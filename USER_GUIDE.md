@@ -8,7 +8,7 @@ A full walkthrough of Note Organizer — what it does, and how to use it. Screen
 
 Note Organizer runs as a single window with three tabs: **Notes**, **Calendar**, and **Settings**. Everything is stored locally, next to the app — there's no account to create and no internet connection required.
 
-`![Main window](screenshots/main-window.png)`
+![Main window](screenshots/main-window.png)
 
 ---
 
@@ -18,7 +18,7 @@ Note Organizer runs as a single window with three tabs: **Notes**, **Calendar**,
 
 Click **+ New Note** in the sidebar to open a blank editor. A note has a title, a body, optional comments, a category, an optional date, an optional color, and an optional checklist. There's only ever one editor open at a time — clicking a different note in the list automatically saves whatever you were working on first, so there's no tab-juggling and no risk of losing an edit.
 
-`![Note editor](screenshots/note-editor.png)`
+![Note editor](screenshots/note-editor.png)
 
 Notes save automatically a moment after you stop typing (look for the "Auto-saved" status), and always save immediately when you switch to a different note.
 
@@ -30,7 +30,7 @@ Notes save automatically a moment after you stop typing (look for the "Auto-save
 - **Group by category** (checkbox above the note list) clusters the list under collapsible category headers.
 - **Search** the note list by keyword, and **sort** by recency, title, category, or date.
 
-`![Categories panel](screenshots/categories-panel.png)`
+![Categories panel](screenshots/categories-panel.png)
 
 ### Checklists
 
@@ -40,7 +40,7 @@ Any note can have a checklist. Click **☑ Checklist** in the editor to open it,
 
 Save any note as a reusable template (📋 **Save as template**), or build one from scratch in Settings → Manage templates. Starting a new note with **Use template** fills in the title, body, category, and checklist from the template — the template itself is never affected by what you do with the note afterward.
 
-`![Templates panel](screenshots/templates-panel.png)`
+![Templates panel](screenshots/templates-panel.png)
 
 ### Trash
 
@@ -50,7 +50,7 @@ Deleting a note moves it to **Recently deleted** (Settings), where it's recovera
 
 Settings → **Clean up duplicates** groups notes that match on title, body, comments, and category. Within a group, tick specific copies to remove (the rest are kept — nothing forces "keep exactly one"), or use **Clean up ALL groups** to apply "keep the first, remove the rest" across every group in one click.
 
-`![Duplicates panel](screenshots/duplicates-panel.png)`
+![Duplicates panel](screenshots/duplicates-panel.png)
 
 ---
 
@@ -65,7 +65,7 @@ Any note can repeat. Open the **Repeat** section in the editor and choose:
 
 Set an end condition if the note shouldn't repeat forever: after a number of occurrences, or by a specific date.
 
-`![Recurrence setup](screenshots/recurrence-setup.png)`
+![Recurrence setup](screenshots/recurrence-setup.png)
 
 Editing or deleting one specific occurrence (rather than the whole series) is always offered as a separate choice — your edit only applies where you meant it to.
 
@@ -75,7 +75,7 @@ Editing or deleting one specific occurrence (rather than the whole series) is al
 
 The Calendar tab shows every note (including every occurrence of every recurring note) on the day it falls on. Navigate month-to-month, jump directly to a specific month/year, or return to today. Multiple notes on one day show up to two title previews plus a "+N more" indicator; hovering a day gives a quick summary.
 
-`![Calendar view](screenshots/calendar-view.png)`
+![Calendar view](screenshots/calendar-view.png)
 
 You can also paint a specific calendar day a custom color (right-click it), independent of any note's own color — useful for marking something about the day itself, like a holiday or deadline.
 
@@ -87,7 +87,7 @@ You can also paint a specific calendar day a custom color (right-click it), inde
 
 **Full backup**: Settings → Export notes creates a single `.zip` containing every note, your settings, and every attachment — the one file you need to move everything to another device. Import it there with Settings → Import notes. Both directions check for notes that look identical to ones you already have, and ask before creating duplicates.
 
-`![Share panel](screenshots/share-panel.png)`
+![Share panel](screenshots/share-panel.png)
 
 ---
 
@@ -95,7 +95,7 @@ You can also paint a specific calendar day a custom color (right-click it), inde
 
 Switch between Dark and Light mode, and pick from four variants of each, in Settings → Appearance. The choice is remembered the next time you open the app.
 
-`![Theme picker](screenshots/theme-picker.png)`
+![Theme picker](screenshots/theme-picker.png)
 
 ---
 
