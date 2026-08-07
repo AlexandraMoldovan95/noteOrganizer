@@ -1,4 +1,4 @@
-# Notes Organizer
+# Note Organizer
 
 A fast, fully offline desktop notes app built with Python and Tkinter — no cloud, no accounts, no dependencies beyond the standard library. Every note, attachment, and setting lives in a folder on your own machine.
 
@@ -58,8 +58,8 @@ Built as a solo/pair project (developer + AI pairing partner) over an extended i
 ## Getting started
 
 ```bash
-git clone https://github.com/<your-username>/notes-organizer.git
-cd notes-organizer
+git clone https://github.com/AlexandraMoldovan95/noteOrganizer.git
+cd noteOrganizer
 python note_organizer.py
 ```
 
@@ -79,7 +79,7 @@ The built app will appear under `dist/NoteOrganizer/`.
 ## Project structure
 
 ```
-notes-organizer/
+noteOrganizer/
 ├── note_organizer.py       # the application (single file by design — see docs/ARCHITECTURE.md)
 ├── docs/
 │   ├── USER_GUIDE.md        # full walkthrough with screenshots
