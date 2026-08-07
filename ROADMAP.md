@@ -9,6 +9,10 @@ Planned work and open ideas, roughly ordered by how soon they're likely to happe
 - **Delete a note directly from the calendar.** Right now, removing a note found via the calendar means opening it in the editor first. A direct delete action on the calendar day view would skip that step for the common case.
 - **Move the Settings entry point.** Try relocating the Settings button fully to the right side of the layout, away from the calendar controls, and see whether that reads more clearly.
 
+## To investigate
+
+- **Attachment files may not be cleaned up from disk when removed.** Observed: files removed from a note (or from a note that was itself deleted) appeared to still exist in the `attachments/` folder afterward. Needs a proper look — likely candidates: removing an attachment from a note doesn't delete the underlying file, and/or permanently deleting a note (or purging it from trash) doesn't clean up its attached files either. Should confirm the exact trigger before fixing.
+
 ## Under consideration
 
 - **Rich text formatting** (bold / italic / underline / basic font choices) in the note body. This is a real architectural change — the editor is currently a plain `tk.Text` widget with no formatting model — so it needs its own design pass rather than being slotted in alongside smaller fixes.
