@@ -15,6 +15,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 - Project documentation set (`README.md`, this changelog, architecture notes, roadmap, issues log)
 - Git version control, hosted on GitHub
 
+### Changed
+- Settings moved out of the Notes/Calendar tab strip entirely, into its own button in the sidebar (alongside New Note / Import / Share), with a "← Back to Notes" button to return. Originally planned as "push it to the far right of the tab strip" (see ROADMAP), but that risked sitting too close to the window's own close button — the sidebar button avoids that concern and tested better in practice.
+
 ---
 
 ## [0.4.0] — Performance overhaul & test infrastructure
