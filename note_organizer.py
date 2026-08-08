@@ -4575,6 +4575,47 @@ class NoteOrganizer(tk.Tk):
                          activebackground="sidebar")
         group_cb.pack(side="left")
 
+        # Multi-select: pick several notes at once for a bulk action (move to
+        # trash, change category), instead of doing each one individually.
+        self.selection_mode = False
+        self.selected_note_ids = set()
+        self.select_toggle_btn = tk.Button(
+            group_row, text="☑ Select", command=self._toggle_selection_mode,
+            relief="flat", font=("Segoe UI", 8, "bold"), cursor="hand2"
+        )
+        self.track_theme(self.select_toggle_btn, bg="card", fg="subtext")
+        self.select_toggle_btn.pack(side="right", ipadx=6, ipady=2)
+
+        # Bulk-action bar: hidden until selection mode is turned on. Built
+        # once, like the rest of this persistent sidebar chrome — its inner
+        # label/buttons get live theme tracking for the same reason group_cb
+        # above does.
+        self.bulk_action_bar = tk.Frame(self.sidebar)
+        self.track_theme(self.bulk_action_bar, bg="sidebar")
+        self.bulk_selected_lbl = tk.Label(
+            self.bulk_action_bar, text="0 selected", font=("Segoe UI", 8, "bold"))
+        self.track_theme(self.bulk_selected_lbl, bg="sidebar", fg="text")
+        self.bulk_selected_lbl.pack(side="left", padx=(0, 8))
+        bulk_select_all_btn = tk.Button(
+            self.bulk_action_bar, text="Select all", command=self._bulk_select_all,
+            relief="flat", font=("Segoe UI", 8), cursor="hand2")
+        self.track_theme(bulk_select_all_btn, bg="card", fg="text")
+        bulk_select_all_btn.pack(side="left", padx=(0, 4), ipadx=4, ipady=2)
+        bulk_trash_btn = tk.Button(
+            self.bulk_action_bar, text="🗑 Trash", command=self._bulk_move_to_trash,
+            relief="flat", font=("Segoe UI", 8, "bold"), cursor="hand2")
+        self.track_theme(bulk_trash_btn, bg="danger")
+        bulk_trash_btn.configure(fg="white")
+        bulk_trash_btn.pack(side="left", padx=(0, 4), ipadx=4, ipady=2)
+        bulk_category_btn = tk.Button(
+            self.bulk_action_bar, text="🗂 Category ▾", command=self._bulk_change_category,
+            relief="flat", font=("Segoe UI", 8), cursor="hand2")
+        self.track_theme(bulk_category_btn, bg="accent")
+        bulk_category_btn.configure(fg="white")
+        bulk_category_btn.pack(side="left", ipadx=4, ipady=2)
+        self._bulk_category_btn = bulk_category_btn
+        # Not packed yet — shown by _toggle_selection_mode() when active.
+
         # Bottom action zone — pinned to the bottom of the sidebar so New Note /
         # Import / Share and their inline panels always stay on-screen even when
         # the window is short. Packed BEFORE the list so it reserves its space;
@@ -6854,6 +6895,14 @@ class NoteOrganizer(tk.Tk):
             return
         for widget in self.list_frame.winfo_children():
             widget.destroy()
+        # Tracks note id -> the card's own widgets, so switching the open
+        # note or toggling selection mode can update just the cards that
+        # actually changed, instead of a full destroy-and-rebuild (which
+        # flickered — every full rebuild here is otherwise a rare enough
+        # action, like saving, searching, or sorting, that the flicker was
+        # only really noticeable on the frequent actions that started using
+        # it too: switching notes, and toggling selection mode).
+        self._note_card_widgets = {}
 
         query = self.search_var.get().lower()
         if query == "search notes...":
@@ -6993,8 +7042,24 @@ class NoteOrganizer(tk.Tk):
         # grew into the thousands, measurably slowing down both this render
         # and every future theme switch.
         color = self.get_note_color(note)
-        card = tk.Frame(self.list_frame, cursor="hand2", bg=self.colors["card"])
+        is_open = note["id"] == self.selected_note_id
+        card = tk.Frame(
+            self.list_frame, cursor="hand2", bg=self.colors["card"],
+            highlightthickness=2 if is_open else 0,
+            highlightbackground=self.colors["accent"], highlightcolor=self.colors["accent"]
+        )
         card.pack(fill="x", pady=5, padx=2)
+
+        sel_cb = None
+        if self.selection_mode:
+            sel_var = tk.BooleanVar(value=note["id"] in self.selected_note_ids)
+            sel_cb = tk.Checkbutton(
+                card, variable=sel_var, bg=self.colors["card"],
+                activebackground=self.colors["card"], selectcolor=self.colors["sidebar"],
+                bd=0, highlightthickness=0,
+                command=lambda n=note, v=sel_var: self._toggle_note_selected(n["id"], v.get())
+            )
+            sel_cb.pack(side="left", padx=(6, 0))
 
         stripe = tk.Frame(card, bg=color, width=5)
         stripe.pack(side="left", fill="y")
@@ -7050,9 +7115,196 @@ class NoteOrganizer(tk.Tk):
 
         widgets = [card, stripe, content, title_lbl, preview_lbl, cat_lbl]
         for widget in widgets:
-            widget.bind("<Button-1>", lambda e, n=note: self.open_note_in_tab(n))
+            if self.selection_mode:
+                # In selection mode, clicking anywhere on the card toggles it —
+                # opening the note would defeat the point of picking several at
+                # once without leaving the list.
+                widget.bind("<Button-1>", lambda e, cb=sel_cb: cb.invoke())
+            else:
+                widget.bind("<Button-1>", lambda e, n=note: self.open_note_in_tab(n))
             # Right-click anywhere on the card opens the context menu.
             widget.bind("<Button-3>", lambda e, n=note: self.show_note_context_menu(e, n))
+
+        self._note_card_widgets[note["id"]] = {
+            "card": card, "clickable": widgets, "checkbox": sel_cb, "note": note,
+        }
+
+    # ---------- Multi-select for bulk actions ----------
+    def _toggle_selection_mode(self):
+        """Turn the pick-several-notes mode on or off. Turning it off always
+        clears whatever was selected — re-entering starts fresh, rather than
+        surprising the user with an old selection still active."""
+        self.selection_mode = not self.selection_mode
+        self.selected_note_ids = set()
+        if self.selection_mode:
+            self.select_toggle_btn.config(text="✕ Cancel select")
+            self.bulk_action_bar.pack(fill="x", padx=15, pady=(0, 8), after=self._selection_anchor_row())
+        else:
+            self.select_toggle_btn.config(text="☑ Select")
+            self.bulk_action_bar.pack_forget()
+        self._update_bulk_selected_label()
+        self._apply_selection_mode_to_cards()
+
+    def _exit_selection_mode_after_bulk_action(self):
+        """Same UI cleanup as turning selection mode off, but followed by a
+        full refresh_note_list() instead of the surgical per-card update —
+        used after a bulk action (trash, category change) that actually
+        changed which notes exist or what they show. The surgical update
+        _toggle_selection_mode() uses elsewhere only adds/removes checkboxes
+        on cards that are still valid; after a bulk action, some of those
+        cards represent notes that no longer exist (or no longer belong in
+        the current view), so nothing short of a real rebuild reflects that
+        correctly — the notes were genuinely gone, but their cards stayed
+        on screen showing stale data until clicked."""
+        self.selection_mode = False
+        self.selected_note_ids = set()
+        self.select_toggle_btn.config(text="☑ Select")
+        self.bulk_action_bar.pack_forget()
+        self._update_bulk_selected_label()
+        self.refresh_note_list()
+
+    def _apply_selection_mode_to_cards(self):
+        """Add or remove just the per-card checkbox, and rebind each card's
+        click handler to match the current selection_mode — without
+        destroying and rebuilding every card. A full refresh_note_list() here
+        worked, but visibly flickered the whole list just to toggle one
+        column of checkboxes on or off."""
+        for note_id, info in list(self._note_card_widgets.items()):
+            card = info["card"]
+            try:
+                card.winfo_exists()
+            except tk.TclError:
+                continue
+            old_cb = info.get("checkbox")
+            if old_cb is not None:
+                try:
+                    old_cb.destroy()
+                except tk.TclError:
+                    pass
+                info["checkbox"] = None
+
+            if self.selection_mode:
+                note = info["note"]
+                sel_var = tk.BooleanVar(value=note_id in self.selected_note_ids)
+                sel_cb = tk.Checkbutton(
+                    card, variable=sel_var, bg=self.colors["card"],
+                    activebackground=self.colors["card"], selectcolor=self.colors["sidebar"],
+                    bd=0, highlightthickness=0,
+                    command=lambda n=note_id, v=sel_var: self._toggle_note_selected(n, v.get())
+                )
+                # Leftmost, ahead of everything already packed in the card.
+                sel_cb.pack(side="left", padx=(6, 0), before=card.winfo_children()[0])
+                info["checkbox"] = sel_cb
+                for widget in info["clickable"]:
+                    widget.bind("<Button-1>", lambda e, cb=sel_cb: cb.invoke())
+            else:
+                note = info["note"]
+                for widget in info["clickable"]:
+                    widget.bind("<Button-1>", lambda e, n=note: self.open_note_in_tab(n))
+
+    def _selection_anchor_row(self):
+        """The row the bulk-action bar should appear directly under. Looked
+        up by walking the sidebar rather than stored separately, so it stays
+        correct even if the sidebar layout changes elsewhere."""
+        return self.select_toggle_btn.master
+
+    def _toggle_note_selected(self, note_id, now_selected):
+        if now_selected:
+            self.selected_note_ids.add(note_id)
+        else:
+            self.selected_note_ids.discard(note_id)
+        self._update_bulk_selected_label()
+        # No refresh_note_list() here on purpose: rebuilding every card just
+        # to reflect one checkbox change caused a visible flicker on every
+        # single click. The checkbox already updates its own check-mark
+        # natively; nothing else about the card needs to change.
+
+    def _update_bulk_selected_label(self):
+        n = len(self.selected_note_ids)
+        self.bulk_selected_lbl.config(text=f"{n} selected")
+
+    def _bulk_select_all(self):
+        """Selects every note currently visible in the list (respecting
+        whatever search/category filter is active) — not necessarily every
+        note in the whole app."""
+        query = self.search_var.get().lower()
+        if query == "search notes...":
+            query = ""
+
+        def _txt(value):
+            return value.lower() if isinstance(value, str) else ""
+
+        visible = [
+            n for n in self.notes
+            if query in _txt(n.get("title")) or query in _txt(n.get("body"))
+            or query in _txt(n.get("comments"))
+        ]
+        chosen_category = getattr(self, "filter_var", None)
+        if chosen_category is not None and self.filter_var.get() != "All":
+            visible = [n for n in visible if n.get("category") == self.filter_var.get()]
+        self.selected_note_ids = {n["id"] for n in visible}
+        self._update_bulk_selected_label()
+        self.refresh_note_list()
+
+    def _bulk_move_to_trash(self):
+        if not self.selected_note_ids:
+            self.show_info("Nothing selected", "Tick one or more notes first.")
+            return
+        count = len(self.selected_note_ids)
+        if not self.ask_yes_no(
+            "Move to trash",
+            f"Move {count} selected note(s) to the trash? "
+            f"You can restore them within {TRASH_RETENTION_DAYS} days.",
+            icon="question"
+        ):
+            return
+        to_trash = [n for n in self.notes if n["id"] in self.selected_note_ids]
+        self._move_notes_to_trash(to_trash)
+        self.notes = [n for n in self.notes if n["id"] not in self.selected_note_ids]
+        self.save_notes()
+        self._exit_selection_mode_after_bulk_action()
+        self.render_calendar()
+        self.set_status(f"Moved {count} note(s) to trash")
+
+    def _bulk_change_category(self):
+        if not self.selected_note_ids:
+            self.show_info("Nothing selected", "Tick one or more notes first.")
+            return
+        self._dismiss_mini_popup()
+        pop = tk.Toplevel(self)
+        self._mini_popup = pop
+        pop.wm_overrideredirect(True)
+        pop.configure(bg=self.colors["accent"])
+        frame = tk.Frame(pop, bg=self.colors["card"], padx=4, pady=4)
+        frame.pack(padx=1, pady=1)
+        tk.Label(frame, text=f"Move {len(self.selected_note_ids)} note(s) to:",
+                 bg=self.colors["card"], fg=self.colors["subtext"],
+                 font=("Segoe UI", 8, "bold")).pack(anchor="w", padx=6, pady=(4, 2))
+
+        def apply_category(cat):
+            count = len(self.selected_note_ids)
+            for n in self.notes:
+                if n["id"] in self.selected_note_ids:
+                    n["category"] = cat
+                    n["updated"] = datetime.now().strftime("%Y-%m-%d %H:%M")
+            self.save_notes()
+            self._dismiss_mini_popup()
+            self._exit_selection_mode_after_bulk_action()
+            self.set_status(f"Moved {count} note(s) to \u201c{cat}\u201d")
+
+        for cat in CATEGORY_COLORS.keys():
+            row = tk.Frame(frame, bg=self.colors["card"], cursor="hand2")
+            row.pack(fill="x")
+            dot = tk.Canvas(row, width=10, height=10, highlightthickness=0, bg=self.colors["card"])
+            dot.create_oval(1, 1, 9, 9, fill=CATEGORY_COLORS[cat], outline=CATEGORY_COLORS[cat])
+            dot.pack(side="left", padx=(8, 6), pady=5)
+            lbl = tk.Label(row, text=cat, bg=self.colors["card"], fg=self.colors["text"],
+                          font=("Segoe UI", 9), anchor="w")
+            lbl.pack(side="left", fill="x", expand=True, padx=(0, 10), pady=5)
+            for w in (row, dot, lbl):
+                w.bind("<Button-1>", lambda e, c=cat: apply_category(c))
+
+        self._place_dropdown_popup(pop, self._bulk_category_btn)
 
     # ---------- Note actions ----------
     # ---------- Editor state snapshot (for multi-note tabs) ----------
@@ -7181,6 +7433,30 @@ class NoteOrganizer(tk.Tk):
             self.refresh_note_list()
             self.render_calendar()
 
+    def _update_open_highlight(self):
+        """Move the 'currently open' card border directly to whichever card
+        needs it, without rebuilding the list. self._note_card_widgets is
+        kept up to date by the last full refresh_note_list() — this just
+        touches the (at most) two cards that actually changed."""
+        prev = getattr(self, "_last_highlighted_note_id", None)
+        current = self.selected_note_id
+        if prev == current:
+            return
+        cards = getattr(self, "_note_card_widgets", {})
+        if prev is not None and prev in cards:
+            try:
+                cards[prev]["card"].configure(highlightthickness=0)
+            except tk.TclError:
+                pass
+        if current is not None and current in cards:
+            try:
+                cards[current]["card"].configure(
+                    highlightthickness=2, highlightbackground=self.colors["accent"],
+                    highlightcolor=self.colors["accent"])
+            except tk.TclError:
+                pass
+        self._last_highlighted_note_id = current
+
     def open_note_in_tab(self, note, occurrence_date=None):
         """Open a saved note in the editor. Only one note is open at a time — any
         unsaved work in the current note is auto-saved first, then this note
@@ -7205,6 +7481,12 @@ class NoteOrganizer(tk.Tk):
         self.open_tabs = [{"key": self._tab_counter, "state": self.capture_editor_state()}]
         self.active_tab_index = 0
         self.refresh_tab_strip()
+        # Moves the highlighted-card border to this note, without rebuilding
+        # the whole list — switching notes happens constantly during normal
+        # use, and a full refresh_note_list() here just to move a border was
+        # a much more noticeable flicker than the same cost is for genuinely
+        # rare actions like saving or searching.
+        self._update_open_highlight()
 
     def open_blank_tab(self):
         """Start a brand-new empty note, replacing whatever was open (after
@@ -7219,6 +7501,10 @@ class NoteOrganizer(tk.Tk):
         self.open_tabs = [{"key": self._tab_counter, "state": self.capture_editor_state()}]
         self.active_tab_index = 0
         self.refresh_tab_strip()
+        # Clears any previously-highlighted card's border — a blank new note
+        # isn't "the" open note in the list. Same surgical update as
+        # open_note_in_tab, not a full rebuild.
+        self._update_open_highlight()
 
     def _flush_autosave(self):
         """Cancel any pending debounced auto-save and, if the current editor has
