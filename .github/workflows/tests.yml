@@ -1,0 +1,60 @@
+name: QA Tests
+
+# Runs automatically on every push and on every Pull Request, against main.
+# GitHub's own machines (not your computer) check out the code fresh and run
+# the whole test suite. If anything fails, the commit/PR gets a clear red X
+# instead of finding out later by hand.
+on:
+  push:
+  pull_request:
+
+jobs:
+  qa:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Tkinter and a virtual display
+        # GitHub's runners have no physical screen — Tkinter still needs
+        # SOMETHING to draw to. Xvfb ("X virtual framebuffer") is a fake
+        # display that lives entirely in memory, just for this: real widgets
+        # get created and interacted with exactly like on a real screen, the
+        # only difference is nobody's looking at it.
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y python3-tk xvfb
+
+      - name: Recurrence engine tests
+        run: python3 test_recurrence.py
+
+      - name: QA1 — Notes, categories, templates
+        run: |
+          cd qa
+          cp ../note_organizer.py .
+          xvfb-run -a python3 qa1.py
+
+      - name: QA2 — Recurrence, calendar, duplicates
+        run: |
+          cd qa
+          xvfb-run -a python3 qa2.py
+
+      - name: QA3 — Trash, share, import/export
+        run: |
+          cd qa
+          xvfb-run -a python3 qa3.py
+
+      - name: QA4 — Theming, stress, memory-leak regression
+        run: |
+          cd qa
+          xvfb-run -a python3 qa4.py
+
+      - name: QA5 — Corrupt data, edge cases
+        run: |
+          cd qa
+          xvfb-run -a python3 qa5.py
