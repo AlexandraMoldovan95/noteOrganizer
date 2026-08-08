@@ -12,11 +12,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 - Attachment files were never actually deleted from disk — removing an attachment from a note, permanently deleting a trashed note (individually, via "Empty trash", or through automatic purge after the retention window) all removed the note/reference but left the underlying file behind indefinitely. All four paths now clean up the physical file too. Moving a note to trash (the reversible, soft-delete path) correctly still leaves files untouched, since the note might be restored.
 - Calendar keyboard navigation (PgUp/PgDn/Home) and the resize-driven font relayout could still act on the calendar while it was hidden behind the new Settings page, if Calendar had been the last-selected tab before opening Settings — silently changing the visible month behind the scenes. Both now check that the calendar is actually on screen, not just that it's the notebook's internally "selected" tab.
 - Importing a single-note share code (as opposed to a multi-note one) skipped the duplicate check entirely and went straight to opening it for editing — found by hand, by copying a code from a note already present and re-importing it. Now checks for an exact match first and asks before opening it, same as the multi-note path.
+- The calendar day panel's delete actions (including the pre-existing right-click menu one) refreshed the panel unconditionally after being clicked — including when the user canceled the confirmation dialog, which incorrectly bounced the view back to the day's note list instead of leaving it exactly as it was. Now only refreshes if the note actually stopped occurring on that date.
 
 ### Added
 - Project documentation set (`README.md`, this changelog, architecture notes, roadmap, issues log)
 - Git version control, hosted on GitHub
 - Continuous integration via GitHub Actions (`.github/workflows/tests.yml`): the full automated test suite now runs on every push and Pull Request.
+- Delete a note directly from the calendar day panel — a small trash icon on each row in a day's note list, and a Delete button on the note-detail view reached from there. Reuses the same confirmation and recurring-series-scope prompts as deleting from anywhere else, so nothing about safety changes; it just no longer requires opening the full editor first.
 
 ### Changed
 - Settings moved out of the Notes/Calendar tab strip entirely, into its own button in the sidebar (alongside New Note / Import / Share), with a "← Back to Notes" button to return. Originally planned as "push it to the far right of the tab strip" (see ROADMAP), but that risked sitting too close to the window's own close button — the sidebar button avoids that concern and tested better in practice.
