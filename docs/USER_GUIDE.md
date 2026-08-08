@@ -1,6 +1,6 @@
 # User Guide
 
-A full walkthrough of Note Organizer — what it does, and how to use it.
+A full walkthrough of Note Organizer — what it does, and how to use it, with a screenshot for every major feature.
 
 ---
 
@@ -22,19 +22,41 @@ Click **+ New Note** in the sidebar to open a blank editor. A note has a title, 
 
 Notes save automatically a moment after you stop typing (look for the "Auto-saved" status), and always save immediately when you switch to a different note.
 
+### Attachments
+
+Attach one or more files to a note from the editor. Attached files show as a small list with their name and a way to remove them; click a file to open it. Removing an attachment deletes it from that note only — it doesn't touch anything else.
+
+![Attachments](screenshots/attachments.png)
+
+### Checklists
+
+Any note can have a checklist. Click **☑ Checklist** in the editor to open it, add items, and check them off as you go — the note's card in the list shows progress at a glance (e.g. "☑ 2/5").
+
+![Checklist](screenshots/checklist.png)
+
+### Emoji
+
+Any text field in a note (title, body, comments) can have an emoji inserted at the cursor via the right-click menu, without leaving the keyboard to hunt through the system emoji picker.
+
+![Emoji picker](screenshots/emoji-picker.png)
+
+### Finding notes: search, sort, and grouping
+
+Search the note list by keyword, and sort by recency, title, category, or date, from the controls above the list.
+
+![Search and sort](screenshots/search-and-sort.png)
+
+**Group by category** (checkbox above the note list) clusters the list under collapsible category headers instead of one flat list — click a group's header to collapse or expand it; the state is remembered.
+
+![Notes grouped by category](screenshots/grouped-notes.png)
+
 ### Organizing
 
 - **Pin** a note (right-click → Pin) to keep it at the top of the list regardless of sort order.
 - **Duplicate** a note to create an editable copy, titled "(copy)".
 - **Categories** act as folders — create, rename, recolor, or delete them from Settings → Manage categories. Deleting a category with notes in it asks where to move them first; nothing is ever silently lost.
-- **Group by category** (checkbox above the note list) clusters the list under collapsible category headers.
-- **Search** the note list by keyword, and **sort** by recency, title, category, or date.
 
 ![Categories panel](screenshots/categories-panel.png)
-
-### Checklists
-
-Any note can have a checklist. Click **☑ Checklist** in the editor to open it, add items, and check them off as you go — the note's card in the list shows progress at a glance (e.g. "☑ 2/5").
 
 ### Templates
 
@@ -44,7 +66,9 @@ Save any note as a reusable template (📋 **Save as template**), or build one f
 
 ### Trash
 
-Deleting a note moves it to **Recently deleted** (Settings), where it's recoverable for a configurable retention window before being purged automatically. Restore individual notes, delete them permanently one at a time, or empty the whole trash at once.
+Deleting a note moves it to **Recently deleted** (Settings), where it's recoverable for a configurable retention window before being purged automatically. Restore individual notes, delete them permanently one at a time, or empty the whole trash at once. With a lot of deleted notes, the list loads the most recent batch first, with a button to reveal more — so it stays quick to open no matter how much has accumulated there.
+
+![Trash panel](screenshots/trash-panel.png)
 
 ### Finding & cleaning up duplicates
 
@@ -79,15 +103,51 @@ The Calendar tab shows every note (including every occurrence of every recurring
 
 You can also paint a specific calendar day a custom color (right-click it), independent of any note's own color — useful for marking something about the day itself, like a holiday or deadline.
 
+![Calendar day coloring](screenshots/calendar-day-color.png)
+
 ---
 
 ## Sharing & backup
 
-**Share a note as a code**: open a note → Copy code. This generates a compact block of text representing that note's content (not its attachments) — paste it to someone else, and they can import it with **Import code** in the sidebar. You can also select several notes at once and generate one code covering all of them.
+### Share a note as a code
 
-**Full backup**: Settings → Export notes creates a single `.zip` containing every note, your settings, and every attachment — the one file you need to move everything to another device. Import it there with Settings → Import notes. Both directions check for notes that look identical to ones you already have, and ask before creating duplicates.
+Open a note → Generate code. This generates a compact block of text representing that note's content (not its attachments) — paste it to someone else, and they can import it with **Import code** in the sidebar. You can also select several notes at once and generate one code covering all of them.
 
 ![Share panel](screenshots/share-panel.png)
+
+### Import a code
+
+Paste a code you received into **Import code** in the sidebar. If any of the notes it contains look identical to ones you already have, you'll be asked whether to skip the duplicates, import everyone anyway, or cancel — nothing is silently duplicated.
+
+![Import code](screenshots/import-code.png)
+
+### Full backup: export
+
+Settings → Export notes creates a single `.zip` containing every note, your settings, and every attachment — the one file you need to move everything to another device. With a lot of attachments this can take a moment; a progress bar stays visible at the bottom of the window the whole time, and the app remains fully usable while it works.
+
+![Export progress](screenshots/export-progress.png)
+
+### Full backup: import
+
+Settings → Import notes brings a previously exported `.zip` back in — notes, settings, and attachments together. Just like importing a code, you'll be asked about any notes that look identical to what you already have before anything is added.
+
+![Import backup](screenshots/import-backup.png)
+
+---
+
+## Settings
+
+Categories, templates, trash, duplicate cleanup, appearance, your name, and usage statistics all live on one page, reached via the **⚙ Settings** button at the bottom of the sidebar. A **← Back to Notes** button at the top returns you to your notes.
+
+![Settings overview](screenshots/settings-overview.png)
+
+### Your name
+
+Settings → Your name sets the greeting shown above the note list ("Hi \<name\>,"). Leave it blank for no greeting.
+
+### Statistics
+
+A quick snapshot of your total note count and this week's activity, with a clickable chip per category — click one to jump straight to your notes filtered to that category.
 
 ---
 
@@ -101,4 +161,27 @@ Switch between Dark and Light mode, and pick from four variants of each, in Sett
 
 ## Adding your own screenshots
 
-Drop image files into `docs/screenshots/` using the filenames referenced above (e.g. `main-window.png`, `note-editor.png`). Once a file exists at that path, it will render automatically wherever this guide references it — no other changes needed.
+Drop image files into `docs/screenshots/` using the exact filenames referenced above. Once a file exists at that path, it renders automatically wherever this guide references it — no other changes needed.
+
+| Filename | What to capture |
+|---|---|
+| `main-window.png` | The main window, Notes tab, with a few notes in the list |
+| `note-editor.png` | A note open in the editor, with some content filled in |
+| `attachments.png` | The attachments section of a note with at least one file attached |
+| `checklist.png` | The checklist section open, with a mix of checked and unchecked items |
+| `emoji-picker.png` | The emoji picker open over a text field |
+| `search-and-sort.png` | The search box and sort dropdown, ideally mid-search |
+| `grouped-notes.png` | The note list with "Group by category" on, showing at least two groups (one collapsed, one expanded, if possible) |
+| `categories-panel.png` | Settings → Manage categories, with a few categories listed |
+| `templates-panel.png` | Settings → Manage templates, with at least one template listed |
+| `trash-panel.png` | Settings → Recently deleted, with a few entries |
+| `duplicates-panel.png` | Settings → Clean up duplicates, with at least one group showing |
+| `recurrence-setup.png` | The Repeat section of the editor, mid-setup (e.g. Weekly with a couple of days picked) |
+| `calendar-view.png` | The Calendar tab, a month with a few notes visible on different days |
+| `calendar-day-color.png` | The right-click menu / result of painting a calendar day a custom color |
+| `share-panel.png` | The Share notes panel with a couple of notes ticked |
+| `import-code.png` | The Import code panel, ideally showing the duplicate-check prompt |
+| `export-progress.png` | The export progress bar visible at the bottom of the window mid-export |
+| `import-backup.png` | The Import notes file picker or its resulting confirmation |
+| `settings-overview.png` | The full Settings page, scrolled to show several sections |
+| `theme-picker.png` | Settings → Appearance, with the theme variant cards visible |

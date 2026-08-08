@@ -11,6 +11,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 ### Fixed
 - Attachment files were never actually deleted from disk — removing an attachment from a note, permanently deleting a trashed note (individually, via "Empty trash", or through automatic purge after the retention window) all removed the note/reference but left the underlying file behind indefinitely. All four paths now clean up the physical file too. Moving a note to trash (the reversible, soft-delete path) correctly still leaves files untouched, since the note might be restored.
 - Calendar keyboard navigation (PgUp/PgDn/Home) and the resize-driven font relayout could still act on the calendar while it was hidden behind the new Settings page, if Calendar had been the last-selected tab before opening Settings — silently changing the visible month behind the scenes. Both now check that the calendar is actually on screen, not just that it's the notebook's internally "selected" tab.
+- Importing a single-note share code (as opposed to a multi-note one) skipped the duplicate check entirely and went straight to opening it for editing — found by hand, by copying a code from a note already present and re-importing it. Now checks for an exact match first and asks before opening it, same as the multi-note path.
 
 ### Added
 - Project documentation set (`README.md`, this changelog, architecture notes, roadmap, issues log)
@@ -19,6 +20,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ### Changed
 - Settings moved out of the Notes/Calendar tab strip entirely, into its own button in the sidebar (alongside New Note / Import / Share), with a "← Back to Notes" button to return. Originally planned as "push it to the far right of the tab strip" (see ROADMAP), but that risked sitting too close to the window's own close button — the sidebar button avoids that concern and tested better in practice.
+- The note editor's "📋 Copy code" button renamed to "📋 Generate code" — nothing has been generated or copied to the clipboard yet at the point it's clicked, which "Copy" implied. Matches the wording already used by the multi-note Share panel's equivalent button.
 
 ### Testing
 - Two of the five automated QA scripts (`qa3.py`, `qa4.py`) still referenced the Settings page's old, removed notebook-tab index, and had been silently passing for the wrong reason (their own exit code was never actually checked, so a script erroring out still reported as a successful test run). Both issues are fixed: the scripts now call `show_settings_page()` directly, and every test script exits with a real failure status when a check fails, which is what makes the new CI integration meaningful rather than always green.

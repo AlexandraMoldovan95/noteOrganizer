@@ -185,21 +185,37 @@ check('toggling again restores the sidebar', app._sidebar_hidden == before_hidde
 
 # Dialogs stay within the app window's own bounds (never a separate OS window
 # that could be dragged outside it)
+def find_btn_qa6(w, label):
+    for c in w.winfo_children():
+        if isinstance(c, tk.Button) and str(c.cget('text')) == label:
+            return c
+        r = find_btn_qa6(c, label)
+        if r: return r
+    return None
+
 choice_holder = {}
 def capture_choice(var):
     app.update()
-    dialog_frame = app.place_slaves()[-1] if app.place_slaves() else None
-    choice_holder['dialog'] = dialog_frame
+    for frame in app.place_slaves():
+        if find_btn_qa6(frame, "OK"):
+            # Check everything about the dialog HERE, while it still exists —
+            # _themed_dialog destroys it as soon as this callback returns
+            # (that's what "wait_variable returned" means to its own cleanup
+            # code), so a stored widget reference checked afterward would
+            # already be pointing at a destroyed widget.
+            choice_holder['found'] = True
+            app.update_idletasks()
+            within_x = app.winfo_rootx() <= frame.winfo_rootx() <= app.winfo_rootx() + app.winfo_width()
+            within_y = app.winfo_rooty() <= frame.winfo_rooty() <= app.winfo_rooty() + app.winfo_height()
+            choice_holder['within_bounds'] = within_x and within_y
+            return
 app.wait_variable = capture_choice
 app._themed_dialog("Test", "Just checking dialog bounds", kind="question",
                    buttons=[("OK", "ok")])
-dlg = choice_holder.get('dialog')
-check('dialog renders as an in-window overlay, not a separate Toplevel', dlg is not None)
-if dlg is not None:
-    app.update_idletasks()
-    within_x = app.winfo_rootx() <= dlg.winfo_rootx() <= app.winfo_rootx() + app.winfo_width()
-    within_y = app.winfo_rooty() <= dlg.winfo_rooty() <= app.winfo_rooty() + app.winfo_height()
-    check('dialog is positioned within the app window bounds', within_x and within_y)
+check('dialog renders as an in-window overlay, not a separate Toplevel',
+      choice_holder.get('found', False))
+check('dialog is positioned within the app window bounds',
+      choice_holder.get('within_bounds', False))
 
 print()
 print(f"=== QA6 FAILURES: {fails if fails else 'NONE'} ===")

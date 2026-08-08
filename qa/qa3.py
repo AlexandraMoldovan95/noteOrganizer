@@ -26,11 +26,17 @@ def find_text_widget(w):
     return None
 
 def click_dialog_button(app, label):
+    """Search every currently-placed overlay for the target button, rather
+    than assuming the themed dialog is always the LAST one in place_slaves()
+    — a lingering toast notification (or any other .place()'d overlay) can
+    end up after the real dialog in that list, and blindly grabbing [-1]
+    then finds an empty frame with no matching button at all."""
     app.update()
-    dialog_frame = app.place_slaves()[-1] if app.place_slaves() else None
-    if dialog_frame:
-        b = find_btn(dialog_frame, label)
-        if b: b.invoke()
+    for frame in app.place_slaves():
+        b = find_btn(frame, label)
+        if b:
+            b.invoke()
+            return
 
 # ---- TRASH: pagination ----
 app.trash = [{'id':i,'title':f'Deleted{i}','body':'x','category':'General',
@@ -114,6 +120,51 @@ app._do_inline_import()
 app.update()
 check('import code with skip-duplicates adds only the fresh note',
       len(app.notes)==before+1 and any(n['title']=='FreshOne' for n in app.notes))
+
+# ---- IMPORT CODE: single-note duplicate detection (the exact scenario a
+# user found by hand: copying a code from a note you already have, then
+# re-importing it, used to silently open it for editing with no warning) ----
+single_dup_code = NO.encode_share_code([
+    {'title':'ShareMe','body':'share body','comments':'','category':'General','date':'','color':'','recurrence':{}}
+])
+app.open_blank_tab()  # a clean, properly-flushed editor state before each import attempt —
+app.update()          # directly clearing title_entry instead risked corrupting/flushing
+                       # whatever note was previously open in the editor
+app.import_box.delete('1.0','end')
+app.import_box.insert('1.0', single_dup_code)
+app.wait_variable = lambda var: click_dialog_button(app, 'Cancel')
+app._do_inline_import()
+app.update()
+check('single-note import warns on an exact duplicate and Cancel skips it',
+      app.title_entry.get() != 'ShareMe')
+
+app.open_blank_tab()
+app.update()
+app.import_box.delete('1.0','end')
+app.import_box.insert('1.0', single_dup_code)
+app.wait_variable = lambda var: click_dialog_button(app, 'Open it anyway')
+app._do_inline_import()
+app.update()
+check('single-note import allows opening the duplicate anyway if chosen',
+      app.title_entry.get() == 'ShareMe')
+
+# a genuinely fresh single note still opens directly, no dialog needed
+fresh_single_code = NO.encode_share_code([
+    {'title':'GenuinelyFresh','body':'zzz','comments':'','category':'General','date':'','color':'','recurrence':{}}
+])
+app.open_blank_tab()
+app.update()
+app.import_box.delete('1.0','end')
+app.import_box.insert('1.0', fresh_single_code)
+app._do_inline_import()
+app.update()
+check('single-note import with no duplicate opens directly, no dialog needed',
+      app.title_entry.get() == 'GenuinelyFresh')
+
+# Clean editor state before the tests that follow, so nothing left over here
+# leaks into them the same way.
+app.open_blank_tab()
+app.update()
 
 # ---- EXPORT: background thread, non-blocking ----
 os.makedirs(NO.ATTACHMENTS_DIR, exist_ok=True)

@@ -2026,9 +2026,21 @@ class NoteOrganizer(tk.Tk):
                                       fg=self.colors["danger"])
             return
         if len(valid) == 1:
+            incoming = valid[0]
+            existing_keys = {_dup_key(n) for n in self.notes}
+            if _dup_key(normalize_note(incoming)) in existing_keys:
+                choice = self._themed_dialog(
+                    "Possible duplicate",
+                    "This note looks identical to one you already have (same "
+                    "title, text, comments and category).",
+                    kind="question",
+                    buttons=[("Cancel", "cancel"), ("Open it anyway", "open")]
+                )
+                if choice is None or choice == "cancel":
+                    return
             self.import_box.delete("1.0", "end")
             self.toggle_import_panel()
-            self._open_imported_note_in_editor(valid[0])
+            self._open_imported_note_in_editor(incoming)
             return
         next_id = max([n["id"] for n in self.notes], default=0) + 1
         # Check each incoming note against what's already here — same
@@ -4951,7 +4963,7 @@ class NoteOrganizer(tk.Tk):
         self.track_theme(delete_btn, bg="danger")
 
         share_btn = tk.Button(
-            action_row, text="📋 Copy code", command=self.share_current_note_as_code,
+            action_row, text="📋 Generate code", command=self.share_current_note_as_code,
             fg="white", relief="flat", font=("Segoe UI", 10, "bold"), cursor="hand2"
         )
         self.track_theme(share_btn, bg="accent")
