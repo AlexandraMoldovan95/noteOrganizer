@@ -1151,13 +1151,41 @@ def save_trash(trash):
         pass
 
 
+def _delete_attachment_files(notes_or_entries):
+    """Permanently remove the on-disk files for every attachment referenced by
+    the given notes/trash-entries. Each attachment gets a unique timestamped
+    filename on disk (see add_attachment), so it's never shared between notes
+    — safe to delete outright, no risk of affecting a different note. Only
+    call this for PERMANENT deletion (trash purge, delete-forever, empty
+    trash) — moving a note to trash must never touch these files, since the
+    note might still be restored."""
+    for note in notes_or_entries:
+        if not isinstance(note, dict):
+            continue
+        for att in note.get("attachments") or []:
+            if not isinstance(att, dict):
+                continue
+            stored_as = att.get("stored_as")
+            if not stored_as:
+                continue
+            path = os.path.join(ATTACHMENTS_DIR, stored_as)
+            try:
+                if os.path.isfile(path):
+                    os.remove(path)
+            except OSError:
+                pass  # best-effort — a locked/missing file shouldn't block the delete
+
+
 def purge_expired_trash(trash):
     """Remove entries older than the retention window. Returns (kept, purged
     count). Entries with a missing/invalid deleted_at are kept (fail-safe: we'd
-    rather keep a note too long than delete it early)."""
+    rather keep a note too long than delete it early). Attachment files
+    belonging to purged notes are permanently deleted too — this is the one
+    place purging happens automatically, without an explicit user action, so
+    it must not be the one place that silently leaves orphaned files behind."""
     cutoff = datetime.now() - timedelta(days=TRASH_RETENTION_DAYS)
     kept = []
-    purged = 0
+    purged_entries = []
     for entry in trash:
         stamp = entry.get("deleted_at", "") if isinstance(entry, dict) else ""
         try:
@@ -1167,10 +1195,11 @@ def purge_expired_trash(trash):
             kept.append(entry)
             continue
         if when < cutoff:
-            purged += 1
+            purged_entries.append(entry)
         else:
             kept.append(entry)
-    return kept, purged
+    _delete_attachment_files(purged_entries)
+    return kept, len(purged_entries)
 
 
 def _strip_copy_suffix(title):
@@ -3853,6 +3882,7 @@ class NoteOrganizer(tk.Tk):
                 f"Permanently delete all {len(self.trash)} note(s) in the trash? "
                 "This can't be undone.", icon="warning", default="no"
             ):
+                _delete_attachment_files(self.trash)
                 self.trash = []
                 save_trash(self.trash)
                 shown_count["n"] = PAGE_SIZE
@@ -6013,7 +6043,8 @@ class NoteOrganizer(tk.Tk):
 
     def remove_attachment(self, index):
         if 0 <= index < len(self.current_attachments):
-            del self.current_attachments[index]
+            removed = self.current_attachments.pop(index)
+            _delete_attachment_files([{"attachments": [removed]}])
             self.refresh_attachments_list()
 
     # File extensions Windows will execute (or run scripts from) rather than
@@ -8349,6 +8380,7 @@ class NoteOrganizer(tk.Tk):
                 f"Permanently delete “{title}”? This can't be undone.",
                 parent=row, icon="warning", default="no"
             ):
+                _delete_attachment_files([entry])
                 self.trash = [e for e in self.trash if e is not entry]
                 save_trash(self.trash)
                 redraw()
