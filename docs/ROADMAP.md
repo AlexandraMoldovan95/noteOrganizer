@@ -4,7 +4,6 @@ Planned work and open ideas, roughly ordered by how soon they're likely to happe
 
 ## Near-term
 
-- **Multi-select notes for bulk actions.** Select several notes from the list at once (like an email client) and move them all to trash, or reassign them all to a different category, without opening each one individually.
 - **Attachments shown inline.** Currently, opening an attached image opens it in an external viewer. Showing a preview directly in the app (with the option to still open/download it) would be more convenient.
 
 ## Under consideration
