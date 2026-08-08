@@ -1,12 +1,12 @@
 # User Guide
 
-A full walkthrough of Note Organizer — what it does, and how to use it. Screenshots are marked with placeholders; see [Adding your own screenshots](#adding-your-own-screenshots) at the bottom for where to drop them in.
+A full walkthrough of Note Organizer — what it does, and how to use it.
 
 ---
 
 ## Getting started
 
-Note Organizer runs as a single window with three tabs: **Notes**, **Calendar**, and **Settings**. Everything is stored locally, next to the app — there's no account to create and no internet connection required.
+Note Organizer runs as a single window with two tabs, **Notes** and **Calendar**, plus a **Settings** page reached via its own button at the bottom of the sidebar. Everything is stored locally, next to the app — there's no account to create and no internet connection required.
 
 ![Main window](screenshots/main-window.png)
 
