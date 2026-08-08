@@ -5960,6 +5960,13 @@ class NoteOrganizer(tk.Tk):
             stripe = tk.Frame(row, bg=color, width=4)
             stripe.pack(side="left", fill="y")
 
+            del_btn = tk.Button(
+                row, text="🗑", relief="flat", cursor="hand2", bd=0,
+                bg=self.colors["card"], fg=self.colors["subtext"], font=("Segoe UI", 10),
+                command=lambda n=base_note, d=date_str: self._delete_note_from_calendar(n, d)
+            )
+            del_btn.pack(side="right", padx=(0, 8))
+
             title_text = _note_str(note, "title") or "(untitled)"
             if is_recurring(base_note):
                 title_text = "🔁 " + title_text
@@ -6003,6 +6010,11 @@ class NoteOrganizer(tk.Tk):
                   bg=self.colors["accent"], fg="white", relief="flat",
                   font=("Segoe UI", 9, "bold"), cursor="hand2"
                   ).pack(side="right", ipadx=6, ipady=2)
+        tk.Button(top, text="🗑 Delete",
+                  command=lambda: self._delete_note_from_calendar(base_note, date_str),
+                  bg=self.colors["danger"], fg="white", relief="flat",
+                  font=("Segoe UI", 9, "bold"), cursor="hand2"
+                  ).pack(side="right", padx=(0, 6), ipadx=6, ipady=2)
 
         title = _note_str(note, "title").strip() or "(untitled)"
         tk.Label(self.day_panel, text=title, font=("Segoe UI", 12, "bold"),
@@ -6023,6 +6035,18 @@ class NoteOrganizer(tk.Tk):
             content += f"\n\n— Comments —\n{note['comments']}"
         txt.insert("1.0", content)
         txt.config(state="disabled")
+
+    def _delete_note_from_calendar(self, note, date_str):
+        """Delete a note from within the calendar day panel (list or detail
+        view). Only refreshes the panel if the note actually stopped
+        occurring on this date — if the user cancels the confirmation (or,
+        for a recurring note, cancels the occurrence-scope prompt), the
+        current view is left exactly as it was, rather than always bouncing
+        back to the list regardless of what was chosen."""
+        self._context_delete_note(note, date_str)
+        still_here = any(n["id"] == note["id"] for n in self.notes_on_date(date_str))
+        if not still_here:
+            self.refresh_day_panel()
 
     def refresh_day_panel(self):
         """Re-render whatever the panel is currently showing (after edits/deletes)."""
@@ -7669,8 +7693,10 @@ class NoteOrganizer(tk.Tk):
         )
         menu.add_command(
             label="🗑  Delete",
-            command=lambda: (self._context_delete_note(note, occurrence_date),
-                             self.refresh_day_panel())
+            command=(lambda: self._delete_note_from_calendar(note, occurrence_date))
+                    if occurrence_date is not None else
+                    (lambda: (self._context_delete_note(note, occurrence_date),
+                             self.refresh_day_panel()))
         )
 
         try:
