@@ -2298,7 +2298,7 @@ class NoteOrganizer(tk.Tk):
         so the user can review or edit it, then hit Save when ready. Crucially
         this stays a NEW note (no selected_note_id) so Save creates a fresh one."""
         note = normalize_note(shared_note)
-        self.notebook.select(0)  # Notes tab
+        self.notebook.select(self.TAB_NOTES)
         self.open_blank_tab()    # gives a clean new-note editor state
 
         self.title_entry.delete(0, "end")
@@ -3155,7 +3155,7 @@ class NoteOrganizer(tk.Tk):
 
         def goto_category(cat):
             self.filter_var.set(cat)
-            self.notebook.select(0)
+            self.notebook.select(self.TAB_NOTES)
             self.refresh_note_list()
 
         for idx, cat in enumerate(ordered_cats):
@@ -4404,6 +4404,13 @@ class NoteOrganizer(tk.Tk):
         self._export_poll_job = None
 
         # --- Notebook: Notes tab / Calendar tab ---
+        # Settings is deliberately NOT a third tab here anymore — it lives as
+        # a separate page (see show_settings_page/hide_settings_page below),
+        # reached via its own button in the sidebar's bottom action zone,
+        # alongside New Note / Import / Share. Putting it in the tab strip
+        # made it read as "just another tab", and the alternative of pushing
+        # it to the top-right corner risked sitting too close to the
+        # window's own close button.
         self.notebook = ttk.Notebook(self.main_inner)
         self.notebook.pack(fill="both", expand=True)
 
@@ -4411,27 +4418,31 @@ class NoteOrganizer(tk.Tk):
         self.track_theme(notes_tab, bg="bg")
         calendar_tab = tk.Frame(self.notebook)
         self.track_theme(calendar_tab, bg="bg")
-        settings_tab = tk.Frame(self.notebook)
-        self.track_theme(settings_tab, bg="bg")
 
         self.notebook.add(notes_tab, text="📝 Notes")
         self.notebook.add(calendar_tab, text="📅 Calendar")
-        self.notebook.add(settings_tab, text="⚙ Settings")
+
+        # Looked up from the notebook itself rather than hardcoded — stays
+        # correct even if a tab is ever added, removed, or reordered again.
+        self.TAB_NOTES = self.notebook.index(notes_tab)
+        self.TAB_CALENDAR = self.notebook.index(calendar_tab)
+
+        # Settings page: a sibling of the notebook (not inside it), in the
+        # same parent, so showing it is a simple pack-forget/pack swap.
+        self.settings_page = tk.Frame(self.main_inner)
+        self.track_theme(self.settings_page, bg="bg")
+        # Not packed yet — hidden until show_settings_page() is called.
 
         self.build_notes_tab(notes_tab)
         self.build_calendar_tab(calendar_tab)
-        self.build_settings_tab(settings_tab)
+        self.build_settings_tab(self.settings_page)
 
-        # Statistics can go stale (notes change while on another tab), so
-        # recompute them whenever the Settings tab is opened.
         def _on_tab_changed(event):
             try:
-                idx = self.notebook.index(self.notebook.select())
+                self.notebook.index(self.notebook.select())
             except tk.TclError:
                 return
             self._catch_up_deferred_refresh()
-            if idx == 2:
-                self._render_statistics()
             # Defensive: some platforms move keyboard focus to whatever Entry
             # happens to sit first in the newly-shown tab (e.g. the search box)
             # when the previously-focused widget is hidden by the tab switch.
@@ -4444,6 +4455,20 @@ class NoteOrganizer(tk.Tk):
             except (tk.TclError, KeyError):
                 pass
         self.notebook.bind("<<NotebookTabChanged>>", _on_tab_changed, add="+")
+
+    def show_settings_page(self):
+        """Show the Settings page in place of the Notes/Calendar notebook.
+        Settings lives outside the tab strip on purpose — see the comment
+        where self.settings_page is created."""
+        self._catch_up_deferred_refresh()
+        self.notebook.pack_forget()
+        self.settings_page.pack(fill="both", expand=True)
+        self._render_statistics()
+
+    def hide_settings_page(self):
+        """Return from Settings to the Notes/Calendar notebook."""
+        self.settings_page.pack_forget()
+        self.notebook.pack(fill="both", expand=True)
 
     def toggle_sidebar(self):
         """Hide or show the left sidebar (note list + New Note / Import / Share)
@@ -4602,6 +4627,13 @@ class NoteOrganizer(tk.Tk):
         # Inline share panel — pick notes, get a code, all without a pop-up.
         self.share_panel = tk.Frame(bottom_zone)
         self.track_theme(self.share_panel, bg="sidebar")
+
+        settings_btn = tk.Button(
+            bottom_zone, text="⚙ Settings", command=self.show_settings_page,
+            relief="flat", font=("Segoe UI", 10, "bold"), cursor="hand2"
+        )
+        self.track_theme(settings_btn, bg="card", fg="text")
+        settings_btn.pack(fill="x", padx=15, pady=(0, 12), ipady=5)
 
         # --- Sidebar collapse toggle (thin strip on the sidebar's edge) ---
         # Stays visible whether the sidebar is shown or hidden, so the user can
@@ -5043,6 +5075,16 @@ class NoteOrganizer(tk.Tk):
                 b.configure(fg="white")
             return b
 
+        back_row = tk.Frame(page)
+        self.track_theme(back_row, bg="bg")
+        back_row.pack(fill="x", padx=40, pady=(20, 0))
+        back_btn = tk.Button(
+            back_row, text="← Back to Notes", command=self.hide_settings_page,
+            relief="flat", font=("Segoe UI", 9, "bold"), cursor="hand2"
+        )
+        self.track_theme(back_btn, bg="card", fg="text")
+        back_btn.pack(side="left", ipadx=8, ipady=4)
+
         tk.Label(page, text="⚙  Settings", font=("Segoe UI", 20, "bold"),
                  bg=self.colors["bg"], fg=self.colors["text"], anchor="w"
                  ).pack(fill="x", padx=40, pady=(24, 0))
@@ -5276,11 +5318,8 @@ class NoteOrganizer(tk.Tk):
         def _on_resize(event):
             if getattr(self, "notebook", None) is None:
                 return
-            try:
-                if self.notebook.index(self.notebook.select()) != 1:
-                    return  # only when the Calendar tab is showing
-            except tk.TclError:
-                return
+            if not self._is_calendar_visible():
+                return  # only when the Calendar tab is actually showing
             size = self._cal_note_font_size()
             if size != self._cal_last_font_size:
                 self._cal_last_font_size = size
@@ -5293,13 +5332,25 @@ class NoteOrganizer(tk.Tk):
         self.bind_all("<Control-Next>", lambda e: self._calendar_key(e, years=1))
         self.bind_all("<Home>", lambda e: self._calendar_key(e, today=True))
 
+    def _is_calendar_visible(self):
+        """True only if the Calendar tab is both selected AND actually on
+        screen. The notebook's own idea of 'which tab is selected' doesn't
+        change just because the Settings page is currently covering it (they're
+        siblings, and showing one doesn't clear the other's selection) — so
+        checking the tab index alone isn't enough on its own, or calendar
+        keyboard shortcuts and resize-driven relayout could silently act on a
+        calendar the user can't currently see, behind the Settings page."""
+        try:
+            if not self.notebook.winfo_ismapped():
+                return False
+            return self.notebook.index(self.notebook.select()) == self.TAB_CALENDAR
+        except tk.TclError:
+            return False
+
     def _calendar_key(self, event, months=0, years=0, today=False):
         """Keyboard navigation, but only while the Calendar tab is showing and
         the user isn't typing — otherwise PgUp/Home would hijack the editor."""
-        try:
-            if self.notebook.index(self.notebook.select()) != 1:
-                return
-        except tk.TclError:
+        if not self._is_calendar_visible():
             return
 
         # bind_all delivers the key to whichever widget has focus, so the
@@ -5677,7 +5728,7 @@ class NoteOrganizer(tk.Tk):
         close.bind("<Button-1>", lambda e: self.dismiss_reminder())
 
     def _open_today_from_reminder(self, today):
-        self.notebook.select(1)  # calendar
+        self.notebook.select(self.TAB_CALENDAR)
         self.open_day_popup(today)
 
     def dismiss_reminder(self):
@@ -5976,7 +6027,7 @@ class NoteOrganizer(tk.Tk):
         the normal case of switching between notes), so we set it again right
         after, once that's done."""
         remembered = {"year": self.cal_year, "month": self.cal_month, "date_str": date_str}
-        self.notebook.select(0)
+        self.notebook.select(self.TAB_NOTES)
         self.open_note_in_tab(base_note, occurrence_date=date_str)
         self._pending_calendar_return = remembered
         self._update_calendar_return_button()
@@ -5989,7 +6040,7 @@ class NoteOrganizer(tk.Tk):
         self._pending_calendar_return = {
             "year": self.cal_year, "month": self.cal_month, "date_str": date_str,
         }
-        self.notebook.select(0)
+        self.notebook.select(self.TAB_NOTES)
         self.new_note()
         self.date_entry.delete(0, "end")
         self.date_entry.insert(0, date_str)
@@ -6005,10 +6056,10 @@ class NoteOrganizer(tk.Tk):
         if hasattr(self, "calendar_return_btn"):
             self.calendar_return_btn.pack_forget()
         if not info:
-            self.notebook.select(1)
+            self.notebook.select(self.TAB_CALENDAR)
             return
         self.cal_year, self.cal_month = info["year"], info["month"]
-        self.notebook.select(1)
+        self.notebook.select(self.TAB_CALENDAR)
         self.render_calendar()
         if info.get("date_str"):
             self.open_day_popup(info["date_str"])
@@ -7627,13 +7678,13 @@ class NoteOrganizer(tk.Tk):
 
     def _ctx_open(self, note, occurrence_date):
         """Open a note in the editor tab from the context menu."""
-        self.notebook.select(0)
+        self.notebook.select(self.TAB_NOTES)
         self.open_note_in_tab(note, occurrence_date=occurrence_date)
 
     def _ctx_make_recurring(self, note):
         """Open a plain dated note in the editor and focus the Repeat control so
         the user can turn it into a recurring series."""
-        self.notebook.select(0)
+        self.notebook.select(self.TAB_NOTES)
         self.open_note_in_tab(note)
         # Nudge focus toward the recurrence dropdown so it's obvious what to do.
         try:
