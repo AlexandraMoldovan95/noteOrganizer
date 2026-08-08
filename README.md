@@ -105,4 +105,6 @@ The app stores everything next to the script (or next to the `.exe` when built),
 
 ## License
 
-*(add a LICENSE file — MIT is a common default for a portfolio project)*
+© 2026 Alexandra Moldovan. All rights reserved.
+
+This project is shared for portfolio and demonstration purposes. The source code may not be copied, modified, or redistributed without permission.
