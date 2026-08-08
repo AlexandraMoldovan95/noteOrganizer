@@ -80,15 +80,25 @@ The built app will appear under `dist/NoteOrganizer/`.
 
 ```
 noteOrganizer/
-├── note_organizer.py       # the application (single file by design — see docs/ARCHITECTURE.md)
+├── .github/
+│   └── workflows/
+│       └── tests.yml         # runs the full QA suite automatically on every push
+├── note_organizer.py         # the application (single file by design — see docs/ARCHITECTURE.md)
+├── test_recurrence.py        # standalone tests for the recurrence engine (no GUI needed)
 ├── docs/
-│   ├── USER_GUIDE.md        # full walkthrough with screenshots
-│   ├── ARCHITECTURE.md       # how the code is organized, and why
-│   ├── ROADMAP.md            # what's planned next
-│   ├── ISSUES_LOG.md         # notable bugs found & fixed during development
+│   ├── USER_GUIDE.md          # full walkthrough with screenshots
+│   ├── ARCHITECTURE.md        # how the code is organized, and why
+│   ├── ROADMAP.md             # what's planned next
+│   ├── ISSUES_LOG.md          # notable bugs found & fixed during development
+│   ├── GIT_WORKFLOW.md        # my own Git command reference for this project
 │   └── screenshots/
 └── qa/
-    └── NoteOrganizer_TestPlan.xlsx   # manual QA test case tracker
+    ├── NoteOrganizer_TestPlan.xlsx   # manual QA test case tracker
+    ├── qa1.py                        # automated: notes, categories, templates
+    ├── qa2.py                        # automated: recurrence, calendar, duplicates
+    ├── qa3.py                        # automated: trash, sharing, import/export
+    ├── qa4.py                        # automated: theming, stress tests, leak regression
+    └── qa5.py                        # automated: corrupt data, edge cases
 ```
 
 ## Documentation
@@ -98,6 +108,19 @@ noteOrganizer/
 - [Roadmap](docs/ROADMAP.md) — planned features and known open items
 - [Changelog](CHANGELOG.md) — release history
 - [Issues Log](docs/ISSUES_LOG.md) — notable bugs encountered during development, and how they were diagnosed/fixed
+- [Git Workflow](docs/GIT_WORKFLOW.md) — the exact commands I use for this project's branch/commit/PR flow
+
+## Testing
+
+Every push and Pull Request automatically runs the full QA suite via GitHub Actions (see `.github/workflows/tests.yml`) — recurrence engine tests plus five headless GUI test scripts covering notes/categories/templates, recurrence/calendar/duplicates, trash/sharing/import-export, theming/stress/leak-regression, and data-corruption resilience. Check the **Actions** tab on GitHub for the latest run.
+
+To run them locally:
+```bash
+python test_recurrence.py
+cd qa && python qa1.py   # and qa2.py – qa5.py
+```
+
+There's also a manual QA test plan (`qa/NoteOrganizer_TestPlan.xlsx`) covering scenarios that are easier to eyeball than to automate.
 
 ## Local data
 
