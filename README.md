@@ -98,7 +98,8 @@ noteOrganizer/
     ├── qa2.py                        # automated: recurrence, calendar, duplicates
     ├── qa3.py                        # automated: trash, sharing, import/export
     ├── qa4.py                        # automated: theming, stress tests, leak regression
-    └── qa5.py                        # automated: corrupt data, edge cases
+    ├── qa5.py                        # automated: corrupt data, edge cases
+    └── qa6.py                        # automated: grouping, settings, attachments, combinations
 ```
 
 ## Documentation
@@ -112,12 +113,12 @@ noteOrganizer/
 
 ## Testing
 
-Every push and Pull Request automatically runs the full QA suite via GitHub Actions (see `.github/workflows/tests.yml`) — recurrence engine tests plus five headless GUI test scripts covering notes/categories/templates, recurrence/calendar/duplicates, trash/sharing/import-export, theming/stress/leak-regression, and data-corruption resilience. Check the **Actions** tab on GitHub for the latest run.
+Every push and Pull Request automatically runs the full QA suite via GitHub Actions (see `.github/workflows/tests.yml`) — recurrence engine tests plus six headless GUI test scripts covering notes/categories/templates, recurrence/calendar/duplicates, trash/sharing/import-export, theming/stress/leak-regression, data-corruption resilience, and grouping/settings/attachments/multi-feature combinations. Check the **Actions** tab on GitHub for the latest run.
 
 To run them locally:
 ```bash
 python test_recurrence.py
-cd qa && python qa1.py   # and qa2.py – qa5.py
+cd qa && python qa1.py   # and qa2.py – qa6.py
 ```
 
 There's also a manual QA test plan (`qa/NoteOrganizer_TestPlan.xlsx`) covering scenarios that are easier to eyeball than to automate.

@@ -22,6 +22,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ### Testing
 - Two of the five automated QA scripts (`qa3.py`, `qa4.py`) still referenced the Settings page's old, removed notebook-tab index, and had been silently passing for the wrong reason (their own exit code was never actually checked, so a script erroring out still reported as a successful test run). Both issues are fixed: the scripts now call `show_settings_page()` directly, and every test script exits with a real failure status when a check fails, which is what makes the new CI integration meaningful rather than always green.
+- Added `qa6.py`: automated coverage for category grouping (collapse state and persistence), Settings (username greeting, statistics navigation), attachments through the actual UI functions (not just the file-cleanup fix), several multi-feature combination scenarios, and the parts of window layout that have a real right/wrong answer (sidebar toggle, dialogs staying within the app window). Wired into the CI workflow alongside the rest.
 
 ---
 

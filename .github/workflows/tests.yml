@@ -58,3 +58,8 @@ jobs:
         run: |
           cd qa
           xvfb-run -a python3 qa5.py
+
+      - name: QA6 — Grouping, Settings, Attachments, Combinations, Layout
+        run: |
+          cd qa
+          xvfb-run -a python3 qa6.py
