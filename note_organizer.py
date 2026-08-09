@@ -38,7 +38,7 @@ except ImportError:
 # distribute: PATCH for fixes, MINOR for new features, MAJOR for big changes.
 # The running app records this into settings, so the next time a newer build
 # opens over older data it can tell the user what changed version-wise.
-APP_VERSION = "1.0.0"
+APP_VERSION = "0.5.0"
 
 
 def parse_version(v):

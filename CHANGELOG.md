@@ -8,6 +8,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ## [Unreleased]
 
+## [0.5.0] — 2026-08-09
+
 ### Fixed
 - Attachment files were never actually deleted from disk — removing an attachment from a note, permanently deleting a trashed note (individually, via "Empty trash", or through automatic purge after the retention window) all removed the note/reference but left the underlying file behind indefinitely. All four paths now clean up the physical file too. Moving a note to trash (the reversible, soft-delete path) correctly still leaves files untouched, since the note might be restored.
 - Calendar keyboard navigation (PgUp/PgDn/Home) and the resize-driven font relayout could still act on the calendar while it was hidden behind the new Settings page, if Calendar had been the last-selected tab before opening Settings — silently changing the visible month behind the scenes. Both now check that the calendar is actually on screen, not just that it's the notebook's internally "selected" tab.
