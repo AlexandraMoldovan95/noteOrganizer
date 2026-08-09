@@ -3282,13 +3282,23 @@ class NoteOrganizer(tk.Tk):
             pass
 
     def _build_themed_dropdown(self, parent, var, options, on_change,
-                               dot_color_fn=None, width_chars=14):
+                               dot_color_fn=None, width_chars=14, nested=False):
         """Build a small themed dropdown button (replaces ttk.Combobox for
         simple single-choice selectors like sort/filter). Returns the button
         Frame; pack it into the caller's layout. `dot_color_fn(value)` — if
         given — returns a hex color to show a bullet next to each option (used
         for the category filter); return None/falsy to skip the bullet for
-        that option (e.g. "All")."""
+        that option (e.g. "All").
+
+        `nested=True` — use when this dropdown lives INSIDE another popup
+        (e.g. the category picker inside the template editor). The default
+        path calls self._dismiss_mini_popup() to close whatever popup was
+        open before opening a new, unrelated one — but a dropdown nested
+        inside another popup IS that popup's content, not something separate
+        to replace; calling the shared dismiss would destroy the very editor
+        this dropdown is sitting inside, before its own list even opens.
+        Nested mode tracks its own small popup instead, leaving whatever the
+        app's main self._mini_popup is completely alone."""
         btn = tk.Frame(parent, bg=self.colors["sidebar"],
                       highlightthickness=1, highlightbackground=self.colors["card"])
         lbl = tk.Label(btn, textvariable=var, bg=self.colors["sidebar"],
@@ -3303,9 +3313,23 @@ class NoteOrganizer(tk.Tk):
         self.track_theme(caret, bg="sidebar", fg="subtext")
 
         def open_list():
-            self._dismiss_mini_popup()
-            pop = tk.Toplevel(self)
-            self._mini_popup = pop
+            if nested:
+                # Close only THIS dropdown's own previous popup, if any —
+                # never touch self._mini_popup, which belongs to whatever
+                # popup this dropdown is living inside.
+                existing = getattr(btn, "_nested_popup", None)
+                if existing is not None:
+                    try:
+                        if existing.winfo_exists():
+                            existing.destroy()
+                    except tk.TclError:
+                        pass
+                pop = tk.Toplevel(self)
+                btn._nested_popup = pop
+            else:
+                self._dismiss_mini_popup()
+                pop = tk.Toplevel(self)
+                self._mini_popup = pop
             pop.wm_overrideredirect(True)
             pop.configure(bg=self.colors["accent"])
             frame = tk.Frame(pop, bg=self.colors["card"], padx=4, pady=4)
@@ -3337,7 +3361,14 @@ class NoteOrganizer(tk.Tk):
 
                 def pick(v=opt):
                     var.set(v)
-                    self._dismiss_mini_popup()
+                    if nested:
+                        try:
+                            pop.destroy()
+                        except tk.TclError:
+                            pass
+                        btn._nested_popup = None
+                    else:
+                        self._dismiss_mini_popup()
                     on_change(v)
 
                 for w in widgets:
@@ -3348,6 +3379,12 @@ class NoteOrganizer(tk.Tk):
                         w.bind("<Leave>", lambda e, r=row, ws=widgets:
                                [x.configure(bg=self.colors["card"]) for x in ws])
 
+            if nested:
+                # Escape is this dropdown's own way to back out without
+                # picking anything, since it can't rely on the shared
+                # click-outside-dismiss (that's scoped to self._mini_popup,
+                # which nested mode deliberately never touches).
+                pop.bind("<Escape>", lambda e: pop.destroy())
             self._place_dropdown_popup(pop, btn)
 
         for w in (btn, lbl, caret):
@@ -3863,7 +3900,8 @@ class NoteOrganizer(tk.Tk):
         cat_menu = self._build_themed_dropdown(
             frame, cat_var, lambda: list(CATEGORY_COLORS.keys()),
             on_change=lambda v: None,
-            dot_color_fn=lambda v: CATEGORY_COLORS.get(v), width_chars=16)
+            dot_color_fn=lambda v: CATEGORY_COLORS.get(v), width_chars=16,
+            nested=True)
         cat_menu.pack(fill="x", pady=(0, 6))
 
         def save():
@@ -5573,7 +5611,8 @@ class NoteOrganizer(tk.Tk):
         month_names = list(cal_module.month_name)[1:]
         month_var = tk.StringVar(value=cal_module.month_name[self.cal_month])
         month_menu = self._build_themed_dropdown(
-            row, month_var, month_names, on_change=lambda v: None, width_chars=10)
+            row, month_var, month_names, on_change=lambda v: None, width_chars=10,
+            nested=True)
         month_menu.pack(side="left", padx=(0, 8))
 
         year_var = tk.StringVar(value=str(self.cal_year))

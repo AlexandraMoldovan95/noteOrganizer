@@ -93,3 +93,9 @@ jobs:
           cd qa
           rm -rf attachments *.json
           xvfb-run -a python3 qa8.py
+
+      - name: QA9 — Nested-dropdown-inside-popup fix (template editor, jump-to-month)
+        run: |
+          cd qa
+          rm -rf attachments *.json
+          xvfb-run -a python3 qa9.py

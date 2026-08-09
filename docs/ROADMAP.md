@@ -2,6 +2,46 @@
 
 Planned work and open ideas, roughly ordered by how soon they're likely to happen. Nothing here is a promise or a deadline — this is a working list for a project developed in spare time by a small team of two.
 
+## Known bugs to investigate
+
+Found by hand, not yet worked on. Grouped by area.
+
+**Note list**
+- Dragging the scrollbar with only a few notes in the list causes visible flicker and adds unexplained spacing between the top bar and the first note's title. Doesn't happen with a longer list — worth checking whether this is related to the scrollregion calculation only being "exercised" enough to self-correct once there's enough content to actually need scrolling.
+- **"Recently updated" sort is unreliable** — doesn't always correctly show the most recently autosaved note first, even though the note *was* saved. Needs a full check of every sort option's logic, not just this one, to make sure each does exactly what its label says.
+- Grouping by category: after expanding the last (previously collapsed) group, editing a note inside it (which autosaves), then collapsing that group again, the note list's scroll position sometimes jumps back to the top instead of staying near where that group was. Hard to reproduce consistently — needs a closer look at what specifically triggers it.
+
+**Settings**
+- Hovering the mouse over the theme picker cards blocks the right-side scrollbar from working (can't scroll up/down while hovering there, without clicking) — likely a stray mouse-wheel binding on the theme cards capturing the scroll event instead of letting it reach the page.
+- The "← Back to Notes" button should stay visible at all times (sticky/pinned), not scroll out of view when scrolled further down the Settings page.
+- Layout: each section's title is left-aligned, but the action buttons are centered — inconsistent, makes the page harder to scan at a glance ("eye slalom"). Worth a proper design pass, not just a quick alignment fix — see "Settings redesign" below, this is likely folded into that.
+- Statistics: hovering looks clickable (the button highlights), but clicking does nothing. Needs its own discussion — see "Statistics: keep, enhance, or relocate?" below.
+- Username field: no length limit currently — a very long typed name could look broken elsewhere in the UI (e.g. the sidebar greeting). Needs a reasonable cap (discussed as ~30 characters).
+- Username field: the redundant "Save" button should probably go — typing a name and navigating away already keeps it (autosave-like behavior already exists here), so a separate save action isn't adding anything.
+- Username field: after clicking into the field and then clicking elsewhere *within Settings* (not related to the name), the text cursor stays visibly blinking in the field instead of losing focus. Switching to the Notes/Calendar tab and back correctly clears it — only the same-page "click elsewhere" case is affected.
+
+**Multi-select**
+- The bulk "Category" button's text isn't fully visible — the last letter of "Category" is slightly cramped, and the label to its left isn't visible at all. Likely just needs more width or a smaller font in that specific button.
+
+**Sort/filter controls**
+- The "Recently updated" label is cut off in the dropdown button itself (before it's even opened) — the last "d" isn't visible. Probably needs a small width adjustment or tighter font.
+
+**Calendar**
+- The right-click "View this day" option seems redundant — a plain left-click on a day already does the same thing (opens that day's view). Worth just removing this menu entry.
+- **Bug:** manually typing a date into a note's date field (year/month/day) and then clicking elsewhere doesn't trigger autosave — the note isn't saved with the new date, and doesn't show up on the calendar there. Same problem when picking a date via the small calendar-icon date-picker popup instead of typing — also doesn't autosave afterward. This one actually loses data (the date change) and is worth prioritizing over the others here when this list gets picked up.
+
+## Settings redesign (bigger discussion, own design pass)
+
+The current single-column Settings page makes for a lot of scrolling and doesn't clearly separate "which section am I in" from "what are this section's controls." Considering a restructure closer to how Chrome (and similar apps) lay out settings: a narrow column on the left listing every section, and the actual controls for whichever section is selected on the right, with empty space beyond that rather than everything stretched full-width. Not yet decided whether Settings should become an inline popup/modal (opened from the editor or calendar, floating over the app) or stay as a page of its own — worth a dedicated conversation before building anything, since it affects more than just this list of small alignment fixes above.
+
+## Statistics: keep, enhance, or relocate?
+
+Currently looks interactive (hover highlight) but isn't clickable, which is misleading. Options to weigh in a separate discussion: make it genuinely interactive to match how it already looks, give it a visual refresh to feel more worth having, or move it down near "About" on the reasoning that it's a low-traffic feature not worth prime placement. No decision made yet — noted here so it isn't lost, not to be worked on until discussed on its own.
+
+## Versioning
+
+Keep the version number below `1.0.0` until the app actually has a real public launch, so that number stays meaningful (a clean `1.0.0` for the real first release, not used up early). Worth revisiting how updates between now and then get grouped into versions, rather than the current ad-hoc pacing.
+
 ## Under consideration
 
 - **Rich text formatting** (bold / italic / underline / basic font choices) in the note body. This is a real architectural change — the editor is currently a plain `tk.Text` widget with no formatting model — so it needs its own design pass rather than being slotted in alongside smaller fixes.
