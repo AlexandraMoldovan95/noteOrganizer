@@ -1562,6 +1562,8 @@ class NoteOrganizer(tk.Tk):
         """Run an auto-save if the current editor content is worth saving and
         actually differs from what's on disk."""
         self._autosave_job = None
+        if not self._still_alive():
+            return
         # Catch the word count up now, in case rapid edits (e.g. inserting
         # several emojis in a row) skipped recomputing it on every click.
         try:
@@ -1680,6 +1682,8 @@ class NoteOrganizer(tk.Tk):
     # ---------- One-time startup notice ----------
     def announce_startup_changes(self):
         """Shown once: where the notes now live, and what cleanup removed."""
+        if not self._still_alive():
+            return
         lines = []
 
         if VERSION_CHANGE:
@@ -1839,7 +1843,16 @@ class NoteOrganizer(tk.Tk):
                     for i, (src, arcname) in enumerate(entries, start=1):
                         zf.write(src, arcname=arcname)
                         state["current"] = i
-            except (IOError, OSError) as e:
+            except Exception as e:
+                # Deliberately broad: this runs in a background thread, where
+                # an uncaught exception of ANY kind kills the thread silently
+                # (Python's default thread behavior) without ever reaching
+                # state["done"] = True below — leaving the progress bar
+                # polling forever against a dict that will never say it's
+                # finished, with no error shown. A background worker must
+                # never let anything escape uncaught; the specific IOError/
+                # OSError message is still preserved when that's the cause,
+                # just no longer the only kind of failure that's handled.
                 state["error"] = str(e)
             state["done"] = True
 
@@ -2429,46 +2442,57 @@ class NoteOrganizer(tk.Tk):
 
         def worker():
             state = self._import_state
-            temp_dir = tempfile.mkdtemp(prefix="notes_import_")
-            state["temp_dir"] = temp_dir
             try:
-                with zipfile.ZipFile(zip_path, "r") as zf:
-                    _safe_extract_zip(zf, temp_dir)
-            except (zipfile.BadZipFile, IOError, OSError, ValueError) as e:
-                state["error"] = f"That file couldn't be read as a backup:\n{e}"
-                state["done"] = True
-                return
+                temp_dir = tempfile.mkdtemp(prefix="notes_import_")
+                state["temp_dir"] = temp_dir
+                try:
+                    with zipfile.ZipFile(zip_path, "r") as zf:
+                        _safe_extract_zip(zf, temp_dir)
+                except (zipfile.BadZipFile, IOError, OSError, ValueError) as e:
+                    state["error"] = f"That file couldn't be read as a backup:\n{e}"
+                    state["done"] = True
+                    return
 
-            imported_notes_path = os.path.join(temp_dir, "notes_data.json")
-            if not os.path.exists(imported_notes_path):
-                state["error"] = "This .zip doesn't look like a Notes Organizer backup."
-                state["done"] = True
-                return
+                imported_notes_path = os.path.join(temp_dir, "notes_data.json")
+                if not os.path.exists(imported_notes_path):
+                    state["error"] = "This .zip doesn't look like a Notes Organizer backup."
+                    state["done"] = True
+                    return
 
-            try:
-                with open(imported_notes_path, "r", encoding="utf-8") as f:
-                    imported_notes = json.load(f)
-            except (json.JSONDecodeError, IOError) as e:
-                state["error"] = f"Couldn't read the notes in that backup:\n{e}"
-                state["done"] = True
-                return
-            state["imported_notes"] = imported_notes
+                try:
+                    with open(imported_notes_path, "r", encoding="utf-8") as f:
+                        imported_notes = json.load(f)
+                except (json.JSONDecodeError, IOError) as e:
+                    state["error"] = f"Couldn't read the notes in that backup:\n{e}"
+                    state["done"] = True
+                    return
+                state["imported_notes"] = imported_notes
 
-            # Copy any attached files from the backup into our attachments
-            # folder — the slowest part for a backup with a lot of them.
-            imported_attachments_dir = os.path.join(temp_dir, "attachments")
-            state["phase"] = "copying"
-            if os.path.isdir(imported_attachments_dir):
-                files = os.listdir(imported_attachments_dir)
-                state["total"] = max(len(files), 1)
-                for i, filename in enumerate(files, start=1):
-                    dest = os.path.join(ATTACHMENTS_DIR, filename)
-                    if not os.path.exists(dest):
-                        try:
-                            shutil.copy2(os.path.join(imported_attachments_dir, filename), dest)
-                        except (IOError, OSError):
-                            pass  # non-critical — the note metadata still gets imported
-                    state["current"] = i
+                # Copy any attached files from the backup into our attachments
+                # folder — the slowest part for a backup with a lot of them.
+                imported_attachments_dir = os.path.join(temp_dir, "attachments")
+                state["phase"] = "copying"
+                if os.path.isdir(imported_attachments_dir):
+                    files = os.listdir(imported_attachments_dir)
+                    state["total"] = max(len(files), 1)
+                    for i, filename in enumerate(files, start=1):
+                        dest = os.path.join(ATTACHMENTS_DIR, filename)
+                        if not os.path.exists(dest):
+                            try:
+                                shutil.copy2(os.path.join(imported_attachments_dir, filename), dest)
+                            except (IOError, OSError):
+                                pass  # non-critical — the note metadata still gets imported
+                        state["current"] = i
+            except Exception as e:
+                # Last-resort catch-all, outside every specific handler above.
+                # This runs in a background thread — an uncaught exception of
+                # ANY kind kills the thread silently (Python's default thread
+                # behavior) without ever reaching state["done"] = True, leaving
+                # the progress bar polling forever against a dict that will
+                # never say it's finished, with no error shown. The specific
+                # handlers above still give a precise message for the cases
+                # they know about; this only catches whatever isn't one of them.
+                state["error"] = f"Import failed unexpectedly:\n{e}"
             state["done"] = True
 
         threading.Thread(target=worker, daemon=True).start()
@@ -4810,6 +4834,8 @@ class NoteOrganizer(tk.Tk):
             drifting away from the top when it's shorter than the visible area.
             Without this, scrolling up on a short note (common when the window
             is maximized) leaves a blank gap above the title."""
+            if not self._still_alive():
+                return
             self.editor_canvas.configure(scrollregion=self.editor_canvas.bbox("all"))
             bbox = self.editor_canvas.bbox(editor_window)
             if not bbox:
@@ -5238,6 +5264,8 @@ class NoteOrganizer(tk.Tk):
                 except (tk.TclError, ValueError):
                     pass
                 self._username_save_job = None
+            if not self._still_alive():
+                return
             self.save_username(self.username_var.get())
             self._refresh_greeting()
             self.set_status("Name saved" if self.username_var.get().strip() else "Name cleared")
@@ -5819,6 +5847,8 @@ class NoteOrganizer(tk.Tk):
     def maybe_show_reminder(self):
         """Show a subtle 'you have notes today' bar — but only once per calendar
         day, and only if there actually are notes due today."""
+        if not self._still_alive():
+            return
         today = datetime.now().strftime("%Y-%m-%d")
         settings = load_settings()
         if settings.get("reminder_last_shown") == today:
@@ -6401,9 +6431,12 @@ class NoteOrganizer(tk.Tk):
         # Click-outside-to-dismiss, matching every other in-app overlay —
         # bound on a short delay so the click that OPENED this preview isn't
         # also immediately seen as a click "outside" it.
-        self.after(50, lambda: setattr(
-            self, "_mini_popup_click_bind",
-            self.bind("<Button-1>", self._maybe_dismiss_mini_popup, add="+")))
+        def _bind_click_outside():
+            if not self._still_alive():
+                return
+            self._mini_popup_click_bind = self.bind(
+                "<Button-1>", self._maybe_dismiss_mini_popup, add="+")
+        self.after(50, _bind_click_outside)
 
     def _open_externally(self, path):
         """Hand a file off to whatever program Windows has associated with
@@ -9109,6 +9142,30 @@ class NoteOrganizer(tk.Tk):
             self.render_calendar()
             self.set_status("Note moved to Trash (recoverable for 30 days)")
 
+    def report_callback_exception(self, exc_type, exc_value, exc_tb):
+        """Overrides Tkinter's default handler for exceptions raised inside
+        any bound callback (button click, keyboard shortcut, timer, ...).
+        The default implementation only prints to stderr — invisible in this
+        app's --windowed build, meaning an unexpected error would otherwise
+        fail completely silently: no crash, but no feedback either, leaving
+        the user unsure whether their click did anything or their data is
+        still safe. This doesn't prevent the failure (whatever the callback
+        was doing stops at the point it broke, same as before), but at least
+        says so, and leaves a trace to diagnose later — same log file the
+        top-level crash handler uses, so both end up in one place."""
+        import traceback
+        details = "".join(traceback.format_exception(exc_type, exc_value, exc_tb))
+        try:
+            log_path = os.path.join(APP_DIR, "crash_log.txt")
+            with open(log_path, "a", encoding="utf-8") as f:
+                f.write(f"\n--- {datetime.now().isoformat()} (callback) ---\n{details}\n")
+        except (IOError, OSError, NameError):
+            pass
+        try:
+            self._show_toast("Something went wrong with that — your other notes are safe", kind="error")
+        except tk.TclError:
+            pass
+
     def on_app_close(self):
         """Before the window closes, offer to save any tabs with unsaved work."""
         self._flush_autosave()
@@ -9145,7 +9202,8 @@ class NoteOrganizer(tk.Tk):
         if not hasattr(self, "toast_frame"):
             return
         color = {"success": self.colors["success"],
-                 "info": self.colors["accent"]}.get(kind, self.colors["success"])
+                 "info": self.colors["accent"],
+                 "error": self.colors["danger"]}.get(kind, self.colors["success"])
         try:
             self.toast_frame.configure(bg=color)
             self.toast_lbl.configure(text=f"✓  {text}", bg=color, fg="white")
