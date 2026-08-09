@@ -11,6 +11,11 @@ on:
 jobs:
   qa:
     runs-on: ubuntu-latest
+    # A safety net, not a normal expectation — the whole suite runs in well
+    # under 5 minutes. If anything ever hangs (a dialog waiting for a click
+    # that will never come in a headless run, for example), this stops it
+    # from silently occupying a runner for hours instead of failing loudly.
+    timeout-minutes: 15
     steps:
       - name: Check out the code
         uses: actions/checkout@v4
@@ -40,34 +45,51 @@ jobs:
         run: |
           cd qa
           cp ../note_organizer.py .
+          rm -rf attachments *.json
           xvfb-run -a python3 qa1.py
 
       - name: QA2 — Recurrence, calendar, duplicates
+        # Each QA step starts from a clean slate (no leftover settings.json,
+        # notes_data.json, trash.json, etc. from the step before it) — every
+        # script should behave the same whether it's run alone or as part of
+        # this whole sequence, not depend on what ran immediately before it.
         run: |
           cd qa
+          rm -rf attachments *.json
           xvfb-run -a python3 qa2.py
 
       - name: QA3 — Trash, share, import/export
         run: |
           cd qa
+          rm -rf attachments *.json
           xvfb-run -a python3 qa3.py
 
       - name: QA4 — Theming, stress, memory-leak regression
         run: |
           cd qa
+          rm -rf attachments *.json
           xvfb-run -a python3 qa4.py
 
       - name: QA5 — Corrupt data, edge cases
         run: |
           cd qa
+          rm -rf attachments *.json
           xvfb-run -a python3 qa5.py
 
       - name: QA6 — Grouping, Settings, Attachments, Combinations, Layout
         run: |
           cd qa
+          rm -rf attachments *.json
           xvfb-run -a python3 qa6.py
 
       - name: QA7 — Calendar delete, multi-select, image preview, autosave & memory fixes
         run: |
           cd qa
+          rm -rf attachments *.json
           xvfb-run -a python3 qa7.py
+
+      - name: QA8 — Search debounce and background-timer robustness
+        run: |
+          cd qa
+          rm -rf attachments *.json
+          xvfb-run -a python3 qa8.py
