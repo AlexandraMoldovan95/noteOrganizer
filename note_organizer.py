@@ -1590,6 +1590,18 @@ class NoteOrganizer(tk.Tk):
         # message is gentle rather than a loud "Saved!".
         self.save_current_note(auto=True)
 
+    def _still_alive(self):
+        """True if the app window is still around and usable. Checked before
+        any code that would otherwise touch a Tkinter widget from a timer
+        callback that might fire after the app has closed. winfo_exists()
+        itself can raise once the whole Tk application (not just one widget)
+        has been torn down, not only when a single widget is gone — so the
+        existence check itself needs a guard, not just what comes after it."""
+        try:
+            return bool(self.winfo_exists())
+        except tk.TclError:
+            return False
+
     def _poll_active_dirty(self):
         """Cheaply keep the active tab's dirty dot in sync while the user types,
         without binding every widget. Only redraws when the state flips."""
@@ -1603,7 +1615,12 @@ class NoteOrganizer(tk.Tk):
                     self.refresh_tab_strip()
         except (tk.TclError, Exception):
             pass
-        self.after(600, self._poll_active_dirty)
+        # Only reschedule if the window is still around — this timer refires
+        # forever otherwise, and calling self.after() against an already
+        # destroyed root raises its own error (observed in practice, e.g.
+        # when a script closes the app while this timer is still pending).
+        if self._still_alive():
+            self.after(600, self._poll_active_dirty)
 
     # ---------- Settings (theme) persistence ----------
     def load_theme_setting(self):
@@ -1833,6 +1850,11 @@ class NoteOrganizer(tk.Tk):
         """Runs on the main thread only, on a timer — reads the plain dict the
         background export thread updates, and reflects it in the progress
         bar. This is the ONLY place export touches any Tkinter widget."""
+        if not self._still_alive():
+            # The app was closed while the background thread was still
+            # running — nothing left to update; the thread finishes and
+            # writes its file regardless, it just has no UI left to report to.
+            return
         state = self._export_state
         if state is None:
             return
@@ -2457,6 +2479,8 @@ class NoteOrganizer(tk.Tk):
         _poll_export_progress. Reads the plain dict the background import
         thread updates; once the slow I/O is done, hands off to the
         (fast, in-memory) duplicate-check dialog and the actual merge."""
+        if not self._still_alive():
+            return
         state = self._import_state
         if state is None:
             return
@@ -4551,7 +4575,22 @@ class NoteOrganizer(tk.Tk):
         self._refresh_greeting()
 
         self.search_var = tk.StringVar()
-        self.search_var.trace_add("write", lambda *args: self.refresh_note_list())
+        self._search_debounce_job = None
+
+        def _debounced_search_refresh(*args):
+            # Rebuilding the whole note list is not cheap (every card is a
+            # handful of widgets) — doing it on every keystroke made typing a
+            # search term feel laggy with a large note collection, worse the
+            # more notes there are (exactly when search matters most). Wait
+            # for a short pause in typing instead, same idea as autosave.
+            if self._search_debounce_job is not None:
+                try:
+                    self.after_cancel(self._search_debounce_job)
+                except (tk.TclError, ValueError):
+                    pass
+            self._search_debounce_job = self.after(180, self.refresh_note_list)
+
+        self.search_var.trace_add("write", _debounced_search_refresh)
         search_entry = tk.Entry(
             self.sidebar, textvariable=self.search_var,
             insertbackground=self.colors["text"], relief="flat", font=("Segoe UI", 11)
@@ -7068,7 +7107,7 @@ class NoteOrganizer(tk.Tk):
 
     # ---------- Note list rendering ----------
     def refresh_note_list(self):
-        if not hasattr(self, "list_frame"):
+        if not hasattr(self, "list_frame") or not self._still_alive():
             return
         for widget in self.list_frame.winfo_children():
             widget.destroy()

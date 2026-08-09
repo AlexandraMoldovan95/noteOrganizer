@@ -8,6 +8,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ## [Unreleased]
 
+### Fixed
+- Typing in the note search box rebuilt the entire note list on every single keystroke — measured at ~800ms for 300 notes, meaning a short search term could cost several seconds of cumulative rebuild time, with visible input lag on every character. Now waits for a brief pause in typing before rebuilding once, the same debounce pattern already used for autosave.
+- Three background timers (the export/import progress poller, and the periodic "is there an unsaved edit" check) could throw an uncaught error if the app window was closed while they were still pending — e.g. closing the app while an export was running in the background. Found and fixed by systematically auditing every scheduled timer in the app, not just these three: also discovered that even checking "is the window still there" can itself fail once the whole application (not just one widget) has been torn down, not only the more obvious "the widget is gone" case — added one shared, properly-guarded check used everywhere this matters now.
+
+### Testing
+- Added `qa8.py`: automated coverage for the search debounce (no rebuild while typing, correct filtering after the pause) and the background-timer robustness fixes (each one confirmed not to raise when called against an already-closed window).
+
 ## [0.5.0] — 2026-08-09
 
 ### Fixed

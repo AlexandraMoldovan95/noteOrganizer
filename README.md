@@ -101,7 +101,8 @@ noteOrganizer/
     ├── qa4.py                        # automated: theming, stress tests, leak regression
     ├── qa5.py                        # automated: corrupt data, edge cases
     ├── qa6.py                        # automated: grouping, settings, attachments, combinations
-    └── qa7.py                        # automated: calendar delete, multi-select, image preview, autosave & memory fixes
+    ├── qa7.py                        # automated: calendar delete, multi-select, image preview, autosave & memory fixes
+    └── qa8.py                        # automated: search debounce, background-timer robustness
 ```
 
 ## Documentation
@@ -120,7 +121,7 @@ Every push and Pull Request automatically runs the full QA suite via GitHub Acti
 To run them locally:
 ```bash
 python test_recurrence.py
-cd qa && python qa1.py   # and qa2.py – qa7.py
+cd qa && python qa1.py   # and qa2.py – qa8.py
 ```
 
 There's also a manual QA test plan (`qa/NoteOrganizer_TestPlan.xlsx`) covering scenarios that are easier to eyeball than to automate.
