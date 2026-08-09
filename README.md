@@ -48,7 +48,7 @@ Built as a solo/pair project (developer + AI pairing partner) over an extended i
 
 ## Tech notes
 
-- **Pure Python + Tkinter.** No GUI framework dependency beyond the standard library — packages to a single-file Windows `.exe` via PyInstaller with no bundled runtime beyond Python itself.
+- **Pure Python + Tkinter, with one dependency.** No GUI framework beyond the standard library — packages to a single-file Windows `.exe` via PyInstaller with no bundled runtime beyond Python itself. The one exception is [Pillow](https://pypi.org/project/Pillow/), used specifically for correctly decoding and scaling image attachments (including composing animated GIF frames properly, which plain Tkinter doesn't do).
 - **Custom widget system throughout.** Every dropdown, color palette, and confirmation dialog is a hand-positioned `Toplevel` popup, anchored and multi-monitor-safe, rather than relying on `tkinter.messagebox` / `ttk.Combobox` defaults.
 - **Background threading for I/O.** Export and import (both of which can move a meaningful amount of data through attachments) run on a worker thread; the main thread only ever touches Tkinter widgets from a polling callback, keeping the UI responsive throughout.
 - **A defensive data layer.** `normalize_note()` coerces any note — however old, however malformed — into a known-good shape before it ever reaches the UI, so a single corrupted entry can't take down the whole app.
@@ -60,10 +60,11 @@ Built as a solo/pair project (developer + AI pairing partner) over an extended i
 ```bash
 git clone https://github.com/AlexandraMoldovan95/noteOrganizer.git
 cd noteOrganizer
+pip install -r requirements.txt
 python note_organizer.py
 ```
 
-Requires Python 3.9+ with Tkinter (bundled with most standard Python installs; on Linux you may need `sudo apt install python3-tk`).
+Requires Python 3.9+ with Tkinter (bundled with most standard Python installs; on Linux you may need `sudo apt install python3-tk`), plus [Pillow](https://pypi.org/project/Pillow/) for image previews (installed above via `requirements.txt`).
 
 ### Building a standalone `.exe` (Windows)
 
@@ -99,7 +100,8 @@ noteOrganizer/
     ├── qa3.py                        # automated: trash, sharing, import/export
     ├── qa4.py                        # automated: theming, stress tests, leak regression
     ├── qa5.py                        # automated: corrupt data, edge cases
-    └── qa6.py                        # automated: grouping, settings, attachments, combinations
+    ├── qa6.py                        # automated: grouping, settings, attachments, combinations
+    └── qa7.py                        # automated: calendar delete, multi-select, image preview, autosave & memory fixes
 ```
 
 ## Documentation
@@ -113,12 +115,12 @@ noteOrganizer/
 
 ## Testing
 
-Every push and Pull Request automatically runs the full QA suite via GitHub Actions (see `.github/workflows/tests.yml`) — recurrence engine tests plus six headless GUI test scripts covering notes/categories/templates, recurrence/calendar/duplicates, trash/sharing/import-export, theming/stress/leak-regression, data-corruption resilience, and grouping/settings/attachments/multi-feature combinations. Check the **Actions** tab on GitHub for the latest run.
+Every push and Pull Request automatically runs the full QA suite via GitHub Actions (see `.github/workflows/tests.yml`) — recurrence engine tests plus seven headless GUI test scripts covering notes/categories/templates, recurrence/calendar/duplicates, trash/sharing/import-export, theming/stress/leak-regression, data-corruption resilience, grouping/settings/attachments/multi-feature combinations, and calendar-delete/multi-select/image-preview/autosave/memory fixes. Check the **Actions** tab on GitHub for the latest run.
 
 To run them locally:
 ```bash
 python test_recurrence.py
-cd qa && python qa1.py   # and qa2.py – qa6.py
+cd qa && python qa1.py   # and qa2.py – qa7.py
 ```
 
 There's also a manual QA test plan (`qa/NoteOrganizer_TestPlan.xlsx`) covering scenarios that are easier to eyeball than to automate.

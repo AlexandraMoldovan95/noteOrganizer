@@ -66,3 +66,8 @@ jobs:
         run: |
           cd qa
           xvfb-run -a python3 qa6.py
+
+      - name: QA7 — Calendar delete, multi-select, image preview, autosave & memory fixes
+        run: |
+          cd qa
+          xvfb-run -a python3 qa7.py
