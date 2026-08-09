@@ -18,6 +18,20 @@ import calendar as cal_module
 import re
 from datetime import datetime, date as date_cls, timedelta
 
+try:
+    from PIL import Image, ImageTk
+except ImportError:
+    import tkinter.messagebox as _messagebox
+    _root = tk.Tk()
+    _root.withdraw()
+    _messagebox.showerror(
+        "Missing dependency",
+        "Note Organizer needs the Pillow library to run (used for image "
+        "previews).\n\nInstall it with:\n\n    pip install Pillow\n\n"
+        "then start the app again."
+    )
+    sys.exit(1)
+
 
 # ---- Version ----
 # Single source of truth. Bump this by hand when building a release to
@@ -1512,6 +1526,11 @@ class NoteOrganizer(tk.Tk):
         self.build_ui()
         self.refresh_note_list()
         self.render_calendar()
+        last_open_id = load_settings().get("last_open_note_id")
+        if last_open_id is not None:
+            last_note = self.find_note(last_open_id)
+            if last_note is not None:
+                self.open_note_in_tab(last_note)
         self.after(250, self.announce_startup_changes)
         self.after(400, self.maybe_show_reminder)
         self._last_active_dirty = None
@@ -1554,8 +1573,12 @@ class NoteOrganizer(tk.Tk):
         except Exception:
             return
         # Never auto-save a completely empty note — that would spawn junk notes
-        # every time the user clicks "New Note".
-        if not (st.get("title", "").strip() or st.get("body", "").strip()):
+        # every time the user clicks "New Note". Attachments and checklist
+        # items count as real content too, not just title/body — a note
+        # with only an attached file (no typed text at all) is genuinely
+        # meaningful and shouldn't be silently dropped.
+        if not (st.get("title", "").strip() or st.get("body", "").strip()
+                or st.get("attachments") or st.get("checklist")):
             return
         # Only save if something actually changed vs. the saved version.
         try:
@@ -1629,6 +1652,13 @@ class NoteOrganizer(tk.Tk):
         settings["collapsed_groups"] = sorted(self.collapsed_groups)
         save_settings(settings)
         self.refresh_note_list()
+
+    def _remember_last_open_note(self, note_id):
+        """Persist which note is currently open, so the app reopens directly
+        into it next launch instead of always starting on a blank editor."""
+        settings = load_settings()
+        settings["last_open_note_id"] = note_id
+        save_settings(settings)
 
     # ---------- One-time startup notice ----------
     def announce_startup_changes(self):
@@ -3457,6 +3487,13 @@ class NoteOrganizer(tk.Tk):
         self._dismiss_mini_popup()
 
     def _dismiss_mini_popup(self):
+        gif_job = getattr(self, "_gif_anim_job", None)
+        if gif_job is not None:
+            try:
+                self.after_cancel(gif_job)
+            except (tk.TclError, ValueError):
+                pass
+            self._gif_anim_job = None
         pop = getattr(self, "_mini_popup", None)
         if pop is not None:
             try:
@@ -6157,6 +6194,7 @@ class NoteOrganizer(tk.Tk):
         filepaths = filedialog.askopenfilenames(title="Choose file(s) to attach")
         if not filepaths:
             return
+        added_any = False
         for src_path in filepaths:
             original_name = os.path.basename(src_path)
             unique_name = f"{datetime.now().strftime('%Y%m%d%H%M%S%f')}_{original_name}"
@@ -6167,13 +6205,17 @@ class NoteOrganizer(tk.Tk):
                 self.show_error("Couldn't attach file", f"Failed to attach '{original_name}':\n{e}")
                 continue
             self.current_attachments.append({"filename": original_name, "stored_as": unique_name})
+            added_any = True
         self.refresh_attachments_list()
+        if added_any:
+            self._schedule_autosave()
 
     def remove_attachment(self, index):
         if 0 <= index < len(self.current_attachments):
             removed = self.current_attachments.pop(index)
             _delete_attachment_files([{"attachments": [removed]}])
             self.refresh_attachments_list()
+            self._schedule_autosave()
 
     # File extensions Windows will execute (or run scripts from) rather than
     # just open in a viewer. Opening one runs code, so we warn first.
@@ -6191,10 +6233,19 @@ class NoteOrganizer(tk.Tk):
                 self.show_warning("File missing", "This attached file can't be found on disk.")
                 return
 
-            # Warn before opening anything Windows would execute as a program
-            # or script — opening it runs code, not just views a file.
             original_name = attachment.get("filename", attachment["stored_as"])
             ext = os.path.splitext(original_name)[1].lower()
+
+            # Pillow decodes all of these — shown large, right in the app,
+            # instead of handing off to whatever image viewer Windows has
+            # associated with the file type. Anything else still opens
+            # externally below.
+            if ext in (".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp"):
+                self._show_image_preview(path, original_name)
+                return
+
+            # Warn before opening anything Windows would execute as a program
+            # or script — opening it runs code, not just views a file.
             if ext in self.DANGEROUS_EXTENSIONS:
                 proceed = self.ask_yes_no(
                     "⚠ Potentially unsafe file",
@@ -6212,6 +6263,117 @@ class NoteOrganizer(tk.Tk):
                 os.startfile(path)  # Windows-only, matches this app's target platform
             except (AttributeError, OSError):
                 self.show_info("Can't open automatically", f"File is located at:\n{path}")
+
+    def _show_image_preview(self, path, filename):
+        """A large, in-app image preview — most of the window, not a tiny
+        thumbnail and not handed off to an external program. Uses Pillow
+        (not plain Tk) for two reasons: plain Tk only decodes PNG/GIF, and
+        for animated GIFs it only ever shows each frame's own raw pixels at
+        that frame's own size — many GIFs only store the part of the frame
+        that CHANGED from the previous one, at whatever size that patch
+        happens to be, relying on the viewer to composite it onto a fixed
+        canvas in the right place. Plain Tk doesn't do that compositing, so
+        the image visibly jumped and resized itself every frame. Pillow
+        handles this correctly and gives real per-frame timing too, instead
+        of a guessed fixed delay."""
+        try:
+            pil_img = Image.open(path)
+        except Exception:
+            self.show_warning("Can't preview this file",
+                             "This file couldn't be read as an image.")
+            return
+
+        self.update_idletasks()
+        target_w = max(int(self.winfo_width() * 0.7), 200)
+        target_h = max(int(self.winfo_height() * 0.7), 200)
+
+        def _scaled(frame):
+            w, h = frame.size
+            if w > target_w or h > target_h:
+                frame = frame.copy()
+                frame.thumbnail((target_w, target_h), Image.LANCZOS)
+            elif w > 0 and h > 0 and w < target_w * 0.6 and h < target_h * 0.6:
+                # Small image, room to spare — enlarge so it's actually easy
+                # to see. Capped so a tiny icon doesn't get blown up absurdly
+                # large just because the window happens to be big.
+                scale = min(min(target_w / w, target_h / h), 8)
+                frame = frame.resize((max(1, int(w * scale)), max(1, int(h * scale))),
+                                     Image.LANCZOS)
+            return frame
+
+        frames = []
+        delays = []
+        if getattr(pil_img, "is_animated", False):
+            for i in range(pil_img.n_frames):
+                pil_img.seek(i)
+                # Pillow composites disposal-method-aware frames onto the
+                # right canvas internally as you seek — converting to RGBA
+                # here is what actually captures that composited result,
+                # not just this frame's own raw (possibly partial) pixels.
+                frame = _scaled(pil_img.convert("RGBA"))
+                frames.append(ImageTk.PhotoImage(frame))
+                delays.append(pil_img.info.get("duration", 100) or 100)
+        else:
+            frame = _scaled(pil_img.convert("RGBA"))
+            frames = [ImageTk.PhotoImage(frame)]
+            delays = [100]
+
+        self._dismiss_mini_popup()
+        overlay = tk.Frame(self, bg=self.colors["bg"], highlightthickness=1,
+                           highlightbackground=self.colors["accent"])
+        self._image_preview_ref = frames  # keep alive — see refresh_attachments_list
+        self._mini_popup = overlay
+
+        header = tk.Frame(overlay, bg=self.colors["bg"])
+        header.pack(fill="x", padx=12, pady=(10, 4))
+        tk.Label(header, text=filename, font=("Segoe UI", 10, "bold"),
+                 bg=self.colors["bg"], fg=self.colors["text"]).pack(side="left")
+        tk.Button(header, text="✕ Close", command=self._dismiss_mini_popup,
+                  relief="flat", cursor="hand2", bg=self.colors["card"],
+                  fg=self.colors["text"], font=("Segoe UI", 9)
+                  ).pack(side="right", ipadx=6, ipady=2)
+        tk.Button(header, text="Open externally",
+                  command=lambda: (self._dismiss_mini_popup(), self._open_externally(path)),
+                  relief="flat", cursor="hand2", bg=self.colors["accent"],
+                  fg="white", font=("Segoe UI", 9)
+                  ).pack(side="right", padx=(0, 6), ipadx=6, ipady=2)
+
+        img_lbl = tk.Label(overlay, image=frames[0], bg=self.colors["bg"])
+        img_lbl.pack(padx=16, pady=(4, 16))
+
+        self._gif_anim_job = None  # explicit even for the single-frame case,
+        # so this attribute always exists after this function runs, not just
+        # when an animation actually starts — any code checking it directly
+        # (rather than via getattr with a default) can rely on that.
+        if len(frames) > 1:
+            state = {"i": 0}
+
+            def _next_frame():
+                if not img_lbl.winfo_exists():
+                    return
+                state["i"] = (state["i"] + 1) % len(frames)
+                img_lbl.configure(image=frames[state["i"]])
+                self._gif_anim_job = self.after(delays[state["i"]], _next_frame)
+
+            self._gif_anim_job = self.after(delays[0], _next_frame)
+
+        overlay.place(relx=0.5, rely=0.5, anchor="center")
+        overlay.lift()
+        # Click-outside-to-dismiss, matching every other in-app overlay —
+        # bound on a short delay so the click that OPENED this preview isn't
+        # also immediately seen as a click "outside" it.
+        self.after(50, lambda: setattr(
+            self, "_mini_popup_click_bind",
+            self.bind("<Button-1>", self._maybe_dismiss_mini_popup, add="+")))
+
+    def _open_externally(self, path):
+        """Hand a file off to whatever program Windows has associated with
+        it — the plain, no-preview fallback used for file types this app
+        can't show inline itself."""
+        try:
+            os.startfile(path)
+        except (AttributeError, OSError):
+            self.show_info("Can't open automatically", f"File is located at:\n{path}")
 
     def refresh_attachments_list(self):
         # Direct .configure() calls, not self.track_theme(): this list is
@@ -6234,22 +6396,37 @@ class NoteOrganizer(tk.Tk):
         for i, att in enumerate(self.current_attachments):
             ext = os.path.splitext(att["filename"])[1].lower()
             icon = "🖼️" if ext in (".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp") else "📄"
+            can_preview_inline = ext in (".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp")
 
             row = tk.Frame(self.attachments_frame, bg=self.colors["card"])
             row.pack(fill="x", pady=2)
 
-            name_lbl = tk.Label(row, text=f"{icon} {att['filename']}", font=("Segoe UI", 9),
+            top_row = tk.Frame(row, bg=self.colors["card"])
+            top_row.pack(fill="x")
+
+            name_lbl = tk.Label(top_row, text=f"{icon} {att['filename']}", font=("Segoe UI", 9),
                                  anchor="w", cursor="hand2",
                                  bg=self.colors["card"], fg=self.colors["text"])
             name_lbl.pack(side="left", fill="x", expand=True, padx=8, pady=4)
             name_lbl.bind("<Button-1>", lambda e, idx=i: self.open_attachment(idx))
 
             remove_btn = tk.Button(
-                row, text="✕", command=lambda idx=i: self.remove_attachment(idx),
+                top_row, text="✕", command=lambda idx=i: self.remove_attachment(idx),
                 relief="flat", font=("Segoe UI", 8), cursor="hand2", width=2,
                 bg=self.colors["danger"], fg="white"
             )
             remove_btn.pack(side="right", padx=4, pady=2)
+
+            if not can_preview_inline:
+                # Common image formats show large, right in the app (see
+                # _show_image_preview) — everything else still opens in
+                # whatever program the system has for that file type. Said
+                # generically on purpose, since the app can't know for sure
+                # which program that'll actually be (varies per computer).
+                hint_lbl = tk.Label(row, text="Opens in your default app for this file type",
+                                    font=("Segoe UI", 7), anchor="w",
+                                    bg=self.colors["card"], fg=self.colors["subtext"])
+                hint_lbl.pack(fill="x", padx=(28, 8), pady=(0, 4))
 
     def _update_color_swatch(self):
         if self.current_note_color:
@@ -7251,17 +7428,38 @@ class NoteOrganizer(tk.Tk):
             self.show_info("Nothing selected", "Tick one or more notes first.")
             return
         count = len(self.selected_note_ids)
+        to_trash = [n for n in self.notes if n["id"] in self.selected_note_ids]
+        attachment_count = sum(len(n.get("attachments") or []) for n in to_trash)
+        warning = ""
+        if attachment_count:
+            plural = "s" if attachment_count != 1 else ""
+            warning = f"\n\n{attachment_count} attached file{plural} will go to trash with them."
         if not self.ask_yes_no(
             "Move to trash",
             f"Move {count} selected note(s) to the trash? "
-            f"You can restore them within {TRASH_RETENTION_DAYS} days.",
+            f"You can restore them within {TRASH_RETENTION_DAYS} days.{warning}",
             icon="question"
         ):
             return
-        to_trash = [n for n in self.notes if n["id"] in self.selected_note_ids]
         self._move_notes_to_trash(to_trash)
         self.notes = [n for n in self.notes if n["id"] not in self.selected_note_ids]
         self.save_notes()
+        # If the note currently open in the editor was among the ones just
+        # trashed, the editor (and any tab pointing at it) is now referring
+        # to a note that no longer exists — without this, the very next
+        # autosave flush (e.g. triggered by clicking a DIFFERENT, perfectly
+        # fine note right after) would fail with "Note missing", since it's
+        # still trying to save changes against the now-gone note. Same
+        # cleanup delete_current_note() already does for a single delete.
+        self.open_tabs = [t for t in self.open_tabs
+                          if t["state"]["selected_note_id"] not in self.selected_note_ids]
+        if not self.open_tabs:
+            self.active_tab_index = None
+            self.new_note()
+        else:
+            self.active_tab_index = None
+            self.switch_to_tab(min(0, len(self.open_tabs) - 1))
+        self.refresh_tab_strip()
         self._exit_selection_mode_after_bulk_action()
         self.render_calendar()
         self.set_status(f"Moved {count} note(s) to trash")
@@ -7476,6 +7674,7 @@ class NoteOrganizer(tk.Tk):
         # Save whatever is currently in the editor before switching away.
         self._flush_autosave()
         self.load_note(note, occurrence_date)
+        self._remember_last_open_note(note["id"])
         # Keep a single-entry tab list so the save/flush machinery still works.
         self._tab_counter += 1
         self.open_tabs = [{"key": self._tab_counter, "state": self.capture_editor_state()}]
@@ -7518,11 +7717,23 @@ class NoteOrganizer(tk.Tk):
             self._autosave_job = None
         if self.selected_note_id is None and not self.open_tabs:
             return
+        # selected_note_id can end up stale — pointing at a note that no
+        # longer exists — in the brief window some code paths (e.g.
+        # _context_delete_note) temporarily repoint it at a DIFFERENT note
+        # than the one genuinely open in the editor, to reuse the normal
+        # delete logic. If that happens, there's nothing real to flush
+        # against; skip silently rather than falling through to a save
+        # attempt that fails with a "Note missing" dialog — an automatic,
+        # invisible safety net shouldn't ever surface an interruptive error
+        # for something the user didn't directly ask to happen.
+        if self.selected_note_id is not None and self.find_note(self.selected_note_id) is None:
+            return
         try:
             st = self.capture_editor_state()
         except Exception:
             return
-        if not (st.get("title", "").strip() or st.get("body", "").strip()):
+        if not (st.get("title", "").strip() or st.get("body", "").strip()
+                or st.get("attachments") or st.get("checklist")):
             return
         try:
             if not self.editor_state_matches_saved(st):
@@ -8020,6 +8231,16 @@ class NoteOrganizer(tk.Tk):
     def _context_delete_note(self, note, occurrence_date=None):
         """Delete triggered from the right-click menu. Routes through the normal
         delete logic so recurring-series scope prompts still apply."""
+        # Flush whatever's genuinely open in the editor FIRST, under its real
+        # selected_note_id. If the note being deleted here isn't the one
+        # actually open, delete_current_note()'s own internal tab-switch
+        # (which flushes again, as part of switching to the next tab)
+        # would otherwise try to save against the note we're ABOUT to
+        # delete below rather than the real one — and since that note is
+        # gone by the time the flush runs, it fails with a spurious
+        # "Note missing" error dialog, for a delete the user never asked
+        # this note to be part of.
+        self._flush_autosave()
         # Point the editor's selection at this note so delete_current_note acts
         # on it, then restore afterward isn't needed (delete resets the editor).
         self.selected_note_id = note["id"]
@@ -8446,7 +8667,9 @@ class NoteOrganizer(tk.Tk):
                 )
                 return
 
-        if not title and not body:
+        has_attachments = bool(self.current_attachments)
+        has_checklist_items = bool(self._get_checklist())
+        if not title and not body and not has_attachments and not has_checklist_items:
             self.show_warning("Empty note", "Write something before saving!")
             return
 
@@ -8485,6 +8708,7 @@ class NoteOrganizer(tk.Tk):
                 "checklist": [dict(it) for it in self._get_checklist()],
             }))
             self.selected_note_id = new_id
+            self._remember_last_open_note(new_id)
             self.set_status(("Auto-saved " if auto else "Saved at ") + now)
             if auto:
                 self._show_toast("Note created")
@@ -8814,10 +9038,15 @@ class NoteOrganizer(tk.Tk):
                 self.set_status("Removed that one occurrence")
                 return
 
+        attachment_count = len(note.get("attachments") or [])
+        warning = ""
+        if attachment_count:
+            plural = "s" if attachment_count != 1 else ""
+            warning = f"\n\n{attachment_count} attached file{plural} will go to trash with it."
         confirm = self.ask_yes_no(
             "Delete note",
-            "Delete this entire repeating series?" if is_recurring(note)
-            else "Are you sure you want to delete this note?"
+            ("Delete this entire repeating series?" if is_recurring(note)
+             else "Are you sure you want to delete this note?") + warning
         )
         if confirm:
             deleted_id = self.selected_note_id
