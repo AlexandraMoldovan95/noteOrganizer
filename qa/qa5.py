@@ -67,6 +67,19 @@ def bad_date_save():
     app.update()
 safe('invalid date input handled gracefully', bad_date_save)
 
+# ---- DATE FIELD AUTOSAVE (regression: typing a date had no autosave
+# binding at all, so a typed date change was silently lost) ----
+app.new_note()
+app.title_entry.insert(0,'DateAutosaveTest')
+app.body_text.insert('1.0','x')
+app.save_current_note(auto=False)
+app.update()
+app.date_entry.delete(0,'end')
+app.date_entry.insert(0,'2026-12-25')
+app.date_entry.event_generate('<KeyRelease>')
+app.update()
+check('typing a date schedules an autosave', getattr(app, '_autosave_job', None) is not None)
+
 # ---- HUGE NOTE (50k chars) ----
 app.new_note()
 app.title_entry.insert(0,'HugeNote')
