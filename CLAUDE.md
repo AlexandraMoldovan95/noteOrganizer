@@ -136,6 +136,127 @@ After completing a task, report:
 Do not claim something was tested or verified if it was not actually
 tested.
 
+## Git & GitHub workflow
+
+### Branches
+
+- `main` is the stable branch — never commit ordinary development work directly on it.
+- Every bug fix, feature, refactor, or test addition gets its own branch, named
+  `fix/...`, `feat/...`, `refactor/...`, `test/...`, or `docs/...`.
+- Keep each branch focused on one logical task; don't mix unrelated changes
+  into it unless explicitly asked to.
+
+### Commits
+
+- Make small, logical commits with messages that clearly describe the change.
+- Always inspect `git diff` and `git status` before committing.
+- Never commit files or changes that weren't part of the requested task
+  without asking first.
+
+### Push
+
+- Never push automatically after making a change.
+- Before pushing, show:
+  - the branch name;
+  - the commit(s) that will be pushed;
+  - the files changed;
+  - the tests/checks performed.
+- Wait for explicit user approval before running `git push`.
+
+### Pull requests
+
+- Do not automatically create or merge pull requests.
+- The user decides whether and when to open or merge a PR.
+- GitHub CLI (`gh`) is currently not installed.
+- Until `gh` is available, after pushing a branch, provide the GitHub PR
+  creation link plus ready-to-paste PR title, description, and suggested label.
+- Never merge a PR into `main` without explicit user approval.
+
+### Main / remote safety
+
+- Never force-push to `main`.
+- Never use destructive Git commands (`reset --hard`, deleting branches,
+  rewriting history, etc.) unless explicitly approved for that exact operation.
+- Never overwrite or discard the user's existing uncommitted work.
+- If pre-existing changes are found that weren't made by this session,
+  stop and report them before touching anything.
+
+### Working tree
+
+- Inspect `git status` at the start of a task.
+- Distinguish between changes made during the task and anything that already existed.
+- Report the final `git status` at the end of a task.
+- Do not leave the working tree with unexplained changes.
+
+### After the user merges a PR on GitHub
+
+- After the user confirms that a PR has been merged, switch to `main`,
+  fetch/pull the latest `main`, prune stale remote-tracking references,
+  and delete the local feature branch with `git branch -d`.
+- Do not perform these cleanup operations automatically before the user
+  confirms the merge.
+- After code changes are merged into `main`, remind the user that the
+  packaged `.exe` should be rebuilt and tested before release.
+- Do not automatically create a release build unless explicitly requested.
+
+### Approval required every time
+
+The following always require explicit approval in the moment, even if
+something similar was approved earlier:
+
+- `git push`
+- merge
+- PR creation
+- force push
+- branch deletion
+- history rewriting
+- other destructive Git operations
+
+Before running a command that requires approval, briefly explain what
+the command will do.
+
+## Full lifecycle for an issue or enhancement
+
+1. Investigate the relevant code and documentation first.
+2. For anything non-trivial, explain the proposed approach in plain language
+   and wait for approval before editing.
+3. Create a dedicated branch.
+4. Implement the smallest change that correctly solves the requested problem.
+5. Run the most relevant existing tests and broader tests when practical.
+6. For bug fixes, add a regression test when practical.
+7. Report the actual test results honestly.
+8. Show the relevant diff before committing.
+9. Commit with a clear, focused message.
+10. Show the branch, commits, changed files, and tests performed.
+11. Wait for explicit approval before pushing.
+12. After pushing, provide the PR creation link and suggested PR title/body/label.
+13. Wait for the user to review and merge the PR.
+14. After the user confirms the merge, synchronize local `main`,
+    prune stale references, and safely delete the local feature branch.
+15. Remind the user to rebuild and test the `.exe` when packaged application
+    code has changed.
+16. Update `CHANGELOG.md`, `docs/ROADMAP.md`, or `docs/ISSUES_LOG.md`
+    only when appropriate and as an explicit, reviewed part of the task.
+
+## Code quality bar
+
+Beyond making the requested change work, actively check what a normal,
+non-malicious user's ordinary interaction does to any new code path —
+not just the intended scenario.
+
+Before considering a fix complete, ask:
+
+- What happens if the user does this slowly?
+- What happens if the input is only partially entered?
+- What happens if the user clicks away mid-action?
+- What happens if the action happens twice?
+- What happens if the operation is interrupted or repeated?
+
+The date-autosave fix in this project is a direct example: a fix can work
+for the intended case while breaking normal mid-typing or partial-input
+behavior. Explicitly test realistic interaction paths before considering
+the change ready for merge.
+
 ## Existing project documentation
 
 Before making architectural or behavioral decisions, consult the relevant
