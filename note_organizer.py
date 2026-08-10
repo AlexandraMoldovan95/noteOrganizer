@@ -4979,6 +4979,10 @@ class NoteOrganizer(tk.Tk):
         self.track_theme(self.date_entry, bg="card", fg="text")
         self.date_entry.pack(side="left", padx=(6, 4), ipady=3)
         self.add_placeholder(self.date_entry, "YYYY-MM-DD")
+        # Typing a date directly (as opposed to using the picker popup, which
+        # already autosaves via _pick()) previously had no autosave binding
+        # at all, so a typed date change could be silently lost.
+        self.date_entry.bind("<KeyRelease>", self._schedule_autosave)
 
         pick_date_btn = tk.Button(
             meta_row, text="📅", command=self.open_date_picker,
@@ -8772,10 +8776,17 @@ class NoteOrganizer(tk.Tk):
             if parse_date(date_raw):
                 date_value = date_raw
             else:
-                self.show_warning(
-                    "Invalid date",
-                    "Date should be in YYYY-MM-DD format (e.g. 2026-07-20), or left empty."
-                )
+                # Autosave fires while the user may still be mid-keystroke
+                # typing a date (e.g. "2026-1"), which is legitimately
+                # incomplete rather than wrong — only the explicit Save
+                # button should interrupt with a warning here. Autosave just
+                # quietly skips this round and tries again once the field
+                # holds a complete, valid date (or is cleared).
+                if not auto:
+                    self.show_warning(
+                        "Invalid date",
+                        "Date should be in YYYY-MM-DD format (e.g. 2026-07-20), or left empty."
+                    )
                 return
 
         has_attachments = bool(self.current_attachments)
@@ -8786,11 +8797,16 @@ class NoteOrganizer(tk.Tk):
 
         recurrence = self.read_recurrence_from_ui()
         if recurrence["freq"] and not date_value:
-            self.show_warning(
-                "Repeating note needs a start date",
-                "A repeating note uses its date as the day the series starts.\n\n"
-                "Set a date, or change Repeat back to 'Does not repeat'."
-            )
+            # Same reasoning as the invalid-date case above: don't interrupt
+            # an automatic autosave for a state the user may still be
+            # actively editing toward (e.g. clearing the date on a
+            # recurring note before typing a new one).
+            if not auto:
+                self.show_warning(
+                    "Repeating note needs a start date",
+                    "A repeating note uses its date as the day the series starts.\n\n"
+                    "Set a date, or change Repeat back to 'Does not repeat'."
+                )
             return
 
         if recurrence["freq"] == "weekly" and not recurrence["weekdays"]:
