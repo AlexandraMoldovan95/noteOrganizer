@@ -28,7 +28,6 @@ Found by hand, not yet worked on. Grouped by area.
 
 **Calendar**
 - The right-click "View this day" option seems redundant — a plain left-click on a day already does the same thing (opens that day's view). Worth just removing this menu entry.
-- **Bug:** manually typing a date into a note's date field (year/month/day) and then clicking elsewhere doesn't trigger autosave — the note isn't saved with the new date, and doesn't show up on the calendar there. Same problem when picking a date via the small calendar-icon date-picker popup instead of typing — also doesn't autosave afterward. This one actually loses data (the date change) and is worth prioritizing over the others here when this list gets picked up.
 
 ## Settings redesign (bigger discussion, own design pass)
 
