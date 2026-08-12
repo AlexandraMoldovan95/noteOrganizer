@@ -321,6 +321,21 @@ check('dialog renders as an in-window overlay, not a separate Toplevel',
 check('dialog is positioned within the app window bounds',
       choice_holder.get('within_bounds', False))
 
+# ---- SETTINGS: "Back to Notes" stays fixed while scrolling (regression) ----
+# It used to be just another row inside the scrollable page, so it
+# scrolled away like any other content instead of staying visible.
+app.show_settings_page()
+app.update()
+back_btn2 = find_widget(app.settings_page, tk.Button, 'Back to Notes')
+check('back to notes button found', back_btn2 is not None)
+if back_btn2:
+    before_y = back_btn2.winfo_rooty()
+    app.settings_canvas.yview_moveto(0.5)
+    app.update()
+    after_y = back_btn2.winfo_rooty()
+    check('"Back to Notes" does not move when the settings page scrolls',
+          before_y == after_y)
+
 print()
 print(f"=== QA6 FAILURES: {fails if fails else 'NONE'} ===")
 

@@ -162,6 +162,15 @@ app.update()
 check('selection mode toggles on', app.selection_mode is True)
 check('bulk action bar becomes visible', app.bulk_action_bar.winfo_ismapped())
 
+# Regression: the bulk-action bar's 4 widgets used to need 260px total
+# (including gaps) inside the fixed 280px-wide sidebar — more than the
+# ~230px actually available, which is why "Category"'s last letter looked
+# cramped. Confirm the bar's real requested width now fits comfortably.
+app.bulk_action_bar.update_idletasks()
+bar_width = app.bulk_action_bar.winfo_reqwidth()
+check(f'bulk action bar fits the sidebar width ({bar_width}px vs sidebar ~280px)',
+      bar_width < NO.SIDEBAR_WIDTH - 20)
+
 card_ids_before = {nid: str(info['card']) for nid, info in app._note_card_widgets.items()}
 app._toggle_note_selected(10, True)
 app.update()
