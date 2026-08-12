@@ -1566,6 +1566,15 @@ class NoteOrganizer(tk.Tk):
         self._autosave_job = None
         if not self._still_alive():
             return
+        # selected_note_id can end up stale — pointing at a note that no
+        # longer exists (e.g. it was removed by another action while this
+        # timer was pending). save_current_note() would otherwise hit its
+        # "Note missing" error dialog here — appropriate for an explicit,
+        # user-initiated Save, but not for a silent background autosave the
+        # user never directly asked for. Same guard _flush_autosave() already
+        # uses for the same reason.
+        if self.selected_note_id is not None and self.find_note(self.selected_note_id) is None:
+            return
         # Catch the word count up now, in case rapid edits (e.g. inserting
         # several emojis in a row) skipped recomputing it on every click.
         try:
