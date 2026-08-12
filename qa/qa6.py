@@ -71,16 +71,24 @@ app._refresh_greeting()
 
 # ---- SETTINGS: username length cap (regression) ----
 # The per-keystroke validation alone isn't fully reliable under rapid/
-# held-down typing (a known Tk limitation), so there's a save-time safety
-# net too. This tests that net directly: force the field to an over-length
-# value the way a validation bypass would, then confirm saving truncates it
-# everywhere — the field, the stored setting, and the greeting.
+# held-down typing (a known Tk limitation), so there are two independent
+# safety nets: an immediate correction on every KeyRelease (so it doesn't
+# wait for a save to fix an over-length value), and a save-time truncation
+# as a final backstop. Both are tested directly here by forcing the value
+# over the limit the way a validation bypass would.
 app.show_settings_page()
 app.update()
 name_entry = find_widget(app.settings_page, tk.Entry)
-app.username_var.set('2' * 70)
 name_entry.focus_set()
 app.update()
+
+app.username_var.set('3' * 70)
+name_entry.event_generate('<KeyRelease>')
+app.update()
+check('a single KeyRelease immediately corrects an over-length value, '
+      'without waiting for a save', len(app.username_var.get()) == 30)
+
+app.username_var.set('2' * 70)
 name_entry.event_generate('<Return>')
 app.update()
 check('over-length name gets truncated to 30 chars on save',

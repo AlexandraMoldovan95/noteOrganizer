@@ -5306,8 +5306,8 @@ class NoteOrganizer(tk.Tk):
         # --- Your name (used for the "Hi <name>," greeting) ---
         name_sec = section(
             "Your name",
-            "So your notes can greet you by name above the list (e.g. “Hi Alex,”) "
-            "— up to 30 characters."
+            "What should we call you? Shows up as a friendly greeting above "
+            "your notes — 30 characters max."
         )
         name_row = tk.Frame(name_sec, bg=self.colors["card"])
         name_row.pack(fill="x", padx=16, pady=16)
@@ -5348,6 +5348,15 @@ class NoteOrganizer(tk.Tk):
             self.set_status("Name saved" if current.strip() else "Name cleared")
 
         def schedule_name_save(event=None):
+            # Real-time correction: the per-keystroke block above can miss
+            # very fast/held-down typing, so check again on every key
+            # release (a plain event binding, not the special validate hook
+            # that has the reliability gap) and snap back immediately if it
+            # slipped past 30 — rather than letting it grow freely and only
+            # fixing it later when the name is actually saved.
+            current = self.username_var.get()
+            if len(current) > USERNAME_MAX_LEN:
+                self.username_var.set(current[:USERNAME_MAX_LEN])
             # Autosave after a short pause, same convention as note editing —
             # so clearing the field and clicking away still saves the change.
             if getattr(self, "_username_save_job", None) is not None:
