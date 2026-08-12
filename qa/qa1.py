@@ -89,17 +89,42 @@ except Exception as e:
     check(f'search survives None-field note ({e})', False)
 
 # ---- SORTING ----
+# Uses the app's real sort-option labels (previously this loop used made-up
+# strings like 'Newest first' that don't match any real option, so every
+# iteration silently no-opped and the test only ever proved "didn't crash",
+# never that sorting actually works) and checks the notes render in the
+# exact order each option promises, not just that nothing crashed.
 app.search_var.set('')
-for opt in ['Newest first','Oldest first','Title A-Z','Title Z-A']:
+app.filter_var.set('All')
+app.group_by_category.set(False)
+app.notes = [
+    {'id':301,'title':'Banana','body':'x','category':'General','date':'2026-03-10',
+     'updated':'2026-01-01 00:00','created':'2026-01-01 00:00','checklist':[],'attachments':[]},
+    {'id':302,'title':'Apple','body':'x','category':'Zeta','date':'2026-01-05',
+     'updated':'2026-01-02 00:00','created':'2026-01-02 00:00','checklist':[],'attachments':[]},
+    {'id':303,'title':'Cherry','body':'x','category':'Alpha','date':'2026-02-20',
+     'updated':'2026-01-03 00:00','created':'2026-01-03 00:00','checklist':[],'attachments':[]},
+]
+
+def rendered_order():
+    app.refresh_note_list()
+    app.update()
+    return [app.find_note(nid)['title'] for nid in app._note_card_widgets.keys()]
+
+for opt, expected in [
+    ('Recently updated', ['Cherry', 'Apple', 'Banana']),   # newest updated first
+    ('Oldest updated',   ['Banana', 'Apple', 'Cherry']),   # oldest updated first
+    ('Title A–Z',        ['Apple', 'Banana', 'Cherry']),
+    ('Title Z–A',        ['Cherry', 'Banana', 'Apple']),
+    ('Category',         ['Cherry', 'Banana', 'Apple']),   # Alpha, General, Zeta
+    ('Date (soonest)',   ['Apple', 'Cherry', 'Banana']),   # 01-05, 02-20, 03-10
+]:
     try:
-        if hasattr(app,'sort_var'):
-            app.sort_var.set(opt)
-        app.refresh_note_list()
-        app.update()
+        app.sort_var.set(opt)
+        actual = rendered_order()
+        check(f'sort "{opt}" orders notes correctly ({actual})', actual == expected)
     except Exception as e:
         check(f'sort option {opt} works ({e})', False)
-        continue
-check('all sort options work', True)
 
 # ---- CHECKLIST ----
 app.new_note()
