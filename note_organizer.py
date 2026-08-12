@@ -4642,7 +4642,13 @@ class NoteOrganizer(tk.Tk):
         self.track_theme(title_lbl, bg="sidebar", fg="text")
         title_lbl.pack(pady=(20, 0), padx=15, anchor="w")
 
-        self.greeting_lbl = tk.Label(self.sidebar, font=("Segoe UI", 9))
+        self.greeting_lbl = tk.Label(
+            self.sidebar, font=("Segoe UI", 9),
+            # Wraps instead of overflowing past the sidebar's fixed width —
+            # a safety net independent of the username length cap, in case a
+            # name ever ends up longer than expected some other way.
+            wraplength=SIDEBAR_WIDTH - 30, justify="left"
+        )
         self.track_theme(self.greeting_lbl, bg="sidebar", fg="subtext")
         self.greeting_lbl.pack(pady=(2, 12), padx=15, anchor="w")
         self._refresh_greeting()
@@ -5298,7 +5304,11 @@ class NoteOrganizer(tk.Tk):
                  ).pack(fill="x", padx=40, pady=(24, 0))
 
         # --- Your name (used for the "Hi <name>," greeting) ---
-        name_sec = section("Your name", "Used for the greeting above your note list.")
+        name_sec = section(
+            "Your name",
+            "So your notes can greet you by name above the list (e.g. “Hi Alex,”) "
+            "— up to 30 characters."
+        )
         name_row = tk.Frame(name_sec, bg=self.colors["card"])
         name_row.pack(fill="x", padx=16, pady=16)
         self.username_var = tk.StringVar(value=self.load_username())
@@ -5325,9 +5335,17 @@ class NoteOrganizer(tk.Tk):
                 self._username_save_job = None
             if not self._still_alive():
                 return
-            self.save_username(self.username_var.get())
+            # Hard safety net: the key-by-key length check above can miss very
+            # fast/held-down typing (a known Tk reliability gap under rapid
+            # keystrokes), so enforce the limit again here, at the moment of
+            # actually saving, regardless of how the field got too long.
+            current = self.username_var.get()
+            if len(current) > USERNAME_MAX_LEN:
+                current = current[:USERNAME_MAX_LEN]
+                self.username_var.set(current)
+            self.save_username(current)
             self._refresh_greeting()
-            self.set_status("Name saved" if self.username_var.get().strip() else "Name cleared")
+            self.set_status("Name saved" if current.strip() else "Name cleared")
 
         def schedule_name_save(event=None):
             # Autosave after a short pause, same convention as note editing —

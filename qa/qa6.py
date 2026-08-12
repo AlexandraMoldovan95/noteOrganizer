@@ -69,6 +69,29 @@ check('greeting disappears when name is cleared', app.greeting_lbl.cget('text') 
 app.save_username('Alexandra')  # restore for later checks
 app._refresh_greeting()
 
+# ---- SETTINGS: username length cap (regression) ----
+# The per-keystroke validation alone isn't fully reliable under rapid/
+# held-down typing (a known Tk limitation), so there's a save-time safety
+# net too. This tests that net directly: force the field to an over-length
+# value the way a validation bypass would, then confirm saving truncates it
+# everywhere — the field, the stored setting, and the greeting.
+app.show_settings_page()
+app.update()
+name_entry = find_widget(app.settings_page, tk.Entry)
+app.username_var.set('2' * 70)
+name_entry.focus_set()
+app.update()
+name_entry.event_generate('<Return>')
+app.update()
+check('over-length name gets truncated to 30 chars on save',
+      len(app.username_var.get()) == 30)
+check('truncated name is what gets persisted',
+      len(NO.load_settings().get('username', '')) == 30)
+check('greeting reflects the truncated name, not the original 70 chars',
+      len(app.greeting_lbl.cget('text')) < 40)
+app.save_username('Alexandra')  # restore for later checks
+app._refresh_greeting()
+
 # ---- SETTINGS: statistics chip navigation ----
 app.notes = [
     {'id':10,'title':'StatNote','body':'x','category':'Work','updated':'2026-01-01 00:00','created':'2026-01-01 00:00','checklist':[],'attachments':[]},
