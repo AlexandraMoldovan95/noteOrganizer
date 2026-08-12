@@ -131,6 +131,27 @@ for opt, expected in [
     except Exception as e:
         check(f'sort option {opt} works ({e})', False)
 
+# ---- SORT DROPDOWN WIDTH (regression) ----
+# "Recently updated" used to render at exactly its natural text width with
+# no margin at all, which is why the last letter looked cut off.
+def find_widget(w, cls, text_contains=None):
+    for c in w.winfo_children():
+        if isinstance(c, cls):
+            if text_contains is None or text_contains in str(c.cget('text')):
+                return c
+        r = find_widget(c, cls, text_contains)
+        if r: return r
+    return None
+app.sort_var.set('Recently updated')
+app.update()
+sort_lbl = find_widget(app.sidebar, tk.Label, 'Recently updated')
+check('sort dropdown label found', sort_lbl is not None)
+if sort_lbl:
+    import tkinter.font as tkfont
+    natural_width = tkfont.Font(family='Segoe UI', size=8).measure('Recently updated')
+    check(f'sort dropdown label has room to spare ({sort_lbl.winfo_reqwidth()}px vs {natural_width}px text)',
+          sort_lbl.winfo_reqwidth() > natural_width)
+
 # ---- CHECKLIST ----
 app.new_note()
 app.title_entry.insert(0,'ChecklistNote')

@@ -4720,9 +4720,14 @@ class NoteOrganizer(tk.Tk):
             "Date (soonest)",
         ]
         self.sort_var = tk.StringVar(value=self.SORT_OPTIONS[0])
+        # width_chars=18: the default (14) renders "Recently updated" at
+        # exactly its natural text width with zero margin, which is why the
+        # last letter looked cut off. Measured with tkinter.font: the
+        # longest option needs 90px, and width=18 gives 114px — comfortable
+        # room without wasting space on the shorter options.
         sort_menu = self._build_themed_dropdown(
             filter_row, self.sort_var, self.SORT_OPTIONS,
-            on_change=lambda v: self.refresh_note_list())
+            on_change=lambda v: self.refresh_note_list(), width_chars=18)
         sort_menu.pack(side="left", fill="x", expand=True, padx=(0, 4))
 
         self.filter_var = tk.StringVar(value="All")
@@ -4772,29 +4777,36 @@ class NoteOrganizer(tk.Tk):
         # once, like the rest of this persistent sidebar chrome — its inner
         # label/buttons get live theme tracking for the same reason group_cb
         # above does.
+        # Font size 7 (not the sidebar's usual 8) and tighter inter-widget
+        # spacing here specifically — measured with tkinter.font: at size 8
+        # with the original spacing, these four widgets need 260px total
+        # (including the gaps between them), more than the ~230px actually
+        # available in the fixed 280px-wide sidebar, which is exactly why
+        # "Category"'s last letter looked cramped. At size 7 with tighter
+        # spacing they need 209px — comfortable room to spare.
         self.bulk_action_bar = tk.Frame(self.sidebar)
         self.track_theme(self.bulk_action_bar, bg="sidebar")
         self.bulk_selected_lbl = tk.Label(
-            self.bulk_action_bar, text="0 selected", font=("Segoe UI", 8, "bold"))
+            self.bulk_action_bar, text="0 selected", font=("Segoe UI", 7, "bold"))
         self.track_theme(self.bulk_selected_lbl, bg="sidebar", fg="text")
-        self.bulk_selected_lbl.pack(side="left", padx=(0, 8))
+        self.bulk_selected_lbl.pack(side="left", padx=(0, 3))
         bulk_select_all_btn = tk.Button(
             self.bulk_action_bar, text="Select all", command=self._bulk_select_all,
-            relief="flat", font=("Segoe UI", 8), cursor="hand2")
+            relief="flat", font=("Segoe UI", 7), cursor="hand2")
         self.track_theme(bulk_select_all_btn, bg="card", fg="text")
-        bulk_select_all_btn.pack(side="left", padx=(0, 4), ipadx=4, ipady=2)
+        bulk_select_all_btn.pack(side="left", padx=(0, 2), ipadx=2, ipady=2)
         bulk_trash_btn = tk.Button(
             self.bulk_action_bar, text="🗑 Trash", command=self._bulk_move_to_trash,
-            relief="flat", font=("Segoe UI", 8, "bold"), cursor="hand2")
+            relief="flat", font=("Segoe UI", 7, "bold"), cursor="hand2")
         self.track_theme(bulk_trash_btn, bg="danger")
         bulk_trash_btn.configure(fg="white")
-        bulk_trash_btn.pack(side="left", padx=(0, 4), ipadx=4, ipady=2)
+        bulk_trash_btn.pack(side="left", padx=(0, 2), ipadx=2, ipady=2)
         bulk_category_btn = tk.Button(
             self.bulk_action_bar, text="🗂 Category ▾", command=self._bulk_change_category,
-            relief="flat", font=("Segoe UI", 8), cursor="hand2")
+            relief="flat", font=("Segoe UI", 7), cursor="hand2")
         self.track_theme(bulk_category_btn, bg="accent")
         bulk_category_btn.configure(fg="white")
-        bulk_category_btn.pack(side="left", ipadx=4, ipady=2)
+        bulk_category_btn.pack(side="left", ipadx=2, ipady=2)
         self._bulk_category_btn = bulk_category_btn
         # Not packed yet — shown by _toggle_selection_mode() when active.
 
@@ -5267,6 +5279,23 @@ class NoteOrganizer(tk.Tk):
         self.track_theme(outer, bg="bg")
         outer.pack(fill="both", expand=True)
 
+        # "Back to Notes" lives in its own fixed row, OUTSIDE the scrollable
+        # canvas below — packed first with side="top" so it claims its own
+        # space and stays visible no matter how far the page underneath is
+        # scrolled, instead of being just another row that scrolls away.
+        sticky_bar = tk.Frame(outer)
+        self.track_theme(sticky_bar, bg="bg")
+        sticky_bar.pack(side="top", fill="x")
+        back_row = tk.Frame(sticky_bar)
+        self.track_theme(back_row, bg="bg")
+        back_row.pack(fill="x", padx=40, pady=(20, 0))
+        back_btn = tk.Button(
+            back_row, text="← Back to Notes", command=self.hide_settings_page,
+            relief="flat", font=("Segoe UI", 9, "bold"), cursor="hand2"
+        )
+        self.track_theme(back_btn, bg="card", fg="text")
+        back_btn.pack(side="left", ipadx=8, ipady=4)
+
         canvas = tk.Canvas(outer, highlightthickness=0, bg=self.colors["bg"])
         self.track_theme(canvas, bg="bg")
         self.settings_canvas = canvas  # panels forward scroll here when they don't scroll
@@ -5333,16 +5362,6 @@ class NoteOrganizer(tk.Tk):
             if kind == "accent":
                 b.configure(fg="white")
             return b
-
-        back_row = tk.Frame(page)
-        self.track_theme(back_row, bg="bg")
-        back_row.pack(fill="x", padx=40, pady=(20, 0))
-        back_btn = tk.Button(
-            back_row, text="← Back to Notes", command=self.hide_settings_page,
-            relief="flat", font=("Segoe UI", 9, "bold"), cursor="hand2"
-        )
-        self.track_theme(back_btn, bg="card", fg="text")
-        back_btn.pack(side="left", ipadx=8, ipady=4)
 
         tk.Label(page, text="⚙  Settings", font=("Segoe UI", 20, "bold"),
                  bg=self.colors["bg"], fg=self.colors["text"], anchor="w"

@@ -162,6 +162,36 @@ app.update()
 check('selection mode toggles on', app.selection_mode is True)
 check('bulk action bar becomes visible', app.bulk_action_bar.winfo_ismapped())
 
+# Regression: the bulk-action bar's 4 widgets used to overflow the fixed
+# 280px-wide sidebar, cramping the "Category" button. Rather than assert an
+# absolute pixel width (which depends on which font is actually available —
+# "Segoe UI" isn't installed on the Linux CI runner, so Tk silently
+# substitutes a fallback with different, wider metrics there than on a real
+# Windows machine), compare the real fixed bar against a reconstruction of
+# the original pre-fix sizing, built with whatever font actually resolves
+# on THIS machine. That keeps the check meaningful across environments: it
+# verifies the fix made things narrower, not that it hits a Windows-specific
+# pixel number.
+app.bulk_action_bar.update_idletasks()
+fixed_width = app.bulk_action_bar.winfo_reqwidth()
+
+_old_bar = tk.Frame(app)
+tk.Label(_old_bar, text="0 selected", font=("Segoe UI", 8, "bold")
+          ).pack(side="left", padx=(0, 8))
+tk.Button(_old_bar, text="Select all", font=("Segoe UI", 8)
+          ).pack(side="left", padx=(0, 4), ipadx=4, ipady=2)
+tk.Button(_old_bar, text="\U0001F5D1 Trash", font=("Segoe UI", 8, "bold")
+          ).pack(side="left", padx=(0, 4), ipadx=4, ipady=2)
+tk.Button(_old_bar, text="\U0001F5C2 Category ▾", font=("Segoe UI", 8)
+          ).pack(side="left", ipadx=4, ipady=2)
+_old_bar.update_idletasks()
+old_width = _old_bar.winfo_reqwidth()
+_old_bar.destroy()
+
+check(f'bulk action bar is narrower than the pre-fix sizing '
+      f'({fixed_width}px vs {old_width}px reconstructed original)',
+      fixed_width < old_width)
+
 card_ids_before = {nid: str(info['card']) for nid, info in app._note_card_widgets.items()}
 app._toggle_note_selected(10, True)
 app.update()
