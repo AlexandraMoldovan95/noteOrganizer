@@ -15,18 +15,12 @@ Found by hand, not yet worked on. Grouped by area.
 - The "← Back to Notes" button should stay visible at all times (sticky/pinned), not scroll out of view when scrolled further down the Settings page.
 - Layout: each section's title is left-aligned, but the action buttons are centered — inconsistent, makes the page harder to scan at a glance ("eye slalom"). Worth a proper design pass, not just a quick alignment fix — see "Settings redesign" below, this is likely folded into that.
 - Statistics: hovering looks clickable (the button highlights), but clicking does nothing. Needs its own discussion — see "Statistics: keep, enhance, or relocate?" below.
-- Username field: no length limit currently — a very long typed name could look broken elsewhere in the UI (e.g. the sidebar greeting). Needs a reasonable cap (discussed as ~30 characters).
-- Username field: the redundant "Save" button should probably go — typing a name and navigating away already keeps it (autosave-like behavior already exists here), so a separate save action isn't adding anything.
-- Username field: after clicking into the field and then clicking elsewhere *within Settings* (not related to the name), the text cursor stays visibly blinking in the field instead of losing focus. Switching to the Notes/Calendar tab and back correctly clears it — only the same-page "click elsewhere" case is affected.
 
 **Multi-select**
 - The bulk "Category" button's text isn't fully visible — the last letter of "Category" is slightly cramped, and the label to its left isn't visible at all. Likely just needs more width or a smaller font in that specific button.
 
 **Sort/filter controls**
 - The "Recently updated" label is cut off in the dropdown button itself (before it's even opened) — the last "d" isn't visible. Probably needs a small width adjustment or tighter font.
-
-**Calendar**
-- The right-click "View this day" option seems redundant — a plain left-click on a day already does the same thing (opens that day's view). Worth just removing this menu entry.
 
 ## Settings redesign (bigger discussion, own design pass)
 
