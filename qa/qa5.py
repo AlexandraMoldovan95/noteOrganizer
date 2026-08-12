@@ -79,6 +79,12 @@ app.date_entry.insert(0,'2026-12-25')
 app.date_entry.event_generate('<KeyRelease>')
 app.update()
 check('typing a date schedules an autosave', getattr(app, '_autosave_job', None) is not None)
+# Flush it now rather than leaving it pending — the same thing the real app
+# does when switching notes. Left dangling, this timer could fire later in
+# this script (e.g. after a subsequent test clears app.notes entirely),
+# pointing at a note that's no longer there.
+app._flush_autosave()
+app.update()
 
 # ---- HUGE NOTE (50k chars) ----
 app.new_note()
