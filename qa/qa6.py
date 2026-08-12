@@ -149,6 +149,27 @@ app.update()
 check('scrolling with the cursor over a theme card scrolls the Settings page',
       app.settings_canvas.yview() != before_scroll)
 
+# ---- SETTINGS: scrolling over a Statistics chip scrolls the page (regression) ----
+# Same class of bug as the theme picker above, but a different root cause:
+# these chips are plain Frames/Labels (no Canvas involved), just never
+# wired into the page's wheel-forwarding at all — found by hand right after
+# the theme picker fix above shipped.
+app.notes = [
+    {'id': 900 + i, 'title': f'StatChip{i}', 'body': 'x',
+     'category': 'Work' if i % 2 else 'General', 'updated': '2026-01-01 00:00',
+     'created': '2026-01-01 00:00', 'checklist': [], 'attachments': []}
+    for i in range(3)
+]
+app.show_settings_page()
+app.update()
+chip_frames = find_all(app.stats_frame, tk.Frame)
+check('statistics has category chips to test', len(chip_frames) > 0)
+before_stats_scroll = app.settings_canvas.yview()
+chip_frames[0].event_generate('<MouseWheel>', delta=-120)
+app.update()
+check('scrolling with the cursor over a statistics chip scrolls the Settings page',
+      app.settings_canvas.yview() != before_stats_scroll)
+
 app.save_username('Alexandra')  # restore for later checks
 app._refresh_greeting()
 
