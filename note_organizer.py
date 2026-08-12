@@ -622,7 +622,9 @@ def normalize_note(note):
             value = {}
         clean[key] = value
     if not clean["updated"]:
-        clean["updated"] = datetime.now().strftime("%Y-%m-%d %H:%M")
+        # Includes seconds (not just minutes) so two notes saved in the same
+        # minute still sort correctly by "Recently updated" instead of tying.
+        clean["updated"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     # Old notes predate the 'created' field — approximate it with 'updated' so
     # they still show a sensible creation date.
     if not clean["created"]:
@@ -7599,7 +7601,7 @@ class NoteOrganizer(tk.Tk):
             for n in self.notes:
                 if n["id"] in self.selected_note_ids:
                     n["category"] = cat
-                    n["updated"] = datetime.now().strftime("%Y-%m-%d %H:%M")
+                    n["updated"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             self.save_notes()
             self._dismiss_mini_popup()
             self._exit_selection_mode_after_bulk_action()
@@ -8048,7 +8050,7 @@ class NoteOrganizer(tk.Tk):
         clone["id"] = max([n["id"] for n in self.notes], default=0) + 1
         base_title = (note.get("title") or "").strip()
         clone["title"] = f"{base_title} (copy)" if base_title else "(copy)"
-        clone["updated"] = datetime.now().strftime("%Y-%m-%d %H:%M")
+        clone["updated"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         # A duplicate is its own note; don't carry occurrence-specific edits that
         # only made sense relative to the original's timeline.
         clone = normalize_note(clone)
@@ -8814,7 +8816,7 @@ class NoteOrganizer(tk.Tk):
             # start date" — and the summary label already says so.
             pass
 
-        now = datetime.now().strftime("%Y-%m-%d %H:%M")
+        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
         if self.selected_note_id is None:
             new_id = max([n["id"] for n in self.notes], default=0) + 1
@@ -9157,7 +9159,7 @@ class NoteOrganizer(tk.Tk):
                 exceptions.add(self.current_occurrence_date)
                 note["exceptions"] = sorted(exceptions)
                 note["overrides"].pop(self.current_occurrence_date, None)
-                note["updated"] = datetime.now().strftime("%Y-%m-%d %H:%M")
+                note["updated"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 self.save_notes()
                 self.new_note()
                 self.refresh_note_list()

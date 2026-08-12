@@ -1,5 +1,5 @@
 import sys
-import note_organizer as NO, tkinter as tk, json, os
+import note_organizer as NO, tkinter as tk, json, os, re
 fails=[]
 def check(name, cond):
     print(('PASS' if cond else 'FAIL'), name)
@@ -29,6 +29,11 @@ app.update()
 note2 = app.find_note(app.selected_note_id)
 check('note edit persists', note2['title']=='Edited Title')
 check('same note id (no duplicate on edit)', note2['id']==note['id'])
+
+# regression: 'updated' must include seconds, not just minutes, so two notes
+# saved in the same minute still sort correctly by "Recently updated"
+check('updated timestamp includes seconds (fixes same-minute sort ties)',
+      bool(re.match(r'^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$', note2.get('updated') or '')))
 
 # pin / unpin
 app.toggle_pin(note2)
