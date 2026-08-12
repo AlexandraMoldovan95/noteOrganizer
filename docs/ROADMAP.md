@@ -11,7 +11,6 @@ Found by hand, not yet worked on. Grouped by area.
 - Grouping by category: after expanding the last (previously collapsed) group, editing a note inside it (which autosaves), then collapsing that group again, the note list's scroll position sometimes jumps back to the top instead of staying near where that group was. Hard to reproduce consistently — needs a closer look at what specifically triggers it.
 
 **Settings**
-- Hovering the mouse over the theme picker cards blocks the right-side scrollbar from working (can't scroll up/down while hovering there, without clicking) — likely a stray mouse-wheel binding on the theme cards capturing the scroll event instead of letting it reach the page.
 - The "← Back to Notes" button should stay visible at all times (sticky/pinned), not scroll out of view when scrolled further down the Settings page.
 - Layout: each section's title is left-aligned, but the action buttons are centered — inconsistent, makes the page harder to scan at a glance ("eye slalom"). Worth a proper design pass, not just a quick alignment fix — see "Settings redesign" below, this is likely folded into that.
 - Statistics: hovering looks clickable (the button highlights), but clicking does nothing. Needs its own discussion — see "Statistics: keep, enhance, or relocate?" below.
