@@ -4253,6 +4253,19 @@ class NoteOrganizer(tk.Tk):
             for w in (cell, sw, lbl):
                 w.bind("<Button-1>", lambda e, n=name: self.set_theme(n))
 
+        # Each preview card's canvas otherwise swallows the mouse wheel
+        # itself (a plain Tk quirk: Canvas has a built-in default scroll
+        # binding, so it never lets the event reach the Settings page
+        # underneath) — forward it to the page's own scroll instead, the
+        # same pattern used for every other Settings panel.
+        def _theme_picker_wheel(event):
+            try:
+                self.settings_canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+            except (tk.TclError, ValueError):
+                pass
+            return "break"
+        self._bind_wheel_tree(parent, _theme_picker_wheel)
+
         self._refresh_theme_picker = lambda: self._build_theme_picker(parent)
 
     def toggle_theme(self):

@@ -130,6 +130,25 @@ check('clicking "Back to Notes" directly clears the field\'s focus',
 app.show_settings_page()
 app.update()
 
+# ---- SETTINGS: scrolling over a theme preview card scrolls the page (regression) ----
+# The theme picker's preview cards are small Canvas widgets, which have a
+# built-in default mouse-wheel behavior of their own — swallowing the wheel
+# event instead of letting it reach the Settings page's own scroll.
+def find_all(w, cls, acc=None):
+    if acc is None: acc = []
+    for c in w.winfo_children():
+        if isinstance(c, cls):
+            acc.append(c)
+        find_all(c, cls, acc)
+    return acc
+theme_canvases = find_all(app.theme_picker_frame, tk.Canvas)
+check('theme picker has preview canvases to test', len(theme_canvases) > 0)
+before_scroll = app.settings_canvas.yview()
+theme_canvases[0].event_generate('<MouseWheel>', delta=-120)
+app.update()
+check('scrolling with the cursor over a theme card scrolls the Settings page',
+      app.settings_canvas.yview() != before_scroll)
+
 app.save_username('Alexandra')  # restore for later checks
 app._refresh_greeting()
 
