@@ -69,6 +69,70 @@ check('greeting disappears when name is cleared', app.greeting_lbl.cget('text') 
 app.save_username('Alexandra')  # restore for later checks
 app._refresh_greeting()
 
+# ---- SETTINGS: username length cap (regression) ----
+# The per-keystroke validation alone isn't fully reliable under rapid/
+# held-down typing (a known Tk limitation), so there are two independent
+# safety nets: an immediate correction on every KeyRelease (so it doesn't
+# wait for a save to fix an over-length value), and a save-time truncation
+# as a final backstop. Both are tested directly here by forcing the value
+# over the limit the way a validation bypass would.
+app.show_settings_page()
+app.update()
+name_entry = find_widget(app.settings_page, tk.Entry)
+name_entry.focus_set()
+app.update()
+
+app.username_var.set('3' * 70)
+name_entry.event_generate('<KeyRelease>')
+app.update()
+check('a single KeyRelease immediately corrects an over-length value, '
+      'without waiting for a save', len(app.username_var.get()) == 30)
+
+app.username_var.set('2' * 70)
+name_entry.event_generate('<Return>')
+app.update()
+check('over-length name gets truncated to 30 chars on save',
+      len(app.username_var.get()) == 30)
+check('truncated name is what gets persisted',
+      len(NO.load_settings().get('username', '')) == 30)
+check('greeting reflects the truncated name, not the original 70 chars',
+      len(app.greeting_lbl.cget('text')) < 40)
+
+# ---- SETTINGS: clicking elsewhere on the page clears field focus (regression) ----
+# Previously, clicking a non-interactive part of the Settings page (a
+# section title, card background) left whatever field was focused — e.g.
+# the username entry — still showing a blinking cursor, even though the
+# value had already autosaved. Switching tabs and back already cleared it
+# correctly; this is specifically the same-page click case.
+name_entry.focus_set()
+app.update()
+check('username entry has focus before clicking elsewhere', app.focus_get() is name_entry)
+stats_title = find_widget(app.settings_page, tk.Label, 'Statistics')
+stats_title.event_generate('<Button-1>')
+app.update()
+check('clicking a section title elsewhere in Settings clears the field\'s focus',
+      app.focus_get() is not name_entry)
+
+# Regression: clicking "Back to Notes" directly (without clicking elsewhere
+# in Settings first) must also clear focus — this is the exact path a user
+# takes when they finish typing and immediately leave, and it broke once
+# during development when the fix above was implemented too narrowly
+# (bound to individual widgets instead of centrally).
+name_entry.focus_set()
+app.update()
+check('username entry has focus before leaving Settings', app.focus_get() is name_entry)
+back_btn = find_widget(app.settings_page, tk.Button, 'Back to Notes')
+back_btn.event_generate('<Button-1>')
+back_btn.event_generate('<ButtonRelease-1>')
+app.update()
+check('clicking "Back to Notes" directly clears the field\'s focus',
+      app.focus_get() is not name_entry)
+app.show_settings_page()
+app.update()
+
+app.save_username('Alexandra')  # restore for later checks
+app._refresh_greeting()
+
 # ---- SETTINGS: statistics chip navigation ----
 app.notes = [
     {'id':10,'title':'StatNote','body':'x','category':'Work','updated':'2026-01-01 00:00','created':'2026-01-01 00:00','checklist':[],'attachments':[]},

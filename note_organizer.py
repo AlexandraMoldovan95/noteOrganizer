@@ -4642,7 +4642,13 @@ class NoteOrganizer(tk.Tk):
         self.track_theme(title_lbl, bg="sidebar", fg="text")
         title_lbl.pack(pady=(20, 0), padx=15, anchor="w")
 
-        self.greeting_lbl = tk.Label(self.sidebar, font=("Segoe UI", 9))
+        self.greeting_lbl = tk.Label(
+            self.sidebar, font=("Segoe UI", 9),
+            # Wraps instead of overflowing past the sidebar's fixed width —
+            # a safety net independent of the username length cap, in case a
+            # name ever ends up longer than expected some other way.
+            wraplength=SIDEBAR_WIDTH - 30, justify="left"
+        )
         self.track_theme(self.greeting_lbl, bg="sidebar", fg="subtext")
         self.greeting_lbl.pack(pady=(2, 12), padx=15, anchor="w")
         self._refresh_greeting()
@@ -5257,6 +5263,24 @@ class NoteOrganizer(tk.Tk):
         canvas.bind("<MouseWheel>", _page_wheel)
         page.bind("<MouseWheel>", _page_wheel)
 
+        # Clicking a non-interactive part of the Settings page (a section
+        # title, card background, blank space) should move keyboard focus
+        # away from whatever field currently has it — otherwise a field's
+        # cursor stays visibly blinking even after its value has already
+        # autosaved. Bound once on the whole app rather than on individual
+        # labels/frames (every click bubbles up to the toplevel by default
+        # unless something along the way stops it, so this reliably catches
+        # all of them) — restricted to only act while Settings is actually
+        # showing, and only when focus is genuinely on an Entry/Text that
+        # isn't the widget that was just clicked.
+        def _clear_settings_field_focus(event):
+            if not self.settings_page.winfo_ismapped():
+                return
+            focused = self.focus_get()
+            if isinstance(focused, (tk.Entry, tk.Text)) and event.widget is not focused:
+                event.widget.focus_set()
+        self.bind("<Button-1>", _clear_settings_field_focus, add="+")
+
         def section(title, subtitle=None):
             head = tk.Frame(page)
             self.track_theme(head, bg="bg")
@@ -5298,14 +5322,24 @@ class NoteOrganizer(tk.Tk):
                  ).pack(fill="x", padx=40, pady=(24, 0))
 
         # --- Your name (used for the "Hi <name>," greeting) ---
-        name_sec = section("Your name", "Used for the greeting above your note list.")
+        name_sec = section(
+            "Your name",
+            "What should we call you? Shows up as a friendly greeting above "
+            "your notes — 30 characters max."
+        )
         name_row = tk.Frame(name_sec, bg=self.colors["card"])
         name_row.pack(fill="x", padx=16, pady=16)
         self.username_var = tk.StringVar(value=self.load_username())
+        # Cap at 30 characters — an unbounded name could look broken in the
+        # sidebar greeting. Only limits new typing; an existing longer name
+        # (saved before this cap existed) still loads and displays in full.
+        USERNAME_MAX_LEN = 30
+        name_len_vcmd = (self.register(lambda p: len(p) <= USERNAME_MAX_LEN), "%P")
         name_entry = tk.Entry(
             name_row, textvariable=self.username_var, relief="flat",
             font=("Segoe UI", 10), bg=self.colors["sidebar"], fg=self.colors["text"],
-            insertbackground=self.colors["text"]
+            insertbackground=self.colors["text"],
+            validate="key", validatecommand=name_len_vcmd
         )
         name_entry.pack(side="left", fill="x", expand=True, ipady=5)
         self._add_paste_menu(name_entry)
@@ -5319,11 +5353,28 @@ class NoteOrganizer(tk.Tk):
                 self._username_save_job = None
             if not self._still_alive():
                 return
-            self.save_username(self.username_var.get())
+            # Hard safety net: the key-by-key length check above can miss very
+            # fast/held-down typing (a known Tk reliability gap under rapid
+            # keystrokes), so enforce the limit again here, at the moment of
+            # actually saving, regardless of how the field got too long.
+            current = self.username_var.get()
+            if len(current) > USERNAME_MAX_LEN:
+                current = current[:USERNAME_MAX_LEN]
+                self.username_var.set(current)
+            self.save_username(current)
             self._refresh_greeting()
-            self.set_status("Name saved" if self.username_var.get().strip() else "Name cleared")
+            self.set_status("Name saved" if current.strip() else "Name cleared")
 
         def schedule_name_save(event=None):
+            # Real-time correction: the per-keystroke block above can miss
+            # very fast/held-down typing, so check again on every key
+            # release (a plain event binding, not the special validate hook
+            # that has the reliability gap) and snap back immediately if it
+            # slipped past 30 — rather than letting it grow freely and only
+            # fixing it later when the name is actually saved.
+            current = self.username_var.get()
+            if len(current) > USERNAME_MAX_LEN:
+                self.username_var.set(current[:USERNAME_MAX_LEN])
             # Autosave after a short pause, same convention as note editing —
             # so clearing the field and clicking away still saves the change.
             if getattr(self, "_username_save_job", None) is not None:
@@ -5336,10 +5387,8 @@ class NoteOrganizer(tk.Tk):
         name_entry.bind("<KeyRelease>", schedule_name_save)
         name_entry.bind("<FocusOut>", lambda e: save_name())
         name_entry.bind("<Return>", lambda e: save_name())
-        tk.Button(name_row, text="Save", command=save_name,
-                  bg=self.colors["accent"], fg="white", relief="flat",
-                  font=("Segoe UI", 9, "bold"), cursor="hand2"
-                  ).pack(side="left", padx=(8, 0), ipadx=12, ipady=5)
+        # No separate Save button — the field already autosaves shortly
+        # after typing stops, and immediately on Enter or clicking away.
 
         stats_sec = section("Statistics", "A quick snapshot of your notes.")
         self.stats_frame = tk.Frame(stats_sec, bg=self.colors["card"])
@@ -8084,10 +8133,9 @@ class NoteOrganizer(tk.Tk):
             label="➕  Add note for this day",
             command=lambda: self._add_note_for_date(date_str)
         )
-        menu.add_command(
-            label="👁  View this day",
-            command=lambda: self.open_day_popup(date_str)
-        )
+        # No "View this day" entry here — a plain left-click on the day
+        # already opens the same panel via open_day_popup(), so this menu
+        # only needs the actions a left-click can't already do.
         menu.add_separator()
         menu.add_command(
             label="🎨  Color this day…",
