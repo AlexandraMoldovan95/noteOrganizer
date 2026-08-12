@@ -115,6 +115,32 @@ After making a change:
 
 When fixing a bug, prefer adding a regression test when practical.
 
+### QA testing safety (hard rule — real data has been lost to this twice)
+
+Running the `qa*.py` scripts requires a working copy of `note_organizer.py`
+next to them, and each script wipes `*.json` and `attachments/` in its
+working directory before running. **This working directory must never be
+the project's own `qa/` folder in place.** Copying files into `qa/` and
+cleaning up there has twice caused a misdirected command to instead wipe
+the real `notes_data.json`, `trash.json`, `templates.json`,
+`settings.json`, and `attachments/` at the project root — both are
+git-ignored, so `git status` never flags the damage, and no automatic
+backup exists to recover from it.
+
+Instead: copy `note_organizer.py` and the target `qaN.py` script into a
+scratch directory **outside the project tree entirely** (e.g. the
+session's own scratchpad folder), and run and clean up there. This makes
+it physically impossible for a wrong-directory mistake to reach real user
+data, rather than relying on correctly remembering the working directory
+every single time.
+
+If a destructive command must reference `notes_data.json`, `trash.json`,
+`templates.json`, `settings.json`, or `attachments/` for any other reason,
+always use a fully-qualified absolute path — never a bare relative
+pattern like `*.json` — as a second layer of protection. Verify the
+working directory (`pwd`) immediately before any destructive command,
+every time, not just when something already looks risky.
+
 ### File safety
 
 Before editing:
