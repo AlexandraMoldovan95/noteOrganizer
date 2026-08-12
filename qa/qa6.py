@@ -97,6 +97,21 @@ check('truncated name is what gets persisted',
       len(NO.load_settings().get('username', '')) == 30)
 check('greeting reflects the truncated name, not the original 70 chars',
       len(app.greeting_lbl.cget('text')) < 40)
+
+# ---- SETTINGS: clicking elsewhere on the page clears field focus (regression) ----
+# Previously, clicking a non-interactive part of the Settings page (a
+# section title, card background) left whatever field was focused — e.g.
+# the username entry — still showing a blinking cursor, even though the
+# value had already autosaved. Switching tabs and back already cleared it
+# correctly; this is specifically the same-page click case.
+name_entry.focus_set()
+app.update()
+check('username entry has focus before clicking elsewhere', app.focus_get() is name_entry)
+stats_title = find_widget(app.settings_page, tk.Label, 'Statistics')
+stats_title.event_generate('<Button-1>')
+app.update()
+check('clicking a section title elsewhere in Settings clears the field\'s focus',
+      app.focus_get() is not name_entry)
 app.save_username('Alexandra')  # restore for later checks
 app._refresh_greeting()
 

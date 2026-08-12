@@ -5263,18 +5263,37 @@ class NoteOrganizer(tk.Tk):
         canvas.bind("<MouseWheel>", _page_wheel)
         page.bind("<MouseWheel>", _page_wheel)
 
+        # Clicking any non-interactive part of the page (a section title, a
+        # card's background, blank space) moves keyboard focus away from
+        # whatever field currently has it — e.g. the username entry. Without
+        # this, clicking elsewhere on the *same* page left the field's
+        # cursor visibly blinking even after the name had already
+        # autosaved, since Labels/Frames don't take focus on click by
+        # default the way switching tabs already correctly does.
+        def _clear_field_focus(event):
+            event.widget.focus_set()
+        outer.bind("<Button-1>", _clear_field_focus)
+        canvas.bind("<Button-1>", _clear_field_focus)
+        page.bind("<Button-1>", _clear_field_focus)
+
         def section(title, subtitle=None):
             head = tk.Frame(page)
             self.track_theme(head, bg="bg")
             head.pack(fill="x", padx=40, pady=(24, 0))
-            tk.Label(head, text=title, font=("Segoe UI", 14, "bold"),
-                     bg=self.colors["bg"], fg=self.colors["text"], anchor="w"
-                     ).pack(fill="x")
+            head.bind("<Button-1>", _clear_field_focus)
+            title_lbl = tk.Label(head, text=title, font=("Segoe UI", 14, "bold"),
+                                 bg=self.colors["bg"], fg=self.colors["text"], anchor="w")
+            title_lbl.pack(fill="x")
+            title_lbl.bind("<Button-1>", _clear_field_focus)
             if subtitle:
-                tk.Label(head, text=subtitle, font=("Segoe UI", 9),
-                         bg=self.colors["bg"], fg=self.colors["subtext"],
-                         anchor="w", justify="left", wraplength=560).pack(fill="x", pady=(2, 0))
+                subtitle_lbl = tk.Label(
+                    head, text=subtitle, font=("Segoe UI", 9),
+                    bg=self.colors["bg"],
+                    fg=self.colors["subtext"], anchor="w", justify="left", wraplength=560)
+                subtitle_lbl.pack(fill="x", pady=(2, 0))
+                subtitle_lbl.bind("<Button-1>", _clear_field_focus)
             card = tk.Frame(page, bg=self.colors["card"])
+            card.bind("<Button-1>", _clear_field_focus)
             self.track_theme(card, bg="card")
             card.pack(fill="x", padx=40, pady=(10, 0))
             return card
