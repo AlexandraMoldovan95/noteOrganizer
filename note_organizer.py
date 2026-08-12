@@ -3281,6 +3281,20 @@ class NoteOrganizer(tk.Tk):
                 w.bind("<Leave>", lambda e, ws=widgets:
                        [x.configure(bg=self.colors["sidebar"]) for x in ws])
 
+        # Same wheel-forwarding pattern used elsewhere in Settings (theme
+        # picker, inline panels) — without it, scrolling with the cursor
+        # over the summary text or a category chip does nothing, since
+        # those widgets have no scroll behavior of their own to fall back
+        # to. Rebound every time this panel rebuilds (it's redrawn on every
+        # Settings-page open, to stay fresh).
+        def _stats_wheel(event):
+            try:
+                self.settings_canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+            except (tk.TclError, ValueError):
+                pass
+            return "break"
+        self._bind_wheel_tree(self.stats_frame, _stats_wheel)
+
     def _refresh_category_button(self):
         """Update the category button's colour dot + label to the current pick."""
         if not hasattr(self, "_cat_dot"):
@@ -4252,6 +4266,19 @@ class NoteOrganizer(tk.Tk):
 
             for w in (cell, sw, lbl):
                 w.bind("<Button-1>", lambda e, n=name: self.set_theme(n))
+
+        # Each preview card's canvas otherwise swallows the mouse wheel
+        # itself (a plain Tk quirk: Canvas has a built-in default scroll
+        # binding, so it never lets the event reach the Settings page
+        # underneath) — forward it to the page's own scroll instead, the
+        # same pattern used for every other Settings panel.
+        def _theme_picker_wheel(event):
+            try:
+                self.settings_canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+            except (tk.TclError, ValueError):
+                pass
+            return "break"
+        self._bind_wheel_tree(parent, _theme_picker_wheel)
 
         self._refresh_theme_picker = lambda: self._build_theme_picker(parent)
 
