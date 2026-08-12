@@ -11,15 +11,8 @@ Found by hand, not yet worked on. Grouped by area.
 - Grouping by category: after expanding the last (previously collapsed) group, editing a note inside it (which autosaves), then collapsing that group again, the note list's scroll position sometimes jumps back to the top instead of staying near where that group was. Hard to reproduce consistently — needs a closer look at what specifically triggers it.
 
 **Settings**
-- The "← Back to Notes" button should stay visible at all times (sticky/pinned), not scroll out of view when scrolled further down the Settings page.
 - Layout: each section's title is left-aligned, but the action buttons are centered — inconsistent, makes the page harder to scan at a glance ("eye slalom"). Worth a proper design pass, not just a quick alignment fix — see "Settings redesign" below, this is likely folded into that.
 - Statistics: hovering looks clickable (the button highlights), but clicking does nothing. Needs its own discussion — see "Statistics: keep, enhance, or relocate?" below.
-
-**Multi-select**
-- The bulk "Category" button's text isn't fully visible — the last letter of "Category" is slightly cramped, and the label to its left isn't visible at all. Likely just needs more width or a smaller font in that specific button.
-
-**Sort/filter controls**
-- The "Recently updated" label is cut off in the dropdown button itself (before it's even opened) — the last "d" isn't visible. Probably needs a small width adjustment or tighter font.
 
 ## Settings redesign (bigger discussion, own design pass)
 
