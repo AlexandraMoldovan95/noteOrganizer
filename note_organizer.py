@@ -5302,10 +5302,16 @@ class NoteOrganizer(tk.Tk):
         name_row = tk.Frame(name_sec, bg=self.colors["card"])
         name_row.pack(fill="x", padx=16, pady=16)
         self.username_var = tk.StringVar(value=self.load_username())
+        # Cap at 30 characters — an unbounded name could look broken in the
+        # sidebar greeting. Only limits new typing; an existing longer name
+        # (saved before this cap existed) still loads and displays in full.
+        USERNAME_MAX_LEN = 30
+        name_len_vcmd = (self.register(lambda p: len(p) <= USERNAME_MAX_LEN), "%P")
         name_entry = tk.Entry(
             name_row, textvariable=self.username_var, relief="flat",
             font=("Segoe UI", 10), bg=self.colors["sidebar"], fg=self.colors["text"],
-            insertbackground=self.colors["text"]
+            insertbackground=self.colors["text"],
+            validate="key", validatecommand=name_len_vcmd
         )
         name_entry.pack(side="left", fill="x", expand=True, ipady=5)
         self._add_paste_menu(name_entry)
@@ -5336,10 +5342,8 @@ class NoteOrganizer(tk.Tk):
         name_entry.bind("<KeyRelease>", schedule_name_save)
         name_entry.bind("<FocusOut>", lambda e: save_name())
         name_entry.bind("<Return>", lambda e: save_name())
-        tk.Button(name_row, text="Save", command=save_name,
-                  bg=self.colors["accent"], fg="white", relief="flat",
-                  font=("Segoe UI", 9, "bold"), cursor="hand2"
-                  ).pack(side="left", padx=(8, 0), ipadx=12, ipady=5)
+        # No separate Save button — the field already autosaves shortly
+        # after typing stops, and immediately on Enter or clicking away.
 
         stats_sec = section("Statistics", "A quick snapshot of your notes.")
         self.stats_frame = tk.Frame(stats_sec, bg=self.colors["card"])
@@ -8084,10 +8088,9 @@ class NoteOrganizer(tk.Tk):
             label="➕  Add note for this day",
             command=lambda: self._add_note_for_date(date_str)
         )
-        menu.add_command(
-            label="👁  View this day",
-            command=lambda: self.open_day_popup(date_str)
-        )
+        # No "View this day" entry here — a plain left-click on the day
+        # already opens the same panel via open_day_popup(), so this menu
+        # only needs the actions a left-click can't already do.
         menu.add_separator()
         menu.add_command(
             label="🎨  Color this day…",
