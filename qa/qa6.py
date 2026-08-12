@@ -112,6 +112,24 @@ stats_title.event_generate('<Button-1>')
 app.update()
 check('clicking a section title elsewhere in Settings clears the field\'s focus',
       app.focus_get() is not name_entry)
+
+# Regression: clicking "Back to Notes" directly (without clicking elsewhere
+# in Settings first) must also clear focus — this is the exact path a user
+# takes when they finish typing and immediately leave, and it broke once
+# during development when the fix above was implemented too narrowly
+# (bound to individual widgets instead of centrally).
+name_entry.focus_set()
+app.update()
+check('username entry has focus before leaving Settings', app.focus_get() is name_entry)
+back_btn = find_widget(app.settings_page, tk.Button, 'Back to Notes')
+back_btn.event_generate('<Button-1>')
+back_btn.event_generate('<ButtonRelease-1>')
+app.update()
+check('clicking "Back to Notes" directly clears the field\'s focus',
+      app.focus_get() is not name_entry)
+app.show_settings_page()
+app.update()
+
 app.save_username('Alexandra')  # restore for later checks
 app._refresh_greeting()
 
