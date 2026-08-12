@@ -8,7 +8,6 @@ Found by hand, not yet worked on. Grouped by area.
 
 **Note list**
 - Dragging the scrollbar with only a few notes in the list causes visible flicker and adds unexplained spacing between the top bar and the first note's title. Doesn't happen with a longer list — worth checking whether this is related to the scrollregion calculation only being "exercised" enough to self-correct once there's enough content to actually need scrolling.
-- **"Recently updated" sort is unreliable** — doesn't always correctly show the most recently autosaved note first, even though the note *was* saved. Needs a full check of every sort option's logic, not just this one, to make sure each does exactly what its label says.
 - Grouping by category: after expanding the last (previously collapsed) group, editing a note inside it (which autosaves), then collapsing that group again, the note list's scroll position sometimes jumps back to the top instead of staying near where that group was. Hard to reproduce consistently — needs a closer look at what specifically triggers it.
 
 **Settings**
