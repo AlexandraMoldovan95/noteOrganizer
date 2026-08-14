@@ -86,6 +86,7 @@ noteOrganizer/
 │       └── tests.yml         # runs the full QA suite automatically on every push
 ├── note_organizer.py         # the application (single file by design — see docs/ARCHITECTURE.md)
 ├── test_recurrence.py        # standalone tests for the recurrence engine (no GUI needed)
+├── test_data_safety.py       # standalone tests for backups & migration safety (no GUI needed)
 ├── docs/
 │   ├── USER_GUIDE.md          # full walkthrough with screenshots
 │   ├── ARCHITECTURE.md        # how the code is organized, and why
@@ -117,11 +118,12 @@ noteOrganizer/
 
 ## Testing
 
-Every push and Pull Request automatically runs the full QA suite via GitHub Actions (see `.github/workflows/tests.yml`) — recurrence engine tests plus seven headless GUI test scripts covering notes/categories/templates, recurrence/calendar/duplicates, trash/sharing/import-export, theming/stress/leak-regression, data-corruption resilience, grouping/settings/attachments/multi-feature combinations, and calendar-delete/multi-select/image-preview/autosave/memory fixes. Check the **Actions** tab on GitHub for the latest run.
+Every push and Pull Request automatically runs the full QA suite via GitHub Actions (see `.github/workflows/tests.yml`) — recurrence engine tests, data-safety tests (backups made before a version upgrade, and the migration logic that moves notes between storage locations), plus nine headless GUI test scripts covering notes/categories/templates, recurrence/calendar/duplicates, trash/sharing/import-export, theming/stress/leak-regression, data-corruption resilience, grouping/settings/attachments/multi-feature combinations, calendar-delete/multi-select/image-preview/autosave/memory fixes, search debounce/background-timer robustness, and the nested-dropdown-inside-popup fix. Check the **Actions** tab on GitHub for the latest run.
 
 To run them locally:
 ```bash
 python test_recurrence.py
+python test_data_safety.py
 cd qa && python qa1.py   # and qa2.py – qa9.py
 ```
 
