@@ -172,6 +172,22 @@ with open(disk_path) as f:
     disk_notes = json.load(f)
 check('disk note count matches memory', len(disk_notes)==len(app.notes))
 
+# ---- DATA SAFETY: load_notes() backs up before re-reading on a version
+# upgrade (regression). Most of this safety net's logic (backup_notes_file,
+# detect_version_change, run_migrations) is pure filesystem code tested
+# directly in test_data_safety.py — this specifically checks the one part
+# that needs a real running app: that load_notes() actually calls the
+# backup when VERSION_CHANGE reports an upgrade. ----
+_original_version_change = NO.VERSION_CHANGE
+NO.VERSION_CHANGE = ('up', '0.0.1', NO.APP_VERSION)
+app._version_backup_path = None
+app.load_notes()
+check('load_notes takes a safety backup when VERSION_CHANGE reports an upgrade',
+      app._version_backup_path is not None and os.path.exists(app._version_backup_path))
+if app._version_backup_path:
+    os.remove(app._version_backup_path)
+NO.VERSION_CHANGE = _original_version_change
+
 print()
 print(f"=== QA1 FAILURES: {fails if fails else 'NONE'} ===")
 

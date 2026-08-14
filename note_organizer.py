@@ -218,7 +218,14 @@ def run_migrations(app_dir):
             and os.path.exists(appdata_notes)
             and count_notes_in(appdata_notes) > 0):
 
+        notes_path_existed = os.path.exists(notes_path)
         displaced = _timestamped_backup(notes_path, "replaced")
+        if notes_path_existed and not displaced:
+            # A local file existed but backing it up failed (disk full,
+            # permissions, locked by something else) — don't risk an
+            # unprotected overwrite. Leave things as they are and try
+            # again next launch instead of proceeding blind.
+            return None
         moved = count_notes_in(appdata_notes)
         try:
             shutil.copy2(appdata_notes, notes_path)
@@ -1482,6 +1489,7 @@ class NoteOrganizer(tk.Tk):
         CATEGORY_COLORS.update(load_categories())
 
         self._cleanup_report = None  # filled in by load_notes if cleanup ran
+        self._version_backup_path = None  # filled in by load_notes on a version upgrade
         self.notes = self.load_notes()
         self.selected_note_id = None
 
@@ -1700,10 +1708,17 @@ class NoteOrganizer(tk.Tk):
         if VERSION_CHANGE:
             direction, old, new = VERSION_CHANGE
             if direction == "up":
-                lines.append(
+                msg = (
                     f"Updated to version {new} (from {old}).\n\n"
                     "Your notes are unchanged — only the app was updated."
                 )
+                if self._version_backup_path:
+                    msg += (
+                        "\n\nAs an extra safety net, a backup of your notes "
+                        "from just before this update was saved to:\n"
+                        f"{self._version_backup_path}"
+                    )
+                lines.append(msg)
             else:
                 lines.append(
                     f"⚠ You're running an older version ({new}) over data last "
@@ -1751,6 +1766,15 @@ class NoteOrganizer(tk.Tk):
     def load_notes(self):
         raw = []
         if os.path.exists(DATA_FILE):
+            # A newer app version is about to run against data last saved by
+            # an older one — snapshot it now, before this version's own code
+            # (which could have new bugs or changed logic) gets any chance
+            # to rewrite it. Every future update gets this safety net, not
+            # just the very first run (see backup_notes_file's other call,
+            # below, for that one-time case). Never auto-deleted — it's the
+            # user's call when old backups are no longer needed.
+            if VERSION_CHANGE and VERSION_CHANGE[0] == "up":
+                self._version_backup_path = backup_notes_file()
             try:
                 with open(DATA_FILE, "r", encoding="utf-8") as f:
                     raw = json.load(f)

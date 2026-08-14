@@ -41,6 +41,9 @@ jobs:
       - name: Recurrence engine tests
         run: python3 test_recurrence.py
 
+      - name: Data safety tests — backups and migration
+        run: python3 test_data_safety.py
+
       - name: QA1 — Notes, categories, templates
         run: |
           cd qa
