@@ -4,7 +4,7 @@ How Note Organizer is built, and why. Written for anyone reading the code for th
 
 ## Overview
 
-Note Organizer is a single-file Python/Tkinter desktop app (`note_organizer.py`). Everything — data model, persistence, and UI — lives in one file by design at the current size (~8,500 lines): the app has no build step, no import graph to reason about, and can be read top-to-bottom. A move to a multi-file package is tracked in [ROADMAP.md](ROADMAP.md) as the app continues to grow, but wasn't worth the churn earlier on.
+Note Organizer is a single-file Python/Tkinter desktop app (`note_organizer.py`). Everything — data model, persistence, and UI — lives in one file by design at the current size (~10,100 lines): the app has no build step, no import graph to reason about, and can be read top-to-bottom. A move to a multi-file package is tracked in [ROADMAP.md](ROADMAP.md) as the app continues to grow, but wasn't worth the churn earlier on.
 
 ## Data layer
 
@@ -70,4 +70,4 @@ Typing pauses trigger a debounced autosave; switching notes (or tabs) flushes an
 
 ## Testing
 
-Manual QA lives as a structured spreadsheet in `qa/`. Automated coverage is a set of headless test scripts run under Xvfb (no visible display needed) — nine scripts covering CRUD/categories/templates, recurrence/calendar/duplicates, trash/share/import-export, theming/stress/leak-regression, data-corruption resilience, grouping/settings/attachments/combinations, calendar-delete/multi-select/image-preview/autosave fixes, search-debounce/background-timer robustness, and a nested-dropdown-inside-popup fix, plus a dedicated recurrence-engine suite that needs no GUI at all. All of them run automatically on every push and Pull Request via GitHub Actions (`.github/workflows/tests.yml`), so a regression shows up as a failed check rather than being found by hand later. See [ISSUES_LOG.md](ISSUES_LOG.md) for notable bugs these caught (and a few they didn't, caught by hand-testing instead).
+Manual QA lives as a structured spreadsheet in `qa/`. Automated coverage is a set of headless test scripts run under Xvfb (no visible display needed) — nine scripts covering CRUD/categories/templates, recurrence/calendar/duplicates, trash/share/import-export, theming/stress/leak-regression, data-corruption resilience, grouping/settings/attachments/combinations, calendar-delete/multi-select/image-preview/autosave fixes, search-debounce/background-timer robustness, and a nested-dropdown-inside-popup fix, plus three standalone suites that need no GUI at all: the recurrence engine, data-safety (backups & migration), and the in-note calculator's expression evaluator. All of them run automatically on every push and Pull Request via GitHub Actions (`.github/workflows/tests.yml`), so a regression shows up as a failed check rather than being found by hand later. See [ISSUES_LOG.md](ISSUES_LOG.md) for notable bugs these caught (and a few they didn't, caught by hand-testing instead).

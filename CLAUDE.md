@@ -7,7 +7,7 @@ runtime dependency (Pillow, for image/GIF preview rendering). No network
 calls, no accounts, no database.
 
 - **Single-file design (intentional):** almost the entire app — data model,
-  persistence, and UI — lives in `note_organizer.py` (~9,300 lines). This is
+  persistence, and UI — lives in `note_organizer.py` (~10,100 lines). This is
   a deliberate choice documented in `docs/ARCHITECTURE.md`, not an oversight.
   A future split into multiple files/modules is tracked in `docs/ROADMAP.md`
   but is not current work unless explicitly requested.

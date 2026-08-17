@@ -34,6 +34,12 @@ Any note can have a checklist. Click **☑ Checklist** in the editor to open it,
 
 ![Checklist](screenshots/checklist.png)
 
+### Calculator
+
+Click **🧮 Calculator** in the editor, next to Checklist, for a collapsible built-in calculator — standard arithmetic with real operator precedence, three interchangeable bracket styles, a square root, powers, and percent, either from the on-screen buttons or by typing/pasting an expression directly. Press **=** to see the result, then **Insert into note** to drop the whole formula (not just the answer) into the note body — repeated inserts stack cleanly below each other. A collapsible history keeps every calculation from the session, with a Clear button and click-to-insert on any past entry.
+
+![Calculator](screenshots/calculator.png)
+
 ### Emoji
 
 Any text field in a note (title, body, comments) can have an emoji inserted at the cursor via the right-click menu, without leaving the keyboard to hunt through the system emoji picker.
@@ -169,6 +175,7 @@ Drop image files into `docs/screenshots/` using the exact filenames referenced a
 | `note-editor.png` | A note open in the editor, with some content filled in |
 | `attachments.png` | The attachments section of a note with at least one file attached |
 | `checklist.png` | The checklist section open, with a mix of checked and unchecked items |
+| `calculator.png` | The calculator section open, with an expression entered and its result inserted into the note |
 | `emoji-picker.png` | The emoji picker open over a text field |
 | `search-and-sort.png` | The search box and sort dropdown, ideally mid-search |
 | `grouped-notes.png` | The note list with "Group by category" on, showing at least two groups (one collapsed, one expanded, if possible) |
