@@ -173,23 +173,33 @@ check('scrolling with the cursor over a statistics chip scrolls the Settings pag
 app.save_username('Alexandra')  # restore for later checks
 app._refresh_greeting()
 
-# ---- SETTINGS: statistics chip navigation ----
+# ---- SETTINGS: statistics chips are informational only, not clickable ----
+# Chips used to navigate to a filtered note list on click, but real usage
+# showed the click silently failing in both the script and the packaged
+# .exe after scrolling the Settings page (never reproduced headlessly,
+# despite trying several ways). Rather than chase that further, the
+# interactivity was removed outright — Statistics is meant to be a
+# read-only snapshot, not another way to filter notes. This guards
+# against the interactivity accidentally coming back.
 app.notes = [
     {'id':10,'title':'StatNote','body':'x','category':'Work','updated':'2026-01-01 00:00','created':'2026-01-01 00:00','checklist':[],'attachments':[]},
 ]
 app.show_settings_page()
 app.update()
 app.filter_var.set('All')
-app.notebook.select(app.TAB_CALENDAR)  # start somewhere else, to prove the click moves us
+app.notebook.select(app.TAB_CALENDAR)
 app.update()
-
-# simulate what the stats chip's goto_category(cat) does
-app.filter_var.set('Work')
-app.notebook.select(app.TAB_NOTES)
-app.refresh_note_list()
+grid_frame = find_all(app.stats_frame, tk.Frame)[0]
+chip = grid_frame.winfo_children()[0]
+check('statistics chip has no hand cursor (not clickable-looking)',
+      str(chip.cget('cursor')) != 'hand2')
+chip.event_generate('<Button-1>')
+chip.event_generate('<ButtonRelease-1>')
 app.update()
-check('category chip navigation lands on Notes tab', app.notebook.index(app.notebook.select())==app.TAB_NOTES)
-check('category chip navigation sets the filter', app.filter_var.get()=='Work')
+check('clicking a statistics chip does not change tabs',
+      app.notebook.index(app.notebook.select())==app.TAB_CALENDAR)
+check('clicking a statistics chip does not change the filter',
+      app.filter_var.get()=='All')
 
 # stats freshness: total should reflect current note count after add
 before_count = len(app.notes)
@@ -197,6 +207,163 @@ app.notes.append({'id':11,'title':'New','body':'x','category':'General','updated
 app.show_settings_page()
 app.update()
 check('note count grew after adding a note', len(app.notes) == before_count + 1)
+
+# ---- SETTINGS: statistics update live, without leaving/reopening Settings
+# (regression) ---- Deleting a category (its notes move to General) used to
+# leave Statistics showing the stale, now-deleted category until the user
+# left Settings and came back. refresh_note_list() (called by
+# _delete_category) now unconditionally refreshes Statistics too. (An
+# earlier version of this fix gated the refresh on the Settings page's
+# winfo_ismapped() state, which looked right but wasn't reliably true right
+# after pack() in real interactive use — it silently skipped real updates,
+# which is worse than doing the (cheap) work unconditionally.)
+def stats_label_texts():
+    out = []
+    def walk(w):
+        for c in w.winfo_children():
+            if isinstance(c, tk.Label):
+                out.append(str(c.cget('text')))
+            walk(c)
+    walk(app.stats_frame)
+    return out
+
+NO.CATEGORY_COLORS['TempStatsCat'] = '#ff0000'
+NO.persist_categories()
+app.notes.append({'id':12,'title':'TempCatNote','body':'x','category':'TempStatsCat',
+                   'updated':'2026-01-01 00:00','created':'2026-01-01 00:00',
+                   'checklist':[],'attachments':[]})
+app.show_settings_page()
+app.update()
+check('stats show the category before it is deleted',
+      any('TempStatsCat' in t for t in stats_label_texts()))
+
+app.ask_yes_no = lambda *a, **k: True
+app._ask_category_deletion = lambda name, count: "move"
+app._delete_category('TempStatsCat', redraw=lambda: None)
+app.update()
+check('stats no longer show the deleted category, without reopening Settings',
+      not any('TempStatsCat' in t for t in stats_label_texts()))
+check('the moved note is now counted under General in stats',
+      any(t.startswith('General (') for t in stats_label_texts()))
+
+# ---- SETTINGS: stats reflect ALL categories, not just the first one
+# (regression) ---- Saving notes into several different categories via the
+# normal editor flow, then opening Settings once at the end (like a real
+# user session, not forcing an update() after every micro-step), should
+# show every category that has notes — not just whichever one happened to
+# be current when Statistics last rendered.
+NO.CATEGORY_COLORS['StatsCatA'] = '#00aaff'
+NO.CATEGORY_COLORS['StatsCatB'] = '#ffaa00'
+NO.persist_categories()
+for cat_name in ('StatsCatA', 'StatsCatB'):
+    app.new_note()
+    app.title_entry.insert(0, f'{cat_name}Note')
+    app.body_text.insert('1.0', 'x')
+    app.category_var.set(cat_name)
+    app.save_current_note(auto=False)
+app.show_settings_page()
+app.update()
+texts = stats_label_texts()
+check('stats show StatsCatA after a normal save sequence',
+      any(t.startswith('StatsCatA (') for t in texts))
+check('stats show StatsCatB after a normal save sequence',
+      any(t.startswith('StatsCatB (') for t in texts))
+
+# ---- SETTINGS: templates/checklists/deleted counts and first-launch date ----
+# Templates and checklists are counted as standalone things (how many exist),
+# not how many notes reference them — a template can be reused across many
+# notes, a checklist only ever lives inside the one note it's on. "Deleted"
+# is whatever's currently in Trash right now, not an all-time total.
+app.templates = [
+    NO.normalize_template({'name': 'StatsTplA'}),
+    NO.normalize_template({'name': 'StatsTplB'}),
+]
+app.notes.append({'id': 900, 'title': 'ChecklistNote', 'body': 'x', 'category': 'General',
+                   'updated': '2026-01-01 00:00', 'created': '2026-01-01 00:00',
+                   'checklist': [{'text': 'item', 'done': False}], 'attachments': []})
+app.trash = [{'id': 901, 'title': 'Deleted', 'category': 'General', 'deleted_at': '2026-01-01 00:00'}]
+app.show_settings_page()
+app.update()
+texts = stats_label_texts()
+check('stats show the correct template count',
+      any('2 templates' in t for t in texts))
+check('stats show the correct checklist-notes count',
+      any('1 notes with checklists' in t for t in texts))
+check('stats show the correct deleted (Trash) count',
+      any('1 deleted' in t for t in texts))
+check('stats show a first-launch date',
+      any('Using Note Organizer since' in t for t in texts))
+
+# ---- SETTINGS: template count updates live, entirely within Settings
+# (regression) ---- Adding/deleting a template via the Manage Templates
+# panel used to leave Statistics showing the stale count until the user
+# switched away (to the editor) and back. _edit_template's save() and
+# _build_template_row's delete() now call _render_statistics() themselves,
+# so this updates immediately, without leaving Settings at all. Uses the
+# real popup/button flow, not direct self.templates mutation, so it
+# actually exercises the same path a user would.
+def find_all2(w, cls, acc=None):
+    if acc is None: acc = []
+    for c in w.winfo_children():
+        if isinstance(c, cls):
+            acc.append(c)
+        find_all2(c, cls, acc)
+    return acc
+
+app.templates = []
+NO.save_templates(app.templates)
+app.show_settings_page()
+app.update()
+app.toggle_settings_panel('templates')
+app.update()
+check('template count starts at 0', any('0 templates' in t for t in stats_label_texts()))
+
+app._edit_template(None, app._refresh_templates_panel)
+app.update()
+popup = app._mini_popup
+find_all2(popup, tk.Entry)[0].insert(0, 'LiveTplTest')
+save_btn = next(b for b in find_all2(popup, tk.Button) if str(b.cget('text')) == 'Save')
+save_btn.invoke()
+app.update()
+check('template count updates live after saving a new template, no navigation away',
+      any('1 templates' in t for t in stats_label_texts()))
+
+delete_btn = next(b for b in find_all2(app.settings_templates_panel, tk.Button)
+                   if str(b.cget('text')) == '\U0001f5d1')
+delete_btn.invoke()
+app.update()
+check('template count updates live after deleting a template, no navigation away',
+      any('0 templates' in t for t in stats_label_texts()))
+
+# ---- SETTINGS: templates/checklists stay current when switching away and
+# back (regression) ---- Checklist edits happen in the note editor, a
+# genuinely different screen from Settings, so they can't live-update
+# Statistics while Settings itself is showing — but show_settings_page()
+# always recomputes fresh from current data, so leaving Settings and
+# coming back should still show accurate counts.
+app.templates.append(NO.normalize_template({'name': 'StatsTplC'}))
+NO.save_templates(app.templates)
+app.hide_settings_page()
+app.update()
+app.show_settings_page()
+app.update()
+check('template count reflects a template added while away, on return to Settings',
+      any('1 templates' in t for t in stats_label_texts()))
+
+app.hide_settings_page()
+app.update()
+app.new_note()
+app.title_entry.insert(0, 'SwitchChecklistNote')
+app.body_text.insert('1.0', 'x')
+app._working_checklist = [{'text': 'a checklist item', 'done': False}]
+if hasattr(app, '_render_checklist_items'):
+    app._render_checklist_items()
+app.save_current_note(auto=False)
+app.update()
+app.show_settings_page()
+app.update()
+check('checklist count reflects a note saved from the editor, on return to Settings',
+      any('2 notes with checklists' in t for t in stats_label_texts()))
 
 # ---- ATTACHMENTS (through the UI functions, not just file cleanup) ----
 tmp_file = os.path.join(tempfile.gettempdir(), 'qa6_attachment.txt')

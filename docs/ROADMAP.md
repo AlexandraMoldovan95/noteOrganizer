@@ -12,15 +12,10 @@ Found by hand, not yet worked on. Grouped by area.
 
 **Settings**
 - Layout: each section's title is left-aligned, but the action buttons are centered — inconsistent, makes the page harder to scan at a glance ("eye slalom"). Worth a proper design pass, not just a quick alignment fix — see "Settings redesign" below, this is likely folded into that.
-- Statistics: hovering looks clickable (the button highlights), but clicking does nothing. Needs its own discussion — see "Statistics: keep, enhance, or relocate?" below.
 
 ## Settings redesign (bigger discussion, own design pass)
 
 The current single-column Settings page makes for a lot of scrolling and doesn't clearly separate "which section am I in" from "what are this section's controls." Considering a restructure closer to how Chrome (and similar apps) lay out settings: a narrow column on the left listing every section, and the actual controls for whichever section is selected on the right, with empty space beyond that rather than everything stretched full-width. Not yet decided whether Settings should become an inline popup/modal (opened from the editor or calendar, floating over the app) or stay as a page of its own — worth a dedicated conversation before building anything, since it affects more than just this list of small alignment fixes above.
-
-## Statistics: keep, enhance, or relocate?
-
-Currently looks interactive (hover highlight) but isn't clickable, which is misleading. Options to weigh in a separate discussion: make it genuinely interactive to match how it already looks, give it a visual refresh to feel more worth having, or move it down near "About" on the reasoning that it's a low-traffic feature not worth prime placement. No decision made yet — noted here so it isn't lost, not to be worked on until discussed on its own.
 
 ## Versioning
 

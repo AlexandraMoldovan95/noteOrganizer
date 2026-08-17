@@ -537,7 +537,23 @@ def detect_version_change():
     return result
 
 
+def get_first_launch_date():
+    """Returns the date the app was first ever run — stamped once, the
+    first time this executes, and never overwritten after. Existing
+    installs from before this was added get today's date recorded as their
+    starting point; there's no way to know their real first-use date
+    retroactively."""
+    settings = load_settings()
+    stamped = settings.get("first_launch_date")
+    if not isinstance(stamped, str) or not stamped:
+        stamped = date_cls.today().isoformat()
+        settings["first_launch_date"] = stamped
+        save_settings(settings)
+    return stamped
+
+
 VERSION_CHANGE = detect_version_change()
+FIRST_LAUNCH_DATE = get_first_launch_date()
 
 
 # ---- Note schema + one-time cleanup ----
@@ -3212,11 +3228,27 @@ class NoteOrganizer(tk.Tk):
                                    buttons=[("Cancel", None), ("No", False), ("Yes", True)])
 
     def _render_statistics(self):
-        """Compute and draw a compact snapshot: total notes, recent activity,
-        and per-category counts as small clickable chips. Recomputed each time
-        the Settings tab is opened, so it never goes stale. Every field is read
-        defensively — a note with a missing/odd timestamp or category just gets
-        skipped from that specific count instead of crashing the whole panel."""
+        """Compute and draw a compact, read-only snapshot: total notes; a
+        week/month/year/older breakdown of when notes were added and last
+        updated; standalone counts of templates, notes with a checklist,
+        and notes currently in Trash; the date this install was first
+        used; and per-category counts as plain lines (no box, not
+        clickable — this is a snapshot, not another way to filter notes).
+        Recomputed on every note-list refresh (not just when the Settings
+        tab is opened), so category renames/deletes, new notes, and any
+        other change stay reflected live while Settings happens to be
+        open — not just after leaving and coming back. Deliberately does
+        NOT gate on the Settings page's winfo_ismapped() state — that
+        looked like the right optimization (skip the work when Settings
+        isn't visible), but pack()/pack_forget() don't always update
+        ismapped() synchronously, so that check could skip a real update
+        and leave stale data on screen. Redrawing every time is cheap
+        (this panel is at most a couple dozen small widgets) compared to
+        the note-card rebuild refresh_note_list() already does around it,
+        so there's no real cost to just always doing it. Every field is
+        read defensively — a note with a missing/odd timestamp or
+        category just gets skipped from that specific count instead of
+        crashing the whole panel."""
         if not hasattr(self, "stats_frame"):
             return
         for w in self.stats_frame.winfo_children():
@@ -3233,17 +3265,110 @@ class NoteOrganizer(tk.Tk):
             except ValueError:
                 return None
 
-        now = datetime.now()
-        week_ago = now - timedelta(days=7)
-        created_7d = 0
-        updated_7d = 0
-        for n in notes:
-            c = _parse_ts(n.get("created"))
-            if c and c >= week_ago:
-                created_7d += 1
-            u = _parse_ts(n.get("updated"))
-            if u and u >= week_ago:
-                updated_7d += 1
+        today = date_cls.today()
+        week_start = today - timedelta(days=today.weekday())
+        month_start = today.replace(day=1)
+        year_start = today.replace(month=1, day=1)
+
+        def _bucket_counts(field):
+            # Cumulative from the start of each period (so "this year"
+            # already includes "this month"); "older" is the one true
+            # complement — notes not touched at all since Jan 1st.
+            week = month = year = older = 0
+            for n in notes:
+                ts = _parse_ts(n.get(field))
+                if not ts:
+                    continue
+                d = ts.date()
+                if d >= week_start:
+                    week += 1
+                if d >= month_start:
+                    month += 1
+                if d >= year_start:
+                    year += 1
+                else:
+                    older += 1
+            return week, month, year, older
+
+        added_week, added_month, added_year, added_older = _bucket_counts("created")
+        updated_week, updated_month, updated_year, updated_older = _bucket_counts("updated")
+
+        # --- Summary: total, then a week/month/year/older breakdown for
+        # both when notes were added and last updated. Built as a grid —
+        # icon, then "Added:"/"Updated:", then each of week/month/year/
+        # older in its own column — rather than one big string per row.
+        # The icon gets its own column specifically because 🆕 and ✏️
+        # aren't the same rendered width, so if the icon and label shared
+        # a column, "Added:" and "Updated:" themselves would start at
+        # different x positions even though the column as a whole lined
+        # up. Splitting it out means every column — icon, label, and each
+        # week/month/year/older segment — lines up independently between
+        # the two rows, regardless of font/DPI. ---
+        tk.Label(
+            self.stats_frame, text=f"{total} notes",
+            font=("Segoe UI", 9, "bold"), bg=self.colors["card"],
+            fg=self.colors["text"], anchor="w"
+        ).pack(fill="x", pady=(0, 4))
+
+        breakdown = tk.Frame(self.stats_frame, bg=self.colors["card"])
+        breakdown.pack(fill="x", pady=(0, 10))
+        stat_font = tkfont.Font(family="Segoe UI", size=9)
+        rows_data = [
+            ("🆕", "Added:", added_week, added_month, added_year, added_older),
+            ("✏️", "Updated:", updated_week, updated_month, updated_year, updated_older),
+        ]
+        icon_width = max(stat_font.measure(rows_data[0][0]),
+                          stat_font.measure(rows_data[1][0])) + 6
+        breakdown.grid_columnconfigure(0, minsize=icon_width)
+        label_width = max(stat_font.measure(rows_data[0][1]),
+                           stat_font.measure(rows_data[1][1])) + 10
+        breakdown.grid_columnconfigure(1, minsize=label_width)
+
+        segment_labels = ["this week", "this month", "this year", "older"]
+        for seg_idx, seg_label in enumerate(segment_labels):
+            col = seg_idx + 2
+            texts = [f"{rows_data[0][seg_idx + 2]} {seg_label}",
+                     f"{rows_data[1][seg_idx + 2]} {seg_label}"]
+            col_width = max(stat_font.measure(t) for t in texts) + 16
+            breakdown.grid_columnconfigure(col, minsize=col_width)
+
+        for r, (icon, label_text, week, month, year, older) in enumerate(rows_data):
+            tk.Label(breakdown, text=icon, font=("Segoe UI", 9),
+                     bg=self.colors["card"], fg=self.colors["text"], anchor="w"
+                     ).grid(row=r, column=0, sticky="w")
+            tk.Label(breakdown, text=label_text, font=("Segoe UI", 9),
+                     bg=self.colors["card"], fg=self.colors["text"], anchor="w"
+                     ).grid(row=r, column=1, sticky="w")
+            for seg_idx, (value, seg_label) in enumerate(
+                    zip((week, month, year, older), segment_labels)):
+                tk.Label(breakdown, text=f"{value} {seg_label}",
+                         font=("Segoe UI", 9), bg=self.colors["card"],
+                         fg=self.colors["text"], anchor="w"
+                         ).grid(row=r, column=seg_idx + 2, sticky="w")
+
+        # --- A few standalone counts: templates and checklists are their
+        # own things (a template can be reused across many notes; a
+        # checklist only ever lives inside the one note it's on), so these
+        # count the things themselves, not how many notes reference them.
+        # "Deleted" counts what's currently in Trash right now, not an
+        # all-time total — it goes back down after Trash is emptied or
+        # auto-purges, same as Trash's own count would show. ---
+        templates_count = len(self.templates)
+        checklists_count = sum(1 for n in notes if n.get("checklist"))
+        deleted_count = len(self.trash)
+        tk.Label(
+            self.stats_frame,
+            text=f"🧩 {templates_count} templates   ·   "
+                 f"☑ {checklists_count} notes with checklists   ·   "
+                 f"🗑 {deleted_count} deleted",
+            font=("Segoe UI", 9), bg=self.colors["card"], fg=self.colors["text"],
+            anchor="w"
+        ).pack(fill="x")
+        tk.Label(
+            self.stats_frame, text=f"📅 Using Note Organizer since {FIRST_LAUNCH_DATE}",
+            font=("Segoe UI", 9), bg=self.colors["card"], fg=self.colors["text"],
+            anchor="w"
+        ).pack(fill="x", pady=(0, 10))
 
         # Per-category counts: known categories first (Manage-categories order),
         # then any leftover/stale category names so nothing is silently dropped.
@@ -3255,55 +3380,32 @@ class NoteOrganizer(tk.Tk):
         ordered_cats = [c for c in CATEGORY_COLORS.keys() if c in counts]
         ordered_cats += [c for c in counts.keys() if c not in ordered_cats]
 
-        # --- One compact summary line ---
-        summary = tk.Label(
-            self.stats_frame,
-            text=f"{total} notes   ·   🆕 {created_7d} new this week   ·   "
-                 f"✏️ {updated_7d} updated this week",
-            font=("Segoe UI", 9), bg=self.colors["card"], fg=self.colors["text"],
-            anchor="w")
-        summary.pack(fill="x", pady=(0, 10))
-
         if not ordered_cats:
             tk.Label(self.stats_frame, text="No notes yet.", font=("Segoe UI", 9),
                      bg=self.colors["card"], fg=self.colors["subtext"]
                      ).pack(anchor="w")
             return
 
-        # --- Category chips: compact, hoverable, click filters the note list
-        # to that category (jumps to the Notes tab). Wraps into rows of 4. ---
+        # --- Per-category counts: plain text, no box — a colored dot plus
+        # "Category (count)". Deliberately not clickable; this is just a
+        # snapshot, not another way to filter notes. Wraps into rows of 4. ---
         grid = tk.Frame(self.stats_frame, bg=self.colors["card"])
         grid.pack(fill="x")
         cols = 4
         for col in range(cols):
             grid.grid_columnconfigure(col, weight=1, uniform="statchip")
 
-        def goto_category(cat):
-            self.filter_var.set(cat)
-            self.notebook.select(self.TAB_NOTES)
-            self.refresh_note_list()
-
         for idx, cat in enumerate(ordered_cats):
             n = counts[cat]
             color = CATEGORY_COLORS.get(cat, self.colors["accent"])
             r, c = divmod(idx, cols)
-            chip = tk.Frame(grid, bg=self.colors["sidebar"], cursor="hand2")
-            chip.grid(row=r, column=c, sticky="ew", padx=3, pady=3, ipady=4)
-            dot = tk.Label(chip, text="●", font=("Segoe UI", 9), fg=color,
-                          bg=self.colors["sidebar"], cursor="hand2")
-            dot.pack(side="left", padx=(8, 4))
-            lbl = tk.Label(chip, text=f"{cat} ({n})", font=("Segoe UI", 8),
-                          bg=self.colors["sidebar"], fg=self.colors["text"],
-                          cursor="hand2", anchor="w")
-            lbl.pack(side="left", padx=(0, 8), fill="x", expand=True)
-
-            widgets = [chip, dot, lbl]
-            for w in widgets:
-                w.bind("<Button-1>", lambda e, c=cat: goto_category(c))
-                w.bind("<Enter>", lambda e, ws=widgets:
-                       [x.configure(bg=self.colors["accent"]) for x in ws])
-                w.bind("<Leave>", lambda e, ws=widgets:
-                       [x.configure(bg=self.colors["sidebar"]) for x in ws])
+            row = tk.Frame(grid, bg=self.colors["card"])
+            row.grid(row=r, column=c, sticky="ew", padx=3, pady=3)
+            tk.Label(row, text="●", font=("Segoe UI", 9), fg=color,
+                     bg=self.colors["card"]).pack(side="left", padx=(0, 4))
+            tk.Label(row, text=f"{cat} ({n})", font=("Segoe UI", 8),
+                     bg=self.colors["card"], fg=self.colors["text"], anchor="w"
+                     ).pack(side="left", fill="x", expand=True)
 
         # Same wheel-forwarding pattern used elsewhere in Settings (theme
         # picker, inline panels) — without it, scrolling with the cursor
@@ -3811,6 +3913,7 @@ class NoteOrganizer(tk.Tk):
                 self.templates = [t for t in self.templates if t is not tpl]
                 save_templates(self.templates)
                 redraw()
+                self._render_statistics()
 
         tk.Button(row, text="🗑", command=delete, relief="flat", cursor="hand2",
                   bg=self.colors["sidebar"], fg=self.colors["danger"],
@@ -3976,6 +4079,7 @@ class NoteOrganizer(tk.Tk):
             save_templates(self.templates)
             self._dismiss_mini_popup()
             redraw()
+            self._render_statistics()
 
         btns = tk.Frame(frame, bg=self.colors["card"])
         btns.pack(fill="x", pady=(4, 0))
@@ -4353,8 +4457,7 @@ class NoteOrganizer(tk.Tk):
         self.style_notebook()
         self.refresh_note_list()
         self.render_calendar()
-        if hasattr(self, "stats_frame"):
-            self._render_statistics()
+        # refresh_note_list() above already refreshes Statistics too.
         # Safety net: catch any widget that slipped through the registered list
         # (e.g. built once and never rebuilt) by swapping known theme colors from
         # the OTHER theme to the current one. This guarantees a clean flip.
@@ -5460,11 +5563,6 @@ class NoteOrganizer(tk.Tk):
         # No separate Save button — the field already autosaves shortly
         # after typing stops, and immediately on Enter or clicking away.
 
-        stats_sec = section("Statistics", "A quick snapshot of your notes.")
-        self.stats_frame = tk.Frame(stats_sec, bg=self.colors["card"])
-        self.stats_frame.pack(fill="x", padx=16, pady=16)
-        self._render_statistics()
-
         # --- Appearance ---
         appearance = section("Appearance", "How the app looks.")
         self.theme_toggle_btn = tk.Button(
@@ -5542,6 +5640,12 @@ class NoteOrganizer(tk.Tk):
         self.settings_duplicates_panel = tk.Frame(dup_sec, bg=self.colors["card"])
         self.track_theme(self.settings_duplicates_panel, bg="card")
         tk.Frame(dup_sec, bg=self.colors["card"], height=10).pack(fill="x")
+
+        # --- Statistics ---
+        stats_sec = section("Statistics", "A quick snapshot of your notes.")
+        self.stats_frame = tk.Frame(stats_sec, bg=self.colors["card"])
+        self.stats_frame.pack(fill="x", padx=16, pady=16)
+        self._render_statistics()
 
         # --- Storage info ---
         info = section("Where your notes are stored")
@@ -7315,6 +7419,13 @@ class NoteOrganizer(tk.Tk):
     def refresh_note_list(self):
         if not hasattr(self, "list_frame") or not self._still_alive():
             return
+        # Called from everywhere note/category data changes (save, delete,
+        # category rename/delete, import, ...) — piggyback the Statistics
+        # panel's refresh here too, so it stays live while Settings happens
+        # to be open, instead of only updating the next time it's opened.
+        # Placed before the early-return branches below (e.g. an empty
+        # filtered list) so it isn't skipped in those cases.
+        self._render_statistics()
         for widget in self.list_frame.winfo_children():
             widget.destroy()
         # Tracks note id -> the card's own widgets, so switching the open

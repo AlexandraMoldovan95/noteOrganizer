@@ -81,6 +81,22 @@ result2 = NO.detect_version_change()
 check('detect_version_change stays silent on an apparent downgrade (re-baselines quietly)',
       result2 is None)
 
+# ---- get_first_launch_date(): stamped once, never overwritten ----
+settings = NO.load_settings()
+settings.pop('first_launch_date', None)
+NO.save_settings(settings)
+stamped = NO.get_first_launch_date()
+check('get_first_launch_date stamps a date when none exists yet',
+      NO.load_settings().get('first_launch_date') == stamped)
+
+settings = NO.load_settings()
+settings['first_launch_date'] = '2020-01-01'
+NO.save_settings(settings)
+check('get_first_launch_date returns the existing date without overwriting it',
+      NO.get_first_launch_date() == '2020-01-01')
+check('the stored date is unchanged on disk after that call',
+      NO.load_settings().get('first_launch_date') == '2020-01-01')
+
 NO.save_settings(original_settings)  # restore whatever was really there
 
 # ---- run_migrations(): Case 1 backup-verification fix ----
