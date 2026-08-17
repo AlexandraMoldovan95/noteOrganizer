@@ -27,7 +27,7 @@ Until then, the other two numbers are **cumulative all-time totals**, not per-re
 
 Bump the version, and cut `CHANGELOG.md`'s `[Unreleased]` section into that new version number (with today's date), every time `note_organizer.py` changes and the app gets rebuilt for real use — the same moment a `.exe` rebuild is already called for. Docs-only changes don't move the version, same as they don't call for a rebuild. If several small PRs land back-to-back before the next rebuild, they share one bump — the trigger is "about to rebuild," not "one bump per PR."
 
-This exists specifically because `APP_VERSION` drives two real things in the code: the backup-before-upgrade safety net in `load_notes()`, and the "Updated to version X" startup banner (`detect_version_change()`) — both only fire when this number actually changes. Recorded history: `0.28.38` (2026-08-17) — 28 Added + 38 Fixed entries across `0.1.0` through the batch of work that included the Statistics read-only/live-update fix; `0.30.38` (2026-08-18) — 30 Added + 38 Fixed, adding the in-note calculator.
+This exists specifically because `APP_VERSION` drives two real things in the code: the backup-before-upgrade safety net in `load_notes()`, and the "Updated to version X" startup banner (`detect_version_change()`) — both only fire when this number actually changes. Recorded history: `0.28.38` (2026-08-17) — 28 Added + 38 Fixed entries across `0.1.0` through the batch of work that included the Statistics read-only/live-update fix; `0.30.38` (2026-08-18) — 30 Added + 38 Fixed, adding the in-note calculator; `0.30.39` (2026-08-18) — 30 Added + 39 Fixed, fixing the AppData-notes-deleted-by-purge_stale_copies bug.
 
 ### At the real launch: 1.0.0 and after
 
