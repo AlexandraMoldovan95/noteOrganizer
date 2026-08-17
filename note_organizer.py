@@ -361,9 +361,19 @@ def purge_stale_copies(app_dir):
       - every note in the stale copy is already present locally
       - every attachment in the stale folder is already present locally
       - the file being deleted is one this app created
+      - the folder isn't the real per-user AppData folder (see below)
 
     The dist\\ folder itself is never removed (it holds the .exe); only the
-    orphaned data files inside it are."""
+    orphaned data files inside it are.
+
+    %APPDATA%\\NoteOrganizer is never touched by this function, under any
+    circumstances, even when it looks fully redundant against app_dir's own
+    copy. It's the durable, cross-run store the distributed .exe actually
+    reads from — treating it as just another disposable legacy folder once
+    caused it to be silently deleted the moment any throwaway script-mode
+    directory (a dev checkout, a CI runner, a test script's own scratch
+    copy) imported this module while real notes existed there. See
+    docs/ISSUES_LOG.md."""
     local_path = os.path.join(app_dir, "notes_data.json")
     if not os.path.exists(local_path):
         return []
@@ -379,6 +389,18 @@ def purge_stale_copies(app_dir):
     cleared = []
 
     for stale_dir in get_legacy_dirs(app_dir):
+        if os.path.abspath(stale_dir) == appdata_dir:
+            # The per-user AppData folder is the durable, cross-run store the
+            # distributed .exe actually reads from — never a disposable
+            # leftover copy, no matter how "redundant" it looks against
+            # whatever directory happens to be running this code right now.
+            # Without this guard, simply importing this module from any
+            # throwaway script-mode directory (a dev checkout, a CI runner,
+            # even a test script's own scratch copy) that hasn't reclaimed
+            # yet would copy the real notes out and then delete the
+            # originals here, since they'd look fully redundant right after
+            # being copied. See docs/ISSUES_LOG.md.
+            continue
         stale_notes = os.path.join(stale_dir, "notes_data.json")
         if not os.path.exists(stale_notes):
             continue
@@ -408,15 +430,6 @@ def purge_stale_copies(app_dir):
             try:
                 shutil.rmtree(stale_attach)
                 removed_anything = True
-            except OSError:
-                pass
-
-        # Only the old %APPDATA% folder gets removed outright, and only if
-        # nothing unexpected is left inside it.
-        if os.path.abspath(stale_dir) == appdata_dir:
-            try:
-                if not os.listdir(stale_dir):
-                    os.rmdir(stale_dir)
             except OSError:
                 pass
 

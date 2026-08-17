@@ -150,6 +150,65 @@ finally:
     shutil.rmtree(app_dir, ignore_errors=True)
     shutil.rmtree(appdata_dir, ignore_errors=True)
 
+# ---- purge_stale_copies(): must never delete the real AppData folder ----
+# The bug this closes: AppData was treated as just another disposable
+# "legacy" folder, so the instant its content also existed somewhere else
+# (which the reclaim step above guarantees, right after copying it) it got
+# deleted outright as a "redundant stale copy" -- including notes_data.json,
+# settings.json, and the whole attachments/ folder. That happened simply
+# from importing this module in script mode from any throwaway directory
+# (a dev checkout, a CI runner, even a test script's own scratch copy)
+# while real notes existed in AppData. It must now be permanently exempt.
+app_dir = tempfile.mkdtemp()
+appdata_dir = tempfile.mkdtemp()
+try:
+    NO.get_appdata_dir = lambda: appdata_dir
+
+    appdata_note = [{'id': 1, 'title': 'Real AppData note'}]
+    with open(os.path.join(appdata_dir, 'notes_data.json'), 'w', encoding='utf-8') as f:
+        json.dump(appdata_note, f)
+    with open(os.path.join(appdata_dir, 'settings.json'), 'w', encoding='utf-8') as f:
+        json.dump({'app_version': NO.APP_VERSION}, f)
+    os.makedirs(os.path.join(appdata_dir, 'attachments'))
+    with open(os.path.join(appdata_dir, 'attachments', 'photo.png'), 'w', encoding='utf-8') as f:
+        f.write('fake image bytes')
+
+    # The local copy is a perfect superset (as it would be right after a
+    # reclaim) -- exactly the condition that used to trigger deletion.
+    with open(os.path.join(app_dir, 'notes_data.json'), 'w', encoding='utf-8') as f:
+        json.dump(appdata_note, f)
+    os.makedirs(os.path.join(app_dir, 'attachments'))
+    with open(os.path.join(app_dir, 'attachments', 'photo.png'), 'w', encoding='utf-8') as f:
+        f.write('fake image bytes')
+
+    NO.purge_stale_copies(app_dir)
+
+    check('AppData notes_data.json still exists after purge_stale_copies',
+          os.path.exists(os.path.join(appdata_dir, 'notes_data.json')))
+    with open(os.path.join(appdata_dir, 'notes_data.json'), encoding='utf-8') as f:
+        still_there = json.load(f)
+    check('AppData notes_data.json content is untouched',
+          still_there == appdata_note)
+    check('AppData settings.json still exists after purge_stale_copies',
+          os.path.exists(os.path.join(appdata_dir, 'settings.json')))
+    check('AppData attachments/ still exists after purge_stale_copies',
+          os.path.exists(os.path.join(appdata_dir, 'attachments', 'photo.png')))
+
+    # Confirm the fix is scoped correctly: a genuinely stale, non-AppData
+    # leftover (e.g. an old dist\ copy from a previous relative-path build)
+    # must still get cleaned up exactly as before.
+    dist_dir = os.path.join(app_dir, 'dist')
+    os.makedirs(dist_dir)
+    with open(os.path.join(dist_dir, 'notes_data.json'), 'w', encoding='utf-8') as f:
+        json.dump(appdata_note, f)
+    NO.purge_stale_copies(app_dir)
+    check('a genuinely stale non-AppData leftover is still cleaned up',
+          not os.path.exists(os.path.join(dist_dir, 'notes_data.json')))
+finally:
+    NO.get_appdata_dir = real_get_appdata_dir
+    shutil.rmtree(app_dir, ignore_errors=True)
+    shutil.rmtree(appdata_dir, ignore_errors=True)
+
 print()
 print(f"FAILURES: {fails if fails else 'none'}")
 
