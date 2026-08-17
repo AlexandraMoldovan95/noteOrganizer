@@ -8,6 +8,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ## [Unreleased]
 
+## [0.30.38] — 2026-08-18
+
+### Added
+- A collapsible in-note calculator, next to Checklist in the note editor. Supports standard +/−/×/÷ arithmetic with three interchangeable bracket styles, a square root, a general power operator (any exponent, not just squaring), and percent — evaluated via a small hand-rolled parser rather than eval(). The display accepts typing and pasting directly, not just button presses, so an expression copied from elsewhere can be evaluated as-is.
+- Insert the calculator's result into the note body — inserts the whole formula (not just the answer), and repeated use builds a clean log downward (each insertion lands on its own line after the previous one) instead of gluing onto wherever the cursor happens to be. A collapsible, session-only history of past calculations is available too, with a Clear button and click-to-insert on any past entry.
+
+### Testing
+- Added test_calculator.py (47 checks) covering the expression evaluator directly — precedence, brackets, power/root/percent, and a wide range of malformed input. Added extensive qa1.py coverage for the real button/paste/history UI flow.
+
 ## [0.28.38] — 2026-08-17
 
 ### Fixed
