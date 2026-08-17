@@ -8,6 +8,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ## [Unreleased]
 
+## [0.28.38] — 2026-08-17
+
 ### Fixed
 - Typing in the note search box rebuilt the entire note list on every single keystroke — measured at ~800ms for 300 notes, meaning a short search term could cost several seconds of cumulative rebuild time, with visible input lag on every character. Now waits for a brief pause in typing before rebuilding once, the same debounce pattern already used for autosave.
 - Audited every scheduled timer/callback in the app (16 in total) for crash-safety if the window closes while one is still pending — a genuine risk for anything that fires after a delay, since the user can close the app at any point in between. Nine were found unguarded and fixed: the export/import progress poller, the periodic unsaved-edit check, the debounced autosave, the debounced search refresh, the username-field autosave, the startup version-change/reminder banners, the editor's scroll-region sync, and the image preview's click-outside-to-dismiss binding. Also discovered that even checking "is the window still there" can itself fail once the whole application (not just one widget) has been torn down — added one shared, properly-guarded check used everywhere this matters now.

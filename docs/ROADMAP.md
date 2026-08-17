@@ -19,7 +19,30 @@ The current single-column Settings page makes for a lot of scrolling and doesn't
 
 ## Versioning
 
-Keep the version number below `1.0.0` until the app actually has a real public launch, so that number stays meaningful (a clean `1.0.0` for the real first release, not used up early). Worth revisiting how updates between now and then get grouped into versions, rather than the current ad-hoc pacing.
+### Right now: pre-1.0.0
+
+Keep the first number at `0` until the app actually has a real public launch, so `1.0.0` stays meaningful (a clean first release, not used up early).
+
+Until then, the other two numbers are **cumulative all-time totals**, not per-release counts — `MAJOR.<total Added entries ever>.<total Fixed entries ever>`, counted from `CHANGELOG.md`'s `Fixed` and `Added` sections only (across every version section, `[Unreleased]` included). `Changed`, `Testing`, and `Removed` entries don't count — they're neither a shipped fix nor a shipped feature. `docs/ROADMAP.md`'s own "known bugs"/"under consideration" items don't count either, since they're not done yet, and `docs/ISSUES_LOG.md` entries aren't counted separately since they're narrative write-ups of fixes already counted in `CHANGELOG.md` — counting both would double-count the same work.
+
+Bump the version, and cut `CHANGELOG.md`'s `[Unreleased]` section into that new version number (with today's date), every time `note_organizer.py` changes and the app gets rebuilt for real use — the same moment a `.exe` rebuild is already called for. Docs-only changes don't move the version, same as they don't call for a rebuild. If several small PRs land back-to-back before the next rebuild, they share one bump — the trigger is "about to rebuild," not "one bump per PR."
+
+This exists specifically because `APP_VERSION` drives two real things in the code: the backup-before-upgrade safety net in `load_notes()`, and the "Updated to version X" startup banner (`detect_version_change()`) — both only fire when this number actually changes. Recorded history: `0.28.38` (2026-08-17) — 28 Added + 38 Fixed entries across `0.1.0` through the batch of work that included the Statistics read-only/live-update fix.
+
+### At the real launch: 1.0.0 and after
+
+The version becomes exactly `1.0.0` at the actual public release, regardless of whatever cumulative number it reached beforehand (even `0.150.320` or similar) — the pre-1.0 scheme is explicitly a development-phase convention, not something that carries forward. From `1.0.0` on, standard [Semantic Versioning](https://semver.org/) takes over, and **each number resets to 0 at the release above it** — no more cumulative totals:
+
+- **PATCH** (`1.0.x`) — a release containing only bug fixes, no new features.
+- **MINOR** (`1.x.0`) — a release that includes at least one new feature; patch resets to `0`.
+- **MAJOR** (`x.0.0`) — reserved for something big enough to warrant it: a real redesign, a breaking data-format change, a genuinely new "generation" of the app. Rare; minor and patch both reset to `0`.
+
+### Platform-specific packaging/publishing
+
+This section is only about the app's own `APP_VERSION`/`CHANGELOG.md` numbering — how a build actually gets packaged and published on a given platform (store-specific package versions, submission requirements) is documented separately, since it's not decided or in progress and doesn't belong mixed into the numbering policy above:
+
+- [`docs/RELEASE_WINDOWS.md`](RELEASE_WINDOWS.md) — Microsoft Store (MSIX) and alternative Windows distribution channels.
+- [`docs/RELEASE_ANDROID.md`](RELEASE_ANDROID.md) — exploratory only, kept ready for if an Android release is ever scoped; not current work (see "Exploratory / long-term" below and `CLAUDE.md`'s Project focus).
 
 ## Under consideration
 

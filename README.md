@@ -93,6 +93,8 @@ noteOrganizer/
 │   ├── ROADMAP.md             # what's planned next
 │   ├── ISSUES_LOG.md          # notable bugs found & fixed during development
 │   ├── GIT_WORKFLOW.md        # my own Git command reference for this project
+│   ├── RELEASE_WINDOWS.md     # Microsoft Store (MSIX) and alternative Windows distribution channels
+│   ├── RELEASE_ANDROID.md     # exploratory only, not current work
 │   └── screenshots/
 └── qa/
     ├── NoteOrganizer_TestPlan.xlsx   # manual QA test case tracker
@@ -115,6 +117,8 @@ noteOrganizer/
 - [Changelog](CHANGELOG.md) — release history
 - [Issues Log](docs/ISSUES_LOG.md) — notable bugs encountered during development, and how they were diagnosed/fixed
 - [Git Workflow](docs/GIT_WORKFLOW.md) — the exact commands I use for this project's branch/commit/PR flow
+- [Windows Release Reference](docs/RELEASE_WINDOWS.md) — Microsoft Store (MSIX) and alternative Windows distribution channels
+- [Android Release Reference](docs/RELEASE_ANDROID.md) — exploratory only, not current work; kept ready for if an Android release is ever scoped
 
 ## Testing
 

@@ -1,5 +1,9 @@
 # --- Personal app data: never commit your own notes/attachments ---
-notes_data.json
+# notes_data*.json covers notes_data.json itself plus the timestamped
+# backups backup_notes_file()/_timestamped_backup() create next to it
+# (notes_data_backup_<stamp>.json, notes_data_replaced_<stamp>.json) —
+# those are just as much real user data as notes_data.json itself.
+notes_data*.json
 settings.json
 trash.json
 templates.json

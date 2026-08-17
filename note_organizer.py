@@ -34,11 +34,14 @@ except ImportError:
 
 
 # ---- Version ----
-# Single source of truth. Bump this by hand when building a release to
-# distribute: PATCH for fixes, MINOR for new features, MAJOR for big changes.
-# The running app records this into settings, so the next time a newer build
-# opens over older data it can tell the user what changed version-wise.
-APP_VERSION = "0.5.0"
+# Single source of truth. Bump this by hand at every release (see
+# docs/ROADMAP.md's "Versioning" section for the exact policy and how the
+# numbers are calculated — summary: MAJOR stays 0 until a real public
+# launch; until then, MINOR/PATCH are cumulative all-time totals of
+# Added/Fixed CHANGELOG.md entries, not per-release counts). The running
+# app records this into settings, so the next time a newer build opens
+# over older data it can tell the user what changed version-wise.
+APP_VERSION = "0.28.38"
 
 
 def parse_version(v):
