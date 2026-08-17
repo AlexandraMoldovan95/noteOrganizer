@@ -8,6 +8,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ## [Unreleased]
 
+### Fixed
+- Found by hand: running `note_organizer.py` in script mode (`python note_organizer.py`, or any script that imports it, including the project's own headless test scripts) from any directory that hadn't already reclaimed once could silently **delete the real notes in `%APPDATA%\NoteOrganizer`** — the store the distributed `.exe` actually reads from. The migration logic that pulls old notes forward from AppData would copy them into the running directory, then a separate cleanup step immediately treated the AppData originals as a "redundant leftover copy" (since they now existed elsewhere too) and deleted `notes_data.json`, `settings.json`, and the whole `attachments/` folder outright. `%APPDATA%\NoteOrganizer` is now permanently exempt from that cleanup, regardless of how "redundant" it looks — it's the durable, cross-run store, never a disposable one.
+
 ## [0.30.38] — 2026-08-18
 
 ### Added
