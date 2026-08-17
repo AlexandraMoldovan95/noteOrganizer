@@ -1,0 +1,103 @@
+"""Dedicated test suite for the in-note calculator's expression evaluator,
+separate from the GUI-based QA scripts — runs headlessly with no tkinter
+needed, same pattern as test_recurrence.py. The calculator's buttons only
+ever produce '+', '−' (not a plain ASCII hyphen), '×', '÷', '^', '(', ')',
+'{', '}', '[', ']', '√', '%', digits, and '.', so every expression here
+uses those exact characters — this also doubles as the evaluator's
+coverage for expressions typed or pasted directly (see qa1.py for that),
+since both paths feed the exact same plain-text string into this
+function with no distinction made between them.
+Check descriptions are kept ASCII-only on purpose — printing the real
+'−'/'×' characters crashes on a plain Windows console using the cp1252
+codepage, unrelated to whether the evaluator itself works correctly."""
+import note_organizer as NO
+
+fails = []
+def check(name, cond):
+    print(('PASS' if cond else 'FAIL'), name)
+    if not cond: fails.append(name)
+
+ev = NO.evaluate_calculator_expression
+fmt = NO.format_calculator_result
+
+# ---- Basic arithmetic ----
+check('addition (5+3=8)', ev('5+3') == 8)
+check('subtraction (10-4=6)', ev('10−4') == 6)
+check('multiplication (6x7=42)', ev('6×7') == 42)
+check('division (20/4=5)', ev('20÷4') == 5)
+
+# ---- Operator precedence (x// bind tighter than +/-) ----
+check('precedence: 5+3x2 = 11, not 16', ev('5+3×2') == 11)
+check('precedence: 10-2x3 = 4', ev('10−2×3') == 4)
+check('precedence: 2+6/3 = 4', ev('2+6÷3') == 4)
+
+# ---- Parentheses override precedence ----
+check('parens: (5+3)x2 = 16', ev('(5+3)×2') == 16)
+check('parens: 5x(3+2) = 25', ev('5×(3+2)') == 25)
+check('nested parens: ((1+2)x3) = 9', ev('((1+2)×3)') == 9)
+check('parens: (2+3)x(4-1) = 15', ev('(2+3)×(4−1)') == 15)
+check('parens: 10/(2+3) = 2', ev('10÷(2+3)') == 2)
+
+# ---- Unary minus ----
+check('leading unary minus: -5+3 = -2', ev('−5+3') == -2)
+check('unary minus after operator: 5x-2 = -10', ev('5×−2') == -10)
+
+# ---- Decimals ----
+check('decimals: 1.5+2.5 = 4', ev('1.5+2.5') == 4)
+check('decimal division: 5/2 = 2.5', ev('5÷2') == 2.5)
+
+# ---- Alternate bracket styles ({} and [] as pure grouping, same as ()) ----
+check('curly braces group like parens: {5+3}x2 = 16', ev('{5+3}×2') == 16)
+check('square brackets group like parens: [5+3]x2 = 16', ev('[5+3]×2') == 16)
+check('mismatched bracket styles still pair up: (5+3] = 8', ev('(5+3]') == 8)
+check('nested mixed brackets: [(2+3)x{4-1}] = 15', ev('[(2+3)×{4−1}]') == 15)
+
+# ---- Square root (prefix) ----
+check('square root: sqrt(9) = 3', ev('√9') == 3)
+check('square root of an expression: sqrt(4+5) = 3', ev('√(4+5)') == 3)
+check('square root of a negative number returns None', ev('√(0−9)') == None)
+
+# ---- Power (^, general, right-associative) and percent (postfix) ----
+check('power: 5^2 = 25 (still works for a simple square)', ev('5^2') == 25)
+check('power: 3^3 = 27 (not just squares)', ev('3^3') == 27)
+check('power: 2^10 = 1024 (any exponent, not a fixed square button)', ev('2^10') == 1024)
+check('power of a group: (2+3)^2 = 25', ev('(2+3)^2') == 25)
+check('power is right-associative: 2^3^2 = 2^(3^2) = 512, not (2^3)^2 = 64',
+      ev('2^3^2') == 512)
+check('unary minus is looser than power: -2^2 = -(2^2) = -4', ev('−2^2') == -4)
+check('power binds tighter than plus: 1+2^2 = 5, not 9', ev('1+2^2') == 5)
+check('power binds tighter than times: 2×3^2 = 18, not 36', ev('2×3^2') == 18)
+check('fractional power of a negative base has no real result -> None',
+      ev('(0−8)^0.5') == None)
+check('zero to a negative power is undefined -> None', ev('0^(0−1)') == None)
+
+check('percent: 50 percent = 0.5', ev('50%') == 0.5)
+check('percent binds to the number right before it: 200+10 percent = 200.1',
+      ev('200+10%') == 200.1)
+check('percent applies after power: 5^2 percent = 25 percent = 0.25',
+      ev('5^2%') == 0.25)
+
+# ---- Division by zero ----
+check('division by zero returns None (caller shows "Error")', ev('5÷0') == None)
+check('division by zero inside parens also returns None', ev('1+5÷0') == None)
+
+# ---- Malformed input: never crashes, always returns None ----
+check('empty string returns None', ev('') == None)
+check('whitespace-only returns None', ev('   ') == None)
+check('trailing operator returns None', ev('5+') == None)
+check('unbalanced open paren returns None', ev('(5+3') == None)
+check('stray close paren returns None', ev('5+3)') == None)
+check('invalid characters return None', ev('abc') == None)
+check('not a string returns None', ev(None) == None)
+
+# ---- format_calculator_result: clean display formatting ----
+check('whole number displays without decimal', fmt(4.0) == '4')
+check('negative whole number displays cleanly', fmt(-10.0) == '-10')
+check('fraction displays as-is', fmt(2.5) == '2.5')
+check('float noise from 0.1+0.2 displays as clean 0.3', fmt(ev('0.1+0.2')) == '0.3')
+
+print()
+print(f"FAILURES: {fails if fails else 'none'}")
+
+import sys
+sys.exit(1 if fails else 0)

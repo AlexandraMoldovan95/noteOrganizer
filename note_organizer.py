@@ -16,6 +16,7 @@ import threading
 import base64
 import calendar as cal_module
 import re
+import math
 from datetime import datetime, date as date_cls, timedelta
 
 try:
@@ -808,6 +809,185 @@ def parse_date(value):
 
 def format_date(d):
     return d.strftime("%Y-%m-%d")
+
+
+class _CalcError(Exception):
+    pass
+
+
+_CALC_OPEN_BRACKETS = "({["
+_CALC_CLOSE_BRACKETS = ")}]"
+_CALC_SINGLE_CHAR_TOKENS = "+−×÷√^%" + _CALC_OPEN_BRACKETS + _CALC_CLOSE_BRACKETS
+
+
+def _tokenize_calc_expression(expr):
+    tokens = []
+    i, n = 0, len(expr)
+    while i < n:
+        ch = expr[i]
+        if ch.isspace():
+            i += 1
+            continue
+        if ch in _CALC_SINGLE_CHAR_TOKENS:
+            tokens.append(ch)
+            i += 1
+            continue
+        # isdecimal(), not isdigit(): str.isdigit() is True for superscript/
+        # other non-ASCII digit-like characters too (they have a defined
+        # digit value even though they aren't plain 0-9) — isdecimal() is
+        # the one that actually means "a real decimal digit," so pasted
+        # text with a lookalike character correctly falls through to the
+        # "unexpected character" error instead of silently merging into a
+        # nearby number literal.
+        if ch.isdecimal() or ch == ".":
+            j = i
+            seen_dot = False
+            while j < n and (expr[j].isdecimal() or (expr[j] == "." and not seen_dot)):
+                if expr[j] == ".":
+                    seen_dot = True
+                j += 1
+            tokens.append(float(expr[i:j]))
+            i = j
+            continue
+        raise _CalcError(f"unexpected character {ch!r}")
+    return tokens
+
+
+def evaluate_calculator_expression(expr):
+    """Evaluate a calculator expression like '(5+3)×2' or '√{4+5}^2', with
+    standard +/−/×/÷ precedence, three interchangeable bracket styles
+    (`()`, `{}`, `[]` — purely visual grouping, not distinct types, so
+    mismatched pairs like '(5+3]' still evaluate), a prefix square-root
+    '√', a power operator '^' (right-associative, e.g. '2^3^2' is
+    '2^(3^2)', not '(2^3)^2' — the usual math convention), and a postfix
+    percent '%'. Returns the numeric result, or None if the expression is
+    empty, malformed (unbalanced brackets, trailing operator, stray
+    characters, a square root of a negative number, a power with no real
+    result like a fractional power of a negative base...), or divides by
+    zero — the caller shows "Error" for None rather than ever letting a
+    bad expression crash the app. Input can come from the calculator's
+    own buttons OR from directly typing/pasting into the display field —
+    both are just plain text by the time they reach here, so both go
+    through the exact same validation with nothing assumed about where
+    the string came from.
+
+    Deliberately hand-rolled instead of eval(): a parser this small costs
+    little and removes the risk entirely, rather than relying on the
+    input always staying constrained to safe characters."""
+    if not isinstance(expr, str) or not expr.strip():
+        return None
+    try:
+        tokens = _tokenize_calc_expression(expr)
+    except _CalcError:
+        return None
+    if not tokens:
+        return None
+
+    pos = [0]
+
+    def peek():
+        return tokens[pos[0]] if pos[0] < len(tokens) else None
+
+    def advance():
+        tok = tokens[pos[0]]
+        pos[0] += 1
+        return tok
+
+    def parse_expression():
+        value = parse_term()
+        while peek() in ("+", "−"):
+            op = advance()
+            rhs = parse_term()
+            value = value + rhs if op == "+" else value - rhs
+        return value
+
+    def parse_term():
+        value = parse_percent()
+        while peek() in ("×", "÷"):
+            op = advance()
+            rhs = parse_percent()
+            if op == "×":
+                value = value * rhs
+            else:
+                if rhs == 0:
+                    raise _CalcError("division by zero")
+                value = value / rhs
+        return value
+
+    def parse_percent():
+        # Postfix — binds to the whole power expression immediately
+        # preceding it, e.g. "5^2%" is "(5^2)%" = 0.25, not "5^(2%)".
+        value = parse_power()
+        while peek() == "%":
+            advance()
+            value = value / 100
+        return value
+
+    def parse_power():
+        # Unary +/− live HERE, not in parse_unary below, so a leading sign
+        # applies to the whole power expression that follows — "-2^2" is
+        # "-(2^2)" = -4 (matching Python's own ** operator and standard
+        # convention), not "(-2)^2" = 4. Right-associative: "2^3^2" is
+        # "2^(3^2)" = 512, not "(2^3)^2" = 64.
+        if peek() == "−":
+            advance()
+            return -parse_power()
+        if peek() == "+":
+            advance()
+            return parse_power()
+        base = parse_unary()
+        if peek() == "^":
+            advance()
+            exponent = parse_power()
+            try:
+                result = base ** exponent
+            except (OverflowError, ZeroDivisionError, ValueError):
+                raise _CalcError("invalid power")
+            if isinstance(result, complex):
+                raise _CalcError("power has no real result")
+            return result
+        return base
+
+    def parse_unary():
+        # Only √, brackets, and plain numbers — unary +/− are handled one
+        # level up, in parse_power, so a sign correctly applies to an
+        # entire power expression rather than just the base.
+        tok = peek()
+        if tok == "√":
+            advance()
+            operand = parse_power()
+            if operand < 0:
+                raise _CalcError("square root of a negative number")
+            return math.sqrt(operand)
+        if isinstance(tok, str) and tok in _CALC_OPEN_BRACKETS:
+            advance()
+            value = parse_expression()
+            nxt = peek()
+            if not (isinstance(nxt, str) and nxt in _CALC_CLOSE_BRACKETS):
+                raise _CalcError("unbalanced brackets")
+            advance()
+            return value
+        if isinstance(tok, float):
+            advance()
+            return tok
+        raise _CalcError("unexpected token")
+
+    try:
+        result = parse_expression()
+        if pos[0] != len(tokens):
+            return None  # leftover tokens, e.g. a stray closing bracket
+        return result
+    except _CalcError:
+        return None
+
+
+def format_calculator_result(value):
+    """1.0 -> '1' (whole numbers display clean); rounds to 10 decimal
+    places first to hide float noise like 0.1+0.2 != 0.3 exactly."""
+    rounded = round(value, 10)
+    if rounded == int(rounded):
+        return str(int(rounded))
+    return f"{rounded:.10f}".rstrip("0").rstrip(".")
 
 
 def normalize_recurrence(rec):
@@ -2655,8 +2835,11 @@ class NoteOrganizer(tk.Tk):
             self._checklist_open = False
             self.checklist_btn.config(text="☑ Checklist")
         else:
-            # Pack right after the checklist button.
-            self.checklist_section.pack(fill="x", padx=30, pady=(0, 8),
+            # Pack right after the checklist button. No padx here — the
+            # button and section both live inside a column Frame (see
+            # build_notes_tab) that already carries the outer margin, now
+            # that Checklist and Calculator sit side by side.
+            self.checklist_section.pack(fill="x", pady=(0, 8),
                                         after=self.checklist_btn)
             self._checklist_open = True
             self.checklist_btn.config(text="☑ Checklist  ▲")
@@ -2818,6 +3001,344 @@ class NoteOrganizer(tk.Tk):
             self._checklist_open = False
         if hasattr(self, "checklist_btn"):
             self._update_checklist_progress()
+
+    # ---------- In-note calculator ----------
+    def toggle_calculator_section(self):
+        """Show or hide the in-note calculator panel."""
+        if self._calculator_open:
+            self.calculator_section.pack_forget()
+            self._calculator_open = False
+            self.calculator_btn.config(text="🧮 Calculator")
+        else:
+            # No padx here — this and the button both live inside a column
+            # Frame (see build_notes_tab) that already carries the outer
+            # margin, now that Checklist and Calculator sit side by side.
+            self.calculator_section.pack(fill="x", pady=(0, 8),
+                                         after=self.calculator_btn)
+            self._calculator_open = True
+            self.calculator_btn.config(text="🧮 Calculator  ▲")
+            # Ready to paste into immediately, no extra click needed.
+            self.calculator_display.focus_set()
+
+    def _build_calculator_section(self):
+        """Build the (initially hidden) in-note calculator: an editable
+        expression display (buttons, typing, or pasting all feed the same
+        field) plus a compact keypad, an optional row of extra functions,
+        and a collapsible history of this session's calculations. Purely
+        a computation tool — nothing here is persisted on the note (no
+        new note field, no share-code/export changes); it starts empty
+        every time it's opened. Built once per editor (like the checklist
+        section above), not rebuilt on every note switch."""
+        sec = self.calculator_section
+        head = tk.Frame(sec, bg=self.colors["card"])
+        head.pack(fill="x", padx=10, pady=(8, 4))
+        tk.Label(head, text="Calculator", bg=self.colors["card"],
+                 fg=self.colors["subtext"], font=("Segoe UI", 9, "bold"),
+                 anchor="w").pack(side="left")
+        tk.Button(head, text="✕ Close", command=self.toggle_calculator_section,
+                  relief="flat", cursor="hand2", bg=self.colors["card"],
+                  fg=self.colors["subtext"], font=("Segoe UI", 8, "bold"), bd=0
+                  ).pack(side="right")
+
+        self._calc_display_var = tk.StringVar(value="")
+        self._calc_just_evaluated = False
+        self._calc_last_full_expr = ""
+        self._calc_history = []
+
+        self.calculator_display = tk.Entry(
+            sec, textvariable=self._calc_display_var, relief="flat",
+            font=("Consolas", 14), justify="right",
+            bg=self.colors["sidebar"], fg=self.colors["text"],
+            insertbackground=self.colors["text"])
+        self.track_theme(self.calculator_display, bg="sidebar", fg="text",
+                         insertbackground="text")
+        self.calculator_display.pack(fill="x", padx=10, pady=(0, 4), ipady=8)
+        # Right-click Cut/Copy/Paste, same as every other text field in the
+        # app — plus a normal Ctrl+V/<<Paste>> binding below, so pasting an
+        # expression copied from somewhere else just works either way.
+        # (No Return-triggers-"=" binding: it would only fire reliably when
+        # this exact field has keyboard focus, which isn't guaranteed after
+        # a sequence of button clicks — the "=" button already covers this
+        # without that fragility.)
+        self._add_paste_menu(self.calculator_display)
+        self.calculator_display.bind("<KeyRelease>", self._calc_on_direct_edit)
+        self.calculator_display.bind("<<Paste>>", self._calc_on_direct_edit)
+
+        grid = tk.Frame(sec, bg=self.colors["card"])
+        grid.pack(fill="x", padx=10, pady=(0, 2))
+        for col in range(4):
+            grid.grid_columnconfigure(col, weight=1)
+
+        rows = [
+            ["(", ")", "C", "⌫"],
+            ["7", "8", "9", "÷"],
+            ["4", "5", "6", "×"],
+            ["1", "2", "3", "−"],
+            ["0", ".", "=", "+"],
+        ]
+        for r, row in enumerate(rows):
+            for c, label in enumerate(row):
+                is_op = label in ("÷", "×", "−", "+", "=")
+                btn = tk.Button(
+                    grid, text=label, relief="flat", cursor="hand2",
+                    font=("Segoe UI", 10, "bold"),
+                    command=lambda t=label: self._calc_press(t))
+                if is_op:
+                    self.track_theme(btn, bg="accent")
+                    btn.configure(fg="white")
+                else:
+                    self.track_theme(btn, bg="sidebar", fg="text")
+                btn.grid(row=r, column=c, sticky="nsew", padx=1, pady=1, ipady=3)
+
+        # --- Extra functions: extra bracket styles, √, a general power
+        # operator '^' (e.g. "3^4" for 3 to the 4th, not just a fixed
+        # square), and % — collapsed by default so the everyday keypad
+        # above stays the main focus. ---
+        self._calc_more_open = False
+        self.calculator_more_btn = tk.Button(
+            sec, text="More functions  ▾", command=self._toggle_calc_more,
+            relief="flat", cursor="hand2", font=("Segoe UI", 8, "bold"))
+        self.track_theme(self.calculator_more_btn, bg="card", fg="subtext")
+        self.calculator_more_btn.pack(fill="x", padx=10, pady=(0, 2))
+
+        self.calculator_more_frame = tk.Frame(sec, bg=self.colors["card"])
+        self.track_theme(self.calculator_more_frame, bg="card")
+        # Not packed yet — toggled open by the button above.
+        for col in range(4):
+            self.calculator_more_frame.grid_columnconfigure(col, weight=1)
+        more_rows = [["√", "^", "%", "{"], ["}", "[", "]", ""]]
+        for r, row in enumerate(more_rows):
+            for c, label in enumerate(row):
+                if not label:
+                    continue
+                btn = tk.Button(
+                    self.calculator_more_frame, text=label, relief="flat",
+                    cursor="hand2", font=("Segoe UI", 10, "bold"),
+                    command=lambda t=label: self._calc_press(t))
+                self.track_theme(btn, bg="sidebar", fg="text")
+                btn.grid(row=r, column=c, sticky="nsew", padx=1, pady=1, ipady=3)
+
+        self.calculator_insert_btn = tk.Button(
+            sec, text="⬇ Insert into note", command=self._calc_insert_into_note,
+            relief="flat", cursor="hand2", font=("Segoe UI", 9, "bold"),
+            state="disabled", disabledforeground=self.colors["subtext"])
+        self.track_theme(self.calculator_insert_btn, bg="sidebar", fg="text")
+        self.calculator_insert_btn.pack(fill="x", padx=10, pady=(2, 8), ipady=4)
+
+        # --- History: this session's past calculations, newest first.
+        # Collapsed by default, like the extra-functions row — a toggle
+        # button reveals it rather than it always taking up space. Not
+        # persisted anywhere — clears with the rest of the calculator on
+        # note switch, same as the expression itself. Each entry is
+        # clickable to insert that specific formula into the note (the
+        # same "own line, right after the last insertion" placement the
+        # main Insert button uses), so an earlier result is still one
+        # click away without having to recompute it. ---
+        self._calc_history_open = False
+        self.calculator_history_head = hist_head = tk.Frame(sec, bg=self.colors["card"])
+        hist_head.pack(fill="x", padx=10, pady=(0, 0))
+        self.calculator_history_btn = tk.Button(
+            hist_head, text="History  ▾", command=self._toggle_calc_history,
+            relief="flat", cursor="hand2", font=("Segoe UI", 8, "bold"),
+            bg=self.colors["card"], fg=self.colors["subtext"], bd=0, anchor="w")
+        self.track_theme(self.calculator_history_btn, bg="card", fg="subtext")
+        self.calculator_history_btn.pack(side="left")
+        self.calculator_history_clear_btn = tk.Button(
+            hist_head, text="Clear", command=self._calc_clear_history,
+            relief="flat", cursor="hand2", font=("Segoe UI", 8), bd=0)
+        self.track_theme(self.calculator_history_clear_btn, bg="card", fg="subtext")
+        self.calculator_history_clear_btn.pack(side="right")
+
+        self.calculator_history_section = tk.Frame(sec, bg=self.colors["card"])
+        self.track_theme(self.calculator_history_section, bg="card")
+        # Not packed yet — toggled open by the button above.
+        hist_wrap = tk.Frame(self.calculator_history_section, bg=self.colors["card"], height=90)
+        hist_wrap.pack(fill="x", pady=(2, 8))
+        hist_wrap.pack_propagate(False)
+        hist_canvas = tk.Canvas(hist_wrap, bg=self.colors["card"], highlightthickness=0)
+        hist_sb = ttk.Scrollbar(hist_wrap, orient="vertical", command=hist_canvas.yview)
+        self.calculator_history_frame = tk.Frame(hist_canvas, bg=self.colors["card"])
+        self.calculator_history_frame.bind(
+            "<Configure>", lambda e: hist_canvas.configure(scrollregion=hist_canvas.bbox("all")))
+        hist_cwin = hist_canvas.create_window((0, 0), window=self.calculator_history_frame, anchor="nw")
+        hist_canvas.bind("<Configure>", self._canvas_width_sync(hist_canvas, hist_cwin))
+        hist_canvas.configure(yscrollcommand=hist_sb.set)
+        hist_sb.pack(side="right", fill="y")
+        hist_canvas.pack(side="left", fill="both", expand=True)
+        self._bind_wheel_tree(self.calculator_history_frame,
+                              lambda e: self._panel_or_page_wheel(hist_canvas, e))
+        self._calc_render_history()
+
+    def _toggle_calc_more(self):
+        """Show or hide the extra-functions row (brackets, √, ^, %)."""
+        if self._calc_more_open:
+            self.calculator_more_frame.pack_forget()
+            self._calc_more_open = False
+            self.calculator_more_btn.config(text="More functions  ▾")
+        else:
+            self.calculator_more_frame.pack(fill="x", padx=10, pady=(0, 4),
+                                            after=self.calculator_more_btn)
+            self._calc_more_open = True
+            self.calculator_more_btn.config(text="More functions  ▴")
+
+    def _toggle_calc_history(self):
+        """Show or hide the calculation history — collapsed by default so
+        it doesn't take up space until actually wanted."""
+        if self._calc_history_open:
+            self.calculator_history_section.pack_forget()
+            self._calc_history_open = False
+            self.calculator_history_btn.config(text="History  ▾")
+        else:
+            self.calculator_history_section.pack(
+                fill="x", padx=10, after=self.calculator_history_head)
+            self._calc_history_open = True
+            self.calculator_history_btn.config(text="History  ▲")
+
+    def _calc_clear_history(self):
+        """Wipe this session's calculation history — the current
+        expression/result on display is untouched, only the log below it."""
+        self._calc_history = []
+        self._calc_render_history()
+
+    def _calc_on_direct_edit(self, event=None):
+        """Fired when the user types or pastes directly into the display
+        instead of using the buttons. Treated like any manual text edit:
+        no auto-clearing, and Insert stays unavailable until a fresh "="
+        produces a real result from whatever's now in the field."""
+        self._calc_just_evaluated = False
+        self._calc_refresh_insert_state()
+
+    def _calc_press(self, token):
+        """Handle one calculator button press. Reads and writes the same
+        editable display field a user could also type or paste into
+        directly — see evaluate_calculator_expression() for the actual
+        math."""
+        current = self._calc_display_var.get()
+        if token == "C":
+            current = ""
+            self._calc_just_evaluated = False
+        elif token == "⌫":
+            current = "" if self._calc_just_evaluated else current[:-1]
+            self._calc_just_evaluated = False
+        elif token == "=":
+            if current and current != "Error":
+                result = evaluate_calculator_expression(current)
+                if result is not None:
+                    formatted = format_calculator_result(result)
+                    self._calc_last_full_expr = current
+                    self._calc_history.insert(0, f"{current}={formatted}")
+                    self._calc_render_history()
+                    current = formatted
+                    self._calc_just_evaluated = True
+                else:
+                    current = "Error"
+                    self._calc_just_evaluated = False
+        elif token in ("+", "−", "×", "÷", "^", "%"):
+            # Binary (+−×÷^) and postfix (%) operators all continue
+            # chaining off a just-computed result instead of clearing it.
+            if current == "Error":
+                current = ""
+            self._calc_just_evaluated = False
+            current += token
+        else:  # a digit, ".", "√", or a bracket — starts a fresh entry
+            if self._calc_just_evaluated or current == "Error":
+                current = ""
+                self._calc_just_evaluated = False
+            current += token
+        self._calc_display_var.set(current)
+        # Button presses set the StringVar programmatically, which doesn't
+        # move the Entry's own cursor the way normal typing would — without
+        # this, the cursor can end up stuck mid-text instead of following
+        # what was just "typed" via the button.
+        self.calculator_display.icursor(tk.END)
+        self._calc_refresh_insert_state()
+
+    def _calc_refresh_insert_state(self):
+        """Insert-into-note is only ever active right after '=' produced
+        a real result — never for an in-progress expression or an error,
+        so there's nothing meaningful to insert until then."""
+        if not hasattr(self, "calculator_insert_btn"):
+            return
+        current = self._calc_display_var.get()
+        enabled = self._calc_just_evaluated and bool(current) and current != "Error"
+        self.calculator_insert_btn.config(state=("normal" if enabled else "disabled"))
+
+    def _calc_render_history(self):
+        if not hasattr(self, "calculator_history_frame"):
+            return
+        for w in self.calculator_history_frame.winfo_children():
+            w.destroy()
+        if not self._calc_history:
+            tk.Label(self.calculator_history_frame, text="No calculations yet.",
+                     bg=self.colors["card"], fg=self.colors["subtext"],
+                     font=("Segoe UI", 8), anchor="w").pack(fill="x", padx=6, pady=4)
+            return
+        for entry in self._calc_history:
+            lbl = tk.Label(self.calculator_history_frame, text=entry,
+                           bg=self.colors["card"], fg=self.colors["subtext"],
+                           font=("Consolas", 9), anchor="e", justify="right",
+                           cursor="hand2")
+            lbl.pack(fill="x", padx=6, pady=2)
+            lbl.bind("<Button-1>", lambda e, formula=entry: self._calc_insert_formula(formula))
+
+    def _calc_insert_formula(self, formula):
+        """Shared insertion logic: type `formula` into the note body,
+        landing on a fresh line right after the previous calculator
+        insertion (tracked via a Text mark), so repeated use — whether
+        from the main Insert button or clicking a history entry — builds
+        a clean log downward instead of gluing results onto wherever the
+        cursor happens to be sitting."""
+        has_prior = "calc_insert_end" in self.body_text.mark_names()
+        if self.focus_get() is not self.body_text:
+            self.body_text.focus_set()
+        if has_prior:
+            self.body_text.mark_set(tk.INSERT, "calc_insert_end")
+            self.body_text.insert(tk.INSERT, "\n" + formula)
+        else:
+            self.body_text.insert(tk.INSERT, formula)
+        self.body_text.mark_set("calc_insert_end", tk.INSERT)
+        self._schedule_autosave(skip_word_count=True)
+
+    def _calc_insert_into_note(self):
+        """Insert the full formula just computed ("expr=result") into the
+        note body — only reachable right after a successful "=" (the
+        button is disabled otherwise)."""
+        if not self._calc_just_evaluated:
+            return
+        result = self._calc_display_var.get()
+        if not result or result == "Error" or not self._calc_last_full_expr:
+            return
+        self._calc_insert_formula(f"{self._calc_last_full_expr}={result}")
+
+    def _sync_calculator_open_state(self):
+        """Collapse and fully reset the calculator on note switch — it's a
+        transient tool, not part of any note's saved content, so carrying
+        a half-finished sum, history, or insertion point over from a
+        previous note would be confusing rather than useful."""
+        if getattr(self, "_calculator_open", False):
+            self.calculator_section.pack_forget()
+            self._calculator_open = False
+        if getattr(self, "_calc_more_open", False):
+            self.calculator_more_frame.pack_forget()
+            self._calc_more_open = False
+            if hasattr(self, "calculator_more_btn"):
+                self.calculator_more_btn.config(text="More functions  ▾")
+        if getattr(self, "_calc_history_open", False):
+            self.calculator_history_section.pack_forget()
+            self._calc_history_open = False
+            if hasattr(self, "calculator_history_btn"):
+                self.calculator_history_btn.config(text="History  ▾")
+        if hasattr(self, "_calc_display_var"):
+            self._calc_display_var.set("")
+        self._calc_just_evaluated = False
+        self._calc_last_full_expr = ""
+        self._calc_history = []
+        self._calc_render_history()
+        if hasattr(self, "calculator_btn"):
+            self.calculator_btn.config(text="🧮 Calculator")
+        self._calc_refresh_insert_state()
+        if "calc_insert_end" in self.body_text.mark_names():
+            self.body_text.mark_unset("calc_insert_end")
 
     def update_word_count(self):
         """Refresh the words · characters readout for the note body."""
@@ -5241,19 +5762,54 @@ class NoteOrganizer(tk.Tk):
         self._add_paste_menu(self.body_text)
         self.update_word_count()
 
-        # --- Checklist (collapsible, hidden until opened) ---
+        # --- Checklist and Calculator, side by side — each still its own
+        # independent collapsible section, just sharing a row instead of
+        # each taking the full editor width stacked one above the other.
+        # Uses grid() with a shared uniform group, not pack(expand=True):
+        # pack only hands out *leftover* space evenly, so two columns with
+        # different natural content widths (the calculator's keypad is
+        # naturally wider than the checklist) would still end up visibly
+        # unequal sizes. grid's uniform option forces them to genuinely
+        # equal widths regardless of what's inside each one. ---
+        tools_row = tk.Frame(self.editor)
+        self.track_theme(tools_row, bg="bg")
+        tools_row.pack(fill="x", padx=30, pady=(4, 2))
+        tools_row.grid_columnconfigure(0, weight=1, uniform="tools_col")
+        tools_row.grid_columnconfigure(1, weight=1, uniform="tools_col")
+
+        checklist_col = tk.Frame(tools_row)
+        self.track_theme(checklist_col, bg="bg")
+        checklist_col.grid(row=0, column=0, sticky="nsew", padx=(0, 4))
+
+        calculator_col = tk.Frame(tools_row)
+        self.track_theme(calculator_col, bg="bg")
+        calculator_col.grid(row=0, column=1, sticky="nsew", padx=(4, 0))
+
         self.checklist_btn = tk.Button(
-            self.editor, text="☑ Checklist", command=self.toggle_checklist_section,
+            checklist_col, text="☑ Checklist", command=self.toggle_checklist_section,
             relief="flat", font=("Segoe UI", 9, "bold"), cursor="hand2", anchor="w"
         )
         self.track_theme(self.checklist_btn, bg="sidebar", fg="text")
-        self.checklist_btn.pack(fill="x", padx=30, pady=(4, 2), ipady=3)
+        self.checklist_btn.pack(fill="x", ipady=3)
 
-        self.checklist_section = tk.Frame(self.editor)
+        self.checklist_section = tk.Frame(checklist_col)
         self.track_theme(self.checklist_section, bg="card")
         # Not packed yet — toggled open by the button.
         self._checklist_open = False
         self._build_checklist_section()
+
+        self.calculator_btn = tk.Button(
+            calculator_col, text="🧮 Calculator", command=self.toggle_calculator_section,
+            relief="flat", font=("Segoe UI", 9, "bold"), cursor="hand2", anchor="w"
+        )
+        self.track_theme(self.calculator_btn, bg="sidebar", fg="text")
+        self.calculator_btn.pack(fill="x", ipady=3)
+
+        self.calculator_section = tk.Frame(calculator_col)
+        self.track_theme(self.calculator_section, bg="card")
+        # Not packed yet — toggled open by the button.
+        self._calculator_open = False
+        self._build_calculator_section()
 
         comments_label = tk.Label(
             self.editor, text="💬 Comments / additional notes",
@@ -7924,6 +8480,7 @@ class NoteOrganizer(tk.Tk):
         if hasattr(self, "checklist_items_frame"):
             self._render_checklist_items()
         self._sync_checklist_open_state()
+        self._sync_calculator_open_state()
 
         self.write_recurrence_to_ui(st.get("recurrence") or {})
 
@@ -8218,6 +8775,7 @@ class NoteOrganizer(tk.Tk):
         if hasattr(self, "checklist_items_frame"):
             self._render_checklist_items()
         self._sync_checklist_open_state()
+        self._sync_calculator_open_state()
         self.title_entry.focus()
         self.set_status("New note — not yet saved")
         self.update_word_count()
@@ -8263,6 +8821,7 @@ class NoteOrganizer(tk.Tk):
         if hasattr(self, "checklist_items_frame"):
             self._render_checklist_items()
         self._sync_checklist_open_state()
+        self._sync_calculator_open_state()
         self.write_recurrence_to_ui(note.get("recurrence"))
 
         if self.current_occurrence_date:
@@ -8693,6 +9252,7 @@ class NoteOrganizer(tk.Tk):
             self.toggle_checklist_section()
         else:
             self._sync_checklist_open_state()
+        self._sync_calculator_open_state()
         self.update_word_count()
         self.set_status("New note started from template — edits here won't change the template")
         self._reset_text_undo()
@@ -9530,6 +10090,13 @@ def _main():
     """Launch the app with a top-level guard. In the --windowed .exe there's no
     console, so an unhandled exception would make the app vanish with no trace.
     This shows the error and, where possible, points the user at their data."""
+    # Tried declaring the process DPI-aware here, to fix two side-by-side
+    # Settings panels rendering at visibly different sizes despite Tk's
+    # own layout math treating them as pixel-identical — reverted. It
+    # made the whole app's rendering noticeably worse (blurrier) without
+    # actually fixing the size mismatch, on the machine that reported the
+    # original bug. Left unresolved rather than trading one visible
+    # problem for a worse one.
     try:
         app = NoteOrganizer()
         app.protocol("WM_DELETE_WINDOW", app.on_app_close)

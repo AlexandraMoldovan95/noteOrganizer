@@ -164,6 +164,191 @@ clnote = app.find_note(app.selected_note_id)
 check('checklist saved with 2 items', len(clnote.get('checklist',[]))==2)
 check('checklist done-state preserved', clnote['checklist'][1]['done']==True)
 
+# ---- CALCULATOR ----
+# Exercises the real button widgets (via .invoke(), like a real click) end
+# to end, not just the evaluate_calculator_expression() function directly
+# — that pure-logic side is covered separately in test_calculator.py.
+# Uses an EXACT text match (not find_widget's substring match): the "C"
+# clear button and the "✕ Close" button both live in this section, and
+# "C" is a substring of "Close" — a substring search for "C" finds the
+# Close button first, since the header (with Close) comes before the
+# button grid (with Clear) in the widget tree.
+def find_calc_btn(text):
+    for c in app.calculator_section.winfo_children():
+        if isinstance(c, tk.Button) and str(c.cget('text')) == text:
+            return c
+        for gc in c.winfo_children():
+            if isinstance(gc, tk.Button) and str(gc.cget('text')) == text:
+                return gc
+    return None
+
+app.new_note()
+app.title_entry.insert(0,'CalcNote')
+app.body_text.insert('1.0','Notes:\n')
+app.update()
+check('calculator starts closed', app._calculator_open == False)
+app.toggle_calculator_section()
+app.update()
+check('calculator opens', app._calculator_open == True)
+check('checklist and calculator sit side by side, not stacked',
+      app.calculator_btn.winfo_rootx() > app.checklist_btn.winfo_rootx()
+      and abs(app.calculator_btn.winfo_rooty() - app.checklist_btn.winfo_rooty()) < 5)
+# The two columns should be genuinely equal width (grid's uniform group),
+# not just "both expanding" — pack(expand=True) alone would size each to
+# its own content and only split the *leftover* space evenly, which
+# still leaves the wider one (the calculator's keypad) visibly bigger.
+checklist_col_width = app.checklist_btn.master.winfo_width()
+calculator_col_width = app.calculator_btn.master.winfo_width()
+check(f'checklist and calculator columns are equal width '
+      f'({checklist_col_width}px vs {calculator_col_width}px)',
+      abs(checklist_col_width - calculator_col_width) <= 2)
+
+for label in ['7', '×', '8']:  # 7 x 8, no "=" yet
+    find_calc_btn(label).invoke()
+    app.update()
+check('insert into note is disabled mid-expression, before "="',
+      str(app.calculator_insert_btn.cget('state')) == 'disabled')
+check('typing cursor stays at the end after button presses, not stuck '
+      'mid-text (icursor follows programmatic StringVar updates)',
+      app.calculator_display.index('insert') == len(app._calc_display_var.get()))
+
+find_calc_btn('=').invoke()
+app.update()
+check('calculator computes 7x8=56 via real button clicks',
+      app._calc_display_var.get() == '56')
+check('insert into note becomes enabled right after "="',
+      str(app.calculator_insert_btn.cget('state')) == 'normal')
+check('history records the calculation', app._calc_history == ['7×8=56'])
+check('history stays hidden until the user asks for it',
+      app._calc_history_open == False)
+
+app._calc_insert_into_note()
+app.update()
+body_after_first_insert = app.body_text.get('1.0', 'end')
+check('insert into note types the WHOLE formula, not just the result',
+      '7×8=56' in body_after_first_insert)
+
+# A second calculation, inserted again — must land on a new line after
+# the first insertion, not glued onto it and not wherever the cursor
+# happens to be (moved the cursor to the very start on purpose, to prove
+# the insertion point is tracked independently of it).
+find_calc_btn('C').invoke()
+app.update()
+check('Clear resets the expression', app._calc_display_var.get() == '')
+app.body_text.mark_set('insert', '1.0')
+for label in ['9', '−', '4', '=']:  # 9 - 4 =
+    find_calc_btn(label).invoke()
+    app.update()
+app._calc_insert_into_note()
+app.update()
+body_after_second_insert = app.body_text.get('1.0', 'end')
+check('second insertion also has the whole formula',
+      '9−4=5' in body_after_second_insert)
+first_pos = body_after_second_insert.find('7×8=56')
+second_pos = body_after_second_insert.find('9−4=5')
+check('second insertion lands on its own line, after the first one — '
+      'not glued on, and not at the (moved) cursor position',
+      second_pos > first_pos and body_after_second_insert[second_pos - 1] == '\n')
+check('history now has both calculations, newest first',
+      app._calc_history == ['9−4=5', '7×8=56'])
+
+for label in ['5', '÷', '0', '=']:  # 5 / 0 =
+    find_calc_btn(label).invoke()
+    app.update()
+check('division by zero shows Error via real button clicks',
+      app._calc_display_var.get() == 'Error')
+check('insert into note is disabled again after an Error',
+      str(app.calculator_insert_btn.cget('state')) == 'disabled')
+
+# ---- Direct typing/pasting into the display (not just buttons) ----
+find_calc_btn('C').invoke()
+app.update()
+app._calc_display_var.set('6+6')  # simulates a paste — the StringVar is
+                                   # the single source of truth regardless
+                                   # of whether buttons or direct edits set it
+app.calculator_display.event_generate('<KeyRelease>')
+app.update()
+check('insert stays disabled after a direct paste, before "=" is pressed',
+      str(app.calculator_insert_btn.cget('state')) == 'disabled')
+find_calc_btn('=').invoke()
+app.update()
+check('pressing "=" evaluates a pasted/typed expression correctly',
+      app._calc_display_var.get() == '12')
+check('insert becomes enabled after evaluating a pasted expression',
+      str(app.calculator_insert_btn.cget('state')) == 'normal')
+
+# ---- Extra functions (brackets, root, power, percent) ----
+find_calc_btn('C').invoke()
+app.update()
+check('extra functions are collapsed by default', app._calc_more_open == False)
+find_calc_btn('More functions  ▾').invoke()
+app.update()
+check('More functions opens the extra row', app._calc_more_open == True)
+for label in ['√', '9']:  # sqrt(9)
+    find_calc_btn(label).invoke()
+    app.update()
+find_calc_btn('=').invoke()
+app.update()
+check('square root works via the extra-functions row',
+      app._calc_display_var.get() == '3')
+
+find_calc_btn('C').invoke()
+app.update()
+for label in ['3', '^', '3']:  # 3^3 — a general power, not just a fixed square
+    find_calc_btn(label).invoke()
+    app.update()
+find_calc_btn('=').invoke()
+app.update()
+check('the power button computes any exponent (3^3=27), not just squaring',
+      app._calc_display_var.get() == '27')
+
+# ---- History: hidden by default, toggle to reveal, click an entry to
+# insert it, and a button to clear it out ----
+hist_wrap_widget = app.calculator_history_section
+check('history section is not packed (hidden) before toggling',
+      not hist_wrap_widget.winfo_ismapped())
+find_calc_btn('History  ▾').invoke()
+app.update()
+check('history becomes visible after the toggle', app._calc_history_open == True)
+check('history section is now actually packed on screen',
+      hist_wrap_widget.winfo_ismapped())
+
+history_labels = [w for w in app.calculator_history_frame.winfo_children()
+                   if isinstance(w, tk.Label)]
+# 5 successful "="es so far this test (7x8, 9-4, 6+6, sqrt9, 3^3) — the
+# 5/0 division-by-zero attempt correctly did NOT add an entry.
+check('history shows one entry per past calculation', len(history_labels) == 5)
+# Click the oldest entry (7×8=56) — should insert it, landing after
+# whatever's already in the body from earlier insertions in this test.
+target_entry = next(w for w in history_labels if str(w.cget('text')) == '7×8=56')
+body_before_history_click = app.body_text.get('1.0', 'end')
+target_entry.event_generate('<Button-1>')
+app.update()
+body_after_history_click = app.body_text.get('1.0', 'end')
+check('clicking a history entry inserts that exact formula into the note',
+      body_after_history_click.count('7×8=56') == body_before_history_click.count('7×8=56') + 1)
+
+find_calc_btn('Clear').invoke()
+app.update()
+check('the Clear (history) button wipes the history', app._calc_history == [])
+check('clearing history does not touch the current expression on display',
+      app._calc_display_var.get() == '27')
+
+find_calc_btn('✕ Close').invoke()
+app.update()
+check('closing collapses the calculator', app._calculator_open == False)
+
+app.toggle_calculator_section()
+find_calc_btn('9').invoke()
+app.update()
+app.new_note()
+app.update()
+check('calculator fully resets (collapsed, cleared, history wiped and '
+      'hidden, extra row collapsed) when switching to a new note',
+      app._calc_display_var.get() == '' and app._calculator_open == False
+      and app._calc_history == [] and app._calc_more_open == False
+      and app._calc_history_open == False)
+
 # ---- PERSISTENCE TO DISK ----
 app.save_notes()
 disk_path = NO.DATA_FILE
