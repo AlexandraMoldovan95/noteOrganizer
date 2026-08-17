@@ -162,6 +162,24 @@ After completing a task, report:
 Do not claim something was tested or verified if it was not actually
 tested.
 
+### Versioning
+
+The full policy (exact counting rules, what happens at the real 1.0.0
+launch, Microsoft Store/Android specifics) lives in `docs/ROADMAP.md`'s
+"Versioning" section — treat that as the source of truth, not this
+summary.
+
+- A version bump belongs with the code change it covers, not as an
+  afterthought: whenever `note_organizer.py` changes and is about to be
+  rebuilt into a new `.exe`, recompute the version per the documented
+  policy and propose the exact new number.
+- Always show the computed number and how it was derived, and wait for
+  explicit confirmation before bumping `APP_VERSION` or cutting a
+  `CHANGELOG.md` version section — never bump it silently as part of an
+  unrelated change.
+- Docs-only changes do not get a version bump, matching how they don't
+  call for an `.exe` rebuild either.
+
 ## Git & GitHub workflow
 
 ### Branches
