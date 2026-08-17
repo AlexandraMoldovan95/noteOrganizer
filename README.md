@@ -17,6 +17,7 @@ Built as a solo/pair project (developer + AI pairing partner) over an extended i
 - Autosave on pause and on note switch — nothing is ever lost mid-edit
 - Full-text search and six sort modes (recency, title, category, date)
 - Group notes by category, with persistent collapse state per group
+- A collapsible in-note calculator (with parentheses and standard operator precedence), for quick sums without leaving the note
 
 **Recurring notes**
 - Daily / weekly / monthly / yearly recurrence, with custom intervals
@@ -87,6 +88,7 @@ noteOrganizer/
 ├── note_organizer.py         # the application (single file by design — see docs/ARCHITECTURE.md)
 ├── test_recurrence.py        # standalone tests for the recurrence engine (no GUI needed)
 ├── test_data_safety.py       # standalone tests for backups & migration safety (no GUI needed)
+├── test_calculator.py        # standalone tests for the in-note calculator's expression evaluator (no GUI needed)
 ├── docs/
 │   ├── USER_GUIDE.md          # full walkthrough with screenshots
 │   ├── ARCHITECTURE.md        # how the code is organized, and why
@@ -122,12 +124,13 @@ noteOrganizer/
 
 ## Testing
 
-Every push and Pull Request automatically runs the full QA suite via GitHub Actions (see `.github/workflows/tests.yml`) — recurrence engine tests, data-safety tests (backups made before a version upgrade, and the migration logic that moves notes between storage locations), plus nine headless GUI test scripts covering notes/categories/templates, recurrence/calendar/duplicates, trash/sharing/import-export, theming/stress/leak-regression, data-corruption resilience, grouping/settings/attachments/multi-feature combinations, calendar-delete/multi-select/image-preview/autosave/memory fixes, search debounce/background-timer robustness, and the nested-dropdown-inside-popup fix. Check the **Actions** tab on GitHub for the latest run.
+Every push and Pull Request automatically runs the full QA suite via GitHub Actions (see `.github/workflows/tests.yml`) — recurrence engine tests, data-safety tests (backups made before a version upgrade, and the migration logic that moves notes between storage locations), the in-note calculator's expression evaluator, plus nine headless GUI test scripts covering notes/categories/templates, recurrence/calendar/duplicates, trash/sharing/import-export, theming/stress/leak-regression, data-corruption resilience, grouping/settings/attachments/multi-feature combinations, calendar-delete/multi-select/image-preview/autosave/memory fixes, search debounce/background-timer robustness, and the nested-dropdown-inside-popup fix. Check the **Actions** tab on GitHub for the latest run.
 
 To run them locally:
 ```bash
 python test_recurrence.py
 python test_data_safety.py
+python test_calculator.py
 cd qa && python qa1.py   # and qa2.py – qa9.py
 ```
 
