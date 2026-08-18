@@ -18,6 +18,7 @@ Built as a solo/pair project (developer + AI pairing partner) over an extended i
 - Full-text search and six sort modes (recency, title, category, date)
 - Group notes by category, with persistent collapse state per group
 - A collapsible in-note calculator (with parentheses and standard operator precedence), for quick sums without leaving the note
+- Rich text formatting (Bold, Italic, Underline, Strikethrough) in the note body — via a toolbar, the right-click menu, or keyboard shortcuts — applied to a selection or to whatever's typed next
 
 **Recurring notes**
 - Daily / weekly / monthly / yearly recurrence, with custom intervals
