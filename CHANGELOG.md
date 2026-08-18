@@ -8,6 +8,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ## [Unreleased]
 
+## [0.31.39] — 2026-08-18
+
+### Added
+- A rich text formatting toolbar (Bold, Italic, Underline, Strikethrough) in the note editor, plus the same four options in the right-click menu with keyboard shortcuts (Ctrl+B/I/U/D). Select existing text and apply a style, or toggle a style with nothing selected so it "sticks" for whatever you type next until turned off again — including correct handling of fast typing, where a burst of several keystrokes doesn't drop the style on any of them. This is Phase 1 of a larger rich-text effort; font size/color/highlight, bullet lists, and paste-with-formatting are still ahead.
+
 ## [0.30.39] — 2026-08-18
 
 ### Fixed
