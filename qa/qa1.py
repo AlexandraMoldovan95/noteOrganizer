@@ -349,6 +349,322 @@ check('calculator fully resets (collapsed, cleared, history wiped and '
       and app._calc_history == [] and app._calc_more_open == False
       and app._calc_history_open == False)
 
+# ---- RICH TEXT FORMATTING ----
+# Exercises the real toolbar Button widgets (via .invoke(), like a real
+# click), not _toggle_body_style() directly — that's already covered by a
+# dedicated interactive script during development; this checks the actual
+# UI path a user takes. Text "selection" is simulated via tag_add("sel", ..)
+# directly on the Text widget, the same standard proxy used elsewhere in
+# this file for widget state a real mouse-drag would otherwise set.
+app.new_note()
+app.title_entry.insert(0, 'FormattingNote')
+app.body_text.insert('1.0', 'Hello world, this is bold and this is italic.')
+app.update()
+
+check('formatting toolbar has all four style buttons',
+      set(app._fmt_buttons.keys()) == {'bold', 'italic', 'underline', 'strike'})
+
+bold_start = app.body_text.search('bold', '1.0', 'end')
+bold_end = f'{bold_start}+4c'
+
+# ---- Keyboard shortcuts (Ctrl+B/I/U/D), same handler as the toolbar ----
+# Checked here, right after the note is created, while body_text can still
+# reliably take real Tk keyboard focus -- event_generate() needs actual
+# focus to dispatch a synthetic key combo correctly (unlike .invoke() on a
+# button, a direct call that bypasses focus entirely), and later in this
+# script several popups (calculator's dropdowns, history) get opened and
+# dismissed, which can leave a stale grab behind that swallows key events.
+app.body_text.tag_add('sel', bold_start, bold_end)
+app.body_text.focus_force()
+app.update()
+was_bold = 'bold' in app.body_text.tag_names(bold_start)
+app.body_text.event_generate('<Control-b>')
+app.update()
+check('Ctrl+B toggles bold via keyboard, same handler as the toolbar button',
+      ('bold' in app.body_text.tag_names(bold_start)) != was_bold)
+app.body_text.event_generate('<Control-b>')  # toggle back off for the button test below
+app.update()
+
+app.body_text.tag_remove('sel', '1.0', 'end')
+app.body_text.tag_add('sel', '1.0', '1.0+3c')
+app.update()
+app.body_text.event_generate('<Control-u>')
+app.update()
+check('Ctrl+U toggles underline via keyboard', 'underline' in app.body_text.tag_names('1.0'))
+app.body_text.event_generate('<Control-d>')
+app.update()
+check('Ctrl+D toggles strikethrough via keyboard', 'strike' in app.body_text.tag_names('1.0'))
+app.body_text.event_generate('<Control-U>')  # uppercase (shift held) variant
+app.update()
+check('the uppercase Ctrl+Shift+U variant also fires the underline binding',
+      'underline' not in app.body_text.tag_names('1.0'))
+app.body_text.tag_remove('underline', '1.0', 'end')
+app.body_text.tag_remove('strike', '1.0', 'end')
+
+# ---- Toolbar buttons (real .invoke() clicks) ----
+app.body_text.tag_remove('sel', '1.0', 'end')
+app.body_text.tag_add('sel', bold_start, bold_end)
+app.update()
+app._fmt_buttons['bold'].invoke()
+app.update()
+check('clicking the Bold toolbar button applies the bold tag',
+      'bold' in app.body_text.tag_names(bold_start))
+
+italic_start = app.body_text.search('italic', '1.0', 'end')
+italic_end = f'{italic_start}+6c'
+app.body_text.tag_remove('sel', '1.0', 'end')
+app.body_text.tag_add('sel', italic_start, italic_end)
+app.update()
+app._fmt_buttons['italic'].invoke()
+app.update()
+check('clicking the Italic toolbar button applies the italic tag',
+      'italic' in app.body_text.tag_names(italic_start))
+
+# Overlap bold + italic on the same word -> Tkinter can't combine two tags
+# that both set "font", so this must become the single compound tag.
+app.body_text.tag_remove('sel', '1.0', 'end')
+app.body_text.tag_add('sel', bold_start, bold_end)
+app.update()
+app._fmt_buttons['italic'].invoke()
+app.update()
+check('bold + italic together become one compound tag, not two conflicting ones',
+      'bold_italic' in app.body_text.tag_names(bold_start)
+      and 'bold' not in app.body_text.tag_names(bold_start))
+app._fmt_buttons['bold'].invoke()
+app.update()
+check('un-bolding a bold+italic range correctly falls back to italic-only',
+      'italic' in app.body_text.tag_names(bold_start)
+      and 'bold_italic' not in app.body_text.tag_names(bold_start))
+
+# Underline + strike are independent tags (no font conflict) and can coexist.
+app.body_text.tag_remove('sel', '1.0', 'end')
+app.body_text.tag_add('sel', '1.0', '1.0+5c')
+app.update()
+app._fmt_buttons['underline'].invoke()
+app._fmt_buttons['strike'].invoke()
+app.update()
+us_names = app.body_text.tag_names('1.0')
+check('underline and strikethrough toolbar buttons can both apply at once',
+      'underline' in us_names and 'strike' in us_names)
+
+# Toolbar reflects the selection's current style (pressed look), and clears
+# once nothing relevant is selected.
+app.body_text.tag_remove('sel', '1.0', 'end')
+app.body_text.tag_add('sel', '1.0', '1.0+5c')
+app._refresh_format_buttons()
+check('toolbar shows Underline pressed while a fully-underlined range is selected',
+      str(app._fmt_buttons['underline'].cget('relief')) == 'sunken')
+app.body_text.tag_remove('sel', '1.0', 'end')
+app._refresh_format_buttons()
+check('toolbar buttons release when nothing is selected',
+      str(app._fmt_buttons['underline'].cget('relief')) == 'flat')
+
+# Clicking a style button with no selection must be a safe no-op, not a crash.
+try:
+    app._fmt_buttons['bold'].invoke()
+    no_sel_crash = False
+except Exception:
+    no_sel_crash = True
+check('clicking a formatting button with no selection does not crash', not no_sel_crash)
+
+# ---- Save/reload round trip through the real editor flow ----
+app.save_current_note(auto=False)
+app.update()
+fmt_note = app.find_note(app.selected_note_id)
+check('note saved with a non-empty formatting field', bool(fmt_note.get('formatting')))
+saved_formatting = fmt_note['formatting']
+
+app.new_note()
+app.update()
+app.load_note(fmt_note)
+app.update()
+check('reopening the note reapplies its saved formatting to the editor',
+      app._extract_formatting(app.body_text) is not None
+      and sorted(app._extract_formatting(app.body_text), key=lambda s: (s['start'], s['style']))
+      == sorted(saved_formatting, key=lambda s: (s['start'], s['style'])))
+
+# ---- Template round trip ----
+# save_current_as_template()'s actual name-entry step is an inline popup
+# (_show_inline_rename), not worth simulating here — what matters is the
+# data transformation it performs: capture_editor_state()'s "formatting"
+# flowing into normalize_template(). Verified directly, the same way
+# save_current_as_template()'s own do_save() callback builds its dict.
+st_for_template = app.capture_editor_state()
+built_tpl = NO.normalize_template({
+    'name': 'FormatTemplate',
+    'title': st_for_template.get('title', ''),
+    'body': st_for_template.get('body', ''),
+    'formatting': st_for_template.get('formatting', []),
+    'comments': st_for_template.get('comments', ''),
+    'category': st_for_template.get('category', 'General'),
+    'checklist': st_for_template.get('checklist', []),
+})
+check('normalize_template preserves formatting from captured editor state',
+      bool(built_tpl.get('formatting')))
+app.templates.append(built_tpl)
+
+app.new_note()
+app.update()
+app._apply_template(built_tpl)
+app.update()
+check('applying a template reapplies its formatting in the editor',
+      bool(app._extract_formatting(app.body_text)))
+
+# ---- Sticky format-at-cursor: toggle a style with NOTHING selected, then
+# it applies to whatever gets typed next, until toggled off again. Real
+# toolbar button clicks (.invoke()), same as everywhere else in this file.
+# Uses a fresh note throughout and calls new_note() itself along the way,
+# so it deliberately runs last in this section, after everything above
+# that depends on "FormattingNote" still being the open note.
+def type_char(ch):
+    """Simulate one real keystroke: insert the char (what Tk's own default
+    KeyPress binding does for a live keystroke), then fire the matching
+    KeyRelease so _apply_pending_style_to_typed_char sees it, same order
+    a real keypress produces."""
+    app.body_text.insert('insert', ch)
+    class _FakeEvent:
+        pass
+    fe = _FakeEvent()
+    fe.char = ch
+    fe.state = 0
+    app._apply_pending_style_to_typed_char(fe)
+    app.update()
+
+app.new_note()
+app.title_entry.insert(0, 'PendingStyleNote')
+app.update()
+check('no pending styles on a fresh note', app._pending_styles == set())
+
+app.body_text.tag_remove('sel', '1.0', 'end')
+app.update()
+app._fmt_buttons['bold'].invoke()
+app.update()
+check('clicking Bold with nothing selected queues it as pending, not a no-op',
+      app._pending_styles == {'bold'})
+check('toolbar shows Bold pressed for the pending state even with no selection',
+      str(app._fmt_buttons['bold'].cget('relief')) == 'sunken')
+
+for ch in 'abc':
+    type_char(ch)
+check('characters typed while Bold is pending are tagged bold',
+      all('bold' in app.body_text.tag_names(f'1.{i}') for i in range(3)))
+
+app._fmt_buttons['bold'].invoke()  # toggle back off, still nothing selected
+app.update()
+check('clicking Bold again with nothing selected clears the pending style',
+      app._pending_styles == set())
+for ch in 'de':
+    type_char(ch)
+check('characters typed after turning pending Bold off are not bold',
+      all('bold' not in app.body_text.tag_names(f'1.{i}') for i in (3, 4)))
+check('earlier bold characters are unaffected by turning pending Bold off',
+      all('bold' in app.body_text.tag_names(f'1.{i}') for i in range(3)))
+
+# A real selection still works exactly as before, independent of pending
+# state -- "def" here was typed with nothing pending, so this must turn
+# bold ON for it (not off, the way it would for the already-bold "abc").
+app.body_text.tag_add('sel', '1.3', '1.5')
+app.update()
+app._fmt_buttons['bold'].invoke()
+app.update()
+check('selecting text and clicking Bold still works, unaffected by pending-style logic',
+      'bold' in app.body_text.tag_names('1.3'))
+check('using the selection-based toggle does not touch _pending_styles',
+      app._pending_styles == set())
+
+app.body_text.tag_remove('sel', '1.0', 'end')
+app._fmt_buttons['italic'].invoke()
+app.update()
+check('a pending style is queued right before switching notes',
+      app._pending_styles == {'italic'})
+app.new_note()
+app.update()
+check('starting a new note clears any pending style', app._pending_styles == set())
+
+app.title_entry.insert(0, 'PendingSaveNote')
+app.body_text.insert('1.0', 'plain text, nothing pending')
+app.save_current_note(auto=False)
+app.update()
+pending_save_note = app.find_note(app.selected_note_id)
+check('pending_styles is a live-editing concept only, never saved to the note',
+      'pending_styles' not in pending_save_note)
+
+# ---- Fast typing (regression): a first version tagged only "the one
+# character right before the cursor" on each KeyRelease, which silently
+# missed characters typed in a fast real burst -- Tk can queue several
+# KeyPress insertions before dispatching the KeyRelease callbacks for
+# them, so "before the cursor right now" can already be past more than
+# one new character by the time a callback runs. Fixed by tagging the
+# whole span from a tracked anchor mark to the cursor instead of just one
+# character, so however many piled up before a callback's turn, the next
+# one covers all of them. Reproduced here with when='tail' (queues events
+# instead of processing them immediately) and NO update() between
+# keystrokes, then a single update() to flush the whole burst at once --
+# the same shape as a fast typist outrunning a naive per-keystroke
+# handler.
+app.new_note()
+app.body_text.focus_force()
+app.update()
+app._fmt_buttons['bold'].invoke()
+app.update()
+check('bold queued as pending before the fast-typing burst', app._pending_styles == {'bold'})
+
+fast_word = 'abcdefghijklmnopqrstuvwxyz1234'
+for ch in fast_word:
+    app.body_text.event_generate(f'<KeyPress-{ch}>', when='tail')
+    app.body_text.event_generate(f'<KeyRelease-{ch}>', when='tail')
+app.update()  # flushes the whole queued burst at once
+
+check(f'all {len(fast_word)} fast-typed characters landed in the note',
+      app.body_text.get('1.0', 'end-1c') == fast_word)
+bold_ranges = app.body_text.tag_ranges('bold')
+fully_bold = (len(bold_ranges) == 2
+              and app._char_offset(app.body_text, bold_ranges[0]) == 0
+              and app._char_offset(app.body_text, bold_ranges[1]) == len(fast_word))
+check('every fast-typed character is bold, not just some of them '
+      '(a single continuous tag range, not gaps and fragments)', fully_bold)
+
+# ---- Moving the cursor without typing must resync the anchor, not let a
+# later keystroke retroactively bold a stretch of older, unrelated text.
+app._fmt_buttons['bold'].invoke()  # off
+app.update()
+app.new_note()
+app.body_text.focus_force()
+app.body_text.insert('1.0', 'existing text here')
+app.body_text.mark_set('insert', '1.0')
+app.update()
+app._fmt_buttons['bold'].invoke()  # pending bold queued AT position 0
+app.update()
+app.body_text.mark_set('insert', 'end')
+app.body_text.event_generate('<KeyRelease-End>')  # cursor moved, nothing typed
+app.update()
+type_char('X')
+check('moving the cursor away before typing does not retroactively bold the older text',
+      'bold' not in app.body_text.tag_names('1.0'))
+check('the character actually typed after the cursor move is correctly bold',
+      'bold' in app.body_text.tag_names('end-2c'))
+
+# ---- A paste must never pick up a pending style, even though a paste
+# also grows the character count (the same signal used to detect real
+# typing) -- excluded via a dedicated <<Paste>> resync, not by inspecting
+# the KeyRelease event that happens to follow it.
+app.new_note()
+app.body_text.focus_force()
+app.update()
+app._fmt_buttons['bold'].invoke()
+app.update()
+app.clipboard_clear()
+app.clipboard_append('PASTED TEXT')
+app.update()
+app.body_text.event_generate('<<Paste>>')
+app.update()
+check('pasted text does not pick up the pending style',
+      'bold' not in app.body_text.tag_names('1.0'))
+check('pasted text lands correctly', app.body_text.get('1.0', 'end-1c') == 'PASTED TEXT')
+type_char('Y')
+check('typing right after a paste correctly resumes picking up the pending style',
+      'bold' in app.body_text.tag_names('end-2c'))
+
 # ---- PERSISTENCE TO DISK ----
 app.save_notes()
 disk_path = NO.DATA_FILE

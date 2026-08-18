@@ -476,6 +476,40 @@ def save_settings(settings):
         pass
 
 
+# ---- Rich text formatting (note body only) ----
+#
+# A note's "body" stays a plain string everywhere (search, duplicate
+# detection, share codes, templates, previews) — untouched by this feature.
+# Formatting lives in a separate, additive field: a flat list of
+# {"start", "end", "style"} spans, character-offset-based into the plain
+# body text. "bold_italic" is its own style name (not "bold" + "italic"
+# both present) because Tkinter Text tags that both set the widget's font
+# option don't compose — only one wins — so bold+italic together has to be
+# one precomputed compound font, same as a real font would have a distinct
+# bold-italic variant rather than layering two independent effects.
+KNOWN_FORMAT_STYLES = {"bold", "italic", "bold_italic", "underline", "strike"}
+
+
+def normalize_formatting(value):
+    """Coerce a note/template's formatting list to valid spans, silently
+    dropping anything malformed (bad type, unknown style, out-of-order or
+    non-integer offsets) rather than ever letting bad data crash the editor."""
+    if not isinstance(value, list):
+        return []
+    spans = []
+    for span in value:
+        if not isinstance(span, dict):
+            continue
+        style = span.get("style")
+        start, end = span.get("start"), span.get("end")
+        if (style in KNOWN_FORMAT_STYLES
+                and isinstance(start, int) and not isinstance(start, bool)
+                and isinstance(end, int) and not isinstance(end, bool)
+                and 0 <= start < end):
+            spans.append({"start": start, "end": end, "style": style})
+    return spans
+
+
 def normalize_template(tpl):
     """Coerce a template dict into a known shape so bad/old data can't crash the
     manager or the 'use template' flow. A template holds a name plus the note
@@ -491,6 +525,7 @@ def normalize_template(tpl):
         "name": _s("name") or "Untitled template",
         "title": _s("title"),
         "body": _s("body"),
+        "formatting": normalize_formatting(tpl.get("formatting")),
         "comments": _s("comments"),
         "category": _s("category") or "General",
         "checklist": [
@@ -578,6 +613,7 @@ FIRST_LAUNCH_DATE = get_first_launch_date()
 NOTE_DEFAULTS = {
     "title": "",
     "body": "",
+    "formatting": [],   # list of {"start","end","style"} spans over body
     "comments": "",
     "category": "General",
     "date": "",
@@ -704,6 +740,8 @@ def normalize_note(note):
                 text = ""
             checklist.append({"text": text, "done": bool(item.get("done"))})
     clean["checklist"] = checklist
+
+    clean["formatting"] = normalize_formatting(clean.get("formatting"))
 
     return clean
 
@@ -1243,7 +1281,7 @@ MAX_SHARED_NOTES = 200                # most notes one code may carry
 # Only these fields travel in a share code. Notably absent: id (assigned fresh
 # on import), attachments, updated, overrides/exceptions.
 SHAREABLE_FIELDS = [
-    "title", "body", "comments", "category", "date", "color", "recurrence",
+    "title", "body", "formatting", "comments", "category", "date", "color", "recurrence",
 ]
 
 
@@ -2139,9 +2177,18 @@ class NoteOrganizer(tk.Tk):
         self._export_poll_job = self.after(100, self._poll_export_progress)
 
     # ---------- Share codes ----------
-    def _add_paste_menu(self, text_widget):
+    def _add_paste_menu(self, text_widget, extra_items=None):
         """Give a Text/Entry widget a right-click menu with Cut/Copy/Paste/Select
-        All, so users can paste without knowing Ctrl+V."""
+        All, so users can paste without knowing Ctrl+V.
+
+        extra_items, when given, is a list of (label, command) or (label,
+        command, accelerator_text) tuples appended after the emoji entry —
+        used only for the note body, to expose the same
+        Bold/Italic/Underline/Strikethrough toggles as the formatting
+        toolbar (with their keyboard shortcuts shown alongside, display
+        only — the actual key bindings live on body_text itself) without
+        adding them to every other text field that shares this same
+        menu-building function."""
         menu = tk.Menu(text_widget, tearoff=0)
         menu.configure(bg=self.colors["card"], fg=self.colors["text"],
                        activebackground=self.colors["accent"], activeforeground="white",
@@ -2165,6 +2212,13 @@ class NoteOrganizer(tk.Tk):
         menu.add_command(label="😀  Insert emoji…",
                          command=lambda: self._show_emoji_picker(text_widget))
 
+        if extra_items:
+            menu.add_separator()
+            for item in extra_items:
+                label, command = item[0], item[1]
+                accelerator = item[2] if len(item) > 2 else ""
+                menu.add_command(label=label, command=command, accelerator=accelerator)
+
         def popup(event):
             try:
                 text_widget.focus_set()
@@ -2172,6 +2226,290 @@ class NoteOrganizer(tk.Tk):
             finally:
                 menu.grab_release()
         text_widget.bind("<Button-3>", popup)
+
+    # ---------- Note body rich text formatting ----------
+    # Storage: a note's "formatting" field is a flat list of {start, end,
+    # style} character-offset spans (see normalize_formatting). The live
+    # Tkinter Text widget is the only thing that ever manipulates ranges
+    # directly, via its own tags — these two functions are the sole bridge
+    # between "tags on a live widget" and "a plain-JSON-serializable list",
+    # called once at load time and once at save time. Tkinter itself keeps
+    # tag ranges correctly anchored to the surrounding text as the user
+    # types/deletes in between, so nothing needs to track offsets while
+    # editing is actually happening.
+    _FONT_STYLES = ("bold", "italic", "bold_italic")  # mutually exclusive
+    _PENDING_STYLE_ANCHOR = "pending_style_anchor"  # see _toggle_body_style
+
+    def _setup_body_formatting_tags(self, text_widget):
+        """Define the Tkinter tags the formatting toolbar/menu apply. Font
+        objects are kept on self so they aren't garbage-collected (Tkinter
+        needs a live Python reference to keep using them)."""
+        base = tkfont.Font(font=text_widget["font"])
+        family, size = base.actual("family"), base.actual("size")
+        self._fmt_bold_font = tkfont.Font(family=family, size=size, weight="bold")
+        self._fmt_italic_font = tkfont.Font(family=family, size=size, slant="italic")
+        self._fmt_bold_italic_font = tkfont.Font(
+            family=family, size=size, weight="bold", slant="italic")
+        text_widget.tag_configure("bold", font=self._fmt_bold_font)
+        text_widget.tag_configure("italic", font=self._fmt_italic_font)
+        text_widget.tag_configure("bold_italic", font=self._fmt_bold_italic_font)
+        text_widget.tag_configure("underline", underline=True)
+        text_widget.tag_configure("strike", overstrike=True)
+
+    @staticmethod
+    def _char_offset(w, index):
+        # text.count("1.0", index, "chars") returns None instead of (0,)
+        # when the distance is exactly zero (a documented Tkinter quirk) --
+        # which happens whenever a tag starts at "1.0" itself, e.g.
+        # formatting applied to the very first character(s) of the note.
+        # Treat that missing result as a real zero, not a crash.
+        result = w.count("1.0", index, "chars")
+        return result[0] if result else 0
+
+    def _extract_formatting(self, text_widget):
+        """Read the widget's current tags back out as a plain span list,
+        for saving. Character offsets (not Tkinter's own line.col indices)
+        so they're stable plain data, independent of line wrapping."""
+        spans = []
+        for style in KNOWN_FORMAT_STYLES:
+            ranges = text_widget.tag_ranges(style)
+            for i in range(0, len(ranges), 2):
+                start = self._char_offset(text_widget, ranges[i])
+                end = self._char_offset(text_widget, ranges[i + 1])
+                if end > start:
+                    spans.append({"start": start, "end": end, "style": style})
+        return spans
+
+    def _extract_formatting_for_stripped_body(self, text_widget, stripped_body):
+        """Like _extract_formatting, but adjusted for save_current_note()'s
+        leading/trailing .strip() on the saved body text. Span offsets are
+        computed against the widget's raw (unstripped) content — saving them
+        as-is against a stripped body would silently shift every span onto
+        the wrong characters whenever the note has leading whitespace."""
+        raw = text_widget.get("1.0", "end-1c")
+        lead = len(raw) - len(raw.lstrip())
+        limit = len(stripped_body)
+        spans = []
+        for span in self._extract_formatting(text_widget):
+            start = max(0, span["start"] - lead)
+            end = min(limit, span["end"] - lead)
+            if end > start:
+                spans.append({"start": start, "end": end, "style": span["style"]})
+        return spans
+
+    def _apply_formatting(self, text_widget, spans):
+        """Re-apply a saved span list as live Tkinter tags, for loading."""
+        for span in normalize_formatting(spans):
+            try:
+                start_idx = text_widget.index(f"1.0+{span['start']}c")
+                end_idx = text_widget.index(f"1.0+{span['end']}c")
+                text_widget.tag_add(span["style"], start_idx, end_idx)
+            except tk.TclError:
+                pass
+
+    def _selection_has_style(self, text_widget, style_set, start, end):
+        """True only if EVERY character in [start, end) already carries at
+        least one tag from style_set — used to decide whether a toolbar
+        toggle should turn a style off (already uniformly applied) or on,
+        the same convention most rich text editors use for a mixed
+        selection (treated as 'off' until the whole thing is one style)."""
+        idx = start
+        while text_widget.compare(idx, "<", end):
+            if not (set(text_widget.tag_names(idx)) & style_set):
+                return False
+            idx = text_widget.index(f"{idx}+1c")
+        return True
+
+    @staticmethod
+    def _font_tag_for(is_bold, is_italic):
+        """Which single font tag represents this bold/italic combination (or
+        None for neither). Tkinter tags that both set the widget's font
+        option don't compose, so bold+italic together needs its own
+        precomputed compound tag rather than two independent ones — see
+        _FONT_STYLES."""
+        if is_bold and is_italic:
+            return "bold_italic"
+        if is_bold:
+            return "bold"
+        if is_italic:
+            return "italic"
+        return None
+
+    def _toggle_body_style(self, style):
+        """Bold/Italic/Underline/Strikethrough toolbar + right-click handler.
+
+        With an active selection, toggles that style on exactly the
+        selected text (existing behavior). With NO selection, toggles a
+        "pending" style instead: it has no effect on existing text, but
+        every character typed from now on picks it up, until the same
+        style is toggled off again the same way — a manual on/off switch,
+        not "match whatever formatting is already at the cursor" the way
+        some editors infer it. See _apply_pending_style_to_typed_char."""
+        try:
+            start = self.body_text.index("sel.first")
+            end = self.body_text.index("sel.last")
+            has_selection = self.body_text.compare(start, "<", end)
+        except tk.TclError:
+            has_selection = False
+
+        if not has_selection:
+            if style in self._pending_styles:
+                self._pending_styles.discard(style)
+                self.set_status(f"{style.capitalize()} off")
+            else:
+                self._pending_styles.add(style)
+                self.set_status(f"{style.capitalize()} on — applies to what you type next")
+            if self._pending_styles:
+                # Left gravity: text typed AT this position pushes the
+                # cursor forward but leaves the mark itself behind, so it
+                # keeps marking "where the pending run started" rather than
+                # tracking the cursor like a normal (right-gravity) mark
+                # would. See _apply_pending_style_to_typed_char for why
+                # this range-based approach (not "just the one most-recent
+                # character") is what actually makes fast typing reliable.
+                self.body_text.mark_set(self._PENDING_STYLE_ANCHOR, tk.INSERT)
+                self.body_text.mark_gravity(self._PENDING_STYLE_ANCHOR, "left")
+                self._pending_style_last_length = self._pending_style_text_length()
+            self._refresh_format_buttons()
+            return
+
+        if style in ("bold", "italic"):
+            # Bold and italic both set the Text widget's "font" option, and
+            # Tkinter tags that set the same option don't compose — only one
+            # wins. So the two can't just be independent on/off tags the way
+            # underline/strike are; the pair is tracked as one of exactly
+            # four mutually exclusive font tags (none/bold/italic/both).
+            is_bold = self._selection_has_style(self.body_text, {"bold", "bold_italic"}, start, end)
+            is_italic = self._selection_has_style(self.body_text, {"italic", "bold_italic"}, start, end)
+            if style == "bold":
+                is_bold = not is_bold
+            else:
+                is_italic = not is_italic
+            for t in self._FONT_STYLES:
+                self.body_text.tag_remove(t, start, end)
+            tag = self._font_tag_for(is_bold, is_italic)
+            if tag:
+                self.body_text.tag_add(tag, start, end)
+        else:
+            already_on = self._selection_has_style(self.body_text, {style}, start, end)
+            if already_on:
+                self.body_text.tag_remove(style, start, end)
+            else:
+                self.body_text.tag_add(style, start, end)
+
+        self._refresh_format_buttons()
+        self._schedule_autosave()
+
+    def _pending_style_text_length(self):
+        result = self.body_text.count("1.0", "end-1c", "chars")
+        return result[0] if result else 0
+
+    def _apply_pending_style_to_typed_char(self, event=None):
+        """Tag whatever's accumulated since _PENDING_STYLE_ANCHOR (set when
+        a style was last toggled on with nothing selected, or resynced
+        below) up through the current cursor — not just "the one character
+        the cursor is now past". Bound to <KeyRelease>.
+
+        The first version of this tagged only a single character —
+        "whatever's immediately before the cursor right now" — on the
+        reasoning that KeyRelease always fires once per keystroke, right
+        after that keystroke's own insertion. True, but under a fast burst
+        Tk can process several KeyPress insertions before it gets around
+        to dispatching the KeyRelease callbacks for them, so a callback
+        can end up running once the cursor has already moved past MORE
+        than one new character — "the one character before the cursor" at
+        that moment silently skips whichever ones came in between. Tagging
+        the whole span from the anchor to the cursor instead means it
+        doesn't matter how many characters piled up before a callback got
+        its turn — the next one that runs covers all of them in one go,
+        since tag_add over an already-tagged sub-range is harmless and
+        adjacent same-tag ranges merge automatically.
+
+        Deciding WHETHER to extend the tag is based on whether the note's
+        total character count actually grew since the last check — not on
+        inspecting event.char/event.state the way an earlier version of
+        this did. That first version correctly matched real-world testing
+        on Windows, but failed in CI (Linux + Xvfb): a differently-behaving
+        Tk build populated (or didn't populate) event.char differently for
+        at least one of a fast burst's synthetic key events, which got
+        misread as "not a real keystroke" and silently ate a chunk of
+        already-typed, correctly-inserted text out of the tag. Character
+        count is a fact about the widget's actual content, not something
+        that depends on how a given platform's Tk build fills in event
+        details — grew means something was typed (of any burst size);
+        unchanged or shrank means nothing new to tag, just resync tracking.
+        A paste is excluded separately (see the <<Paste>> binding below),
+        not by inspecting this event either.
+
+        A version of this whole feature that hooked the Tcl level for
+        true per-insert precision was tried and reverted after three
+        separate, unpredictable app-launch crashes (Tk's own internal
+        Text-widget bookkeeping hits several "normally harmless, silently
+        tolerated" Tcl errors that turned into real, escaping Python
+        exceptions once a Python proxy sat in the call path). This
+        mark-based approach stays entirely within ordinary,
+        already-proven-safe Tkinter usage (the same kind of mark tracking
+        the calculator's insert-into-note feature already relies on).
+        See docs/ISSUES_LOG.md."""
+        if not self._pending_styles:
+            return
+        if self._PENDING_STYLE_ANCHOR not in self.body_text.mark_names():
+            return
+        current_length = self._pending_style_text_length()
+        if current_length <= self._pending_style_last_length:
+            # No growth (a shortcut key's release, arrow keys, Home/End) or
+            # the text shrank (Backspace/Delete) -- nothing new to tag.
+            self._resync_pending_style_anchor()
+            return
+        start_idx = self.body_text.index(self._PENDING_STYLE_ANCHOR)
+        end_idx = self.body_text.index(tk.INSERT)
+        if self.body_text.compare(start_idx, "<", end_idx):
+            tag = self._font_tag_for("bold" in self._pending_styles, "italic" in self._pending_styles)
+            if tag:
+                self.body_text.tag_add(tag, start_idx, end_idx)
+            if "underline" in self._pending_styles:
+                self.body_text.tag_add("underline", start_idx, end_idx)
+            if "strike" in self._pending_styles:
+                self.body_text.tag_add("strike", start_idx, end_idx)
+        self.body_text.mark_set(self._PENDING_STYLE_ANCHOR, end_idx)
+        self._pending_style_last_length = current_length
+
+    def _resync_pending_style_anchor(self, event=None):
+        """Move the pending-style anchor to the cursor's current position
+        with no tagging, and refresh the length baseline it's compared
+        against — used whenever the cursor moves without typing
+        (navigation keys, a mouse click), and right after a paste (bound
+        separately, below), so a later keystroke only ever extends the
+        tag over genuinely new typing, never a stretch of older text or a
+        pasted block it was never meant to touch."""
+        if self._pending_styles and self._PENDING_STYLE_ANCHOR in self.body_text.mark_names():
+            self.body_text.mark_set(self._PENDING_STYLE_ANCHOR, tk.INSERT)
+            self._pending_style_last_length = self._pending_style_text_length()
+
+    def _refresh_format_buttons(self, event=None):
+        """Reflect the current selection's styles — or, with no selection,
+        the pending styles queued up for the next typed character — in the
+        toolbar buttons' pressed/unpressed look. Called on selection/cursor
+        changes and whenever a pending style is toggled."""
+        if not hasattr(self, "_fmt_buttons"):
+            return
+        try:
+            start = self.body_text.index("sel.first")
+            end = self.body_text.index("sel.last")
+            has_selection = self.body_text.compare(start, "<", end)
+        except tk.TclError:
+            has_selection = False
+        for style, btn in self._fmt_buttons.items():
+            if has_selection:
+                check = {"bold_italic", style} if style in ("bold", "italic") else {style}
+                active = self._selection_has_style(self.body_text, check, start, end)
+            else:
+                active = style in self._pending_styles
+            btn.configure(
+                relief="sunken" if active else "flat",
+                bg=self.colors["accent"] if active else self.colors["sidebar"],
+                fg="white" if active else self.colors["text"],
+            )
 
     # A curated set — common, broadly useful emojis grouped loosely by theme,
     # not an exhaustive unicode picker. Keeps the popup a manageable size.
@@ -2633,6 +2971,7 @@ class NoteOrganizer(tk.Tk):
 
         self.body_text.delete("1.0", "end")
         self.body_text.insert("1.0", note.get("body", ""))
+        self._apply_formatting(self.body_text, note.get("formatting", []))
         self.comments_text.delete("1.0", "end")
         self.comments_text.insert("1.0", note.get("comments", ""))
 
@@ -5754,6 +6093,33 @@ class NoteOrganizer(tk.Tk):
         self.track_theme(self.word_count_lbl, bg="bg", fg="subtext")
         self.word_count_lbl.pack(side="right")
 
+        # --- Formatting toolbar: Bold/Italic/Underline/Strikethrough toggle
+        # buttons, applying to the current selection. Requires an active
+        # selection (no sticky format-at-cursor in this first version) —
+        # see _toggle_body_style. Each button previews its own style in its
+        # own label font. ---
+        format_bar = tk.Frame(self.editor)
+        self.track_theme(format_bar, bg="bg")
+        format_bar.pack(fill="x", padx=30, pady=(0, 4))
+
+        self._fmt_buttons = {}
+        self._pending_styles = set()  # styles queued up for the next typed char
+        self._pending_style_last_length = 0  # baseline for detecting growth
+        for style, label, label_font in (
+            ("bold", "B", ("Segoe UI", 10, "bold")),
+            ("italic", "I", ("Segoe UI", 10, "italic")),
+            ("underline", "U", ("Segoe UI", 10, "underline")),
+            ("strike", "S", ("Segoe UI", 10, "overstrike")),
+        ):
+            btn = tk.Button(
+                format_bar, text=label, font=label_font, width=3,
+                relief="flat", cursor="hand2",
+                command=lambda s=style: self._toggle_body_style(s)
+            )
+            self.track_theme(btn, bg="sidebar", fg="text")
+            btn.pack(side="left", padx=(0, 4), ipady=2)
+            self._fmt_buttons[style] = btn
+
         text_frame = tk.Frame(self.editor)
         self.track_theme(text_frame, bg="card")
         text_frame.pack(fill="both", expand=True, padx=30, pady=(0, 10))
@@ -5768,11 +6134,40 @@ class NoteOrganizer(tk.Tk):
         self.track_theme(self.body_text, bg="card", fg="text")
         body_sb.pack(side="right", fill="y")
         self.body_text.pack(side="left", fill="both", expand=True)
+        self._setup_body_formatting_tags(self.body_text)
         self.body_text.bind("<KeyRelease>", self._schedule_autosave)
+        self.body_text.bind("<KeyRelease>", self._apply_pending_style_to_typed_char, add="+")
+        self.body_text.bind("<KeyRelease>", self._refresh_format_buttons, add="+")
+        self.body_text.bind("<ButtonRelease-1>", self._resync_pending_style_anchor, add="+")
+        self.body_text.bind("<ButtonRelease-1>", self._refresh_format_buttons, add="+")
+        # A paste (Ctrl+V, or the right-click menu's synthetic <<Paste>>)
+        # must never pick up a pending style — resyncing here, right after
+        # the paste's own text lands, means the length-based growth check
+        # in _apply_pending_style_to_typed_char sees no NEW growth by the
+        # time that KeyRelease callback runs, so it correctly does nothing.
+        self.body_text.bind("<<Paste>>", self._resync_pending_style_anchor, add="+")
+        # Keyboard shortcuts for the same four toggles as the toolbar/menu.
+        # Bound to body_text specifically, not the whole app, so they only
+        # fire while actually editing the note body. Each returns "break"
+        # to stop Tk's own default handling of the key combo (relevant on
+        # some Tk builds/platforms where Ctrl+letter combos have a default
+        # Text-widget behavior of their own) from also running.
+        for key, style in (
+            ("<Control-b>", "bold"), ("<Control-B>", "bold"),
+            ("<Control-i>", "italic"), ("<Control-I>", "italic"),
+            ("<Control-u>", "underline"), ("<Control-U>", "underline"),
+            ("<Control-d>", "strike"), ("<Control-D>", "strike"),
+        ):
+            self.body_text.bind(key, lambda e, s=style: (self._toggle_body_style(s), "break")[1])
         # Let the mousewheel scroll the text box's own content when it overflows,
         # instead of bubbling up to the editor's outer scroll.
         self._bind_text_wheel(self.body_text)
-        self._add_paste_menu(self.body_text)
+        self._add_paste_menu(self.body_text, extra_items=[
+            ("𝐁  Bold", lambda: self._toggle_body_style("bold"), "Ctrl+B"),
+            ("𝑰  Italic", lambda: self._toggle_body_style("italic"), "Ctrl+I"),
+            ("U̲  Underline", lambda: self._toggle_body_style("underline"), "Ctrl+U"),
+            ("S̶  Strikethrough", lambda: self._toggle_body_style("strike"), "Ctrl+D"),
+        ])
         self.update_word_count()
 
         # --- Checklist and Calculator, side by side — each still its own
@@ -8449,6 +8844,8 @@ class NoteOrganizer(tk.Tk):
             "occurrence_date": self.current_occurrence_date,
             "title": title,
             "body": self.body_text.get("1.0", "end-1c"),
+            "formatting": self._extract_formatting(self.body_text),
+            "pending_styles": sorted(self._pending_styles),
             "comments": self.comments_text.get("1.0", "end-1c"),
             "category": self.category_var.get(),
             "date": date_raw,
@@ -8471,8 +8868,13 @@ class NoteOrganizer(tk.Tk):
             self.title_entry.insert(0, "Note title...")
             self.title_entry.config(fg=self.colors["subtext"])
 
+        # Restore this tab's own pending style (if any) before inserting
+        # its body — set after the insert instead, a leftover pending style
+        # from whatever tab was open a moment ago could tag this one's text.
+        self._pending_styles = set(st.get("pending_styles") or [])
         self.body_text.delete("1.0", "end")
         self.body_text.insert("1.0", st["body"])
+        self._apply_formatting(self.body_text, st.get("formatting", []))
         self.comments_text.delete("1.0", "end")
         self.comments_text.insert("1.0", st["comments"])
         self.category_var.set(st["category"])
@@ -8498,6 +8900,7 @@ class NoteOrganizer(tk.Tk):
         self.write_recurrence_to_ui(st.get("recurrence") or {})
 
         self.update_word_count()
+        self._refresh_format_buttons()
 
         self._reset_editor_scroll()
         self._reset_text_undo()
@@ -8522,6 +8925,7 @@ class NoteOrganizer(tk.Tk):
         shown = effective_note(note, occ) if occ else note
         if (st["title"].strip() != shown["title"].strip()
                 or st["body"].strip() != shown["body"].strip()
+                or st.get("formatting", []) != note.get("formatting", [])
                 or st["comments"].strip() != shown.get("comments", "").strip()
                 or st["category"] != shown["category"]
                 or st["color"] != shown.get("color", "")
@@ -8792,6 +9196,8 @@ class NoteOrganizer(tk.Tk):
         self.title_entry.focus()
         self.set_status("New note — not yet saved")
         self.update_word_count()
+        self._pending_styles = set()
+        self._refresh_format_buttons()
         self._reset_editor_scroll()
         self._reset_text_undo()
         self._update_restore_button()
@@ -8805,11 +9211,24 @@ class NoteOrganizer(tk.Tk):
 
         shown = effective_note(note, occurrence_date) if occurrence_date else note
 
+        # Clear out any pending style left over from whatever note was open
+        # before, BEFORE inserting this note's body — the insert hook that
+        # applies pending styles doesn't know or care that this particular
+        # insert is "loading a note" rather than "typing", so a stale
+        # pending style at this point would silently tag this note's text.
+        self._pending_styles = set()
         self.title_entry.delete(0, "end")
         self.title_entry.insert(0, shown["title"])
         self.title_entry.config(fg=self.colors["text"])
         self.body_text.delete("1.0", "end")
         self.body_text.insert("1.0", shown["body"])
+        # Formatting spans are only ever saved for the base note, never a
+        # per-occurrence override (see save_current_note) — reapplying them
+        # against override text of a different length/content would place
+        # bold/italic on the wrong characters. Only apply when what's shown
+        # actually IS the base content (no override for this occurrence).
+        if shown.get("body") == note.get("body"):
+            self._apply_formatting(self.body_text, note.get("formatting", []))
         self.comments_text.delete("1.0", "end")
         self.comments_text.insert("1.0", shown.get("comments", ""))
         self.category_var.set(shown["category"])
@@ -8848,6 +9267,7 @@ class NoteOrganizer(tk.Tk):
             else:
                 self.set_status(f"Last updated: {note['updated']}")
         self.update_word_count()
+        self._refresh_format_buttons()
         self._reset_editor_scroll()
         self._reset_text_undo()
         self._update_restore_button()
@@ -9245,6 +9665,7 @@ class NoteOrganizer(tk.Tk):
         if tpl.get("body"):
             self.body_text.delete("1.0", "end")
             self.body_text.insert("1.0", tpl["body"])
+            self._apply_formatting(self.body_text, tpl.get("formatting", []))
         if tpl.get("comments"):
             self.comments_text.delete("1.0", "end")
             self.comments_text.insert("1.0", tpl["comments"])
@@ -9267,6 +9688,7 @@ class NoteOrganizer(tk.Tk):
             self._sync_checklist_open_state()
         self._sync_calculator_open_state()
         self.update_word_count()
+        self._refresh_format_buttons()
         self.set_status("New note started from template — edits here won't change the template")
         self._reset_text_undo()
 
@@ -9296,6 +9718,7 @@ class NoteOrganizer(tk.Tk):
                 "name": name,
                 "title": st.get("title", ""),
                 "body": st.get("body", ""),
+                "formatting": st.get("formatting", []),
                 "comments": st.get("comments", ""),
                 "category": st.get("category", "General"),
                 "checklist": st.get("checklist", []),
@@ -9564,12 +9987,18 @@ class NoteOrganizer(tk.Tk):
             icon="question"
         ):
             return
-        # Put the previous content back into the editor and save it.
+        # Put the previous content back into the editor and save it. Clear
+        # any pending style first — the insert hook that applies pending
+        # styles doesn't know this insert is a restore rather than typing,
+        # so a stale pending style at this point would silently tag it.
+        self._pending_styles = set()
         self.title_entry.delete(0, "end")
         self.title_entry.insert(0, prev.get("title", ""))
         self.title_entry.config(fg=self.colors["text"])
         self.body_text.delete("1.0", "end")
         self.body_text.insert("1.0", prev.get("body", ""))
+        self._apply_formatting(self.body_text, prev.get("formatting", []))
+        self._refresh_format_buttons()
         self.comments_text.delete("1.0", "end")
         self.comments_text.insert("1.0", prev.get("comments", ""))
         # Clear the backup so the button hides after a successful restore.
@@ -9583,6 +10012,7 @@ class NoteOrganizer(tk.Tk):
         if title == "Note title...":
             title = ""
         body = self.body_text.get("1.0", "end").strip()
+        formatting = self._extract_formatting_for_stripped_body(self.body_text, body)
         comments = self.comments_text.get("1.0", "end").strip()
         category = self.category_var.get()
 
@@ -9638,6 +10068,7 @@ class NoteOrganizer(tk.Tk):
                 "id": new_id,
                 "title": title,
                 "body": body,
+                "formatting": formatting,
                 "comments": comments,
                 "category": category,
                 "date": date_value,
@@ -9669,7 +10100,14 @@ class NoteOrganizer(tk.Tk):
 
             if scope == "occurrence":
                 # Only content is overridden. Date, recurrence rule and
-                # attachments stay owned by the series.
+                # attachments stay owned by the series. Formatting is
+                # deliberately NOT part of an occurrence override (see
+                # OVERRIDABLE_FIELDS): overrides only ever hold plain
+                # strings, and even setting that aside, this occurrence's
+                # body text may now differ in length/content from the base
+                # note's, so the base note's formatting spans wouldn't
+                # necessarily land on the right characters. An occurrence
+                # with its own overridden text shows as plain text.
                 note.setdefault("overrides", {})[self.current_occurrence_date] = {
                     "title": title,
                     "body": body,
@@ -9695,10 +10133,12 @@ class NoteOrganizer(tk.Tk):
                     note["_prev"] = {
                         "title": note.get("title", ""),
                         "body": note.get("body", ""),
+                        "formatting": note.get("formatting", []),
                         "comments": note.get("comments", ""),
                     }
                 note["title"] = title
                 note["body"] = body
+                note["formatting"] = formatting
                 note["comments"] = comments
                 note["category"] = category
                 note["date"] = date_value
