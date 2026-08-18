@@ -2369,6 +2369,7 @@ class NoteOrganizer(tk.Tk):
                 # character") is what actually makes fast typing reliable.
                 self.body_text.mark_set(self._PENDING_STYLE_ANCHOR, tk.INSERT)
                 self.body_text.mark_gravity(self._PENDING_STYLE_ANCHOR, "left")
+                self._pending_style_last_length = self._pending_style_text_length()
             self._refresh_format_buttons()
             return
 
@@ -2399,6 +2400,10 @@ class NoteOrganizer(tk.Tk):
         self._refresh_format_buttons()
         self._schedule_autosave()
 
+    def _pending_style_text_length(self):
+        result = self.body_text.count("1.0", "end-1c", "chars")
+        return result[0] if result else 0
+
     def _apply_pending_style_to_typed_char(self, event=None):
         """Tag whatever's accumulated since _PENDING_STYLE_ANCHOR (set when
         a style was last toggled on with nothing selected, or resynced
@@ -2418,55 +2423,68 @@ class NoteOrganizer(tk.Tk):
         doesn't matter how many characters piled up before a callback got
         its turn — the next one that runs covers all of them in one go,
         since tag_add over an already-tagged sub-range is harmless and
-        adjacent same-tag ranges merge automatically. A version that hooked
-        the Tcl level to close this gap with true per-insert precision was
-        tried and reverted after three separate, unpredictable app-launch
-        crashes (Tk's own internal Text-widget bookkeeping hits several
-        "normally harmless, silently tolerated" Tcl errors that turned
-        into real, escaping Python exceptions once a Python proxy sat in
-        the call path). This mark-based approach stays entirely within
-        ordinary, already-proven-safe Tkinter usage (the same kind of
-        mark tracking the calculator's insert-into-note feature already
-        relies on) and closes the gap in practice, if not with the same
-        theoretical exactness. See docs/ISSUES_LOG.md.
+        adjacent same-tag ranges merge automatically.
 
-        A real typed character extends the tag and advances the anchor to
-        follow it. Anything else (arrow keys, Home/End, Backspace/Delete —
-        distinguished the same way as before: not a single printable
-        character, or Ctrl held) just resyncs the anchor to the cursor's
-        new position instead, so moving the cursor without typing can
-        never cause a later keystroke to tag a stretch of older text it
-        was never meant to touch. The same resync also happens on a mouse
-        click, bound separately below."""
+        Deciding WHETHER to extend the tag is based on whether the note's
+        total character count actually grew since the last check — not on
+        inspecting event.char/event.state the way an earlier version of
+        this did. That first version correctly matched real-world testing
+        on Windows, but failed in CI (Linux + Xvfb): a differently-behaving
+        Tk build populated (or didn't populate) event.char differently for
+        at least one of a fast burst's synthetic key events, which got
+        misread as "not a real keystroke" and silently ate a chunk of
+        already-typed, correctly-inserted text out of the tag. Character
+        count is a fact about the widget's actual content, not something
+        that depends on how a given platform's Tk build fills in event
+        details — grew means something was typed (of any burst size);
+        unchanged or shrank means nothing new to tag, just resync tracking.
+        A paste is excluded separately (see the <<Paste>> binding below),
+        not by inspecting this event either.
+
+        A version of this whole feature that hooked the Tcl level for
+        true per-insert precision was tried and reverted after three
+        separate, unpredictable app-launch crashes (Tk's own internal
+        Text-widget bookkeeping hits several "normally harmless, silently
+        tolerated" Tcl errors that turned into real, escaping Python
+        exceptions once a Python proxy sat in the call path). This
+        mark-based approach stays entirely within ordinary,
+        already-proven-safe Tkinter usage (the same kind of mark tracking
+        the calculator's insert-into-note feature already relies on).
+        See docs/ISSUES_LOG.md."""
         if not self._pending_styles:
             return
         if self._PENDING_STYLE_ANCHOR not in self.body_text.mark_names():
             return
-        is_typed_char = (event is not None and event.char and len(event.char) == 1
-                          and ord(event.char) >= 32 and not (event.state & 0x0004))
-        if not is_typed_char:
+        current_length = self._pending_style_text_length()
+        if current_length <= self._pending_style_last_length:
+            # No growth (a shortcut key's release, arrow keys, Home/End) or
+            # the text shrank (Backspace/Delete) -- nothing new to tag.
             self._resync_pending_style_anchor()
             return
         start_idx = self.body_text.index(self._PENDING_STYLE_ANCHOR)
         end_idx = self.body_text.index(tk.INSERT)
-        if self.body_text.compare(start_idx, ">=", end_idx):
-            return
-        tag = self._font_tag_for("bold" in self._pending_styles, "italic" in self._pending_styles)
-        if tag:
-            self.body_text.tag_add(tag, start_idx, end_idx)
-        if "underline" in self._pending_styles:
-            self.body_text.tag_add("underline", start_idx, end_idx)
-        if "strike" in self._pending_styles:
-            self.body_text.tag_add("strike", start_idx, end_idx)
+        if self.body_text.compare(start_idx, "<", end_idx):
+            tag = self._font_tag_for("bold" in self._pending_styles, "italic" in self._pending_styles)
+            if tag:
+                self.body_text.tag_add(tag, start_idx, end_idx)
+            if "underline" in self._pending_styles:
+                self.body_text.tag_add("underline", start_idx, end_idx)
+            if "strike" in self._pending_styles:
+                self.body_text.tag_add("strike", start_idx, end_idx)
         self.body_text.mark_set(self._PENDING_STYLE_ANCHOR, end_idx)
+        self._pending_style_last_length = current_length
 
     def _resync_pending_style_anchor(self, event=None):
         """Move the pending-style anchor to the cursor's current position
-        with no tagging — used whenever the cursor moves without typing
-        (navigation keys, a mouse click), so a later keystroke only ever
-        extends the tag over genuinely new text."""
+        with no tagging, and refresh the length baseline it's compared
+        against — used whenever the cursor moves without typing
+        (navigation keys, a mouse click), and right after a paste (bound
+        separately, below), so a later keystroke only ever extends the
+        tag over genuinely new typing, never a stretch of older text or a
+        pasted block it was never meant to touch."""
         if self._pending_styles and self._PENDING_STYLE_ANCHOR in self.body_text.mark_names():
             self.body_text.mark_set(self._PENDING_STYLE_ANCHOR, tk.INSERT)
+            self._pending_style_last_length = self._pending_style_text_length()
 
     def _refresh_format_buttons(self, event=None):
         """Reflect the current selection's styles — or, with no selection,
@@ -6086,6 +6104,7 @@ class NoteOrganizer(tk.Tk):
 
         self._fmt_buttons = {}
         self._pending_styles = set()  # styles queued up for the next typed char
+        self._pending_style_last_length = 0  # baseline for detecting growth
         for style, label, label_font in (
             ("bold", "B", ("Segoe UI", 10, "bold")),
             ("italic", "I", ("Segoe UI", 10, "italic")),
@@ -6121,6 +6140,12 @@ class NoteOrganizer(tk.Tk):
         self.body_text.bind("<KeyRelease>", self._refresh_format_buttons, add="+")
         self.body_text.bind("<ButtonRelease-1>", self._resync_pending_style_anchor, add="+")
         self.body_text.bind("<ButtonRelease-1>", self._refresh_format_buttons, add="+")
+        # A paste (Ctrl+V, or the right-click menu's synthetic <<Paste>>)
+        # must never pick up a pending style — resyncing here, right after
+        # the paste's own text lands, means the length-based growth check
+        # in _apply_pending_style_to_typed_char sees no NEW growth by the
+        # time that KeyRelease callback runs, so it correctly does nothing.
+        self.body_text.bind("<<Paste>>", self._resync_pending_style_anchor, add="+")
         # Keyboard shortcuts for the same four toggles as the toolbar/menu.
         # Bound to body_text specifically, not the whole app, so they only
         # fire while actually editing the note body. Each returns "break"

@@ -644,6 +644,27 @@ check('moving the cursor away before typing does not retroactively bold the olde
 check('the character actually typed after the cursor move is correctly bold',
       'bold' in app.body_text.tag_names('end-2c'))
 
+# ---- A paste must never pick up a pending style, even though a paste
+# also grows the character count (the same signal used to detect real
+# typing) -- excluded via a dedicated <<Paste>> resync, not by inspecting
+# the KeyRelease event that happens to follow it.
+app.new_note()
+app.body_text.focus_force()
+app.update()
+app._fmt_buttons['bold'].invoke()
+app.update()
+app.clipboard_clear()
+app.clipboard_append('PASTED TEXT')
+app.update()
+app.body_text.event_generate('<<Paste>>')
+app.update()
+check('pasted text does not pick up the pending style',
+      'bold' not in app.body_text.tag_names('1.0'))
+check('pasted text lands correctly', app.body_text.get('1.0', 'end-1c') == 'PASTED TEXT')
+type_char('Y')
+check('typing right after a paste correctly resumes picking up the pending style',
+      'bold' in app.body_text.tag_names('end-2c'))
+
 # ---- PERSISTENCE TO DISK ----
 app.save_notes()
 disk_path = NO.DATA_FILE
