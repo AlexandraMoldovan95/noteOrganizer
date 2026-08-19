@@ -23,7 +23,13 @@ env/
 # --- PyInstaller build artifacts ---
 build/
 dist/
+# Auto-generated specs (from "pyinstaller script.py") are throwaway, but
+# NoteOrganizer.spec is the hand-maintained build recipe this project
+# actually ships with — see CLAUDE.md. Ignoring it meant build settings
+# (e.g. the numpy exclusion) lived only on one machine and couldn't be
+# reproduced from a fresh clone or in CI.
 *.spec
+!NoteOrganizer.spec
 
 # --- Editor / OS cruft ---
 .vscode/
