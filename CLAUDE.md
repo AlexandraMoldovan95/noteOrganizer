@@ -134,12 +134,17 @@ the real `notes_data.json`, `trash.json`, `templates.json`,
 git-ignored, so `git status` never flags the damage, and no automatic
 backup exists to recover from it.
 
-Instead: copy `note_organizer.py` and the target `qaN.py` script into a
-scratch directory **outside the project tree entirely** (e.g. the
-session's own scratchpad folder), and run and clean up there. This makes
-it physically impossible for a wrong-directory mistake to reach real user
-data, rather than relying on correctly remembering the working directory
-every single time.
+Instead: copy `note_organizer.py`, the `noteorganizer/` package, and the
+target `qaN.py` script into a scratch directory **outside the project
+tree entirely** (e.g. the session's own scratchpad folder), and run and
+clean up there. This makes it physically impossible for a wrong-directory
+mistake to reach real user data, rather than relying on correctly
+remembering the working directory every single time.
+
+The `noteorganizer/` package must travel with `note_organizer.py` — the
+latter imports from it, so a copy on its own now fails with
+`ModuleNotFoundError`. Copy the whole directory (`cp -r`), not just the
+modules currently in use.
 
 If a destructive command must reference `notes_data.json`, `trash.json`,
 `templates.json`, `settings.json`, or `attachments/` for any other reason,
