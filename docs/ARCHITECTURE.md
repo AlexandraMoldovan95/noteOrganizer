@@ -4,7 +4,16 @@ How Note Organizer is built, and why. Written for anyone reading the code for th
 
 ## Overview
 
-Note Organizer is a single-file Python/Tkinter desktop app (`note_organizer.py`). Everything — data model, persistence, and UI — lives in one file by design at the current size (~10,100 lines): the app has no build step, no import graph to reason about, and can be read top-to-bottom. A move to a multi-file package is tracked in [ROADMAP.md](ROADMAP.md) as the app continues to grow, but wasn't worth the churn earlier on.
+Note Organizer is a Python/Tkinter desktop app, entered through `note_organizer.py`. It was a single file by design for most of its life — no build step, no import graph to reason about, readable top-to-bottom — but at ~11,000 lines that stopped paying for itself, and the app is now being reorganised into a `noteorganizer/` package one module at a time.
+
+The target is two layers:
+
+- **`noteorganizer/core/`** — data and rules: persistence, validation, recurrence, the calculator parser, sharing. **No module in here may import tkinter**, which is what keeps it testable headlessly and reusable by a different front end.
+- **`noteorganizer/ui/`** — everything on screen. Not created yet; the interface still lives in `note_organizer.py`.
+
+`note_organizer.py` stays the entry point (`py note_organizer.py`) and re-exports the names that have moved, so existing callers — including the ~154 `note_organizer.<name>` references across the QA scripts — keep working untouched while the move happens. That's deliberate: it means each extraction is a pure move that leaves the whole test suite green, rather than a rewrite.
+
+Moved so far: `core/calculator.py`, `core/recurrence.py`. [CODE_TOUR.md](CODE_TOUR.md) walks through the modules for someone learning the codebase.
 
 ## Data layer
 

@@ -86,13 +86,18 @@ noteOrganizer/
 ├── .github/
 │   └── workflows/
 │       └── tests.yml         # runs the full QA suite automatically on every push
-├── note_organizer.py         # the application (single file by design — see docs/ARCHITECTURE.md)
+├── note_organizer.py         # entry point + the UI (run this); being split up — see docs/ARCHITECTURE.md
+├── noteorganizer/            # the application package, growing as code is extracted
+│   └── core/                 #   data & rules layer — never imports tkinter
+│       ├── calculator.py     #   the in-note calculator's expression parser
+│       └── recurrence.py     #   repeat rules & which dates a note falls on
 ├── test_recurrence.py        # standalone tests for the recurrence engine (no GUI needed)
 ├── test_data_safety.py       # standalone tests for backups & migration safety (no GUI needed)
 ├── test_calculator.py        # standalone tests for the in-note calculator's expression evaluator (no GUI needed)
 ├── docs/
 │   ├── USER_GUIDE.md          # full walkthrough with screenshots
 │   ├── ARCHITECTURE.md        # how the code is organized, and why
+│   ├── CODE_TOUR.md           # annotated walkthrough of the modules, for learning the codebase
 │   ├── ROADMAP.md             # what's planned next
 │   ├── ISSUES_LOG.md          # notable bugs found & fixed during development
 │   ├── GIT_WORKFLOW.md        # my own Git command reference for this project
@@ -116,6 +121,7 @@ noteOrganizer/
 
 - [User Guide](docs/USER_GUIDE.md) — full feature walkthrough
 - [Architecture](docs/ARCHITECTURE.md) — how the codebase is structured
+- [Code tour](docs/CODE_TOUR.md) — a guided, annotated walkthrough of the modules
 - [Roadmap](docs/ROADMAP.md) — planned features and known open items
 - [Changelog](CHANGELOG.md) — release history
 - [Issues Log](docs/ISSUES_LOG.md) — notable bugs encountered during development, and how they were diagnosed/fixed

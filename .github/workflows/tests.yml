@@ -48,9 +48,18 @@ jobs:
         run: python3 test_calculator.py
 
       - name: QA1 — Notes, categories, templates
+        # The QA scripts run with qa/ as the working directory, so they need
+        # note_organizer.py beside them — that's also what puts their test
+        # data in qa/ rather than the repo root, since resolve_data_dir()
+        # keys off the module's own location. The noteorganizer/ package has
+        # to travel with it now that note_organizer.py imports from it;
+        # copying rather than relying on PYTHONPATH keeps everything the
+        # tests touch inside this one folder. Both persist for the QA2-QA9
+        # steps below, which only clear the data files between runs.
         run: |
           cd qa
           cp ../note_organizer.py .
+          cp -r ../noteorganizer .
           rm -rf attachments *.json
           xvfb-run -a python3 qa1.py
 

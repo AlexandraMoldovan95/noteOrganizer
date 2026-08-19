@@ -6,11 +6,18 @@ Note Organizer is a fully offline desktop notes app: Python + Tkinter, one
 runtime dependency (Pillow, for image/GIF preview rendering). No network
 calls, no accounts, no database.
 
-- **Single-file design (intentional):** almost the entire app — data model,
-  persistence, and UI — lives in `note_organizer.py` (~10,100 lines). This is
-  a deliberate choice documented in `docs/ARCHITECTURE.md`, not an oversight.
-  A future split into multiple files/modules is tracked in `docs/ROADMAP.md`
-  but is not current work unless explicitly requested.
+- **Being reorganised into a package (current work):** the app was a single
+  file by design for most of its life, and most of it still is —
+  `note_organizer.py` holds the UI and the logic not yet moved. Code is being
+  extracted into `noteorganizer/` one module at a time, into a `core/` layer
+  (data and rules; **must never import tkinter**) and eventually a `ui/`
+  layer. `note_organizer.py` remains the entry point and re-exports whatever
+  has moved, so `py note_organizer.py`, `import note_organizer as NO` in the
+  QA scripts, and the PyInstaller build all keep working untouched. Each
+  extraction should be a pure move that leaves the full test suite green —
+  if a step needs behaviour changes to pass, split the step. See
+  `docs/ARCHITECTURE.md` for the target shape and `docs/CODE_TOUR.md` for the
+  annotated walkthrough (kept up to date as modules land).
 - **Storage:** plain local JSON — `notes_data.json`, `settings.json`,
   `trash.json`, `templates.json` — plus an `attachments/` folder, no
   database. Location is chosen by `resolve_data_dir()`: beside the script
@@ -127,12 +134,17 @@ the real `notes_data.json`, `trash.json`, `templates.json`,
 git-ignored, so `git status` never flags the damage, and no automatic
 backup exists to recover from it.
 
-Instead: copy `note_organizer.py` and the target `qaN.py` script into a
-scratch directory **outside the project tree entirely** (e.g. the
-session's own scratchpad folder), and run and clean up there. This makes
-it physically impossible for a wrong-directory mistake to reach real user
-data, rather than relying on correctly remembering the working directory
-every single time.
+Instead: copy `note_organizer.py`, the `noteorganizer/` package, and the
+target `qaN.py` script into a scratch directory **outside the project
+tree entirely** (e.g. the session's own scratchpad folder), and run and
+clean up there. This makes it physically impossible for a wrong-directory
+mistake to reach real user data, rather than relying on correctly
+remembering the working directory every single time.
+
+The `noteorganizer/` package must travel with `note_organizer.py` — the
+latter imports from it, so a copy on its own now fails with
+`ModuleNotFoundError`. Copy the whole directory (`cp -r`), not just the
+modules currently in use.
 
 If a destructive command must reference `notes_data.json`, `trash.json`,
 `templates.json`, `settings.json`, or `attachments/` for any other reason,
