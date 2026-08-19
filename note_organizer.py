@@ -2720,6 +2720,24 @@ class NoteOrganizer(tk.Tk):
             self.body_text.mark_set(self._PENDING_STYLE_ANCHOR, tk.INSERT)
             self._pending_style_last_length = self._pending_style_text_length()
 
+    def _select_body_line_no_newline(self, event):
+        """Replaces Tk's default triple-click "select line" behavior on the
+        note body. Tk's own version selects through the START of the next
+        line, which silently includes the invisible trailing newline
+        character in the selection -- same overshoot as the Select-All fix
+        above, but harder to notice here because it's triggered by mouse
+        clicks (a triple-click, or two double-clicks close enough together
+        in time that Tk counts them as one), not a menu command. Left as-is,
+        it also means copy/paste carries that extra newline along with the
+        line's real text."""
+        index = self.body_text.index(f"@{event.x},{event.y}")
+        line = index.split(".")[0]
+        line_start, line_end = f"{line}.0", f"{line}.0 lineend"
+        self.body_text.tag_remove("sel", "1.0", "end")
+        self.body_text.tag_add("sel", line_start, line_end)
+        self.body_text.mark_set("insert", line_end)
+        return "break"
+
     def _uniform_color_in_selection(self, kind, start, end):
         """The single hex color of the given kind ("text_color" or
         "highlight") that covers the ENTIRE [start, end) range, or None if
@@ -6475,6 +6493,10 @@ class NoteOrganizer(tk.Tk):
         self.body_text.bind("<KeyRelease>", self._refresh_format_buttons, add="+")
         self.body_text.bind("<ButtonRelease-1>", self._resync_pending_style_anchor, add="+")
         self.body_text.bind("<ButtonRelease-1>", self._refresh_format_buttons, add="+")
+        # Overrides Tk's default triple-click "select line" (see
+        # _select_body_line_no_newline) so it stops at the real end of the
+        # line instead of overshooting into the trailing newline.
+        self.body_text.bind("<Triple-Button-1>", self._select_body_line_no_newline)
         # A paste (Ctrl+V, or the right-click menu's synthetic <<Paste>>)
         # must never pick up a pending style — resyncing here, right after
         # the paste's own text lands, means the length-based growth check
