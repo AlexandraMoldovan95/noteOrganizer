@@ -484,47 +484,13 @@ def save_settings(settings):
 # {"start", "end", "style"} spans (plus "value" for the two color styles
 # below), character-offset-based into the plain body text. "bold_italic"
 # is its own style name (not "bold" + "italic" both present) because
-# Tkinter Text tags that both set the widget's font option don't compose —
-# only one wins — so bold+italic together has to be one precomputed
-# compound font, same as a real font would have a distinct bold-italic
-# variant rather than layering two independent effects.
-KNOWN_FORMAT_STYLES = {"bold", "italic", "bold_italic", "underline", "strike"}
-
-# text_color/highlight carry a "value" (a hex color) instead of being plain
-# on/off styles. Unlike bold/italic, foreground/background are independent
-# Tk tag options — they don't fight the font option the way bold and italic
-# do, so no compound-tag scheme is needed for these two.
-VALUE_FORMAT_STYLES = {"text_color", "highlight"}
-
-
-def _is_valid_hex_color(value):
-    return (isinstance(value, str) and len(value) == 7 and value[0] == "#"
-            and all(c in "0123456789abcdefABCDEF" for c in value[1:]))
-
-
-def normalize_formatting(value):
-    """Coerce a note/template's formatting list to valid spans, silently
-    dropping anything malformed (bad type, unknown style, out-of-order or
-    non-integer offsets, or — for text_color/highlight — a missing/invalid
-    hex value) rather than ever letting bad data crash the editor."""
-    if not isinstance(value, list):
-        return []
-    spans = []
-    for span in value:
-        if not isinstance(span, dict):
-            continue
-        style = span.get("style")
-        start, end = span.get("start"), span.get("end")
-        if not (isinstance(start, int) and not isinstance(start, bool)
-                and isinstance(end, int) and not isinstance(end, bool)
-                and 0 <= start < end):
-            continue
-        if style in KNOWN_FORMAT_STYLES:
-            spans.append({"start": start, "end": end, "style": style})
-        elif style in VALUE_FORMAT_STYLES and _is_valid_hex_color(span.get("value")):
-            spans.append({"start": start, "end": end, "style": style,
-                          "value": span["value"].lower()})
-    return spans
+# Rich-text span storage moved to noteorganizer/core/formatting.py.
+from noteorganizer.core.formatting import (
+    KNOWN_FORMAT_STYLES,
+    VALUE_FORMAT_STYLES,
+    _is_valid_hex_color,
+    normalize_formatting,
+)
 
 
 def normalize_template(tpl):
@@ -866,142 +832,18 @@ from noteorganizer.core.calculator import (
 
 
 # ---- Share codes (move notes between devices as copy-paste text) ----
-#
-# A share code is: a small JSON payload -> zlib-compressed -> Base64 text,
-# tagged with a version prefix. It carries note CONTENT (title, body, comments,
-# category, date, color, recurrence) but NOT attachments — binary files
-# would bloat the code to millions of characters, past what any chat box or
-# email will paste. For attachments, the ZIP export is the right tool.
-
-SHARE_CODE_PREFIX = "NOTE1:"
-
-# Safety limits for importing share codes. These stop a malformed or malicious
-# code from exhausting memory or flooding the notebook.
-MAX_SHARE_CODE_CHARS = 5_000_000      # reject absurdly long pasted text outright
-MAX_DECOMPRESSED_BYTES = 20_000_000   # cap zlib output — guards against zip bombs
-MAX_SHARED_NOTES = 200                # most notes one code may carry
-
-# Only these fields travel in a share code. Notably absent: id (assigned fresh
-# on import), attachments, updated, overrides/exceptions.
-SHAREABLE_FIELDS = [
-    "title", "body", "formatting", "comments", "category", "date", "color", "recurrence",
-]
-
-
-def _shareable_view(note):
-    """The slice of a note that a share code carries."""
-    return {k: note.get(k) for k in SHAREABLE_FIELDS if k in note}
-
-
-def encode_share_code(notes):
-    """Turn one or more notes into a copy-paste share code. Accepts a single
-    note dict or a list of them."""
-    if isinstance(notes, dict):
-        notes = [notes]
-    payload = {"v": 1, "notes": [_shareable_view(n) for n in notes]}
-    raw = json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
-    compressed = zlib.compress(raw, level=9)
-    b64 = base64.urlsafe_b64encode(compressed).decode("ascii")
-    return SHARE_CODE_PREFIX + b64
-
-
-def _bounded_decompress(compressed, limit):
-    """Decompress, but never produce more than `limit` bytes. A tiny 'zip bomb'
-    can expand to gigabytes and crash the app; this stops it cold."""
-    dobj = zlib.decompressobj()
-    out = dobj.decompress(compressed, limit)
-    if dobj.unconsumed_tail:
-        # There's more than the limit allows — refuse rather than keep going.
-        raise ValueError("decompressed data exceeds the safe size limit")
-    out += dobj.flush()
-    if len(out) > limit:
-        raise ValueError("decompressed data exceeds the safe size limit")
-    return out
-
-
-def decode_share_code(code):
-    """Parse a share code back into a list of note dicts. Raises ValueError with
-    a human-readable message if the code is malformed, oversized, or from a
-    newer version."""
-    if not isinstance(code, str):
-        raise ValueError("That doesn't look like a share code.")
-    # Tolerate extra whitespace/newlines from a chat app.
-    code = "".join(code.split())
-    if not code:
-        raise ValueError("No code was pasted.")
-    if len(code) > MAX_SHARE_CODE_CHARS:
-        raise ValueError(
-            "That code is far too large to import safely. Use Import (ZIP) for "
-            "very large transfers."
-        )
-    if not code.startswith(SHARE_CODE_PREFIX):
-        raise ValueError(
-            "This isn't a Notes Organizer share code. A valid code starts "
-            f"with \u201c{SHARE_CODE_PREFIX}\u201d."
-        )
-    body = code[len(SHARE_CODE_PREFIX):]
-    try:
-        compressed = base64.urlsafe_b64decode(body)
-    except (base64.binascii.Error, ValueError):
-        raise ValueError(
-            "This share code is damaged or incomplete. Ask the sender to copy "
-            "the whole code again — chat apps sometimes cut long codes short."
-        )
-    try:
-        raw = _bounded_decompress(compressed, MAX_DECOMPRESSED_BYTES)
-    except (zlib.error, ValueError):
-        raise ValueError(
-            "This share code is damaged, or too large to import safely. Ask the "
-            "sender to send it again, or use Import (ZIP) for large transfers."
-        )
-    try:
-        payload = json.loads(raw.decode("utf-8"))
-    except (json.JSONDecodeError, UnicodeDecodeError, ValueError):
-        raise ValueError(
-            "This share code is damaged or incomplete. Ask the sender to copy "
-            "the whole code again."
-        )
-    if not isinstance(payload, dict) or "notes" not in payload:
-        raise ValueError("This share code doesn't contain any notes.")
-    if payload.get("v", 1) > 1:
-        raise ValueError(
-            "This code was made by a newer version of Notes Organizer. "
-            "Update the app to import it."
-        )
-    notes = payload.get("notes")
-    if not isinstance(notes, list) or not notes:
-        raise ValueError("This share code doesn't contain any notes.")
-    if len(notes) > MAX_SHARED_NOTES:
-        raise ValueError(
-            f"This code contains {len(notes)} notes, which is over the "
-            f"{MAX_SHARED_NOTES}-note limit for a single code. Ask the sender to "
-            "split it into smaller codes, or to use Export (ZIP) instead."
-        )
-    return notes
-
-
-def _safe_extract_zip(zf, dest_dir):
-    """Extract a zip safely: block path-traversal ('../' escapes) and refuse
-    archives that would expand past a sane size. extractall() does neither, so
-    a malicious backup zip could otherwise write files anywhere or fill the disk."""
-    MAX_TOTAL = 500_000_000   # 500 MB uncompressed ceiling for a whole backup
-    MAX_FILES = 10_000
-    dest_root = os.path.abspath(dest_dir)
-
-    infos = zf.infolist()
-    if len(infos) > MAX_FILES:
-        raise ValueError("This backup contains too many files to import safely.")
-
-    total = sum(max(i.file_size, 0) for i in infos)
-    if total > MAX_TOTAL:
-        raise ValueError("This backup is too large to import safely.")
-
-    for info in infos:
-        # Reject absolute paths and anything that escapes the destination.
-        target = os.path.abspath(os.path.join(dest_root, info.filename))
-        if not (target == dest_root or target.startswith(dest_root + os.sep)):
-            raise ValueError("This backup contains unsafe file paths and was blocked.")
-    zf.extractall(dest_dir)
+# Moved to noteorganizer/core/sharing.py, together with the ZIP-import
+# path guard. Re-exported so existing callers are unaffected.
+from noteorganizer.core.sharing import (
+    SHARE_CODE_PREFIX,
+    MAX_SHARE_CODE_CHARS,
+    MAX_DECOMPRESSED_BYTES,
+    MAX_SHARED_NOTES,
+    SHAREABLE_FIELDS,
+    encode_share_code,
+    decode_share_code,
+    _safe_extract_zip,
+)
 
 
 def load_trash():
@@ -1078,48 +920,13 @@ def purge_expired_trash(trash):
     return kept, len(purged_entries)
 
 
-def _strip_copy_suffix(title):
-    """Remove any number of trailing ' (copy)' markers from a title, so a note
-    and its duplicates ('X', 'X (copy)', 'X (copy) (copy)') compare as equal.
-    The real title is left untouched — this is only for duplicate matching."""
-    t = (title or "").strip()
-    while t.lower().endswith("(copy)"):
-        t = t[: -len("(copy)")].rstrip()
-    return t
-
-
-def _normalize_ws(text):
-    """Collapse whitespace for duplicate comparison: trim ends and squeeze any
-    run of spaces/newlines/tabs into a single space. So 'hi  world' and
-    ' hi world ' match, but 'hi world' and 'hi werld' still differ."""
-    return " ".join((text or "").split())
-
-
-def _dup_key(note):
-    """The (title, body, comments, category) signature used to decide whether
-    two notes are 'the same' — case/whitespace-insensitive, ignoring a
-    trailing ' (copy)' in the title. Shared by duplicate-group detection and
-    by the import flow's duplicate check, so both agree on what counts as a
-    match."""
-    return (
-        _normalize_ws(_strip_copy_suffix(note.get("title") or "")).lower(),
-        _normalize_ws(note.get("body") or "").lower(),
-        _normalize_ws(note.get("comments") or "").lower(),
-        note.get("category") or "",
-    )
-
-
-def find_duplicate_groups(notes):
-    """Group notes that are the same in title, body, comments and category.
-    Matching ignores case and normalizes whitespace, and a trailing ' (copy)'
-    in the title is ignored. Date, attachments, color, recurrence and IDs
-    are all IGNORED — only the visible text content (case-insensitively) and
-    category define a duplicate. When the user cleans up, the kept copy inherits
-    combined attachments so nothing is lost."""
-    groups = {}
-    for n in notes:
-        groups.setdefault(_dup_key(n), []).append(n)
-    return [g for g in groups.values() if len(g) > 1]
+# Duplicate detection moved to noteorganizer/core/duplicates.py.
+from noteorganizer.core.duplicates import (
+    find_duplicate_groups,
+    _strip_copy_suffix,
+    _normalize_ws,
+    _dup_key,
+)
 
 
 def backup_notes_file():
@@ -1136,145 +943,22 @@ def backup_notes_file():
         return None
 
 # ---- Themes ----
-THEMES = {
-    # ---- DARK variants ----
-    "dark": {  # Midnight Purple (original)
-        "bg": "#1e1e2f",
-        "sidebar": "#26263f",
-        "accent": "#7c5cff",
-        "accent_hover": "#9377ff",
-        "card": "#2e2e48",
-        "text": "#f2f2f7",
-        "subtext": "#a0a0c0",
-        "danger": "#ff5c7c",
-        "success": "#4cd9a3",
-        "calendar_has_notes": "#3d3168",
-    },
-    "dark_ocean": {  # deep blue
-        "bg": "#0f1b2d",
-        "sidebar": "#16273f",
-        "accent": "#2f9be0",
-        "accent_hover": "#54b0ec",
-        "card": "#1c3350",
-        "text": "#eaf2fb",
-        "subtext": "#8fa8c4",
-        "danger": "#ff6b6b",
-        "success": "#3ecf8e",
-        "calendar_has_notes": "#1f4266",
-    },
-    "dark_forest": {  # deep green
-        "bg": "#14231b",
-        "sidebar": "#1b3227",
-        "accent": "#43c07a",
-        "accent_hover": "#5ed494",
-        "card": "#213e30",
-        "text": "#eafaf0",
-        "subtext": "#8fbaa1",
-        "danger": "#ff7a7a",
-        "success": "#4cd9a3",
-        "calendar_has_notes": "#254e39",
-    },
-    "dark_slate": {  # neutral charcoal, warm accent
-        "bg": "#1c1c22",
-        "sidebar": "#26262e",
-        "accent": "#e0863f",
-        "accent_hover": "#ec9d5a",
-        "card": "#2d2d38",
-        "text": "#f3f2f0",
-        "subtext": "#a8a8b0",
-        "danger": "#ff6b6b",
-        "success": "#4cd9a3",
-        "calendar_has_notes": "#3a2f22",
-    },
-    # ---- LIGHT variants ----
-    "light": {  # Soft Lavender (original)
-        "bg": "#f5f5fa",
-        "sidebar": "#e9e9f5",
-        "accent": "#7c5cff",
-        "accent_hover": "#6a49e6",
-        "card": "#ffffff",
-        "text": "#22223a",
-        "subtext": "#6b6b85",
-        "danger": "#e0405f",
-        "success": "#2fae82",
-        "calendar_has_notes": "#e3dbff",
-    },
-    "light_sky": {  # airy blue
-        "bg": "#f0f6fc",
-        "sidebar": "#dcebf8",
-        "accent": "#1f88d6",
-        "accent_hover": "#1873ba",
-        "card": "#ffffff",
-        "text": "#173049",
-        "subtext": "#5a748c",
-        "danger": "#e0405f",
-        "success": "#2fae82",
-        "calendar_has_notes": "#d3e7f8",
-    },
-    "light_mint": {  # fresh green
-        "bg": "#f1f9f4",
-        "sidebar": "#dcefe3",
-        "accent": "#2aa971",
-        "accent_hover": "#238e5f",
-        "card": "#ffffff",
-        "text": "#183328",
-        "subtext": "#5b7d6c",
-        "danger": "#e0405f",
-        "success": "#2fae82",
-        "calendar_has_notes": "#d3edde",
-    },
-    "light_warm": {  # warm cream, orange accent
-        "bg": "#faf6f0",
-        "sidebar": "#f1e7da",
-        "accent": "#d97a2b",
-        "accent_hover": "#bd6822",
-        "card": "#ffffff",
-        "text": "#3a2c1c",
-        "subtext": "#8a7660",
-        "danger": "#e0405f",
-        "success": "#2fae82",
-        "calendar_has_notes": "#f3e2cd",
-    },
-}
-
-# Which variants are dark vs light — used to keep 'light is light, dark is dark'
-# behavior and to group them in the theme picker.
-DARK_THEMES = ["dark", "dark_ocean", "dark_forest", "dark_slate"]
-LIGHT_THEMES = ["light", "light_sky", "light_mint", "light_warm"]
-
-# Friendly display names for the picker.
-THEME_LABELS = {
-    "dark": "Midnight Purple",
-    "dark_ocean": "Ocean Blue",
-    "dark_forest": "Forest Green",
-    "dark_slate": "Warm Charcoal",
-    "light": "Soft Lavender",
-    "light_sky": "Sky Blue",
-    "light_mint": "Fresh Mint",
-    "light_warm": "Warm Cream",
-}
-
-DEFAULT_CATEGORY_COLORS = {
-    "General": "#7c5cff",
-    "Work": "#4cc9f0",
-    "Personal": "#f9c74f",
-    "Ideas": "#f77f00",
-    "Urgent": "#ff5c7c",
-}
-
-# A curated palette for the inline color picker (used for categories and
-# calendar day markers). Enough variety without overwhelming; one click picks
-# a color, no OS dialog.
-PALETTE_COLORS = [
-    "#7c5cff", "#4cc9f0", "#f9c74f", "#f77f00", "#ff5c7c",
-    "#43aa8b", "#90be6d", "#f94144", "#577590", "#9b5de5",
-    "#00bbf9", "#00f5d4", "#fee440", "#ff924c", "#ff6392",
-    "#8ac926", "#1982c4", "#6a4c93", "#e07a5f", "#b5838d",
-]
-
-# "General" is the safety net: it can't be renamed or deleted, so there is
-# always a valid home for notes whose category is removed.
-PROTECTED_CATEGORY = "General"
+# Palettes, theme names/labels, the default categories and the swatch
+# lists all moved to noteorganizer/core/themes.py — pure data, no logic.
+# Re-exported so existing callers and the QA scripts are unaffected.
+from noteorganizer.core.themes import (
+    THEMES,
+    DARK_THEMES,
+    LIGHT_THEMES,
+    THEME_LABELS,
+    DEFAULT_CATEGORY_COLORS,
+    PALETTE_COLORS,
+    PROTECTED_CATEGORY,
+    PRESET_NOTE_COLORS,
+    HIGHLIGHT_COLOR_PALETTE,
+    SIDEBAR_WIDTH,
+    EDITOR_MIN_WIDTH,
+)
 
 # The live category map. Starts from the defaults, then gets overlaid with the
 # user's saved categories on startup. Referenced everywhere the old
@@ -1312,37 +996,6 @@ def persist_categories():
     save_settings(settings)
 
 
-# Quick-pick palette offered when choosing a custom note color, and (below)
-# for text color. Swatches only, deliberately — no hex-code entry, since
-# most users don't think in hex; the palette is sized generously instead so
-# picking a swatch stays a real choice, not just the ten "obvious" colors.
-PRESET_NOTE_COLORS = [
-    "#7c5cff", "#4cc9f0", "#f9c74f", "#f77f00", "#ff5c7c",
-    "#4cd9a3", "#ff8fa3", "#a3a3ff", "#ffd166", "#06d6a0",
-    "#e63946", "#3a86ff", "#c77dff", "#8ac926", "#6c757d",
-]
-
-# Note body TEXT color reuses PRESET_NOTE_COLORS above, for visual
-# consistency with the rest of the app. HIGHLIGHT (background) color gets
-# its own, separate palette: deliberately soft/pastel, the way a real
-# highlighter marker is, so text drawn on top of it stays readable —
-# PRESET_NOTE_COLORS' vivid, saturated tones work fine as a small accent
-# dot but would be too strong as a block of background behind text.
-HIGHLIGHT_COLOR_PALETTE = [
-    "#fff3b0",  # soft yellow
-    "#c8f4d9",  # soft green
-    "#ffd6e8",  # soft pink
-    "#cde7ff",  # soft blue
-    "#ffe0b3",  # soft peach
-    "#e0d4ff",  # soft purple
-    "#ffd1d1",  # soft coral
-    "#c8f4ec",  # soft teal
-    "#e8e8e8",  # soft gray
-    "#f0f4c3",  # soft lime
-]
-
-SIDEBAR_WIDTH = 280
-EDITOR_MIN_WIDTH = 620
 
 
 class NoteOrganizer(tk.Tk):
