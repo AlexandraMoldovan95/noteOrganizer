@@ -2237,7 +2237,13 @@ class NoteOrganizer(tk.Tk):
         menu.add_command(label="Paste", command=lambda: do("<<Paste>>"))
         menu.add_separator()
         menu.add_command(label="Select All",
-                         command=lambda: (text_widget.tag_add("sel", "1.0", "end")
+                         # "end" (not "end-1c") is a Text widget's implicit
+                         # trailing newline -- including it in the
+                         # selection is why the highlight used to visibly
+                         # stretch to the full width of the last line,
+                         # well past the actual last character, regardless
+                         # of how short that line was.
+                         command=lambda: (text_widget.tag_add("sel", "1.0", "end-1c")
                                           if isinstance(text_widget, tk.Text)
                                           else text_widget.select_range(0, "end")))
         menu.add_separator()
@@ -6398,6 +6404,9 @@ class NoteOrganizer(tk.Tk):
         self._pending_text_color = None  # hex, or None
         self._pending_highlight_color = None  # hex, or None
         self._pending_style_last_length = 0  # baseline for detecting growth
+        style_lbl = tk.Label(format_bar, text="Style", font=("Segoe UI", 8))
+        self.track_theme(style_lbl, bg="bg", fg="subtext")
+        style_lbl.pack(side="left", padx=(0, 6))
         for style, label, label_font in (
             ("bold", "B", ("Segoe UI", 10, "bold")),
             ("italic", "I", ("Segoe UI", 10, "italic")),
