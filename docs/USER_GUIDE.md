@@ -24,11 +24,11 @@ Notes save automatically a moment after you stop typing (look for the "Auto-save
 
 ### Formatting
 
-A small toolbar above the note body offers **Bold**, *Italic*, <u>Underline</u>, and ~~Strikethrough~~ — the same four options are also on the right-click menu, and available as keyboard shortcuts (**Ctrl+B**, **Ctrl+I**, **Ctrl+U**, **Ctrl+D**). Two ways to use them: select some text and click (or press) a style to apply it there, or click a style with nothing selected — it "sticks" for whatever you type next, until you click it again to turn it off.
+A small toolbar above the note body is split into two groups. **Style**: **Bold**, *Italic*, <u>Underline</u>, and ~~Strikethrough~~ — also on the right-click menu, and available as keyboard shortcuts (**Ctrl+B**, **Ctrl+I**, **Ctrl+U**, **Ctrl+D**). **Colors**: text color and highlight, each opening a small swatch picker (no hex codes to type — just pick a color) with a Clear option to remove it again. All six work the same way: select some text and click (or press) one to apply it there, or click one with nothing selected — it "sticks" for whatever you type next, until you click it again to turn it off. Text color and highlight can be combined with each other and with any of the four styles.
 
 ![Formatting toolbar](screenshots/formatting-toolbar.png)
 
-This is the first phase of a larger effort — font size, font family, text color, highlight color, bullet lists, and paste that keeps (or discards) formatting from wherever it was copied are all still ahead.
+This is still ahead of a larger effort — font size, font family, bullet lists, and paste that keeps (or discards) formatting from wherever it was copied are all still to come.
 
 ### Attachments
 
@@ -181,7 +181,7 @@ Drop image files into `docs/screenshots/` using the exact filenames referenced a
 |---|---|
 | `main-window.png` | The main window, Notes tab, with a few notes in the list |
 | `note-editor.png` | A note open in the editor, with some content filled in |
-| `formatting-toolbar.png` | The formatting toolbar, with a mix of bold/italic/underlined/struck-through text visible in the body |
+| `formatting-toolbar.png` | The formatting toolbar, with a mix of bold/italic/underlined/struck-through/colored/highlighted text visible in the body |
 | `attachments.png` | The attachments section of a note with at least one file attached |
 | `checklist.png` | The checklist section open, with a mix of checked and unchecked items |
 | `calculator.png` | The calculator section open, with an expression entered and its result inserted into the note |
