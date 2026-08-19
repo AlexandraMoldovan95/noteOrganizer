@@ -316,4 +316,146 @@ the performance case above.
 
 ---
 
+## 3. `noteorganizer/core/themes.py`
+
+**What it's for.** Eight colour palettes and a few fixed layout numbers.
+Pure data — no logic, no file access, nothing that can fail.
+
+The thing worth noticing is the *shape*. Every theme defines exactly the
+same keys:
+
+```python
+"dark":  {"bg": "#1e1e2f", "card": "#2e2e48", "text": "#f2f2f7", ...}
+"light": {"bg": "#f5f5fa", "card": "#ffffff", "text": "#22223a", ...}
+```
+
+Nothing in the app ever asks *"which theme is this?"* before picking a
+colour. It asks for `colors["card"]` and gets whatever that means right
+now. **Adding a ninth theme means adding one dict here and changing
+nothing else.**
+
+That uniformity also enables the theme-switch safety net: because every
+palette is known, the app can spot a widget still holding a colour from a
+*different* theme and remap it (`_recolor_stragglers`). You couldn't do
+that if themes were ad-hoc.
+
+`CATEGORY_COLORS` — the *live* category map the user edits — is
+deliberately **not** here. It reads and writes `settings.json`, so it
+belongs with the storage layer, which hasn't moved yet. Only the immutable
+defaults live in this module.
+
+---
+
+## 4. `noteorganizer/core/formatting.py`
+
+**What it's for.** Deciding what a note's `formatting` field is allowed to
+contain.
+
+Formatting is stored as a flat list of spans:
+
+```python
+{"start": 0, "end": 5, "style": "bold"}
+{"start": 6, "end": 9, "style": "highlight", "value": "#fff3b0"}
+```
+
+**Why character offsets and not Tkinter's own `line.column` positions?**
+Because offsets are plain data. They survive being written to JSON, sent
+as a share code, and loaded back into a window of a different width. Line
+and column numbers shift the moment text wraps differently — they describe
+*the screen*, not *the text*.
+
+`normalize_formatting()` is a gatekeeper of the same kind as
+`normalize_recurrence`, with one difference worth noting: **it drops bad
+spans rather than repairing them.** A span with no valid colour, or a
+zero-length range, is discarded entirely. Repairing would mean guessing
+what the user meant; dropping is honest and can't corrupt the editor.
+
+---
+
+## 5. `noteorganizer/core/sharing.py`
+
+**What it's for.** Turning notes into a block of text you can paste into a
+chat, and back again.
+
+```
+notes -> JSON -> zlib compress -> Base64 -> "NOTE1:" + text
+```
+
+**It's compression, not encryption.** Anyone with the code can read it.
+Worth being clear about, because Base64 output *looks* scrambled and it
+would be easy to assume otherwise.
+
+### The part actually worth learning: distrusting your own input
+
+Decoding runs on text a user pasted from who-knows-where, so every stage
+assumes the worst. This is the best example of defensive programming in
+the codebase:
+
+| Guard | Stops |
+|---|---|
+| `MAX_SHARE_CODE_CHARS` | absurdly long input, rejected before any work |
+| `_bounded_decompress` | a **zip bomb** |
+| `MAX_SHARED_NOTES` | one code flooding the notebook |
+| `_safe_extract_zip` | a **Zip Slip** path-traversal attack |
+
+Two of those deserve explanation.
+
+**Zip bomb.** A tiny compressed payload that expands to gigabytes. Calling
+`zlib.decompress()` on one exhausts memory *before it returns* — so
+checking the size afterwards is already too late. The fix is to decompress
+in chunks through a decompressor object and stop the moment you cross the
+limit:
+
+```python
+while chunk := decompressor.decompress(..., limit_step):
+    total += len(chunk)
+    if total > limit:
+        raise ValueError(...)
+```
+
+**Zip Slip.** A ZIP entry named `../../something` would, on naive
+extraction, write *outside* the folder you chose. `_safe_extract_zip`
+resolves each entry's final path and refuses anything that doesn't still
+sit under the destination.
+
+The general lesson: **when data comes from outside, enforce limits during
+processing, not after.** Anything that checks "was that too big?" after
+the fact has already paid the cost.
+
+---
+
+## 6. `noteorganizer/core/duplicates.py`
+
+**What it's for.** Deciding when two notes are really the same note, so
+Settings can offer to tidy them up.
+
+Two normalisations do the real work:
+
+- `_strip_copy_suffix` removes any number of trailing `" (copy)"` markers,
+  so a note and its duplicate match *even though the app renamed one of
+  them*.
+- `_normalize_ws` collapses runs of whitespace, so a stray blank line
+  doesn't hide a match.
+
+Date, colour, attachments and pinned state are ignored **on purpose**. Two
+notes with identical text are the same note to a person, even if one is
+pinned — the comparison encodes a human judgement, not a mechanical one.
+
+### One performance idea
+
+Grouping uses a dictionary of `key -> [notes]`, not a comparison of every
+note against every other note:
+
+```python
+groups.setdefault(_dup_key(n), []).append(n)
+```
+
+Comparing every pair would be *quadratic* — 1,000 notes means ~500,000
+comparisons; 5,000 notes means ~12.5 million. Building a dict touches each
+note once. Same answer, and it stays fast as the notebook grows. Reaching
+for a dict to avoid a nested loop is one of the most reliably useful
+instincts in everyday Python.
+
+---
+
 *More sections will be added here as further modules are extracted.*

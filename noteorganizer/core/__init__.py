@@ -10,7 +10,13 @@ Modules, as they get moved across from `note_organizer.py`:
 
 * ``calculator`` — evaluates the in-note calculator's expressions.
 * ``recurrence`` — the repeat rules, and which dates a note lands on.
+* ``themes`` — colour palettes and the fixed layout numbers. Pure data.
+* ``formatting`` — how rich-text spans are stored on a note.
+* ``sharing`` — share codes, and the guards that make importing them safe.
+* ``duplicates`` — deciding when two notes are really the same note.
 
-Still to come: paths and migrations, the note model, storage, sharing,
-and themes.
+Still to come: paths and migrations, storage, and the note model. Those
+are held back on purpose — they share mutable module state
+(``CATEGORY_COLORS``) and run migrations at import time, so moving them
+is a behaviour change rather than a pure move.
 """
