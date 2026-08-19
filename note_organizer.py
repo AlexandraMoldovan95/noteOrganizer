@@ -2254,7 +2254,7 @@ class NoteOrganizer(tk.Tk):
                                           if isinstance(text_widget, tk.Text)
                                           else text_widget.select_range(0, "end")))
         menu.add_separator()
-        menu.add_command(label="😀  Insert emoji…",
+        menu.add_command(label="Insert emoji…",
                          command=lambda: self._show_emoji_picker(text_widget))
 
         if extra_items:
@@ -2323,7 +2323,7 @@ class NoteOrganizer(tk.Tk):
     @classmethod
     def _char_class(cls, ch):
         # Three classes: contiguous runs of the same class form one
-        # double-click "word" -- used by _select_body_word_at_click so that
+        # double-click "word" -- used by _select_word_at_click so that
         # punctuation like "." always breaks a word (unlike Tk's own
         # default word-boundary detection, which keeps a single "." glued
         # to its surrounding letters, e.g. treating "something.else" as one
@@ -2356,6 +2356,27 @@ class NoteOrganizer(tk.Tk):
         # matters.
         text_widget.tag_raise("sel")
         return tag
+
+    @staticmethod
+    def _tag_add_no_newline(text_widget, tag, start, end):
+        """tag_add over [start, end), but per line and never covering a
+        line's newline character.
+
+        Tk paints a BACKGROUND tag across the full remaining width of a
+        line whenever the tag covers that line's newline -- so a highlight
+        spanning several lines drew a full-width bar on every fully-covered
+        line, far past the actual text, instead of hugging the words. Same
+        family as the Select-All and triple-click fixes: don't include the
+        invisible trailing newline. Only highlight (a background) is
+        affected; foreground color and underline/strike don't paint one.
+        """
+        first = int(str(text_widget.index(start)).split(".")[0])
+        last = int(str(text_widget.index(end)).split(".")[0])
+        for line in range(first, last + 1):
+            seg_start = start if line == first else f"{line}.0"
+            seg_end = end if line == last else f"{line}.end"
+            if text_widget.compare(seg_start, "<", seg_end):
+                text_widget.tag_add(tag, seg_start, seg_end)
 
     def _extract_formatting(self, text_widget):
         """Read the widget's current tags back out as a plain span list,
@@ -2416,7 +2437,14 @@ class NoteOrganizer(tk.Tk):
                     tag = self._ensure_color_tag(text_widget, span["style"], span["value"])
                 else:
                     tag = span["style"]
-                text_widget.tag_add(tag, start_idx, end_idx)
+                if span["style"] == "highlight":
+                    # Notes saved before the newline fix can still hold a
+                    # single highlight span running across several lines --
+                    # re-apply those the corrected way too, so an old note
+                    # renders right without needing to be re-highlighted.
+                    self._tag_add_no_newline(text_widget, tag, start_idx, end_idx)
+                else:
+                    text_widget.tag_add(tag, start_idx, end_idx)
             except tk.TclError:
                 pass
 
@@ -2573,7 +2601,10 @@ class NoteOrganizer(tk.Tk):
                 self.body_text.tag_remove(tag_name, start, end)
         if hex_color:
             tag = self._ensure_color_tag(self.body_text, kind, hex_color)
-            self.body_text.tag_add(tag, start, end)
+            if kind == "highlight":
+                self._tag_add_no_newline(self.body_text, tag, start, end)
+            else:
+                self.body_text.tag_add(tag, start, end)
 
         self._refresh_format_buttons()
         self._schedule_autosave()
@@ -2714,7 +2745,10 @@ class NoteOrganizer(tk.Tk):
                 self.body_text.tag_add(color_tag, start_idx, end_idx)
             if self._pending_highlight_color:
                 color_tag = self._ensure_color_tag(self.body_text, "highlight", self._pending_highlight_color)
-                self.body_text.tag_add(color_tag, start_idx, end_idx)
+                # Typing past the end of a line (pressing Enter with a
+                # highlight still "stuck" on) would otherwise sweep the
+                # newline into the tag and bleed the bar full-width.
+                self._tag_add_no_newline(self.body_text, color_tag, start_idx, end_idx)
         self.body_text.mark_set(self._PENDING_STYLE_ANCHOR, end_idx)
         self._pending_style_last_length = current_length
 
@@ -2730,16 +2764,24 @@ class NoteOrganizer(tk.Tk):
             self.body_text.mark_set(self._PENDING_STYLE_ANCHOR, tk.INSERT)
             self._pending_style_last_length = self._pending_style_text_length()
 
-    def _select_body_word_at_click(self, event):
-        """Replaces Tk's default double-click "select word" on the note
-        body with a plain alnum/underscore definition of "word" (see
-        _char_class), so a double-click never crosses a "." or other
-        punctuation -- e.g. double-clicking "something" in
-        "something.else" selects only "something", and double-clicking
-        "else" selects only "else"."""
-        index = self.body_text.index(f"@{event.x},{event.y}")
+    def _select_word_at_click(self, event):
+        """Replaces Tk's default double-click "select word" with a plain
+        alnum/underscore definition of "word" (see _char_class), so a
+        double-click never crosses a "." or other punctuation -- e.g.
+        double-clicking "something" in "something.else" selects only
+        "something", and double-clicking "else" selects only "else".
+
+        Also makes double-clicking an EMPTY line select nothing at all,
+        rather than Tk's default of grabbing that line's invisible newline
+        and painting a full-width selection bar over a row with no words
+        in it.
+
+        Works off event.widget, so the same handler serves the note body
+        and the comments box rather than being tied to either."""
+        w = event.widget
+        index = w.index(f"@{event.x},{event.y}")
         line, col = index.split(".")
-        line_text = self.body_text.get(f"{line}.0", f"{line}.0 lineend")
+        line_text = w.get(f"{line}.0", f"{line}.0 lineend")
         col = min(int(col), len(line_text) - 1)
         if col < 0:
             return "break"
@@ -2752,28 +2794,40 @@ class NoteOrganizer(tk.Tk):
         end = col + 1
         while end < len(line_text) and self._char_class(line_text[end]) == char_cls:
             end += 1
-        self.body_text.tag_remove("sel", "1.0", "end")
-        self.body_text.tag_add("sel", f"{line}.{start}", f"{line}.{end}")
-        self.body_text.mark_set("insert", f"{line}.{end}")
+        w.tag_remove("sel", "1.0", "end")
+        w.tag_add("sel", f"{line}.{start}", f"{line}.{end}")
+        w.mark_set("insert", f"{line}.{end}")
         return "break"
 
-    def _select_body_line_no_newline(self, event):
-        """Replaces Tk's default triple-click "select line" behavior on the
-        note body. Tk's own version selects through the START of the next
-        line, which silently includes the invisible trailing newline
-        character in the selection -- same overshoot as the Select-All fix
-        above, but harder to notice here because it's triggered by mouse
-        clicks (a triple-click, or two double-clicks close enough together
-        in time that Tk counts them as one), not a menu command. Left as-is,
-        it also means copy/paste carries that extra newline along with the
-        line's real text."""
-        index = self.body_text.index(f"@{event.x},{event.y}")
+    def _select_line_no_newline(self, event):
+        """Replaces Tk's default triple-click "select line" behavior. Tk's
+        own version selects through the START of the next line, which
+        silently includes the invisible trailing newline character in the
+        selection -- same overshoot as the Select-All fix above, but harder
+        to notice here because it's triggered by mouse clicks (a
+        triple-click, or two double-clicks close enough together in time
+        that Tk counts them as one), not a menu command. Left as-is, it
+        also means copy/paste carries that extra newline along with the
+        line's real text.
+
+        Works off event.widget, so the same handler serves the note body
+        and the comments box rather than being tied to either."""
+        w = event.widget
+        index = w.index(f"@{event.x},{event.y}")
         line = index.split(".")[0]
         line_start, line_end = f"{line}.0", f"{line}.0 lineend"
-        self.body_text.tag_remove("sel", "1.0", "end")
-        self.body_text.tag_add("sel", line_start, line_end)
-        self.body_text.mark_set("insert", line_end)
+        w.tag_remove("sel", "1.0", "end")
+        w.tag_add("sel", line_start, line_end)
+        w.mark_set("insert", line_end)
         return "break"
+
+    def _bind_text_selection_fixes(self, text_widget):
+        """Apply the double-click (word boundary / empty line) and
+        triple-click (no trailing newline) selection fixes to a Text
+        widget. Used for every multi-line text field the user types real
+        prose into, so selection behaves the same way in all of them."""
+        text_widget.bind("<Double-Button-1>", self._select_word_at_click)
+        text_widget.bind("<Triple-Button-1>", self._select_line_no_newline)
 
     def _uniform_color_in_selection(self, kind, start, end):
         """The single hex color of the given kind ("text_color" or
@@ -2784,6 +2838,13 @@ class NoteOrganizer(tk.Tk):
         color = None
         idx = start
         while self.body_text.compare(idx, "<", end):
+            # Newlines deliberately never carry a highlight tag (see
+            # _tag_add_no_newline), so judging them as "uncolored" here
+            # would report any multi-line selection as a mix and stop the
+            # toolbar button from previewing the color that's really there.
+            if self.body_text.get(idx) == "\n":
+                idx = self.body_text.index(f"{idx}+1c")
+                continue
             names = [n for n in self.body_text.tag_names(idx) if n.startswith(prefix)]
             if not names:
                 return None
@@ -5666,13 +5727,55 @@ class NoteOrganizer(tk.Tk):
         self.refresh_weekday_buttons()
         self.on_end_mode_changed()
         self.style_notebook()
-        self.refresh_note_list()
-        self.render_calendar()
-        # refresh_note_list() above already refreshes Statistics too.
+        # Statistics is deliberately NOT re-rendered here. It destroys and
+        # rebuilds its widgets, and a theme switch changes no statistic --
+        # only the palette, which _recolor_stragglers below handles. It's on
+        # the Settings page, i.e. exactly where the user is standing when
+        # they switch themes, so rebuilding it there was visible churn for
+        # no new information. Real data changes still redraw it through
+        # refresh_note_list(), which is unchanged.
+        #
+        # Same reasoning for the calendar: rebuilding every day cell costs
+        # ~19ms and is pointless while the calendar isn't even on screen.
+        # Checked against the selected tab (reliable state) rather than
+        # winfo_ismapped(), which isn't updated synchronously.
+        if self._calendar_is_showing():
+            self.render_calendar()
+        else:
+            self._calendar_needs_render = True
         # Safety net: catch any widget that slipped through the registered list
         # (e.g. built once and never rebuilt) by swapping known theme colors from
         # the OTHER theme to the current one. This guarantees a clean flip.
         self._recolor_stragglers()
+        # Recolour the note cards in place rather than calling
+        # refresh_note_list(), which destroys and rebuilds every card. That
+        # rebuild was ~85ms of a ~121ms theme switch and made the list
+        # visibly empty and refill -- the theme-switch flicker. Nothing here
+        # depends on the note DATA having changed (it hasn't; only the
+        # palette did), so there is nothing to re-read.
+        #
+        # Deliberately AFTER _recolor_stragglers: a card's stripe/tag colour
+        # comes from the note itself, and a custom note colour that happens
+        # to match some other theme's palette entry (e.g. #7c5cff, which is
+        # also the dark theme's accent) would otherwise be swapped out by
+        # the straggler pass and left showing the wrong colour. Running last
+        # makes the note's own data authoritative. See _recolor_note_cards.
+        self._recolor_note_cards()
+
+    def _calendar_is_showing(self):
+        """True only if the Calendar tab is the one currently selected AND
+        the notebook itself is visible (Settings replaces it). Uses the
+        notebook's own selection rather than winfo_ismapped(), which
+        pack()/pack_forget() don't update synchronously."""
+        tab = getattr(self, "_calendar_tab", None)
+        if tab is None:
+            return True  # unknown layout: rebuild rather than risk staleness
+        try:
+            if not self.notebook.winfo_ismapped():
+                return False
+            return str(self.notebook.select()) == str(tab)
+        except tk.TclError:
+            return True
 
     def _recolor_stragglers(self):
         """Walk the whole widget tree and fix any bg/fg still set to a color from
@@ -5949,6 +6052,9 @@ class NoteOrganizer(tk.Tk):
 
         self.notebook.add(notes_tab, text="📝 Notes")
         self.notebook.add(calendar_tab, text="📅 Calendar")
+        # Kept so a theme switch can tell whether the calendar is actually
+        # on screen, and skip rebuilding it if not — see apply_theme.
+        self._calendar_tab = calendar_tab
 
         # Looked up from the notebook itself rather than hardcoded — stays
         # correct even if a tab is ever added, removed, or reordered again.
@@ -6530,13 +6636,12 @@ class NoteOrganizer(tk.Tk):
         self.body_text.bind("<KeyRelease>", self._refresh_format_buttons, add="+")
         self.body_text.bind("<ButtonRelease-1>", self._resync_pending_style_anchor, add="+")
         self.body_text.bind("<ButtonRelease-1>", self._refresh_format_buttons, add="+")
-        # Overrides Tk's default double-click "select word" (see
-        # _select_body_word_at_click) so punctuation like "." always breaks
-        # a word, and its default triple-click "select line" (see
-        # _select_body_line_no_newline) so it stops at the real end of the
-        # line instead of overshooting into the trailing newline.
-        self.body_text.bind("<Double-Button-1>", self._select_body_word_at_click)
-        self.body_text.bind("<Triple-Button-1>", self._select_body_line_no_newline)
+        # Overrides Tk's default double-click "select word" so punctuation
+        # like "." always breaks a word (and an empty line selects
+        # nothing), and its default triple-click "select line" so it stops
+        # at the real end of the line instead of overshooting into the
+        # trailing newline. The comments box gets the same treatment.
+        self._bind_text_selection_fixes(self.body_text)
         # A paste (Ctrl+V, or the right-click menu's synthetic <<Paste>>)
         # must never pick up a pending style — resyncing here, right after
         # the paste's own text lands, means the length-based growth check
@@ -6559,13 +6664,18 @@ class NoteOrganizer(tk.Tk):
         # Let the mousewheel scroll the text box's own content when it overflows,
         # instead of bubbling up to the editor's outer scroll.
         self._bind_text_wheel(self.body_text)
+        # Plain text labels, no decorative glyph prefixes: the styled
+        # characters these used to carry (astral math letters, combining
+        # underline/strike marks, an emoji) all render at different widths,
+        # so the words after them lined up neither with each other nor with
+        # the unprefixed Cut/Copy/Paste entries above.
         self._add_paste_menu(self.body_text, extra_items=[
-            ("𝐁  Bold", lambda: self._toggle_body_style("bold"), "Ctrl+B"),
-            ("𝑰  Italic", lambda: self._toggle_body_style("italic"), "Ctrl+I"),
-            ("U̲  Underline", lambda: self._toggle_body_style("underline"), "Ctrl+U"),
-            ("S̶  Strikethrough", lambda: self._toggle_body_style("strike"), "Ctrl+D"),
-            ("A  Text color…", lambda: self._open_color_swatch_popup("text_color")),
-            ("🖍  Highlight…", lambda: self._open_color_swatch_popup("highlight")),
+            ("Bold", lambda: self._toggle_body_style("bold"), "Ctrl+B"),
+            ("Italic", lambda: self._toggle_body_style("italic"), "Ctrl+I"),
+            ("Underline", lambda: self._toggle_body_style("underline"), "Ctrl+U"),
+            ("Strikethrough", lambda: self._toggle_body_style("strike"), "Ctrl+D"),
+            ("Text color…", lambda: self._open_color_swatch_popup("text_color")),
+            ("Highlight…", lambda: self._open_color_swatch_popup("highlight")),
         ])
         self.update_word_count()
 
@@ -6641,6 +6751,7 @@ class NoteOrganizer(tk.Tk):
         self.comments_text.pack(side="left", fill="both", expand=True)
         self._bind_text_wheel(self.comments_text)
         self._add_paste_menu(self.comments_text)
+        self._bind_text_selection_fixes(self.comments_text)
         self.comments_text.bind("<KeyRelease>", self._schedule_autosave)
         # Expand/Collapse toggle for the comments box (compact 4 rows <-> 12).
         self._add_text_resize_toggle(self.editor, self.comments_text,
@@ -8997,7 +9108,69 @@ class NoteOrganizer(tk.Tk):
 
         self._note_card_widgets[note["id"]] = {
             "card": card, "clickable": widgets, "checkbox": sel_cb, "note": note,
+            # Named references (not positions in "clickable") so a theme
+            # switch can recolour these in place instead of destroying and
+            # rebuilding every card — see _recolor_note_cards.
+            "stripe": stripe, "content": content, "title": title_lbl,
+            "preview": preview_lbl, "tags": cat_lbl,
         }
+
+    def _recolor_note_cards(self):
+        """Re-apply the current theme's colours to the note cards already on
+        screen, instead of destroying and rebuilding every one of them just
+        because the palette changed.
+
+        A full refresh_note_list() was measured at ~85ms of a ~121ms theme
+        switch (roughly 2ms per card), and it's a destroy-then-repopulate:
+        the list visibly empties and refills, which is what the theme-switch
+        flicker actually was. Recolouring in place skips both.
+
+        This is NOT the track_theme() pattern that leaked before (see
+        docs/ISSUES_LOG.md): nothing is appended to a list that outlives the
+        widgets. _note_card_widgets is rebuilt from scratch on every
+        refresh_note_list(), so it only ever holds the cards currently on
+        screen, and dead entries are skipped defensively below.
+
+        The stripe and tag colours are deliberately RECOMPUTED from the note
+        via get_note_color() rather than colour-swapped, so a note's own
+        custom colour survives a theme switch exactly as it would through a
+        real rebuild.
+        """
+        c = self.colors
+        for note_id, info in list(getattr(self, "_note_card_widgets", {}).items()):
+            card = info.get("card")
+            if card is None:
+                continue
+            try:
+                if not card.winfo_exists():
+                    continue
+                note_color = self.get_note_color(info.get("note") or {})
+                card.configure(bg=c["card"], highlightbackground=c["accent"],
+                               highlightcolor=c["accent"])
+                for key in ("content",):
+                    w = info.get(key)
+                    if w is not None:
+                        w.configure(bg=c["card"])
+                stripe = info.get("stripe")
+                if stripe is not None:
+                    stripe.configure(bg=note_color)
+                title = info.get("title")
+                if title is not None:
+                    title.configure(bg=c["card"], fg=c["text"])
+                preview = info.get("preview")
+                if preview is not None:
+                    preview.configure(bg=c["card"], fg=c["subtext"])
+                tags = info.get("tags")
+                if tags is not None:
+                    tags.configure(bg=c["card"], fg=note_color)
+                checkbox = info.get("checkbox")
+                if checkbox is not None:
+                    checkbox.configure(bg=c["card"], activebackground=c["card"],
+                                       selectcolor=c["sidebar"])
+            except tk.TclError:
+                # The card (or one of its children) was destroyed between the
+                # snapshot above and now — nothing to recolour.
+                continue
 
     # ---------- Multi-select for bulk actions ----------
     def _toggle_selection_mode(self):
@@ -9335,7 +9508,14 @@ class NoteOrganizer(tk.Tk):
         otherwise static screen."""
         if getattr(self, "_note_list_needs_refresh", False):
             self._note_list_needs_refresh = False
+            self._calendar_needs_render = False
             self.refresh_note_list()
+            self.render_calendar()
+        elif getattr(self, "_calendar_needs_render", False):
+            # A theme switch happened while the calendar was off screen, so
+            # its rebuild was skipped (see apply_theme). Catch it up now,
+            # before it becomes visible.
+            self._calendar_needs_render = False
             self.render_calendar()
 
     def _update_open_highlight(self):

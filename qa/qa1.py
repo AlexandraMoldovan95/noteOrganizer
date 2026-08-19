@@ -771,6 +771,58 @@ reloaded_colors = [s for s in app._extract_formatting(app.body_text)
 check('reopening the note reapplies its saved color formatting',
       len(reloaded_colors) == len(color_spans))
 
+# ---- Regression: a highlight covering a line's newline made Tk paint the
+# background across the FULL remaining width of that line, so highlighting
+# several lines drew full-width bars instead of hugging the words. The tag
+# must never sit on a "\n" -- checked on the widget itself, since the
+# character range alone looked correct even while it rendered wrong.
+app.new_note()
+app.update()
+app.body_text.insert('1.0', 'alpha\nbeta\ngamma\n')
+app.body_text.tag_add('sel', '1.0', '3.3')
+app.update()
+app._apply_body_color('highlight', NO.HIGHLIGHT_COLOR_PALETTE[0])
+app.body_text.tag_remove('sel', '1.0', 'end')
+app.update()
+hl_tag = app._color_tag_name('highlight', NO.HIGHLIGHT_COLOR_PALETTE[0])
+hl_ranges = app.body_text.tag_ranges(hl_tag)
+check('a multi-line highlight is applied at all', len(hl_ranges) >= 2)
+newline_tagged = []
+for i in range(0, len(hl_ranges), 2):
+    idx = app.body_text.index(hl_ranges[i])
+    while app.body_text.compare(idx, '<', hl_ranges[i + 1]):
+        if app.body_text.get(idx) == '\n':
+            newline_tagged.append(str(idx))
+        idx = app.body_text.index(idx + '+1c')
+check('a multi-line highlight never covers a newline (no full-width bleed)',
+      not newline_tagged)
+# The lines it did cover must still be fully highlighted up to their text end.
+check('the fully-covered line is still highlighted across its own text',
+      hl_tag in app.body_text.tag_names('1.0')
+      and hl_tag in app.body_text.tag_names('1.4'))
+# Toolbar preview must still recognise the color despite the untagged newlines.
+check('toolbar still previews the highlight color across a multi-line range',
+      app._uniform_color_in_selection('highlight', '1.0', '3.3')
+      == NO.HIGHLIGHT_COLOR_PALETTE[0])
+# An old note whose saved span crosses lines must also load without bleeding.
+app.new_note()
+app.update()
+app.body_text.insert('1.0', 'alpha\nbeta\ngamma\n')
+app._apply_formatting(app.body_text,
+                      [{'start': 0, 'end': 13, 'style': 'highlight',
+                        'value': NO.HIGHLIGHT_COLOR_PALETTE[0]}])
+app.update()
+legacy_ranges = app.body_text.tag_ranges(hl_tag)
+legacy_newlines = []
+for i in range(0, len(legacy_ranges), 2):
+    idx = app.body_text.index(legacy_ranges[i])
+    while app.body_text.compare(idx, '<', legacy_ranges[i + 1]):
+        if app.body_text.get(idx) == '\n':
+            legacy_newlines.append(str(idx))
+        idx = app.body_text.index(idx + '+1c')
+check('a legacy saved span crossing lines also loads without covering newlines',
+      len(legacy_ranges) >= 2 and not legacy_newlines)
+
 # ---- Regression: a placeholder-registered widget (self._placeholders)
 # that gets destroyed before the next theme switch used to crash with
 # "invalid command name" -- the widget is long gone by the time
@@ -804,6 +856,168 @@ except Exception as e:
 check('switching themes after the widget is destroyed does not crash', theme_switch_ok)
 check('the destroyed entry is pruned from self._placeholders, not left dangling',
       my_entry is not None and all(e is not my_entry for e, _ in app._placeholders))
+
+# ---- A theme switch recolours the note cards in place instead of destroying
+# and rebuilding every one of them (that rebuild was the bulk of the switch's
+# cost, and made the list visibly empty and refill). Two things must hold:
+# the result has to be identical to what a real rebuild produces, and a note's
+# OWN colour must survive -- _recolor_stragglers would otherwise swap out a
+# custom colour that happens to match another theme's palette entry.
+_theme_opts = ('bg', 'fg', 'highlightbackground', 'highlightcolor')
+
+def _card_colors():
+    out = []
+    def walk(w):
+        row = [w.__class__.__name__]
+        for o in _theme_opts:
+            try:
+                row.append(str(w.cget(o)).lower())
+            except Exception:
+                pass
+        out.append(tuple(row))
+        for ch in w.winfo_children():
+            walk(ch)
+    walk(app.list_frame)
+    return out
+
+app.new_note()
+app.title_entry.delete(0, 'end'); app.title_entry.insert(0, 'Palette clash note')
+app.title_entry.config(fg='black')
+app.body_text.insert('1.0', 'body')
+# '#7c5cff' is a preset note colour AND the dark theme's accent -- the exact
+# case where a colour-swapping pass would wrongly repaint it.
+app.current_note_color = '#7c5cff'
+app.save_current_note(auto=False)
+app.update()
+
+app.set_theme('dark')
+app.update()
+_clash_id = app.selected_note_id
+for _theme in ('dark_ocean', 'light_sky', 'light', 'dark'):
+    app.set_theme(_theme)
+    app.update()
+    _in_place = _card_colors()
+    app.refresh_note_list()
+    app.update()
+    check(f'theme switch to {_theme}: in-place card recolour matches a full rebuild',
+          _in_place == _card_colors())
+
+app.set_theme('dark_ocean')
+app.update()
+_info = app._note_card_widgets.get(_clash_id)
+check("a note's own colour survives a theme switch that doesn't share it",
+      _info is not None
+      and str(_info['stripe'].cget('bg')).lower()
+      == app.get_note_color(_info['note']).lower())
+app.set_theme('dark')
+app.update()
+
+# ---- A theme switch shouldn't rebuild the calendar while it's off screen
+# (that was ~19ms of pointless churn per switch). It must still be caught up
+# before it becomes visible, so it can never be left showing stale colours.
+app._calendar_needs_render = False
+app.set_theme('light')
+app.update()
+check('a theme switch defers the calendar rebuild while it is off screen',
+      getattr(app, '_calendar_needs_render', False) is True)
+app._catch_up_deferred_refresh()
+app.update()
+check('the deferred calendar rebuild is caught up at the next transition',
+      getattr(app, '_calendar_needs_render', False) is False)
+
+# Statistics is no longer rebuilt on a theme switch either (nothing about a
+# statistic changes when only the palette does), so it must be left with no
+# colour from the previous theme.
+def _stale_colors(root):
+    _cur = {v.lower() for v in app.colors.values()
+            if isinstance(v, str) and v.startswith('#')}
+    _other = set()
+    for _n, _p in NO.THEMES.items():
+        if _n == app.theme_name:
+            continue
+        for _v in _p.values():
+            if isinstance(_v, str) and _v.startswith('#'):
+                _other.add(_v.lower())
+    _suspect = _other - _cur
+    _bad = []
+    def _walk(w):
+        for _o in ('bg', 'fg'):
+            try:
+                if str(w.cget(_o)).lower() in _suspect:
+                    _bad.append((w.__class__.__name__, _o))
+            except Exception:
+                pass
+        for _c in w.winfo_children():
+            _walk(_c)
+    _walk(root)
+    return _bad
+
+for _theme in ('dark_ocean', 'light', 'dark'):
+    app.set_theme(_theme)
+    app.update()
+    check(f'statistics carries no stale colour after switching to {_theme}',
+          not _stale_colors(app.stats_frame))
+
+# ---- Right-click menu labels must all be plain text, so every entry starts
+# at the same x. They used to carry a mix of astral math letters, combining
+# underline/strike marks and emoji, which render at different widths and left
+# the words after them lining up with nothing.
+def _menu_labels(widget):
+    menus = [w for w in widget.winfo_children() if isinstance(w, NO.tk.Menu)]
+    if not menus:
+        return []
+    m = menus[0]
+    return [m.entrycget(i, 'label') for i in range(m.index('end') + 1)
+            if m.type(i) == 'command']
+
+def _is_plain(s):
+    return all(not (ord(c) > 0x2100 or 0x0300 <= ord(c) <= 0x036F) for c in s)
+
+_body_menu = _menu_labels(app.body_text)
+check('every right-click menu label is plain text (aligned, no glyph prefixes)',
+      bool(_body_menu) and all(_is_plain(l) for l in _body_menu))
+check('no right-click menu label is indented relative to the others',
+      all(l == l.lstrip() for l in _body_menu))
+check('the formatting entries are still present in the body menu',
+      {'Bold', 'Italic', 'Underline', 'Strikethrough'} <= set(_body_menu))
+
+# ---- Regression: the comments box had none of the note body's selection
+# fixes, so double-clicking a row with no words in it grabbed that row's
+# invisible newline and painted a full-width selection over an empty line.
+def _dbl_xy(w, x, y, t):
+    w.event_generate('<Button-1>', x=x, y=y, time=t)
+    w.event_generate('<ButtonRelease-1>', x=x, y=y, time=t + 10)
+    w.event_generate('<Button-1>', x=x, y=y, time=t + 120)
+    w.event_generate('<ButtonRelease-1>', x=x, y=y, time=t + 130)
+    app.update()
+    r = w.tag_ranges('sel')
+    return w.get(r[0], r[1]) if r else None
+
+app.new_note()
+app.update()
+_c = app.comments_text
+_c.delete('1.0', 'end')
+_c.insert('1.0', 'hello world\n\nfoo.bar\n')
+app.update()
+_bb = _c.bbox('2.0')
+check('comments: double-clicking an empty row selects nothing',
+      _bb is not None
+      and _dbl_xy(_c, _bb[0] + 2, _bb[1] + _bb[3] // 2, 41000) is None)
+_c.tag_remove('sel', '1.0', 'end')
+app.update()
+_bbw = _c.bbox('1.2')
+check('comments: double-clicking a word selects just that word',
+      _bbw is not None
+      and _dbl_xy(_c, _bbw[0] + _bbw[2] // 2, _bbw[1] + _bbw[3] // 2, 42000) == 'hello')
+_c.tag_remove('sel', '1.0', 'end')
+app.update()
+_bbp = _c.bbox('3.1')
+check('comments: punctuation breaks a double-clicked word, same as the body',
+      _bbp is not None
+      and _dbl_xy(_c, _bbp[0] + _bbp[2] // 2, _bbp[1] + _bbp[3] // 2, 43000) == 'foo')
+_c.tag_remove('sel', '1.0', 'end')
+_c.delete('1.0', 'end')
+app.update()
 
 # ---- PERSISTENCE TO DISK ----
 app.save_notes()
