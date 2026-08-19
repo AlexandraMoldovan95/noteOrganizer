@@ -196,4 +196,124 @@ behaviour it's pinning down, so it doubles as a specification.
 
 ---
 
+## 2. `noteorganizer/core/recurrence.py`
+
+**What it's for.** Notes can repeat — daily, weekly, monthly, yearly — and
+the calendar needs to know which days each one lands on.
+
+### The one idea that shapes everything else
+
+> **A recurring note is stored exactly once.**
+
+Its occurrences are worked out *on demand*, for whatever date range is
+being shown, and never saved. A note repeating daily since 1990 is still a
+single entry in `notes_data.json`.
+
+It's worth pausing on why, because the alternative is tempting. If you
+saved every occurrence you'd get: a file that grows forever, "edit the
+whole series" meaning rewriting thousands of records, and no sensible
+answer to "repeats forever". Computing instead keeps the stored data tiny
+and the rule editable — at the cost of the code in this module. **That
+trade, store the rule and compute the results, comes up constantly in real
+software.**
+
+Four fields carry it:
+
+| Field | Meaning |
+|---|---|
+| `note["date"]` | the anchor — when the series starts |
+| `note["recurrence"]` | the rule itself |
+| `note["exceptions"]` | days the user deleted individually |
+| `note["overrides"]` | per-day content edits |
+
+### Normalising at the edge
+
+`normalize_recurrence()` never raises and never returns anything odd. Give
+it `None`, a string, or a dict with `interval` set to `"banana"` — it
+returns a valid rule, falling back to "does not repeat" if it must. Every
+field is checked on its own, so one bad value doesn't discard an otherwise
+fine rule.
+
+The payoff: **everything downstream can assume the shape is right.**
+`expand_occurrences` never checks whether `interval` is a number, because
+by then it always is. Without this you'd need defensive checks in every
+function and would still miss one. Notes get the same treatment from
+`normalize_note()` — it's why a single corrupt entry can't take down the
+app.
+
+One detail worth spotting:
+
+```python
+out = dict(RECURRENCE_DEFAULTS)
+out["weekdays"] = []      # not the default's list!
+out["month_days"] = []
+```
+
+`dict(...)` copies the dictionary, but **the lists inside it are shared**.
+Without those two lines every rule would point at the same list object, and
+adding a weekday to one note would change every other note too. Worth
+remembering generally: copying a container doesn't copy what's inside it.
+
+### Reading `expand_occurrences`
+
+It's the biggest function here, but it's one shape repeated four times —
+a branch per frequency. Each walks forward from the anchor and calls the
+same inner helper:
+
+```python
+def take(candidate):
+    nonlocal produced
+    ...
+```
+
+`take()` decides whether a date counts, records it if it falls inside the
+visible range, and returns `False` when the rule is spent. Note it counts
+*every* occurrence since the anchor (so "stop after 10 times" works) while
+only collecting the ones you can actually see.
+
+`nonlocal produced` exists for the same reason the calculator used
+`pos = [0]`: assigning to a name inside a nested function would create a
+new local variable. `nonlocal` says "update the enclosing one instead".
+Two solutions to the same Python quirk — you'll meet both in real code.
+
+### Two things that make it fast and safe
+
+**Skip ahead, don't walk.** For a rule with no count limit the code jumps
+straight to the visible window:
+
+```python
+skipped = (range_start - anchor).days // interval
+current = anchor + step * skipped
+```
+
+A daily note anchored in 1990 costs the same to display in 2026 as one
+made yesterday. `test_recurrence.py` pins this down with a 36-year-old
+recurrence that resolves in about **0.01 ms**.
+
+**Guard rails.** Every loop counts iterations against `MAX_OCCURRENCES`
+(5000) as well as checking dates. If a rule were ever malformed such that
+the date stopped advancing, the guard ends the loop rather than freezing
+the app. When a loop's exit depends on computed values, a bound is cheap
+insurance.
+
+### The awkward calendar cases
+
+Two are handled explicitly, because dates are full of them:
+
+- **"The 31st" in February.** `_day_in_month()` applies the rule's policy:
+  `"clamp"` uses the last day that exists (Feb 28), `"skip"` produces no
+  occurrence that month. The user chooses. Feb 29 anchors on yearly rules
+  take exactly the same path.
+- **Month arithmetic.** `_shift_month()` turns a year and month into a
+  single running count of months, adds, then converts back — so there's no
+  "what if we roll past December" case to get wrong.
+
+### Where it's tested
+
+`test_recurrence.py` — 18 checks, no GUI. Read it alongside the module: it
+covers the clamp/skip policies, count and end-date limits, exceptions, and
+the performance case above.
+
+---
+
 *More sections will be added here as further modules are extracted.*

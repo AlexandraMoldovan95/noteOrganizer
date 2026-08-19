@@ -89,7 +89,8 @@ noteOrganizer/
 ├── note_organizer.py         # entry point + the UI (run this); being split up — see docs/ARCHITECTURE.md
 ├── noteorganizer/            # the application package, growing as code is extracted
 │   └── core/                 #   data & rules layer — never imports tkinter
-│       └── calculator.py     #   the in-note calculator's expression parser
+│       ├── calculator.py     #   the in-note calculator's expression parser
+│       └── recurrence.py     #   repeat rules & which dates a note falls on
 ├── test_recurrence.py        # standalone tests for the recurrence engine (no GUI needed)
 ├── test_data_safety.py       # standalone tests for backups & migration safety (no GUI needed)
 ├── test_calculator.py        # standalone tests for the in-note calculator's expression evaluator (no GUI needed)

@@ -831,52 +831,24 @@ def clean_notes(notes):
 
 # ---- Recurrence engine ----
 #
-# A recurring note is stored ONCE. Its occurrences are computed on demand for
-# whatever date range is being displayed, never written to the notes file.
-#   - note["date"]        is the series anchor (when it starts)
-#   - note["recurrence"]  is the rule
-#   - note["exceptions"]  are dates the user deleted individually
-#   - note["overrides"]   are per-date content edits, keyed by date string
-
-WEEKDAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
-
-FREQ_LABELS = {
-    "": "Does not repeat",
-    "daily": "Daily",
-    "weekly": "Weekly",
-    "monthly": "Monthly",
-    "yearly": "Yearly",
-}
-
-RECURRENCE_DEFAULTS = {
-    "freq": "",               # "" means this is a normal one-off note
-    "interval": 1,            # every N days / weeks / months / years
-    "weekdays": [],           # weekly only: 0=Mon .. 6=Sun
-    "month_days": [],         # monthly only: 1..31
-    "month_day_policy": "clamp",   # "clamp" -> Feb 28/29, "skip" -> no occurrence
-    "end": "",                # "" = never ends
-    "count": 0,               # 0 = unlimited; otherwise stop after N occurrences
-}
-
-# Fields a per-occurrence override is allowed to replace.
-OVERRIDABLE_FIELDS = ["title", "body", "comments", "category", "color"]
-
-# Safety valve: no rule may ever generate more than this in one expansion.
-MAX_OCCURRENCES = 5000
-
-
-def parse_date(value):
-    """'2026-07-24' -> date object, or None if it isn't a valid date."""
-    if not isinstance(value, str) or not value.strip():
-        return None
-    try:
-        return datetime.strptime(value.strip(), "%Y-%m-%d").date()
-    except ValueError:
-        return None
-
-
-def format_date(d):
-    return d.strftime("%Y-%m-%d")
+# Moved to noteorganizer/core/recurrence.py — a recurring note is stored
+# ONCE and its occurrences are computed on demand; see that module (and
+# docs/CODE_TOUR.md) for how and why. Re-exported here so existing
+# callers and the QA scripts keep working unchanged.
+from noteorganizer.core.recurrence import (
+    WEEKDAY_NAMES,
+    FREQ_LABELS,
+    RECURRENCE_DEFAULTS,
+    OVERRIDABLE_FIELDS,
+    MAX_OCCURRENCES,
+    parse_date,
+    format_date,
+    normalize_recurrence,
+    is_recurring,
+    expand_occurrences,
+    effective_note,
+    describe_recurrence,
+)
 
 
 # The calculator's expression parser now lives in its own module — see
@@ -891,225 +863,6 @@ from noteorganizer.core.calculator import (
 )
 
 
-def normalize_recurrence(rec):
-    """Coerce a recurrence rule into a known-good shape. Anything unexpected
-    degrades to 'does not repeat' rather than crashing the calendar."""
-    out = dict(RECURRENCE_DEFAULTS)
-    out["weekdays"] = []
-    out["month_days"] = []
-    if not isinstance(rec, dict):
-        return out
-
-    freq = rec.get("freq", "")
-    out["freq"] = freq if freq in ("daily", "weekly", "monthly", "yearly") else ""
-
-    try:
-        out["interval"] = max(1, int(rec.get("interval", 1)))
-    except (TypeError, ValueError):
-        out["interval"] = 1
-
-    weekdays = rec.get("weekdays", [])
-    if isinstance(weekdays, list):
-        out["weekdays"] = sorted({d for d in weekdays if isinstance(d, int) and 0 <= d <= 6})
-
-    month_days = rec.get("month_days", [])
-    if isinstance(month_days, list):
-        out["month_days"] = sorted({d for d in month_days if isinstance(d, int) and 1 <= d <= 31})
-
-    policy = rec.get("month_day_policy", "clamp")
-    out["month_day_policy"] = policy if policy in ("clamp", "skip") else "clamp"
-
-    end = rec.get("end", "")
-    out["end"] = end.strip() if isinstance(end, str) and parse_date(end) else ""
-
-    try:
-        out["count"] = max(0, int(rec.get("count", 0)))
-    except (TypeError, ValueError):
-        out["count"] = 0
-
-    return out
-
-
-def is_recurring(note):
-    return bool((note.get("recurrence") or {}).get("freq"))
-
-
-def _shift_month(year, month, months_to_add):
-    total = (year * 12 + (month - 1)) + months_to_add
-    return total // 12, (total % 12) + 1
-
-
-def _day_in_month(year, month, wanted_day, policy):
-    """Resolve 'the 31st' inside a month that may not have one."""
-    last_day = cal_module.monthrange(year, month)[1]
-    if wanted_day <= last_day:
-        return date_cls(year, month, wanted_day)
-    if policy == "clamp":
-        return date_cls(year, month, last_day)
-    return None  # "skip"
-
-
-def expand_occurrences(note, range_start, range_end):
-    """Every date this note lands on between range_start and range_end
-    (inclusive), as 'YYYY-MM-DD' strings. Exceptions are already removed."""
-    anchor = parse_date(note.get("date", ""))
-    if anchor is None:
-        return []
-
-    rec = normalize_recurrence(note.get("recurrence"))
-    exceptions = set(note.get("exceptions") or [])
-
-    if not rec["freq"]:
-        one_off = format_date(anchor)
-        if range_start <= anchor <= range_end and one_off not in exceptions:
-            return [one_off]
-        return []
-
-    interval = rec["interval"]
-    end_date = parse_date(rec["end"])
-    max_count = rec["count"]
-    policy = rec["month_day_policy"]
-
-    # Hard stop for the whole expansion: never look past the requested range,
-    # and never past the rule's own end date.
-    horizon = range_end if end_date is None else min(range_end, end_date)
-    if horizon < anchor:
-        return []
-
-    results = []
-    produced = 0          # counts occurrences from the anchor, for "count"
-    limited = max_count > 0
-
-    def take(candidate):
-        """Record one occurrence. Returns False when the rule is exhausted."""
-        nonlocal produced
-        if candidate < anchor:
-            return True
-        if end_date is not None and candidate > end_date:
-            return False
-        produced += 1
-        if range_start <= candidate <= range_end:
-            results.append(candidate)
-        if limited and produced >= max_count:
-            return False
-        return True
-
-    if rec["freq"] == "daily":
-        step = timedelta(days=interval)
-        current = anchor
-        # With no count limit we can jump straight to the visible window
-        # instead of walking every day since the anchor.
-        if not limited and range_start > anchor:
-            skipped = (range_start - anchor).days // interval
-            current = anchor + step * skipped
-        guard = 0
-        while current <= horizon and guard < MAX_OCCURRENCES:
-            guard += 1
-            if not take(current):
-                break
-            current += step
-
-    elif rec["freq"] == "weekly":
-        weekdays = rec["weekdays"] or [anchor.weekday()]
-        anchor_week = anchor - timedelta(days=anchor.weekday())
-        week_step = timedelta(weeks=interval)
-        week_start = anchor_week
-        if not limited and range_start > anchor:
-            weeks_ahead = (range_start - anchor_week).days // (7 * interval)
-            if weeks_ahead > 0:
-                week_start = anchor_week + week_step * weeks_ahead
-        guard = 0
-        stop = False
-        while week_start <= horizon and guard < MAX_OCCURRENCES and not stop:
-            guard += 1
-            for weekday in weekdays:
-                candidate = week_start + timedelta(days=weekday)
-                if candidate > horizon:
-                    continue
-                if not take(candidate):
-                    stop = True
-                    break
-            week_start += week_step
-
-    elif rec["freq"] == "monthly":
-        month_days = rec["month_days"] or [anchor.day]
-        step_index = 0
-        if not limited and range_start > anchor:
-            months_ahead = ((range_start.year - anchor.year) * 12
-                            + (range_start.month - anchor.month))
-            step_index = max(0, months_ahead // interval)
-        guard = 0
-        stop = False
-        while guard < MAX_OCCURRENCES and not stop:
-            guard += 1
-            year, month = _shift_month(anchor.year, anchor.month, step_index * interval)
-            if date_cls(year, month, 1) > horizon:
-                break
-            for wanted in month_days:
-                candidate = _day_in_month(year, month, wanted, policy)
-                if candidate is None or candidate > horizon:
-                    continue
-                if not take(candidate):
-                    stop = True
-                    break
-            step_index += 1
-
-    elif rec["freq"] == "yearly":
-        year_index = 0
-        if not limited and range_start.year > anchor.year:
-            year_index = max(0, (range_start.year - anchor.year) // interval)
-        guard = 0
-        while guard < MAX_OCCURRENCES:
-            guard += 1
-            year = anchor.year + year_index * interval
-            if year > horizon.year:
-                break
-            candidate = _day_in_month(year, anchor.month, anchor.day, policy)
-            if candidate is not None:
-                if candidate > horizon:
-                    break
-                if not take(candidate):
-                    break
-            year_index += 1
-
-    return [format_date(d) for d in sorted(results) if format_date(d) not in exceptions]
-
-
-def effective_note(note, occurrence_date):
-    """The note as it should appear on one specific day: the base note, with
-    any per-occurrence override applied on top."""
-    override = (note.get("overrides") or {}).get(occurrence_date)
-    if not isinstance(override, dict):
-        return note
-    merged = dict(note)
-    for field in OVERRIDABLE_FIELDS:
-        if field in override:
-            merged[field] = override[field]
-    return merged
-
-
-def describe_recurrence(note):
-    """Short human-readable summary, e.g. 'Every 2 weeks on Mon, Thu'."""
-    rec = normalize_recurrence(note.get("recurrence"))
-    freq = rec["freq"]
-    if not freq:
-        return ""
-
-    interval = rec["interval"]
-    unit = {"daily": "day", "weekly": "week", "monthly": "month", "yearly": "year"}[freq]
-    base = f"Every {unit}" if interval == 1 else f"Every {interval} {unit}s"
-
-    if freq == "weekly" and rec["weekdays"]:
-        base += " on " + ", ".join(WEEKDAY_NAMES[d] for d in rec["weekdays"])
-    elif freq == "monthly" and rec["month_days"]:
-        base += " on day " + ", ".join(str(d) for d in rec["month_days"])
-
-    if rec["count"]:
-        base += f", {rec['count']} times"
-    elif rec["end"]:
-        base += f", until {rec['end']}"
-
-    return base
 
 
 # ---- Share codes (move notes between devices as copy-paste text) ----
