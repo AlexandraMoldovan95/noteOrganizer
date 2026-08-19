@@ -8,6 +8,18 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ## [Unreleased]
 
+## [0.32.49] — 2026-08-20
+
+### Fixed
+- Highlighting text that spanned more than one line painted a full-width bar across every fully covered line, stretching far past the words instead of hugging them. Tk paints a background across the whole remaining width of a line whenever the highlight covers that line's invisible newline; highlights are now applied line by line and never include it. Notes highlighted before this fix render correctly too, without needing to be re-highlighted — and typing with a highlight still "stuck" on no longer bleeds when you press Enter.
+- The note body's right-click menu didn't line up: its entries mixed four kinds of decorative prefix (styled mathematical letters, combining underline/strike marks, plain letters and an emoji) which render at different widths, so the words after them lined up with neither each other nor the plain Cut/Copy/Paste entries above. All labels are plain text now, so every entry starts in the same place.
+- The comments box never received the note body's selection fixes, so double-clicking a row with no words in it selected that row's invisible newline and painted a full-width highlight over an empty line. Both fields now share the same handlers: double-click treats punctuation as a word boundary (clicking either side of `something.else` selects just that word), an empty row selects nothing, and triple-click stops at the real end of the line instead of swallowing the newline.
+- A note's own colour could be silently repainted with the current theme's accent when switching to a theme whose palette didn't contain that colour — the theme-switch safety pass that remaps leftover colours couldn't tell a themed widget from a note deliberately coloured the same way. Note cards are now recoloured last, from the note's own data, so the note's colour always wins.
+- Switching themes visibly flickered, showing a half-recoloured page with dark bands across it, and got worse the more notes existed. The bulk of a theme switch was destroying and rebuilding every note card (about 85ms of 121ms, with the list visibly emptying and refilling), plus rebuilding the statistics panel — where no statistic changes when only the palette does — and rebuilding the calendar even while it was off screen. None of that is needed when only colours changed. A switch now takes roughly 26ms instead of about 140ms, and no longer slows down as notes accumulate (going from 40 to 100 notes used to add 117ms; it now adds 19ms).
+
+### Changed
+- The Windows build no longer bundles numpy, which was never imported by the app — it was only included because Pillow can optionally use it for array conversions that nothing here does. This cuts the packaged folder from 68 MB to 38 MB with no change in behaviour; the image and animated-GIF preview path was verified to work with numpy made unavailable. `NoteOrganizer.spec` is now tracked in git as well, so the build recipe can be reproduced from a fresh clone instead of living on one machine.
+
 ## [0.32.44] — 2026-08-19
 
 ### Added
