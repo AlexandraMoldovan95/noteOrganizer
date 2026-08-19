@@ -912,6 +912,52 @@ check("a note's own colour survives a theme switch that doesn't share it",
 app.set_theme('dark')
 app.update()
 
+# ---- A theme switch shouldn't rebuild the calendar while it's off screen
+# (that was ~19ms of pointless churn per switch). It must still be caught up
+# before it becomes visible, so it can never be left showing stale colours.
+app._calendar_needs_render = False
+app.set_theme('light')
+app.update()
+check('a theme switch defers the calendar rebuild while it is off screen',
+      getattr(app, '_calendar_needs_render', False) is True)
+app._catch_up_deferred_refresh()
+app.update()
+check('the deferred calendar rebuild is caught up at the next transition',
+      getattr(app, '_calendar_needs_render', False) is False)
+
+# Statistics is no longer rebuilt on a theme switch either (nothing about a
+# statistic changes when only the palette does), so it must be left with no
+# colour from the previous theme.
+def _stale_colors(root):
+    _cur = {v.lower() for v in app.colors.values()
+            if isinstance(v, str) and v.startswith('#')}
+    _other = set()
+    for _n, _p in NO.THEMES.items():
+        if _n == app.theme_name:
+            continue
+        for _v in _p.values():
+            if isinstance(_v, str) and _v.startswith('#'):
+                _other.add(_v.lower())
+    _suspect = _other - _cur
+    _bad = []
+    def _walk(w):
+        for _o in ('bg', 'fg'):
+            try:
+                if str(w.cget(_o)).lower() in _suspect:
+                    _bad.append((w.__class__.__name__, _o))
+            except Exception:
+                pass
+        for _c in w.winfo_children():
+            _walk(_c)
+    _walk(root)
+    return _bad
+
+for _theme in ('dark_ocean', 'light', 'dark'):
+    app.set_theme(_theme)
+    app.update()
+    check(f'statistics carries no stale colour after switching to {_theme}',
+          not _stale_colors(app.stats_frame))
+
 # ---- Right-click menu labels must all be plain text, so every entry starts
 # at the same x. They used to carry a mix of astral math letters, combining
 # underline/strike marks and emoji, which render at different widths and left

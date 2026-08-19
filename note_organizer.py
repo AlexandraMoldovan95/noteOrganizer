@@ -5727,10 +5727,22 @@ class NoteOrganizer(tk.Tk):
         self.refresh_weekday_buttons()
         self.on_end_mode_changed()
         self.style_notebook()
-        # Statistics still gets its normal redraw, since refresh_note_list()
-        # is what used to trigger it.
-        self._render_statistics()
-        self.render_calendar()
+        # Statistics is deliberately NOT re-rendered here. It destroys and
+        # rebuilds its widgets, and a theme switch changes no statistic --
+        # only the palette, which _recolor_stragglers below handles. It's on
+        # the Settings page, i.e. exactly where the user is standing when
+        # they switch themes, so rebuilding it there was visible churn for
+        # no new information. Real data changes still redraw it through
+        # refresh_note_list(), which is unchanged.
+        #
+        # Same reasoning for the calendar: rebuilding every day cell costs
+        # ~19ms and is pointless while the calendar isn't even on screen.
+        # Checked against the selected tab (reliable state) rather than
+        # winfo_ismapped(), which isn't updated synchronously.
+        if self._calendar_is_showing():
+            self.render_calendar()
+        else:
+            self._calendar_needs_render = True
         # Safety net: catch any widget that slipped through the registered list
         # (e.g. built once and never rebuilt) by swapping known theme colors from
         # the OTHER theme to the current one. This guarantees a clean flip.
@@ -5749,6 +5761,21 @@ class NoteOrganizer(tk.Tk):
         # the straggler pass and left showing the wrong colour. Running last
         # makes the note's own data authoritative. See _recolor_note_cards.
         self._recolor_note_cards()
+
+    def _calendar_is_showing(self):
+        """True only if the Calendar tab is the one currently selected AND
+        the notebook itself is visible (Settings replaces it). Uses the
+        notebook's own selection rather than winfo_ismapped(), which
+        pack()/pack_forget() don't update synchronously."""
+        tab = getattr(self, "_calendar_tab", None)
+        if tab is None:
+            return True  # unknown layout: rebuild rather than risk staleness
+        try:
+            if not self.notebook.winfo_ismapped():
+                return False
+            return str(self.notebook.select()) == str(tab)
+        except tk.TclError:
+            return True
 
     def _recolor_stragglers(self):
         """Walk the whole widget tree and fix any bg/fg still set to a color from
@@ -6025,6 +6052,9 @@ class NoteOrganizer(tk.Tk):
 
         self.notebook.add(notes_tab, text="📝 Notes")
         self.notebook.add(calendar_tab, text="📅 Calendar")
+        # Kept so a theme switch can tell whether the calendar is actually
+        # on screen, and skip rebuilding it if not — see apply_theme.
+        self._calendar_tab = calendar_tab
 
         # Looked up from the notebook itself rather than hardcoded — stays
         # correct even if a tab is ever added, removed, or reordered again.
@@ -9478,7 +9508,14 @@ class NoteOrganizer(tk.Tk):
         otherwise static screen."""
         if getattr(self, "_note_list_needs_refresh", False):
             self._note_list_needs_refresh = False
+            self._calendar_needs_render = False
             self.refresh_note_list()
+            self.render_calendar()
+        elif getattr(self, "_calendar_needs_render", False):
+            # A theme switch happened while the calendar was off screen, so
+            # its rebuild was skipped (see apply_theme). Catch it up now,
+            # before it becomes visible.
+            self._calendar_needs_render = False
             self.render_calendar()
 
     def _update_open_highlight(self):
