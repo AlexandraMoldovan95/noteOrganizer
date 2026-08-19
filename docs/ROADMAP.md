@@ -13,6 +13,9 @@ Found by hand, not yet worked on. Grouped by area.
 **Settings**
 - Layout: each section's title is left-aligned, but the action buttons are centered — inconsistent, makes the page harder to scan at a glance ("eye slalom"). Worth a proper design pass, not just a quick alignment fix — see "Settings redesign" below, this is likely folded into that.
 
+**Theming**
+- Switching between dark and light shows a brief visible flicker before the new theme settles in — purely cosmetic, colors always end up correct. Two fix attempts (Windows redraw suppression, a full-window color-matching cover) were tried and reverted; neither helped, and the second made it visibly worse. See `docs/ISSUES_LOG.md`, "Two attempts at the theme-switch flicker, neither one kept" before trying again.
+
 ## Settings redesign (bigger discussion, own design pass)
 
 The current single-column Settings page makes for a lot of scrolling and doesn't clearly separate "which section am I in" from "what are this section's controls." Considering a restructure closer to how Chrome (and similar apps) lay out settings: a narrow column on the left listing every section, and the actual controls for whichever section is selected on the right, with empty space beyond that rather than everything stretched full-width. Not yet decided whether Settings should become an inline popup/modal (opened from the editor or calendar, floating over the app) or stay as a page of its own — worth a dedicated conversation before building anything, since it affects more than just this list of small alignment fixes above.
