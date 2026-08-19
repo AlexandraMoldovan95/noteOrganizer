@@ -8,6 +8,21 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ## [Unreleased]
 
+## [0.32.44] — 2026-08-19
+
+### Added
+- Phase 2a of rich text formatting: text color and highlight, added to the same toolbar as Bold/Italic/Underline/Strikethrough (and to the right-click menu). Text color and highlight can be combined with each other and with the boolean styles, applied to a selection or queued to "stick" for whatever's typed next, the same way the Phase 1 styles work. The toolbar buttons themselves preview the active color as a real swatch, with the letter's contrast computed automatically so it stays legible against any color on any theme — and the four style toggles and the two color pickers are visually grouped apart from each other ("Style" / "Colors" labels with a divider between them), since they work differently (toggle vs. open-a-picker) and previously all looked like one undifferentiated row of buttons.
+
+### Fixed
+- Switching themes after opening (and closing) the text-color or highlight picker could crash with `TclError: invalid command name` — the picker's hex-code entry (since removed, see Changed below) registered itself for live theme-tracking but was never un-registered once destroyed, the same class of bug as an unbounded-growth leak fixed earlier in the project, just in a different tracking list. This also retroactively fixes the pre-existing note-color picker, which had the exact same latent bug.
+- Right-click → "Select All" in the note body selected through the widget's invisible trailing newline, which visibly stretched the highlight to the full width of the last line regardless of how short it actually was.
+- Triple-clicking a line (or two double-clicks landing close enough together in time to be counted as one) selected through to the start of the *next* line, including the invisible newline in between — which also meant a copy right after picked up an unwanted extra newline. Triple-click now stops at the real end of the line's text.
+- Double-clicking a word right up against punctuation, like `something.else`, selected the whole punctuated run as one "word" regardless of which side was clicked. Double-click now treats punctuation as a hard word boundary, the way most editors do — clicking `something` selects only `something`, clicking `else` selects only `else`.
+- Selecting text that already had a text color or highlight applied showed no visible selection at all, since Tk gives later-created tags higher display priority and the color tags were created after the built-in `sel` tag — the color's own background was silently painting over the selection color. Selection (and re-coloring already-colored text) was never actually broken, just invisible; the `sel` tag is now kept on top of the tag stack so the selection color always wins visually.
+
+### Changed
+- Removed the hex-code entry from both color pickers (the note's own color, and the new text-color/highlight pickers) — swatches only now, since most users don't think in hex. Both palettes were enlarged to compensate: the shared note-color/text-color palette grew from 10 to 15 colors, and the highlight palette from 6 to 10.
+
 ## [0.31.39] — 2026-08-18
 
 ### Added
