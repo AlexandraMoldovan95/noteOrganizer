@@ -2254,7 +2254,7 @@ class NoteOrganizer(tk.Tk):
                                           if isinstance(text_widget, tk.Text)
                                           else text_widget.select_range(0, "end")))
         menu.add_separator()
-        menu.add_command(label="😀  Insert emoji…",
+        menu.add_command(label="Insert emoji…",
                          command=lambda: self._show_emoji_picker(text_widget))
 
         if extra_items:
@@ -2323,7 +2323,7 @@ class NoteOrganizer(tk.Tk):
     @classmethod
     def _char_class(cls, ch):
         # Three classes: contiguous runs of the same class form one
-        # double-click "word" -- used by _select_body_word_at_click so that
+        # double-click "word" -- used by _select_word_at_click so that
         # punctuation like "." always breaks a word (unlike Tk's own
         # default word-boundary detection, which keeps a single "." glued
         # to its surrounding letters, e.g. treating "something.else" as one
@@ -2764,16 +2764,24 @@ class NoteOrganizer(tk.Tk):
             self.body_text.mark_set(self._PENDING_STYLE_ANCHOR, tk.INSERT)
             self._pending_style_last_length = self._pending_style_text_length()
 
-    def _select_body_word_at_click(self, event):
-        """Replaces Tk's default double-click "select word" on the note
-        body with a plain alnum/underscore definition of "word" (see
-        _char_class), so a double-click never crosses a "." or other
-        punctuation -- e.g. double-clicking "something" in
-        "something.else" selects only "something", and double-clicking
-        "else" selects only "else"."""
-        index = self.body_text.index(f"@{event.x},{event.y}")
+    def _select_word_at_click(self, event):
+        """Replaces Tk's default double-click "select word" with a plain
+        alnum/underscore definition of "word" (see _char_class), so a
+        double-click never crosses a "." or other punctuation -- e.g.
+        double-clicking "something" in "something.else" selects only
+        "something", and double-clicking "else" selects only "else".
+
+        Also makes double-clicking an EMPTY line select nothing at all,
+        rather than Tk's default of grabbing that line's invisible newline
+        and painting a full-width selection bar over a row with no words
+        in it.
+
+        Works off event.widget, so the same handler serves the note body
+        and the comments box rather than being tied to either."""
+        w = event.widget
+        index = w.index(f"@{event.x},{event.y}")
         line, col = index.split(".")
-        line_text = self.body_text.get(f"{line}.0", f"{line}.0 lineend")
+        line_text = w.get(f"{line}.0", f"{line}.0 lineend")
         col = min(int(col), len(line_text) - 1)
         if col < 0:
             return "break"
@@ -2786,28 +2794,40 @@ class NoteOrganizer(tk.Tk):
         end = col + 1
         while end < len(line_text) and self._char_class(line_text[end]) == char_cls:
             end += 1
-        self.body_text.tag_remove("sel", "1.0", "end")
-        self.body_text.tag_add("sel", f"{line}.{start}", f"{line}.{end}")
-        self.body_text.mark_set("insert", f"{line}.{end}")
+        w.tag_remove("sel", "1.0", "end")
+        w.tag_add("sel", f"{line}.{start}", f"{line}.{end}")
+        w.mark_set("insert", f"{line}.{end}")
         return "break"
 
-    def _select_body_line_no_newline(self, event):
-        """Replaces Tk's default triple-click "select line" behavior on the
-        note body. Tk's own version selects through the START of the next
-        line, which silently includes the invisible trailing newline
-        character in the selection -- same overshoot as the Select-All fix
-        above, but harder to notice here because it's triggered by mouse
-        clicks (a triple-click, or two double-clicks close enough together
-        in time that Tk counts them as one), not a menu command. Left as-is,
-        it also means copy/paste carries that extra newline along with the
-        line's real text."""
-        index = self.body_text.index(f"@{event.x},{event.y}")
+    def _select_line_no_newline(self, event):
+        """Replaces Tk's default triple-click "select line" behavior. Tk's
+        own version selects through the START of the next line, which
+        silently includes the invisible trailing newline character in the
+        selection -- same overshoot as the Select-All fix above, but harder
+        to notice here because it's triggered by mouse clicks (a
+        triple-click, or two double-clicks close enough together in time
+        that Tk counts them as one), not a menu command. Left as-is, it
+        also means copy/paste carries that extra newline along with the
+        line's real text.
+
+        Works off event.widget, so the same handler serves the note body
+        and the comments box rather than being tied to either."""
+        w = event.widget
+        index = w.index(f"@{event.x},{event.y}")
         line = index.split(".")[0]
         line_start, line_end = f"{line}.0", f"{line}.0 lineend"
-        self.body_text.tag_remove("sel", "1.0", "end")
-        self.body_text.tag_add("sel", line_start, line_end)
-        self.body_text.mark_set("insert", line_end)
+        w.tag_remove("sel", "1.0", "end")
+        w.tag_add("sel", line_start, line_end)
+        w.mark_set("insert", line_end)
         return "break"
+
+    def _bind_text_selection_fixes(self, text_widget):
+        """Apply the double-click (word boundary / empty line) and
+        triple-click (no trailing newline) selection fixes to a Text
+        widget. Used for every multi-line text field the user types real
+        prose into, so selection behaves the same way in all of them."""
+        text_widget.bind("<Double-Button-1>", self._select_word_at_click)
+        text_widget.bind("<Triple-Button-1>", self._select_line_no_newline)
 
     def _uniform_color_in_selection(self, kind, start, end):
         """The single hex color of the given kind ("text_color" or
@@ -6571,13 +6591,12 @@ class NoteOrganizer(tk.Tk):
         self.body_text.bind("<KeyRelease>", self._refresh_format_buttons, add="+")
         self.body_text.bind("<ButtonRelease-1>", self._resync_pending_style_anchor, add="+")
         self.body_text.bind("<ButtonRelease-1>", self._refresh_format_buttons, add="+")
-        # Overrides Tk's default double-click "select word" (see
-        # _select_body_word_at_click) so punctuation like "." always breaks
-        # a word, and its default triple-click "select line" (see
-        # _select_body_line_no_newline) so it stops at the real end of the
-        # line instead of overshooting into the trailing newline.
-        self.body_text.bind("<Double-Button-1>", self._select_body_word_at_click)
-        self.body_text.bind("<Triple-Button-1>", self._select_body_line_no_newline)
+        # Overrides Tk's default double-click "select word" so punctuation
+        # like "." always breaks a word (and an empty line selects
+        # nothing), and its default triple-click "select line" so it stops
+        # at the real end of the line instead of overshooting into the
+        # trailing newline. The comments box gets the same treatment.
+        self._bind_text_selection_fixes(self.body_text)
         # A paste (Ctrl+V, or the right-click menu's synthetic <<Paste>>)
         # must never pick up a pending style — resyncing here, right after
         # the paste's own text lands, means the length-based growth check
@@ -6600,13 +6619,18 @@ class NoteOrganizer(tk.Tk):
         # Let the mousewheel scroll the text box's own content when it overflows,
         # instead of bubbling up to the editor's outer scroll.
         self._bind_text_wheel(self.body_text)
+        # Plain text labels, no decorative glyph prefixes: the styled
+        # characters these used to carry (astral math letters, combining
+        # underline/strike marks, an emoji) all render at different widths,
+        # so the words after them lined up neither with each other nor with
+        # the unprefixed Cut/Copy/Paste entries above.
         self._add_paste_menu(self.body_text, extra_items=[
-            ("𝐁  Bold", lambda: self._toggle_body_style("bold"), "Ctrl+B"),
-            ("𝑰  Italic", lambda: self._toggle_body_style("italic"), "Ctrl+I"),
-            ("U̲  Underline", lambda: self._toggle_body_style("underline"), "Ctrl+U"),
-            ("S̶  Strikethrough", lambda: self._toggle_body_style("strike"), "Ctrl+D"),
-            ("A  Text color…", lambda: self._open_color_swatch_popup("text_color")),
-            ("🖍  Highlight…", lambda: self._open_color_swatch_popup("highlight")),
+            ("Bold", lambda: self._toggle_body_style("bold"), "Ctrl+B"),
+            ("Italic", lambda: self._toggle_body_style("italic"), "Ctrl+I"),
+            ("Underline", lambda: self._toggle_body_style("underline"), "Ctrl+U"),
+            ("Strikethrough", lambda: self._toggle_body_style("strike"), "Ctrl+D"),
+            ("Text color…", lambda: self._open_color_swatch_popup("text_color")),
+            ("Highlight…", lambda: self._open_color_swatch_popup("highlight")),
         ])
         self.update_word_count()
 
@@ -6682,6 +6706,7 @@ class NoteOrganizer(tk.Tk):
         self.comments_text.pack(side="left", fill="both", expand=True)
         self._bind_text_wheel(self.comments_text)
         self._add_paste_menu(self.comments_text)
+        self._bind_text_selection_fixes(self.comments_text)
         self.comments_text.bind("<KeyRelease>", self._schedule_autosave)
         # Expand/Collapse toggle for the comments box (compact 4 rows <-> 12).
         self._add_text_resize_toggle(self.editor, self.comments_text,

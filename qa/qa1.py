@@ -857,6 +857,67 @@ check('switching themes after the widget is destroyed does not crash', theme_swi
 check('the destroyed entry is pruned from self._placeholders, not left dangling',
       my_entry is not None and all(e is not my_entry for e, _ in app._placeholders))
 
+# ---- Right-click menu labels must all be plain text, so every entry starts
+# at the same x. They used to carry a mix of astral math letters, combining
+# underline/strike marks and emoji, which render at different widths and left
+# the words after them lining up with nothing.
+def _menu_labels(widget):
+    menus = [w for w in widget.winfo_children() if isinstance(w, NO.tk.Menu)]
+    if not menus:
+        return []
+    m = menus[0]
+    return [m.entrycget(i, 'label') for i in range(m.index('end') + 1)
+            if m.type(i) == 'command']
+
+def _is_plain(s):
+    return all(not (ord(c) > 0x2100 or 0x0300 <= ord(c) <= 0x036F) for c in s)
+
+_body_menu = _menu_labels(app.body_text)
+check('every right-click menu label is plain text (aligned, no glyph prefixes)',
+      bool(_body_menu) and all(_is_plain(l) for l in _body_menu))
+check('no right-click menu label is indented relative to the others',
+      all(l == l.lstrip() for l in _body_menu))
+check('the formatting entries are still present in the body menu',
+      {'Bold', 'Italic', 'Underline', 'Strikethrough'} <= set(_body_menu))
+
+# ---- Regression: the comments box had none of the note body's selection
+# fixes, so double-clicking a row with no words in it grabbed that row's
+# invisible newline and painted a full-width selection over an empty line.
+def _dbl_xy(w, x, y, t):
+    w.event_generate('<Button-1>', x=x, y=y, time=t)
+    w.event_generate('<ButtonRelease-1>', x=x, y=y, time=t + 10)
+    w.event_generate('<Button-1>', x=x, y=y, time=t + 120)
+    w.event_generate('<ButtonRelease-1>', x=x, y=y, time=t + 130)
+    app.update()
+    r = w.tag_ranges('sel')
+    return w.get(r[0], r[1]) if r else None
+
+app.new_note()
+app.update()
+_c = app.comments_text
+_c.delete('1.0', 'end')
+_c.insert('1.0', 'hello world\n\nfoo.bar\n')
+app.update()
+_bb = _c.bbox('2.0')
+check('comments: double-clicking an empty row selects nothing',
+      _bb is not None
+      and _dbl_xy(_c, _bb[0] + 2, _bb[1] + _bb[3] // 2, 41000) is None)
+_c.tag_remove('sel', '1.0', 'end')
+app.update()
+_bbw = _c.bbox('1.2')
+check('comments: double-clicking a word selects just that word',
+      _bbw is not None
+      and _dbl_xy(_c, _bbw[0] + _bbw[2] // 2, _bbw[1] + _bbw[3] // 2, 42000) == 'hello')
+_c.tag_remove('sel', '1.0', 'end')
+app.update()
+_bbp = _c.bbox('3.1')
+check('comments: punctuation breaks a double-clicked word, same as the body',
+      _bbp is not None
+      and _dbl_xy(_c, _bbp[0] + _bbp[2] // 2, _bbp[1] + _bbp[3] // 2, 43000) == 'foo')
+_c.tag_remove('sel', '1.0', 'end')
+_c.delete('1.0', 'end')
+app.update()
+
 # ---- PERSISTENCE TO DISK ----
 app.save_notes()
 disk_path = NO.DATA_FILE
