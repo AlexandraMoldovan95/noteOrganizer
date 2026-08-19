@@ -2293,6 +2293,13 @@ class NoteOrganizer(tk.Tk):
         text_widget.tag_configure("bold_italic", font=self._fmt_bold_italic_font)
         text_widget.tag_configure("underline", underline=True)
         text_widget.tag_configure("strike", overstrike=True)
+        # Tk gives later-configured tags higher display priority, and "sel"
+        # is created before any of these -- left alone, a highlight/text
+        # color tag always paints over the selection color, making selected
+        # highlighted text look unselected even though it really is (see
+        # _ensure_color_tag, which re-raises "sel" for the same reason
+        # whenever a new color tag is created later).
+        text_widget.tag_raise("sel")
 
     @staticmethod
     def _char_offset(w, index):
@@ -2336,6 +2343,11 @@ class NoteOrganizer(tk.Tk):
             text_widget.tag_configure(tag, foreground=hex_color)
         else:
             text_widget.tag_configure(tag, background=hex_color)
+        # A newly created tag becomes the new highest display priority,
+        # which would bury "sel" underneath it -- see the matching
+        # tag_raise("sel") in _setup_body_formatting_tags for why that
+        # matters.
+        text_widget.tag_raise("sel")
         return tag
 
     def _extract_formatting(self, text_widget):
