@@ -771,24 +771,28 @@ reloaded_colors = [s for s in app._extract_formatting(app.body_text)
 check('reopening the note reapplies its saved color formatting',
       len(reloaded_colors) == len(color_spans))
 
-# ---- Regression: opening a color picker (its hex-code entry registers in
-# self._placeholders, same as the note's own pre-existing color picker)
-# then switching themes used to crash with "invalid command name" -- the
-# popup, and its entry, are long destroyed by the time the next theme
-# switch tries to read it. Real button clicks throughout, not calling
-# internals directly.
+# ---- Regression: a placeholder-registered widget (self._placeholders)
+# that gets destroyed before the next theme switch used to crash with
+# "invalid command name" -- the widget is long gone by the time
+# _refresh_placeholder_colors tries to read it. This used to be exercised
+# via the color picker's hex-code entry, since destroyed on every popup
+# close; that entry was removed (swatches only now, no hex input), so this
+# drives the same self._placeholders/_refresh_placeholder_colors mechanism
+# directly with a throwaway widget instead of relying on incidental popup
+# structure that can change independently of this regression.
 # Track THIS specific entry by identity, not a raw list count -- earlier
 # parts of this same test run (template editor, category pickers, ...)
 # may already have left their own stale, not-yet-pruned entries sitting
 # in self._placeholders, so comparing counts would be thrown off by
 # however many of THOSE also get swept up by the same theme switch.
 entries_before = {id(e) for e, _ in app._placeholders}
-app.text_color_btn.invoke()
+throwaway = NO.tk.Entry(app)
+app.add_placeholder(throwaway, 'throwaway placeholder')
 app.update()
 new_entries = [e for e, _ in app._placeholders if id(e) not in entries_before]
-check('opening the color picker registers its hex entry', len(new_entries) == 1)
+check('add_placeholder registers the widget in self._placeholders', len(new_entries) == 1)
 my_entry = new_entries[0] if new_entries else None
-app._dismiss_mini_popup()
+throwaway.destroy()
 app.update()
 try:
     app.set_theme('light' if app.theme_name != 'light' else 'dark')
@@ -797,7 +801,7 @@ try:
 except Exception as e:
     print('  exception:', e)
     theme_switch_ok = False
-check('switching themes after closing the color picker does not crash', theme_switch_ok)
+check('switching themes after the widget is destroyed does not crash', theme_switch_ok)
 check('the destroyed entry is pruned from self._placeholders, not left dangling',
       my_entry is not None and all(e is not my_entry for e, _ in app._placeholders))
 

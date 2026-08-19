@@ -1726,11 +1726,14 @@ def persist_categories():
     save_settings(settings)
 
 
-# Quick-pick palette offered when choosing a custom note color.
-# "Custom..." (via the system color picker) is always available too.
+# Quick-pick palette offered when choosing a custom note color, and (below)
+# for text color. Swatches only, deliberately — no hex-code entry, since
+# most users don't think in hex; the palette is sized generously instead so
+# picking a swatch stays a real choice, not just the ten "obvious" colors.
 PRESET_NOTE_COLORS = [
     "#7c5cff", "#4cc9f0", "#f9c74f", "#f77f00", "#ff5c7c",
     "#4cd9a3", "#ff8fa3", "#a3a3ff", "#ffd166", "#06d6a0",
+    "#e63946", "#3a86ff", "#c77dff", "#8ac926", "#6c757d",
 ]
 
 # Note body TEXT color reuses PRESET_NOTE_COLORS above, for visual
@@ -1746,6 +1749,10 @@ HIGHLIGHT_COLOR_PALETTE = [
     "#cde7ff",  # soft blue
     "#ffe0b3",  # soft peach
     "#e0d4ff",  # soft purple
+    "#ffd1d1",  # soft coral
+    "#c8f4ec",  # soft teal
+    "#e8e8e8",  # soft gray
+    "#f0f4c3",  # soft lime
 ]
 
 SIDEBAR_WIDTH = 280
@@ -2573,10 +2580,12 @@ class NoteOrganizer(tk.Tk):
 
     def _open_color_swatch_popup(self, kind):
         """Text-color/highlight picker popup — a grid of swatches plus a
-        hex-code entry and a Clear option, anchored to the toolbar button
-        that opened it. Closely mirrors open_color_picker() (the note's
-        own color), reused here with a different palette and a different
-        target (the body text's formatting instead of the note's color)."""
+        Clear option, anchored to the toolbar button that opened it.
+        Closely mirrors open_color_picker() (the note's own color), reused
+        here with a different palette and a different target (the body
+        text's formatting instead of the note's color). Swatches only, no
+        hex-code entry -- most users don't think in hex, so the palette is
+        the whole picker."""
         self._dismiss_mini_popup()
         palette = PRESET_NOTE_COLORS if kind == "text_color" else HIGHLIGHT_COLOR_PALETTE
         anchor_btn = self.text_color_btn if kind == "text_color" else self.highlight_btn
@@ -2608,35 +2617,6 @@ class NoteOrganizer(tk.Tk):
                 relief="flat", cursor="hand2", command=lambda c=hex_color: _choose(c)
             )
             swatch.grid(row=i // 5, column=i % 5, padx=4, pady=4)
-
-        # Hex-code entry for anything outside the curated palette.
-        hex_row = tk.Frame(body, bg=self.colors["card"])
-        hex_row.pack(fill="x", padx=15, pady=(8, 4))
-        hex_var = tk.StringVar(value="")
-        hex_entry = tk.Entry(
-            hex_row, textvariable=hex_var, relief="flat", font=("Segoe UI", 9),
-            bg=self.colors["sidebar"], fg=self.colors["text"],
-            insertbackground=self.colors["text"], width=12
-        )
-        hex_entry.pack(side="left", fill="x", expand=True, ipady=4)
-        self.add_placeholder(hex_entry, "#hex code")
-        error_lbl = tk.Label(body, text="", font=("Segoe UI", 8),
-                             bg=self.colors["card"], fg=self.colors["danger"])
-
-        def _apply_hex(event=None):
-            raw = hex_var.get().strip()
-            if raw and raw != "#hex code" and not raw.startswith("#"):
-                raw = "#" + raw
-            if _is_valid_hex_color(raw):
-                _choose(raw)
-            else:
-                error_lbl.config(text="Enter a valid hex color, e.g. #3498db")
-                error_lbl.pack(padx=15, pady=(0, 4))
-
-        hex_entry.bind("<Return>", _apply_hex)
-        tk.Button(hex_row, text="Apply", command=_apply_hex, relief="flat",
-                  cursor="hand2", bg=self.colors["accent"], fg="white",
-                  font=("Segoe UI", 9, "bold")).pack(side="left", padx=(6, 0), ipadx=8, ipady=4)
 
         button_row = tk.Frame(body, bg=self.colors["card"])
         button_row.pack(fill="x", padx=15, pady=(8, 14))
@@ -8173,9 +8153,10 @@ class NoteOrganizer(tk.Tk):
             self.color_hint_lbl.config(text="category color")
 
     def open_color_picker(self):
-        """Pick this note's own color: a curated palette, plus a hex-code entry
-        for anything else. Renders as an in-app dropdown anchored to the color
-        swatch button, not a separate window."""
+        """Pick this note's own color from a curated palette. Renders as an
+        in-app dropdown anchored to the color swatch button, not a separate
+        window. Swatches only, no hex-code entry -- most users don't think
+        in hex, so the palette is the whole picker."""
         self._dismiss_mini_popup()
         popup = tk.Toplevel(self)
         self._mini_popup = popup
@@ -8205,36 +8186,6 @@ class NoteOrganizer(tk.Tk):
                 relief="flat", cursor="hand2", command=lambda c=hex_color: _choose(c)
             )
             swatch.grid(row=i // 5, column=i % 5, padx=4, pady=4)
-
-        # Hex-code entry replaces the OS color-chooser dialog — types any color
-        # without leaving the app.
-        hex_row = tk.Frame(body, bg=self.colors["card"])
-        hex_row.pack(fill="x", padx=15, pady=(8, 4))
-        hex_var = tk.StringVar(value=self.current_note_color or "")
-        hex_entry = tk.Entry(
-            hex_row, textvariable=hex_var, relief="flat", font=("Segoe UI", 9),
-            bg=self.colors["sidebar"], fg=self.colors["text"],
-            insertbackground=self.colors["text"], width=12
-        )
-        hex_entry.pack(side="left", fill="x", expand=True, ipady=4)
-        self.add_placeholder(hex_entry, "#hex code")
-        error_lbl = tk.Label(body, text="", font=("Segoe UI", 8),
-                             bg=self.colors["card"], fg=self.colors["danger"])
-
-        def _apply_hex(event=None):
-            raw = hex_var.get().strip()
-            if raw and raw != "#hex code" and not raw.startswith("#"):
-                raw = "#" + raw
-            if len(raw) == 7 and all(c in "0123456789abcdefABCDEF" for c in raw[1:]):
-                _choose(raw)
-            else:
-                error_lbl.config(text="Enter a valid hex color, e.g. #3498db")
-                error_lbl.pack(padx=15, pady=(0, 4))
-
-        hex_entry.bind("<Return>", _apply_hex)
-        tk.Button(hex_row, text="Apply", command=_apply_hex, relief="flat",
-                  cursor="hand2", bg=self.colors["accent"], fg="white",
-                  font=("Segoe UI", 9, "bold")).pack(side="left", padx=(6, 0), ipadx=8, ipady=4)
 
         button_row = tk.Frame(body, bg=self.colors["card"])
         button_row.pack(fill="x", padx=15, pady=(8, 14))
