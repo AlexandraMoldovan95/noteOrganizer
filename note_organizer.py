@@ -2304,6 +2304,24 @@ class NoteOrganizer(tk.Tk):
         result = w.count("1.0", index, "chars")
         return result[0] if result else 0
 
+    _WORD_CHAR_RE = re.compile(r"\w", re.UNICODE)
+
+    @classmethod
+    def _char_class(cls, ch):
+        # Three classes: contiguous runs of the same class form one
+        # double-click "word" -- used by _select_body_word_at_click so that
+        # punctuation like "." always breaks a word (unlike Tk's own
+        # default word-boundary detection, which keeps a single "." glued
+        # to its surrounding letters, e.g. treating "something.else" as one
+        # word regardless of which side of the "." was clicked).
+        if not ch:
+            return None
+        if cls._WORD_CHAR_RE.match(ch):
+            return "word"
+        if ch.isspace():
+            return "space"
+        return "other"
+
     @staticmethod
     def _color_tag_name(style, hex_color):
         # A fixed tag name per style (bold, underline, ...) doesn't work for
@@ -2719,6 +2737,33 @@ class NoteOrganizer(tk.Tk):
         if self._has_any_pending_style() and self._PENDING_STYLE_ANCHOR in self.body_text.mark_names():
             self.body_text.mark_set(self._PENDING_STYLE_ANCHOR, tk.INSERT)
             self._pending_style_last_length = self._pending_style_text_length()
+
+    def _select_body_word_at_click(self, event):
+        """Replaces Tk's default double-click "select word" on the note
+        body with a plain alnum/underscore definition of "word" (see
+        _char_class), so a double-click never crosses a "." or other
+        punctuation -- e.g. double-clicking "something" in
+        "something.else" selects only "something", and double-clicking
+        "else" selects only "else"."""
+        index = self.body_text.index(f"@{event.x},{event.y}")
+        line, col = index.split(".")
+        line_text = self.body_text.get(f"{line}.0", f"{line}.0 lineend")
+        col = min(int(col), len(line_text) - 1)
+        if col < 0:
+            return "break"
+        char_cls = self._char_class(line_text[col])
+        if char_cls is None:
+            return "break"
+        start = col
+        while start > 0 and self._char_class(line_text[start - 1]) == char_cls:
+            start -= 1
+        end = col + 1
+        while end < len(line_text) and self._char_class(line_text[end]) == char_cls:
+            end += 1
+        self.body_text.tag_remove("sel", "1.0", "end")
+        self.body_text.tag_add("sel", f"{line}.{start}", f"{line}.{end}")
+        self.body_text.mark_set("insert", f"{line}.{end}")
+        return "break"
 
     def _select_body_line_no_newline(self, event):
         """Replaces Tk's default triple-click "select line" behavior on the
@@ -6493,9 +6538,12 @@ class NoteOrganizer(tk.Tk):
         self.body_text.bind("<KeyRelease>", self._refresh_format_buttons, add="+")
         self.body_text.bind("<ButtonRelease-1>", self._resync_pending_style_anchor, add="+")
         self.body_text.bind("<ButtonRelease-1>", self._refresh_format_buttons, add="+")
-        # Overrides Tk's default triple-click "select line" (see
+        # Overrides Tk's default double-click "select word" (see
+        # _select_body_word_at_click) so punctuation like "." always breaks
+        # a word, and its default triple-click "select line" (see
         # _select_body_line_no_newline) so it stops at the real end of the
         # line instead of overshooting into the trailing newline.
+        self.body_text.bind("<Double-Button-1>", self._select_body_word_at_click)
         self.body_text.bind("<Triple-Button-1>", self._select_body_line_no_newline)
         # A paste (Ctrl+V, or the right-click menu's synthetic <<Paste>>)
         # must never pick up a pending style — resyncing here, right after
