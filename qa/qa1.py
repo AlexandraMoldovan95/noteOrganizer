@@ -857,6 +857,61 @@ check('switching themes after the widget is destroyed does not crash', theme_swi
 check('the destroyed entry is pruned from self._placeholders, not left dangling',
       my_entry is not None and all(e is not my_entry for e, _ in app._placeholders))
 
+# ---- A theme switch recolours the note cards in place instead of destroying
+# and rebuilding every one of them (that rebuild was the bulk of the switch's
+# cost, and made the list visibly empty and refill). Two things must hold:
+# the result has to be identical to what a real rebuild produces, and a note's
+# OWN colour must survive -- _recolor_stragglers would otherwise swap out a
+# custom colour that happens to match another theme's palette entry.
+_theme_opts = ('bg', 'fg', 'highlightbackground', 'highlightcolor')
+
+def _card_colors():
+    out = []
+    def walk(w):
+        row = [w.__class__.__name__]
+        for o in _theme_opts:
+            try:
+                row.append(str(w.cget(o)).lower())
+            except Exception:
+                pass
+        out.append(tuple(row))
+        for ch in w.winfo_children():
+            walk(ch)
+    walk(app.list_frame)
+    return out
+
+app.new_note()
+app.title_entry.delete(0, 'end'); app.title_entry.insert(0, 'Palette clash note')
+app.title_entry.config(fg='black')
+app.body_text.insert('1.0', 'body')
+# '#7c5cff' is a preset note colour AND the dark theme's accent -- the exact
+# case where a colour-swapping pass would wrongly repaint it.
+app.current_note_color = '#7c5cff'
+app.save_current_note(auto=False)
+app.update()
+
+app.set_theme('dark')
+app.update()
+_clash_id = app.selected_note_id
+for _theme in ('dark_ocean', 'light_sky', 'light', 'dark'):
+    app.set_theme(_theme)
+    app.update()
+    _in_place = _card_colors()
+    app.refresh_note_list()
+    app.update()
+    check(f'theme switch to {_theme}: in-place card recolour matches a full rebuild',
+          _in_place == _card_colors())
+
+app.set_theme('dark_ocean')
+app.update()
+_info = app._note_card_widgets.get(_clash_id)
+check("a note's own colour survives a theme switch that doesn't share it",
+      _info is not None
+      and str(_info['stripe'].cget('bg')).lower()
+      == app.get_note_color(_info['note']).lower())
+app.set_theme('dark')
+app.update()
+
 # ---- Right-click menu labels must all be plain text, so every entry starts
 # at the same x. They used to carry a mix of astral math letters, combining
 # underline/strike marks and emoji, which render at different widths and left

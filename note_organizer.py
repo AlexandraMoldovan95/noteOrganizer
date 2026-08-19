@@ -5727,13 +5727,28 @@ class NoteOrganizer(tk.Tk):
         self.refresh_weekday_buttons()
         self.on_end_mode_changed()
         self.style_notebook()
-        self.refresh_note_list()
+        # Statistics still gets its normal redraw, since refresh_note_list()
+        # is what used to trigger it.
+        self._render_statistics()
         self.render_calendar()
-        # refresh_note_list() above already refreshes Statistics too.
         # Safety net: catch any widget that slipped through the registered list
         # (e.g. built once and never rebuilt) by swapping known theme colors from
         # the OTHER theme to the current one. This guarantees a clean flip.
         self._recolor_stragglers()
+        # Recolour the note cards in place rather than calling
+        # refresh_note_list(), which destroys and rebuilds every card. That
+        # rebuild was ~85ms of a ~121ms theme switch and made the list
+        # visibly empty and refill -- the theme-switch flicker. Nothing here
+        # depends on the note DATA having changed (it hasn't; only the
+        # palette did), so there is nothing to re-read.
+        #
+        # Deliberately AFTER _recolor_stragglers: a card's stripe/tag colour
+        # comes from the note itself, and a custom note colour that happens
+        # to match some other theme's palette entry (e.g. #7c5cff, which is
+        # also the dark theme's accent) would otherwise be swapped out by
+        # the straggler pass and left showing the wrong colour. Running last
+        # makes the note's own data authoritative. See _recolor_note_cards.
+        self._recolor_note_cards()
 
     def _recolor_stragglers(self):
         """Walk the whole widget tree and fix any bg/fg still set to a color from
@@ -9063,7 +9078,69 @@ class NoteOrganizer(tk.Tk):
 
         self._note_card_widgets[note["id"]] = {
             "card": card, "clickable": widgets, "checkbox": sel_cb, "note": note,
+            # Named references (not positions in "clickable") so a theme
+            # switch can recolour these in place instead of destroying and
+            # rebuilding every card — see _recolor_note_cards.
+            "stripe": stripe, "content": content, "title": title_lbl,
+            "preview": preview_lbl, "tags": cat_lbl,
         }
+
+    def _recolor_note_cards(self):
+        """Re-apply the current theme's colours to the note cards already on
+        screen, instead of destroying and rebuilding every one of them just
+        because the palette changed.
+
+        A full refresh_note_list() was measured at ~85ms of a ~121ms theme
+        switch (roughly 2ms per card), and it's a destroy-then-repopulate:
+        the list visibly empties and refills, which is what the theme-switch
+        flicker actually was. Recolouring in place skips both.
+
+        This is NOT the track_theme() pattern that leaked before (see
+        docs/ISSUES_LOG.md): nothing is appended to a list that outlives the
+        widgets. _note_card_widgets is rebuilt from scratch on every
+        refresh_note_list(), so it only ever holds the cards currently on
+        screen, and dead entries are skipped defensively below.
+
+        The stripe and tag colours are deliberately RECOMPUTED from the note
+        via get_note_color() rather than colour-swapped, so a note's own
+        custom colour survives a theme switch exactly as it would through a
+        real rebuild.
+        """
+        c = self.colors
+        for note_id, info in list(getattr(self, "_note_card_widgets", {}).items()):
+            card = info.get("card")
+            if card is None:
+                continue
+            try:
+                if not card.winfo_exists():
+                    continue
+                note_color = self.get_note_color(info.get("note") or {})
+                card.configure(bg=c["card"], highlightbackground=c["accent"],
+                               highlightcolor=c["accent"])
+                for key in ("content",):
+                    w = info.get(key)
+                    if w is not None:
+                        w.configure(bg=c["card"])
+                stripe = info.get("stripe")
+                if stripe is not None:
+                    stripe.configure(bg=note_color)
+                title = info.get("title")
+                if title is not None:
+                    title.configure(bg=c["card"], fg=c["text"])
+                preview = info.get("preview")
+                if preview is not None:
+                    preview.configure(bg=c["card"], fg=c["subtext"])
+                tags = info.get("tags")
+                if tags is not None:
+                    tags.configure(bg=c["card"], fg=note_color)
+                checkbox = info.get("checkbox")
+                if checkbox is not None:
+                    checkbox.configure(bg=c["card"], activebackground=c["card"],
+                                       selectcolor=c["sidebar"])
+            except tk.TclError:
+                # The card (or one of its children) was destroyed between the
+                # snapshot above and now — nothing to recolour.
+                continue
 
     # ---------- Multi-select for bulk actions ----------
     def _toggle_selection_mode(self):
