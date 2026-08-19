@@ -665,6 +665,112 @@ type_char('Y')
 check('typing right after a paste correctly resumes picking up the pending style',
       'bold' in app.body_text.tag_names('end-2c'))
 
+# ---- Text color / Highlight (Phase 2): real toolbar button click opens
+# the picker popup, then a real swatch button inside it is clicked --
+# not calling _apply_body_color() directly, matching how the rest of
+# this file exercises real widgets.
+def find_swatch_button(widget, bg_color):
+    for c in widget.winfo_children():
+        if isinstance(c, tk.Button) and str(c.cget('bg')) == bg_color:
+            return c
+        found = find_swatch_button(c, bg_color)
+        if found:
+            return found
+    return None
+
+def find_button_by_text(widget, text):
+    for c in widget.winfo_children():
+        if isinstance(c, tk.Button) and str(c.cget('text')) == text:
+            return c
+        found = find_button_by_text(c, text)
+        if found:
+            return found
+    return None
+
+app.new_note()
+app.body_text.insert('1.0', 'Colorful text for testing.')
+app.update()
+color_start = app.body_text.search('Colorful', '1.0', 'end')
+color_end = f'{color_start}+8c'
+app.body_text.tag_add('sel', color_start, color_end)
+app.update()
+
+app.text_color_btn.invoke()
+app.update()
+check('clicking the text-color toolbar button opens a popup',
+      app._mini_popup is not None and app._mini_popup.winfo_exists())
+swatch = find_swatch_button(app._mini_popup, NO.PRESET_NOTE_COLORS[0])
+check('the popup shows a real, clickable swatch button for the first palette color',
+      swatch is not None)
+if swatch:
+    app.body_text.tag_add('sel', color_start, color_end)
+    swatch.invoke()
+    app.update()
+check('clicking a real swatch button applies that text color to the selection',
+      any(n.startswith('text_color_' + NO.PRESET_NOTE_COLORS[0].lstrip('#'))
+          for n in app.body_text.tag_names(color_start)))
+
+# Highlight: same real-button-click pattern, different palette/button.
+app.body_text.tag_add('sel', color_start, color_end)
+app.update()
+app.highlight_btn.invoke()
+app.update()
+hl_swatch = find_swatch_button(app._mini_popup, NO.HIGHLIGHT_COLOR_PALETTE[0])
+check('the highlight popup shows a real swatch for the first highlight color',
+      hl_swatch is not None)
+if hl_swatch:
+    app.body_text.tag_add('sel', color_start, color_end)
+    hl_swatch.invoke()
+    app.update()
+check('clicking a real highlight swatch applies it, alongside the existing text color',
+      any(n.startswith('highlight_' + NO.HIGHLIGHT_COLOR_PALETTE[0].lstrip('#'))
+          for n in app.body_text.tag_names(color_start))
+      and any(n.startswith('text_color_' + NO.PRESET_NOTE_COLORS[0].lstrip('#'))
+              for n in app.body_text.tag_names(color_start)))
+
+# Clear via the popup's real Clear button.
+app.body_text.tag_add('sel', color_start, color_end)
+app.update()
+app.text_color_btn.invoke()
+app.update()
+clear_btn = find_button_by_text(app._mini_popup, 'Clear')
+check('the popup has a real Clear button', clear_btn is not None)
+if clear_btn:
+    app.body_text.tag_add('sel', color_start, color_end)
+    clear_btn.invoke()
+    app.update()
+check('clicking Clear removes the text color but leaves the highlight',
+      not any(n.startswith('text_color_') for n in app.body_text.tag_names(color_start))
+      and any(n.startswith('highlight_') for n in app.body_text.tag_names(color_start)))
+
+# Pending color (nothing selected) sticks for future typing, same
+# mechanism as the boolean styles.
+app.body_text.tag_remove('sel', '1.0', 'end')
+app.update()
+app._apply_body_color('highlight', NO.HIGHLIGHT_COLOR_PALETTE[1])
+app.update()
+check('pending highlight queued via the toolbar path',
+      app._pending_highlight_color == NO.HIGHLIGHT_COLOR_PALETTE[1])
+type_char('Z')
+check('a character typed while a highlight is pending picks it up',
+      any(n.startswith('highlight_' + NO.HIGHLIGHT_COLOR_PALETTE[1].lstrip('#'))
+          for n in app.body_text.tag_names('end-2c')))
+
+# Save/reload round trip.
+app.save_current_note(auto=False)
+app.update()
+color_note = app.find_note(app.selected_note_id)
+color_spans = [s for s in color_note.get('formatting', []) if s.get('style') in ('text_color', 'highlight')]
+check('color spans were saved with the note', len(color_spans) >= 1)
+app.new_note()
+app.update()
+app.load_note(color_note)
+app.update()
+reloaded_colors = [s for s in app._extract_formatting(app.body_text)
+                   if s.get('style') in ('text_color', 'highlight')]
+check('reopening the note reapplies its saved color formatting',
+      len(reloaded_colors) == len(color_spans))
+
 # ---- PERSISTENCE TO DISK ----
 app.save_notes()
 disk_path = NO.DATA_FILE
