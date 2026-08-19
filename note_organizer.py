@@ -481,19 +481,32 @@ def save_settings(settings):
 # A note's "body" stays a plain string everywhere (search, duplicate
 # detection, share codes, templates, previews) — untouched by this feature.
 # Formatting lives in a separate, additive field: a flat list of
-# {"start", "end", "style"} spans, character-offset-based into the plain
-# body text. "bold_italic" is its own style name (not "bold" + "italic"
-# both present) because Tkinter Text tags that both set the widget's font
-# option don't compose — only one wins — so bold+italic together has to be
-# one precomputed compound font, same as a real font would have a distinct
-# bold-italic variant rather than layering two independent effects.
+# {"start", "end", "style"} spans (plus "value" for the two color styles
+# below), character-offset-based into the plain body text. "bold_italic"
+# is its own style name (not "bold" + "italic" both present) because
+# Tkinter Text tags that both set the widget's font option don't compose —
+# only one wins — so bold+italic together has to be one precomputed
+# compound font, same as a real font would have a distinct bold-italic
+# variant rather than layering two independent effects.
 KNOWN_FORMAT_STYLES = {"bold", "italic", "bold_italic", "underline", "strike"}
+
+# text_color/highlight carry a "value" (a hex color) instead of being plain
+# on/off styles. Unlike bold/italic, foreground/background are independent
+# Tk tag options — they don't fight the font option the way bold and italic
+# do, so no compound-tag scheme is needed for these two.
+VALUE_FORMAT_STYLES = {"text_color", "highlight"}
+
+
+def _is_valid_hex_color(value):
+    return (isinstance(value, str) and len(value) == 7 and value[0] == "#"
+            and all(c in "0123456789abcdefABCDEF" for c in value[1:]))
 
 
 def normalize_formatting(value):
     """Coerce a note/template's formatting list to valid spans, silently
     dropping anything malformed (bad type, unknown style, out-of-order or
-    non-integer offsets) rather than ever letting bad data crash the editor."""
+    non-integer offsets, or — for text_color/highlight — a missing/invalid
+    hex value) rather than ever letting bad data crash the editor."""
     if not isinstance(value, list):
         return []
     spans = []
@@ -502,11 +515,15 @@ def normalize_formatting(value):
             continue
         style = span.get("style")
         start, end = span.get("start"), span.get("end")
-        if (style in KNOWN_FORMAT_STYLES
-                and isinstance(start, int) and not isinstance(start, bool)
+        if not (isinstance(start, int) and not isinstance(start, bool)
                 and isinstance(end, int) and not isinstance(end, bool)
                 and 0 <= start < end):
+            continue
+        if style in KNOWN_FORMAT_STYLES:
             spans.append({"start": start, "end": end, "style": style})
+        elif style in VALUE_FORMAT_STYLES and _is_valid_hex_color(span.get("value")):
+            spans.append({"start": start, "end": end, "style": style,
+                          "value": span["value"].lower()})
     return spans
 
 
@@ -1709,11 +1726,33 @@ def persist_categories():
     save_settings(settings)
 
 
-# Quick-pick palette offered when choosing a custom note color.
-# "Custom..." (via the system color picker) is always available too.
+# Quick-pick palette offered when choosing a custom note color, and (below)
+# for text color. Swatches only, deliberately — no hex-code entry, since
+# most users don't think in hex; the palette is sized generously instead so
+# picking a swatch stays a real choice, not just the ten "obvious" colors.
 PRESET_NOTE_COLORS = [
     "#7c5cff", "#4cc9f0", "#f9c74f", "#f77f00", "#ff5c7c",
     "#4cd9a3", "#ff8fa3", "#a3a3ff", "#ffd166", "#06d6a0",
+    "#e63946", "#3a86ff", "#c77dff", "#8ac926", "#6c757d",
+]
+
+# Note body TEXT color reuses PRESET_NOTE_COLORS above, for visual
+# consistency with the rest of the app. HIGHLIGHT (background) color gets
+# its own, separate palette: deliberately soft/pastel, the way a real
+# highlighter marker is, so text drawn on top of it stays readable —
+# PRESET_NOTE_COLORS' vivid, saturated tones work fine as a small accent
+# dot but would be too strong as a block of background behind text.
+HIGHLIGHT_COLOR_PALETTE = [
+    "#fff3b0",  # soft yellow
+    "#c8f4d9",  # soft green
+    "#ffd6e8",  # soft pink
+    "#cde7ff",  # soft blue
+    "#ffe0b3",  # soft peach
+    "#e0d4ff",  # soft purple
+    "#ffd1d1",  # soft coral
+    "#c8f4ec",  # soft teal
+    "#e8e8e8",  # soft gray
+    "#f0f4c3",  # soft lime
 ]
 
 SIDEBAR_WIDTH = 280
@@ -2205,7 +2244,13 @@ class NoteOrganizer(tk.Tk):
         menu.add_command(label="Paste", command=lambda: do("<<Paste>>"))
         menu.add_separator()
         menu.add_command(label="Select All",
-                         command=lambda: (text_widget.tag_add("sel", "1.0", "end")
+                         # "end" (not "end-1c") is a Text widget's implicit
+                         # trailing newline -- including it in the
+                         # selection is why the highlight used to visibly
+                         # stretch to the full width of the last line,
+                         # well past the actual last character, regardless
+                         # of how short that line was.
+                         command=lambda: (text_widget.tag_add("sel", "1.0", "end-1c")
                                           if isinstance(text_widget, tk.Text)
                                           else text_widget.select_range(0, "end")))
         menu.add_separator()
@@ -2255,6 +2300,13 @@ class NoteOrganizer(tk.Tk):
         text_widget.tag_configure("bold_italic", font=self._fmt_bold_italic_font)
         text_widget.tag_configure("underline", underline=True)
         text_widget.tag_configure("strike", overstrike=True)
+        # Tk gives later-configured tags higher display priority, and "sel"
+        # is created before any of these -- left alone, a highlight/text
+        # color tag always paints over the selection color, making selected
+        # highlighted text look unselected even though it really is (see
+        # _ensure_color_tag, which re-raises "sel" for the same reason
+        # whenever a new color tag is created later).
+        text_widget.tag_raise("sel")
 
     @staticmethod
     def _char_offset(w, index):
@@ -2265,6 +2317,45 @@ class NoteOrganizer(tk.Tk):
         # Treat that missing result as a real zero, not a crash.
         result = w.count("1.0", index, "chars")
         return result[0] if result else 0
+
+    _WORD_CHAR_RE = re.compile(r"\w", re.UNICODE)
+
+    @classmethod
+    def _char_class(cls, ch):
+        # Three classes: contiguous runs of the same class form one
+        # double-click "word" -- used by _select_body_word_at_click so that
+        # punctuation like "." always breaks a word (unlike Tk's own
+        # default word-boundary detection, which keeps a single "." glued
+        # to its surrounding letters, e.g. treating "something.else" as one
+        # word regardless of which side of the "." was clicked).
+        if not ch:
+            return None
+        if cls._WORD_CHAR_RE.match(ch):
+            return "word"
+        if ch.isspace():
+            return "space"
+        return "other"
+
+    @staticmethod
+    def _color_tag_name(style, hex_color):
+        # A fixed tag name per style (bold, underline, ...) doesn't work for
+        # color, since the tag itself has to carry a specific value — a
+        # distinct Tk tag per (style, color) pair, created the first time
+        # that exact color is used and reused after that.
+        return f"{style}_{hex_color.lstrip('#').lower()}"
+
+    def _ensure_color_tag(self, text_widget, style, hex_color):
+        tag = self._color_tag_name(style, hex_color)
+        if style == "text_color":
+            text_widget.tag_configure(tag, foreground=hex_color)
+        else:
+            text_widget.tag_configure(tag, background=hex_color)
+        # A newly created tag becomes the new highest display priority,
+        # which would bury "sel" underneath it -- see the matching
+        # tag_raise("sel") in _setup_body_formatting_tags for why that
+        # matters.
+        text_widget.tag_raise("sel")
+        return tag
 
     def _extract_formatting(self, text_widget):
         """Read the widget's current tags back out as a plain span list,
@@ -2278,6 +2369,21 @@ class NoteOrganizer(tk.Tk):
                 end = self._char_offset(text_widget, ranges[i + 1])
                 if end > start:
                     spans.append({"start": start, "end": end, "style": style})
+        for tag_name in text_widget.tag_names():
+            for style in VALUE_FORMAT_STYLES:
+                prefix = style + "_"
+                if not tag_name.startswith(prefix):
+                    continue
+                hex_color = "#" + tag_name[len(prefix):]
+                if not _is_valid_hex_color(hex_color):
+                    continue
+                ranges = text_widget.tag_ranges(tag_name)
+                for i in range(0, len(ranges), 2):
+                    start = self._char_offset(text_widget, ranges[i])
+                    end = self._char_offset(text_widget, ranges[i + 1])
+                    if end > start:
+                        spans.append({"start": start, "end": end, "style": style,
+                                      "value": hex_color})
         return spans
 
     def _extract_formatting_for_stripped_body(self, text_widget, stripped_body):
@@ -2294,7 +2400,10 @@ class NoteOrganizer(tk.Tk):
             start = max(0, span["start"] - lead)
             end = min(limit, span["end"] - lead)
             if end > start:
-                spans.append({"start": start, "end": end, "style": span["style"]})
+                shifted = {"start": start, "end": end, "style": span["style"]}
+                if "value" in span:
+                    shifted["value"] = span["value"]
+                spans.append(shifted)
         return spans
 
     def _apply_formatting(self, text_widget, spans):
@@ -2303,7 +2412,11 @@ class NoteOrganizer(tk.Tk):
             try:
                 start_idx = text_widget.index(f"1.0+{span['start']}c")
                 end_idx = text_widget.index(f"1.0+{span['end']}c")
-                text_widget.tag_add(span["style"], start_idx, end_idx)
+                if span["style"] in VALUE_FORMAT_STYLES:
+                    tag = self._ensure_color_tag(text_widget, span["style"], span["value"])
+                else:
+                    tag = span["style"]
+                text_widget.tag_add(tag, start_idx, end_idx)
             except tk.TclError:
                 pass
 
@@ -2335,6 +2448,21 @@ class NoteOrganizer(tk.Tk):
             return "italic"
         return None
 
+    @staticmethod
+    def _contrasting_fg(hex_color):
+        """Black or near-white, whichever reads better against hex_color —
+        standard perceived-luminance formula. Used so the Text
+        color/Highlight toolbar buttons can show an actual swatch of the
+        active color as their own background (not just a subtle tint
+        applied against the theme's own sidebar color, which was hard to
+        read for some color/theme combinations) while the "A"/"H" letter
+        stays legible regardless of which color from the palette, or
+        which app theme, is in play."""
+        h = hex_color.lstrip("#")
+        r, g, b = (int(h[i:i + 2], 16) for i in (0, 2, 4))
+        luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255
+        return "#1a1a1a" if luminance > 0.6 else "#ffffff"
+
     def _toggle_body_style(self, style):
         """Bold/Italic/Underline/Strikethrough toolbar + right-click handler.
 
@@ -2359,7 +2487,7 @@ class NoteOrganizer(tk.Tk):
             else:
                 self._pending_styles.add(style)
                 self.set_status(f"{style.capitalize()} on — applies to what you type next")
-            if self._pending_styles:
+            if self._has_any_pending_style():
                 # Left gravity: text typed AT this position pushes the
                 # cursor forward but leaves the mark itself behind, so it
                 # keeps marking "where the pending run started" rather than
@@ -2400,9 +2528,119 @@ class NoteOrganizer(tk.Tk):
         self._refresh_format_buttons()
         self._schedule_autosave()
 
+    def _apply_body_color(self, kind, hex_color):
+        """Text-color/highlight-color picker handler. kind is "text_color"
+        or "highlight"; hex_color is the chosen color, or None to clear it.
+
+        Unlike Bold/Italic/Underline/Strikethrough, a color isn't a simple
+        on/off switch — it's "one of a palette, or nothing" — so this
+        isn't quite a toggle: clicking a swatch always sets that color
+        (replacing whichever color of the same kind was already on the
+        selection, if any), and a separate "Clear" entry in the picker
+        popup passes hex_color=None to remove it. With no selection, this
+        sets (or clears) the PENDING color instead, sharing the exact same
+        anchor-mark-and-length-tracking machinery _toggle_body_style uses
+        for the boolean styles — see _has_any_pending_style."""
+        try:
+            start = self.body_text.index("sel.first")
+            end = self.body_text.index("sel.last")
+            has_selection = self.body_text.compare(start, "<", end)
+        except tk.TclError:
+            has_selection = False
+
+        label = "Highlight" if kind == "highlight" else "Text color"
+
+        if not has_selection:
+            if kind == "text_color":
+                self._pending_text_color = hex_color
+            else:
+                self._pending_highlight_color = hex_color
+            self.set_status(f"{label} on — applies to what you type next" if hex_color
+                             else f"{label} off")
+            if self._has_any_pending_style():
+                self.body_text.mark_set(self._PENDING_STYLE_ANCHOR, tk.INSERT)
+                self.body_text.mark_gravity(self._PENDING_STYLE_ANCHOR, "left")
+                self._pending_style_last_length = self._pending_style_text_length()
+            self._refresh_format_buttons()
+            return
+
+        # A span only ever has one text color and one highlight color at a
+        # time -- remove whatever tag of this kind is already there before
+        # adding (or not adding) the new one, rather than layering a
+        # second tag that would just win or lose by tag priority.
+        for tag_name in self.body_text.tag_names():
+            if tag_name.startswith(kind + "_"):
+                self.body_text.tag_remove(tag_name, start, end)
+        if hex_color:
+            tag = self._ensure_color_tag(self.body_text, kind, hex_color)
+            self.body_text.tag_add(tag, start, end)
+
+        self._refresh_format_buttons()
+        self._schedule_autosave()
+
+    def _open_color_swatch_popup(self, kind):
+        """Text-color/highlight picker popup — a grid of swatches plus a
+        Clear option, anchored to the toolbar button that opened it.
+        Closely mirrors open_color_picker() (the note's own color), reused
+        here with a different palette and a different target (the body
+        text's formatting instead of the note's color). Swatches only, no
+        hex-code entry -- most users don't think in hex, so the palette is
+        the whole picker."""
+        self._dismiss_mini_popup()
+        palette = PRESET_NOTE_COLORS if kind == "text_color" else HIGHLIGHT_COLOR_PALETTE
+        anchor_btn = self.text_color_btn if kind == "text_color" else self.highlight_btn
+        label_text = "Pick a text color" if kind == "text_color" else "Pick a highlight color"
+
+        popup = tk.Toplevel(self)
+        self._mini_popup = popup
+        popup.wm_overrideredirect(True)
+        popup.configure(bg=self.colors["accent"])
+        outer = tk.Frame(popup, bg=self.colors["card"], padx=1, pady=1)
+        outer.pack()
+        body = tk.Frame(outer, bg=self.colors["card"])
+        body.pack()
+
+        label = tk.Label(body, text=label_text, font=("Segoe UI", 10, "bold"),
+                          bg=self.colors["card"], fg=self.colors["text"])
+        label.pack(padx=15, pady=(12, 8))
+
+        swatch_grid = tk.Frame(body, bg=self.colors["card"])
+        swatch_grid.pack(padx=15)
+
+        def _choose(color):
+            self._apply_body_color(kind, color)
+            self._dismiss_mini_popup()
+
+        for i, hex_color in enumerate(palette):
+            swatch = tk.Button(
+                swatch_grid, bg=hex_color, activebackground=hex_color, width=3, height=1,
+                relief="flat", cursor="hand2", command=lambda c=hex_color: _choose(c)
+            )
+            swatch.grid(row=i // 5, column=i % 5, padx=4, pady=4)
+
+        button_row = tk.Frame(body, bg=self.colors["card"])
+        button_row.pack(fill="x", padx=15, pady=(8, 14))
+        clear_btn = tk.Button(
+            button_row, text="Clear", command=lambda: _choose(None), relief="flat",
+            bg=self.colors["sidebar"], fg=self.colors["text"], cursor="hand2", font=("Segoe UI", 9)
+        )
+        clear_btn.pack(fill="x", ipady=5)
+
+        self._place_dropdown_popup(popup, anchor_btn)
+
     def _pending_style_text_length(self):
         result = self.body_text.count("1.0", "end-1c", "chars")
         return result[0] if result else 0
+
+    def _has_any_pending_style(self):
+        """True if there's anything queued for the next typed character —
+        a boolean style (bold/italic/underline/strike) or a color. Colors
+        aren't members of _pending_styles (a color isn't on/off, it's a
+        value, or nothing), so this is the one place that needs to know
+        about both kinds together — anywhere that used to just check
+        "is _pending_styles non-empty" now goes through this instead."""
+        return bool(self._pending_styles) or bool(self._pending_text_color) \
+            or bool(self._pending_highlight_color)
 
     def _apply_pending_style_to_typed_char(self, event=None):
         """Tag whatever's accumulated since _PENDING_STYLE_ANCHOR (set when
@@ -2451,7 +2689,7 @@ class NoteOrganizer(tk.Tk):
         already-proven-safe Tkinter usage (the same kind of mark tracking
         the calculator's insert-into-note feature already relies on).
         See docs/ISSUES_LOG.md."""
-        if not self._pending_styles:
+        if not self._has_any_pending_style():
             return
         if self._PENDING_STYLE_ANCHOR not in self.body_text.mark_names():
             return
@@ -2471,6 +2709,12 @@ class NoteOrganizer(tk.Tk):
                 self.body_text.tag_add("underline", start_idx, end_idx)
             if "strike" in self._pending_styles:
                 self.body_text.tag_add("strike", start_idx, end_idx)
+            if self._pending_text_color:
+                color_tag = self._ensure_color_tag(self.body_text, "text_color", self._pending_text_color)
+                self.body_text.tag_add(color_tag, start_idx, end_idx)
+            if self._pending_highlight_color:
+                color_tag = self._ensure_color_tag(self.body_text, "highlight", self._pending_highlight_color)
+                self.body_text.tag_add(color_tag, start_idx, end_idx)
         self.body_text.mark_set(self._PENDING_STYLE_ANCHOR, end_idx)
         self._pending_style_last_length = current_length
 
@@ -2482,9 +2726,74 @@ class NoteOrganizer(tk.Tk):
         separately, below), so a later keystroke only ever extends the
         tag over genuinely new typing, never a stretch of older text or a
         pasted block it was never meant to touch."""
-        if self._pending_styles and self._PENDING_STYLE_ANCHOR in self.body_text.mark_names():
+        if self._has_any_pending_style() and self._PENDING_STYLE_ANCHOR in self.body_text.mark_names():
             self.body_text.mark_set(self._PENDING_STYLE_ANCHOR, tk.INSERT)
             self._pending_style_last_length = self._pending_style_text_length()
+
+    def _select_body_word_at_click(self, event):
+        """Replaces Tk's default double-click "select word" on the note
+        body with a plain alnum/underscore definition of "word" (see
+        _char_class), so a double-click never crosses a "." or other
+        punctuation -- e.g. double-clicking "something" in
+        "something.else" selects only "something", and double-clicking
+        "else" selects only "else"."""
+        index = self.body_text.index(f"@{event.x},{event.y}")
+        line, col = index.split(".")
+        line_text = self.body_text.get(f"{line}.0", f"{line}.0 lineend")
+        col = min(int(col), len(line_text) - 1)
+        if col < 0:
+            return "break"
+        char_cls = self._char_class(line_text[col])
+        if char_cls is None:
+            return "break"
+        start = col
+        while start > 0 and self._char_class(line_text[start - 1]) == char_cls:
+            start -= 1
+        end = col + 1
+        while end < len(line_text) and self._char_class(line_text[end]) == char_cls:
+            end += 1
+        self.body_text.tag_remove("sel", "1.0", "end")
+        self.body_text.tag_add("sel", f"{line}.{start}", f"{line}.{end}")
+        self.body_text.mark_set("insert", f"{line}.{end}")
+        return "break"
+
+    def _select_body_line_no_newline(self, event):
+        """Replaces Tk's default triple-click "select line" behavior on the
+        note body. Tk's own version selects through the START of the next
+        line, which silently includes the invisible trailing newline
+        character in the selection -- same overshoot as the Select-All fix
+        above, but harder to notice here because it's triggered by mouse
+        clicks (a triple-click, or two double-clicks close enough together
+        in time that Tk counts them as one), not a menu command. Left as-is,
+        it also means copy/paste carries that extra newline along with the
+        line's real text."""
+        index = self.body_text.index(f"@{event.x},{event.y}")
+        line = index.split(".")[0]
+        line_start, line_end = f"{line}.0", f"{line}.0 lineend"
+        self.body_text.tag_remove("sel", "1.0", "end")
+        self.body_text.tag_add("sel", line_start, line_end)
+        self.body_text.mark_set("insert", line_end)
+        return "break"
+
+    def _uniform_color_in_selection(self, kind, start, end):
+        """The single hex color of the given kind ("text_color" or
+        "highlight") that covers the ENTIRE [start, end) range, or None if
+        the range is empty, uncolored, or a mix of more than one color —
+        the color-preview equivalent of _selection_has_style."""
+        prefix = kind + "_"
+        color = None
+        idx = start
+        while self.body_text.compare(idx, "<", end):
+            names = [n for n in self.body_text.tag_names(idx) if n.startswith(prefix)]
+            if not names:
+                return None
+            this_hex = "#" + names[0][len(prefix):]
+            if color is None:
+                color = this_hex
+            elif color != this_hex:
+                return None
+            idx = self.body_text.index(f"{idx}+1c")
+        return color
 
     def _refresh_format_buttons(self, event=None):
         """Reflect the current selection's styles — or, with no selection,
@@ -2509,6 +2818,32 @@ class NoteOrganizer(tk.Tk):
                 relief="sunken" if active else "flat",
                 bg=self.colors["accent"] if active else self.colors["sidebar"],
                 fg="white" if active else self.colors["text"],
+            )
+
+        if hasattr(self, "text_color_btn"):
+            if has_selection:
+                text_color = self._uniform_color_in_selection("text_color", start, end)
+                highlight_color = self._uniform_color_in_selection("highlight", start, end)
+            else:
+                text_color = self._pending_text_color
+                highlight_color = self._pending_highlight_color
+            # Both buttons show an actual swatch of the active color as
+            # their own background when one is set (matching the note's
+            # own color-swatch button elsewhere in the app — a familiar
+            # pattern, not a new visual language), falling back to the
+            # theme's normal button look when nothing is active. Either
+            # way the letter's contrast is computed from whatever
+            # background is actually showing, so it stays legible for
+            # any palette color against any app theme.
+            tc_bg = text_color or self.colors["sidebar"]
+            hl_bg = highlight_color or self.colors["sidebar"]
+            self.text_color_btn.configure(
+                bg=tc_bg, activebackground=tc_bg,
+                fg=self._contrasting_fg(tc_bg) if text_color else self.colors["text"],
+            )
+            self.highlight_btn.configure(
+                bg=hl_bg, activebackground=hl_bg,
+                fg=self._contrasting_fg(hl_bg) if highlight_color else self.colors["text"],
             )
 
     # A curated set — common, broadly useful emojis grouped loosely by theme,
@@ -5380,11 +5715,28 @@ class NoteOrganizer(tk.Tk):
             pass
 
     def _refresh_placeholder_colors(self):
+        # self._placeholders only ever grows (add_placeholder() appends,
+        # nothing ever removes an entry when the widget that owns it is
+        # later destroyed) -- harmless for a permanent field, but every
+        # hex-code entry inside a temporary color-picker popup (this
+        # feature's two new ones, and the note's own pre-existing color
+        # picker) registers here too, and gets destroyed the moment its
+        # popup closes. The next theme switch after that used to crash on
+        # "invalid command name" trying to read a long-gone widget. Prune
+        # dead entries here, the first time each one is found stale,
+        # rather than letting the list accumulate references that can
+        # never be read again.
+        alive = []
         for entry, placeholder in getattr(self, "_placeholders", []):
-            if entry.get() == placeholder:
-                entry.config(fg=self.colors["subtext"])
-            else:
-                entry.config(fg=self.colors["text"])
+            try:
+                if entry.get() == placeholder:
+                    entry.config(fg=self.colors["subtext"])
+                else:
+                    entry.config(fg=self.colors["text"])
+                alive.append((entry, placeholder))
+            except tk.TclError:
+                pass
+        self._placeholders = alive
 
     def style_notebook(self):
         self.style_ttk()
@@ -6104,7 +6456,12 @@ class NoteOrganizer(tk.Tk):
 
         self._fmt_buttons = {}
         self._pending_styles = set()  # styles queued up for the next typed char
+        self._pending_text_color = None  # hex, or None
+        self._pending_highlight_color = None  # hex, or None
         self._pending_style_last_length = 0  # baseline for detecting growth
+        style_lbl = tk.Label(format_bar, text="Style", font=("Segoe UI", 8))
+        self.track_theme(style_lbl, bg="bg", fg="subtext")
+        style_lbl.pack(side="left", padx=(0, 6))
         for style, label, label_font in (
             ("bold", "B", ("Segoe UI", 10, "bold")),
             ("italic", "I", ("Segoe UI", 10, "italic")),
@@ -6119,6 +6476,39 @@ class NoteOrganizer(tk.Tk):
             self.track_theme(btn, bg="sidebar", fg="text")
             btn.pack(side="left", padx=(0, 4), ipady=2)
             self._fmt_buttons[style] = btn
+
+        # A thin divider + short label mark the color pickers as their own
+        # group, distinct from the four toggle buttons — they work
+        # differently (open a picker rather than applying anything
+        # directly) and deserve to read that way at a glance, not blend
+        # into the row as two more toggle-looking buttons.
+        divider = tk.Frame(format_bar, width=1)
+        self.track_theme(divider, bg="card")
+        divider.pack(side="left", fill="y", padx=(2, 8), pady=2)
+        colors_lbl = tk.Label(format_bar, text="Colors", font=("Segoe UI", 8))
+        self.track_theme(colors_lbl, bg="bg", fg="subtext")
+        colors_lbl.pack(side="left", padx=(0, 6))
+
+        # Text color / Highlight: unlike the four toggle buttons above,
+        # these open a swatch picker rather than applying anything
+        # directly (there's no single obvious "the" color to toggle).
+        # Each button previews the current state as an actual swatch —
+        # its own background set to the chosen color, with the "A"/"H"
+        # letter's contrast computed to stay legible against it — falling
+        # back to the theme's normal button look when nothing is set. See
+        # _refresh_format_buttons / _contrasting_fg.
+        self.text_color_btn = tk.Button(
+            format_bar, text="A", font=("Segoe UI", 10, "bold"), width=3,
+            relief="flat", cursor="hand2",
+            command=lambda: self._open_color_swatch_popup("text_color")
+        )
+        self.text_color_btn.pack(side="left", padx=(0, 4), ipady=2)
+        self.highlight_btn = tk.Button(
+            format_bar, text="H", font=("Segoe UI", 10, "bold"), width=3,
+            relief="flat", cursor="hand2",
+            command=lambda: self._open_color_swatch_popup("highlight")
+        )
+        self.highlight_btn.pack(side="left", padx=(0, 4), ipady=2)
 
         text_frame = tk.Frame(self.editor)
         self.track_theme(text_frame, bg="card")
@@ -6140,6 +6530,13 @@ class NoteOrganizer(tk.Tk):
         self.body_text.bind("<KeyRelease>", self._refresh_format_buttons, add="+")
         self.body_text.bind("<ButtonRelease-1>", self._resync_pending_style_anchor, add="+")
         self.body_text.bind("<ButtonRelease-1>", self._refresh_format_buttons, add="+")
+        # Overrides Tk's default double-click "select word" (see
+        # _select_body_word_at_click) so punctuation like "." always breaks
+        # a word, and its default triple-click "select line" (see
+        # _select_body_line_no_newline) so it stops at the real end of the
+        # line instead of overshooting into the trailing newline.
+        self.body_text.bind("<Double-Button-1>", self._select_body_word_at_click)
+        self.body_text.bind("<Triple-Button-1>", self._select_body_line_no_newline)
         # A paste (Ctrl+V, or the right-click menu's synthetic <<Paste>>)
         # must never pick up a pending style — resyncing here, right after
         # the paste's own text lands, means the length-based growth check
@@ -6167,6 +6564,8 @@ class NoteOrganizer(tk.Tk):
             ("𝑰  Italic", lambda: self._toggle_body_style("italic"), "Ctrl+I"),
             ("U̲  Underline", lambda: self._toggle_body_style("underline"), "Ctrl+U"),
             ("S̶  Strikethrough", lambda: self._toggle_body_style("strike"), "Ctrl+D"),
+            ("A  Text color…", lambda: self._open_color_swatch_popup("text_color")),
+            ("🖍  Highlight…", lambda: self._open_color_swatch_popup("highlight")),
         ])
         self.update_word_count()
 
@@ -7754,9 +8153,10 @@ class NoteOrganizer(tk.Tk):
             self.color_hint_lbl.config(text="category color")
 
     def open_color_picker(self):
-        """Pick this note's own color: a curated palette, plus a hex-code entry
-        for anything else. Renders as an in-app dropdown anchored to the color
-        swatch button, not a separate window."""
+        """Pick this note's own color from a curated palette. Renders as an
+        in-app dropdown anchored to the color swatch button, not a separate
+        window. Swatches only, no hex-code entry -- most users don't think
+        in hex, so the palette is the whole picker."""
         self._dismiss_mini_popup()
         popup = tk.Toplevel(self)
         self._mini_popup = popup
@@ -7786,36 +8186,6 @@ class NoteOrganizer(tk.Tk):
                 relief="flat", cursor="hand2", command=lambda c=hex_color: _choose(c)
             )
             swatch.grid(row=i // 5, column=i % 5, padx=4, pady=4)
-
-        # Hex-code entry replaces the OS color-chooser dialog — types any color
-        # without leaving the app.
-        hex_row = tk.Frame(body, bg=self.colors["card"])
-        hex_row.pack(fill="x", padx=15, pady=(8, 4))
-        hex_var = tk.StringVar(value=self.current_note_color or "")
-        hex_entry = tk.Entry(
-            hex_row, textvariable=hex_var, relief="flat", font=("Segoe UI", 9),
-            bg=self.colors["sidebar"], fg=self.colors["text"],
-            insertbackground=self.colors["text"], width=12
-        )
-        hex_entry.pack(side="left", fill="x", expand=True, ipady=4)
-        self.add_placeholder(hex_entry, "#hex code")
-        error_lbl = tk.Label(body, text="", font=("Segoe UI", 8),
-                             bg=self.colors["card"], fg=self.colors["danger"])
-
-        def _apply_hex(event=None):
-            raw = hex_var.get().strip()
-            if raw and raw != "#hex code" and not raw.startswith("#"):
-                raw = "#" + raw
-            if len(raw) == 7 and all(c in "0123456789abcdefABCDEF" for c in raw[1:]):
-                _choose(raw)
-            else:
-                error_lbl.config(text="Enter a valid hex color, e.g. #3498db")
-                error_lbl.pack(padx=15, pady=(0, 4))
-
-        hex_entry.bind("<Return>", _apply_hex)
-        tk.Button(hex_row, text="Apply", command=_apply_hex, relief="flat",
-                  cursor="hand2", bg=self.colors["accent"], fg="white",
-                  font=("Segoe UI", 9, "bold")).pack(side="left", padx=(6, 0), ipadx=8, ipady=4)
 
         button_row = tk.Frame(body, bg=self.colors["card"])
         button_row.pack(fill="x", padx=15, pady=(8, 14))
@@ -8846,6 +9216,8 @@ class NoteOrganizer(tk.Tk):
             "body": self.body_text.get("1.0", "end-1c"),
             "formatting": self._extract_formatting(self.body_text),
             "pending_styles": sorted(self._pending_styles),
+            "pending_text_color": self._pending_text_color,
+            "pending_highlight_color": self._pending_highlight_color,
             "comments": self.comments_text.get("1.0", "end-1c"),
             "category": self.category_var.get(),
             "date": date_raw,
@@ -8872,6 +9244,8 @@ class NoteOrganizer(tk.Tk):
         # its body — set after the insert instead, a leftover pending style
         # from whatever tab was open a moment ago could tag this one's text.
         self._pending_styles = set(st.get("pending_styles") or [])
+        self._pending_text_color = st.get("pending_text_color")
+        self._pending_highlight_color = st.get("pending_highlight_color")
         self.body_text.delete("1.0", "end")
         self.body_text.insert("1.0", st["body"])
         self._apply_formatting(self.body_text, st.get("formatting", []))
@@ -9197,6 +9571,8 @@ class NoteOrganizer(tk.Tk):
         self.set_status("New note — not yet saved")
         self.update_word_count()
         self._pending_styles = set()
+        self._pending_text_color = None
+        self._pending_highlight_color = None
         self._refresh_format_buttons()
         self._reset_editor_scroll()
         self._reset_text_undo()
@@ -9217,6 +9593,8 @@ class NoteOrganizer(tk.Tk):
         # insert is "loading a note" rather than "typing", so a stale
         # pending style at this point would silently tag this note's text.
         self._pending_styles = set()
+        self._pending_text_color = None
+        self._pending_highlight_color = None
         self.title_entry.delete(0, "end")
         self.title_entry.insert(0, shown["title"])
         self.title_entry.config(fg=self.colors["text"])
@@ -9992,6 +10370,8 @@ class NoteOrganizer(tk.Tk):
         # styles doesn't know this insert is a restore rather than typing,
         # so a stale pending style at this point would silently tag it.
         self._pending_styles = set()
+        self._pending_text_color = None
+        self._pending_highlight_color = None
         self.title_entry.delete(0, "end")
         self.title_entry.insert(0, prev.get("title", ""))
         self.title_entry.config(fg=self.colors["text"])
