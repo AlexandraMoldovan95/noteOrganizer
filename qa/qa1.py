@@ -771,6 +771,36 @@ reloaded_colors = [s for s in app._extract_formatting(app.body_text)
 check('reopening the note reapplies its saved color formatting',
       len(reloaded_colors) == len(color_spans))
 
+# ---- Regression: opening a color picker (its hex-code entry registers in
+# self._placeholders, same as the note's own pre-existing color picker)
+# then switching themes used to crash with "invalid command name" -- the
+# popup, and its entry, are long destroyed by the time the next theme
+# switch tries to read it. Real button clicks throughout, not calling
+# internals directly.
+# Track THIS specific entry by identity, not a raw list count -- earlier
+# parts of this same test run (template editor, category pickers, ...)
+# may already have left their own stale, not-yet-pruned entries sitting
+# in self._placeholders, so comparing counts would be thrown off by
+# however many of THOSE also get swept up by the same theme switch.
+entries_before = {id(e) for e, _ in app._placeholders}
+app.text_color_btn.invoke()
+app.update()
+new_entries = [e for e, _ in app._placeholders if id(e) not in entries_before]
+check('opening the color picker registers its hex entry', len(new_entries) == 1)
+my_entry = new_entries[0] if new_entries else None
+app._dismiss_mini_popup()
+app.update()
+try:
+    app.set_theme('light' if app.theme_name != 'light' else 'dark')
+    app.update()
+    theme_switch_ok = True
+except Exception as e:
+    print('  exception:', e)
+    theme_switch_ok = False
+check('switching themes after closing the color picker does not crash', theme_switch_ok)
+check('the destroyed entry is pruned from self._placeholders, not left dangling',
+      my_entry is not None and all(e is not my_entry for e, _ in app._placeholders))
+
 # ---- PERSISTENCE TO DISK ----
 app.save_notes()
 disk_path = NO.DATA_FILE

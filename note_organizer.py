@@ -2405,6 +2405,21 @@ class NoteOrganizer(tk.Tk):
             return "italic"
         return None
 
+    @staticmethod
+    def _contrasting_fg(hex_color):
+        """Black or near-white, whichever reads better against hex_color —
+        standard perceived-luminance formula. Used so the Text
+        color/Highlight toolbar buttons can show an actual swatch of the
+        active color as their own background (not just a subtle tint
+        applied against the theme's own sidebar color, which was hard to
+        read for some color/theme combinations) while the "A"/"H" letter
+        stays legible regardless of which color from the palette, or
+        which app theme, is in play."""
+        h = hex_color.lstrip("#")
+        r, g, b = (int(h[i:i + 2], 16) for i in (0, 2, 4))
+        luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255
+        return "#1a1a1a" if luminance > 0.6 else "#ffffff"
+
     def _toggle_body_style(self, style):
         """Bold/Italic/Underline/Strikethrough toolbar + right-click handler.
 
@@ -2751,10 +2766,23 @@ class NoteOrganizer(tk.Tk):
             else:
                 text_color = self._pending_text_color
                 highlight_color = self._pending_highlight_color
-            self.text_color_btn.configure(fg=text_color or self.colors["text"])
+            # Both buttons show an actual swatch of the active color as
+            # their own background when one is set (matching the note's
+            # own color-swatch button elsewhere in the app — a familiar
+            # pattern, not a new visual language), falling back to the
+            # theme's normal button look when nothing is active. Either
+            # way the letter's contrast is computed from whatever
+            # background is actually showing, so it stays legible for
+            # any palette color against any app theme.
+            tc_bg = text_color or self.colors["sidebar"]
+            hl_bg = highlight_color or self.colors["sidebar"]
+            self.text_color_btn.configure(
+                bg=tc_bg, activebackground=tc_bg,
+                fg=self._contrasting_fg(tc_bg) if text_color else self.colors["text"],
+            )
             self.highlight_btn.configure(
-                bg=highlight_color or self.colors["sidebar"],
-                activebackground=highlight_color or self.colors["sidebar"],
+                bg=hl_bg, activebackground=hl_bg,
+                fg=self._contrasting_fg(hl_bg) if highlight_color else self.colors["text"],
             )
 
     # A curated set — common, broadly useful emojis grouped loosely by theme,
@@ -5626,11 +5654,28 @@ class NoteOrganizer(tk.Tk):
             pass
 
     def _refresh_placeholder_colors(self):
+        # self._placeholders only ever grows (add_placeholder() appends,
+        # nothing ever removes an entry when the widget that owns it is
+        # later destroyed) -- harmless for a permanent field, but every
+        # hex-code entry inside a temporary color-picker popup (this
+        # feature's two new ones, and the note's own pre-existing color
+        # picker) registers here too, and gets destroyed the moment its
+        # popup closes. The next theme switch after that used to crash on
+        # "invalid command name" trying to read a long-gone widget. Prune
+        # dead entries here, the first time each one is found stale,
+        # rather than letting the list accumulate references that can
+        # never be read again.
+        alive = []
         for entry, placeholder in getattr(self, "_placeholders", []):
-            if entry.get() == placeholder:
-                entry.config(fg=self.colors["subtext"])
-            else:
-                entry.config(fg=self.colors["text"])
+            try:
+                if entry.get() == placeholder:
+                    entry.config(fg=self.colors["subtext"])
+                else:
+                    entry.config(fg=self.colors["text"])
+                alive.append((entry, placeholder))
+            except tk.TclError:
+                pass
+        self._placeholders = alive
 
     def style_notebook(self):
         self.style_ttk()
@@ -6368,13 +6413,26 @@ class NoteOrganizer(tk.Tk):
             btn.pack(side="left", padx=(0, 4), ipady=2)
             self._fmt_buttons[style] = btn
 
+        # A thin divider + short label mark the color pickers as their own
+        # group, distinct from the four toggle buttons — they work
+        # differently (open a picker rather than applying anything
+        # directly) and deserve to read that way at a glance, not blend
+        # into the row as two more toggle-looking buttons.
+        divider = tk.Frame(format_bar, width=1)
+        self.track_theme(divider, bg="card")
+        divider.pack(side="left", fill="y", padx=(2, 8), pady=2)
+        colors_lbl = tk.Label(format_bar, text="Colors", font=("Segoe UI", 8))
+        self.track_theme(colors_lbl, bg="bg", fg="subtext")
+        colors_lbl.pack(side="left", padx=(0, 6))
+
         # Text color / Highlight: unlike the four toggle buttons above,
         # these open a swatch picker rather than applying anything
         # directly (there's no single obvious "the" color to toggle).
-        # Each button previews the current state by coloring itself: the
-        # "A" letter in the chosen text color, the "H" letter's background
-        # in the chosen highlight color, falling back to the theme's
-        # normal colors when nothing is set.
+        # Each button previews the current state as an actual swatch —
+        # its own background set to the chosen color, with the "A"/"H"
+        # letter's contrast computed to stay legible against it — falling
+        # back to the theme's normal button look when nothing is set. See
+        # _refresh_format_buttons / _contrasting_fg.
         self.text_color_btn = tk.Button(
             format_bar, text="A", font=("Segoe UI", 10, "bold"), width=3,
             relief="flat", cursor="hand2",
