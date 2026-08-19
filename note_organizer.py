@@ -2357,6 +2357,27 @@ class NoteOrganizer(tk.Tk):
         text_widget.tag_raise("sel")
         return tag
 
+    @staticmethod
+    def _tag_add_no_newline(text_widget, tag, start, end):
+        """tag_add over [start, end), but per line and never covering a
+        line's newline character.
+
+        Tk paints a BACKGROUND tag across the full remaining width of a
+        line whenever the tag covers that line's newline -- so a highlight
+        spanning several lines drew a full-width bar on every fully-covered
+        line, far past the actual text, instead of hugging the words. Same
+        family as the Select-All and triple-click fixes: don't include the
+        invisible trailing newline. Only highlight (a background) is
+        affected; foreground color and underline/strike don't paint one.
+        """
+        first = int(str(text_widget.index(start)).split(".")[0])
+        last = int(str(text_widget.index(end)).split(".")[0])
+        for line in range(first, last + 1):
+            seg_start = start if line == first else f"{line}.0"
+            seg_end = end if line == last else f"{line}.end"
+            if text_widget.compare(seg_start, "<", seg_end):
+                text_widget.tag_add(tag, seg_start, seg_end)
+
     def _extract_formatting(self, text_widget):
         """Read the widget's current tags back out as a plain span list,
         for saving. Character offsets (not Tkinter's own line.col indices)
@@ -2416,7 +2437,14 @@ class NoteOrganizer(tk.Tk):
                     tag = self._ensure_color_tag(text_widget, span["style"], span["value"])
                 else:
                     tag = span["style"]
-                text_widget.tag_add(tag, start_idx, end_idx)
+                if span["style"] == "highlight":
+                    # Notes saved before the newline fix can still hold a
+                    # single highlight span running across several lines --
+                    # re-apply those the corrected way too, so an old note
+                    # renders right without needing to be re-highlighted.
+                    self._tag_add_no_newline(text_widget, tag, start_idx, end_idx)
+                else:
+                    text_widget.tag_add(tag, start_idx, end_idx)
             except tk.TclError:
                 pass
 
@@ -2573,7 +2601,10 @@ class NoteOrganizer(tk.Tk):
                 self.body_text.tag_remove(tag_name, start, end)
         if hex_color:
             tag = self._ensure_color_tag(self.body_text, kind, hex_color)
-            self.body_text.tag_add(tag, start, end)
+            if kind == "highlight":
+                self._tag_add_no_newline(self.body_text, tag, start, end)
+            else:
+                self.body_text.tag_add(tag, start, end)
 
         self._refresh_format_buttons()
         self._schedule_autosave()
@@ -2714,7 +2745,10 @@ class NoteOrganizer(tk.Tk):
                 self.body_text.tag_add(color_tag, start_idx, end_idx)
             if self._pending_highlight_color:
                 color_tag = self._ensure_color_tag(self.body_text, "highlight", self._pending_highlight_color)
-                self.body_text.tag_add(color_tag, start_idx, end_idx)
+                # Typing past the end of a line (pressing Enter with a
+                # highlight still "stuck" on) would otherwise sweep the
+                # newline into the tag and bleed the bar full-width.
+                self._tag_add_no_newline(self.body_text, color_tag, start_idx, end_idx)
         self.body_text.mark_set(self._PENDING_STYLE_ANCHOR, end_idx)
         self._pending_style_last_length = current_length
 
@@ -2784,6 +2818,13 @@ class NoteOrganizer(tk.Tk):
         color = None
         idx = start
         while self.body_text.compare(idx, "<", end):
+            # Newlines deliberately never carry a highlight tag (see
+            # _tag_add_no_newline), so judging them as "uncolored" here
+            # would report any multi-line selection as a mix and stop the
+            # toolbar button from previewing the color that's really there.
+            if self.body_text.get(idx) == "\n":
+                idx = self.body_text.index(f"{idx}+1c")
+                continue
             names = [n for n in self.body_text.tag_names(idx) if n.startswith(prefix)]
             if not names:
                 return None

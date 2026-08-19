@@ -771,6 +771,58 @@ reloaded_colors = [s for s in app._extract_formatting(app.body_text)
 check('reopening the note reapplies its saved color formatting',
       len(reloaded_colors) == len(color_spans))
 
+# ---- Regression: a highlight covering a line's newline made Tk paint the
+# background across the FULL remaining width of that line, so highlighting
+# several lines drew full-width bars instead of hugging the words. The tag
+# must never sit on a "\n" -- checked on the widget itself, since the
+# character range alone looked correct even while it rendered wrong.
+app.new_note()
+app.update()
+app.body_text.insert('1.0', 'alpha\nbeta\ngamma\n')
+app.body_text.tag_add('sel', '1.0', '3.3')
+app.update()
+app._apply_body_color('highlight', NO.HIGHLIGHT_COLOR_PALETTE[0])
+app.body_text.tag_remove('sel', '1.0', 'end')
+app.update()
+hl_tag = app._color_tag_name('highlight', NO.HIGHLIGHT_COLOR_PALETTE[0])
+hl_ranges = app.body_text.tag_ranges(hl_tag)
+check('a multi-line highlight is applied at all', len(hl_ranges) >= 2)
+newline_tagged = []
+for i in range(0, len(hl_ranges), 2):
+    idx = app.body_text.index(hl_ranges[i])
+    while app.body_text.compare(idx, '<', hl_ranges[i + 1]):
+        if app.body_text.get(idx) == '\n':
+            newline_tagged.append(str(idx))
+        idx = app.body_text.index(idx + '+1c')
+check('a multi-line highlight never covers a newline (no full-width bleed)',
+      not newline_tagged)
+# The lines it did cover must still be fully highlighted up to their text end.
+check('the fully-covered line is still highlighted across its own text',
+      hl_tag in app.body_text.tag_names('1.0')
+      and hl_tag in app.body_text.tag_names('1.4'))
+# Toolbar preview must still recognise the color despite the untagged newlines.
+check('toolbar still previews the highlight color across a multi-line range',
+      app._uniform_color_in_selection('highlight', '1.0', '3.3')
+      == NO.HIGHLIGHT_COLOR_PALETTE[0])
+# An old note whose saved span crosses lines must also load without bleeding.
+app.new_note()
+app.update()
+app.body_text.insert('1.0', 'alpha\nbeta\ngamma\n')
+app._apply_formatting(app.body_text,
+                      [{'start': 0, 'end': 13, 'style': 'highlight',
+                        'value': NO.HIGHLIGHT_COLOR_PALETTE[0]}])
+app.update()
+legacy_ranges = app.body_text.tag_ranges(hl_tag)
+legacy_newlines = []
+for i in range(0, len(legacy_ranges), 2):
+    idx = app.body_text.index(legacy_ranges[i])
+    while app.body_text.compare(idx, '<', legacy_ranges[i + 1]):
+        if app.body_text.get(idx) == '\n':
+            legacy_newlines.append(str(idx))
+        idx = app.body_text.index(idx + '+1c')
+check('a legacy saved span crossing lines also loads without covering newlines',
+      len(legacy_ranges) >= 2 and not legacy_newlines)
+
 # ---- Regression: a placeholder-registered widget (self._placeholders)
 # that gets destroyed before the next theme switch used to crash with
 # "invalid command name" -- the widget is long gone by the time
