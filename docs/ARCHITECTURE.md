@@ -9,7 +9,7 @@ Note Organizer is a Python/Tkinter desktop app, entered through `note_organizer.
 The target is two layers:
 
 - **`noteorganizer/core/`** — data and rules: persistence, validation, recurrence, the calculator parser, sharing. **No module in here may import tkinter**, which is what keeps it testable headlessly and reusable by a different front end.
-- **`noteorganizer/ui/`** — everything on screen. Not created yet; the interface still lives in `note_organizer.py`.
+- **`noteorganizer/ui/`** — everything on screen, being split one area at a time into **mixin** classes that `NoteOrganizer` inherits from. The methods are unchanged: they still reach for `self.colors`, `self.notes` and each other exactly as before, so each move is cut-and-paste rather than a redesign. This is organisation, not decoupling — the mixins share one object, and `self.colors` alone is read in 655 places. Two rules: a method lives in exactly one mixin (a duplicate is silently resolved by class order, with no error), and mixins never define `__init__` — construction stays in `NoteOrganizer`. `tools/check_class_api.py` enforces the first by comparing the class's whole method list against a recorded baseline. Moved so far: `ui/calculator_panel.py`.
 
 `note_organizer.py` stays the entry point (`py note_organizer.py`) and re-exports the names that have moved, so existing callers — including the ~154 `note_organizer.<name>` references across the QA scripts — keep working untouched while the move happens. That's deliberate: it means each extraction is a pure move that leaves the whole test suite green, rather than a rewrite.
 

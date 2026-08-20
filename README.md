@@ -99,6 +99,8 @@ noteOrganizer/
 │       ├── storage.py        #   reading/writing settings, templates, trash
 │       ├── categories.py     #   the live category map, saved in settings
 │       └── model.py          #   what a note is; normalize_note validates every one
+│   └── ui/                   #   the interface, one mixin per area
+│       └── calculator_panel.py  #   the in-note calculator panel
 ├── tools/                    # refactor safety net, run by CI
 │   ├── check_undefined_names.py  # names used but never imported (moving code breaks these)
 │   └── check_class_api.py        # the app class must keep exactly the same methods
