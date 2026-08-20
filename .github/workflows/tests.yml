@@ -38,6 +38,16 @@ jobs:
       - name: Install Python dependencies
         run: pip install -r requirements.txt
 
+      - name: Static checks — names resolve, class surface unchanged
+        # Both catch mistakes that moving code makes easy and that neither
+        # importing nor the GUI tests reliably notice: a name left without
+        # its import (Python only looks names up when a line actually runs,
+        # so the module still imports), and a method lost, duplicated or
+        # re-signatured while being moved between files.
+        run: |
+          python3 tools/check_undefined_names.py note_organizer.py noteorganizer/core/*.py
+          python3 tools/check_class_api.py
+
       - name: Recurrence engine tests
         run: python3 test_recurrence.py
 
