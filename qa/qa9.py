@@ -62,9 +62,22 @@ check('nested dropdown popup exists', dropdown_popup is not None and dropdown_po
 
 app.update_idletasks()
 btn_x, btn_y = cat_btn.winfo_rootx(), cat_btn.winfo_rooty()
+btn_h = cat_btn.winfo_height()
 pop_x, pop_y = dropdown_popup.winfo_rootx(), dropdown_popup.winfo_rooty()
-distance = ((btn_x - pop_x) ** 2 + (btn_y - pop_y) ** 2) ** 0.5
-check('dropdown anchors near the button, not top-left of the window (bug 3)', distance < 200)
+pop_h = dropdown_popup.winfo_height() or dropdown_popup.winfo_reqheight()
+
+# The popup must be docked TO THE BUTTON, which means left edges aligned and
+# the popup sitting immediately below it — or immediately above, because
+# _place_dropdown_popup deliberately flips upward when there isn't room below
+# inside the app window. A plain straight-line distance check can't express
+# that: a legitimate flip moves the popup by its own height, so the check
+# failed on any window short enough to trigger one (reliably on Windows,
+# never on the CI runner's geometry) while the app was behaving correctly.
+aligned_x = abs(pop_x - btn_x) <= 40
+docked_below = 0 <= (pop_y - (btn_y + btn_h)) <= 40
+docked_above = 0 <= (btn_y - (pop_y + pop_h)) <= 40
+check('dropdown anchors to the button, not top-left of the window (bug 3)',
+      aligned_x and (docked_below or docked_above))
 
 work_lbl = find_widget(dropdown_popup, tk.Label, 'Work')
 work_lbl.event_generate('<Button-1>')
