@@ -458,4 +458,108 @@ instincts in everyday Python.
 
 ---
 
+## 7. `noteorganizer/core/paths.py`
+
+**What it's for.** Deciding which folder holds your notes, migrating data
+forward from older locations, and cleaning up leftovers.
+
+This is the most dangerous code in the project — it *moves and deletes
+files* — and it's worth reading precisely for that reason.
+
+### Two situations, handled differently
+
+| Running as | Data goes | Why |
+|---|---|---|
+| a `.py` script | beside the script | convenient while developing |
+| a `.exe` | your `%APPDATA%` folder | always writable, never auto-cleaned |
+
+A one-file `.exe` unpacks into a temp folder Windows later deletes, and
+Program Files may be read-only — so "next to the app" is unreliable once
+it's distributed.
+
+Note that `resolve_data_dir` doesn't just *check* the folder exists, it
+**writes a probe file** to prove it's writable. Existence isn't enough:
+Program Files exists too, and fails only when you try to write.
+
+### The rule: back up before you destroy
+
+`run_migrations()` never overwrites a file it hasn't copied first — and if
+the backup fails, it **aborts**. Losing a migration is recoverable; losing
+the notes isn't. When a step can't be made safe, not doing it is the
+correct outcome.
+
+`purge_stale_copies()` is the one that deletes, and two rules hold it in
+check:
+
+1. It only removes files it recognises as its own (`OWNED_FILENAMES`,
+   `OWNED_PREFIXES`) — never something you happened to put there.
+2. The `%APPDATA%` folder is **permanently exempt**, no matter how
+   redundant it looks.
+
+That second rule exists because it was once missing, and a real notebook
+was deleted. `docs/ISSUES_LOG.md` has the full story under "The cleanup
+that deleted the real notebook". The exemption is not tidy-up-later code.
+
+`is_redundant_copy()` is the judgement behind it: a folder counts as
+redundant only if every note in it is already present locally *and* its
+attachments are covered. Content is compared by **signature**, not by
+counting files — "10 notes here, 10 notes there" must never be mistaken
+for "the same 10 notes".
+
+### Two bugs this extraction caused — both worth learning from
+
+Moving this code broke things in ways that looked impossible for a "pure
+move". Both are classic Python traps.
+
+**1. `__file__` means something different once a file moves.**
+
+The old code decided where data lives like this:
+
+```python
+script_dir = os.path.dirname(os.path.abspath(__file__))
+```
+
+That was correct while it lived in `note_organizer.py`. The moment it
+moved into `noteorganizer/core/paths.py`, `__file__` pointed *there* — so
+the app chose a data folder two levels too deep, and cheerfully migrated
+real notes into it.
+
+The fix: pass the directory in as an argument.
+
+```python
+APP_DIR, STORAGE_WARNING = resolve_data_dir(
+    os.path.dirname(os.path.abspath(__file__)))   # in the ENTRY POINT
+```
+
+Now the answer can't change again just because a file moved. **If a
+function's behaviour depends on where its source file lives, moving it
+changes its behaviour** — even when nothing else about it changed.
+
+**2. Monkeypatching a re-exported name stops working.**
+
+`test_data_safety.py` faked the AppData folder like this:
+
+```python
+NO.get_appdata_dir = lambda: fake_dir      # note_organizer.get_appdata_dir
+```
+
+That worked while `run_migrations` lived in the same module. After the
+move, `run_migrations` looks up `get_appdata_dir` in **`paths.py`'s**
+namespace, so the patch had no effect — and the test silently began
+running against the *real* `%APPDATA%`.
+
+The fix is to patch where the name is **looked up**, not where it's
+re-exported:
+
+```python
+from noteorganizer.core import paths as NO_paths
+NO_paths.get_appdata_dir = lambda: fake_dir
+```
+
+This is the single most common surprise when splitting a module. `from x
+import y` copies a *reference*; rebinding one name never affects the
+other. Both bugs are pinned by regression tests now.
+
+---
+
 *More sections will be added here as further modules are extracted.*
