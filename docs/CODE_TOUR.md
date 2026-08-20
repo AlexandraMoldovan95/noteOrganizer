@@ -8,9 +8,9 @@ This is a companion to [ARCHITECTURE.md](ARCHITECTURE.md), which is the
 short reference version for someone who already knows the codebase. Start
 here; go there when you want the summary.
 
-> **Status:** the project is being reorganised from one large file into
-> smaller modules, one at a time. This tour grows as that happens. Sections
-> marked *(still in note_organizer.py)* haven't been moved yet.
+> **Status:** the data and rules layer is fully extracted — all ten modules
+> below are covered here. The user interface hasn't been split yet and still
+> lives in `note_organizer.py`; sections for it will follow.
 
 ---
 
@@ -46,7 +46,16 @@ files in whatever folder they run from.
 note_organizer.py         the entry point you run, plus the UI (for now)
 noteorganizer/
 └── core/                 data and rules — never imports tkinter
-    └── calculator.py     the in-note calculator's expression parser
+    ├── calculator.py     the in-note calculator's expression parser
+    ├── recurrence.py     repeat rules, and which dates a note lands on
+    ├── themes.py         colour palettes and layout numbers (pure data)
+    ├── formatting.py     how rich-text spans are stored on a note
+    ├── sharing.py        share codes, and the guards that make import safe
+    ├── duplicates.py     deciding when two notes are the same note
+    ├── paths.py          where data lives, migrations, safe cleanup
+    ├── storage.py        reading/writing settings, templates, trash
+    ├── categories.py     the live category map
+    └── model.py          what a note is; normalize_note validates every one
 docs/                     these documents
 qa/                       headless GUI tests
 test_*.py                 tests for the core logic, no GUI needed
@@ -69,10 +78,15 @@ would let a phone app reuse it one day.
 
 If you're working through this for the first time:
 
-1. **`noteorganizer/core/calculator.py`** — start here. It's small,
-   completely self-contained, and it teaches a genuinely useful pattern.
-2. The rest of `core`, as it gets moved.
-3. The UI.
+1. **`calculator.py`** — start here. Small, completely self-contained, and
+   it teaches a genuinely useful pattern (two-stage parsing).
+2. **`recurrence.py`** — the best example of a design decision: store the
+   rule, compute the results.
+3. **`model.py`** (section 10) — `normalize_note` is the single idea the
+   whole data layer is built on.
+4. The rest in any order. `sharing.py` is the one to read if you're
+   interested in defending against hostile input.
+5. The UI, once it's split.
 
 ---
 
@@ -559,6 +573,161 @@ NO_paths.get_appdata_dir = lambda: fake_dir
 This is the single most common surprise when splitting a module. `from x
 import y` copies a *reference*; rebinding one name never affects the
 other. Both bugs are pinned by regression tests now.
+
+---
+
+## 8. `noteorganizer/core/storage.py`
+
+**What it's for.** Everything that reads or writes `settings.json`,
+`templates.json` and `trash.json`, plus the pre-flight backup of the notes
+file.
+
+### The binding rule this module is built around
+
+Storage doesn't decide *where* the files are — `paths` does. It reads them
+as **attributes**:
+
+```python
+with open(paths.SETTINGS_FILE) as f: ...
+```
+
+That indirection isn't stylistic, and it's worth understanding properly
+because it trips people up constantly.
+
+When `storage.py` is imported, the paths are still `None` — they only get
+filled in later, when `paths.configure()` runs. So this would be broken:
+
+```python
+from .paths import SETTINGS_FILE      # copies None, permanently
+```
+
+`from X import Y` copies **the value as it is right now**. Rebinding
+`paths.SETTINGS_FILE` afterwards changes the name *in the paths module*,
+but the copy you took keeps pointing at the old value — `None` — forever.
+Going through `paths.SETTINGS_FILE` means the lookup happens when the
+function actually runs, by which time it's real.
+
+The same rule explains a bug we hit earlier: a test monkeypatched
+`note_organizer.get_appdata_dir`, but the function that *uses* it had moved
+into `core.paths` and looks it up in **its own** module. Patching the
+re-exported copy did nothing. **Patch the module that looks the name up,
+not the one you happen to have imported it from.**
+
+### The pattern every loader follows
+
+Each `load_*` returns something usable no matter what it finds — missing
+file, unreadable file, or valid JSON of entirely the wrong shape all give
+an empty default rather than an exception. The app is meant to keep running
+with an empty notebook, not refuse to start because one file got damaged.
+
+`save_settings` is read-modify-write rather than a blind overwrite, so two
+features updating different keys can't clobber each other.
+
+---
+
+## 9. `noteorganizer/core/categories.py`
+
+**What it's for.** The live category map, and moving it to and from
+settings.
+
+### Shared mutable state, and the one rule that makes it safe
+
+`CATEGORY_COLORS` is a plain dict that the UI writes to in 36 places, and
+which `model.py` reads to decide whether a note's category still exists.
+Sharing mutable state across modules is usually asking for trouble. It
+works here because of a single rule:
+
+> The name is **bound exactly once**. Every change after that mutates the
+> dict *in place*.
+
+`.clear()`, `.update()`, `[name] = colour`, `.pop()` — all mutations.
+Because `from ... import CATEGORY_COLORS` copies a **reference**, every
+module ends up pointing at the same dict object and sees every change.
+
+Rebinding it would silently break that:
+
+```python
+CATEGORY_COLORS = load_categories()     # DON'T — see below
+```
+
+The module doing that gets a brand-new dict; everyone else keeps the old
+one. No error, no warning — the two just drift apart. Which is why the
+startup path does this instead:
+
+```python
+CATEGORY_COLORS.clear()
+CATEGORY_COLORS.update(load_categories())
+```
+
+Same visible outcome, one object.
+
+This is the same distinction as the `paths.SETTINGS_FILE` case above, seen
+from the other side: **mutation is shared, rebinding is not.**
+
+### General is special
+
+"General" always exists and always sorts first. It's the fallback home for
+notes whose category is deleted, so it can never itself be removed —
+guaranteed in `load_categories()` rather than trusted to the UI, because a
+guarantee enforced at the data layer can't be forgotten by a caller.
+
+---
+
+## 10. `noteorganizer/core/model.py`
+
+**What it's for.** What a note *is* — and `normalize_note`, the single gate
+every note passes through before the rest of the app is allowed to touch
+it.
+
+### Why this function matters more than it looks
+
+Notes arrive from a JSON file you can hand-edit, from backups written by
+older versions, and from share codes typed in from elsewhere. Any field
+might be missing, be the wrong type, or hold something nonsensical.
+
+Rather than defend against that everywhere, everything funnels through one
+function that returns a note of known shape:
+
+- a `None` title becomes `""`
+- a checklist that isn't a list becomes `[]`
+- a category that no longer exists falls back to "General"
+
+So a corrupt entry degrades into a slightly emptier note instead of taking
+down the note list.
+
+**Validate once, at the edge, then trust the data inwards.** You've now
+seen the same idea three times — `normalize_recurrence`,
+`normalize_formatting`, and here — and `normalize_note` delegates to both
+of those for their parts of the note. That repetition is the point: it's
+one habit applied consistently, not three separate tricks.
+
+### Richness, and why it exists
+
+`note_is_empty` and `note_richness` support cleanup. When duplicates are
+merged, richness decides *which copy to keep* — the one carrying the most
+actual content — rather than picking arbitrarily and hoping. `clean_notes`
+uses both to drop blank notes and de-duplicate on load, and reports what it
+did so the app can tell you rather than silently changing your notebook.
+
+---
+
+## Where the app starts
+
+Worth knowing once you've read the modules: **importing `note_organizer`
+does nothing.**
+
+Resolving the data folder, migrating notes from older locations, purging
+stale copies and recording the version all happen in `initialise()`, which
+`NoteOrganizer.__init__` and `_main()` both call.
+
+It didn't always work that way, and the reason it does now is the most
+serious bug in this project's history: those steps move and delete files,
+and running them as a side effect of an `import` destroyed a real notebook
+once. Anything wanting the data layer without opening a window —
+`test_data_safety.py`, for instance — now has to ask for it deliberately.
+
+If you take one habit from this file, make it that one: **an import should
+not change anything.**
 
 ---
 
