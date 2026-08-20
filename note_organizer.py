@@ -63,6 +63,7 @@ def parse_version(v):
 # import-time side effects - the calls below are still what actually runs
 # them, unchanged for now. Re-exported so callers and the QA scripts are
 # unaffected.
+from noteorganizer.core import paths as _core_paths
 from noteorganizer.core.paths import (
     get_appdata_dir,
     _is_writable,
@@ -92,48 +93,31 @@ APP_DIR, STORAGE_WARNING = resolve_data_dir(
 MIGRATION_INFO = run_migrations(APP_DIR)
 PURGED_DIRS = purge_stale_copies(APP_DIR)
 
-DATA_FILE = os.path.join(APP_DIR, "notes_data.json")
-SETTINGS_FILE = os.path.join(APP_DIR, "settings.json")
-ATTACHMENTS_DIR = os.path.join(APP_DIR, "attachments")
-TRASH_FILE = os.path.join(APP_DIR, "trash.json")
-TEMPLATES_FILE = os.path.join(APP_DIR, "templates.json")
-
-# Deleted notes live in the trash this many days, then auto-purge on startup.
-TRASH_RETENTION_DAYS = 30
-os.makedirs(ATTACHMENTS_DIR, exist_ok=True)
-
-
-# ---- Settings file (read/modify/write, so keys never clobber each other) ----
-
-def load_settings():
-    if os.path.exists(SETTINGS_FILE):
-        try:
-            with open(SETTINGS_FILE, "r", encoding="utf-8") as f:
-                data = json.load(f)
-            if isinstance(data, dict):
-                return data
-        except (json.JSONDecodeError, IOError, OSError):
-            pass
-    return {}
+# Hand the resolved folder to core.paths, which works out the individual
+# file locations and creates the attachments folder. Everything in
+# core.storage reads them from there, so this has to happen before any
+# load/save call. Re-exported below so existing callers and the QA scripts
+# still find note_organizer.DATA_FILE and friends.
+_core_paths.configure(APP_DIR)
+DATA_FILE = _core_paths.DATA_FILE
+SETTINGS_FILE = _core_paths.SETTINGS_FILE
+ATTACHMENTS_DIR = _core_paths.ATTACHMENTS_DIR
+TRASH_FILE = _core_paths.TRASH_FILE
+TEMPLATES_FILE = _core_paths.TEMPLATES_FILE
 
 
-def save_settings(settings):
-    try:
-        with open(SETTINGS_FILE, "w", encoding="utf-8") as f:
-            json.dump(settings, f, indent=2)
-    except (IOError, OSError):
-        pass
+# Reading/writing settings, templates and trash, plus the pre-flight
+# notes backup, now live in noteorganizer/core/storage.py. They read the
+# file locations from core.paths, which configure() filled in above.
+# Duplicate detection lives in noteorganizer/core/duplicates.py.
+from noteorganizer.core.duplicates import (
+    find_duplicate_groups,
+    _strip_copy_suffix,
+    _normalize_ws,
+    _dup_key,
+)
 
-
-# ---- Rich text formatting (note body only) ----
-#
-# A note's "body" stays a plain string everywhere (search, duplicate
-# detection, share codes, templates, previews) — untouched by this feature.
-# Formatting lives in a separate, additive field: a flat list of
-# {"start", "end", "style"} spans (plus "value" for the two color styles
-# below), character-offset-based into the plain body text. "bold_italic"
-# is its own style name (not "bold" + "italic" both present) because
-# Rich-text span storage moved to noteorganizer/core/formatting.py.
+# Rich-text span storage lives in noteorganizer/core/formatting.py.
 from noteorganizer.core.formatting import (
     KNOWN_FORMAT_STYLES,
     VALUE_FORMAT_STYLES,
@@ -141,52 +125,19 @@ from noteorganizer.core.formatting import (
     normalize_formatting,
 )
 
-
-def normalize_template(tpl):
-    """Coerce a template dict into a known shape so bad/old data can't crash the
-    manager or the 'use template' flow. A template holds a name plus the note
-    fields it fills in: title, body, comments, category."""
-    if not isinstance(tpl, dict):
-        tpl = {}
-
-    def _s(key, default=""):
-        v = tpl.get(key, default)
-        return v if isinstance(v, str) else default
-
-    return {
-        "name": _s("name") or "Untitled template",
-        "title": _s("title"),
-        "body": _s("body"),
-        "formatting": normalize_formatting(tpl.get("formatting")),
-        "comments": _s("comments"),
-        "category": _s("category") or "General",
-        "checklist": [
-            {"text": it.get("text", "") if isinstance(it.get("text"), str) else "",
-             "done": bool(it.get("done"))}
-            for it in (tpl.get("checklist") or [])
-            if isinstance(it, dict)
-        ],
-    }
-
-
-def load_templates():
-    if os.path.exists(TEMPLATES_FILE):
-        try:
-            with open(TEMPLATES_FILE, "r", encoding="utf-8") as f:
-                data = json.load(f)
-            if isinstance(data, list):
-                return [normalize_template(t) for t in data if isinstance(t, dict)]
-        except (json.JSONDecodeError, IOError, OSError):
-            pass
-    return []
-
-
-def save_templates(templates):
-    try:
-        with open(TEMPLATES_FILE, "w", encoding="utf-8") as f:
-            json.dump(templates, f, indent=2, ensure_ascii=False)
-    except (IOError, OSError):
-        pass
+from noteorganizer.core.storage import (
+    TRASH_RETENTION_DAYS,
+    load_settings,
+    save_settings,
+    normalize_template,
+    load_templates,
+    save_templates,
+    load_trash,
+    save_trash,
+    _delete_attachment_files,
+    purge_expired_trash,
+    backup_notes_file,
+)
 
 
 def detect_version_change():
@@ -495,101 +446,6 @@ from noteorganizer.core.sharing import (
 )
 
 
-def load_trash():
-    """Read the trashed notes list. Malformed/missing -> empty list, never
-    crashes."""
-    if os.path.exists(TRASH_FILE):
-        try:
-            with open(TRASH_FILE, "r", encoding="utf-8") as f:
-                data = json.load(f)
-            if isinstance(data, list):
-                return data
-        except (json.JSONDecodeError, IOError, OSError):
-            pass
-    return []
-
-
-def save_trash(trash):
-    """Write the trashed notes list, best-effort."""
-    try:
-        with open(TRASH_FILE, "w", encoding="utf-8") as f:
-            json.dump(trash, f, indent=2, ensure_ascii=False)
-    except (IOError, OSError):
-        pass
-
-
-def _delete_attachment_files(notes_or_entries):
-    """Permanently remove the on-disk files for every attachment referenced by
-    the given notes/trash-entries. Each attachment gets a unique timestamped
-    filename on disk (see add_attachment), so it's never shared between notes
-    — safe to delete outright, no risk of affecting a different note. Only
-    call this for PERMANENT deletion (trash purge, delete-forever, empty
-    trash) — moving a note to trash must never touch these files, since the
-    note might still be restored."""
-    for note in notes_or_entries:
-        if not isinstance(note, dict):
-            continue
-        for att in note.get("attachments") or []:
-            if not isinstance(att, dict):
-                continue
-            stored_as = att.get("stored_as")
-            if not stored_as:
-                continue
-            path = os.path.join(ATTACHMENTS_DIR, stored_as)
-            try:
-                if os.path.isfile(path):
-                    os.remove(path)
-            except OSError:
-                pass  # best-effort — a locked/missing file shouldn't block the delete
-
-
-def purge_expired_trash(trash):
-    """Remove entries older than the retention window. Returns (kept, purged
-    count). Entries with a missing/invalid deleted_at are kept (fail-safe: we'd
-    rather keep a note too long than delete it early). Attachment files
-    belonging to purged notes are permanently deleted too — this is the one
-    place purging happens automatically, without an explicit user action, so
-    it must not be the one place that silently leaves orphaned files behind."""
-    cutoff = datetime.now() - timedelta(days=TRASH_RETENTION_DAYS)
-    kept = []
-    purged_entries = []
-    for entry in trash:
-        stamp = entry.get("deleted_at", "") if isinstance(entry, dict) else ""
-        try:
-            when = datetime.strptime(stamp, "%Y-%m-%d %H:%M:%S")
-        except (ValueError, TypeError):
-            # Unknown timestamp -> keep it, don't risk early deletion.
-            kept.append(entry)
-            continue
-        if when < cutoff:
-            purged_entries.append(entry)
-        else:
-            kept.append(entry)
-    _delete_attachment_files(purged_entries)
-    return kept, len(purged_entries)
-
-
-# Duplicate detection moved to noteorganizer/core/duplicates.py.
-from noteorganizer.core.duplicates import (
-    find_duplicate_groups,
-    _strip_copy_suffix,
-    _normalize_ws,
-    _dup_key,
-)
-
-
-def backup_notes_file():
-    """Snapshot the notes file before touching it. Cleanup should never be
-    the reason something is lost."""
-    if not os.path.exists(DATA_FILE):
-        return None
-    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    backup_path = os.path.join(APP_DIR, f"notes_data_backup_{stamp}.json")
-    try:
-        shutil.copy2(DATA_FILE, backup_path)
-        return backup_path
-    except (IOError, OSError):
-        return None
 
 # ---- Themes ----
 # Palettes, theme names/labels, the default categories and the swatch

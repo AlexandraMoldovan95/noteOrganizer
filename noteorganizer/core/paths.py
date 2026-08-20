@@ -454,3 +454,43 @@ def purge_stale_copies(app_dir):
             cleared.append(stale_dir)
 
     return cleared
+
+
+# ---- The resolved data-file locations ----
+#
+# These start as None and are filled in by configure() once the app knows
+# which folder it is using. Other modules must read them as ATTRIBUTES of
+# this module (``paths.SETTINGS_FILE``) rather than importing the names
+# directly: ``from ... import SETTINGS_FILE`` copies whatever the value is
+# at import time, which is None, and would never see the configured value.
+# The same binding rule is why patching a re-exported name doesn't work
+# (see docs/CODE_TOUR.md).
+DATA_FILE = None
+SETTINGS_FILE = None
+ATTACHMENTS_DIR = None
+TRASH_FILE = None
+TEMPLATES_FILE = None
+
+
+def configure(app_dir):
+    """Point the storage layer at ``app_dir`` and make sure it is usable.
+
+    Called once at startup, after :func:`resolve_data_dir` has decided
+    where the data lives. Creates the attachments folder as a side effect,
+    which is why this is an explicit call rather than something that
+    happens on import.
+
+    Args:
+        app_dir: The folder holding this app's data files.
+
+    Returns:
+        The same ``app_dir``, for convenience at the call site.
+    """
+    global DATA_FILE, SETTINGS_FILE, ATTACHMENTS_DIR, TRASH_FILE, TEMPLATES_FILE
+    DATA_FILE = os.path.join(app_dir, "notes_data.json")
+    SETTINGS_FILE = os.path.join(app_dir, "settings.json")
+    ATTACHMENTS_DIR = os.path.join(app_dir, "attachments")
+    TRASH_FILE = os.path.join(app_dir, "trash.json")
+    TEMPLATES_FILE = os.path.join(app_dir, "templates.json")
+    os.makedirs(ATTACHMENTS_DIR, exist_ok=True)
+    return app_dir
