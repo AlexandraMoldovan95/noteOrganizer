@@ -107,8 +107,18 @@ check('greeting reflects the truncated name, not the original 70 chars',
 name_entry.focus_set()
 app.update()
 check('username entry has focus before clicking elsewhere', app.focus_get() is name_entry)
-stats_title = find_widget(app.settings_page, tk.Label, 'Statistics')
-stats_title.event_generate('<Button-1>')
+# Click the section's own title. It has to be a title that's actually on
+# screen: Settings shows one section at a time, so reaching into a section
+# that isn't selected would be clicking a widget the user cannot see, and
+# Tk defers focus changes on unmapped widgets rather than applying them.
+# Ask the app what this section is called rather than hardcoding it -- the
+# label changed from "Your name" to "General" when the greeting settings were
+# grouped, and a hardcoded string turned that into a crash here.
+_section_labels = {k: l for k, l, _b, _e in app.SETTINGS_SECTIONS}
+name_title = find_widget(app.settings_name_panel, tk.Label, _section_labels['name'])
+check('the section title label was found', name_title is not None)
+check('the shown section\'s title is actually visible', name_title.winfo_ismapped())
+name_title.event_generate('<Button-1>')
 app.update()
 check('clicking a section title elsewhere in Settings clears the field\'s focus',
       app.focus_get() is not name_entry)
@@ -141,34 +151,71 @@ def find_all(w, cls, acc=None):
             acc.append(c)
         find_all(c, cls, acc)
     return acc
+# Three things have to be true before this can observe anything. The
+# section owning the cards must be the selected one; the content pane must
+# actually overflow (one section on its own fits the window at full size,
+# and a pane with nothing to scroll looks exactly like the bug this
+# guards); and the cards must be ones the page-wide recursive wheel bind
+# never saw. That last one is the whole point: switching theme destroys and
+# rebuilds every card, so the replacements are created long after
+# build_settings_tab bound the tree, and only the theme picker's own
+# forwarding covers them. Testing the first build instead passes even with
+# that forwarding deleted.
+app.toggle_settings_panel('appearance')
+app.geometry('900x400')          # 400 is the app's own minimum height
+app.update(); app.update_idletasks()
+theme_before_wheel_test = app.theme_name
+app.set_theme('light' if app.theme_name in NO.DARK_THEMES else 'dark')
+app.update(); app.update_idletasks()
 theme_canvases = find_all(app.theme_picker_frame, tk.Canvas)
 check('theme picker has preview canvases to test', len(theme_canvases) > 0)
+check('theme card is on screen', theme_canvases[0].winfo_ismapped())
+check('Settings pane actually overflows, so scrolling is observable',
+      app.settings_canvas.yview()[1] < 1.0)
 before_scroll = app.settings_canvas.yview()
 theme_canvases[0].event_generate('<MouseWheel>', delta=-120)
 app.update()
 check('scrolling with the cursor over a theme card scrolls the Settings page',
       app.settings_canvas.yview() != before_scroll)
+app.set_theme(theme_before_wheel_test)   # leave the theme as we found it
+app.geometry('1100x850')
+app.update()
 
 # ---- SETTINGS: scrolling over a Statistics chip scrolls the page (regression) ----
 # Same class of bug as the theme picker above, but a different root cause:
 # these chips are plain Frames/Labels (no Canvas involved), just never
 # wired into the page's wheel-forwarding at all — found by hand right after
 # the theme picker fix above shipped.
+# Enough categories that the chips wrap to several rows and the section is
+# genuinely taller than the pane. Two categories no longer overflow now that
+# Statistics is shown on its own rather than stacked under everything else,
+# and a pane with nothing to scroll would pass this test no matter how badly
+# the wheel were wired.
+stat_cats = [f'Cat{i:02d}' for i in range(20)]
+for c in stat_cats:
+    NO.CATEGORY_COLORS.setdefault(c, '#7c5cff')
 app.notes = [
     {'id': 900 + i, 'title': f'StatChip{i}', 'body': 'x',
-     'category': 'Work' if i % 2 else 'General', 'updated': '2026-01-01 00:00',
+     'category': stat_cats[i % len(stat_cats)], 'updated': '2026-01-01 00:00',
      'created': '2026-01-01 00:00', 'checklist': [], 'attachments': []}
-    for i in range(3)
+    for i in range(40)
 ]
 app.show_settings_page()
+app.toggle_settings_panel('statistics')
 app.update()
 chip_frames = find_all(app.stats_frame, tk.Frame)
 check('statistics has category chips to test', len(chip_frames) > 0)
+app.geometry('900x400')          # 400 is the app's own minimum height
+app.update(); app.update_idletasks()
+check('Settings pane overflows for the chip test too',
+      app.settings_canvas.yview()[1] < 1.0)
 before_stats_scroll = app.settings_canvas.yview()
 chip_frames[0].event_generate('<MouseWheel>', delta=-120)
 app.update()
 check('scrolling with the cursor over a statistics chip scrolls the Settings page',
       app.settings_canvas.yview() != before_stats_scroll)
+app.geometry('1100x850')
+app.update()
 
 app.save_username('Alexandra')  # restore for later checks
 app._refresh_greeting()
@@ -227,6 +274,38 @@ def stats_label_texts():
     walk(app.stats_frame)
     return out
 
+def stats_pairs():
+    """Every "big number + caption beneath it" in the Statistics panel.
+
+    Statistics used to render its figures as sentences ("2 templates"), so
+    these checks matched substrings. It now shows a number and its caption
+    as two labels, which reads far better but means a substring match finds
+    nothing. Reading the pair structure instead tests the actual figure and
+    survives the next presentation change too.
+
+    Returns {caption: number} for the stat tiles, and {name: count} for the
+    category pills, which have the same shape (a label and a number).
+    """
+    tiles, pills = {}, {}
+    def walk(w):
+        kids = w.winfo_children()
+        labels = [c for c in kids if isinstance(c, tk.Label)]
+        if len(labels) == 2:
+            a, b = (str(labels[0].cget('text')), str(labels[1].cget('text')))
+            if a.isdigit():          # tile: number above, caption below
+                tiles[b] = int(a)
+            elif b.isdigit():        # pill: name then count
+                pills[a] = int(b)
+        for c in kids:
+            walk(c)
+    walk(app.stats_frame)
+    tiles.update(pills)
+    return tiles
+
+def category_in_stats(name):
+    """Is this category shown in the Statistics breakdown?"""
+    return name in stats_pairs()
+
 NO.CATEGORY_COLORS['TempStatsCat'] = '#ff0000'
 NO.persist_categories()
 app.notes.append({'id':12,'title':'TempCatNote','body':'x','category':'TempStatsCat',
@@ -235,16 +314,16 @@ app.notes.append({'id':12,'title':'TempCatNote','body':'x','category':'TempStats
 app.show_settings_page()
 app.update()
 check('stats show the category before it is deleted',
-      any('TempStatsCat' in t for t in stats_label_texts()))
+      category_in_stats('TempStatsCat'))
 
 app.ask_yes_no = lambda *a, **k: True
 app._ask_category_deletion = lambda name, count: "move"
 app._delete_category('TempStatsCat', redraw=lambda: None)
 app.update()
 check('stats no longer show the deleted category, without reopening Settings',
-      not any('TempStatsCat' in t for t in stats_label_texts()))
+      not category_in_stats('TempStatsCat'))
 check('the moved note is now counted under General in stats',
-      any(t.startswith('General (') for t in stats_label_texts()))
+      category_in_stats('General'))
 
 # ---- SETTINGS: stats reflect ALL categories, not just the first one
 # (regression) ---- Saving notes into several different categories via the
@@ -265,9 +344,9 @@ app.show_settings_page()
 app.update()
 texts = stats_label_texts()
 check('stats show StatsCatA after a normal save sequence',
-      any(t.startswith('StatsCatA (') for t in texts))
+      category_in_stats('StatsCatA'))
 check('stats show StatsCatB after a normal save sequence',
-      any(t.startswith('StatsCatB (') for t in texts))
+      category_in_stats('StatsCatB'))
 
 # ---- SETTINGS: templates/checklists/deleted counts and first-launch date ----
 # Templates and checklists are counted as standalone things (how many exist),
@@ -286,11 +365,11 @@ app.show_settings_page()
 app.update()
 texts = stats_label_texts()
 check('stats show the correct template count',
-      any('2 templates' in t for t in texts))
+      stats_pairs().get('Templates') == 2)
 check('stats show the correct checklist-notes count',
-      any('1 notes with checklists' in t for t in texts))
+      stats_pairs().get('With a checklist') == 1)
 check('stats show the correct deleted (Trash) count',
-      any('1 deleted' in t for t in texts))
+      stats_pairs().get('In trash') == 1)
 check('stats show a first-launch date',
       any('Using Note Organizer since' in t for t in texts))
 
@@ -316,7 +395,7 @@ app.show_settings_page()
 app.update()
 app.toggle_settings_panel('templates')
 app.update()
-check('template count starts at 0', any('0 templates' in t for t in stats_label_texts()))
+check('template count starts at 0', stats_pairs().get('Templates') == 0)
 
 app._edit_template(None, app._refresh_templates_panel)
 app.update()
@@ -326,14 +405,16 @@ save_btn = next(b for b in find_all2(popup, tk.Button) if str(b.cget('text')) ==
 save_btn.invoke()
 app.update()
 check('template count updates live after saving a new template, no navigation away',
-      any('1 templates' in t for t in stats_label_texts()))
+      stats_pairs().get('Templates') == 1)
 
-delete_btn = next(b for b in find_all2(app.settings_templates_panel, tk.Button)
-                   if str(b.cget('text')) == '\U0001f5d1')
-delete_btn.invoke()
+# Row actions are drawn glyphs on a Canvas now, not Buttons carrying an
+# emoji label, so find them by the kind each widget records.
+delete_btn = next(c for c in find_all2(app.settings_templates_panel, tk.Canvas)
+                  if getattr(c, '_icon_kind', None) == 'trash')
+delete_btn.event_generate('<Button-1>')
 app.update()
 check('template count updates live after deleting a template, no navigation away',
-      any('0 templates' in t for t in stats_label_texts()))
+      stats_pairs().get('Templates') == 0)
 
 # ---- SETTINGS: templates/checklists stay current when switching away and
 # back (regression) ---- Checklist edits happen in the note editor, a
@@ -348,7 +429,7 @@ app.update()
 app.show_settings_page()
 app.update()
 check('template count reflects a template added while away, on return to Settings',
-      any('1 templates' in t for t in stats_label_texts()))
+      stats_pairs().get('Templates') == 1)
 
 app.hide_settings_page()
 app.update()
@@ -363,7 +444,7 @@ app.update()
 app.show_settings_page()
 app.update()
 check('checklist count reflects a note saved from the editor, on return to Settings',
-      any('2 notes with checklists' in t for t in stats_label_texts()))
+      stats_pairs().get('With a checklist') == 2)
 
 # ---- ATTACHMENTS (through the UI functions, not just file cleanup) ----
 tmp_file = os.path.join(tempfile.gettempdir(), 'qa6_attachment.txt')

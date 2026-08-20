@@ -57,6 +57,12 @@ jobs:
       - name: Calculator expression evaluator tests
         run: python3 test_calculator.py
 
+      - name: Entry-module identity — Settings labels survive a real launch
+        # Builds a window, so it needs the virtual display. This one cannot
+        # be folded into the QA scripts: they all do `import note_organizer`,
+        # which is exactly the condition that hides the bug it guards.
+        run: xvfb-run -a python3 test_entry_module_identity.py
+
       - name: QA1 — Notes, categories, templates
         # The QA scripts run with qa/ as the working directory, so they need
         # note_organizer.py beside them — that's also what puts their test

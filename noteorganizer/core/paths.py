@@ -465,6 +465,7 @@ def purge_stale_copies(app_dir):
 # at import time, which is None, and would never see the configured value.
 # The same binding rule is why patching a re-exported name doesn't work
 # (see docs/CODE_TOUR.md).
+APP_DIR = None
 DATA_FILE = None
 SETTINGS_FILE = None
 ATTACHMENTS_DIR = None
@@ -486,7 +487,8 @@ def configure(app_dir):
     Returns:
         The same ``app_dir``, for convenience at the call site.
     """
-    global DATA_FILE, SETTINGS_FILE, ATTACHMENTS_DIR, TRASH_FILE, TEMPLATES_FILE
+    global APP_DIR, DATA_FILE, SETTINGS_FILE, ATTACHMENTS_DIR, TRASH_FILE, TEMPLATES_FILE
+    APP_DIR = app_dir
     DATA_FILE = os.path.join(app_dir, "notes_data.json")
     SETTINGS_FILE = os.path.join(app_dir, "settings.json")
     ATTACHMENTS_DIR = os.path.join(app_dir, "attachments")

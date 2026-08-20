@@ -3099,11 +3099,6 @@ class NoteOrganizer(CalculatorPanelMixin, SettingsPageMixin, tk.Tk):
                 widget.configure(**{opt: self.colors[key] for opt, key in option_map.items()})
             except tk.TclError:
                 pass
-        # The theme toggle now lives in Settings; update its label if present.
-        if hasattr(self, "theme_toggle_btn"):
-            self.theme_toggle_btn.config(
-                text="☀️  Switch to Light mode" if self.theme_name in DARK_THEMES
-                else "🌙  Switch to Dark mode")
         self._refresh_placeholder_colors()
         self.refresh_weekday_buttons()
         self.on_end_mode_changed()
@@ -3128,6 +3123,11 @@ class NoteOrganizer(CalculatorPanelMixin, SettingsPageMixin, tk.Tk):
         # (e.g. built once and never rebuilt) by swapping known theme colors from
         # the OTHER theme to the current one. This guarantees a clean flip.
         self._recolor_stragglers()
+        # The Settings nav glyphs are shapes drawn onto small canvases, and
+        # nothing above reaches items drawn on a canvas -- track_theme only
+        # restores the canvas background. Repaint them explicitly, the same
+        # way the theme picker refreshes its own preview cards.
+        self._recolor_settings_nav_icons()
         # Recolour the note cards in place rather than calling
         # refresh_note_list(), which destroys and rebuilds every card. That
         # rebuild was ~85ms of a ~121ms theme switch and made the list

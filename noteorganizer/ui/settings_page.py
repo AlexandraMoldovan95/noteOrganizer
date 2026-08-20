@@ -37,16 +37,19 @@ and gives each a collapsible header — that assembly is what becomes a left
 nav plus a content pane.
 """
 
+import os
 import tkinter as tk
 from tkinter import ttk
 import tkinter.font as tkfont
 from datetime import datetime, timedelta, date as date_cls
 
+from ..core import paths
 from ..core.categories import CATEGORY_COLORS, persist_categories
 from ..core.duplicates import find_duplicate_groups
 from ..core.storage import (
     TRASH_RETENTION_DAYS,
     _delete_attachment_files,
+    load_settings,
     normalize_template,
     save_templates,
     save_trash,
@@ -65,12 +68,19 @@ def _host():
     """The entry-point module, imported only when actually needed.
 
     ``note_organizer`` imports this file to build the app class, so importing
-    it back at module level would be circular. Two labels here show the app
-    version and the first-launch date, which live there as module globals —
-    and ``FIRST_LAUNCH_DATE`` is only filled in once ``initialise()`` runs,
-    so it has to be read when the label is built, not when this file loads.
-    A local import does both: it breaks the cycle and reads the current
-    value.
+    it back at module level would be circular. A local import breaks the
+    cycle.
+
+    Use this **only for values that are module-level constants**, such as
+    ``APP_VERSION``. Anything ``initialise()`` fills in must not be read
+    through here, because there can be two copies of this module at once:
+    running the app as ``py note_organizer.py`` makes the running copy
+    ``__main__``, and ``import note_organizer`` below then loads a *second*,
+    separate copy whose ``initialise()`` has never run — so every value it
+    assigns is still ``None``. That is not hypothetical; it blanked the
+    storage path in About and printed "since None" in Statistics. Those two
+    now read from the core layer instead, which is only ever imported by
+    name and so can never be duplicated this way.
     """
     import note_organizer
     return note_organizer
@@ -84,48 +94,91 @@ class SettingsPageMixin:
     """
 
     def toggle_settings_panel(self, which):
-        """Accordion for Settings: open the requested inline panel and close any
-        other. Panels replace the old pop-up dialogs for categories, trash
-        and duplicates."""
-        panels = {
-            "templates": (getattr(self, "settings_templates_panel", None),
-                          self._build_settings_templates_panel),
-            "categories": (getattr(self, "settings_categories_panel", None),
-                           self._build_settings_categories_panel),
-            "trash": (getattr(self, "settings_trash_panel", None),
-                      self._build_settings_trash_panel),
-            "duplicates": (getattr(self, "settings_duplicates_panel", None),
-                           self._build_settings_duplicates_panel),
-        }
-        target, builder = panels.get(which, (None, None))
+        """Show one Settings section, hiding whichever was showing.
+
+        Kept under its original name because it is how the rest of the app --
+        and the QA suite, in 8 places -- asks for a Settings section. What
+        changed is the meaning: there used to be an accordion where a section
+        could be open or closed, and now exactly one is always showing, so this
+        selects rather than toggles.
+        """
+        sections = {key: (getattr(self, "settings_%s_panel" % key, None), builder, eager)
+                    for key, _label, builder, eager in self.SETTINGS_SECTIONS}
+        target, builder, eager = sections.get(which, (None, None, None))
         if target is None:
             return
-        already_open = target.winfo_ismapped()
-        # Close every panel first.
-        for panel, _ in panels.values():
+
+        for key, (panel, _b, _e) in sections.items():
             if panel is not None and panel.winfo_ismapped():
                 panel.pack_forget()
-        if already_open:
-            return  # it was open → now closed, done (toggle behavior)
-        # Build fresh content and show it.
-        for w in target.winfo_children():
-            w.destroy()
-        self._active_panel_canvas = None  # builder sets this if it has a scroll list
-        self._resize_handles_pending = []
-        builder(target)
-        # Create any resize handles the builder requested, now that the canvas
-        # exists — the handle overlays the target's bottom edge and is lifted on
-        # top so it stays visible and doesn't repack siblings while dragging.
-        for tgt, mn, mx in getattr(self, "_resize_handles_pending", []):
-            h = self._add_resize_handle(tgt, min_h=mn, max_h=mx, host=target)
-            h.pack(fill="x", padx=12, pady=(2, 8))
-        self._resize_handles_pending = []
-        target.pack(fill="x", padx=16, pady=(0, 12))
-        # One wheel rule for the whole panel: if the panel has an inner scroll
-        # list with overflow, scroll it; otherwise scroll the Settings page.
-        # This works no matter where the cursor is over the panel.
-        inner_canvas = getattr(self, "_active_panel_canvas", None)
-        self._bind_wheel_tree(target, lambda e: self._panel_or_page_wheel(inner_canvas, e))
+
+        if not eager:
+            # Heavy panels rebuild on each visit, so they reflect the current
+            # notes rather than whatever was true when Settings was opened.
+            for w in target.winfo_children():
+                w.destroy()
+            self._active_panel_canvas = None
+            self._resize_handles_pending = []
+            label = next(l for k, l, _b, _e in self.SETTINGS_SECTIONS if k == which)
+            self._settings_section_heading(target, label)
+            builder_fn = getattr(self, builder)
+            builder_fn(target)
+            # Builders can't create their own resize handle: the handle has to
+            # overlay the panel's bottom edge, so it can only be added once the
+            # canvas above it exists. They record (frame, min, max) instead and
+            # it gets built here, lifted above its siblings so dragging it
+            # doesn't repack them.
+            for tgt, mn, mx in getattr(self, "_resize_handles_pending", []):
+                h = self._add_resize_handle(tgt, min_h=mn, max_h=mx, host=target)
+                h.pack(fill="x", padx=12, pady=(2, 8))
+            self._resize_handles_pending = []
+
+        target.pack(fill="both", expand=True, padx=48, pady=(40, 60))
+        self._settings_selected_section = which
+        self._highlight_settings_nav(which)
+        if getattr(self, "settings_canvas", None) is not None:
+            try:
+                self.settings_canvas.yview_moveto(0)
+            except tk.TclError:
+                pass
+
+    def _highlight_settings_nav(self, which):
+        """Mark the selected nav entry, clear the rest.
+
+        A solid accent block was the loudest thing on the page and sat there
+        permanently. The same information -- you are here -- carries fine on
+        an accent rail plus a tint of the accent mixed into the sidebar, with
+        the label in the accent colour rather than reversed out to white.
+        """
+        rails = getattr(self, "_settings_nav_rails", {})
+        icons = getattr(self, "_settings_nav_icons", {})
+        tint = self._blend(self.colors["sidebar"], self.colors["accent"], 0.16)
+        for key, btn in getattr(self, "_settings_nav_buttons", {}).items():
+            try:
+                selected = (key == which)
+                btn.configure(
+                    bg=tint if selected else self.colors["sidebar"],
+                    fg=self.colors["accent"] if selected else self.colors["subtext"],
+                    activebackground=tint if selected else self.colors["card"],
+                )
+                rail = rails.get(key)
+                if rail is not None:
+                    rail.configure(bg=tint if selected else self.colors["sidebar"])
+                    rail.delete("all")
+                    if selected:
+                        h = max(rail.winfo_height(), 34)
+                        top = (h - 16) / 2
+                        rail.create_rectangle(0, top, 3, top + 16,
+                                              fill=self.colors["accent"],
+                                              outline=self.colors["accent"])
+                icon = icons.get(key)
+                if icon is not None:
+                    icon.configure(bg=tint if selected else self.colors["sidebar"])
+                    self._draw_icon(
+                        icon, key,
+                        self.colors["accent"] if selected else self.colors["subtext"])
+            except tk.TclError:
+                pass
 
     def _panel_or_page_wheel(self, panel_canvas, event):
         """If the panel's list can scroll, scroll it; else scroll the whole
@@ -153,20 +206,19 @@ class SettingsPageMixin:
                 pass
         return "break"
 
-    def _settings_panel_header(self, parent, title, subtitle, which):
-        """Common header for an inline settings panel: title + close ✕."""
-        head = tk.Frame(parent, bg=self.colors["card"])
-        head.pack(fill="x", padx=12, pady=(10, 2))
-        tk.Label(head, text=title, font=("Segoe UI", 12, "bold"),
-                 bg=self.colors["card"], fg=self.colors["text"]).pack(side="left")
-        tk.Button(head, text="✕", command=lambda: self.toggle_settings_panel(which),
-                  bg=self.colors["card"], fg=self.colors["subtext"], relief="flat",
-                  font=("Segoe UI", 11, "bold"), cursor="hand2").pack(side="right")
-        if subtitle:
-            tk.Label(parent, text=subtitle, font=("Segoe UI", 8),
-                     bg=self.colors["card"], fg=self.colors["subtext"],
-                     justify="left", wraplength=520, anchor="w"
-                     ).pack(fill="x", padx=12, pady=(0, 8))
+    def _settings_subtitle(self, parent, text):
+        """The explanatory line under a section title.
+
+        This replaced a header that drew the title itself plus a close ✕.
+        Both stopped making sense once the nav took over naming sections and
+        one section is always showing: the title appeared twice, and the ✕
+        had nothing left to close -- it re-selected the section it was
+        already on.
+        """
+        tk.Label(parent, text=text, font=("Segoe UI", 10), anchor="w",
+                 justify="left", wraplength=self.SETTINGS_CONTENT_MAX - 20,
+                 bg=self.colors["bg"], fg=self.colors["subtext"]
+                 ).pack(fill="x", pady=(0, 22))
 
     def _render_statistics(self):
         """Compute and draw a compact, read-only snapshot: total notes; a
@@ -234,119 +286,142 @@ class SettingsPageMixin:
         added_week, added_month, added_year, added_older = _bucket_counts("created")
         updated_week, updated_month, updated_year, updated_older = _bucket_counts("updated")
 
-        # --- Summary: total, then a week/month/year/older breakdown for
-        # both when notes were added and last updated. Built as a grid —
-        # icon, then "Added:"/"Updated:", then each of week/month/year/
-        # older in its own column — rather than one big string per row.
-        # The icon gets its own column specifically because 🆕 and ✏️
-        # aren't the same rendered width, so if the icon and label shared
-        # a column, "Added:" and "Updated:" themselves would start at
-        # different x positions even though the column as a whole lined
-        # up. Splitting it out means every column — icon, label, and each
-        # week/month/year/older segment — lines up independently between
-        # the two rows, regardless of font/DPI. ---
-        tk.Label(
-            self.stats_frame, text=f"{total} notes",
-            font=("Segoe UI", 9, "bold"), bg=self.colors["card"],
-            fg=self.colors["text"], anchor="w"
-        ).pack(fill="x", pady=(0, 4))
-
-        breakdown = tk.Frame(self.stats_frame, bg=self.colors["card"])
-        breakdown.pack(fill="x", pady=(0, 10))
-        stat_font = tkfont.Font(family="Segoe UI", size=9)
-        rows_data = [
-            ("🆕", "Added:", added_week, added_month, added_year, added_older),
-            ("✏️", "Updated:", updated_week, updated_month, updated_year, updated_older),
-        ]
-        icon_width = max(stat_font.measure(rows_data[0][0]),
-                          stat_font.measure(rows_data[1][0])) + 6
-        breakdown.grid_columnconfigure(0, minsize=icon_width)
-        label_width = max(stat_font.measure(rows_data[0][1]),
-                           stat_font.measure(rows_data[1][1])) + 10
-        breakdown.grid_columnconfigure(1, minsize=label_width)
-
-        segment_labels = ["this week", "this month", "this year", "older"]
-        for seg_idx, seg_label in enumerate(segment_labels):
-            col = seg_idx + 2
-            texts = [f"{rows_data[0][seg_idx + 2]} {seg_label}",
-                     f"{rows_data[1][seg_idx + 2]} {seg_label}"]
-            col_width = max(stat_font.measure(t) for t in texts) + 16
-            breakdown.grid_columnconfigure(col, minsize=col_width)
-
-        for r, (icon, label_text, week, month, year, older) in enumerate(rows_data):
-            tk.Label(breakdown, text=icon, font=("Segoe UI", 9),
-                     bg=self.colors["card"], fg=self.colors["text"], anchor="w"
-                     ).grid(row=r, column=0, sticky="w")
-            tk.Label(breakdown, text=label_text, font=("Segoe UI", 9),
-                     bg=self.colors["card"], fg=self.colors["text"], anchor="w"
-                     ).grid(row=r, column=1, sticky="w")
-            for seg_idx, (value, seg_label) in enumerate(
-                    zip((week, month, year, older), segment_labels)):
-                tk.Label(breakdown, text=f"{value} {seg_label}",
-                         font=("Segoe UI", 9), bg=self.colors["card"],
-                         fg=self.colors["text"], anchor="w"
-                         ).grid(row=r, column=seg_idx + 2, sticky="w")
-
-        # --- A few standalone counts: templates and checklists are their
-        # own things (a template can be reused across many notes; a
-        # checklist only ever lives inside the one note it's on), so these
-        # count the things themselves, not how many notes reference them.
-        # "Deleted" counts what's currently in Trash right now, not an
-        # all-time total — it goes back down after Trash is emptied or
-        # auto-purges, same as Trash's own count would show. ---
+        # --- Presentation. The figures above are the same as they always
+        # were; what changed is that they are shown as figures rather than
+        # as sentences. This used to render "Added: 0 this week 0 this
+        # month 5 this year 0 older" as one run of same-size text, so the
+        # number and the word carried identical weight and nothing could be
+        # read at a glance -- which is the whole point of a snapshot.
+        #
+        # Now: three tiles for the standalone counts, then a small table
+        # with a real header row for the time breakdown, then the category
+        # split. Numbers lead, captions follow quietly. ---
+        # Tallied up here because the tiles below report the category count as
+        # well as the split further down.
+        counts = {}
+        for n in notes:
+            cat = n.get("category") or PROTECTED_CATEGORY
+            counts[cat] = counts.get(cat, 0) + 1
+        # Templates and checklists are their own things -- a template can be
+        # reused across many notes, a checklist only ever lives inside the one
+        # note it is on -- so these count the things themselves, not how many
+        # notes reference them. "In trash" is what is there right now, not an
+        # all-time total, so it drops back after Trash is emptied or purges.
         templates_count = len(self.templates)
         checklists_count = sum(1 for n in notes if n.get("checklist"))
         deleted_count = len(self.trash)
-        tk.Label(
-            self.stats_frame,
-            text=f"🧩 {templates_count} templates   ·   "
-                 f"☑ {checklists_count} notes with checklists   ·   "
-                 f"🗑 {deleted_count} deleted",
-            font=("Segoe UI", 9), bg=self.colors["card"], fg=self.colors["text"],
-            anchor="w"
-        ).pack(fill="x")
-        tk.Label(
-            self.stats_frame, text=f"📅 Using Note Organizer since {_host().FIRST_LAUNCH_DATE}",
-            font=("Segoe UI", 9), bg=self.colors["card"], fg=self.colors["text"],
-            anchor="w"
-        ).pack(fill="x", pady=(0, 10))
 
-        # Per-category counts: known categories first (Manage-categories order),
-        # then any leftover/stale category names so nothing is silently dropped.
-        counts = {}
-        for n in notes:
-            cat = n.get("category") if isinstance(n.get("category"), str) else None
-            cat = cat or "General"
-            counts[cat] = counts.get(cat, 0) + 1
+        tiles = tk.Frame(self.stats_frame, bg=self.colors["bg"])
+        tiles.pack(fill="x", pady=(0, 22))
+        for i in range(3):
+            tiles.grid_columnconfigure(i, weight=1, uniform="stat")
+        # Three across, as in the reference design -- but six figures rather
+        # than three, wrapping to a second row. The reference was a sketch
+        # with three; dropping to match it exactly would have deleted the
+        # template, checklist and trash counts, which are real figures this
+        # panel has always shown and has regression tests for.
+        for i, (value, caption) in enumerate((
+                (total, "Total notes"),
+                (added_week, "Added this week"),
+                (len(counts), "Categories"),
+                (templates_count, "Templates"),
+                (checklists_count, "With a checklist"),
+                (deleted_count, "In trash"))):
+            edge = tk.Frame(tiles, bg=self._border_color())
+            edge.grid(row=i // 3, column=i % 3, sticky="nsew",
+                      padx=(0 if i % 3 == 0 else 12, 0),
+                      pady=(0 if i < 3 else 12, 0))
+            tile = tk.Frame(edge, bg=self._surface())
+            tile.pack(fill="both", expand=True, padx=1, pady=1)
+            tk.Label(tile, text=str(value), font=("Segoe UI", 20, "bold"),
+                     bg=self._surface(), fg=self.colors["text"], anchor="w"
+                     ).pack(fill="x", padx=18, pady=(16, 0))
+            tk.Label(tile, text=caption, font=("Segoe UI", 9, "bold"),
+                     bg=self._surface(), fg=self.colors["subtext"], anchor="w"
+                     ).pack(fill="x", padx=18, pady=(3, 16))
+
+        # --- The time breakdown, as a table with a header rather than a
+        # sentence. Counts are right-aligned so digits line up down each
+        # column, and the header says once what the old version repeated on
+        # every single cell ("this week" appeared four times). ---
+        SEGMENTS = ("this week", "this month", "this year", "older")
+        table = tk.Frame(self.stats_frame, bg=self.colors["bg"])
+        table.pack(fill="x", pady=(0, 4))
+        table.grid_columnconfigure(0, weight=0, minsize=76)
+        for c in range(1, 5):
+            table.grid_columnconfigure(c, weight=1, uniform="seg")
+
+        for c, seg in enumerate(SEGMENTS):
+            tk.Label(table, text=seg, font=("Segoe UI", 8), bg=self.colors["bg"],
+                     fg=self.colors["subtext"], anchor="e"
+                     ).grid(row=0, column=c + 1, sticky="ew", padx=(8, 0), pady=(0, 2))
+
+        rule = tk.Frame(table, height=1, bg=self._border_color())
+        rule.grid(row=1, column=0, columnspan=5, sticky="ew", pady=(0, 4))
+
+        for r, (caption, values) in enumerate((
+                ("Added", (added_week, added_month, added_year, added_older)),
+                ("Updated", (updated_week, updated_month, updated_year, updated_older)))):
+            tk.Label(table, text=caption, font=("Segoe UI", 9), bg=self.colors["bg"],
+                     fg=self.colors["subtext"], anchor="w"
+                     ).grid(row=r + 2, column=0, sticky="w", pady=2)
+            for c, value in enumerate(values):
+                tk.Label(table, text=str(value), font=("Segoe UI", 10, "bold"),
+                         bg=self.colors["bg"],
+                         fg=self.colors["text"] if value else self.colors["subtext"],
+                         anchor="e"
+                         ).grid(row=r + 2, column=c + 1, sticky="ew", padx=(8, 0), pady=2)
+
+        # --- Per-category split. Known categories first (Manage-categories
+        # order), then any leftover/stale names so nothing is silently
+        # dropped. Deliberately not clickable: this is a snapshot, not
+        # another way to filter notes -- see docs/ISSUES_LOG.md. ---
         ordered_cats = [c for c in CATEGORY_COLORS.keys() if c in counts]
         ordered_cats += [c for c in counts.keys() if c not in ordered_cats]
 
+        tk.Label(self.stats_frame, text="BY CATEGORY", font=("Segoe UI", 8, "bold"),
+                 bg=self.colors["card"], fg=self.colors["subtext"], anchor="w"
+                 ).pack(fill="x", pady=(16, 6))
+
         if not ordered_cats:
             tk.Label(self.stats_frame, text="No notes yet.", font=("Segoe UI", 9),
-                     bg=self.colors["card"], fg=self.colors["subtext"]
-                     ).pack(anchor="w")
-            return
+                     bg=self.colors["bg"], fg=self.colors["subtext"], anchor="w"
+                     ).pack(fill="x")
+        else:
+            grid = tk.Frame(self.stats_frame, bg=self.colors["bg"])
+            grid.pack(fill="x")
+            cols = 3
+            for col in range(cols):
+                grid.grid_columnconfigure(col, weight=1, uniform="cat")
+            for idx, cat in enumerate(ordered_cats):
+                n = counts[cat]
+                color = CATEGORY_COLORS.get(cat, self.colors["subtext"])
+                edge = tk.Frame(grid, bg=self._border_color())
+                edge.grid(row=idx // cols, column=idx % cols, sticky="ew",
+                          padx=(0 if idx % cols == 0 else 8, 0), pady=4)
+                pill = tk.Frame(edge, bg=self._surface())
+                pill.pack(fill="both", expand=True, padx=1, pady=1)
+                dot = tk.Frame(pill, bg=color, width=7, height=7)
+                dot.pack(side="left", padx=(8, 6), pady=8)
+                dot.pack_propagate(False)
+                tk.Label(pill, text=cat, font=("Segoe UI", 9, "bold"),
+                         bg=self._surface(), fg=self.colors["subtext"], anchor="w"
+                         ).pack(side="left", fill="x", expand=True)
+                tk.Label(pill, text=str(n), font=("Consolas", 9),
+                         bg=self._surface(), fg=self.colors["text"], anchor="e"
+                         ).pack(side="right", padx=(6, 12))
 
-        # --- Per-category counts: plain text, no box — a colored dot plus
-        # "Category (count)". Deliberately not clickable; this is just a
-        # snapshot, not another way to filter notes. Wraps into rows of 4. ---
-        grid = tk.Frame(self.stats_frame, bg=self.colors["card"])
-        grid.pack(fill="x")
-        cols = 4
-        for col in range(cols):
-            grid.grid_columnconfigure(col, weight=1, uniform="statchip")
+        # Read the stamp back from settings rather than the entry module's
+        # FIRST_LAUNCH_DATE -- see _host()'s docstring for why that global
+        # can be None here. Purely a read: the stamp is written once, at
+        # startup, by get_first_launch_date().
+        since = load_settings().get("first_launch_date") or "\u2014"
+        tk.Label(
+            self.stats_frame, text=f"Using Note Organizer since {since}",
+            font=("Segoe UI", 9), bg=self.colors["bg"],
+            fg=self.colors["subtext"], anchor="w"
+        ).pack(fill="x", pady=(18, 0))
 
-        for idx, cat in enumerate(ordered_cats):
-            n = counts[cat]
-            color = CATEGORY_COLORS.get(cat, self.colors["accent"])
-            r, c = divmod(idx, cols)
-            row = tk.Frame(grid, bg=self.colors["card"])
-            row.grid(row=r, column=c, sticky="ew", padx=3, pady=3)
-            tk.Label(row, text="●", font=("Segoe UI", 9), fg=color,
-                     bg=self.colors["card"]).pack(side="left", padx=(0, 4))
-            tk.Label(row, text=f"{cat} ({n})", font=("Segoe UI", 8),
-                     bg=self.colors["card"], fg=self.colors["text"], anchor="w"
-                     ).pack(side="left", fill="x", expand=True)
 
         # Same wheel-forwarding pattern used elsewhere in Settings (theme
         # picker, inline panels) — without it, scrolling with the cursor
@@ -363,10 +438,9 @@ class SettingsPageMixin:
         self._bind_wheel_tree(self.stats_frame, _stats_wheel)
 
     def _build_settings_categories_panel(self, parent):
-        self._settings_panel_header(
-            parent, "Categories",
-            "Rename, recolor, or remove your categories. “General” is permanent.",
-            "categories")
+        self._settings_subtitle(
+            parent,
+            "Rename, recolor, or remove your categories. “General” is permanent.")
         wrap = tk.Frame(parent, bg=self.colors["card"], height=220)
         wrap.pack(fill="x", padx=12, pady=(0, 0))
         wrap.pack_propagate(False)
@@ -386,7 +460,9 @@ class SettingsPageMixin:
         def redraw():
             for w in rows_frame.winfo_children():
                 w.destroy()
-            for name in list(CATEGORY_COLORS.keys()):
+            for i, name in enumerate(list(CATEGORY_COLORS.keys())):
+                if i:
+                    self._row_divider(rows_frame)
                 self._build_category_row(rows_frame, name, redraw)
             self._bind_wheel_tree(rows_frame, lambda e: self._panel_or_page_wheel(canvas, e))
         redraw()
@@ -422,13 +498,12 @@ class SettingsPageMixin:
                   ).pack(side="right", ipadx=10, ipady=4)
 
     def _build_settings_templates_panel(self, parent):
-        self._settings_panel_header(
-            parent, "Templates",
+        self._settings_subtitle(
+            parent,
             "Reusable starting points for new notes. Create one here or use "
             "“🧩 Save as template” on any note. Pick one with “📎 Use template”. "
             "Editing a template only affects notes you make from it afterwards — "
-            "notes already created stay as they are.",
-            "templates")
+            "notes already created stay as they are.")
         wrap = tk.Frame(parent, bg=self.colors["card"], height=240)
         wrap.pack(fill="x", padx=12, pady=(0, 0))
         wrap.pack_propagate(False)
@@ -455,7 +530,9 @@ class SettingsPageMixin:
                          font=("Segoe UI", 9), wraplength=460, justify="left"
                          ).pack(pady=10, padx=6, anchor="w")
             else:
-                for tpl in self.templates:
+                for i, tpl in enumerate(self.templates):
+                    if i:
+                        self._row_divider(rows)
                     self._build_template_row(rows, tpl, redraw)
             self._bind_wheel_tree(rows, lambda e: self._panel_or_page_wheel(canvas, e))
         redraw()
@@ -474,9 +551,10 @@ class SettingsPageMixin:
         name = tpl.get("name", "Untitled template")
         row = tk.Frame(parent, bg=self.colors["sidebar"])
         row.pack(fill="x", pady=4, padx=2)
-        tk.Label(row, text=f"🧩  {name}", bg=self.colors["sidebar"],
+        self._icon_button(row, "templates", bg_key="sidebar").pack(side="left", padx=(6, 0))
+        tk.Label(row, text=name, bg=self.colors["sidebar"],
                  fg=self.colors["text"], font=("Segoe UI", 10, "bold"), anchor="w"
-                 ).pack(side="left", fill="x", expand=True, padx=10, pady=8)
+                 ).pack(side="left", fill="x", expand=True, padx=6, pady=8)
 
         def delete():
             if self.ask_yes_no("Delete template",
@@ -486,13 +564,12 @@ class SettingsPageMixin:
                 redraw()
                 self._render_statistics()
 
-        tk.Button(row, text="🗑", command=delete, relief="flat", cursor="hand2",
-                  bg=self.colors["sidebar"], fg=self.colors["danger"],
-                  font=("Segoe UI", 10)).pack(side="right", padx=(2, 8))
-        edit_btn = tk.Button(row, text="✎", relief="flat", cursor="hand2",
-                  bg=self.colors["sidebar"], fg=self.colors["text"], font=("Segoe UI", 10))
-        edit_btn.configure(command=lambda: self._edit_template(tpl, redraw, edit_btn))
-        edit_btn.pack(side="right", padx=2)
+        self._icon_button(row, "trash", delete, danger=True, bg_key="sidebar"
+                          ).pack(side="right", padx=(1, 6))
+        edit_btn = self._icon_button(row, "pencil", bg_key="sidebar")
+        edit_btn.bind("<Button-1>",
+                      lambda _e: self._edit_template(tpl, redraw, edit_btn))
+        edit_btn.pack(side="right", padx=1)
 
     def _edit_template(self, tpl, redraw, anchor_widget=None):
         """Open a small editor (inline window) to create or edit a template's
@@ -679,10 +756,9 @@ class SettingsPageMixin:
         pop.bind("<Escape>", lambda e: self._dismiss_mini_popup())
 
     def _build_settings_trash_panel(self, parent):
-        self._settings_panel_header(
-            parent, "Recently deleted",
-            f"Kept for {TRASH_RETENTION_DAYS} days, then removed automatically.",
-            "trash")
+        self._settings_subtitle(
+            parent,
+            f"Kept for {TRASH_RETENTION_DAYS} days, then removed automatically.")
         wrap = tk.Frame(parent, bg=self.colors["card"], height=240)
         wrap.pack(fill="x", padx=12, pady=(0, 0))
         wrap.pack_propagate(False)
@@ -705,7 +781,15 @@ class SettingsPageMixin:
         # time since trash accumulates. Showing the most recent batch first,
         # with a button to reveal more, keeps opening the panel fast
         # regardless of how large the trash gets.
-        PAGE_SIZE = 50
+        #
+        # 25 rather than 50 since Settings started showing one section at a
+        # time. A page of 50 costs about 585ms to open with a full trash, and
+        # profiling puts ~95% of that in Tk laying the widgets out, not in any
+        # code here — so the only real lever is how many rows get painted up
+        # front. 25 halves it to about 405ms. This used to be hidden: the old
+        # accordion re-opened the panel on every other click, so half the
+        # time it was cheaply closing rather than rebuilding.
+        PAGE_SIZE = self.TRASH_PAGE_SIZE
         shown_count = {"n": PAGE_SIZE}
 
         def redraw():
@@ -747,17 +831,16 @@ class SettingsPageMixin:
                 shown_count["n"] = PAGE_SIZE
                 redraw()
 
-        tk.Button(parent, text="🗑  Empty trash", command=empty_trash,
-                  bg=self.colors["danger"], fg="white", relief="flat",
-                  font=("Segoe UI", 9, "bold"), cursor="hand2"
-                  ).pack(fill="x", padx=12, pady=(4, 10), ipady=5)
+        self._settings_big_button(
+            parent, "Empty trash", empty_trash, kind="danger"
+        ).pack(fill="x", padx=12, pady=(4, 10), ipady=5)
 
     def _build_settings_duplicates_panel(self, parent):
-        self._settings_panel_header(
-            parent, "Duplicate notes",
+        self._settings_subtitle(
+            parent,
             "Notes with the same title, text, comments and category (ignoring "
             "case, spacing, date and color). Tick the copies you want to "
-            "remove — the rest are kept.", "duplicates")
+            "remove — the rest are kept.")
         groups = find_duplicate_groups(self.notes)
         if not groups:
             tk.Label(parent, text="No duplicates found — every note is unique. 🎉",
@@ -896,76 +979,101 @@ class SettingsPageMixin:
             panel.pack(fill="x", padx=16, pady=(0, 12))
 
     def _build_theme_picker(self, parent):
-        """Show the theme variants for the CURRENT mode (dark or light) as
-        larger, nicer preview cards. Switching light/dark swaps which set shows.
-        The active theme is highlighted."""
+        """The theme swatches for the current mode, as in the reference design.
+
+        Four across, each a bordered tile holding a small preview of that
+        theme -- its own sidebar strip and three text lines painted in its own
+        colours -- with the name beneath and a tick badge on the selected one.
+        Switching light/dark swaps which set is shown.
+        """
         for w in parent.winfo_children():
             w.destroy()
 
-        in_dark = self.theme_name in DARK_THEMES
-        names = DARK_THEMES if in_dark else LIGHT_THEMES
+        # Both groups, as in the reference. Showing only the current mode's
+        # set meant picking a light theme took two steps -- flip the mode,
+        # then choose -- when one click will do.
+        names = list(DARK_THEMES) + list(LIGHT_THEMES)
 
-        heading = tk.Label(
-            parent, text=("Dark themes" if in_dark else "Light themes"),
-            bg=self.colors["card"], fg=self.colors["subtext"],
-            font=("Segoe UI", 9, "bold"), anchor="w")
-        heading.pack(fill="x", pady=(4, 8))
+        # How many fit depends on the column width; the reference shows four
+        # and that is what a 640px column takes, but it re-wraps rather than
+        # letting the last one hang off the edge.
+        CARD_W = 132
+        per_group = max(len(DARK_THEMES), len(LIGHT_THEMES))
+        avail = parent.winfo_width()
+        if avail <= 1:
+            avail = self.SETTINGS_CONTENT_MAX
+        fit = max(1, min(per_group, avail // CARD_W))
+        rows = -(-per_group // fit)
+        per_row = -(-per_group // rows)
+        self._theme_picker_cols = per_row
 
-        grid = tk.Frame(parent, bg=self.colors["card"])
-        grid.pack(fill="x")
-        for col in range(len(names)):
-            grid.grid_columnconfigure(col, weight=1, uniform="themecol")
-
+        grid = None
+        group = None
         for i, name in enumerate(names):
+            this_group = "DARK" if name in DARK_THEMES else "LIGHT"
+            if this_group != group:
+                group = this_group
+                tk.Label(parent, text=group, bg=self.colors["bg"],
+                         fg=self.colors["subtext"], font=("Segoe UI", 9, "bold"),
+                         anchor="w").pack(fill="x", pady=(0 if grid is None else 18, 10))
+                grid = tk.Frame(parent, bg=self.colors["bg"])
+                grid.pack(fill="x")
+                for col in range(per_row):
+                    grid.grid_columnconfigure(col, weight=1, uniform="themecol")
+                base = i
             pal = THEMES[name]
             active = (name == self.theme_name)
+            edge_col = self.colors["accent"] if active else self._border_color()
 
-            cell = tk.Frame(grid, bg=self.colors["card"], cursor="hand2")
-            cell.grid(row=0, column=i, padx=6, pady=2, sticky="nsew")
+            edge = tk.Frame(grid, bg=edge_col, cursor="hand2")
+            j = i - base
+            edge.grid(row=j // per_row, column=j % per_row, sticky="nsew",
+                      padx=(0 if j % per_row == 0 else 10, 0),
+                      pady=(0 if j < per_row else 10, 0))
+            cell = tk.Frame(edge, bg=self._surface(), cursor="hand2")
+            cell.pack(fill="both", expand=True, padx=2, pady=2)
 
-            # A larger preview card: window chrome with sidebar, an accent
-            # button, a couple of text bars — a mini snapshot of the theme.
-            W, H = 150, 96
-            sw = tk.Canvas(cell, width=W, height=H, highlightthickness=0,
-                           bg=self.colors["card"], cursor="hand2")
-            # Outer rounded card = bg, with a highlight ring if active.
-            ring = pal["accent"] if active else pal["sidebar"]
-            self._rounded_rect(sw, 2, 2, W - 2, H - 2, 12, fill=pal["bg"], outline=ring)
-            if active:
-                self._rounded_rect(sw, 4, 4, W - 4, H - 4, 11, fill=pal["bg"], outline=pal["accent"])
-            # Sidebar strip on the left.
-            self._rounded_rect(sw, 8, 10, 44, H - 10, 8, fill=pal["sidebar"], outline=pal["sidebar"])
-            # A "note card" on the right.
-            self._rounded_rect(sw, 52, 12, W - 12, H - 12, 8, fill=pal["card"], outline=pal["card"])
-            # Accent button + text lines inside the card.
-            self._rounded_rect(sw, 60, 20, 108, 32, 5, fill=pal["accent"], outline=pal["accent"])
-            self._rounded_rect(sw, 60, 42, W - 20, 48, 3, fill=pal["text"], outline=pal["text"])
-            self._rounded_rect(sw, 60, 54, W - 30, 60, 3, fill=pal["subtext"], outline=pal["subtext"])
-            self._rounded_rect(sw, 60, 66, W - 40, 72, 3, fill=pal["subtext"], outline=pal["subtext"])
-            # Sidebar dots.
-            for dy in (18, 30, 42):
-                self._rounded_rect(sw, 14, dy, 38, dy + 6, 3,
-                                   fill=pal["accent"] if dy == 18 else pal["card"],
-                                   outline=pal["accent"] if dy == 18 else pal["card"])
-            if active:
-                sw.create_text(W - 16, 16, text="✓", fill=pal["accent"],
-                               font=("Segoe UI", 13, "bold"))
-            sw.pack()
+            W, H = 116, 46
+            sw = tk.Canvas(cell, width=W, height=H, highlightthickness=0, bd=0,
+                           bg=self._surface(), cursor="hand2")
+            sw.pack(padx=8, pady=(8, 6))
+            # the theme's own page, its sidebar strip, and three text lines
+            sw.create_rectangle(0, 0, W, H, fill=pal["bg"], outline=pal["bg"])
+            sw.create_rectangle(0, 0, W * 0.28, H, fill=pal["sidebar"],
+                                outline=pal["sidebar"])
+            x0 = W * 0.28 + 7
+            for idx, (frac, colour) in enumerate((
+                    (0.60, pal["accent"]),
+                    (0.85, pal["text"]),
+                    (0.40, pal["subtext"]))):
+                y = 10 + idx * 9
+                sw.create_rectangle(x0, y, x0 + (W - x0 - 8) * frac, y + 4,
+                                    fill=colour, outline=colour)
 
             lbl = tk.Label(cell, text=THEME_LABELS.get(name, name),
-                           bg=self.colors["card"],
-                           fg=(self.colors["accent"] if active else self.colors["text"]),
-                           font=("Segoe UI", 9, "bold" if active else "normal"))
-            lbl.pack(pady=(6, 2))
+                           bg=self._surface(), cursor="hand2",
+                           fg=(self.colors["accent"] if active
+                               else self.colors["subtext"]),
+                           font=("Segoe UI", 8, "bold"))
+            lbl.pack(pady=(0, 8))
 
-            for w in (cell, sw, lbl):
+            if active:
+                badge = tk.Canvas(cell, width=16, height=16, highlightthickness=0,
+                                  bd=0, bg=self._surface())
+                badge.place(relx=1.0, rely=0.0, x=-4, y=4, anchor="ne")
+                badge.create_oval(0, 0, 15, 15, fill=self.colors["accent"],
+                                  outline=self.colors["accent"])
+                badge.create_line(4, 8, 6.5, 10.5, 11.5, 5,
+                                  fill="white", width=1.8)
+
+            for w in (edge, cell, sw, lbl):
                 w.bind("<Button-1>", lambda e, n=name: self.set_theme(n))
 
-        # Each preview card's canvas otherwise swallows the mouse wheel
-        # itself (a plain Tk quirk: Canvas has a built-in default scroll
-        # binding, so it never lets the event reach the Settings page
-        # underneath) — forward it to the page's own scroll instead, the
-        # same pattern used for every other Settings panel.
+        # Each preview canvas otherwise swallows the mouse wheel itself (a
+        # plain Tk quirk: Canvas has a built-in default scroll binding, so it
+        # never lets the event reach the Settings page underneath) -- forward
+        # it to the page's own scroll instead, the same pattern used for
+        # every other Settings panel.
         def _theme_picker_wheel(event):
             try:
                 self.settings_canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
@@ -973,6 +1081,16 @@ class SettingsPageMixin:
                 pass
             return "break"
         self._bind_wheel_tree(parent, _theme_picker_wheel)
+
+        # Re-wrap when the column's width changes. Only an actual change in
+        # the number of columns rebuilds, so ordinary Configure noise -- which
+        # fires for height changes too -- doesn't churn the cards.
+        def _rewrap(event):
+            fits = max(1, min(per_group, max(event.width, 1) // CARD_W))
+            balanced = -(-per_group // (-(-per_group // fits)))
+            if balanced != getattr(self, "_theme_picker_cols", None):
+                self._build_theme_picker(parent)
+        parent.bind("<Configure>", _rewrap)
 
         self._refresh_theme_picker = lambda: self._build_theme_picker(parent)
 
@@ -991,45 +1109,183 @@ class SettingsPageMixin:
         self.notebook.pack(fill="both", expand=True)
 
     # ---------- Settings tab ----------
+    # One row per section: nav order, the builder that fills the pane, and
+    # whether it is cheap enough to build up front. This list is the single
+    # source of truth for the navigation — adding a section means adding a row.
+    #
+    # The four that used to hide behind an "expand" button (categories,
+    # templates, trash, duplicates) are ordinary sections now. That removes a
+    # whole interaction layer: previously you scrolled to a section, clicked to
+    # expand its panel, then closed it again.
+    # The keys are an API: the QA suite selects sections by them and reads
+    # ``settings_<key>_panel`` attributes, so they stay put even when a label
+    # changes. "name" is now shown as "General" because it carries the
+    # greeting settings rather than only a name field.
+    SETTINGS_SECTIONS = (
+        ("name",       "General",          "_build_settings_name_panel",       True),
+        ("appearance", "Appearance",       "_build_settings_appearance_panel", True),
+        ("categories", "Categories",       "_build_settings_categories_panel", False),
+        ("templates",  "Templates",        "_build_settings_templates_panel",  False),
+        ("backup",     "Backup",           "_build_settings_backup_panel",     True),
+        ("trash",      "Recently deleted", "_build_settings_trash_panel",      False),
+        ("duplicates", "Duplicates",       "_build_settings_duplicates_panel", False),
+        ("statistics", "Statistics",       "_build_settings_statistics_panel", True),
+        ("about",      "About",            "_build_settings_about_panel",      True),
+    )
+
+    # Nine entries in one flat run mixed four different kinds of thing:
+    # preferences, managers for content you made, tools that delete things,
+    # and read-only information. Grouping is kept separate from the tuple
+    # above so section keys and their order stay independent of how the nav
+    # happens to be arranged.
+    SETTINGS_GROUPS = (
+        ("General", ("name", "appearance")),
+        ("Content", ("categories", "templates")),
+        ("Data",    ("backup", "trash", "duplicates")),
+        ("More",    ("statistics", "about")),
+    )
+
+    # The nav is a fixed width. It does not need a narrow breakpoint: the app
+    # holds its whole content area to at least SIDEBAR_WIDTH + EDITOR_MIN_WIDTH
+    # (900px) and scrolls horizontally below that rather than reflowing -- see
+    # _on_main_canvas_configure in note_organizer.py -- and Settings sits
+    # inside that same canvas, so its pane never gets narrower than ~890px.
+    SETTINGS_NAV_WIDTH = 240
+    # How many trash rows are painted before "Show more". A tuning knob, not
+    # a feature: see the note in _build_settings_trash_panel for the numbers.
+    TRASH_PAGE_SIZE = 25
+    # Content stops growing past this; the space left on the right is
+    # deliberate, so a short form is not stretched across the whole window.
+    SETTINGS_CONTENT_MAX = 640
+
     def build_settings_tab(self, parent):
-        """A calm, scrollable settings page: appearance, categories, and a
-        clearly separated backup section. These are all occasional actions,
-        so moving them out of the sidebar keeps the notes list front-and-center."""
+        """Settings as a navigation column plus a content pane.
+
+        Sections used to be stacked in one long scrolling column, four of them
+        hiding an expandable panel behind a button. Everything competed for the
+        same vertical space, and section titles sat left while their buttons sat
+        centred, so reading the page meant zig-zagging.
+
+        Now one section shows at a time, picked from the list on the left, and
+        everything inside it lines up against the same left edge.
+        """
         outer = tk.Frame(parent)
         self.track_theme(outer, bg="bg")
         outer.pack(fill="both", expand=True)
 
-        # "Back to Notes" lives in its own fixed row, OUTSIDE the scrollable
-        # canvas below — packed first with side="top" so it claims its own
-        # space and stays visible no matter how far the page underneath is
-        # scrolled, instead of being just another row that scrolls away.
-        sticky_bar = tk.Frame(outer)
-        self.track_theme(sticky_bar, bg="bg")
-        sticky_bar.pack(side="top", fill="x")
-        back_row = tk.Frame(sticky_bar)
-        self.track_theme(back_row, bg="bg")
-        back_row.pack(fill="x", padx=40, pady=(20, 0))
-        back_btn = tk.Button(
-            back_row, text="← Back to Notes", command=self.hide_settings_page,
-            relief="flat", font=("Segoe UI", 9, "bold"), cursor="hand2"
-        )
-        self.track_theme(back_btn, bg="card", fg="text")
-        back_btn.pack(side="left", ipadx=8, ipady=4)
+        # There is no bar across the top any more: Back to Notes lives in
+        # the rail, beside the section list. A full-width strip spent a band
+        # of vertical space on every section to carry one control.
 
-        canvas = tk.Canvas(outer, highlightthickness=0, bg=self.colors["bg"])
+        body = tk.Frame(outer)
+        self.track_theme(body, bg="bg")
+        body.pack(fill="both", expand=True)
+
+        # ---- left: the navigation ----
+        self.settings_nav = tk.Frame(body, width=self.SETTINGS_NAV_WIDTH)
+        self.track_theme(self.settings_nav, bg="sidebar")
+        self.settings_nav.pack(side="left", fill="y")
+        self.settings_nav.pack_propagate(False)   # hold our width, ignore children
+
+        # --- brand block: mark, product name, and what this screen is ---
+        brand = tk.Frame(self.settings_nav)
+        self.track_theme(brand, bg="sidebar")
+        brand.pack(fill="x", padx=14, pady=(16, 14))
+        mark = tk.Canvas(brand, width=26, height=26, highlightthickness=0, bd=0,
+                         bg=self.colors["sidebar"])
+        mark.pack(side="left", padx=(0, 9))
+        self._settings_brand_mark = mark
+        self._paint_brand_mark()
+        names = tk.Frame(brand)
+        self.track_theme(names, bg="sidebar")
+        names.pack(side="left", fill="x", expand=True)
+        tk.Label(names, text="Note Organizer", font=("Segoe UI", 10, "bold"),
+                 anchor="w", bg=self.colors["sidebar"], fg=self.colors["text"]
+                 ).pack(fill="x")
+        tk.Label(names, text="Settings", font=("Segoe UI", 8), anchor="w",
+                 bg=self.colors["sidebar"], fg=self.colors["subtext"]
+                 ).pack(fill="x")
+
+        # --- Back to Notes, in the rail rather than in its own bar above ---
+        # It used to sit in a strip across the top of the whole page, which
+        # spent a band of vertical space on every section to hold one control.
+        back_row = tk.Frame(self.settings_nav, cursor="hand2")
+        self.track_theme(back_row, bg="sidebar")
+        back_row.pack(fill="x", padx=8, pady=(0, 8))
+        back_ico = tk.Canvas(back_row, width=14, height=14, highlightthickness=0,
+                             bd=0, bg=self.colors["sidebar"], cursor="hand2")
+        back_ico.pack(side="left", padx=(8, 6), pady=8)
+        back_ico.create_line(12, 7, 3, 7, fill=self.colors["subtext"], width=1.6)
+        back_ico.create_line(6.5, 3.5, 3, 7, 6.5, 10.5,
+                             fill=self.colors["subtext"], width=1.6)
+        back_lbl = tk.Button(
+            back_row, text="Back to Notes", anchor="w", relief="flat", bd=0,
+            highlightthickness=0, font=("Segoe UI", 9, "bold"), cursor="hand2",
+            bg=self.colors["sidebar"], fg=self.colors["subtext"],
+            activebackground=self.colors["card"],
+            activeforeground=self.colors["text"],
+            command=self.hide_settings_page)
+        back_lbl.pack(side="left", fill="x", expand=True)
+        for w in (back_row, back_ico):
+            w.bind("<Button-1>", lambda _e: self.hide_settings_page())
+
+        def _back_hover(on, _ws=(back_row, back_ico, back_lbl)):
+            c = self.colors["card"] if on else self.colors["sidebar"]
+            for w in _ws:
+                try:
+                    w.configure(bg=c)
+                except tk.TclError:
+                    pass
+
+        for w in (back_row, back_ico, back_lbl):
+            w.bind("<Enter>", lambda _e: _back_hover(True))
+            w.bind("<Leave>", lambda _e: _back_hover(False))
+
+
+        # Each entry is a rail plus a button, not just a button: a tk.Button
+        # cannot draw a border on one side only, and the selected state reads
+        # far more quietly as a thin accent bar beside a tinted row than as a
+        # fully saturated block. The rail is a 3px Frame that is simply the
+        # same colour as the sidebar when the entry isn't selected.
+        self._settings_nav_buttons = {}
+        self._settings_nav_rails = {}
+        self._settings_nav_icons = {}
+        labels = {k: l for k, l, _b, _e in self.SETTINGS_SECTIONS}
+        for group_name, group_keys in self.SETTINGS_GROUPS:
+            tk.Label(self.settings_nav, text=group_name.upper(),
+                     font=("Segoe UI", 8, "bold"), anchor="w",
+                     bg=self.colors["sidebar"], fg=self.colors["subtext"]
+                     ).pack(fill="x", padx=17, pady=(12, 4))
+            for key in group_keys:
+                label = labels[key]
+                self._build_nav_entry(key, label)
+
+        self._settings_theme_toggle()
+
+        # ---- right: the scrolling content pane ----
+        content_host = tk.Frame(body)
+        self.track_theme(content_host, bg="bg")
+        content_host.pack(side="left", fill="both", expand=True)
+
+        canvas = tk.Canvas(content_host, highlightthickness=0, bg=self.colors["bg"])
         self.track_theme(canvas, bg="bg")
-        self.settings_canvas = canvas  # panels forward scroll here when they don't scroll
-        sb = ttk.Scrollbar(outer, orient="vertical", command=canvas.yview)
+        self.settings_canvas = canvas   # panels forward their scroll here
+        sb = ttk.Scrollbar(content_host, orient="vertical", command=canvas.yview)
         page = tk.Frame(canvas)
         self.track_theme(page, bg="bg")
-        page.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
+        self.settings_content = page
+        page.bind("<Configure>",
+                  lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
         page_window = canvas.create_window((0, 0), window=page, anchor="nw")
-        canvas.bind("<Configure>", lambda e: canvas.itemconfigure(page_window, width=e.width))
+
+        def _fit(event):
+            canvas.itemconfigure(page_window,
+                                 width=min(event.width, self.SETTINGS_CONTENT_MAX))
+        canvas.bind("<Configure>", _fit)
         canvas.configure(yscrollcommand=sb.set)
         canvas.pack(side="left", fill="both", expand=True)
         sb.pack(side="right", fill="y")
 
-        # Wheel anywhere over the settings page scrolls the page.
         def _page_wheel(event):
             try:
                 canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
@@ -1039,16 +1295,9 @@ class SettingsPageMixin:
         canvas.bind("<MouseWheel>", _page_wheel)
         page.bind("<MouseWheel>", _page_wheel)
 
-        # Clicking a non-interactive part of the Settings page (a section
-        # title, card background, blank space) should move keyboard focus
-        # away from whatever field currently has it — otherwise a field's
-        # cursor stays visibly blinking even after its value has already
-        # autosaved. Bound once on the whole app rather than on individual
-        # labels/frames (every click bubbles up to the toplevel by default
-        # unless something along the way stops it, so this reliably catches
-        # all of them) — restricted to only act while Settings is actually
-        # showing, and only when focus is genuinely on an Entry/Text that
-        # isn't the widget that was just clicked.
+        # Clicking a non-interactive part of the page takes focus off whatever
+        # field has it, so a cursor is not left blinking in an already-saved
+        # field. Bound on the toplevel because clicks bubble there anyway.
         def _clear_settings_field_focus(event):
             if not self.settings_page.winfo_ismapped():
                 return
@@ -1057,23 +1306,497 @@ class SettingsPageMixin:
                 event.widget.focus_set()
         self.bind("<Button-1>", _clear_settings_field_focus, add="+")
 
-        def section(title, subtitle=None):
-            head = tk.Frame(page)
-            self.track_theme(head, bg="bg")
-            head.pack(fill="x", padx=40, pady=(24, 0))
-            tk.Label(head, text=title, font=("Segoe UI", 14, "bold"),
-                     bg=self.colors["bg"], fg=self.colors["text"], anchor="w"
-                     ).pack(fill="x")
-            if subtitle:
-                tk.Label(head, text=subtitle, font=("Segoe UI", 9),
-                         bg=self.colors["bg"], fg=self.colors["subtext"],
-                         anchor="w", justify="left", wraplength=560).pack(fill="x", pady=(2, 0))
-            card = tk.Frame(page, bg=self.colors["card"])
-            self.track_theme(card, bg="card")
-            card.pack(fill="x", padx=40, pady=(10, 0))
-            return card
+        # A frame per section, all created now so callers can reach them (the
+        # QA suite reads self.stats_frame straight after opening Settings). The
+        # light ones are filled immediately; the four heavy panels build their
+        # contents when first selected, as they always have -- the trash list
+        # alone can run to hundreds of rows.
+        for key, label, builder, eager in self.SETTINGS_SECTIONS:
+            # On the page ground, so the cards inside read as raised surfaces.
+            # The whole panel used to be card-coloured, which flattened every
+            # section into one slab with nothing to separate its groups.
+            frame = tk.Frame(page, bg=self.colors["bg"])
+            self.track_theme(frame, bg="bg")
+            setattr(self, "settings_%s_panel" % key, frame)
+            if eager:
+                self._settings_section_heading(frame, label)
+                getattr(self, builder)(frame)
 
-        def big_button(parent_frame, text, command, kind="normal"):
+        self._bind_mousewheel_recursive(page, canvas)
+        self.toggle_settings_panel(self.SETTINGS_SECTIONS[0][0])
+
+
+    def _build_nav_entry(self, key, label):
+        """One row in the section list: accent rail, glyph, label."""
+        row = tk.Frame(self.settings_nav)
+        self.track_theme(row, bg="sidebar")
+        row.pack(fill="x", padx=0, pady=1)
+
+        # The reference marks the selected entry with a short bar beside it --
+        # 3px wide, 16px tall, vertically centred -- not a rule running the
+        # full height of the row. A canvas gives that without a nest of
+        # spacer frames, and lets the ends be rounded on the outer edge.
+        rail = tk.Canvas(row, width=3, height=34, highlightthickness=0, bd=0,
+                         bg=self.colors["sidebar"])
+        rail.pack(side="left", fill="y")
+
+        icon = tk.Canvas(row, width=self.NAV_ICON_SIZE, height=self.NAV_ICON_SIZE,
+                         highlightthickness=0, bd=0, bg=self.colors["sidebar"],
+                         cursor="hand2")
+        icon.pack(side="left", padx=(9, 0))
+        # The glyph is decoration; the button beside it is the control, so
+        # clicking the glyph has to reach the same place.
+        icon.bind("<Button-1>", lambda _e, k=key: self.toggle_settings_panel(k))
+
+        btn = tk.Button(
+            row, text=label, anchor="w", relief="flat",
+            font=("Segoe UI", 10, "bold"), cursor="hand2", bd=0,
+            highlightthickness=0, activebackground=self.colors["card"],
+            activeforeground=self.colors["text"],
+            command=lambda k=key: self.toggle_settings_panel(k)
+        )
+        # Unselected entries are muted, not full-strength text -- that is what
+        # lets the selected one read as selected without shouting.
+        self.track_theme(btn, bg="sidebar", fg="subtext")
+        btn.pack(side="left", fill="x", expand=True, padx=(10, 10), ipady=7)
+
+        # Hover feedback, the same <Enter>/<Leave> pattern the sort menu,
+        # emoji picker and category picker already use. The selected entry
+        # is skipped so hovering it doesn't undo its own highlight.
+        def _enter(_e, k=key, b=btn, ic=icon):
+            if getattr(self, "_settings_selected_section", None) != k:
+                b.configure(bg=self.colors["card"])
+                ic.configure(bg=self.colors["card"])
+
+        def _leave(_e, k=key, b=btn, ic=icon):
+            if getattr(self, "_settings_selected_section", None) != k:
+                b.configure(bg=self.colors["sidebar"])
+                ic.configure(bg=self.colors["sidebar"])
+
+        for w in (btn, icon):
+            w.bind("<Enter>", _enter)
+            w.bind("<Leave>", _leave)
+
+        self._settings_nav_buttons[key] = btn
+        self._settings_nav_rails[key] = rail
+        self._settings_nav_icons[key] = icon
+
+    # Each glyph is drawn as plain geometry in a 16x16 box rather than set as
+    # a character or loaded as an image. That is what lets it take the theme's
+    # colour: emoji are fixed-colour bitmaps and would stay the same on all
+    # eight themes, and a PNG would need one copy per theme or a tinting pass.
+    # Shapes just get redrawn in whatever colour is current.
+    NAV_ICON_SIZE = 17
+
+    def _draw_icon(self, canvas, kind, color, size=None):
+        """(Re)draw one glyph in ``color``.
+
+        Shapes are laid out in a 16-unit box and scaled at the end, so one
+        definition serves the 16px nav and the smaller row-action buttons.
+        """
+        canvas.delete("glyph")
+        o = {"tags": "glyph", "outline": color, "width": 1.6}
+        # Filled shapes say outline="" explicitly: a canvas item's outline
+        # defaults to the system text colour, which width=0 happens to hide
+        # but which would otherwise be one more thing not following the theme.
+        f = {"tags": "glyph", "fill": color, "outline": "", "width": 0}
+
+        if kind == "name":                      # a person
+            canvas.create_oval(5.5, 2.5, 10.5, 7.5, **o)
+            canvas.create_arc(3, 9, 13, 19, start=0, extent=180, style="arc", **o)
+        elif kind == "appearance":              # half-filled disc: light/dark
+            canvas.create_oval(2.5, 2.5, 13.5, 13.5, **o)
+            canvas.create_arc(2.5, 2.5, 13.5, 13.5, start=90, extent=180,
+                              style="pieslice", **f)
+        elif kind == "categories":              # a folder
+            canvas.create_polygon(2.5, 4, 6, 4, 7.5, 6, 13.5, 6, 13.5, 13,
+                                  2.5, 13, fill="", **o)
+        elif kind == "templates":               # a page with a folded corner
+            canvas.create_polygon(3.5, 2.5, 9.5, 2.5, 12.5, 5.5, 12.5, 13.5,
+                                  3.5, 13.5, fill="", **o)
+            canvas.create_line(9.5, 2.5, 9.5, 5.5, 12.5, 5.5, fill=color, width=1.2,
+                               tags="glyph")
+        elif kind == "backup":                  # arrow landing in a tray
+            canvas.create_line(8, 2.5, 8, 8.5, fill=color, width=1.6, tags="glyph")
+            canvas.create_line(5, 5.8, 8, 8.8, 11, 5.8, fill=color, width=1.6,
+                               tags="glyph")
+            canvas.create_line(2.8, 11, 2.8, 13.2, 13.2, 13.2, 13.2, 11,
+                               fill=color, width=1.6, tags="glyph")
+        elif kind == "trash":                   # a bin
+            # Filled, not outlined. At the ~15px these are drawn at, a 1.6px
+            # outline collapses into a small box that reads as nothing in
+            # particular -- a solid silhouette still reads as a bin.
+            canvas.create_rectangle(6.2, 2.4, 9.8, 4.2, **f)
+            canvas.create_rectangle(2.8, 4.4, 13.2, 5.9, **f)
+            canvas.create_polygon(4.6, 6.5, 11.4, 6.5, 10.6, 13.6, 5.4, 13.6, **f)
+        elif kind == "duplicates":              # two overlapping cards
+            canvas.create_rectangle(2.5, 2.5, 9.5, 9.5, fill="", **o)
+            canvas.create_rectangle(6.5, 6.5, 13.5, 13.5, fill="", **o)
+        elif kind == "statistics":              # a bar chart
+            canvas.create_rectangle(2.8, 9, 5.2, 13.6, **f)
+            canvas.create_rectangle(6.8, 5, 9.2, 13.6, **f)
+            canvas.create_rectangle(10.8, 7, 13.2, 13.6, **f)
+        elif kind == "about":                   # an info disc
+            canvas.create_oval(2.5, 2.5, 13.5, 13.5, **o)
+            canvas.create_oval(7.2, 4.8, 8.8, 6.4, **f)
+            canvas.create_rectangle(7.3, 7.6, 8.7, 11.8, **f)
+        elif kind == "pencil":                  # edit
+            # Filled for the same reason as the bin above.
+            canvas.create_polygon(2.6, 13.4, 3.7, 10.1, 6.0, 12.4, **f)
+            canvas.create_polygon(4.6, 9.2, 10.4, 3.4, 12.6, 5.6, 6.8, 11.4, **f)
+            canvas.create_polygon(11.2, 2.6, 13.4, 4.8, 12.6, 5.6, 10.4, 3.4, **f)
+        elif kind == "lock":                    # protected, not editable
+            canvas.create_rectangle(4, 7.5, 12, 13.5, fill="", **o)
+            canvas.create_arc(5.6, 2.8, 10.4, 9.2, start=0, extent=180,
+                              style="arc", **o)
+        elif kind == "plus":                    # add
+            canvas.create_line(8, 3.5, 8, 12.5, fill=color, width=1.8,
+                               tags="glyph")
+            canvas.create_line(3.5, 8, 12.5, 8, fill=color, width=1.8,
+                               tags="glyph")
+
+        if size and size != 16:
+            canvas.scale("glyph", 0, 0, size / 16.0, size / 16.0)
+
+    # ---- the small design system the panels are built from --------------
+    #
+    # Three surface steps and one border colour, all derived from the theme
+    # rather than hardcoded, so every one of the eight themes gets a
+    # consistent set. "surface" is the card, "inset" is a well *inside* a
+    # card (inputs, preview strips), and the border is what gives a card an
+    # edge now that corners stay square.
+    def _surface(self, kind="card"):
+        """One of the reference design's three surface steps.
+
+        The order matters and is the same in both modes: the page ground is
+        furthest from the text colour, a card sits one step toward it, and a
+        well *inside* a card sits one step further again. On a dark theme
+        that reads as progressively lighter, on a light theme progressively
+        darker -- which is why this blends toward ``text`` rather than
+        hardcoding a direction.
+        """
+        if kind == "page":
+            return self.colors["bg"]
+        if kind == "inset":
+            return self._blend(self.colors["card"], self.colors["text"], 0.07)
+        return self.colors["card"]
+
+    def _border_color(self):
+        return self._blend(self.colors["card"], self.colors["subtext"], 0.22)
+
+    def _settings_card(self, parent, pad=(22, 20)):
+        """A bordered panel that groups related controls.
+
+        Square-cornered on purpose: Tk has no border radius, and faking it
+        means drawing the card on a canvas and placing every child onto it.
+        A 1px border plus real padding carries the same grouping.
+        """
+        outer = tk.Frame(parent, bg=self._border_color())
+        outer.pack(fill="x", pady=(0, 16))
+        inner = tk.Frame(outer, bg=self._surface())
+        inner.pack(fill="both", expand=True, padx=1, pady=1)
+        body = tk.Frame(inner, bg=self._surface())
+        body.pack(fill="both", expand=True, padx=pad[0], pady=pad[1])
+        return body
+
+    def _field_label(self, parent, text):
+        """The small uppercase caption above an input."""
+        tk.Label(parent, text=text.upper(), font=("Segoe UI", 9, "bold"),
+                 bg=self._surface(), fg=self.colors["subtext"], anchor="w"
+                 ).pack(fill="x", pady=(0, 6))
+
+    def _card_row(self, parent, label, hint=None, first=False):
+        """One setting: label (and optional hint) left, control returned right.
+
+        The caller packs its control into the frame this returns, which is
+        the standard settings anatomy -- what the setting *is* on the left,
+        what you do about it on the right, on one baseline.
+        """
+        if not first:
+            tk.Frame(parent, height=1, bg=self._border_color()).pack(fill="x")
+        row = tk.Frame(parent, bg=self._surface())
+        row.pack(fill="x", pady=12)
+        text_col = tk.Frame(row, bg=self._surface())
+        text_col.pack(side="left", fill="x", expand=True)
+        tk.Label(text_col, text=label, font=("Segoe UI", 10, "bold"),
+                 bg=self._surface(), fg=self.colors["text"], anchor="w"
+                 ).pack(fill="x")
+        if hint:
+            tk.Label(text_col, text=hint, font=("Segoe UI", 9),
+                     bg=self._surface(), fg=self.colors["subtext"], anchor="w",
+                     justify="left", wraplength=self.SETTINGS_CONTENT_MAX - 260
+                     ).pack(fill="x", pady=(2, 0))
+        control = tk.Frame(row, bg=self._surface())
+        control.pack(side="right", padx=(16, 0))
+        return control
+
+    def _add_row(self, parent, text, command):
+        """The "+ Add category" affordance: accent text, not a filled block.
+
+        A full-width saturated button for "add another one" outweighed every
+        real control on the page.
+        """
+        row = tk.Frame(parent, bg=self._surface(), cursor="hand2")
+        row.pack(fill="x", pady=(8, 0))
+        icon = self._icon_button(row, "plus", bg_key="card")
+        icon.pack(side="left")
+        lbl = tk.Label(row, text=text, font=("Segoe UI", 10, "bold"),
+                       bg=self._surface(), fg=self.colors["accent"], anchor="w",
+                       cursor="hand2")
+        lbl.pack(side="left", padx=(2, 0))
+        for w in (row, lbl, icon):
+            w.bind("<Button-1>", lambda _e: command())
+        self._draw_icon(icon, "plus", self.colors["accent"],
+                        size=self.ROW_ICON_SIZE)
+        icon.move("glyph", 5, 5)
+        return row
+
+    def _note_banner(self, parent, text):
+        """An informational strip -- retention notices and the like."""
+        bg = self._surface("inset")
+        wrap = tk.Frame(parent, bg=bg)
+        wrap.pack(fill="x", pady=(0, 12))
+        ico = tk.Canvas(wrap, width=16, height=16, highlightthickness=0, bd=0, bg=bg)
+        ico.pack(side="left", padx=(12, 8), pady=11)
+        self._draw_icon(ico, "about", self.colors["accent"], size=16)
+        tk.Label(wrap, text=text, font=("Segoe UI", 9), bg=bg,
+                 fg=self.colors["subtext"], anchor="w", justify="left",
+                 wraplength=self.SETTINGS_CONTENT_MAX - 90
+                 ).pack(side="left", fill="x", expand=True, pady=10, padx=(0, 12))
+        return wrap
+
+    def _text_button(self, parent, text, command, kind="normal"):
+        """A button sized to its label rather than stretched across the pane."""
+        if kind == "danger":
+            fg, border = self.colors["danger"], self.colors["danger"]
+            bg = self._surface()
+            hover = self._blend(bg, self.colors["danger"], 0.14)
+        elif kind == "primary":
+            fg, border = "white", self.colors["accent"]
+            bg = self.colors["accent"]
+            hover = self.colors["accent_hover"]
+        else:
+            fg, border = self.colors["text"], self._border_color()
+            bg = self._surface("inset")
+            hover = self._blend(bg, self.colors["text"], 0.08)
+        b = tk.Button(parent, text=text, command=command, relief="solid", bd=1,
+                      font=("Segoe UI", 9, "bold"), cursor="hand2",
+                      fg=fg, bg=bg, activeforeground=fg, activebackground=hover,
+                      highlightbackground=border, padx=14, pady=6)
+        b.bind("<Enter>", lambda _e: b.configure(bg=hover))
+        b.bind("<Leave>", lambda _e: b.configure(bg=bg))
+        return b
+
+    ROW_ICON_SIZE = 15
+
+    def _icon_button(self, parent, kind, command=None, danger=False, bg_key="card"):
+        """A small drawn-glyph button for a list row.
+
+        Replaces the emoji these rows used to use. Emoji are fixed-colour
+        bitmaps, so a red wastebasket stayed the same shade of red on all
+        eight themes and read as clipart against a flat interface; the
+        pencil beside it was a monochrome dingbat that *did* recolour, so
+        the two never matched. Drawn shapes give one consistent set that
+        follows whatever theme is on.
+
+        Passing no ``command`` makes it a plain indicator (the padlock on a
+        protected category), not something clickable.
+        """
+        size = self.ROW_ICON_SIZE
+        # Faint at rest even for destructive actions: the reference colours
+        # them only on hover, so a list of rows does not read as a column of
+        # red warnings before anyone has reached for anything.
+        base = self.colors["subtext"]
+        pad = 6
+        c = tk.Canvas(parent, width=size + pad * 2, height=size + pad * 2,
+                      highlightthickness=0, bd=0, bg=self.colors[bg_key],
+                      cursor="hand2" if command else "")
+        # A canvas has no text to search for the way a Button does, so record
+        # which glyph this is. The QA scripts locate row actions by it, and it
+        # keeps them from depending on how a given icon happens to be drawn.
+        c._icon_kind = kind
+        # The glyph is drawn from the top-left, so nudge it into the padding.
+        def paint(color):
+            self._draw_icon(c, kind, color, size=size)
+            c.move("glyph", pad, pad)
+
+        paint(base)
+        if command is not None:
+            c.bind("<Button-1>", lambda _e: command())
+            hot = self.colors["danger"] if danger else self.colors["text"]
+            rest_bg = self.colors[bg_key]
+            hover_bg = (self._blend(rest_bg, self.colors["danger"], 0.16) if danger
+                        else self._surface("inset"))
+
+            def _on(_e):
+                c.configure(bg=hover_bg)
+                paint(hot)
+
+            def _off(_e):
+                c.configure(bg=rest_bg)
+                paint(base)
+
+            c.bind("<Enter>", _on)
+            c.bind("<Leave>", _off)
+        return c
+
+    def _row_divider(self, parent):
+        """A hairline between list rows.
+
+        Material's guidance is dividers *between groups*, not between every
+        item -- but these rows each carry their own controls, so without a
+        rule they read as one undifferentiated block of text.
+        """
+        line = tk.Frame(parent, height=1,
+                        bg=self._blend(self.colors["card"],
+                                       self.colors["subtext"], 0.22))
+        line.pack(fill="x", padx=2)
+        return line
+
+    def _paint_brand_mark(self):
+        """The small app mark at the top of the rail.
+
+        A flat accent tile with a page glyph on it. The reference design used
+        a gradient; Tk canvases have no gradient fill, and faking one by
+        drawing 26 stacked lines would cost more than it is worth at this
+        size, so it is a solid accent instead.
+        """
+        c = getattr(self, "_settings_brand_mark", None)
+        if c is None:
+            return
+        try:
+            c.delete("all")
+            c.configure(bg=self.colors["sidebar"])
+            self._rounded_rect(c, 0, 0, 26, 26, 8,
+                               fill=self.colors["accent"],
+                               outline=self.colors["accent"])
+            # a small page: body plus two text lines
+            c.create_rectangle(9, 7, 17, 19, fill="white", outline="white")
+            c.create_line(11, 11, 15, 11, fill=self.colors["accent"], width=1.2)
+            c.create_line(11, 14, 15, 14, fill=self.colors["accent"], width=1.2)
+        except tk.TclError:
+            pass
+
+    def _settings_theme_toggle(self):
+        """Light/dark, as a segmented control pinned to the foot of the rail.
+
+        Moving it here takes the one control people flip most often out of
+        the Appearance panel, so it is reachable from every section rather
+        than only after navigating to one.
+        """
+        foot = tk.Frame(self.settings_nav)
+        self.track_theme(foot, bg="sidebar")
+        foot.pack(side="bottom", fill="x", padx=14, pady=14)
+        tk.Label(foot, text="THEME", font=("Segoe UI", 8, "bold"), anchor="w",
+                 bg=self.colors["sidebar"], fg=self.colors["subtext"]
+                 ).pack(side="left")
+
+        holder = tk.Frame(foot, bg=self._border_color())
+        holder.pack(side="right")
+        inner = tk.Frame(holder, bg=self.colors["sidebar"])
+        inner.pack(padx=1, pady=1)
+        self._settings_mode_buttons = {}
+        for mode, glyph in (("dark", "moon"), ("light", "sun")):
+            b = tk.Canvas(inner, width=26, height=20, highlightthickness=0, bd=0,
+                          bg=self.colors["sidebar"], cursor="hand2")
+            b.pack(side="left")
+            b.bind("<Button-1>", lambda _e, m=mode: self._pick_settings_mode(m))
+            self._settings_mode_buttons[mode] = b
+        self._refresh_mode_toggle()
+
+    def _pick_settings_mode(self, mode):
+        """Switch to the remembered theme for this mode, if not already on it."""
+        in_dark = self.theme_name in DARK_THEMES
+        if (mode == "dark") == in_dark:
+            return
+        self.toggle_theme()
+
+    def _refresh_mode_toggle(self):
+        """Mark whichever half of the toggle matches the current theme."""
+        buttons = getattr(self, "_settings_mode_buttons", None)
+        if not buttons:
+            return
+        in_dark = self.theme_name in DARK_THEMES
+        for mode, c in buttons.items():
+            active = (mode == "dark") == in_dark
+            try:
+                c.delete("all")
+                bg = self.colors["card"] if active else self.colors["sidebar"]
+                fg = self.colors["accent"] if active else self.colors["subtext"]
+                c.configure(bg=bg)
+                if mode == "dark":
+                    c.create_oval(8, 5, 18, 15, outline=fg, width=1.5)
+                    c.create_oval(11, 3, 22, 14, outline=bg, fill=bg, width=0)
+                else:
+                    c.create_oval(10, 7, 16, 13, outline=fg, width=1.5)
+                    for x1, y1, x2, y2 in ((13, 2, 13, 4), (13, 16, 13, 18),
+                                           (5, 10, 7, 10), (19, 10, 21, 10),
+                                           (7.5, 4.5, 9, 6), (17, 14, 18.5, 15.5),
+                                           (7.5, 15.5, 9, 14), (17, 6, 18.5, 4.5)):
+                        c.create_line(x1, y1, x2, y2, fill=fg, width=1.3)
+            except tk.TclError:
+                pass
+
+    def _recolor_settings_nav_icons(self):
+        """Repaint the nav glyphs for the current theme.
+
+        Called from ``apply_theme``: ``track_theme`` restores each canvas's
+        background, but nothing it does reaches items *drawn on* a canvas, so
+        without this the glyphs keep the old theme's colour.
+        """
+        self._paint_brand_mark()
+        self._refresh_mode_toggle()
+        if not getattr(self, "_settings_nav_icons", None):
+            return
+        self._highlight_settings_nav(
+            getattr(self, "_settings_selected_section", None))
+
+    def _settings_section_heading(self, parent, title):
+        """A section's title, left-aligned with everything beneath it.
+
+        The previous layout put titles left and their buttons centred, which is
+        exactly what made the page tiring to scan.
+        """
+        tk.Label(parent, text=title, font=("Segoe UI", 16, "bold"), anchor="w",
+                 bg=self.colors["bg"], fg=self.colors["text"]
+                 ).pack(fill="x", pady=(0, 6))
+
+    def _settings_section_note(self, parent, subtitle):
+        """Optional explanatory line, then the frame a section builds into.
+
+        Replaces the old ``section()`` closure. That one created its own title
+        as well; titles now come from the nav list via
+        :meth:`_settings_section_heading`, so there is one place deciding what
+        a section is called.
+        """
+        if subtitle:
+            self._settings_subtitle(parent, subtitle)
+        holder = tk.Frame(parent, bg=self.colors["card"])
+        self.track_theme(holder, bg="card")
+        holder.pack(fill="x", padx=4)
+        return holder
+
+    def _settings_big_button(self, parent_frame, text, command, kind="normal"):
+        """A full-width action button, left-aligned like its section.
+
+        Three kinds. ``accent`` is the one primary action a section may have;
+        ``normal`` is everything else; ``danger`` is outlined rather than
+        filled -- it keeps the warning colour, which is reserved for exactly
+        this, but stops a destructive action from being the heaviest thing on
+        the page. Emptying the trash should be findable, not inviting.
+        """
+        if kind == "danger":
+            b = tk.Button(parent_frame, text=text, command=command,
+                          relief="solid", bd=1, font=("Segoe UI", 10, "bold"),
+                          cursor="hand2", fg=self.colors["danger"],
+                          bg=self.colors["card"],
+                          highlightbackground=self.colors["danger"],
+                          activeforeground=self.colors["danger"],
+                          activebackground=self.colors["card"])
+            self.track_theme(b, bg="card", fg="danger")
+            hover_bg = self._blend(self.colors["card"], self.colors["danger"], 0.14)
+            rest_bg = self.colors["card"]
+        else:
             bg = "accent" if kind == "accent" else "sidebar"
             b = tk.Button(parent_frame, text=text, command=command, relief="flat",
                           font=("Segoe UI", 10, "bold"), cursor="hand2",
@@ -1081,186 +1804,14 @@ class SettingsPageMixin:
             self.track_theme(b, bg=bg)
             if kind == "accent":
                 b.configure(fg="white")
-            return b
+            rest_bg = self.colors[bg]
+            hover_bg = (self.colors["accent_hover"] if kind == "accent"
+                        else self.colors["card"])
 
-        tk.Label(page, text="⚙  Settings", font=("Segoe UI", 20, "bold"),
-                 bg=self.colors["bg"], fg=self.colors["text"], anchor="w"
-                 ).pack(fill="x", padx=40, pady=(24, 0))
-
-        # --- Your name (used for the "Hi <name>," greeting) ---
-        name_sec = section(
-            "Your name",
-            "What should we call you? Shows up as a friendly greeting above "
-            "your notes — 30 characters max."
-        )
-        name_row = tk.Frame(name_sec, bg=self.colors["card"])
-        name_row.pack(fill="x", padx=16, pady=16)
-        self.username_var = tk.StringVar(value=self.load_username())
-        # Cap at 30 characters — an unbounded name could look broken in the
-        # sidebar greeting. Only limits new typing; an existing longer name
-        # (saved before this cap existed) still loads and displays in full.
-        USERNAME_MAX_LEN = 30
-        name_len_vcmd = (self.register(lambda p: len(p) <= USERNAME_MAX_LEN), "%P")
-        name_entry = tk.Entry(
-            name_row, textvariable=self.username_var, relief="flat",
-            font=("Segoe UI", 10), bg=self.colors["sidebar"], fg=self.colors["text"],
-            insertbackground=self.colors["text"],
-            validate="key", validatecommand=name_len_vcmd
-        )
-        name_entry.pack(side="left", fill="x", expand=True, ipady=5)
-        self._add_paste_menu(name_entry)
-
-        def save_name():
-            if getattr(self, "_username_save_job", None) is not None:
-                try:
-                    self.after_cancel(self._username_save_job)
-                except (tk.TclError, ValueError):
-                    pass
-                self._username_save_job = None
-            if not self._still_alive():
-                return
-            # Hard safety net: the key-by-key length check above can miss very
-            # fast/held-down typing (a known Tk reliability gap under rapid
-            # keystrokes), so enforce the limit again here, at the moment of
-            # actually saving, regardless of how the field got too long.
-            current = self.username_var.get()
-            if len(current) > USERNAME_MAX_LEN:
-                current = current[:USERNAME_MAX_LEN]
-                self.username_var.set(current)
-            self.save_username(current)
-            self._refresh_greeting()
-            self.set_status("Name saved" if current.strip() else "Name cleared")
-
-        def schedule_name_save(event=None):
-            # Real-time correction: the per-keystroke block above can miss
-            # very fast/held-down typing, so check again on every key
-            # release (a plain event binding, not the special validate hook
-            # that has the reliability gap) and snap back immediately if it
-            # slipped past 30 — rather than letting it grow freely and only
-            # fixing it later when the name is actually saved.
-            current = self.username_var.get()
-            if len(current) > USERNAME_MAX_LEN:
-                self.username_var.set(current[:USERNAME_MAX_LEN])
-            # Autosave after a short pause, same convention as note editing —
-            # so clearing the field and clicking away still saves the change.
-            if getattr(self, "_username_save_job", None) is not None:
-                try:
-                    self.after_cancel(self._username_save_job)
-                except (tk.TclError, ValueError):
-                    pass
-            self._username_save_job = self.after(600, save_name)
-
-        name_entry.bind("<KeyRelease>", schedule_name_save)
-        name_entry.bind("<FocusOut>", lambda e: save_name())
-        name_entry.bind("<Return>", lambda e: save_name())
-        # No separate Save button — the field already autosaves shortly
-        # after typing stops, and immediately on Enter or clicking away.
-
-        # --- Appearance ---
-        appearance = section("Appearance", "How the app looks.")
-        self.theme_toggle_btn = tk.Button(
-            appearance,
-            text="☀️  Switch to Light mode" if self.theme_name in DARK_THEMES
-            else "🌙  Switch to Dark mode",
-            command=self.toggle_theme, relief="flat",
-            font=("Segoe UI", 10, "bold"), cursor="hand2"
-        )
-        self.track_theme(self.theme_toggle_btn, bg="sidebar", fg="text")
-        self.theme_toggle_btn.pack(fill="x", padx=16, pady=(16, 8), ipady=6)
-
-        # Theme picker — pick any color scheme, grouped Dark / Light.
-        self.theme_picker_frame = tk.Frame(appearance, bg=self.colors["card"])
-        self.track_theme(self.theme_picker_frame, bg="card")
-        self.theme_picker_frame.pack(fill="x", padx=16, pady=(0, 16))
-        self._build_theme_picker(self.theme_picker_frame)
-
-        # --- Organization: categories ---
-        org = section("Organization",
-                      "Categories are folders for your notes.")
-        big_button(org, "🗂  Manage categories",
-                   lambda: self.toggle_settings_panel("categories")
-                   ).pack(fill="x", padx=16, pady=(16, 6), ipady=6)
-        self.settings_categories_panel = tk.Frame(org, bg=self.colors["card"])
-        self.track_theme(self.settings_categories_panel, bg="card")
-
-        big_button(org, "🧩  Manage templates",
-                   lambda: self.toggle_settings_panel("templates")
-                   ).pack(fill="x", padx=16, pady=(0, 6), ipady=6)
-        # Inline panel for templates.
-        self.settings_templates_panel = tk.Frame(org, bg=self.colors["card"])
-        self.track_theme(self.settings_templates_panel, bg="card")
-        # Reserve trailing space under the last button/panel.
-        tk.Frame(org, bg=self.colors["card"], height=10).pack(fill="x")
-
-        # --- Backup (deliberately separate: these act on your data) ---
-        backup = section("Backup",
-                         "Save all your notes to a file, or bring them in from one. "
-                         "Use this to move notes between computers.")
-        row = tk.Frame(backup, bg=self.colors["card"])
-        self.track_theme(row, bg="card")
-        row.pack(fill="x", padx=16, pady=16)
-        big_button(row, "⬆  Export notes", self.export_data, kind="accent"
-                   ).pack(side="left", fill="x", expand=True, padx=(0, 6), ipady=6)
-        big_button(row, "⬇  Import notes", self.import_data
-                   ).pack(side="left", fill="x", expand=True, padx=(6, 0), ipady=6)
-
-        # --- Trash (recover recently deleted notes) ---
-        trash_sec = section("Recently deleted",
-                            f"Deleted notes are kept here for {TRASH_RETENTION_DAYS} "
-                            "days, then removed automatically. You can restore them "
-                            "until then.")
-        self.trash_btn = tk.Button(
-            trash_sec, text="🗑  Open Recently Deleted",
-            command=lambda: self.toggle_settings_panel("trash"),
-            relief="flat", font=("Segoe UI", 10, "bold"), cursor="hand2"
-        )
-        self.track_theme(self.trash_btn, bg="sidebar", fg="text")
-        self.trash_btn.pack(fill="x", padx=16, pady=(16, 6), ipady=6)
-        self.settings_trash_panel = tk.Frame(trash_sec, bg=self.colors["card"])
-        self.track_theme(self.settings_trash_panel, bg="card")
-        tk.Frame(trash_sec, bg=self.colors["card"], height=10).pack(fill="x")
-
-        # --- Clean up duplicates ---
-        dup_sec = section("Clean up duplicates",
-                          "Find notes that are exactly identical (same title, "
-                          "text, comments, category and date). Tick the "
-                          "copies you want to remove; the rest are kept.")
-        tk.Button(dup_sec, text="🧹  Find duplicates",
-                  command=lambda: self.toggle_settings_panel("duplicates"),
-                  relief="flat", font=("Segoe UI", 10, "bold"), cursor="hand2",
-                  bg=self.colors["sidebar"], fg=self.colors["text"]
-                  ).pack(fill="x", padx=16, pady=(16, 6), ipady=6)
-        self.settings_duplicates_panel = tk.Frame(dup_sec, bg=self.colors["card"])
-        self.track_theme(self.settings_duplicates_panel, bg="card")
-        tk.Frame(dup_sec, bg=self.colors["card"], height=10).pack(fill="x")
-
-        # --- Statistics ---
-        stats_sec = section("Statistics", "A quick snapshot of your notes.")
-        self.stats_frame = tk.Frame(stats_sec, bg=self.colors["card"])
-        self.stats_frame.pack(fill="x", padx=16, pady=16)
-        self._render_statistics()
-
-        # --- Storage info ---
-        info = section("Where your notes are stored")
-        tk.Label(info, text=_host().APP_DIR, font=("Consolas", 9),
-                 bg=self.colors["card"], fg=self.colors["subtext"],
-                 anchor="w", wraplength=560, justify="left"
-                 ).pack(fill="x", padx=16, pady=16)
-
-        # --- About / version ---
-        about = section("About")
-        about_inner = tk.Frame(about, bg=self.colors["card"])
-        self.track_theme(about_inner, bg="card")
-        about_inner.pack(fill="x", padx=16, pady=16)
-        tk.Label(about_inner, text="Notes Organizer", font=("Segoe UI", 11, "bold"),
-                 bg=self.colors["card"], fg=self.colors["text"], anchor="w"
-                 ).pack(fill="x")
-        tk.Label(about_inner, text=f"Version {_host().APP_VERSION}", font=("Segoe UI", 9),
-                 bg=self.colors["card"], fg=self.colors["subtext"], anchor="w"
-                 ).pack(fill="x", pady=(2, 0))
-
-        tk.Frame(page, bg=self.colors["bg"], height=30).pack()
-        self._bind_mousewheel_recursive(page, canvas)
+        # Same hover convention as the rest of the app.
+        b.bind("<Enter>", lambda _e, w=b, c=hover_bg: w.configure(bg=c))
+        b.bind("<Leave>", lambda _e, w=b, c=rest_bg: w.configure(bg=c))
+        return b
 
     def _build_category_row(self, parent, name, redraw):
         protected = (name == PROTECTED_CATEGORY)
@@ -1319,23 +1870,15 @@ class SettingsPageMixin:
             self._show_inline_rename(name_lbl, name, do_rename)
 
         if not protected:
-            tk.Button(
-                row, text="✎", command=rename, relief="flat", cursor="hand2",
-                bg=self.colors["card"], fg=self.colors["text"], font=("Segoe UI", 10)
-            ).pack(side="right", padx=2)
+            self._icon_button(row, "pencil", rename).pack(side="right", padx=1)
 
             def delete():
                 self._delete_category(name, redraw)
 
-            tk.Button(
-                row, text="🗑", command=delete, relief="flat", cursor="hand2",
-                bg=self.colors["card"], fg=self.colors["danger"], font=("Segoe UI", 10)
-            ).pack(side="right", padx=2)
+            self._icon_button(row, "trash", delete, danger=True
+                              ).pack(side="right", padx=1)
         else:
-            tk.Label(
-                row, text="🔒", bg=self.colors["card"], fg=self.colors["subtext"],
-                font=("Segoe UI", 10)
-            ).pack(side="right", padx=6)
+            self._icon_button(row, "lock").pack(side="right", padx=5)
 
     def _delete_category(self, name, redraw):
         """Delete a category, asking what to do with any notes it holds."""
@@ -1387,8 +1930,15 @@ class SettingsPageMixin:
             "Delete category",
             f"“{name}” has {count} note(s). What should happen to them?",
             kind="warning",
+            # "delete_notes" does NOT destroy anything -- it calls
+            # _move_notes_to_trash, so the notes are restorable for the full
+            # retention window like any other delete. The label used to say
+            # "(permanent)", which was simply untrue and frightened people off
+            # a safe choice -- or worse, convinced them notes were gone when
+            # they were sitting in Trash.
             buttons=[("Cancel", None),
-                     ("Delete the notes too (permanent)", "delete_notes", "danger"),
+                     (f"Delete the notes too (restorable for "
+                      f"{TRASH_RETENTION_DAYS} days)", "delete_notes", "danger"),
                      (f"Move them to “{PROTECTED_CATEGORY}” (keep the notes)", "move")]
         )
 
@@ -1448,3 +1998,233 @@ class SettingsPageMixin:
             self.show_info("Cleaned up",
                                 f"Moved {len(to_trash)} duplicate(s) to the trash.")
         refresh()
+
+    def _build_settings_name_panel(self, parent):
+        """The greeting shown above the note list, plus a live preview."""
+        self._settings_subtitle(
+            parent,
+            "The basics — how the app greets you, and what shows in the sidebar.")
+        card = self._settings_card(parent)
+        self._field_label(card, "Your name")
+
+        field = tk.Frame(card, bg=self._border_color())
+        field.pack(fill="x")
+        inner = tk.Frame(field, bg=self._surface("inset"))
+        inner.pack(fill="x", padx=1, pady=1)
+
+        self.username_var = tk.StringVar(value=self.load_username())
+        # Cap at 30 characters -- an unbounded name could look broken in the
+        # sidebar greeting. Only limits new typing; an existing longer name
+        # (saved before this cap existed) still loads and displays in full.
+        USERNAME_MAX_LEN = 30
+        name_len_vcmd = (self.register(lambda p: len(p) <= USERNAME_MAX_LEN), "%P")
+        name_entry = tk.Entry(
+            inner, textvariable=self.username_var, relief="flat", bd=0,
+            highlightthickness=0, font=("Segoe UI", 11),
+            bg=self._surface("inset"), fg=self.colors["text"],
+            insertbackground=self.colors["text"],
+            validate="key", validatecommand=name_len_vcmd
+        )
+        name_entry.pack(side="left", fill="x", expand=True, padx=(12, 6), pady=9)
+        self._add_paste_menu(name_entry)
+
+        # How much room is left, in the field itself, rather than only in the
+        # description above it.
+        counter = tk.Label(inner, font=("Consolas", 8), bg=self._surface("inset"),
+                           fg=self.colors["subtext"])
+        counter.pack(side="right", padx=(0, 12))
+
+        preview = tk.Frame(card, bg=self._surface("inset"))
+        preview.pack(fill="x", pady=(12, 0))
+        tk.Label(preview, text="Sidebar shows", font=("Segoe UI", 8),
+                 bg=self._surface("inset"), fg=self.colors["subtext"]
+                 ).pack(side="left", padx=(12, 8), pady=10)
+        preview_value = tk.Label(preview, text="", font=("Segoe UI", 9, "bold"),
+                                 bg=self._surface("inset"), fg=self.colors["text"])
+        preview_value.pack(side="left", pady=10)
+
+        saved_note = tk.Label(card, text="", font=("Segoe UI", 8),
+                              bg=self._surface(), fg=self.colors["success"],
+                              anchor="w")
+        saved_note.pack(fill="x", pady=(8, 0))
+
+        def refresh_preview():
+            current = self.username_var.get().strip()
+            preview_value.configure(
+                text=f"Hi {current}," if current else "no greeting",
+                fg=self.colors["text"] if current else self.colors["subtext"])
+            used = len(self.username_var.get())
+            counter.configure(
+                text=f"{used}/{USERNAME_MAX_LEN}",
+                fg=self.colors["danger"] if used >= USERNAME_MAX_LEN - 3
+                else self.colors["subtext"])
+
+        refresh_preview()
+
+        def save_name():
+            if getattr(self, "_username_save_job", None) is not None:
+                try:
+                    self.after_cancel(self._username_save_job)
+                except (tk.TclError, ValueError):
+                    pass
+                self._username_save_job = None
+            if not self._still_alive():
+                return
+            # Hard safety net: the key-by-key length check above can miss very
+            # fast/held-down typing (a known Tk reliability gap under rapid
+            # keystrokes), so enforce the limit again here, at the moment of
+            # actually saving, regardless of how the field got too long.
+            current = self.username_var.get()
+            if len(current) > USERNAME_MAX_LEN:
+                current = current[:USERNAME_MAX_LEN]
+                self.username_var.set(current)
+            self.save_username(current)
+            self._refresh_greeting()
+            refresh_preview()
+            self.set_status("Name saved" if current.strip() else "Name cleared")
+            try:
+                saved_note.configure(text="Saved automatically")
+                self.after(2200, lambda: saved_note.winfo_exists()
+                           and saved_note.configure(text=""))
+            except tk.TclError:
+                pass
+
+        def schedule_name_save(event=None):
+            # Real-time correction: the per-keystroke block above can miss
+            # very fast/held-down typing, so check again on every key
+            # release (a plain event binding, not the special validate hook
+            # that has the reliability gap) and snap back immediately if it
+            # slipped past 30 -- rather than letting it grow freely and only
+            # fixing it later when the name is actually saved.
+            current = self.username_var.get()
+            if len(current) > USERNAME_MAX_LEN:
+                self.username_var.set(current[:USERNAME_MAX_LEN])
+            refresh_preview()
+            # Autosave after a short pause, same convention as note editing --
+            # so clearing the field and clicking away still saves the change.
+            if getattr(self, "_username_save_job", None) is not None:
+                try:
+                    self.after_cancel(self._username_save_job)
+                except (tk.TclError, ValueError):
+                    pass
+            self._username_save_job = self.after(600, save_name)
+
+        name_entry.bind("<KeyRelease>", schedule_name_save)
+        name_entry.bind("<FocusOut>", lambda e: save_name())
+        name_entry.bind("<Return>", lambda e: save_name())
+        # No separate Save button -- the field already autosaves shortly
+        # after typing stops, and immediately on Enter or clicking away.
+        # No separate Save button — the field already autosaves shortly
+        # after typing stops, and immediately on Enter or clicking away.
+
+    def _build_settings_appearance_panel(self, parent):
+        """Light/dark toggle and the theme picker.
+
+        Moved out of build_settings_tab unchanged when Settings became a
+        nav plus a content pane; only the frame it builds into differs.
+        """
+        self._settings_subtitle(
+            parent, "Pick a look that feels right. Changes apply instantly, everywhere.")
+        appearance = parent
+        # No light/dark button here any more: the mode switch is a
+        # segmented control in the rail footer, reachable from every
+        # section instead of only after navigating to this one.
+
+        # Theme picker — pick any color scheme, grouped Dark / Light.
+        self.theme_picker_frame = tk.Frame(appearance, bg=self.colors["bg"])
+        self.track_theme(self.theme_picker_frame, bg="bg")
+        self.theme_picker_frame.pack(fill="x")
+        self._build_theme_picker(self.theme_picker_frame)
+
+    def _build_settings_backup_panel(self, parent):
+        """Export everything to a file, or import from one."""
+        self._settings_subtitle(
+            parent,
+            "Move your notes between computers, or keep a copy somewhere safe.")
+        self._note_banner(
+            parent,
+            "Everything stays on this computer. An export is the only copy of "
+            "your notes that is not in the app's own folder.")
+        card = self._settings_card(parent)
+
+        control = self._card_row(
+            card, "Export notes",
+            "Writes every note, setting and attachment into one .zip file.",
+            first=True)
+        self._text_button(control, "Export", self.export_data,
+                          kind="primary").pack()
+
+        control = self._card_row(
+            card, "Import notes",
+            "Brings a previously exported .zip back in. You are asked before "
+            "anything that looks like a duplicate is added.")
+        self._text_button(control, "Import", self.import_data).pack()
+
+    def _build_settings_statistics_panel(self, parent):
+        """A read-only snapshot of the notebook."""
+        self._settings_subtitle(parent, "A quick snapshot of your notes.")
+        # No wrapping card: the tiles and chips below are the raised surfaces,
+        # so a card around them would box a box.
+        self.stats_frame = tk.Frame(parent, bg=self.colors["bg"])
+        self.track_theme(self.stats_frame, bg="bg")
+        self.stats_frame.pack(fill="x")
+        self._render_statistics()
+
+    def _build_settings_about_panel(self, parent):
+        """Version, where the data lives, and what changed."""
+        self._settings_subtitle(parent, "Version info and where your notes live.")
+        head = tk.Frame(parent, bg=self.colors["bg"])
+        self.track_theme(head, bg="bg")
+        head.pack(fill="x", pady=(0, 14))
+        mark = tk.Canvas(head, width=44, height=44, highlightthickness=0, bd=0,
+                         bg=self.colors["bg"])
+        mark.pack(side="left", padx=(2, 12))
+        self._rounded_rect(mark, 0, 0, 44, 44, 12,
+                           fill=self.colors["accent"], outline=self.colors["accent"])
+        mark.create_rectangle(15, 11, 29, 33, fill="white", outline="white")
+        for y in (17, 22, 27):
+            mark.create_line(18, y, 26, y, fill=self.colors["accent"], width=1.6)
+        titles = tk.Frame(head, bg=self.colors["bg"])
+        self.track_theme(titles, bg="bg")
+        titles.pack(side="left", fill="x", expand=True)
+        tk.Label(titles, text="Note Organizer", font=("Segoe UI", 13, "bold"),
+                 anchor="w", bg=self.colors["bg"], fg=self.colors["text"]
+                 ).pack(fill="x", pady=(3, 0))
+        tk.Label(titles, text=f"Version {_host().APP_VERSION}",
+                 font=("Consolas", 9), anchor="w",
+                 bg=self.colors["bg"], fg=self.colors["subtext"]).pack(fill="x")
+
+        card = self._settings_card(parent)
+        self._field_label(card, "Where your notes are stored")
+        # paths.APP_DIR, not the entry module's -- see _host()'s docstring.
+        path_text = paths.APP_DIR or "(not set yet)"
+        well = tk.Frame(card, bg=self._surface("inset"))
+        well.pack(fill="x")
+        tk.Label(well, text=path_text, font=("Consolas", 9),
+                 bg=self._surface("inset"), fg=self.colors["subtext"],
+                 anchor="w", justify="left",
+                 wraplength=self.SETTINGS_CONTENT_MAX - 110
+                 ).pack(fill="x", padx=12, pady=10)
+
+        buttons = tk.Frame(card, bg=self._surface())
+        buttons.pack(fill="x", pady=(10, 0))
+
+        def open_folder():
+            target = paths.APP_DIR
+            if not target or not os.path.isdir(target):
+                self.show_warning("Folder not found",
+                                  "The data folder could not be opened.")
+                return
+            try:
+                os.startfile(target)   # Windows-only, matches this app's target
+            except OSError as exc:
+                self.show_warning("Could not open folder", str(exc))
+
+        def copy_path():
+            target = paths.APP_DIR or ""
+            self.clipboard_clear()
+            self.clipboard_append(target)
+            self.set_status("Folder path copied")
+
+        self._text_button(buttons, "Open folder", open_folder).pack(side="left")
+        self._text_button(buttons, "Copy path", copy_path).pack(side="left", padx=(8, 0))

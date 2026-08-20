@@ -56,15 +56,22 @@ def count_rows(w, marker):
             walk(c)
     walk(w)
     return count[0]
+# Read the page size from the app rather than hardcoding it. What matters
+# here is that the panel pages at all and that "Show more" adds exactly one
+# more page -- not the specific number, which is a performance tuning knob
+# (it went 50 -> 25 when Settings began showing one section at a time, and
+# hardcoding it here meant a tuning change looked like a broken feature).
+PAGE = app.TRASH_PAGE_SIZE
 initial_rows = count_rows(app.settings_trash_panel, 'Deleted')
-check('trash paginated to 50 initial rows', initial_rows==50)
+check(f'trash paginated to {PAGE} initial rows', initial_rows==PAGE)
 
 show_more = find_btn(app.settings_trash_panel, 'Show')
 check('Show more button present', show_more is not None)
 if show_more:
     show_more.invoke()
     app.update()
-    check('Show more expands to 100 rows', count_rows(app.settings_trash_panel, 'Deleted')==100)
+    check(f'Show more expands to {PAGE*2} rows',
+          count_rows(app.settings_trash_panel, 'Deleted')==PAGE*2)
 
 # restore preserves pagination + moves note back
 restore_btn = find_btn(app.settings_trash_panel, 'Restore')
