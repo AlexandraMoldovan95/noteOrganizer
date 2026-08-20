@@ -8,6 +8,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ## [Unreleased]
 
+### Changed
+- The app is being reorganised from one ~11,000-line file into a package. The data and rules layer now lives in `noteorganizer/core/` as ten modules — the calculator's expression parser, the recurrence engine, themes, rich-text spans, share codes, duplicate detection, data location and migrations, storage, categories, and the note model. No module in that layer imports tkinter, so all of it can be tested without opening a window. `note_organizer.py` is still the file you run and still re-exports everything that moved, so nothing about running the app, the tests, or the build changed. `note_organizer.py` went from 11,147 to 9,739 lines; the interface itself hasn't been split yet.
+- Importing `note_organizer` no longer does anything. It previously resolved a data folder, migrated notes into it, deleted files it judged redundant, and wrote settings — meaning an import alone could destroy a notebook, which is exactly how one was lost once. That work moved into `initialise()`, called by the app and by the entry point. Anything that wants the data layer without opening a window now has to ask for it deliberately.
+
+
 ## [0.32.49] — 2026-08-20
 
 ### Fixed
