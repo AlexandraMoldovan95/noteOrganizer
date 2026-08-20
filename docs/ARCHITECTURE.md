@@ -13,7 +13,7 @@ The target is two layers:
 
 `note_organizer.py` stays the entry point (`py note_organizer.py`) and re-exports the names that have moved, so existing callers — including the ~154 `note_organizer.<name>` references across the QA scripts — keep working untouched while the move happens. That's deliberate: it means each extraction is a pure move that leaves the whole test suite green, rather than a rewrite.
 
-Moved so far: `core/calculator.py`, `core/recurrence.py`, `core/themes.py`, `core/formatting.py`, `core/sharing.py`, `core/duplicates.py`, `core/paths.py`, `core/storage.py`. [CODE_TOUR.md](CODE_TOUR.md) walks through the modules for someone learning the codebase.
+Moved so far: `core/calculator.py`, `core/recurrence.py`, `core/themes.py`, `core/formatting.py`, `core/sharing.py`, `core/duplicates.py`, `core/paths.py`, `core/storage.py`, `core/categories.py`, `core/model.py` — the core layer is complete. [CODE_TOUR.md](CODE_TOUR.md) walks through the modules for someone learning the codebase.
 
 ## Data layer
 
