@@ -94,7 +94,8 @@ noteOrganizer/
 │       ├── themes.py         #   colour palettes and layout constants (pure data)
 │       ├── formatting.py     #   how rich-text spans are stored on a note
 │       ├── sharing.py        #   share codes + safe-import guards
-│       └── duplicates.py     #   deciding when two notes are the same note
+│       ├── duplicates.py     #   deciding when two notes are the same note
+│       └── paths.py          #   data location, migrations, safe cleanup
 ├── test_recurrence.py        # standalone tests for the recurrence engine (no GUI needed)
 ├── test_data_safety.py       # standalone tests for backups & migration safety (no GUI needed)
 ├── test_calculator.py        # standalone tests for the in-note calculator's expression evaluator (no GUI needed)

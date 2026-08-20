@@ -13,6 +13,12 @@ import json
 import shutil
 import tempfile
 import note_organizer as NO
+# Patch targets live in the module that LOOKS THE NAME UP. run_migrations and
+# purge_stale_copies moved into noteorganizer.core.paths, so they resolve
+# get_appdata_dir in that module's namespace — patching the re-exported
+# note_organizer.get_appdata_dir has no effect on them and would silently let
+# these tests run against the real %APPDATA%.
+from noteorganizer.core import paths as NO_paths
 
 fails = []
 def check(name, cond):
@@ -103,11 +109,11 @@ NO.save_settings(original_settings)  # restore whatever was really there
 # The bug this closes: if backing up the local file before overwriting it
 # with the AppData copy failed, the overwrite used to proceed anyway. Now
 # it should refuse and leave the local file untouched instead.
-real_get_appdata_dir = NO.get_appdata_dir
+real_get_appdata_dir = NO_paths.get_appdata_dir
 app_dir = tempfile.mkdtemp()
 appdata_dir = tempfile.mkdtemp()
 try:
-    NO.get_appdata_dir = lambda: appdata_dir
+    NO_paths.get_appdata_dir = lambda: appdata_dir
 
     with open(os.path.join(appdata_dir, 'notes_data.json'), 'w', encoding='utf-8') as f:
         json.dump([{'id': 1, 'title': 'AppData note'}], f)
@@ -146,7 +152,7 @@ try:
     check('a backup of the displaced local note was kept, not deleted',
           len(backups) == 1)
 finally:
-    NO.get_appdata_dir = real_get_appdata_dir
+    NO_paths.get_appdata_dir = real_get_appdata_dir
     shutil.rmtree(app_dir, ignore_errors=True)
     shutil.rmtree(appdata_dir, ignore_errors=True)
 
@@ -162,7 +168,7 @@ finally:
 app_dir = tempfile.mkdtemp()
 appdata_dir = tempfile.mkdtemp()
 try:
-    NO.get_appdata_dir = lambda: appdata_dir
+    NO_paths.get_appdata_dir = lambda: appdata_dir
 
     appdata_note = [{'id': 1, 'title': 'Real AppData note'}]
     with open(os.path.join(appdata_dir, 'notes_data.json'), 'w', encoding='utf-8') as f:
@@ -205,9 +211,50 @@ try:
     check('a genuinely stale non-AppData leftover is still cleaned up',
           not os.path.exists(os.path.join(dist_dir, 'notes_data.json')))
 finally:
-    NO.get_appdata_dir = real_get_appdata_dir
+    NO_paths.get_appdata_dir = real_get_appdata_dir
     shutil.rmtree(app_dir, ignore_errors=True)
     shutil.rmtree(appdata_dir, ignore_errors=True)
+
+# ---- Regression: resolve_data_dir() must key off the ENTRY POINT, not off
+# wherever its own source file happens to live. It used to derive the folder
+# from its own __file__; when the function moved into noteorganizer/core/,
+# that silently pointed two levels deeper and the app chose the wrong data
+# folder (then migrated real notes into it). It now takes the directory as
+# an argument, so moving the file again can't change the answer.
+import inspect
+_sig = inspect.signature(NO.resolve_data_dir)
+check('resolve_data_dir takes the base directory as an argument',
+      len(_sig.parameters) == 1)
+
+_probe = tempfile.mkdtemp(prefix='qa_resolve_')
+try:
+    _resolved, _note = NO.resolve_data_dir(_probe)
+    check('resolve_data_dir returns exactly the directory it was given',
+          os.path.normcase(_resolved) == os.path.normcase(os.path.abspath(_probe)))
+    check('...and reports no fallback warning for a writable directory',
+          _note is None)
+finally:
+    shutil.rmtree(_probe, ignore_errors=True)
+
+_p1 = tempfile.mkdtemp(prefix='qa_resolve_a_')
+_p2 = tempfile.mkdtemp(prefix='qa_resolve_b_')
+try:
+    # Two different inputs must give two different answers — proof the result
+    # follows the argument rather than any fixed location on disk.
+    _r1, _ = NO.resolve_data_dir(_p1)
+    _r2, _ = NO.resolve_data_dir(_p2)
+    check('resolve_data_dir follows its argument, not a fixed location',
+          os.path.normcase(_r1) == os.path.normcase(os.path.abspath(_p1))
+          and os.path.normcase(_r2) == os.path.normcase(os.path.abspath(_p2))
+          and _r1 != _r2)
+finally:
+    shutil.rmtree(_p1, ignore_errors=True)
+    shutil.rmtree(_p2, ignore_errors=True)
+
+# The app's own APP_DIR must sit beside note_organizer.py, not inside the
+# noteorganizer/ package.
+check('APP_DIR is not inside the noteorganizer package',
+      'noteorganizer' not in os.path.normpath(NO.APP_DIR).split(os.sep)[-2:])
 
 print()
 print(f"FAILURES: {fails if fails else 'none'}")
