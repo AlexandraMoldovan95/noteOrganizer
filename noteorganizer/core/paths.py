@@ -10,9 +10,9 @@ called deliberately. That matters: these are the functions that move and
 delete a user's notes, and for a long time they ran as a side effect of
 importing the app, which is how a real notebook once got deleted (see
 `docs/ISSUES_LOG.md`, "The cleanup that deleted the real notebook").
-``note_organizer.py`` still calls them at import time for now; making that
-explicit is a separate change. Keeping this module inert at least means
-the dangerous parts can be tested in isolation.
+``note_organizer.py`` no longer calls them at import either: they run from
+``note_organizer.initialise()``, which the app and the entry point invoke.
+Importing the app is now inert too.
 
 TWO SITUATIONS, HANDLED DIFFERENTLY
 -----------------------------------

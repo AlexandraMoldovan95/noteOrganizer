@@ -20,6 +20,14 @@ import note_organizer as NO
 # these tests run against the real %APPDATA%.
 from noteorganizer.core import paths as NO_paths
 
+# Importing note_organizer no longer resolves a data folder, migrates notes or
+# writes settings — that all moved into initialise(), so an import cannot
+# damage a notebook by itself. This file works directly with the data layer
+# rather than building a window, so it has to ask for it explicitly. Doing so
+# in THIS directory is exactly why the file must be run from a throwaway copy
+# (see CLAUDE.md's "QA testing safety").
+NO.initialise()
+
 fails = []
 def check(name, cond):
     print(('PASS' if cond else 'FAIL'), name)

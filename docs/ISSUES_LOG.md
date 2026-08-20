@@ -258,6 +258,8 @@ A narrative log of the more interesting bugs found and fixed during development 
 
 **Recovery:** the real notes weren't actually gone — they'd been copied into a directory before AppData was cleared. In this case a plain `python note_organizer.py` run at the project root held an intact copy, which was restored back into AppData by hand (a direct file copy, deliberately not routed through any app code, to stay isolated from the very bug being fixed).
 
+**Follow-up (0.33.x):** the deeper cause — that any `import note_organizer` performed migrations at all — is now gone. Resolving the data folder, migrating, purging and writing settings moved into an explicit `initialise()`, called by `NoteOrganizer.__init__` and by `_main()`. Importing the module creates no files and touches no notes, verified by importing it into a directory holding a decoy notebook and confirming nothing was read, moved or deleted. The exemption below still stands as defence in depth; it is no longer the only thing standing between a stray import and someone's notes.
+
 **Takeaway:** "Copy it somewhere else, then delete the original because it's now redundant" is a dangerous pattern to apply to anything that's a *permanent* store rather than a genuinely disposable one — the logic has no way to tell those apart from the data alone. A cleanup routine should name its exemptions explicitly (as this fix now does) rather than relying on every possible caller happening to avoid the deletion condition. Also worth remembering: a safety practice designed to protect data from one specific script (`qa*.py`'s working-directory wipe) doesn't automatically protect against a completely different destructive path living inside the very code being tested.
 
 ---
