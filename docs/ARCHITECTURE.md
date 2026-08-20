@@ -15,6 +15,12 @@ The target is two layers:
 
 Moved so far: `core/calculator.py`, `core/recurrence.py`, `core/themes.py`, `core/formatting.py`, `core/sharing.py`, `core/duplicates.py`, `core/paths.py`, `core/storage.py`, `core/categories.py`, `core/model.py` — the core layer is complete. [CODE_TOUR.md](CODE_TOUR.md) walks through the modules for someone learning the codebase.
 
+## Startup
+
+`note_organizer.py` is inert to import. Resolving the data folder, running migrations, purging stale copies, pointing `core.paths` at the result and recording the version all happen in `initialise()`, which `NoteOrganizer.__init__` and `_main()` both call (it's idempotent, so order doesn't matter).
+
+This matters for more than tidiness: those steps move and delete files, and running them as a side effect of `import note_organizer` is how a real notebook was once destroyed — see [ISSUES_LOG.md](ISSUES_LOG.md). Anything that wants the data layer without building a window must now call `initialise()` deliberately, which is what `test_data_safety.py` does.
+
 ## Data layer
 
 ### Storage

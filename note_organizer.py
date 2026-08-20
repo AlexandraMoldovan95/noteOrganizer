@@ -83,27 +83,88 @@ from noteorganizer.core.paths import (
 )
 
 
-# The data folder is resolved relative to THIS file, the entry point.
-# resolve_data_dir() takes it as an argument rather than deriving it from
-# its own location: once that code moved into noteorganizer/core/, its
-# __file__ pointed there instead, and the app silently picked a data
-# folder two levels below the right one.
-APP_DIR, STORAGE_WARNING = resolve_data_dir(
-    os.path.dirname(os.path.abspath(__file__)))
-MIGRATION_INFO = run_migrations(APP_DIR)
-PURGED_DIRS = purge_stale_copies(APP_DIR)
+# ---- Startup state, filled in by initialise() ----
+#
+# These stay None until initialise() runs. NOTHING here happens at import
+# time any more, and that is the entire point: importing this module used
+# to resolve a data folder, migrate notes into it, DELETE files it judged
+# stale, and write settings.json — so merely importing the app could
+# destroy a notebook. It did, once (see docs/ISSUES_LOG.md, "The cleanup
+# that deleted the real notebook"), and it is why every test in this
+# project has to be run from a throwaway directory.
+#
+# Now an import is inert and the work happens when someone asks for it.
+APP_DIR = None
+STORAGE_WARNING = None
+MIGRATION_INFO = None
+PURGED_DIRS = None
+DATA_FILE = None
+SETTINGS_FILE = None
+ATTACHMENTS_DIR = None
+TRASH_FILE = None
+TEMPLATES_FILE = None
+VERSION_CHANGE = None
+FIRST_LAUNCH_DATE = None
 
-# Hand the resolved folder to core.paths, which works out the individual
-# file locations and creates the attachments folder. Everything in
-# core.storage reads them from there, so this has to happen before any
-# load/save call. Re-exported below so existing callers and the QA scripts
-# still find note_organizer.DATA_FILE and friends.
-_core_paths.configure(APP_DIR)
-DATA_FILE = _core_paths.DATA_FILE
-SETTINGS_FILE = _core_paths.SETTINGS_FILE
-ATTACHMENTS_DIR = _core_paths.ATTACHMENTS_DIR
-TRASH_FILE = _core_paths.TRASH_FILE
-TEMPLATES_FILE = _core_paths.TEMPLATES_FILE
+_initialised = False
+
+
+def initialise(app_dir=None):
+    """Work out where the data lives, bring it up to date, and open it.
+
+    Does, in order: resolve the data folder, migrate anything left in an
+    older location, purge genuinely stale copies, point core.paths at the
+    result, then record the app version and first-launch date.
+
+    Called by NoteOrganizer.__init__ and by _main(), so ordinary use needs
+    no change. Anything that wants the data layer WITHOUT building a
+    window — test_data_safety.py, say — must call this explicitly.
+
+    Idempotent: calling it again is a no-op, so it does not matter whether
+    the app or the entry point gets there first.
+
+    Args:
+        app_dir: Override the data folder. Only for tests; normally the
+            folder is derived from this file's location.
+
+    Returns:
+        The resolved data folder.
+    """
+    global APP_DIR, STORAGE_WARNING, MIGRATION_INFO, PURGED_DIRS
+    global DATA_FILE, SETTINGS_FILE, ATTACHMENTS_DIR, TRASH_FILE, TEMPLATES_FILE
+    global VERSION_CHANGE, FIRST_LAUNCH_DATE, _initialised
+    if _initialised:
+        return APP_DIR
+
+    # The data folder is resolved relative to THIS file, the entry point.
+    # resolve_data_dir() takes it as an argument rather than deriving it
+    # from its own location: once that code moved into noteorganizer/core/,
+    # its __file__ pointed there instead, and the app silently picked a
+    # data folder two levels below the right one.
+    base = app_dir or os.path.dirname(os.path.abspath(__file__))
+    APP_DIR, STORAGE_WARNING = resolve_data_dir(base)
+    MIGRATION_INFO = run_migrations(APP_DIR)
+    PURGED_DIRS = purge_stale_copies(APP_DIR)
+
+    # Hand the resolved folder to core.paths, which works out the individual
+    # file locations and creates the attachments folder. Everything in
+    # core.storage reads them from there, so this has to happen before any
+    # load/save call. Mirrored onto this module so existing callers and the
+    # QA scripts still find note_organizer.DATA_FILE and friends.
+    _core_paths.configure(APP_DIR)
+    DATA_FILE = _core_paths.DATA_FILE
+    SETTINGS_FILE = _core_paths.SETTINGS_FILE
+    ATTACHMENTS_DIR = _core_paths.ATTACHMENTS_DIR
+    TRASH_FILE = _core_paths.TRASH_FILE
+    TEMPLATES_FILE = _core_paths.TEMPLATES_FILE
+
+    # These write to settings.json, so they belong after configure() and
+    # are just as much a side effect as the migration above.
+    VERSION_CHANGE = detect_version_change()
+    FIRST_LAUNCH_DATE = get_first_launch_date()
+
+    _initialised = True
+    return APP_DIR
 
 
 # Reading/writing settings, templates and trash, plus the pre-flight
@@ -187,8 +248,7 @@ def get_first_launch_date():
     return stamped
 
 
-VERSION_CHANGE = detect_version_change()
-FIRST_LAUNCH_DATE = get_first_launch_date()
+# VERSION_CHANGE / FIRST_LAUNCH_DATE are set by initialise().
 
 
 # ---- Note schema + one-time cleanup ----
@@ -289,6 +349,9 @@ from noteorganizer.core.themes import (
 
 class NoteOrganizer(tk.Tk):
     def __init__(self):
+        # Make sure the data layer is open before anything reads it. Safe to
+        # call repeatedly; _main() calls it too.
+        initialise()
         super().__init__()
         self.title("Notes Organizer")
         self.geometry("900x600")
@@ -9639,6 +9702,7 @@ def _main():
     # original bug. Left unresolved rather than trading one visible
     # problem for a worse one.
     try:
+        initialise()
         app = NoteOrganizer()
         app.protocol("WM_DELETE_WINDOW", app.on_app_close)
         app.mainloop()
