@@ -15,10 +15,13 @@ Modules, as they get moved across from `note_organizer.py`:
 * ``sharing`` — share codes, and the guards that make importing them safe.
 * ``duplicates`` — deciding when two notes are really the same note.
 * ``paths`` — where data lives, migrations, and the cleanup that must
-  never delete the wrong thing. Importing it does nothing on its own.
+  never delete the wrong thing. Importing it does nothing on its own;
+  ``paths.configure(app_dir)`` fills in the individual file locations.
+* ``storage`` — reading and writing settings, templates and trash, plus
+  the pre-flight backup of the notes file.
 
-Still to come: storage and the note model. Those are held back on
-purpose — they share mutable module state (``CATEGORY_COLORS``) and the
-app still runs migrations at import time, so moving them is a behaviour
-change rather than a pure move.
+Still to come: the note model and the live category map, which are
+entangled with each other (``normalize_note`` consults
+``CATEGORY_COLORS``), and the change that makes migrations run on an
+explicit call rather than on import.
 """
