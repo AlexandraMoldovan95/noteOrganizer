@@ -192,207 +192,25 @@ FIRST_LAUNCH_DATE = get_first_launch_date()
 
 
 # ---- Note schema + one-time cleanup ----
-
-NOTE_DEFAULTS = {
-    "title": "",
-    "body": "",
-    "formatting": [],   # list of {"start","end","style"} spans over body
-    "comments": "",
-    "category": "General",
-    "date": "",
-    "color": "",
-    "attachments": [],
-    "updated": "",
-    "created": "",      # when the note was first made; backfilled for old notes
-    "recurrence": {},   # empty dict = one-off note (see the recurrence engine)
-    "exceptions": [],   # dates removed from a series
-    "overrides": {},    # date -> partial note, for per-occurrence edits
-    "pinned": False,    # pinned notes float to the top of the list
-    "checklist": [],    # list of {"text": str, "done": bool} items
-}
-
-
-
-# Broad-ish emoji ranges — enough to catch common emoji people actually type
-# in a note title (faces, symbols, transport, flags, etc.) without pulling in
-# a full unicode-data dependency just for this.
-_EMOJI_PATTERN = re.compile(
-    "[\U0001F300-\U0001FAFF\U00002600-\U000027BF\U0001F1E6-\U0001F1FF"
-    "\U00002190-\U000021FF\U00002B00-\U00002BFF\U0001F900-\U0001F9FF]",
-    flags=re.UNICODE,
+# The note model moved to noteorganizer/core/model.py; the live category
+# map and its load/save moved to noteorganizer/core/categories.py.
+# Re-exported so existing callers and the QA scripts are unaffected.
+from noteorganizer.core.categories import (
+    CATEGORY_COLORS,
+    load_categories,
+    persist_categories,
 )
-
-
-def _extract_first_emoji(text):
-    """Find the first emoji anywhere in a string (title, etc.), or None. Used
-    to surface a note's own emoji on its calendar day even when the title is
-    long enough that the emoji itself would otherwise get truncated away."""
-    if not isinstance(text, str) or not text:
-        return None
-    m = _EMOJI_PATTERN.search(text)
-    return m.group(0) if m else None
-
-
-def _darken_hex(hex_color, factor=0.85):
-    """Return a slightly darker shade of a #rrggbb color, for hover states on
-    fixed (non-theme) colored chips."""
-    hex_color = hex_color.lstrip("#")
-    try:
-        r, g, b = (int(hex_color[i:i + 2], 16) for i in (0, 2, 4))
-    except ValueError:
-        return hex_color
-    r, g, b = (max(0, int(v * factor)) for v in (r, g, b))
-    return f"#{r:02x}{g:02x}{b:02x}"
-
-
-def _truncate(text, limit=60):
-    """Shorten a string for display with an ellipsis, collapsing newlines so a
-    multi-line title can't blow up the layout. The stored value is never
-    changed — this is display-only."""
-    if not isinstance(text, str):
-        return ""
-    flat = " ".join(text.split())
-    if len(flat) <= limit:
-        return flat
-    return flat[:limit].rstrip() + "…"
-
-
-def _note_str(note, key, default=""):
-    """Read a note field as a string, coercing missing/None/non-string values to
-    a default. Used in render paths so a single malformed note can never crash
-    the list, calendar, or day panels."""
-    value = note.get(key) if isinstance(note, dict) else None
-    return value if isinstance(value, str) else default
-
-
-def normalize_note(note):
-    """Guarantee every note has every field, with the right type. Older notes
-    were saved before 'comments', 'date', 'color' and 'attachments' existed,
-    and code that reads note['title'] directly crashes on those."""
-    clean = {}
-    clean["id"] = note.get("id", 0)
-    for key, default in NOTE_DEFAULTS.items():
-        value = note.get(key, default)
-        if isinstance(default, str) and not isinstance(value, str):
-            value = default
-        if isinstance(default, list) and not isinstance(value, list):
-            value = []
-        if isinstance(default, dict) and not isinstance(value, dict):
-            value = {}
-        clean[key] = value
-    if not clean["updated"]:
-        # Includes seconds (not just minutes) so two notes saved in the same
-        # minute still sort correctly by "Recently updated" instead of tying.
-        clean["updated"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    # Old notes predate the 'created' field — approximate it with 'updated' so
-    # they still show a sensible creation date.
-    if not clean["created"]:
-        clean["created"] = clean["updated"]
-    clean["pinned"] = bool(clean.get("pinned"))
-    if clean["category"] not in CATEGORY_COLORS:
-        clean["category"] = "General"
-
-    clean["recurrence"] = normalize_recurrence(clean["recurrence"])
-
-    # A recurring rule with no anchor date can't be placed on a calendar,
-    # so it degrades to a normal note instead of silently disappearing.
-    if clean["recurrence"]["freq"] and not parse_date(clean["date"]):
-        clean["recurrence"] = normalize_recurrence({})
-
-    clean["exceptions"] = sorted({
-        d for d in clean["exceptions"] if isinstance(d, str) and parse_date(d)
-    })
-    clean["overrides"] = {
-        d: {k: v for k, v in patch.items() if k in OVERRIDABLE_FIELDS and isinstance(v, str)}
-        for d, patch in clean["overrides"].items()
-        if isinstance(d, str) and parse_date(d) and isinstance(patch, dict)
-    }
-
-
-    # Tags were removed as a feature — drop any leftover "tags" key from
-    # notes saved before this cleanup, so old data doesn't keep carrying it
-    # around indefinitely once re-saved.
-    clean.pop("tags", None)
-
-    # Checklist: coerce each item to {"text": str, "done": bool}, dropping junk.
-    checklist = []
-    for item in clean.get("checklist", []):
-        if isinstance(item, dict):
-            text = item.get("text", "")
-            if not isinstance(text, str):
-                text = ""
-            checklist.append({"text": text, "done": bool(item.get("done"))})
-    clean["checklist"] = checklist
-
-    clean["formatting"] = normalize_formatting(clean.get("formatting"))
-
-    return clean
-
-
-def note_richness(note):
-    """Used to decide which copy of a duplicate to keep: the one carrying the
-    most extra data (attachments beat color beat date beat comments)."""
-    score = 0
-    if note.get("attachments"):
-        score += 8
-    if note.get("color"):
-        score += 4
-    if note.get("date"):
-        score += 2
-    if note.get("comments"):
-        score += 1
-    return score
-
-
-def note_is_empty(note):
-    """A note with no title, no body, no comments and no attachments is a
-    stray '+ New Note' click, not real content."""
-    def _s(v):
-        return v.strip() if isinstance(v, str) else ""
-    return not (
-        _s(note.get("title"))
-        or _s(note.get("body"))
-        or _s(note.get("comments"))
-        or note.get("attachments")
-    )
-
-
-def clean_notes(notes):
-    """Drop empty notes, collapse exact duplicates, and re-number IDs.
-    Returns (cleaned_notes, stats)."""
-    stats = {"before": len(notes), "empty_removed": 0, "duplicates_removed": 0}
-
-    kept = [n for n in notes if not note_is_empty(n)]
-    stats["empty_removed"] = len(notes) - len(kept)
-
-    # Two notes are "the same" if their actual content matches. 'updated'
-    # and 'id' are deliberately excluded — those differ on copies.
-    best_by_signature = {}
-    order = []
-    for note in kept:
-        signature = (
-            note["title"].strip(),
-            note["body"].strip(),
-            note["comments"].strip(),
-            note["category"],
-            note["date"],
-        )
-        existing = best_by_signature.get(signature)
-        if existing is None:
-            best_by_signature[signature] = note
-            order.append(signature)
-        else:
-            stats["duplicates_removed"] += 1
-            if note_richness(note) > note_richness(existing):
-                best_by_signature[signature] = note
-
-    deduped = [best_by_signature[sig] for sig in order]
-
-    for new_id, note in enumerate(deduped, start=1):
-        note["id"] = new_id
-
-    stats["after"] = len(deduped)
-    return deduped, stats
+from noteorganizer.core.model import (
+    NOTE_DEFAULTS,
+    _extract_first_emoji,
+    _darken_hex,
+    _truncate,
+    _note_str,
+    normalize_note,
+    note_richness,
+    note_is_empty,
+    clean_notes,
+)
 
 
 # ---- Recurrence engine ----
@@ -465,40 +283,6 @@ from noteorganizer.core.themes import (
     EDITOR_MIN_WIDTH,
 )
 
-# The live category map. Starts from the defaults, then gets overlaid with the
-# user's saved categories on startup. Referenced everywhere the old
-# CATEGORY_COLORS constant was, so the whole app reads from one place.
-CATEGORY_COLORS = dict(DEFAULT_CATEGORY_COLORS)
-
-
-def load_categories():
-    """Read the user's categories from settings, falling back to defaults.
-    Guarantees General exists and stays first."""
-    saved = load_settings().get("categories")
-    result = {}
-    if isinstance(saved, dict) and saved:
-        # Keep only well-formed name -> #hex entries.
-        for name, color in saved.items():
-            if (isinstance(name, str) and name.strip()
-                    and isinstance(color, str) and color.startswith("#")):
-                result[name.strip()] = color
-    if not result:
-        result = dict(DEFAULT_CATEGORY_COLORS)
-    # General is mandatory and always first.
-    if PROTECTED_CATEGORY not in result:
-        result = {PROTECTED_CATEGORY: DEFAULT_CATEGORY_COLORS[PROTECTED_CATEGORY], **result}
-    ordered = {PROTECTED_CATEGORY: result[PROTECTED_CATEGORY]}
-    for name, color in result.items():
-        if name != PROTECTED_CATEGORY:
-            ordered[name] = color
-    return ordered
-
-
-def persist_categories():
-    """Write the current category map back to settings."""
-    settings = load_settings()
-    settings["categories"] = dict(CATEGORY_COLORS)
-    save_settings(settings)
 
 
 

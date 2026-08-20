@@ -96,7 +96,9 @@ noteOrganizer/
 │       ├── sharing.py        #   share codes + safe-import guards
 │       ├── duplicates.py     #   deciding when two notes are the same note
 │       ├── paths.py          #   data location, migrations, safe cleanup
-│       └── storage.py        #   reading/writing settings, templates, trash
+│       ├── storage.py        #   reading/writing settings, templates, trash
+│       ├── categories.py     #   the live category map, saved in settings
+│       └── model.py          #   what a note is; normalize_note validates every one
 ├── test_recurrence.py        # standalone tests for the recurrence engine (no GUI needed)
 ├── test_data_safety.py       # standalone tests for backups & migration safety (no GUI needed)
 ├── test_calculator.py        # standalone tests for the in-note calculator's expression evaluator (no GUI needed)

@@ -19,9 +19,12 @@ Modules, as they get moved across from `note_organizer.py`:
   ``paths.configure(app_dir)`` fills in the individual file locations.
 * ``storage`` — reading and writing settings, templates and trash, plus
   the pre-flight backup of the notes file.
+* ``categories`` — the live category map, and moving it to and from
+  settings.
+* ``model`` — what a note *is*, and ``normalize_note``, the single gate
+  every note passes through before the app trusts it.
 
-Still to come: the note model and the live category map, which are
-entangled with each other (``normalize_note`` consults
-``CATEGORY_COLORS``), and the change that makes migrations run on an
-explicit call rather than on import.
+The core layer is now complete. What remains is the change that makes
+migrations run on an explicit call rather than as a side effect of
+importing ``note_organizer``, and then splitting the UI itself.
 """
