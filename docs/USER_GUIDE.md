@@ -68,13 +68,13 @@ Search the note list by keyword, and sort by recency, title, category, or date, 
 
 - **Pin** a note (right-click → Pin) to keep it at the top of the list regardless of sort order.
 - **Duplicate** a note to create an editable copy, titled "(copy)".
-- **Categories** act as folders — create, rename, recolor, or delete them from Settings → Manage categories. Deleting a category with notes in it asks where to move them first; nothing is ever silently lost.
+- **Categories** act as folders — create, rename, recolor, or delete them from Settings → Categories. Deleting a category with notes in it asks where to move them first; nothing is ever silently lost.
 
 ![Categories panel](screenshots/categories-panel.png)
 
 ### Templates
 
-Save any note as a reusable template (📋 **Save as template**), or build one from scratch in Settings → Manage templates. Starting a new note with **Use template** fills in the title, body, category, and checklist from the template — the template itself is never affected by what you do with the note afterward.
+Save any note as a reusable template (📋 **Save as template**), or build one from scratch in Settings → Templates. Starting a new note with **Use template** fills in the title, body, category, and checklist from the template — the template itself is never affected by what you do with the note afterward.
 
 ![Templates panel](screenshots/templates-panel.png)
 
@@ -86,7 +86,7 @@ Deleting a note moves it to **Recently deleted** (Settings), where it's recovera
 
 ### Finding & cleaning up duplicates
 
-Settings → **Clean up duplicates** groups notes that match on title, body, comments, and category. Within a group, tick specific copies to remove (the rest are kept — nothing forces "keep exactly one"), or use **Clean up ALL groups** to apply "keep the first, remove the rest" across every group in one click.
+Settings → **Duplicates** groups notes that match on title, body, comments, and category. Within a group, tick specific copies to remove (the rest are kept — nothing forces "keep exactly one"), or use **Clean up ALL groups** to apply "keep the first, remove the rest" across every group in one click.
 
 ![Duplicates panel](screenshots/duplicates-panel.png)
 
@@ -151,7 +151,7 @@ Settings → Import notes brings a previously exported `.zip` back in — notes,
 
 ## Settings
 
-Categories, templates, trash, duplicate cleanup, appearance, your name, and usage statistics all live on one page, reached via the **⚙ Settings** button at the bottom of the sidebar. A **← Back to Notes** button at the top returns you to your notes.
+Categories, templates, trash, duplicate cleanup, appearance, your name, and usage statistics all live on one page, reached via the **⚙ Settings** button at the bottom of the sidebar. The page is split in two: a list of settings on the left, and whichever one you picked on the right. One section shows at a time, so you're only ever looking at the setting you came for. A **← Back to Notes** button at the top returns you to your notes.
 
 ![Settings overview](screenshots/settings-overview.png)
 
@@ -188,10 +188,10 @@ Drop image files into `docs/screenshots/` using the exact filenames referenced a
 | `emoji-picker.png` | The emoji picker open over a text field |
 | `search-and-sort.png` | The search box and sort dropdown, ideally mid-search |
 | `grouped-notes.png` | The note list with "Group by category" on, showing at least two groups (one collapsed, one expanded, if possible) |
-| `categories-panel.png` | Settings → Manage categories, with a few categories listed |
-| `templates-panel.png` | Settings → Manage templates, with at least one template listed |
+| `categories-panel.png` | Settings → Categories, with a few categories listed |
+| `templates-panel.png` | Settings → Templates, with at least one template listed |
 | `trash-panel.png` | Settings → Recently deleted, with a few entries |
-| `duplicates-panel.png` | Settings → Clean up duplicates, with at least one group showing |
+| `duplicates-panel.png` | Settings → Duplicates, with at least one group showing |
 | `recurrence-setup.png` | The Repeat section of the editor, mid-setup (e.g. Weekly with a couple of days picked) |
 | `calendar-view.png` | The Calendar tab, a month with a few notes visible on different days |
 | `calendar-day-color.png` | The right-click menu / result of painting a calendar day a custom color |
@@ -199,5 +199,5 @@ Drop image files into `docs/screenshots/` using the exact filenames referenced a
 | `import-code.png` | The Import code panel, ideally showing the duplicate-check prompt |
 | `export-progress.png` | The export progress bar visible at the bottom of the window mid-export |
 | `import-backup.png` | The Import notes file picker or its resulting confirmation |
-| `settings-overview.png` | The full Settings page, scrolled to show several sections |
+| `settings-overview.png` | The Settings page, showing the section list on the left and a section open on the right |
 | `theme-picker.png` | Settings → Appearance, with the theme variant cards visible |
