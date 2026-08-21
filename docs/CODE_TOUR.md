@@ -53,7 +53,7 @@ noteorganizer/
     ├── sharing.py        share codes, and the guards that make import safe
     ├── duplicates.py     deciding when two notes are the same note
     ├── paths.py          where data lives, migrations, safe cleanup
-    ├── storage.py        reading/writing settings, templates, trash
+    ├── storage.py        reading/writing notes, settings, templates, trash
     ├── categories.py     the live category map
     └── model.py          what a note is; normalize_note validates every one
 docs/                     these documents
@@ -578,9 +578,26 @@ other. Both bugs are pinned by regression tests now.
 
 ## 8. `noteorganizer/core/storage.py`
 
-**What it's for.** Everything that reads or writes `settings.json`,
-`templates.json` and `trash.json`, plus the pre-flight backup of the notes
-file.
+**What it's for.** Everything that reads or writes `notes_data.json`,
+`settings.json`, `templates.json` and `trash.json`, plus the pre-flight
+backup of the notes file.
+
+`load_notes` and `save_notes` arrived here last, and are worth a look
+because of *how* they had to change. They were methods on the app class —
+not because either drew anything, but because that is where all the code
+used to live. Two details did not survive the move unchanged:
+
+* `load_notes` used to read the entry module's `VERSION_CHANGE` global.
+  Values on that module are exactly what goes missing when the app runs as
+  a script (see `docs/ISSUES_LOG.md`, "The module that existed twice"), so
+  it is a parameter now — the caller, which does know, passes it in.
+* `save_notes` used to open an error dialog itself. Nothing in this layer
+  may touch the interface, so it returns `(ok, exception)` and lets the
+  caller decide what a failure looks like on screen.
+
+Both are the general shape of moving code down here: the logic comes as-is,
+but anything that reached *up* — to a global on the entry module, or to a
+widget — has to become an argument or a return value.
 
 ### The binding rule this module is built around
 
