@@ -755,6 +755,46 @@ class SettingsPageMixin:
                 enable_click_outside=False)
         pop.bind("<Escape>", lambda e: self._dismiss_mini_popup())
 
+    def _build_trash_row(self, parent, entry, redraw):
+        row = tk.Frame(parent, bg=self.colors["card"])
+        row.pack(fill="x", pady=3)
+
+        left = tk.Frame(row, bg=self.colors["card"])
+        left.pack(side="left", fill="x", expand=True, padx=10, pady=8)
+        title = (entry.get("title") or "").strip() or "(untitled)"
+        tk.Label(left, text=title[:42], bg=self.colors["card"], fg=self.colors["text"],
+                 font=("Segoe UI", 10, "bold"), anchor="w").pack(fill="x")
+        # Show when it was deleted and how long remains.
+        meta = entry.get("deleted_at", "")
+        remaining = self._days_left_in_trash(meta)
+        sub = f"deleted {meta[:10]}" if meta else "deleted"
+        if remaining is not None:
+            sub += f" · {remaining} day(s) left"
+        tk.Label(left, text=sub, bg=self.colors["card"], fg=self.colors["subtext"],
+                 font=("Segoe UI", 8), anchor="w").pack(fill="x")
+
+        def restore():
+            self._restore_from_trash(entry)
+            redraw()
+
+        def delete_forever():
+            if self.ask_yes_no(
+                "Delete permanently",
+                f"Permanently delete “{title}”? This can't be undone.",
+                parent=row, icon="warning", default="no"
+            ):
+                _delete_attachment_files([entry])
+                self.trash = [e for e in self.trash if e is not entry]
+                save_trash(self.trash)
+                redraw()
+
+        tk.Button(row, text="Delete", command=delete_forever, relief="flat",
+                  cursor="hand2", bg=self.colors["danger"], fg="white",
+                  font=("Segoe UI", 8, "bold")).pack(side="right", padx=(2, 8), ipadx=4, ipady=1)
+        tk.Button(row, text="Restore", command=restore, relief="flat",
+                  cursor="hand2", bg=self.colors["accent"], fg="white",
+                  font=("Segoe UI", 8, "bold")).pack(side="right", padx=2, ipadx=4, ipady=1)
+
     def _build_settings_trash_panel(self, parent):
         self._settings_subtitle(
             parent,

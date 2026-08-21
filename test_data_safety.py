@@ -346,6 +346,158 @@ check('no core module imports tkinter', not _offenders, )
 if _offenders:
     print('   offenders:', _offenders)
 
+# ---- core/storage trash operations ----
+#
+# Delete and restore were methods on the app class and touched no interface,
+# so this is their first coverage that does not open a window. The restore
+# case worth pinning down is the orphan: a note whose category was deleted
+# while it sat in the trash would otherwise come back filed under something
+# that no longer exists.
+_trash_dir = tempfile.mkdtemp()
+_prev = (NO_paths.DATA_FILE, NO_paths.SETTINGS_FILE, NO_paths.TRASH_FILE)
+try:
+    NO_paths.configure(_trash_dir)
+    with open(NO_paths.SETTINGS_FILE, 'w', encoding='utf-8') as f:
+        json.dump({'cleanup_done': True}, f)
+
+    _notes = [{'id': 1, 'title': 'Keep'}, {'id': 2, 'title': 'Bin', 'category': 'Gone'}]
+    _trash = []
+    _storage.move_notes_to_trash(_trash, [_notes[1]])
+    check('move_notes_to_trash puts the note in the trash', len(_trash) == 1)
+    check('move_notes_to_trash stamps a deletion time', bool(_trash[0].get('deleted_at')))
+    check('move_notes_to_trash writes the trash file', os.path.exists(NO_paths.TRASH_FILE))
+
+    check('days_left_in_trash counts from the stamp',
+          _storage.days_left_in_trash(_trash[0]['deleted_at']) == NO.TRASH_RETENTION_DAYS)
+    check('days_left_in_trash returns None for an unreadable stamp',
+          _storage.days_left_in_trash('not a date') is None)
+    check('days_left_in_trash returns None rather than raising on junk',
+          _storage.days_left_in_trash(None) is None)
+
+    _notes = [n for n in _notes if n['id'] != 2]
+    # A note created AFTER the delete has taken the id the trashed one used.
+    # Without this the id check cannot fail, which is exactly how the first
+    # version of it passed against code that never reassigned an id at all.
+    _notes.append({'id': 2, 'title': 'Made later'})
+    _restored_from = dict(_trash[0])
+    _notes, _trash = _storage.restore_from_trash(_notes, _trash, _trash[0])
+    check('restore_from_trash puts the note back', len(_notes) == 3)
+    check('restore_from_trash empties it out of the trash', _trash == [])
+    check('a restored note whose category is gone falls back rather than orphaning',
+          _notes[-1]['category'] == 'General')
+    check('restore_from_trash gives the note an id that cannot collide',
+          _notes[-1]['id'] not in [n['id'] for n in _notes[:-1]])
+    check('...and specifically does not reuse the id it had when deleted',
+          _notes[-1]['id'] != _restored_from['id'])
+    check('restore_from_trash drops the deleted_at stamp',
+          'deleted_at' not in _notes[-1])
+finally:
+    shutil.rmtree(_trash_dir, ignore_errors=True)
+    NO_paths.DATA_FILE, NO_paths.SETTINGS_FILE, NO_paths.TRASH_FILE = _prev
+
+# ---- core/model note lookups ----
+#
+# find_note, count_notes_in_category and rename_category_everywhere were
+# methods on the app class and touch no interface. The case worth pinning
+# down in all three is the per-occurrence override: a repeating note can
+# carry a patch for one date that names a different category from the
+# series, so anything that only looks at note["category"] gets it wrong --
+# undercounting, or leaving a patch pointing at a name that is gone.
+from noteorganizer.core.model import (
+    find_note as _find_note,
+    count_notes_in_category as _count_in_cat,
+    rename_category_everywhere as _rename_cat,
+)
+
+_ln = [
+    {'id': 1, 'title': 'plain', 'category': 'Work'},
+    {'id': 2, 'title': 'series', 'category': 'Work',
+     'overrides': {'2026-03-01': {'category': 'Urgent'},
+                   '2026-03-08': {'category': 'Urgent'}}},
+    {'id': 3, 'title': 'other', 'category': 'Home'},
+]
+
+check('find_note returns the matching note', _find_note(_ln, 2)['title'] == 'series')
+check('find_note returns None for an id that is not there', _find_note(_ln, 99) is None)
+check('find_note on an empty list returns None', _find_note([], 1) is None)
+
+check('count_notes_in_category counts base categories', _count_in_cat(_ln, 'Work') == 2)
+check('a note is counted once even with several overrides naming the category',
+      _count_in_cat(_ln, 'Urgent') == 1)
+check('count_notes_in_category returns 0 for an unused category',
+      _count_in_cat(_ln, 'Nothing') == 0)
+
+_rename_cat(_ln, 'Urgent', 'Later')
+check('rename_category_everywhere leaves nothing under the old name',
+      _count_in_cat(_ln, 'Urgent') == 0)
+check('rename_category_everywhere rewrites per-occurrence overrides too',
+      [p['category'] for p in _ln[1]['overrides'].values()] == ['Later', 'Later'])
+_rename_cat(_ln, 'Work', 'Job')
+check('rename_category_everywhere rewrites base categories',
+      _count_in_cat(_ln, 'Job') == 2 and _count_in_cat(_ln, 'Work') == 0)
+check('renaming leaves unrelated notes alone', _ln[2]['category'] == 'Home')
+
+# ---- core/storage single-setting helpers ----
+#
+# Six methods were the same read-modify-write of one key. That shape is the
+# point, not incidental: several parts of the app own different keys in one
+# file, so writing the whole file from one caller's view of it would drop
+# the others. The check below is exactly that property.
+_set_dir = tempfile.mkdtemp()
+_set_prev = (NO_paths.SETTINGS_FILE,)
+try:
+    NO_paths.configure(_set_dir)
+    with open(NO_paths.SETTINGS_FILE, 'w', encoding='utf-8') as f:
+        json.dump({'cleanup_done': True, 'username': 'Alexandra'}, f)
+
+    _storage.save_setting('theme', 'dark_forest')
+    check('save_setting stores the value', _storage.get_setting('theme') == 'dark_forest')
+    check('save_setting leaves the other keys alone',
+          _storage.get_setting('cleanup_done') is True
+          and _storage.get_setting('username') == 'Alexandra')
+
+    check('get_setting falls back when the key is missing',
+          _storage.get_setting('nope', 'fallback') == 'fallback')
+    _storage.save_setting('username', 12345)
+    check('get_setting returns a wrong-typed value as-is without expect',
+          _storage.get_setting('username') == 12345)
+    check('get_setting falls back on a wrong type when expect is given',
+          _storage.get_setting('username', '', expect=str) == '')
+finally:
+    shutil.rmtree(_set_dir, ignore_errors=True)
+    NO_paths.SETTINGS_FILE, = _set_prev
+
+# ---- core colour and tag-name helpers ----
+#
+# Pure functions that were staticmethods on the app class. The colour ones
+# are checked against every colour in every theme rather than a sample,
+# because the whole point of contrasting_fg is that it holds for all of them.
+from noteorganizer.core.themes import blend as _blend_fn, contrasting_fg as _contrast
+from noteorganizer.core.formatting import (
+    char_class as _cc, color_tag_name as _ctn, font_tag_for as _ftf)
+
+_all_colours = sorted({v for pal in NO.THEMES.values() for v in pal.values()
+                       if isinstance(v, str) and v.startswith('#')})
+check('every theme colour gets a legible contrasting foreground',
+      all(_contrast(c) in ('#1a1a1a', '#ffffff') for c in _all_colours))
+check('contrasting_fg picks dark text on a light ground', _contrast('#ffffff') == '#1a1a1a')
+check('contrasting_fg picks light text on a dark ground', _contrast('#1e1e2f') == '#ffffff')
+
+check('blend at t=0 returns the first colour', _blend_fn('#000000', '#ffffff', 0) == '#000000')
+check('blend at t=1 returns the second colour', _blend_fn('#000000', '#ffffff', 1) == '#ffffff')
+check('blend at t=0.5 lands halfway', _blend_fn('#000000', '#ffffff', 0.5) == '#808080')
+
+check('char_class calls a letter a word character', _cc('a') == 'word')
+check('char_class calls a space a space', _cc(' ') == 'space')
+check('char_class puts punctuation in its own class so it breaks a word',
+      _cc('.') == 'other')
+check('char_class handles the empty string', _cc('') is None)
+
+check('color_tag_name is stable and lowercase', _ctn('highlight', '#FFF3B0') == 'highlight_fff3b0')
+check('font_tag_for gives bold+italic its own compound tag',
+      _ftf(True, True) == 'bold_italic')
+check('font_tag_for returns None when neither is set', _ftf(False, False) is None)
+
 print()
 print(f"FAILURES: {fails if fails else 'none'}")
 

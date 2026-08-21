@@ -210,3 +210,34 @@ HIGHLIGHT_COLOR_PALETTE = [
 
 SIDEBAR_WIDTH = 280
 EDITOR_MIN_WIDTH = 620
+
+
+# ---- Colour arithmetic ----
+#
+# Both were staticmethods on the app class. They are pure colour maths and
+# get used from several places, so they belong beside the palettes rather
+# than on whatever happens to draw next.
+
+def blend(hex_a, hex_b, t):
+    """Mix two ``#rrggbb`` colours. ``t=0`` gives *hex_a*, ``t=1`` gives *hex_b*."""
+    a = tuple(int(hex_a[i:i + 2], 16) for i in (1, 3, 5))
+    b = tuple(int(hex_b[i:i + 2], 16) for i in (1, 3, 5))
+    mixed = tuple(round(a[i] + (b[i] - a[i]) * t) for i in range(3))
+    return "#%02x%02x%02x" % mixed
+
+
+def contrasting_fg(hex_color):
+    """Black or near-white, whichever reads better against *hex_color*.
+
+    The standard perceived-luminance weighting: the eye is far more
+    sensitive to green than to blue, so a plain average of the channels
+    picks the wrong side on colours like pure blue.
+
+    This exists because the text-colour and highlight buttons show a swatch
+    of the active colour as their own background, and the letter on top has
+    to stay legible against any colour in the palette on any of the themes.
+    """
+    h = hex_color.lstrip("#")
+    r, g, b = (int(h[i:i + 2], 16) for i in (0, 2, 4))
+    luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255
+    return "#1a1a1a" if luminance > 0.6 else "#ffffff"

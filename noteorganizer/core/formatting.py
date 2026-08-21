@@ -27,6 +27,8 @@ Why ``bold_italic`` is its own style rather than two overlapping spans is
 a Tkinter constraint, explained in the comment just below.
 """
 
+import re
+
 # Tkinter Text tags that both set the widget's font option don't compose —
 # only one wins — so bold+italic together has to be one precomputed
 # compound font, same as a real font would have a distinct bold-italic
@@ -68,3 +70,50 @@ def normalize_formatting(value):
             spans.append({"start": start, "end": end, "style": style,
                           "value": span["value"].lower()})
     return spans
+
+
+# ---- Naming the tags the editor applies ----
+#
+# These three were on the app class and are pure string work: no widget, no
+# state. They decide what a Tk tag is *called*, which is why they sit beside
+# the span format they name rather than in the editor that applies them.
+
+_WORD_CHAR_RE = re.compile(r"\w", re.UNICODE)
+
+
+def char_class(ch):
+    """Which of three classes a character belongs to.
+
+    Contiguous runs of one class form a double-click "word". Punctuation is
+    its own class so that it always breaks a word, unlike Tk's built-in
+    boundary detection, which glues a full stop to its neighbours and
+    selects the whole of ``something.else`` whichever half was clicked.
+    """
+    if not ch:
+        return None
+    if _WORD_CHAR_RE.match(ch):
+        return "word"
+    if ch.isspace():
+        return "space"
+    return "other"
+
+
+def color_tag_name(style, hex_color):
+    """The tag name for one colour of one style, e.g. ``highlight_fff3b0``."""
+    return f"{style}_{hex_color.lstrip('#').lower()}"
+
+
+def font_tag_for(is_bold, is_italic):
+    """The single font tag for this bold/italic combination, or None.
+
+    Two Tk tags that both set the widget's font option do not compose -- one
+    simply wins -- so bold and italic together needs its own precomputed
+    compound tag rather than layering two independent ones.
+    """
+    if is_bold and is_italic:
+        return "bold_italic"
+    if is_bold:
+        return "bold"
+    if is_italic:
+        return "italic"
+    return None

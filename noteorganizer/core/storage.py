@@ -329,3 +329,113 @@ def save_notes(notes):
         return True, None
     except (IOError, OSError) as exc:
         return False, exc
+
+
+# ---- Trash operations ----
+#
+# These were methods on the app class and touch no interface at all. They are
+# the data half of "delete" and "restore": the caller still owns telling the
+# screen to redraw afterwards.
+
+def move_notes_to_trash(trash, notes_to_trash):
+    """Move notes into the trash with a deletion timestamp.
+
+    Nothing is destroyed -- every delete path goes through here so a note is
+    never lost without its grace period.
+
+    Args:
+        trash: the current trash list, appended to in place.
+        notes_to_trash: the notes being removed from the active list.
+
+    Returns:
+        The same trash list, for convenience at the call site.
+    """
+    stamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    for note in notes_to_trash:
+        entry = dict(note)
+        entry["deleted_at"] = stamp
+        trash.append(entry)
+    save_trash(trash)
+    return trash
+
+
+def days_left_in_trash(deleted_at):
+    """How many days until this trashed note auto-purges. None if unknown."""
+    try:
+        when = datetime.strptime(deleted_at, "%Y-%m-%d %H:%M:%S")
+    except (ValueError, TypeError):
+        return None
+    elapsed = (datetime.now() - when).days
+    return max(0, TRASH_RETENTION_DAYS - elapsed)
+
+
+def restore_from_trash(notes, trash, entry):
+    """Bring a trashed note back into the active list.
+
+    A note whose category was deleted while it sat in the trash comes back
+    filed under "General" rather than orphaned -- but that is
+    :func:`~noteorganizer.core.model.normalize_note`'s doing, not this
+    function's. The method this replaced re-checked the category itself and
+    fell back to the same value, which had no effect; the check is gone
+    rather than carried over, and the guarantee is tested where it lives.
+
+    Args:
+        notes: the active note list, appended to in place.
+        trash: the trash list; ``entry`` is removed from it.
+        entry: the trashed note to restore.
+
+    Returns:
+        ``(notes, trash)`` -- both lists, saved to disk.
+    """
+    from .model import normalize_note
+
+    # normalize_note rebuilds the note from a known schema, so it drops
+    # "deleted_at" and anything else the trash entry carried. The method this
+    # replaced stripped that key by hand first; verified redundant, so it is
+    # gone rather than copied across. What it guaranteed is still tested.
+    note = normalize_note(entry)
+    # A fresh id: the trashed note's own id may have been reused by a note
+    # created after it was deleted.
+    note["id"] = max([n["id"] for n in notes], default=0) + 1
+    notes.append(note)
+    trash = [e for e in trash if e is not entry]
+    save_trash(trash)
+    return notes, trash
+
+
+# ---- Single settings values ----
+#
+# Six methods on the app class were the same three lines: load the settings,
+# change one key, save them back. That shape is not incidental -- writing the
+# whole file for one value is what stops a save from wiping a key it never
+# meant to touch, like the one-time cleanup flag. Doing it once here keeps
+# the reason attached to the code rather than repeated in six comments.
+
+def get_setting(key, default=None, expect=None):
+    """One value out of settings.json.
+
+    Args:
+        key: the setting to read.
+        default: returned when the key is missing, or when it holds
+            something of the wrong type.
+        expect: an optional type the value must be. A settings file can be
+            hand-edited or written by an older version, so a value that is
+            there but wrong should read as absent rather than reach the
+            caller and fail somewhere less obvious.
+    """
+    value = load_settings().get(key, default)
+    if expect is not None and not isinstance(value, expect):
+        return default
+    return value
+
+
+def save_setting(key, value):
+    """Change one value in settings.json, leaving the rest alone.
+
+    Read-modify-write rather than a blind overwrite: several parts of the
+    app own different keys in this one file, and a save that rewrote the
+    whole thing from one caller's view of it would drop the others.
+    """
+    settings = load_settings()
+    settings[key] = value
+    save_settings(settings)
