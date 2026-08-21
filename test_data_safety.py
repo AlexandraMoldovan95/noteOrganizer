@@ -395,6 +395,48 @@ finally:
     shutil.rmtree(_trash_dir, ignore_errors=True)
     NO_paths.DATA_FILE, NO_paths.SETTINGS_FILE, NO_paths.TRASH_FILE = _prev
 
+# ---- core/model note lookups ----
+#
+# find_note, count_notes_in_category and rename_category_everywhere were
+# methods on the app class and touch no interface. The case worth pinning
+# down in all three is the per-occurrence override: a repeating note can
+# carry a patch for one date that names a different category from the
+# series, so anything that only looks at note["category"] gets it wrong --
+# undercounting, or leaving a patch pointing at a name that is gone.
+from noteorganizer.core.model import (
+    find_note as _find_note,
+    count_notes_in_category as _count_in_cat,
+    rename_category_everywhere as _rename_cat,
+)
+
+_ln = [
+    {'id': 1, 'title': 'plain', 'category': 'Work'},
+    {'id': 2, 'title': 'series', 'category': 'Work',
+     'overrides': {'2026-03-01': {'category': 'Urgent'},
+                   '2026-03-08': {'category': 'Urgent'}}},
+    {'id': 3, 'title': 'other', 'category': 'Home'},
+]
+
+check('find_note returns the matching note', _find_note(_ln, 2)['title'] == 'series')
+check('find_note returns None for an id that is not there', _find_note(_ln, 99) is None)
+check('find_note on an empty list returns None', _find_note([], 1) is None)
+
+check('count_notes_in_category counts base categories', _count_in_cat(_ln, 'Work') == 2)
+check('a note is counted once even with several overrides naming the category',
+      _count_in_cat(_ln, 'Urgent') == 1)
+check('count_notes_in_category returns 0 for an unused category',
+      _count_in_cat(_ln, 'Nothing') == 0)
+
+_rename_cat(_ln, 'Urgent', 'Later')
+check('rename_category_everywhere leaves nothing under the old name',
+      _count_in_cat(_ln, 'Urgent') == 0)
+check('rename_category_everywhere rewrites per-occurrence overrides too',
+      [p['category'] for p in _ln[1]['overrides'].values()] == ['Later', 'Later'])
+_rename_cat(_ln, 'Work', 'Job')
+check('rename_category_everywhere rewrites base categories',
+      _count_in_cat(_ln, 'Job') == 2 and _count_in_cat(_ln, 'Work') == 0)
+check('renaming leaves unrelated notes alone', _ln[2]['category'] == 'Home')
+
 print()
 print(f"FAILURES: {fails if fails else 'none'}")
 

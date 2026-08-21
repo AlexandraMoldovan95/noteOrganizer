@@ -247,3 +247,54 @@ def clean_notes(notes):
 
     stats["after"] = len(deduped)
     return deduped, stats
+
+
+# ---- Looking notes up, and moving them between categories ----
+#
+# These were methods on the app class. None of them drew anything; they read
+# and rewrite the notes list, which is what this module is for. Each takes
+# the list as its first argument rather than reaching for ``self.notes``.
+#
+# All three account for per-occurrence overrides. A repeating note can carry
+# a patch for one date that sets a different category from the series, so a
+# rename that only rewrote ``note["category"]`` would leave those patches
+# pointing at a name that no longer exists.
+
+def find_note(notes, note_id):
+    """The note with this id, or None."""
+    for n in notes:
+        if n["id"] == note_id:
+            return n
+    return None
+
+
+def count_notes_in_category(notes, name):
+    """How many notes use this category.
+
+    A note counts once even if several of its overrides name the category,
+    which is why this breaks out of the inner loop.
+    """
+    total = 0
+    for n in notes:
+        if n.get("category") == name:
+            total += 1
+            continue
+        for patch in (n.get("overrides") or {}).values():
+            if patch.get("category") == name:
+                total += 1
+                break
+    return total
+
+
+def rename_category_everywhere(notes, old_name, new_name):
+    """Rewrite every reference to a category, in base notes and overrides.
+
+    Used both for a real rename and for moving notes out of a category that
+    is being deleted -- the operation is the same either way.
+    """
+    for n in notes:
+        if n.get("category") == old_name:
+            n["category"] = new_name
+        for patch in (n.get("overrides") or {}).values():
+            if patch.get("category") == old_name:
+                patch["category"] = new_name

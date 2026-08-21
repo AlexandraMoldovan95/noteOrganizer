@@ -277,6 +277,9 @@ from noteorganizer.core.categories import (
 )
 from noteorganizer.core.model import (
     NOTE_DEFAULTS,
+    find_note as core_find_note,
+    count_notes_in_category as core_count_in_category,
+    rename_category_everywhere as core_rename_category,
     _extract_first_emoji,
     _darken_hex,
     _truncate,
@@ -7416,41 +7419,27 @@ class NoteOrganizer(CalculatorPanelMixin, SettingsPageMixin, tk.Tk):
             self.open_note_in_tab(clone)
 
     def find_note(self, note_id):
-        for n in self.notes:
-            if n["id"] == note_id:
-                return n
-        return None
+        """The note with this id, or None."""
+        return core_find_note(self.notes, note_id)
 
     # ---------- Category management ----------
     def count_notes_in_category(self, name):
-        """How many notes use this category, counting per-occurrence overrides
-        too (an override can set a different category for one day)."""
-        total = 0
-        for n in self.notes:
-            if n.get("category") == name:
-                total += 1
-                continue
-            for patch in (n.get("overrides") or {}).values():
-                if patch.get("category") == name:
-                    total += 1
-                    break
-        return total
+        """How many notes use this category, per-occurrence overrides included."""
+        return core_count_in_category(self.notes, name)
 
     def rename_category_everywhere(self, old_name, new_name):
-        """Rewrite every reference to a category when it's renamed — base notes
-        AND per-occurrence overrides — so nothing is left pointing at a name
-        that no longer exists."""
-        for n in self.notes:
-            if n.get("category") == old_name:
-                n["category"] = new_name
-            for patch in (n.get("overrides") or {}).values():
-                if patch.get("category") == old_name:
-                    patch["category"] = new_name
+        """Rewrite every reference to a category when it is renamed."""
+        core_rename_category(self.notes, old_name, new_name)
 
     def reassign_category_everywhere(self, old_name, new_name):
-        """Move every note from one category to another (used when a category
-        is deleted and its notes are kept)."""
-        self.rename_category_everywhere(old_name, new_name)
+        """Move every note from one category to another.
+
+        Kept distinct from rename_category_everywhere despite doing the same
+        thing: the call sites read very differently -- one is the user
+        renaming a category, the other is a category being deleted and its
+        notes being kept.
+        """
+        core_rename_category(self.notes, old_name, new_name)
 
     def refresh_category_widgets(self):
         """Push the current category set into the editor dropdown and the
