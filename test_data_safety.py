@@ -346,6 +346,55 @@ check('no core module imports tkinter', not _offenders, )
 if _offenders:
     print('   offenders:', _offenders)
 
+# ---- core/storage trash operations ----
+#
+# Delete and restore were methods on the app class and touched no interface,
+# so this is their first coverage that does not open a window. The restore
+# case worth pinning down is the orphan: a note whose category was deleted
+# while it sat in the trash would otherwise come back filed under something
+# that no longer exists.
+_trash_dir = tempfile.mkdtemp()
+_prev = (NO_paths.DATA_FILE, NO_paths.SETTINGS_FILE, NO_paths.TRASH_FILE)
+try:
+    NO_paths.configure(_trash_dir)
+    with open(NO_paths.SETTINGS_FILE, 'w', encoding='utf-8') as f:
+        json.dump({'cleanup_done': True}, f)
+
+    _notes = [{'id': 1, 'title': 'Keep'}, {'id': 2, 'title': 'Bin', 'category': 'Gone'}]
+    _trash = []
+    _storage.move_notes_to_trash(_trash, [_notes[1]])
+    check('move_notes_to_trash puts the note in the trash', len(_trash) == 1)
+    check('move_notes_to_trash stamps a deletion time', bool(_trash[0].get('deleted_at')))
+    check('move_notes_to_trash writes the trash file', os.path.exists(NO_paths.TRASH_FILE))
+
+    check('days_left_in_trash counts from the stamp',
+          _storage.days_left_in_trash(_trash[0]['deleted_at']) == NO.TRASH_RETENTION_DAYS)
+    check('days_left_in_trash returns None for an unreadable stamp',
+          _storage.days_left_in_trash('not a date') is None)
+    check('days_left_in_trash returns None rather than raising on junk',
+          _storage.days_left_in_trash(None) is None)
+
+    _notes = [n for n in _notes if n['id'] != 2]
+    # A note created AFTER the delete has taken the id the trashed one used.
+    # Without this the id check cannot fail, which is exactly how the first
+    # version of it passed against code that never reassigned an id at all.
+    _notes.append({'id': 2, 'title': 'Made later'})
+    _restored_from = dict(_trash[0])
+    _notes, _trash = _storage.restore_from_trash(_notes, _trash, _trash[0])
+    check('restore_from_trash puts the note back', len(_notes) == 3)
+    check('restore_from_trash empties it out of the trash', _trash == [])
+    check('a restored note whose category is gone falls back rather than orphaning',
+          _notes[-1]['category'] == 'General')
+    check('restore_from_trash gives the note an id that cannot collide',
+          _notes[-1]['id'] not in [n['id'] for n in _notes[:-1]])
+    check('...and specifically does not reuse the id it had when deleted',
+          _notes[-1]['id'] != _restored_from['id'])
+    check('restore_from_trash drops the deleted_at stamp',
+          'deleted_at' not in _notes[-1])
+finally:
+    shutil.rmtree(_trash_dir, ignore_errors=True)
+    NO_paths.DATA_FILE, NO_paths.SETTINGS_FILE, NO_paths.TRASH_FILE = _prev
+
 print()
 print(f"FAILURES: {fails if fails else 'none'}")
 
