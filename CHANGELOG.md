@@ -6,7 +6,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ---
 
-## [Unreleased]
+## [0.32.51] — 2026-08-21
 
 ### Fixed
 - Settings → About showed a blank space where the storage folder should be, and Settings → Statistics read "Using Note Organizer since None". Both appeared when the Settings page moved into its own module: it could no longer read `APP_DIR` and `FIRST_LAUNCH_DATE` directly, so it imported the entry module to reach them — but launching the app as `py note_organizer.py` makes the running copy `__main__`, so that import returns a *second* copy of the module whose `initialise()` never ran and whose values are all still `None`. Both labels now read from the core layer instead, which is only ever imported by name and so can't be duplicated this way. The nine QA scripts could never have caught it: they all `import note_organizer`, which is precisely the condition under which the bug disappears, so this gets a dedicated test (`test_entry_module_identity.py`) that loads the app the way a real launch does.
