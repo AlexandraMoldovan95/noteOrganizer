@@ -264,6 +264,88 @@ finally:
 check('APP_DIR is not inside the noteorganizer package',
       'noteorganizer' not in os.path.normpath(NO.APP_DIR).split(os.sep)[-2:])
 
+# ---- core/storage.load_notes + save_notes ----
+#
+# These were methods on the Tkinter class until they moved here, so this is
+# the first coverage they have had that does not go through a window. Two
+# things are worth pinning down beyond "it round-trips":
+#
+#   * load_notes takes version_change as an ARGUMENT. It used to read the
+#     entry module's global, which is the value that silently goes missing
+#     when the app runs as `py note_organizer.py` (the running copy is
+#     __main__, so `import note_organizer` yields a second, uninitialised
+#     module). Passing it in removes that whole class of bug.
+#   * save_notes REPORTS failure instead of showing a dialog. Nothing in
+#     core may touch the interface, so the caller decides what a failure
+#     looks like on screen.
+from noteorganizer.core import storage as _storage
+
+_notes_dir = tempfile.mkdtemp()
+_prev_paths = (NO_paths.DATA_FILE, NO_paths.SETTINGS_FILE)
+try:
+    NO_paths.configure(_notes_dir)
+    with open(NO_paths.SETTINGS_FILE, 'w', encoding='utf-8') as f:
+        json.dump({'cleanup_done': True}, f)
+    with open(NO_paths.DATA_FILE, 'w', encoding='utf-8') as f:
+        json.dump([{'id': 1, 'title': 'Kept'}], f)
+
+    _loaded, _report = _storage.load_notes()
+    check('load_notes reads the notes file', [n['title'] for n in _loaded] == ['Kept'])
+    check('load_notes fills in missing fields via normalize_note',
+          'attachments' in _loaded[0] and 'checklist' in _loaded[0])
+    check('load_notes reports no backup when nothing special happened',
+          _report == {'version_backup_path': None, 'cleanup_report': None})
+
+    _loaded.append({'id': 2, 'title': 'Added'})
+    _ok, _exc = _storage.save_notes(_loaded)
+    check('save_notes reports success as (True, None)', (_ok, _exc) == (True, None))
+    _again, _ = _storage.load_notes()
+    check('what save_notes wrote is what load_notes reads back',
+          [n['title'] for n in _again] == ['Kept', 'Added'])
+
+    # An upgrade must snapshot the file before this version's code rewrites it.
+    _before = len([f for f in os.listdir(_notes_dir) if f.startswith('notes_data_backup_')])
+    _storage.load_notes(version_change=('up', '0.1.0', '0.2.0'))
+    _after = len([f for f in os.listdir(_notes_dir) if f.startswith('notes_data_backup_')])
+    check('load_notes backs the file up when told the app was upgraded', _after == _before + 1)
+
+    _storage.load_notes(version_change=None)
+    check('load_notes takes no backup when there was no version change',
+          len([f for f in os.listdir(_notes_dir)
+               if f.startswith('notes_data_backup_')]) == _after)
+
+    # A write that cannot succeed must come back as a value, not a dialog and
+    # not an exception -- the caller is what knows how to tell the user.
+    NO_paths.DATA_FILE = os.path.join(_notes_dir, 'no_such_dir', 'notes_data.json')
+    _ok2, _exc2 = _storage.save_notes([{'id': 1}])
+    check('save_notes reports failure instead of raising', _ok2 is False)
+    check('save_notes hands back the reason it failed', isinstance(_exc2, OSError))
+finally:
+    shutil.rmtree(_notes_dir, ignore_errors=True)
+    NO_paths.DATA_FILE, NO_paths.SETTINGS_FILE = _prev_paths
+
+# ---- the core layer stays free of the interface ----
+#
+# ARCHITECTURE.md has said "core must never import tkinter" since the split
+# began, but nothing enforced it -- and the rule is what makes the data layer
+# usable from anything: a test, a script, or a different front end. One
+# stray import would take that away silently, so check it rather than trust it.
+_core_dir = os.path.join(os.path.dirname(os.path.abspath(NO_paths.__file__)))
+_core_modules = [f[:-3] for f in sorted(os.listdir(_core_dir))
+                 if f.endswith('.py') and not f.startswith('__')]
+check('every core module was found', len(_core_modules) >= 10)
+
+_offenders = []
+for _name in _core_modules:
+    _src = open(os.path.join(_core_dir, _name + '.py'), encoding='utf-8').read()
+    for _line in _src.split('\n'):
+        _stripped = _line.strip()
+        if _stripped.startswith(('import tkinter', 'from tkinter')):
+            _offenders.append(f'{_name}.py: {_stripped}')
+check('no core module imports tkinter', not _offenders, )
+if _offenders:
+    print('   offenders:', _offenders)
+
 print()
 print(f"FAILURES: {fails if fails else 'none'}")
 

@@ -218,3 +218,114 @@ def backup_notes_file():
         return backup_path
     except (IOError, OSError):
         return None
+
+
+# ---- Notes file ----
+#
+# These moved out of NoteOrganizer, where they had been methods since before
+# there was a core layer. Neither drew anything; they were on the UI class
+# only because that is where all the code used to live.
+#
+# Two things changed in the move, both deliberate:
+#
+# 1. ``load_notes`` used to read the module-global ``VERSION_CHANGE``. A
+#    global on the entry module is exactly the value that goes missing when
+#    the app runs as ``py note_organizer.py`` -- the running copy is then
+#    ``__main__`` and any ``import note_organizer`` gets a *second* module
+#    whose ``initialise()`` never ran (see test_entry_module_identity.py,
+#    and the About/Statistics bug it was written for). So it is a parameter
+#    now: the caller, which does know, passes it in.
+#
+# 2. ``save_notes`` used to open an error dialog itself. Nothing in core may
+#    touch the interface, so it reports the failure and the caller decides
+#    how to show it.
+
+def load_notes(version_change=None):
+    """Read, normalise and (once) clean the notes file.
+
+    Args:
+        version_change: The app's ``VERSION_CHANGE`` tuple, or None. When it
+            says the app has been upgraded, the notes file is snapshotted
+            *before* this version's code gets a chance to rewrite it.
+
+    Returns:
+        ``(notes, report)``. *report* carries what the caller needs to tell
+        the user about afterwards:
+
+        * ``version_backup_path`` -- set only if an upgrade backup was taken.
+        * ``cleanup_report`` -- ``(stats, backup_path)`` only if the one-time
+          cleanup ran on this launch.
+
+        Both are None the rest of the time, which is almost always.
+    """
+    # Imported here rather than at the top of the file because there is a
+    # real cycle: storage -> model -> categories -> storage. At module level
+    # it fails with "cannot import name 'load_settings' from partially
+    # initialized module". Inside the function the import runs long after
+    # every module is built, so it resolves cleanly.
+    from .model import normalize_note, clean_notes
+
+    report = {"version_backup_path": None, "cleanup_report": None}
+    raw = []
+    if os.path.exists(paths.DATA_FILE):
+        # A newer app version is about to run against data last saved by
+        # an older one — snapshot it now, before this version's own code
+        # (which could have new bugs or changed logic) gets any chance
+        # to rewrite it. Every future update gets this safety net, not
+        # just the very first run (see backup_notes_file's other call,
+        # below, for that one-time case). Never auto-deleted — it's the
+        # user's call when old backups are no longer needed.
+        if version_change and version_change[0] == "up":
+            report["version_backup_path"] = backup_notes_file()
+        try:
+            with open(paths.DATA_FILE, "r", encoding="utf-8") as f:
+                raw = json.load(f)
+        except (json.JSONDecodeError, IOError):
+            raw = []
+    if not isinstance(raw, list):
+        raw = []
+
+    # Every note gets the full set of fields, so no later code has to
+    # guess whether an old note has 'comments' or 'attachments'.
+    notes = [normalize_note(n) for n in raw if isinstance(n, dict)]
+
+    settings = load_settings()
+    if not settings.get("cleanup_done"):
+        backup_path = backup_notes_file()
+        notes, stats = clean_notes(notes)
+        report["cleanup_report"] = (stats, backup_path)
+
+        try:
+            with open(paths.DATA_FILE, "w", encoding="utf-8") as f:
+                json.dump(notes, f, indent=2, ensure_ascii=False)
+        except (IOError, OSError):
+            pass
+
+        settings["cleanup_done"] = True
+        save_settings(settings)
+
+    return notes, report
+
+
+def save_notes(notes):
+    """Write notes to disk.
+
+    A failure here used to be invisible — the app looked like it saved but
+    nothing hit the disk, which is exactly how notes 'vanished' on other
+    PCs. It is surfaced instead, but by the caller: this returns the reason
+    rather than opening a dialog, so the same function works whatever is
+    drawing the window.
+
+    Returns:
+        ``(True, None)`` on success, or ``(False, exception)``.
+    """
+    try:
+        tmp_path = paths.DATA_FILE + ".tmp"
+        with open(tmp_path, "w", encoding="utf-8") as f:
+            json.dump(notes, f, indent=2, ensure_ascii=False)
+        # Atomic replace: a crash mid-write can't corrupt the real file,
+        # it either fully updates or stays as it was.
+        os.replace(tmp_path, paths.DATA_FILE)
+        return True, None
+    except (IOError, OSError) as exc:
+        return False, exc
