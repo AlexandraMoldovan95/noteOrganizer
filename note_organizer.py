@@ -198,6 +198,11 @@ from noteorganizer.core.storage import (
     _delete_attachment_files,
     purge_expired_trash,
     backup_notes_file,
+    # Aliased because the methods that call them are also called load_notes
+    # and save_notes; without the alias the method name would shadow the
+    # function inside the class body.
+    load_notes as core_load_notes,
+    save_notes as core_save_notes,
 )
 
 
@@ -651,71 +656,46 @@ class NoteOrganizer(CalculatorPanelMixin, SettingsPageMixin, tk.Tk):
 
     # ---------- Data handling ----------
     def load_notes(self):
-        raw = []
-        if os.path.exists(DATA_FILE):
-            # A newer app version is about to run against data last saved by
-            # an older one — snapshot it now, before this version's own code
-            # (which could have new bugs or changed logic) gets any chance
-            # to rewrite it. Every future update gets this safety net, not
-            # just the very first run (see backup_notes_file's other call,
-            # below, for that one-time case). Never auto-deleted — it's the
-            # user's call when old backups are no longer needed.
-            if VERSION_CHANGE and VERSION_CHANGE[0] == "up":
-                self._version_backup_path = backup_notes_file()
-            try:
-                with open(DATA_FILE, "r", encoding="utf-8") as f:
-                    raw = json.load(f)
-            except (json.JSONDecodeError, IOError):
-                raw = []
-        if not isinstance(raw, list):
-            raw = []
+        """Read the notes file, and remember anything the user should be told.
 
-        # Every note gets the full set of fields, so no later code has to
-        # guess whether an old note has 'comments' or 'attachments'.
-        notes = [normalize_note(n) for n in raw if isinstance(n, dict)]
+        The work happens in core/storage.py; this keeps the two pieces of
+        news it produces -- an upgrade backup, and the one-time cleanup
+        report -- on the app, where the code that shows them looks for them.
 
-        settings = load_settings()
-        if not settings.get("cleanup_done"):
-            backup_path = backup_notes_file()
-            notes, stats = clean_notes(notes)
-            self._cleanup_report = (stats, backup_path)
-
-            try:
-                with open(DATA_FILE, "w", encoding="utf-8") as f:
-                    json.dump(notes, f, indent=2, ensure_ascii=False)
-            except (IOError, OSError):
-                pass
-
-            settings["cleanup_done"] = True
-            save_settings(settings)
-
+        VERSION_CHANGE is passed in rather than read inside core on purpose:
+        it is a global on this module, and this module has two identities
+        when the app is launched as a script. See core/storage.load_notes.
+        """
+        notes, report = core_load_notes(VERSION_CHANGE)
+        if report["version_backup_path"]:
+            self._version_backup_path = report["version_backup_path"]
+        if report["cleanup_report"]:
+            self._cleanup_report = report["cleanup_report"]
         return notes
 
     def save_notes(self):
-        """Write notes to disk. Returns True on success. A failure here used to
-        be invisible — the app looked like it saved but nothing hit the disk,
-        which is exactly how notes 'vanished' on other PCs. Now it's surfaced."""
-        try:
-            tmp_path = DATA_FILE + ".tmp"
-            with open(tmp_path, "w", encoding="utf-8") as f:
-                json.dump(self.notes, f, indent=2, ensure_ascii=False)
-            # Atomic replace: a crash mid-write can't corrupt the real file,
-            # it either fully updates or stays as it was.
-            os.replace(tmp_path, DATA_FILE)
+        """Write notes to disk, and say so plainly if it fails.
+
+        A failure here used to be invisible - the app looked like it saved
+        but nothing hit the disk, which is exactly how notes "vanished" on
+        other PCs. core/storage.py does the writing and reports the reason;
+        turning that into a dialog is this layer's job.
+        """
+        ok, exc = core_save_notes(self.notes)
+        if ok:
             return True
-        except (IOError, OSError) as exc:
-            self.show_error(
-                "Couldn't save your notes",
-                "Your notes could not be written to disk, so recent changes may "
-                "be lost when you close the app.\n\n"
-                f"Location:\n{DATA_FILE}\n\n"
-                f"Reason: {exc}\n\n"
-                "This usually means the app is in a read-only folder (like "
-                "Program Files or a location that needs admin rights). Move the "
-                "app to your Documents or Desktop, or use Export to save a copy "
-                "somewhere you can write to."
-            )
-            return False
+        self.show_error(
+            "Couldn't save your notes",
+            "Your notes could not be written to disk, so recent changes may "
+            "be lost when you close the app.\n\n"
+            f"Location:\n{DATA_FILE}\n\n"
+            f"Reason: {exc}\n\n"
+            "This usually means the app is in a read-only folder (like "
+            "Program Files or a location that needs admin rights). Move the "
+            "app to your Documents or Desktop, or use Export to save a copy "
+            "somewhere you can write to."
+        )
+        return False
 
     # ---------- Export / Import (moving your notebook between devices) ----------
     def export_data(self):
