@@ -10,15 +10,42 @@ Found by hand, not yet worked on. Grouped by area.
 - Dragging the scrollbar with only a few notes in the list causes visible flicker and adds unexplained spacing between the top bar and the first note's title. Doesn't happen with a longer list — worth checking whether this is related to the scrollregion calculation only being "exercised" enough to self-correct once there's enough content to actually need scrolling.
 - Grouping by category: after expanding the last (previously collapsed) group, editing a note inside it (which autosaves), then collapsing that group again, the note list's scroll position sometimes jumps back to the top instead of staying near where that group was. Hard to reproduce consistently — needs a closer look at what specifically triggers it.
 
-**Settings**
-- Layout: each section's title is left-aligned, but the action buttons are centered — inconsistent, makes the page harder to scan at a glance ("eye slalom"). Worth a proper design pass, not just a quick alignment fix — see "Settings redesign" below, this is likely folded into that.
-
 **Theming**
 - Theme switching was ~140ms and visibly flickered; it's now ~26ms and no longer rebuilds anything that didn't change (fixed in 0.32.49). What remains is much smaller and is a plain-Tkinter limitation rather than something this codebase controls: each widget is its own OS window that Windows repaints as soon as its colour is set, so a very brief partial repaint is still possible. See `docs/ISSUES_LOG.md`, "The theme-switch flicker, and three ways not to fix it", before attempting anything further — three approaches were tried and reverted, and the reasons they can't work are recorded there.
 
-## Settings redesign (bigger discussion, own design pass)
+## Settings redesign — shipped
 
-The current single-column Settings page makes for a lot of scrolling and doesn't clearly separate "which section am I in" from "what are this section's controls." Considering a restructure closer to how Chrome (and similar apps) lay out settings: a narrow column on the left listing every section, and the actual controls for whichever section is selected on the right, with empty space beyond that rather than everything stretched full-width. Not yet decided whether Settings should become an inline popup/modal (opened from the editor or calendar, floating over the app) or stay as a page of its own — worth a dedicated conversation before building anything, since it affects more than just this list of small alignment fixes above.
+Settings is now a list of sections on the left and one open section on the
+right, grouped under General / Content / Data / More. The questions this
+section used to hold open were answered in the building:
+
+- **Page, not a popup.** Nine settings-related actions open popups of their
+  own (the template editor opens nine on its own), and `qa/qa9.py` exists
+  because a nested-dropdown-inside-a-popup already broke once. Putting the
+  whole of Settings inside a modal would have stacked another layer on that.
+- **Flat list, then grouped.** It shipped flat and was grouped shortly
+  after: nine entries in one run mixed four different kinds of thing —
+  preferences, managers for content you made, tools that delete things, and
+  read-only information.
+- **The nav does not shrink on a narrow window.** It was built to, and the
+  breakpoint could never fire: the app holds its whole content area to at
+  least `SIDEBAR_WIDTH + EDITOR_MIN_WIDTH` (900px) and scrolls horizontally
+  below that rather than reflowing, so the Settings pane never gets narrow
+  enough. The dead code was removed and the reason recorded in
+  `settings_page.py`.
+
+Still open, in rough order of value:
+
+- **A "last exported" line in Backup.** The app is offline by design, so an
+  export is the only copy of the notes that is not in the app's own folder,
+  and nothing currently says when one last happened. One settings key.
+- **Trash retention is not configurable**, though `USER_GUIDE.md` says it
+  is. `TRASH_RETENTION_DAYS = 30` is a constant. Either make the sentence
+  true or make the setting real.
+- **No keyboard-shortcut reference.** Thirteen shortcuts are bound and only
+  the formatting ones are discoverable, via the right-click menu.
+- **Template deletion is permanent and unlabelled as such** — templates are
+  not routed through Trash like everything else.
 
 ## Versioning
 
@@ -52,7 +79,7 @@ This section is only about the app's own `APP_VERSION`/`CHANGELOG.md` numbering 
 - **Rich text formatting, continued.** Phase 1 shipped in `0.31.39`: a Bold/Italic/Underline/Strikethrough toolbar and right-click menu, with keyboard shortcuts, applying either to a selection or to whatever's typed next. Phase 2a shipped in `0.32.44`: text color and highlight, added to the same toolbar with swatch-style pickers (no hex-code entry — see `CHANGELOG.md`). Still ahead: font size, font family, bullet lists, and paste that preserves (or discards) source formatting — the last of these is also a prerequisite for the table feature below, which needs to accept a pasted table, not just plain text.
 - **A simple table feature** for structured content within a note.
 - **Note list virtualization.** The main note list currently builds a full widget per note on every refresh. Trash and the Share panel already cap what they render up front (see [ARCHITECTURE.md](ARCHITECTURE.md)); doing the same for the main list — or true windowed rendering, building only the cards currently scrolled into view — would help further at very large note counts (many hundreds to thousands).
-- **Split the UI into modules.** The data and rules layer is done — ten modules under `noteorganizer/core/`, none importing tkinter (see [ARCHITECTURE.md](ARCHITECTURE.md)). What's left is the interface: ~9,700 lines and ~257 methods on one class, which would split along the seams that already exist (note list, editor, calendar, settings, sharing, trash, calculator, popups). Unlike the core extractions, that isn't a pure move — the methods share state through `self`, so it needs mixins or an explicit app object rather than cut-and-paste.
+- **Split the UI into modules.** The data and rules layer is done — eleven modules under `noteorganizer/core/`, none importing tkinter (see [ARCHITECTURE.md](ARCHITECTURE.md)). Two areas have moved into `noteorganizer/ui/` as mixins so far — the calculator panel and the Settings page, about 2,650 lines between them. What's left is roughly 8,000 lines in `note_organizer.py`, splitting along the seams that already exist (note list, editor, calendar, sharing, trash, popups). Unlike the core extractions, that isn't a pure move — the methods share state through `self`, so it needs mixins or an explicit app object rather than cut-and-paste.
 
 ## Exploratory / long-term
 

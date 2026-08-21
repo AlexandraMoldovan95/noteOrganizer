@@ -297,3 +297,55 @@ A narrative log of the more interesting bugs found and fixed during development 
 **A real bug fell out of verifying it.** That equivalence check caught a custom note colour being repainted with the new theme's accent — `_recolor_stragglers` can't tell a themed widget from a note the user deliberately coloured the same hex. It was confirmed present on `main`, i.e. pre-existing and unrelated to the new work. Fixed by running the card recolour *after* the straggler pass and recomputing each stripe from the note's own data, so the note's colour is authoritative.
 
 **Takeaway:** three attempts were spent hiding a symptom before anyone measured where the time went; the measurement pointed straight at the fix and took less effort than any of them. When something looks like a rendering problem, profile before reaching for a rendering trick. Also worth remembering: an "additive" fix that only wraps existing behaviour can still make things worse (attempt 2), and reverting cleanly is a legitimate outcome rather than a failure. What remains is a genuine plain-Tkinter limit — one OS window per widget, each repainting as it is recoloured — not something further code can remove.
+
+---
+
+### The module that existed twice
+
+**Symptom:** Settings → About showed a blank space where the storage folder
+should be, and Settings → Statistics read "Using Note Organizer since None".
+The version number, two lines away from the blank path, displayed correctly.
+Nothing crashed, and every one of the nine QA scripts passed.
+
+**Root cause:** Running the app the normal way — `py note_organizer.py` — makes
+the running module `__main__`. Anything that then does `import note_organizer`
+does not get that module back: Python builds a *second* module object from the
+same file, with its own globals, and `initialise()` has never run on it. Every
+value `initialise()` assigns is still `None` there.
+
+That mattered because the Settings page had just moved into its own mixin. It
+could no longer say `APP_DIR` directly, so it grew a `_host()` helper that
+imported the entry module to reach it — and under a real launch that helper
+handed back the uninitialised copy. `APP_VERSION` kept working throughout,
+which is what made the symptom so lopsided: it is a module-level constant, so
+it has the same value in both copies. Only the values filled in at startup went
+missing.
+
+**Fix:** The two labels read from the core layer instead. `core/paths.py` now
+keeps `APP_DIR` alongside the file paths it already derives from it, and the
+first-launch date is read back from settings. Core modules are only ever
+imported by name, so there is only ever one of them — the duplicate-module
+situation cannot arise. `_host()` survives for `APP_VERSION` alone, with a
+docstring saying why nothing else may use it.
+
+**Why the test suite could not have caught it:** every QA script begins
+`import note_organizer as NO`. That import *is* what makes the running module
+`note_organizer`, so `_host()` returns the very same object the test is holding
+and the bug disappears. The suite was not merely missing a case; it was
+structurally incapable of expressing one. That is why this got its own file,
+`test_entry_module_identity.py`, which loads the source under the name
+`__main__` the way a launch does.
+
+**A false negative worth recording:** the first version of that test passed
+against the broken code. It tried to force the failure by blanking
+`note_organizer.APP_DIR` after the app was built — but About is one of the
+eagerly-built panels, so its labels already had their text and no later change
+to a global could affect them. The test that works does not fake anything: it
+builds the app from the `__main__` copy while the imported copy stays
+uninitialised, which is precisely the production situation.
+
+**Takeaway:** "the tests all pass" is only reassuring if the tests *could* have
+failed. When a bug reaches a user through code the suite covers heavily, the
+question is not "which case did we miss" but "is there a case this suite is
+unable to represent at all". Here, the very act of importing the module under
+test removed the condition that caused the bug.
