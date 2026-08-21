@@ -437,6 +437,67 @@ check('rename_category_everywhere rewrites base categories',
       _count_in_cat(_ln, 'Job') == 2 and _count_in_cat(_ln, 'Work') == 0)
 check('renaming leaves unrelated notes alone', _ln[2]['category'] == 'Home')
 
+# ---- core/storage single-setting helpers ----
+#
+# Six methods were the same read-modify-write of one key. That shape is the
+# point, not incidental: several parts of the app own different keys in one
+# file, so writing the whole file from one caller's view of it would drop
+# the others. The check below is exactly that property.
+_set_dir = tempfile.mkdtemp()
+_set_prev = (NO_paths.SETTINGS_FILE,)
+try:
+    NO_paths.configure(_set_dir)
+    with open(NO_paths.SETTINGS_FILE, 'w', encoding='utf-8') as f:
+        json.dump({'cleanup_done': True, 'username': 'Alexandra'}, f)
+
+    _storage.save_setting('theme', 'dark_forest')
+    check('save_setting stores the value', _storage.get_setting('theme') == 'dark_forest')
+    check('save_setting leaves the other keys alone',
+          _storage.get_setting('cleanup_done') is True
+          and _storage.get_setting('username') == 'Alexandra')
+
+    check('get_setting falls back when the key is missing',
+          _storage.get_setting('nope', 'fallback') == 'fallback')
+    _storage.save_setting('username', 12345)
+    check('get_setting returns a wrong-typed value as-is without expect',
+          _storage.get_setting('username') == 12345)
+    check('get_setting falls back on a wrong type when expect is given',
+          _storage.get_setting('username', '', expect=str) == '')
+finally:
+    shutil.rmtree(_set_dir, ignore_errors=True)
+    NO_paths.SETTINGS_FILE, = _set_prev
+
+# ---- core colour and tag-name helpers ----
+#
+# Pure functions that were staticmethods on the app class. The colour ones
+# are checked against every colour in every theme rather than a sample,
+# because the whole point of contrasting_fg is that it holds for all of them.
+from noteorganizer.core.themes import blend as _blend_fn, contrasting_fg as _contrast
+from noteorganizer.core.formatting import (
+    char_class as _cc, color_tag_name as _ctn, font_tag_for as _ftf)
+
+_all_colours = sorted({v for pal in NO.THEMES.values() for v in pal.values()
+                       if isinstance(v, str) and v.startswith('#')})
+check('every theme colour gets a legible contrasting foreground',
+      all(_contrast(c) in ('#1a1a1a', '#ffffff') for c in _all_colours))
+check('contrasting_fg picks dark text on a light ground', _contrast('#ffffff') == '#1a1a1a')
+check('contrasting_fg picks light text on a dark ground', _contrast('#1e1e2f') == '#ffffff')
+
+check('blend at t=0 returns the first colour', _blend_fn('#000000', '#ffffff', 0) == '#000000')
+check('blend at t=1 returns the second colour', _blend_fn('#000000', '#ffffff', 1) == '#ffffff')
+check('blend at t=0.5 lands halfway', _blend_fn('#000000', '#ffffff', 0.5) == '#808080')
+
+check('char_class calls a letter a word character', _cc('a') == 'word')
+check('char_class calls a space a space', _cc(' ') == 'space')
+check('char_class puts punctuation in its own class so it breaks a word',
+      _cc('.') == 'other')
+check('char_class handles the empty string', _cc('') is None)
+
+check('color_tag_name is stable and lowercase', _ctn('highlight', '#FFF3B0') == 'highlight_fff3b0')
+check('font_tag_for gives bold+italic its own compound tag',
+      _ftf(True, True) == 'bold_italic')
+check('font_tag_for returns None when neither is set', _ftf(False, False) is None)
+
 print()
 print(f"FAILURES: {fails if fails else 'none'}")
 

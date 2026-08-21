@@ -42,6 +42,7 @@ from .formatting import normalize_formatting
 from .recurrence import (
     normalize_recurrence,
     parse_date,
+    expand_occurrences,
     OVERRIDABLE_FIELDS,
 )
 
@@ -298,3 +299,16 @@ def rename_category_everywhere(notes, old_name, new_name):
         for patch in (n.get("overrides") or {}).values():
             if patch.get("category") == old_name:
                 patch["category"] = new_name
+
+
+def notes_on_date(notes, date_str):
+    """Every note that lands on this date, recurring ones included.
+
+    A recurring note has one stored entry but appears on many days, so this
+    asks the recurrence engine to expand each note over a single-day window
+    rather than comparing stored dates.
+    """
+    target = parse_date(date_str)
+    if target is None:
+        return []
+    return [n for n in notes if expand_occurrences(n, target, target)]

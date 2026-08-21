@@ -180,6 +180,9 @@ from noteorganizer.core.duplicates import (
 
 # Rich-text span storage lives in noteorganizer/core/formatting.py.
 from noteorganizer.core.formatting import (
+    char_class as core_char_class,
+    color_tag_name as core_color_tag_name,
+    font_tag_for as core_font_tag_for,
     KNOWN_FORMAT_STYLES,
     VALUE_FORMAT_STYLES,
     _is_valid_hex_color,
@@ -203,6 +206,8 @@ from noteorganizer.core.storage import (
     # function inside the class body.
     load_notes as core_load_notes,
     save_notes as core_save_notes,
+    get_setting,
+    save_setting,
     move_notes_to_trash as core_move_to_trash,
     days_left_in_trash as core_days_left_in_trash,
     restore_from_trash as core_restore_from_trash,
@@ -278,6 +283,7 @@ from noteorganizer.core.categories import (
 from noteorganizer.core.model import (
     NOTE_DEFAULTS,
     find_note as core_find_note,
+    notes_on_date as core_notes_on_date,
     count_notes_in_category as core_count_in_category,
     rename_category_everywhere as core_rename_category,
     _extract_first_emoji,
@@ -348,6 +354,8 @@ from noteorganizer.core.sharing import (
 # lists all moved to noteorganizer/core/themes.py — pure data, no logic.
 # Re-exported so existing callers and the QA scripts are unaffected.
 from noteorganizer.core.themes import (
+    blend as core_blend,
+    contrasting_fg as core_contrasting_fg,
     THEMES,
     DARK_THEMES,
     LIGHT_THEMES,
@@ -543,24 +551,18 @@ class NoteOrganizer(CalculatorPanelMixin, SettingsPageMixin, tk.Tk):
 
     # ---------- Settings (theme) persistence ----------
     def load_theme_setting(self):
-        theme = load_settings().get("theme")
+        """The saved theme, or the default if it names one that no longer exists."""
+        theme = get_setting("theme")
         return theme if theme in THEMES else "dark"
 
     def save_theme_setting(self):
-        # Read/modify/write so saving the theme can't wipe other settings
-        # (like the cleanup flag) that live in the same file.
-        settings = load_settings()
-        settings["theme"] = self.theme_name
-        save_settings(settings)
+        save_setting("theme", self.theme_name)
 
     def load_username(self):
-        name = load_settings().get("username", "")
-        return name if isinstance(name, str) else ""
+        return get_setting("username", "", expect=str)
 
     def save_username(self, name):
-        settings = load_settings()
-        settings["username"] = name.strip()
-        save_settings(settings)
+        save_setting("username", name.strip())
 
     def _refresh_greeting(self):
         """Show 'Hi <name>,' if a name is set in Settings, otherwise a gentle
@@ -592,9 +594,7 @@ class NoteOrganizer(CalculatorPanelMixin, SettingsPageMixin, tk.Tk):
     def _remember_last_open_note(self, note_id):
         """Persist which note is currently open, so the app reopens directly
         into it next launch instead of always starting on a blank editor."""
-        settings = load_settings()
-        settings["last_open_note_id"] = note_id
-        save_settings(settings)
+        save_setting("last_open_note_id", note_id)
 
     # ---------- One-time startup notice ----------
     def announce_startup_changes(self):
@@ -902,31 +902,15 @@ class NoteOrganizer(CalculatorPanelMixin, SettingsPageMixin, tk.Tk):
         result = w.count("1.0", index, "chars")
         return result[0] if result else 0
 
-    _WORD_CHAR_RE = re.compile(r"\w", re.UNICODE)
 
     @classmethod
     def _char_class(cls, ch):
-        # Three classes: contiguous runs of the same class form one
-        # double-click "word" -- used by _select_word_at_click so that
-        # punctuation like "." always breaks a word (unlike Tk's own
-        # default word-boundary detection, which keeps a single "." glued
-        # to its surrounding letters, e.g. treating "something.else" as one
-        # word regardless of which side of the "." was clicked).
-        if not ch:
-            return None
-        if cls._WORD_CHAR_RE.match(ch):
-            return "word"
-        if ch.isspace():
-            return "space"
-        return "other"
+        """Which of three classes a character belongs to (see core.formatting)."""
+        return core_char_class(ch)
 
     @staticmethod
     def _color_tag_name(style, hex_color):
-        # A fixed tag name per style (bold, underline, ...) doesn't work for
-        # color, since the tag itself has to carry a specific value — a
-        # distinct Tk tag per (style, color) pair, created the first time
-        # that exact color is used and reused after that.
-        return f"{style}_{hex_color.lstrip('#').lower()}"
+        return core_color_tag_name(style, hex_color)
 
     def _ensure_color_tag(self, text_widget, style, hex_color):
         tag = self._color_tag_name(style, hex_color)
@@ -1047,33 +1031,17 @@ class NoteOrganizer(CalculatorPanelMixin, SettingsPageMixin, tk.Tk):
 
     @staticmethod
     def _font_tag_for(is_bold, is_italic):
-        """Which single font tag represents this bold/italic combination (or
-        None for neither). Tkinter tags that both set the widget's font
-        option don't compose, so bold+italic together needs its own
-        precomputed compound tag rather than two independent ones — see
-        _FONT_STYLES."""
-        if is_bold and is_italic:
-            return "bold_italic"
-        if is_bold:
-            return "bold"
-        if is_italic:
-            return "italic"
-        return None
+        """The single font tag for this bold/italic pair, or None.
+
+        Two Tk tags that both set the font option do not compose, which is
+        why bold+italic is one compound tag -- see core.formatting.
+        """
+        return core_font_tag_for(is_bold, is_italic)
 
     @staticmethod
     def _contrasting_fg(hex_color):
-        """Black or near-white, whichever reads better against hex_color —
-        standard perceived-luminance formula. Used so the Text
-        color/Highlight toolbar buttons can show an actual swatch of the
-        active color as their own background (not just a subtle tint
-        applied against the theme's own sidebar color, which was hard to
-        read for some color/theme combinations) while the "A"/"H" letter
-        stays legible regardless of which color from the palette, or
-        which app theme, is in play."""
-        h = hex_color.lstrip("#")
-        r, g, b = (int(h[i:i + 2], 16) for i in (0, 2, 4))
-        luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255
-        return "#1a1a1a" if luminance > 0.6 else "#ffffff"
+        """Black or near-white, whichever reads better against hex_color."""
+        return core_contrasting_fg(hex_color)
 
     def _toggle_body_style(self, style):
         """Bold/Italic/Underline/Strikethrough toolbar + right-click handler.
@@ -3323,10 +3291,7 @@ class NoteOrganizer(CalculatorPanelMixin, SettingsPageMixin, tk.Tk):
     @staticmethod
     def _blend(hex_a, hex_b, t):
         """Mix two #rrggbb colors. t=0 -> hex_a, t=1 -> hex_b."""
-        a = tuple(int(hex_a[i:i+2], 16) for i in (1, 3, 5))
-        b = tuple(int(hex_b[i:i+2], 16) for i in (1, 3, 5))
-        mixed = tuple(round(a[i] + (b[i] - a[i]) * t) for i in range(3))
-        return "#%02x%02x%02x" % mixed
+        return core_blend(hex_a, hex_b, t)
 
     # ---------- UI construction ----------
     def build_ui(self):
@@ -4734,10 +4699,7 @@ class NoteOrganizer(CalculatorPanelMixin, SettingsPageMixin, tk.Tk):
 
     def notes_on_date(self, date_str):
         """Every note that lands on this date, recurring ones included."""
-        target = parse_date(date_str)
-        if target is None:
-            return []
-        return [n for n in self.notes if expand_occurrences(n, target, target)]
+        return core_notes_on_date(self.notes, date_str)
 
     def show_day_summary_tooltip(self, date_str):
         """Compact, TITLES-ONLY list for hovering the day cell itself (not a
@@ -7008,9 +6970,7 @@ class NoteOrganizer(CalculatorPanelMixin, SettingsPageMixin, tk.Tk):
             self.render_calendar()
 
     def _persist_day_colors(self):
-        settings = load_settings()
-        settings["day_colors"] = dict(self.day_colors)
-        save_settings(settings)
+        save_setting("day_colors", dict(self.day_colors))
 
     # A small curated set for flagging a day — not the full emoji picker,
     # just quick, common markers (star, alert, celebration, etc.).
@@ -7131,9 +7091,7 @@ class NoteOrganizer(CalculatorPanelMixin, SettingsPageMixin, tk.Tk):
     def _persist_day_emoji(self):
         # Drop any None/empty entries (from Clear) rather than persisting them.
         self.day_emoji = {d: e for d, e in self.day_emoji.items() if e}
-        settings = load_settings()
-        settings["day_emoji"] = dict(self.day_emoji)
-        save_settings(settings)
+        save_setting("day_emoji", dict(self.day_emoji))
 
     def show_note_context_menu(self, event, note, occurrence_date=None):
         """Native right-click dropdown for a note. Extensible — add items here

@@ -401,3 +401,41 @@ def restore_from_trash(notes, trash, entry):
     trash = [e for e in trash if e is not entry]
     save_trash(trash)
     return notes, trash
+
+
+# ---- Single settings values ----
+#
+# Six methods on the app class were the same three lines: load the settings,
+# change one key, save them back. That shape is not incidental -- writing the
+# whole file for one value is what stops a save from wiping a key it never
+# meant to touch, like the one-time cleanup flag. Doing it once here keeps
+# the reason attached to the code rather than repeated in six comments.
+
+def get_setting(key, default=None, expect=None):
+    """One value out of settings.json.
+
+    Args:
+        key: the setting to read.
+        default: returned when the key is missing, or when it holds
+            something of the wrong type.
+        expect: an optional type the value must be. A settings file can be
+            hand-edited or written by an older version, so a value that is
+            there but wrong should read as absent rather than reach the
+            caller and fail somewhere less obvious.
+    """
+    value = load_settings().get(key, default)
+    if expect is not None and not isinstance(value, expect):
+        return default
+    return value
+
+
+def save_setting(key, value):
+    """Change one value in settings.json, leaving the rest alone.
+
+    Read-modify-write rather than a blind overwrite: several parts of the
+    app own different keys in this one file, and a save that rewrote the
+    whole thing from one caller's view of it would drop the others.
+    """
+    settings = load_settings()
+    settings[key] = value
+    save_settings(settings)
