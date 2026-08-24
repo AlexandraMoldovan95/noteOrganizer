@@ -878,6 +878,87 @@ app.update()
 check('applying a template rebuilds its list indents in the editor',
       bool(app._extract_paragraphs(app.body_text)))
 
+# ---- PARAGRAPH ALIGNMENT ----
+# Alignment is the other line-level property, and unlike a list marker it
+# leaves nothing behind in the body text -- so it is read from its tag and
+# has to be carried through save/reload by the paragraphs record alone.
+app.new_note()
+app.title_entry.insert(0, 'AlignNote')
+app.update()
+
+check('the alignment buttons live in their own registry',
+      set(app._align_buttons.keys()) == {'left', 'center', 'right'})
+
+set_body('one\ntwo\nthree')
+app.body_text.tag_add('sel', '1.0', '1.end')
+app.update()
+app._set_paragraph_align('center')
+clear_selection()
+check('centring a line records it against that line only',
+      app._extract_paragraphs(app.body_text) == [{'line': 0, 'align': 'center'}])
+check('the body text itself is untouched by alignment',
+      body() == 'one\ntwo\nthree')
+
+app.body_text.tag_add('sel', '1.0', '1.end')
+app.update()
+app._set_paragraph_align('center')
+clear_selection()
+check('clicking the alignment a line already has puts it back to left',
+      app._extract_paragraphs(app.body_text) == [])
+
+# Alignment must reach the newline: justify applies to a whole display line,
+# so a range stopping at .end leaves the caret jumping back left the moment
+# Enter is pressed on a centred line.
+set_body('heading')
+app.body_text.tag_add('sel', '1.0', '1.end')
+app.update()
+app._set_paragraph_align('center')
+clear_selection()
+app.body_text.insert('1.end', '\n')      # what pressing Enter there does
+app.update()
+check('alignment carries onto the new line when Enter ends a centred one',
+      'align_center' in app.body_text.tag_names('2.0'))
+
+# A centred bullet keeps both properties: they set different Tk options.
+set_body('milk\neggs')
+select_all_body()
+app._list_buttons['bullet'].invoke()
+clear_selection()
+app.body_text.tag_add('sel', '1.0', '1.end')
+app.update()
+app._set_paragraph_align('right')
+clear_selection()
+check('a line can be both a list item and aligned',
+      app._extract_paragraphs(app.body_text)
+      == [{'line': 0, 'kind': 'bullet', 'align': 'right'},
+          {'line': 1, 'kind': 'bullet'}])
+
+# ---- Alignment round trip ----
+app.new_note()
+app.title_entry.insert(0, 'AlignRoundTrip')
+set_body('title line\nbody line')
+app.body_text.tag_add('sel', '1.0', '1.end')
+app.update()
+app._set_paragraph_align('center')
+clear_selection()
+app.save_current_note(auto=False)
+app.update()
+align_note = app.find_note(app.selected_note_id)
+check('alignment is saved on a note with no list at all',
+      align_note.get('paragraphs') == [{'line': 0, 'align': 'center'}])
+app.new_note()
+app.update()
+app.load_note(align_note)
+app.update()
+check('reopening the note re-centres the right line',
+      app._paragraph_align_of(app.body_text, 1) == 'center'
+      and app._paragraph_align_of(app.body_text, 2) == 'left')
+
+check('normalize_paragraphs drops an entry that says nothing',
+      NO.normalize_paragraphs([{'line': 0}, {'line': 1, 'align': 'left'}]) == [])
+check('normalize_paragraphs rejects an alignment it does not know',
+      NO.normalize_paragraphs([{'line': 0, 'align': 'sideways'}]) == [])
+
 # ---- Fast typing (regression): a first version tagged only "the one
 # character right before the cursor" on each KeyRelease, which silently
 # missed characters typed in a fast real burst -- Tk can queue several

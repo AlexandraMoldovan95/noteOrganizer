@@ -142,6 +142,11 @@ BULLET = "• "
 _NUMBER_RE = re.compile(r"^(\d+)\. ")
 LIST_KINDS = ("bullet", "number")
 
+# Alignment is a property of the whole line, so it lives here beside the
+# list kinds rather than among the character styles. "left" is the default
+# and is never stored -- see normalize_paragraphs.
+ALIGNMENTS = ("left", "center", "right")
+
 
 def parse_list_marker(line):
     """Split a line into ``(kind, marker, rest)``.
@@ -167,6 +172,10 @@ def normalize_paragraphs(value, line_count=None):
     The same gatekeeper idea as :func:`normalize_formatting`: one bad entry
     from an old file or hand-edited JSON should be discarded, not repaired
     into something that half-works.
+
+    Only non-default properties are kept, so a line that is a plain,
+    left-aligned paragraph produces no entry at all rather than a row of
+    defaults in every note's JSON.
     """
     if not isinstance(value, list):
         return []
@@ -174,15 +183,31 @@ def normalize_paragraphs(value, line_count=None):
     for item in value:
         if not isinstance(item, dict):
             continue
-        line, kind = item.get("line"), item.get("kind")
-        if not isinstance(line, int) or line < 0 or kind not in LIST_KINDS:
+        line = item.get("line")
+        if not isinstance(line, int) or line < 0:
             continue
         if line_count is not None and line >= line_count:
             continue
-        if line in seen:            # one kind per line
+        if line in seen:            # one set of properties per line
             continue
+
+        kind = item.get("kind")
+        if kind not in LIST_KINDS:
+            kind = None
+        align = item.get("align")
+        if align not in ALIGNMENTS:
+            align = "left"
+
+        if kind is None and align == "left":
+            continue                # nothing worth recording
+
         seen.add(line)
-        clean.append({"line": line, "kind": kind})
+        entry = {"line": line}
+        if kind:
+            entry["kind"] = kind
+        if align != "left":
+            entry["align"] = align
+        clean.append(entry)
     return sorted(clean, key=lambda b: b["line"])
 
 
@@ -198,7 +223,8 @@ def renumber(body, paragraphs):
     so the caller can move formatting spans to match.
     """
     lines = body.split("\n")
-    by_line = {b["line"]: b["kind"] for b in normalize_paragraphs(paragraphs, len(lines))}
+    by_line = {b["line"]: b.get("kind")
+               for b in normalize_paragraphs(paragraphs, len(lines))}
     shifts, counter, pos = [], 0, 0
     for i, line in enumerate(lines):
         kind = by_line.get(i)

@@ -880,14 +880,57 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
     # ---------- Bullet and numbered lists ----------
     def _setup_list_tags(self, text_widget):
-        """Tags that give a list line its hanging indent.
+        """Tags for the paragraph properties: hanging indent and alignment.
 
         lmargin1 indents the first line, lmargin2 the wrapped continuation --
         which is what keeps a long item lined up under its own text instead
         of back under the marker.
+
+        Alignment gets its own tags rather than being folded into the list
+        ones. They set different Tk options (justify vs lmargin), so the two
+        compose: a centred bullet keeps its hanging indent.
         """
         text_widget.tag_configure("list_bullet", lmargin1=18, lmargin2=42)
         text_widget.tag_configure("list_number", lmargin1=18, lmargin2=46)
+        text_widget.tag_configure("align_center", justify="center")
+        text_widget.tag_configure("align_right", justify="right")
+
+    def _paragraph_align_of(self, text_widget, line_no):
+        """The alignment of this line: "left", "center" or "right".
+
+        Read from the tag rather than the text, because unlike a list marker
+        alignment leaves nothing behind in the body to read back.
+        """
+        tags = text_widget.tag_names(f"{line_no}.0")
+        for align in ("center", "right"):
+            if f"align_{align}" in tags:
+                return align
+        return "left"
+
+    def _set_paragraph_align(self, align):
+        """Align the selected lines left, centre or right.
+
+        Clicking the alignment a line already has puts it back to left, the
+        same way clicking a list button again turns the list off -- a button
+        that is already pressed should undo itself rather than do nothing.
+        """
+        first, last = self._selected_line_range()
+        if all(self._paragraph_align_of(self.body_text, n) == align
+               for n in range(first, last + 1)):
+            align = "left"
+        for line_no in range(first, last + 1):
+            for name in ("center", "right"):
+                self.body_text.tag_remove(f"align_{name}",
+                                          f"{line_no}.0", f"{line_no}.end+1c")
+            if align != "left":
+                # Includes the newline, unlike the list tags: justify applies
+                # to the whole display line, and a range stopping at .end
+                # leaves an empty line unaligned, so the caret jumps back to
+                # the left the moment you press Enter on a centred line.
+                self.body_text.tag_add(f"align_{align}",
+                                       f"{line_no}.0", f"{line_no}.end+1c")
+        self._refresh_list_buttons()
+        self._schedule_autosave()
 
     def _list_kind_of(self, text_widget, line_no):
         """Which kind of list line this is, or None if it is not one.
@@ -913,8 +956,15 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         total = int(text_widget.index("end-1c").split(".")[0])
         for line_no in range(1, total + 1):
             kind = self._list_kind_of(text_widget, line_no)
+            align = self._paragraph_align_of(text_widget, line_no)
+            if not kind and align == "left":
+                continue            # an ordinary paragraph records nothing
+            entry = {"line": line_no - 1}
             if kind:
-                paragraphs.append({"line": line_no - 1, "kind": kind})
+                entry["kind"] = kind
+            if align != "left":
+                entry["align"] = align
+            paragraphs.append(entry)
         return paragraphs
 
     def _resync_list_tags(self, line_no=None):
@@ -966,12 +1016,47 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         line_no = int(self.body_text.index("insert").split(".")[0])
         current = self._list_kind_of(self.body_text, line_no)
         for kind, btn in self._list_buttons.items():
-            active = kind == current
-            btn.configure(
-                relief="sunken" if active else "flat",
-                bg=self.colors["accent"] if active else self.colors["sidebar"],
-                fg="white" if active else self.colors["text"],
-            )
+            self._set_button_pressed(btn, kind == current)
+        current_align = self._paragraph_align_of(self.body_text, line_no)
+        for align, btn in getattr(self, "_align_buttons", {}).items():
+            self._set_button_pressed(btn, align == current_align)
+
+    def _make_align_button(self, parent, align):
+        """One alignment button, drawn as four bars on a small canvas.
+
+        The ragged edge is the whole icon: bars flush left, centred, or
+        flush right. Drawn rather than written because nothing in a normal
+        font says "align right", and because canvas items can be recoloured
+        on a theme switch.
+        """
+        canvas = tk.Canvas(parent, width=24, height=20, highlightthickness=0,
+                           bd=0, cursor="hand2", relief="flat")
+        for row, width in enumerate((15, 9, 15, 9)):
+            y = 5 + row * 3.5
+            if align == "left":
+                x0 = 5
+            elif align == "right":
+                x0 = 19 - width
+            else:
+                x0 = 12 - width / 2
+            canvas.create_line(x0, y, x0 + width, y, width=2, tags="bar")
+        canvas.bind("<Button-1>",
+                    lambda e, a=align: self._set_paragraph_align(a))
+        return canvas
+
+    def _set_button_pressed(self, btn, active):
+        """The pressed/unpressed look shared by the paragraph buttons.
+
+        Handles both real Buttons and the drawn alignment canvases: a canvas
+        has no foreground of its own, so the bars are recoloured instead.
+        """
+        bg = self.colors["accent"] if active else self.colors["sidebar"]
+        fg = "white" if active else self.colors["text"]
+        btn.configure(relief="sunken" if active else "flat", bg=bg)
+        if isinstance(btn, tk.Canvas):
+            btn.itemconfigure("bar", fill=fg)
+        else:
+            btn.configure(fg=fg)
 
     def _extract_paragraphs_for_stripped_body(self, text_widget, stripped_body):
         """Like _extract_paragraphs, but adjusted for save_current_note()'s
@@ -989,7 +1074,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         for paragraph in self._extract_paragraphs(text_widget):
             line = paragraph["line"] - dropped
             if 0 <= line < limit:
-                shifted.append({"line": line, "kind": paragraph["kind"]})
+                # Copy the whole entry rather than rebuilding it field by
+                # field, so a property added later cannot be silently lost
+                # here while every other path keeps it.
+                moved = dict(paragraph)
+                moved["line"] = line
+                shifted.append(moved)
         return shifted
 
     def _apply_paragraphs(self, text_widget, paragraphs):
@@ -1005,10 +1095,17 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             line_no = paragraph["line"] + 1
             if line_no > total:
                 continue
-            line = text_widget.get(f"{line_no}.0", f"{line_no}.end")
-            if parse_list_marker(line)[0] != paragraph["kind"]:
+            align = paragraph.get("align", "left")
+            if align != "left":
+                text_widget.tag_add(f"align_{align}",
+                                    f"{line_no}.0", f"{line_no}.end+1c")
+            kind = paragraph.get("kind")
+            if not kind:
                 continue
-            text_widget.tag_add(f"list_{paragraph['kind']}",
+            line = text_widget.get(f"{line_no}.0", f"{line_no}.end")
+            if parse_list_marker(line)[0] != kind:
+                continue
+            text_widget.tag_add(f"list_{kind}",
                                 f"{line_no}.0", f"{line_no}.end")
 
     def _selected_line_range(self):
@@ -2935,6 +3032,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # restores the canvas background. Repaint them explicitly, the same
         # way the theme picker refreshes its own preview cards.
         self._recolor_settings_nav_icons()
+        # The alignment icons are canvas-drawn for the same reason and need
+        # the same treatment; this repaints their bars along with restoring
+        # every paragraph button's pressed state in the new palette.
+        self._refresh_list_buttons()
         # Recolour the note cards in place rather than calling
         # refresh_note_list(), which destroys and rebuilds every card. That
         # rebuild was ~85ms of a ~121ms theme switch and made the list
@@ -3740,6 +3841,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # line, so it would answer "no" every time and hold the buttons
         # permanently unpressed.
         self._list_buttons = {}
+        self._align_buttons = {}
         self._pending_styles = set()  # styles queued up for the next typed char
         self._pending_text_color = None  # hex, or None
         self._pending_highlight_color = None  # hex, or None
@@ -3814,6 +3916,17 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self.track_theme(btn, bg="sidebar", fg="text")
             btn.pack(side="left", padx=(0, 4), ipady=2)
             self._list_buttons[kind] = btn
+
+        # Alignment sits in the same group: it is another property of the
+        # whole line. The icons are drawn rather than lettered -- there is no
+        # icon font to lean on and the app ships no image assets, and drawn
+        # bars recolour with the theme, which a picture would not. Same
+        # approach as the Settings nav glyphs.
+        for align in ("left", "center", "right"):
+            btn = self._make_align_button(format_bar, align)
+            self.track_theme(btn, bg="sidebar")
+            btn.pack(side="left", padx=(0, 4))
+            self._align_buttons[align] = btn
 
         text_frame = tk.Frame(self.editor)
         self.track_theme(text_frame, bg="card")
