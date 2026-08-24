@@ -4,6 +4,20 @@ A narrative log of the more interesting bugs found and fixed during development 
 
 ---
 
+### The bullet that had no bullet in it
+
+**Symptom:** Put the cursor at the end of the last item in a bullet list, paste a couple of lines, and the pasted lines behaved as though they were list items — they were saved that way and came back indented on reload — while showing no bullet at all. Worse, clicking the bullet button on one of them appeared to do nothing: the app thought the line was already a bullet, so the button toggled it *off*.
+
+**Root cause:** A list line carries its marker in the note's text and gets its hanging indent from a Tk tag drawn over it. The tag was applied from the line's start to `line.end+1c` — one character past the end, which is the newline. Tk gives text inserted between two characters that *both* carry a tag that same tag, so anything typed or pasted at that boundary inherited it. The line then had the tag but no marker, and the code decided what was a list item by reading the tag.
+
+**Fix:** Two halves. The tag stops at `line.end` so it no longer covers the newline, and the marker in the text — not the tag — is what decides whether a line is a list item. The tag is presentation only.
+
+**What it cost to get right:** the obvious fix, ending the tag one character earlier, broke the opposite case. Tk's inheritance rule cuts both ways: text typed at the *end* of an item is also between a tagged character and an untagged newline, so it arrived untagged too — and a wrap point in untagged text loses the hanging indent, so a long item's second line slid back under its own marker. Measuring the display lines showed them at the bare left padding instead of the indent. The tag is now rebuilt from the markers as the line is edited, one line at a time on each keystroke rather than the whole body, since rebuilding everything on every keystroke is exactly the kind of refresh work that has cost this app real responsiveness before.
+
+**What made it findable:** mutation testing. Reverting each half of the fix separately showed the suite still passing both times — each half covered for the other in every scenario the tests exercised, so neither was actually pinned down. That produced a third test, which states the rule directly: a stray tag on a line with no marker is not a list item.
+
+---
+
 ### The dropdown that opened on the wrong monitor
 
 **Symptom:** On a multi-monitor setup, dropdowns (category picker, sort menu) could pop up on a completely different screen than the app itself.

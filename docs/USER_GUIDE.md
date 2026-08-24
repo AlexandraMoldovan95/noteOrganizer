@@ -24,11 +24,22 @@ Notes save automatically a moment after you stop typing (look for the "Auto-save
 
 ### Formatting
 
-A small toolbar above the note body is split into two groups. **Style**: **Bold**, *Italic*, <u>Underline</u>, and ~~Strikethrough~~ — also on the right-click menu, and available as keyboard shortcuts (**Ctrl+B**, **Ctrl+I**, **Ctrl+U**, **Ctrl+D**). **Colors**: text color and highlight, each opening a small swatch picker (no hex codes to type — just pick a color) with a Clear option to remove it again. All six work the same way: select some text and click (or press) one to apply it there, or click one with nothing selected — it "sticks" for whatever you type next, until you click it again to turn it off. Text color and highlight can be combined with each other and with any of the four styles.
+A small toolbar above the note body is split into three groups. **Style** and **Colors** below change the characters you select; **Paragraph** changes whole lines. **Style**: **Bold**, *Italic*, <u>Underline</u>, and ~~Strikethrough~~ — also on the right-click menu, and available as keyboard shortcuts (**Ctrl+B**, **Ctrl+I**, **Ctrl+U**, **Ctrl+D**). **Colors**: text color and highlight, each opening a small swatch picker (no hex codes to type — just pick a color) with a Clear option to remove it again. All six work the same way: select some text and click (or press) one to apply it there, or click one with nothing selected — it "sticks" for whatever you type next, until you click it again to turn it off. Text color and highlight can be combined with each other and with any of the four styles.
 
 ![Formatting toolbar](screenshots/formatting-toolbar.png)
 
-This is still ahead of a larger effort — font size, font family, bullet lists, and paste that keeps (or discards) formatting from wherever it was copied are all still to come.
+**Paragraph** applies to whole lines — whichever lines your cursor or selection touches, so you don't need to select a line exactly.
+
+- **Lists.** The **•** and **1.** buttons turn those lines into a bullet or numbered list. Click the same button again to turn the list off. Press **Enter** to start the next item; press it on an item you haven't typed anything into and the list ends there. **Backspace** with the cursor just after a marker removes the marker rather than deleting it one character at a time.
+- **Nesting.** **Tab** pushes a list item one level in, **Shift+Tab** pulls it back out — or use the **⇤** and **⇥** buttons. A numbered sub-list counts from 1 again under each parent, and picks the outer numbering back up when it ends. Bullets change shape as they go deeper (•, ◦, ▪). Outside a list, Tab still types a tab; the two indent buttons work on any paragraph, list or not, up to eight levels.
+- **Alignment.** The three bar icons set a line left, centred, or right. Clicking the alignment a line already has puts it back to left.
+- **Quote blocks.** The **❝** button marks lines as a quote: a coloured bar down the left with a lightly tinted background. Useful for something you're quoting, or a note-to-self you want to stand apart from the rest.
+
+These combine: a bullet can be centred, a nested list can sit inside a quote, and any of it can carry bold or a text colour.
+
+List markers are part of the note's own text — a bullet really is a "• " at the start of the line. That's deliberate: it means a list still looks like a list when you export the note, share it as a code, or paste it into an email. The indenting is drawn by the app on top of that.
+
+Still ahead: font size, font family, and paste that keeps (or discards) formatting from wherever it was copied.
 
 ### Attachments
 

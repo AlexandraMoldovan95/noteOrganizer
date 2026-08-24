@@ -6,6 +6,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ---
 
+## [0.33.51] — 2026-08-24
+
+### Added
+- Paragraph formatting in the note body, as a **Paragraph** group in the toolbar: bullet and numbered lists, nesting to eight levels with Tab and Shift+Tab, indentation for ordinary paragraphs as well as list items, left/centre/right alignment, and quote blocks. Enter continues a list and, on an item you never typed into, steps out one level before leaving the list altogether; Backspace against a marker outdents a nested item and only removes the marker once it is back at the margin. Numbered lists keep a separate count per level, so a sub-list restarts at one under every parent and resumes the outer count when it ends. The marker itself lives in the note's text ("• milk", "1. milk"), so a list survives export, share codes, and being copied into anything else as readable plain text; the indent is a Tk tag drawn over it. Bullets change glyph with depth (•, ◦, ▪) and numbers deliberately do not — the usual nested scheme of 1. then a. then i. is ambiguous with ordinary prose, and a note is exactly the kind of document where a line can begin "a. " innocently, so depth shows through indentation and the restarting count instead. A quote block is a coloured bar with a tinted background rather than a border: Tk draws a bordered range as one box per display line, so a paragraph that wraps comes out as several boxes with the last ending mid-sentence, while the bar reads as one block at any width.
+
+### Changed
+- Notes gained a `paragraphs` field recording line-level formatting — which lines are list items, at what depth, how they are aligned, and whether they sit in a quote. Only non-default properties are stored, so a note with no paragraph formatting gains nothing at all, and `normalize_note` bounds every entry by the body's real line count so an entry left pointing past the end of a shortened note is dropped rather than kept to indent a line that no longer exists.
+
+---
+
 ## [0.32.51] — 2026-08-21
 
 ### Fixed
