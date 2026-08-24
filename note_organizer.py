@@ -183,8 +183,10 @@ from noteorganizer.core.formatting import (
     normalize_paragraphs,
     parse_list_marker,
     marker_for,
+    bullet_level_of,
     renumber,
     shift_spans,
+    MAX_INDENT,
     char_class as core_char_class,
     color_tag_name as core_color_tag_name,
     font_tag_for as core_font_tag_for,
@@ -890,10 +892,58 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         ones. They set different Tk options (justify vs lmargin), so the two
         compose: a centred bullet keeps its hanging indent.
         """
-        text_widget.tag_configure("list_bullet", lmargin1=18, lmargin2=42)
-        text_widget.tag_configure("list_number", lmargin1=18, lmargin2=46)
+        self._paragraph_tags = set()
         text_widget.tag_configure("align_center", justify="center")
         text_widget.tag_configure("align_right", justify="right")
+
+    # Pixels per indent step, and the room a marker needs in front of its
+    # text so a wrapped line hangs under the text rather than the marker.
+    INDENT_STEP = 24
+    _MARKER_ROOM = {"bullet": 24, "number": 28}
+
+    def _paragraph_tag(self, text_widget, kind, indent):
+        """The margin tag for this list kind at this depth, made on demand.
+
+        There is one tag per combination rather than one per property,
+        because both properties set the same two Tk options -- lmargin1 and
+        lmargin2 -- and a widget applies only the winning tag's value for an
+        option. Building them lazily is the same pattern the colour tags
+        use: the app cannot know which combinations a note will want.
+        """
+        name = f"para_{kind or 'plain'}_{indent}"
+        if name not in self._paragraph_tags:
+            left = indent * self.INDENT_STEP
+            if kind:
+                text_widget.tag_configure(
+                    name, lmargin1=18 + left,
+                    lmargin2=18 + left + self._MARKER_ROOM[kind])
+            else:
+                text_widget.tag_configure(name, lmargin1=left, lmargin2=left)
+            self._paragraph_tags.add(name)
+        return name
+
+    def _clear_paragraph_tags(self, text_widget, line_no):
+        """Strip every margin tag from a line, whatever kind or depth."""
+        for name in text_widget.tag_names(f"{line_no}.0"):
+            if name.startswith("para_"):
+                text_widget.tag_remove(name, f"{line_no}.0", f"{line_no}.end+1c")
+
+    def _paragraph_indent_of(self, text_widget, line_no):
+        """How deep this line is pushed.
+
+        Read from the margin tag, with one fallback: a bullet's glyph also
+        says which level it is at, so a bullet whose tag was lost -- pasted
+        in from elsewhere, say -- still comes back at the right depth.
+        """
+        for name in text_widget.tag_names(f"{line_no}.0"):
+            if name.startswith("para_"):
+                try:
+                    return int(name.rsplit("_", 1)[1])
+                except ValueError:
+                    return 0
+        line = text_widget.get(f"{line_no}.0", f"{line_no}.end")
+        kind, marker, _ = parse_list_marker(line)
+        return bullet_level_of(marker) if kind == "bullet" else 0
 
     def _paragraph_align_of(self, text_widget, line_no):
         """The alignment of this line: "left", "center" or "right".
@@ -957,11 +1007,14 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         for line_no in range(1, total + 1):
             kind = self._list_kind_of(text_widget, line_no)
             align = self._paragraph_align_of(text_widget, line_no)
-            if not kind and align == "left":
+            indent = self._paragraph_indent_of(text_widget, line_no)
+            if not kind and align == "left" and not indent:
                 continue            # an ordinary paragraph records nothing
             entry = {"line": line_no - 1}
             if kind:
                 entry["kind"] = kind
+            if indent:
+                entry["indent"] = indent
             if align != "left":
                 entry["align"] = align
             paragraphs.append(entry)
@@ -989,11 +1042,14 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             first = last = line_no
         for n in range(first, last + 1):
             kind = self._list_kind_of(self.body_text, n)
-            for tag in ("list_bullet", "list_number"):
-                if tag != f"list_{kind}":
-                    self.body_text.tag_remove(tag, f"{n}.0", f"{n}.end")
-            if kind:
-                self.body_text.tag_add(f"list_{kind}", f"{n}.0", f"{n}.end")
+            indent = self._paragraph_indent_of(self.body_text, n)
+            wanted = (self._paragraph_tag(self.body_text, kind, indent)
+                      if (kind or indent) else None)
+            for name in self.body_text.tag_names(f"{n}.0"):
+                if name.startswith("para_") and name != wanted:
+                    self.body_text.tag_remove(name, f"{n}.0", f"{n}.end+1c")
+            if wanted:
+                self.body_text.tag_add(wanted, f"{n}.0", f"{n}.end")
 
     def _on_body_paste(self, event=None):
         """Pasted text can add or remove whole list lines, so resync them all.
@@ -1100,13 +1156,69 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 text_widget.tag_add(f"align_{align}",
                                     f"{line_no}.0", f"{line_no}.end+1c")
             kind = paragraph.get("kind")
-            if not kind:
-                continue
+            indent = paragraph.get("indent", 0)
             line = text_widget.get(f"{line_no}.0", f"{line_no}.end")
-            if parse_list_marker(line)[0] != kind:
+            if kind and parse_list_marker(line)[0] != kind:
                 continue
-            text_widget.tag_add(f"list_{kind}",
+            if not kind and not indent:
+                continue
+            text_widget.tag_add(self._paragraph_tag(text_widget, kind, indent),
                                 f"{line_no}.0", f"{line_no}.end")
+
+    def _set_paragraph_indent(self, line_no, indent):
+        """Put one line at a given depth, rewriting its marker if it has one.
+
+        A bullet's glyph changes with depth, so the marker in the text has to
+        be replaced, not just the tag -- otherwise a demoted item keeps the
+        parent's bullet and the two levels look identical.
+        """
+        kind = self._list_kind_of(self.body_text, line_no)
+        self._clear_paragraph_tags(self.body_text, line_no)
+        if kind == "bullet":
+            line = self.body_text.get(f"{line_no}.0", f"{line_no}.end")
+            _, marker, _rest = parse_list_marker(line)
+            new_marker = marker_for("bullet", 1, indent)
+            if marker != new_marker:
+                self.body_text.delete(f"{line_no}.0",
+                                      f"{line_no}.0+{len(marker)}c")
+                self.body_text.insert(f"{line_no}.0", new_marker)
+        if kind or indent:
+            self.body_text.tag_add(
+                self._paragraph_tag(self.body_text, kind, indent),
+                f"{line_no}.0", f"{line_no}.end")
+
+    def _change_paragraph_indent(self, delta):
+        """Push the selected lines one step deeper, or pull them back out.
+
+        Applies to any paragraph, not only list items: indenting a plain
+        block of text is the other half of what people reach for here. Lines
+        move as a group and each is clamped on its own, so a selection that
+        already has one line at the left margin still indents the rest
+        instead of refusing.
+        """
+        first, last = self._selected_line_range()
+        for line_no in range(first, last + 1):
+            current = self._paragraph_indent_of(self.body_text, line_no)
+            self._set_paragraph_indent(
+                line_no, max(0, min(MAX_INDENT, current + delta)))
+        self._renumber_lists()
+        self._refresh_list_buttons()
+        self._schedule_autosave()
+
+    def _on_body_tab(self, event, delta):
+        """Tab and Shift+Tab change depth inside a list.
+
+        Only inside one: in ordinary prose Tab should still type a tab, which
+        is what returning None leaves Tk to do. Shift+Tab always stops here,
+        since its default is to move focus out of the editor mid-sentence.
+        """
+        first, last = self._selected_line_range()
+        in_list = any(self._list_kind_of(self.body_text, n)
+                      for n in range(first, last + 1))
+        if not in_list:
+            return "break" if delta < 0 else None
+        self._change_paragraph_indent(delta)
+        return "break"
 
     def _selected_line_range(self):
         """The line numbers the cursor or selection covers."""
@@ -1129,18 +1241,26 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         for line_no in range(first, last + 1):
             line = self.body_text.get(f"{line_no}.0", f"{line_no}.end")
             existing, marker, rest = parse_list_marker(line)
+            # Depth is read before the tags go, and put back after: turning a
+            # nested item into a bullet should leave it where it sits rather
+            # than snapping it back to the left margin.
+            indent = self._paragraph_indent_of(self.body_text, line_no)
             if marker:
                 self.body_text.delete(f"{line_no}.0", f"{line_no}.0+{len(marker)}c")
-            for tag in ("list_bullet", "list_number"):
-                self.body_text.tag_remove(tag, f"{line_no}.0", f"{line_no}.end+1c")
-            if not turning_off:
-                new_marker = marker_for(kind)
-                self.body_text.insert(f"{line_no}.0", new_marker)
-                # Stops at .end, deliberately: a tag that covered the newline
-                # too would be inherited by whatever gets typed or pasted on
-                # the next line.
-                self.body_text.tag_add(f"list_{kind}",
-                                       f"{line_no}.0", f"{line_no}.end")
+            self._clear_paragraph_tags(self.body_text, line_no)
+            if turning_off:
+                if indent:
+                    self.body_text.tag_add(
+                        self._paragraph_tag(self.body_text, None, indent),
+                        f"{line_no}.0", f"{line_no}.end")
+                continue
+            self.body_text.insert(f"{line_no}.0", marker_for(kind, 1, indent))
+            # Stops at .end, deliberately: a tag that covered the newline
+            # too would be inherited by whatever gets typed or pasted on
+            # the next line.
+            self.body_text.tag_add(
+                self._paragraph_tag(self.body_text, kind, indent),
+                f"{line_no}.0", f"{line_no}.end")
         self._renumber_lists()
         self._refresh_list_buttons()
         self._schedule_autosave()
@@ -1182,15 +1302,25 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             return None
         line = self.body_text.get(f"{line_no}.0", f"{line_no}.end")
         _, marker, rest = parse_list_marker(line)
+        indent = self._paragraph_indent_of(self.body_text, line_no)
         if not rest.strip():
+            # An empty nested item steps out one level first. Pressing Enter
+            # twice to leave a list is muscle memory, but from three levels
+            # deep it should climb out rather than drop straight to a plain
+            # paragraph -- which is what every other editor does.
+            if indent:
+                self._set_paragraph_indent(line_no, indent - 1)
+                self._renumber_lists()
+                return "break"
             self.body_text.delete(f"{line_no}.0", f"{line_no}.end")
-            for tag in ("list_bullet", "list_number"):
-                self.body_text.tag_remove(tag, f"{line_no}.0", f"{line_no}.end+1c")
+            self._clear_paragraph_tags(self.body_text, line_no)
             self._renumber_lists()
             return "break"
-        self.body_text.insert("insert", "\n" + marker_for(kind))
+        self.body_text.insert("insert", "\n" + marker_for(kind, 1, indent))
         new_line = line_no + 1
-        self.body_text.tag_add(f"list_{kind}", f"{new_line}.0", f"{new_line}.end")
+        self.body_text.tag_add(
+            self._paragraph_tag(self.body_text, kind, indent),
+            f"{new_line}.0", f"{new_line}.end")
         self._renumber_lists()
         self._schedule_autosave()
         return "break"
@@ -1210,6 +1340,17 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         _, marker, _rest = parse_list_marker(line)
         if not marker or col != len(marker):
             return None
+        # Nested first: Backspace against the marker climbs out one level,
+        # and only removes the marker once the item is back at the margin.
+        # Deleting a bullet three levels in would otherwise leave its text
+        # stranded at a depth with nothing above it.
+        indent = self._paragraph_indent_of(self.body_text, line_no)
+        if indent:
+            self._set_paragraph_indent(line_no, indent - 1)
+            self._renumber_lists()
+            self._refresh_list_buttons()
+            self._schedule_autosave()
+            return "break"
         self.body_text.delete(f"{line_no}.0", f"{line_no}.0+{len(marker)}c")
         for tag in ("list_bullet", "list_number"):
             self.body_text.tag_remove(tag, f"{line_no}.0", f"{line_no}.end+1c")
@@ -3928,6 +4069,18 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             btn.pack(side="left", padx=(0, 4))
             self._align_buttons[align] = btn
 
+        # Indent and outdent. Arrows rather than drawn bars: these do
+        # something rather than describe a state, so they never show a
+        # pressed look and do not belong in the registries above.
+        for delta, glyph in ((-1, "⇤"), (+1, "⇥")):
+            btn = tk.Button(
+                format_bar, text=glyph, font=("Segoe UI", 11), width=3,
+                relief="flat", cursor="hand2",
+                command=lambda d=delta: self._change_paragraph_indent(d)
+            )
+            self.track_theme(btn, bg="sidebar", fg="text")
+            btn.pack(side="left", padx=(0, 4), ipady=2)
+
         text_frame = tk.Frame(self.editor)
         self.track_theme(text_frame, bg="card")
         text_frame.pack(fill="both", expand=True, padx=30, pady=(0, 10))
@@ -3947,6 +4100,17 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.body_text.bind("<Return>", self._on_body_return)
         self.body_text.bind("<BackSpace>", self._on_body_backspace)
         self.body_text.bind("<<Paste>>", self._on_body_paste, add="+")
+        self.body_text.bind("<Tab>", lambda e: self._on_body_tab(e, +1))
+        self.body_text.bind("<Shift-Tab>", lambda e: self._on_body_tab(e, -1))
+        # X11 reports Shift+Tab as its own keysym rather than a modified Tab.
+        # Windows has never heard of it, and binding an unknown keysym is an
+        # error there, so this is allowed to fail rather than guarded by a
+        # platform check -- the same binding is simply unnecessary on Windows.
+        try:
+            self.body_text.bind("<ISO_Left_Tab>",
+                                lambda e: self._on_body_tab(e, -1))
+        except tk.TclError:
+            pass
         self.body_text.bind("<KeyRelease>", self._schedule_autosave)
         self.body_text.bind("<KeyRelease>", self._apply_pending_style_to_typed_char, add="+")
         self.body_text.bind("<KeyRelease>", self._refresh_format_buttons, add="+")

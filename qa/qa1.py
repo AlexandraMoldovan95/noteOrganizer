@@ -735,7 +735,12 @@ app.body_text.mark_set('insert', '1.end')
 app.body_text.insert('insert', ' ' + 'word ' * 40)
 app._refresh_format_buttons()
 app.update()
-tagged = app.body_text.tag_ranges('list_bullet')
+# Asks the app for the tag name rather than spelling it out: there is one
+# margin tag per list kind and depth, so a hard-coded name silently stops
+# matching anything the moment that scheme changes, and a test that looks at
+# nothing passes for free.
+bullet_tag = app._paragraph_tag(app.body_text, 'bullet', 0)
+tagged = app.body_text.tag_ranges(bullet_tag)
 check('the indent tag grows to cover text typed at the end of an item',
       len(tagged) == 2
       and str(app.body_text.index(tagged[1])) == str(app.body_text.index('1.end')))
@@ -746,7 +751,7 @@ check('the indent tag grows to cover text typed at the end of an item',
 # the tag instead of the marker happens to give the same answer everywhere
 # else, so nothing else here would notice the rule being dropped.
 set_body('plain line')
-app.body_text.tag_add('list_bullet', '1.0', '1.end')
+app.body_text.tag_add(bullet_tag, '1.0', '1.end')
 app.update()
 check('a stray indent tag on a line with no marker is not a list item',
       app._extract_paragraphs(app.body_text) == [])
@@ -755,7 +760,7 @@ set_body('plain\nlines')
 app._apply_paragraphs(app.body_text, [{'line': 0, 'kind': 'bullet'}])
 app.update()
 check('a stored list line whose text lost its marker does not indent a plain line',
-      not app.body_text.tag_ranges('list_bullet'))
+      not app.body_text.tag_ranges(bullet_tag))
 
 # ---- The cursor's own line drives the button's pressed look ----
 # Sets up its own list line instead of inheriting one from the checks above,
@@ -958,6 +963,186 @@ check('normalize_paragraphs drops an entry that says nothing',
       NO.normalize_paragraphs([{'line': 0}, {'line': 1, 'align': 'left'}]) == [])
 check('normalize_paragraphs rejects an alignment it does not know',
       NO.normalize_paragraphs([{'line': 0, 'align': 'sideways'}]) == [])
+
+# ---- INDENTATION AND MULTILEVEL LISTS ----
+# Depth is one property for both jobs: on a list line it is the nesting
+# level, on a plain line it is just a left margin. Numbering restarts per
+# level *and* per parent, which is the part worth pinning down.
+app.new_note()
+app.title_entry.insert(0, 'NestNote')
+app.update()
+
+
+def lines_now():
+    return app.body_text.get('1.0', 'end-1c').split('\n')
+
+
+def depths():
+    return [app._paragraph_indent_of(app.body_text, n)
+            for n in range(1, len(lines_now()) + 1)]
+
+
+def indent_range(a, z, delta):
+    app.body_text.tag_add('sel', f'{a}.0', f'{z}.end')
+    app.update()
+    app._change_paragraph_indent(delta)
+    clear_selection()
+
+
+set_body('first\nsub one\nsub two\nsecond\nsub A\nsub B')
+select_all_body()
+app._list_buttons['number'].invoke()
+clear_selection()
+indent_range(2, 3, +1)
+indent_range(5, 6, +1)
+check('a nested numbered run restarts at one under each parent',
+      lines_now() == ['1. first', '1. sub one', '2. sub two',
+                      '2. second', '1. sub A', '2. sub B'])
+check('the outer numbering ignores the nested items',
+      depths() == [0, 1, 1, 0, 1, 1])
+
+indent_range(3, 3, +1)
+check('going a level deeper again restarts that level too',
+      lines_now()[2] == '1. sub two' and depths()[2] == 2)
+
+indent_range(1, 6, -1)
+check('outdenting the whole list pulls every line back one step, '
+      'clamping the ones already at the margin',
+      depths() == [0, 0, 1, 0, 0, 0])
+
+# Bullets show their depth in the glyph, which is what makes a bullet
+# recognisable from the text alone at any level.
+set_body('top\nalpha\nbeta')
+select_all_body()
+app._list_buttons['bullet'].invoke()
+clear_selection()
+indent_range(2, 2, +1)
+indent_range(3, 3, +1)
+indent_range(3, 3, +1)
+check('each bullet level gets its own glyph',
+      lines_now() == ['\u2022 top', '\u25e6 alpha', '\u25aa beta'])
+check('outdenting a bullet puts its glyph back',
+      (indent_range(3, 3, -1) or lines_now()[2]) == '\u25e6 beta')
+
+# Depth survives changing the list kind, and survives turning it off.
+set_body('item')
+select_all_body()
+app._list_buttons['bullet'].invoke()
+clear_selection()
+indent_range(1, 1, +1)
+app.body_text.tag_add('sel', '1.0', '1.end')
+app.update()
+app._list_buttons['number'].invoke()
+clear_selection()
+check('switching a nested bullet to a number keeps it at its depth',
+      lines_now() == ['1. item'] and depths() == [1])
+app.body_text.tag_add('sel', '1.0', '1.end')
+app.update()
+app._list_buttons['number'].invoke()
+clear_selection()
+check('turning the list off leaves the line indented, not snapped left',
+      lines_now() == ['item'] and depths() == [1])
+
+# A plain paragraph can be indented with no list involved at all.
+set_body('a plain paragraph')
+app.body_text.tag_add('sel', '1.0', '1.end')
+app.update()
+app._change_paragraph_indent(+1)
+clear_selection()
+check('a plain paragraph records its indent and no list kind',
+      app._extract_paragraphs(app.body_text) == [{'line': 0, 'indent': 1}])
+
+check('indent is clamped so it cannot run off the edge',
+      NO.normalize_paragraphs([{'line': 0, 'indent': 999}])
+      == [{'line': 0, 'indent': NO.MAX_INDENT}])
+check('a nonsense indent is discarded rather than repaired',
+      NO.normalize_paragraphs([{'line': 0, 'indent': 'deep'}]) == [])
+
+# ---- Keyboard: Tab, Enter and Backspace against depth ----
+set_body('one')
+select_all_body()
+app._list_buttons['number'].invoke()
+clear_selection()
+app.body_text.mark_set('insert', '1.end')
+app._on_body_return(None)
+app.body_text.insert('insert', 'two')
+app.update()
+app._on_body_tab(None, +1)
+check('Tab demotes the item the cursor is in',
+      lines_now() == ['1. one', '1. two'] and depths() == [0, 1])
+app._on_body_tab(None, -1)
+check('Shift+Tab promotes it again',
+      lines_now() == ['1. one', '2. two'] and depths() == [0, 0])
+
+
+app._on_body_tab(None, +1)
+app._on_body_return(None)
+app.update()
+check('Enter starts the next item at the same depth',
+      depths() == [0, 1, 1])
+app._on_body_return(None)
+app.update()
+# Both outcomes leave the line at depth 0, so the depth alone cannot tell
+# them apart -- what differs is whether it is still a list item.
+check('Enter on an empty nested item climbs out one level first',
+      depths() == [0, 1, 0] and lines_now()[2].strip() != '')
+app._on_body_return(None)
+app.update()
+check('Enter again on the now-unnested empty item leaves the list',
+      lines_now()[2] == '')
+
+# On a bullet, the glyph is what shows the depth, so this is where Enter
+# carrying the level can actually be seen -- a numbered marker reads "1. "
+# at every depth and would hide the difference.
+set_body('parent')
+select_all_body()
+app._list_buttons['bullet'].invoke()
+clear_selection()
+indent_range(1, 1, +1)
+app.body_text.mark_set('insert', '1.end')
+app._on_body_return(None)
+app.body_text.insert('insert', 'sibling')
+app.update()
+check("Enter keeps a nested bullet's own glyph on the next item",
+      lines_now() == ['\u25e6 parent', '\u25e6 sibling'] and depths() == [1, 1])
+
+set_body('alpha')
+select_all_body()
+app._list_buttons['bullet'].invoke()
+clear_selection()
+indent_range(1, 1, +1)
+app.body_text.mark_set('insert', '1.2')
+app.update()
+check('Backspace against a nested marker outdents instead of deleting it',
+      app._on_body_backspace(None) == 'break'
+      and lines_now() == ['\u2022 alpha'] and depths() == [0])
+
+set_body('just prose')
+app.body_text.mark_set('insert', '1.4')
+app.update()
+check('Tab in ordinary prose is left to Tk, so it still types a tab',
+      app._on_body_tab(None, +1) is None)
+
+# ---- Nesting round trip ----
+app.new_note()
+app.title_entry.insert(0, 'NestRoundTrip')
+set_body('parent\nchild')
+select_all_body()
+app._list_buttons['number'].invoke()
+clear_selection()
+indent_range(2, 2, +1)
+app.save_current_note(auto=False)
+app.update()
+nest_note = app.find_note(app.selected_note_id)
+check('depth is saved alongside the list kind',
+      nest_note.get('paragraphs') == [{'line': 0, 'kind': 'number'},
+                                      {'line': 1, 'kind': 'number', 'indent': 1}])
+app.new_note()
+app.update()
+app.load_note(nest_note)
+app.update()
+check('reopening the note puts the child back at its own depth',
+      depths() == [0, 1] and lines_now() == ['1. parent', '1. child'])
 
 # ---- Fast typing (regression): a first version tagged only "the one
 # character right before the cursor" on each KeyRelease, which silently

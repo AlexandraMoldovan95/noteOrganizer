@@ -139,8 +139,16 @@ def font_tag_for(is_bold, is_italic):
 # renumbering tell a real "1." from a line that merely starts with one.
 
 BULLET = "• "
+# One glyph per nesting level, cycling past the third. All three are ones
+# nobody types by accident, which is what lets a bullet be recognised from
+# the text alone.
+BULLET_GLYPHS = ("•", "◦", "▪")
 _NUMBER_RE = re.compile(r"^(\d+)\. ")
 LIST_KINDS = ("bullet", "number")
+
+# How deep a paragraph may be pushed. A cap at all is what stops a held-down
+# Tab from marching text off the right-hand edge of the editor.
+MAX_INDENT = 8
 
 # Alignment is a property of the whole line, so it lives here beside the
 # list kinds rather than among the character styles. "left" is the default
@@ -153,17 +161,41 @@ def parse_list_marker(line):
 
     Returns ``(None, "", line)`` for a line that is not a list item.
     """
-    if line.startswith(BULLET):
-        return "bullet", BULLET, line[len(BULLET):]
+    for glyph in BULLET_GLYPHS:
+        if line.startswith(glyph + " "):
+            return "bullet", glyph + " ", line[len(glyph) + 1:]
     m = _NUMBER_RE.match(line)
     if m:
         return "number", m.group(0), line[m.end():]
     return None, "", line
 
 
-def marker_for(kind, number=1):
-    """The text a list line of this kind starts with."""
-    return BULLET if kind == "bullet" else f"{number}. "
+def bullet_level_of(marker):
+    """Which nesting level a bullet marker's glyph stands for, or 0.
+
+    Only meaningful for bullets. Numbered levels are told apart by their
+    indent, not by their marker -- see :func:`marker_for`.
+    """
+    glyph = marker.strip()
+    return BULLET_GLYPHS.index(glyph) if glyph in BULLET_GLYPHS else 0
+
+
+def marker_for(kind, number=1, level=0):
+    """The text a list line of this kind and depth starts with.
+
+    Bullets change glyph with depth, which is free: the three glyphs are
+    ones nobody types by accident, so a line starting with one is a bullet
+    beyond doubt.
+
+    Numbers deliberately do not. The obvious nested scheme -- 1. then a.
+    then i. -- is genuinely ambiguous with ordinary prose, and a note is
+    exactly the kind of document where a line can legitimately begin "a. "
+    or "i. ". Depth is shown by indentation and by the count restarting
+    under each parent instead, which costs nothing and cannot misfire.
+    """
+    if kind == "bullet":
+        return BULLET_GLYPHS[level % len(BULLET_GLYPHS)] + " "
+    return f"{number}. "
 
 
 def normalize_paragraphs(value, line_count=None):
@@ -197,14 +229,20 @@ def normalize_paragraphs(value, line_count=None):
         align = item.get("align")
         if align not in ALIGNMENTS:
             align = "left"
+        indent = item.get("indent")
+        if not isinstance(indent, int) or isinstance(indent, bool) or indent < 0:
+            indent = 0
+        indent = min(indent, MAX_INDENT)
 
-        if kind is None and align == "left":
+        if kind is None and align == "left" and indent == 0:
             continue                # nothing worth recording
 
         seen.add(line)
         entry = {"line": line}
         if kind:
             entry["kind"] = kind
+        if indent:
+            entry["indent"] = indent
         if align != "left":
             entry["align"] = align
         clean.append(entry)
@@ -221,17 +259,28 @@ def renumber(body, paragraphs):
     Returns ``(body, shift)``: the rewritten body, and a list of
     ``(offset, delta)`` describing where characters were inserted or removed,
     so the caller can move formatting spans to match.
+
+    Nesting keeps one counter per level. Going deeper starts that level from
+    one again on every parent, so the second item's sub-list reads 1, 2, 3
+    rather than carrying on from the first item's. Coming back out resumes
+    the shallower count where it left off.
     """
     lines = body.split("\n")
-    by_line = {b["line"]: b.get("kind")
+    by_line = {b["line"]: b
                for b in normalize_paragraphs(paragraphs, len(lines))}
-    shifts, counter, pos = [], 0, 0
+    shifts, counters, pos = [], {}, 0
     for i, line in enumerate(lines):
-        kind = by_line.get(i)
+        entry = by_line.get(i) or {}
+        kind = entry.get("kind")
+        level = entry.get("indent", 0)
         if kind == "number":
-            counter += 1
+            counters[level] = counters.get(level, 0) + 1
+            # Anything deeper belongs to the item that just ended, so it
+            # starts again under this one.
+            for deeper in [lv for lv in counters if lv > level]:
+                del counters[deeper]
             _, old_marker, rest = parse_list_marker(line)
-            new_marker = marker_for("number", counter)
+            new_marker = marker_for("number", counters[level], level)
             if old_marker != new_marker:
                 delta = len(new_marker) - len(old_marker)
                 if delta:
@@ -241,8 +290,14 @@ def renumber(body, paragraphs):
                     # then has to loop over for nothing.
                     shifts.append((pos, delta))
                 lines[i] = new_marker + rest
+        elif kind == "bullet":
+            # A bullet interrupts numbering at its own depth and below, but
+            # leaves an outer numbered list alone: a bulleted aside inside
+            # item 2 should not restart the outer count at 1.
+            for lv in [lv for lv in counters if lv >= level]:
+                del counters[lv]
         else:
-            counter = 0
+            counters.clear()
         pos += len(lines[i]) + 1        # +1 for the newline
     return "\n".join(lines), shifts
 
