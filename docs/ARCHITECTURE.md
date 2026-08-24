@@ -9,7 +9,38 @@ Note Organizer is a Python/Tkinter desktop app, entered through `note_organizer.
 The target is two layers:
 
 - **`noteorganizer/core/`** — data and rules: persistence, validation, recurrence, the calculator parser, sharing. **No module in here may import tkinter**, which is what keeps it testable headlessly and reusable by a different front end. `test_data_safety.py` checks that rather than trusting it — the property is easy to lose to one stray import and impossible to notice by hand.
-- **`noteorganizer/ui/`** — everything on screen, being split one area at a time into **mixin** classes that `NoteOrganizer` inherits from. The methods are unchanged: they still reach for `self.colors`, `self.notes` and each other exactly as before, so each move is cut-and-paste rather than a redesign. This is organisation, not decoupling — the mixins share one object, and `self.colors` alone is read in 655 places. Two rules: a method lives in exactly one mixin (a duplicate is silently resolved by class order, with no error), and mixins never define `__init__` — construction stays in `NoteOrganizer`. `tools/check_class_api.py` enforces the first by comparing the class's whole method list against a recorded baseline. Moved so far: `ui/calculator_panel.py`, `ui/settings_page.py`. Scope is decided by what an area *owns*, not by keyword: the theming engine (`apply_theme`, `set_theme`, `track_theme`) and shared widgets (`_themed_dialog`, `_build_themed_dropdown`) stay on `NoteOrganizer`, because the whole app uses them — only the Settings *UI* for picking a theme moved. Where a mixin needs a value that lives on the entry module and is only filled in by `initialise()` (`APP_VERSION`, `APP_DIR`, `FIRST_LAUNCH_DATE`), it reads it through a small local-import helper rather than importing `note_organizer` at module level, which would be circular — and reading it at call time is what the original code did anyway.
+- **`noteorganizer/ui/`** — everything on screen, being split one area at a time into **mixin** classes that `NoteOrganizer` inherits from. The methods are unchanged: they still reach for `self.colors`, `self.notes` and each other exactly as before, so each move is cut-and-paste rather than a redesign. This is organisation, not decoupling — the mixins share one object, and `self.colors` alone is read in 655 places. Two rules: a method lives in exactly one mixin (a duplicate is silently resolved by class order, with no error), and mixins never define `__init__` — construction stays in `NoteOrganizer`. `tools/check_class_api.py` enforces the first by comparing the class's whole method list against a recorded baseline. Moved so far: `ui/calculator_panel.py`, `ui/settings_page.py`, `ui/dialogs.py`, `ui/calendar_view.py`, `ui/attachments.py`.
+
+**How the remaining groups were chosen.** Three attempts to plan this split from section comments and method names were all wrong, in the same way: the comment markers in `note_organizer.py` have drifted (the block headed "Trash / recently deleted" contains `set_status` and `_show_toast`; "Daily reminder bar" covers attachments, the colour picker and the date picker), so grouping by heading produces units that do not hold together. The fourth attempt measured the call graph instead — for each method, which other methods of the same class it calls — and asked what share of a candidate group's outgoing calls stay inside it:
+
+| group | methods | lines | internal traffic |
+|---|---|---|---|
+| dialogs | 11 | ~400 | 62% |
+| calendar | 29 | ~917 | 59% |
+| note list | 5 | ~256 | 46% |
+| attachments | 6 | ~227 | 38% |
+| open-note tabs | 5 | ~148 | 24% |
+| sharing | 6 | ~323 | 19% |
+| editor | 10 | ~447 | **11%** |
+
+Only the top two are cohesive enough to move as units, and that is what "cohesive" means here: a group whose calls mostly stay inside it can leave without dragging the class behind it. **`editor` is the important negative result** — at 11%, fifty of its fifty-six calls go outside the group. It is not a module waiting to be extracted; it is the hub the rest of the class turns around, and forcing it into a file would move the tangle rather than remove it.
+
+The other 157 methods (~4,550 lines) belong to no group at all. They are the genuinely shared surface — `_dismiss_mini_popup` has eighteen callers, `set_status` sixteen, `_schedule_autosave` eleven. A large shared core is not a failure to split; it is what an application's main window is.
+
+So the plan was: extract what measures as cohesive, re-measure afterwards, and stop when nothing else clears the bar — rather than pursuing a target number of files. That is now done, and re-measuring proved its worth: attachments scored 38% at the start and 67% by the time it was its turn, because most of what had looked like outside traffic was this code asking for a confirmation box. Planning all the groups up front would have ranked it near the bottom.
+
+**Where it stopped, and why.** After dialogs, the calendar and attachments, nothing else clears the bar:
+
+| group | internal traffic |
+|---|---|
+| note list | 41% |
+| sharing | 33% |
+| open-note tabs | 26% |
+| editor | **17%** |
+
+The editor moved from 11% to 17% across three extractions, which is the strongest evidence available that it is not a module hiding inside the class. What remains is 144 methods and about 4,300 lines belonging to no group at all — `set_status` has sixteen callers, `_schedule_autosave` eleven, `find_note` ten. That is the app's genuinely shared surface, and moving any of it into a file would relocate the tangle rather than remove it.
+
+**One blind spot in the measurement, worth knowing before trusting it again.** The call graph is built from `note_organizer.py` alone, so it cannot see calls made from the mixins already extracted. That made it pull `_rounded_rect` and `_show_color_palette` into the calendar group -- both are used by `settings_page.py`, so their only *visible* callers were calendar ones. Neither belongs there. Read the methods before moving them; the graph shortlists, it does not decide. Scope is decided by what an area *owns*, not by keyword: the theming engine (`apply_theme`, `set_theme`, `track_theme`) and shared widgets (`_themed_dialog`, `_build_themed_dropdown`) stay on `NoteOrganizer`, because the whole app uses them — only the Settings *UI* for picking a theme moved. Where a mixin needs a value that lives on the entry module and is only filled in by `initialise()` (`APP_VERSION`, `APP_DIR`, `FIRST_LAUNCH_DATE`), it reads it through a small local-import helper rather than importing `note_organizer` at module level, which would be circular — and reading it at call time is what the original code did anyway.
 
 `note_organizer.py` stays the entry point (`py note_organizer.py`) and re-exports the names that have moved, so existing callers — including the ~154 `note_organizer.<name>` references across the QA scripts — keep working untouched while the move happens. That's deliberate: it means each extraction is a pure move that leaves the whole test suite green, rather than a rewrite.
 
