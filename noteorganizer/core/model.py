@@ -38,7 +38,7 @@ import re
 from datetime import datetime
 
 from .categories import CATEGORY_COLORS
-from .formatting import normalize_formatting
+from .formatting import normalize_formatting, normalize_blocks
 from .recurrence import (
     normalize_recurrence,
     parse_date,
@@ -64,6 +64,7 @@ NOTE_DEFAULTS = {
     "overrides": {},    # date -> partial note, for per-occurrence edits
     "pinned": False,    # pinned notes float to the top of the list
     "checklist": [],    # list of {"text": str, "done": bool} items
+    "blocks": [],       # list lines: {"line": int, "kind": "bullet"|"number"}
 }
 
 
@@ -157,6 +158,12 @@ def normalize_note(note):
     clean["exceptions"] = sorted({
         d for d in clean["exceptions"] if isinstance(d, str) and parse_date(d)
     })
+
+    # Bounded by the body's real line count, so an entry left pointing past
+    # the end of a note that was later shortened is dropped rather than kept
+    # around to indent a line that no longer exists.
+    clean["blocks"] = normalize_blocks(
+        clean["blocks"], len(clean["body"].split("\n")))
     clean["overrides"] = {
         d: {k: v for k, v in patch.items() if k in OVERRIDABLE_FIELDS and isinstance(v, str)}
         for d, patch in clean["overrides"].items()

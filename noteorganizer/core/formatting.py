@@ -117,3 +117,126 @@ def font_tag_for(is_bold, is_italic):
     if is_italic:
         return "italic"
     return None
+
+
+# ---- Bullet and numbered lists ----
+#
+# A list line carries its marker in the body text: "• milk", "1. milk". The
+# alternative -- drawing the marker without storing it -- was considered and
+# rejected. Formatting is stored as character offsets into the body, so a
+# marker that exists on screen but not in the body would put every offset
+# after it out by the marker's length, on every line, forever. Keeping the
+# body and the widget identical means the offsets need no translation at all.
+#
+# ``blocks`` on a note records which lines are list items:
+#
+#     [{"line": 0, "kind": "bullet"}, {"line": 1, "kind": "number"}]
+#
+# The marker is derivable from the text, so this looks redundant -- but it is
+# what tells the editor to give the line a hanging indent, and what lets
+# renumbering tell a real "1." from a line that merely starts with one.
+
+BULLET = "• "
+_NUMBER_RE = re.compile(r"^(\d+)\. ")
+LIST_KINDS = ("bullet", "number")
+
+
+def parse_list_marker(line):
+    """Split a line into ``(kind, marker, rest)``.
+
+    Returns ``(None, "", line)`` for a line that is not a list item.
+    """
+    if line.startswith(BULLET):
+        return "bullet", BULLET, line[len(BULLET):]
+    m = _NUMBER_RE.match(line)
+    if m:
+        return "number", m.group(0), line[m.end():]
+    return None, "", line
+
+
+def marker_for(kind, number=1):
+    """The text a list line of this kind starts with."""
+    return BULLET if kind == "bullet" else f"{number}. "
+
+
+def normalize_blocks(value, line_count=None):
+    """Drop anything that is not a usable block entry.
+
+    The same gatekeeper idea as :func:`normalize_formatting`: one bad entry
+    from an old file or hand-edited JSON should be discarded, not repaired
+    into something that half-works.
+    """
+    if not isinstance(value, list):
+        return []
+    clean, seen = [], set()
+    for item in value:
+        if not isinstance(item, dict):
+            continue
+        line, kind = item.get("line"), item.get("kind")
+        if not isinstance(line, int) or line < 0 or kind not in LIST_KINDS:
+            continue
+        if line_count is not None and line >= line_count:
+            continue
+        if line in seen:            # one kind per line
+            continue
+        seen.add(line)
+        clean.append({"line": line, "kind": kind})
+    return sorted(clean, key=lambda b: b["line"])
+
+
+def renumber(body, blocks):
+    """Make every numbered run read 1, 2, 3 from its own start.
+
+    A run ends at any line that is not a numbered item -- a blank line, a
+    paragraph, or a bullet -- so two numbered lists separated by text each
+    start again at one, which is what a person writing them expects.
+
+    Returns ``(body, shift)``: the rewritten body, and a list of
+    ``(offset, delta)`` describing where characters were inserted or removed,
+    so the caller can move formatting spans to match.
+    """
+    lines = body.split("\n")
+    by_line = {b["line"]: b["kind"] for b in normalize_blocks(blocks, len(lines))}
+    shifts, counter, pos = [], 0, 0
+    for i, line in enumerate(lines):
+        kind = by_line.get(i)
+        if kind == "number":
+            counter += 1
+            _, old_marker, rest = parse_list_marker(line)
+            new_marker = marker_for("number", counter)
+            if old_marker != new_marker:
+                delta = len(new_marker) - len(old_marker)
+                if delta:
+                    # Only a change in marker *length* moves later text.
+                    # "1." -> "2." rewrites a character without shifting
+                    # anything, and recording it would be noise the caller
+                    # then has to loop over for nothing.
+                    shifts.append((pos, delta))
+                lines[i] = new_marker + rest
+        else:
+            counter = 0
+        pos += len(lines[i]) + 1        # +1 for the newline
+    return "\n".join(lines), shifts
+
+
+def shift_spans(spans, shifts):
+    """Move formatting spans by the character shifts renumbering caused.
+
+    Without this, renumbering "9. " to "10. " would push every later
+    character along by one and leave the bold in the wrong place -- exactly
+    the mismatch that storing the marker in the body is meant to avoid.
+    """
+    if not shifts:
+        return spans
+    out = []
+    for span in spans:
+        start, end = span["start"], span["end"]
+        for at, delta in shifts:
+            if at < start:
+                start += delta
+            if at < end:
+                end += delta
+        moved = dict(span)
+        moved["start"], moved["end"] = start, end
+        out.append(moved)
+    return out

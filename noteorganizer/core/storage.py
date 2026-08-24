@@ -44,9 +44,9 @@ import shutil
 from datetime import datetime, timedelta
 
 from . import paths
-# normalize_template validates a template's rich-text spans, so the
-# storage layer needs the span validator.
-from .formatting import normalize_formatting
+# normalize_template validates a template's rich-text spans and its list
+# lines, so the storage layer needs both validators.
+from .formatting import normalize_formatting, normalize_blocks
 
 # Deleted notes live in the trash this many days, then auto-purge on startup.
 TRASH_RETENTION_DAYS = 30
@@ -92,6 +92,8 @@ def normalize_template(tpl):
         "title": _s("title"),
         "body": _s("body"),
         "formatting": normalize_formatting(tpl.get("formatting")),
+        "blocks": normalize_blocks(tpl.get("blocks"),
+                                   len(_s("body").split("\n"))),
         "comments": _s("comments"),
         "category": _s("category") or "General",
         "checklist": [

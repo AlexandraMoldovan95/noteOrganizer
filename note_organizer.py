@@ -180,6 +180,11 @@ from noteorganizer.core.duplicates import (
 
 # Rich-text span storage lives in noteorganizer/core/formatting.py.
 from noteorganizer.core.formatting import (
+    normalize_blocks,
+    parse_list_marker,
+    marker_for,
+    renumber,
+    shift_spans,
     char_class as core_char_class,
     color_tag_name as core_color_tag_name,
     font_tag_for as core_font_tag_for,
@@ -873,6 +878,248 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
     _FONT_STYLES = ("bold", "italic", "bold_italic")  # mutually exclusive
     _PENDING_STYLE_ANCHOR = "pending_style_anchor"  # see _toggle_body_style
 
+    # ---------- Bullet and numbered lists ----------
+    def _setup_list_tags(self, text_widget):
+        """Tags that give a list line its hanging indent.
+
+        lmargin1 indents the first line, lmargin2 the wrapped continuation --
+        which is what keeps a long item lined up under its own text instead
+        of back under the marker.
+        """
+        text_widget.tag_configure("list_bullet", lmargin1=18, lmargin2=42)
+        text_widget.tag_configure("list_number", lmargin1=18, lmargin2=46)
+
+    def _list_kind_of(self, text_widget, line_no):
+        """Which kind of list line this is, or None if it is not one.
+
+        Decided by the marker in the text, not by the tag. The marker is the
+        thing that is actually saved, and the tag is only the hanging indent
+        drawn over it -- and Tk hands a tag on to text inserted beside it, so
+        reading the tag once let a pasted line come back as a bullet that had
+        no bullet in it.
+        """
+        line = text_widget.get(f"{line_no}.0", f"{line_no}.end")
+        return parse_list_marker(line)[0]
+
+    def _extract_blocks(self, text_widget):
+        """Read the list tags back out as plain data, for saving.
+
+        Line numbers rather than character offsets: a list applies to a whole
+        line, and a line index survives being reloaded into a window of a
+        different width, which is the same reason formatting uses offsets
+        rather than Tk's own line.column indices.
+        """
+        blocks = []
+        total = int(text_widget.index("end-1c").split(".")[0])
+        for line_no in range(1, total + 1):
+            kind = self._list_kind_of(text_widget, line_no)
+            if kind:
+                blocks.append({"line": line_no - 1, "kind": kind})
+        return blocks
+
+    def _resync_list_tags(self, line_no=None):
+        """Redraw the indent tags from the markers actually in the text.
+
+        Tk only passes a tag on to text inserted between two characters that
+        both carry it, so anything typed at the *end* of an item arrives
+        untagged -- and a wrap point in untagged text loses the hanging
+        indent, so a long item's second line slides back under its marker.
+        Re-tagging from the markers keeps the two in step.
+
+        Defaults to the cursor's line only. Typing happens one line at a
+        time, and rebuilding every line on every keystroke is exactly the
+        kind of refresh work that has cost this app real responsiveness
+        before (see docs/ISSUES_LOG.md). The whole-body pass is for paste,
+        which is rare and can change many lines at once.
+        """
+        if line_no is None:
+            first = 1
+            last = int(self.body_text.index("end-1c").split(".")[0])
+        else:
+            first = last = line_no
+        for n in range(first, last + 1):
+            kind = self._list_kind_of(self.body_text, n)
+            for tag in ("list_bullet", "list_number"):
+                if tag != f"list_{kind}":
+                    self.body_text.tag_remove(tag, f"{n}.0", f"{n}.end")
+            if kind:
+                self.body_text.tag_add(f"list_{kind}", f"{n}.0", f"{n}.end")
+
+    def _on_body_paste(self, event=None):
+        """Pasted text can add or remove whole list lines, so resync them all.
+
+        Runs after Tk's own paste handler rather than instead of it -- at
+        <<Paste>> time the text is not in the widget yet.
+        """
+        self.after_idle(self._resync_list_tags)
+
+    def _refresh_list_buttons(self):
+        """Show the bullet/number button as pressed when the cursor sits in
+        a list of that kind, matching how the four style buttons behave.
+
+        Deliberately reads the line the cursor is on rather than the whole
+        selection: dragging across a plain line and a bullet line should not
+        make the button claim the selection is a list.
+        """
+        if not getattr(self, "_list_buttons", None):
+            return
+        line_no = int(self.body_text.index("insert").split(".")[0])
+        current = self._list_kind_of(self.body_text, line_no)
+        for kind, btn in self._list_buttons.items():
+            active = kind == current
+            btn.configure(
+                relief="sunken" if active else "flat",
+                bg=self.colors["accent"] if active else self.colors["sidebar"],
+                fg="white" if active else self.colors["text"],
+            )
+
+    def _extract_blocks_for_stripped_body(self, text_widget, stripped_body):
+        """Like _extract_blocks, but adjusted for save_current_note()'s
+        leading/trailing .strip() on the saved body.
+
+        Blocks are stored per line, so any leading blank lines that strip()
+        removes would leave every entry pointing one line too far down, and
+        the note would come back with the indent on the wrong line. Exactly
+        the problem _extract_formatting_for_stripped_body solves for spans.
+        """
+        raw = text_widget.get("1.0", "end-1c")
+        dropped = raw[:len(raw) - len(raw.lstrip())].count("\n")
+        limit = len(stripped_body.split("\n"))
+        shifted = []
+        for block in self._extract_blocks(text_widget):
+            line = block["line"] - dropped
+            if 0 <= line < limit:
+                shifted.append({"line": line, "kind": block["kind"]})
+        return shifted
+
+    def _apply_blocks(self, text_widget, blocks):
+        """Re-apply saved list lines as live tags, for loading.
+
+        A stored entry only earns an indent if the line still starts with a
+        marker of that kind. Otherwise a note edited outside the app, or one
+        whose body was rewritten while its blocks were not, would come back
+        with a plain line indented as though it were an item.
+        """
+        total = int(text_widget.index("end-1c").split(".")[0])
+        for block in normalize_blocks(blocks, total):
+            line_no = block["line"] + 1
+            if line_no > total:
+                continue
+            line = text_widget.get(f"{line_no}.0", f"{line_no}.end")
+            if parse_list_marker(line)[0] != block["kind"]:
+                continue
+            text_widget.tag_add(f"list_{block['kind']}",
+                                f"{line_no}.0", f"{line_no}.end")
+
+    def _selected_line_range(self):
+        """The line numbers the cursor or selection covers."""
+        try:
+            first = int(self.body_text.index("sel.first").split(".")[0])
+            last = int(self.body_text.index("sel.last").split(".")[0])
+        except tk.TclError:
+            first = last = int(self.body_text.index("insert").split(".")[0])
+        return first, last
+
+    def _toggle_list(self, kind):
+        """Turn the selected lines into a list, or back into plain lines.
+
+        Toggling off is deliberate: pressing the same button twice should undo
+        itself rather than stack a second marker onto the line.
+        """
+        first, last = self._selected_line_range()
+        turning_off = all(self._list_kind_of(self.body_text, n) == kind
+                          for n in range(first, last + 1))
+        for line_no in range(first, last + 1):
+            line = self.body_text.get(f"{line_no}.0", f"{line_no}.end")
+            existing, marker, rest = parse_list_marker(line)
+            if marker:
+                self.body_text.delete(f"{line_no}.0", f"{line_no}.0+{len(marker)}c")
+            for tag in ("list_bullet", "list_number"):
+                self.body_text.tag_remove(tag, f"{line_no}.0", f"{line_no}.end+1c")
+            if not turning_off:
+                new_marker = marker_for(kind)
+                self.body_text.insert(f"{line_no}.0", new_marker)
+                # Stops at .end, deliberately: a tag that covered the newline
+                # too would be inherited by whatever gets typed or pasted on
+                # the next line.
+                self.body_text.tag_add(f"list_{kind}",
+                                       f"{line_no}.0", f"{line_no}.end")
+        self._renumber_lists()
+        self._refresh_list_buttons()
+        self._schedule_autosave()
+        self.update_word_count()
+
+    def _renumber_lists(self):
+        """Make every numbered run read 1, 2, 3 again after any change.
+
+        The arithmetic is in core/formatting.py; this applies the result and
+        moves the formatting spans by however much the markers grew or shrank,
+        so bold text does not slide sideways when 9 becomes 10.
+        """
+        body = self.body_text.get("1.0", "end-1c")
+        blocks = self._extract_blocks(self.body_text)
+        new_body, shifts = renumber(body, blocks)
+        if new_body == body:
+            return
+        spans = shift_spans(self._extract_formatting(self.body_text), shifts)
+        insert_at = self.body_text.index("insert")
+        self.body_text.delete("1.0", "end-1c")
+        self.body_text.insert("1.0", new_body)
+        self._apply_formatting(self.body_text, spans)
+        self._apply_blocks(self.body_text, blocks)
+        try:
+            self.body_text.mark_set("insert", insert_at)
+        except tk.TclError:
+            pass
+
+    def _on_body_return(self, event):
+        """Enter inside a list continues it, or ends it on an empty item.
+
+        Pressing Enter on an item you have not typed anything into is how
+        people leave a list, so that removes the marker instead of adding
+        another one.
+        """
+        line_no = int(self.body_text.index("insert").split(".")[0])
+        kind = self._list_kind_of(self.body_text, line_no)
+        if not kind:
+            return None
+        line = self.body_text.get(f"{line_no}.0", f"{line_no}.end")
+        _, marker, rest = parse_list_marker(line)
+        if not rest.strip():
+            self.body_text.delete(f"{line_no}.0", f"{line_no}.end")
+            for tag in ("list_bullet", "list_number"):
+                self.body_text.tag_remove(tag, f"{line_no}.0", f"{line_no}.end+1c")
+            self._renumber_lists()
+            return "break"
+        self.body_text.insert("insert", "\n" + marker_for(kind))
+        new_line = line_no + 1
+        self.body_text.tag_add(f"list_{kind}", f"{new_line}.0", f"{new_line}.end")
+        self._renumber_lists()
+        self._schedule_autosave()
+        return "break"
+
+    def _on_body_backspace(self, event):
+        """Backspace just after a marker removes the marker, not a character.
+
+        Otherwise the only way out of a list is to delete the bullet one
+        character at a time, which reads as the app fighting you.
+        """
+        index = self.body_text.index("insert")
+        line_no, col = (int(p) for p in index.split("."))
+        kind = self._list_kind_of(self.body_text, line_no)
+        if not kind:
+            return None
+        line = self.body_text.get(f"{line_no}.0", f"{line_no}.end")
+        _, marker, _rest = parse_list_marker(line)
+        if not marker or col != len(marker):
+            return None
+        self.body_text.delete(f"{line_no}.0", f"{line_no}.0+{len(marker)}c")
+        for tag in ("list_bullet", "list_number"):
+            self.body_text.tag_remove(tag, f"{line_no}.0", f"{line_no}.end+1c")
+        self._renumber_lists()
+        self._schedule_autosave()
+        return "break"
+
     def _setup_body_formatting_tags(self, text_widget):
         """Define the Tkinter tags the formatting toolbar/menu apply. Font
         objects are kept on self so they aren't garbage-collected (Tkinter
@@ -1419,6 +1666,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         changes and whenever a pending style is toggled."""
         if not hasattr(self, "_fmt_buttons"):
             return
+        self._resync_list_tags(int(self.body_text.index("insert").split(".")[0]))
+        self._refresh_list_buttons()
         try:
             start = self.body_text.index("sel.first")
             end = self.body_text.index("sel.last")
@@ -1924,6 +2173,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.body_text.delete("1.0", "end")
         self.body_text.insert("1.0", note.get("body", ""))
         self._apply_formatting(self.body_text, note.get("formatting", []))
+        self._apply_blocks(self.body_text, note.get("blocks", []))
         self.comments_text.delete("1.0", "end")
         self.comments_text.insert("1.0", note.get("comments", ""))
 
@@ -3484,6 +3734,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         format_bar.pack(fill="x", padx=30, pady=(0, 4))
 
         self._fmt_buttons = {}
+        # Lists get their own registry rather than sharing _fmt_buttons: that
+        # dict is driven by _refresh_format_buttons, which asks whether the
+        # *selection* carries a character style. A list is a property of a
+        # line, so it would answer "no" every time and hold the buttons
+        # permanently unpressed.
+        self._list_buttons = {}
         self._pending_styles = set()  # styles queued up for the next typed char
         self._pending_text_color = None  # hex, or None
         self._pending_highlight_color = None  # hex, or None
@@ -3539,6 +3795,25 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         )
         self.highlight_btn.pack(side="left", padx=(0, 4), ipady=2)
 
+        # Lists get their own group for the same reason the colour pickers do:
+        # they act on whole lines rather than on a selection, so they behave
+        # differently from the four toggles and should not read as more of them.
+        list_divider = tk.Frame(format_bar, width=1)
+        self.track_theme(list_divider, bg="card")
+        list_divider.pack(side="left", fill="y", padx=(2, 8), pady=2)
+        lists_lbl = tk.Label(format_bar, text="Lists", font=("Segoe UI", 8))
+        self.track_theme(lists_lbl, bg="bg", fg="subtext")
+        lists_lbl.pack(side="left", padx=(0, 6))
+        for kind, label in (("bullet", "\u2022"), ("number", "1.")):
+            btn = tk.Button(
+                format_bar, text=label, font=("Segoe UI", 10, "bold"), width=3,
+                relief="flat", cursor="hand2",
+                command=lambda k=kind: self._toggle_list(k)
+            )
+            self.track_theme(btn, bg="sidebar", fg="text")
+            btn.pack(side="left", padx=(0, 4), ipady=2)
+            self._list_buttons[kind] = btn
+
         text_frame = tk.Frame(self.editor)
         self.track_theme(text_frame, bg="card")
         text_frame.pack(fill="both", expand=True, padx=30, pady=(0, 10))
@@ -3554,6 +3829,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         body_sb.pack(side="right", fill="y")
         self.body_text.pack(side="left", fill="both", expand=True)
         self._setup_body_formatting_tags(self.body_text)
+        self._setup_list_tags(self.body_text)
+        self.body_text.bind("<Return>", self._on_body_return)
+        self.body_text.bind("<BackSpace>", self._on_body_backspace)
+        self.body_text.bind("<<Paste>>", self._on_body_paste, add="+")
         self.body_text.bind("<KeyRelease>", self._schedule_autosave)
         self.body_text.bind("<KeyRelease>", self._apply_pending_style_to_typed_char, add="+")
         self.body_text.bind("<KeyRelease>", self._refresh_format_buttons, add="+")
@@ -5131,6 +5410,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             "title": title,
             "body": self.body_text.get("1.0", "end-1c"),
             "formatting": self._extract_formatting(self.body_text),
+            "blocks": self._extract_blocks(self.body_text),
             "pending_styles": sorted(self._pending_styles),
             "pending_text_color": self._pending_text_color,
             "pending_highlight_color": self._pending_highlight_color,
@@ -5165,6 +5445,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.body_text.delete("1.0", "end")
         self.body_text.insert("1.0", st["body"])
         self._apply_formatting(self.body_text, st.get("formatting", []))
+        self._apply_blocks(self.body_text, st.get("blocks", []))
         self.comments_text.delete("1.0", "end")
         self.comments_text.insert("1.0", st["comments"])
         self.category_var.set(st["category"])
@@ -5530,6 +5811,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # actually IS the base content (no override for this occurrence).
         if shown.get("body") == note.get("body"):
             self._apply_formatting(self.body_text, note.get("formatting", []))
+        self._apply_blocks(self.body_text, note.get("blocks", []))
         self.comments_text.delete("1.0", "end")
         self.comments_text.insert("1.0", shown.get("comments", ""))
         self.category_var.set(shown["category"])
@@ -5785,6 +6067,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self.body_text.delete("1.0", "end")
             self.body_text.insert("1.0", tpl["body"])
             self._apply_formatting(self.body_text, tpl.get("formatting", []))
+            self._apply_blocks(self.body_text, tpl.get("blocks", []))
         if tpl.get("comments"):
             self.comments_text.delete("1.0", "end")
             self.comments_text.insert("1.0", tpl["comments"])
@@ -5838,6 +6121,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 "title": st.get("title", ""),
                 "body": st.get("body", ""),
                 "formatting": st.get("formatting", []),
+                "blocks": st.get("blocks", []),
                 "comments": st.get("comments", ""),
                 "category": st.get("category", "General"),
                 "checklist": st.get("checklist", []),
@@ -5978,6 +6262,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.body_text.delete("1.0", "end")
         self.body_text.insert("1.0", prev.get("body", ""))
         self._apply_formatting(self.body_text, prev.get("formatting", []))
+        self._apply_blocks(self.body_text, prev.get("blocks", []))
         self._refresh_format_buttons()
         self.comments_text.delete("1.0", "end")
         self.comments_text.insert("1.0", prev.get("comments", ""))
@@ -5993,6 +6278,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             title = ""
         body = self.body_text.get("1.0", "end").strip()
         formatting = self._extract_formatting_for_stripped_body(self.body_text, body)
+        blocks = self._extract_blocks_for_stripped_body(self.body_text, body)
         comments = self.comments_text.get("1.0", "end").strip()
         category = self.category_var.get()
 
@@ -6049,6 +6335,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 "title": title,
                 "body": body,
                 "formatting": formatting,
+                "blocks": blocks,
                 "comments": comments,
                 "category": category,
                 "date": date_value,
@@ -6114,11 +6401,13 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                         "title": note.get("title", ""),
                         "body": note.get("body", ""),
                         "formatting": note.get("formatting", []),
+                        "blocks": note.get("blocks", []),
                         "comments": note.get("comments", ""),
                     }
                 note["title"] = title
                 note["body"] = body
                 note["formatting"] = formatting
+                note["blocks"] = blocks
                 note["comments"] = comments
                 note["category"] = category
                 note["date"] = date_value
