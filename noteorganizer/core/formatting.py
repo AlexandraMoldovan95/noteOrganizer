@@ -117,3 +117,220 @@ def font_tag_for(is_bold, is_italic):
     if is_italic:
         return "italic"
     return None
+
+
+# ---- Bullet and numbered lists ----
+#
+# A list line carries its marker in the body text: "• milk", "1. milk". The
+# alternative -- drawing the marker without storing it -- was considered and
+# rejected. Formatting is stored as character offsets into the body, so a
+# marker that exists on screen but not in the body would put every offset
+# after it out by the marker's length, on every line, forever. Keeping the
+# body and the widget identical means the offsets need no translation at all.
+#
+# ``paragraphs`` on a note records line-level formatting -- what a whole line
+# looks like, as opposed to the characters inside it, which ``formatting``
+# covers. Today that means which lines are list items:
+#
+#     [{"line": 0, "kind": "bullet"}, {"line": 1, "kind": "number"}]
+#
+# The marker is derivable from the text, so this looks redundant -- but it is
+# what tells the editor to give the line a hanging indent, and what lets
+# renumbering tell a real "1." from a line that merely starts with one.
+
+BULLET = "• "
+# One glyph per nesting level, cycling past the third. All three are ones
+# nobody types by accident, which is what lets a bullet be recognised from
+# the text alone.
+BULLET_GLYPHS = ("•", "◦", "▪")
+_NUMBER_RE = re.compile(r"^(\d+)\. ")
+LIST_KINDS = ("bullet", "number")
+
+# How deep a paragraph may be pushed. A cap at all is what stops a held-down
+# Tab from marching text off the right-hand edge of the editor.
+MAX_INDENT = 8
+
+# Alignment is a property of the whole line, so it lives here beside the
+# list kinds rather than among the character styles. "left" is the default
+# and is never stored -- see normalize_paragraphs.
+ALIGNMENTS = ("left", "center", "right")
+
+# Block styling. A quote is drawn as a coloured left bar plus a tinted
+# background rather than a box, because Tk draws a bordered range as one box
+# per display line -- a paragraph that wraps comes out as several boxes, the
+# last ending mid-sentence. The bar reads as one block however it wraps.
+BLOCK_STYLES = ("quote",)
+
+
+def parse_list_marker(line):
+    """Split a line into ``(kind, marker, rest)``.
+
+    Returns ``(None, "", line)`` for a line that is not a list item.
+    """
+    for glyph in BULLET_GLYPHS:
+        if line.startswith(glyph + " "):
+            return "bullet", glyph + " ", line[len(glyph) + 1:]
+    m = _NUMBER_RE.match(line)
+    if m:
+        return "number", m.group(0), line[m.end():]
+    return None, "", line
+
+
+def bullet_level_of(marker):
+    """Which nesting level a bullet marker's glyph stands for, or 0.
+
+    Only meaningful for bullets. Numbered levels are told apart by their
+    indent, not by their marker -- see :func:`marker_for`.
+    """
+    glyph = marker.strip()
+    return BULLET_GLYPHS.index(glyph) if glyph in BULLET_GLYPHS else 0
+
+
+def marker_for(kind, number=1, level=0):
+    """The text a list line of this kind and depth starts with.
+
+    Bullets change glyph with depth, which is free: the three glyphs are
+    ones nobody types by accident, so a line starting with one is a bullet
+    beyond doubt.
+
+    Numbers deliberately do not. The obvious nested scheme -- 1. then a.
+    then i. -- is genuinely ambiguous with ordinary prose, and a note is
+    exactly the kind of document where a line can legitimately begin "a. "
+    or "i. ". Depth is shown by indentation and by the count restarting
+    under each parent instead, which costs nothing and cannot misfire.
+    """
+    if kind == "bullet":
+        return BULLET_GLYPHS[level % len(BULLET_GLYPHS)] + " "
+    return f"{number}. "
+
+
+def normalize_paragraphs(value, line_count=None):
+    """Drop anything that is not a usable paragraph entry.
+
+    The same gatekeeper idea as :func:`normalize_formatting`: one bad entry
+    from an old file or hand-edited JSON should be discarded, not repaired
+    into something that half-works.
+
+    Only non-default properties are kept, so a line that is a plain,
+    left-aligned paragraph produces no entry at all rather than a row of
+    defaults in every note's JSON.
+    """
+    if not isinstance(value, list):
+        return []
+    clean, seen = [], set()
+    for item in value:
+        if not isinstance(item, dict):
+            continue
+        line = item.get("line")
+        if not isinstance(line, int) or line < 0:
+            continue
+        if line_count is not None and line >= line_count:
+            continue
+        if line in seen:            # one set of properties per line
+            continue
+
+        kind = item.get("kind")
+        if kind not in LIST_KINDS:
+            kind = None
+        align = item.get("align")
+        if align not in ALIGNMENTS:
+            align = "left"
+        indent = item.get("indent")
+        if not isinstance(indent, int) or isinstance(indent, bool) or indent < 0:
+            indent = 0
+        indent = min(indent, MAX_INDENT)
+        block = item.get("block")
+        if block not in BLOCK_STYLES:
+            block = None
+
+        if kind is None and align == "left" and indent == 0 and block is None:
+            continue                # nothing worth recording
+
+        seen.add(line)
+        entry = {"line": line}
+        if kind:
+            entry["kind"] = kind
+        if indent:
+            entry["indent"] = indent
+        if align != "left":
+            entry["align"] = align
+        if block:
+            entry["block"] = block
+        clean.append(entry)
+    return sorted(clean, key=lambda b: b["line"])
+
+
+def renumber(body, paragraphs):
+    """Make every numbered run read 1, 2, 3 from its own start.
+
+    A run ends at any line that is not a numbered item -- a blank line, a
+    paragraph, or a bullet -- so two numbered lists separated by text each
+    start again at one, which is what a person writing them expects.
+
+    Returns ``(body, shift)``: the rewritten body, and a list of
+    ``(offset, delta)`` describing where characters were inserted or removed,
+    so the caller can move formatting spans to match.
+
+    Nesting keeps one counter per level. Going deeper starts that level from
+    one again on every parent, so the second item's sub-list reads 1, 2, 3
+    rather than carrying on from the first item's. Coming back out resumes
+    the shallower count where it left off.
+    """
+    lines = body.split("\n")
+    by_line = {b["line"]: b
+               for b in normalize_paragraphs(paragraphs, len(lines))}
+    shifts, counters, pos = [], {}, 0
+    for i, line in enumerate(lines):
+        entry = by_line.get(i) or {}
+        kind = entry.get("kind")
+        level = entry.get("indent", 0)
+        if kind == "number":
+            counters[level] = counters.get(level, 0) + 1
+            # Anything deeper belongs to the item that just ended, so it
+            # starts again under this one.
+            for deeper in [lv for lv in counters if lv > level]:
+                del counters[deeper]
+            _, old_marker, rest = parse_list_marker(line)
+            new_marker = marker_for("number", counters[level], level)
+            if old_marker != new_marker:
+                delta = len(new_marker) - len(old_marker)
+                if delta:
+                    # Only a change in marker *length* moves later text.
+                    # "1." -> "2." rewrites a character without shifting
+                    # anything, and recording it would be noise the caller
+                    # then has to loop over for nothing.
+                    shifts.append((pos, delta))
+                lines[i] = new_marker + rest
+        elif kind == "bullet":
+            # A bullet interrupts numbering at its own depth and below, but
+            # leaves an outer numbered list alone: a bulleted aside inside
+            # item 2 should not restart the outer count at 1.
+            for lv in [lv for lv in counters if lv >= level]:
+                del counters[lv]
+        else:
+            counters.clear()
+        pos += len(lines[i]) + 1        # +1 for the newline
+    return "\n".join(lines), shifts
+
+
+def shift_spans(spans, shifts):
+    """Move formatting spans by the character shifts renumbering caused.
+
+    Without this, renumbering "9. " to "10. " would push every later
+    character along by one and leave the bold in the wrong place -- exactly
+    the mismatch that storing the marker in the body is meant to avoid.
+    """
+    if not shifts:
+        return spans
+    out = []
+    for span in spans:
+        start, end = span["start"], span["end"]
+        for at, delta in shifts:
+            if at < start:
+                start += delta
+            if at < end:
+                end += delta
+        moved = dict(span)
+        moved["start"], moved["end"] = start, end
+        out.append(moved)
+    return out

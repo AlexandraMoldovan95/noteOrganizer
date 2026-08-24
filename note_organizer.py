@@ -42,7 +42,7 @@ except ImportError:
 # Added/Fixed CHANGELOG.md entries, not per-release counts). The running
 # app records this into settings, so the next time a newer build opens
 # over older data it can tell the user what changed version-wise.
-APP_VERSION = "0.32.51"
+APP_VERSION = "0.34.51"
 
 
 def parse_version(v):
@@ -180,6 +180,13 @@ from noteorganizer.core.duplicates import (
 
 # Rich-text span storage lives in noteorganizer/core/formatting.py.
 from noteorganizer.core.formatting import (
+    normalize_paragraphs,
+    parse_list_marker,
+    marker_for,
+    bullet_level_of,
+    renumber,
+    shift_spans,
+    MAX_INDENT,
     char_class as core_char_class,
     color_tag_name as core_color_tag_name,
     font_tag_for as core_font_tag_for,
@@ -873,6 +880,629 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
     _FONT_STYLES = ("bold", "italic", "bold_italic")  # mutually exclusive
     _PENDING_STYLE_ANCHOR = "pending_style_anchor"  # see _toggle_body_style
 
+    # ---------- Bullet and numbered lists ----------
+    def _setup_list_tags(self, text_widget):
+        """Tags for the paragraph properties: hanging indent and alignment.
+
+        lmargin1 indents the first line, lmargin2 the wrapped continuation --
+        which is what keeps a long item lined up under its own text instead
+        of back under the marker.
+
+        Alignment gets its own tags rather than being folded into the list
+        ones. They set different Tk options (justify vs lmargin), so the two
+        compose: a centred bullet keeps its hanging indent.
+        """
+        self._paragraph_tags = {}
+        text_widget.tag_configure("align_center", justify="center")
+        text_widget.tag_configure("align_right", justify="right")
+
+    # Pixels per indent step, and the room a marker needs in front of its
+    # text so a wrapped line hangs under the text rather than the marker.
+    INDENT_STEP = 24
+    _MARKER_ROOM = {"bullet": 24, "number": 28}
+    QUOTE_BAR = 4
+
+    def _paragraph_tag(self, text_widget, kind, indent, block=None):
+        """The margin tag for this combination of properties, made on demand.
+
+        There is one tag per combination rather than one per property,
+        because they all set the same two Tk options -- lmargin1 and
+        lmargin2 -- and a widget applies only the winning tag's value for an
+        option. Building them lazily is the same pattern the colour tags
+        use: the app cannot know which combinations a note will want.
+        """
+        name = f"para_{kind or 'plain'}_{indent}" + (f"_{block}" if block else "")
+        if name not in self._paragraph_tags:
+            self._paragraph_tags[name] = (kind, indent, block)
+            self._configure_paragraph_tag(text_widget, name)
+        return name
+
+    def _configure_paragraph_tag(self, text_widget, name):
+        """Set one margin tag's options, in the palette as it stands now.
+
+        Split out from _paragraph_tag so a theme switch can re-run it: a
+        quote's bar and tint are theme colours, and nothing else in
+        apply_theme reaches a text tag.
+        """
+        kind, indent, block = self._paragraph_tags[name]
+        left = indent * self.INDENT_STEP
+        if block == "quote":
+            # Room for the bar itself, then the gap before the text.
+            left += self.QUOTE_BAR + 10
+        options = {}
+        if kind:
+            options["lmargin1"] = 18 + left
+            options["lmargin2"] = 18 + left + self._MARKER_ROOM[kind]
+        else:
+            options["lmargin1"] = options["lmargin2"] = left
+        if block == "quote":
+            options["lmargincolor"] = self.colors["accent"]
+            options["background"] = core_blend(
+                self.colors["card"], self.colors["accent"], 0.12)
+        text_widget.tag_configure(name, **options)
+
+    def _recolor_paragraph_tags(self):
+        """Repaint the quote bars and tints after a theme switch."""
+        if not getattr(self, "_paragraph_tags", None):
+            return
+        for name, (_kind, _indent, block) in self._paragraph_tags.items():
+            if block:
+                self._configure_paragraph_tag(self.body_text, name)
+
+    def _paragraph_block_of(self, text_widget, line_no):
+        """The block style on this line, or None. Read from its margin tag."""
+        for name in text_widget.tag_names(f"{line_no}.0"):
+            if name.startswith("para_"):
+                return self._paragraph_tags.get(name, (None, 0, None))[2]
+        return None
+
+    def _toggle_paragraph_block(self, block):
+        """Turn the selected lines into a quote block, or back to plain.
+
+        Applies to whole lines, so a quote made of several paragraphs shows
+        one continuous bar down the side rather than one bar per line.
+        """
+        first, last = self._selected_line_range()
+        turning_off = all(
+            self._paragraph_block_of(self.body_text, n) == block
+            for n in range(first, last + 1))
+        for line_no in range(first, last + 1):
+            kind = self._list_kind_of(self.body_text, line_no)
+            indent = self._paragraph_indent_of(self.body_text, line_no)
+            self._clear_paragraph_tags(self.body_text, line_no)
+            wanted = None if turning_off else block
+            if kind or indent or wanted:
+                self.body_text.tag_add(
+                    self._paragraph_tag(self.body_text, kind, indent, wanted),
+                    f"{line_no}.0", f"{line_no}.end")
+        self._refresh_list_buttons()
+        self._schedule_autosave()
+
+    def _clear_paragraph_tags(self, text_widget, line_no):
+        """Strip every margin tag from a line, whatever kind or depth."""
+        for name in text_widget.tag_names(f"{line_no}.0"):
+            if name.startswith("para_"):
+                text_widget.tag_remove(name, f"{line_no}.0", f"{line_no}.end+1c")
+
+    def _paragraph_indent_of(self, text_widget, line_no):
+        """How deep this line is pushed.
+
+        Read from the margin tag, with one fallback: a bullet's glyph also
+        says which level it is at, so a bullet whose tag was lost -- pasted
+        in from elsewhere, say -- still comes back at the right depth.
+        """
+        for name in text_widget.tag_names(f"{line_no}.0"):
+            if name.startswith("para_"):
+                # Looked up rather than parsed back out of the name: the
+                # name gained a "_quote" suffix, and reading the depth off
+                # the end of it then returned 0 for every quoted line.
+                return self._paragraph_tags.get(name, (None, 0, None))[1]
+        line = text_widget.get(f"{line_no}.0", f"{line_no}.end")
+        kind, marker, _ = parse_list_marker(line)
+        return bullet_level_of(marker) if kind == "bullet" else 0
+
+    def _paragraph_align_of(self, text_widget, line_no):
+        """The alignment of this line: "left", "center" or "right".
+
+        Read from the tag rather than the text, because unlike a list marker
+        alignment leaves nothing behind in the body to read back.
+        """
+        tags = text_widget.tag_names(f"{line_no}.0")
+        for align in ("center", "right"):
+            if f"align_{align}" in tags:
+                return align
+        return "left"
+
+    def _set_paragraph_align(self, align):
+        """Align the selected lines left, centre or right.
+
+        Clicking the alignment a line already has puts it back to left, the
+        same way clicking a list button again turns the list off -- a button
+        that is already pressed should undo itself rather than do nothing.
+        """
+        first, last = self._selected_line_range()
+        if all(self._paragraph_align_of(self.body_text, n) == align
+               for n in range(first, last + 1)):
+            align = "left"
+        for line_no in range(first, last + 1):
+            for name in ("center", "right"):
+                self.body_text.tag_remove(f"align_{name}",
+                                          f"{line_no}.0", f"{line_no}.end+1c")
+            if align != "left":
+                # Includes the newline, unlike the list tags: justify applies
+                # to the whole display line, and a range stopping at .end
+                # leaves an empty line unaligned, so the caret jumps back to
+                # the left the moment you press Enter on a centred line.
+                self.body_text.tag_add(f"align_{align}",
+                                       f"{line_no}.0", f"{line_no}.end+1c")
+        self._refresh_list_buttons()
+        self._schedule_autosave()
+
+    def _list_kind_of(self, text_widget, line_no):
+        """Which kind of list line this is, or None if it is not one.
+
+        Decided by the marker in the text, not by the tag. The marker is the
+        thing that is actually saved, and the tag is only the hanging indent
+        drawn over it -- and Tk hands a tag on to text inserted beside it, so
+        reading the tag once let a pasted line come back as a bullet that had
+        no bullet in it.
+        """
+        line = text_widget.get(f"{line_no}.0", f"{line_no}.end")
+        return parse_list_marker(line)[0]
+
+    def _extract_paragraphs(self, text_widget):
+        """Read the list tags back out as plain data, for saving.
+
+        Line numbers rather than character offsets: a list applies to a whole
+        line, and a line index survives being reloaded into a window of a
+        different width, which is the same reason formatting uses offsets
+        rather than Tk's own line.column indices.
+        """
+        paragraphs = []
+        total = int(text_widget.index("end-1c").split(".")[0])
+        for line_no in range(1, total + 1):
+            kind = self._list_kind_of(text_widget, line_no)
+            align = self._paragraph_align_of(text_widget, line_no)
+            indent = self._paragraph_indent_of(text_widget, line_no)
+            block = self._paragraph_block_of(text_widget, line_no)
+            if not kind and align == "left" and not indent and not block:
+                continue            # an ordinary paragraph records nothing
+            entry = {"line": line_no - 1}
+            if kind:
+                entry["kind"] = kind
+            if indent:
+                entry["indent"] = indent
+            if align != "left":
+                entry["align"] = align
+            if block:
+                entry["block"] = block
+            paragraphs.append(entry)
+        return paragraphs
+
+    def _resync_list_tags(self, line_no=None):
+        """Redraw the indent tags from the markers actually in the text.
+
+        Tk only passes a tag on to text inserted between two characters that
+        both carry it, so anything typed at the *end* of an item arrives
+        untagged -- and a wrap point in untagged text loses the hanging
+        indent, so a long item's second line slides back under its marker.
+        Re-tagging from the markers keeps the two in step.
+
+        Defaults to the cursor's line only. Typing happens one line at a
+        time, and rebuilding every line on every keystroke is exactly the
+        kind of refresh work that has cost this app real responsiveness
+        before (see docs/ISSUES_LOG.md). The whole-body pass is for paste,
+        which is rare and can change many lines at once.
+        """
+        if line_no is None:
+            first = 1
+            last = int(self.body_text.index("end-1c").split(".")[0])
+        else:
+            first = last = line_no
+        for n in range(first, last + 1):
+            kind = self._list_kind_of(self.body_text, n)
+            indent = self._paragraph_indent_of(self.body_text, n)
+            block = self._paragraph_block_of(self.body_text, n)
+            wanted = (self._paragraph_tag(self.body_text, kind, indent, block)
+                      if (kind or indent or block) else None)
+            for name in self.body_text.tag_names(f"{n}.0"):
+                if name.startswith("para_") and name != wanted:
+                    self.body_text.tag_remove(name, f"{n}.0", f"{n}.end+1c")
+            if wanted:
+                self.body_text.tag_add(wanted, f"{n}.0", f"{n}.end")
+
+    def _on_body_paste(self, event=None):
+        """Pasted text can add or remove whole list lines, so resync them all.
+
+        Runs after Tk's own paste handler rather than instead of it -- at
+        <<Paste>> time the text is not in the widget yet.
+        """
+        self.after_idle(self._resync_list_tags)
+
+    def _refresh_list_buttons(self):
+        """Show the bullet/number button as pressed when the cursor sits in
+        a list of that kind, matching how the four style buttons behave.
+
+        Deliberately reads the line the cursor is on rather than the whole
+        selection: dragging across a plain line and a bullet line should not
+        make the button claim the selection is a list.
+        """
+        if not getattr(self, "_list_buttons", None):
+            return
+        line_no = int(self.body_text.index("insert").split(".")[0])
+        current = self._list_kind_of(self.body_text, line_no)
+        for kind, btn in self._list_buttons.items():
+            self._set_button_pressed(btn, kind == current)
+        current_align = self._paragraph_align_of(self.body_text, line_no)
+        for align, btn in getattr(self, "_align_buttons", {}).items():
+            self._set_button_pressed(btn, align == current_align)
+        current_block = self._paragraph_block_of(self.body_text, line_no)
+        for block, btn in getattr(self, "_block_buttons", {}).items():
+            self._set_button_pressed(btn, block == current_block)
+
+    def _attach_tooltip(self, widget, title, detail=""):
+        """Explain a widget while the cursor rests on it.
+
+        Every button on the formatting toolbar is an icon or a single
+        letter, so what each one does is a guess at best. Bound with add="+"
+        because several of these widgets already carry their own <Enter> or
+        <Button-1> handlers.
+        """
+        widget.bind("<Enter>",
+                    lambda e, w=widget: self._schedule_tooltip(w, title, detail),
+                    add="+")
+        widget.bind("<Leave>", lambda e: self._hide_tooltip(), add="+")
+        # Clicking should get on with the job, not leave a label hanging over
+        # the result of it.
+        widget.bind("<Button-1>", lambda e: self._hide_tooltip(), add="+")
+
+    def _schedule_tooltip(self, widget, title, detail):
+        """Wait a moment before showing, so sweeping across the toolbar on
+        the way somewhere else doesn't flash a row of labels."""
+        self._hide_tooltip()
+        self._tooltip_after = self.after(
+            450, lambda: self._show_tooltip(widget, title, detail))
+
+    def _hide_tooltip(self, event=None):
+        """Take the tooltip down, and cancel one that has not appeared yet."""
+        pending = getattr(self, "_tooltip_after", None)
+        if pending is not None:
+            try:
+                self.after_cancel(pending)
+            except (tk.TclError, ValueError):
+                pass
+            self._tooltip_after = None
+        tip = getattr(self, "_tooltip", None)
+        if tip is not None:
+            try:
+                if tip.winfo_exists():
+                    tip.destroy()
+            except tk.TclError:
+                pass
+            self._tooltip = None
+
+    def _show_tooltip(self, widget, title, detail):
+        self._tooltip_after = None
+        try:
+            if not widget.winfo_exists() or not widget.winfo_ismapped():
+                return
+        except tk.TclError:
+            return
+
+        tip = tk.Toplevel(self)
+        tip.overrideredirect(True)
+        tip.attributes("-topmost", True)
+        self._tooltip = tip
+
+        outer = tk.Frame(tip, bg=self.colors["accent"], padx=1, pady=1)
+        outer.pack()
+        box = tk.Frame(outer, bg=self.colors["card"], padx=10, pady=7)
+        box.pack()
+        tk.Label(box, text=title, bg=self.colors["card"],
+                 fg=self.colors["text"], font=("Segoe UI", 9, "bold"),
+                 justify="left").pack(anchor="w")
+        if detail:
+            tk.Label(box, text=detail, bg=self.colors["card"],
+                     fg=self.colors["subtext"], font=("Segoe UI", 8),
+                     justify="left").pack(anchor="w", pady=(2, 0))
+
+        # Positioned under the button and measured against the app window,
+        # never the screen -- the whole virtual desktop spans every monitor,
+        # and measuring against that has put a popup on a display the app was
+        # not on before (see docs/ISSUES_LOG.md).
+        tip.update_idletasks()
+        x = widget.winfo_rootx()
+        y = widget.winfo_rooty() + widget.winfo_height() + 6
+        right_edge = self.winfo_rootx() + self.winfo_width() - 8
+        if x + tip.winfo_width() > right_edge:
+            x = max(self.winfo_rootx() + 8, right_edge - tip.winfo_width())
+        tip.geometry(f"+{x}+{y}")
+
+    def _make_align_button(self, parent, align):
+        """One alignment button, drawn as four bars on a small canvas.
+
+        The ragged edge is the whole icon: bars flush left, centred, or
+        flush right. Drawn rather than written because nothing in a normal
+        font says "align right", and because canvas items can be recoloured
+        on a theme switch.
+        """
+        canvas = tk.Canvas(parent, width=24, height=20, highlightthickness=0,
+                           bd=0, cursor="hand2", relief="flat")
+        for row, width in enumerate((15, 9, 15, 9)):
+            y = 5 + row * 3.5
+            if align == "left":
+                x0 = 5
+            elif align == "right":
+                x0 = 19 - width
+            else:
+                x0 = 12 - width / 2
+            canvas.create_line(x0, y, x0 + width, y, width=2, tags="bar")
+        canvas.bind("<Button-1>",
+                    lambda e, a=align: self._set_paragraph_align(a))
+        return canvas
+
+    def _set_button_pressed(self, btn, active):
+        """The pressed/unpressed look shared by the paragraph buttons.
+
+        Handles both real Buttons and the drawn alignment canvases: a canvas
+        has no foreground of its own, so the bars are recoloured instead.
+        """
+        bg = self.colors["accent"] if active else self.colors["sidebar"]
+        fg = "white" if active else self.colors["text"]
+        btn.configure(relief="sunken" if active else "flat", bg=bg)
+        if isinstance(btn, tk.Canvas):
+            btn.itemconfigure("bar", fill=fg)
+        else:
+            btn.configure(fg=fg)
+
+    def _extract_paragraphs_for_stripped_body(self, text_widget, stripped_body):
+        """Like _extract_paragraphs, but adjusted for save_current_note()'s
+        leading/trailing .strip() on the saved body.
+
+        Blocks are stored per line, so any leading blank lines that strip()
+        removes would leave every entry pointing one line too far down, and
+        the note would come back with the indent on the wrong line. Exactly
+        the problem _extract_formatting_for_stripped_body solves for spans.
+        """
+        raw = text_widget.get("1.0", "end-1c")
+        dropped = raw[:len(raw) - len(raw.lstrip())].count("\n")
+        limit = len(stripped_body.split("\n"))
+        shifted = []
+        for paragraph in self._extract_paragraphs(text_widget):
+            line = paragraph["line"] - dropped
+            if 0 <= line < limit:
+                # Copy the whole entry rather than rebuilding it field by
+                # field, so a property added later cannot be silently lost
+                # here while every other path keeps it.
+                moved = dict(paragraph)
+                moved["line"] = line
+                shifted.append(moved)
+        return shifted
+
+    def _apply_paragraphs(self, text_widget, paragraphs):
+        """Re-apply saved list lines as live tags, for loading.
+
+        A stored entry only earns an indent if the line still starts with a
+        marker of that kind. Otherwise a note edited outside the app, or one
+        whose body was rewritten while its paragraphs were not, would come back
+        with a plain line indented as though it were an item.
+        """
+        total = int(text_widget.index("end-1c").split(".")[0])
+        for paragraph in normalize_paragraphs(paragraphs, total):
+            line_no = paragraph["line"] + 1
+            if line_no > total:
+                continue
+            align = paragraph.get("align", "left")
+            if align != "left":
+                text_widget.tag_add(f"align_{align}",
+                                    f"{line_no}.0", f"{line_no}.end+1c")
+            kind = paragraph.get("kind")
+            indent = paragraph.get("indent", 0)
+            block = paragraph.get("block")
+            line = text_widget.get(f"{line_no}.0", f"{line_no}.end")
+            if kind and parse_list_marker(line)[0] != kind:
+                continue
+            if not kind and not indent and not block:
+                continue
+            text_widget.tag_add(
+                self._paragraph_tag(text_widget, kind, indent, block),
+                f"{line_no}.0", f"{line_no}.end")
+
+    def _set_paragraph_indent(self, line_no, indent):
+        """Put one line at a given depth, rewriting its marker if it has one.
+
+        A bullet's glyph changes with depth, so the marker in the text has to
+        be replaced, not just the tag -- otherwise a demoted item keeps the
+        parent's bullet and the two levels look identical.
+        """
+        kind = self._list_kind_of(self.body_text, line_no)
+        block = self._paragraph_block_of(self.body_text, line_no)
+        self._clear_paragraph_tags(self.body_text, line_no)
+        if kind == "bullet":
+            line = self.body_text.get(f"{line_no}.0", f"{line_no}.end")
+            _, marker, _rest = parse_list_marker(line)
+            new_marker = marker_for("bullet", 1, indent)
+            if marker != new_marker:
+                self.body_text.delete(f"{line_no}.0",
+                                      f"{line_no}.0+{len(marker)}c")
+                self.body_text.insert(f"{line_no}.0", new_marker)
+        if kind or indent or block:
+            self.body_text.tag_add(
+                self._paragraph_tag(self.body_text, kind, indent, block),
+                f"{line_no}.0", f"{line_no}.end")
+
+    def _change_paragraph_indent(self, delta):
+        """Push the selected lines one step deeper, or pull them back out.
+
+        Applies to any paragraph, not only list items: indenting a plain
+        block of text is the other half of what people reach for here. Lines
+        move as a group and each is clamped on its own, so a selection that
+        already has one line at the left margin still indents the rest
+        instead of refusing.
+        """
+        first, last = self._selected_line_range()
+        for line_no in range(first, last + 1):
+            current = self._paragraph_indent_of(self.body_text, line_no)
+            self._set_paragraph_indent(
+                line_no, max(0, min(MAX_INDENT, current + delta)))
+        self._renumber_lists()
+        self._refresh_list_buttons()
+        self._schedule_autosave()
+
+    def _on_body_tab(self, event, delta):
+        """Tab and Shift+Tab change depth inside a list.
+
+        Only inside one: in ordinary prose Tab should still type a tab, which
+        is what returning None leaves Tk to do. Shift+Tab always stops here,
+        since its default is to move focus out of the editor mid-sentence.
+        """
+        first, last = self._selected_line_range()
+        in_list = any(self._list_kind_of(self.body_text, n)
+                      for n in range(first, last + 1))
+        if not in_list:
+            return "break" if delta < 0 else None
+        self._change_paragraph_indent(delta)
+        return "break"
+
+    def _selected_line_range(self):
+        """The line numbers the cursor or selection covers."""
+        try:
+            first = int(self.body_text.index("sel.first").split(".")[0])
+            last = int(self.body_text.index("sel.last").split(".")[0])
+        except tk.TclError:
+            first = last = int(self.body_text.index("insert").split(".")[0])
+        return first, last
+
+    def _toggle_list(self, kind):
+        """Turn the selected lines into a list, or back into plain lines.
+
+        Toggling off is deliberate: pressing the same button twice should undo
+        itself rather than stack a second marker onto the line.
+        """
+        first, last = self._selected_line_range()
+        turning_off = all(self._list_kind_of(self.body_text, n) == kind
+                          for n in range(first, last + 1))
+        for line_no in range(first, last + 1):
+            line = self.body_text.get(f"{line_no}.0", f"{line_no}.end")
+            existing, marker, rest = parse_list_marker(line)
+            # Depth is read before the tags go, and put back after: turning a
+            # nested item into a bullet should leave it where it sits rather
+            # than snapping it back to the left margin.
+            indent = self._paragraph_indent_of(self.body_text, line_no)
+            block = self._paragraph_block_of(self.body_text, line_no)
+            if marker:
+                self.body_text.delete(f"{line_no}.0", f"{line_no}.0+{len(marker)}c")
+            self._clear_paragraph_tags(self.body_text, line_no)
+            if turning_off:
+                if indent or block:
+                    self.body_text.tag_add(
+                        self._paragraph_tag(self.body_text, None, indent, block),
+                        f"{line_no}.0", f"{line_no}.end")
+                continue
+            self.body_text.insert(f"{line_no}.0", marker_for(kind, 1, indent))
+            # Stops at .end, deliberately: a tag that covered the newline
+            # too would be inherited by whatever gets typed or pasted on
+            # the next line.
+            self.body_text.tag_add(
+                self._paragraph_tag(self.body_text, kind, indent, block),
+                f"{line_no}.0", f"{line_no}.end")
+        self._renumber_lists()
+        self._refresh_list_buttons()
+        self._schedule_autosave()
+        self.update_word_count()
+
+    def _renumber_lists(self):
+        """Make every numbered run read 1, 2, 3 again after any change.
+
+        The arithmetic is in core/formatting.py; this applies the result and
+        moves the formatting spans by however much the markers grew or shrank,
+        so bold text does not slide sideways when 9 becomes 10.
+        """
+        body = self.body_text.get("1.0", "end-1c")
+        paragraphs = self._extract_paragraphs(self.body_text)
+        new_body, shifts = renumber(body, paragraphs)
+        if new_body == body:
+            return
+        spans = shift_spans(self._extract_formatting(self.body_text), shifts)
+        insert_at = self.body_text.index("insert")
+        self.body_text.delete("1.0", "end-1c")
+        self.body_text.insert("1.0", new_body)
+        self._apply_formatting(self.body_text, spans)
+        self._apply_paragraphs(self.body_text, paragraphs)
+        try:
+            self.body_text.mark_set("insert", insert_at)
+        except tk.TclError:
+            pass
+
+    def _on_body_return(self, event):
+        """Enter inside a list continues it, or ends it on an empty item.
+
+        Pressing Enter on an item you have not typed anything into is how
+        people leave a list, so that removes the marker instead of adding
+        another one.
+        """
+        line_no = int(self.body_text.index("insert").split(".")[0])
+        kind = self._list_kind_of(self.body_text, line_no)
+        if not kind:
+            return None
+        line = self.body_text.get(f"{line_no}.0", f"{line_no}.end")
+        _, marker, rest = parse_list_marker(line)
+        indent = self._paragraph_indent_of(self.body_text, line_no)
+        if not rest.strip():
+            # An empty nested item steps out one level first. Pressing Enter
+            # twice to leave a list is muscle memory, but from three levels
+            # deep it should climb out rather than drop straight to a plain
+            # paragraph -- which is what every other editor does.
+            if indent:
+                self._set_paragraph_indent(line_no, indent - 1)
+                self._renumber_lists()
+                return "break"
+            self.body_text.delete(f"{line_no}.0", f"{line_no}.end")
+            self._clear_paragraph_tags(self.body_text, line_no)
+            self._renumber_lists()
+            return "break"
+        self.body_text.insert("insert", "\n" + marker_for(kind, 1, indent))
+        new_line = line_no + 1
+        self.body_text.tag_add(
+            self._paragraph_tag(self.body_text, kind, indent),
+            f"{new_line}.0", f"{new_line}.end")
+        self._renumber_lists()
+        self._schedule_autosave()
+        return "break"
+
+    def _on_body_backspace(self, event):
+        """Backspace just after a marker removes the marker, not a character.
+
+        Otherwise the only way out of a list is to delete the bullet one
+        character at a time, which reads as the app fighting you.
+        """
+        index = self.body_text.index("insert")
+        line_no, col = (int(p) for p in index.split("."))
+        kind = self._list_kind_of(self.body_text, line_no)
+        if not kind:
+            return None
+        line = self.body_text.get(f"{line_no}.0", f"{line_no}.end")
+        _, marker, _rest = parse_list_marker(line)
+        if not marker or col != len(marker):
+            return None
+        # Nested first: Backspace against the marker climbs out one level,
+        # and only removes the marker once the item is back at the margin.
+        # Deleting a bullet three levels in would otherwise leave its text
+        # stranded at a depth with nothing above it.
+        indent = self._paragraph_indent_of(self.body_text, line_no)
+        if indent:
+            self._set_paragraph_indent(line_no, indent - 1)
+            self._renumber_lists()
+            self._refresh_list_buttons()
+            self._schedule_autosave()
+            return "break"
+        self.body_text.delete(f"{line_no}.0", f"{line_no}.0+{len(marker)}c")
+        for tag in ("list_bullet", "list_number"):
+            self.body_text.tag_remove(tag, f"{line_no}.0", f"{line_no}.end+1c")
+        self._renumber_lists()
+        self._schedule_autosave()
+        return "break"
+
     def _setup_body_formatting_tags(self, text_widget):
         """Define the Tkinter tags the formatting toolbar/menu apply. Font
         objects are kept on self so they aren't garbage-collected (Tkinter
@@ -1419,6 +2049,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         changes and whenever a pending style is toggled."""
         if not hasattr(self, "_fmt_buttons"):
             return
+        self._resync_list_tags(int(self.body_text.index("insert").split(".")[0]))
+        self._refresh_list_buttons()
         try:
             start = self.body_text.index("sel.first")
             end = self.body_text.index("sel.last")
@@ -1924,6 +2556,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.body_text.delete("1.0", "end")
         self.body_text.insert("1.0", note.get("body", ""))
         self._apply_formatting(self.body_text, note.get("formatting", []))
+        self._apply_paragraphs(self.body_text, note.get("paragraphs", []))
         self.comments_text.delete("1.0", "end")
         self.comments_text.insert("1.0", note.get("comments", ""))
 
@@ -2685,6 +3318,13 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # restores the canvas background. Repaint them explicitly, the same
         # way the theme picker refreshes its own preview cards.
         self._recolor_settings_nav_icons()
+        # The alignment icons are canvas-drawn for the same reason and need
+        # the same treatment; this repaints their bars along with restoring
+        # every paragraph button's pressed state in the new palette.
+        self._refresh_list_buttons()
+        # A quote's bar and tint are theme colours living on a text tag,
+        # which nothing above reaches either.
+        self._recolor_paragraph_tags()
         # Recolour the note cards in place rather than calling
         # refresh_note_list(), which destroys and rebuilds every card. That
         # rebuild was ~85ms of a ~121ms theme switch and made the list
@@ -3484,6 +4124,14 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         format_bar.pack(fill="x", padx=30, pady=(0, 4))
 
         self._fmt_buttons = {}
+        # List buttons get their own registry rather than sharing _fmt_buttons:
+        # dict is driven by _refresh_format_buttons, which asks whether the
+        # *selection* carries a character style. A list is a property of a
+        # line, so it would answer "no" every time and hold the buttons
+        # permanently unpressed.
+        self._list_buttons = {}
+        self._align_buttons = {}
+        self._block_buttons = {}
         self._pending_styles = set()  # styles queued up for the next typed char
         self._pending_text_color = None  # hex, or None
         self._pending_highlight_color = None  # hex, or None
@@ -3491,11 +4139,14 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         style_lbl = tk.Label(format_bar, text="Style", font=("Segoe UI", 8))
         self.track_theme(style_lbl, bg="bg", fg="subtext")
         style_lbl.pack(side="left", padx=(0, 6))
-        for style, label, label_font in (
-            ("bold", "B", ("Segoe UI", 10, "bold")),
-            ("italic", "I", ("Segoe UI", 10, "italic")),
-            ("underline", "U", ("Segoe UI", 10, "underline")),
-            ("strike", "S", ("Segoe UI", 10, "overstrike")),
+        for style, label, label_font, tip, tip_detail in (
+            ("bold", "B", ("Segoe UI", 10, "bold"), "Bold",
+             "Ctrl+B \u2014 the selected text, or whatever you type next"),
+            ("italic", "I", ("Segoe UI", 10, "italic"), "Italic", "Ctrl+I"),
+            ("underline", "U", ("Segoe UI", 10, "underline"), "Underline",
+             "Ctrl+U"),
+            ("strike", "S", ("Segoe UI", 10, "overstrike"), "Strikethrough",
+             "Ctrl+D"),
         ):
             btn = tk.Button(
                 format_bar, text=label, font=label_font, width=3,
@@ -3504,6 +4155,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             )
             self.track_theme(btn, bg="sidebar", fg="text")
             btn.pack(side="left", padx=(0, 4), ipady=2)
+            self._attach_tooltip(btn, tip, tip_detail)
             self._fmt_buttons[style] = btn
 
         # A thin divider + short label mark the color pickers as their own
@@ -3532,12 +4184,86 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             command=lambda: self._open_color_swatch_popup("text_color")
         )
         self.text_color_btn.pack(side="left", padx=(0, 4), ipady=2)
+        self._attach_tooltip(self.text_color_btn, "Text colour",
+                             "Colours the letters themselves")
         self.highlight_btn = tk.Button(
             format_bar, text="H", font=("Segoe UI", 10, "bold"), width=3,
             relief="flat", cursor="hand2",
             command=lambda: self._open_color_swatch_popup("highlight")
         )
         self.highlight_btn.pack(side="left", padx=(0, 4), ipady=2)
+        self._attach_tooltip(self.highlight_btn, "Highlight",
+                             "Colours the background behind the letters")
+
+        # Paragraph formatting -- what a whole line looks like -- kept apart
+        # from the Style group, which is about the characters inside it. The
+        # name is not "Lists": the note already has a Checklist below, and
+        # two things called lists in one editor is one too many.
+        para_divider = tk.Frame(format_bar, width=1)
+        self.track_theme(para_divider, bg="card")
+        para_divider.pack(side="left", fill="y", padx=(2, 8), pady=2)
+        para_lbl = tk.Label(format_bar, text="Paragraph", font=("Segoe UI", 8))
+        self.track_theme(para_lbl, bg="bg", fg="subtext")
+        para_lbl.pack(side="left", padx=(0, 6))
+        for kind, label, tip, tip_detail in (
+            ("bullet", "\u2022", "Bullet list",
+             "Whole lines \u2014 click again to turn the list off"),
+            ("number", "1.", "Numbered list",
+             "Numbers itself; a nested list restarts at 1"),
+        ):
+            btn = tk.Button(
+                format_bar, text=label, font=("Segoe UI", 10, "bold"), width=3,
+                relief="flat", cursor="hand2",
+                command=lambda k=kind: self._toggle_list(k)
+            )
+            self.track_theme(btn, bg="sidebar", fg="text")
+            btn.pack(side="left", padx=(0, 4), ipady=2)
+            self._attach_tooltip(btn, tip, tip_detail)
+            self._list_buttons[kind] = btn
+
+        # Alignment sits in the same group: it is another property of the
+        # whole line. The icons are drawn rather than lettered -- there is no
+        # icon font to lean on and the app ships no image assets, and drawn
+        # bars recolour with the theme, which a picture would not. Same
+        # approach as the Settings nav glyphs.
+        for align, tip in (("left", "Align left"), ("center", "Centre"),
+                           ("right", "Align right")):
+            btn = self._make_align_button(format_bar, align)
+            self.track_theme(btn, bg="sidebar")
+            btn.pack(side="left", padx=(0, 4))
+            self._attach_tooltip(
+                btn, tip,
+                "Applies to whole paragraphs, not to part of one")
+            self._align_buttons[align] = btn
+
+        # Indent and outdent. Arrows rather than drawn bars: these do
+        # something rather than describe a state, so they never show a
+        # pressed look and do not belong in the registries above.
+        for delta, glyph, tip, tip_detail in (
+            (-1, "⇤", "Outdent", "Shift+Tab inside a list"),
+            (+1, "⇥", "Indent", "Tab inside a list — works on any paragraph"),
+        ):
+            btn = tk.Button(
+                format_bar, text=glyph, font=("Segoe UI", 11), width=3,
+                relief="flat", cursor="hand2",
+                command=lambda d=delta: self._change_paragraph_indent(d)
+            )
+            self.track_theme(btn, bg="sidebar", fg="text")
+            btn.pack(side="left", padx=(0, 4), ipady=2)
+            self._attach_tooltip(btn, tip, tip_detail)
+
+        # Quote block. Shows a pressed state, so it joins a registry the
+        # refresh loop knows about.
+        quote_btn = tk.Button(
+            format_bar, text="❝", font=("Segoe UI", 11), width=3,
+            relief="flat", cursor="hand2",
+            command=lambda: self._toggle_paragraph_block("quote")
+        )
+        self.track_theme(quote_btn, bg="sidebar", fg="text")
+        quote_btn.pack(side="left", padx=(0, 4), ipady=2)
+        self._attach_tooltip(quote_btn, "Quote block",
+                             "A coloured bar down the left of the paragraph")
+        self._block_buttons["quote"] = quote_btn
 
         text_frame = tk.Frame(self.editor)
         self.track_theme(text_frame, bg="card")
@@ -3554,6 +4280,21 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         body_sb.pack(side="right", fill="y")
         self.body_text.pack(side="left", fill="both", expand=True)
         self._setup_body_formatting_tags(self.body_text)
+        self._setup_list_tags(self.body_text)
+        self.body_text.bind("<Return>", self._on_body_return)
+        self.body_text.bind("<BackSpace>", self._on_body_backspace)
+        self.body_text.bind("<<Paste>>", self._on_body_paste, add="+")
+        self.body_text.bind("<Tab>", lambda e: self._on_body_tab(e, +1))
+        self.body_text.bind("<Shift-Tab>", lambda e: self._on_body_tab(e, -1))
+        # X11 reports Shift+Tab as its own keysym rather than a modified Tab.
+        # Windows has never heard of it, and binding an unknown keysym is an
+        # error there, so this is allowed to fail rather than guarded by a
+        # platform check -- the same binding is simply unnecessary on Windows.
+        try:
+            self.body_text.bind("<ISO_Left_Tab>",
+                                lambda e: self._on_body_tab(e, -1))
+        except tk.TclError:
+            pass
         self.body_text.bind("<KeyRelease>", self._schedule_autosave)
         self.body_text.bind("<KeyRelease>", self._apply_pending_style_to_typed_char, add="+")
         self.body_text.bind("<KeyRelease>", self._refresh_format_buttons, add="+")
@@ -5131,6 +5872,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             "title": title,
             "body": self.body_text.get("1.0", "end-1c"),
             "formatting": self._extract_formatting(self.body_text),
+            "paragraphs": self._extract_paragraphs(self.body_text),
             "pending_styles": sorted(self._pending_styles),
             "pending_text_color": self._pending_text_color,
             "pending_highlight_color": self._pending_highlight_color,
@@ -5165,6 +5907,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.body_text.delete("1.0", "end")
         self.body_text.insert("1.0", st["body"])
         self._apply_formatting(self.body_text, st.get("formatting", []))
+        self._apply_paragraphs(self.body_text, st.get("paragraphs", []))
         self.comments_text.delete("1.0", "end")
         self.comments_text.insert("1.0", st["comments"])
         self.category_var.set(st["category"])
@@ -5530,6 +6273,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # actually IS the base content (no override for this occurrence).
         if shown.get("body") == note.get("body"):
             self._apply_formatting(self.body_text, note.get("formatting", []))
+        self._apply_paragraphs(self.body_text, note.get("paragraphs", []))
         self.comments_text.delete("1.0", "end")
         self.comments_text.insert("1.0", shown.get("comments", ""))
         self.category_var.set(shown["category"])
@@ -5785,6 +6529,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self.body_text.delete("1.0", "end")
             self.body_text.insert("1.0", tpl["body"])
             self._apply_formatting(self.body_text, tpl.get("formatting", []))
+            self._apply_paragraphs(self.body_text, tpl.get("paragraphs", []))
         if tpl.get("comments"):
             self.comments_text.delete("1.0", "end")
             self.comments_text.insert("1.0", tpl["comments"])
@@ -5838,6 +6583,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 "title": st.get("title", ""),
                 "body": st.get("body", ""),
                 "formatting": st.get("formatting", []),
+                "paragraphs": st.get("paragraphs", []),
                 "comments": st.get("comments", ""),
                 "category": st.get("category", "General"),
                 "checklist": st.get("checklist", []),
@@ -5978,6 +6724,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.body_text.delete("1.0", "end")
         self.body_text.insert("1.0", prev.get("body", ""))
         self._apply_formatting(self.body_text, prev.get("formatting", []))
+        self._apply_paragraphs(self.body_text, prev.get("paragraphs", []))
         self._refresh_format_buttons()
         self.comments_text.delete("1.0", "end")
         self.comments_text.insert("1.0", prev.get("comments", ""))
@@ -5993,6 +6740,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             title = ""
         body = self.body_text.get("1.0", "end").strip()
         formatting = self._extract_formatting_for_stripped_body(self.body_text, body)
+        paragraphs = self._extract_paragraphs_for_stripped_body(self.body_text, body)
         comments = self.comments_text.get("1.0", "end").strip()
         category = self.category_var.get()
 
@@ -6049,6 +6797,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 "title": title,
                 "body": body,
                 "formatting": formatting,
+                "paragraphs": paragraphs,
                 "comments": comments,
                 "category": category,
                 "date": date_value,
@@ -6114,11 +6863,13 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                         "title": note.get("title", ""),
                         "body": note.get("body", ""),
                         "formatting": note.get("formatting", []),
+                        "paragraphs": note.get("paragraphs", []),
                         "comments": note.get("comments", ""),
                     }
                 note["title"] = title
                 note["body"] = body
                 note["formatting"] = formatting
+                note["paragraphs"] = paragraphs
                 note["comments"] = comments
                 note["category"] = category
                 note["date"] = date_value

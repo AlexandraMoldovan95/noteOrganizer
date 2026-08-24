@@ -589,6 +589,737 @@ pending_save_note = app.find_note(app.selected_note_id)
 check('pending_styles is a live-editing concept only, never saved to the note',
       'pending_styles' not in pending_save_note)
 
+# ---- BULLET AND NUMBERED LISTS ----
+# A list is line-level state: the marker lives in the body text (so it
+# survives export, share codes and plain-text copy untouched) while the
+# hanging indent is a Tk tag rebuilt from the note's "paragraphs" field.
+#
+# Enter/Backspace are driven by calling the handlers directly rather than
+# by event_generate: this is deep into the script, where body_text can no
+# longer reliably take real keyboard focus, and a key event delivered to
+# an unfocused widget silently does nothing at all. The bindings
+# themselves are asserted separately, so the wiring is still covered.
+app.new_note()
+app.title_entry.insert(0, 'ListNote')
+app.update()
+
+check('list buttons live in their own registry, not among the style toggles',
+      set(app._list_buttons.keys()) == {'bullet', 'number'}
+      and set(app._fmt_buttons.keys()) == {'bold', 'italic', 'underline', 'strike'})
+check('Return and BackSpace are bound on the body text',
+      bool(app.body_text.bind('<Return>')) and bool(app.body_text.bind('<BackSpace>')))
+
+
+def set_body(text):
+    app.body_text.delete('1.0', 'end')
+    app.body_text.insert('1.0', text)
+    app.update()
+
+
+def select_all_body():
+    app.body_text.tag_add('sel', '1.0', 'end-1c')
+    app.update()
+
+
+def clear_selection():
+    app.body_text.tag_remove('sel', '1.0', 'end')
+    app.update()
+
+
+def body():
+    return app.body_text.get('1.0', 'end-1c')
+
+
+set_body('milk\neggs\nbread')
+select_all_body()
+app._list_buttons['bullet'].invoke()
+clear_selection()
+check('clicking the bullet button prefixes every selected line',
+      body() == '• milk\n• eggs\n• bread')
+check('each bulleted line is tagged, so the indent can be rebuilt on load',
+      app._extract_paragraphs(app.body_text)
+      == [{'line': 0, 'kind': 'bullet'},
+          {'line': 1, 'kind': 'bullet'},
+          {'line': 2, 'kind': 'bullet'}])
+
+select_all_body()
+app._list_buttons['number'].invoke()
+clear_selection()
+check('switching a bullet list to numbers replaces the markers and counts up',
+      body() == '1. milk\n2. eggs\n3. bread')
+
+select_all_body()
+app._list_buttons['number'].invoke()
+clear_selection()
+check('clicking the same list button again turns the list back off',
+      body() == 'milk\neggs\nbread')
+check('turning a list off leaves no list tags behind',
+      app._extract_paragraphs(app.body_text) == [])
+
+# ---- Enter continues the list; Enter on an empty item leaves it ----
+set_body('first')
+select_all_body()
+app._list_buttons['number'].invoke()
+clear_selection()
+app.body_text.mark_set('insert', '1.end')
+app._on_body_return(None)
+app.body_text.insert('insert', 'second')
+app.update()
+check('Enter at the end of a numbered item starts the next one',
+      body() == '1. first\n2. second')
+
+app._on_body_return(None)
+app.update()
+check('Enter again adds an empty item, ready to type into',
+      body() == '1. first\n2. second\n3. ')
+app._on_body_return(None)
+app.update()
+check('Enter on an item you never typed into ends the list instead',
+      body() == '1. first\n2. second\n')
+check('ending the list leaves only the two real items tagged',
+      app._extract_paragraphs(app.body_text)
+      == [{'line': 0, 'kind': 'number'}, {'line': 1, 'kind': 'number'}])
+
+# ---- Backspace against the marker ----
+set_body('alpha')
+select_all_body()
+app._list_buttons['bullet'].invoke()
+clear_selection()
+app.body_text.mark_set('insert', '1.2')  # immediately after "• "
+app.update()
+check('Backspace just after the marker removes the whole marker',
+      app._on_body_backspace(None) == 'break' and body() == 'alpha')
+check('removing the marker by Backspace also drops the list tag',
+      app._extract_paragraphs(app.body_text) == [])
+
+set_body('aaa')
+select_all_body()
+app._list_buttons['bullet'].invoke()
+clear_selection()
+app.body_text.mark_set('insert', '1.4')  # mid-word
+app.update()
+check('Backspace elsewhere in the item is left to Tk, deleting one character',
+      app._on_body_backspace(None) is None)
+
+# ---- Marker and indent tag must not drift apart (regression) ----
+# The indent tag first covered each line's trailing newline. Tk hands a tag
+# on to text inserted between two characters that both carry it, so the next
+# line inherited it: a line with no bullet in it counted as a bullet, was
+# saved that way, and clicking the bullet button "did nothing" because the
+# app thought it was already one and toggled it off. Fixed by ending the tag
+# at .end and reading the marker in the text as the source of truth.
+set_body('one\ntwo')
+select_all_body()
+app._list_buttons['bullet'].invoke()
+clear_selection()
+app.body_text.insert('end-1c', '\nthree')
+app.update()
+check('a line added after a list item is not silently treated as an item',
+      app._extract_paragraphs(app.body_text) == [{'line': 0, 'kind': 'bullet'},
+                                             {'line': 1, 'kind': 'bullet'}])
+app.body_text.tag_add('sel', '3.0', '3.end')
+app.update()
+app._list_buttons['bullet'].invoke()
+clear_selection()
+check('clicking the bullet button on that line adds a bullet, not removes one',
+      body() == '\u2022 one\n\u2022 two\n\u2022 three')
+
+# The mirror image: text typed at the END of an item is not inherited either,
+# and an untagged wrap point loses the hanging indent, so a long item's
+# second display line slid back under its own marker.
+set_body('short')
+select_all_body()
+app._list_buttons['bullet'].invoke()
+clear_selection()
+app.body_text.mark_set('insert', '1.end')
+app.body_text.insert('insert', ' ' + 'word ' * 40)
+app._refresh_format_buttons()
+app.update()
+# Asks the app for the tag name rather than spelling it out: there is one
+# margin tag per list kind and depth, so a hard-coded name silently stops
+# matching anything the moment that scheme changes, and a test that looks at
+# nothing passes for free.
+bullet_tag = app._paragraph_tag(app.body_text, 'bullet', 0)
+tagged = app.body_text.tag_ranges(bullet_tag)
+check('the indent tag grows to cover text typed at the end of an item',
+      len(tagged) == 2
+      and str(app.body_text.index(tagged[1])) == str(app.body_text.index('1.end')))
+
+# The marker in the text is what makes a line an item -- the tag is only the
+# indent drawn over it. Checked directly, because the two halves of that rule
+# cover for each other: with the tag no longer reaching the newline, reading
+# the tag instead of the marker happens to give the same answer everywhere
+# else, so nothing else here would notice the rule being dropped.
+set_body('plain line')
+app.body_text.tag_add(bullet_tag, '1.0', '1.end')
+app.update()
+check('a stray indent tag on a line with no marker is not a list item',
+      app._extract_paragraphs(app.body_text) == [])
+
+set_body('plain\nlines')
+app._apply_paragraphs(app.body_text, [{'line': 0, 'kind': 'bullet'}])
+app.update()
+check('a stored list line whose text lost its marker does not indent a plain line',
+      not app.body_text.tag_ranges(bullet_tag))
+
+# ---- The cursor's own line drives the button's pressed look ----
+# Sets up its own list line instead of inheriting one from the checks above,
+# so adding a check before this one cannot quietly change what it tests.
+set_body('bullet me')
+select_all_body()
+app._list_buttons['bullet'].invoke()
+clear_selection()
+app.body_text.mark_set('insert', '1.3')
+app._refresh_list_buttons()
+app.update()
+check('the bullet button reads as pressed while the cursor is in a bullet item',
+      str(app._list_buttons['bullet'].cget('relief')) == 'sunken'
+      and str(app._list_buttons['number'].cget('relief')) == 'flat')
+
+# ---- Renumbering when the widest marker shrinks (10. -> 9.) ----
+# The marker is part of the body, so every character offset after it moves
+# when the marker changes width. Formatting spans have to move with it or
+# bold text slides sideways onto its neighbours.
+set_body('\n'.join('item%d' % i for i in range(1, 11)))
+select_all_body()
+app._list_buttons['number'].invoke()
+clear_selection()
+check('a ten-item list numbers past single digits correctly',
+      body().split('\n')[9] == '10. item10')
+app.body_text.tag_add('sel', '10.4', '10.end')
+app.update()
+app._fmt_buttons['bold'].invoke()
+clear_selection()
+check('bold applies to the text of the tenth item',
+      app.body_text.get('bold.first', 'bold.last') == 'item10')
+app.body_text.delete('1.0', '2.0')  # delete item 1 outright
+app._renumber_lists()
+app.update()
+check('deleting the first item renumbers the rest down',
+      body().split('\n')[-1] == '9. item10')
+check('bold stays on its own text when the marker in front of it shrinks',
+      app.body_text.get('bold.first', 'bold.last') == 'item10')
+
+# ---- Save/reload round trip ----
+app.new_note()
+app.title_entry.insert(0, 'ListRoundTrip')
+set_body('one\ntwo')
+select_all_body()
+app._list_buttons['bullet'].invoke()
+clear_selection()
+app.save_current_note(auto=False)
+app.update()
+list_note = app.find_note(app.selected_note_id)
+check('a saved note carries its list lines alongside its formatting',
+      list_note.get('paragraphs') == [{'line': 0, 'kind': 'bullet'},
+                                  {'line': 1, 'kind': 'bullet'}])
+check('the markers themselves are saved as ordinary body text',
+      list_note['body'] == '• one\n• two')
+app.new_note()
+app.update()
+app.load_note(list_note)
+app.update()
+check('reopening the note puts the list tags back on the right lines',
+      app._extract_paragraphs(app.body_text) == [{'line': 0, 'kind': 'bullet'},
+                                             {'line': 1, 'kind': 'bullet'}])
+
+# Saving over an existing note is a different code path from creating one,
+# and the more common one -- a list usually grows after its note exists.
+app.body_text.insert('end-1c', '\nthree')
+app.body_text.tag_add('sel', '3.0', '3.end')
+app.update()
+app._list_buttons['bullet'].invoke()
+clear_selection()
+app.save_current_note(auto=False)
+app.update()
+grown_note = app.find_note(app.selected_note_id)
+check('adding an item to an existing note updates the list lines it saves',
+      grown_note['body'] == '\u2022 one\n\u2022 two\n\u2022 three'
+      and grown_note.get('paragraphs') == [{'line': 0, 'kind': 'bullet'},
+                                       {'line': 1, 'kind': 'bullet'},
+                                       {'line': 2, 'kind': 'bullet'}])
+
+# save_current_note() strips the body, so leading blank lines shift every
+# line up. Without compensating, the reopened note indents the wrong ones.
+app.new_note()
+app.title_entry.insert(0, 'LeadingBlanks')
+set_body('\n\nmilk\neggs')
+app.body_text.tag_add('sel', '3.0', '4.end')
+app.update()
+app._list_buttons['bullet'].invoke()
+clear_selection()
+app.save_current_note(auto=False)
+app.update()
+blank_note = app.find_note(app.selected_note_id)
+check('leading blank lines that saving strips also shift the list lines up',
+      blank_note['body'] == '• milk\n• eggs'
+      and blank_note.get('paragraphs') == [{'line': 0, 'kind': 'bullet'},
+                                       {'line': 1, 'kind': 'bullet'}])
+
+check('normalize_note drops list lines pointing past the end of the body',
+      NO.normalize_note({'body': 'one\ntwo',
+                         'paragraphs': [{'line': 0, 'kind': 'bullet'},
+                                    {'line': 9, 'kind': 'bullet'}]})['paragraphs']
+      == [{'line': 0, 'kind': 'bullet'}])
+
+# ---- Templates carry lists too ----
+st_for_list_tpl = app.capture_editor_state()
+list_tpl = NO.normalize_template({
+    'name': 'ListTemplate',
+    'title': st_for_list_tpl.get('title', ''),
+    'body': st_for_list_tpl.get('body', ''),
+    'formatting': st_for_list_tpl.get('formatting', []),
+    'paragraphs': st_for_list_tpl.get('paragraphs', []),
+    'comments': st_for_list_tpl.get('comments', ''),
+    'category': st_for_list_tpl.get('category', 'General'),
+    'checklist': st_for_list_tpl.get('checklist', []),
+})
+check('normalize_template keeps list lines from captured editor state',
+      bool(list_tpl.get('paragraphs')))
+app.new_note()
+app.update()
+app._apply_template(list_tpl)
+app.update()
+check('applying a template rebuilds its list indents in the editor',
+      bool(app._extract_paragraphs(app.body_text)))
+
+# ---- PARAGRAPH ALIGNMENT ----
+# Alignment is the other line-level property, and unlike a list marker it
+# leaves nothing behind in the body text -- so it is read from its tag and
+# has to be carried through save/reload by the paragraphs record alone.
+app.new_note()
+app.title_entry.insert(0, 'AlignNote')
+app.update()
+
+check('the alignment buttons live in their own registry',
+      set(app._align_buttons.keys()) == {'left', 'center', 'right'})
+
+set_body('one\ntwo\nthree')
+app.body_text.tag_add('sel', '1.0', '1.end')
+app.update()
+app._set_paragraph_align('center')
+clear_selection()
+check('centring a line records it against that line only',
+      app._extract_paragraphs(app.body_text) == [{'line': 0, 'align': 'center'}])
+check('the body text itself is untouched by alignment',
+      body() == 'one\ntwo\nthree')
+
+app.body_text.tag_add('sel', '1.0', '1.end')
+app.update()
+app._set_paragraph_align('center')
+clear_selection()
+check('clicking the alignment a line already has puts it back to left',
+      app._extract_paragraphs(app.body_text) == [])
+
+# Alignment must reach the newline: justify applies to a whole display line,
+# so a range stopping at .end leaves the caret jumping back left the moment
+# Enter is pressed on a centred line.
+set_body('heading')
+app.body_text.tag_add('sel', '1.0', '1.end')
+app.update()
+app._set_paragraph_align('center')
+clear_selection()
+app.body_text.insert('1.end', '\n')      # what pressing Enter there does
+app.update()
+check('alignment carries onto the new line when Enter ends a centred one',
+      'align_center' in app.body_text.tag_names('2.0'))
+
+# A centred bullet keeps both properties: they set different Tk options.
+set_body('milk\neggs')
+select_all_body()
+app._list_buttons['bullet'].invoke()
+clear_selection()
+app.body_text.tag_add('sel', '1.0', '1.end')
+app.update()
+app._set_paragraph_align('right')
+clear_selection()
+check('a line can be both a list item and aligned',
+      app._extract_paragraphs(app.body_text)
+      == [{'line': 0, 'kind': 'bullet', 'align': 'right'},
+          {'line': 1, 'kind': 'bullet'}])
+
+# ---- Alignment round trip ----
+app.new_note()
+app.title_entry.insert(0, 'AlignRoundTrip')
+set_body('title line\nbody line')
+app.body_text.tag_add('sel', '1.0', '1.end')
+app.update()
+app._set_paragraph_align('center')
+clear_selection()
+app.save_current_note(auto=False)
+app.update()
+align_note = app.find_note(app.selected_note_id)
+check('alignment is saved on a note with no list at all',
+      align_note.get('paragraphs') == [{'line': 0, 'align': 'center'}])
+app.new_note()
+app.update()
+app.load_note(align_note)
+app.update()
+check('reopening the note re-centres the right line',
+      app._paragraph_align_of(app.body_text, 1) == 'center'
+      and app._paragraph_align_of(app.body_text, 2) == 'left')
+
+check('normalize_paragraphs drops an entry that says nothing',
+      NO.normalize_paragraphs([{'line': 0}, {'line': 1, 'align': 'left'}]) == [])
+check('normalize_paragraphs rejects an alignment it does not know',
+      NO.normalize_paragraphs([{'line': 0, 'align': 'sideways'}]) == [])
+
+# ---- INDENTATION AND MULTILEVEL LISTS ----
+# Depth is one property for both jobs: on a list line it is the nesting
+# level, on a plain line it is just a left margin. Numbering restarts per
+# level *and* per parent, which is the part worth pinning down.
+app.new_note()
+app.title_entry.insert(0, 'NestNote')
+app.update()
+
+
+def lines_now():
+    return app.body_text.get('1.0', 'end-1c').split('\n')
+
+
+def depths():
+    return [app._paragraph_indent_of(app.body_text, n)
+            for n in range(1, len(lines_now()) + 1)]
+
+
+def indent_range(a, z, delta):
+    app.body_text.tag_add('sel', f'{a}.0', f'{z}.end')
+    app.update()
+    app._change_paragraph_indent(delta)
+    clear_selection()
+
+
+set_body('first\nsub one\nsub two\nsecond\nsub A\nsub B')
+select_all_body()
+app._list_buttons['number'].invoke()
+clear_selection()
+indent_range(2, 3, +1)
+indent_range(5, 6, +1)
+check('a nested numbered run restarts at one under each parent',
+      lines_now() == ['1. first', '1. sub one', '2. sub two',
+                      '2. second', '1. sub A', '2. sub B'])
+check('the outer numbering ignores the nested items',
+      depths() == [0, 1, 1, 0, 1, 1])
+
+indent_range(3, 3, +1)
+check('going a level deeper again restarts that level too',
+      lines_now()[2] == '1. sub two' and depths()[2] == 2)
+
+indent_range(1, 6, -1)
+check('outdenting the whole list pulls every line back one step, '
+      'clamping the ones already at the margin',
+      depths() == [0, 0, 1, 0, 0, 0])
+
+# Bullets show their depth in the glyph, which is what makes a bullet
+# recognisable from the text alone at any level.
+set_body('top\nalpha\nbeta')
+select_all_body()
+app._list_buttons['bullet'].invoke()
+clear_selection()
+indent_range(2, 2, +1)
+indent_range(3, 3, +1)
+indent_range(3, 3, +1)
+check('each bullet level gets its own glyph',
+      lines_now() == ['\u2022 top', '\u25e6 alpha', '\u25aa beta'])
+check('outdenting a bullet puts its glyph back',
+      (indent_range(3, 3, -1) or lines_now()[2]) == '\u25e6 beta')
+
+# Depth survives changing the list kind, and survives turning it off.
+set_body('item')
+select_all_body()
+app._list_buttons['bullet'].invoke()
+clear_selection()
+indent_range(1, 1, +1)
+app.body_text.tag_add('sel', '1.0', '1.end')
+app.update()
+app._list_buttons['number'].invoke()
+clear_selection()
+check('switching a nested bullet to a number keeps it at its depth',
+      lines_now() == ['1. item'] and depths() == [1])
+app.body_text.tag_add('sel', '1.0', '1.end')
+app.update()
+app._list_buttons['number'].invoke()
+clear_selection()
+check('turning the list off leaves the line indented, not snapped left',
+      lines_now() == ['item'] and depths() == [1])
+
+# A plain paragraph can be indented with no list involved at all.
+set_body('a plain paragraph')
+app.body_text.tag_add('sel', '1.0', '1.end')
+app.update()
+app._change_paragraph_indent(+1)
+clear_selection()
+check('a plain paragraph records its indent and no list kind',
+      app._extract_paragraphs(app.body_text) == [{'line': 0, 'indent': 1}])
+
+check('indent is clamped so it cannot run off the edge',
+      NO.normalize_paragraphs([{'line': 0, 'indent': 999}])
+      == [{'line': 0, 'indent': NO.MAX_INDENT}])
+check('a nonsense indent is discarded rather than repaired',
+      NO.normalize_paragraphs([{'line': 0, 'indent': 'deep'}]) == [])
+
+# ---- Keyboard: Tab, Enter and Backspace against depth ----
+set_body('one')
+select_all_body()
+app._list_buttons['number'].invoke()
+clear_selection()
+app.body_text.mark_set('insert', '1.end')
+app._on_body_return(None)
+app.body_text.insert('insert', 'two')
+app.update()
+app._on_body_tab(None, +1)
+check('Tab demotes the item the cursor is in',
+      lines_now() == ['1. one', '1. two'] and depths() == [0, 1])
+app._on_body_tab(None, -1)
+check('Shift+Tab promotes it again',
+      lines_now() == ['1. one', '2. two'] and depths() == [0, 0])
+
+
+app._on_body_tab(None, +1)
+app._on_body_return(None)
+app.update()
+check('Enter starts the next item at the same depth',
+      depths() == [0, 1, 1])
+app._on_body_return(None)
+app.update()
+# Both outcomes leave the line at depth 0, so the depth alone cannot tell
+# them apart -- what differs is whether it is still a list item.
+check('Enter on an empty nested item climbs out one level first',
+      depths() == [0, 1, 0] and lines_now()[2].strip() != '')
+app._on_body_return(None)
+app.update()
+check('Enter again on the now-unnested empty item leaves the list',
+      lines_now()[2] == '')
+
+# On a bullet, the glyph is what shows the depth, so this is where Enter
+# carrying the level can actually be seen -- a numbered marker reads "1. "
+# at every depth and would hide the difference.
+set_body('parent')
+select_all_body()
+app._list_buttons['bullet'].invoke()
+clear_selection()
+indent_range(1, 1, +1)
+app.body_text.mark_set('insert', '1.end')
+app._on_body_return(None)
+app.body_text.insert('insert', 'sibling')
+app.update()
+check("Enter keeps a nested bullet's own glyph on the next item",
+      lines_now() == ['\u25e6 parent', '\u25e6 sibling'] and depths() == [1, 1])
+
+set_body('alpha')
+select_all_body()
+app._list_buttons['bullet'].invoke()
+clear_selection()
+indent_range(1, 1, +1)
+app.body_text.mark_set('insert', '1.2')
+app.update()
+check('Backspace against a nested marker outdents instead of deleting it',
+      app._on_body_backspace(None) == 'break'
+      and lines_now() == ['\u2022 alpha'] and depths() == [0])
+
+set_body('just prose')
+app.body_text.mark_set('insert', '1.4')
+app.update()
+check('Tab in ordinary prose is left to Tk, so it still types a tab',
+      app._on_body_tab(None, +1) is None)
+
+# ---- Nesting round trip ----
+app.new_note()
+app.title_entry.insert(0, 'NestRoundTrip')
+set_body('parent\nchild')
+select_all_body()
+app._list_buttons['number'].invoke()
+clear_selection()
+indent_range(2, 2, +1)
+app.save_current_note(auto=False)
+app.update()
+nest_note = app.find_note(app.selected_note_id)
+check('depth is saved alongside the list kind',
+      nest_note.get('paragraphs') == [{'line': 0, 'kind': 'number'},
+                                      {'line': 1, 'kind': 'number', 'indent': 1}])
+app.new_note()
+app.update()
+app.load_note(nest_note)
+app.update()
+check('reopening the note puts the child back at its own depth',
+      depths() == [0, 1] and lines_now() == ['1. parent', '1. child'])
+
+# ---- QUOTE BLOCKS ----
+# Drawn as a coloured left bar plus a tinted background rather than a box:
+# Tk draws a bordered range as one box per display line, so a paragraph that
+# wraps comes out as several boxes with the last ending mid-sentence.
+app.new_note()
+app.title_entry.insert(0, 'QuoteNote')
+app.update()
+
+check('the quote button lives in its own registry',
+      set(app._block_buttons.keys()) == {'quote'})
+
+set_body('a quoted remark\nplain line')
+app.body_text.tag_add('sel', '1.0', '1.end')
+app.update()
+app._block_buttons['quote'].invoke()
+clear_selection()
+check('quoting a line records it against that line only',
+      app._extract_paragraphs(app.body_text) == [{'line': 0, 'block': 'quote'}])
+check('quoting leaves the body text alone',
+      body() == 'a quoted remark\nplain line')
+
+app.body_text.tag_add('sel', '1.0', '1.end')
+app.update()
+app._block_buttons['quote'].invoke()
+clear_selection()
+check('clicking quote again turns the block back off',
+      app._extract_paragraphs(app.body_text) == [])
+
+# The bar and the tint are theme colours on a text tag, and the margin has
+# to leave room for the bar, so all three live on one combined tag.
+set_body('quoted')
+app.body_text.tag_add('sel', '1.0', '1.end')
+app.update()
+app._block_buttons['quote'].invoke()
+clear_selection()
+quote_tag = app._paragraph_tag(app.body_text, None, 0, 'quote')
+check('a quote reserves margin for its bar',
+      int(app.body_text.tag_cget(quote_tag, 'lmargin1')) >= app.QUOTE_BAR)
+check('the bar is drawn in the theme accent',
+      str(app.body_text.tag_cget(quote_tag, 'lmargincolor'))
+      == app.colors['accent'])
+
+# A quote composes with the other paragraph properties rather than
+# replacing them.
+set_body('milk\neggs')
+select_all_body()
+app._list_buttons['bullet'].invoke()
+clear_selection()
+app.body_text.tag_add('sel', '1.0', '2.end')
+app.update()
+app._block_buttons['quote'].invoke()
+clear_selection()
+check('a quote can hold a list, keeping both properties',
+      app._extract_paragraphs(app.body_text)
+      == [{'line': 0, 'kind': 'bullet', 'block': 'quote'},
+          {'line': 1, 'kind': 'bullet', 'block': 'quote'}])
+
+app.body_text.tag_add('sel', '2.0', '2.end')
+app.update()
+app._change_paragraph_indent(+1)
+clear_selection()
+check('indenting inside a quote keeps the quote',
+      app._extract_paragraphs(app.body_text)[1]
+      == {'line': 1, 'kind': 'bullet', 'indent': 1, 'block': 'quote'})
+
+app.body_text.tag_add('sel', '1.0', '1.end')
+app.update()
+app._list_buttons['bullet'].invoke()      # turn the list off
+clear_selection()
+check('turning the list off inside a quote leaves the quote standing',
+      app._extract_paragraphs(app.body_text)[0] == {'line': 0, 'block': 'quote'})
+
+# ---- Quote round trip ----
+app.new_note()
+app.title_entry.insert(0, 'QuoteRoundTrip')
+set_body('quoted line\nplain line')
+app.body_text.tag_add('sel', '1.0', '1.end')
+app.update()
+app._block_buttons['quote'].invoke()
+clear_selection()
+app.save_current_note(auto=False)
+app.update()
+quote_note = app.find_note(app.selected_note_id)
+check('the quote is saved with the note',
+      quote_note.get('paragraphs') == [{'line': 0, 'block': 'quote'}])
+app.new_note()
+app.update()
+app.load_note(quote_note)
+app.update()
+check('reopening the note puts the quote back on the right line',
+      app._paragraph_block_of(app.body_text, 1) == 'quote'
+      and app._paragraph_block_of(app.body_text, 2) is None)
+
+check('normalize_paragraphs rejects a block style it does not know',
+      NO.normalize_paragraphs([{'line': 0, 'block': 'sidebar'}]) == [])
+
+# ---- TOOLBAR TOOLTIPS ----
+# Every button on the formatting bar is an icon or a single letter, so each
+# one carries a short label on hover.
+app.new_note()
+app.update()
+
+formatting_buttons = (list(app._fmt_buttons.values())
+                      + [app.text_color_btn, app.highlight_btn]
+                      + list(app._list_buttons.values())
+                      + list(app._align_buttons.values())
+                      + list(app._block_buttons.values()))
+check(f'every formatting button carries a tooltip ({len(formatting_buttons)} of them)',
+      all(bool(w.bind('<Enter>')) and bool(w.bind('<Leave>'))
+          for w in formatting_buttons))
+
+# Nothing appears at once: sweeping the pointer across the bar on the way
+# somewhere else should not flash a row of labels.
+app._hide_tooltip()
+app._schedule_tooltip(app._list_buttons['bullet'], 'Bullet list', 'detail')
+app.update()
+check('hovering schedules the tooltip rather than showing it straight away',
+      getattr(app, '_tooltip', None) is None
+      and getattr(app, '_tooltip_after', None) is not None)
+
+check('leaving before the delay is up cancels it',
+      (app._hide_tooltip() or True)
+      and getattr(app, '_tooltip_after', None) is None
+      and getattr(app, '_tooltip', None) is None)
+
+app._show_tooltip(app._list_buttons['bullet'], 'Bullet list',
+                  'Whole lines — click again to turn the list off')
+app.update()
+tip = getattr(app, '_tooltip', None)
+check('the tooltip is a real window once shown',
+      tip is not None and tip.winfo_exists())
+
+
+def tooltip_texts(widget):
+    found = []
+    for child in widget.winfo_children():
+        if isinstance(child, tk.Label):
+            found.append(str(child.cget('text')))
+        found.extend(tooltip_texts(child))
+    return found
+
+
+check('it shows both the name and the explanation',
+      tip is not None
+      and 'Bullet list' in tooltip_texts(tip)
+      and any('turn the list off' in t for t in tooltip_texts(tip)))
+
+app._hide_tooltip()
+app.update()
+check('moving the pointer away takes it down again',
+      getattr(app, '_tooltip', None) is None)
+
+# Hovering one button then another must not leave the first one stranded.
+app._show_tooltip(app._list_buttons['bullet'], 'Bullet list', 'one')
+first_tip = app._tooltip
+app._schedule_tooltip(app._list_buttons['number'], 'Numbered list', 'two')
+app.update()
+check('hovering a second button removes the first tooltip',
+      not first_tip.winfo_exists() and getattr(app, '_tooltip', None) is None)
+app._hide_tooltip()
+
+# A button that has gone away must not produce a stray window.
+ghost = tk.Button(app, text='x')
+ghost.destroy()
+crashed = False
+try:
+    app._show_tooltip(ghost, 'Gone', 'detail')
+    app.update()
+except Exception:
+    crashed = True
+check('a tooltip for a widget that no longer exists is skipped, not crashed',
+      not crashed and getattr(app, '_tooltip', None) is None)
+
+check('hiding when nothing is showing is harmless',
+      (app._hide_tooltip() or True) and getattr(app, '_tooltip', None) is None)
+
 # ---- Fast typing (regression): a first version tagged only "the one
 # character right before the cursor" on each KeyRelease, which silently
 # missed characters typed in a fast real burst -- Tk can queue several
