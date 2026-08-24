@@ -1240,6 +1240,86 @@ check('reopening the note puts the quote back on the right line',
 check('normalize_paragraphs rejects a block style it does not know',
       NO.normalize_paragraphs([{'line': 0, 'block': 'sidebar'}]) == [])
 
+# ---- TOOLBAR TOOLTIPS ----
+# Every button on the formatting bar is an icon or a single letter, so each
+# one carries a short label on hover.
+app.new_note()
+app.update()
+
+formatting_buttons = (list(app._fmt_buttons.values())
+                      + [app.text_color_btn, app.highlight_btn]
+                      + list(app._list_buttons.values())
+                      + list(app._align_buttons.values())
+                      + list(app._block_buttons.values()))
+check(f'every formatting button carries a tooltip ({len(formatting_buttons)} of them)',
+      all(bool(w.bind('<Enter>')) and bool(w.bind('<Leave>'))
+          for w in formatting_buttons))
+
+# Nothing appears at once: sweeping the pointer across the bar on the way
+# somewhere else should not flash a row of labels.
+app._hide_tooltip()
+app._schedule_tooltip(app._list_buttons['bullet'], 'Bullet list', 'detail')
+app.update()
+check('hovering schedules the tooltip rather than showing it straight away',
+      getattr(app, '_tooltip', None) is None
+      and getattr(app, '_tooltip_after', None) is not None)
+
+check('leaving before the delay is up cancels it',
+      (app._hide_tooltip() or True)
+      and getattr(app, '_tooltip_after', None) is None
+      and getattr(app, '_tooltip', None) is None)
+
+app._show_tooltip(app._list_buttons['bullet'], 'Bullet list',
+                  'Whole lines — click again to turn the list off')
+app.update()
+tip = getattr(app, '_tooltip', None)
+check('the tooltip is a real window once shown',
+      tip is not None and tip.winfo_exists())
+
+
+def tooltip_texts(widget):
+    found = []
+    for child in widget.winfo_children():
+        if isinstance(child, tk.Label):
+            found.append(str(child.cget('text')))
+        found.extend(tooltip_texts(child))
+    return found
+
+
+check('it shows both the name and the explanation',
+      tip is not None
+      and 'Bullet list' in tooltip_texts(tip)
+      and any('turn the list off' in t for t in tooltip_texts(tip)))
+
+app._hide_tooltip()
+app.update()
+check('moving the pointer away takes it down again',
+      getattr(app, '_tooltip', None) is None)
+
+# Hovering one button then another must not leave the first one stranded.
+app._show_tooltip(app._list_buttons['bullet'], 'Bullet list', 'one')
+first_tip = app._tooltip
+app._schedule_tooltip(app._list_buttons['number'], 'Numbered list', 'two')
+app.update()
+check('hovering a second button removes the first tooltip',
+      not first_tip.winfo_exists() and getattr(app, '_tooltip', None) is None)
+app._hide_tooltip()
+
+# A button that has gone away must not produce a stray window.
+ghost = tk.Button(app, text='x')
+ghost.destroy()
+crashed = False
+try:
+    app._show_tooltip(ghost, 'Gone', 'detail')
+    app.update()
+except Exception:
+    crashed = True
+check('a tooltip for a widget that no longer exists is skipped, not crashed',
+      not crashed and getattr(app, '_tooltip', None) is None)
+
+check('hiding when nothing is showing is harmless',
+      (app._hide_tooltip() or True) and getattr(app, '_tooltip', None) is None)
+
 # ---- Fast typing (regression): a first version tagged only "the one
 # character right before the cursor" on each KeyRelease, which silently
 # missed characters typed in a fast real burst -- Tk can queue several

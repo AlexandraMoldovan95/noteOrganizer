@@ -1140,6 +1140,84 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         for block, btn in getattr(self, "_block_buttons", {}).items():
             self._set_button_pressed(btn, block == current_block)
 
+    def _attach_tooltip(self, widget, title, detail=""):
+        """Explain a widget while the cursor rests on it.
+
+        Every button on the formatting toolbar is an icon or a single
+        letter, so what each one does is a guess at best. Bound with add="+"
+        because several of these widgets already carry their own <Enter> or
+        <Button-1> handlers.
+        """
+        widget.bind("<Enter>",
+                    lambda e, w=widget: self._schedule_tooltip(w, title, detail),
+                    add="+")
+        widget.bind("<Leave>", lambda e: self._hide_tooltip(), add="+")
+        # Clicking should get on with the job, not leave a label hanging over
+        # the result of it.
+        widget.bind("<Button-1>", lambda e: self._hide_tooltip(), add="+")
+
+    def _schedule_tooltip(self, widget, title, detail):
+        """Wait a moment before showing, so sweeping across the toolbar on
+        the way somewhere else doesn't flash a row of labels."""
+        self._hide_tooltip()
+        self._tooltip_after = self.after(
+            450, lambda: self._show_tooltip(widget, title, detail))
+
+    def _hide_tooltip(self, event=None):
+        """Take the tooltip down, and cancel one that has not appeared yet."""
+        pending = getattr(self, "_tooltip_after", None)
+        if pending is not None:
+            try:
+                self.after_cancel(pending)
+            except (tk.TclError, ValueError):
+                pass
+            self._tooltip_after = None
+        tip = getattr(self, "_tooltip", None)
+        if tip is not None:
+            try:
+                if tip.winfo_exists():
+                    tip.destroy()
+            except tk.TclError:
+                pass
+            self._tooltip = None
+
+    def _show_tooltip(self, widget, title, detail):
+        self._tooltip_after = None
+        try:
+            if not widget.winfo_exists() or not widget.winfo_ismapped():
+                return
+        except tk.TclError:
+            return
+
+        tip = tk.Toplevel(self)
+        tip.overrideredirect(True)
+        tip.attributes("-topmost", True)
+        self._tooltip = tip
+
+        outer = tk.Frame(tip, bg=self.colors["accent"], padx=1, pady=1)
+        outer.pack()
+        box = tk.Frame(outer, bg=self.colors["card"], padx=10, pady=7)
+        box.pack()
+        tk.Label(box, text=title, bg=self.colors["card"],
+                 fg=self.colors["text"], font=("Segoe UI", 9, "bold"),
+                 justify="left").pack(anchor="w")
+        if detail:
+            tk.Label(box, text=detail, bg=self.colors["card"],
+                     fg=self.colors["subtext"], font=("Segoe UI", 8),
+                     justify="left").pack(anchor="w", pady=(2, 0))
+
+        # Positioned under the button and measured against the app window,
+        # never the screen -- the whole virtual desktop spans every monitor,
+        # and measuring against that has put a popup on a display the app was
+        # not on before (see docs/ISSUES_LOG.md).
+        tip.update_idletasks()
+        x = widget.winfo_rootx()
+        y = widget.winfo_rooty() + widget.winfo_height() + 6
+        right_edge = self.winfo_rootx() + self.winfo_width() - 8
+        if x + tip.winfo_width() > right_edge:
+            x = max(self.winfo_rootx() + 8, right_edge - tip.winfo_width())
+        tip.geometry(f"+{x}+{y}")
+
     def _make_align_button(self, parent, align):
         """One alignment button, drawn as four bars on a small canvas.
 
@@ -4061,11 +4139,14 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         style_lbl = tk.Label(format_bar, text="Style", font=("Segoe UI", 8))
         self.track_theme(style_lbl, bg="bg", fg="subtext")
         style_lbl.pack(side="left", padx=(0, 6))
-        for style, label, label_font in (
-            ("bold", "B", ("Segoe UI", 10, "bold")),
-            ("italic", "I", ("Segoe UI", 10, "italic")),
-            ("underline", "U", ("Segoe UI", 10, "underline")),
-            ("strike", "S", ("Segoe UI", 10, "overstrike")),
+        for style, label, label_font, tip, tip_detail in (
+            ("bold", "B", ("Segoe UI", 10, "bold"), "Bold",
+             "Ctrl+B \u2014 the selected text, or whatever you type next"),
+            ("italic", "I", ("Segoe UI", 10, "italic"), "Italic", "Ctrl+I"),
+            ("underline", "U", ("Segoe UI", 10, "underline"), "Underline",
+             "Ctrl+U"),
+            ("strike", "S", ("Segoe UI", 10, "overstrike"), "Strikethrough",
+             "Ctrl+D"),
         ):
             btn = tk.Button(
                 format_bar, text=label, font=label_font, width=3,
@@ -4074,6 +4155,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             )
             self.track_theme(btn, bg="sidebar", fg="text")
             btn.pack(side="left", padx=(0, 4), ipady=2)
+            self._attach_tooltip(btn, tip, tip_detail)
             self._fmt_buttons[style] = btn
 
         # A thin divider + short label mark the color pickers as their own
@@ -4102,12 +4184,16 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             command=lambda: self._open_color_swatch_popup("text_color")
         )
         self.text_color_btn.pack(side="left", padx=(0, 4), ipady=2)
+        self._attach_tooltip(self.text_color_btn, "Text colour",
+                             "Colours the letters themselves")
         self.highlight_btn = tk.Button(
             format_bar, text="H", font=("Segoe UI", 10, "bold"), width=3,
             relief="flat", cursor="hand2",
             command=lambda: self._open_color_swatch_popup("highlight")
         )
         self.highlight_btn.pack(side="left", padx=(0, 4), ipady=2)
+        self._attach_tooltip(self.highlight_btn, "Highlight",
+                             "Colours the background behind the letters")
 
         # Paragraph formatting -- what a whole line looks like -- kept apart
         # from the Style group, which is about the characters inside it. The
@@ -4119,7 +4205,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         para_lbl = tk.Label(format_bar, text="Paragraph", font=("Segoe UI", 8))
         self.track_theme(para_lbl, bg="bg", fg="subtext")
         para_lbl.pack(side="left", padx=(0, 6))
-        for kind, label in (("bullet", "\u2022"), ("number", "1.")):
+        for kind, label, tip, tip_detail in (
+            ("bullet", "\u2022", "Bullet list",
+             "Whole lines \u2014 click again to turn the list off"),
+            ("number", "1.", "Numbered list",
+             "Numbers itself; a nested list restarts at 1"),
+        ):
             btn = tk.Button(
                 format_bar, text=label, font=("Segoe UI", 10, "bold"), width=3,
                 relief="flat", cursor="hand2",
@@ -4127,6 +4218,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             )
             self.track_theme(btn, bg="sidebar", fg="text")
             btn.pack(side="left", padx=(0, 4), ipady=2)
+            self._attach_tooltip(btn, tip, tip_detail)
             self._list_buttons[kind] = btn
 
         # Alignment sits in the same group: it is another property of the
@@ -4134,16 +4226,23 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # icon font to lean on and the app ships no image assets, and drawn
         # bars recolour with the theme, which a picture would not. Same
         # approach as the Settings nav glyphs.
-        for align in ("left", "center", "right"):
+        for align, tip in (("left", "Align left"), ("center", "Centre"),
+                           ("right", "Align right")):
             btn = self._make_align_button(format_bar, align)
             self.track_theme(btn, bg="sidebar")
             btn.pack(side="left", padx=(0, 4))
+            self._attach_tooltip(
+                btn, tip,
+                "Applies to whole paragraphs, not to part of one")
             self._align_buttons[align] = btn
 
         # Indent and outdent. Arrows rather than drawn bars: these do
         # something rather than describe a state, so they never show a
         # pressed look and do not belong in the registries above.
-        for delta, glyph in ((-1, "⇤"), (+1, "⇥")):
+        for delta, glyph, tip, tip_detail in (
+            (-1, "⇤", "Outdent", "Shift+Tab inside a list"),
+            (+1, "⇥", "Indent", "Tab inside a list — works on any paragraph"),
+        ):
             btn = tk.Button(
                 format_bar, text=glyph, font=("Segoe UI", 11), width=3,
                 relief="flat", cursor="hand2",
@@ -4151,6 +4250,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             )
             self.track_theme(btn, bg="sidebar", fg="text")
             btn.pack(side="left", padx=(0, 4), ipady=2)
+            self._attach_tooltip(btn, tip, tip_detail)
 
         # Quote block. Shows a pressed state, so it joins a registry the
         # refresh loop knows about.
@@ -4161,6 +4261,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         )
         self.track_theme(quote_btn, bg="sidebar", fg="text")
         quote_btn.pack(side="left", padx=(0, 4), ipady=2)
+        self._attach_tooltip(quote_btn, "Quote block",
+                             "A coloured bar down the left of the paragraph")
         self._block_buttons["quote"] = quote_btn
 
         text_frame = tk.Frame(self.editor)
