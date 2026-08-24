@@ -180,7 +180,7 @@ from noteorganizer.core.duplicates import (
 
 # Rich-text span storage lives in noteorganizer/core/formatting.py.
 from noteorganizer.core.formatting import (
-    normalize_blocks,
+    normalize_paragraphs,
     parse_list_marker,
     marker_for,
     renumber,
@@ -901,7 +901,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         line = text_widget.get(f"{line_no}.0", f"{line_no}.end")
         return parse_list_marker(line)[0]
 
-    def _extract_blocks(self, text_widget):
+    def _extract_paragraphs(self, text_widget):
         """Read the list tags back out as plain data, for saving.
 
         Line numbers rather than character offsets: a list applies to a whole
@@ -909,13 +909,13 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         different width, which is the same reason formatting uses offsets
         rather than Tk's own line.column indices.
         """
-        blocks = []
+        paragraphs = []
         total = int(text_widget.index("end-1c").split(".")[0])
         for line_no in range(1, total + 1):
             kind = self._list_kind_of(text_widget, line_no)
             if kind:
-                blocks.append({"line": line_no - 1, "kind": kind})
-        return blocks
+                paragraphs.append({"line": line_no - 1, "kind": kind})
+        return paragraphs
 
     def _resync_list_tags(self, line_no=None):
         """Redraw the indent tags from the markers actually in the text.
@@ -973,8 +973,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 fg="white" if active else self.colors["text"],
             )
 
-    def _extract_blocks_for_stripped_body(self, text_widget, stripped_body):
-        """Like _extract_blocks, but adjusted for save_current_note()'s
+    def _extract_paragraphs_for_stripped_body(self, text_widget, stripped_body):
+        """Like _extract_paragraphs, but adjusted for save_current_note()'s
         leading/trailing .strip() on the saved body.
 
         Blocks are stored per line, so any leading blank lines that strip()
@@ -986,29 +986,29 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         dropped = raw[:len(raw) - len(raw.lstrip())].count("\n")
         limit = len(stripped_body.split("\n"))
         shifted = []
-        for block in self._extract_blocks(text_widget):
-            line = block["line"] - dropped
+        for paragraph in self._extract_paragraphs(text_widget):
+            line = paragraph["line"] - dropped
             if 0 <= line < limit:
-                shifted.append({"line": line, "kind": block["kind"]})
+                shifted.append({"line": line, "kind": paragraph["kind"]})
         return shifted
 
-    def _apply_blocks(self, text_widget, blocks):
+    def _apply_paragraphs(self, text_widget, paragraphs):
         """Re-apply saved list lines as live tags, for loading.
 
         A stored entry only earns an indent if the line still starts with a
         marker of that kind. Otherwise a note edited outside the app, or one
-        whose body was rewritten while its blocks were not, would come back
+        whose body was rewritten while its paragraphs were not, would come back
         with a plain line indented as though it were an item.
         """
         total = int(text_widget.index("end-1c").split(".")[0])
-        for block in normalize_blocks(blocks, total):
-            line_no = block["line"] + 1
+        for paragraph in normalize_paragraphs(paragraphs, total):
+            line_no = paragraph["line"] + 1
             if line_no > total:
                 continue
             line = text_widget.get(f"{line_no}.0", f"{line_no}.end")
-            if parse_list_marker(line)[0] != block["kind"]:
+            if parse_list_marker(line)[0] != paragraph["kind"]:
                 continue
-            text_widget.tag_add(f"list_{block['kind']}",
+            text_widget.tag_add(f"list_{paragraph['kind']}",
                                 f"{line_no}.0", f"{line_no}.end")
 
     def _selected_line_range(self):
@@ -1057,8 +1057,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         so bold text does not slide sideways when 9 becomes 10.
         """
         body = self.body_text.get("1.0", "end-1c")
-        blocks = self._extract_blocks(self.body_text)
-        new_body, shifts = renumber(body, blocks)
+        paragraphs = self._extract_paragraphs(self.body_text)
+        new_body, shifts = renumber(body, paragraphs)
         if new_body == body:
             return
         spans = shift_spans(self._extract_formatting(self.body_text), shifts)
@@ -1066,7 +1066,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.body_text.delete("1.0", "end-1c")
         self.body_text.insert("1.0", new_body)
         self._apply_formatting(self.body_text, spans)
-        self._apply_blocks(self.body_text, blocks)
+        self._apply_paragraphs(self.body_text, paragraphs)
         try:
             self.body_text.mark_set("insert", insert_at)
         except tk.TclError:
@@ -2173,7 +2173,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.body_text.delete("1.0", "end")
         self.body_text.insert("1.0", note.get("body", ""))
         self._apply_formatting(self.body_text, note.get("formatting", []))
-        self._apply_blocks(self.body_text, note.get("blocks", []))
+        self._apply_paragraphs(self.body_text, note.get("paragraphs", []))
         self.comments_text.delete("1.0", "end")
         self.comments_text.insert("1.0", note.get("comments", ""))
 
@@ -3734,7 +3734,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         format_bar.pack(fill="x", padx=30, pady=(0, 4))
 
         self._fmt_buttons = {}
-        # Lists get their own registry rather than sharing _fmt_buttons: that
+        # List buttons get their own registry rather than sharing _fmt_buttons:
         # dict is driven by _refresh_format_buttons, which asks whether the
         # *selection* carries a character style. A list is a property of a
         # line, so it would answer "no" every time and hold the buttons
@@ -3795,15 +3795,16 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         )
         self.highlight_btn.pack(side="left", padx=(0, 4), ipady=2)
 
-        # Lists get their own group for the same reason the colour pickers do:
-        # they act on whole lines rather than on a selection, so they behave
-        # differently from the four toggles and should not read as more of them.
-        list_divider = tk.Frame(format_bar, width=1)
-        self.track_theme(list_divider, bg="card")
-        list_divider.pack(side="left", fill="y", padx=(2, 8), pady=2)
-        lists_lbl = tk.Label(format_bar, text="Lists", font=("Segoe UI", 8))
-        self.track_theme(lists_lbl, bg="bg", fg="subtext")
-        lists_lbl.pack(side="left", padx=(0, 6))
+        # Paragraph formatting -- what a whole line looks like -- kept apart
+        # from the Style group, which is about the characters inside it. The
+        # name is not "Lists": the note already has a Checklist below, and
+        # two things called lists in one editor is one too many.
+        para_divider = tk.Frame(format_bar, width=1)
+        self.track_theme(para_divider, bg="card")
+        para_divider.pack(side="left", fill="y", padx=(2, 8), pady=2)
+        para_lbl = tk.Label(format_bar, text="Paragraph", font=("Segoe UI", 8))
+        self.track_theme(para_lbl, bg="bg", fg="subtext")
+        para_lbl.pack(side="left", padx=(0, 6))
         for kind, label in (("bullet", "\u2022"), ("number", "1.")):
             btn = tk.Button(
                 format_bar, text=label, font=("Segoe UI", 10, "bold"), width=3,
@@ -5410,7 +5411,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             "title": title,
             "body": self.body_text.get("1.0", "end-1c"),
             "formatting": self._extract_formatting(self.body_text),
-            "blocks": self._extract_blocks(self.body_text),
+            "paragraphs": self._extract_paragraphs(self.body_text),
             "pending_styles": sorted(self._pending_styles),
             "pending_text_color": self._pending_text_color,
             "pending_highlight_color": self._pending_highlight_color,
@@ -5445,7 +5446,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.body_text.delete("1.0", "end")
         self.body_text.insert("1.0", st["body"])
         self._apply_formatting(self.body_text, st.get("formatting", []))
-        self._apply_blocks(self.body_text, st.get("blocks", []))
+        self._apply_paragraphs(self.body_text, st.get("paragraphs", []))
         self.comments_text.delete("1.0", "end")
         self.comments_text.insert("1.0", st["comments"])
         self.category_var.set(st["category"])
@@ -5811,7 +5812,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # actually IS the base content (no override for this occurrence).
         if shown.get("body") == note.get("body"):
             self._apply_formatting(self.body_text, note.get("formatting", []))
-        self._apply_blocks(self.body_text, note.get("blocks", []))
+        self._apply_paragraphs(self.body_text, note.get("paragraphs", []))
         self.comments_text.delete("1.0", "end")
         self.comments_text.insert("1.0", shown.get("comments", ""))
         self.category_var.set(shown["category"])
@@ -6067,7 +6068,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self.body_text.delete("1.0", "end")
             self.body_text.insert("1.0", tpl["body"])
             self._apply_formatting(self.body_text, tpl.get("formatting", []))
-            self._apply_blocks(self.body_text, tpl.get("blocks", []))
+            self._apply_paragraphs(self.body_text, tpl.get("paragraphs", []))
         if tpl.get("comments"):
             self.comments_text.delete("1.0", "end")
             self.comments_text.insert("1.0", tpl["comments"])
@@ -6121,7 +6122,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 "title": st.get("title", ""),
                 "body": st.get("body", ""),
                 "formatting": st.get("formatting", []),
-                "blocks": st.get("blocks", []),
+                "paragraphs": st.get("paragraphs", []),
                 "comments": st.get("comments", ""),
                 "category": st.get("category", "General"),
                 "checklist": st.get("checklist", []),
@@ -6262,7 +6263,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.body_text.delete("1.0", "end")
         self.body_text.insert("1.0", prev.get("body", ""))
         self._apply_formatting(self.body_text, prev.get("formatting", []))
-        self._apply_blocks(self.body_text, prev.get("blocks", []))
+        self._apply_paragraphs(self.body_text, prev.get("paragraphs", []))
         self._refresh_format_buttons()
         self.comments_text.delete("1.0", "end")
         self.comments_text.insert("1.0", prev.get("comments", ""))
@@ -6278,7 +6279,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             title = ""
         body = self.body_text.get("1.0", "end").strip()
         formatting = self._extract_formatting_for_stripped_body(self.body_text, body)
-        blocks = self._extract_blocks_for_stripped_body(self.body_text, body)
+        paragraphs = self._extract_paragraphs_for_stripped_body(self.body_text, body)
         comments = self.comments_text.get("1.0", "end").strip()
         category = self.category_var.get()
 
@@ -6335,7 +6336,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 "title": title,
                 "body": body,
                 "formatting": formatting,
-                "blocks": blocks,
+                "paragraphs": paragraphs,
                 "comments": comments,
                 "category": category,
                 "date": date_value,
@@ -6401,13 +6402,13 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                         "title": note.get("title", ""),
                         "body": note.get("body", ""),
                         "formatting": note.get("formatting", []),
-                        "blocks": note.get("blocks", []),
+                        "paragraphs": note.get("paragraphs", []),
                         "comments": note.get("comments", ""),
                     }
                 note["title"] = title
                 note["body"] = body
                 note["formatting"] = formatting
-                note["blocks"] = blocks
+                note["paragraphs"] = paragraphs
                 note["comments"] = comments
                 note["category"] = category
                 note["date"] = date_value

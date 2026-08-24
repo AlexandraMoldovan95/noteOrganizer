@@ -592,7 +592,7 @@ check('pending_styles is a live-editing concept only, never saved to the note',
 # ---- BULLET AND NUMBERED LISTS ----
 # A list is line-level state: the marker lives in the body text (so it
 # survives export, share codes and plain-text copy untouched) while the
-# hanging indent is a Tk tag rebuilt from the note's "blocks" field.
+# hanging indent is a Tk tag rebuilt from the note's "paragraphs" field.
 #
 # Enter/Backspace are driven by calling the handlers directly rather than
 # by event_generate: this is deep into the script, where body_text can no
@@ -637,7 +637,7 @@ clear_selection()
 check('clicking the bullet button prefixes every selected line',
       body() == '• milk\n• eggs\n• bread')
 check('each bulleted line is tagged, so the indent can be rebuilt on load',
-      app._extract_blocks(app.body_text)
+      app._extract_paragraphs(app.body_text)
       == [{'line': 0, 'kind': 'bullet'},
           {'line': 1, 'kind': 'bullet'},
           {'line': 2, 'kind': 'bullet'}])
@@ -654,7 +654,7 @@ clear_selection()
 check('clicking the same list button again turns the list back off',
       body() == 'milk\neggs\nbread')
 check('turning a list off leaves no list tags behind',
-      app._extract_blocks(app.body_text) == [])
+      app._extract_paragraphs(app.body_text) == [])
 
 # ---- Enter continues the list; Enter on an empty item leaves it ----
 set_body('first')
@@ -677,7 +677,7 @@ app.update()
 check('Enter on an item you never typed into ends the list instead',
       body() == '1. first\n2. second\n')
 check('ending the list leaves only the two real items tagged',
-      app._extract_blocks(app.body_text)
+      app._extract_paragraphs(app.body_text)
       == [{'line': 0, 'kind': 'number'}, {'line': 1, 'kind': 'number'}])
 
 # ---- Backspace against the marker ----
@@ -690,7 +690,7 @@ app.update()
 check('Backspace just after the marker removes the whole marker',
       app._on_body_backspace(None) == 'break' and body() == 'alpha')
 check('removing the marker by Backspace also drops the list tag',
-      app._extract_blocks(app.body_text) == [])
+      app._extract_paragraphs(app.body_text) == [])
 
 set_body('aaa')
 select_all_body()
@@ -715,7 +715,7 @@ clear_selection()
 app.body_text.insert('end-1c', '\nthree')
 app.update()
 check('a line added after a list item is not silently treated as an item',
-      app._extract_blocks(app.body_text) == [{'line': 0, 'kind': 'bullet'},
+      app._extract_paragraphs(app.body_text) == [{'line': 0, 'kind': 'bullet'},
                                              {'line': 1, 'kind': 'bullet'}])
 app.body_text.tag_add('sel', '3.0', '3.end')
 app.update()
@@ -749,10 +749,10 @@ set_body('plain line')
 app.body_text.tag_add('list_bullet', '1.0', '1.end')
 app.update()
 check('a stray indent tag on a line with no marker is not a list item',
-      app._extract_blocks(app.body_text) == [])
+      app._extract_paragraphs(app.body_text) == [])
 
 set_body('plain\nlines')
-app._apply_blocks(app.body_text, [{'line': 0, 'kind': 'bullet'}])
+app._apply_paragraphs(app.body_text, [{'line': 0, 'kind': 'bullet'}])
 app.update()
 check('a stored list line whose text lost its marker does not indent a plain line',
       not app.body_text.tag_ranges('list_bullet'))
@@ -806,7 +806,7 @@ app.save_current_note(auto=False)
 app.update()
 list_note = app.find_note(app.selected_note_id)
 check('a saved note carries its list lines alongside its formatting',
-      list_note.get('blocks') == [{'line': 0, 'kind': 'bullet'},
+      list_note.get('paragraphs') == [{'line': 0, 'kind': 'bullet'},
                                   {'line': 1, 'kind': 'bullet'}])
 check('the markers themselves are saved as ordinary body text',
       list_note['body'] == '• one\n• two')
@@ -815,7 +815,7 @@ app.update()
 app.load_note(list_note)
 app.update()
 check('reopening the note puts the list tags back on the right lines',
-      app._extract_blocks(app.body_text) == [{'line': 0, 'kind': 'bullet'},
+      app._extract_paragraphs(app.body_text) == [{'line': 0, 'kind': 'bullet'},
                                              {'line': 1, 'kind': 'bullet'}])
 
 # Saving over an existing note is a different code path from creating one,
@@ -830,7 +830,7 @@ app.update()
 grown_note = app.find_note(app.selected_note_id)
 check('adding an item to an existing note updates the list lines it saves',
       grown_note['body'] == '\u2022 one\n\u2022 two\n\u2022 three'
-      and grown_note.get('blocks') == [{'line': 0, 'kind': 'bullet'},
+      and grown_note.get('paragraphs') == [{'line': 0, 'kind': 'bullet'},
                                        {'line': 1, 'kind': 'bullet'},
                                        {'line': 2, 'kind': 'bullet'}])
 
@@ -848,13 +848,13 @@ app.update()
 blank_note = app.find_note(app.selected_note_id)
 check('leading blank lines that saving strips also shift the list lines up',
       blank_note['body'] == '• milk\n• eggs'
-      and blank_note.get('blocks') == [{'line': 0, 'kind': 'bullet'},
+      and blank_note.get('paragraphs') == [{'line': 0, 'kind': 'bullet'},
                                        {'line': 1, 'kind': 'bullet'}])
 
 check('normalize_note drops list lines pointing past the end of the body',
       NO.normalize_note({'body': 'one\ntwo',
-                         'blocks': [{'line': 0, 'kind': 'bullet'},
-                                    {'line': 9, 'kind': 'bullet'}]})['blocks']
+                         'paragraphs': [{'line': 0, 'kind': 'bullet'},
+                                    {'line': 9, 'kind': 'bullet'}]})['paragraphs']
       == [{'line': 0, 'kind': 'bullet'}])
 
 # ---- Templates carry lists too ----
@@ -864,19 +864,19 @@ list_tpl = NO.normalize_template({
     'title': st_for_list_tpl.get('title', ''),
     'body': st_for_list_tpl.get('body', ''),
     'formatting': st_for_list_tpl.get('formatting', []),
-    'blocks': st_for_list_tpl.get('blocks', []),
+    'paragraphs': st_for_list_tpl.get('paragraphs', []),
     'comments': st_for_list_tpl.get('comments', ''),
     'category': st_for_list_tpl.get('category', 'General'),
     'checklist': st_for_list_tpl.get('checklist', []),
 })
 check('normalize_template keeps list lines from captured editor state',
-      bool(list_tpl.get('blocks')))
+      bool(list_tpl.get('paragraphs')))
 app.new_note()
 app.update()
 app._apply_template(list_tpl)
 app.update()
 check('applying a template rebuilds its list indents in the editor',
-      bool(app._extract_blocks(app.body_text)))
+      bool(app._extract_paragraphs(app.body_text)))
 
 # ---- Fast typing (regression): a first version tagged only "the one
 # character right before the cursor" on each KeyRelease, which silently

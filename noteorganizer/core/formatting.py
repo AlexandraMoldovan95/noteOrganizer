@@ -128,7 +128,9 @@ def font_tag_for(is_bold, is_italic):
 # after it out by the marker's length, on every line, forever. Keeping the
 # body and the widget identical means the offsets need no translation at all.
 #
-# ``blocks`` on a note records which lines are list items:
+# ``paragraphs`` on a note records line-level formatting -- what a whole line
+# looks like, as opposed to the characters inside it, which ``formatting``
+# covers. Today that means which lines are list items:
 #
 #     [{"line": 0, "kind": "bullet"}, {"line": 1, "kind": "number"}]
 #
@@ -159,8 +161,8 @@ def marker_for(kind, number=1):
     return BULLET if kind == "bullet" else f"{number}. "
 
 
-def normalize_blocks(value, line_count=None):
-    """Drop anything that is not a usable block entry.
+def normalize_paragraphs(value, line_count=None):
+    """Drop anything that is not a usable paragraph entry.
 
     The same gatekeeper idea as :func:`normalize_formatting`: one bad entry
     from an old file or hand-edited JSON should be discarded, not repaired
@@ -184,7 +186,7 @@ def normalize_blocks(value, line_count=None):
     return sorted(clean, key=lambda b: b["line"])
 
 
-def renumber(body, blocks):
+def renumber(body, paragraphs):
     """Make every numbered run read 1, 2, 3 from its own start.
 
     A run ends at any line that is not a numbered item -- a blank line, a
@@ -196,7 +198,7 @@ def renumber(body, blocks):
     so the caller can move formatting spans to match.
     """
     lines = body.split("\n")
-    by_line = {b["line"]: b["kind"] for b in normalize_blocks(blocks, len(lines))}
+    by_line = {b["line"]: b["kind"] for b in normalize_paragraphs(paragraphs, len(lines))}
     shifts, counter, pos = [], 0, 0
     for i, line in enumerate(lines):
         kind = by_line.get(i)
