@@ -892,7 +892,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         ones. They set different Tk options (justify vs lmargin), so the two
         compose: a centred bullet keeps its hanging indent.
         """
-        self._paragraph_tags = set()
+        self._paragraph_tags = {}
         text_widget.tag_configure("align_center", justify="center")
         text_widget.tag_configure("align_right", justify="right")
 
@@ -900,27 +900,83 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
     # text so a wrapped line hangs under the text rather than the marker.
     INDENT_STEP = 24
     _MARKER_ROOM = {"bullet": 24, "number": 28}
+    QUOTE_BAR = 4
 
-    def _paragraph_tag(self, text_widget, kind, indent):
-        """The margin tag for this list kind at this depth, made on demand.
+    def _paragraph_tag(self, text_widget, kind, indent, block=None):
+        """The margin tag for this combination of properties, made on demand.
 
         There is one tag per combination rather than one per property,
-        because both properties set the same two Tk options -- lmargin1 and
+        because they all set the same two Tk options -- lmargin1 and
         lmargin2 -- and a widget applies only the winning tag's value for an
         option. Building them lazily is the same pattern the colour tags
         use: the app cannot know which combinations a note will want.
         """
-        name = f"para_{kind or 'plain'}_{indent}"
+        name = f"para_{kind or 'plain'}_{indent}" + (f"_{block}" if block else "")
         if name not in self._paragraph_tags:
-            left = indent * self.INDENT_STEP
-            if kind:
-                text_widget.tag_configure(
-                    name, lmargin1=18 + left,
-                    lmargin2=18 + left + self._MARKER_ROOM[kind])
-            else:
-                text_widget.tag_configure(name, lmargin1=left, lmargin2=left)
-            self._paragraph_tags.add(name)
+            self._paragraph_tags[name] = (kind, indent, block)
+            self._configure_paragraph_tag(text_widget, name)
         return name
+
+    def _configure_paragraph_tag(self, text_widget, name):
+        """Set one margin tag's options, in the palette as it stands now.
+
+        Split out from _paragraph_tag so a theme switch can re-run it: a
+        quote's bar and tint are theme colours, and nothing else in
+        apply_theme reaches a text tag.
+        """
+        kind, indent, block = self._paragraph_tags[name]
+        left = indent * self.INDENT_STEP
+        if block == "quote":
+            # Room for the bar itself, then the gap before the text.
+            left += self.QUOTE_BAR + 10
+        options = {}
+        if kind:
+            options["lmargin1"] = 18 + left
+            options["lmargin2"] = 18 + left + self._MARKER_ROOM[kind]
+        else:
+            options["lmargin1"] = options["lmargin2"] = left
+        if block == "quote":
+            options["lmargincolor"] = self.colors["accent"]
+            options["background"] = core_blend(
+                self.colors["card"], self.colors["accent"], 0.12)
+        text_widget.tag_configure(name, **options)
+
+    def _recolor_paragraph_tags(self):
+        """Repaint the quote bars and tints after a theme switch."""
+        if not getattr(self, "_paragraph_tags", None):
+            return
+        for name, (_kind, _indent, block) in self._paragraph_tags.items():
+            if block:
+                self._configure_paragraph_tag(self.body_text, name)
+
+    def _paragraph_block_of(self, text_widget, line_no):
+        """The block style on this line, or None. Read from its margin tag."""
+        for name in text_widget.tag_names(f"{line_no}.0"):
+            if name.startswith("para_"):
+                return self._paragraph_tags.get(name, (None, 0, None))[2]
+        return None
+
+    def _toggle_paragraph_block(self, block):
+        """Turn the selected lines into a quote block, or back to plain.
+
+        Applies to whole lines, so a quote made of several paragraphs shows
+        one continuous bar down the side rather than one bar per line.
+        """
+        first, last = self._selected_line_range()
+        turning_off = all(
+            self._paragraph_block_of(self.body_text, n) == block
+            for n in range(first, last + 1))
+        for line_no in range(first, last + 1):
+            kind = self._list_kind_of(self.body_text, line_no)
+            indent = self._paragraph_indent_of(self.body_text, line_no)
+            self._clear_paragraph_tags(self.body_text, line_no)
+            wanted = None if turning_off else block
+            if kind or indent or wanted:
+                self.body_text.tag_add(
+                    self._paragraph_tag(self.body_text, kind, indent, wanted),
+                    f"{line_no}.0", f"{line_no}.end")
+        self._refresh_list_buttons()
+        self._schedule_autosave()
 
     def _clear_paragraph_tags(self, text_widget, line_no):
         """Strip every margin tag from a line, whatever kind or depth."""
@@ -937,10 +993,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         """
         for name in text_widget.tag_names(f"{line_no}.0"):
             if name.startswith("para_"):
-                try:
-                    return int(name.rsplit("_", 1)[1])
-                except ValueError:
-                    return 0
+                # Looked up rather than parsed back out of the name: the
+                # name gained a "_quote" suffix, and reading the depth off
+                # the end of it then returned 0 for every quoted line.
+                return self._paragraph_tags.get(name, (None, 0, None))[1]
         line = text_widget.get(f"{line_no}.0", f"{line_no}.end")
         kind, marker, _ = parse_list_marker(line)
         return bullet_level_of(marker) if kind == "bullet" else 0
@@ -1008,7 +1064,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             kind = self._list_kind_of(text_widget, line_no)
             align = self._paragraph_align_of(text_widget, line_no)
             indent = self._paragraph_indent_of(text_widget, line_no)
-            if not kind and align == "left" and not indent:
+            block = self._paragraph_block_of(text_widget, line_no)
+            if not kind and align == "left" and not indent and not block:
                 continue            # an ordinary paragraph records nothing
             entry = {"line": line_no - 1}
             if kind:
@@ -1017,6 +1074,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 entry["indent"] = indent
             if align != "left":
                 entry["align"] = align
+            if block:
+                entry["block"] = block
             paragraphs.append(entry)
         return paragraphs
 
@@ -1043,8 +1102,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         for n in range(first, last + 1):
             kind = self._list_kind_of(self.body_text, n)
             indent = self._paragraph_indent_of(self.body_text, n)
-            wanted = (self._paragraph_tag(self.body_text, kind, indent)
-                      if (kind or indent) else None)
+            block = self._paragraph_block_of(self.body_text, n)
+            wanted = (self._paragraph_tag(self.body_text, kind, indent, block)
+                      if (kind or indent or block) else None)
             for name in self.body_text.tag_names(f"{n}.0"):
                 if name.startswith("para_") and name != wanted:
                     self.body_text.tag_remove(name, f"{n}.0", f"{n}.end+1c")
@@ -1076,6 +1136,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         current_align = self._paragraph_align_of(self.body_text, line_no)
         for align, btn in getattr(self, "_align_buttons", {}).items():
             self._set_button_pressed(btn, align == current_align)
+        current_block = self._paragraph_block_of(self.body_text, line_no)
+        for block, btn in getattr(self, "_block_buttons", {}).items():
+            self._set_button_pressed(btn, block == current_block)
 
     def _make_align_button(self, parent, align):
         """One alignment button, drawn as four bars on a small canvas.
@@ -1157,13 +1220,15 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                                     f"{line_no}.0", f"{line_no}.end+1c")
             kind = paragraph.get("kind")
             indent = paragraph.get("indent", 0)
+            block = paragraph.get("block")
             line = text_widget.get(f"{line_no}.0", f"{line_no}.end")
             if kind and parse_list_marker(line)[0] != kind:
                 continue
-            if not kind and not indent:
+            if not kind and not indent and not block:
                 continue
-            text_widget.tag_add(self._paragraph_tag(text_widget, kind, indent),
-                                f"{line_no}.0", f"{line_no}.end")
+            text_widget.tag_add(
+                self._paragraph_tag(text_widget, kind, indent, block),
+                f"{line_no}.0", f"{line_no}.end")
 
     def _set_paragraph_indent(self, line_no, indent):
         """Put one line at a given depth, rewriting its marker if it has one.
@@ -1173,6 +1238,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         parent's bullet and the two levels look identical.
         """
         kind = self._list_kind_of(self.body_text, line_no)
+        block = self._paragraph_block_of(self.body_text, line_no)
         self._clear_paragraph_tags(self.body_text, line_no)
         if kind == "bullet":
             line = self.body_text.get(f"{line_no}.0", f"{line_no}.end")
@@ -1182,9 +1248,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 self.body_text.delete(f"{line_no}.0",
                                       f"{line_no}.0+{len(marker)}c")
                 self.body_text.insert(f"{line_no}.0", new_marker)
-        if kind or indent:
+        if kind or indent or block:
             self.body_text.tag_add(
-                self._paragraph_tag(self.body_text, kind, indent),
+                self._paragraph_tag(self.body_text, kind, indent, block),
                 f"{line_no}.0", f"{line_no}.end")
 
     def _change_paragraph_indent(self, delta):
@@ -1245,13 +1311,14 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             # nested item into a bullet should leave it where it sits rather
             # than snapping it back to the left margin.
             indent = self._paragraph_indent_of(self.body_text, line_no)
+            block = self._paragraph_block_of(self.body_text, line_no)
             if marker:
                 self.body_text.delete(f"{line_no}.0", f"{line_no}.0+{len(marker)}c")
             self._clear_paragraph_tags(self.body_text, line_no)
             if turning_off:
-                if indent:
+                if indent or block:
                     self.body_text.tag_add(
-                        self._paragraph_tag(self.body_text, None, indent),
+                        self._paragraph_tag(self.body_text, None, indent, block),
                         f"{line_no}.0", f"{line_no}.end")
                 continue
             self.body_text.insert(f"{line_no}.0", marker_for(kind, 1, indent))
@@ -1259,7 +1326,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             # too would be inherited by whatever gets typed or pasted on
             # the next line.
             self.body_text.tag_add(
-                self._paragraph_tag(self.body_text, kind, indent),
+                self._paragraph_tag(self.body_text, kind, indent, block),
                 f"{line_no}.0", f"{line_no}.end")
         self._renumber_lists()
         self._refresh_list_buttons()
@@ -3177,6 +3244,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # the same treatment; this repaints their bars along with restoring
         # every paragraph button's pressed state in the new palette.
         self._refresh_list_buttons()
+        # A quote's bar and tint are theme colours living on a text tag,
+        # which nothing above reaches either.
+        self._recolor_paragraph_tags()
         # Recolour the note cards in place rather than calling
         # refresh_note_list(), which destroys and rebuilds every card. That
         # rebuild was ~85ms of a ~121ms theme switch and made the list
@@ -3983,6 +4053,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # permanently unpressed.
         self._list_buttons = {}
         self._align_buttons = {}
+        self._block_buttons = {}
         self._pending_styles = set()  # styles queued up for the next typed char
         self._pending_text_color = None  # hex, or None
         self._pending_highlight_color = None  # hex, or None
@@ -4080,6 +4151,17 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             )
             self.track_theme(btn, bg="sidebar", fg="text")
             btn.pack(side="left", padx=(0, 4), ipady=2)
+
+        # Quote block. Shows a pressed state, so it joins a registry the
+        # refresh loop knows about.
+        quote_btn = tk.Button(
+            format_bar, text="❝", font=("Segoe UI", 11), width=3,
+            relief="flat", cursor="hand2",
+            command=lambda: self._toggle_paragraph_block("quote")
+        )
+        self.track_theme(quote_btn, bg="sidebar", fg="text")
+        quote_btn.pack(side="left", padx=(0, 4), ipady=2)
+        self._block_buttons["quote"] = quote_btn
 
         text_frame = tk.Frame(self.editor)
         self.track_theme(text_frame, bg="card")

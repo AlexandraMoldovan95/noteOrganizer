@@ -1144,6 +1144,102 @@ app.update()
 check('reopening the note puts the child back at its own depth',
       depths() == [0, 1] and lines_now() == ['1. parent', '1. child'])
 
+# ---- QUOTE BLOCKS ----
+# Drawn as a coloured left bar plus a tinted background rather than a box:
+# Tk draws a bordered range as one box per display line, so a paragraph that
+# wraps comes out as several boxes with the last ending mid-sentence.
+app.new_note()
+app.title_entry.insert(0, 'QuoteNote')
+app.update()
+
+check('the quote button lives in its own registry',
+      set(app._block_buttons.keys()) == {'quote'})
+
+set_body('a quoted remark\nplain line')
+app.body_text.tag_add('sel', '1.0', '1.end')
+app.update()
+app._block_buttons['quote'].invoke()
+clear_selection()
+check('quoting a line records it against that line only',
+      app._extract_paragraphs(app.body_text) == [{'line': 0, 'block': 'quote'}])
+check('quoting leaves the body text alone',
+      body() == 'a quoted remark\nplain line')
+
+app.body_text.tag_add('sel', '1.0', '1.end')
+app.update()
+app._block_buttons['quote'].invoke()
+clear_selection()
+check('clicking quote again turns the block back off',
+      app._extract_paragraphs(app.body_text) == [])
+
+# The bar and the tint are theme colours on a text tag, and the margin has
+# to leave room for the bar, so all three live on one combined tag.
+set_body('quoted')
+app.body_text.tag_add('sel', '1.0', '1.end')
+app.update()
+app._block_buttons['quote'].invoke()
+clear_selection()
+quote_tag = app._paragraph_tag(app.body_text, None, 0, 'quote')
+check('a quote reserves margin for its bar',
+      int(app.body_text.tag_cget(quote_tag, 'lmargin1')) >= app.QUOTE_BAR)
+check('the bar is drawn in the theme accent',
+      str(app.body_text.tag_cget(quote_tag, 'lmargincolor'))
+      == app.colors['accent'])
+
+# A quote composes with the other paragraph properties rather than
+# replacing them.
+set_body('milk\neggs')
+select_all_body()
+app._list_buttons['bullet'].invoke()
+clear_selection()
+app.body_text.tag_add('sel', '1.0', '2.end')
+app.update()
+app._block_buttons['quote'].invoke()
+clear_selection()
+check('a quote can hold a list, keeping both properties',
+      app._extract_paragraphs(app.body_text)
+      == [{'line': 0, 'kind': 'bullet', 'block': 'quote'},
+          {'line': 1, 'kind': 'bullet', 'block': 'quote'}])
+
+app.body_text.tag_add('sel', '2.0', '2.end')
+app.update()
+app._change_paragraph_indent(+1)
+clear_selection()
+check('indenting inside a quote keeps the quote',
+      app._extract_paragraphs(app.body_text)[1]
+      == {'line': 1, 'kind': 'bullet', 'indent': 1, 'block': 'quote'})
+
+app.body_text.tag_add('sel', '1.0', '1.end')
+app.update()
+app._list_buttons['bullet'].invoke()      # turn the list off
+clear_selection()
+check('turning the list off inside a quote leaves the quote standing',
+      app._extract_paragraphs(app.body_text)[0] == {'line': 0, 'block': 'quote'})
+
+# ---- Quote round trip ----
+app.new_note()
+app.title_entry.insert(0, 'QuoteRoundTrip')
+set_body('quoted line\nplain line')
+app.body_text.tag_add('sel', '1.0', '1.end')
+app.update()
+app._block_buttons['quote'].invoke()
+clear_selection()
+app.save_current_note(auto=False)
+app.update()
+quote_note = app.find_note(app.selected_note_id)
+check('the quote is saved with the note',
+      quote_note.get('paragraphs') == [{'line': 0, 'block': 'quote'}])
+app.new_note()
+app.update()
+app.load_note(quote_note)
+app.update()
+check('reopening the note puts the quote back on the right line',
+      app._paragraph_block_of(app.body_text, 1) == 'quote'
+      and app._paragraph_block_of(app.body_text, 2) is None)
+
+check('normalize_paragraphs rejects a block style it does not know',
+      NO.normalize_paragraphs([{'line': 0, 'block': 'sidebar'}]) == [])
+
 # ---- Fast typing (regression): a first version tagged only "the one
 # character right before the cursor" on each KeyRelease, which silently
 # missed characters typed in a fast real burst -- Tk can queue several
