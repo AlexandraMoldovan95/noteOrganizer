@@ -71,6 +71,50 @@ check("a hex colour becomes a text colour span",
 check("an rgb() background becomes a highlight span",
       {"start": 14, "end": 20, "style": "highlight", "value": "#ffff00"} in _s)
 
+# A page's own theme is not emphasis. Pasting from a dark-mode source used
+# to bring its near-white text and near-black background along, which is
+# unreadable in a note and was never anybody's decision about the words.
+# What survives is colour that is actually coloured.
+CHROME = [
+    ("dark-mode text", 'color:#e8e6f0'),
+    ("a dark background", 'background-color:#1e1b2e'),
+    ("black text", 'color:#111111'),
+    ("a white background", 'background-color:#ffffff'),
+    ("a grey code block", 'background-color:#3a3a4d'),
+    ("a grey", 'color:#808080'),
+    ("a dark red background, too dark to read through",
+     'background-color:#4a0000'),
+]
+for label, css in CHROME:
+    _t, _s, _p = html_to_note(f'<p><span style="{css}">x</span></p>')
+    check(f"a page's own colouring is dropped: {label}",
+          [s for s in _s if "value" in s] == [])
+
+DELIBERATE = [
+    ("a red warning", 'color:#e63946', "text_color", "#e63946"),
+    ("a blue link", 'color:#3a86ff', "text_color", "#3a86ff"),
+    ("a yellow highlight", 'background-color:#ffff00', "highlight", "#ffff00"),
+    ("a pale green highlight", 'background-color:#c8f7c5', "highlight", "#c8f7c5"),
+]
+for label, css, style, value in DELIBERATE:
+    _t, _s, _p = html_to_note(f'<p><span style="{css}">x</span></p>')
+    check(f"a colour someone chose survives: {label}",
+          [s for s in _s if "value" in s]
+          == [{"start": 0, "end": 1, "style": style, "value": value}])
+
+# The whole point, end to end: a dark page's list arrives as a list, with
+# its words and its bold, and none of its theme.
+_t, _s, _p = html_to_note(
+    '<div style="background-color:#2b2b3d;color:#e8e6f0">'
+    '<p style="color:#e8e6f0">Heading</p><ul>'
+    '<li style="color:#e8e6f0">first with <b>bold</b> in it</li>'
+    '<li><code style="background-color:#3a3a4d">code</code> here</li>'
+    '</ul></div>')
+check("pasting from a dark page keeps the structure and drops the theme",
+      _p == [{"line": 1, "kind": "bullet"}, {"line": 2, "kind": "bullet"}]
+      and [s for s in _s if "value" in s] == []
+      and any(s["style"] == "bold" for s in _s))
+
 _t, _s, _p = html_to_note('<p style="text-align:center">middle</p>')
 check("text-align becomes an alignment entry",
       _p == [{"line": 0, "align": "center"}])

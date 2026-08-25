@@ -84,6 +84,41 @@ def _as_hex(value):
     return None
 
 
+# Below this, a colour is near enough to grey that it is almost certainly
+# the page's own theme rather than a decision anyone made about the words.
+# The app's own text-colour palette runs from 17 up to 247, so this does
+# cut across the bottom of it -- but a grey chosen from a picker and a grey
+# arriving from a stylesheet are different things, and only one of them was
+# meant.
+_MIN_SATURATION = 40
+
+# A highlighter is pale by definition. The app's own highlight palette sits
+# between 220 and 239, and a dark page background is nowhere near it.
+_MIN_HIGHLIGHT_LIGHTNESS = 200
+
+
+def _channels(hex_colour):
+    return [int(hex_colour[i:i + 2], 16) for i in (1, 3, 5)]
+
+
+def _is_meaningful(hex_colour, kind):
+    """Whether a colour says something about the words, or about the page.
+
+    Pasting from a dark-mode page used to bring its theme along: near-white
+    text on a near-black highlight, which is unreadable in a note and was
+    never anybody's idea of emphasis. What survives is colour that is
+    actually coloured -- a red warning, a yellow highlight -- and, for a
+    highlight, only if it is pale enough to read black text through.
+    """
+    red, green, blue = _channels(hex_colour)
+    if max(red, green, blue) - min(red, green, blue) < _MIN_SATURATION:
+        return False
+    if kind == "highlight":
+        lightness = 0.299 * red + 0.587 * green + 0.114 * blue
+        return lightness >= _MIN_HIGHLIGHT_LIGHTNESS
+    return True
+
+
 def _css(style_attr):
     """A style attribute as a dict, lowercased, without failing on junk."""
     out = {}
@@ -179,9 +214,10 @@ class _Reader(HTMLParser):
 
         style = _css(attrs.get("style"))
         for prop, name in (("color", "text_color"),
+                           ("background", "highlight"),
                            ("background-color", "highlight")):
             hex_value = _as_hex(style.get(prop))
-            if hex_value:
+            if hex_value and _is_meaningful(hex_value, name):
                 self._open.append((name, hex_value, self.length))
         if style.get("font-weight") in ("bold", "700", "800", "900"):
             self._open.append(("bold", None, self.length))

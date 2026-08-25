@@ -1,9 +1,30 @@
 import sys
+import time
 import note_organizer as NO, tkinter as tk, json, os, re
 fails=[]
 def check(name, cond):
     print(('PASS' if cond else 'FAIL'), name)
     if not cond: fails.append(name)
+
+
+def take_focus(widget, attempts=60):
+    """Give a widget the keyboard focus, and wait until Tk agrees it has it.
+
+    focus_force() is a request, not an accomplished fact. event_generate()
+    for a key combination needs the focus to have actually arrived, and
+    under the load of a full-suite run it does not always get there within
+    a single update() -- which is why the shortcut checks below have failed
+    at random and never once when this file is run on its own.
+    """
+    widget.focus_force()
+    for _ in range(attempts):
+        app.update()
+        app.update_idletasks()
+        if app.focus_get() is widget:
+            return True
+        time.sleep(0.01)
+    return False
+
 
 app=NO.NoteOrganizer(); app._poll_active_dirty=lambda:None
 app.show_info=lambda *a,**k: True
@@ -375,8 +396,7 @@ bold_end = f'{bold_start}+4c'
 # script several popups (calculator's dropdowns, history) get opened and
 # dismissed, which can leave a stale grab behind that swallows key events.
 app.body_text.tag_add('sel', bold_start, bold_end)
-app.body_text.focus_force()
-app.update()
+take_focus(app.body_text)
 was_bold = 'bold' in app.body_text.tag_names(bold_start)
 app.body_text.event_generate('<Control-b>')
 app.update()
@@ -1871,8 +1891,7 @@ NO.clipboard.write = _real_write
 # the same shape as a fast typist outrunning a naive per-keystroke
 # handler.
 app.new_note()
-app.body_text.focus_force()
-app.update()
+take_focus(app.body_text)
 app._fmt_buttons['bold'].invoke()
 app.update()
 check('bold queued as pending before the fast-typing burst', app._pending_styles == {'bold'})
@@ -1897,7 +1916,7 @@ check('every fast-typed character is bold, not just some of them '
 app._fmt_buttons['bold'].invoke()  # off
 app.update()
 app.new_note()
-app.body_text.focus_force()
+take_focus(app.body_text)
 app.body_text.insert('1.0', 'existing text here')
 app.body_text.mark_set('insert', '1.0')
 app.update()
@@ -1917,8 +1936,7 @@ check('the character actually typed after the cursor move is correctly bold',
 # typing) -- excluded via a dedicated <<Paste>> resync, not by inspecting
 # the KeyRelease event that happens to follow it.
 app.new_note()
-app.body_text.focus_force()
-app.update()
+take_focus(app.body_text)
 app._fmt_buttons['bold'].invoke()
 app.update()
 app.clipboard_clear()
