@@ -54,7 +54,7 @@ Built as a solo/pair project (developer + AI pairing partner) over an extended i
 
 ## Tech notes
 
-- **Pure Python + Tkinter, with one dependency.** No GUI framework beyond the standard library — packages to a single-file Windows `.exe` via PyInstaller with no bundled runtime beyond Python itself. The one exception is [Pillow](https://pypi.org/project/Pillow/), used specifically for correctly decoding and scaling image attachments (including composing animated GIF frames properly, which plain Tkinter doesn't do).
+- **Pure Python + Tkinter, with one dependency.** No GUI framework beyond the standard library — packages to a self-contained Windows app folder via PyInstaller with no bundled runtime beyond Python itself. The one exception is [Pillow](https://pypi.org/project/Pillow/), used specifically for correctly decoding and scaling image attachments (including composing animated GIF frames properly, which plain Tkinter doesn't do).
 - **Custom widget system throughout.** Every dropdown, color palette, and confirmation dialog is a hand-positioned `Toplevel` popup, anchored and multi-monitor-safe, rather than relying on `tkinter.messagebox` / `ttk.Combobox` defaults.
 - **Background threading for I/O.** Export and import (both of which can move a meaningful amount of data through attachments) run on a worker thread; the main thread only ever touches Tkinter widgets from a polling callback, keeping the UI responsive throughout.
 - **A defensive data layer.** `normalize_note()` coerces any note — however old, however malformed — into a known-good shape before it ever reaches the UI, so a single corrupted entry can't take down the whole app.
@@ -76,10 +76,16 @@ Requires Python 3.9+ with Tkinter (bundled with most standard Python installs; o
 
 ```powershell
 pip install pyinstaller
-pyinstaller --windowed --name NoteOrganizer note_organizer.py
+pyinstaller --noconfirm NoteOrganizer.spec
 ```
 
-The built app will appear under `dist/NoteOrganizer/`.
+Build from the spec file rather than passing options on the command line: it
+is what the project's build settings live in, and building the script
+directly would generate a competing spec of its own.
+
+The built app appears under `dist/NoteOrganizer/` as a folder — `NoteOrganizer.exe`
+alongside an `_internal` folder it needs. Move the whole folder, not the `.exe`
+on its own.
 
 ---
 

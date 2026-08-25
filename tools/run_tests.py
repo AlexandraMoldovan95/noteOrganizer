@@ -128,7 +128,13 @@ def main(argv):
                 for line in failed[:8]:
                     print(f"          {line}")
                 if not failed:
-                    for line in output.strip().splitlines()[-6:]:
+                    # No "FAIL" line means the script died rather than
+                    # reporting -- so this is a traceback, and the frames
+                    # that name the app are at its top, not its end. Six
+                    # lines showed only tkinter's own innards; a rare,
+                    # hard-to-reproduce crash then left nothing to work
+                    # from. Deep enough to reach the app's own frames.
+                    for line in output.strip().splitlines()[-25:]:
                         print(f"          {line}")
     finally:
         if keep:
