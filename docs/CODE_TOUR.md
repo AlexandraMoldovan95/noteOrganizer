@@ -343,6 +343,14 @@ same keys:
 "light": {"bg": "#f5f5fa", "card": "#ffffff", "text": "#22223a", ...}
 ```
 
+Two colours are *computed* from a palette rather than stored in it:
+`inset_surface()` (a well sunk inside a card) and `hairline()` (its
+borders), both blends of `card` toward another key. They live here so that
+Settings and the theme switch share one definition — a colour that is
+derived rather than looked up is invisible to anything that fixes stray
+colours by matching known palette values, which is exactly how the Settings
+panels once stayed dark on a light theme.
+
 Nothing in the app ever asks *"which theme is this?"* before picking a
 colour. It asks for `colors["card"]` and gets whatever that means right
 now. **Adding a ninth theme means adding one dict here and changing
@@ -383,6 +391,85 @@ and column numbers shift the moment text wraps differently — they describe
 spans rather than repairing them.** A span with no valid colour, or a
 zero-length range, is discarded entirely. Repairing would mean guessing
 what the user meant; dropping is honest and can't corrupt the editor.
+
+### Two kinds of formatting, stored two different ways
+
+A note carries formatting in two fields, because they answer different
+questions.
+
+`formatting` describes **characters** — bold, italic, colours, and now font
+size and family — as the spans above.
+
+`paragraphs` describes **whole lines** — which are list items, at what
+nesting depth, and how they are aligned — keyed by line number, since a
+line is the unit those apply to. Only non-default properties are stored, so
+an ordinary paragraph produces no entry at all.
+
+It has its own gatekeeper, `normalize_paragraphs()`, which drops bad
+entries the same way — and additionally throws away any pointing past the
+end of the body, so a note that was later shortened can't come back with
+an indent on a line that no longer exists.
+
+### The rule that shapes most of this module
+
+**Two Tk tags that both set the widget's `font` option do not compose. One
+simply wins.**
+
+That single constraint explains a surprising amount:
+
+- Why `bold_italic` is its own style rather than a `bold` span overlapping
+  an `italic` one.
+- Why font size and family, which also set `font`, can't be independent
+  tags either — so `font_tag_for()` folds weight, slant, size and family
+  into *one* tag name, and `resolve_font_runs()` works out the stretches of
+  text over which that combination is constant.
+- Why the note still stores all four as **separate spans**. They only meet
+  at render time. Keeping them separate in the data is what lets you bold
+  part of a resized run without the two fighting.
+
+`parse_font_tag()` is the inverse, used when reading the widget back: it
+takes a composite tag apart again into size and family. Weight and slant
+come from their own tags instead, so a run isn't saved twice.
+
+`merge_spans()` exists because of that split: a composite tag is broken at
+every bold boundary inside it, so one size across a paragraph reads back as
+several pieces. Left alone they'd be written to the note that way and split
+further on the next save.
+
+### Markers live in the note's text
+
+A bullet really is a `"• "` at the start of the line, and a numbered item
+really begins `"1. "`. `parse_list_marker()` reads them back; `marker_for()`
+writes them.
+
+**Why store the marker instead of just drawing it?** Because `formatting`
+is character offsets into that same body. A marker that existed on screen
+but not in the text would put every offset after it out by the marker's
+length, on every line, forever. Keeping the text and the widget identical
+means the offsets need no translation — and a list still looks like a list
+when the note is exported, shared as a code, or pasted into an email.
+
+The cost is that renumbering rewrites real characters, which moves
+everything after them. So `renumber()` returns the shifts it caused and
+`shift_spans()` moves the character spans to match — otherwise bold slides
+sideways the moment `9.` becomes `10.`.
+
+Bullets change glyph with depth (`•`, `◦`, `▪`) because those are
+characters nobody types by accident. Numbers deliberately don't: `1.` then
+`a.` then `i.` is ambiguous with ordinary prose, and a note is exactly the
+kind of document where a line can legitimately begin `"a. "`. Depth shows
+through indentation and the count restarting instead.
+
+### One function here isn't about text at all
+
+`split_toolbar_rows()` decides which formatting-toolbar controls go on
+which row when the bar has to wrap. It lives in core, taking widths as
+plain numbers, for a reason worth remembering: a check that measures widget
+widths is testing whatever font the machine happens to have. The same
+toolbar measures 577px on one machine and 827px under Xvfb, and which
+control lands on a row boundary moves with it. Given numbers, the same
+inputs give the same answer everywhere. See `docs/ISSUES_LOG.md`, "A
+toolbar check that measured the wrong thing, three times".
 
 ---
 
