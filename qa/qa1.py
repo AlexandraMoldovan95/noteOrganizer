@@ -1537,6 +1537,29 @@ check('starting a new note hides it again',
 app.new_note()
 app.update()
 
+# ---- NO HEX CODES IN THE INTERFACE ----
+# The colour picker takes swatches only and deliberately offers no hex
+# entry, because most people do not think in hex -- but the label beside
+# the swatch printed the raw value anyway, which was the one place the app
+# contradicted that.
+app.new_note()
+app.update()
+check('with no colour of its own, a note says where the colour comes from',
+      str(app.color_hint_lbl.cget('text')) == 'category color')
+app.current_note_color = '#e63946'
+app._update_color_swatch()
+app.update()
+_shown = str(app.color_hint_lbl.cget('text'))
+check(f'choosing a colour does not print its hex code ({_shown!r})',
+      '#' not in _shown and _shown == 'custom color')
+check('the swatch still carries the colour itself',
+      str(app.color_swatch_btn.cget('bg')).lower() == '#e63946')
+app.current_note_color = ''
+app._update_color_swatch()
+app.update()
+check('clearing it goes back to the category colour',
+      str(app.color_hint_lbl.cget('text')) == 'category color')
+
 # ---- Fast typing (regression): a first version tagged only "the one
 # character right before the cursor" on each KeyRelease, which silently
 # missed characters typed in a fast real burst -- Tk can queue several

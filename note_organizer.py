@@ -42,7 +42,7 @@ except ImportError:
 # Added/Fixed CHANGELOG.md entries, not per-release counts). The running
 # app records this into settings, so the next time a newer build opens
 # over older data it can tell the user what changed version-wise.
-APP_VERSION = "0.36.55"
+APP_VERSION = "0.36.56"
 
 
 def parse_version(v):
@@ -5109,9 +5109,17 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
 
     def _update_color_swatch(self):
+        """Keep the swatch and the words beside it matching the note.
+
+        The label says where the colour comes from, not what it is: the
+        swatch is already showing what it is, and a hex code says nothing
+        to most people. That is the same reasoning the picker itself
+        follows -- swatches only, no hex entry -- so printing "#7c5cff"
+        here was the one place the app contradicted it.
+        """
         if self.current_note_color:
             self.color_swatch_btn.config(bg=self.current_note_color, activebackground=self.current_note_color)
-            self.color_hint_lbl.config(text=self.current_note_color)
+            self.color_hint_lbl.config(text="custom color")
         else:
             default_color = CATEGORY_COLORS.get(self.category_var.get(), self.colors["accent"])
             self.color_swatch_btn.config(bg=default_color, activebackground=default_color)

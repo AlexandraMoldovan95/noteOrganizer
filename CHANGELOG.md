@@ -6,7 +6,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ---
 
-## [0.36.55] — 2026-08-25
+## [0.36.56] — 2026-08-25
 
 ### Added
 - Font size and family in the note body, as a **Font** group in the toolbar, plus the baseline both start from under Settings → Appearance. The toolbar pair sets the typeface and size of the selected text, or sticks for whatever is typed next the way the colour pickers already do; the Settings pair sets what every note uses unless it says otherwise, since "my notes should be bigger" is a statement about reading rather than about one note. Choosing **Default** stores no span at all, which is what lets a note follow the setting instead of being pinned to whatever it happened to be the day it was written. A selection spanning two different sizes reads as Default rather than as the first run's size, which would claim the whole selection is that size. Families are a curated list of eight that ship with every Windows install rather than whatever is installed here: notes travel as share codes and backups, and Tk silently substitutes a font the reader does not have, with nothing to say the note is no longer showing what it was written in.
@@ -18,6 +18,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 - The Settings section list could not be scrolled. Nine entries in four groups, plus the brand and the theme toggle, need more height than a short window has, and the list was a plain frame — whatever did not fit was simply unreachable. It scrolls to the wheel now, anywhere over the list, while the brand and the theme toggle stay put.
 
 - A note title is now limited to 200 characters. Not for storage or layout — the note list already shortens titles to 60 for display — but because tk.Entry slows roughly with the square of what it holds: one keystroke measured 0.5ms at 30 characters, 38ms at 10,000 and 3.5 seconds at 100,000. Paste a document into the title by accident and the field froze, with no way to edit it back. Pasting something longer now shortens it to fit rather than refusing it whole, which would have left the field empty and looked like the paste failing. A counter appears beside the title once it comes within 40 characters of the limit, reading 175/200 and turning the warning colour when it is full — hidden until then, since a permanent 12/200 beside a twelve-character title is noise about a limit nobody is near. Titles already saved are never touched: validation fires on programmatic inserts too, so a note written before this cap loads in full and saves back in full.
+
+- The label beside a note's colour swatch printed the raw hex value once a colour was picked. The picker itself takes swatches only and offers no hex entry on purpose — most people do not think in hex — so this was the one place the app contradicted that. It says where the colour comes from now, "category color" or "custom color"; the swatch was always the thing showing which colour it is.
 
 ### Removed
 - The quote block, from the app and from the code rather than merely hidden. It read as a heavy visual device for something a note rarely needs, and it was the only paragraph property carrying colours of its own. A note that still holds the old `block` key loads as an ordinary paragraph, keeping whatever list kind, indent and alignment it also had; nothing needs migrating.
