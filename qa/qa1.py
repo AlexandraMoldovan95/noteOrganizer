@@ -1813,6 +1813,25 @@ _text, _spans, _paras = _body_state()
 check(f'it brings the words and nothing else ({_text!r})',
       _text == 'A bold word' and _spans == [] and _paras == [])
 
+# Both choices have to be reachable from the keyboard, not only by calling
+# the methods. Ctrl+V is not bound directly -- Tk turns it into the <<Paste>>
+# virtual event, which is what carries the binding -- so the two are checked
+# the way a user actually reaches them.
+set_body('')
+_stub_clipboard(html='<ul><li>milk</li></ul>', text='\u2022 milk')
+take_focus(app.body_text)
+app.body_text.event_generate('<<Paste>>')
+app.update()
+check(f'Ctrl+V keeps the list ({body()!r})',
+      body() == '\u2022 milk' and app._extract_paragraphs(app.body_text))
+
+set_body('')
+take_focus(app.body_text)
+app.body_text.event_generate('<Control-Shift-V>')
+app.update()
+check(f'Ctrl+Shift+V pastes the words with no list ({body()!r})',
+      body() == 'milk' and not app._extract_paragraphs(app.body_text))
+
 # Nothing rich on the clipboard: the ordinary paste must still happen.
 set_body('')
 _stub_clipboard(html=None)
