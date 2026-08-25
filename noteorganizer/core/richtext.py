@@ -322,7 +322,14 @@ def note_to_html(text, formatting=None, paragraphs=None):
             body, body_offset = line[len(marker):], offset + len(marker)
 
         target = indent + 1 if kind else 0
-        while len(open_lists) > target:
+        # Close while there are too many levels open, and also when the
+        # level we are about to write into is the wrong kind: a numbered
+        # item following a bulleted one at the same depth needs its own
+        # <ol>, not another <li> in the open <ul>.
+        while open_lists and (
+                len(open_lists) > target
+                or (kind and len(open_lists) == target
+                    and open_lists[-1][0] != kind)):
             closed, was_nested = open_lists.pop()
             out.append("</ul>" if closed == "bullet" else "</ol>")
             if was_nested:

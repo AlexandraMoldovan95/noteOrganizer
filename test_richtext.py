@@ -183,6 +183,27 @@ for label, text, spans, paras in ROUND_TRIP:
     check(f"round trip keeps the paragraphs: {label}", back_paras == paras)
     check(f"round trip produces valid markup: {label}", valid(markup))
 
+# A list changing kind at the same depth needs a list element of its own,
+# not another item in the one already open. Writing it as another <li> put
+# a numbered line inside a <ul>, so it came back as a bullet.
+KIND_CHANGES = [
+    ("bullets then numbers", BULLET + "milk\n1. collect",
+     [{"line": 0, "kind": "bullet"}, {"line": 1, "kind": "number"}]),
+    ("numbers then bullets", "1. one\n" + BULLET + "aside",
+     [{"line": 0, "kind": "number"}, {"line": 1, "kind": "bullet"}]),
+    ("alternating", BULLET + "a\n1. b\n" + BULLET + "c",
+     [{"line": 0, "kind": "bullet"}, {"line": 1, "kind": "number"},
+      {"line": 2, "kind": "bullet"}]),
+    ("kind changing while nested", BULLET + "top\n1. sub\n" + BULLET + "back",
+     [{"line": 0, "kind": "bullet"}, {"line": 1, "kind": "number", "indent": 1},
+      {"line": 2, "kind": "bullet"}]),
+]
+for label, text, paras in KIND_CHANGES:
+    markup = note_to_html(text, [], paras)
+    back_text, _bs, back_paras = html_to_note(markup)
+    check(f"a list changing kind starts a new list: {label}",
+          back_text == text and back_paras == paras and valid(markup))
+
 # Styles must survive the trip, though bold+italic may come back as two
 # spans where it went out as one -- the note format allows both.
 markup = note_to_html("abc", [{"start": 0, "end": 3, "style": "bold_italic"}])
