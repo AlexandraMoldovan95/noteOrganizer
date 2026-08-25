@@ -329,12 +329,6 @@ MAX_INDENT = 8
 # and is never stored -- see normalize_paragraphs.
 ALIGNMENTS = ("left", "center", "right")
 
-# Block styling. A quote is drawn as a coloured left bar plus a tinted
-# background rather than a box, because Tk draws a bordered range as one box
-# per display line -- a paragraph that wraps comes out as several boxes, the
-# last ending mid-sentence. The bar reads as one block however it wraps.
-BLOCK_STYLES = ("quote",)
-
 
 def parse_list_marker(line):
     """Split a line into ``(kind, marker, rest)``.
@@ -413,11 +407,8 @@ def normalize_paragraphs(value, line_count=None):
         if not isinstance(indent, int) or isinstance(indent, bool) or indent < 0:
             indent = 0
         indent = min(indent, MAX_INDENT)
-        block = item.get("block")
-        if block not in BLOCK_STYLES:
-            block = None
 
-        if kind is None and align == "left" and indent == 0 and block is None:
+        if kind is None and align == "left" and indent == 0:
             continue                # nothing worth recording
 
         seen.add(line)
@@ -428,8 +419,6 @@ def normalize_paragraphs(value, line_count=None):
             entry["indent"] = indent
         if align != "left":
             entry["align"] = align
-        if block:
-            entry["block"] = block
         clean.append(entry)
     return sorted(clean, key=lambda b: b["line"])
 
