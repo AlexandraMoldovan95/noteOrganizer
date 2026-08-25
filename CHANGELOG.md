@@ -14,6 +14,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 ### Changed
 - Rich clipboard content is read through `ctypes`, which is in the standard library, so this costs no new dependency — Tkinter's own clipboard only ever offers plain text, which is why paste was lossy. The conversion between HTML and a note is kept separate from the clipboard itself, in `core/richtext.py`: it turns strings into strings, so it can be tested on any machine, while the part that only works on Windows is small and isolated. The mapping is deliberately lossy — HTML can express unlimited styling and a note cannot, so anything with no equivalent is dropped rather than approximated, the same choice the app already makes about malformed formatting. Font size and family are dropped on the way in for a related reason: the app offers eight of each and a web page uses neither, so matching would mean claiming a note is set in something it never was.
 
+### Testing
+- The paste checks drove `_on_body_paste` and `_paste_plain` by calling them, so a broken key binding would have passed unnoticed. They now press the keys instead — the `<<Paste>>` virtual event that Tk turns Ctrl+V into, and `<Control-Shift-V>` — which is how anyone actually reaches either choice.
+
 ---
 
 ## [0.36.56] — 2026-08-25
