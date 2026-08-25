@@ -382,6 +382,25 @@ def parse_list_marker(line):
     return None, "", line
 
 
+def strip_list_markers(text):
+    """Remove anything this app would read back as a list marker.
+
+    Needed by "paste without formatting". A marker in the text is what
+    makes a line a list line here, and a source that writes its own bullets
+    into the plain-text copy it offers -- many do -- would otherwise give
+    exactly the formatted result that was asked to be left behind.
+
+    Only markers this app recognises are removed. A line starting "- " or
+    "* " keeps them: they are the writer's characters, and they were never
+    going to become a list.
+    """
+    lines = []
+    for line in (text or "").split("\n"):
+        kind, _marker, rest = parse_list_marker(line.lstrip(" \t"))
+        lines.append(rest if kind else line)
+    return "\n".join(lines)
+
+
 def bullet_level_of(marker):
     """Which nesting level a bullet marker's glyph stands for, or 0.
 

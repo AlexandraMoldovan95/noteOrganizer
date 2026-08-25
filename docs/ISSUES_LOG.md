@@ -4,6 +4,20 @@ A narrative log of the more interesting bugs found and fixed during development 
 
 ---
 
+### The paste that kept the formatting it was told to drop
+
+**Symptom:** "paste without formatting" pasted a bullet list. Both choices did the same thing, which made it look like the wrong function was wired to the shortcut.
+
+**Root cause:** nothing in the paste code. When you copy a list, the source puts it on the clipboard twice — once as HTML, once as its own plain-text version — and that plain-text version has real bullet characters in it. Everything worked exactly as written; the "plain text" simply was not plain.
+
+**Why it hit this app in particular:** here a marker in the text *is* what makes a line a list. A bullet is not a property of the line, it is the two characters `"• "` at the start of it, because the character offsets in `formatting` have to index that same body text. So pasting the source's plain text verbatim did not merely show bullet characters — it built genuine, indented list paragraphs out of them.
+
+**What pointed at it:** the same paste from a source that sends no bullets was already correct. That ruled out the paste path and left the clipboard.
+
+**Fix:** plain paste strips what the app itself would read as a marker — the three bullet glyphs and a numbered prefix, with the indentation in front of them. A line starting `- ` keeps its characters, since those never made a list here anyway.
+
+**The cost, accepted deliberately:** any number followed by a dot and a space starts a numbered item in this app, so `2026. was a year` loses its year. The stripper matches what the editor does with that line rather than being cleverer than it. A gentler rule would paste text that looked plain and came back as a list the next time the note was opened, which is worse than being consistent.
+
 ### The title box that took three and a half seconds a keystroke
 
 **Symptom:** none, until someone pasted something long into a note's title. Then the title field stopped responding — and because the only way to fix a title is to edit it, there was no way back out.

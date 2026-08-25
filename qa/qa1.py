@@ -1,9 +1,30 @@
 import sys
+import time
 import note_organizer as NO, tkinter as tk, json, os, re
 fails=[]
 def check(name, cond):
     print(('PASS' if cond else 'FAIL'), name)
     if not cond: fails.append(name)
+
+
+def take_focus(widget, attempts=60):
+    """Give a widget the keyboard focus, and wait until Tk agrees it has it.
+
+    focus_force() is a request, not an accomplished fact. event_generate()
+    for a key combination needs the focus to have actually arrived, and
+    under the load of a full-suite run it does not always get there within
+    a single update() -- which is why the shortcut checks below have failed
+    at random and never once when this file is run on its own.
+    """
+    widget.focus_force()
+    for _ in range(attempts):
+        app.update()
+        app.update_idletasks()
+        if app.focus_get() is widget:
+            return True
+        time.sleep(0.01)
+    return False
+
 
 app=NO.NoteOrganizer(); app._poll_active_dirty=lambda:None
 app.show_info=lambda *a,**k: True
@@ -375,8 +396,7 @@ bold_end = f'{bold_start}+4c'
 # script several popups (calculator's dropdowns, history) get opened and
 # dismissed, which can leave a stale grab behind that swallows key events.
 app.body_text.tag_add('sel', bold_start, bold_end)
-app.body_text.focus_force()
-app.update()
+take_focus(app.body_text)
 was_bold = 'bold' in app.body_text.tag_names(bold_start)
 app.body_text.event_generate('<Control-b>')
 app.update()
@@ -1717,6 +1737,165 @@ check('clearing it falls back to the category colour',
       str(app.color_swatch_btn.cget('bg')).lower()
       == str(NO.CATEGORY_COLORS.get('General', app.colors['accent'])).lower())
 
+# ---- PASTING AND COPYING FORMATTED TEXT ----
+# The clipboard is stubbed out here. Rich formats are a Windows facility
+# and this suite runs on Linux, and even on Windows the clipboard belongs
+# to the whole machine -- a test that reads it is testing whatever was
+# copied last. What matters is the wiring either side of it.
+app.new_note()
+app.update()
+
+_real_read_html = NO.clipboard.read_html
+_real_read_text = NO.clipboard.read_text
+_real_write = NO.clipboard.write
+_written = {}
+
+
+def _stub_clipboard(html=None, text=None):
+    NO.clipboard.read_html = lambda: html
+    NO.clipboard.read_text = lambda: text
+    _written.clear()
+
+    def _capture(t, h=None):
+        _written['text'], _written['html'] = t, h
+        return bool(h)
+
+    NO.clipboard.write = _capture
+
+
+def _body_state():
+    return (body(),
+            sorted((s['start'], s['end'], s['style'])
+                   for s in app._extract_formatting(app.body_text)),
+            app._extract_paragraphs(app.body_text))
+
+
+_stub_clipboard(html="<p>A <b>bold</b> word</p><ul><li>milk</li><li>eggs</li></ul>")
+set_body('')
+_result = app._on_body_paste()
+app.update()
+_text, _spans, _paras = _body_state()
+check('pasting formatted text takes over from the plain paste',
+      _result == 'break')
+check(f'the words and list markers arrive ({_text!r})',
+      _text == 'A bold word\n\u2022 milk\n\u2022 eggs')
+check('the bold comes with them, over the right characters',
+      (2, 6, 'bold') in _spans)
+check('and the list lines are recorded as list lines',
+      _paras == [{'line': 1, 'kind': 'bullet'}, {'line': 2, 'kind': 'bullet'}])
+# ...and are actually indented. The marker alone makes _extract_paragraphs
+# call a line a list line, so the check above passes whether or not the
+# hanging indent was ever applied -- which is the half that can go missing.
+check('the pasted list lines get their indent, not just their markers',
+      all(any(n.startswith('para_') for n in app.body_text.tag_names(f'{ln}.0'))
+          for ln in (2, 3)))
+
+# Pasted formatting has to land where the cursor is, not at the start.
+set_body('START END')
+app.body_text.mark_set('insert', '1.6')
+_stub_clipboard(html='<p><b>mid</b></p>')
+app._on_body_paste()
+app.update()
+_text, _spans, _paras = _body_state()
+check(f'pasting into the middle puts the text there ({_text!r})',
+      _text == 'START midEND')
+check('and its formatting is offset to match',
+      _spans == [(6, 9, 'bold')]
+      and _text[6:9] == 'mid')
+
+# Same clipboard, asked for plainly.
+set_body('')
+_stub_clipboard(html='<p>A <b>bold</b> word</p>', text='A bold word')
+check('pasting without formatting takes over too',
+      app._paste_plain() == 'break')
+app.update()
+_text, _spans, _paras = _body_state()
+check(f'it brings the words and nothing else ({_text!r})',
+      _text == 'A bold word' and _spans == [] and _paras == [])
+
+# Both choices have to be reachable from the keyboard, not only by calling
+# the methods. Ctrl+V is not bound directly -- Tk turns it into the <<Paste>>
+# virtual event, which is what carries the binding -- so the two are checked
+# the way a user actually reaches them.
+set_body('')
+_stub_clipboard(html='<ul><li>milk</li></ul>', text='\u2022 milk')
+take_focus(app.body_text)
+app.body_text.event_generate('<<Paste>>')
+app.update()
+check(f'Ctrl+V keeps the list ({body()!r})',
+      body() == '\u2022 milk' and app._extract_paragraphs(app.body_text))
+
+set_body('')
+take_focus(app.body_text)
+app.body_text.event_generate('<Control-Shift-V>')
+app.update()
+check(f'Ctrl+Shift+V pastes the words with no list ({body()!r})',
+      body() == 'milk' and not app._extract_paragraphs(app.body_text))
+
+# Nothing rich on the clipboard: the ordinary paste must still happen.
+set_body('')
+_stub_clipboard(html=None)
+check('with no rich clipboard content, the normal paste is left to run',
+      app._on_body_paste() is None)
+
+# ---- Copying ----
+set_body('heading\nmilk\neggs')
+app.body_text.tag_add('sel', '1.0', '1.end')
+app.update()
+app._toggle_body_style('bold')
+clear_selection()
+app.body_text.tag_add('sel', '2.0', '3.end')
+app.update()
+app._list_buttons['bullet'].invoke()
+clear_selection()
+
+_stub_clipboard()
+app.body_text.tag_add('sel', '1.0', 'end-1c')
+app.update()
+check('copying a selection writes markup as well as text',
+      app._copy_formatted() == 'break')
+check(f'the markup carries the bold ({_written.get("html")})',
+      '<b>heading</b>' in (_written.get('html') or ''))
+check('and the list as a real list rather than bullet characters',
+      '<ul><li>milk</li>' in (_written.get('html') or ''))
+check('the plain text goes on too, for anything that cannot read markup',
+      (_written.get('text') or '').startswith('heading'))
+
+# Half a bold word must copy as half a bold word.
+_stub_clipboard()
+clear_selection()
+app.body_text.tag_add('sel', '1.0', '1.4')
+app.update()
+app._copy_formatted()
+check(f'a partly selected style is clipped to the selection '
+      f'({_written.get("html")})',
+      _written.get('html') == '<div><b>head</b></div>')
+
+# The selection above sits wholly inside the bold, so clipping the span or
+# leaving it alone produce the same markup. Starting inside the style and
+# running past its end is what tells the two apart.
+set_body('heading tail')
+app.body_text.tag_add('sel', '1.0', '1.7')
+app.update()
+app._toggle_body_style('bold')
+clear_selection()
+_stub_clipboard()
+app.body_text.tag_add('sel', '1.4', '1.12')
+app.update()
+app._copy_formatted()
+check(f'a style is clipped at the end of the selection too '
+      f'({_written.get("html")})',
+      _written.get('html') == '<div><b>ing</b> tail</div>')
+
+_stub_clipboard()
+clear_selection()
+app.update()
+check('copying nothing is left to Tk', app._copy_formatted() is None)
+
+NO.clipboard.read_html = _real_read_html
+NO.clipboard.read_text = _real_read_text
+NO.clipboard.write = _real_write
+
 # ---- Fast typing (regression): a first version tagged only "the one
 # character right before the cursor" on each KeyRelease, which silently
 # missed characters typed in a fast real burst -- Tk can queue several
@@ -1731,8 +1910,7 @@ check('clearing it falls back to the category colour',
 # the same shape as a fast typist outrunning a naive per-keystroke
 # handler.
 app.new_note()
-app.body_text.focus_force()
-app.update()
+take_focus(app.body_text)
 app._fmt_buttons['bold'].invoke()
 app.update()
 check('bold queued as pending before the fast-typing burst', app._pending_styles == {'bold'})
@@ -1757,7 +1935,7 @@ check('every fast-typed character is bold, not just some of them '
 app._fmt_buttons['bold'].invoke()  # off
 app.update()
 app.new_note()
-app.body_text.focus_force()
+take_focus(app.body_text)
 app.body_text.insert('1.0', 'existing text here')
 app.body_text.mark_set('insert', '1.0')
 app.update()
@@ -1777,8 +1955,7 @@ check('the character actually typed after the cursor move is correctly bold',
 # typing) -- excluded via a dedicated <<Paste>> resync, not by inspecting
 # the KeyRelease event that happens to follow it.
 app.new_note()
-app.body_text.focus_force()
-app.update()
+take_focus(app.body_text)
 app._fmt_buttons['bold'].invoke()
 app.update()
 app.clipboard_clear()
