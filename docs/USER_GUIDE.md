@@ -24,7 +24,7 @@ Notes save automatically a moment after you stop typing (look for the "Auto-save
 
 ### Formatting
 
-A small toolbar above the note body is split into three groups. **Style** and **Colors** below change the characters you select; **Paragraph** changes whole lines. **Style**: **Bold**, *Italic*, <u>Underline</u>, and ~~Strikethrough~~ — also on the right-click menu, and available as keyboard shortcuts (**Ctrl+B**, **Ctrl+I**, **Ctrl+U**, **Ctrl+D**). **Colors**: text color and highlight, each opening a small swatch picker (no hex codes to type — just pick a color) with a Clear option to remove it again. All six work the same way: select some text and click (or press) one to apply it there, or click one with nothing selected — it "sticks" for whatever you type next, until you click it again to turn it off. Text color and highlight can be combined with each other and with any of the four styles.
+A small toolbar above the note body is split into four groups. **Style**, **Font** and **Colors** change the characters you select; **Paragraph** changes whole lines. **Style**: **Bold**, *Italic*, <u>Underline</u>, and ~~Strikethrough~~ — also on the right-click menu, and available as keyboard shortcuts (**Ctrl+B**, **Ctrl+I**, **Ctrl+U**, **Ctrl+D**). **Colors**: text color and highlight, each opening a small swatch picker (no hex codes to type — just pick a color) with a Clear option to remove it again. All six work the same way: select some text and click (or press) one to apply it there, or click one with nothing selected — it "sticks" for whatever you type next, until you click it again to turn it off. Text color and highlight can be combined with each other and with any of the four styles.
 
 ![Formatting toolbar](screenshots/formatting-toolbar.png)
 
@@ -39,7 +39,15 @@ These combine: a bullet can be centred, a nested list can sit inside a quote, an
 
 List markers are part of the note's own text — a bullet really is a "• " at the start of the line. That's deliberate: it means a list still looks like a list when you export the note, share it as a code, or paste it into an email. The indenting is drawn by the app on top of that.
 
-Still ahead: font size, font family, and paste that keeps (or discards) formatting from wherever it was copied.
+**Font** sets the typeface and size. Pick from either dropdown to change the selected text, or pick with nothing selected and it applies to whatever you type next — the same way the Style buttons work.
+
+- **Default** means "no setting of its own", so that text follows whatever the editor's default is. It is how you undo a size or a typeface, rather than setting it back by hand.
+- If you select text that mixes two sizes, the dropdown shows **Default** rather than picking one of them — otherwise it would look like the whole selection was already that size.
+- The eight typefaces are ones that come with Windows. That is deliberate: if a note used a font the person you send it to doesn't have, their computer would quietly swap in a different one and nothing would say so.
+
+**To make everything bigger**, don't format each note — go to **Settings → Appearance** and set **Editor font** and **Text size**. That is the size notes start at; anything you set from the toolbar overrides it just for that text. This is the setting to reach for if the default is simply too small to read comfortably.
+
+Still ahead: paste that keeps (or discards) formatting from wherever it was copied.
 
 ### Attachments
 

@@ -6,6 +6,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ---
 
+## [0.35.51] — 2026-08-25
+
+### Added
+- Font size and family in the note body, as a **Font** group in the toolbar, plus the baseline both start from under Settings → Appearance. The toolbar pair sets the typeface and size of the selected text, or sticks for whatever is typed next the way the colour pickers already do; the Settings pair sets what every note uses unless it says otherwise, since "my notes should be bigger" is a statement about reading rather than about one note. Choosing **Default** stores no span at all, which is what lets a note follow the setting instead of being pinned to whatever it happened to be the day it was written. A selection spanning two different sizes reads as Default rather than as the first run's size, which would claim the whole selection is that size. Families are a curated list of eight that ship with every Windows install rather than whatever is installed here: notes travel as share codes and backups, and Tk silently substitutes a font the reader does not have, with nothing to say the note is no longer showing what it was written in.
+
+### Changed
+- Size and family are stored as ordinary spans like the colours, but unlike the colours they collide with bold and italic over Tk's font option — two tags that set it do not compose, one simply wins, which is the same collision that made `bold_italic` a tag of its own. All four therefore stay separate in the note and are merged only at render time, into one composite tag per run built on demand. A note that never touches size or family tags exactly as it did before, and the plain `bold` tag stays on the text underneath as the marker the toolbar reads, so "is this selection bold?" still answers correctly inside a resized run. Two things that follow from the base font had to be made to move with it: bold and italic are separate font objects built from it, and the list hanging indent is measured in pixels while the marker is not — `• ` is 11px at 12pt and 22px at 24pt, so the fixed margin that hung correctly at the default left a large-font item's second line out of true.
+
+---
+
 ## [0.34.51] — 2026-08-25
 
 ### Added

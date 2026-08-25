@@ -2174,7 +2174,11 @@ class SettingsPageMixin:
         # Theme picker — pick any color scheme, grouped Dark / Light.
         self.theme_picker_frame = tk.Frame(appearance, bg=self.colors["bg"])
         self.track_theme(self.theme_picker_frame, bg="bg")
-        self.theme_picker_frame.pack(fill="x")
+        # Bottom padding here rather than top padding on the card below:
+        # _settings_card deliberately has none, because everywhere else a
+        # card follows a subtitle. This is the one place one follows a grid
+        # of swatches, which would otherwise sit right against it.
+        self.theme_picker_frame.pack(fill="x", pady=(0, 20))
         self._build_theme_picker(self.theme_picker_frame)
 
         # The editor's own font. This is the baseline every note starts
