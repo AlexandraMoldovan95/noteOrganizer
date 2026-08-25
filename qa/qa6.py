@@ -1,4 +1,5 @@
 import sys
+import time
 import note_organizer as NO, tkinter as tk, tkinter.filedialog as fd, os, tempfile
 fails=[]
 def check(name, cond):
@@ -584,16 +585,32 @@ if back_btn2:
     check('"Back to Notes" does not move when the settings page scrolls',
           before_y == after_y)
 
+def _resize(width, height, attempts=60):
+    """Resize the window and wait until it has really happened.
+
+    geometry() is a request to the window manager, not a resize. Reading a
+    widget's size straight after it can still give the old one, which makes
+    any check that depends on the new size flaky rather than wrong.
+    """
+    app.geometry(f'{width}x{height}')
+    for _ in range(attempts):
+        app.update()
+        app.update_idletasks()
+        if abs(app.winfo_width() - width) <= 2 and                 abs(app.winfo_height() - height) <= 2:
+            break
+        time.sleep(0.02)
+    app.update()
+    app.update_idletasks()
+    app.update()
+
+
 # ---- THE SECTION LIST SCROLLS WHEN THE WINDOW IS SHORT ----
 # Nine entries in four groups, plus a brand and the theme toggle, need more
 # height than a short window has. The list was a plain Frame, so whatever
 # did not fit was simply unreachable.
-app.geometry('1100x420')
-app.update()
+_resize(1100, 420)
 app.show_settings_page()
-app.update()
-app.update_idletasks()
-app.update()
+_resize(1100, 420)
 
 _nav = app._settings_nav_canvas
 _box = _nav.bbox('all')
@@ -618,10 +635,7 @@ check('the wheel reaches the entries themselves, not just the canvas behind',
 
 # Tall enough for everything: scrolling would only shift content that is
 # already fully visible, which reads as the list drifting for no reason.
-app.geometry('1100x1000')
-app.update()
-app.update_idletasks()
-app.update()
+_resize(1100, 1000)
 _nav.yview_moveto(0)
 app.update()
 app._settings_nav_wheel(_Wheel())
@@ -629,8 +643,7 @@ app.update()
 check('a window tall enough for every entry does not scroll',
       _nav.yview()[0] == 0.0)
 
-app.geometry('1100x850')
-app.update()
+_resize(1100, 850)
 
 # ---- DERIVED SURFACES FOLLOW A THEME SWITCH (regression) ----
 # Settings blends `card` toward `text` for the well inside a card, and

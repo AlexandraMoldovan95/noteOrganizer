@@ -1,4 +1,5 @@
 import sys
+import time
 import note_organizer as NO, tkinter as tk, json, os, re
 fails=[]
 def check(name, cond):
@@ -1390,6 +1391,26 @@ check('two runs of different sizes report Default, not whichever came first',
       app.font_size_var.get() == app.DEFAULT_FONT_LABEL)
 clear_selection()
 
+def _resize(width, height, attempts=60):
+    """Resize the window and wait until it has really happened.
+
+    geometry() is a request to the window manager, not a resize. Reading a
+    widget's size straight after it can still give the old one, which makes
+    any check that depends on the new size flaky rather than wrong.
+    """
+    app.geometry(f'{width}x{height}')
+    for _ in range(attempts):
+        app.update()
+        app.update_idletasks()
+        if abs(app.winfo_width() - width) <= 2 and \
+                abs(app.winfo_height() - height) <= 2:
+            break
+        time.sleep(0.02)
+    app.update()
+    app.update_idletasks()
+    app.update()
+
+
 # ---- NO FORMATTING CONTROL IS EVER OUT OF REACH ----
 # The bar once needed 868px against 787px of editor pane, so the last
 # group ran off the right-hand edge and could not be reached without
@@ -1420,20 +1441,15 @@ def _controls_past_the_edge():
 
 _geom = app.winfo_geometry()
 for _w in (1400, 1100, 1000, 940, 900):
-    app.geometry(f'{_w}x800')
+    _resize(_w, 800)
     _past = _controls_past_the_edge()
     check(f'no formatting control sticks out at {_w}px wide '
           f'({len(_past)} did)', not _past)
 
-app.geometry('1400x800')
-app.update()
-app.update_idletasks()
+_resize(1400, 800)
 check('every control is on one row when there is room for one',
       len([r for r in app._fmt_bar_rows if r.winfo_ismapped()]) == 1)
-app.geometry('900x800')
-app.update()
-app.update_idletasks()
-app.update()
+_resize(900, 800)
 check('the bar wraps rather than hiding anything when there is not',
       len([r for r in app._fmt_bar_rows if r.winfo_ismapped()]) >= 2)
 app.geometry(_geom)
