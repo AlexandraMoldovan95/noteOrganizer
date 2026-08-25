@@ -121,6 +121,20 @@ Because the marker is in the text, **the text is what decides** whether a line i
 
 **Numbered levels are not lettered on purpose.** The usual nested scheme — `1.` then `a.` then `i.` — is ambiguous with ordinary prose, and a note is exactly the kind of document where a line can legitimately begin `"a. "`. Since recognising a list from its own text is what keeps markers and tags from drifting apart, that recognition has to stay reliable. Bullets vary by depth (`•`, `◦`, `▪`) because those glyphs are not typed by accident; numbered depth shows through indentation and the count restarting under each parent instead.
 
+### Colours that are computed, not looked up
+
+`apply_theme()` re-applies the palette to every widget registered with `track_theme`, and `_recolor_stragglers()` catches the rest by remapping any other theme's palette values onto the current theme's. That covers everything whose colour *is* a palette entry.
+
+Settings does not work that way throughout. It derives two surfaces by blending: a well inside a card is `card` mixed toward `text`, and a hairline is `card` mixed toward `subtext`. Those results belong to no palette, so the straggler pass cannot recognise them — which is exactly how the Settings information bars stayed dark on a light theme (`docs/ISSUES_LOG.md`).
+
+Both derivations therefore live in `core/themes.py` as `inset_surface()` and `hairline()`, and `_recolor_stragglers()` remaps each theme's derived surfaces alongside its palette. **If you compute a colour rather than looking one up, derive it in one place and teach the theme switch about it there** — otherwise it is invisible to everything that fixes colours by matching known values.
+
+### Layout arithmetic belongs in core, not in the widgets
+
+The formatting toolbar wraps when it will not fit on one row, so no control can be out of reach at any window width, in any font, at any display scaling. The decision of *what goes on which row* is `split_toolbar_rows()` in `core/formatting.py`, and it takes widths as plain numbers rather than measuring widgets.
+
+That split is deliberate, and it was learned the hard way. A check that measures widget widths is testing whatever font the machine has: the same bar is 577px here and 827px under Xvfb, and which control lands on a row boundary — and therefore whether the bug shows at all — moves with it. Given numbers, the same inputs give the same answer everywhere, so the behaviour can be pinned down exactly. The widget side keeps only the measuring and the packing.
+
 ### Large lists: paginate, don't virtualize (yet)
 
 Trash and the multi-note Share panel both cap how many rows they build at once (50 and 100 respectively), with a "Show more" button to reveal the next batch, rather than rendering every entry immediately. This was enough to take the Trash panel from ~1.8s to ~100ms with 600 entries. The main note list doesn't do this yet — see [ROADMAP.md](ROADMAP.md) for real windowed virtualization, which would help further at very large note counts.
