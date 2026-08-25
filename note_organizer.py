@@ -179,6 +179,8 @@ from noteorganizer.core.duplicates import (
 )
 
 # Rich-text span storage lives in noteorganizer/core/formatting.py.
+from noteorganizer.core import clipboard
+from noteorganizer.core.richtext import html_to_note, note_to_html
 from noteorganizer.core.formatting import (
     normalize_paragraphs,
     parse_list_marker,
@@ -954,6 +956,13 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         menu.add_command(label="Cut", command=lambda: do("<<Cut>>"))
         menu.add_command(label="Copy", command=lambda: do("<<Copy>>"))
         menu.add_command(label="Paste", command=lambda: do("<<Paste>>"))
+        # Only the note body knows what to do with formatting; everywhere
+        # else this widget appears -- the import box, a rename field -- takes
+        # plain text anyway, so offering the choice there would be noise.
+        if text_widget is getattr(self, "body_text", None):
+            menu.add_command(label="Paste without formatting",
+                             accelerator="Ctrl+Shift+V",
+                             command=self._paste_plain)
         menu.add_separator()
         menu.add_command(label="Select All",
                          # "end" (not "end-1c") is a Text widget's implicit
@@ -1251,12 +1260,109 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 self.body_text.tag_add(wanted, f"{n}.0", f"{n}.end")
 
     def _on_body_paste(self, event=None):
-        """Pasted text can add or remove whole list lines, so resync them all.
+        """Paste, keeping the source's formatting where there is any.
 
-        Runs after Tk's own paste handler rather than instead of it -- at
-        <<Paste>> time the text is not in the widget yet.
+        Falls through to Tk's own plain-text paste when the clipboard holds
+        nothing rich, when this is not Windows, or when anything at all goes
+        wrong reading it -- returning None leaves the default handler to
+        run, which is exactly what happened before this existed.
         """
+        if self._paste_formatted():
+            return "break"
+        # Plain paste: Tk inserts the text after this returns, so the list
+        # tags can only be brought back into step once that has happened.
         self.after_idle(self._resync_list_tags)
+        return None
+
+    def _paste_plain(self, event=None):
+        """Paste the clipboard's text with none of its formatting.
+
+        The escape hatch for pasting from a web page into a note without
+        dragging its styling along.
+        """
+        text = clipboard.read_text()
+        if text is None:
+            try:
+                text = self.body_text.clipboard_get()
+            except tk.TclError:
+                return "break"
+        self._replace_selection_with(text)
+        self.after_idle(self._resync_list_tags)
+        self._schedule_autosave()
+        return "break"
+
+    def _replace_selection_with(self, text):
+        """Drop the selection, if any, and put *text* where the cursor is."""
+        try:
+            self.body_text.delete("sel.first", "sel.last")
+        except tk.TclError:
+            pass
+        self.body_text.insert("insert", text)
+
+    def _paste_formatted(self):
+        """Paste rich clipboard content. True if that actually happened."""
+        markup = clipboard.read_html()
+        if not markup:
+            return False
+        text, spans, paragraphs = html_to_note(markup)
+        if not text:
+            return False
+
+        try:
+            self.body_text.delete("sel.first", "sel.last")
+        except tk.TclError:
+            pass
+        # Where it lands, before inserting: everything after this point
+        # shifts, and Tk moves its own tags along with the text, so only
+        # what arrives needs placing.
+        at = self._char_offset(self.body_text, self.body_text.index("insert"))
+        line = int(self.body_text.index("insert").split(".")[0]) - 1
+        self.body_text.insert("insert", text)
+
+        self._apply_formatting(
+            self.body_text,
+            [dict(s, start=s["start"] + at, end=s["end"] + at) for s in spans])
+        self._apply_paragraphs(
+            self.body_text,
+            [dict(p, line=p["line"] + line) for p in paragraphs])
+        # A pasted list starts its own numbering at one; renumbering makes
+        # it continue whatever it was dropped into.
+        self._renumber_lists()
+        self._refresh_format_buttons()
+        self._schedule_autosave()
+        return True
+
+    def _copy_formatted(self, event=None):
+        """Copy the selection so it arrives elsewhere still formatted.
+
+        The plain text goes on the clipboard too, so pasting into something
+        that cannot read markup still gives words rather than tags.
+        """
+        try:
+            start = self.body_text.index("sel.first")
+            end = self.body_text.index("sel.last")
+        except tk.TclError:
+            return None                      # nothing selected; let Tk decide
+        text = self.body_text.get(start, end)
+        if not text:
+            return None
+        first = self._char_offset(self.body_text, start)
+        last = self._char_offset(self.body_text, end)
+        first_line = int(start.split(".")[0]) - 1
+
+        clipped = []
+        for span in self._extract_formatting(self.body_text):
+            lo, hi = max(span["start"], first), min(span["end"], last)
+            if hi > lo:
+                clipped.append(dict(span, start=lo - first, end=hi - first))
+        paragraphs = [
+            dict(p, line=p["line"] - first_line)
+            for p in self._extract_paragraphs(self.body_text)
+            if 0 <= p["line"] - first_line < len(text.split("\n"))]
+
+        if not clipboard.write(text, note_to_html(text, clipped, paragraphs)):
+            return None                      # nothing written; Tk's copy runs
+        return "break"
 
     def _refresh_list_buttons(self):
         """Show the bullet/number button as pressed when the cursor sits in
@@ -4735,6 +4841,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.body_text.bind("<Return>", self._on_body_return)
         self.body_text.bind("<BackSpace>", self._on_body_backspace)
         self.body_text.bind("<<Paste>>", self._on_body_paste, add="+")
+        self.body_text.bind("<<Copy>>", self._copy_formatted, add="+")
+        # Ctrl+Shift+V is the usual way to ask for the text without its
+        # styling; Ctrl+V keeps it, the way every other editor does.
+        self.body_text.bind("<Control-Shift-V>", self._paste_plain)
+        self.body_text.bind("<Control-Shift-v>", self._paste_plain)
         self.body_text.bind("<Tab>", lambda e: self._on_body_tab(e, +1))
         self.body_text.bind("<Shift-Tab>", lambda e: self._on_body_tab(e, -1))
         # X11 reports Shift+Tab as its own keysym rather than a modified Tab.
