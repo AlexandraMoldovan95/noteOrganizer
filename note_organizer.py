@@ -1393,14 +1393,18 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         for item in self._fmt_bar_items:
             widget, padx, _ipady, fill, _pady = item
             width = widget.winfo_reqwidth() + padx[0] + padx[1]
-            # A divider never starts a row -- it would read as a rule
-            # hanging off the front of the next line -- so it stays put and
-            # the group after it breaks instead.
-            breaks = used and used + width > available and index < last_row
-            if breaks and fill != "y":
+            if used and used + width > available and index < last_row:
                 index += 1
                 rows.append([])
                 used = 0
+                if fill == "y":
+                    # A divider is left out at a row break rather than
+                    # carried over: starting a line with a vertical rule
+                    # reads as a mistake, and the break already does what
+                    # the divider was there for. Keeping it on the previous
+                    # row instead is what pushed that row past the edge --
+                    # which is the whole failure this guards against.
+                    continue
             rows[index].append(item)
             used += width
 

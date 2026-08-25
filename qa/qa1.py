@@ -1413,45 +1413,67 @@ def _resize(width, height, attempts=60):
 
 # ---- NO FORMATTING CONTROL IS EVER OUT OF REACH ----
 # The bar once needed 868px against 787px of editor pane, so the last
-# group ran off the right-hand edge and could not be reached without
-# widening the window. Trimming it fixed that on one machine, but a
-# width in pixels depends on the font: this suite runs under Xvfb with
-# no Segoe UI, where the same bar measures 827px rather than 577px. So
-# the bar wraps, and what is asserted is the property rather than a
-# budget -- nothing sticks out, at any width.
+# group ran off the right-hand edge. Trimming it fixed that on one
+# machine, but a width in pixels depends on the font: this suite runs
+# under Xvfb with no Segoe UI, where the same bar measures 827px rather
+# than 577px. So the bar wraps, and what is checked is the property --
+# nothing is out of reach -- rather than a budget.
+#
+# Swept across a range of widths rather than sampled at a few, because
+# which item lands on a row boundary depends on the font, and the bug
+# this caught only appeared at the widths where that item was a divider.
 app.new_note()
 app.update()
 app.update_idletasks()
 
+_fmt_controls = [(w, px, fl) for w, px, _ip, fl, _py in app._fmt_bar_items]
+_fmt_real = [w for w, _px, fl in _fmt_controls if fl != 'y']
 
-def _controls_past_the_edge():
-    app.update()
+
+def _fmt_layout_faults(available):
+    """Controls missing or past the edge after reflowing to a width."""
+    app._reflow_format_bar(available)
     app.update_idletasks()
-    app.update()
-    bar = app._fmt_bar
-    past = []
-    for _widget, *_rest in app._fmt_bar_items:
-        if _widget.winfo_manager() != 'pack':
-            past.append(_widget)          # not laid out at all
+    faults = []
+    for _w, _px, _fl in _fmt_controls:
+        if _w.winfo_manager() != 'pack':
+            # A divider is deliberately left out where a row breaks;
+            # a real control never is.
+            if _fl != 'y':
+                faults.append(_w)
             continue
-        if _widget.winfo_x() + _widget.winfo_width() > bar.winfo_width() + 1:
-            past.append(_widget)
-    return past
+    for _row in app._fmt_bar_rows:
+        _used = 0
+        for _w, _px, _fl in _fmt_controls:
+            if _w.winfo_manager() == 'pack' and \
+                    str(_w.pack_info().get('in')) == str(_row):
+                _used += _w.winfo_reqwidth() + _px[0] + _px[1]
+        if _used > available:
+            faults.append(_row)
+    return faults
 
 
+_swept = list(range(300, 1001, 25))
+_bad = [a for a in _swept if _fmt_layout_faults(a)]
+check(f'every formatting control stays reachable at all {len(_swept)} widths tried '
+      f'from {_swept[0]}px to {_swept[-1]}px (failed at {_bad})', not _bad)
+
+# ...and through the real resize path, not only by calling the reflow.
 _geom = app.winfo_geometry()
-for _w in (1400, 1100, 1000, 940, 900):
+for _w in (1400, 1100, 900):
     _resize(_w, 800)
-    _past = _controls_past_the_edge()
-    check(f'no formatting control sticks out at {_w}px wide '
-          f'({len(_past)} did)', not _past)
+    _past = [c for c, _px, fl in _fmt_controls
+             if fl != 'y' and (c.winfo_manager() != 'pack'
+                               or c.winfo_x() + c.winfo_width()
+                               > app._fmt_bar.winfo_width() + 1)]
+    check(f'nothing sticks out after really resizing to {_w}px ({len(_past)} did)',
+          not _past)
 
 _resize(1400, 800)
 check('every control is on one row when there is room for one',
       len([r for r in app._fmt_bar_rows if r.winfo_ismapped()]) == 1)
-_resize(900, 800)
-check('the bar wraps rather than hiding anything when there is not',
-      len([r for r in app._fmt_bar_rows if r.winfo_ismapped()]) >= 2)
+check('and all of them are showing',
+      all(c.winfo_manager() == 'pack' for c in _fmt_real))
 app.geometry(_geom)
 app.update()
 
