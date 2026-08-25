@@ -233,6 +233,44 @@ def resolve_font_runs(spans, text_length):
     return merged
 
 
+def split_toolbar_rows(items, available, max_rows=3):
+    """Deal toolbar controls into rows no wider than *available*.
+
+    *items* is ``[(width, is_divider), ...]`` in the order they appear;
+    the result is a list of rows, each holding indices into *items*.
+
+    Pure arithmetic, deliberately: which control lands on a row boundary
+    depends entirely on the font, so testing this through real widgets
+    tests whatever font the machine happens to have. The bug this exists
+    to prevent -- a divider making its row too wide -- showed up on a CI
+    runner and not on the machine it was written on, purely for that
+    reason.
+
+    A divider that falls at a row break is dropped rather than carried
+    over. Starting a row with a vertical rule reads as a mistake, and
+    keeping it on the row it overflowed is what made that row too wide.
+
+    The last row takes whatever is left even if it no longer fits: there
+    is nowhere else to put it, and a control that is hard to reach is
+    still better than one that is not there at all.
+    """
+    rows, used, index = [[]], 0, 0
+    for i, (width, is_divider) in enumerate(items):
+        if used and used + width > available and index < max_rows - 1:
+            index += 1
+            rows.append([])
+            used = 0
+        # Stated once, as a property of the row rather than of the break:
+        # checking it only at the break missed the case where a divider was
+        # dropped there and the *next* divider then found an empty row and
+        # opened it.
+        if is_divider and index and not rows[index]:
+            continue
+        rows[index].append(i)
+        used += width
+    return rows
+
+
 def merge_spans(spans):
     """Join spans that touch and say the same thing.
 

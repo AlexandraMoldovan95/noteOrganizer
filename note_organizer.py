@@ -187,6 +187,7 @@ from noteorganizer.core.formatting import (
     renumber,
     shift_spans,
     merge_spans,
+    split_toolbar_rows,
     MAX_INDENT,
     parse_font_tag,
     resolve_font_runs,
@@ -1388,25 +1389,14 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if available <= 1:                   # not laid out yet
             return
 
-        rows, used, index = [[]], 0, 0
-        last_row = len(self._fmt_bar_rows) - 1
-        for item in self._fmt_bar_items:
-            widget, padx, _ipady, fill, _pady = item
-            width = widget.winfo_reqwidth() + padx[0] + padx[1]
-            if used and used + width > available and index < last_row:
-                index += 1
-                rows.append([])
-                used = 0
-                if fill == "y":
-                    # A divider is left out at a row break rather than
-                    # carried over: starting a line with a vertical rule
-                    # reads as a mistake, and the break already does what
-                    # the divider was there for. Keeping it on the previous
-                    # row instead is what pushed that row past the edge --
-                    # which is the whole failure this guards against.
-                    continue
-            rows[index].append(item)
-            used += width
+        measured = [(w.winfo_reqwidth() + px[0] + px[1], fl == "y")
+                    for w, px, _ip, fl, _py in self._fmt_bar_items]
+        # The arithmetic lives in core/formatting.py so it can be tested
+        # against made-up widths rather than against whatever font this
+        # machine happens to have -- see split_toolbar_rows.
+        rows = [[self._fmt_bar_items[i] for i in row]
+                for row in split_toolbar_rows(measured, available,
+                                              len(self._fmt_bar_rows))]
 
         for widget, _padx, _ipady, _fill, _pady in self._fmt_bar_items:
             widget.pack_forget()

@@ -1411,6 +1411,82 @@ def _resize(width, height, attempts=60):
     app.update()
 
 
+# ---- HOW THE TOOLBAR SPLITS INTO ROWS ----
+# Checked against widths given directly rather than measured off widgets.
+# Which control lands on a row boundary depends entirely on the font, so a
+# widget-based check tests whatever font the machine has: the divider bug
+# below was invisible here and failed on the CI runner for that reason
+# alone.
+_D = True          # a divider
+_C = False         # a real control
+
+
+def _rows_of(items, available, max_rows=3):
+    return NO.split_toolbar_rows(items, available, max_rows)
+
+
+def _widths(items, rows):
+    return [sum(items[i][0] for i in row) for row in rows]
+
+
+# A divider that falls where a row breaks is dropped, not carried over.
+# Carrying it is what made its row too wide.
+_items = [(100, _C), (100, _C), (10, _D), (100, _C), (100, _C)]
+_rows = _rows_of(_items, 205)      # 210 would let the divider fit exactly
+check(f'a divider at a row break is dropped, not kept on the full row '
+      f'(rows {_rows})',
+      2 not in [i for row in _rows for i in row])
+check(f'no row is wider than the space it has ({_widths(_items, _rows)} in 205)',
+      all(w <= 205 for w in _widths(_items, _rows)))
+check('every real control is still placed exactly once',
+      sorted(i for row in _rows for i in row) == [0, 1, 3, 4])
+
+# A divider mid-row is kept.
+_items = [(100, _C), (10, _D), (100, _C)]
+_rows = _rows_of(_items, 500)
+check('a divider that fits stays where it is',
+      _rows == [[0, 1, 2]])
+
+# Exhaustive: many shapes, every width, the invariants must hold.
+_shapes = [
+    [(60, _C)] * 10,
+    [(60, _C), (8, _D)] * 6,
+    [(8, _D)] + [(60, _C)] * 6 + [(8, _D)],
+    [(200, _C), (8, _D), (30, _C), (30, _C)],
+    [(8, _D)] * 4,
+]
+_faults = []
+for _shape in _shapes:
+    _total = sum(w for w, _d in _shape)
+    for _avail in range(20, _total + 40, 7):
+        _rows = _rows_of(_shape, _avail)
+        _placed = [i for row in _rows for i in row]
+        _controls = [i for i, (_w, d) in enumerate(_shape) if not d]
+        # every real control appears exactly once
+        if sorted(i for i in _placed if not _shape[i][1]) != _controls:
+            _faults.append((_shape, _avail, 'a control went missing'))
+            continue
+        # no row starts with a divider
+        if any(row and _shape[row[0]][1] for row in _rows[1:]):
+            _faults.append((_shape, _avail, 'a later row starts with a divider'))
+            continue
+        # only the last row may exceed the width, and only because there is
+        # nowhere else to put what is left
+        # A row may exceed the width only when it holds a single control
+        # that is wider than the whole bar -- there is nowhere narrower to
+        # put it. Any other overflow means two things were packed together
+        # that should not have been.
+        _over = [n for n, w in enumerate(_widths(_shape, _rows))
+                 if w > _avail and n < len(_rows) - 1 and len(_rows[n]) > 1]
+        if _over:
+            _faults.append((_shape, _avail, 'a row overflowed'))
+check(f'the splitter holds its invariants across {len(_shapes)} layouts at '
+      f'every width ({len(_faults)} faults)', not _faults)
+
+check('nothing is ever dropped except a divider at a break',
+      _rows_of([(50, _C)] * 3, 10) == [[0], [1], [2]])
+
+
 # ---- NO FORMATTING CONTROL IS EVER OUT OF REACH ----
 # The bar once needed 868px against 787px of editor pane, so the last
 # group ran off the right-hand edge. Trimming it fixed that on one
@@ -1453,7 +1529,15 @@ def _fmt_layout_faults(available):
     return faults
 
 
-_swept = list(range(300, 1001, 25))
+# The floor is the narrowest the bar can actually get: the editor pane
+# never goes below EDITOR_MIN_WIDTH, because the app clamps its content to
+# SIDEBAR_WIDTH + EDITOR_MIN_WIDTH and scrolls horizontally rather than
+# reflowing below that, and the bar sits inside 30px of padding either
+# side. Sweeping narrower than that asserts a layout the app cannot
+# produce -- which is what failed on CI, where the controls are wider and
+# three rows genuinely cannot hold them at 300px.
+_fmt_floor = NO.EDITOR_MIN_WIDTH - 60
+_swept = list(range(_fmt_floor, 1001, 25))
 _bad = [a for a in _swept if _fmt_layout_faults(a)]
 check(f'every formatting control stays reachable at all {len(_swept)} widths tried '
       f'from {_swept[0]}px to {_swept[-1]}px (failed at {_bad})', not _bad)
