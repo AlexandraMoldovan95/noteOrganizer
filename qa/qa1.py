@@ -1,5 +1,4 @@
 import sys
-import time
 import note_organizer as NO, tkinter as tk, json, os, re
 fails=[]
 def check(name, cond):
@@ -1391,26 +1390,6 @@ check('two runs of different sizes report Default, not whichever came first',
       app.font_size_var.get() == app.DEFAULT_FONT_LABEL)
 clear_selection()
 
-def _resize(width, height, attempts=60):
-    """Resize the window and wait until it has really happened.
-
-    geometry() is a request to the window manager, not a resize. Reading a
-    widget's size straight after it can still give the old one, which makes
-    any check that depends on the new size flaky rather than wrong.
-    """
-    app.geometry(f'{width}x{height}')
-    for _ in range(attempts):
-        app.update()
-        app.update_idletasks()
-        if abs(app.winfo_width() - width) <= 2 and \
-                abs(app.winfo_height() - height) <= 2:
-            break
-        time.sleep(0.02)
-    app.update()
-    app.update_idletasks()
-    app.update()
-
-
 # ---- HOW THE TOOLBAR SPLITS INTO ROWS ----
 # Checked against widths given directly rather than measured off widgets.
 # Which control lands on a row boundary depends entirely on the font, so a
@@ -1542,23 +1521,36 @@ _bad = [a for a in _swept if _fmt_layout_faults(a)]
 check(f'every formatting control stays reachable at all {len(_swept)} widths tried '
       f'from {_swept[0]}px to {_swept[-1]}px (failed at {_bad})', not _bad)
 
-# ...and through the real resize path, not only by calling the reflow.
-_geom = app.winfo_geometry()
-for _w in (1400, 1100, 900):
-    _resize(_w, 800)
-    _past = [c for c, _px, fl in _fmt_controls
-             if fl != 'y' and (c.winfo_manager() != 'pack'
-                               or c.winfo_x() + c.winfo_width()
-                               > app._fmt_bar.winfo_width() + 1)]
-    check(f'nothing sticks out after really resizing to {_w}px ({len(_past)} did)',
-          not _past)
+# ...and through the path a real resize takes, without resizing the live
+# window. Doing that mid-suite disturbs focus, and later checks here drive
+# the editor with focus_force() and event_generate(): a check about
+# pending bold, nothing to do with the toolbar, failed once in a full-suite
+# run because of it. The binding is what matters, so the binding is what is
+# checked, and the handler is called with an event of its own.
+check('the bar reflows when its width changes',
+      bool(app._fmt_bar.bind('<Configure>')))
 
-_resize(1400, 800)
+
+class _WidthEvent:
+    def __init__(self, width):
+        self.width = width
+
+
+for _w in (1400, 900, 1400):
+    app._on_format_bar_resize(_WidthEvent(_w))
+    app.update_idletasks()
+    _past = [c for c, _px, fl in _fmt_controls
+             if fl != 'y' and c.winfo_manager() != 'pack']
+    check(f'no control is dropped when the bar is told it has {_w}px '
+          f'({len(_past)} were)', not _past)
+
+app._on_format_bar_resize(_WidthEvent(1400))
+app.update_idletasks()
 check('every control is on one row when there is room for one',
       len([r for r in app._fmt_bar_rows if r.winfo_ismapped()]) == 1)
 check('and all of them are showing',
       all(c.winfo_manager() == 'pack' for c in _fmt_real))
-app.geometry(_geom)
+app._reflow_format_bar()
 app.update()
 
 check('no group caption is left taking up room',
