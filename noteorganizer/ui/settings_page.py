@@ -62,6 +62,8 @@ from ..core.themes import (
     THEME_LABELS,
     DEFAULT_CATEGORY_COLORS,
     PROTECTED_CATEGORY,
+    inset_surface,
+    hairline,
 )
 
 
@@ -1519,11 +1521,11 @@ class SettingsPageMixin:
         if kind == "page":
             return self.colors["bg"]
         if kind == "inset":
-            return self._blend(self.colors["card"], self.colors["text"], 0.07)
+            return inset_surface(self.colors)
         return self.colors["card"]
 
     def _border_color(self):
-        return self._blend(self.colors["card"], self.colors["subtext"], 0.22)
+        return hairline(self.colors)
 
     def _settings_card(self, parent, pad=(22, 20)):
         """A bordered panel that groups related controls.

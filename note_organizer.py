@@ -373,6 +373,8 @@ from noteorganizer.core.sharing import (
 from noteorganizer.core.themes import (
     blend as core_blend,
     contrasting_fg as core_contrasting_fg,
+    inset_surface,
+    hairline,
     THEMES,
     DARK_THEMES,
     LIGHT_THEMES,
@@ -3646,10 +3648,26 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     # theme (same hex used by both) — only remap true mismatches.
                     if val.lower() != cur[key].lower():
                         remap[val.lower()] = cur[key]
+        # Surfaces DERIVED from a palette are invisible to the loop above,
+        # because they are in no palette: Settings blends card toward text
+        # for the well inside a card, and toward subtext for its hairlines.
+        # A widget built under one theme therefore kept the other theme's
+        # inset -- which is why the information bars in General, Backup and
+        # About stayed dark, and unreadable, on a light theme.
+        for name, palette in THEMES.items():
+            if name == self.theme_name:
+                continue
+            for derive in (inset_surface, hairline):
+                was, now = derive(palette), derive(cur)
+                if was.lower() != now.lower():
+                    remap[was.lower()] = now
+
         # Current theme's own colors must never be remapped away.
         for key, val in cur.items():
             if isinstance(val, str) and val.startswith("#"):
                 remap.pop(val.lower(), None)
+        for derive in (inset_surface, hairline):
+            remap.pop(derive(cur).lower(), None)
 
         def walk(w):
             for opt in ("bg", "fg"):

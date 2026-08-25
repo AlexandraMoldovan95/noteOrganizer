@@ -584,6 +584,54 @@ if back_btn2:
     check('"Back to Notes" does not move when the settings page scrolls',
           before_y == after_y)
 
+# ---- DERIVED SURFACES FOLLOW A THEME SWITCH (regression) ----
+# Settings blends `card` toward `text` for the well inside a card, and
+# toward `subtext` for its hairlines. Neither result is in any theme's
+# palette, so _recolor_stragglers -- which remaps palette colours -- could
+# not see them: a panel built under a dark theme kept the dark inset on a
+# light one, and the information bars in General, Backup and About were
+# unreadable.
+def _all_backgrounds(widget, found=None):
+    found = [] if found is None else found
+    for child in widget.winfo_children():
+        try:
+            found.append(str(child.cget('bg')).lower())
+        except tk.TclError:
+            pass
+        _all_backgrounds(child, found)
+    return found
+
+
+app.show_settings_page()
+app.update()
+for _section in ('name', 'backup', 'about'):
+    app.toggle_settings_panel(_section)
+    app.update()
+
+for _theme in ('light', 'dark'):
+    app.set_theme(_theme)
+    app.update()
+    _current = {NO.inset_surface(app.colors).lower(),
+                NO.hairline(app.colors).lower()}
+    _foreign = set()
+    for _name, _palette in NO.THEMES.items():
+        if _name == app.theme_name:
+            continue
+        for _derived in (NO.inset_surface(_palette), NO.hairline(_palette)):
+            if _derived.lower() not in _current:
+                _foreign.add(_derived.lower())
+    _stale = []
+    for _section in ('name', 'backup', 'about'):
+        _panel = getattr(app, f'settings_{_section}_panel', None)
+        if _panel is None:
+            continue
+        _stale += [b for b in _all_backgrounds(_panel) if b in _foreign]
+    check(f'no Settings panel keeps another theme\'s derived surface '
+          f'after switching to {_theme} ({len(_stale)} found)', not _stale)
+
+app.hide_settings_page()
+app.update()
+
 print()
 print(f"=== QA6 FAILURES: {fails if fails else 'NONE'} ===")
 
