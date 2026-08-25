@@ -139,6 +139,38 @@ check(f"an enormous paste is capped ({len(_t)} chars kept)",
       len(_t) <= NO_MAX if (NO_MAX := 100_000) else False)
 
 
+# ---- Pasting without formatting must not leave a list behind ----
+# A marker in the text is what makes a line a list line in this app, and
+# plenty of sources write their own bullets into the plain text they offer.
+# Pasting that verbatim produced exactly the formatting the user had asked
+# to be left behind.
+for label, before, after in [
+    ("a bullet", BULLET + "milk", "milk"),
+    ("a nested bullet", "  " + SUB_BULLET + "inner", "inner"),
+    ("a third-level bullet", SUB_SUB + "deep", "deep"),
+    ("a numbered item", "1. first", "first"),
+    ("several lines", BULLET + "a\n" + BULLET + "b", "a\nb"),
+]:
+    check(f"paste-without-formatting drops {label}",
+          NO.strip_list_markers(before) == after)
+
+for label, line in [
+    ("a dash, which was never a marker here", "- not an app marker"),
+    ("an asterisk", "* also not"),
+    ("ordinary words", "just words"),
+    ("a bullet in the middle of a line", "see " + BULLET.strip() + " here"),
+]:
+    check(f"and leaves {label} alone", NO.strip_list_markers(line) == line)
+
+# Known and accepted: any number followed by a dot and a space starts a
+# numbered item in this app, so a year at the start of a line loses it.
+# Stripping matches what the editor itself would do with that line -- a
+# second, different rule would mean text that looks plain but comes back
+# as a list the moment it is reopened.
+check("a leading year is treated as a marker, matching how it is typed",
+      NO.strip_list_markers("2026. was a year") == "was a year")
+
+
 # --------------------------------------------------------------- out ----
 class _Valid(HTMLParser):
     """Balanced tags, and a list may only contain list items."""

@@ -184,6 +184,7 @@ from noteorganizer.core.richtext import html_to_note, note_to_html
 from noteorganizer.core.formatting import (
     normalize_paragraphs,
     parse_list_marker,
+    strip_list_markers,
     marker_for,
     bullet_level_of,
     renumber,
@@ -1286,7 +1287,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 text = self.body_text.clipboard_get()
             except tk.TclError:
                 return "break"
-        self._replace_selection_with(text)
+        # Plenty of sources write their own bullets into the plain text they
+        # offer, and a marker in the text is what makes a line a list line
+        # here -- so pasting it verbatim produced the very formatting this
+        # was meant to leave behind.
+        self._replace_selection_with(strip_list_markers(text))
         self.after_idle(self._resync_list_tags)
         self._schedule_autosave()
         return "break"

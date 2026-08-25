@@ -54,7 +54,7 @@ A title can be up to 200 characters. That is far more than a title needs, and it
 
 Copy something from a web page, an email or Word, paste it into a note with **Ctrl+V**, and the bold, the colours and the lists come with it.
 
-- **Ctrl+Shift+V** pastes the words on their own, with none of the styling. There is a **Paste without formatting** entry on the right-click menu too.
+- **Ctrl+Shift+V** pastes the words on their own, with none of the styling — and no bullets either, even when the thing you copied from puts bullet characters into its own plain-text version. There is a **Paste without formatting** entry on the right-click menu too.
 - Copying works the same way outwards: select part of a note, copy it, and paste it into an email or a document, and it arrives still formatted. Copying between two notes keeps everything.
 
 Colours are treated carefully. If you copy from a site in dark mode, you get its words, its bold and its lists — not its dark background and pale text, which would be unreadable in your note. A colour comes through when it was clearly a choice, like a red warning or a yellow highlight; greys, blacks and whites are the page's own styling and are left behind.
