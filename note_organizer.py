@@ -403,6 +403,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
         self.theme_name = self.load_theme_setting()
         self.colors = THEMES[self.theme_name]
+        # Read before the editor is built, so the body text is created in the
+        # right font rather than being restyled a moment after it appears.
+        self._load_editor_font()
         # Track last-used dark/light for the quick toggle button.
         self._last_dark_theme = self.theme_name if self.theme_name in DARK_THEMES else "dark"
         self._last_light_theme = self.theme_name if self.theme_name in LIGHT_THEMES else "light"
@@ -905,9 +908,81 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
     # Pixels per indent step, and the room a marker needs in front of its
     # text so a wrapped line hangs under the text rather than the marker.
+    # Shown in both font dropdowns for "no span at all", which is what lets
+    # a note follow the Settings default instead of being pinned to whatever
+    # that happened to be the day it was written.
+    DEFAULT_FONT_LABEL = "Default"
+
     INDENT_STEP = 24
+    # Widths measured at _MARKER_ROOM_AT point. A marker set larger is
+    # wider, so these are scaled rather than used raw -- see _marker_room.
+    # The reference is a fixed number, not the current base size: that moves
+    # with the setting, and comparing it against itself scales by one.
     _MARKER_ROOM = {"bullet": 24, "number": 28}
+    _MARKER_ROOM_AT = 12
     QUOTE_BAR = 4
+
+    def _load_editor_font(self):
+        """Read the editor's baseline font from settings.
+
+        Falls back to the app's own defaults rather than to whatever the
+        widget happens to be set to, so a settings file with a font that is
+        no longer offered degrades to something known instead of sticking.
+        """
+        family = get_setting("editor_font_family", FONT_FAMILIES[0], str)
+        if family not in FONT_FAMILIES:
+            family = FONT_FAMILIES[0]
+        size = get_setting("editor_font_size", 12, int)
+        if size not in FONT_SIZES:
+            size = 12
+        self.editor_font_family, self.editor_font_size = family, size
+
+    def _set_editor_font(self, family=None, size=None):
+        """Change the baseline font every note is written in.
+
+        Rebuilds the tags derived from it as well as the widget's own font:
+        bold and italic are separate Font objects built from the base
+        family and size, and the list margins are in pixels scaled by that
+        size, so neither follows automatically.
+        """
+        if family is not None:
+            self.editor_font_family = family
+            save_setting("editor_font_family", family)
+        if size is not None:
+            self.editor_font_size = size
+            save_setting("editor_font_size", size)
+
+        spec = (self.editor_font_family, self.editor_font_size)
+        for widget in (self.body_text, getattr(self, "comments_text", None)):
+            if widget is not None:
+                widget.configure(font=spec)
+        self._setup_body_formatting_tags(self.body_text)
+        # Rebuilt at the new base size: a tag's margin was computed from the
+        # old one, and nothing else recomputes it.
+        for name in list(self._paragraph_tags):
+            self._configure_paragraph_tag(self.body_text, name)
+        self._refresh_format_buttons()
+
+    def _marker_room(self, kind):
+        """How much room a list marker needs before its text.
+
+        Scaled by the editor's font size, because the margin is in pixels
+        and the marker is not: "• " measures 11px at 12pt and 22px at 24pt,
+        so a fixed 42px lmargin2 that hangs correctly at the default size
+        leaves a large-font item's second line 11px out of true.
+        """
+        room = self._MARKER_ROOM[kind]
+        current = self._editor_font_size()
+        if current and current != self._MARKER_ROOM_AT:
+            room = int(round(room * current / self._MARKER_ROOM_AT))
+        return room
+
+    def _editor_font_size(self):
+        """The size the body text is actually set in right now."""
+        try:
+            return tkfont.Font(font=self.body_text["font"]).actual("size")
+        except (tk.TclError, AttributeError):
+            return getattr(self, "_body_base_size", 0)
 
     def _paragraph_tag(self, text_widget, kind, indent, block=None):
         """The margin tag for this combination of properties, made on demand.
@@ -939,7 +1014,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         options = {}
         if kind:
             options["lmargin1"] = 18 + left
-            options["lmargin2"] = 18 + left + self._MARKER_ROOM[kind]
+            options["lmargin2"] = 18 + left + self._marker_room(kind)
         else:
             options["lmargin1"] = options["lmargin2"] = left
         if block == "quote":
@@ -1888,6 +1963,63 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._refresh_format_buttons()
         self._schedule_autosave()
 
+    def _apply_body_font(self, style, value):
+        """Font size / family picker handler.
+
+        Closer to a colour than to Bold: "one of a list, or nothing" rather
+        than on/off. With no selection it becomes a pending choice for
+        whatever gets typed next, through the same anchor-tracking machinery
+        the boolean styles and colours already use.
+        """
+        try:
+            start = self.body_text.index("sel.first")
+            end = self.body_text.index("sel.last")
+            has_selection = self.body_text.compare(start, "<", end)
+        except tk.TclError:
+            has_selection = False
+
+        label = "Font size" if style == "font_size" else "Font"
+        if not has_selection:
+            if style == "font_size":
+                self._pending_font_size = value
+            else:
+                self._pending_font_family = value
+            self.set_status(f"{label} set — applies to what you type next"
+                            if value else f"{label} back to the default")
+            if self._has_any_pending_style():
+                self.body_text.mark_set(self._PENDING_STYLE_ANCHOR, tk.INSERT)
+                self.body_text.mark_gravity(self._PENDING_STYLE_ANCHOR, "left")
+                self._pending_style_last_length = self._pending_style_text_length()
+            self._refresh_format_buttons()
+            return
+
+        # Size and family cannot be tagged in place the way a colour can:
+        # what a run should look like depends on the bold and italic around
+        # it too. So the spans are edited as data and the whole resolution
+        # is redone -- clip this style out of the selection, put the new
+        # value back over it, and let _apply_font_runs work out the tags.
+        first = self._char_offset(self.body_text, start)
+        last = self._char_offset(self.body_text, end)
+        spans = []
+        for span in self._extract_formatting(self.body_text):
+            if span["style"] != style or span["end"] <= first or span["start"] >= last:
+                spans.append(span)
+                continue
+            if span["start"] < first:
+                spans.append({**span, "end": first})
+            if span["end"] > last:
+                spans.append({**span, "start": last})
+        if value is not None:
+            spans.append({"start": first, "end": last, "style": style,
+                          "value": value})
+
+        for name in self.body_text.tag_names():
+            if parse_font_tag(name):
+                self.body_text.tag_remove(name, "1.0", "end")
+        self._apply_font_runs(self.body_text, spans)
+        self._refresh_format_buttons()
+        self._schedule_autosave()
+
     def _open_color_swatch_popup(self, kind):
         """Text-color/highlight picker popup — a grid of swatches plus a
         Clear option, anchored to the toolbar button that opened it.
@@ -1950,7 +2082,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         about both kinds together — anywhere that used to just check
         "is _pending_styles non-empty" now goes through this instead."""
         return bool(self._pending_styles) or bool(self._pending_text_color) \
-            or bool(self._pending_highlight_color)
+            or bool(self._pending_highlight_color) \
+            or bool(self._pending_font_size) or bool(self._pending_font_family)
 
     def _apply_pending_style_to_typed_char(self, event=None):
         """Tag whatever's accumulated since _PENDING_STYLE_ANCHOR (set when
@@ -2012,9 +2145,19 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         start_idx = self.body_text.index(self._PENDING_STYLE_ANCHOR)
         end_idx = self.body_text.index(tk.INSERT)
         if self.body_text.compare(start_idx, "<", end_idx):
-            tag = self._font_tag_for("bold" in self._pending_styles, "italic" in self._pending_styles)
+            is_bold = "bold" in self._pending_styles
+            is_italic = "italic" in self._pending_styles
+            tag = self._font_tag_for(is_bold, is_italic)
             if tag:
                 self.body_text.tag_add(tag, start_idx, end_idx)
+            if self._pending_font_size or self._pending_font_family:
+                # The plain tag above stays as the marker the toolbar reads;
+                # this one goes over it and decides how the text looks.
+                self.body_text.tag_add(
+                    self._ensure_font_tag(
+                        self.body_text, is_bold, is_italic,
+                        self._pending_font_size, self._pending_font_family),
+                    start_idx, end_idx)
             if "underline" in self._pending_styles:
                 self.body_text.tag_add("underline", start_idx, end_idx)
             if "strike" in self._pending_styles:
@@ -2108,6 +2251,32 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         text_widget.bind("<Double-Button-1>", self._select_word_at_click)
         text_widget.bind("<Triple-Button-1>", self._select_line_no_newline)
 
+    def _uniform_font_in_selection(self, style, start, end):
+        """The one size (or family) covering the WHOLE range, or None.
+
+        None also means "a mix", which is the honest answer for a dropdown:
+        showing the first run's size for a selection spanning two of them
+        would claim the whole selection is that size, and the next click
+        would then be understood as "leave it as it is".
+        """
+        wanted = None
+        idx = start
+        while self.body_text.compare(idx, "<", end):
+            found = None
+            for name in self.body_text.tag_names(idx):
+                parsed = parse_font_tag(name)
+                if parsed:
+                    found = parsed[2] if style == "font_size" else parsed[3]
+                    break
+            if found is None:
+                return None
+            if wanted is None:
+                wanted = found
+            elif wanted != found:
+                return None
+            idx = self.body_text.index(f"{idx}+1c")
+        return wanted
+
     def _uniform_color_in_selection(self, kind, start, end):
         """The single hex color of the given kind ("text_color" or
         "highlight") that covers the ENTIRE [start, end) range, or None if
@@ -2161,6 +2330,19 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 bg=self.colors["accent"] if active else self.colors["sidebar"],
                 fg="white" if active else self.colors["text"],
             )
+
+        if hasattr(self, "font_size_var"):
+            if has_selection:
+                size = self._uniform_font_in_selection("font_size", start, end)
+                family = self._uniform_font_in_selection("font_family", start, end)
+            else:
+                size = self._pending_font_size
+                family = self._pending_font_family
+            # A mix across the selection reads as "Default" rather than as
+            # the first run's value, which would claim the whole selection
+            # is that size.
+            self.font_size_var.set(str(size) if size else self.DEFAULT_FONT_LABEL)
+            self.font_family_var.set(family or self.DEFAULT_FONT_LABEL)
 
         if hasattr(self, "text_color_btn"):
             if has_selection:
@@ -4227,6 +4409,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._block_buttons = {}
         self._pending_styles = set()  # styles queued up for the next typed char
         self._pending_text_color = None  # hex, or None
+        self._pending_font_size = None    # a size from FONT_SIZES, or None
+        self._pending_font_family = None  # a family from FONT_FAMILIES
         self._pending_highlight_color = None  # hex, or None
         self._pending_style_last_length = 0  # baseline for detecting growth
         style_lbl = tk.Label(format_bar, text="Style", font=("Segoe UI", 8))
@@ -4250,6 +4434,42 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             btn.pack(side="left", padx=(0, 4), ipady=2)
             self._attach_tooltip(btn, tip, tip_detail)
             self._fmt_buttons[style] = btn
+
+        # Font: a family and a size, as dropdowns rather than buttons —
+        # neither is a toggle, and neither fits in three characters. They
+        # sit before Colors because they are the coarsest thing here: the
+        # typeface a run is set in, before anything is done to it.
+        font_divider = tk.Frame(format_bar, width=1)
+        self.track_theme(font_divider, bg="card")
+        font_divider.pack(side="left", fill="y", padx=(2, 8), pady=2)
+        font_lbl = tk.Label(format_bar, text="Font", font=("Segoe UI", 8))
+        self.track_theme(font_lbl, bg="bg", fg="subtext")
+        font_lbl.pack(side="left", padx=(0, 6))
+
+        # "Default" is the app's own font, i.e. no span at all — which is
+        # what makes the note follow the Settings default rather than being
+        # pinned to whatever that happened to be on the day it was written.
+        self.font_family_var = tk.StringVar(value=self.DEFAULT_FONT_LABEL)
+        family_dd = self._build_themed_dropdown(
+            format_bar, self.font_family_var,
+            [self.DEFAULT_FONT_LABEL] + list(FONT_FAMILIES),
+            lambda v: self._apply_body_font(
+                "font_family", None if v == self.DEFAULT_FONT_LABEL else v),
+            width_chars=13)
+        family_dd.pack(side="left", padx=(0, 4))
+        self._attach_tooltip(family_dd, "Font",
+                             "The selected text, or whatever you type next")
+
+        self.font_size_var = tk.StringVar(value=self.DEFAULT_FONT_LABEL)
+        size_dd = self._build_themed_dropdown(
+            format_bar, self.font_size_var,
+            [self.DEFAULT_FONT_LABEL] + [str(s) for s in FONT_SIZES],
+            lambda v: self._apply_body_font(
+                "font_size", None if v == self.DEFAULT_FONT_LABEL else int(v)),
+            width_chars=7)
+        size_dd.pack(side="left", padx=(0, 4))
+        self._attach_tooltip(size_dd, "Font size",
+                             "Default follows the size set in Settings")
 
         # A thin divider + short label mark the color pickers as their own
         # group, distinct from the four toggle buttons — they work
@@ -4365,7 +4585,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         body_sb = ttk.Scrollbar(text_frame, orient="vertical")
         self.body_text = tk.Text(
             text_frame, insertbackground=self.colors["text"],
-            relief="flat", font=("Segoe UI", 12), wrap="word", padx=15, pady=15, height=12,
+            relief="flat", wrap="word", padx=15, pady=15, height=12,
+            font=(self.editor_font_family, self.editor_font_size),
             yscrollcommand=body_sb.set, undo=True, autoseparators=True, maxundo=-1
         )
         body_sb.config(command=self.body_text.yview)
@@ -5968,6 +6189,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             "paragraphs": self._extract_paragraphs(self.body_text),
             "pending_styles": sorted(self._pending_styles),
             "pending_text_color": self._pending_text_color,
+            "pending_font_size": self._pending_font_size,
+            "pending_font_family": self._pending_font_family,
             "pending_highlight_color": self._pending_highlight_color,
             "comments": self.comments_text.get("1.0", "end-1c"),
             "category": self.category_var.get(),
@@ -5996,6 +6219,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # from whatever tab was open a moment ago could tag this one's text.
         self._pending_styles = set(st.get("pending_styles") or [])
         self._pending_text_color = st.get("pending_text_color")
+        self._pending_font_size = st.get("pending_font_size")
+        self._pending_font_family = st.get("pending_font_family")
         self._pending_highlight_color = st.get("pending_highlight_color")
         self.body_text.delete("1.0", "end")
         self.body_text.insert("1.0", st["body"])
@@ -6331,6 +6556,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.update_word_count()
         self._pending_styles = set()
         self._pending_text_color = None
+        self._pending_font_size = None
+        self._pending_font_family = None
         self._pending_highlight_color = None
         self._refresh_format_buttons()
         self._reset_editor_scroll()
@@ -6353,6 +6580,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # pending style at this point would silently tag this note's text.
         self._pending_styles = set()
         self._pending_text_color = None
+        self._pending_font_size = None
+        self._pending_font_family = None
         self._pending_highlight_color = None
         self.title_entry.delete(0, "end")
         self.title_entry.insert(0, shown["title"])
@@ -6810,6 +7039,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # so a stale pending style at this point would silently tag it.
         self._pending_styles = set()
         self._pending_text_color = None
+        self._pending_font_size = None
+        self._pending_font_family = None
         self._pending_highlight_color = None
         self.title_entry.delete(0, "end")
         self.title_entry.insert(0, prev.get("title", ""))

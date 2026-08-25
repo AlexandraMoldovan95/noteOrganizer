@@ -45,6 +45,7 @@ from datetime import datetime, timedelta, date as date_cls
 
 from ..core import paths
 from ..core.categories import CATEGORY_COLORS, persist_categories
+from ..core.formatting import FONT_FAMILIES, FONT_SIZES
 from ..core.duplicates import find_duplicate_groups
 from ..core.storage import (
     TRASH_RETENTION_DAYS,
@@ -2175,6 +2176,31 @@ class SettingsPageMixin:
         self.track_theme(self.theme_picker_frame, bg="bg")
         self.theme_picker_frame.pack(fill="x")
         self._build_theme_picker(self.theme_picker_frame)
+
+        # The editor's own font. This is the baseline every note starts
+        # from; the toolbar's Font group overrides it for a selection. Kept
+        # here rather than per note deliberately -- "I want my notes bigger"
+        # is a statement about reading, not about one note.
+        card = self._settings_card(appearance)
+        row = self._card_row(
+            card, "Editor font",
+            "The typeface notes are written in, unless a note says otherwise.",
+            first=True)
+        self.editor_font_family_var = tk.StringVar(
+            value=self.editor_font_family or FONT_FAMILIES[0])
+        self._build_themed_dropdown(
+            row, self.editor_font_family_var, list(FONT_FAMILIES),
+            lambda v: self._set_editor_font(family=v), width_chars=16
+        ).pack(side="right")
+
+        row = self._card_row(
+            card, "Text size",
+            "Bigger text everywhere, without reformatting a single note.")
+        self.editor_font_size_var = tk.StringVar(value=str(self.editor_font_size))
+        self._build_themed_dropdown(
+            row, self.editor_font_size_var, [str(s) for s in FONT_SIZES],
+            lambda v: self._set_editor_font(size=int(v)), width_chars=8
+        ).pack(side="right")
 
     def _build_settings_backup_panel(self, parent):
         """Export everything to a file, or import from one."""

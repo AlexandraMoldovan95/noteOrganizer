@@ -1320,6 +1320,157 @@ check('a tooltip for a widget that no longer exists is skipped, not crashed',
 check('hiding when nothing is showing is harmless',
       (app._hide_tooltip() or True) and getattr(app, '_tooltip', None) is None)
 
+# ---- FONT SIZE AND FAMILY ----
+# Size and family fight bold and italic over Tk's font option -- two tags
+# that set it do not compose, one wins -- so all four are merged into one
+# composite tag at render time while staying separate spans in the note.
+app.new_note()
+app.title_entry.insert(0, 'FontNote')
+app.update()
+
+
+def font_spans():
+    return sorted((s['start'], s['end'], s['style'], s.get('value'))
+                  for s in app._extract_formatting(app.body_text))
+
+
+def select(a, z):
+    app.body_text.tag_add('sel', a, z)
+    app.update()
+
+
+set_body('hello world again')
+select('1.0', '1.5')
+app._apply_body_font('font_size', 20)
+clear_selection()
+check('a size applies to the selected characters only',
+      font_spans() == [(0, 5, 'font_size', 20)])
+check('applying a size leaves the text itself untouched',
+      body() == 'hello world again')
+
+select('1.0', '1.11')
+app._apply_body_font('font_family', 'Georgia')
+clear_selection()
+check('a family can cover a different range from the size',
+      font_spans() == [(0, 5, 'font_size', 20),
+                       (0, 11, 'font_family', 'Georgia')])
+
+select('1.6', '1.11')
+app._toggle_body_style('bold')
+clear_selection()
+check('bold still records itself separately inside a resized run',
+      font_spans() == [(0, 5, 'font_size', 20),
+                       (0, 11, 'font_family', 'Georgia'),
+                       (6, 11, 'bold', None)])
+check('the plain bold tag is still on the text, so the toolbar can see it',
+      'bold' in app.body_text.tag_names('1.7'))
+check('and a composite font tag sits over it',
+      any(NO.parse_font_tag(n) for n in app.body_text.tag_names('1.7')))
+
+# The dropdowns report what is actually there, and refuse to guess.
+select('1.0', '1.5')
+app._refresh_format_buttons()
+check('the dropdowns show the size and family of a uniform selection',
+      app.font_size_var.get() == '20'
+      and app.font_family_var.get() == 'Georgia')
+clear_selection()
+select('1.0', '1.17')
+app._refresh_format_buttons()
+check('a selection spanning two different sizes reads as Default, not the first',
+      app.font_size_var.get() == app.DEFAULT_FONT_LABEL)
+clear_selection()
+
+select('1.0', '1.5')
+app._apply_body_font('font_size', None)
+clear_selection()
+check('choosing Default removes the size rather than storing one',
+      font_spans() == [(0, 11, 'font_family', 'Georgia'), (6, 11, 'bold', None)])
+
+# ---- Round trip ----
+app.save_current_note(auto=False)
+app.update()
+font_note = app.find_note(app.selected_note_id)
+check('size and family are saved as ordinary spans',
+      sorted((s['start'], s['end'], s['style'], s.get('value'))
+             for s in font_note['formatting'])
+      == [(0, 11, 'font_family', 'Georgia'), (6, 11, 'bold', None)])
+app.new_note()
+app.update()
+app.load_note(font_note)
+app.update()
+check('reopening the note puts the font back',
+      font_spans() == [(0, 11, 'font_family', 'Georgia'), (6, 11, 'bold', None)])
+
+# A composite tag is split at every bold boundary inside it, so reading it
+# back gives pieces; they must be rejoined or the note grows on every save.
+once = font_spans()
+app._apply_formatting(app.body_text, [dict(s) for s in app._extract_formatting(app.body_text)])
+app.update()
+check('spans do not fragment further each time the note is saved',
+      font_spans() == once)
+
+# ---- A note written before any of this still works ----
+set_body('hello world')
+app._apply_formatting(app.body_text,
+                      [{'start': 0, 'end': 5, 'style': 'bold_italic'},
+                       {'start': 6, 'end': 11, 'style': 'strike'}])
+app.update()
+check('a note using the old bold_italic style is unchanged by the font work',
+      font_spans() == [(0, 5, 'bold_italic', None), (6, 11, 'strike', None)])
+
+check('normalize_formatting rejects a size the app does not offer',
+      NO.normalize_formatting(
+          [{'start': 0, 'end': 4, 'style': 'font_size', 'value': 13}]) == [])
+check('normalize_formatting rejects a family the app does not offer',
+      NO.normalize_formatting(
+          [{'start': 0, 'end': 4, 'style': 'font_family', 'value': 'Comic Sans MS'}]) == [])
+
+# ---- The editor's own default, and what depends on it ----
+before_family = app.editor_font_family
+before_size = app.editor_font_size
+import tkinter.font as _tkfont
+set_body('milk\neggs')
+select_all_body()
+app._list_buttons['bullet'].invoke()
+clear_selection()
+bullet_tag = [t for t in app.body_text.tag_names('1.0') if t.startswith('para_')][0]
+margin_at_12 = int(app.body_text.tag_cget(bullet_tag, 'lmargin2'))
+
+app._set_editor_font(size=24)
+app.update()
+check('changing the default resizes the editor itself',
+      _tkfont.Font(font=app.body_text['font']).actual('size') == 24)
+check('the bold tag is rebuilt at the new size, not left at the old one',
+      _tkfont.Font(font=app.body_text.tag_cget('bold', 'font')).actual('size') == 24)
+check('a list margin scales with it, so a wrapped item still hangs true',
+      int(app.body_text.tag_cget(bullet_tag, 'lmargin2')) > margin_at_12)
+
+app._set_editor_font(family=before_family, size=before_size)
+app.update()
+check('setting it back restores the original size',
+      _tkfont.Font(font=app.body_text['font']).actual('size') == before_size
+      and int(app.body_text.tag_cget(bullet_tag, 'lmargin2')) == margin_at_12)
+
+# Both runs carry a size here, so "mixed" has to come from comparing two
+# sizes rather than from one of them having none -- which is what the check
+# above actually exercised.
+set_body('hello world')
+select('1.0', '1.5')
+app._apply_body_font('font_size', 20)
+clear_selection()
+select('1.5', '1.11')
+app._apply_body_font('font_size', 9)
+clear_selection()
+select('1.0', '1.5')
+app._refresh_format_buttons()
+check('a run that is uniformly 20pt reports 20', app.font_size_var.get() == '20')
+clear_selection()
+select('1.0', '1.11')
+app._refresh_format_buttons()
+check('two runs of different sizes report Default, not whichever came first',
+      app.font_size_var.get() == app.DEFAULT_FONT_LABEL)
+clear_selection()
+
 # ---- Fast typing (regression): a first version tagged only "the one
 # character right before the cursor" on each KeyRelease, which silently
 # missed characters typed in a fast real burst -- Tk can queue several
