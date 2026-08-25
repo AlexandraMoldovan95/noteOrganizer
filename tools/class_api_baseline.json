@@ -1,6 +1,7 @@
 {
   "__init__": "(self)",
   "_add_checklist_item": "(self)",
+  "_add_fmt_item": "(self, widget, padx=(0, 2), ipady=0, fill=None, pady=0)",
   "_add_note_for_date": "(self, date_str)",
   "_add_paste_menu": "(self, text_widget, extra_items=None)",
   "_add_resize_handle": "(self, target, min_h=80, max_h=1000, host=None)",
@@ -117,6 +118,7 @@
   "_on_body_paste": "(self, event=None)",
   "_on_body_return": "(self, event)",
   "_on_body_tab": "(self, event, delta)",
+  "_on_format_bar_resize": "(self, event)",
   "_on_title_paste": "(self, event=None)",
   "_on_toggle_group_by_category": "(self)",
   "_open_category_dropdown": "(self)",
@@ -143,6 +145,7 @@
   "_recolor_note_cards": "(self)",
   "_recolor_settings_nav_icons": "(self)",
   "_recolor_stragglers": "(self)",
+  "_reflow_format_bar": "(self, available=None)",
   "_refresh_category_button": "(self)",
   "_refresh_category_button_safe": "(self)",
   "_refresh_day_badge": "(self, date_str)",

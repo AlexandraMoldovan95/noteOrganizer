@@ -1353,6 +1353,78 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             x = max(self.winfo_rootx() + 8, right_edge - tip.winfo_width())
         tip.geometry(f"+{x}+{y}")
 
+    def _add_fmt_item(self, widget, padx=(0, 2), ipady=0, fill=None, pady=0):
+        """Record a formatting control, in the order it should appear.
+
+        Not packed here: which row it lands on depends on how much room
+        there is, which is not known until the editor has a width.
+        """
+        self._fmt_bar_items.append((widget, padx, ipady, fill, pady))
+
+    def _on_format_bar_resize(self, event):
+        """Reflow, but only when the width the controls have actually changed.
+
+        Packing widgets changes the frame's size, which fires <Configure>
+        again -- so reacting to every one of them is a loop.
+        """
+        if event.width == getattr(self, "_fmt_bar_width", None):
+            return
+        self._fmt_bar_width = event.width
+        self._reflow_format_bar(event.width)
+
+    def _reflow_format_bar(self, available=None):
+        """Deal the controls into rows, breaking when one would not fit.
+
+        Everything fits a single row at the sizes this app is used at. The
+        second row is for the cases a fixed pixel budget cannot cover: a
+        narrow window, a display at a different scaling, or a machine
+        without the font this was measured on -- CI is all three, and the
+        same bar that needs 577px here needs 827px there.
+        """
+        if not getattr(self, "_fmt_bar_items", None):
+            return
+        if available is None:
+            available = self._fmt_bar.winfo_width()
+        if available <= 1:                   # not laid out yet
+            return
+
+        rows, used, index = [[]], 0, 0
+        last_row = len(self._fmt_bar_rows) - 1
+        for item in self._fmt_bar_items:
+            widget, padx, _ipady, fill, _pady = item
+            width = widget.winfo_reqwidth() + padx[0] + padx[1]
+            # A divider never starts a row -- it would read as a rule
+            # hanging off the front of the next line -- so it stays put and
+            # the group after it breaks instead.
+            breaks = used and used + width > available and index < last_row
+            if breaks and fill != "y":
+                index += 1
+                rows.append([])
+                used = 0
+            rows[index].append(item)
+            used += width
+
+        for widget, _padx, _ipady, _fill, _pady in self._fmt_bar_items:
+            widget.pack_forget()
+        for n, row_items in enumerate(rows):
+            row = self._fmt_bar_rows[n]
+            if row_items and not row.winfo_ismapped():
+                row.pack(side="top", fill="x")
+            elif not row_items and row.winfo_ismapped():
+                row.pack_forget()
+            for widget, padx, ipady, fill, pady in row_items:
+                opts = {"side": "left", "padx": padx, "in_": row}
+                if ipady:
+                    opts["ipady"] = ipady
+                if fill:
+                    opts["fill"] = fill
+                if pady:
+                    opts["pady"] = pady
+                widget.pack(**opts)
+        for n in range(len(rows), len(self._fmt_bar_rows)):
+            if self._fmt_bar_rows[n].winfo_ismapped():
+                self._fmt_bar_rows[n].pack_forget()
+
     def _make_align_button(self, parent, align):
         """One alignment button, drawn as four bars on a small canvas.
 
@@ -4475,6 +4547,25 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.track_theme(format_bar, bg="bg")
         format_bar.pack(fill="x", padx=30, pady=(0, 4))
 
+        # Two rows, and the controls are dealt into them by width rather
+        # than packed straight in. Everything fits one row at the sizes this
+        # app is used at; the second exists so that a narrow window, a
+        # different font, or a scaled display can never put a control out of
+        # reach. See _reflow_format_bar.
+        self._fmt_bar = format_bar
+        self._fmt_bar_items = []
+        self._fmt_bar_rows = []
+        # Three, not two: the number of rows needed depends on the font, and
+        # a machine whose substitute font is much wider than this was
+        # measured on could want a third. Unused rows cost nothing -- they
+        # are never packed.
+        for _ in range(3):
+            row = tk.Frame(format_bar)
+            self.track_theme(row, bg="bg")
+            self._fmt_bar_rows.append(row)
+        self._fmt_bar_rows[0].pack(side="top", fill="x")
+        format_bar.bind("<Configure>", self._on_format_bar_resize)
+
         self._fmt_buttons = {}
         # List buttons get their own registry rather than sharing _fmt_buttons:
         # dict is driven by _refresh_format_buttons, which asks whether the
@@ -4507,7 +4598,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 command=lambda s=style: self._toggle_body_style(s)
             )
             self.track_theme(btn, bg="sidebar", fg="text")
-            btn.pack(side="left", padx=(0, 2), ipady=2)
+            self._add_fmt_item(btn, padx=(0, 2), ipady=2)
             self._attach_tooltip(btn, tip, tip_detail)
             self._fmt_buttons[style] = btn
 
@@ -4517,7 +4608,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # typeface a run is set in, before anything is done to it.
         font_divider = tk.Frame(format_bar, width=1)
         self.track_theme(font_divider, bg="card")
-        font_divider.pack(side="left", fill="y", padx=(5, 5), pady=3)
+        self._add_fmt_item(font_divider, padx=(5, 5), fill="y", pady=3)
         # "Default" is the app's own font, i.e. no span at all — which is
         # what makes the note follow the Settings default rather than being
         # pinned to whatever that happened to be on the day it was written.
@@ -4528,7 +4619,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             lambda v: self._apply_body_font(
                 "font_family", None if v == self.DEFAULT_FONT_LABEL else v),
             width_chars=11)
-        family_dd.pack(side="left", padx=(0, 4))
+        self._add_fmt_item(family_dd, padx=(0, 4))
         self._attach_tooltip(family_dd, "Font",
                              "The selected text, or whatever you type next")
 
@@ -4539,7 +4630,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             lambda v: self._apply_body_font(
                 "font_size", None if v == self.DEFAULT_FONT_LABEL else int(v)),
             width_chars=7)
-        size_dd.pack(side="left", padx=(0, 4))
+        self._add_fmt_item(size_dd, padx=(0, 4))
         self._attach_tooltip(size_dd, "Font size",
                              "Default follows the size set in Settings")
 
@@ -4550,7 +4641,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # into the row as two more toggle-looking buttons.
         divider = tk.Frame(format_bar, width=1)
         self.track_theme(divider, bg="card")
-        divider.pack(side="left", fill="y", padx=(5, 5), pady=3)
+        self._add_fmt_item(divider, padx=(5, 5), fill="y", pady=3)
         # Text color / Highlight: unlike the four toggle buttons above,
         # these open a swatch picker rather than applying anything
         # directly (there's no single obvious "the" color to toggle).
@@ -4564,7 +4655,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             relief="flat", cursor="hand2",
             command=lambda: self._open_color_swatch_popup("text_color")
         )
-        self.text_color_btn.pack(side="left", padx=(0, 2), ipady=2)
+        self._add_fmt_item(self.text_color_btn, padx=(0, 2), ipady=2)
         self._attach_tooltip(self.text_color_btn, "Text colour",
                              "Colours the letters themselves")
         self.highlight_btn = tk.Button(
@@ -4572,7 +4663,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             relief="flat", cursor="hand2",
             command=lambda: self._open_color_swatch_popup("highlight")
         )
-        self.highlight_btn.pack(side="left", padx=(0, 2), ipady=2)
+        self._add_fmt_item(self.highlight_btn, padx=(0, 2), ipady=2)
         self._attach_tooltip(self.highlight_btn, "Highlight",
                              "Colours the background behind the letters")
 
@@ -4582,7 +4673,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # two things called lists in one editor is one too many.
         para_divider = tk.Frame(format_bar, width=1)
         self.track_theme(para_divider, bg="card")
-        para_divider.pack(side="left", fill="y", padx=(5, 5), pady=3)
+        self._add_fmt_item(para_divider, padx=(5, 5), fill="y", pady=3)
         for kind, label, tip, tip_detail in (
             ("bullet", "\u2022", "Bullet list",
              "Whole lines \u2014 click again to turn the list off"),
@@ -4595,7 +4686,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 command=lambda k=kind: self._toggle_list(k)
             )
             self.track_theme(btn, bg="sidebar", fg="text")
-            btn.pack(side="left", padx=(0, 2), ipady=2)
+            self._add_fmt_item(btn, padx=(0, 2), ipady=2)
             self._attach_tooltip(btn, tip, tip_detail)
             self._list_buttons[kind] = btn
 
@@ -4608,7 +4699,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                            ("right", "Align right")):
             btn = self._make_align_button(format_bar, align)
             self.track_theme(btn, bg="sidebar")
-            btn.pack(side="left", padx=(0, 4))
+            self._add_fmt_item(btn, padx=(0, 4))
             self._attach_tooltip(
                 btn, tip,
                 "Applies to whole paragraphs, not to part of one")
@@ -4627,7 +4718,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 command=lambda d=delta: self._change_paragraph_indent(d)
             )
             self.track_theme(btn, bg="sidebar", fg="text")
-            btn.pack(side="left", padx=(0, 2), ipady=2)
+            self._add_fmt_item(btn, padx=(0, 2), ipady=2)
             self._attach_tooltip(btn, tip, tip_detail)
 
         text_frame = tk.Frame(self.editor)

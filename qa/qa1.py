@@ -1390,22 +1390,59 @@ check('two runs of different sizes report Default, not whichever came first',
       app.font_size_var.get() == app.DEFAULT_FONT_LABEL)
 clear_selection()
 
-# ---- THE FORMATTING BAR FITS THE EDITOR (regression) ----
-# It needed 868px against 787px of pane, so the last group ran off the
-# right-hand edge and you had to widen the window to reach it. Asserted
-# rather than eyeballed, because the failure is invisible on a wide screen
-# and every button added later pushes it back toward the edge.
+# ---- NO FORMATTING CONTROL IS EVER OUT OF REACH ----
+# The bar once needed 868px against 787px of editor pane, so the last
+# group ran off the right-hand edge and could not be reached without
+# widening the window. Trimming it fixed that on one machine, but a
+# width in pixels depends on the font: this suite runs under Xvfb with
+# no Segoe UI, where the same bar measures 827px rather than 577px. So
+# the bar wraps, and what is asserted is the property rather than a
+# budget -- nothing sticks out, at any width.
 app.new_note()
 app.update()
 app.update_idletasks()
-_bar = list(app._fmt_buttons.values())[0].master
-_needed = _bar.winfo_reqwidth()
-check(f'the formatting bar fits the editor pane ({_needed}px needed)',
-      _needed <= NO.EDITOR_MIN_WIDTH)
+
+
+def _controls_past_the_edge():
+    app.update()
+    app.update_idletasks()
+    app.update()
+    bar = app._fmt_bar
+    past = []
+    for _widget, *_rest in app._fmt_bar_items:
+        if _widget.winfo_manager() != 'pack':
+            past.append(_widget)          # not laid out at all
+            continue
+        if _widget.winfo_x() + _widget.winfo_width() > bar.winfo_width() + 1:
+            past.append(_widget)
+    return past
+
+
+_geom = app.winfo_geometry()
+for _w in (1400, 1100, 1000, 940, 900):
+    app.geometry(f'{_w}x800')
+    _past = _controls_past_the_edge()
+    check(f'no formatting control sticks out at {_w}px wide '
+          f'({len(_past)} did)', not _past)
+
+app.geometry('1400x800')
+app.update()
+app.update_idletasks()
+check('every control is on one row when there is room for one',
+      len([r for r in app._fmt_bar_rows if r.winfo_ismapped()]) == 1)
+app.geometry('900x800')
+app.update()
+app.update_idletasks()
+app.update()
+check('the bar wraps rather than hiding anything when there is not',
+      len([r for r in app._fmt_bar_rows if r.winfo_ismapped()]) >= 2)
+app.geometry(_geom)
+app.update()
+
 check('no group caption is left taking up room',
       not any(isinstance(w, tk.Label) and str(w.cget('text'))
               in ('Style', 'Font', 'Colors', 'Paragraph')
-              for w in _bar.winfo_children()))
+              for w, *_ in app._fmt_bar_items))
 
 # ---- READING ESTIMATE ----
 check('an empty note is given no reading estimate',
