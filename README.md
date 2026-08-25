@@ -19,7 +19,9 @@ Built as a solo/pair project (developer + AI pairing partner) over an extended i
 - Group notes by category, with persistent collapse state per group
 - A collapsible in-note calculator (with parentheses and standard operator precedence), for quick sums without leaving the note
 - Rich text formatting (Bold, Italic, Underline, Strikethrough, text color, highlight) in the note body — via a toolbar, the right-click menu, or keyboard shortcuts — applied to a selection or to whatever's typed next
-- Paragraph formatting: bullet and numbered lists that nest with Tab, indentation for any paragraph, left/centre/right alignment, and quote blocks. List markers are kept in the note's own text, so a list stays readable when exported, shared as a code, or pasted anywhere else
+- A reading-time estimate for each note, beside its word and character counts
+- Font size and family, per selection or as the default for every note (Settings → Appearance), from a curated list that ships with Windows so a shared note renders as it was written
+- Paragraph formatting: bullet and numbered lists that nest with Tab, indentation for any paragraph, and left/centre/right alignment. List markers are kept in the note's own text, so a list stays readable when exported, shared as a code, or pasted anywhere else
 
 **Recurring notes**
 - Daily / weekly / monthly / yearly recurrence, with custom intervals

@@ -226,6 +226,21 @@ def blend(hex_a, hex_b, t):
     return "#%02x%02x%02x" % mixed
 
 
+def inset_surface(palette):
+    """The surface of a well sunk *inside* a card, for this palette.
+
+    A step further from the page ground than the card is: lighter on a dark
+    theme, darker on a light one, which is why it blends toward ``text``
+    rather than hardcoding a direction.
+    """
+    return blend(palette["card"], palette["text"], 0.07)
+
+
+def hairline(palette):
+    """The colour of a card's border and of the rules between its rows."""
+    return blend(palette["card"], palette["subtext"], 0.22)
+
+
 def contrasting_fg(hex_color):
     """Black or near-white, whichever reads better against *hex_color*.
 

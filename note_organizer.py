@@ -42,7 +42,7 @@ except ImportError:
 # Added/Fixed CHANGELOG.md entries, not per-release counts). The running
 # app records this into settings, so the next time a newer build opens
 # over older data it can tell the user what changed version-wise.
-APP_VERSION = "0.34.51"
+APP_VERSION = "0.36.56"
 
 
 def parse_version(v):
@@ -186,7 +186,15 @@ from noteorganizer.core.formatting import (
     bullet_level_of,
     renumber,
     shift_spans,
+    merge_spans,
+    split_toolbar_rows,
     MAX_INDENT,
+    parse_font_tag,
+    resolve_font_runs,
+    COLOR_FORMAT_STYLES,
+    FONT_VALUE_STYLES,
+    FONT_FAMILIES,
+    FONT_SIZES,
     char_class as core_char_class,
     color_tag_name as core_color_tag_name,
     font_tag_for as core_font_tag_for,
@@ -303,6 +311,7 @@ from noteorganizer.core.model import (
     normalize_note,
     note_richness,
     note_is_empty,
+    reading_time,
     clean_notes,
 )
 
@@ -366,6 +375,8 @@ from noteorganizer.core.sharing import (
 from noteorganizer.core.themes import (
     blend as core_blend,
     contrasting_fg as core_contrasting_fg,
+    inset_surface,
+    hairline,
     THEMES,
     DARK_THEMES,
     LIGHT_THEMES,
@@ -396,6 +407,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
         self.theme_name = self.load_theme_setting()
         self.colors = THEMES[self.theme_name]
+        # Read before the editor is built, so the body text is created in the
+        # right font rather than being restyled a moment after it appears.
+        self._load_editor_font()
         # Track last-used dark/light for the quick toggle button.
         self._last_dark_theme = self.theme_name if self.theme_name in DARK_THEMES else "dark"
         self._last_light_theme = self.theme_name if self.theme_name in LIGHT_THEMES else "light"
@@ -462,6 +476,109 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.after(400, self.maybe_show_reminder)
         self._last_active_dirty = None
         self.after(600, self._poll_active_dirty)
+
+    # A title longer than this cannot be typed or pasted in. The limit is
+    # not about storage or layout -- the note list already truncates to 60
+    # characters for display -- but about tk.Entry, which slows roughly with
+    # the square of what it holds: measured, one keystroke costs 0.5ms at 30
+    # characters, 38ms at 10,000, and 3.5 seconds at 100,000. Someone who
+    # pastes a document into the title by accident would find the field
+    # frozen and no way to edit it back. 200 is far past any real title and
+    # far short of where the widget struggles.
+    TITLE_MAX_LEN = 200
+
+    def _title_within_limit(self, proposed):
+        """Validator for the title field: reject an edit past the cap."""
+        if getattr(self, "_setting_title", False):
+            return True                      # a stored title being loaded
+        if len(proposed) <= self.TITLE_MAX_LEN:
+            return True
+        # Deferred: Tk turns validation off if the validate command touches
+        # a widget while it runs, and the status bar is a widget.
+        self.after_idle(
+            lambda: self.set_status(
+                f"A note title can be up to {self.TITLE_MAX_LEN} characters"))
+        return False
+
+    # How close to the cap the counter starts showing. Far enough out to be
+    # a warning rather than a surprise, close enough that an ordinary title
+    # never sees it.
+    TITLE_COUNT_FROM = 40
+
+    def _refresh_title_count(self, event=None):
+        """Show how much title is left, once there is little enough of it.
+
+        Also called after a note is loaded, so opening one that is already
+        near the cap says so straight away rather than waiting for a
+        keystroke to reveal it.
+        """
+        if not hasattr(self, "title_count_lbl"):
+            return
+        used = len(self.title_entry.get())
+        if self._title_is_placeholder():
+            used = 0
+        if used < self.TITLE_MAX_LEN - self.TITLE_COUNT_FROM:
+            if self.title_count_lbl.winfo_ismapped():
+                self.title_count_lbl.pack_forget()
+            return
+        self.title_count_lbl.config(
+            text=f"{used}/{self.TITLE_MAX_LEN}",
+            fg=self.colors["danger"] if used >= self.TITLE_MAX_LEN
+            else self.colors["subtext"],
+        )
+        if not self.title_count_lbl.winfo_ismapped():
+            # Before the category button, which is packed to the right first,
+            # so the counter sits between the title and it rather than past
+            # the edge of the row.
+            self.title_count_lbl.pack(side="left", padx=(8, 0))
+
+    def _title_is_placeholder(self):
+        """True while the field is showing its grey 'Note title...' prompt."""
+        return self.title_entry.get() == "Note title..."
+
+    def _insert_title(self, text):
+        """Put a stored title into the field, cap or no cap.
+
+        Validation fires on programmatic inserts as well as on typing. A
+        note whose title predates the cap -- or one hand-edited in the JSON
+        -- would otherwise have the widget silently drop the overflow, and
+        the next autosave would write that shortened title back over the
+        real one. Loading a note must never edit it.
+        """
+        self._setting_title = True
+        try:
+            self.title_entry.insert(0, text)
+        finally:
+            self._setting_title = False
+        self._refresh_title_count()
+
+    def _on_title_paste(self, event=None):
+        """Paste into the title, trimmed to fit rather than refused.
+
+        A validator can only accept or reject a change whole, so pasting
+        something long past the cap would otherwise leave the field empty --
+        which looks like the paste failed rather than like it was shortened.
+        """
+        try:
+            pasted = self.clipboard_get()
+        except tk.TclError:
+            return "break"
+        try:
+            self.title_entry.delete("sel.first", "sel.last")
+        except tk.TclError:
+            pass
+        room = self.TITLE_MAX_LEN - len(self.title_entry.get())
+        if room <= 0:
+            self.set_status(
+                f"A note title can be up to {self.TITLE_MAX_LEN} characters")
+            return "break"
+        clipped = " ".join(pasted.split())[:room]
+        self.title_entry.insert("insert", clipped)
+        self._refresh_title_count()
+        if len(pasted) > len(clipped):
+            self.set_status(
+                f"Pasted title shortened to {self.TITLE_MAX_LEN} characters")
+        return "break"
 
     def _schedule_autosave(self, event=None, skip_word_count=False):
         """Debounced auto-save: (re)start a short timer on every edit. When the
@@ -898,11 +1015,82 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
     # Pixels per indent step, and the room a marker needs in front of its
     # text so a wrapped line hangs under the text rather than the marker.
-    INDENT_STEP = 24
-    _MARKER_ROOM = {"bullet": 24, "number": 28}
-    QUOTE_BAR = 4
+    # Shown in both font dropdowns for "no span at all", which is what lets
+    # a note follow the Settings default instead of being pinned to whatever
+    # that happened to be the day it was written.
+    DEFAULT_FONT_LABEL = "Default"
 
-    def _paragraph_tag(self, text_widget, kind, indent, block=None):
+    INDENT_STEP = 24
+    # Widths measured at _MARKER_ROOM_AT point. A marker set larger is
+    # wider, so these are scaled rather than used raw -- see _marker_room.
+    # The reference is a fixed number, not the current base size: that moves
+    # with the setting, and comparing it against itself scales by one.
+    _MARKER_ROOM = {"bullet": 24, "number": 28}
+    _MARKER_ROOM_AT = 12
+
+    def _load_editor_font(self):
+        """Read the editor's baseline font from settings.
+
+        Falls back to the app's own defaults rather than to whatever the
+        widget happens to be set to, so a settings file with a font that is
+        no longer offered degrades to something known instead of sticking.
+        """
+        family = get_setting("editor_font_family", FONT_FAMILIES[0], str)
+        if family not in FONT_FAMILIES:
+            family = FONT_FAMILIES[0]
+        size = get_setting("editor_font_size", 12, int)
+        if size not in FONT_SIZES:
+            size = 12
+        self.editor_font_family, self.editor_font_size = family, size
+
+    def _set_editor_font(self, family=None, size=None):
+        """Change the baseline font every note is written in.
+
+        Rebuilds the tags derived from it as well as the widget's own font:
+        bold and italic are separate Font objects built from the base
+        family and size, and the list margins are in pixels scaled by that
+        size, so neither follows automatically.
+        """
+        if family is not None:
+            self.editor_font_family = family
+            save_setting("editor_font_family", family)
+        if size is not None:
+            self.editor_font_size = size
+            save_setting("editor_font_size", size)
+
+        spec = (self.editor_font_family, self.editor_font_size)
+        for widget in (self.body_text, getattr(self, "comments_text", None)):
+            if widget is not None:
+                widget.configure(font=spec)
+        self._setup_body_formatting_tags(self.body_text)
+        # Rebuilt at the new base size: a tag's margin was computed from the
+        # old one, and nothing else recomputes it.
+        for name in list(self._paragraph_tags):
+            self._configure_paragraph_tag(self.body_text, name)
+        self._refresh_format_buttons()
+
+    def _marker_room(self, kind):
+        """How much room a list marker needs before its text.
+
+        Scaled by the editor's font size, because the margin is in pixels
+        and the marker is not: "• " measures 11px at 12pt and 22px at 24pt,
+        so a fixed 42px lmargin2 that hangs correctly at the default size
+        leaves a large-font item's second line 11px out of true.
+        """
+        room = self._MARKER_ROOM[kind]
+        current = self._editor_font_size()
+        if current and current != self._MARKER_ROOM_AT:
+            room = int(round(room * current / self._MARKER_ROOM_AT))
+        return room
+
+    def _editor_font_size(self):
+        """The size the body text is actually set in right now."""
+        try:
+            return tkfont.Font(font=self.body_text["font"]).actual("size")
+        except (tk.TclError, AttributeError):
+            return getattr(self, "_body_base_size", 0)
+
+    def _paragraph_tag(self, text_widget, kind, indent):
         """The margin tag for this combination of properties, made on demand.
 
         There is one tag per combination rather than one per property,
@@ -911,72 +1099,28 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         option. Building them lazily is the same pattern the colour tags
         use: the app cannot know which combinations a note will want.
         """
-        name = f"para_{kind or 'plain'}_{indent}" + (f"_{block}" if block else "")
+        name = f"para_{kind or 'plain'}_{indent}"
         if name not in self._paragraph_tags:
-            self._paragraph_tags[name] = (kind, indent, block)
+            self._paragraph_tags[name] = (kind, indent)
             self._configure_paragraph_tag(text_widget, name)
         return name
 
     def _configure_paragraph_tag(self, text_widget, name):
-        """Set one margin tag's options, in the palette as it stands now.
+        """Set one margin tag's options.
 
-        Split out from _paragraph_tag so a theme switch can re-run it: a
-        quote's bar and tint are theme colours, and nothing else in
-        apply_theme reaches a text tag.
+        Split out from _paragraph_tag so the tags can be rebuilt when the
+        editor's font size changes: the margins are in pixels and the marker
+        they leave room for is not.
         """
-        kind, indent, block = self._paragraph_tags[name]
+        kind, indent = self._paragraph_tags[name]
         left = indent * self.INDENT_STEP
-        if block == "quote":
-            # Room for the bar itself, then the gap before the text.
-            left += self.QUOTE_BAR + 10
         options = {}
         if kind:
             options["lmargin1"] = 18 + left
-            options["lmargin2"] = 18 + left + self._MARKER_ROOM[kind]
+            options["lmargin2"] = 18 + left + self._marker_room(kind)
         else:
             options["lmargin1"] = options["lmargin2"] = left
-        if block == "quote":
-            options["lmargincolor"] = self.colors["accent"]
-            options["background"] = core_blend(
-                self.colors["card"], self.colors["accent"], 0.12)
         text_widget.tag_configure(name, **options)
-
-    def _recolor_paragraph_tags(self):
-        """Repaint the quote bars and tints after a theme switch."""
-        if not getattr(self, "_paragraph_tags", None):
-            return
-        for name, (_kind, _indent, block) in self._paragraph_tags.items():
-            if block:
-                self._configure_paragraph_tag(self.body_text, name)
-
-    def _paragraph_block_of(self, text_widget, line_no):
-        """The block style on this line, or None. Read from its margin tag."""
-        for name in text_widget.tag_names(f"{line_no}.0"):
-            if name.startswith("para_"):
-                return self._paragraph_tags.get(name, (None, 0, None))[2]
-        return None
-
-    def _toggle_paragraph_block(self, block):
-        """Turn the selected lines into a quote block, or back to plain.
-
-        Applies to whole lines, so a quote made of several paragraphs shows
-        one continuous bar down the side rather than one bar per line.
-        """
-        first, last = self._selected_line_range()
-        turning_off = all(
-            self._paragraph_block_of(self.body_text, n) == block
-            for n in range(first, last + 1))
-        for line_no in range(first, last + 1):
-            kind = self._list_kind_of(self.body_text, line_no)
-            indent = self._paragraph_indent_of(self.body_text, line_no)
-            self._clear_paragraph_tags(self.body_text, line_no)
-            wanted = None if turning_off else block
-            if kind or indent or wanted:
-                self.body_text.tag_add(
-                    self._paragraph_tag(self.body_text, kind, indent, wanted),
-                    f"{line_no}.0", f"{line_no}.end")
-        self._refresh_list_buttons()
-        self._schedule_autosave()
 
     def _clear_paragraph_tags(self, text_widget, line_no):
         """Strip every margin tag from a line, whatever kind or depth."""
@@ -993,10 +1137,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         """
         for name in text_widget.tag_names(f"{line_no}.0"):
             if name.startswith("para_"):
-                # Looked up rather than parsed back out of the name: the
-                # name gained a "_quote" suffix, and reading the depth off
-                # the end of it then returned 0 for every quoted line.
-                return self._paragraph_tags.get(name, (None, 0, None))[1]
+                # Looked up rather than parsed out of the name, which is
+                # a format this does not need to know.
+                return self._paragraph_tags.get(name, (None, 0))[1]
         line = text_widget.get(f"{line_no}.0", f"{line_no}.end")
         kind, marker, _ = parse_list_marker(line)
         return bullet_level_of(marker) if kind == "bullet" else 0
@@ -1064,8 +1207,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             kind = self._list_kind_of(text_widget, line_no)
             align = self._paragraph_align_of(text_widget, line_no)
             indent = self._paragraph_indent_of(text_widget, line_no)
-            block = self._paragraph_block_of(text_widget, line_no)
-            if not kind and align == "left" and not indent and not block:
+            if not kind and align == "left" and not indent:
                 continue            # an ordinary paragraph records nothing
             entry = {"line": line_no - 1}
             if kind:
@@ -1074,8 +1216,6 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 entry["indent"] = indent
             if align != "left":
                 entry["align"] = align
-            if block:
-                entry["block"] = block
             paragraphs.append(entry)
         return paragraphs
 
@@ -1102,9 +1242,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         for n in range(first, last + 1):
             kind = self._list_kind_of(self.body_text, n)
             indent = self._paragraph_indent_of(self.body_text, n)
-            block = self._paragraph_block_of(self.body_text, n)
-            wanted = (self._paragraph_tag(self.body_text, kind, indent, block)
-                      if (kind or indent or block) else None)
+            wanted = (self._paragraph_tag(self.body_text, kind, indent)
+                      if (kind or indent) else None)
             for name in self.body_text.tag_names(f"{n}.0"):
                 if name.startswith("para_") and name != wanted:
                     self.body_text.tag_remove(name, f"{n}.0", f"{n}.end+1c")
@@ -1136,9 +1275,6 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         current_align = self._paragraph_align_of(self.body_text, line_no)
         for align, btn in getattr(self, "_align_buttons", {}).items():
             self._set_button_pressed(btn, align == current_align)
-        current_block = self._paragraph_block_of(self.body_text, line_no)
-        for block, btn in getattr(self, "_block_buttons", {}).items():
-            self._set_button_pressed(btn, block == current_block)
 
     def _attach_tooltip(self, widget, title, detail=""):
         """Explain a widget while the cursor rests on it.
@@ -1217,6 +1353,71 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if x + tip.winfo_width() > right_edge:
             x = max(self.winfo_rootx() + 8, right_edge - tip.winfo_width())
         tip.geometry(f"+{x}+{y}")
+
+    def _add_fmt_item(self, widget, padx=(0, 2), ipady=0, fill=None, pady=0):
+        """Record a formatting control, in the order it should appear.
+
+        Not packed here: which row it lands on depends on how much room
+        there is, which is not known until the editor has a width.
+        """
+        self._fmt_bar_items.append((widget, padx, ipady, fill, pady))
+
+    def _on_format_bar_resize(self, event):
+        """Reflow, but only when the width the controls have actually changed.
+
+        Packing widgets changes the frame's size, which fires <Configure>
+        again -- so reacting to every one of them is a loop.
+        """
+        if event.width == getattr(self, "_fmt_bar_width", None):
+            return
+        self._fmt_bar_width = event.width
+        self._reflow_format_bar(event.width)
+
+    def _reflow_format_bar(self, available=None):
+        """Deal the controls into rows, breaking when one would not fit.
+
+        Everything fits a single row at the sizes this app is used at. The
+        second row is for the cases a fixed pixel budget cannot cover: a
+        narrow window, a display at a different scaling, or a machine
+        without the font this was measured on -- CI is all three, and the
+        same bar that needs 577px here needs 827px there.
+        """
+        if not getattr(self, "_fmt_bar_items", None):
+            return
+        if available is None:
+            available = self._fmt_bar.winfo_width()
+        if available <= 1:                   # not laid out yet
+            return
+
+        measured = [(w.winfo_reqwidth() + px[0] + px[1], fl == "y")
+                    for w, px, _ip, fl, _py in self._fmt_bar_items]
+        # The arithmetic lives in core/formatting.py so it can be tested
+        # against made-up widths rather than against whatever font this
+        # machine happens to have -- see split_toolbar_rows.
+        rows = [[self._fmt_bar_items[i] for i in row]
+                for row in split_toolbar_rows(measured, available,
+                                              len(self._fmt_bar_rows))]
+
+        for widget, _padx, _ipady, _fill, _pady in self._fmt_bar_items:
+            widget.pack_forget()
+        for n, row_items in enumerate(rows):
+            row = self._fmt_bar_rows[n]
+            if row_items and not row.winfo_ismapped():
+                row.pack(side="top", fill="x")
+            elif not row_items and row.winfo_ismapped():
+                row.pack_forget()
+            for widget, padx, ipady, fill, pady in row_items:
+                opts = {"side": "left", "padx": padx, "in_": row}
+                if ipady:
+                    opts["ipady"] = ipady
+                if fill:
+                    opts["fill"] = fill
+                if pady:
+                    opts["pady"] = pady
+                widget.pack(**opts)
+        for n in range(len(rows), len(self._fmt_bar_rows)):
+            if self._fmt_bar_rows[n].winfo_ismapped():
+                self._fmt_bar_rows[n].pack_forget()
 
     def _make_align_button(self, parent, align):
         """One alignment button, drawn as four bars on a small canvas.
@@ -1298,14 +1499,13 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                                     f"{line_no}.0", f"{line_no}.end+1c")
             kind = paragraph.get("kind")
             indent = paragraph.get("indent", 0)
-            block = paragraph.get("block")
             line = text_widget.get(f"{line_no}.0", f"{line_no}.end")
             if kind and parse_list_marker(line)[0] != kind:
                 continue
-            if not kind and not indent and not block:
+            if not kind and not indent:
                 continue
             text_widget.tag_add(
-                self._paragraph_tag(text_widget, kind, indent, block),
+                self._paragraph_tag(text_widget, kind, indent),
                 f"{line_no}.0", f"{line_no}.end")
 
     def _set_paragraph_indent(self, line_no, indent):
@@ -1316,7 +1516,6 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         parent's bullet and the two levels look identical.
         """
         kind = self._list_kind_of(self.body_text, line_no)
-        block = self._paragraph_block_of(self.body_text, line_no)
         self._clear_paragraph_tags(self.body_text, line_no)
         if kind == "bullet":
             line = self.body_text.get(f"{line_no}.0", f"{line_no}.end")
@@ -1326,9 +1525,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 self.body_text.delete(f"{line_no}.0",
                                       f"{line_no}.0+{len(marker)}c")
                 self.body_text.insert(f"{line_no}.0", new_marker)
-        if kind or indent or block:
+        if kind or indent:
             self.body_text.tag_add(
-                self._paragraph_tag(self.body_text, kind, indent, block),
+                self._paragraph_tag(self.body_text, kind, indent),
                 f"{line_no}.0", f"{line_no}.end")
 
     def _change_paragraph_indent(self, delta):
@@ -1389,14 +1588,13 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             # nested item into a bullet should leave it where it sits rather
             # than snapping it back to the left margin.
             indent = self._paragraph_indent_of(self.body_text, line_no)
-            block = self._paragraph_block_of(self.body_text, line_no)
             if marker:
                 self.body_text.delete(f"{line_no}.0", f"{line_no}.0+{len(marker)}c")
             self._clear_paragraph_tags(self.body_text, line_no)
             if turning_off:
-                if indent or block:
+                if indent:
                     self.body_text.tag_add(
-                        self._paragraph_tag(self.body_text, None, indent, block),
+                        self._paragraph_tag(self.body_text, None, indent),
                         f"{line_no}.0", f"{line_no}.end")
                 continue
             self.body_text.insert(f"{line_no}.0", marker_for(kind, 1, indent))
@@ -1404,7 +1602,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             # too would be inherited by whatever gets typed or pasted on
             # the next line.
             self.body_text.tag_add(
-                self._paragraph_tag(self.body_text, kind, indent, block),
+                self._paragraph_tag(self.body_text, kind, indent),
                 f"{line_no}.0", f"{line_no}.end")
         self._renumber_lists()
         self._refresh_list_buttons()
@@ -1509,6 +1707,13 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         needs a live Python reference to keep using them)."""
         base = tkfont.Font(font=text_widget["font"])
         family, size = base.actual("family"), base.actual("size")
+        # Kept for the composite font tags: a span that sets only a size
+        # still needs a family to build a Font from, and vice versa.
+        self._body_base_family, self._body_base_size = family, size
+        # Live references to those tags' Font objects, keyed by tag name.
+        # Tkinter drops a font nothing holds, and the tag then silently
+        # stops applying -- the same reason the three below sit on self.
+        self._font_tag_fonts = {}
         self._fmt_bold_font = tkfont.Font(family=family, size=size, weight="bold")
         self._fmt_italic_font = tkfont.Font(family=family, size=size, slant="italic")
         self._fmt_bold_italic_font = tkfont.Font(
@@ -1580,6 +1785,52 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             if text_widget.compare(seg_start, "<", seg_end):
                 text_widget.tag_add(tag, seg_start, seg_end)
 
+    def _ensure_font_tag(self, text_widget, is_bold, is_italic, size, family):
+        """The tag carrying one whole font combination, made on demand.
+
+        The Font object is held on self because Tkinter needs a live Python
+        reference to keep using it -- let it be collected and the tag
+        quietly stops applying. Built lazily because the combinations
+        multiply, weight by slant by size by family: creating all 192 of the
+        ones this app can offer measured 193ms, which is startup time spent
+        on tags almost every note never uses.
+        """
+        name = core_font_tag_for(is_bold, is_italic, size, family)
+        if name is None or name in KNOWN_FORMAT_STYLES:
+            return name          # plain bold/italic/bold_italic, set up already
+        if name not in self._font_tag_fonts:
+            self._font_tag_fonts[name] = tkfont.Font(
+                family=family or self._body_base_family,
+                size=size or self._body_base_size,
+                weight="bold" if is_bold else "normal",
+                slant="italic" if is_italic else "roman",
+            )
+            # Configured now, so it lands later in Tk's tag order than bold
+            # and italic and therefore wins the font option -- which is the
+            # whole point, since those two set it as well.
+            text_widget.tag_configure(name, font=self._font_tag_fonts[name])
+        return name
+
+    def _apply_font_runs(self, text_widget, spans):
+        """Lay composite font tags over the ranges that need one.
+
+        Runs alongside the plain style tags rather than instead of them: a
+        bold run inside a resized paragraph keeps its "bold" tag, which is
+        what the toolbar reads, while the composite on top decides what the
+        text actually looks like.
+        """
+        length = len(text_widget.get("1.0", "end-1c"))
+        for start, end, is_bold, is_italic, size, family in resolve_font_runs(
+                spans, length):
+            tag = self._ensure_font_tag(text_widget, is_bold, is_italic,
+                                        size, family)
+            if not tag:
+                continue
+            try:
+                text_widget.tag_add(tag, f"1.0+{start}c", f"1.0+{end}c")
+            except tk.TclError:
+                pass
+
     def _extract_formatting(self, text_widget):
         """Read the widget's current tags back out as a plain span list,
         for saving. Character offsets (not Tkinter's own line.col indices)
@@ -1592,8 +1843,30 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 end = self._char_offset(text_widget, ranges[i + 1])
                 if end > start:
                     spans.append({"start": start, "end": end, "style": style})
+        # Composite font tags carry size and family. Weight and slant are
+        # folded into them for rendering, but are read back from their own
+        # bold/italic tags above -- taking them from here as well would save
+        # the same run twice.
         for tag_name in text_widget.tag_names():
-            for style in VALUE_FORMAT_STYLES:
+            parsed = parse_font_tag(tag_name)
+            if not parsed:
+                continue
+            _is_bold, _is_italic, size, family = parsed
+            ranges = text_widget.tag_ranges(tag_name)
+            for i in range(0, len(ranges), 2):
+                start = self._char_offset(text_widget, ranges[i])
+                end = self._char_offset(text_widget, ranges[i + 1])
+                if end <= start:
+                    continue
+                if size is not None:
+                    spans.append({"start": start, "end": end,
+                                  "style": "font_size", "value": size})
+                if family is not None:
+                    spans.append({"start": start, "end": end,
+                                  "style": "font_family", "value": family})
+
+        for tag_name in text_widget.tag_names():
+            for style in COLOR_FORMAT_STYLES:
                 prefix = style + "_"
                 if not tag_name.startswith(prefix):
                     continue
@@ -1607,7 +1880,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     if end > start:
                         spans.append({"start": start, "end": end, "style": style,
                                       "value": hex_color})
-        return spans
+        # Merged before returning: a composite font tag is split into one
+        # range per bold/italic boundary inside it, so a single size across a
+        # paragraph reads back in pieces and would be written to the note
+        # that way, then split again on the next save.
+        return merge_spans(spans)
 
     def _extract_formatting_for_stripped_body(self, text_widget, stripped_body):
         """Like _extract_formatting, but adjusted for save_current_note()'s
@@ -1632,10 +1909,16 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
     def _apply_formatting(self, text_widget, spans):
         """Re-apply a saved span list as live Tkinter tags, for loading."""
         for span in normalize_formatting(spans):
+            # Size and family are not applied one span at a time: they have
+            # to be merged with whatever bold/italic covers the same
+            # characters into a single tag, which _apply_font_runs does once
+            # the whole list is known.
+            if span["style"] in FONT_VALUE_STYLES:
+                continue
             try:
                 start_idx = text_widget.index(f"1.0+{span['start']}c")
                 end_idx = text_widget.index(f"1.0+{span['end']}c")
-                if span["style"] in VALUE_FORMAT_STYLES:
+                if span["style"] in COLOR_FORMAT_STYLES:
                     tag = self._ensure_color_tag(text_widget, span["style"], span["value"])
                 else:
                     tag = span["style"]
@@ -1649,6 +1932,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     text_widget.tag_add(tag, start_idx, end_idx)
             except tk.TclError:
                 pass
+        self._apply_font_runs(text_widget, spans)
 
     def _selection_has_style(self, text_widget, style_set, start, end):
         """True only if EVERY character in [start, end) already carries at
@@ -1795,6 +2079,63 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._refresh_format_buttons()
         self._schedule_autosave()
 
+    def _apply_body_font(self, style, value):
+        """Font size / family picker handler.
+
+        Closer to a colour than to Bold: "one of a list, or nothing" rather
+        than on/off. With no selection it becomes a pending choice for
+        whatever gets typed next, through the same anchor-tracking machinery
+        the boolean styles and colours already use.
+        """
+        try:
+            start = self.body_text.index("sel.first")
+            end = self.body_text.index("sel.last")
+            has_selection = self.body_text.compare(start, "<", end)
+        except tk.TclError:
+            has_selection = False
+
+        label = "Font size" if style == "font_size" else "Font"
+        if not has_selection:
+            if style == "font_size":
+                self._pending_font_size = value
+            else:
+                self._pending_font_family = value
+            self.set_status(f"{label} set — applies to what you type next"
+                            if value else f"{label} back to the default")
+            if self._has_any_pending_style():
+                self.body_text.mark_set(self._PENDING_STYLE_ANCHOR, tk.INSERT)
+                self.body_text.mark_gravity(self._PENDING_STYLE_ANCHOR, "left")
+                self._pending_style_last_length = self._pending_style_text_length()
+            self._refresh_format_buttons()
+            return
+
+        # Size and family cannot be tagged in place the way a colour can:
+        # what a run should look like depends on the bold and italic around
+        # it too. So the spans are edited as data and the whole resolution
+        # is redone -- clip this style out of the selection, put the new
+        # value back over it, and let _apply_font_runs work out the tags.
+        first = self._char_offset(self.body_text, start)
+        last = self._char_offset(self.body_text, end)
+        spans = []
+        for span in self._extract_formatting(self.body_text):
+            if span["style"] != style or span["end"] <= first or span["start"] >= last:
+                spans.append(span)
+                continue
+            if span["start"] < first:
+                spans.append({**span, "end": first})
+            if span["end"] > last:
+                spans.append({**span, "start": last})
+        if value is not None:
+            spans.append({"start": first, "end": last, "style": style,
+                          "value": value})
+
+        for name in self.body_text.tag_names():
+            if parse_font_tag(name):
+                self.body_text.tag_remove(name, "1.0", "end")
+        self._apply_font_runs(self.body_text, spans)
+        self._refresh_format_buttons()
+        self._schedule_autosave()
+
     def _open_color_swatch_popup(self, kind):
         """Text-color/highlight picker popup — a grid of swatches plus a
         Clear option, anchored to the toolbar button that opened it.
@@ -1857,7 +2198,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         about both kinds together — anywhere that used to just check
         "is _pending_styles non-empty" now goes through this instead."""
         return bool(self._pending_styles) or bool(self._pending_text_color) \
-            or bool(self._pending_highlight_color)
+            or bool(self._pending_highlight_color) \
+            or bool(self._pending_font_size) or bool(self._pending_font_family)
 
     def _apply_pending_style_to_typed_char(self, event=None):
         """Tag whatever's accumulated since _PENDING_STYLE_ANCHOR (set when
@@ -1919,9 +2261,19 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         start_idx = self.body_text.index(self._PENDING_STYLE_ANCHOR)
         end_idx = self.body_text.index(tk.INSERT)
         if self.body_text.compare(start_idx, "<", end_idx):
-            tag = self._font_tag_for("bold" in self._pending_styles, "italic" in self._pending_styles)
+            is_bold = "bold" in self._pending_styles
+            is_italic = "italic" in self._pending_styles
+            tag = self._font_tag_for(is_bold, is_italic)
             if tag:
                 self.body_text.tag_add(tag, start_idx, end_idx)
+            if self._pending_font_size or self._pending_font_family:
+                # The plain tag above stays as the marker the toolbar reads;
+                # this one goes over it and decides how the text looks.
+                self.body_text.tag_add(
+                    self._ensure_font_tag(
+                        self.body_text, is_bold, is_italic,
+                        self._pending_font_size, self._pending_font_family),
+                    start_idx, end_idx)
             if "underline" in self._pending_styles:
                 self.body_text.tag_add("underline", start_idx, end_idx)
             if "strike" in self._pending_styles:
@@ -2015,6 +2367,32 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         text_widget.bind("<Double-Button-1>", self._select_word_at_click)
         text_widget.bind("<Triple-Button-1>", self._select_line_no_newline)
 
+    def _uniform_font_in_selection(self, style, start, end):
+        """The one size (or family) covering the WHOLE range, or None.
+
+        None also means "a mix", which is the honest answer for a dropdown:
+        showing the first run's size for a selection spanning two of them
+        would claim the whole selection is that size, and the next click
+        would then be understood as "leave it as it is".
+        """
+        wanted = None
+        idx = start
+        while self.body_text.compare(idx, "<", end):
+            found = None
+            for name in self.body_text.tag_names(idx):
+                parsed = parse_font_tag(name)
+                if parsed:
+                    found = parsed[2] if style == "font_size" else parsed[3]
+                    break
+            if found is None:
+                return None
+            if wanted is None:
+                wanted = found
+            elif wanted != found:
+                return None
+            idx = self.body_text.index(f"{idx}+1c")
+        return wanted
+
     def _uniform_color_in_selection(self, kind, start, end):
         """The single hex color of the given kind ("text_color" or
         "highlight") that covers the ENTIRE [start, end) range, or None if
@@ -2068,6 +2446,19 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 bg=self.colors["accent"] if active else self.colors["sidebar"],
                 fg="white" if active else self.colors["text"],
             )
+
+        if hasattr(self, "font_size_var"):
+            if has_selection:
+                size = self._uniform_font_in_selection("font_size", start, end)
+                family = self._uniform_font_in_selection("font_family", start, end)
+            else:
+                size = self._pending_font_size
+                family = self._pending_font_family
+            # A mix across the selection reads as "Default" rather than as
+            # the first run's value, which would claim the whole selection
+            # is that size.
+            self.font_size_var.set(str(size) if size else self.DEFAULT_FONT_LABEL)
+            self.font_family_var.set(family or self.DEFAULT_FONT_LABEL)
 
         if hasattr(self, "text_color_btn"):
             if has_selection:
@@ -2550,7 +2941,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.title_entry.delete(0, "end")
         title = note.get("title", "")
         if title:
-            self.title_entry.insert(0, title)
+            self._insert_title(title)
             self.title_entry.config(fg=self.colors["text"])
 
         self.body_text.delete("1.0", "end")
@@ -2953,7 +3344,14 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         else:
             w = "word" if words == 1 else "words"
             c = "character" if chars == 1 else "characters"
-            self.word_count_lbl.config(text=f"{words} {w} · {chars} {c}")
+            # The reading estimate goes on its own line under the counts:
+            # it answers a different question ("have I got time for this?"
+            # rather than "how much have I written?") and reads as an aside
+            # rather than as more of the same figure.
+            line = f"{words} {w} · {chars} {c}"
+            estimate = reading_time(words)
+            self.word_count_lbl.config(
+                text=f"{line}\n{estimate}" if estimate else line)
 
     def _reset_editor_scroll(self):
         """Called after loading a note into the editor: snap back to the top and
@@ -3322,9 +3720,6 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # the same treatment; this repaints their bars along with restoring
         # every paragraph button's pressed state in the new palette.
         self._refresh_list_buttons()
-        # A quote's bar and tint are theme colours living on a text tag,
-        # which nothing above reaches either.
-        self._recolor_paragraph_tags()
         # Recolour the note cards in place rather than calling
         # refresh_note_list(), which destroys and rebuilds every card. That
         # rebuild was ~85ms of a ~121ms theme switch and made the list
@@ -3371,10 +3766,26 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     # theme (same hex used by both) — only remap true mismatches.
                     if val.lower() != cur[key].lower():
                         remap[val.lower()] = cur[key]
+        # Surfaces DERIVED from a palette are invisible to the loop above,
+        # because they are in no palette: Settings blends card toward text
+        # for the well inside a card, and toward subtext for its hairlines.
+        # A widget built under one theme therefore kept the other theme's
+        # inset -- which is why the information bars in General, Backup and
+        # About stayed dark, and unreadable, on a light theme.
+        for name, palette in THEMES.items():
+            if name == self.theme_name:
+                continue
+            for derive in (inset_surface, hairline):
+                was, now = derive(palette), derive(cur)
+                if was.lower() != now.lower():
+                    remap[was.lower()] = now
+
         # Current theme's own colors must never be remapped away.
         for key, val in cur.items():
             if isinstance(val, str) and val.startswith("#"):
                 remap.pop(val.lower(), None)
+        for derive in (inset_surface, hairline):
+            remap.pop(derive(cur).lower(), None)
 
         def walk(w):
             for opt in ("bg", "fg"):
@@ -3999,13 +4410,23 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
         self.title_entry = tk.Entry(
             top_row, insertbackground=self.colors["text"],
-            relief="flat", font=("Segoe UI", 20, "bold")
+            relief="flat", font=("Segoe UI", 20, "bold"),
+            validate="key",
+            validatecommand=(self.register(self._title_within_limit), "%P")
         )
         self.track_theme(self.title_entry, bg="bg", fg="text")
         self.title_entry.pack(side="left", fill="x", expand=True)
         self.add_placeholder(self.title_entry, "Note title...")
         self._add_paste_menu(self.title_entry)
+        # How much of the title is left, shown only once it starts to matter.
+        # A permanent "12/200" beside a twelve-character title is noise about
+        # a limit nobody is near; the point is to warn before the field stops
+        # accepting, not to keep score.
+        self.title_count_lbl = tk.Label(top_row, text="", font=("Segoe UI", 8))
+        self.track_theme(self.title_count_lbl, bg="bg", fg="subtext")
         self.title_entry.bind("<KeyRelease>", self._schedule_autosave)
+        self.title_entry.bind("<KeyRelease>", self._refresh_title_count, add="+")
+        self.title_entry.bind("<<Paste>>", self._on_title_paste)
 
         self.category_var = tk.StringVar(value="General")
         # Keep the button's dot/label in sync whenever the category changes,
@@ -4092,10 +4513,6 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         )
         self.color_swatch_btn.pack(side="left", padx=(6, 6))
 
-        self.color_hint_lbl = tk.Label(meta_row, text="category color", font=("Segoe UI", 8))
-        self.track_theme(self.color_hint_lbl, bg="bg", fg="subtext")
-        self.color_hint_lbl.pack(side="left")
-
         self._update_color_swatch()
 
         # --- Metadata row 2: Repeat (own line — it expands when active) ---
@@ -4110,7 +4527,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.track_theme(body_label, bg="bg", fg="subtext")
         body_label.pack(side="left")
 
-        self.word_count_lbl = tk.Label(body_header, text="", font=("Segoe UI", 8), anchor="e")
+        self.word_count_lbl = tk.Label(body_header, text="", font=("Segoe UI", 8),
+                                       anchor="e", justify="right")
         self.track_theme(self.word_count_lbl, bg="bg", fg="subtext")
         self.word_count_lbl.pack(side="right")
 
@@ -4123,6 +4541,25 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.track_theme(format_bar, bg="bg")
         format_bar.pack(fill="x", padx=30, pady=(0, 4))
 
+        # Two rows, and the controls are dealt into them by width rather
+        # than packed straight in. Everything fits one row at the sizes this
+        # app is used at; the second exists so that a narrow window, a
+        # different font, or a scaled display can never put a control out of
+        # reach. See _reflow_format_bar.
+        self._fmt_bar = format_bar
+        self._fmt_bar_items = []
+        self._fmt_bar_rows = []
+        # Three, not two: the number of rows needed depends on the font, and
+        # a machine whose substitute font is much wider than this was
+        # measured on could want a third. Unused rows cost nothing -- they
+        # are never packed.
+        for _ in range(3):
+            row = tk.Frame(format_bar)
+            self.track_theme(row, bg="bg")
+            self._fmt_bar_rows.append(row)
+        self._fmt_bar_rows[0].pack(side="top", fill="x")
+        format_bar.bind("<Configure>", self._on_format_bar_resize)
+
         self._fmt_buttons = {}
         # List buttons get their own registry rather than sharing _fmt_buttons:
         # dict is driven by _refresh_format_buttons, which asks whether the
@@ -4131,14 +4568,15 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # permanently unpressed.
         self._list_buttons = {}
         self._align_buttons = {}
-        self._block_buttons = {}
         self._pending_styles = set()  # styles queued up for the next typed char
         self._pending_text_color = None  # hex, or None
+        self._pending_font_size = None    # a size from FONT_SIZES, or None
+        self._pending_font_family = None  # a family from FONT_FAMILIES
         self._pending_highlight_color = None  # hex, or None
         self._pending_style_last_length = 0  # baseline for detecting growth
-        style_lbl = tk.Label(format_bar, text="Style", font=("Segoe UI", 8))
-        self.track_theme(style_lbl, bg="bg", fg="subtext")
-        style_lbl.pack(side="left", padx=(0, 6))
+        # No group captions. They cost 182px of a bar that did not fit, and
+        # every button now says what it is on hover, which is what they were
+        # for. The dividers still separate the groups.
         for style, label, label_font, tip, tip_detail in (
             ("bold", "B", ("Segoe UI", 10, "bold"), "Bold",
              "Ctrl+B \u2014 the selected text, or whatever you type next"),
@@ -4149,14 +4587,46 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
              "Ctrl+D"),
         ):
             btn = tk.Button(
-                format_bar, text=label, font=label_font, width=3,
+                format_bar, text=label, font=label_font, width=2,
                 relief="flat", cursor="hand2",
                 command=lambda s=style: self._toggle_body_style(s)
             )
             self.track_theme(btn, bg="sidebar", fg="text")
-            btn.pack(side="left", padx=(0, 4), ipady=2)
+            self._add_fmt_item(btn, padx=(0, 2), ipady=2)
             self._attach_tooltip(btn, tip, tip_detail)
             self._fmt_buttons[style] = btn
+
+        # Font: a family and a size, as dropdowns rather than buttons —
+        # neither is a toggle, and neither fits in three characters. They
+        # sit before Colors because they are the coarsest thing here: the
+        # typeface a run is set in, before anything is done to it.
+        font_divider = tk.Frame(format_bar, width=1)
+        self.track_theme(font_divider, bg="card")
+        self._add_fmt_item(font_divider, padx=(5, 5), fill="y", pady=3)
+        # "Default" is the app's own font, i.e. no span at all — which is
+        # what makes the note follow the Settings default rather than being
+        # pinned to whatever that happened to be on the day it was written.
+        self.font_family_var = tk.StringVar(value=self.DEFAULT_FONT_LABEL)
+        family_dd = self._build_themed_dropdown(
+            format_bar, self.font_family_var,
+            [self.DEFAULT_FONT_LABEL] + list(FONT_FAMILIES),
+            lambda v: self._apply_body_font(
+                "font_family", None if v == self.DEFAULT_FONT_LABEL else v),
+            width_chars=11)
+        self._add_fmt_item(family_dd, padx=(0, 4))
+        self._attach_tooltip(family_dd, "Font",
+                             "The selected text, or whatever you type next")
+
+        self.font_size_var = tk.StringVar(value=self.DEFAULT_FONT_LABEL)
+        size_dd = self._build_themed_dropdown(
+            format_bar, self.font_size_var,
+            [self.DEFAULT_FONT_LABEL] + [str(s) for s in FONT_SIZES],
+            lambda v: self._apply_body_font(
+                "font_size", None if v == self.DEFAULT_FONT_LABEL else int(v)),
+            width_chars=7)
+        self._add_fmt_item(size_dd, padx=(0, 4))
+        self._attach_tooltip(size_dd, "Font size",
+                             "Default follows the size set in Settings")
 
         # A thin divider + short label mark the color pickers as their own
         # group, distinct from the four toggle buttons — they work
@@ -4165,11 +4635,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # into the row as two more toggle-looking buttons.
         divider = tk.Frame(format_bar, width=1)
         self.track_theme(divider, bg="card")
-        divider.pack(side="left", fill="y", padx=(2, 8), pady=2)
-        colors_lbl = tk.Label(format_bar, text="Colors", font=("Segoe UI", 8))
-        self.track_theme(colors_lbl, bg="bg", fg="subtext")
-        colors_lbl.pack(side="left", padx=(0, 6))
-
+        self._add_fmt_item(divider, padx=(5, 5), fill="y", pady=3)
         # Text color / Highlight: unlike the four toggle buttons above,
         # these open a swatch picker rather than applying anything
         # directly (there's no single obvious "the" color to toggle).
@@ -4179,19 +4645,19 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # back to the theme's normal button look when nothing is set. See
         # _refresh_format_buttons / _contrasting_fg.
         self.text_color_btn = tk.Button(
-            format_bar, text="A", font=("Segoe UI", 10, "bold"), width=3,
+            format_bar, text="A", font=("Segoe UI", 10, "bold"), width=2,
             relief="flat", cursor="hand2",
             command=lambda: self._open_color_swatch_popup("text_color")
         )
-        self.text_color_btn.pack(side="left", padx=(0, 4), ipady=2)
+        self._add_fmt_item(self.text_color_btn, padx=(0, 2), ipady=2)
         self._attach_tooltip(self.text_color_btn, "Text colour",
                              "Colours the letters themselves")
         self.highlight_btn = tk.Button(
-            format_bar, text="H", font=("Segoe UI", 10, "bold"), width=3,
+            format_bar, text="H", font=("Segoe UI", 10, "bold"), width=2,
             relief="flat", cursor="hand2",
             command=lambda: self._open_color_swatch_popup("highlight")
         )
-        self.highlight_btn.pack(side="left", padx=(0, 4), ipady=2)
+        self._add_fmt_item(self.highlight_btn, padx=(0, 2), ipady=2)
         self._attach_tooltip(self.highlight_btn, "Highlight",
                              "Colours the background behind the letters")
 
@@ -4201,10 +4667,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # two things called lists in one editor is one too many.
         para_divider = tk.Frame(format_bar, width=1)
         self.track_theme(para_divider, bg="card")
-        para_divider.pack(side="left", fill="y", padx=(2, 8), pady=2)
-        para_lbl = tk.Label(format_bar, text="Paragraph", font=("Segoe UI", 8))
-        self.track_theme(para_lbl, bg="bg", fg="subtext")
-        para_lbl.pack(side="left", padx=(0, 6))
+        self._add_fmt_item(para_divider, padx=(5, 5), fill="y", pady=3)
         for kind, label, tip, tip_detail in (
             ("bullet", "\u2022", "Bullet list",
              "Whole lines \u2014 click again to turn the list off"),
@@ -4212,12 +4675,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
              "Numbers itself; a nested list restarts at 1"),
         ):
             btn = tk.Button(
-                format_bar, text=label, font=("Segoe UI", 10, "bold"), width=3,
+                format_bar, text=label, font=("Segoe UI", 10, "bold"), width=2,
                 relief="flat", cursor="hand2",
                 command=lambda k=kind: self._toggle_list(k)
             )
             self.track_theme(btn, bg="sidebar", fg="text")
-            btn.pack(side="left", padx=(0, 4), ipady=2)
+            self._add_fmt_item(btn, padx=(0, 2), ipady=2)
             self._attach_tooltip(btn, tip, tip_detail)
             self._list_buttons[kind] = btn
 
@@ -4230,7 +4693,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                            ("right", "Align right")):
             btn = self._make_align_button(format_bar, align)
             self.track_theme(btn, bg="sidebar")
-            btn.pack(side="left", padx=(0, 4))
+            self._add_fmt_item(btn, padx=(0, 4))
             self._attach_tooltip(
                 btn, tip,
                 "Applies to whole paragraphs, not to part of one")
@@ -4244,26 +4707,13 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             (+1, "⇥", "Indent", "Tab inside a list — works on any paragraph"),
         ):
             btn = tk.Button(
-                format_bar, text=glyph, font=("Segoe UI", 11), width=3,
+                format_bar, text=glyph, font=("Segoe UI", 11), width=2,
                 relief="flat", cursor="hand2",
                 command=lambda d=delta: self._change_paragraph_indent(d)
             )
             self.track_theme(btn, bg="sidebar", fg="text")
-            btn.pack(side="left", padx=(0, 4), ipady=2)
+            self._add_fmt_item(btn, padx=(0, 2), ipady=2)
             self._attach_tooltip(btn, tip, tip_detail)
-
-        # Quote block. Shows a pressed state, so it joins a registry the
-        # refresh loop knows about.
-        quote_btn = tk.Button(
-            format_bar, text="❝", font=("Segoe UI", 11), width=3,
-            relief="flat", cursor="hand2",
-            command=lambda: self._toggle_paragraph_block("quote")
-        )
-        self.track_theme(quote_btn, bg="sidebar", fg="text")
-        quote_btn.pack(side="left", padx=(0, 4), ipady=2)
-        self._attach_tooltip(quote_btn, "Quote block",
-                             "A coloured bar down the left of the paragraph")
-        self._block_buttons["quote"] = quote_btn
 
         text_frame = tk.Frame(self.editor)
         self.track_theme(text_frame, bg="card")
@@ -4272,7 +4722,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         body_sb = ttk.Scrollbar(text_frame, orient="vertical")
         self.body_text = tk.Text(
             text_frame, insertbackground=self.colors["text"],
-            relief="flat", font=("Segoe UI", 12), wrap="word", padx=15, pady=15, height=12,
+            relief="flat", wrap="word", padx=15, pady=15, height=12,
+            font=(self.editor_font_family, self.editor_font_size),
             yscrollcommand=body_sb.set, undo=True, autoseparators=True, maxundo=-1
         )
         body_sb.config(command=self.body_text.yview)
@@ -4739,13 +5190,16 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
 
     def _update_color_swatch(self):
-        if self.current_note_color:
-            self.color_swatch_btn.config(bg=self.current_note_color, activebackground=self.current_note_color)
-            self.color_hint_lbl.config(text=self.current_note_color)
-        else:
-            default_color = CATEGORY_COLORS.get(self.category_var.get(), self.colors["accent"])
-            self.color_swatch_btn.config(bg=default_color, activebackground=default_color)
-            self.color_hint_lbl.config(text="category color")
+        """Show the note's colour on the swatch, and nothing else.
+
+        No words beside it. The swatch already shows the colour, and the
+        picker is one click away -- naming the state ("custom colour")
+        told the user something they could see, in exchange for a second
+        thing to read on a row that is mostly labels already.
+        """
+        color = self.current_note_color or CATEGORY_COLORS.get(
+            self.category_var.get(), self.colors["accent"])
+        self.color_swatch_btn.config(bg=color, activebackground=color)
 
     def open_color_picker(self):
         """Pick this note's own color from a curated palette. Renders as an
@@ -5875,6 +6329,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             "paragraphs": self._extract_paragraphs(self.body_text),
             "pending_styles": sorted(self._pending_styles),
             "pending_text_color": self._pending_text_color,
+            "pending_font_size": self._pending_font_size,
+            "pending_font_family": self._pending_font_family,
             "pending_highlight_color": self._pending_highlight_color,
             "comments": self.comments_text.get("1.0", "end-1c"),
             "category": self.category_var.get(),
@@ -5892,10 +6348,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
         self.title_entry.delete(0, "end")
         if st["title"]:
-            self.title_entry.insert(0, st["title"])
+            self._insert_title(st["title"])
             self.title_entry.config(fg=self.colors["text"])
         else:
-            self.title_entry.insert(0, "Note title...")
+            self._insert_title("Note title...")
             self.title_entry.config(fg=self.colors["subtext"])
 
         # Restore this tab's own pending style (if any) before inserting
@@ -5903,6 +6359,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # from whatever tab was open a moment ago could tag this one's text.
         self._pending_styles = set(st.get("pending_styles") or [])
         self._pending_text_color = st.get("pending_text_color")
+        self._pending_font_size = st.get("pending_font_size")
+        self._pending_font_family = st.get("pending_font_family")
         self._pending_highlight_color = st.get("pending_highlight_color")
         self.body_text.delete("1.0", "end")
         self.body_text.insert("1.0", st["body"])
@@ -6219,6 +6677,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.current_occurrence_date = None
         self.title_entry.delete(0, "end")
         self.title_entry.config(fg=self.colors["text"])
+        # Clearing the field does not go through _insert_title, so the
+        # counter would otherwise still be showing the last note's length.
+        self._refresh_title_count()
         self.body_text.delete("1.0", "end")
         self.comments_text.delete("1.0", "end")
         self.category_var.set("General")
@@ -6238,6 +6699,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.update_word_count()
         self._pending_styles = set()
         self._pending_text_color = None
+        self._pending_font_size = None
+        self._pending_font_family = None
         self._pending_highlight_color = None
         self._refresh_format_buttons()
         self._reset_editor_scroll()
@@ -6260,9 +6723,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # pending style at this point would silently tag this note's text.
         self._pending_styles = set()
         self._pending_text_color = None
+        self._pending_font_size = None
+        self._pending_font_family = None
         self._pending_highlight_color = None
         self.title_entry.delete(0, "end")
-        self.title_entry.insert(0, shown["title"])
+        self._insert_title(shown["title"])
         self.title_entry.config(fg=self.colors["text"])
         self.body_text.delete("1.0", "end")
         self.body_text.insert("1.0", shown["body"])
@@ -6523,7 +6988,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.selected_note_id = None
         if tpl.get("title"):
             self.title_entry.delete(0, "end")
-            self.title_entry.insert(0, tpl["title"])
+            self._insert_title(tpl["title"])
             self.title_entry.config(fg=self.colors["text"])
         if tpl.get("body"):
             self.body_text.delete("1.0", "end")
@@ -6717,9 +7182,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # so a stale pending style at this point would silently tag it.
         self._pending_styles = set()
         self._pending_text_color = None
+        self._pending_font_size = None
+        self._pending_font_family = None
         self._pending_highlight_color = None
         self.title_entry.delete(0, "end")
-        self.title_entry.insert(0, prev.get("title", ""))
+        self._insert_title(prev.get("title", ""))
         self.title_entry.config(fg=self.colors["text"])
         self.body_text.delete("1.0", "end")
         self.body_text.insert("1.0", prev.get("body", ""))

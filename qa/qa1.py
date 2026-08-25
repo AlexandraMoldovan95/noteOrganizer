@@ -1144,101 +1144,21 @@ app.update()
 check('reopening the note puts the child back at its own depth',
       depths() == [0, 1] and lines_now() == ['1. parent', '1. child'])
 
-# ---- QUOTE BLOCKS ----
-# Drawn as a coloured left bar plus a tinted background rather than a box:
-# Tk draws a bordered range as one box per display line, so a paragraph that
-# wraps comes out as several boxes with the last ending mid-sentence.
-app.new_note()
-app.title_entry.insert(0, 'QuoteNote')
-app.update()
-
-check('the quote button lives in its own registry',
-      set(app._block_buttons.keys()) == {'quote'})
-
-set_body('a quoted remark\nplain line')
-app.body_text.tag_add('sel', '1.0', '1.end')
-app.update()
-app._block_buttons['quote'].invoke()
-clear_selection()
-check('quoting a line records it against that line only',
-      app._extract_paragraphs(app.body_text) == [{'line': 0, 'block': 'quote'}])
-check('quoting leaves the body text alone',
-      body() == 'a quoted remark\nplain line')
-
-app.body_text.tag_add('sel', '1.0', '1.end')
-app.update()
-app._block_buttons['quote'].invoke()
-clear_selection()
-check('clicking quote again turns the block back off',
-      app._extract_paragraphs(app.body_text) == [])
-
-# The bar and the tint are theme colours on a text tag, and the margin has
-# to leave room for the bar, so all three live on one combined tag.
-set_body('quoted')
-app.body_text.tag_add('sel', '1.0', '1.end')
-app.update()
-app._block_buttons['quote'].invoke()
-clear_selection()
-quote_tag = app._paragraph_tag(app.body_text, None, 0, 'quote')
-check('a quote reserves margin for its bar',
-      int(app.body_text.tag_cget(quote_tag, 'lmargin1')) >= app.QUOTE_BAR)
-check('the bar is drawn in the theme accent',
-      str(app.body_text.tag_cget(quote_tag, 'lmargincolor'))
-      == app.colors['accent'])
-
-# A quote composes with the other paragraph properties rather than
-# replacing them.
-set_body('milk\neggs')
-select_all_body()
-app._list_buttons['bullet'].invoke()
-clear_selection()
-app.body_text.tag_add('sel', '1.0', '2.end')
-app.update()
-app._block_buttons['quote'].invoke()
-clear_selection()
-check('a quote can hold a list, keeping both properties',
-      app._extract_paragraphs(app.body_text)
-      == [{'line': 0, 'kind': 'bullet', 'block': 'quote'},
-          {'line': 1, 'kind': 'bullet', 'block': 'quote'}])
-
-app.body_text.tag_add('sel', '2.0', '2.end')
-app.update()
-app._change_paragraph_indent(+1)
-clear_selection()
-check('indenting inside a quote keeps the quote',
-      app._extract_paragraphs(app.body_text)[1]
-      == {'line': 1, 'kind': 'bullet', 'indent': 1, 'block': 'quote'})
-
-app.body_text.tag_add('sel', '1.0', '1.end')
-app.update()
-app._list_buttons['bullet'].invoke()      # turn the list off
-clear_selection()
-check('turning the list off inside a quote leaves the quote standing',
-      app._extract_paragraphs(app.body_text)[0] == {'line': 0, 'block': 'quote'})
-
-# ---- Quote round trip ----
-app.new_note()
-app.title_entry.insert(0, 'QuoteRoundTrip')
-set_body('quoted line\nplain line')
-app.body_text.tag_add('sel', '1.0', '1.end')
-app.update()
-app._block_buttons['quote'].invoke()
-clear_selection()
-app.save_current_note(auto=False)
-app.update()
-quote_note = app.find_note(app.selected_note_id)
-check('the quote is saved with the note',
-      quote_note.get('paragraphs') == [{'line': 0, 'block': 'quote'}])
-app.new_note()
-app.update()
-app.load_note(quote_note)
-app.update()
-check('reopening the note puts the quote back on the right line',
-      app._paragraph_block_of(app.body_text, 1) == 'quote'
-      and app._paragraph_block_of(app.body_text, 2) is None)
-
-check('normalize_paragraphs rejects a block style it does not know',
-      NO.normalize_paragraphs([{'line': 0, 'block': 'sidebar'}]) == [])
+# ---- THE QUOTE BLOCK IS GONE (regression) ----
+# Removed on request: it read as a heavy visual device for something a
+# note rarely needs, and it was the only paragraph property that carried
+# its own colours. Checked rather than merely deleted, so it cannot
+# reappear by accident -- and so a note that still carries the old
+# block:"quote" key is known to degrade to a plain paragraph rather than
+# to anything stranger.
+check('the editor exposes no block-style buttons at all',
+      not hasattr(app, '_block_buttons'))
+check('a paragraph property named block is no longer recognised',
+      NO.normalize_paragraphs([{'line': 0, 'block': 'quote'}]) == [])
+check('a note saved with the old quote key loads as a plain paragraph',
+      NO.normalize_paragraphs(
+          [{'line': 0, 'kind': 'bullet', 'block': 'quote'}])
+      == [{'line': 0, 'kind': 'bullet'}])
 
 # ---- TOOLBAR TOOLTIPS ----
 # Every button on the formatting bar is an icon or a single letter, so each
@@ -1249,8 +1169,7 @@ app.update()
 formatting_buttons = (list(app._fmt_buttons.values())
                       + [app.text_color_btn, app.highlight_btn]
                       + list(app._list_buttons.values())
-                      + list(app._align_buttons.values())
-                      + list(app._block_buttons.values()))
+                      + list(app._align_buttons.values()))
 check(f'every formatting button carries a tooltip ({len(formatting_buttons)} of them)',
       all(bool(w.bind('<Enter>')) and bool(w.bind('<Leave>'))
           for w in formatting_buttons))
@@ -1319,6 +1238,484 @@ check('a tooltip for a widget that no longer exists is skipped, not crashed',
 
 check('hiding when nothing is showing is harmless',
       (app._hide_tooltip() or True) and getattr(app, '_tooltip', None) is None)
+
+# ---- FONT SIZE AND FAMILY ----
+# Size and family fight bold and italic over Tk's font option -- two tags
+# that set it do not compose, one wins -- so all four are merged into one
+# composite tag at render time while staying separate spans in the note.
+app.new_note()
+app.title_entry.insert(0, 'FontNote')
+app.update()
+
+
+def font_spans():
+    return sorted((s['start'], s['end'], s['style'], s.get('value'))
+                  for s in app._extract_formatting(app.body_text))
+
+
+def select(a, z):
+    app.body_text.tag_add('sel', a, z)
+    app.update()
+
+
+set_body('hello world again')
+select('1.0', '1.5')
+app._apply_body_font('font_size', 20)
+clear_selection()
+check('a size applies to the selected characters only',
+      font_spans() == [(0, 5, 'font_size', 20)])
+check('applying a size leaves the text itself untouched',
+      body() == 'hello world again')
+
+select('1.0', '1.11')
+app._apply_body_font('font_family', 'Georgia')
+clear_selection()
+check('a family can cover a different range from the size',
+      font_spans() == [(0, 5, 'font_size', 20),
+                       (0, 11, 'font_family', 'Georgia')])
+
+select('1.6', '1.11')
+app._toggle_body_style('bold')
+clear_selection()
+check('bold still records itself separately inside a resized run',
+      font_spans() == [(0, 5, 'font_size', 20),
+                       (0, 11, 'font_family', 'Georgia'),
+                       (6, 11, 'bold', None)])
+check('the plain bold tag is still on the text, so the toolbar can see it',
+      'bold' in app.body_text.tag_names('1.7'))
+check('and a composite font tag sits over it',
+      any(NO.parse_font_tag(n) for n in app.body_text.tag_names('1.7')))
+
+# The dropdowns report what is actually there, and refuse to guess.
+select('1.0', '1.5')
+app._refresh_format_buttons()
+check('the dropdowns show the size and family of a uniform selection',
+      app.font_size_var.get() == '20'
+      and app.font_family_var.get() == 'Georgia')
+clear_selection()
+select('1.0', '1.17')
+app._refresh_format_buttons()
+check('a selection spanning two different sizes reads as Default, not the first',
+      app.font_size_var.get() == app.DEFAULT_FONT_LABEL)
+clear_selection()
+
+select('1.0', '1.5')
+app._apply_body_font('font_size', None)
+clear_selection()
+check('choosing Default removes the size rather than storing one',
+      font_spans() == [(0, 11, 'font_family', 'Georgia'), (6, 11, 'bold', None)])
+
+# ---- Round trip ----
+app.save_current_note(auto=False)
+app.update()
+font_note = app.find_note(app.selected_note_id)
+check('size and family are saved as ordinary spans',
+      sorted((s['start'], s['end'], s['style'], s.get('value'))
+             for s in font_note['formatting'])
+      == [(0, 11, 'font_family', 'Georgia'), (6, 11, 'bold', None)])
+app.new_note()
+app.update()
+app.load_note(font_note)
+app.update()
+check('reopening the note puts the font back',
+      font_spans() == [(0, 11, 'font_family', 'Georgia'), (6, 11, 'bold', None)])
+
+# A composite tag is split at every bold boundary inside it, so reading it
+# back gives pieces; they must be rejoined or the note grows on every save.
+once = font_spans()
+app._apply_formatting(app.body_text, [dict(s) for s in app._extract_formatting(app.body_text)])
+app.update()
+check('spans do not fragment further each time the note is saved',
+      font_spans() == once)
+
+# ---- A note written before any of this still works ----
+set_body('hello world')
+app._apply_formatting(app.body_text,
+                      [{'start': 0, 'end': 5, 'style': 'bold_italic'},
+                       {'start': 6, 'end': 11, 'style': 'strike'}])
+app.update()
+check('a note using the old bold_italic style is unchanged by the font work',
+      font_spans() == [(0, 5, 'bold_italic', None), (6, 11, 'strike', None)])
+
+check('normalize_formatting rejects a size the app does not offer',
+      NO.normalize_formatting(
+          [{'start': 0, 'end': 4, 'style': 'font_size', 'value': 13}]) == [])
+check('normalize_formatting rejects a family the app does not offer',
+      NO.normalize_formatting(
+          [{'start': 0, 'end': 4, 'style': 'font_family', 'value': 'Comic Sans MS'}]) == [])
+
+# ---- The editor's own default, and what depends on it ----
+before_family = app.editor_font_family
+before_size = app.editor_font_size
+import tkinter.font as _tkfont
+set_body('milk\neggs')
+select_all_body()
+app._list_buttons['bullet'].invoke()
+clear_selection()
+bullet_tag = [t for t in app.body_text.tag_names('1.0') if t.startswith('para_')][0]
+margin_at_12 = int(app.body_text.tag_cget(bullet_tag, 'lmargin2'))
+
+app._set_editor_font(size=24)
+app.update()
+check('changing the default resizes the editor itself',
+      _tkfont.Font(font=app.body_text['font']).actual('size') == 24)
+check('the bold tag is rebuilt at the new size, not left at the old one',
+      _tkfont.Font(font=app.body_text.tag_cget('bold', 'font')).actual('size') == 24)
+check('a list margin scales with it, so a wrapped item still hangs true',
+      int(app.body_text.tag_cget(bullet_tag, 'lmargin2')) > margin_at_12)
+
+app._set_editor_font(family=before_family, size=before_size)
+app.update()
+check('setting it back restores the original size',
+      _tkfont.Font(font=app.body_text['font']).actual('size') == before_size
+      and int(app.body_text.tag_cget(bullet_tag, 'lmargin2')) == margin_at_12)
+
+# Both runs carry a size here, so "mixed" has to come from comparing two
+# sizes rather than from one of them having none -- which is what the check
+# above actually exercised.
+set_body('hello world')
+select('1.0', '1.5')
+app._apply_body_font('font_size', 20)
+clear_selection()
+select('1.5', '1.11')
+app._apply_body_font('font_size', 9)
+clear_selection()
+select('1.0', '1.5')
+app._refresh_format_buttons()
+check('a run that is uniformly 20pt reports 20', app.font_size_var.get() == '20')
+clear_selection()
+select('1.0', '1.11')
+app._refresh_format_buttons()
+check('two runs of different sizes report Default, not whichever came first',
+      app.font_size_var.get() == app.DEFAULT_FONT_LABEL)
+clear_selection()
+
+# ---- HOW THE TOOLBAR SPLITS INTO ROWS ----
+# Checked against widths given directly rather than measured off widgets.
+# Which control lands on a row boundary depends entirely on the font, so a
+# widget-based check tests whatever font the machine has: the divider bug
+# below was invisible here and failed on the CI runner for that reason
+# alone.
+_D = True          # a divider
+_C = False         # a real control
+
+
+def _rows_of(items, available, max_rows=3):
+    return NO.split_toolbar_rows(items, available, max_rows)
+
+
+def _widths(items, rows):
+    return [sum(items[i][0] for i in row) for row in rows]
+
+
+# A divider that falls where a row breaks is dropped, not carried over.
+# Carrying it is what made its row too wide.
+_items = [(100, _C), (100, _C), (10, _D), (100, _C), (100, _C)]
+_rows = _rows_of(_items, 205)      # 210 would let the divider fit exactly
+check(f'a divider at a row break is dropped, not kept on the full row '
+      f'(rows {_rows})',
+      2 not in [i for row in _rows for i in row])
+check(f'no row is wider than the space it has ({_widths(_items, _rows)} in 205)',
+      all(w <= 205 for w in _widths(_items, _rows)))
+check('every real control is still placed exactly once',
+      sorted(i for row in _rows for i in row) == [0, 1, 3, 4])
+
+# A divider mid-row is kept.
+_items = [(100, _C), (10, _D), (100, _C)]
+_rows = _rows_of(_items, 500)
+check('a divider that fits stays where it is',
+      _rows == [[0, 1, 2]])
+
+# Exhaustive: many shapes, every width, the invariants must hold.
+_shapes = [
+    [(60, _C)] * 10,
+    [(60, _C), (8, _D)] * 6,
+    [(8, _D)] + [(60, _C)] * 6 + [(8, _D)],
+    [(200, _C), (8, _D), (30, _C), (30, _C)],
+    [(8, _D)] * 4,
+]
+_faults = []
+for _shape in _shapes:
+    _total = sum(w for w, _d in _shape)
+    for _avail in range(20, _total + 40, 7):
+        _rows = _rows_of(_shape, _avail)
+        _placed = [i for row in _rows for i in row]
+        _controls = [i for i, (_w, d) in enumerate(_shape) if not d]
+        # every real control appears exactly once
+        if sorted(i for i in _placed if not _shape[i][1]) != _controls:
+            _faults.append((_shape, _avail, 'a control went missing'))
+            continue
+        # no row starts with a divider
+        if any(row and _shape[row[0]][1] for row in _rows[1:]):
+            _faults.append((_shape, _avail, 'a later row starts with a divider'))
+            continue
+        # only the last row may exceed the width, and only because there is
+        # nowhere else to put what is left
+        # A row may exceed the width only when it holds a single control
+        # that is wider than the whole bar -- there is nowhere narrower to
+        # put it. Any other overflow means two things were packed together
+        # that should not have been.
+        _over = [n for n, w in enumerate(_widths(_shape, _rows))
+                 if w > _avail and n < len(_rows) - 1 and len(_rows[n]) > 1]
+        if _over:
+            _faults.append((_shape, _avail, 'a row overflowed'))
+check(f'the splitter holds its invariants across {len(_shapes)} layouts at '
+      f'every width ({len(_faults)} faults)', not _faults)
+
+check('nothing is ever dropped except a divider at a break',
+      _rows_of([(50, _C)] * 3, 10) == [[0], [1], [2]])
+
+
+# ---- NO FORMATTING CONTROL IS EVER OUT OF REACH ----
+# The bar once needed 868px against 787px of editor pane, so the last
+# group ran off the right-hand edge. Trimming it fixed that on one
+# machine, but a width in pixels depends on the font: this suite runs
+# under Xvfb with no Segoe UI, where the same bar measures 827px rather
+# than 577px. So the bar wraps, and what is checked is the property --
+# nothing is out of reach -- rather than a budget.
+#
+# Swept across a range of widths rather than sampled at a few, because
+# which item lands on a row boundary depends on the font, and the bug
+# this caught only appeared at the widths where that item was a divider.
+app.new_note()
+app.update()
+app.update_idletasks()
+
+_fmt_controls = [(w, px, fl) for w, px, _ip, fl, _py in app._fmt_bar_items]
+_fmt_real = [w for w, _px, fl in _fmt_controls if fl != 'y']
+
+
+def _fmt_layout_faults(available):
+    """Controls missing or past the edge after reflowing to a width."""
+    app._reflow_format_bar(available)
+    app.update_idletasks()
+    faults = []
+    for _w, _px, _fl in _fmt_controls:
+        if _w.winfo_manager() != 'pack':
+            # A divider is deliberately left out where a row breaks;
+            # a real control never is.
+            if _fl != 'y':
+                faults.append(_w)
+            continue
+    for _row in app._fmt_bar_rows:
+        _used = 0
+        for _w, _px, _fl in _fmt_controls:
+            if _w.winfo_manager() == 'pack' and \
+                    str(_w.pack_info().get('in')) == str(_row):
+                _used += _w.winfo_reqwidth() + _px[0] + _px[1]
+        if _used > available:
+            faults.append(_row)
+    return faults
+
+
+# The floor is the narrowest the bar can actually get: the editor pane
+# never goes below EDITOR_MIN_WIDTH, because the app clamps its content to
+# SIDEBAR_WIDTH + EDITOR_MIN_WIDTH and scrolls horizontally rather than
+# reflowing below that, and the bar sits inside 30px of padding either
+# side. Sweeping narrower than that asserts a layout the app cannot
+# produce -- which is what failed on CI, where the controls are wider and
+# three rows genuinely cannot hold them at 300px.
+_fmt_floor = NO.EDITOR_MIN_WIDTH - 60
+_swept = list(range(_fmt_floor, 1001, 25))
+_bad = [a for a in _swept if _fmt_layout_faults(a)]
+check(f'every formatting control stays reachable at all {len(_swept)} widths tried '
+      f'from {_swept[0]}px to {_swept[-1]}px (failed at {_bad})', not _bad)
+
+# ...and through the path a real resize takes, without resizing the live
+# window. Doing that mid-suite disturbs focus, and later checks here drive
+# the editor with focus_force() and event_generate(): a check about
+# pending bold, nothing to do with the toolbar, failed once in a full-suite
+# run because of it. The binding is what matters, so the binding is what is
+# checked, and the handler is called with an event of its own.
+check('the bar reflows when its width changes',
+      bool(app._fmt_bar.bind('<Configure>')))
+
+
+class _WidthEvent:
+    def __init__(self, width):
+        self.width = width
+
+
+for _w in (1400, 900, 1400):
+    app._on_format_bar_resize(_WidthEvent(_w))
+    app.update_idletasks()
+    _past = [c for c, _px, fl in _fmt_controls
+             if fl != 'y' and c.winfo_manager() != 'pack']
+    check(f'no control is dropped when the bar is told it has {_w}px '
+          f'({len(_past)} were)', not _past)
+
+app._on_format_bar_resize(_WidthEvent(1400))
+app.update_idletasks()
+check('every control is on one row when there is room for one',
+      len([r for r in app._fmt_bar_rows if r.winfo_ismapped()]) == 1)
+check('and all of them are showing',
+      all(c.winfo_manager() == 'pack' for c in _fmt_real))
+app._reflow_format_bar()
+app.update()
+
+check('no group caption is left taking up room',
+      not any(isinstance(w, tk.Label) and str(w.cget('text'))
+              in ('Style', 'Font', 'Colors', 'Paragraph')
+              for w, *_ in app._fmt_bar_items))
+
+# ---- READING ESTIMATE ----
+check('an empty note is given no reading estimate',
+      NO.reading_time(0) == '' and NO.reading_time(-3) == '')
+check('a short note reads as under a minute',
+      NO.reading_time(199) == 'under a minute to read')
+check('the singular is used at exactly one minute',
+      NO.reading_time(200) == 'about 1 minute to read')
+check('longer notes are rounded to whole minutes',
+      NO.reading_time(450) == 'about 2 minutes to read'
+      and NO.reading_time(1000) == 'about 5 minutes to read')
+check('a nonsense word count is refused rather than guessed at',
+      NO.reading_time('lots') == '' and NO.reading_time(True) == '')
+
+app.new_note()
+set_body('word ' * 400)
+app.update_word_count()
+app.update()
+_readout = str(app.word_count_lbl.cget('text'))
+check(f'the editor shows the estimate under the counts ({_readout!r})',
+      '400 words' in _readout and 'to read' in _readout
+      and '\n' in _readout)
+set_body('')
+app.update_word_count()
+app.update()
+check('an empty note shows no readout at all',
+      str(app.word_count_lbl.cget('text')) == '')
+
+# ---- TITLE LENGTH CAP ----
+# Not about storage or layout -- the note list already truncates to 60 for
+# display -- but about tk.Entry, which slows roughly with the square of
+# what it holds: one keystroke measured 0.5ms at 30 characters, 38ms at
+# 10,000 and 3.5 seconds at 100,000. Paste a document into the title by
+# accident and the field is frozen with no way to edit it back.
+app.new_note()
+app.update()
+_title = app.title_entry
+_title.delete(0, 'end')
+app.update()
+
+_title.insert(0, 'x' * NO.NoteOrganizer.TITLE_MAX_LEN)
+app.update()
+check(f'a title of exactly {NO.NoteOrganizer.TITLE_MAX_LEN} characters is accepted',
+      len(_title.get()) == NO.NoteOrganizer.TITLE_MAX_LEN)
+_title.insert('end', 'y')
+app.update()
+check('one character past the cap is refused',
+      len(_title.get()) == NO.NoteOrganizer.TITLE_MAX_LEN
+      and not _title.get().endswith('y'))
+
+# A validator can only take or refuse a change whole, so a long paste would
+# leave the field empty -- which reads as the paste failing, not as it being
+# shortened.
+_title.delete(0, 'end')
+app.update()
+app.clipboard_clear()
+app.clipboard_append('z' * 5000)
+app.update()
+app._on_title_paste()
+app.update()
+check('pasting something too long shortens it instead of refusing it',
+      len(_title.get()) == NO.NoteOrganizer.TITLE_MAX_LEN)
+
+# The one that matters: the cap must never shorten a title already saved.
+# Validation fires on programmatic inserts too, so loading a note written
+# before the cap could have had the widget drop the overflow -- and the next
+# autosave would write that shortened title back over the real one.
+_LONG = 'L' * 5000
+app.notes.append(NO.normalize_note({'id': 8801, 'title': _LONG, 'body': 'b'}))
+app.save_notes()
+app.load_note(app.find_note(8801))
+app.update()
+check('a stored title longer than the cap loads in full',
+      len(app.title_entry.get()) == len(_LONG))
+app.save_current_note(auto=False)
+app.update()
+check('and saving that note again does not shorten it',
+      app.find_note(8801)['title'] == _LONG)
+
+# The counter that warns before the cap is reached. Hidden most of the
+# time on purpose: a permanent "12/200" beside a twelve-character title is
+# noise about a limit nobody is near.
+_CAP = NO.NoteOrganizer.TITLE_MAX_LEN
+_FROM = NO.NoteOrganizer.TITLE_COUNT_FROM
+
+
+def _counter_state(n):
+    app.title_entry.delete(0, 'end')
+    app.title_entry.insert(0, 'x' * n)
+    app._refresh_title_count()
+    app.update()
+    return (bool(app.title_count_lbl.winfo_ismapped()),
+            str(app.title_count_lbl.cget('text')),
+            str(app.title_count_lbl.cget('fg')))
+
+
+check('an ordinary title shows no counter at all',
+      _counter_state(50)[0] is False)
+check('the counter stays hidden right up to the threshold',
+      _counter_state(_CAP - _FROM - 1)[0] is False)
+_shown, _text, _fg = _counter_state(_CAP - _FROM)
+check(f'it appears {_FROM} characters before the cap, reading '
+      f'{_CAP - _FROM}/{_CAP}',
+      _shown and _text == f'{_CAP - _FROM}/{_CAP}')
+_shown, _text, _fg = _counter_state(_CAP)
+check('at the cap it reads full and turns the warning colour',
+      _shown and _text == f'{_CAP}/{_CAP}' and _fg == app.colors['danger'])
+check('and it goes away again when the title is shortened',
+      _counter_state(10)[0] is False)
+
+# Opening a note near the cap must say so without waiting for a keystroke.
+app.notes.append(NO.normalize_note(
+    {'id': 8802, 'title': 'y' * (_CAP - 3), 'body': 'b'}))
+app.save_notes()
+app.new_note()
+app.update()
+check('a new note starts with no counter',
+      not app.title_count_lbl.winfo_ismapped())
+app.load_note(app.find_note(8802))
+app.update()
+check('opening a note already near the cap shows the counter straight away',
+      app.title_count_lbl.winfo_ismapped()
+      and str(app.title_count_lbl.cget('text')) == f'{_CAP - 3}/{_CAP}')
+app.new_note()
+app.update()
+check('starting a new note hides it again',
+      not app.title_count_lbl.winfo_ismapped())
+
+app.new_note()
+app.update()
+
+# ---- NOTHING BUT THE SWATCH ----
+# The colour picker takes swatches only and offers no hex entry, because
+# most people do not think in hex. The label beside the swatch printed
+# the raw value anyway, then named the state instead -- and naming a
+# state the swatch already shows is a second thing to read for nothing.
+app.new_note()
+app.update()
+check('there is no text label beside the colour swatch',
+      not hasattr(app, 'color_hint_lbl'))
+
+_swatch_row = app.color_swatch_btn.master
+_words = [str(w.cget('text')) for w in _swatch_row.winfo_children()
+          if isinstance(w, tk.Label) and str(w.cget('text'))]
+check(f'no hex code appears anywhere on that row ({_words})',
+      not any('#' in t for t in _words))
+
+app.current_note_color = '#e63946'
+app._update_color_swatch()
+app.update()
+check('the swatch carries the chosen colour',
+      str(app.color_swatch_btn.cget('bg')).lower() == '#e63946')
+app.current_note_color = ''
+app.category_var.set('General')
+app._update_color_swatch()
+app.update()
+check('clearing it falls back to the category colour',
+      str(app.color_swatch_btn.cget('bg')).lower()
+      == str(NO.CATEGORY_COLORS.get('General', app.colors['accent'])).lower())
 
 # ---- Fast typing (regression): a first version tagged only "the one
 # character right before the cursor" on each KeyRelease, which silently

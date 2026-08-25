@@ -1,4 +1,5 @@
 import sys
+import time
 import note_organizer as NO, tkinter as tk, tkinter.filedialog as fd, os, tempfile
 fails=[]
 def check(name, cond):
@@ -583,6 +584,114 @@ if back_btn2:
     after_y = back_btn2.winfo_rooty()
     check('"Back to Notes" does not move when the settings page scrolls',
           before_y == after_y)
+
+def _resize(width, height, attempts=60):
+    """Resize the window and wait until it has really happened.
+
+    geometry() is a request to the window manager, not a resize. Reading a
+    widget's size straight after it can still give the old one, which makes
+    any check that depends on the new size flaky rather than wrong.
+    """
+    app.geometry(f'{width}x{height}')
+    for _ in range(attempts):
+        app.update()
+        app.update_idletasks()
+        if abs(app.winfo_width() - width) <= 2 and                 abs(app.winfo_height() - height) <= 2:
+            break
+        time.sleep(0.02)
+    app.update()
+    app.update_idletasks()
+    app.update()
+
+
+# ---- THE SECTION LIST SCROLLS WHEN THE WINDOW IS SHORT ----
+# Nine entries in four groups, plus a brand and the theme toggle, need more
+# height than a short window has. The list was a plain Frame, so whatever
+# did not fit was simply unreachable.
+_resize(1100, 420)
+app.show_settings_page()
+_resize(1100, 420)
+
+_nav = app._settings_nav_canvas
+_box = _nav.bbox('all')
+check(f'the section list overflows a short window '
+      f'({_box[3] if _box else 0}px of entries in {_nav.winfo_height()}px)',
+      bool(_box) and _box[3] > _nav.winfo_height())
+
+
+class _Wheel:
+    delta = -360
+
+
+_before = _nav.yview()[0]
+app._settings_nav_wheel(_Wheel())
+app.update()
+check('the wheel scrolls the section list', _nav.yview()[0] > _before)
+
+check('the wheel reaches the entries themselves, not just the canvas behind',
+      any(bool(w.bind('<MouseWheel>'))
+          for w in (app._settings_nav_buttons['about'],
+                    app._settings_nav_buttons['about'].master)))
+
+# Tall enough for everything: scrolling would only shift content that is
+# already fully visible, which reads as the list drifting for no reason.
+_resize(1100, 1000)
+_nav.yview_moveto(0)
+app.update()
+app._settings_nav_wheel(_Wheel())
+app.update()
+check('a window tall enough for every entry does not scroll',
+      _nav.yview()[0] == 0.0)
+
+_resize(1100, 850)
+
+# ---- DERIVED SURFACES FOLLOW A THEME SWITCH (regression) ----
+# Settings blends `card` toward `text` for the well inside a card, and
+# toward `subtext` for its hairlines. Neither result is in any theme's
+# palette, so _recolor_stragglers -- which remaps palette colours -- could
+# not see them: a panel built under a dark theme kept the dark inset on a
+# light one, and the information bars in General, Backup and About were
+# unreadable.
+def _all_backgrounds(widget, found=None):
+    found = [] if found is None else found
+    for child in widget.winfo_children():
+        try:
+            found.append(str(child.cget('bg')).lower())
+        except tk.TclError:
+            pass
+        _all_backgrounds(child, found)
+    return found
+
+
+app.show_settings_page()
+app.update()
+for _section in ('name', 'backup', 'about'):
+    app.toggle_settings_panel(_section)
+    app.update()
+
+for _theme in ('light', 'dark'):
+    app.set_theme(_theme)
+    app.update()
+    _current = {NO.inset_surface(app.colors).lower(),
+                NO.hairline(app.colors).lower()}
+    _foreign = set()
+    for _name, _palette in NO.THEMES.items():
+        if _name == app.theme_name:
+            continue
+        for _derived in (NO.inset_surface(_palette), NO.hairline(_palette)):
+            if _derived.lower() not in _current:
+                _foreign.add(_derived.lower())
+    _stale = []
+    for _section in ('name', 'backup', 'about'):
+        _panel = getattr(app, f'settings_{_section}_panel', None)
+        if _panel is None:
+            continue
+        _stale += [b for b in _all_backgrounds(_panel) if b in _foreign]
+    check(f'no Settings panel keeps another theme\'s derived surface '
+          f'after switching to {_theme} ({len(_stale)} found)', not _stale)
+
+app.hide_settings_page()
+app.update()
 
 print()
 print(f"=== QA6 FAILURES: {fails if fails else 'NONE'} ===")

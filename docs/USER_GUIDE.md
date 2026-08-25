@@ -24,7 +24,7 @@ Notes save automatically a moment after you stop typing (look for the "Auto-save
 
 ### Formatting
 
-A small toolbar above the note body is split into three groups. **Style** and **Colors** below change the characters you select; **Paragraph** changes whole lines. **Style**: **Bold**, *Italic*, <u>Underline</u>, and ~~Strikethrough~~ — also on the right-click menu, and available as keyboard shortcuts (**Ctrl+B**, **Ctrl+I**, **Ctrl+U**, **Ctrl+D**). **Colors**: text color and highlight, each opening a small swatch picker (no hex codes to type — just pick a color) with a Clear option to remove it again. All six work the same way: select some text and click (or press) one to apply it there, or click one with nothing selected — it "sticks" for whatever you type next, until you click it again to turn it off. Text color and highlight can be combined with each other and with any of the four styles.
+A small toolbar above the note body is split into four groups, separated by thin dividers. If the window is too narrow to hold them all on one line, the toolbar wraps onto a second rather than hiding anything. The first three — the style toggles, the font dropdowns, and the two colour buttons — change the characters you select. The last changes whole lines. Hover any button and it tells you what it does. **Style**: **Bold**, *Italic*, <u>Underline</u>, and ~~Strikethrough~~ — also on the right-click menu, and available as keyboard shortcuts (**Ctrl+B**, **Ctrl+I**, **Ctrl+U**, **Ctrl+D**). **Colors**: text color and highlight, each opening a small swatch picker (no hex codes to type — just pick a color) with a Clear option to remove it again. All six work the same way: select some text and click (or press) one to apply it there, or click one with nothing selected — it "sticks" for whatever you type next, until you click it again to turn it off. Text color and highlight can be combined with each other and with any of the four styles.
 
 ![Formatting toolbar](screenshots/formatting-toolbar.png)
 
@@ -33,13 +33,28 @@ A small toolbar above the note body is split into three groups. **Style** and **
 - **Lists.** The **•** and **1.** buttons turn those lines into a bullet or numbered list. Click the same button again to turn the list off. Press **Enter** to start the next item; press it on an item you haven't typed anything into and the list ends there. **Backspace** with the cursor just after a marker removes the marker rather than deleting it one character at a time.
 - **Nesting.** **Tab** pushes a list item one level in, **Shift+Tab** pulls it back out — or use the **⇤** and **⇥** buttons. A numbered sub-list counts from 1 again under each parent, and picks the outer numbering back up when it ends. Bullets change shape as they go deeper (•, ◦, ▪). Outside a list, Tab still types a tab; the two indent buttons work on any paragraph, list or not, up to eight levels.
 - **Alignment.** The three bar icons set a line left, centred, or right. Clicking the alignment a line already has puts it back to left.
-- **Quote blocks.** The **❝** button marks lines as a quote: a coloured bar down the left with a lightly tinted background. Useful for something you're quoting, or a note-to-self you want to stand apart from the rest.
 
-These combine: a bullet can be centred, a nested list can sit inside a quote, and any of it can carry bold or a text colour.
+These combine: a bullet can be centred, an indented paragraph can be right-aligned, and any of it can carry bold or a text colour.
 
 List markers are part of the note's own text — a bullet really is a "• " at the start of the line. That's deliberate: it means a list still looks like a list when you export the note, share it as a code, or paste it into an email. The indenting is drawn by the app on top of that.
 
-Still ahead: font size, font family, and paste that keeps (or discards) formatting from wherever it was copied.
+**Font** sets the typeface and size. Pick from either dropdown to change the selected text, or pick with nothing selected and it applies to whatever you type next — the same way the Style buttons work.
+
+- **Default** means "no setting of its own", so that text follows whatever the editor's default is. It is how you undo a size or a typeface, rather than setting it back by hand.
+- If you select text that mixes two sizes, the dropdown shows **Default** rather than picking one of them — otherwise it would look like the whole selection was already that size.
+- The eight typefaces are ones that come with Windows. That is deliberate: if a note used a font the person you send it to doesn't have, their computer would quietly swap in a different one and nothing would say so.
+
+**To make everything bigger**, don't format each note — go to **Settings → Appearance** and set **Editor font** and **Text size**. That is the size notes start at; anything you set from the toolbar overrides it just for that text. This is the setting to reach for if the default is simply too small to read comfortably.
+
+Still ahead: paste that keeps (or discards) formatting from wherever it was copied.
+
+A title can be up to 200 characters. That is far more than a title needs, and it keeps the field quick to type in — a very long one makes the box itself sluggish. You do not have to count: once you are within 40 characters of the limit, a small counter appears beside the title (`175/200`) and turns red when it is full. Pasting something longer shortens it to fit rather than refusing it. Titles saved before this limit existed are left exactly as they are, however long they are.
+
+### How long a note takes to read
+
+Under the word and character counts, each note shows roughly how long it takes to read — "under a minute to read" for a short one, "about 4 minutes to read" for a longer one.
+
+It is worked out from the word count at 200 words a minute, which is the slow end of normal adult reading. That is on purpose: finishing sooner than promised costs you nothing, whereas being told a note is shorter than it really is does.
 
 ### Attachments
 
