@@ -1434,6 +1434,60 @@ app.update()
 check('an empty note shows no readout at all',
       str(app.word_count_lbl.cget('text')) == '')
 
+# ---- TITLE LENGTH CAP ----
+# Not about storage or layout -- the note list already truncates to 60 for
+# display -- but about tk.Entry, which slows roughly with the square of
+# what it holds: one keystroke measured 0.5ms at 30 characters, 38ms at
+# 10,000 and 3.5 seconds at 100,000. Paste a document into the title by
+# accident and the field is frozen with no way to edit it back.
+app.new_note()
+app.update()
+_title = app.title_entry
+_title.delete(0, 'end')
+app.update()
+
+_title.insert(0, 'x' * NO.NoteOrganizer.TITLE_MAX_LEN)
+app.update()
+check(f'a title of exactly {NO.NoteOrganizer.TITLE_MAX_LEN} characters is accepted',
+      len(_title.get()) == NO.NoteOrganizer.TITLE_MAX_LEN)
+_title.insert('end', 'y')
+app.update()
+check('one character past the cap is refused',
+      len(_title.get()) == NO.NoteOrganizer.TITLE_MAX_LEN
+      and not _title.get().endswith('y'))
+
+# A validator can only take or refuse a change whole, so a long paste would
+# leave the field empty -- which reads as the paste failing, not as it being
+# shortened.
+_title.delete(0, 'end')
+app.update()
+app.clipboard_clear()
+app.clipboard_append('z' * 5000)
+app.update()
+app._on_title_paste()
+app.update()
+check('pasting something too long shortens it instead of refusing it',
+      len(_title.get()) == NO.NoteOrganizer.TITLE_MAX_LEN)
+
+# The one that matters: the cap must never shorten a title already saved.
+# Validation fires on programmatic inserts too, so loading a note written
+# before the cap could have had the widget drop the overflow -- and the next
+# autosave would write that shortened title back over the real one.
+_LONG = 'L' * 5000
+app.notes.append(NO.normalize_note({'id': 8801, 'title': _LONG, 'body': 'b'}))
+app.save_notes()
+app.load_note(app.find_note(8801))
+app.update()
+check('a stored title longer than the cap loads in full',
+      len(app.title_entry.get()) == len(_LONG))
+app.save_current_note(auto=False)
+app.update()
+check('and saving that note again does not shorten it',
+      app.find_note(8801)['title'] == _LONG)
+
+app.new_note()
+app.update()
+
 # ---- Fast typing (regression): a first version tagged only "the one
 # character right before the cursor" on each KeyRelease, which silently
 # missed characters typed in a fast real burst -- Tk can queue several

@@ -42,7 +42,7 @@ except ImportError:
 # Added/Fixed CHANGELOG.md entries, not per-release counts). The running
 # app records this into settings, so the next time a newer build opens
 # over older data it can tell the user what changed version-wise.
-APP_VERSION = "0.36.54"
+APP_VERSION = "0.36.55"
 
 
 def parse_version(v):
@@ -475,6 +475,71 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.after(400, self.maybe_show_reminder)
         self._last_active_dirty = None
         self.after(600, self._poll_active_dirty)
+
+    # A title longer than this cannot be typed or pasted in. The limit is
+    # not about storage or layout -- the note list already truncates to 60
+    # characters for display -- but about tk.Entry, which slows roughly with
+    # the square of what it holds: measured, one keystroke costs 0.5ms at 30
+    # characters, 38ms at 10,000, and 3.5 seconds at 100,000. Someone who
+    # pastes a document into the title by accident would find the field
+    # frozen and no way to edit it back. 200 is far past any real title and
+    # far short of where the widget struggles.
+    TITLE_MAX_LEN = 200
+
+    def _title_within_limit(self, proposed):
+        """Validator for the title field: reject an edit past the cap."""
+        if getattr(self, "_setting_title", False):
+            return True                      # a stored title being loaded
+        if len(proposed) <= self.TITLE_MAX_LEN:
+            return True
+        # Deferred: Tk turns validation off if the validate command touches
+        # a widget while it runs, and the status bar is a widget.
+        self.after_idle(
+            lambda: self.set_status(
+                f"A note title can be up to {self.TITLE_MAX_LEN} characters"))
+        return False
+
+    def _insert_title(self, text):
+        """Put a stored title into the field, cap or no cap.
+
+        Validation fires on programmatic inserts as well as on typing. A
+        note whose title predates the cap -- or one hand-edited in the JSON
+        -- would otherwise have the widget silently drop the overflow, and
+        the next autosave would write that shortened title back over the
+        real one. Loading a note must never edit it.
+        """
+        self._setting_title = True
+        try:
+            self.title_entry.insert(0, text)
+        finally:
+            self._setting_title = False
+
+    def _on_title_paste(self, event=None):
+        """Paste into the title, trimmed to fit rather than refused.
+
+        A validator can only accept or reject a change whole, so pasting
+        something long past the cap would otherwise leave the field empty --
+        which looks like the paste failed rather than like it was shortened.
+        """
+        try:
+            pasted = self.clipboard_get()
+        except tk.TclError:
+            return "break"
+        try:
+            self.title_entry.delete("sel.first", "sel.last")
+        except tk.TclError:
+            pass
+        room = self.TITLE_MAX_LEN - len(self.title_entry.get())
+        if room <= 0:
+            self.set_status(
+                f"A note title can be up to {self.TITLE_MAX_LEN} characters")
+            return "break"
+        clipped = " ".join(pasted.split())[:room]
+        self.title_entry.insert("insert", clipped)
+        if len(pasted) > len(clipped):
+            self.set_status(
+                f"Pasted title shortened to {self.TITLE_MAX_LEN} characters")
+        return "break"
 
     def _schedule_autosave(self, event=None, skip_word_count=False):
         """Debounced auto-save: (re)start a short timer on every edit. When the
@@ -2772,7 +2837,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.title_entry.delete(0, "end")
         title = note.get("title", "")
         if title:
-            self.title_entry.insert(0, title)
+            self._insert_title(title)
             self.title_entry.config(fg=self.colors["text"])
 
         self.body_text.delete("1.0", "end")
@@ -4241,13 +4306,16 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
         self.title_entry = tk.Entry(
             top_row, insertbackground=self.colors["text"],
-            relief="flat", font=("Segoe UI", 20, "bold")
+            relief="flat", font=("Segoe UI", 20, "bold"),
+            validate="key",
+            validatecommand=(self.register(self._title_within_limit), "%P")
         )
         self.track_theme(self.title_entry, bg="bg", fg="text")
         self.title_entry.pack(side="left", fill="x", expand=True)
         self.add_placeholder(self.title_entry, "Note title...")
         self._add_paste_menu(self.title_entry)
         self.title_entry.bind("<KeyRelease>", self._schedule_autosave)
+        self.title_entry.bind("<<Paste>>", self._on_title_paste)
 
         self.category_var = tk.StringVar(value="General")
         # Keep the button's dot/label in sync whenever the category changes,
@@ -6151,10 +6219,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
         self.title_entry.delete(0, "end")
         if st["title"]:
-            self.title_entry.insert(0, st["title"])
+            self._insert_title(st["title"])
             self.title_entry.config(fg=self.colors["text"])
         else:
-            self.title_entry.insert(0, "Note title...")
+            self._insert_title("Note title...")
             self.title_entry.config(fg=self.colors["subtext"])
 
         # Restore this tab's own pending style (if any) before inserting
@@ -6527,7 +6595,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._pending_font_family = None
         self._pending_highlight_color = None
         self.title_entry.delete(0, "end")
-        self.title_entry.insert(0, shown["title"])
+        self._insert_title(shown["title"])
         self.title_entry.config(fg=self.colors["text"])
         self.body_text.delete("1.0", "end")
         self.body_text.insert("1.0", shown["body"])
@@ -6788,7 +6856,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.selected_note_id = None
         if tpl.get("title"):
             self.title_entry.delete(0, "end")
-            self.title_entry.insert(0, tpl["title"])
+            self._insert_title(tpl["title"])
             self.title_entry.config(fg=self.colors["text"])
         if tpl.get("body"):
             self.body_text.delete("1.0", "end")
@@ -6986,7 +7054,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._pending_font_family = None
         self._pending_highlight_color = None
         self.title_entry.delete(0, "end")
-        self.title_entry.insert(0, prev.get("title", ""))
+        self._insert_title(prev.get("title", ""))
         self.title_entry.config(fg=self.colors["text"])
         self.body_text.delete("1.0", "end")
         self.body_text.insert("1.0", prev.get("body", ""))
