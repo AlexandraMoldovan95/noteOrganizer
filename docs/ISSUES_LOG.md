@@ -4,6 +4,48 @@ A narrative log of the more interesting bugs found and fixed during development 
 
 ---
 
+### The title box that took three and a half seconds a keystroke
+
+**Symptom:** none, until someone pasted something long into a note's title. Then the title field stopped responding — and because the only way to fix a title is to edit it, there was no way back out.
+
+**Root cause:** `tk.Entry` slows roughly with the square of what it holds. Measured on a bare widget with no bindings and no app around it: 0.5ms a keystroke at 30 characters, 38ms at 10,000, 892ms at 50,000, and 3,535ms at 100,000. Nothing in this codebase was involved.
+
+**What it was *not*:** the question that prompted the measurement was whether a long title slows the app down. It does not. Twenty notes with million-character titles make a 19MB file that still loads in 50ms, the note list costs the same as with ordinary titles, and searching them takes 1ms. The app was never the problem; one widget was.
+
+**Fix:** titles are capped at 200 characters — far past any real title, far short of where the widget struggles, and well above the 60 the note list displays.
+
+**Two things that needed care.** A validator can only accept or refuse a change *whole*, so pasting something longer left the field empty, which reads as the paste having failed rather than having been shortened; pasting now trims to fit. And validation fires on programmatic inserts as well as on typing — so without a guard, opening a note written before the cap would have had the widget silently drop the overflow, and the next autosave would have written that shortened title back over the real one. Loading a note must never edit it.
+
+**Why the body is fine:** it is a `tk.Text`, which stays near-linear — a million characters costs 363ms a keystroke against `tk.Entry`'s three and a half seconds at a tenth of the size. Someone can write a book in one note; measured at 1M characters, typing is 14ms and saving 377ms.
+
+---
+
+### The Settings panels that stayed dark on a light theme
+
+**Symptom:** switching to a light theme left the information bars in Settings → General, Backup and About dark, with their text almost unreadable against it.
+
+**Root cause:** `_recolor_stragglers()` fixes any widget still holding a colour from another theme by remapping that theme's palette entries onto the current one's. Settings does not use only palette entries: it *derives* two surfaces by blending — `card` toward `text` for the well inside a card, `card` toward `subtext` for its hairlines. Neither result is in any theme's palette, so the remap could not see them, and a panel built once under a dark theme kept the dark inset for the rest of the session. Measured: 19 widgets across those three panels.
+
+**Fix:** the two derivations moved to `core/themes.py` as `inset_surface()` and `hairline()`, so Settings and the straggler pass share one definition, and the remap now includes each theme's derived surfaces alongside its palette. One change covers all 44 blended call sites rather than touching any of them.
+
+**The rule worth keeping:** a colour that is computed rather than looked up is invisible to anything that works by matching known palette values. Derive it in one place, and teach the theme switch about it there.
+
+---
+
+### A toolbar check that measured the wrong thing, three times
+
+**Symptom:** the formatting toolbar overflowed the editor, so the last group could not be reached without widening the window. Fixed — and then CI failed three times running on the check meant to prove it.
+
+**Root cause, each time the same one:** the check asserted *measured pixel widths*. Pixel widths depend on the font, and CI runs under Xvfb where "Segoe UI" does not exist and Tk substitutes something wider — the same bar measures 577px on the development machine and 827px there. A display at different scaling would diverge the same way.
+
+**Three rounds of it.** First, a width budget against a constant: passed locally, failed on CI. Second, the bar was made to wrap, but a special case meant to keep a divider from starting a row kept it on the row it overflowed instead — reintroducing the overflow the wrap existed to prevent, at widths that depend on the font. Third — the worst one — the swept range was narrowed until the bug fell outside it. That turned CI green while making the check unable to catch the very bug it was written for, which was confirmed afterwards by reintroducing the bug and watching the check pass.
+
+**Fix:** the row splitting moved to `core/formatting.py` as `split_toolbar_rows()`, taking widths as plain numbers. Given widths directly it behaves identically everywhere, so the checks are deterministic on any machine. Writing them immediately found two more faults: an invariant of mine that called a lone oversized control an overflow when there is nowhere narrower to put it, and a real one — the "a divider never opens a row" rule was enforced at the break, so a divider dropped there left an empty row for the *next* divider to open.
+
+**The rule worth keeping:** when a test asserts a number that came from measuring this machine, it is testing this machine. Push the logic somewhere it can be given its inputs, and assert the property instead. See also "Tests that always passed, no matter what".
+
+---
+
 ### The bullet that had no bullet in it
 
 **Symptom:** Put the cursor at the end of the last item in a bullet list, paste a couple of lines, and the pasted lines behaved as though they were list items — they were saved that way and came back indented on reload — while showing no bullet at all. Worse, clicking the bullet button on one of them appeared to do nothing: the app thought the line was already a bullet, so the button toggled it *off*.
