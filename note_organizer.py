@@ -499,6 +499,42 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 f"A note title can be up to {self.TITLE_MAX_LEN} characters"))
         return False
 
+    # How close to the cap the counter starts showing. Far enough out to be
+    # a warning rather than a surprise, close enough that an ordinary title
+    # never sees it.
+    TITLE_COUNT_FROM = 40
+
+    def _refresh_title_count(self, event=None):
+        """Show how much title is left, once there is little enough of it.
+
+        Also called after a note is loaded, so opening one that is already
+        near the cap says so straight away rather than waiting for a
+        keystroke to reveal it.
+        """
+        if not hasattr(self, "title_count_lbl"):
+            return
+        used = len(self.title_entry.get())
+        if self._title_is_placeholder():
+            used = 0
+        if used < self.TITLE_MAX_LEN - self.TITLE_COUNT_FROM:
+            if self.title_count_lbl.winfo_ismapped():
+                self.title_count_lbl.pack_forget()
+            return
+        self.title_count_lbl.config(
+            text=f"{used}/{self.TITLE_MAX_LEN}",
+            fg=self.colors["danger"] if used >= self.TITLE_MAX_LEN
+            else self.colors["subtext"],
+        )
+        if not self.title_count_lbl.winfo_ismapped():
+            # Before the category button, which is packed to the right first,
+            # so the counter sits between the title and it rather than past
+            # the edge of the row.
+            self.title_count_lbl.pack(side="left", padx=(8, 0))
+
+    def _title_is_placeholder(self):
+        """True while the field is showing its grey 'Note title...' prompt."""
+        return self.title_entry.get() == "Note title..."
+
     def _insert_title(self, text):
         """Put a stored title into the field, cap or no cap.
 
@@ -513,6 +549,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self.title_entry.insert(0, text)
         finally:
             self._setting_title = False
+        self._refresh_title_count()
 
     def _on_title_paste(self, event=None):
         """Paste into the title, trimmed to fit rather than refused.
@@ -536,6 +573,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             return "break"
         clipped = " ".join(pasted.split())[:room]
         self.title_entry.insert("insert", clipped)
+        self._refresh_title_count()
         if len(pasted) > len(clipped):
             self.set_status(
                 f"Pasted title shortened to {self.TITLE_MAX_LEN} characters")
@@ -4314,7 +4352,14 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.title_entry.pack(side="left", fill="x", expand=True)
         self.add_placeholder(self.title_entry, "Note title...")
         self._add_paste_menu(self.title_entry)
+        # How much of the title is left, shown only once it starts to matter.
+        # A permanent "12/200" beside a twelve-character title is noise about
+        # a limit nobody is near; the point is to warn before the field stops
+        # accepting, not to keep score.
+        self.title_count_lbl = tk.Label(top_row, text="", font=("Segoe UI", 8))
+        self.track_theme(self.title_count_lbl, bg="bg", fg="subtext")
         self.title_entry.bind("<KeyRelease>", self._schedule_autosave)
+        self.title_entry.bind("<KeyRelease>", self._refresh_title_count, add="+")
         self.title_entry.bind("<<Paste>>", self._on_title_paste)
 
         self.category_var = tk.StringVar(value="General")
@@ -6548,6 +6593,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.current_occurrence_date = None
         self.title_entry.delete(0, "end")
         self.title_entry.config(fg=self.colors["text"])
+        # Clearing the field does not go through _insert_title, so the
+        # counter would otherwise still be showing the last note's length.
+        self._refresh_title_count()
         self.body_text.delete("1.0", "end")
         self.comments_text.delete("1.0", "end")
         self.category_var.set("General")

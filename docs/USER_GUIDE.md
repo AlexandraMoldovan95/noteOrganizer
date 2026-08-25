@@ -48,7 +48,7 @@ List markers are part of the note's own text — a bullet really is a "• " at 
 
 Still ahead: paste that keeps (or discards) formatting from wherever it was copied.
 
-A title can be up to 200 characters. That is far more than a title needs, and it keeps the field quick to type in — a very long one makes the box itself sluggish. Pasting something longer shortens it to fit. Titles saved before this limit existed are left exactly as they are.
+A title can be up to 200 characters. That is far more than a title needs, and it keeps the field quick to type in — a very long one makes the box itself sluggish. You do not have to count: once you are within 40 characters of the limit, a small counter appears beside the title (`175/200`) and turns red when it is full. Pasting something longer shortens it to fit rather than refusing it. Titles saved before this limit existed are left exactly as they are, however long they are.
 
 ### How long a note takes to read
 

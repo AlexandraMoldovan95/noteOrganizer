@@ -1485,6 +1485,55 @@ app.update()
 check('and saving that note again does not shorten it',
       app.find_note(8801)['title'] == _LONG)
 
+# The counter that warns before the cap is reached. Hidden most of the
+# time on purpose: a permanent "12/200" beside a twelve-character title is
+# noise about a limit nobody is near.
+_CAP = NO.NoteOrganizer.TITLE_MAX_LEN
+_FROM = NO.NoteOrganizer.TITLE_COUNT_FROM
+
+
+def _counter_state(n):
+    app.title_entry.delete(0, 'end')
+    app.title_entry.insert(0, 'x' * n)
+    app._refresh_title_count()
+    app.update()
+    return (bool(app.title_count_lbl.winfo_ismapped()),
+            str(app.title_count_lbl.cget('text')),
+            str(app.title_count_lbl.cget('fg')))
+
+
+check('an ordinary title shows no counter at all',
+      _counter_state(50)[0] is False)
+check('the counter stays hidden right up to the threshold',
+      _counter_state(_CAP - _FROM - 1)[0] is False)
+_shown, _text, _fg = _counter_state(_CAP - _FROM)
+check(f'it appears {_FROM} characters before the cap, reading '
+      f'{_CAP - _FROM}/{_CAP}',
+      _shown and _text == f'{_CAP - _FROM}/{_CAP}')
+_shown, _text, _fg = _counter_state(_CAP)
+check('at the cap it reads full and turns the warning colour',
+      _shown and _text == f'{_CAP}/{_CAP}' and _fg == app.colors['danger'])
+check('and it goes away again when the title is shortened',
+      _counter_state(10)[0] is False)
+
+# Opening a note near the cap must say so without waiting for a keystroke.
+app.notes.append(NO.normalize_note(
+    {'id': 8802, 'title': 'y' * (_CAP - 3), 'body': 'b'}))
+app.save_notes()
+app.new_note()
+app.update()
+check('a new note starts with no counter',
+      not app.title_count_lbl.winfo_ismapped())
+app.load_note(app.find_note(8802))
+app.update()
+check('opening a note already near the cap shows the counter straight away',
+      app.title_count_lbl.winfo_ismapped()
+      and str(app.title_count_lbl.cget('text')) == f'{_CAP - 3}/{_CAP}')
+app.new_note()
+app.update()
+check('starting a new note hides it again',
+      not app.title_count_lbl.winfo_ismapped())
+
 app.new_note()
 app.update()
 
