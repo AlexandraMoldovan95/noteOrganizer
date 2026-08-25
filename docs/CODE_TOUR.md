@@ -8,7 +8,7 @@ This is a companion to [ARCHITECTURE.md](ARCHITECTURE.md), which is the
 short reference version for someone who already knows the codebase. Start
 here; go there when you want the summary.
 
-> **Status:** the data and rules layer is fully extracted — all ten modules
+> **Status:** the data and rules layer is fully extracted — all twelve modules
 > below are covered here. The user interface hasn't been split yet and still
 > lives in `note_organizer.py`; sections for it will follow.
 
@@ -50,6 +50,8 @@ noteorganizer/
     ├── recurrence.py     repeat rules, and which dates a note lands on
     ├── themes.py         colour palettes and layout numbers (pure data)
     ├── formatting.py     how rich-text spans are stored on a note
+    ├── richtext.py       HTML in and out, for paste and copy
+    ├── clipboard.py      the Windows clipboard's richer formats
     ├── sharing.py        share codes, and the guards that make import safe
     ├── duplicates.py     deciding when two notes are the same note
     ├── paths.py          where data lives, migrations, safe cleanup
@@ -470,6 +472,38 @@ toolbar measures 577px on one machine and 827px under Xvfb, and which
 control lands on a row boundary moves with it. Given numbers, the same
 inputs give the same answer everywhere. See `docs/ISSUES_LOG.md`, "A
 toolbar check that measured the wrong thing, three times".
+
+---
+
+## 4a. `noteorganizer/core/richtext.py` and `core/clipboard.py`
+
+**What they're for.** Pasting formatted text in, and copying it back out.
+
+`richtext.py` converts: HTML in, a note's text and spans out, and the
+reverse. `clipboard.py` is the part that talks to Windows.
+
+**Why two modules rather than one?** Because only one of them can be
+tested here. Tkinter's clipboard only offers plain text, so reaching
+`CF_HTML` means the Win32 API through `ctypes` — Windows-only, and the
+test suite runs on Linux. Keeping that to one small module, where every
+function returns None rather than failing when it cannot work, leaves all
+the actual decisions — what maps to what, how lists nest, where offsets
+land — in a module that turns strings into strings and can be tested
+anywhere. That is `test_richtext.py`, which needs no window and no
+clipboard.
+
+**Two things that map more neatly than you might expect.** An `<li>`
+becomes a line starting `"• "` plus a `paragraphs` entry, which is exactly
+what the editor produces when a list is typed by hand. And `<b>text</b>`
+becomes a span of character offsets, which is exactly how `formatting`
+already stores bold. The note format and HTML line up almost one to one.
+
+**And one that does not.** Everything else. HTML can say things a note
+cannot, so `<sup>`, `<code>`, a background image and a CSS class are
+dropped and their words kept. Font size and family are dropped too, even
+though the app has both: a web page uses neither of the eight the app
+offers, so matching would mean picking a nearest value and claiming the
+note is set in something it never was.
 
 ---
 

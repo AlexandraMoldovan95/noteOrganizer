@@ -50,6 +50,15 @@ Still ahead: paste that keeps (or discards) formatting from wherever it was copi
 
 A title can be up to 200 characters. That is far more than a title needs, and it keeps the field quick to type in — a very long one makes the box itself sluggish. You do not have to count: once you are within 40 characters of the limit, a small counter appears beside the title (`175/200`) and turns red when it is full. Pasting something longer shortens it to fit rather than refusing it. Titles saved before this limit existed are left exactly as they are, however long they are.
 
+### Pasting and copying
+
+Copy something from a web page, an email or Word, paste it into a note with **Ctrl+V**, and the bold, the colours and the lists come with it.
+
+- **Ctrl+Shift+V** pastes the words on their own, with none of the styling. There is a **Paste without formatting** entry on the right-click menu too.
+- Copying works the same way outwards: select part of a note, copy it, and paste it into an email or a document, and it arrives still formatted. Copying between two notes keeps everything.
+
+Not every kind of styling can survive. A note can be bold, italic, underlined, struck through, coloured, highlighted, set in one of eight fonts, made into a list, indented and aligned. Anything a web page does beyond that — a heading style, a box, a background image — is dropped and its words kept, rather than being turned into an approximation of itself. Font sizes and typefaces from a web page are dropped for the same reason: the page is almost certainly using something this app does not offer, and picking the nearest one would claim the note is set in something it never was.
+
 ### How long a note takes to read
 
 Under the word and character counts, each note shows roughly how long it takes to read — "under a minute to read" for a short one, "about 4 minutes to read" for a longer one.

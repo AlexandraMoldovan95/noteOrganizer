@@ -121,6 +121,19 @@ Because the marker is in the text, **the text is what decides** whether a line i
 
 **Numbered levels are not lettered on purpose.** The usual nested scheme — `1.` then `a.` then `i.` — is ambiguous with ordinary prose, and a note is exactly the kind of document where a line can legitimately begin `"a. "`. Since recognising a list from its own text is what keeps markers and tags from drifting apart, that recognition has to stay reliable. Bullets vary by depth (`•`, `◦`, `▪`) because those glyphs are not typed by accident; numbered depth shows through indentation and the count restarting under each parent instead.
 
+### The clipboard: a small platform part, and a large testable one
+
+Pasting formatted text needs something Tkinter cannot do — its clipboard only ever offers plain text, while Windows keeps `CF_HTML` alongside it. Reaching that needs the Win32 API, through `ctypes`, which is in the standard library and so costs no dependency.
+
+That work is split deliberately across two modules:
+
+- **`core/clipboard.py`** is the platform part, and is kept as small as possible: open the clipboard, read or write one format, close it. Every function returns None or does nothing off Windows, or when the clipboard is momentarily held by another program, so a paste that cannot find rich content simply falls back to the plain-text paste the app always did.
+- **`core/richtext.py`** is the conversion, and knows nothing about clipboards. It turns HTML into a note's text, spans and paragraph entries, and back again — strings in, strings out.
+
+The split is what makes the feature testable. The app runs on Windows and the suite runs on Linux, so anything that depends on the platform can only be exercised by hand; keeping that to one small module leaves the part with all the decisions in it — what maps to what, how lists nest, where the offsets go — under test on every machine. `test_richtext.py` covers it with no window and no clipboard at all.
+
+**The mapping is lossy on purpose.** HTML can express unlimited styling; a note has a fixed vocabulary. Anything with no equivalent is dropped rather than approximated — the same choice `normalize_formatting` makes about malformed spans, and for the same reason: guessing produces notes nobody asked for.
+
 ### Colours that are computed, not looked up
 
 `apply_theme()` re-applies the palette to every widget registered with `track_theme`, and `_recolor_stragglers()` catches the rest by remapping any other theme's palette values onto the current theme's. That covers everything whose colour *is* a palette entry.

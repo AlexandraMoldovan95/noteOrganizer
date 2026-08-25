@@ -6,6 +6,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ---
 
+## [0.37.56] — 2026-08-26
+
+### Added
+- Pasting keeps the formatting it came with. **Ctrl+V** brings bold, italics, colours and lists across from a browser or a word processor instead of flattening them to plain text; **Ctrl+Shift+V** pastes the words alone, and that choice is on the right-click menu too. Copying works the same way in reverse: a note copied into an email or Word arrives still formatted, and two notes copy between each other exactly. This does change what Ctrl+V does — it used to paste plain text — but keeping formatting is what Word, Google Docs and every browser already do, so the surprising behaviour was the old one. Everything falls back rather than failing: nothing rich on the clipboard, or anything at all going wrong reading it, and the ordinary paste happens instead.
+
+### Changed
+- Rich clipboard content is read through `ctypes`, which is in the standard library, so this costs no new dependency — Tkinter's own clipboard only ever offers plain text, which is why paste was lossy. The conversion between HTML and a note is kept separate from the clipboard itself, in `core/richtext.py`: it turns strings into strings, so it can be tested on any machine, while the part that only works on Windows is small and isolated. The mapping is deliberately lossy — HTML can express unlimited styling and a note cannot, so anything with no equivalent is dropped rather than approximated, the same choice the app already makes about malformed formatting. Font size and family are dropped on the way in for a related reason: the app offers eight of each and a web page uses neither, so matching would mean claiming a note is set in something it never was.
+
+---
+
 ## [0.36.56] — 2026-08-25
 
 ### Added
