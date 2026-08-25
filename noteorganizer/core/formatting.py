@@ -39,7 +39,36 @@ KNOWN_FORMAT_STYLES = {"bold", "italic", "bold_italic", "underline", "strike"}
 # on/off styles. Unlike bold/italic, foreground/background are independent
 # Tk tag options — they don't fight the font option the way bold and italic
 # do, so no compound-tag scheme is needed for these two.
-VALUE_FORMAT_STYLES = {"text_color", "highlight"}
+COLOR_FORMAT_STYLES = {"text_color", "highlight"}
+
+# Size and family also carry a value, but they *do* fight the font option --
+# the same collision that forced "bold_italic" to exist. Every combination of
+# weight, slant, size and family therefore resolves to one composite tag; see
+# font_tag_for. They are stored as separate spans regardless, so the four
+# properties stay independent in the note and only meet at render time.
+FONT_VALUE_STYLES = {"font_size", "font_family"}
+
+# Everything that carries a "value". Kept as one name because most callers
+# only need to know whether a span has one, not what kind.
+VALUE_FORMAT_STYLES = COLOR_FORMAT_STYLES | FONT_VALUE_STYLES
+
+# A curated list rather than whatever the machine happens to have installed.
+# Notes travel -- as share codes, as backups, between machines -- and a font
+# the reader does not have is silently swapped by Tk for something else, with
+# nothing to say the note is no longer showing what it was written in. These
+# ship with every Windows install.
+FONT_FAMILIES = (
+    "Segoe UI",
+    "Arial",
+    "Calibri",
+    "Georgia",
+    "Times New Roman",
+    "Verdana",
+    "Consolas",
+    "Courier New",
+)
+
+FONT_SIZES = (9, 10, 11, 12, 14, 16, 20, 24)
 
 
 def _is_valid_hex_color(value):
@@ -66,9 +95,23 @@ def normalize_formatting(value):
             continue
         if style in KNOWN_FORMAT_STYLES:
             spans.append({"start": start, "end": end, "style": style})
-        elif style in VALUE_FORMAT_STYLES and _is_valid_hex_color(span.get("value")):
+        elif style in COLOR_FORMAT_STYLES and _is_valid_hex_color(span.get("value")):
             spans.append({"start": start, "end": end, "style": style,
                           "value": span["value"].lower()})
+        elif style == "font_size":
+            size = span.get("value")
+            # Only sizes the app offers. An arbitrary number would render
+            # fine but could never be shown as selected in the picker, and a
+            # note is not the place to discover a size you cannot get back to.
+            if isinstance(size, int) and not isinstance(size, bool) \
+                    and size in FONT_SIZES:
+                spans.append({"start": start, "end": end, "style": style,
+                              "value": size})
+        elif style == "font_family":
+            family = span.get("value")
+            if isinstance(family, str) and family in FONT_FAMILIES:
+                spans.append({"start": start, "end": end, "style": style,
+                              "value": family})
     return spans
 
 
@@ -103,19 +146,150 @@ def color_tag_name(style, hex_color):
     return f"{style}_{hex_color.lstrip('#').lower()}"
 
 
-def font_tag_for(is_bold, is_italic):
-    """The single font tag for this bold/italic combination, or None.
+def font_tag_for(is_bold, is_italic, size=None, family=None):
+    """The single tag carrying this whole font combination, or None.
 
     Two Tk tags that both set the widget's font option do not compose -- one
-    simply wins -- so bold and italic together needs its own precomputed
-    compound tag rather than layering two independent ones.
+    simply wins -- which is why bold and italic together needed a compound
+    tag rather than two independent ones. Size and family set the same
+    option, so all four have to resolve to one name.
+
+    With neither size nor family the historic names are returned unchanged,
+    so notes written before this existed keep tagging exactly as they did,
+    and the plain "bold" tag stays the one the toolbar reads.
     """
-    if is_bold and is_italic:
-        return "bold_italic"
-    if is_bold:
-        return "bold"
-    if is_italic:
-        return "italic"
+    if size is None and family is None:
+        if is_bold and is_italic:
+            return "bold_italic"
+        if is_bold:
+            return "bold"
+        if is_italic:
+            return "italic"
+        return None
+    # Slugged so the name survives being a Tk tag: spaces separate tag names
+    # in some Tk calls, and a family like "Times New Roman" has two.
+    slug = (family or "-").replace(" ", "+")
+    return f"font_{slug}_{size or '-'}_{int(bool(is_bold))}{int(bool(is_italic))}"
+
+
+def resolve_font_runs(spans, text_length):
+    """Work out where a composite font tag is needed, and which one.
+
+    Returns ``(start, end, is_bold, is_italic, size, family)`` for each run
+    that carries a size or a family, weight and slant folded in from
+    whatever bold/italic spans cover the same characters.
+
+    Only those runs. Bold on its own still uses the plain "bold" tag, which
+    keeps two things true: a note that never touches size or family tags
+    exactly as it always did, and the toolbar can go on asking "is this
+    range bold?" by looking for that tag.
+    """
+    spans = normalize_formatting(spans)
+    affects_font = {"bold", "italic", "bold_italic"} | FONT_VALUE_STYLES
+    relevant = [s for s in spans if s["style"] in affects_font]
+    if not any(s["style"] in FONT_VALUE_STYLES for s in relevant):
+        return []
+
+    # Every span boundary is a point where the answer can change; between
+    # two consecutive boundaries it cannot.
+    marks = {0, text_length}
+    for span in relevant:
+        marks.add(span["start"])
+        marks.add(span["end"])
+    points = sorted(m for m in marks if 0 <= m <= text_length)
+
+    runs = []
+    for start, end in zip(points, points[1:]):
+        if start >= end:
+            continue
+        bold = italic = False
+        size = family = None
+        for span in relevant:
+            if span["start"] > start or span["end"] < end:
+                continue
+            style = span["style"]
+            if style == "bold":
+                bold = True
+            elif style == "italic":
+                italic = True
+            elif style == "bold_italic":
+                bold = italic = True
+            elif style == "font_size":
+                size = span["value"]
+            else:
+                family = span["value"]
+        if size is not None or family is not None:
+            runs.append((start, end, bold, italic, size, family))
+
+    # Neighbouring runs that came out identical were split by a boundary
+    # belonging to some other span; joining them keeps the widget holding one
+    # tag range instead of several touching ones.
+    merged = []
+    for run in runs:
+        if merged and merged[-1][1] == run[0] and merged[-1][2:] == run[2:]:
+            merged[-1] = (merged[-1][0], run[1]) + run[2:]
+        else:
+            merged.append(run)
+    return merged
+
+
+def merge_spans(spans):
+    """Join spans that touch and say the same thing.
+
+    Reading the widget back gives one span per tag range, and a composite
+    font tag is split wherever bold or italic starts or stops inside it --
+    so a single size across a paragraph can come back as three or four
+    pieces. Left alone they would be written to the note that way, and split
+    again a little further on the next save.
+    """
+    by_style = {}
+    for span in spans:
+        by_style.setdefault((span["style"], span.get("value")), []).append(span)
+    merged = []
+    for (style, value), group in by_style.items():
+        group.sort(key=lambda s: (s["start"], s["end"]))
+        current = dict(group[0])
+        for span in group[1:]:
+            if span["start"] <= current["end"]:
+                current["end"] = max(current["end"], span["end"])
+            else:
+                merged.append(current)
+                current = dict(span)
+        merged.append(current)
+    return sorted(merged, key=lambda s: (s["start"], s["end"], s["style"]))
+
+
+def parse_font_tag(name):
+    """Turn a composite font tag name back into its four properties.
+
+    Returns ``(is_bold, is_italic, size, family)``, or None if *name* is not
+    one. The inverse of :func:`font_tag_for`, so saving can decompose what
+    rendering composed -- the note stores the four properties separately and
+    only the widget ever sees them merged.
+    """
+    if not isinstance(name, str) or not name.startswith("font_"):
+        return None
+    try:
+        slug, size, flags = name[len("font_"):].rsplit("_", 2)
+    except ValueError:
+        return None
+    if len(flags) != 2 or not set(flags) <= {"0", "1"}:
+        return None
+    family = slug.replace("+", " ")
+    if family == "-":
+        family = None
+    elif family not in FONT_FAMILIES:
+        return None
+    if size == "-":
+        size = None
+    else:
+        try:
+            size = int(size)
+        except ValueError:
+            return None
+        if size not in FONT_SIZES:
+            return None
+    return flags[0] == "1", flags[1] == "1", size, family
     return None
 
 

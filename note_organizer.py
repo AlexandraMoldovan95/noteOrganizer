@@ -186,7 +186,14 @@ from noteorganizer.core.formatting import (
     bullet_level_of,
     renumber,
     shift_spans,
+    merge_spans,
     MAX_INDENT,
+    parse_font_tag,
+    resolve_font_runs,
+    COLOR_FORMAT_STYLES,
+    FONT_VALUE_STYLES,
+    FONT_FAMILIES,
+    FONT_SIZES,
     char_class as core_char_class,
     color_tag_name as core_color_tag_name,
     font_tag_for as core_font_tag_for,
@@ -1509,6 +1516,13 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         needs a live Python reference to keep using them)."""
         base = tkfont.Font(font=text_widget["font"])
         family, size = base.actual("family"), base.actual("size")
+        # Kept for the composite font tags: a span that sets only a size
+        # still needs a family to build a Font from, and vice versa.
+        self._body_base_family, self._body_base_size = family, size
+        # Live references to those tags' Font objects, keyed by tag name.
+        # Tkinter drops a font nothing holds, and the tag then silently
+        # stops applying -- the same reason the three below sit on self.
+        self._font_tag_fonts = {}
         self._fmt_bold_font = tkfont.Font(family=family, size=size, weight="bold")
         self._fmt_italic_font = tkfont.Font(family=family, size=size, slant="italic")
         self._fmt_bold_italic_font = tkfont.Font(
@@ -1580,6 +1594,52 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             if text_widget.compare(seg_start, "<", seg_end):
                 text_widget.tag_add(tag, seg_start, seg_end)
 
+    def _ensure_font_tag(self, text_widget, is_bold, is_italic, size, family):
+        """The tag carrying one whole font combination, made on demand.
+
+        The Font object is held on self because Tkinter needs a live Python
+        reference to keep using it -- let it be collected and the tag
+        quietly stops applying. Built lazily because the combinations
+        multiply, weight by slant by size by family: creating all 192 of the
+        ones this app can offer measured 193ms, which is startup time spent
+        on tags almost every note never uses.
+        """
+        name = core_font_tag_for(is_bold, is_italic, size, family)
+        if name is None or name in KNOWN_FORMAT_STYLES:
+            return name          # plain bold/italic/bold_italic, set up already
+        if name not in self._font_tag_fonts:
+            self._font_tag_fonts[name] = tkfont.Font(
+                family=family or self._body_base_family,
+                size=size or self._body_base_size,
+                weight="bold" if is_bold else "normal",
+                slant="italic" if is_italic else "roman",
+            )
+            # Configured now, so it lands later in Tk's tag order than bold
+            # and italic and therefore wins the font option -- which is the
+            # whole point, since those two set it as well.
+            text_widget.tag_configure(name, font=self._font_tag_fonts[name])
+        return name
+
+    def _apply_font_runs(self, text_widget, spans):
+        """Lay composite font tags over the ranges that need one.
+
+        Runs alongside the plain style tags rather than instead of them: a
+        bold run inside a resized paragraph keeps its "bold" tag, which is
+        what the toolbar reads, while the composite on top decides what the
+        text actually looks like.
+        """
+        length = len(text_widget.get("1.0", "end-1c"))
+        for start, end, is_bold, is_italic, size, family in resolve_font_runs(
+                spans, length):
+            tag = self._ensure_font_tag(text_widget, is_bold, is_italic,
+                                        size, family)
+            if not tag:
+                continue
+            try:
+                text_widget.tag_add(tag, f"1.0+{start}c", f"1.0+{end}c")
+            except tk.TclError:
+                pass
+
     def _extract_formatting(self, text_widget):
         """Read the widget's current tags back out as a plain span list,
         for saving. Character offsets (not Tkinter's own line.col indices)
@@ -1592,8 +1652,30 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 end = self._char_offset(text_widget, ranges[i + 1])
                 if end > start:
                     spans.append({"start": start, "end": end, "style": style})
+        # Composite font tags carry size and family. Weight and slant are
+        # folded into them for rendering, but are read back from their own
+        # bold/italic tags above -- taking them from here as well would save
+        # the same run twice.
         for tag_name in text_widget.tag_names():
-            for style in VALUE_FORMAT_STYLES:
+            parsed = parse_font_tag(tag_name)
+            if not parsed:
+                continue
+            _is_bold, _is_italic, size, family = parsed
+            ranges = text_widget.tag_ranges(tag_name)
+            for i in range(0, len(ranges), 2):
+                start = self._char_offset(text_widget, ranges[i])
+                end = self._char_offset(text_widget, ranges[i + 1])
+                if end <= start:
+                    continue
+                if size is not None:
+                    spans.append({"start": start, "end": end,
+                                  "style": "font_size", "value": size})
+                if family is not None:
+                    spans.append({"start": start, "end": end,
+                                  "style": "font_family", "value": family})
+
+        for tag_name in text_widget.tag_names():
+            for style in COLOR_FORMAT_STYLES:
                 prefix = style + "_"
                 if not tag_name.startswith(prefix):
                     continue
@@ -1607,7 +1689,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     if end > start:
                         spans.append({"start": start, "end": end, "style": style,
                                       "value": hex_color})
-        return spans
+        # Merged before returning: a composite font tag is split into one
+        # range per bold/italic boundary inside it, so a single size across a
+        # paragraph reads back in pieces and would be written to the note
+        # that way, then split again on the next save.
+        return merge_spans(spans)
 
     def _extract_formatting_for_stripped_body(self, text_widget, stripped_body):
         """Like _extract_formatting, but adjusted for save_current_note()'s
@@ -1632,10 +1718,16 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
     def _apply_formatting(self, text_widget, spans):
         """Re-apply a saved span list as live Tkinter tags, for loading."""
         for span in normalize_formatting(spans):
+            # Size and family are not applied one span at a time: they have
+            # to be merged with whatever bold/italic covers the same
+            # characters into a single tag, which _apply_font_runs does once
+            # the whole list is known.
+            if span["style"] in FONT_VALUE_STYLES:
+                continue
             try:
                 start_idx = text_widget.index(f"1.0+{span['start']}c")
                 end_idx = text_widget.index(f"1.0+{span['end']}c")
-                if span["style"] in VALUE_FORMAT_STYLES:
+                if span["style"] in COLOR_FORMAT_STYLES:
                     tag = self._ensure_color_tag(text_widget, span["style"], span["value"])
                 else:
                     tag = span["style"]
@@ -1649,6 +1741,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     text_widget.tag_add(tag, start_idx, end_idx)
             except tk.TclError:
                 pass
+        self._apply_font_runs(text_widget, spans)
 
     def _selection_has_style(self, text_widget, style_set, start, end):
         """True only if EVERY character in [start, end) already carries at
