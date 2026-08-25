@@ -4447,10 +4447,6 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         )
         self.color_swatch_btn.pack(side="left", padx=(6, 6))
 
-        self.color_hint_lbl = tk.Label(meta_row, text="category color", font=("Segoe UI", 8))
-        self.track_theme(self.color_hint_lbl, bg="bg", fg="subtext")
-        self.color_hint_lbl.pack(side="left")
-
         self._update_color_swatch()
 
         # --- Metadata row 2: Repeat (own line — it expands when active) ---
@@ -5109,21 +5105,16 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
 
     def _update_color_swatch(self):
-        """Keep the swatch and the words beside it matching the note.
+        """Show the note's colour on the swatch, and nothing else.
 
-        The label says where the colour comes from, not what it is: the
-        swatch is already showing what it is, and a hex code says nothing
-        to most people. That is the same reasoning the picker itself
-        follows -- swatches only, no hex entry -- so printing "#7c5cff"
-        here was the one place the app contradicted it.
+        No words beside it. The swatch already shows the colour, and the
+        picker is one click away -- naming the state ("custom colour")
+        told the user something they could see, in exchange for a second
+        thing to read on a row that is mostly labels already.
         """
-        if self.current_note_color:
-            self.color_swatch_btn.config(bg=self.current_note_color, activebackground=self.current_note_color)
-            self.color_hint_lbl.config(text="custom color")
-        else:
-            default_color = CATEGORY_COLORS.get(self.category_var.get(), self.colors["accent"])
-            self.color_swatch_btn.config(bg=default_color, activebackground=default_color)
-            self.color_hint_lbl.config(text="category color")
+        color = self.current_note_color or CATEGORY_COLORS.get(
+            self.category_var.get(), self.colors["accent"])
+        self.color_swatch_btn.config(bg=color, activebackground=color)
 
     def open_color_picker(self):
         """Pick this note's own color from a curated palette. Renders as an

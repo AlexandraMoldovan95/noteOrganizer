@@ -1537,28 +1537,34 @@ check('starting a new note hides it again',
 app.new_note()
 app.update()
 
-# ---- NO HEX CODES IN THE INTERFACE ----
-# The colour picker takes swatches only and deliberately offers no hex
-# entry, because most people do not think in hex -- but the label beside
-# the swatch printed the raw value anyway, which was the one place the app
-# contradicted that.
+# ---- NOTHING BUT THE SWATCH ----
+# The colour picker takes swatches only and offers no hex entry, because
+# most people do not think in hex. The label beside the swatch printed
+# the raw value anyway, then named the state instead -- and naming a
+# state the swatch already shows is a second thing to read for nothing.
 app.new_note()
 app.update()
-check('with no colour of its own, a note says where the colour comes from',
-      str(app.color_hint_lbl.cget('text')) == 'category color')
+check('there is no text label beside the colour swatch',
+      not hasattr(app, 'color_hint_lbl'))
+
+_swatch_row = app.color_swatch_btn.master
+_words = [str(w.cget('text')) for w in _swatch_row.winfo_children()
+          if isinstance(w, tk.Label) and str(w.cget('text'))]
+check(f'no hex code appears anywhere on that row ({_words})',
+      not any('#' in t for t in _words))
+
 app.current_note_color = '#e63946'
 app._update_color_swatch()
 app.update()
-_shown = str(app.color_hint_lbl.cget('text'))
-check(f'choosing a colour does not print its hex code ({_shown!r})',
-      '#' not in _shown and _shown == 'custom color')
-check('the swatch still carries the colour itself',
+check('the swatch carries the chosen colour',
       str(app.color_swatch_btn.cget('bg')).lower() == '#e63946')
 app.current_note_color = ''
+app.category_var.set('General')
 app._update_color_swatch()
 app.update()
-check('clearing it goes back to the category colour',
-      str(app.color_hint_lbl.cget('text')) == 'category color')
+check('clearing it falls back to the category colour',
+      str(app.color_swatch_btn.cget('bg')).lower()
+      == str(NO.CATEGORY_COLORS.get('General', app.colors['accent'])).lower())
 
 # ---- Fast typing (regression): a first version tagged only "the one
 # character right before the cursor" on each KeyRelease, which silently
