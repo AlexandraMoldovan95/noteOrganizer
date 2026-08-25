@@ -191,6 +191,27 @@ def normalize_note(note):
     return clean
 
 
+def reading_time(word_count, wpm=200):
+    """Roughly how long this many words takes to read, as a phrase.
+
+    200 words a minute is the slow end of the usual adult silent-reading
+    range, and that is the end worth picking: a reader who finishes sooner
+    than promised has lost nothing, while one who runs over was told the
+    note was shorter than it is.
+
+    Returns "" for an empty note, so the caller can show nothing at all
+    rather than "0 minutes".
+    """
+    if not isinstance(word_count, int) or isinstance(word_count, bool):
+        return ""
+    if word_count <= 0:
+        return ""
+    if word_count < wpm:
+        return "under a minute to read"
+    minutes = int(round(word_count / wpm))
+    return f"about {minutes} minute{'' if minutes == 1 else 's'} to read"
+
+
 def note_richness(note):
     """Used to decide which copy of a duplicate to keep: the one carrying the
     most extra data (attachments beat color beat date beat comments)."""

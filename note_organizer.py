@@ -42,7 +42,7 @@ except ImportError:
 # Added/Fixed CHANGELOG.md entries, not per-release counts). The running
 # app records this into settings, so the next time a newer build opens
 # over older data it can tell the user what changed version-wise.
-APP_VERSION = "0.35.51"
+APP_VERSION = "0.36.54"
 
 
 def parse_version(v):
@@ -310,6 +310,7 @@ from noteorganizer.core.model import (
     normalize_note,
     note_richness,
     note_is_empty,
+    reading_time,
     clean_notes,
 )
 
@@ -3174,7 +3175,14 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         else:
             w = "word" if words == 1 else "words"
             c = "character" if chars == 1 else "characters"
-            self.word_count_lbl.config(text=f"{words} {w} · {chars} {c}")
+            # The reading estimate goes on its own line under the counts:
+            # it answers a different question ("have I got time for this?"
+            # rather than "how much have I written?") and reads as an aside
+            # rather than as more of the same figure.
+            line = f"{words} {w} · {chars} {c}"
+            estimate = reading_time(words)
+            self.word_count_lbl.config(
+                text=f"{line}\n{estimate}" if estimate else line)
 
     def _reset_editor_scroll(self):
         """Called after loading a note into the editor: snap back to the top and
@@ -4344,7 +4352,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.track_theme(body_label, bg="bg", fg="subtext")
         body_label.pack(side="left")
 
-        self.word_count_lbl = tk.Label(body_header, text="", font=("Segoe UI", 8), anchor="e")
+        self.word_count_lbl = tk.Label(body_header, text="", font=("Segoe UI", 8),
+                                       anchor="e", justify="right")
         self.track_theme(self.word_count_lbl, bg="bg", fg="subtext")
         self.word_count_lbl.pack(side="right")
 
@@ -4371,9 +4380,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._pending_font_family = None  # a family from FONT_FAMILIES
         self._pending_highlight_color = None  # hex, or None
         self._pending_style_last_length = 0  # baseline for detecting growth
-        style_lbl = tk.Label(format_bar, text="Style", font=("Segoe UI", 8))
-        self.track_theme(style_lbl, bg="bg", fg="subtext")
-        style_lbl.pack(side="left", padx=(0, 6))
+        # No group captions. They cost 182px of a bar that did not fit, and
+        # every button now says what it is on hover, which is what they were
+        # for. The dividers still separate the groups.
         for style, label, label_font, tip, tip_detail in (
             ("bold", "B", ("Segoe UI", 10, "bold"), "Bold",
              "Ctrl+B \u2014 the selected text, or whatever you type next"),
@@ -4384,12 +4393,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
              "Ctrl+D"),
         ):
             btn = tk.Button(
-                format_bar, text=label, font=label_font, width=3,
+                format_bar, text=label, font=label_font, width=2,
                 relief="flat", cursor="hand2",
                 command=lambda s=style: self._toggle_body_style(s)
             )
             self.track_theme(btn, bg="sidebar", fg="text")
-            btn.pack(side="left", padx=(0, 4), ipady=2)
+            btn.pack(side="left", padx=(0, 2), ipady=2)
             self._attach_tooltip(btn, tip, tip_detail)
             self._fmt_buttons[style] = btn
 
@@ -4399,11 +4408,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # typeface a run is set in, before anything is done to it.
         font_divider = tk.Frame(format_bar, width=1)
         self.track_theme(font_divider, bg="card")
-        font_divider.pack(side="left", fill="y", padx=(2, 8), pady=2)
-        font_lbl = tk.Label(format_bar, text="Font", font=("Segoe UI", 8))
-        self.track_theme(font_lbl, bg="bg", fg="subtext")
-        font_lbl.pack(side="left", padx=(0, 6))
-
+        font_divider.pack(side="left", fill="y", padx=(5, 5), pady=3)
         # "Default" is the app's own font, i.e. no span at all — which is
         # what makes the note follow the Settings default rather than being
         # pinned to whatever that happened to be on the day it was written.
@@ -4413,7 +4418,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             [self.DEFAULT_FONT_LABEL] + list(FONT_FAMILIES),
             lambda v: self._apply_body_font(
                 "font_family", None if v == self.DEFAULT_FONT_LABEL else v),
-            width_chars=13)
+            width_chars=11)
         family_dd.pack(side="left", padx=(0, 4))
         self._attach_tooltip(family_dd, "Font",
                              "The selected text, or whatever you type next")
@@ -4436,11 +4441,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # into the row as two more toggle-looking buttons.
         divider = tk.Frame(format_bar, width=1)
         self.track_theme(divider, bg="card")
-        divider.pack(side="left", fill="y", padx=(2, 8), pady=2)
-        colors_lbl = tk.Label(format_bar, text="Colors", font=("Segoe UI", 8))
-        self.track_theme(colors_lbl, bg="bg", fg="subtext")
-        colors_lbl.pack(side="left", padx=(0, 6))
-
+        divider.pack(side="left", fill="y", padx=(5, 5), pady=3)
         # Text color / Highlight: unlike the four toggle buttons above,
         # these open a swatch picker rather than applying anything
         # directly (there's no single obvious "the" color to toggle).
@@ -4450,19 +4451,19 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # back to the theme's normal button look when nothing is set. See
         # _refresh_format_buttons / _contrasting_fg.
         self.text_color_btn = tk.Button(
-            format_bar, text="A", font=("Segoe UI", 10, "bold"), width=3,
+            format_bar, text="A", font=("Segoe UI", 10, "bold"), width=2,
             relief="flat", cursor="hand2",
             command=lambda: self._open_color_swatch_popup("text_color")
         )
-        self.text_color_btn.pack(side="left", padx=(0, 4), ipady=2)
+        self.text_color_btn.pack(side="left", padx=(0, 2), ipady=2)
         self._attach_tooltip(self.text_color_btn, "Text colour",
                              "Colours the letters themselves")
         self.highlight_btn = tk.Button(
-            format_bar, text="H", font=("Segoe UI", 10, "bold"), width=3,
+            format_bar, text="H", font=("Segoe UI", 10, "bold"), width=2,
             relief="flat", cursor="hand2",
             command=lambda: self._open_color_swatch_popup("highlight")
         )
-        self.highlight_btn.pack(side="left", padx=(0, 4), ipady=2)
+        self.highlight_btn.pack(side="left", padx=(0, 2), ipady=2)
         self._attach_tooltip(self.highlight_btn, "Highlight",
                              "Colours the background behind the letters")
 
@@ -4472,10 +4473,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # two things called lists in one editor is one too many.
         para_divider = tk.Frame(format_bar, width=1)
         self.track_theme(para_divider, bg="card")
-        para_divider.pack(side="left", fill="y", padx=(2, 8), pady=2)
-        para_lbl = tk.Label(format_bar, text="Paragraph", font=("Segoe UI", 8))
-        self.track_theme(para_lbl, bg="bg", fg="subtext")
-        para_lbl.pack(side="left", padx=(0, 6))
+        para_divider.pack(side="left", fill="y", padx=(5, 5), pady=3)
         for kind, label, tip, tip_detail in (
             ("bullet", "\u2022", "Bullet list",
              "Whole lines \u2014 click again to turn the list off"),
@@ -4483,12 +4481,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
              "Numbers itself; a nested list restarts at 1"),
         ):
             btn = tk.Button(
-                format_bar, text=label, font=("Segoe UI", 10, "bold"), width=3,
+                format_bar, text=label, font=("Segoe UI", 10, "bold"), width=2,
                 relief="flat", cursor="hand2",
                 command=lambda k=kind: self._toggle_list(k)
             )
             self.track_theme(btn, bg="sidebar", fg="text")
-            btn.pack(side="left", padx=(0, 4), ipady=2)
+            btn.pack(side="left", padx=(0, 2), ipady=2)
             self._attach_tooltip(btn, tip, tip_detail)
             self._list_buttons[kind] = btn
 
@@ -4515,12 +4513,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             (+1, "⇥", "Indent", "Tab inside a list — works on any paragraph"),
         ):
             btn = tk.Button(
-                format_bar, text=glyph, font=("Segoe UI", 11), width=3,
+                format_bar, text=glyph, font=("Segoe UI", 11), width=2,
                 relief="flat", cursor="hand2",
                 command=lambda d=delta: self._change_paragraph_indent(d)
             )
             self.track_theme(btn, bg="sidebar", fg="text")
-            btn.pack(side="left", padx=(0, 4), ipady=2)
+            btn.pack(side="left", padx=(0, 2), ipady=2)
             self._attach_tooltip(btn, tip, tip_detail)
 
         text_frame = tk.Frame(self.editor)

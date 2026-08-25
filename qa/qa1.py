@@ -1390,6 +1390,50 @@ check('two runs of different sizes report Default, not whichever came first',
       app.font_size_var.get() == app.DEFAULT_FONT_LABEL)
 clear_selection()
 
+# ---- THE FORMATTING BAR FITS THE EDITOR (regression) ----
+# It needed 868px against 787px of pane, so the last group ran off the
+# right-hand edge and you had to widen the window to reach it. Asserted
+# rather than eyeballed, because the failure is invisible on a wide screen
+# and every button added later pushes it back toward the edge.
+app.new_note()
+app.update()
+app.update_idletasks()
+_bar = list(app._fmt_buttons.values())[0].master
+_needed = _bar.winfo_reqwidth()
+check(f'the formatting bar fits the editor pane ({_needed}px needed)',
+      _needed <= NO.EDITOR_MIN_WIDTH)
+check('no group caption is left taking up room',
+      not any(isinstance(w, tk.Label) and str(w.cget('text'))
+              in ('Style', 'Font', 'Colors', 'Paragraph')
+              for w in _bar.winfo_children()))
+
+# ---- READING ESTIMATE ----
+check('an empty note is given no reading estimate',
+      NO.reading_time(0) == '' and NO.reading_time(-3) == '')
+check('a short note reads as under a minute',
+      NO.reading_time(199) == 'under a minute to read')
+check('the singular is used at exactly one minute',
+      NO.reading_time(200) == 'about 1 minute to read')
+check('longer notes are rounded to whole minutes',
+      NO.reading_time(450) == 'about 2 minutes to read'
+      and NO.reading_time(1000) == 'about 5 minutes to read')
+check('a nonsense word count is refused rather than guessed at',
+      NO.reading_time('lots') == '' and NO.reading_time(True) == '')
+
+app.new_note()
+set_body('word ' * 400)
+app.update_word_count()
+app.update()
+_readout = str(app.word_count_lbl.cget('text'))
+check(f'the editor shows the estimate under the counts ({_readout!r})',
+      '400 words' in _readout and 'to read' in _readout
+      and '\n' in _readout)
+set_body('')
+app.update_word_count()
+app.update()
+check('an empty note shows no readout at all',
+      str(app.word_count_lbl.cget('text')) == '')
+
 # ---- Fast typing (regression): a first version tagged only "the one
 # character right before the cursor" on each KeyRelease, which silently
 # missed characters typed in a fast real burst -- Tk can queue several

@@ -584,6 +584,54 @@ if back_btn2:
     check('"Back to Notes" does not move when the settings page scrolls',
           before_y == after_y)
 
+# ---- THE SECTION LIST SCROLLS WHEN THE WINDOW IS SHORT ----
+# Nine entries in four groups, plus a brand and the theme toggle, need more
+# height than a short window has. The list was a plain Frame, so whatever
+# did not fit was simply unreachable.
+app.geometry('1100x420')
+app.update()
+app.show_settings_page()
+app.update()
+app.update_idletasks()
+app.update()
+
+_nav = app._settings_nav_canvas
+_box = _nav.bbox('all')
+check(f'the section list overflows a short window '
+      f'({_box[3] if _box else 0}px of entries in {_nav.winfo_height()}px)',
+      bool(_box) and _box[3] > _nav.winfo_height())
+
+
+class _Wheel:
+    delta = -360
+
+
+_before = _nav.yview()[0]
+app._settings_nav_wheel(_Wheel())
+app.update()
+check('the wheel scrolls the section list', _nav.yview()[0] > _before)
+
+check('the wheel reaches the entries themselves, not just the canvas behind',
+      any(bool(w.bind('<MouseWheel>'))
+          for w in (app._settings_nav_buttons['about'],
+                    app._settings_nav_buttons['about'].master)))
+
+# Tall enough for everything: scrolling would only shift content that is
+# already fully visible, which reads as the list drifting for no reason.
+app.geometry('1100x1000')
+app.update()
+app.update_idletasks()
+app.update()
+_nav.yview_moveto(0)
+app.update()
+app._settings_nav_wheel(_Wheel())
+app.update()
+check('a window tall enough for every entry does not scroll',
+      _nav.yview()[0] == 0.0)
+
+app.geometry('1100x850')
+app.update()
+
 # ---- DERIVED SURFACES FOLLOW A THEME SWITCH (regression) ----
 # Settings blends `card` toward `text` for the well inside a card, and
 # toward `subtext` for its hairlines. Neither result is in any theme's

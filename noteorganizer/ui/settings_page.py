@@ -1252,7 +1252,37 @@ class SettingsPageMixin:
         # --- Back to Notes, in the rail rather than in its own bar above ---
         # It used to sit in a strip across the top of the whole page, which
         # spent a band of vertical space on every section to hold one control.
-        back_row = tk.Frame(self.settings_nav, cursor="hand2")
+        # The foot is claimed before the scrolling area, so it reserves its
+        # height rather than being pushed off the bottom by a list that
+        # expands -- the same ordering the note sidebar uses for its own
+        # bottom zone.
+        self._settings_theme_toggle()
+
+        # Everything between the brand and that foot scrolls. Nine entries in
+        # four groups do not fit a short window, and a plain Frame simply
+        # clipped whatever was past the bottom with no way to reach it.
+        nav_scroll = tk.Canvas(self.settings_nav, highlightthickness=0, bd=0,
+                               width=self.SETTINGS_NAV_WIDTH)
+        self.track_theme(nav_scroll, bg="sidebar")
+        nav_scroll.pack(side="top", fill="both", expand=True)
+        self._settings_nav_canvas = nav_scroll
+        self._settings_nav_body = tk.Frame(nav_scroll)
+        self.track_theme(self._settings_nav_body, bg="sidebar")
+        nav_window = nav_scroll.create_window(
+            (0, 0), window=self._settings_nav_body, anchor="nw",
+            width=self.SETTINGS_NAV_WIDTH)
+
+        def _nav_scrollregion(_event=None):
+            nav_scroll.configure(scrollregion=nav_scroll.bbox("all"))
+
+        def _nav_fit(event):
+            nav_scroll.itemconfigure(nav_window, width=event.width)
+            _nav_scrollregion()
+
+        self._settings_nav_body.bind("<Configure>", _nav_scrollregion)
+        nav_scroll.bind("<Configure>", _nav_fit)
+
+        back_row = tk.Frame(self._settings_nav_body, cursor="hand2")
         self.track_theme(back_row, bg="sidebar")
         back_row.pack(fill="x", padx=8, pady=(0, 8))
         back_ico = tk.Canvas(back_row, width=14, height=14, highlightthickness=0,
@@ -1295,7 +1325,7 @@ class SettingsPageMixin:
         self._settings_nav_icons = {}
         labels = {k: l for k, l, _b, _e in self.SETTINGS_SECTIONS}
         for group_name, group_keys in self.SETTINGS_GROUPS:
-            tk.Label(self.settings_nav, text=group_name.upper(),
+            tk.Label(self._settings_nav_body, text=group_name.upper(),
                      font=("Segoe UI", 8, "bold"), anchor="w",
                      bg=self.colors["sidebar"], fg=self.colors["subtext"]
                      ).pack(fill="x", padx=17, pady=(12, 4))
@@ -1303,7 +1333,22 @@ class SettingsPageMixin:
                 label = labels[key]
                 self._build_nav_entry(key, label)
 
-        self._settings_theme_toggle()
+        # The wheel has to work over the entries themselves, not only over
+        # the canvas behind them, since the entries cover it completely.
+        # _bind_wheel_tree_if_unbound skips anything with a binding of its
+        # own, so nothing that already scrolls loses its handler.
+        def _nav_wheel(event):
+            try:
+                if nav_scroll.bbox("all") and \
+                        nav_scroll.bbox("all")[3] > nav_scroll.winfo_height():
+                    nav_scroll.yview_scroll(int(-1 * (event.delta / 120)), "units")
+            except (tk.TclError, ValueError, TypeError):
+                pass
+            return "break"
+
+        self._settings_nav_wheel = _nav_wheel
+        self.after_idle(
+            lambda: self._bind_wheel_tree_if_unbound(self.settings_nav, _nav_wheel))
 
         # ---- right: the scrolling content pane ----
         content_host = tk.Frame(body)
@@ -1371,7 +1416,7 @@ class SettingsPageMixin:
 
     def _build_nav_entry(self, key, label):
         """One row in the section list: accent rail, glyph, label."""
-        row = tk.Frame(self.settings_nav)
+        row = tk.Frame(self._settings_nav_body)
         self.track_theme(row, bg="sidebar")
         row.pack(fill="x", padx=0, pady=1)
 
