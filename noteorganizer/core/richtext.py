@@ -149,6 +149,14 @@ class _Reader(HTMLParser):
     def _at_line_start(self):
         return not self.length or "".join(self.text[-1:]).endswith("\n")
 
+    # Set when the fragment carries no block-level tag at all. HTML says
+    # a newline in text is just whitespace, and for a web page that is right
+    # -- the markup was laid out for a human to read. A PDF viewer offers no
+    # block tags and puts the page's real line breaks in the text, so
+    # collapsing them there throws away the only structure on offer and
+    # produces one run-on paragraph.
+    keep_newlines = False
+
     def _add(self, chunk):
         if self.length >= MAX_PASTE_CHARS:
             return
@@ -245,11 +253,21 @@ class _Reader(HTMLParser):
 
     def handle_data(self, data):
         # Markup is indented for humans; a note should not inherit that.
-        cleaned = re.sub(r"[ \t\r\n]+", " ", data)
+        if self.keep_newlines:
+            # Runs of spaces still collapse; the newlines are what survive.
+            cleaned = re.sub(r"[ \t\r]+", " ", data)
+            cleaned = re.sub(r" *\n *", "\n", cleaned)
+        else:
+            cleaned = re.sub(r"[ \t\r\n]+", " ", data)
         if self._at_line_start():
             cleaned = cleaned.lstrip(" ")
         if cleaned.strip() or self._line_has_text:
             self._add(cleaned)
+
+
+_BLOCK_TAG_RE = re.compile(
+    r"<\s*/?\s*(?:" + "|".join(sorted(_BLOCK_TAGS | {"li", "ul", "ol", "table"}))
+    + r")\b", re.I)
 
 
 def html_to_note(fragment):
@@ -260,6 +278,9 @@ def html_to_note(fragment):
     that would not have been allowed if it had been typed.
     """
     reader = _Reader()
+    # Looked for in the source rather than during parsing: a block tag late in
+    # the fragment still means the earlier newlines were markup, not content.
+    reader.keep_newlines = not _BLOCK_TAG_RE.search(fragment or "")
     try:
         reader.feed(fragment or "")
         reader.close()
@@ -425,15 +446,30 @@ _MIN_COLUMN_WIDTH = 40
 _MOSTLY_FORCED = 0.6
 
 
-def _forced_break(line, next_line, width):
+# The column is never narrower than the longest line seen, and usually a
+# little wider -- no line ends exactly at the edge unless a word happens to
+# land there. Judging a near-miss as a deliberate ending therefore splits
+# paragraphs that were only wrapped, so a couple of characters of slack are
+# allowed and a borderline break counts as forced. That errs towards joining,
+# which loses a paragraph break at worst; erring the other way cuts sentences
+# in half.
+_COLUMN_SLACK = 2
+
+
+def _forced_break(line, next_line, width, slack=0):
     """True when the next line's first word could not have fitted on this one.
 
     Which means the column broke the line rather than the writer ending it.
+
+    *slack* is used only when deciding where a paragraph ended, never when
+    deciding whether this is a column at all. Allowing it in the detection
+    made three short paragraphs -- each a single line, each followed by a
+    word too long to join it -- look like wrapped prose and become one.
     """
     word = next_line.strip().split(" ")[0] if next_line.strip() else ""
     if not word:
         return False
-    return len(line) + 1 + len(word) > width
+    return len(line) + 1 + len(word) > width - slack
 
 
 def _looks_wrapped(lines):
@@ -509,7 +545,8 @@ def reflow_wrapped(text):
                 continue
             following = lines[i + 1]
             indented = len(following) - len(following.lstrip()) > edge
-            if indented or not _forced_break(line, following, width):
+            if indented or not _forced_break(line, following, width,
+                                             _COLUMN_SLACK):
                 paragraphs.append(current)
                 current = []
         if current:

@@ -499,12 +499,13 @@ def renumber(body, paragraphs):
     lines = body.split("\n")
     by_line = {b["line"]: b
                for b in normalize_paragraphs(paragraphs, len(lines))}
-    shifts, counters, pos = [], {}, 0
+    shifts, counters, pos, blanks = [], {}, 0, 0
     for i, line in enumerate(lines):
         entry = by_line.get(i) or {}
         kind = entry.get("kind")
         level = entry.get("indent", 0)
         if kind == "number":
+            blanks = 0
             counters[level] = counters.get(level, 0) + 1
             # Anything deeper belongs to the item that just ended, so it
             # starts again under this one.
@@ -525,10 +526,20 @@ def renumber(body, paragraphs):
             # A bullet interrupts numbering at its own depth and below, but
             # leaves an outer numbered list alone: a bulleted aside inside
             # item 2 should not restart the outer count at 1.
+            blanks = 0
             for lv in [lv for lv in counters if lv >= level]:
                 del counters[lv]
-        else:
+        elif line.strip():
+            blanks = 0
             counters.clear()
+        else:
+            # One blank line does not end a list. People space their items
+            # out, and restarting there numbered such a list 1, 1, 1. Two
+            # blank lines do end it, which is how a genuinely new list is
+            # told apart from a spaced-out one.
+            blanks += 1
+            if blanks > 1:
+                counters.clear()
         pos += len(lines[i]) + 1        # +1 for the newline
     return "\n".join(lines), shifts
 
