@@ -1892,6 +1892,66 @@ clear_selection()
 app.update()
 check('copying nothing is left to Tk', app._copy_formatted() is None)
 
+# ---- TABLES IN THE EDITOR ----
+# A row is drawn in a monospace face, because columns cannot line up in a
+# proportional one. The face is derived from the text, exactly like a list's
+# margin: the pipes are what make the line a row, and the tag is only how
+# that is shown. Nothing about it is stored with the note.
+_stub_clipboard(html=('<p>Shopping</p><table>'
+                      '<tr><th>Name</th><th>Qty</th></tr>'
+                      '<tr><td>Milk</td><td>2</td></tr>'
+                      '<tr><td>Eggs and bread</td><td>12</td></tr></table>'
+                      '<p>Done</p>'))
+set_body('')
+app._on_body_paste()
+app.update()
+_rows = body().split('\n')
+check(f'a pasted table keeps its cells apart in the editor ({_rows[1]!r})',
+      _rows == ['Shopping',
+                '| Name           | Qty |',
+                '| Milk           | 2   |',
+                '| Eggs and bread | 12  |',
+                'Done'])
+
+
+def _mono(line_no):
+    return app.TABLE_TAG in app.body_text.tag_names(f'{line_no}.0')
+
+
+check('the table rows are drawn in the monospace face',
+      _mono(2) and _mono(3) and _mono(4))
+check('the text around the table is not', not _mono(1) and not _mono(5))
+check(f'the face is a monospace one '
+      f'({app.body_text.tag_cget(app.TABLE_TAG, "font")!r})',
+      str(app.body_text.tag_cget(app.TABLE_TAG, 'font')).split()[0]
+      in ('Consolas', 'Courier'))
+
+# Typed by hand rather than pasted: the same text has to give the same
+# result, since it is the text that decides.
+set_body('| a | b |')
+app._resync_list_tags()
+app.update()
+check('a row typed by hand is a row too', _mono(1))
+
+# And a line that stops being a row loses the face -- otherwise a table
+# taken apart by hand would leave monospace prose behind it.
+app.body_text.delete('1.0', '1.1')
+app._resync_list_tags(1)
+app.update()
+check(f'deleting the opening pipe ends the row ({body()!r})', not _mono(1))
+
+# The face follows the note's own size, or a table would stay at whatever
+# size it was built at while the text around it moved.
+_before_size = str(app.body_text.tag_cget(app.TABLE_TAG, 'font'))
+app._set_editor_font(size=20)
+app.update()
+_after_size = str(app.body_text.tag_cget(app.TABLE_TAG, 'font'))
+check(f'the table face follows the editor font size ({_before_size!r} -> '
+      f'{_after_size!r})', _after_size.endswith('20') and _before_size != _after_size)
+app._set_editor_font(size=12)
+app.update()
+set_body('')
+
 NO.clipboard.read_html = _real_read_html
 NO.clipboard.read_text = _real_read_text
 NO.clipboard.write = _real_write

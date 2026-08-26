@@ -68,6 +68,12 @@ FONT_FAMILIES = (
     "Courier New",
 )
 
+# Columns can only line up in a face where every character is the same
+# width. Both of these ship with Windows; the first the system actually has
+# is the one used, and a table falls back to the note's own font rather than
+# to something the reader does not have.
+MONOSPACE_FAMILIES = ("Consolas", "Courier New")
+
 FONT_SIZES = (9, 10, 11, 12, 14, 16, 20, 24)
 
 

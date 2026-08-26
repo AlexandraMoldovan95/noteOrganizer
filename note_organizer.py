@@ -180,6 +180,7 @@ from noteorganizer.core.duplicates import (
 
 # Rich-text span storage lives in noteorganizer/core/formatting.py.
 from noteorganizer.core import clipboard
+from noteorganizer.core.tables import is_table_row
 from noteorganizer.core.richtext import (html_to_note, note_to_html,
                                         reflow_wrapped)
 from noteorganizer.core.formatting import (
@@ -199,6 +200,7 @@ from noteorganizer.core.formatting import (
     FONT_VALUE_STYLES,
     FONT_FAMILIES,
     FONT_SIZES,
+    MONOSPACE_FAMILIES,
     char_class as core_char_class,
     color_tag_name as core_color_tag_name,
     font_tag_for as core_font_tag_for,
@@ -1078,6 +1080,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # old one, and nothing else recomputes it.
         for name in list(self._paragraph_tags):
             self._configure_paragraph_tag(self.body_text, name)
+        # The table face follows the base size too, or a table would stay at
+        # whatever size it was built at while the text around it moved.
+        self._configure_table_tag(self.body_text)
         self._refresh_format_buttons()
 
     def _marker_room(self, kind):
@@ -1115,6 +1120,23 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self._paragraph_tags[name] = (kind, indent)
             self._configure_paragraph_tag(text_widget, name)
         return name
+
+    TABLE_TAG = "table_row"
+
+    def _configure_table_tag(self, text_widget):
+        """Draw table rows in a monospace face, at the editor's own size.
+
+        Derived from the text rather than stored with the note, exactly like
+        the list margins: what makes a line a table row is the pipes in it,
+        and this tag is only how that is shown. Nothing about it reaches
+        ``formatting``, so a table exported, shared as a code, or pasted
+        into another application carries no font of its own.
+        """
+        available = set(tkfont.families())
+        family = next((f for f in MONOSPACE_FAMILIES if f in available),
+                      self.editor_font_family)
+        text_widget.tag_configure(self.TABLE_TAG,
+                                  font=(family, self.editor_font_size))
 
     def _configure_paragraph_tag(self, text_widget, name):
         """Set one margin tag's options.
@@ -1251,6 +1273,18 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         else:
             first = last = line_no
         for n in range(first, last + 1):
+            # A table row is drawn in a monospace face for the same reason
+            # its pipes live in the text: the columns cannot line up
+            # otherwise. Done here because it is the same question as the
+            # list margins -- what does this line say it is -- asked at the
+            # same moments. Removing it covers the newline as well, so a
+            # row that stops being one does not pass the face on to what is
+            # typed after it.
+            line = self.body_text.get(f"{n}.0", f"{n}.end")
+            if is_table_row(line):
+                self.body_text.tag_add(self.TABLE_TAG, f"{n}.0", f"{n}.end")
+            else:
+                self.body_text.tag_remove(self.TABLE_TAG, f"{n}.0", f"{n}.end+1c")
             kind = self._list_kind_of(self.body_text, n)
             indent = self._paragraph_indent_of(self.body_text, n)
             wanted = (self._paragraph_tag(self.body_text, kind, indent)
@@ -1345,6 +1379,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # A pasted list starts its own numbering at one; renumbering makes
         # it continue whatever it was dropped into.
         self._renumber_lists()
+        # A whole-body pass, which this is the case the cheap per-line one
+        # is not for: a paste can bring in many lines at once, and the tags
+        # derived from what those lines say -- a list's margin, a table's
+        # monospace face -- are not carried by the text itself.
+        self._resync_list_tags()
         self._refresh_format_buttons()
         self._schedule_autosave()
         return True
@@ -4889,6 +4928,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.body_text.pack(side="left", fill="both", expand=True)
         self._setup_body_formatting_tags(self.body_text)
         self._setup_list_tags(self.body_text)
+        self._configure_table_tag(self.body_text)
         self.body_text.bind("<Return>", self._on_body_return)
         self.body_text.bind("<BackSpace>", self._on_body_backspace)
         self.body_text.bind("<<Paste>>", self._on_body_paste, add="+")
