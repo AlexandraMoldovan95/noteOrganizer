@@ -773,6 +773,56 @@ if _comment_btns:
           'comments_expanded' not in NO.load_settings())
 app.update()
 
+# ---- BOTH TEXT BOXES USE THE FULL WIDTH ----
+# The Expand toggle used to call pack_configure(expand=False) on the box it
+# was given. Both boxes are packed with side="left", where expand hands out
+# horizontal space -- so it never affected the height it was meant to control,
+# and left the box at its default eighty characters inside a much wider frame.
+# The text then wrapped halfway across with no way to reach the rest, and
+# deleting a character did not reflow it, because the box really was that
+# narrow. Measured at the time: 752px of 1027px for the body, 672px for
+# comments.
+_resize(1400, 900)
+
+for _name, _box in (('the body box', app.body_text),
+                    ('the comments box', app.comments_text)):
+    _frame_w = _box.master.winfo_width()
+    _unused = _frame_w - _box.winfo_width()
+    # A scrollbar sits beside each one, so a small remainder is expected.
+    check(f'{_name} fills its frame ({_box.winfo_width()}px of {_frame_w}px)',
+          _unused <= 25)
+
+# The pixel comparison above can be fooled: a box left at its default eighty
+# characters is about 700px, and a frame can happen to be about that too. The
+# invariant behind it cannot. Both boxes are packed with side="left", where
+# expand is what hands out horizontal space -- without it the box can never
+# fill its frame at any window size, whatever this particular window measures.
+for _name, _box in (('the body box', app.body_text),
+                    ('the comments box', app.comments_text)):
+    _info = _box.pack_info()
+    check(f'{_name} is packed to take the width it is given '
+          f'(side={_info["side"]}, expand={_info["expand"]})',
+          str(_info['side']) == 'left' and str(_info['expand']) in ('1', 'True'))
+
+# And still does after being expanded and collapsed again, which is when the
+# packing was being changed out from under it.
+app.body_resize_btn.invoke()
+app.update(); app.update_idletasks()
+check(f'the body box still fills its frame while expanded '
+      f'({app.body_text.winfo_width()}px)',
+      app.body_text.master.winfo_width() - app.body_text.winfo_width() <= 25)
+app.body_resize_btn.invoke()
+app.update(); app.update_idletasks()
+check(f'and after collapsing again ({app.body_text.winfo_width()}px)',
+      app.body_text.master.winfo_width() - app.body_text.winfo_width() <= 25)
+check('expanding and collapsing leaves the packing alone',
+      str(app.body_text.pack_info()['expand']) in ('1', 'True'))
+
+# Deliberately not checked here: how far across the box the text runs before
+# it wraps. Text always fills whatever box it is given -- with the bug it
+# filled a 752px box perfectly well -- so that measurement cannot tell the
+# two apart. What distinguishes them is the box against its frame, above.
+
 print()
 print(f"=== QA6 FAILURES: {fails if fails else 'NONE'} ===")
 
