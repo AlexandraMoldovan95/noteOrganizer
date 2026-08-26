@@ -385,7 +385,7 @@ def note_to_html(text, formatting=None, paragraphs=None):
     lines = text.split("\n")
     props = {p["line"]: p for p in normalize_paragraphs(paragraphs or [], len(lines))}
 
-    out, offset, open_lists = [], 0, []
+    out, offset, open_lists, in_table = [], 0, [], False
     for number, line in enumerate(lines):
         entry = props.get(number, {})
         kind = entry.get("kind")
@@ -415,6 +415,10 @@ def note_to_html(text, formatting=None, paragraphs=None):
             out.append("</ul>" if closed == "bullet" else "</ol>")
             if was_nested:
                 out.append("</li>")
+        row = None if kind else tables.cell_bounds(line) if tables.is_table_row(line) else None
+        if in_table and row is None:
+            out.append("</table>")
+            in_table = False
         if kind:
             while len(open_lists) < target:
                 # A sub-list belongs *inside* the item it hangs off, so the
@@ -428,12 +432,27 @@ def note_to_html(text, formatting=None, paragraphs=None):
                 open_lists.append((kind, nested))
                 out.append("<ul>" if kind == "bullet" else "<ol>")
             out.append(f"<li>{_line_html(body, spans, body_offset)}</li>")
+        elif row is not None:
+            # Real <table> markup rather than the pipes, for the same reason
+            # a list goes out as <ul>: a word processor understands one and
+            # would paste the other as a row of pipe characters. Each cell
+            # is rendered from its own offsets so formatting inside it
+            # survives the trip.
+            if not in_table:
+                out.append("<table>")
+                in_table = True
+            cells = "".join(
+                f"<td>{_line_html(line[start:end], spans, offset + start)}</td>"
+                for start, end in row)
+            out.append(f"<tr>{cells}</tr>")
         else:
             align = entry.get("align")
             style = f' style="text-align:{align};"' if align else ""
             out.append(f"<div{style}>{_line_html(body, spans, body_offset) or '<br>'}</div>")
         offset += len(line) + 1
 
+    if in_table:
+        out.append("</table>")
     while open_lists:
         closed, was_nested = open_lists.pop()
         out.append("</ul>" if closed == "bullet" else "</ol>")

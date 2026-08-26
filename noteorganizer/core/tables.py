@@ -60,6 +60,27 @@ def split_row(line):
     return [part.strip() for part in parts[1:-1]]
 
 
+def cell_bounds(line):
+    """Where each cell's text sits inside the row, as ``(start, end)``.
+
+    Offsets into the line exactly as written, with the padding excluded, so
+    formatting stored against the body can be carried across to the markup
+    for one cell. Without this a bold word in a cell would be looked up at
+    the wrong place once the row is split apart.
+    """
+    raw = line or ""
+    lead = len(raw) - len(raw.lstrip())
+    body = raw.strip()
+    if not body.startswith(CELL) or not body.endswith(CELL):
+        return []
+    bounds, pos = [], lead + 1
+    for part in body.split(CELL)[1:-1]:
+        start = pos + (len(part) - len(part.lstrip()))
+        bounds.append((start, start + len(part.strip())))
+        pos += len(part) + 1
+    return bounds
+
+
 def column_widths(rows):
     """How wide each column has to be to hold every cell in it.
 
