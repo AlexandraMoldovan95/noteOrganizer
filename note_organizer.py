@@ -42,7 +42,7 @@ except ImportError:
 # Added/Fixed CHANGELOG.md entries, not per-release counts). The running
 # app records this into settings, so the next time a newer build opens
 # over older data it can tell the user what changed version-wise.
-APP_VERSION = "0.38.56"
+APP_VERSION = "0.38.59"
 
 
 def parse_version(v):
@@ -180,7 +180,8 @@ from noteorganizer.core.duplicates import (
 
 # Rich-text span storage lives in noteorganizer/core/formatting.py.
 from noteorganizer.core import clipboard
-from noteorganizer.core.richtext import html_to_note, note_to_html
+from noteorganizer.core.richtext import (html_to_note, note_to_html,
+                                        reflow_wrapped)
 from noteorganizer.core.formatting import (
     normalize_paragraphs,
     parse_list_marker,
@@ -1291,7 +1292,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # offer, and a marker in the text is what makes a line a list line
         # here -- so pasting it verbatim produced the very formatting this
         # was meant to leave behind.
-        self._replace_selection_with(strip_list_markers(text))
+        # A PDF's line breaks are where its column ended, not where the
+        # writer did. Rejoined before the markers are stripped, because that
+        # decision reads the line structure and refuses to touch a list.
+        self._replace_selection_with(strip_list_markers(reflow_wrapped(text)))
         self.after_idle(self._resync_list_tags)
         self._schedule_autosave()
         return "break"
@@ -1312,6 +1316,14 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         text, spans, paragraphs = html_to_note(markup)
         if not text:
             return False
+        # Only when the source offered no formatting of its own, which is the
+        # case a PDF presents: bare lines broken by a column. Reflowing moves
+        # every character after each join, and the spans are offsets into this
+        # same text -- so a source that did send formatting keeps its line
+        # breaks rather than have its bold slide out of place. Such a source
+        # sent real block tags anyway, which means real paragraphs already.
+        if not spans and not paragraphs:
+            text = reflow_wrapped(text)
 
         try:
             self.body_text.delete("sel.first", "sel.last")
@@ -1690,9 +1702,24 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         itself rather than stack a second marker onto the line.
         """
         first, last = self._selected_line_range()
+
+        def blank(line_no):
+            line = self.body_text.get(f"{line_no}.0", f"{line_no}.end")
+            return not parse_list_marker(line)[2].strip()
+
+        # An empty line is not a list item. Numbering a selection that had
+        # blank lines between its items put a number on those too, so the
+        # list read 1, 3, 5 with the even numbers sitting on nothing.
+        # Blank lines are still visited when turning a list off, because one
+        # of them may be carrying a marker put there before this.
+        items = [n for n in range(first, last + 1) if not blank(n)]
+        if not items:
+            return
         turning_off = all(self._list_kind_of(self.body_text, n) == kind
-                          for n in range(first, last + 1))
+                          for n in items)
         for line_no in range(first, last + 1):
+            if not turning_off and line_no not in items:
+                continue
             line = self.body_text.get(f"{line_no}.0", f"{line_no}.end")
             existing, marker, rest = parse_list_marker(line)
             # Depth is read before the tags go, and put back after: turning a
@@ -3505,12 +3532,15 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         name; without one the box opens compact every time, which is right for
         a box whose size is incidental and wrong for one someone chose.
         """
-        # Make height changes visible: stop the box from expanding to fill all
-        # available space, so the row count controls its size.
-        try:
-            text_widget.pack_configure(expand=False)
-        except tk.TclError:
-            pass
+        # Nothing is done to the box's packing here. There used to be a
+        # pack_configure(expand=False), meant to keep the row count in charge
+        # of the height -- but both boxes are packed with side="left", where
+        # expand hands out *horizontal* space, not vertical. It never affected
+        # the height, and it left the box at its default width of eighty
+        # characters inside a much wider frame: 752px of 1027px, with the text
+        # wrapping halfway across and no way to make it fill the rest.
+        # The height is governed by the frame around the box, which sizes
+        # itself to what the box asks for, and the row count sets that.
         text_widget.configure(height=compact)
 
         start = False

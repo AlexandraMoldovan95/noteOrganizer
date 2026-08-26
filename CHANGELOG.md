@@ -6,6 +6,18 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ---
 
+## [0.38.59] — 2026-08-26
+
+### Fixed
+- Both text boxes in the editor were stuck at eighty characters wide, however wide the window. The body measured 752px inside a 1027px frame, comments 672px — text wrapped halfway across the box and deleting a character did not reflow it, because the box really was that narrow. The Expand toggle was calling `pack_configure(expand=False)` on the box it was given; both are packed with `side="left"`, where expand hands out horizontal space rather than vertical, so it never affected the height it was meant to control and only ever cost width. The height is governed by the frame around the box, which sizes itself to what the box asks for, so removing the line costs nothing. The body inherited this in `0.38.56`; the comments box had it for far longer.
+- Text pasted from a PDF arrived as the PDF's own lines rather than as paragraphs. A PDF has no paragraphs — it has lines placed on a page, and copying from one hands those breaks over as though they were meant. Keeping them gave narrow ragged text a third of the way across the note; **Ctrl+V** dropped them all instead and gave one run-on block, because HTML treats a newline in text as whitespace. That is right for a web page, whose markup is laid out for a human to read, and wrong for a fragment carrying no block tag at all, which is what a PDF viewer offers. Those breaks are now kept, and both paste paths rejoin the lines a column broke: each break is judged by whether the next line's first word would have fitted, by whether the line ends in any sentence punctuation at all — a paragraph almost never stops mid-sentence — and by indentation where the document offers it. A line falling well short of the column ends a paragraph whatever it looks like, which is how a heading keeps its own line. Lists, addresses, poems and anything under three lines are left exactly as they came: a break someone meant is worse to lose than a break left in.
+- Turning a selection into a numbered list numbered the blank lines between its items too, so it read 1, 3, 5 with the even numbers sitting on nothing. An empty line is not an item and is now skipped. A single blank line no longer ends a numbered run either, so a list written with space between its items numbers 1, 2, 3 rather than 1, 1, 1; two blank lines still end it, which is how a genuinely new list is told apart from a spaced-out one.
+
+### Testing
+- The rejoining is checked by property rather than by result: at eight column widths, indented and not, no word is ever lost or altered and no paragraph is ever split in two. Merging two paragraphs is possible and is asserted as a known limit rather than hidden — without indentation, a paragraph whose last line lands nearly full cannot be told from a line the column broke.
+
+---
+
 ## [0.38.56] — 2026-08-26
 
 ### Added

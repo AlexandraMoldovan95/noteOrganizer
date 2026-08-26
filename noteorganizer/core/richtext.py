@@ -43,6 +43,7 @@ from .formatting import (
     marker_for,
     normalize_formatting,
     normalize_paragraphs,
+    parse_list_marker,
 )
 
 # A pasted web page can carry a great deal of markup. These are not tuning
@@ -148,6 +149,14 @@ class _Reader(HTMLParser):
     def _at_line_start(self):
         return not self.length or "".join(self.text[-1:]).endswith("\n")
 
+    # Set when the fragment carries no block-level tag at all. HTML says
+    # a newline in text is just whitespace, and for a web page that is right
+    # -- the markup was laid out for a human to read. A PDF viewer offers no
+    # block tags and puts the page's real line breaks in the text, so
+    # collapsing them there throws away the only structure on offer and
+    # produces one run-on paragraph.
+    keep_newlines = False
+
     def _add(self, chunk):
         if self.length >= MAX_PASTE_CHARS:
             return
@@ -244,11 +253,21 @@ class _Reader(HTMLParser):
 
     def handle_data(self, data):
         # Markup is indented for humans; a note should not inherit that.
-        cleaned = re.sub(r"[ \t\r\n]+", " ", data)
+        if self.keep_newlines:
+            # Runs of spaces still collapse; the newlines are what survive.
+            cleaned = re.sub(r"[ \t\r]+", " ", data)
+            cleaned = re.sub(r" *\n *", "\n", cleaned)
+        else:
+            cleaned = re.sub(r"[ \t\r\n]+", " ", data)
         if self._at_line_start():
             cleaned = cleaned.lstrip(" ")
         if cleaned.strip() or self._line_has_text:
             self._add(cleaned)
+
+
+_BLOCK_TAG_RE = re.compile(
+    r"<\s*/?\s*(?:" + "|".join(sorted(_BLOCK_TAGS | {"li", "ul", "ol", "table"}))
+    + r")\b", re.I)
 
 
 def html_to_note(fragment):
@@ -259,6 +278,9 @@ def html_to_note(fragment):
     that would not have been allowed if it had been typed.
     """
     reader = _Reader()
+    # Looked for in the source rather than during parsing: a block tag late in
+    # the fragment still means the earlier newlines were markup, not content.
+    reader.keep_newlines = not _BLOCK_TAG_RE.search(fragment or "")
     try:
         reader.feed(fragment or "")
         reader.close()
@@ -395,3 +417,158 @@ def note_to_html(text, formatting=None, paragraphs=None):
         if was_nested:
             out.append("</li>")
     return "".join(out)
+
+
+# --- Rejoining text that a column broke -------------------------------------
+#
+# A PDF has no paragraphs. It has lines placed on a page, and copying from one
+# hands those line breaks over as though they were meant. Keeping them gives a
+# note broken at the PDF's column width, narrow and ragged; dropping them all
+# gives one run-on block. Neither is what the page said.
+#
+# Every break is judged by one question: **would the next line's first word
+# have fitted on this one?** If it would have, the line was ended on purpose
+# and the break is a real one. If it would not, the column forced it and the
+# two lines are one. That test needs no threshold tuned to a particular width,
+# which an earlier attempt did need -- and it got 60-character text wrong in
+# one direction and 110-character text wrong in the other.
+#
+# Rejoining is still guesswork, so it only runs where the evidence is strong.
+# Everything else -- an address, a list, a poem, a couple of lines -- comes
+# back untouched. A break someone meant is worse to lose than a break left in:
+# the first destroys what they wrote, the second is merely untidy.
+
+# Fewer lines than this is not a pattern, it is a coincidence.
+_MIN_WRAPPED_LINES = 3
+# Narrow text is far more likely to be a list or an address than a column.
+_MIN_COLUMN_WIDTH = 40
+# How many of the breaks have to be forced before a column is the likely cause.
+_MOSTLY_FORCED = 0.6
+
+
+# The column is never narrower than the longest line seen, and usually a
+# little wider -- no line ends exactly at the edge unless a word happens to
+# land there. Judging a near-miss as a deliberate ending therefore splits
+# paragraphs that were only wrapped, so a couple of characters of slack are
+# allowed and a borderline break counts as forced. That errs towards joining,
+# which loses a paragraph break at worst; erring the other way cuts sentences
+# in half.
+_COLUMN_SLACK = 2
+
+# A paragraph almost never stops in the middle of a sentence, so a line that
+# ends without any of these was almost certainly broken by the column even if
+# the next word looked like it would have fitted. Closing quotes and brackets
+# count, since a sentence can end inside them.
+_SENTENCE_END = ('.', '!', '?', ':', ';', '"', "'", ')', ']', '’', '”')
+# Unless the line is far short of the column, in which case it ended early on
+# purpose -- a heading, or the last line of a paragraph -- whatever it ends in.
+_CLEARLY_SHORT = 0.7
+
+
+def _ends_a_paragraph(line, width):
+    """Whether a line that *could* have taken another word really ended."""
+    stripped = line.rstrip()
+    if not stripped:
+        return True
+    if len(stripped) < width * _CLEARLY_SHORT:
+        return True
+    return stripped.endswith(_SENTENCE_END)
+
+
+def _forced_break(line, next_line, width, slack=0):
+    """True when the next line's first word could not have fitted on this one.
+
+    Which means the column broke the line rather than the writer ending it.
+
+    *slack* is used only when deciding where a paragraph ended, never when
+    deciding whether this is a column at all. Allowing it in the detection
+    made three short paragraphs -- each a single line, each followed by a
+    word too long to join it -- look like wrapped prose and become one.
+    """
+    word = next_line.strip().split(" ")[0] if next_line.strip() else ""
+    if not word:
+        return False
+    return len(line) + 1 + len(word) > width - slack
+
+
+def _looks_wrapped(lines):
+    """True when these lines were broken by a column, not on purpose."""
+    if len(lines) < _MIN_WRAPPED_LINES:
+        return False
+    # A list's line breaks are the list. Never touch them, and do not let a
+    # list anywhere in the run make the rest of it look like prose.
+    if any(parse_list_marker(line.lstrip(" \t"))[0] for line in lines):
+        return False
+    width = max(len(line) for line in lines)
+    if width < _MIN_COLUMN_WIDTH:
+        return False
+    breaks = len(lines) - 1
+    forced = sum(1 for i in range(breaks)
+                 if _forced_break(lines[i], lines[i + 1], width))
+    return forced >= max(2, int(breaks * _MOSTLY_FORCED))
+
+
+def _join_wrapped(lines):
+    """One paragraph out of the lines a column broke it into."""
+    joined = ""
+    for line in lines:
+        piece = line.strip()
+        if not joined:
+            joined = piece
+        elif (len(joined) > 1 and joined[-1] == "-" and joined[-2].isalpha()
+              and piece[:1].islower()):
+            # A hyphen at the break joins without a space: "more-" + "or-less"
+            # is one word, and so is "type-" + "setting". The hyphen is kept,
+            # because those two cases cannot be told apart and only one of the
+            # two possible mistakes is survivable -- keeping it turns a
+            # syllable break into "type-setting", which still reads, while
+            # dropping it turned "more-or-less" into "moreor-less", which is
+            # not a word at all. Only when a letter precedes the hyphen and
+            # the next line goes on in lower case, so "see page 12 -" and
+            # "- and then" keep their space.
+            joined += piece
+        else:
+            joined += " " + piece
+    return joined
+
+
+def reflow_wrapped(text):
+    """Rejoin lines that a fixed-width column broke, leaving real breaks alone.
+
+    Blank lines always separate paragraphs and are never removed. Within a run
+    that looks like a wrapped column, a line whose break was not forced by the
+    column ends a paragraph. A run that does not look wrapped comes back
+    exactly as it went in.
+    """
+    blocks = []
+    for block in re.split(r"\n[ \t]*\n", text or ""):
+        lines = [line.rstrip() for line in block.split("\n") if line.strip()]
+        if not lines:
+            continue
+        if not _looks_wrapped(lines):
+            blocks.append("\n".join(lines))
+            continue
+        width = max(len(line) for line in lines)
+        # Many documents mark a new paragraph by indenting its first line.
+        # Where that happens it is a far better signal than any measurement:
+        # a line whose break looks forced still ends a paragraph if the line
+        # after it is indented past the block's own left edge.
+        edge = min(len(line) - len(line.lstrip()) for line in lines)
+        paragraphs, current = [], []
+        for i, line in enumerate(lines):
+            current.append(line)
+            last = i == len(lines) - 1
+            if last:
+                paragraphs.append(current)
+                current = []
+                continue
+            following = lines[i + 1]
+            indented = len(following) - len(following.lstrip()) > edge
+            could_fit = not _forced_break(line, following, width, _COLUMN_SLACK)
+            if indented or (could_fit and _ends_a_paragraph(line, width)):
+                paragraphs.append(current)
+                current = []
+        if current:
+            paragraphs.append(current)
+        blocks.append("\n".join(_join_wrapped(p) for p in paragraphs))
+    return "\n\n".join(blocks)

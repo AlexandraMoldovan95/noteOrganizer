@@ -19,6 +19,7 @@ Built as a solo/pair project (developer + AI pairing partner) over an extended i
 - Group notes by category, with persistent collapse state per group
 - A collapsible in-note calculator (with parentheses and standard operator precedence), for quick sums without leaving the note
 - Rich text formatting (Bold, Italic, Underline, Strikethrough, text color, highlight) in the note body — via a toolbar, the right-click menu, or keyboard shortcuts — applied to a selection or to whatever's typed next
+- Paste from a browser, a word processor or a PDF: formatting is kept where there is any, and a PDF's line breaks are rejoined into the paragraphs they came from
 - Paste from a browser or a word processor and keep the bold, colours and lists (Ctrl+Shift+V for plain text); copy a note out and it arrives formatted in email or Word
 - A reading-time estimate for each note, beside its word and character counts
 - Font size and family, per selection or as the default for every note (Settings → Appearance), from a curated list that ships with Windows so a shared note renders as it was written

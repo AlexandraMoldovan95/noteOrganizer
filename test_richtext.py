@@ -9,7 +9,8 @@ Check descriptions stay ASCII-only, for the same reason test_calculator.py
 does: printing a bullet crashes a plain Windows console on cp1252.
 """
 import note_organizer as NO
-from noteorganizer.core.richtext import html_to_note, note_to_html
+from noteorganizer.core.richtext import (html_to_note, note_to_html,
+                                        reflow_wrapped)
 from html.parser import HTMLParser
 
 fails = []
@@ -287,6 +288,169 @@ _t, _s, _p = html_to_note(markup)
 check("bold_italic survives as bold and italic over the same characters",
       sorted(s["style"] for s in _s) == ["bold", "italic"]
       and all(s["start"] == 0 and s["end"] == 3 for s in _s))
+
+# --- reflow_wrapped: rejoining what a column broke --------------------------
+# A PDF hands over its own line breaks. Keeping them gives narrow ragged text;
+# dropping them all gives one run-on block. Each break is judged by whether the
+# next line's first word would have fitted on the line before it.
+#
+# What is checked here is what the function actually promises, at every width
+# rather than at the widths that happen to work: no word is ever lost or
+# changed, no paragraph is ever split in two, and a document that indents its
+# paragraphs is recovered exactly. Merging two paragraphs IS possible without
+# indentation -- a paragraph whose last line lands nearly full cannot be told
+# from a line the column broke -- and that limit is asserted rather than hidden.
+import textwrap
+
+PARAS = [
+    "Lorem Ipsum is simply dummy text of the printing and typesetting "
+    "industry. Lorem Ipsum has been the industry standard dummy text ever "
+    "since 1966, when designers at Letraset and James Mosley took a 1914 "
+    "Cicero translation and scrambled it to make dummy text.",
+    "It is a long established fact that a reader will be distracted by the "
+    "readable content of a page when looking at its layout. The point of "
+    "using Lorem Ipsum is that it has a more-or-less normal distribution.",
+    "Contrary to popular belief, Lorem Ipsum is not simply random text. It "
+    "has roots in a piece of classical Latin literature from 45 BC, making "
+    "it over 2000 years old.",
+]
+ORIGINAL = "\n".join(PARAS)
+WIDTHS = (45, 52, 60, 70, 80, 95, 110, 130)
+
+
+def _wrapped(width, indent=""):
+    return "\n".join("\n".join(textwrap.wrap(p, width, initial_indent=indent))
+                     for p in PARAS)
+
+
+def _only_merges(out, paragraphs):
+    """True if every output paragraph is whole original paragraphs joined.
+
+    Merging is allowed and sometimes unavoidable; splitting one apart is the
+    failure that would break a sentence in half, so it must never happen.
+    """
+    remaining = list(paragraphs)
+    for line in out.split("\n"):
+        taken = ""
+        while remaining and taken != line:
+            taken = (taken + " " + remaining.pop(0)).strip()
+            if len(taken) > len(line):
+                return False
+        if taken != line:
+            return False
+    return not remaining
+
+
+# The safety properties, at every width, indented or not.
+for _w in WIDTHS:
+    for _label, _indent in (("plain", ""), ("indented", "    ")):
+        _out = reflow_wrapped(_wrapped(_w, _indent))
+        check(f"{_label} text at {_w} columns keeps every word unchanged",
+              _out.split() == ORIGINAL.split())
+        check(f"{_label} text at {_w} columns never splits a paragraph in two",
+              _only_merges(_out, PARAS))
+
+# Where the document says where paragraphs start, there is nothing to guess.
+for _w in WIDTHS:
+    check(f"indented paragraphs are recovered exactly at {_w} columns",
+          reflow_wrapped(_wrapped(_w, "    ")) == ORIGINAL)
+
+# And where paragraph ends are unambiguous -- each ending well short of the
+# column -- so is the plain case.
+CLEAR = ["The first paragraph runs on for a while and then stops here.",
+         "The second one also runs on for a while before it stops.",
+         "The third is much the same, and then it ends."]
+for _w in (52, 70, 95):
+    _clear_wrapped = "\n".join("\n".join(textwrap.wrap(p, _w)) for p in CLEAR)
+    check(f"unambiguous paragraphs are recovered exactly at {_w} columns",
+          reflow_wrapped(_clear_wrapped) == "\n".join(CLEAR))
+
+# --- what must be left alone ---
+_address = "Str. Mihai Viteazul 12\nBloc A, ap. 4\nCluj-Napoca"
+check("an address keeps its own line breaks",
+      reflow_wrapped(_address) == _address)
+
+_poem = ("I wandered lonely as a cloud\nThat floats on high o'er vales and "
+         "hills\nWhen all at once I saw a crowd")
+check("short lines that were meant are kept", reflow_wrapped(_poem) == _poem)
+
+_two = ("Lorem Ipsum is simply dummy text of the printing industry here\n"
+        "and it continues on this second line of roughly equal length")
+check("two lines are not enough evidence to join anything",
+      reflow_wrapped(_two) == _two)
+
+_list = ("\u2022 The first item, which runs on for quite a while and is long\n"
+         "\u2022 The second item, also long enough to look like wrapped prose\n"
+         "\u2022 And a third one, so there are enough lines to be a pattern")
+check("a bullet list is never rejoined, however long its lines",
+      reflow_wrapped(_list) == _list)
+
+_numbered = ("1. The first item, which runs on for quite a while and is long\n"
+             "2. The second item, also long enough to look like wrapped prose\n"
+             "3. And a third one, so there are enough lines to be a pattern")
+check("a numbered list is never rejoined either",
+      reflow_wrapped(_numbered) == _numbered)
+
+# --- blank lines, hyphens, and text that needs nothing done to it ---
+_blocks = _wrapped(70, "    ") + "\n\n" + _wrapped(70, "    ")
+check("a blank line still separates what it separated",
+      reflow_wrapped(_blocks) == ORIGINAL + "\n\n" + ORIGINAL)
+
+# A hyphen at the break is kept and the space dropped. "more-or-less" split as
+# "more-" / "or-less" is the case that matters: removing the hyphen made it
+# "moreor-less", which is not a word.
+check("a hyphenated word broken across lines is not corrupted",
+      "more-or-less" in reflow_wrapped(_wrapped(45)))
+
+_dash_end = ("Everything below is quoted from the report, see page 12 -\n"
+             "and the figures there disagree with the summary given above\n"
+             "in three separate places, which nobody has yet explained.")
+check("a trailing dash that is not part of a word keeps its space",
+      "12 - and" in reflow_wrapped(_dash_end))
+
+# A real PDF, justified, where a paragraph's line happens to fall a few
+# characters short and the next word is small: "...at interdum magna augue" /
+# "eget diam. Vestibulum..." was read as two paragraphs and numbered as two
+# list items, splitting the sentence between them. A paragraph almost never
+# stops mid-sentence, so a line ending in no punctuation at all is taken as
+# the column's doing.
+_PDF_LINES = [
+    "Suspendisse in justo eu magna luctus suscipit. Sed lectus. Integer",
+    "euismod lacus luctus magna. Quisque cursus, metus vitae pharetra",
+    "auctor, sem massa mattis sem, at interdum magna augue",
+    "eget diam. Vestibulum ante ipsum primis in faucibus orci luctus et",
+    "ultrices posuere cubilia Curae; Morbi lacinia molestie dui.",
+    "Morbi in dui quis est pulvinar ullamcorper. Nulla facilisi. Integer",
+    "lacinia sollicitudin massa. Cras metus. Sed aliquet risus a tortor.",
+]
+_pdf_out = reflow_wrapped("\n".join(_PDF_LINES))
+check(f"a sentence running past a short line is not split in two "
+      f"({len(_pdf_out.splitlines())} paragraphs from {len(_PDF_LINES)} lines)",
+      len(_pdf_out.splitlines()) == 2)
+check("and the continuation stays with the sentence it belongs to",
+      "magna augue eget diam." in _pdf_out)
+
+# A heading still ends a paragraph, punctuation or not, because it falls well
+# short of the column. Enough wrapped lines here for the block to be taken as
+# a column in the first place -- an earlier version of this fixture was three
+# lines long, was never recognised as wrapped, and so passed without testing
+# anything at all.
+_heading = ["Introduction",
+            "The first paragraph of this section runs the full width of the",
+            "column and carries on past the end of its first line without",
+            "stopping, which is what makes the block read as a column here",
+            "rather than as a handful of separate short lines of its own."]
+_heading_out = reflow_wrapped("\n".join(_heading))
+check(f"a short heading still starts its own paragraph "
+      f"({_heading_out.splitlines()[0][:20]!r})",
+      _heading_out.splitlines()[0] == "Introduction")
+check("and the lines under it are joined into one",
+      len(_heading_out.splitlines()) == 2)
+
+check("already-joined paragraphs are returned untouched",
+      reflow_wrapped(ORIGINAL) == ORIGINAL)
+check("empty text is handled", reflow_wrapped("") == "")
+check("None is handled", reflow_wrapped(None) == "")
 
 print()
 print(f"FAILURES: {fails if fails else 'none'}")
