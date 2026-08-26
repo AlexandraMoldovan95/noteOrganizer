@@ -4,6 +4,38 @@ A narrative log of the more interesting bugs found and fixed during development 
 
 ---
 
+### The text box that was always eighty characters wide
+
+**Symptom:** pasted text used only about half the width of the note, and deleting a character further down did not make it reflow into the space. It behaved as though the box were half its apparent size.
+
+**Root cause:** it was. The Expand toggle added for the writing area called `pack_configure(expand=False)` on the box it was given, meaning to stop it filling the available space so the row count would govern its height. Both text boxes are packed with `side="left"`, where `expand` hands out *horizontal* space — vertical space is the container's to give. So the call never affected the height it was written for, and left each box at a Text widget's default width of eighty characters inside a much wider frame. Measured: 752px of 1027px for the body, 672px for comments.
+
+**What it was *not*:** the paste. Every paste path showed it, because the box was narrow before anything was pasted into it.
+
+**Fix:** delete the line. The height is governed by the frame around the box, which sizes itself to what the box asks for, so nothing was lost.
+
+**Two checks that could not have caught it.** The first measured whether the text ran the full width of the box — but text always fills the box it is given; with the bug it filled a 752px box perfectly well. The second compared the box against its frame, which is the right comparison, but a Text widget's default eighty characters is about 700px and the frame in that test happened to be 727px, so it passed anyway. What does catch it is the invariant behind the measurement: a box packed `side="left"` without `expand` cannot fill its frame at *any* window size.
+
+**Takeaway:** when a check passes, ask what it would take to make it fail. Both of these were written to guard a specific bug, and neither would have.
+
+### The paragraphs a PDF does not have
+
+**Symptom:** text copied from a PDF arrived either as one run-on block (**Ctrl+V**) or as narrow ragged lines a third of the way across the note (**Ctrl+Shift+V**). Numbering it then put a number on every line, including mid-sentence.
+
+**Root cause:** a PDF has no paragraphs. It has lines placed on a page, and copying from one hands those line breaks over as though they were meant. Both behaviours followed from that honestly: the plain path kept every break, and the HTML path dropped them all, because HTML says a newline in text is whitespace — true for a web page, whose markup is laid out for a human to read, and false for a fragment carrying no block tag at all, which is what a PDF viewer offers.
+
+**Fix:** keep those breaks when the fragment has no block structure, then rejoin the lines a column broke.
+
+**Three heuristics, two of them wrong.** The first used width-relative thresholds — a line reaching 90% of the widest was "full" — and got 60-column text wrong in one direction and 110-column wrong in the other. The second asked the right question, *would the next line's first word have fitted here?*, which needs no threshold tuned to a width; but the column is never narrower than the longest line seen and usually a little wider, so a near-miss read as a deliberate ending and split paragraphs in half. The third added two characters of slack for that decision — and only for that decision, since allowing it when deciding whether the text is a column at all made three short paragraphs look like wrapped prose and merged them.
+
+**And the signal that was missing from all three.** A paragraph almost never stops in the middle of a sentence. A line ending in no punctuation at all was broken by the column, whatever the arithmetic says — unless it falls well short of the column, which is a heading or a last line however it ends.
+
+**Tested by property, not by result.** Which widths happen to come out exactly right is not the point and invites tuning the test until it passes, which this project has done once before and regretted. What is asserted instead, at eight widths, indented and not: no word is ever lost or altered, and no paragraph is ever split in two. Merging two paragraphs is possible — without indentation, a paragraph whose last line lands nearly full cannot be told from a line the column broke — and that limit is asserted rather than hidden, because losing a break is survivable and cutting a sentence in half is not.
+
+**One check written during the fix passed without testing anything.** A three-line fixture meant to prove a heading keeps its own line was never recognised as a column in the first place, so it never reached the code it was guarding. Deleting that code changed nothing. It was found by deliberately breaking the code and noticing that nothing failed.
+
+---
+
 ### The paste that kept the formatting it was told to drop
 
 **Symptom:** "paste without formatting" pasted a bullet list. Both choices did the same thing, which made it look like the wrong function was wired to the shortcut.
