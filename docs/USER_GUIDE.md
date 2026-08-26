@@ -22,6 +22,8 @@ Click **+ New Note** in the sidebar to open a blank editor. A note has a title, 
 
 Notes save automatically a moment after you stop typing (look for the "Auto-saved" status), and always save immediately when you switch to a different note.
 
+The writing area starts at twelve lines. **Expand**, underneath it, makes it roughly twice as tall for a long note, and **Collapse** puts it back — the note itself is unaffected either way, only how much of it you can see at once. The buttons at the bottom of the editor do not go out of reach; the page simply gets longer and scrolls. The app remembers which you chose. The comments box has the same toggle, though it always opens small.
+
 ### Formatting
 
 A small toolbar above the note body is split into four groups, separated by thin dividers. If the window is too narrow to hold them all on one line, the toolbar wraps onto a second rather than hiding anything. The first three — the style toggles, the font dropdowns, and the two colour buttons — change the characters you select. The last changes whole lines. Hover any button and it tells you what it does. **Style**: **Bold**, *Italic*, <u>Underline</u>, and ~~Strikethrough~~ — also on the right-click menu, and available as keyboard shortcuts (**Ctrl+B**, **Ctrl+I**, **Ctrl+U**, **Ctrl+D**). **Colors**: text color and highlight, each opening a small swatch picker (no hex codes to type — just pick a color) with a Clear option to remove it again. All six work the same way: select some text and click (or press) one to apply it there, or click one with nothing selected — it "sticks" for whatever you type next, until you click it again to turn it off. Text color and highlight can be combined with each other and with any of the four styles.

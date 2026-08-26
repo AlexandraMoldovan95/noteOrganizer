@@ -22,6 +22,7 @@ Built as a solo/pair project (developer + AI pairing partner) over an extended i
 - Paste from a browser or a word processor and keep the bold, colours and lists (Ctrl+Shift+V for plain text); copy a note out and it arrives formatted in email or Word
 - A reading-time estimate for each note, beside its word and character counts
 - Font size and family, per selection or as the default for every note (Settings → Appearance), from a curated list that ships with Windows so a shared note renders as it was written
+- A writing area that can be made taller with one click, and stays that way; the comments box has the same toggle
 - Paragraph formatting: bullet and numbered lists that nest with Tab, indentation for any paragraph, and left/centre/right alignment. List markers are kept in the note's own text, so a list stays readable when exported, shared as a code, or pasted anywhere else
 
 **Recurring notes**

@@ -42,7 +42,7 @@ except ImportError:
 # Added/Fixed CHANGELOG.md entries, not per-release counts). The running
 # app records this into settings, so the next time a newer build opens
 # over older data it can tell the user what changed version-wise.
-APP_VERSION = "0.37.56"
+APP_VERSION = "0.38.56"
 
 
 def parse_version(v):
@@ -3489,11 +3489,22 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         return handler
 
     def _add_text_resize_toggle(self, host, text_widget, compact, expanded,
-                                pack_kwargs=None):
+                                pack_kwargs=None, remember_key=None):
         """Add an Expand/Collapse toggle under a Text box. One click switches its
         height (in rows) between compact and expanded — same flicker-free pattern
         as the Settings panels, no dragging. Also disables the box's expand fill
-        so the height setting actually takes effect. Not persisted."""
+        so the height setting actually takes effect.
+
+        Dragging a box's edge was tried for the note body and abandoned: the
+        editor sits inside a scrolling canvas that recomputes its scrollregion
+        whenever its contents resize, and a drag sends that dozens of times a
+        second. The canvas fell behind, leaving widgets drawn at stale
+        positions. One click is one resize, so it cannot happen.
+
+        Pass *remember_key* to store the chosen state in settings under that
+        name; without one the box opens compact every time, which is right for
+        a box whose size is incidental and wrong for one someone chose.
+        """
         # Make height changes visible: stop the box from expanding to fill all
         # available space, so the row count controls its size.
         try:
@@ -3502,7 +3513,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             pass
         text_widget.configure(height=compact)
 
-        state = {"expanded": False}
+        start = False
+        if remember_key:
+            start = bool(get_setting(remember_key, False, bool))
+        state = {"expanded": start}
         btn = tk.Button(host, relief="flat", font=("Segoe UI", 8, "bold"),
                         cursor="hand2", bd=0)
         self.track_theme(btn, bg="bg", fg="subtext",
@@ -3518,6 +3532,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         def toggle():
             state["expanded"] = not state["expanded"]
             apply()
+            if remember_key:
+                save_setting(remember_key, state["expanded"])
 
         btn.configure(command=toggle)
         apply()
@@ -4909,6 +4925,18 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             ("Highlight…", lambda: self._open_color_swatch_popup("highlight")),
         ])
         self.update_word_count()
+
+        # How tall the writing area should be is a property of the note, not
+        # of the app: twelve rows suits most notes and is cramped for a long
+        # one. Unlike the comments box below, this one remembers the choice --
+        # someone who writes long notes wants the taller box every time, not
+        # once per launch. Nothing else has to change for the taller box to
+        # work: the editor already scrolls, so the page simply gets longer and
+        # the buttons underneath stay reachable.
+        self.body_resize_btn = self._add_text_resize_toggle(
+            self.editor, self.body_text, compact=12, expanded=26,
+            pack_kwargs={"padx": 30, "pady": (0, 8)},
+            remember_key="editor_body_expanded")
 
         # --- Checklist and Calculator, side by side — each still its own
         # independent collapsible section, just sharing a row instead of
