@@ -1950,6 +1950,82 @@ check(f'the table face follows the editor font size ({_before_size!r} -> '
       f'{_after_size!r})', _after_size.endswith('20') and _before_size != _after_size)
 app._set_editor_font(size=12)
 app.update()
+
+# ---- A TABLE IS LINED UP AGAIN ONCE IT IS LEFT ----
+# Not on every keystroke: the columns would jump about under the hands of
+# whoever is typing, and each keystroke would rewrite characters. Waiting
+# until the row is left means one rewrite, at a moment nobody is mid-word.
+set_body('before\n| Name | Qty |\n| Milk | 2   |\nafter')
+app._resync_list_tags()
+app.update()
+_cell = app.body_text.search('Name', '1.0', 'end')
+app.body_text.tag_add('bold', _cell, _cell + '+4c')
+app.update()
+
+
+def _caret(index):
+    """Move the caret and let the app notice, as a key or a click would."""
+    app.body_text.mark_set('insert', index)
+    app._align_table_on_leaving()
+    app.update()
+
+
+_caret('3.7')
+app.body_text.insert('insert', ' and bread')
+app.update()
+check(f'a table is left alone while it is being typed in '
+      f'({lines_now()[2]!r})',
+      lines_now()[2] == '| Milk  and bread| 2   |')
+
+_caret('2.3')
+check('and while the caret moves between its own rows',
+      lines_now()[2] == '| Milk  and bread| 2   |')
+
+_caret('4.0')
+check(f'but is lined up once the caret leaves it ({lines_now()[1]!r})',
+      lines_now() == ['before',
+                      '| Name            | Qty |',
+                      '| Milk  and bread | 2   |',
+                      'after'])
+
+# The reason only the spaces are edited: Tk carries a tag along with the
+# text around it, so bold inside a cell survives. Rewriting the line would
+# have taken its tags with it.
+_bold = app.body_text.tag_ranges('bold')
+check(f'bold inside a cell survives the re-padding '
+      f'({app.body_text.get(_bold[0], _bold[1]) if _bold else None!r})',
+      bool(_bold) and app.body_text.get(_bold[0], _bold[1]) == 'Name')
+check(f'and the caret is where it was left ({app.body_text.index("insert")})',
+      app.body_text.index('insert') == '4.0')
+
+# That check alone cannot fail: re-padding only happens once the caret has
+# left the block, and Tk moves an index on another line by itself. What can
+# fail is the caret when the block is lined up around it, which is what
+# inserting or editing a table will do. Tk keeps the mark beside the
+# character it was beside; putting it back to the index it held before would
+# drag it to a column that now holds something else -- which an earlier
+# version of this did, landing the caret on a space nineteen characters away.
+set_body('| a | Z |\n| a much longer cell | b |')
+app._resync_list_tags()
+app.update()
+app.body_text.mark_set('insert', '1.7')
+check("the caret starts just after 'Z'", app.body_text.get('insert -1c') == 'Z')
+app._align_table_block(1)
+app.update()
+check(f"and is still just after 'Z' once the columns are widened "
+      f"({app.body_text.index('insert')}, after "
+      f"{app.body_text.get('insert -1c')!r})",
+      app.body_text.get('insert -1c') == 'Z')
+
+# Padding that is no longer needed goes away as well, or a table would only
+# ever grow wider as it was edited.
+set_body('| Name                    | Qty |\n| Milk                    | 2   |\nafter')
+app._resync_list_tags()
+_caret('1.5')
+_caret('3.0')
+check(f'padding left over from deleted text is taken back ({lines_now()[0]!r})',
+      lines_now()[0] == '| Name | Qty |')
+
 set_body('')
 
 NO.clipboard.read_html = _real_read_html

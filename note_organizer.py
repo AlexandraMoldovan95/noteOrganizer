@@ -180,6 +180,7 @@ from noteorganizer.core.duplicates import (
 
 # Rich-text span storage lives in noteorganizer/core/formatting.py.
 from noteorganizer.core import clipboard
+from noteorganizer.core import tables as core_tables
 from noteorganizer.core.tables import is_table_row
 from noteorganizer.core.richtext import (html_to_note, note_to_html,
                                         reflow_wrapped)
@@ -1122,6 +1123,85 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         return name
 
     TABLE_TAG = "table_row"
+
+    def _table_block_at(self, line_no):
+        """The first and last line of the table *line_no* belongs to, 1-based.
+
+        None if that line is not a table row. Read from the widget rather
+        than from anything remembered, because the text is what decides.
+        """
+        if not is_table_row(self.body_text.get(f"{line_no}.0", f"{line_no}.end")):
+            return None
+        first = last = line_no
+        end = int(self.body_text.index("end-1c").split(".")[0])
+        while first > 1 and is_table_row(
+                self.body_text.get(f"{first - 1}.0", f"{first - 1}.end")):
+            first -= 1
+        while last < end and is_table_row(
+                self.body_text.get(f"{last + 1}.0", f"{last + 1}.end")):
+            last += 1
+        return first, last
+
+    def _align_table_block(self, line_no):
+        """Line the columns of one table up again.
+
+        Only the spaces are touched, never the whole line: Tk carries a tag
+        along with the text around it, so a space inserted beside a cell
+        leaves the bold inside it where it was, while rewriting the line
+        would take its tags with it.
+
+        The caret is deliberately *not* put back. Tk already moves the
+        insert mark along with the text around it, which keeps it beside the
+        character it was beside; restoring it to the index it had before
+        would drag it back to a column that now holds something else.
+        Measured: with the caret just after "Z" in a row being widened by
+        nineteen spaces, restoring left it on a space nineteen characters
+        earlier.
+        """
+        block = self._table_block_at(line_no)
+        if not block:
+            return False
+        first, last = block
+        lines = [self.body_text.get(f"{n}.0", f"{n}.end")
+                 for n in range(first, last + 1)]
+        widths = core_tables.column_widths(
+            [core_tables.split_row(line) for line in lines])
+        changed = False
+        for offset, line in enumerate(lines):
+            row = first + offset
+            for at, delta in core_tables.pad_ops(line, widths):
+                changed = True
+                if delta > 0:
+                    self.body_text.insert(f"{row}.{at}", " " * delta)
+                else:
+                    self.body_text.delete(f"{row}.{at}",
+                                          f"{row}.{at + (-delta)}")
+        if changed:
+            self._resync_list_tags()
+        return changed
+
+    def _align_table_on_leaving(self, event=None):
+        """Re-pad a table once the caret is no longer inside it.
+
+        Not on every keystroke: the columns would jump about under the
+        hands of whoever is typing, and every keystroke would rewrite
+        characters. Waiting until the row is left means one rewrite, at a
+        moment nobody is mid-word.
+        """
+        try:
+            now = int(self.body_text.index("insert").split(".")[0])
+        except tk.TclError:
+            return
+        was = getattr(self, "_last_caret_line", None)
+        self._last_caret_line = now
+        if was is None or was == now:
+            return
+        # The line just left, not the one just arrived at: a table is tidied
+        # when it is finished with, and a caret moving between two rows of
+        # the same table is not finished with it.
+        leaving = self._table_block_at(was)
+        if leaving and leaving != self._table_block_at(now):
+            self._align_table_block(was)
 
     def _configure_table_tag(self, text_widget):
         """Draw table rows in a monospace face, at the editor's own size.
@@ -4951,8 +5031,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.body_text.bind("<KeyRelease>", self._schedule_autosave)
         self.body_text.bind("<KeyRelease>", self._apply_pending_style_to_typed_char, add="+")
         self.body_text.bind("<KeyRelease>", self._refresh_format_buttons, add="+")
+        self.body_text.bind("<KeyRelease>", self._align_table_on_leaving, add="+")
         self.body_text.bind("<ButtonRelease-1>", self._resync_pending_style_anchor, add="+")
         self.body_text.bind("<ButtonRelease-1>", self._refresh_format_buttons, add="+")
+        self.body_text.bind("<ButtonRelease-1>", self._align_table_on_leaving, add="+")
         # Overrides Tk's default double-click "select word" so punctuation
         # like "." always breaks a word (and an empty line selects
         # nothing), and its default triple-click "select line" so it stops

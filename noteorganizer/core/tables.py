@@ -111,6 +111,42 @@ def format_table(rows):
     return [format_row(row, widths) for row in rows]
 
 
+def pad_ops(line, widths):
+    """The space edits that would line this row up, listed right to left.
+
+    Each is ``(offset, delta)``: a positive delta inserts that many spaces at
+    that offset in the line, a negative one deletes that many characters
+    there. Right to left so applying one does not move the next one's offset.
+
+    Editing the spaces rather than rewriting the line is what makes this
+    usable in a widget. Tk moves a tag along with the text around it, so
+    inserting a space beside a cell leaves the bold inside it exactly where
+    it was; replacing the whole line would take the tags with it.
+    """
+    bounds = cell_bounds(line)
+    if not bounds:
+        return []
+    raw = (line or "").rstrip()
+    ops = []
+    for i in range(len(bounds) - 1, -1, -1):
+        start, end = bounds[i]
+        width = widths[i] if i < len(widths) else (end - start)
+        # After the text: however many spaces are needed to reach the width,
+        # plus the one that always sits before the closing pipe.
+        closing = raw.index(CELL, end)
+        have, want = closing - end, width - (end - start) + 1
+        if have != want:
+            ops.append((end, want - have))
+        # Before the text: exactly one space after the opening pipe.
+        opening = start - 1
+        while opening >= 0 and raw[opening] != CELL:
+            opening -= 1
+        have_lead = start - opening - 1
+        if have_lead != 1:
+            ops.append((opening + 1, 1 - have_lead))
+    return ops
+
+
 def find_blocks(text):
     """Every run of consecutive table rows, as ``(first_line, last_line)``.
 
