@@ -1790,13 +1790,178 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._refresh_list_buttons()
         self._schedule_autosave()
 
-    def _on_body_tab(self, event, delta):
-        """Tab and Shift+Tab change depth inside a list.
+    def _cell_at(self, line_no, column):
+        """Which cell of this row the given column falls in, and where it is.
 
-        Only inside one: in ordinary prose Tab should still type a tab, which
-        is what returning None leaves Tk to do. Shift+Tab always stops here,
-        since its default is to move focus out of the editor mid-sentence.
+        Returns ``(index, start, end)`` for the cell containing *column*, or
+        the nearest one when the column sits on a pipe or in the padding.
+        None if the line is not a row.
         """
+        line = self.body_text.get(f"{line_no}.0", f"{line_no}.end")
+        bounds = core_tables.cell_bounds(line)
+        if not bounds:
+            return None
+        for i, (start, end) in enumerate(bounds):
+            # The cell owns everything up to the pipe that closes it, so a
+            # caret sitting in the padding after a short cell counts as being
+            # in that cell rather than in nothing.
+            closing = line.index(core_tables.CELL, end)
+            if column <= closing:
+                return i, start, end
+        last = len(bounds) - 1
+        return last, bounds[last][0], bounds[last][1]
+
+    def _move_to_cell(self, line_no, index):
+        """Put the caret at the start of one cell's text, selecting it.
+
+        Selecting is what makes tabbing through a table useful: the next
+        thing typed replaces the cell rather than being appended to it,
+        which is what every other table does.
+        """
+        line = self.body_text.get(f"{line_no}.0", f"{line_no}.end")
+        bounds = core_tables.cell_bounds(line)
+        if not bounds or index >= len(bounds):
+            return False
+        start, end = bounds[index]
+        self.body_text.tag_remove("sel", "1.0", "end")
+        self.body_text.mark_set("insert", f"{line_no}.{start}")
+        if end > start:
+            self.body_text.tag_add("sel", f"{line_no}.{start}", f"{line_no}.{end}")
+        self.body_text.see("insert")
+        return True
+
+    def _tab_in_table(self, delta):
+        """Move to the next or previous cell. True if that happened.
+
+        At the end of the last row a new one is added rather than the caret
+        leaving: it is what lets a whole table be typed without reaching for
+        the mouse, and it is what every word processor does. Backwards out of
+        the first cell does nothing -- there is nowhere sensible to go, and
+        silently leaving the table would be worse than staying.
+        """
+        line_no = int(self.body_text.index("insert").split(".")[0])
+        column = int(self.body_text.index("insert").split(".")[1])
+        here = self._cell_at(line_no, column)
+        if here is None:
+            return False
+        index, _start, _end = here
+        block = self._table_block_at(line_no)
+        if not block:
+            return False
+        first, last = block
+        count = len(core_tables.cell_bounds(
+            self.body_text.get(f"{line_no}.0", f"{line_no}.end")))
+
+        if delta > 0:
+            if index + 1 < count:
+                return self._move_to_cell(line_no, index + 1)
+            if line_no < last:
+                return self._move_to_cell(line_no + 1, 0)
+            # The last cell of the last row: make somewhere to go.
+            self.body_text.insert(f"{line_no}.end", "\n"
+                                  + core_tables.blank_table(1, count)[0])
+            self._align_table_block(line_no)
+            self._resync_list_tags()
+            return self._move_to_cell(line_no + 1, 0)
+
+        if index > 0:
+            return self._move_to_cell(line_no, index - 1)
+        if line_no > first:
+            above = len(core_tables.cell_bounds(
+                self.body_text.get(f"{line_no - 1}.0", f"{line_no - 1}.end")))
+            return self._move_to_cell(line_no - 1, above - 1)
+        return True
+
+    TABLE_GRID_ROWS = 6
+    TABLE_GRID_COLUMNS = 8
+
+    def _insert_table(self, rows, columns):
+        """Put a blank table at the caret, on lines of its own.
+
+        A table is lines, so it cannot share one with anything else: a
+        newline is added before it when the caret sits in the middle of
+        something, and after it so there is somewhere to carry on writing.
+        """
+        rows = max(1, min(self.TABLE_GRID_ROWS * 4, int(rows)))
+        columns = max(1, min(self.TABLE_GRID_COLUMNS, int(columns)))
+        line_no = int(self.body_text.index("insert").split(".")[0])
+        line = self.body_text.get(f"{line_no}.0", f"{line_no}.end")
+        before = "" if not line.strip() else "\n"
+        block = "\n".join(core_tables.blank_table(rows, columns))
+        self.body_text.insert("insert", before + block + "\n")
+        first = line_no + (1 if before else 0)
+        self._align_table_block(first)
+        self._resync_list_tags()
+        self._move_to_cell(first, 0)
+        self.body_text.focus_set()
+        self._schedule_autosave()
+        return first
+
+    def _open_table_size_popup(self):
+        """Choose the size by pointing at it, the way a word processor does.
+
+        A grid rather than two number fields: the shape of a table is the
+        thing being chosen, and a grid shows it. Reuses the same anchored
+        mini-popup the colour swatches use.
+        """
+        self._dismiss_mini_popup()
+        popup = tk.Toplevel(self)
+        self._mini_popup = popup
+        popup.wm_overrideredirect(True)
+        popup.configure(bg=self.colors["accent"])
+        outer = tk.Frame(popup, bg=self.colors["card"], padx=1, pady=1)
+        outer.pack()
+        body = tk.Frame(outer, bg=self.colors["card"])
+        body.pack()
+
+        caption = tk.Label(body, text="Insert table", font=("Segoe UI", 10, "bold"),
+                           bg=self.colors["card"], fg=self.colors["text"])
+        caption.pack(padx=15, pady=(12, 6))
+
+        grid = tk.Frame(body, bg=self.colors["card"])
+        grid.pack(padx=15)
+        cells = {}
+
+        def highlight(rows, columns):
+            for (r, c), cell in cells.items():
+                inside = r <= rows and c <= columns
+                cell.configure(bg=self.colors["accent"] if inside
+                               else inset_surface(self.colors))
+            caption.configure(text=f"{rows} x {columns} table")
+
+        def leave(_event=None):
+            highlight(0, 0)
+            caption.configure(text="Insert table")
+
+        for r in range(1, self.TABLE_GRID_ROWS + 1):
+            for c in range(1, self.TABLE_GRID_COLUMNS + 1):
+                cell = tk.Frame(grid, width=14, height=14, cursor="hand2",
+                                bg=inset_surface(self.colors))
+                cell.grid(row=r, column=c, padx=1, pady=1)
+                cell.bind("<Enter>", lambda e, r=r, c=c: highlight(r, c))
+                cell.bind("<Button-1>", lambda e, r=r, c=c: (
+                    self._dismiss_mini_popup(), self._insert_table(r, c)))
+                cells[(r, c)] = cell
+        grid.bind("<Leave>", leave)
+
+        hint = tk.Label(body, text="Tab moves between cells",
+                        font=("Segoe UI", 8), bg=self.colors["card"],
+                        fg=self.colors["subtext"])
+        hint.pack(padx=15, pady=(6, 12))
+
+        self._place_mini_popup(popup, self.table_btn)
+        return popup
+
+    def _on_body_tab(self, event, delta):
+        """Tab and Shift+Tab move between table cells, or change list depth.
+
+        Only inside one or the other: in ordinary prose Tab should still type
+        a tab, which is what returning None leaves Tk to do. Shift+Tab always
+        stops here, since its default is to move focus out of the editor
+        mid-sentence.
+        """
+        if self._tab_in_table(delta):
+            return "break"
         first, last = self._selected_line_range()
         in_list = any(self._list_kind_of(self.body_text, n)
                       for n in range(first, last + 1))
@@ -4990,6 +5155,22 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self.track_theme(btn, bg="sidebar", fg="text")
             self._add_fmt_item(btn, padx=(0, 2), ipady=2)
             self._attach_tooltip(btn, tip, tip_detail)
+
+        table_divider = tk.Frame(format_bar, width=1)
+        self.track_theme(table_divider, bg="card")
+        self._add_fmt_item(table_divider, padx=(5, 5), fill="y", pady=3)
+
+        self.table_btn = tk.Button(
+            format_bar, text="\u25a6", font=("Segoe UI", 11), width=2,
+            relief="flat", cursor="hand2",
+            command=self._open_table_size_popup
+        )
+        self.track_theme(self.table_btn, bg="sidebar", fg="text")
+        self._add_fmt_item(self.table_btn, padx=(0, 2), ipady=2)
+        self._attach_tooltip(
+            self.table_btn, "Table",
+            "Rows live in the note's own text, so a table survives being "
+            "exported, shared as a code, or pasted anywhere else")
 
         text_frame = tk.Frame(self.editor)
         self.track_theme(text_frame, bg="card")

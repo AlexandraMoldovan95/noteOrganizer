@@ -75,8 +75,16 @@ def cell_bounds(line):
         return []
     bounds, pos = [], lead + 1
     for part in body.split(CELL)[1:-1]:
-        start = pos + (len(part) - len(part.lstrip()))
-        bounds.append((start, start + len(part.strip())))
+        text = part.strip()
+        if text:
+            start = pos + (len(part) - len(part.lstrip()))
+        else:
+            # An empty cell is all padding, and skipping past it would put
+            # the caret on the closing pipe -- outside the cell it is meant
+            # to be in. One space in from the opening pipe is where typing
+            # should start.
+            start = pos + min(1, len(part))
+        bounds.append((start, start + len(text)))
         pos += len(part) + 1
     return bounds
 

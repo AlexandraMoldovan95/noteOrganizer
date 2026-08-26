@@ -2026,6 +2026,61 @@ _caret('3.0')
 check(f'padding left over from deleted text is taken back ({lines_now()[0]!r})',
       lines_now()[0] == '| Name | Qty |')
 
+# ---- MAKING A TABLE, AND TABBING THROUGH IT ----
+check('the toolbar has a table button', hasattr(app, 'table_btn'))
+
+set_body('')
+app._insert_table(3, 2)
+app.update()
+check(f'a blank table is inserted ({lines_now()[:3]!r})',
+      lines_now()[:3] == ['|  |  |', '|  |  |', '|  |  |'])
+check('its rows are drawn in the monospace face',
+      app.TABLE_TAG in app.body_text.tag_names('1.0'))
+check(f'the caret starts in the first cell ({app.body_text.index("insert")})',
+      app.body_text.index('insert') == '1.2')
+
+# The whole point of Tab: a table can be filled in without the mouse.
+take_focus(app.body_text)
+for _word in ('Name', 'Qty', 'Milk', '2', 'Eggs', '12'):
+    app.body_text.insert('insert', _word)
+    app.body_text.event_generate('<Tab>')
+    app.update()
+check(f'a table can be typed straight through with Tab ({lines_now()[:3]!r})',
+      lines_now()[:3] == ['| Name | Qty |', '| Milk | 2   |', '| Eggs | 12  |'])
+check(f'and Tab at the last cell makes a new row ({lines_now()[3]!r})',
+      lines_now()[3] == '|      |     |')
+
+# Tab selects the cell it lands on, so the next thing typed replaces it
+# rather than being appended -- which is what every other table does.
+app.body_text.mark_set('insert', '1.2')
+app.body_text.event_generate('<Tab>')
+app.update()
+try:
+    _selected = app.body_text.get('sel.first', 'sel.last')
+except tk.TclError:
+    _selected = None
+check(f'tabbing into a cell selects what is in it ({_selected!r})',
+      _selected == 'Qty')
+
+# Shift+Tab goes back, including to the row above.
+clear_selection()
+app.body_text.mark_set('insert', '2.2')
+app.body_text.event_generate('<Shift-Tab>')
+app.update()
+check(f'Shift+Tab goes back to the row above '
+      f'({app.body_text.index("insert")})',
+      app.body_text.index('insert').startswith('1.'))
+
+# And outside a table Tab still types a tab, as it always did.
+clear_selection()
+set_body('ordinary prose')
+app.body_text.mark_set('insert', '1.8')
+take_focus(app.body_text)
+app.body_text.event_generate('<Tab>')
+app.update()
+check(f'Tab in ordinary prose still types a tab ({body()!r})',
+      '\t' in body())
+
 set_body('')
 
 NO.clipboard.read_html = _real_read_html
