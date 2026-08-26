@@ -1084,6 +1084,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # The table face follows the base size too, or a table would stay at
         # whatever size it was built at while the text around it moved.
         self._configure_table_tag(self.body_text)
+        self._configure_table_cell_tags(self.body_text)
         self._refresh_format_buttons()
 
     def _marker_room(self, kind):
@@ -1123,6 +1124,37 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         return name
 
     TABLE_TAG = "table_row"
+    TABLE_CELL_TAG = "table_cell"
+    TABLE_HEAD_TAG = "table_head"
+    TABLE_PIPE_TAG = "table_pipe"
+
+    def _configure_table_cell_tags(self, text_widget):
+        """The drawn parts of a table: a border round each cell, and the
+        pipes hidden behind it.
+
+        The pipes stay in the text -- they are what makes the line a row, and
+        every character offset in `formatting` counts them -- but `elide`
+        keeps them out of sight. Tk hides elided text without removing it, so
+        the note's own text, its length and its offsets are untouched.
+
+        A border per cell rather than lines drawn between them, because a Tk
+        text widget can only draw around a run of characters. Neighbouring
+        cells then share an edge, which is what makes it read as a grid.
+        """
+        text_widget.tag_configure(self.TABLE_PIPE_TAG, elide=True)
+        text_widget.tag_configure(
+            self.TABLE_CELL_TAG, relief="solid", borderwidth=1,
+            background=inset_surface(self.colors))
+        # The heading is the row people read first, so it is given the
+        # weight rather than a colour of its own: a colour here would fight
+        # whatever the note's own theme is.
+        text_widget.tag_configure(
+            self.TABLE_HEAD_TAG, relief="solid", borderwidth=1,
+            background=hairline(self.colors))
+        # Cells are drawn under anything the writer chose. A highlight over
+        # a cell has to win, or colouring one would do nothing.
+        text_widget.tag_lower(self.TABLE_CELL_TAG)
+        text_widget.tag_lower(self.TABLE_HEAD_TAG)
 
     def _table_block_at(self, line_no):
         """The first and last line of the table *line_no* belongs to, 1-based.
@@ -1361,8 +1393,22 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             # row that stops being one does not pass the face on to what is
             # typed after it.
             line = self.body_text.get(f"{n}.0", f"{n}.end")
+            for name in (self.TABLE_CELL_TAG, self.TABLE_HEAD_TAG,
+                         self.TABLE_PIPE_TAG):
+                self.body_text.tag_remove(name, f"{n}.0", f"{n}.end+1c")
             if is_table_row(line):
                 self.body_text.tag_add(self.TABLE_TAG, f"{n}.0", f"{n}.end")
+                block = self._table_block_at(n)
+                # The first row of a block is its heading. Nothing marks it
+                # as one in the text, and nothing needs to: being first is
+                # what makes a heading a heading.
+                cell_tag = (self.TABLE_HEAD_TAG if block and n == block[0]
+                            else self.TABLE_CELL_TAG)
+                for start, end in core_tables.cell_spans(line):
+                    self.body_text.tag_add(cell_tag, f"{n}.{start}", f"{n}.{end}")
+                for at in core_tables.pipe_positions(line):
+                    self.body_text.tag_add(self.TABLE_PIPE_TAG,
+                                           f"{n}.{at}", f"{n}.{at + 1}")
             else:
                 self.body_text.tag_remove(self.TABLE_TAG, f"{n}.0", f"{n}.end+1c")
             kind = self._list_kind_of(self.body_text, n)
@@ -5190,6 +5236,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._setup_body_formatting_tags(self.body_text)
         self._setup_list_tags(self.body_text)
         self._configure_table_tag(self.body_text)
+        self._configure_table_cell_tags(self.body_text)
         self.body_text.bind("<Return>", self._on_body_return)
         self.body_text.bind("<BackSpace>", self._on_body_backspace)
         self.body_text.bind("<<Paste>>", self._on_body_paste, add="+")

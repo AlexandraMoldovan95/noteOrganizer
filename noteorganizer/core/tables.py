@@ -60,6 +60,38 @@ def split_row(line):
     return [part.strip() for part in parts[1:-1]]
 
 
+def cell_spans(line):
+    """Each cell's full extent, padding included, as ``(start, end)``.
+
+    Where ``cell_bounds`` finds the text, this finds the box around it --
+    everything between one pipe and the next. That is what a border is drawn
+    around and what a colour fills, and it is why padding added later stays
+    inside the same span rather than falling outside the colour.
+    """
+    raw = line or ""
+    lead = len(raw) - len(raw.lstrip())
+    body = raw.strip()
+    if not body.startswith(CELL) or not body.endswith(CELL):
+        return []
+    spans, pos = [], lead + 1
+    for part in body.split(CELL)[1:-1]:
+        spans.append((pos, pos + len(part)))
+        pos += len(part) + 1
+    return spans
+
+
+def pipe_positions(line):
+    """Where the pipes are, so they can be hidden from view.
+
+    They stay in the text -- they are what makes the line a row -- but a
+    drawn border says the same thing better, and showing both says it twice.
+    """
+    raw = line or ""
+    if not is_table_row(raw):
+        return []
+    return [i for i, ch in enumerate(raw) if ch == CELL]
+
+
 def cell_bounds(line):
     """Where each cell's text sits inside the row, as ``(start, end)``.
 
