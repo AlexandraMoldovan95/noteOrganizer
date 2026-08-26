@@ -3532,12 +3532,15 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         name; without one the box opens compact every time, which is right for
         a box whose size is incidental and wrong for one someone chose.
         """
-        # Make height changes visible: stop the box from expanding to fill all
-        # available space, so the row count controls its size.
-        try:
-            text_widget.pack_configure(expand=False)
-        except tk.TclError:
-            pass
+        # Nothing is done to the box's packing here. There used to be a
+        # pack_configure(expand=False), meant to keep the row count in charge
+        # of the height -- but both boxes are packed with side="left", where
+        # expand hands out *horizontal* space, not vertical. It never affected
+        # the height, and it left the box at its default width of eighty
+        # characters inside a much wider frame: 752px of 1027px, with the text
+        # wrapping halfway across and no way to make it fill the rest.
+        # The height is governed by the frame around the box, which sizes
+        # itself to what the box asks for, and the row count sets that.
         text_widget.configure(height=compact)
 
         start = False
