@@ -562,12 +562,15 @@ def shift_spans(spans, shifts):
     out = []
     for span in spans:
         start, end = span["start"], span["end"]
-        for at, delta in shifts:
-            if at < start:
-                start += delta
-            if at < end:
-                end += delta
+        # Every offset in *shifts* describes the text as it was, so each one
+        # has to be judged against the span as it was. Adding the deltas one
+        # at a time and comparing against the running total counted a later
+        # shift as being "before" a span it had itself pushed past: with two
+        # cells padded on one row, the bold in the first cell ended up in the
+        # second. Renumbering never showed it, because a line rarely has more
+        # than one marker widening before the same word.
         moved = dict(span)
-        moved["start"], moved["end"] = start, end
+        moved["start"] = start + sum(d for at, d in shifts if at < start)
+        moved["end"] = end + sum(d for at, d in shifts if at < end)
         out.append(moved)
     return out

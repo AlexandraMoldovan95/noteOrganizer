@@ -1182,13 +1182,17 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         leaves the bold inside it where it was, while rewriting the line
         would take its tags with it.
 
-        The caret is deliberately *not* put back. Tk already moves the
-        insert mark along with the text around it, which keeps it beside the
-        character it was beside; restoring it to the index it had before
-        would drag it back to a column that now holds something else.
-        Measured: with the caret just after "Z" in a row being widened by
-        nineteen spaces, restoring left it on a space nineteen characters
-        earlier.
+        The caret is not put back by index. Tk already moves the insert mark
+        along with the text around it, which keeps it beside the character it
+        was beside; setting it back to the index it had before would drag it
+        to a column that now holds something else -- measured, with the caret
+        just after "Z" in a widened row, it landed nineteen characters early.
+
+        What it does need is gravity. Padding is added at the end of a cell's
+        text, which is exactly where a caret sits after typing there, and a
+        mark's default gravity puts it to the *right* of text inserted at it
+        -- so the caret drifted past the new spaces to the far side of the
+        cell. Left gravity keeps it against the word it was against.
         """
         block = self._table_block_at(line_no)
         if not block:
@@ -1199,6 +1203,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         widths = core_tables.column_widths(
             [core_tables.split_row(line) for line in lines])
         changed = False
+        try:
+            was_gravity = self.body_text.mark_gravity("insert")
+            self.body_text.mark_gravity("insert", "left")
+        except tk.TclError:
+            was_gravity = None
         for offset, line in enumerate(lines):
             row = first + offset
             for at, delta in core_tables.pad_ops(line, widths):
@@ -1208,6 +1217,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 else:
                     self.body_text.delete(f"{row}.{at}",
                                           f"{row}.{at + (-delta)}")
+        if was_gravity:
+            try:
+                self.body_text.mark_gravity("insert", was_gravity)
+            except tk.TclError:
+                pass
         if changed:
             self._resync_list_tags()
         return changed
@@ -1247,8 +1261,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         available = set(tkfont.families())
         family = next((f for f in MONOSPACE_FAMILIES if f in available),
                       self.editor_font_family)
+        # A table's rows sit closer together than prose wants to, because
+        # each one is a single line. The extra space above and below is what
+        # turns a run of bordered lines into cells with something in them.
         text_widget.tag_configure(self.TABLE_TAG,
-                                  font=(family, self.editor_font_size))
+                                  font=(family, self.editor_font_size),
+                                  spacing1=4, spacing3=4)
 
     def _configure_paragraph_tag(self, text_widget, name):
         """Set one margin tag's options.

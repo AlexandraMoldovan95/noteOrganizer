@@ -121,11 +121,20 @@ def cell_bounds(line):
     return bounds
 
 
+# No column is drawn narrower than this, however little is in it. A new
+# table is all empty cells, and cells one character wide read as a row of
+# specks rather than as something to type into -- and they lurch wider as
+# soon as anything is typed. A floor costs a little width and makes an empty
+# table look like the thing it is.
+MIN_COLUMN = 8
+
+
 def column_widths(rows):
     """How wide each column has to be to hold every cell in it.
 
-    Rows may be ragged -- a row with fewer cells than its neighbours is not
-    an error, it is a row someone is still typing.
+    Never narrower than MIN_COLUMN. Rows may be ragged -- a row with fewer
+    cells than its neighbours is not an error, it is a row someone is still
+    typing.
     """
     widths = []
     for row in rows:
@@ -133,7 +142,7 @@ def column_widths(rows):
             if i >= len(widths):
                 widths.append(0)
             widths[i] = max(widths[i], len(cell))
-    return widths
+    return [max(MIN_COLUMN, w) for w in widths]
 
 
 def format_row(cells, widths):
@@ -220,20 +229,26 @@ def align(text):
     shifts = []
     for first, last in find_blocks(text):
         rows = [split_row(line) for line in lines[first:last + 1]]
-        formatted = format_table(rows)
+        widths = column_widths(rows)
         # Offsets are counted from the start of the body, so the length of
         # every line before this block has to be walked first. Done per
         # block rather than kept running, because a block's own lines change
         # length as they are replaced.
         pos = sum(len(line) + 1 for line in lines[:first])
-        for offset, (old, new) in enumerate(zip(lines[first:last + 1], formatted)):
-            delta = len(new) - len(old)
-            if delta:
-                # Recorded at the end of the line: padding is added inside
-                # it, so only text after the line moves. Anything formatted
-                # within the line keeps its place, which is what a person
-                # editing one cell expects of the bold in another.
-                shifts.append((pos + len(old), delta))
+        for offset, old in enumerate(list(lines[first:last + 1])):
+            new = old
+            # Each edit is recorded where it actually happens, not at the end
+            # of the line. Padding goes in *between* cells, so a word in a
+            # later cell of the same row moves too -- recording it at the
+            # line end left the bold in the second cell sitting on a space,
+            # which only showed once columns had a minimum width and there
+            # was padding to speak of.
+            for at, delta in pad_ops(old, widths):
+                if delta > 0:
+                    new = new[:at] + " " * delta + new[at:]
+                else:
+                    new = new[:at] + new[at - delta:]
+                shifts.append((pos + at, delta))
             pos += len(old) + 1
             lines[first + offset] = new
     return "\n".join(lines), shifts

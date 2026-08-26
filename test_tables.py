@@ -55,23 +55,38 @@ check("cell_bounds copes with a row that is indented",
       == ["Milk", "2"])
 
 # --- laying out ---------------------------------------------------------
-check("every column is as wide as its widest cell",
-      tables.column_widths([["Name", "Qty"], ["Milk", "2"], ["Eggs", "12"]])
-      == [4, 3])
-check("a table is padded to line up",
-      tables.format_table([["Name", "Qty"], ["Milk", "2"]])
-      == ["| Name | Qty |", "| Milk | 2   |"])
+# Widths are asserted as properties rather than as strings: they depend on
+# MIN_COLUMN, and a check written as a literal has to be rewritten every
+# time that moves -- which is how a test stops testing and starts following.
+_wide = tables.column_widths([["Name", "Qty"], ["A much longer cell", "2"]])
+check(f"a column is as wide as its widest cell ({_wide})",
+      _wide[0] == len("A much longer cell"))
+check(f"and never narrower than the floor ({_wide})",
+      all(w >= tables.MIN_COLUMN for w in _wide))
+
+_padded = tables.format_table([["Name", "Qty"], ["Milk", "2"]])
+check(f"a table is padded to line up ({_padded[0]!r})",
+      len(_padded[0]) == len(_padded[1]))
+check("the cells survive the padding",
+      [tables.split_row(r) for r in _padded] == [["Name", "Qty"], ["Milk", "2"]])
 
 # A row with fewer cells than its neighbours is not an error -- it is a row
 # someone is still typing -- so it is filled out rather than refused.
-check("a short row is padded out to the full width",
-      tables.format_table([["a", "b", "c"], ["d"]])
-      == ["| a | b | c |", "| d |   |   |"])
+_ragged = tables.format_table([["a", "b", "c"], ["d"]])
+check(f"a short row is padded out to the full width ({_ragged[1]!r})",
+      len(_ragged[0]) == len(_ragged[1])
+      and tables.split_row(_ragged[1]) == ["d", "", ""])
 
-check("a blank table is ready to type into",
-      tables.blank_table(2, 3) == ["|  |  |  |", "|  |  |  |"])
+_blank = tables.blank_table(2, 3)
+check(f"a blank table is ready to type into ({_blank[0]!r})",
+      len(_blank) == 2
+      and all(tables.split_row(r) == ["", "", ""] for r in _blank))
+check("its cells are wide enough to look like cells, not specks",
+      all(w >= tables.MIN_COLUMN
+          for w in tables.column_widths([["", "", ""]])))
 check("a blank table is never smaller than one cell",
-      tables.blank_table(0, 0) == ["|  |"])
+      len(tables.blank_table(0, 0)) == 1
+      and tables.split_row(tables.blank_table(0, 0)[0]) == [""])
 
 # --- finding them in a note ---------------------------------------------
 _body = "\n".join(["intro", "| a | b |", "| c | d |", "text", "| e | f |"])
@@ -94,8 +109,9 @@ for _target in ("IMPORTANT", "Name", "start"):
           f"(got {_covered!r})", _covered == _target)
 
 _aligned, _ = tables.align(_before)
-check("re-padding lines the columns up",
-      _aligned.split("\n")[1] == "| Name           | Qty |")
+_rows = _aligned.split("\n")[1:3]
+check(f"re-padding lines the columns up ({_rows[0]!r})",
+      len(_rows[0]) == len(_rows[1]))
 check("and leaves everything around it alone",
       _aligned.split("\n")[0] == "start" and _aligned.split("\n")[3] == "IMPORTANT after")
 check("re-padding an already-padded table changes nothing",
@@ -108,25 +124,26 @@ _html = ("<table><tr><th>Name</th><th>Qty</th></tr>"
          "<tr><td>Milk</td><td>2</td></tr>"
          "<tr><td>Eggs and bread</td><td>12</td></tr></table>")
 _text, _spans, _paras = html_to_note(_html)
-check("a pasted table keeps its cells apart",
-      _text.split("\n") == ["| Name           | Qty |",
-                            "| Milk           | 2   |",
-                            "| Eggs and bread | 12  |"])
+check(f"a pasted table keeps its cells apart ({_text.splitlines()[1]!r})",
+      [tables.split_row(r) for r in _text.split("\n")]
+      == [["Name", "Qty"], ["Milk", "2"], ["Eggs and bread", "12"]])
 check("a pasted table needs no paragraph entries", _paras == [])
 
 _mixed = "<p>Before</p><table><tr><td>A</td><td><b>B</b></td></tr></table><p>After</p>"
 _t, _s, _p = html_to_note(_mixed)
 check(f"a table between paragraphs keeps its place ({_t.splitlines()[1]!r})",
-      _t.split("\n") == ["Before", "| A | B |", "After"])
+      [_t.split("\n")[0], _t.split("\n")[2]] == ["Before", "After"]
+      and tables.split_row(_t.split("\n")[1]) == ["A", "B"])
 check("and bold inside a cell survives the trip in",
       len(_s) == 1 and _t[_s[0]["start"]:_s[0]["end"]] == "B")
 
 # --- copying one out -----------------------------------------------------
 # Real markup, for the same reason a list goes out as <ul>: a word processor
 # understands one and would paste the other as a row of pipe characters.
-_note = "Before\n| Name | Qty |\n| Milk | 2   |\nAfter"
+_note = "Before\n" + "\n".join(
+    tables.format_table([["Name", "Qty"], ["Milk", "2"]])) + "\nAfter"
 _out = note_to_html(_note)
-check("a table goes out as real markup",
+check(f"a table goes out as real markup ({_out[:60]!r})",
       "<table><tr><td>Name</td><td>Qty</td></tr>"
       "<tr><td>Milk</td><td>2</td></tr></table>" in _out)
 check("the text around it is unaffected",

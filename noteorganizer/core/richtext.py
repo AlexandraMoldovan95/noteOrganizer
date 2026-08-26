@@ -164,6 +164,12 @@ class _Reader(HTMLParser):
     # collapsing them there throws away the only structure on offer and
     # produces one run-on paragraph.
     keep_newlines = False
+    # How deep inside <td>/<th> the parser currently is. A cell is one line
+    # of the note, so a block tag inside it -- and a spreadsheet puts a <p>
+    # or a <div> in every cell -- must not start a new one. Left unguarded,
+    # a pasted table shattered: the header row survived because its cells
+    # held bare text, and every row under it became six separate lines.
+    cell_depth = 0
 
     def _add(self, chunk):
         if self.length >= MAX_PASTE_CHARS:
@@ -227,9 +233,15 @@ class _Reader(HTMLParser):
                     entry["indent"] = indent
                 self.paragraphs.append(entry)
         elif tag in _CELL_TAGS:
+            self.cell_depth += 1
             self._add(tables.CELL + " ")
         elif tag in _BLOCK_TAGS:
-            self._newline()
+            if self.cell_depth:
+                # Whatever the block meant, inside a cell it can only be a
+                # gap between words.
+                self._add(" ")
+            else:
+                self._newline()
 
         style = _css(attrs.get("style"))
         for prop, name in (("color", "text_color"),
@@ -254,13 +266,15 @@ class _Reader(HTMLParser):
                 self._lists.pop()
             self._newline()
         elif tag in _CELL_TAGS:
+            self.cell_depth = max(0, self.cell_depth - 1)
             self._add(" ")
         elif tag == "tr":
             # The row's closing pipe, before the newline _BLOCK_TAGS gives it.
             self._add(tables.CELL)
             self._newline()
         elif tag in _BLOCK_TAGS:
-            self._newline()
+            if not self.cell_depth:
+                self._newline()
         elif tag in ("span", "font"):
             for name in ("text_color", "highlight", "bold", "italic"):
                 if any(o[0] == name for o in self._open):
@@ -319,6 +333,10 @@ def html_to_note(fragment):
     # step from the moment the note is built -- and align() reports what it
     # moved, so the spans move with it.
     if tables.find_blocks(text):
+        # A cell that held a block tag has picked up the space put in its
+        # place, and one that held several has picked up several. align()
+        # rebuilds each row from its cells' stripped text, which settles all
+        # of it, but the spans have to be moved by however much it removed.
         text, table_shifts = tables.align(text)
         spans = shift_spans(spans, table_shifts)
     paragraphs = [dict(p) for p in reader.paragraphs]

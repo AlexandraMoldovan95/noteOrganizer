@@ -1,6 +1,7 @@
 import sys
 import time
 import note_organizer as NO, tkinter as tk, json, os, re
+from noteorganizer.core import tables as core_tables
 fails=[]
 def check(name, cond):
     print(('PASS' if cond else 'FAIL'), name)
@@ -1906,12 +1907,12 @@ set_body('')
 app._on_body_paste()
 app.update()
 _rows = body().split('\n')
+# The cells are what matter; the spaces between them follow MIN_COLUMN and
+# would have to be rewritten here every time that moved.
 check(f'a pasted table keeps its cells apart in the editor ({_rows[1]!r})',
-      _rows == ['Shopping',
-                '| Name           | Qty |',
-                '| Milk           | 2   |',
-                '| Eggs and bread | 12  |',
-                'Done'])
+      [_rows[0], _rows[4]] == ['Shopping', 'Done']
+      and [core_tables.split_row(r) for r in _rows[1:4]]
+      == [['Name', 'Qty'], ['Milk', '2'], ['Eggs and bread', '12']])
 
 
 def _mono(line_no):
@@ -1982,11 +1983,12 @@ check('and while the caret moves between its own rows',
       lines_now()[2] == '| Milk  and bread| 2   |')
 
 _caret('4.0')
-check(f'but is lined up once the caret leaves it ({lines_now()[1]!r})',
-      lines_now() == ['before',
-                      '| Name            | Qty |',
-                      '| Milk  and bread | 2   |',
-                      'after'])
+_after = lines_now()
+check(f'but is lined up once the caret leaves it ({_after[1]!r})',
+      [_after[0], _after[3]] == ['before', 'after']
+      and len(_after[1]) == len(_after[2])
+      and [core_tables.split_row(r) for r in _after[1:3]]
+      == [['Name', 'Qty'], ['Milk  and bread', '2']])
 
 # The reason only the spaces are edited: Tk carries a tag along with the
 # text around it, so bold inside a cell survives. Rewriting the line would
@@ -2024,7 +2026,8 @@ app._resync_list_tags()
 _caret('1.5')
 _caret('3.0')
 check(f'padding left over from deleted text is taken back ({lines_now()[0]!r})',
-      lines_now()[0] == '| Name | Qty |')
+      len(lines_now()[0]) < 34
+      and core_tables.split_row(lines_now()[0]) == ['Name', 'Qty'])
 
 # ---- MAKING A TABLE, AND TABBING THROUGH IT ----
 check('the toolbar has a table button', hasattr(app, 'table_btn'))
@@ -2032,8 +2035,11 @@ check('the toolbar has a table button', hasattr(app, 'table_btn'))
 set_body('')
 app._insert_table(3, 2)
 app.update()
-check(f'a blank table is inserted ({lines_now()[:3]!r})',
-      lines_now()[:3] == ['|  |  |', '|  |  |', '|  |  |'])
+_blank = lines_now()[:3]
+check(f'a blank table is inserted ({_blank[0]!r})',
+      all(core_tables.split_row(r) == ['', ''] for r in _blank))
+check('its cells are wide enough to look like cells, not specks',
+      len(_blank[0]) >= 2 * core_tables.MIN_COLUMN)
 check('its rows are drawn in the monospace face',
       app.TABLE_TAG in app.body_text.tag_names('1.0'))
 check(f'the caret starts in the first cell ({app.body_text.index("insert")})',
@@ -2045,10 +2051,11 @@ for _word in ('Name', 'Qty', 'Milk', '2', 'Eggs', '12'):
     app.body_text.insert('insert', _word)
     app.body_text.event_generate('<Tab>')
     app.update()
-check(f'a table can be typed straight through with Tab ({lines_now()[:3]!r})',
-      lines_now()[:3] == ['| Name | Qty |', '| Milk | 2   |', '| Eggs | 12  |'])
+check(f'a table can be typed straight through with Tab ({lines_now()[0]!r})',
+      [core_tables.split_row(r) for r in lines_now()[:3]]
+      == [['Name', 'Qty'], ['Milk', '2'], ['Eggs', '12']])
 check(f'and Tab at the last cell makes a new row ({lines_now()[3]!r})',
-      lines_now()[3] == '|      |     |')
+      core_tables.split_row(lines_now()[3]) == ['', ''])
 
 # Tab selects the cell it lands on, so the next thing typed replaces it
 # rather than being appended -- which is what every other table does.
