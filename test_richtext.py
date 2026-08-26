@@ -408,6 +408,45 @@ _dash_end = ("Everything below is quoted from the report, see page 12 -\n"
 check("a trailing dash that is not part of a word keeps its space",
       "12 - and" in reflow_wrapped(_dash_end))
 
+# A real PDF, justified, where a paragraph's line happens to fall a few
+# characters short and the next word is small: "...at interdum magna augue" /
+# "eget diam. Vestibulum..." was read as two paragraphs and numbered as two
+# list items, splitting the sentence between them. A paragraph almost never
+# stops mid-sentence, so a line ending in no punctuation at all is taken as
+# the column's doing.
+_PDF_LINES = [
+    "Suspendisse in justo eu magna luctus suscipit. Sed lectus. Integer",
+    "euismod lacus luctus magna. Quisque cursus, metus vitae pharetra",
+    "auctor, sem massa mattis sem, at interdum magna augue",
+    "eget diam. Vestibulum ante ipsum primis in faucibus orci luctus et",
+    "ultrices posuere cubilia Curae; Morbi lacinia molestie dui.",
+    "Morbi in dui quis est pulvinar ullamcorper. Nulla facilisi. Integer",
+    "lacinia sollicitudin massa. Cras metus. Sed aliquet risus a tortor.",
+]
+_pdf_out = reflow_wrapped("\n".join(_PDF_LINES))
+check(f"a sentence running past a short line is not split in two "
+      f"({len(_pdf_out.splitlines())} paragraphs from {len(_PDF_LINES)} lines)",
+      len(_pdf_out.splitlines()) == 2)
+check("and the continuation stays with the sentence it belongs to",
+      "magna augue eget diam." in _pdf_out)
+
+# A heading still ends a paragraph, punctuation or not, because it falls well
+# short of the column. Enough wrapped lines here for the block to be taken as
+# a column in the first place -- an earlier version of this fixture was three
+# lines long, was never recognised as wrapped, and so passed without testing
+# anything at all.
+_heading = ["Introduction",
+            "The first paragraph of this section runs the full width of the",
+            "column and carries on past the end of its first line without",
+            "stopping, which is what makes the block read as a column here",
+            "rather than as a handful of separate short lines of its own."]
+_heading_out = reflow_wrapped("\n".join(_heading))
+check(f"a short heading still starts its own paragraph "
+      f"({_heading_out.splitlines()[0][:20]!r})",
+      _heading_out.splitlines()[0] == "Introduction")
+check("and the lines under it are joined into one",
+      len(_heading_out.splitlines()) == 2)
+
 check("already-joined paragraphs are returned untouched",
       reflow_wrapped(ORIGINAL) == ORIGINAL)
 check("empty text is handled", reflow_wrapped("") == "")

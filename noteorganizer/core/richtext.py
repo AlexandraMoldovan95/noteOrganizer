@@ -455,6 +455,25 @@ _MOSTLY_FORCED = 0.6
 # in half.
 _COLUMN_SLACK = 2
 
+# A paragraph almost never stops in the middle of a sentence, so a line that
+# ends without any of these was almost certainly broken by the column even if
+# the next word looked like it would have fitted. Closing quotes and brackets
+# count, since a sentence can end inside them.
+_SENTENCE_END = ('.', '!', '?', ':', ';', '"', "'", ')', ']', '’', '”')
+# Unless the line is far short of the column, in which case it ended early on
+# purpose -- a heading, or the last line of a paragraph -- whatever it ends in.
+_CLEARLY_SHORT = 0.7
+
+
+def _ends_a_paragraph(line, width):
+    """Whether a line that *could* have taken another word really ended."""
+    stripped = line.rstrip()
+    if not stripped:
+        return True
+    if len(stripped) < width * _CLEARLY_SHORT:
+        return True
+    return stripped.endswith(_SENTENCE_END)
+
 
 def _forced_break(line, next_line, width, slack=0):
     """True when the next line's first word could not have fitted on this one.
@@ -545,8 +564,8 @@ def reflow_wrapped(text):
                 continue
             following = lines[i + 1]
             indented = len(following) - len(following.lstrip()) > edge
-            if indented or not _forced_break(line, following, width,
-                                             _COLUMN_SLACK):
+            could_fit = not _forced_break(line, following, width, _COLUMN_SLACK)
+            if indented or (could_fit and _ends_a_paragraph(line, width)):
                 paragraphs.append(current)
                 current = []
         if current:
