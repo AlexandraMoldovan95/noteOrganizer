@@ -37,6 +37,7 @@ import re
 from html import escape
 from html.parser import HTMLParser
 
+from . import tables
 from .formatting import (
     BULLET_GLYPHS,
     MAX_INDENT,
@@ -44,6 +45,7 @@ from .formatting import (
     normalize_formatting,
     normalize_paragraphs,
     parse_list_marker,
+    shift_spans,
 )
 
 # A pasted web page can carry a great deal of markup. These are not tuning
@@ -55,6 +57,12 @@ MAX_PASTE_SPANS = 2_000
 # Tags that mean "a new line starts here".
 _BLOCK_TAGS = {"p", "div", "br", "tr", "h1", "h2", "h3", "h4", "h5", "h6",
                "blockquote", "pre", "section", "article"}
+
+# A cell is not a block tag: a cell does not start a line, the row does. Its
+# text is wrapped in the pipes that make it a cell, opened at the start of
+# each cell and closed once at the end of the row, which puts exactly one
+# pipe between neighbours and one at either end -- "| A | B |".
+_CELL_TAGS = {"td", "th"}
 
 # Inline tags this app has a style for. Anything else is dropped.
 _STYLE_TAGS = {
@@ -218,6 +226,8 @@ class _Reader(HTMLParser):
                 if indent:
                     entry["indent"] = indent
                 self.paragraphs.append(entry)
+        elif tag in _CELL_TAGS:
+            self._add(tables.CELL + " ")
         elif tag in _BLOCK_TAGS:
             self._newline()
 
@@ -242,6 +252,12 @@ class _Reader(HTMLParser):
         if tag in ("ul", "ol"):
             if self._lists:
                 self._lists.pop()
+            self._newline()
+        elif tag in _CELL_TAGS:
+            self._add(" ")
+        elif tag == "tr":
+            # The row's closing pipe, before the newline _BLOCK_TAGS gives it.
+            self._add(tables.CELL)
             self._newline()
         elif tag in _BLOCK_TAGS:
             self._newline()
@@ -298,6 +314,13 @@ def html_to_note(fragment):
     spans = [s for s in spans if s["end"] > s["start"] and s["start"] < len(text)]
     for span in spans:
         span["end"] = min(span["end"], len(text))
+    # A pasted table arrives with cells of whatever width they had. Padding
+    # them here rather than in the editor keeps the offsets and the text in
+    # step from the moment the note is built -- and align() reports what it
+    # moved, so the spans move with it.
+    if tables.find_blocks(text):
+        text, table_shifts = tables.align(text)
+        spans = shift_spans(spans, table_shifts)
     paragraphs = [dict(p) for p in reader.paragraphs]
     return (text,
             normalize_formatting(spans),
@@ -495,9 +518,12 @@ def _looks_wrapped(lines):
     """True when these lines were broken by a column, not on purpose."""
     if len(lines) < _MIN_WRAPPED_LINES:
         return False
-    # A list's line breaks are the list. Never touch them, and do not let a
-    # list anywhere in the run make the rest of it look like prose.
+    # A list's line breaks are the list, and a table's rows are its rows.
+    # Never touch either, and do not let one anywhere in the run make the
+    # rest of it look like prose.
     if any(parse_list_marker(line.lstrip(" \t"))[0] for line in lines):
+        return False
+    if any(tables.is_table_row(line) for line in lines):
         return False
     width = max(len(line) for line in lines)
     if width < _MIN_COLUMN_WIDTH:
