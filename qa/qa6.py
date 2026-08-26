@@ -693,6 +693,86 @@ for _theme in ('light', 'dark'):
 app.hide_settings_page()
 app.update()
 
+# ---- EXPANDING THE BODY BOX ----
+# Twelve rows suits most notes and is cramped for a long one, so the writing
+# area has the same one-click Expand toggle the comments box has. Dragging an
+# edge was tried first and abandoned: the editor sits in a scrolling canvas
+# that recomputes its scrollregion on every resize, and a drag sends dozens a
+# second, leaving widgets drawn at stale positions. Checked here because what
+# makes this one different from the comments box is persistence, which is what
+# the rest of this file is about.
+app.new_note()
+app.update()
+
+
+def _rows(w):
+    return int(w.cget('height'))
+
+
+_btn = app.body_resize_btn
+check('the body box has an expand button', _btn is not None)
+check(f'it starts compact at 12 rows ({_rows(app.body_text)})',
+      _rows(app.body_text) == 12)
+
+_btn.invoke()
+app.update()
+check(f'one click takes it to 26 rows ({_rows(app.body_text)})',
+      _rows(app.body_text) == 26)
+check(f'the button then offers to collapse ({_btn.cget("text")!r})',
+      'Restrânge' in str(_btn.cget('text')))
+check(f'the taller box is really taller on screen ({app.body_text.winfo_height()}px)',
+      app.body_text.winfo_height() > 300)
+
+# The point of the feature: a taller box must not put the Save row out of
+# reach. The editor already scrolls, so the page just gets longer.
+app.update_idletasks()
+_region = app.editor_canvas.bbox('all')
+check('the whole editor still fits inside the scrollable region',
+      app.editor.winfo_reqheight() <= _region[3] - _region[1] + 2)
+
+check('expanding is written to settings',
+      NO.load_settings().get('editor_body_expanded') is True)
+_btn.invoke()
+app.update()
+check(f'clicking again returns it to 12 rows ({_rows(app.body_text)})',
+      _rows(app.body_text) == 12)
+check('collapsing is written too',
+      NO.load_settings().get('editor_body_expanded') is False)
+
+# A box built while the setting says expanded must open expanded -- the read
+# side of the same preference. Built on a throwaway widget rather than by
+# opening a second window, which would mean two Tk interpreters at once.
+NO.save_setting('editor_body_expanded', True)
+_scratch_host = tk.Frame(app)
+_scratch_text = tk.Text(_scratch_host, height=12)
+_scratch_text.pack()
+app._add_text_resize_toggle(_scratch_host, _scratch_text, compact=12, expanded=26,
+                            remember_key='editor_body_expanded')
+check(f'a box built while the stored choice is "expanded" opens expanded '
+      f'({_rows(_scratch_text)} rows)', _rows(_scratch_text) == 26)
+_scratch_host.destroy()
+NO.save_setting('editor_body_expanded', False)
+
+# The comments box shares the helper and must be untouched by all this: same
+# toggle, still four rows, and still deliberately not remembered.
+check(f'the comments box is still compact at 4 rows ({_rows(app.comments_text)})',
+      _rows(app.comments_text) == 4)
+# Both boxes now carry a toggle reading "Extinde", so the body's own button
+# has to be excluded by identity -- matching on the label alone finds two.
+_comment_btns = [w for w in app.editor.winfo_children()
+                 if isinstance(w, tk.Button) and 'Extinde' in str(w.cget('text'))
+                 and w is not app.body_resize_btn]
+check(f'the comments box still has its own toggle ({len(_comment_btns)} found)',
+      len(_comment_btns) == 1)
+if _comment_btns:
+    _comment_btns[0].invoke()
+    app.update()
+    check(f'the comments toggle still works ({_rows(app.comments_text)} rows)',
+          _rows(app.comments_text) == 12)
+    check('the comments box is deliberately not persisted',
+          'comments_expanded' not in NO.load_settings())
+app.update()
+
 print()
 print(f"=== QA6 FAILURES: {fails if fails else 'NONE'} ===")
 

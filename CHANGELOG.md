@@ -6,6 +6,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ---
 
+## [0.38.56] — 2026-08-26
+
+### Added
+- The writing area can be made taller. Twelve rows suits most notes and is cramped for a long one, so an **Expand** toggle under the body switches it to twenty-six and back — the same one-click control the comments box already had, which until now was the only box in the editor that could be resized at all. Unlike that one, the body remembers the choice: someone who writes long notes wants the taller box every time, not once per launch. Nothing below it becomes unreachable, because the editor already scrolls — the page simply gets longer. Dragging the box's edge was built first and abandoned: the editor sits inside a scrolling canvas that recomputes its scrollregion whenever its contents resize, and a drag sends that dozens of times a second, leaving widgets drawn at stale positions. The codebase had already reached that conclusion — both existing resize helpers say "no dragging" and "flicker-free" in as many words.
+
+### Testing
+- Seventeen checks in `qa6.py`, covering the toggle, the stored choice being written and read back, and the comments box — which shares the helper — being left exactly as it was, still four rows and still deliberately not remembered.
+
+---
+
 ## [0.37.56] — 2026-08-26
 
 ### Added

@@ -6,7 +6,7 @@
   "_add_paste_menu": "(self, text_widget, extra_items=None)",
   "_add_resize_handle": "(self, target, min_h=80, max_h=1000, host=None)",
   "_add_row": "(self, parent, text, command)",
-  "_add_text_resize_toggle": "(self, host, text_widget, compact, expanded, pack_kwargs=None)",
+  "_add_text_resize_toggle": "(self, host, text_widget, compact, expanded, pack_kwargs=None, remember_key=None)",
   "_apply_body_color": "(self, kind, hex_color)",
   "_apply_body_font": "(self, style, value)",
   "_apply_font_runs": "(self, text_widget, spans)",
