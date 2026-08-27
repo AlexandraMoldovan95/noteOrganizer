@@ -480,12 +480,20 @@ def note_to_html(text, formatting=None, paragraphs=None):
     # Merge markers only make sense against their whole block, so every
     # block's matrix is resolved up front and looked up per line.
     merge_at = {}
+    separator_lines = set()
     for block_first, block_last in tables.find_blocks(text):
-        matrix = [tables.split_row(lines[n])
-                  for n in range(block_first, block_last + 1)]
+        block = lines[block_first:block_last + 1]
+        sep_at = tables.separator_index(block)
+        if sep_at is not None:
+            # Mechanics, not data: the separator's dashes never reach the
+            # markup a word processor sees.
+            separator_lines.add(block_first + sep_at)
+        data_lines = [n for n in range(block_first, block_last + 1)
+                      if n - block_first != sep_at]
+        matrix = [tables.split_row(lines[n]) for n in data_lines]
         m_spans, m_covered = tables.merge_map(matrix)
-        for r in range(len(matrix)):
-            merge_at[block_first + r] = (
+        for r, n in enumerate(data_lines):
+            merge_at[n] = (
                 {c: m_spans[(ar, c)] for (ar, c) in m_spans if ar == r},
                 {c for (rr, c) in m_covered if rr == r})
 
@@ -520,6 +528,11 @@ def note_to_html(text, formatting=None, paragraphs=None):
             if was_nested:
                 out.append("</li>")
         row = None if kind else tables.cell_bounds(line) if tables.is_table_row(line) else None
+        if number in separator_lines:
+            # The separator stays inside the table run (so in_table holds)
+            # but emits nothing.
+            offset += len(line) + 1
+            continue
         if in_table and row is None:
             out.append("</table>")
             in_table = False

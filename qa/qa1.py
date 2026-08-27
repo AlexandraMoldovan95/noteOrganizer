@@ -2701,6 +2701,152 @@ check(f'Tab in ordinary prose still types a tab ({body()!r})',
 
 set_body('')
 
+# ---- THE SEPARATOR ROW: |---|:---:|~| IS MECHANICS, NOT DATA ----
+# Markdown's own separator line carries per-column width (the dash count),
+# alignment (the colons) and hiding (~). It must never be drawn as a row
+# of dashes, never counted when measuring, and never exported.
+_md = ('| Nume | Cant |\n|:-----:|---|\n| Lapte | 2 |\n| Paine | 1 |')
+set_body(_md)
+app._render_table_grids()
+app.update()
+_tS = app._grid_at_line(1)
+check(f'a pasted markdown separator becomes mechanics, not a data row '
+      f'({_tS["nrows"]} text rows, {_tS["data_rows"]} drawn)',
+      _tS['data_rows'] == 3 and _tS['nrows'] == 4
+      and _tS['sep_cols'] is not None
+      and _tS['cells'][(1, 0)]['value'] == 'Lapte')
+check('no drawn cell wears the dashes',
+      not any('---' in c['value'] for c in _tS['cells'].values()))
+
+# Widening a column pads the data rows out to the dash count.
+app._grid_set_col_width(_tS, 0, 24)
+app.update()
+_tS = app._grid_at_line(1)
+_dataS = app.body_text.get('3.0', '3.end')
+check(f'a hand-widened column pads its data cells ({len(_dataS)} chars)',
+      len(_dataS.split('|')[1]) >= 24
+      and core_tables.parse_separator(
+          app.body_text.get('2.0', '2.end'))[0]['width'] == 24)
+
+# Narrowing below the content is display-only: the drawn cell ellipsizes,
+# the text keeps every character.
+app._grid_set_col_width(_tS, 0, 4)
+app.update()
+_tS = app._grid_at_line(1)
+_shownS = _tS['canvas'].itemcget(_tS['cells'][(1, 0)]['text'], 'text')
+check(f'a too-narrow column draws an ellipsis and keeps its text '
+      f'({_shownS!r})',
+      chr(0x2026) in _shownS and _tS['cells'][(1, 0)]['value'] == 'Lapte')
+
+# Hiding draws a stub and takes the cells out of play; unhide restores.
+app._grid_hide_col(_tS, 1)
+app.update()
+_tS = app._grid_at_line(1)
+check('a hidden column is a stub with no cells',
+      1 in _tS['hidden_cols']
+      and not any(c == 1 for (_r, c) in _tS['cells']))
+app._grid_unhide_all(_tS)
+app.update()
+_tS = app._grid_at_line(1)
+check('unhide brings the column back',
+      not _tS['hidden_cols'] and _tS['cells'][(1, 1)]['value'] == '2')
+
+# A stub has no cells, so the cell menu cannot open on it -- with every
+# column hidden that would lock Unhide away for good. The sliver answers
+# with its own menu instead.
+app._grid_hide_col(_tS, 1)
+app.update()
+_tS = app._grid_at_line(1)
+_posted = []
+_real_popup = NO.tk.Menu.tk_popup
+NO.tk.Menu.tk_popup = lambda _m, *a, **k: _posted.append(_m)
+try:
+    _stub_x = (_tS['col_x'][1] + _tS['col_x'][2]) / 2
+    app._grid_menu(_tS, type('E', (), {
+        'x': int(_stub_x), 'y': 4, 'x_root': 0, 'y_root': 0})())
+    _stub_labels = ([_posted[-1].entrycget(i, 'label')
+                     for i in range(_posted[-1].index('end') + 1)]
+                    if _posted else [])
+    check(f'right-clicking a hidden stub offers Unhide ({_stub_labels})',
+          'Unhide column' in _stub_labels
+          and 'Unhide all columns' in _stub_labels)
+    if _posted:
+        _posted[-1].invoke('Unhide column')
+        app.update()
+    _tS = app._grid_at_line(1)
+    check('and invoking it brings the column back',
+          not _tS['hidden_cols'])
+
+    # Delete row answers to DATA rows: a table of header + separator has
+    # one data row, and deleting it must be off the table.
+    set_body('| a | b |\n| --- | --- |')
+    app._render_table_grids()
+    app.update()
+    _t1 = app._grid_at_line(1)
+    _posted.clear()
+    _c00 = _t1['cells'][(0, 0)]
+    app._grid_menu(_t1, type('E', (), {
+        'x': int(_c00['x'] + 4), 'y': int(_c00['y'] + 4),
+        'x_root': 0, 'y_root': 0})())
+    _del_state = None
+    if _posted:
+        _m = _posted[-1]
+        for i in range(_m.index('end') + 1):
+            if (_m.type(i) == 'command'
+                    and _m.entrycget(i, 'label') == 'Delete row'):
+                _del_state = str(_m.entrycget(i, 'state'))
+    check(f'Delete row is disabled at one data row ({_del_state})',
+          _del_state == 'disabled')
+finally:
+    NO.tk.Menu.tk_popup = _real_popup
+set_body(_md)
+app._render_table_grids()
+app.update()
+_tS = app._grid_at_line(1)
+app._grid_set_col_width(_tS, 0, 4)
+app.update()
+_tS = app._grid_at_line(1)
+
+# The separator survives a structural op, and the inserted column takes
+# a default of its own -- its neighbour's hand-set width must MOVE, not
+# be stolen. (replace_block pads a short separator at the end, so a
+# forgotten middle insert would leave the old width on the wrong column.)
+app._grid_set_col_width(_tS, 1, 15)
+app.update()
+_tS = app._grid_at_line(1)
+app._grid_insert_col(_tS, 1)
+app.update()
+_tS = app._grid_at_line(1)
+_sepS = app.body_text.get('2.0', '2.end')
+_colsS = core_tables.parse_separator(_sepS)
+check(f'insert-column keeps the separator a separator ({_sepS!r})',
+      core_tables.is_separator_row(_sepS)
+      and len(_colsS) == _tS['ncols'])
+check('the inserted column is default and its neighbour keeps its width',
+      _colsS[1]['width'] <= 8 and _colsS[2]['width'] == 15)
+
+# Export never carries the mechanics row.
+_htmlS = NO.note_to_html(body())
+check('exported HTML has no separator row',
+      '---' not in _htmlS and _htmlS.count('<tr>') == 3)
+
+# Dragging the first rule resizes column 0 through press/drag/release.
+_edgeS = int(_tS['col_x'][1])
+_tS['canvas'].event_generate('<Button-1>', x=_edgeS, y=4)
+_resS = getattr(app, '_grid_resizing', None)
+check('pressing a rule starts a resize, not a selection',
+      _resS is not None and _resS['col'] == 0
+      and getattr(app, '_grid_pressed', None) is None)
+_tS['canvas'].event_generate('<B1-Motion>', x=_edgeS + 70, y=4)
+_tS['canvas'].event_generate('<ButtonRelease-1>', x=_edgeS + 70, y=4)
+app.update()
+_tS = app._grid_at_line(1)
+_wS = core_tables.parse_separator(
+    app.body_text.get('2.0', '2.end'))[0]['width']
+check(f'releasing the drag stores the new width in the separator '
+      f'(W={_wS})', _wS is not None and _wS >= 8)
+set_body('')
+
 NO.clipboard.read_html = _real_read_html
 NO.clipboard.read_text = _real_read_text
 NO.clipboard.write = _real_write

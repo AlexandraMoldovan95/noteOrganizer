@@ -244,6 +244,53 @@ check(f"a centred cell stays centred as its column widens "
       f"({_wider.splitlines()[0]!r})",
       tables.cell_alignments(_wider.splitlines()[0])[0] == "center")
 
+# ---- THE SEPARATOR ROW: MECHANICS, NOT DATA ----
+# |---|:---:|~| as row two carries per-column display width (dash count),
+# alignment (colons) and hiding (~). It is exactly markdown's own syntax,
+# so tables travel both ways between this app and anything markdown-aware.
+check("a separator row is recognised",
+      tables.is_separator_row("| --- | :---: | ~ |"))
+check("a data row is not",
+      not tables.is_separator_row("| --- | words |"))
+check("only the first two rows can hold one",
+      tables.separator_index(["| a | b |", "| c | d |", "| --- | --- |"]) is None
+      and tables.separator_index(["| a | b |", "| --- | --- |", "| c | d |"]) == 1)
+_sp = tables.parse_separator("| ----- | :---: | ---: | ~ |")
+check(f"parse reads width, alignment and hiding ({_sp})",
+      _sp[0] == {"width": 5, "align": None, "hidden": False}
+      and _sp[1] == {"width": 5, "align": "center", "hidden": False}
+      and _sp[2] == {"width": 4, "align": "right", "hidden": False}
+      and _sp[3]["hidden"])
+check("make/parse round-trips every column",
+      tables.parse_separator(
+          "| " + " | ".join(tables.make_separator(_sp)) + " |") == _sp)
+
+# align() widens data to a hand-widened separator, and leaves a narrow
+# one alone -- narrow is a display width, the text never truncates.
+_sep_body = "\n".join(["| Name | Qty |",
+                       "| ------------ | --- |",
+                       "| ab | 2 |"])
+_sep_after, _ = tables.align(_sep_body)
+_sep_lines = _sep_after.split("\n")
+check(f"align pads data out to a wide separator ({_sep_lines[2]!r})",
+      len(_sep_lines[2].split("|")[1]) >= 12)
+check("and the separator still parses with its width",
+      tables.parse_separator(_sep_lines[1])[0]["width"] == 12)
+_nar_body = "\n".join(["| Name | Qty |",
+                       "| --- | --- |",
+                       "| something long | 2 |"])
+_nar_after, _ = tables.align(_nar_body)
+check("a narrow separator never truncates the data",
+      "something long" in _nar_after)
+# (Measuring the separator AS content would give the same widths -- its
+# cell length IS the stored width -- so that variant is equivalent, not a
+# bug to test for.)
+
+# The separator never reaches exported HTML.
+_sep_html = note_to_html(_sep_body)
+check("export skips the separator row",
+      "---" not in _sep_html and _sep_html.count("<tr>") == 2)
+
 print()
 print(f"FAILURES: {fails if fails else 'none'}")
 

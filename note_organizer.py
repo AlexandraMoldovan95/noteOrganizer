@@ -1374,6 +1374,53 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             )
         return cache[key]
 
+    def _measuring_font(self, font):
+        """A font that can measure -- the emoji cells pass a plain tuple,
+        which draws fine but cannot answer measure()."""
+        if hasattr(font, "measure"):
+            return font
+        cache = getattr(self, "_measure_font_cache", None)
+        if cache is None:
+            cache = self._measure_font_cache = {}
+        if font not in cache:
+            cache[font] = tkfont.Font(family=font[0], size=font[1])
+        return cache[font]
+
+    def _ellipsize(self, value, font, max_px):
+        """The drawing clips, the text never does: a value wider than its
+        column is drawn shortened with an ellipsis, while the note's own
+        text keeps every character."""
+        font = self._measuring_font(font)
+        if max_px <= 0 or font.measure(value) <= max_px:
+            return value
+        ellipsis = "\u2026"
+        lo, hi = 0, len(value)
+        while lo < hi:
+            mid = (lo + hi + 1) // 2
+            if font.measure(value[:mid] + ellipsis) <= max_px:
+                lo = mid
+            else:
+                hi = mid - 1
+        return value[:lo] + ellipsis
+
+    def _grid_line_of_row(self, info, r):
+        """The text line a data row lives on -- the separator makes the
+        mapping non-trivial, and every write must go through it."""
+        first = self._grid_first_line(info)
+        if first is None:
+            return None
+        offsets = info.get("row_off")
+        if offsets and r < len(offsets):
+            return first + offsets[r]
+        return first + r
+
+    def _grid_boundary_at(self, info, x):
+        """Which column's right edge sits within grabbing distance of x."""
+        for c in range(1, len(info["col_x"])):
+            if abs(x - info["col_x"][c]) <= 4:
+                return c - 1
+        return None
+
     def _grid_cell_at_xy(self, info, x, y):
         """Which cell a canvas point falls in. Covered positions have no
         cell of their own, so a click inside a merge finds its anchor."""
@@ -1401,11 +1448,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                          bg=self.colors["card"], fg=self.colors["text"],
                          insertbackground=self.colors["text"])
         entry.insert(0, cell["value"])
-        first_line = self._grid_first_line(info)
-        if first_line is not None:
+        row_line = self._grid_line_of_row(info, r)
+        if row_line is not None:
             row_aligns = core_tables.cell_alignments(
-                self.body_text.get(f"{first_line + r}.0",
-                                   f"{first_line + r}.end"))
+                self.body_text.get(f"{row_line}.0", f"{row_line}.end"))
             if c < len(row_aligns):
                 entry.configure(justify={
                     core_tables.ALIGN_CENTER: "center",
@@ -1554,10 +1600,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     pass
                 first = self._grid_first_line(info)
                 if first is not None:
-                    lines = [self.body_text.get(f"{n}.0", f"{n}.end")
-                             for n in range(first, first + info["nrows"])]
+                    data = [self.body_text.get(f"{n}.0", f"{n}.end")
+                            for n in (self._grid_line_of_row(info, i)
+                                      for i in range(info["data_rows"]))
+                            if n is not None]
                     widths = core_tables.column_widths(
-                        [core_tables.split_row(line) for line in lines])
+                        [core_tables.split_row(line) for line in data])
                     if widths != info["widths_chars"]:
                         info["stale"] = True
                 wrote = True
@@ -1572,8 +1620,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         first = self._grid_first_line(info)
         if first is None:
             return
-        line_no = first + r
-        base = 1 if r == 0 else 0
+        line_no = self._grid_line_of_row(info, r)
+        if line_no is None:
+            return
+        base = 1 if line_no == first else 0
         line = b.get(f"{line_no}.0", f"{line_no}.end")
         bounds = core_tables.cell_bounds(line)
         if c >= len(bounds):
@@ -1697,30 +1747,47 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
     def _build_table_grid(self, first, last):
         b = self.body_text
-        rows = [core_tables.split_row(b.get(f"{n}.0", f"{n}.end"))
-                for n in range(first, last + 1)]
+        block = [b.get(f"{n}.0", f"{n}.end") for n in range(first, last + 1)]
+        sep_at = core_tables.separator_index(block)
+        sep_cols = (core_tables.parse_separator(block[sep_at])
+                    if sep_at is not None else None)
+        # Data rows and the separator part ways here: the separator is
+        # mechanics and is never drawn, so every grid row index maps back
+        # to its text line through row_off.
+        row_off = [i for i in range(len(block)) if i != sep_at]
+        rows = [core_tables.split_row(block[i]) for i in row_off]
         widths = core_tables.column_widths(rows)
         if not widths:
             return
         merges, covered = core_tables.merge_map(rows)
-        aligns_matrix = [core_tables.cell_alignments(
-                             b.get(f"{n}.0", f"{n}.end"))
-                         for n in range(first, last + 1)]
+        aligns_matrix = [core_tables.cell_alignments(block[i])
+                         for i in row_off]
         header_font, cell_font = self._grid_fonts()
         pad_x, pad_y = 10, 7
         row_h = max(header_font.metrics("linespace"),
                     cell_font.metrics("linespace")) + 2 * pad_y
-        # Pixel widths come from measuring the real strings in the real
-        # font; character counts alone lie in a proportional face. Cells
-        # spanning several columns answer to all of them and drive none.
-        floor = cell_font.measure("0") * core_tables.MIN_COLUMN
+        char_px = cell_font.measure("0")
+        floor = char_px * core_tables.MIN_COLUMN
         col_w = [floor] * len(widths)
-        for r, row in enumerate(rows):
-            font = header_font if r == 0 else cell_font
-            for c in range(len(widths)):
+        hidden_cols = set()
+        for c in range(len(widths)):
+            column = sep_cols[c] if sep_cols and c < len(sep_cols) else None
+            if column and column.get("hidden"):
+                # A hidden column is a sliver, not an absence: wide enough
+                # to right-click for Unhide, too thin to read.
+                hidden_cols.add(c)
+                col_w[c] = 14
+                continue
+            if column and column.get("width"):
+                # The dash count is the display width, exactly -- narrower
+                # than the content clips the drawing, never the text.
+                col_w[c] = char_px * column["width"] + 2 * pad_x
+                continue
+            for r, row in enumerate(rows):
                 span = merges.get((r, c))
                 if (r, c) in covered or (span and span[1] > 1):
                     continue
+                font = header_font if r == 0 else cell_font
                 value = row[c] if c < len(row) else ""
                 col_w[c] = max(col_w[c], font.measure(value) + 2 * pad_x)
         col_x = [0]
@@ -1730,8 +1797,6 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         height = row_h * len(rows)
 
         host = tk.Frame(b, bg=self.colors["card"], cursor="arrow")
-        # One extra pixel each way, or the right and bottom rules land on
-        # the first pixel outside the canvas and are never seen.
         canvas = tk.Canvas(host, highlightthickness=0, bd=0, cursor="arrow",
                            bg=self.colors["card"], height=height + 1,
                            scrollregion=(0, 0, natural + 1, height + 1))
@@ -1752,6 +1817,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     fill=(inset_surface(self.colors) if r == 0
                           else self.colors["card"]),
                     outline=rule)
+                if c in hidden_cols:
+                    continue
                 align = (aligns_matrix[r][c]
                          if r < len(aligns_matrix)
                          and c < len(aligns_matrix[r])
@@ -1762,18 +1829,15 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     tx, tanchor = x + w - pad_x, "e"
                 else:
                     tx, tanchor = x + pad_x, "w"
-                # Segoe UI has no emoji glyphs; drawing them in it is what
-                # put squares in the cells. Any astral or symbol codepoint
-                # sends the whole item to the emoji face, which carries
-                # Latin too, so mixed text still reads.
                 emoji = any(ord(ch) >= 0x1F000 or 0x2600 <= ord(ch) <= 0x27BF
                             for ch in value)
                 font = (("Segoe UI Emoji", self.editor_font_size)
                         if emoji else
                         (header_font if r == 0 else cell_font))
+                shown = self._ellipsize(value, font, w - 2 * pad_x)
                 text = canvas.create_text(
                     tx, y + h / 2, anchor=tanchor,
-                    font=font, fill=self.colors["text"], text=value)
+                    font=font, fill=self.colors["text"], text=shown)
                 cells[(r, c)] = {"value": value, "rect": rect, "text": text,
                                  "x": x, "y": y, "w": w, "h": h,
                                  "rs": row_span, "cs": col_span}
@@ -1782,8 +1846,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         b.mark_gravity(mark, "left")
         info = {"frame": host, "canvas": canvas, "hbar": None,
                 "natural": natural, "cells": cells, "mark": mark,
-                "nrows": len(rows), "ncols": len(widths),
-                "row_h": row_h, "col_x": col_x,
+                "nrows": len(block), "data_rows": len(rows),
+                "row_off": row_off, "sep_cols": sep_cols,
+                "hidden_cols": hidden_cols,
+                "ncols": len(widths), "row_h": row_h, "col_x": col_x,
                 "widths_chars": list(widths)}
         self._fit_grid(info)
         canvas.bind("<Button-1>", lambda e, i=info: self._grid_press(i, e))
@@ -1791,18 +1857,15 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         canvas.bind("<ButtonRelease-1>",
                     lambda e, i=info: self._grid_release(i, e))
         canvas.bind("<Button-3>", lambda e, i=info: self._grid_menu(i, e))
+        canvas.bind("<Motion>", lambda e, i=info: self._grid_motion(i, e))
+        canvas.bind("<Double-Button-1>",
+                    lambda e, i=info: self._grid_double(i, e))
         for widget in (host, canvas):
             widget.bind("<MouseWheel>", self._forward_grid_wheel)
             widget.bind("<Shift-MouseWheel>",
                         lambda ev, cv=canvas: self._grid_wheel_x(cv, ev))
-        # align="bottom": the caret beside the table sits at its foot
-        # rather than floating at mid-height, which read as typing landing
-        # in the middle of the note.
         b.window_create(f"{first}.0", window=host, padx=1, pady=6,
                         align="bottom")
-        # The window itself sits at column 0; the pipe text starts at column
-        # 1 and is hidden through the block's last line. Hidden, not removed:
-        # get() still returns it, offsets still count it, save still keeps it.
         b.tag_add(self.TABLE_HIDE_TAG, f"{first}.1", f"{last}.end")
         self._table_grids = getattr(self, "_table_grids", [])
         self._table_grids.append(info)
@@ -1860,13 +1923,21 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
     def _grid_press(self, info, event):
         canvas = info["canvas"]
-        hit = self._grid_cell_at_xy(info, canvas.canvasx(event.x),
-                                    canvas.canvasy(event.y))
+        x = canvas.canvasx(event.x)
+        boundary = self._grid_boundary_at(info, x)
+        if boundary is not None:
+            # Grabbing a rule resizes its column instead of selecting.
+            self._grid_resizing = {"info": info, "col": boundary, "x": x}
+            self._grid_pressed = None
+            return "break"
+        hit = self._grid_cell_at_xy(info, x, canvas.canvasy(event.y))
         self._grid_clear_selection()
         self._grid_pressed = (info, hit) if hit else None
         return "break"
 
     def _grid_drag(self, info, event):
+        if getattr(self, "_grid_resizing", None):
+            return "break"
         pressed = getattr(self, "_grid_pressed", None)
         if not pressed or pressed[0] is not info:
             return "break"
@@ -1879,6 +1950,18 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
     def _grid_release(self, info, event):
         """A plain click opens the editor; a drag leaves its selection."""
+        resizing = getattr(self, "_grid_resizing", None)
+        self._grid_resizing = None
+        if resizing is not None and resizing["info"] is info:
+            canvas = info["canvas"]
+            col = resizing["col"]
+            left = info["col_x"][col]
+            new_px = canvas.canvasx(event.x) - left
+            _hf, cell_font = self._grid_fonts()
+            char_px = max(1, cell_font.measure("0"))
+            self._grid_set_col_width(
+                info, col, max(2, round((new_px - 20) / char_px)))
+            return "break"
         pressed = getattr(self, "_grid_pressed", None)
         self._grid_pressed = None
         if pressed is None or pressed[0] is not info:
@@ -2039,6 +2122,26 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._render_table_grids()
         self._schedule_autosave()
 
+    def _grid_block_parts(self, first, text_rows):
+        """(data_rows, data_aligns, sep_cols, sep_at) for one block.
+
+        Every structural operation transforms the data and carries the
+        separator's columns alongside, so a hand-dragged width or a hidden
+        column survives inserts, deletes, merges and fills.
+        """
+        block = [self.body_text.get(f"{n}.0", f"{n}.end")
+                 for n in range(first, first + text_rows)]
+        sep_at = core_tables.separator_index(block)
+        sep_cols = (core_tables.parse_separator(block[sep_at])
+                    if sep_at is not None else None)
+        rows, aligns = [], []
+        for i, line in enumerate(block):
+            if i == sep_at:
+                continue
+            rows.append(core_tables.split_row(line))
+            aligns.append(core_tables.cell_alignments(line))
+        return rows, aligns, sep_cols, sep_at
+
     def _grid_read_rows(self, first, nrows):
         return [core_tables.split_row(
                     self.body_text.get(f"{n}.0", f"{n}.end"))
@@ -2049,7 +2152,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     self.body_text.get(f"{n}.0", f"{n}.end"))
                 for n in range(first, first + nrows)]
 
-    def _grid_replace_block(self, first, old_nrows, rows, aligns=None):
+    def _grid_replace_block(self, first, old_nrows, rows, aligns=None,
+                            sep_cols=None):
         """Wholesale rewrite for the structural ops that reshape columns.
 
         Character formatting inside the table does not survive these ops --
@@ -2058,8 +2162,17 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         """
         b = self.body_text
         b.delete(f"{first}.0", f"{first + old_nrows - 1}.end")
-        b.insert(f"{first}.0",
-                 "\n".join(core_tables.format_table(rows, aligns)))
+        lines = core_tables.format_table(rows, aligns)
+        if sep_cols is not None and lines:
+            while len(sep_cols) < len(core_tables.column_widths(rows)):
+                sep_cols.append({"width": None, "align": None,
+                                 "hidden": False})
+            sep_line = core_tables.CELL + core_tables.CELL.join(
+                " " + cell + " "
+                for cell in core_tables.make_separator(sep_cols)
+            ) + core_tables.CELL
+            lines = [lines[0], sep_line] + lines[1:]
+        b.insert(f"{first}.0", "\n".join(lines))
 
     def _dissolve_orphan_markers(self, rows):
         _spans, covered = core_tables.merge_map(rows)
@@ -2075,11 +2188,16 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if not context:
             return
         first, nrows, ncols = context
+        rows, _aligns, _sep, sep_at = self._grid_block_parts(first, nrows)
+        data_off = [i for i in range(nrows) if i != sep_at]
         blank = core_tables.blank_table(1, ncols)[0]
-        if at >= nrows:
+        if at >= len(data_off):
             self.body_text.insert(f"{first + nrows - 1}.end", "\n" + blank)
         else:
-            self.body_text.insert(f"{first + at}.0", blank + "\n")
+            # *at* is a data-row index; the separator shifts the line it
+            # maps to. A new first row still goes above the separator only
+            # when there is no header to keep -- above everything.
+            self.body_text.insert(f"{first + data_off[at]}.0", blank + "\n")
         self._grid_after_op(first)
 
     def _grid_insert_col(self, info, at):
@@ -2087,14 +2205,16 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if not context:
             return
         first, nrows, _ncols = context
-        b = self.body_text
-        for n in range(first, first + nrows):
-            line = b.get(f"{n}.0", f"{n}.end")
-            pipes = core_tables.pipe_positions(line)
-            if not pipes:
-                continue
-            boundary = pipes[min(at, len(pipes) - 1)]
-            b.insert(f"{n}.{self._tk_col(line, boundary + 1)}", "  |")
+        rows, aligns, sep_cols, _sep_at = self._grid_block_parts(first, nrows)
+        for row in rows:
+            row.insert(min(at, len(row)), "")
+        for row_aligns in aligns:
+            row_aligns.insert(min(at, len(row_aligns)),
+                              core_tables.ALIGN_LEFT)
+        if sep_cols is not None:
+            sep_cols.insert(min(at, len(sep_cols)),
+                            {"width": None, "align": None, "hidden": False})
+        self._grid_replace_block(first, nrows, rows, aligns, sep_cols)
         self._grid_after_op(first)
 
     def _grid_delete_row(self, info, r):
@@ -2105,12 +2225,14 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if nrows <= 1:
             self._grid_after_op(first)
             return
-        rows = self._grid_read_rows(first, nrows)
-        aligns = self._grid_read_aligns(first, nrows)
+        rows, aligns, sep_cols, _sep_at = self._grid_block_parts(first, nrows)
+        if r >= len(rows):
+            self._grid_after_op(first)
+            return
         del rows[r]
         del aligns[r]
         rows = self._dissolve_orphan_markers(rows)
-        self._grid_replace_block(first, nrows, rows, aligns)
+        self._grid_replace_block(first, nrows, rows, aligns, sep_cols)
         self._grid_after_op(first)
 
     def _grid_delete_col(self, info, c):
@@ -2125,8 +2247,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if not context:
             return
         first, nrows, ncols = context
-        rows = self._grid_read_rows(first, nrows)
-        aligns = self._grid_read_aligns(first, nrows)
+        rows, aligns, sep_cols, _sep_at = self._grid_block_parts(first, nrows)
         if ncols <= 2:
             for row in rows:
                 if c < len(row):
@@ -2146,8 +2267,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             for row_aligns in aligns:
                 if c < len(row_aligns):
                     del row_aligns[c]
+            if sep_cols is not None and c < len(sep_cols):
+                del sep_cols[c]
             rows = self._dissolve_orphan_markers(rows)
-        self._grid_replace_block(first, nrows, rows, aligns)
+        self._grid_replace_block(first, nrows, rows, aligns, sep_cols)
         self._grid_after_op(first)
 
     def _grid_set_marker(self, info, r, c, marker):
@@ -2155,11 +2278,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if not context:
             return
         first, nrows, _ncols = context
-        rows = self._grid_read_rows(first, nrows)
-        aligns = self._grid_read_aligns(first, nrows)
+        rows, aligns, sep_cols, _sep_at = self._grid_block_parts(first, nrows)
         if r < len(rows) and c < len(rows[r]):
             rows[r][c] = marker
-        self._grid_replace_block(first, nrows, rows, aligns)
+        self._grid_replace_block(first, nrows, rows, aligns, sep_cols)
         self._grid_after_op(first)
 
     def _grid_split(self, info, r, c):
@@ -2167,8 +2289,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if not context:
             return
         first, nrows, _ncols = context
-        rows = self._grid_read_rows(first, nrows)
-        aligns = self._grid_read_aligns(first, nrows)
+        rows, aligns, sep_cols, _sep_at = self._grid_block_parts(first, nrows)
         spans, _covered = core_tables.merge_map(rows)
         for (ar, ac), (rs, cs) in spans.items():
             if ar <= r < ar + rs and ac <= c < ac + cs:
@@ -2177,8 +2298,78 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                         if (rr, cc) != (ar, ac) and cc < len(rows[rr]):
                             rows[rr][cc] = ""
                 break
-        self._grid_replace_block(first, nrows, rows, aligns)
+        self._grid_replace_block(first, nrows, rows, aligns, sep_cols)
         self._grid_after_op(first)
+
+    def _grid_column_mechanics(self, info, mutate):
+        """Shared body for width, hide and autofit: parts, a separator
+        conjured if the table has none yet, *mutate* applied, written back."""
+        first = self._grid_first_line(info)
+        if first is None:
+            return
+        self._commit_cell_editor()
+        again = self._grid_at_line(first)
+        if again is not None:
+            info = again
+            first = self._grid_first_line(info) or first
+        nrows = info["nrows"]
+        self._grid_saved_view = self._capture_grid_views()
+        self._teardown_table_grids()
+        rows, aligns, sep_cols, _sep_at = self._grid_block_parts(first, nrows)
+        if sep_cols is None:
+            widths = core_tables.layout_widths(rows, aligns)
+            sep_cols = [{"width": width, "align": None, "hidden": False}
+                        for width in widths]
+        mutate(sep_cols, rows, aligns)
+        self._grid_replace_block(first, nrows, rows, aligns, sep_cols)
+        self._grid_after_op(first)
+
+    def _grid_set_col_width(self, info, c, width):
+        def mutate(sep_cols, rows, aligns):
+            if c < len(sep_cols):
+                sep_cols[c]["width"] = max(1, int(width))
+                sep_cols[c]["hidden"] = False
+        self._grid_column_mechanics(info, mutate)
+
+    def _grid_autofit_col(self, info, c):
+        def mutate(sep_cols, rows, aligns):
+            widths = core_tables.layout_widths(rows, aligns)
+            if c < len(sep_cols) and c < len(widths):
+                sep_cols[c]["width"] = widths[c]
+                sep_cols[c]["hidden"] = False
+        self._grid_column_mechanics(info, mutate)
+
+    def _grid_hide_col(self, info, c, hidden=True):
+        def mutate(sep_cols, rows, aligns):
+            if c < len(sep_cols):
+                sep_cols[c]["hidden"] = hidden
+        self._grid_column_mechanics(info, mutate)
+
+    def _grid_unhide_all(self, info):
+        def mutate(sep_cols, rows, aligns):
+            for column in sep_cols:
+                column["hidden"] = False
+        self._grid_column_mechanics(info, mutate)
+
+    def _grid_double(self, info, event):
+        """A double-click on a rule autofits its column."""
+        canvas = info["canvas"]
+        boundary = self._grid_boundary_at(info, canvas.canvasx(event.x))
+        if boundary is not None:
+            self._grid_resizing = None
+            self._grid_autofit_col(info, boundary)
+            return "break"
+        return None
+
+    def _grid_motion(self, info, event):
+        """The cursor telegraphs a grabbable rule."""
+        canvas = info["canvas"]
+        near = self._grid_boundary_at(info, canvas.canvasx(event.x))
+        try:
+            canvas.configure(cursor="sb_h_double_arrow"
+                             if near is not None else "arrow")
+        except tk.TclError:
+            pass
 
     def _grid_delete_table(self, info):
         first = self._grid_first_line(info)
@@ -2224,8 +2415,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if not context:
             return
         first, nrows, _ncols = context
-        rows = self._grid_read_rows(first, nrows)
-        aligns = self._grid_read_aligns(first, nrows)
+        rows, aligns, sep_cols, _sep_at = self._grid_block_parts(first, nrows)
         for r in range(r0, min(r1 + 1, len(rows))):
             for c in range(c0, min(c1 + 1, len(rows[r]))):
                 if rows[r][c] not in (core_tables.MERGE_LEFT,
@@ -2233,7 +2423,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     rows[r][c] = value
                     if align is not None and c < len(aligns[r]):
                         aligns[r][c] = align
-        self._grid_replace_block(first, nrows, rows, aligns)
+        self._grid_replace_block(first, nrows, rows, aligns, sep_cols)
         self._grid_after_op(first)
 
     def _grid_merge_selection(self, sel):
@@ -2248,8 +2438,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if not context:
             return
         first, nrows, _ncols = context
-        rows = self._grid_read_rows(first, nrows)
-        aligns = self._grid_read_aligns(first, nrows)
+        rows, aligns, sep_cols, _sep_at = self._grid_block_parts(first, nrows)
         spans, _covered = core_tables.merge_map(rows)
         for (ar, ac), (rs, cs) in spans.items():
             if ar <= r1 and ar + rs - 1 >= r0 and ac <= c1 and ac + cs - 1 >= c0:
@@ -2264,7 +2453,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 rows[r][c] = (core_tables.MERGE_LEFT if r == r0
                               else (core_tables.MERGE_UP if c == c0
                                     else core_tables.MERGE_LEFT))
-        self._grid_replace_block(first, nrows, rows, aligns)
+        self._grid_replace_block(first, nrows, rows, aligns, sep_cols)
         self._grid_after_op(first)
 
     def _grid_paste_cells(self, info, r, c):
@@ -2291,8 +2480,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if not context:
             return
         first, nrows, ncols = context
-        rows = self._grid_read_rows(first, nrows)
-        aligns = self._grid_read_aligns(first, nrows)
+        rows, aligns, sep_cols, sep_at = self._grid_block_parts(first, nrows)
         while r + len(matrix) > len(rows):
             rows.append([""] * ncols)
             aligns.append([core_tables.ALIGN_LEFT] * ncols)
@@ -2304,11 +2492,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     if c + dc < len(aligns[r + dr]):
                         aligns[r + dr][c + dc] = core_tables.ALIGN_LEFT
         # The block may have grown; rewrite against its original height and
-        # let format_table emit the extra rows.
-        self.body_text.delete(f"{first}.0", f"{first + nrows - 1}.end")
-        self.body_text.insert(
-            f"{first}.0",
-            "\n".join(core_tables.format_table(rows, aligns)))
+        # let format_table emit the extra rows, the separator restored
+        # after the header.
+        self._grid_replace_block(first, nrows, rows, aligns, sep_cols)
         self._grid_after_op(first)
 
     def _grid_copy_cell(self, info, r, c):
@@ -2403,22 +2589,43 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if not context:
             return
         first, nrows, _ncols = context
-        rows = self._grid_read_rows(first, nrows)
-        aligns = self._grid_read_aligns(first, nrows)
+        rows, aligns, sep_cols, _sep_at = self._grid_block_parts(first, nrows)
         for r in range(r0, min(r1 + 1, len(rows))):
             for c in range(c0, min(c1 + 1, len(rows[r]))):
                 if (rows[r][c] not in (core_tables.MERGE_LEFT,
                                        core_tables.MERGE_UP)
                         and c < len(aligns[r])):
                     aligns[r][c] = align
-        self._grid_replace_block(first, nrows, rows, aligns)
+        self._grid_replace_block(first, nrows, rows, aligns, sep_cols)
         self._grid_after_op(first)
+
+    def _grid_stub_menu(self, info, event, c):
+        """The only menu a hidden column can offer: bring it back."""
+        menu = tk.Menu(self, tearoff=0, bg=self.colors["card"],
+                       fg=self.colors["text"],
+                       activebackground=self.colors["accent"],
+                       activeforeground="#ffffff")
+        menu.add_command(label="Unhide column",
+                         command=lambda: self._grid_hide_col(info, c, False))
+        menu.add_command(label="Unhide all columns",
+                         command=lambda: self._grid_unhide_all(info))
+        try:
+            menu.tk_popup(event.x_root, event.y_root)
+        finally:
+            menu.grab_release()
+        return "break"
 
     def _grid_menu(self, info, event, at=None):
         canvas = info["canvas"]
         hit = at if at is not None else self._grid_cell_at_xy(
             info, canvas.canvasx(event.x), canvas.canvasy(event.y))
         if hit is None or hit not in info["cells"]:
+            # A hidden column's sliver has no cells; without a menu of its
+            # own, hiding every column would lock Unhide away for good.
+            x = canvas.canvasx(event.x)
+            for c in info.get("hidden_cols", ()):
+                if info["col_x"][c] <= x < info["col_x"][c + 1]:
+                    return self._grid_stub_menu(info, event, c)
             return "break"
         r, c = hit
         cell = info["cells"][(r, c)]
@@ -2496,6 +2703,15 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         menu.add_command(label="Insert column right",
                          command=lambda: self._grid_insert_col(info, c + 1))
         menu.add_separator()
+        menu.add_command(label="Hide column",
+                         command=lambda: self._grid_hide_col(info, c))
+        menu.add_command(
+            label="Unhide all columns",
+            state=("normal" if info.get("hidden_cols") else "disabled"),
+            command=lambda: self._grid_unhide_all(info))
+        menu.add_command(label="Autofit column width",
+                         command=lambda: self._grid_autofit_col(info, c))
+        menu.add_separator()
         merged = cell["rs"] > 1 or cell["cs"] > 1
         menu.add_command(label="Merge with cell to the left",
                          state="normal" if c > 0 else "disabled",
@@ -2510,7 +2726,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                          command=lambda: self._grid_split(info, r, c))
         menu.add_separator()
         menu.add_command(label="Delete row",
-                         state="normal" if info["nrows"] > 1 else "disabled",
+                         state=("normal" if info["data_rows"] > 1
+                                else "disabled"),
                          command=lambda: self._grid_delete_row(info, r))
         menu.add_command(label="Delete column",
                          command=lambda: self._grid_delete_col(info, c))

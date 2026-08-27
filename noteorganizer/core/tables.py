@@ -258,6 +258,89 @@ def pipe_positions(line):
     return [i for i, ch in enumerate(raw) if ch == CELL]
 
 
+SEPARATOR_HIDDEN = "~"
+
+
+def is_separator_row(line):
+    """True for a markdown-style separator row: every cell is dashes with
+    optional alignment colons, or the hidden marker."""
+    if not is_table_row(line):
+        return False
+    cells = split_row(line)
+    if not cells:
+        return False
+    for cell in cells:
+        if cell == SEPARATOR_HIDDEN:
+            continue
+        body = cell
+        if body.startswith(":"):
+            body = body[1:]
+        if body.endswith(":"):
+            body = body[:-1]
+        if not body or body.strip("-"):
+            return False
+    return True
+
+
+def parse_separator(line):
+    """Each column's mechanics, off the separator's own text.
+
+    Returns a list of ``{"width", "align", "hidden"}`` -- width is the
+    cell's content length (dashes and colons together), which is what keeps
+    a regenerated separator the same width it was written at; align comes
+    from the colons, or None where the author left the column to its cells.
+    """
+    columns = []
+    for cell in split_row(line):
+        if cell == SEPARATOR_HIDDEN:
+            columns.append({"width": None, "align": None, "hidden": True})
+            continue
+        left = cell.startswith(":")
+        right = cell.endswith(":")
+        align = (ALIGN_CENTER if left and right
+                 else ALIGN_RIGHT if right
+                 else ALIGN_LEFT if left else None)
+        columns.append({"width": len(cell), "align": align, "hidden": False})
+    return columns
+
+
+def make_separator(columns):
+    """A separator's cells from parsed (or edited) column mechanics.
+
+    The width is honoured exactly: the dash count IS the stored display
+    width, so regenerating a separator never forgets a hand-dragged size.
+    """
+    cells = []
+    for column in columns:
+        if column.get("hidden"):
+            cells.append(SEPARATOR_HIDDEN)
+            continue
+        width = max(3, column.get("width") or 3)
+        align = column.get("align")
+        if align == ALIGN_CENTER:
+            cells.append(":" + "-" * max(1, width - 2) + ":")
+        elif align == ALIGN_RIGHT:
+            cells.append("-" * max(1, width - 1) + ":")
+        elif align == ALIGN_LEFT:
+            cells.append(":" + "-" * max(1, width - 1))
+        else:
+            cells.append("-" * width)
+    return cells
+
+
+def separator_index(lines):
+    """Which line of a block is its separator, or None.
+
+    Only the first counts, and only in the block's first two rows -- that
+    is where markdown puts it, and a dashed line further down is far more
+    likely to be content than mechanics.
+    """
+    for i, line in enumerate(lines[:2]):
+        if is_separator_row(line):
+            return i
+    return None
+
+
 def merge_map(rows):
     """Resolve merge markers into spans.
 
@@ -317,9 +400,25 @@ def align(text):
     lines = (text or "").split("\n")
     shifts = []
     for first, last in find_blocks(text):
-        rows = [split_row(line) for line in lines[first:last + 1]]
-        aligns = [cell_alignments(line) for line in lines[first:last + 1]]
-        widths = layout_widths(rows, aligns)
+        block = lines[first:last + 1]
+        sep_at = separator_index(block)
+        rows = [split_row(line) for line in block]
+        aligns = [cell_alignments(line) for line in block]
+        if sep_at is not None:
+            # The separator is mechanics, not data. Its dashes must not be
+            # treated as content when measuring -- but where a column was
+            # hand-widened, the dash count IS the wider width, and the data
+            # cells pad out to honour it. Narrower-than-content dashes are
+            # left alone: they are a display width for the drawn grid, and
+            # the text never truncates what a cell holds.
+            data_rows = [row for i, row in enumerate(rows) if i != sep_at]
+            data_aligns = [a for i, a in enumerate(aligns) if i != sep_at]
+            widths = layout_widths(data_rows, data_aligns)
+            for i, column in enumerate(parse_separator(block[sep_at])):
+                if i < len(widths) and not column["hidden"] and column["width"]:
+                    widths[i] = max(widths[i], column["width"])
+        else:
+            widths = layout_widths(rows, aligns)
         # Offsets are counted from the start of the body, so the length of
         # every line before this block has to be walked first. Done per
         # block rather than kept running, because a block's own lines change
