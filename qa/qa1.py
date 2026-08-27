@@ -2933,6 +2933,8 @@ try:
     check(f'the cell menu no longer offers a blind Hide ({len(_labels)} entries)',
           'Hide column' not in _labels
           and 'Autofit column width' in _labels)
+    check('the cell menu highlights a single cell',
+          'Highlight cell' in _labels)
 
     # A whole-column selection (all three data rows) offers Hide...
     _select_cells(_tF, (0, 1), (2, 1))
@@ -2994,9 +2996,16 @@ app._grid_apply_style(_tF, (0, 0, 0, 1), 'highlight', _hexF)
 app.update()
 _tF = app._grid_at_line(1)
 _fillF = _tF['canvas'].itemcget(_tF['cells'][(0, 0)]['rect'], 'fill')
+_surfF = NO.inset_surface(app.colors)
+_blendF = app._blend_hex(_hexF, _surfF, 0.45)
 _spansF = app._extract_formatting(app.body_text)
-check(f'a highlighted header cell is drawn filled ({_fillF!r})',
-      _fillF == _hexF)
+check(f'a highlighted header cell is drawn as a 45% blend ({_fillF!r})',
+      _fillF == _blendF and _fillF != _hexF)
+check('every selected cell takes the paint, not just the last',
+      _tF['canvas'].itemcget(_tF['cells'][(0, 0)]['rect'], 'fill')
+      == _blendF
+      and _tF['canvas'].itemcget(_tF['cells'][(0, 1)]['rect'], 'fill')
+      == _blendF)
 # Exact offsets, not mere existence: the tag writer and reader share any
 # off-by-one (the first line's embedded window), so only the SAVED span's
 # slice of the body can prove the range is right.
@@ -3007,8 +3016,9 @@ check(f'and the saved highlight span covers exactly the cell text '
 app._grid_apply_style(_tF, (0, 0, 0, 1), 'highlight', None)
 app.update()
 _tF = app._grid_at_line(1)
-check('Clear highlight restores the header surface',
-      _tF['canvas'].itemcget(_tF['cells'][(0, 0)]['rect'], 'fill') != _hexF)
+check('Clear highlight restores the exact header surface',
+      _tF['canvas'].itemcget(_tF['cells'][(0, 0)]['rect'], 'fill')
+      == _surfF)
 
 # An open editor is a target too: the color button means that cell.
 app._grid_sel = None
@@ -3025,6 +3035,43 @@ check('a color aimed at the open cell colors it, not a pending choice',
       and not app._pending_text_color
       and _tF['canvas'].itemcget(_tF['cells'][(1, 1)]['text'],
                                  'fill') == '#ff0000')
+app._commit_cell_editor()
+app.update()
+set_body('')
+
+# ---- A CLICK ACROSS THE COMMIT'S REBUILD ----
+# Typing wide in one cell and clicking another: the commit inside the
+# click's open rebuilds the grids; the editor must land on the FRESH
+# grid, not crash on the dead canvas (the field failure that then broke
+# selections and dropped Ctrl+V into the body as literal text).
+set_body('| Nume | Cant |\n| a | 2 |\n| b | 3 |')
+app._render_table_grids()
+app.update()
+_tR = app._grid_at_line(1)
+app._open_cell_editor(_tR, 1, 0)
+app.update()
+app._cell_editor['entry'].delete(0, 'end')
+app._cell_editor['entry'].insert(0, 'un text mult mai lat decat coloana')
+_oldR = _tR['canvas']
+_cellR = _tR['cells'][(2, 0)]
+_evR = type('E', (), {'x': int(_cellR['x'] + 30),
+                      'y': int(_cellR['y'] + 6)})()
+_crashR = None
+try:
+    app._grid_press(_tR, _evR)
+    app._grid_release(_tR, _evR)
+    app.update()
+except NO.tk.TclError as exc:
+    _crashR = exc
+_freshR = app._grid_at_line(1)
+check(f'a click across the rebuild opens the editor on the fresh grid '
+      f'(crash={_crashR!r})',
+      _crashR is None and not int(_oldR.winfo_exists())
+      and app._cell_editor is not None
+      and app._cell_editor['info'] is _freshR
+      and (app._cell_editor['r'], app._cell_editor['c']) == (2, 0))
+check('and the wide value was committed on the way',
+      _freshR['cells'][(1, 0)]['value'].startswith('un text'))
 app._commit_cell_editor()
 app.update()
 set_body('')

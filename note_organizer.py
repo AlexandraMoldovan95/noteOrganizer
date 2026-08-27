@@ -1291,6 +1291,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._table_grids = []
         self._grid_sel = None
         self._grid_pressed = None
+        self._grid_resizing = None
         try:
             self.body_text.tag_remove(self.TABLE_HIDE_TAG, "1.0", "end")
         except tk.TclError:
@@ -1434,11 +1435,22 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         """One floating Entry over one cell -- the only live widget a table
         ever has. Everything else is drawn, which is what lets a table of
         hundreds of rows scroll without dragging the editor down."""
+        # Committing the previous editor can rebuild the grids (a widened
+        # column goes stale at close), which destroys the very canvas the
+        # caller's info points at. Anchor the table by line first and pick
+        # up the fresh grid after -- the same dance _editor_step does.
+        anchor_line = self._grid_first_line(info)
         self._commit_cell_editor()
+        if anchor_line is not None:
+            fresh = self._grid_at_line(anchor_line)
+            if fresh is not None:
+                info = fresh
         cell = info["cells"].get((r, c))
         if cell is None:
             return
         canvas = info["canvas"]
+        if not int(canvas.winfo_exists()):
+            return
         header_font, cell_font = self._grid_fonts()
         astral = any(ord(ch) > 0xFFFF for ch in cell["value"])
         entry = tk.Entry(canvas, relief="flat", bd=0,
@@ -2626,6 +2638,23 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._grid_replace_block(first, nrows, rows, aligns, sep_cols)
         self._grid_after_op(first)
 
+    def _grid_highlight_menu(self, parent, info, box):
+        """The highlight cascade -- palette swatches plus Clear -- for
+        whichever menu asks: a selection's, or a single cell's."""
+        cascade = tk.Menu(parent, tearoff=0, bg=self.colors["card"],
+                          fg=self.colors["text"])
+        for hex_color in HIGHLIGHT_COLOR_PALETTE:
+            cascade.add_command(
+                label="        ", background=hex_color,
+                activebackground=hex_color,
+                command=lambda h=hex_color:
+                    self._grid_apply_style(info, box, "highlight", h))
+        cascade.add_command(
+            label="Clear highlight",
+            command=lambda: self._grid_apply_style(
+                info, box, "highlight", None))
+        return cascade
+
     def _grid_cell_text_range(self, info, r, c):
         """The body-text indices of one cell's content, or None when the
         cell is empty -- padding never carries formatting."""
@@ -2728,6 +2757,21 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         paint["strike"] = "strike" in tags
         return paint
 
+    @staticmethod
+    def _blend_hex(top, base, opacity):
+        """Fake transparency on a canvas that has none: *top* at *opacity*
+        over *base*, channel by channel."""
+        try:
+            tr, tg, tb = (int(top.lstrip("#")[i:i + 2], 16)
+                          for i in (0, 2, 4))
+            br, bg_, bb = (int(base.lstrip("#")[i:i + 2], 16)
+                           for i in (0, 2, 4))
+        except (ValueError, AttributeError):
+            return top
+        return "#%02x%02x%02x" % tuple(
+            round(t * opacity + b * (1 - opacity))
+            for t, b in ((tr, br), (tg, bg_), (tb, bb)))
+
     def _grid_restyle(self, info):
         """Repaint every drawn cell from its text tags, in place.
 
@@ -2739,8 +2783,13 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         header_font, cell_font = self._grid_fonts()
         for (r, c), cell in info["cells"].items():
             paint = self._grid_cell_paint(info, r, c)
-            bg = paint["bg"] or (inset_surface(self.colors) if r == 0
-                                 else self.colors["card"])
+            surface = (inset_surface(self.colors) if r == 0
+                       else self.colors["card"])
+            # The saved colour stays pure; only the DRAWING blends it
+            # toward the cell's own surface, so the text stays readable
+            # on either theme -- a solid palette fill buried it.
+            bg = (self._blend_hex(paint["bg"], surface, 0.45)
+                  if paint["bg"] else surface)
             fg = paint["fg"] or self.colors["text"]
             value = cell["value"]
             emoji = any(ord(ch) >= 0x1F000 or 0x2600 <= ord(ch) <= 0x27BF
@@ -2828,20 +2877,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     command=lambda: self._grid_hide_span(
                         info, sel["box"][1], sel["box"][3]))
             menu.add_separator()
-            highlight_menu = tk.Menu(menu, tearoff=0,
-                                     bg=self.colors["card"],
-                                     fg=self.colors["text"])
-            for hex_color in HIGHLIGHT_COLOR_PALETTE:
-                highlight_menu.add_command(
-                    label="        ", background=hex_color,
-                    activebackground=hex_color,
-                    command=lambda h=hex_color, box=sel["box"]:
-                        self._grid_apply_style(info, box, "highlight", h))
-            highlight_menu.add_command(
-                label="Clear highlight",
-                command=lambda box=sel["box"]:
-                    self._grid_apply_style(info, box, "highlight", None))
-            menu.add_cascade(label="Highlight cells", menu=highlight_menu)
+            menu.add_cascade(label="Highlight cells",
+                             menu=self._grid_highlight_menu(
+                                 menu, info, sel["box"]))
             menu.add_separator()
             for label, align_value in (
                     ("Align left", core_tables.ALIGN_LEFT),
@@ -2875,6 +2913,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         menu.add_command(label="Clear cell",
                          command=lambda: self._grid_fill_selection(
                              {"info": info, "box": (r, c, r, c)}, ""))
+        menu.add_cascade(label="Highlight cell",
+                         menu=self._grid_highlight_menu(
+                             menu, info, (r, c, r, c)))
         menu.add_separator()
         for label, align_value in (
                 ("Align left", core_tables.ALIGN_LEFT),
