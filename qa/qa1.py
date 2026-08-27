@@ -2114,6 +2114,59 @@ check(f'a pipe typed into a cell cannot break the row ({lines_now()[0]!r})',
       core_tables.split_row(lines_now()[0])[0] == 'a/b'
       and len(core_tables.split_row(lines_now()[0])) == 2)
 
+# ---- MERGED CELLS, AND A TABLE WIDER THAN THE EDITOR ----
+# A source's rowspan/colspan arrives as merge markers in the text and is
+# drawn as genuinely spanned cells; a table wider than the editor scrolls
+# sideways instead of being cut off at the edge.
+set_body('')
+_stub_clipboard(html=('<table>'
+                      "<tr><th rowspan='2'>Nr</th>"
+                      "<th colspan='2'>Cablu</th></tr>"
+                      '<tr><th>Vodafone</th><th>Digi</th></tr>'
+                      '<tr><td>1.</td><td>da</td><td>nu</td></tr>'
+                      '</table>'))
+app._on_body_paste()
+app.update()
+_merged = app._grid_at_line(1)
+check('a merged paste renders a grid', _merged is not None)
+check(f'the rowspan anchor really spans its rows '
+      f'({_merged["entries"][0][0].grid_info().get("rowspan")})',
+      int(_merged['entries'][0][0].grid_info().get('rowspan', 1)) == 2)
+check(f'the colspan anchor really spans its columns '
+      f'({_merged["entries"][0][1].grid_info().get("columnspan")})',
+      int(_merged['entries'][0][1].grid_info().get('columnspan', 1)) == 2)
+check('covered positions hold no widget at all',
+      _merged['entries'][0][2] is None and _merged['entries'][1][0] is None)
+
+# Editing the anchor rewrites the anchor cell and nothing else: the markers
+# that carry the merge stay exactly where they were.
+_merged['entries'][0][1].delete(0, 'end')
+_merged['entries'][0][1].insert(0, 'Cablu Nou')
+app._flush_table_grids()
+app.update()
+check(f'editing a merge anchor keeps the merge ({lines_now()[0]!r})',
+      core_tables.split_row(lines_now()[0]) == ['Nr', 'Cablu Nou', '<']
+      and core_tables.split_row(lines_now()[1])[0] == '^')
+
+# A narrow table needs no scrollbar; a wide one gets a live one.
+check('a narrow table shows no horizontal scrollbar',
+      _merged.get('hbar') is None or not _merged['hbar'].winfo_manager())
+set_body('')
+_stub_clipboard(html=('<table><tr>'
+                      + ''.join(f'<th>Column with a long name {i}</th>'
+                                for i in range(9))
+                      + '</tr><tr>'
+                      + ''.join(f'<td>value {i}</td>' for i in range(9))
+                      + '</tr></table>'))
+app._on_body_paste()
+app.update()
+app.update_idletasks()
+_wide = app._grid_at_line(1)
+check(f'a wide table gets a horizontal scrollbar '
+      f'(natural {_wide["natural"]}px, shown {_wide["canvas"].cget("width")}px)',
+      _wide['hbar'] is not None and bool(_wide['hbar'].winfo_manager())
+      and int(float(_wide['canvas'].cget('width'))) < _wide['natural'])
+
 # And outside a table Tab still types a tab, as it always did.
 clear_selection()
 set_body('ordinary prose')

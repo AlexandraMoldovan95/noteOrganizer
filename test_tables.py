@@ -172,6 +172,52 @@ _table_text = "\n".join([
 check("reflow leaves a table exactly as it found it",
       reflow_wrapped(_table_text) == _table_text)
 
+# --- merged cells --------------------------------------------------------
+# A cell holding exactly "<" belongs to the cell on its left, "^" to the
+# cell above; anchors sit at the top-left of their rectangle. The markers
+# live in the text like everything else, so a merge survives align(), save,
+# share codes and export with no new note field.
+_m_rows = [["Nr", "Canal", "Cablu", "<", "<"],
+           ["^", "^", "Vodafone", "Digi", "Orange"],
+           ["1.", "TV", "x", "x", "x"]]
+_m_spans, _m_covered = tables.merge_map(_m_rows)
+check(f"merge_map finds the spans ({sorted(_m_spans.items())})",
+      _m_spans == {(0, 0): (2, 1), (0, 1): (2, 1), (0, 2): (1, 3)})
+check(f"and the covered positions ({len(_m_covered)})",
+      _m_covered == {(0, 3), (0, 4), (1, 0), (1, 1)})
+
+# A marker with nothing to attach to is content, not a merge.
+_orphans, _orphan_covered = tables.merge_map([["<", "a"], ["^", "b"]])
+check("an orphan marker stays ordinary content",
+      _orphans == {} and _orphan_covered == set())
+
+# The bug as reported: a spreadsheet header with rowspan and colspan sheared
+# every row under it one column left, so the symbol columns came out empty.
+_shear_html = ("<table>"
+               "<tr><th rowspan='2'>Nr</th><th rowspan='2'>Canal</th>"
+               "<th colspan='3'>Cablu</th></tr>"
+               "<tr><th>Vodafone</th><th>Digi</th><th>Orange</th></tr>"
+               "<tr><td>1.</td><td>TV</td>"
+               "<td>\u2713</td><td>\u2717</td><td>\u2713</td></tr>"
+               "</table>")
+_shear_text, _s2, _p2 = html_to_note(_shear_html)
+_shear_rows = [tables.split_row(l) for l in _shear_text.split("\n")]
+check(f"a merged header no longer shears the rows below ({_shear_rows[1]})",
+      _shear_rows == [["Nr", "Canal", "Cablu", "<", "<"],
+                      ["^", "^", "Vodafone", "Digi", "Orange"],
+                      ["1.", "TV", "\u2713", "\u2717", "\u2713"]])
+check("the symbols come through as themselves",
+      "\u2713" in _shear_text and "\u2717" in _shear_text)
+
+# And back out: anchors leave with their spans, covered cells not at all.
+_m_out = note_to_html(_shear_text)
+check("a merged table goes out with colspan and rowspan",
+      'colspan="3"' in _m_out and 'rowspan="2"' in _m_out)
+check("the markers themselves never leak into the markup",
+      "&lt;</td>" not in _m_out and ">^<" not in _m_out)
+_m_back, _m_bs, _m_bp = html_to_note(_m_out)
+check("a merged table survives the round trip", _m_back == _shear_text)
+
 print()
 print(f"FAILURES: {fails if fails else 'none'}")
 

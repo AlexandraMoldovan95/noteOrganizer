@@ -214,8 +214,35 @@ class _Reader(HTMLParser):
                 return
 
     # -- parser callbacks ------------------------------------------------
+    @staticmethod
+    def _span_attr(attrs, name):
+        try:
+            return max(1, min(30, int(str(attrs.get(name, "1")).strip())))
+        except (TypeError, ValueError):
+            return 1
+
+    def _owed_merge_cell(self):
+        """Emit one owed marker cell if a rowspan covers the current column."""
+        pending = getattr(self, "_tbl_pending", None)
+        if not pending or self._tbl_col not in pending:
+            return False
+        left, marker = pending[self._tbl_col]
+        self._add(tables.CELL + " " + marker + " ")
+        if left - 1 > 0:
+            pending[self._tbl_col][0] = left - 1
+        else:
+            del pending[self._tbl_col]
+        self._tbl_col += 1
+        return True
+
     def handle_starttag(self, tag, attrs):
         attrs = dict(attrs)
+        if tag == "table":
+            self._tbl_active = getattr(self, "_tbl_active", 0) + 1
+            self._tbl_pending = {}
+            self._tbl_col = 0
+        elif tag == "tr" and getattr(self, "_tbl_active", 0):
+            self._tbl_col = 0
         if tag in _STYLE_TAGS:
             self._open.append((_STYLE_TAGS[tag], None, self.length))
         if tag in ("ul", "ol"):
@@ -234,6 +261,15 @@ class _Reader(HTMLParser):
                 self.paragraphs.append(entry)
         elif tag in _CELL_TAGS:
             self.cell_depth += 1
+            # Columns still covered by a rowspan from an earlier row are
+            # owed their marker before this cell can take its place --
+            # without it every later cell lands one column too far left,
+            # which is how a merged header shears the whole table under it.
+            while self._owed_merge_cell():
+                pass
+            self._tbl_cell = (getattr(self, "_tbl_col", 0),
+                              self._span_attr(attrs, "colspan"),
+                              self._span_attr(attrs, "rowspan"))
             self._add(tables.CELL + " ")
         elif tag in _BLOCK_TAGS:
             if self.cell_depth:
@@ -268,7 +304,37 @@ class _Reader(HTMLParser):
         elif tag in _CELL_TAGS:
             self.cell_depth = max(0, self.cell_depth - 1)
             self._add(" ")
+            col, span_c, span_r = getattr(self, "_tbl_cell", (0, 1, 1))
+            # A colspan is written out as the anchor followed by "<" cells,
+            # and a rowspan owes "^" cells to the rows below -- "^" under
+            # the anchor, "<" under the rest of its width, so the rectangle
+            # reads back unambiguously.
+            for _ in range(span_c - 1):
+                self._add(tables.CELL + " " + tables.MERGE_LEFT + " ")
+            if span_r > 1:
+                pending = getattr(self, "_tbl_pending", None)
+                if pending is None:
+                    pending = self._tbl_pending = {}
+                for cover in range(col, col + span_c):
+                    pending[cover] = [
+                        span_r - 1,
+                        tables.MERGE_UP if cover == col else tables.MERGE_LEFT]
+            self._tbl_col = col + span_c
+        elif tag == "table":
+            self._tbl_active = max(0, getattr(self, "_tbl_active", 1) - 1)
+            self._tbl_pending = {}
         elif tag == "tr":
+            if getattr(self, "_tbl_active", 0):
+                # Rowspan columns the row never reached still owe markers,
+                # with empty filler for any gap on the way to them.
+                pending = getattr(self, "_tbl_pending", {})
+                for cover in sorted(list(pending)):
+                    if cover < self._tbl_col:
+                        continue
+                    while self._tbl_col < cover:
+                        self._add(tables.CELL + "  ")
+                        self._tbl_col += 1
+                    self._owed_merge_cell()
             # The row's closing pipe, before the newline _BLOCK_TAGS gives it.
             self._add(tables.CELL)
             self._newline()
@@ -403,6 +469,18 @@ def note_to_html(text, formatting=None, paragraphs=None):
     lines = text.split("\n")
     props = {p["line"]: p for p in normalize_paragraphs(paragraphs or [], len(lines))}
 
+    # Merge markers only make sense against their whole block, so every
+    # block's matrix is resolved up front and looked up per line.
+    merge_at = {}
+    for block_first, block_last in tables.find_blocks(text):
+        matrix = [tables.split_row(lines[n])
+                  for n in range(block_first, block_last + 1)]
+        m_spans, m_covered = tables.merge_map(matrix)
+        for r in range(len(matrix)):
+            merge_at[block_first + r] = (
+                {c: m_spans[(ar, c)] for (ar, c) in m_spans if ar == r},
+                {c for (rr, c) in m_covered if rr == r})
+
     out, offset, open_lists, in_table = [], 0, [], False
     for number, line in enumerate(lines):
         entry = props.get(number, {})
@@ -459,10 +537,21 @@ def note_to_html(text, formatting=None, paragraphs=None):
             if not in_table:
                 out.append("<table>")
                 in_table = True
-            cells = "".join(
-                f"<td>{_line_html(line[start:end], spans, offset + start)}</td>"
-                for start, end in row)
-            out.append(f"<tr>{cells}</tr>")
+            row_spans, row_covered = merge_at.get(number, ({}, set()))
+            cells = []
+            for c, (start, end) in enumerate(row):
+                if c in row_covered:
+                    continue
+                rs, cs = row_spans.get(c, (1, 1))
+                attr = ""
+                if cs > 1:
+                    attr += f' colspan="{cs}"'
+                if rs > 1:
+                    attr += f' rowspan="{rs}"'
+                cells.append(f"<td{attr}>"
+                             f"{_line_html(line[start:end], spans, offset + start)}"
+                             f"</td>")
+            out.append(f"<tr>{''.join(cells)}</tr>")
         else:
             align = entry.get("align")
             style = f' style="text-align:{align};"' if align else ""

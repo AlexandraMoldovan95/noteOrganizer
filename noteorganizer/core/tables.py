@@ -26,6 +26,13 @@ tested on any machine.
 """
 
 CELL = "|"
+# A cell holding exactly one of these is not content but a merge marker:
+# "<" belongs to the cell on its left, "^" to the cell above. Anchors sit
+# at the top-left of their rectangle. Typing one of these alone into a cell
+# genuinely means merging -- the same kind of accepted trade-off as "2."
+# starting a numbered item.
+MERGE_LEFT = "<"
+MERGE_UP = "^"
 # A row needs at least this much text to be worth calling a table. A line
 # holding only pipes and spaces is a separator someone typed, not data.
 _MIN_CELLS = 2
@@ -162,6 +169,33 @@ def pad_ops(line, widths):
         if have_lead != 1:
             ops.append((opening + 1, 1 - have_lead))
     return ops
+
+
+def merge_map(rows):
+    """Resolve merge markers into spans.
+
+    Returns ``(spans, covered)``: ``spans[(r, c)] = (rowspan, colspan)`` for
+    every anchor that spans more than one cell, and ``covered`` is the set
+    of (r, c) positions swallowed by some anchor. A marker with nothing to
+    attach to -- "<" in the first column, "^" in the first row -- is left
+    alone as ordinary content rather than guessed at.
+    """
+    anchor_of = {}
+    for r, row in enumerate(rows):
+        for c, value in enumerate(row):
+            if value == MERGE_LEFT and c > 0:
+                left = anchor_of.get((r, c - 1), (r, c - 1))
+                if rows[left[0]][left[1]] not in (MERGE_LEFT, MERGE_UP):
+                    anchor_of[(r, c)] = left
+            elif value == MERGE_UP and r > 0:
+                above = anchor_of.get((r - 1, c), (r - 1, c))
+                if rows[above[0]][above[1]] not in (MERGE_LEFT, MERGE_UP):
+                    anchor_of[(r, c)] = above
+    spans = {}
+    for (r, c), (ar, ac) in anchor_of.items():
+        rs, cs = spans.get((ar, ac), (1, 1))
+        spans[(ar, ac)] = (max(rs, r - ar + 1), max(cs, c - ac + 1))
+    return spans, set(anchor_of)
 
 
 def find_blocks(text):

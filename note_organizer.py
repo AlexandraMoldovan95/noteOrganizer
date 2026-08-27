@@ -1313,6 +1313,75 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         for first0, last0 in core_tables.find_blocks(text):
             self._build_table_grid(first0 + 1, last0 + 1)
 
+    def _grid_first_entry(self, info):
+        """The first real cell -- merged-over positions hold None."""
+        for row in info["entries"]:
+            for entry in row:
+                if entry is not None:
+                    return entry
+        return None
+
+    def _grid_last_row_entry(self, info):
+        for entry in info["entries"][-1]:
+            if entry is not None:
+                return entry
+        return None
+
+    def _grid_available_width(self):
+        """How wide a table may draw before it has to scroll instead."""
+        try:
+            width = self.body_text.winfo_width()
+        except tk.TclError:
+            width = 0
+        # Before the editor is mapped the widget reports 1; better to let a
+        # table draw at its natural width than to squeeze it into nothing.
+        return width - 50 if width > 120 else 10_000
+
+    def _fit_grid(self, info):
+        """Size one grid's viewport, showing a scrollbar only when needed."""
+        canvas = info.get("canvas")
+        if canvas is None:
+            return
+        avail = max(160, self._grid_available_width())
+        shown = min(info["natural"], avail)
+        try:
+            if int(float(canvas.cget("width"))) != shown:
+                canvas.configure(width=shown)
+        except tk.TclError:
+            return
+        needs_bar = info["natural"] > avail
+        hbar = info.get("hbar")
+        if needs_bar and hbar is None:
+            hbar = ttk.Scrollbar(info["frame"], orient="horizontal",
+                                 command=canvas.xview)
+            canvas.configure(xscrollcommand=hbar.set)
+            info["hbar"] = hbar
+        if hbar is not None:
+            if needs_bar:
+                hbar.pack(side="top", fill="x")
+            else:
+                hbar.pack_forget()
+
+    def _on_body_resize_grids(self, _event=None):
+        for info in getattr(self, "_table_grids", []):
+            self._fit_grid(info)
+
+    def _forward_grid_wheel(self, event):
+        """The wheel over a table scrolls the note, as it does over text."""
+        try:
+            self.body_text.yview_scroll(-1 if event.delta > 0 else 1, "units")
+        except tk.TclError:
+            pass
+        return "break"
+
+    def _grid_wheel_x(self, canvas, event):
+        """Shift+wheel pans a wide table sideways."""
+        try:
+            canvas.xview_scroll(-1 if event.delta > 0 else 1, "units")
+        except tk.TclError:
+            pass
+        return "break"
+
     def _build_table_grid(self, first, last):
         b = self.body_text
         rows = [core_tables.split_row(b.get(f"{n}.0", f"{n}.end"))
@@ -1320,19 +1389,31 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         widths = core_tables.column_widths(rows)
         if not widths:
             return
+        merges, covered = core_tables.merge_map(rows)
+        # The grid proper lives on a canvas so that a table wider than the
+        # editor can scroll sideways instead of being cut off at the edge.
         # The 1px gaps between cells show the frame behind them, and that is
         # what draws the grid lines: every rule exactly once, horizontal and
         # vertical, without the doubled edges adjacent borders would give.
-        frame = tk.Frame(b, bg=hairline(self.colors))
+        host = tk.Frame(b, bg=self.colors["card"])
+        canvas = tk.Canvas(host, highlightthickness=0, bd=0,
+                           bg=hairline(self.colors))
+        frame = tk.Frame(canvas, bg=hairline(self.colors))
         header_font = (self.editor_font_family, self.editor_font_size, "bold")
         cell_font = (self.editor_font_family, self.editor_font_size)
         entries = []
         for r, row in enumerate(rows):
             entries.append([])
             for c in range(len(widths)):
+                if (r, c) in covered:
+                    # Swallowed by a merge: the anchor's widget covers this
+                    # position, so there is nothing to build here.
+                    entries[r].append(None)
+                    continue
+                row_span, col_span = merges.get((r, c), (1, 1))
                 entry = tk.Entry(
                     frame, relief="flat", bd=0,
-                    width=widths[c] + 1,
+                    width=sum(widths[c:c + col_span]) + 2 * (col_span - 1) + 1,
                     font=header_font if r == 0 else cell_font,
                     bg=(inset_surface(self.colors) if r == 0
                         else self.colors["card"]),
@@ -1340,25 +1421,52 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     insertbackground=self.colors["text"],
                 )
                 entry.insert(0, row[c] if c < len(row) else "")
-                entry.grid(row=r, column=c, sticky="nsew",
-                           padx=(1, 1 if c == len(widths) - 1 else 0),
-                           pady=(1, 1 if r == len(rows) - 1 else 0),
+                entry.grid(row=r, column=c,
+                           rowspan=row_span, columnspan=col_span,
+                           sticky="nsew",
+                           padx=(1, 1 if c + col_span == len(widths) else 0),
+                           pady=(1, 1 if r + row_span == len(rows) else 0),
                            ipadx=6, ipady=5)
                 entry.bind("<FocusOut>", lambda _e: self._flush_table_grids())
                 entry.bind("<KeyRelease>",
                            lambda _e: self._schedule_autosave())
                 entries[r].append(entry)
-        mark = f"table_grid_{id(frame)}"
+        for widget in ([host, canvas, frame]
+                       + [e for row in entries for e in row if e is not None]):
+            widget.bind("<MouseWheel>", self._forward_grid_wheel)
+            widget.bind("<Shift-MouseWheel>",
+                        lambda ev, cv=canvas: self._grid_wheel_x(cv, ev))
+        canvas.create_window((0, 0), window=frame, anchor="nw")
+        frame.update_idletasks()
+        natural_w = frame.winfo_reqwidth()
+        canvas.configure(height=frame.winfo_reqheight(),
+                         scrollregion=(0, 0, natural_w,
+                                       frame.winfo_reqheight()))
+        canvas.pack(side="top", anchor="w")
+        mark = f"table_grid_{id(host)}"
         b.mark_set(mark, f"{first}.0")
         b.mark_gravity(mark, "left")
-        info = {"frame": frame, "entries": entries, "mark": mark,
+        info = {"frame": host, "canvas": canvas, "hbar": None,
+                "natural": natural_w, "entries": entries, "mark": mark,
                 "nrows": len(rows), "ncols": len(widths)}
+        self._fit_grid(info)
         # Tab at the very last cell adds a row; Shift+Tab out of the first
         # cell stays put, since silently leaving the table would be worse
         # than staying. Both mirror what the text path already does.
-        entries[-1][-1].bind("<Tab>", lambda _e, i=info: self._grid_add_row(i))
-        entries[0][0].bind("<Shift-Tab>", lambda _e: "break")
-        b.window_create(f"{first}.0", window=frame, padx=1, pady=6)
+        # The bind belongs on the FINAL cell in traversal order -- the last
+        # real widget of the last row -- while _grid_last_row_entry answers
+        # the other question, where focus lands after a row is added.
+        tail = None
+        for candidate in reversed(info["entries"][-1]):
+            if candidate is not None:
+                tail = candidate
+                break
+        if tail is not None:
+            tail.bind("<Tab>", lambda _e, i=info: self._grid_add_row(i))
+        head = self._grid_first_entry(info)
+        if head is not None:
+            head.bind("<Shift-Tab>", lambda _e: "break")
+        b.window_create(f"{first}.0", window=host, padx=1, pady=6)
         # The window itself sits at column 0; the pipe text starts at column
         # 1 and is hidden through the block's last line. Hidden, not removed:
         # get() still returns it, offsets still count it, save still keeps it.
@@ -1388,7 +1496,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 line = b.get(f"{line_no}.0", f"{line_no}.end")
                 bounds = core_tables.cell_bounds(line)
                 for c, entry in enumerate(row_entries):
-                    if c >= len(bounds):
+                    if entry is None or c >= len(bounds):
                         continue
                     try:
                         value = entry.get()
@@ -1414,10 +1522,17 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             # Columns follow their content: the widest value in a column
             # sets every cell in it, never narrower than the floor.
             for c in range(info["ncols"]):
-                column = [row[c] for row in info["entries"] if c < len(row)]
+                column = [row[c] for row in info["entries"]
+                          if c < len(row) and row[c] is not None]
+                # Cells spanning several columns answer to all of them, so
+                # only single-span cells drive a column's width.
+                single = [e for e in column
+                          if int(e.grid_info().get("columnspan", 1)) == 1]
+                if not single:
+                    continue
                 want = max([core_tables.MIN_COLUMN]
-                           + [len(e.get()) for e in column]) + 1
-                for e in column:
+                           + [len(e.get()) for e in single]) + 1
+                for e in single:
                     e.configure(width=want)
         if changed:
             self._schedule_autosave()
@@ -1437,8 +1552,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._resync_list_tags()
         self._render_table_grids()
         fresh = self._grid_at_line(first)
-        if fresh is not None and fresh["entries"]:
-            fresh["entries"][-1][0].focus_set()
+        if fresh is not None:
+            landing = self._grid_last_row_entry(fresh)
+            if landing is not None:
+                landing.focus_set()
         self._schedule_autosave()
         return "break"
 
@@ -2112,8 +2229,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if rendered:
             grid = self._grid_at_line(rendered[0])
             if grid is not None:
-                if delta > 0 and grid["entries"] and grid["entries"][0]:
-                    grid["entries"][0][0].focus_set()
+                head = self._grid_first_entry(grid)
+                if delta > 0 and head is not None:
+                    head.focus_set()
                 return True
         here = self._cell_at(line_no, column)
         if here is None:
@@ -2168,8 +2286,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._resync_list_tags()
         self._render_table_grids()
         made = self._grid_at_line(first)
-        if made is not None and made["entries"] and made["entries"][0]:
-            made["entries"][0][0].focus_set()
+        if made is not None:
+            head = self._grid_first_entry(made)
+            if head is not None:
+                head.focus_set()
         self._schedule_autosave()
         return first
 
@@ -5497,6 +5617,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # caret wander into it -- and typing there would edit characters
         # nobody can see.
         self.body_text.bind("<KeyPress>", self._caret_out_of_hidden, add="+")
+        self.body_text.bind("<Configure>", self._on_body_resize_grids, add="+")
         self.body_text.bind("<KeyRelease>", self._caret_out_of_hidden, add="+")
         self.body_text.bind("<ButtonRelease-1>", self._caret_out_of_hidden, add="+")
         # Overrides Tk's default double-click "select word" so punctuation
