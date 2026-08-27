@@ -2518,13 +2518,15 @@ _linesX = len(body().split('\n'))
 
 
 def _select_cells(g, a, bcell):
+    # 12px in from the corner: pressing within 4px of a vertical rule is
+    # (by design) a grab of the rule, not the start of a selection.
     _ca, _cb = g['cells'][a], g['cells'][bcell]
     g['canvas'].event_generate('<Button-1>',
-                               x=int(_ca['x'] + 4), y=int(_ca['y'] + 4))
+                               x=int(_ca['x'] + 12), y=int(_ca['y'] + 6))
     g['canvas'].event_generate('<B1-Motion>',
-                               x=int(_cb['x'] + 4), y=int(_cb['y'] + 4))
+                               x=int(_cb['x'] + 12), y=int(_cb['y'] + 6))
     g['canvas'].event_generate('<ButtonRelease-1>',
-                               x=int(_cb['x'] + 4), y=int(_cb['y'] + 4))
+                               x=int(_cb['x'] + 12), y=int(_cb['y'] + 6))
     app.update()
 
 
@@ -2845,6 +2847,186 @@ _wS = core_tables.parse_separator(
     app.body_text.get('2.0', '2.end'))[0]['width']
 check(f'releasing the drag stores the new width in the separator '
       f'(W={_wS})', _wS is not None and _wS >= 8)
+
+# A click ON a rule that never moves is not a drag: the width must not
+# shift. (At the default font a motionless click could not cross the
+# rounding boundary anyway -- the release-side guard matters at small
+# fonts, where a char is narrower than the 4px grab tolerance. This
+# check pins the user-visible invariant, whichever layer provides it.)
+_tS = app._grid_at_line(1)
+_edgeS = int(_tS['col_x'][1])
+_tS['canvas'].event_generate('<Button-1>', x=_edgeS, y=4)
+_tS['canvas'].event_generate('<ButtonRelease-1>', x=_edgeS, y=4)
+app.update()
+_wS2 = core_tables.parse_separator(
+    app.body_text.get('2.0', '2.end'))[0]['width']
+check(f'a motionless click on a rule changes nothing (W={_wS2})',
+      _wS2 == _wS)
+set_body('')
+
+# ---- MERGE KEEPS THE TEXT IT SWALLOWS ----
+# Merging 'A' with an empty neighbour used to keep whichever cell was the
+# anchor -- and lose the text when the anchor was the empty one.
+# The text sits in the NON-anchor cell -- the case that actually lost
+# it: the anchor was empty, and the merge kept the anchor.
+set_body('|  | A |\n| x | y |')
+app._render_table_grids()
+app.update()
+_tF = app._grid_at_line(1)
+app._grid_merge_selection({'info': _tF, 'box': (0, 0, 0, 1)})
+app.update()
+_tF = app._grid_at_line(1)
+check(f"merging an empty anchor with 'A' keeps the A "
+      f"({_tF['cells'][(0, 0)]['value']!r})",
+      _tF['cells'][(0, 0)]['value'] == 'A')
+set_body('| A | B |\n| x | y |')
+app._render_table_grids()
+app.update()
+_tF = app._grid_at_line(1)
+app._grid_merge_selection({'info': _tF, 'box': (0, 0, 0, 1)})
+app.update()
+_tF = app._grid_at_line(1)
+check(f"merging two texts joins them ({_tF['cells'][(0, 0)]['value']!r})",
+      _tF['cells'][(0, 0)]['value'] == 'A B')
+set_body('')
+
+# ---- A LIST CAN START ON AN EMPTY LINE ----
+app.body_text.mark_set('insert', '1.0')
+app._toggle_list('bullet')
+app.update()
+check(f'a bullet lands on the empty line the caret is on '
+      f'({body()!r})', body().startswith(chr(0x2022)))
+set_body('')
+app.body_text.mark_set('insert', '1.0')
+app._toggle_list('number')
+app.update()
+check(f'and so does numbering ({body()!r})', body().startswith('1.'))
+set_body('')
+
+# ---- HIDE ONLY FROM A WHOLE-COLUMN SELECTION ----
+# Right-clicking one cell must not offer Hide -- the user cannot see what
+# would disappear. A column selected top to bottom can.
+set_body('| a | b |\n| c | d |\n| e | f |')
+app._render_table_grids()
+app.update()
+_tF = app._grid_at_line(1)
+_posted = []
+_real_popup = NO.tk.Menu.tk_popup
+NO.tk.Menu.tk_popup = lambda _m, *a, **k: _posted.append(_m)
+
+
+def _menu_entries(m):
+    out = []
+    for i in range(m.index('end') + 1):
+        if m.type(i) in ('command', 'cascade'):
+            out.append(m.entrycget(i, 'label'))
+    return out
+
+
+try:
+    _cF = _tF['cells'][(1, 0)]
+    app._grid_clear_selection()
+    app._grid_menu(_tF, type('E', (), {
+        'x': int(_cF['x'] + 4), 'y': int(_cF['y'] + 4),
+        'x_root': 0, 'y_root': 0})())
+    _labels = _menu_entries(_posted[-1]) if _posted else []
+    check(f'the cell menu no longer offers a blind Hide ({len(_labels)} entries)',
+          'Hide column' not in _labels
+          and 'Autofit column width' in _labels)
+
+    # A whole-column selection (all three data rows) offers Hide...
+    _select_cells(_tF, (0, 1), (2, 1))
+    _posted.clear()
+    _cSel = _tF['cells'][(1, 1)]
+    app._grid_menu(_tF, type('E', (), {
+        'x': int(_cSel['x'] + 4), 'y': int(_cSel['y'] + 4),
+        'x_root': 0, 'y_root': 0})())
+    _labels = _menu_entries(_posted[-1]) if _posted else []
+    check('a whole-column selection offers Hide column',
+          'Hide column' in _labels)
+    check('and the selection menu carries Highlight cells',
+          'Highlight cells' in _labels)
+
+    # ...and a partial selection does not.
+    _select_cells(_tF, (0, 0), (1, 0))
+    _posted.clear()
+    _cSel = _tF['cells'][(0, 0)]
+    app._grid_menu(_tF, type('E', (), {
+        'x': int(_cSel['x'] + 4), 'y': int(_cSel['y'] + 4),
+        'x_root': 0, 'y_root': 0})())
+    _labels = _menu_entries(_posted[-1]) if _posted else []
+    check('a partial selection does not offer Hide',
+          'Hide column' not in _labels and 'Merge cells' in _labels)
+finally:
+    NO.tk.Menu.tk_popup = _real_popup
+app._grid_clear_selection()
+set_body('')
+
+# ---- TOOLBAR FORMATTING REACHES THE CELLS ----
+# With cells selected, Bold means THOSE cells -- not a pending style for
+# the body. The tag lands on the cell's text (so save and export carry
+# it) and the drawn cell repaints.
+set_body('| Nume | Cant |\n| Lapte | 2 |')
+app._render_table_grids()
+app.update()
+_tF = app._grid_at_line(1)
+app._grid_sel = {'info': _tF, 'box': (1, 0, 1, 1),
+                 'cells': [(1, 0), (1, 1)]}
+app._toggle_body_style('bold')
+app.update()
+_tF = app._grid_at_line(1)
+_spanF = app._grid_cell_text_range(_tF, 1, 0)
+_fontF = str(_tF['canvas'].itemcget(_tF['cells'][(1, 0)]['text'], 'font'))
+check(f'Bold on selected cells tags the text and repaints ({_fontF!r})',
+      'bold' in app.body_text.tag_names(_spanF[0])
+      and 'bold' in _fontF and not app._pending_styles)
+app._toggle_body_style('bold')
+app.update()
+_tF = app._grid_at_line(1)
+_spanF = app._grid_cell_text_range(_tF, 1, 0)
+check('a second press turns it back off',
+      'bold' not in app.body_text.tag_names(_spanF[0]))
+
+# Highlight from the selection menu paints the drawn header and lands in
+# the saved formatting.
+_hexF = NO.HIGHLIGHT_COLOR_PALETTE[0]
+app._grid_apply_style(_tF, (0, 0, 0, 1), 'highlight', _hexF)
+app.update()
+_tF = app._grid_at_line(1)
+_fillF = _tF['canvas'].itemcget(_tF['cells'][(0, 0)]['rect'], 'fill')
+_spansF = app._extract_formatting(app.body_text)
+check(f'a highlighted header cell is drawn filled ({_fillF!r})',
+      _fillF == _hexF)
+# Exact offsets, not mere existence: the tag writer and reader share any
+# off-by-one (the first line's embedded window), so only the SAVED span's
+# slice of the body can prove the range is right.
+_hlF = [s for s in _spansF if 'highlight' in str(s)]
+_sliceF = (body()[_hlF[0]['start']:_hlF[0]['end']] if _hlF else '')
+check(f'and the saved highlight span covers exactly the cell text '
+      f'({_sliceF!r})', _sliceF == 'Nume')
+app._grid_apply_style(_tF, (0, 0, 0, 1), 'highlight', None)
+app.update()
+_tF = app._grid_at_line(1)
+check('Clear highlight restores the header surface',
+      _tF['canvas'].itemcget(_tF['cells'][(0, 0)]['rect'], 'fill') != _hexF)
+
+# An open editor is a target too: the color button means that cell.
+app._grid_sel = None
+app._open_cell_editor(_tF, 1, 1)
+app.update()
+app._apply_body_color('text_color', '#ff0000')
+app.update()
+_tF = app._grid_at_line(1)
+_spanF = app._grid_cell_text_range(_tF, 1, 1)
+check('a color aimed at the open cell colors it, not a pending choice',
+      _spanF is not None
+      and any(t.startswith('text_color_')
+              for t in app.body_text.tag_names(_spanF[0]))
+      and not app._pending_text_color
+      and _tF['canvas'].itemcget(_tF['cells'][(1, 1)]['text'],
+                                 'fill') == '#ff0000')
+app._commit_cell_editor()
+app.update()
 set_body('')
 
 NO.clipboard.read_html = _real_read_html

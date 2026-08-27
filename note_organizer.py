@@ -1860,6 +1860,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         canvas.bind("<Motion>", lambda e, i=info: self._grid_motion(i, e))
         canvas.bind("<Double-Button-1>",
                     lambda e, i=info: self._grid_double(i, e))
+        # Saved formatting is already on the text as tags by the time a
+        # grid is built (load applies formatting first), so painting from
+        # tags here shows it from the first frame.
+        self._grid_restyle(info)
         for widget in (host, canvas):
             widget.bind("<MouseWheel>", self._forward_grid_wheel)
             widget.bind("<Shift-MouseWheel>",
@@ -1954,6 +1958,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._grid_resizing = None
         if resizing is not None and resizing["info"] is info:
             canvas = info["canvas"]
+            # A press beside a rule that never moved is a click, not a
+            # drag -- applying it would nudge the width by a rounding
+            # error every time someone clicks near a boundary.
+            if abs(canvas.canvasx(event.x) - resizing["x"]) < 3:
+                return "break"
             col = resizing["col"]
             left = info["col_x"][col]
             new_px = canvas.canvasx(event.x) - left
@@ -2345,6 +2354,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 sep_cols[c]["hidden"] = hidden
         self._grid_column_mechanics(info, mutate)
 
+    def _grid_hide_span(self, info, c0, c1):
+        def mutate(sep_cols, rows, aligns):
+            for c in range(c0, min(c1 + 1, len(sep_cols))):
+                sep_cols[c]["hidden"] = True
+        self._grid_column_mechanics(info, mutate)
+
     def _grid_unhide_all(self, info):
         def mutate(sep_cols, rows, aligns):
             for column in sep_cols:
@@ -2446,6 +2461,18 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     for cc in range(ac, ac + cs):
                         if (rr, cc) != (ar, ac) and cc < len(rows[rr]):
                             rows[rr][cc] = ""
+        # Nothing the merge swallows is thrown away: every cell's text
+        # moves into the merged cell, joined in reading order. Merging "A"
+        # with an empty neighbour used to keep whichever cell was the
+        # anchor -- and lose the text when the anchor was the empty one.
+        pieces = []
+        for r in range(r0, min(r1 + 1, len(rows))):
+            for c in range(c0, min(c1 + 1, len(rows[r]))):
+                value = rows[r][c]
+                if value and value not in (core_tables.MERGE_LEFT,
+                                           core_tables.MERGE_UP):
+                    pieces.append(value)
+        rows[r0][c0] = " ".join(pieces)
         for r in range(r0, min(r1 + 1, len(rows))):
             for c in range(c0, min(c1 + 1, len(rows[r]))):
                 if (r, c) == (r0, c0):
@@ -2599,6 +2626,145 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._grid_replace_block(first, nrows, rows, aligns, sep_cols)
         self._grid_after_op(first)
 
+    def _grid_cell_text_range(self, info, r, c):
+        """The body-text indices of one cell's content, or None when the
+        cell is empty -- padding never carries formatting."""
+        line_no = self._grid_line_of_row(info, r)
+        first = self._grid_first_line(info)
+        if line_no is None or first is None:
+            return None
+        base = 1 if line_no == first else 0
+        line = self.body_text.get(f"{line_no}.0", f"{line_no}.end")
+        bounds = core_tables.cell_bounds(line)
+        if c >= len(bounds):
+            return None
+        start, end = bounds[c]
+        if start >= end:
+            return None
+        return (f"{line_no}.{base + self._tk_col(line, start)}",
+                f"{line_no}.{base + self._tk_col(line, end)}")
+
+    def _grid_style_target(self):
+        """Where toolbar formatting should land instead of the body: the
+        selected cells, or the one open in the editor. None means the
+        toolbar keeps its ordinary meaning."""
+        sel = getattr(self, "_grid_sel", None)
+        if (sel is not None
+                and self._grid_first_line(sel["info"]) is not None):
+            return sel["info"], sel["box"]
+        editor = getattr(self, "_cell_editor", None)
+        if editor is not None:
+            return editor["info"], (editor["r"], editor["c"],
+                                    editor["r"], editor["c"])
+        return None
+
+    def _grid_apply_style(self, info, box, kind, value=None):
+        """One toolbar action, over every selected cell's text.
+
+        The toggle decision is made once across all the cells -- a mixed
+        selection turns the style ON everywhere, the way the body's own
+        selection behaves -- and the drawn grid repaints in place.
+        """
+        r0, c0, r1, c1 = box
+        ranges = []
+        for r in range(r0, r1 + 1):
+            for c in range(c0, c1 + 1):
+                span = self._grid_cell_text_range(info, r, c)
+                if span:
+                    ranges.append(span)
+        if not ranges:
+            return
+        b = self.body_text
+        if kind in ("bold", "italic"):
+            is_bold = all(self._selection_has_style(
+                b, {"bold", "bold_italic"}, s, e) for s, e in ranges)
+            is_italic = all(self._selection_has_style(
+                b, {"italic", "bold_italic"}, s, e) for s, e in ranges)
+            if kind == "bold":
+                is_bold = not is_bold
+            else:
+                is_italic = not is_italic
+            tag = self._font_tag_for(is_bold, is_italic)
+            for s, e in ranges:
+                for t in self._FONT_STYLES:
+                    b.tag_remove(t, s, e)
+                if tag:
+                    b.tag_add(tag, s, e)
+        elif kind in ("underline", "strike"):
+            on = all(self._selection_has_style(b, {kind}, s, e)
+                     for s, e in ranges)
+            for s, e in ranges:
+                if on:
+                    b.tag_remove(kind, s, e)
+                else:
+                    b.tag_add(kind, s, e)
+        else:
+            for s, e in ranges:
+                for tag_name in b.tag_names():
+                    if tag_name.startswith(kind + "_"):
+                        b.tag_remove(tag_name, s, e)
+                if value:
+                    tag = self._ensure_color_tag(b, kind, value)
+                    b.tag_add(tag, s, e)
+        self._grid_restyle(info)
+        self._schedule_autosave()
+
+    def _grid_cell_paint(self, info, r, c):
+        """What the cell's text tags ask the drawing to look like."""
+        paint = {"bg": None, "fg": None, "bold": False, "italic": False,
+                 "underline": False, "strike": False}
+        span = self._grid_cell_text_range(info, r, c)
+        if not span:
+            return paint
+        tags = set(self.body_text.tag_names(span[0]))
+        for t in tags:
+            if t.startswith("highlight_"):
+                paint["bg"] = "#" + t[len("highlight_"):]
+            elif t.startswith("text_color_"):
+                paint["fg"] = "#" + t[len("text_color_"):]
+        paint["bold"] = bool(tags & {"bold", "bold_italic"})
+        paint["italic"] = bool(tags & {"italic", "bold_italic"})
+        paint["underline"] = "underline" in tags
+        paint["strike"] = "strike" in tags
+        return paint
+
+    def _grid_restyle(self, info):
+        """Repaint every drawn cell from its text tags, in place.
+
+        A cell styled only in part is drawn styled whole -- the drawing is
+        one canvas item; the underlying spans stay exact, so export and
+        the round trip keep the precise extent.
+        """
+        canvas = info["canvas"]
+        header_font, cell_font = self._grid_fonts()
+        for (r, c), cell in info["cells"].items():
+            paint = self._grid_cell_paint(info, r, c)
+            bg = paint["bg"] or (inset_surface(self.colors) if r == 0
+                                 else self.colors["card"])
+            fg = paint["fg"] or self.colors["text"]
+            value = cell["value"]
+            emoji = any(ord(ch) >= 0x1F000 or 0x2600 <= ord(ch) <= 0x27BF
+                        for ch in value)
+            if emoji:
+                family, size = "Segoe UI Emoji", self.editor_font_size
+            elif r == 0:
+                family = header_font.cget("family")
+                size = header_font.cget("size")
+            else:
+                family = cell_font.cget("family")
+                size = cell_font.cget("size")
+            mods = [m for m, on in (
+                ("bold", paint["bold"] or r == 0),
+                ("italic", paint["italic"]),
+                ("underline", paint["underline"]),
+                ("overstrike", paint["strike"])) if on]
+            font = (family, size, " ".join(mods)) if mods else (family, size)
+            try:
+                canvas.itemconfigure(cell["rect"], fill=bg)
+                canvas.itemconfigure(cell["text"], fill=fg, font=font)
+            except tk.TclError:
+                pass
+
     def _grid_stub_menu(self, info, event, c):
         """The only menu a hidden column can offer: bring it back."""
         menu = tk.Menu(self, tearoff=0, bg=self.colors["card"],
@@ -2651,6 +2817,31 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                                  sel, ""))
             menu.add_command(label="Merge cells",
                              command=lambda: self._grid_merge_selection(sel))
+            # Hide asks for a whole column selected top to bottom -- the
+            # user can SEE what is about to disappear. Anything less and
+            # the option stays away, on purpose.
+            if (sel["box"][0] == 0
+                    and sel["box"][2] >= info["data_rows"] - 1):
+                menu.add_command(
+                    label=("Hide column" if sel["box"][1] == sel["box"][3]
+                           else "Hide columns"),
+                    command=lambda: self._grid_hide_span(
+                        info, sel["box"][1], sel["box"][3]))
+            menu.add_separator()
+            highlight_menu = tk.Menu(menu, tearoff=0,
+                                     bg=self.colors["card"],
+                                     fg=self.colors["text"])
+            for hex_color in HIGHLIGHT_COLOR_PALETTE:
+                highlight_menu.add_command(
+                    label="        ", background=hex_color,
+                    activebackground=hex_color,
+                    command=lambda h=hex_color, box=sel["box"]:
+                        self._grid_apply_style(info, box, "highlight", h))
+            highlight_menu.add_command(
+                label="Clear highlight",
+                command=lambda box=sel["box"]:
+                    self._grid_apply_style(info, box, "highlight", None))
+            menu.add_cascade(label="Highlight cells", menu=highlight_menu)
             menu.add_separator()
             for label, align_value in (
                     ("Align left", core_tables.ALIGN_LEFT),
@@ -2703,8 +2894,6 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         menu.add_command(label="Insert column right",
                          command=lambda: self._grid_insert_col(info, c + 1))
         menu.add_separator()
-        menu.add_command(label="Hide column",
-                         command=lambda: self._grid_hide_col(info, c))
         menu.add_command(
             label="Unhide all columns",
             state=("normal" if info.get("hidden_cols") else "disabled"),
@@ -3592,7 +3781,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # of them may be carrying a marker put there before this.
         items = [n for n in range(first, last + 1) if not blank(n)]
         if not items:
-            return
+            if first != last:
+                return
+            # A single empty line is not a gap between items -- it is the
+            # user asking to START a list here, marker first, text after.
+            items = [first]
         turning_off = all(self._list_kind_of(self.body_text, n) == kind
                           for n in items)
         for line_no in range(first, last + 1):
@@ -3992,6 +4185,13 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         style is toggled off again the same way — a manual on/off switch,
         not "match whatever formatting is already at the cursor" the way
         some editors infer it. See _apply_pending_style_to_typed_char."""
+        target = self._grid_style_target()
+        if target:
+            # Cells are selected, or one is open in the editor: the button
+            # means THOSE, not a pending style for the body.
+            self._flush_table_grids()
+            self._grid_apply_style(target[0], target[1], style)
+            return
         try:
             start = self.body_text.index("sel.first")
             end = self.body_text.index("sel.last")
@@ -4060,6 +4260,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         sets (or clears) the PENDING color instead, sharing the exact same
         anchor-mark-and-length-tracking machinery _toggle_body_style uses
         for the boolean styles — see _has_any_pending_style."""
+        target = self._grid_style_target()
+        if target:
+            self._flush_table_grids()
+            self._grid_apply_style(target[0], target[1], kind, hex_color)
+            return
         try:
             start = self.body_text.index("sel.first")
             end = self.body_text.index("sel.last")
