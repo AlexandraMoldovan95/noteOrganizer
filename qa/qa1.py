@@ -2321,7 +2321,7 @@ check(f'copied cells reach the clipboard as rows of tabs '
 
 # Checkmarks fill the selection, and a checkmark draws centred.
 _sel = app._grid_sel
-app._grid_fill_selection(_sel, '\u2713')
+app._grid_fill_selection(_sel, '\u2713', align=core_tables.ALIGN_CENTER)
 app.update()
 check(f'checkmarks fill every selected cell ({lines_now()[0]!r})',
       all(core_tables.split_row(l) == ['\u2713', '\u2713']
@@ -2370,6 +2370,38 @@ check(f'the table shows an arrow cursor '
 # The right and bottom rules are inside the canvas, not one pixel past it.
 check('the outer rules fit inside the drawn area',
       int(_t['canvas'].cget('scrollregion').split()[2]) == _t['natural'] + 1)
+
+# ---- CELL ALIGNMENT, AND THE TABLE THAT JUMPED TO THE MIDDLE ----
+set_body('')
+_stub_clipboard(html='<table><tr><td>Titlu</td><td>B</td></tr>'
+                     '<tr><td>C</td><td>D</td></tr></table>')
+app._on_body_paste()
+app.update()
+_t = app._grid_at_line(1)
+app._grid_set_alignment(_t, (0, 0, 0, 0), core_tables.ALIGN_CENTER)
+app.update()
+check(f'centring a cell writes balanced padding ({lines_now()[0]!r})',
+      core_tables.cell_alignments(lines_now()[0])[0] == 'center')
+_t = app._grid_at_line(1)
+check('and the cell draws centred',
+      str(_t['canvas'].itemcget(_t['cells'][(0, 0)]['text'], 'anchor'))
+      in ('c', 'center'))
+app._open_cell_editor(_t, 0, 0)
+check('and its editor justifies to match',
+      str(app._cell_editor['entry'].cget('justify')) == 'center')
+app._commit_cell_editor()
+app.update()
+check('committing an unchanged cell keeps the alignment',
+      core_tables.cell_alignments(lines_now()[0])[0] == 'center')
+
+# A paragraph-alignment tag left on a table's line centres the embedded
+# window itself: the whole table jumped to the middle of the note. Table
+# lines refuse those tags.
+app.body_text.tag_add('align_center', '1.0', '1.end')
+app._resync_list_tags()
+app.update()
+check('a table line sheds paragraph alignment, so the table stays put',
+      not app.body_text.tag_ranges('align_center'))
 
 # The toolbar has an emoji button, and it knows about open cells.
 check('the toolbar has an emoji button', hasattr(app, 'emoji_btn'))

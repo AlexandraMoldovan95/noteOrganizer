@@ -1171,8 +1171,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         first, last = block
         lines = [self.body_text.get(f"{n}.0", f"{n}.end")
                  for n in range(first, last + 1)]
-        widths = core_tables.column_widths(
-            [core_tables.split_row(line) for line in lines])
+        aligns = [core_tables.cell_alignments(line) for line in lines]
+        widths = core_tables.layout_widths(
+            [core_tables.split_row(line) for line in lines], aligns)
         changed = False
         try:
             was_gravity = self.body_text.mark_gravity("insert")
@@ -1185,7 +1186,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             # so edits on that line land one Tk column further right than
             # the offsets computed from get(), which skips windows.
             base = self._col_base(row)
-            for at, delta in core_tables.pad_ops(line, widths):
+            for at, delta in core_tables.pad_ops(
+                    line, widths,
+                    aligns[offset] if offset < len(aligns) else None):
                 changed = True
                 if delta > 0:
                     self.body_text.insert(f"{row}.{at + base}", " " * delta)
@@ -1359,6 +1362,16 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                          bg=self.colors["card"], fg=self.colors["text"],
                          insertbackground=self.colors["text"])
         entry.insert(0, cell["value"])
+        first_line = self._grid_first_line(info)
+        if first_line is not None:
+            row_aligns = core_tables.cell_alignments(
+                self.body_text.get(f"{first_line + r}.0",
+                                   f"{first_line + r}.end"))
+            if c < len(row_aligns):
+                entry.configure(justify={
+                    core_tables.ALIGN_CENTER: "center",
+                    core_tables.ALIGN_RIGHT: "right",
+                }.get(row_aligns[c], "left"))
         if select:
             entry.select_range(0, "end")
         entry.icursor("end")
@@ -1374,7 +1387,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         entry.bind("<Escape>",
                    lambda _e: (self._cancel_cell_editor(), "break")[1])
         entry.bind("<FocusOut>",
-                   lambda _e: self.after_idle(self._maybe_close_cell_editor))
+                   lambda _e, this=entry: self.after_idle(
+                       lambda: self._maybe_close_cell_editor(this)))
         entry.bind("<KeyRelease>", lambda _e: self._schedule_autosave())
         entry.bind("<MouseWheel>", self._forward_grid_wheel)
         # The floating editor sits exactly over its cell, so a right-click
@@ -1413,18 +1427,34 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
     def _cancel_cell_editor(self):
         self._close_cell_editor()
 
-    def _maybe_close_cell_editor(self):
+    def _maybe_close_cell_editor(self, source=None):
         """FocusOut closes the editor -- except while the emoji picker is
         up, which holds the click without holding the focus, and the chosen
-        emoji still needs somewhere to land."""
+        emoji still needs somewhere to land.
+
+        *source* is the entry whose FocusOut scheduled this. A destroyed
+        editor fires FocusOut too, and by the time the callback runs a NEW
+        editor may be open -- the stale callback must not close it, which
+        it did: stepping through cells worked once and then died.
+        """
         editor = getattr(self, "_cell_editor", None)
         if not editor:
+            return
+        if source is not None and source is not editor["entry"]:
             return
         try:
             focus = self.focus_get()
         except (tk.TclError, KeyError):
             focus = None
         if focus is editor["entry"]:
+            return
+        if focus is None or focus is self:
+            # Mid-transfer. Destroying the old editor hands focus to the
+            # root window before the new editor's focus_set settles, so at
+            # this moment focus reads as the app itself -- and closing here
+            # is what killed the second cell of every step-through. A real
+            # click elsewhere always names a specific widget, never the
+            # root.
             return
         popup = getattr(self, "_mini_popup", None)
         try:
@@ -1609,6 +1639,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if not widths:
             return
         merges, covered = core_tables.merge_map(rows)
+        aligns_matrix = [core_tables.cell_alignments(
+                             b.get(f"{n}.0", f"{n}.end"))
+                         for n in range(first, last + 1)]
         header_font, cell_font = self._grid_fonts()
         pad_x, pad_y = 10, 7
         row_h = max(header_font.metrics("linespace"),
@@ -1655,13 +1688,28 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     fill=(inset_surface(self.colors) if r == 0
                           else self.colors["card"]),
                     outline=rule)
-                # A checkmark is a state, not a sentence: it centres.
-                symbol = value in ("\u2713", "\u2717", "\u2714", "\u2716")
+                align = (aligns_matrix[r][c]
+                         if r < len(aligns_matrix)
+                         and c < len(aligns_matrix[r])
+                         else core_tables.ALIGN_LEFT)
+                if align == core_tables.ALIGN_CENTER:
+                    tx, tanchor = x + w / 2, "c"
+                elif align == core_tables.ALIGN_RIGHT:
+                    tx, tanchor = x + w - pad_x, "e"
+                else:
+                    tx, tanchor = x + pad_x, "w"
+                # Segoe UI has no emoji glyphs; drawing them in it is what
+                # put squares in the cells. Any astral or symbol codepoint
+                # sends the whole item to the emoji face, which carries
+                # Latin too, so mixed text still reads.
+                emoji = any(ord(ch) >= 0x1F000 or 0x2600 <= ord(ch) <= 0x27BF
+                            for ch in value)
+                font = (("Segoe UI Emoji", self.editor_font_size)
+                        if emoji else
+                        (header_font if r == 0 else cell_font))
                 text = canvas.create_text(
-                    x + (w / 2 if symbol else pad_x),
-                    y + h / 2, anchor="c" if symbol else "w",
-                    font=header_font if r == 0 else cell_font,
-                    fill=self.colors["text"], text=value)
+                    tx, y + h / 2, anchor=tanchor,
+                    font=font, fill=self.colors["text"], text=value)
                 cells[(r, c)] = {"value": value, "rect": rect, "text": text,
                                  "x": x, "y": y, "w": w, "h": h,
                                  "rs": row_span, "cs": col_span}
@@ -1874,7 +1922,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     self.body_text.get(f"{n}.0", f"{n}.end"))
                 for n in range(first, first + nrows)]
 
-    def _grid_replace_block(self, first, old_nrows, rows):
+    def _grid_read_aligns(self, first, nrows):
+        return [core_tables.cell_alignments(
+                    self.body_text.get(f"{n}.0", f"{n}.end"))
+                for n in range(first, first + nrows)]
+
+    def _grid_replace_block(self, first, old_nrows, rows, aligns=None):
         """Wholesale rewrite for the structural ops that reshape columns.
 
         Character formatting inside the table does not survive these ops --
@@ -1884,7 +1937,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         b = self.body_text
         b.delete(f"{first}.0", f"{first + old_nrows - 1}.end")
         b.insert(f"{first}.0",
-                 "\n".join(core_tables.format_table(rows)))
+                 "\n".join(core_tables.format_table(rows, aligns)))
 
     def _dissolve_orphan_markers(self, rows):
         _spans, covered = core_tables.merge_map(rows)
@@ -1931,9 +1984,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self._grid_after_op(first)
             return
         rows = self._grid_read_rows(first, nrows)
+        aligns = self._grid_read_aligns(first, nrows)
         del rows[r]
+        del aligns[r]
         rows = self._dissolve_orphan_markers(rows)
-        self._grid_replace_block(first, nrows, rows)
+        self._grid_replace_block(first, nrows, rows, aligns)
         self._grid_after_op(first)
 
     def _grid_delete_col(self, info, c):
@@ -1949,6 +2004,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             return
         first, nrows, ncols = context
         rows = self._grid_read_rows(first, nrows)
+        aligns = self._grid_read_aligns(first, nrows)
         if ncols <= 2:
             for row in rows:
                 if c < len(row):
@@ -1965,8 +2021,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             for row in rows:
                 if c < len(row):
                     del row[c]
+            for row_aligns in aligns:
+                if c < len(row_aligns):
+                    del row_aligns[c]
             rows = self._dissolve_orphan_markers(rows)
-        self._grid_replace_block(first, nrows, rows)
+        self._grid_replace_block(first, nrows, rows, aligns)
         self._grid_after_op(first)
 
     def _grid_set_marker(self, info, r, c, marker):
@@ -1975,9 +2034,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             return
         first, nrows, _ncols = context
         rows = self._grid_read_rows(first, nrows)
+        aligns = self._grid_read_aligns(first, nrows)
         if r < len(rows) and c < len(rows[r]):
             rows[r][c] = marker
-        self._grid_replace_block(first, nrows, rows)
+        self._grid_replace_block(first, nrows, rows, aligns)
         self._grid_after_op(first)
 
     def _grid_split(self, info, r, c):
@@ -1986,6 +2046,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             return
         first, nrows, _ncols = context
         rows = self._grid_read_rows(first, nrows)
+        aligns = self._grid_read_aligns(first, nrows)
         spans, _covered = core_tables.merge_map(rows)
         for (ar, ac), (rs, cs) in spans.items():
             if ar <= r < ar + rs and ac <= c < ac + cs:
@@ -1994,7 +2055,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                         if (rr, cc) != (ar, ac) and cc < len(rows[rr]):
                             rows[rr][cc] = ""
                 break
-        self._grid_replace_block(first, nrows, rows)
+        self._grid_replace_block(first, nrows, rows, aligns)
         self._grid_after_op(first)
 
     def _grid_delete_table(self, info):
@@ -2034,7 +2095,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         except tk.TclError:
             pass
 
-    def _grid_fill_selection(self, sel, value):
+    def _grid_fill_selection(self, sel, value, align=None):
         info = sel["info"]
         r0, c0, r1, c1 = sel["box"]
         context = self._grid_op_context(info)
@@ -2042,12 +2103,15 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             return
         first, nrows, _ncols = context
         rows = self._grid_read_rows(first, nrows)
+        aligns = self._grid_read_aligns(first, nrows)
         for r in range(r0, min(r1 + 1, len(rows))):
             for c in range(c0, min(c1 + 1, len(rows[r]))):
                 if rows[r][c] not in (core_tables.MERGE_LEFT,
                                       core_tables.MERGE_UP):
                     rows[r][c] = value
-        self._grid_replace_block(first, nrows, rows)
+                    if align is not None and c < len(aligns[r]):
+                        aligns[r][c] = align
+        self._grid_replace_block(first, nrows, rows, aligns)
         self._grid_after_op(first)
 
     def _grid_merge_selection(self, sel):
@@ -2063,6 +2127,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             return
         first, nrows, _ncols = context
         rows = self._grid_read_rows(first, nrows)
+        aligns = self._grid_read_aligns(first, nrows)
         spans, _covered = core_tables.merge_map(rows)
         for (ar, ac), (rs, cs) in spans.items():
             if ar <= r1 and ar + rs - 1 >= r0 and ac <= c1 and ac + cs - 1 >= c0:
@@ -2077,7 +2142,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 rows[r][c] = (core_tables.MERGE_LEFT if r == r0
                               else (core_tables.MERGE_UP if c == c0
                                     else core_tables.MERGE_LEFT))
-        self._grid_replace_block(first, nrows, rows)
+        self._grid_replace_block(first, nrows, rows, aligns)
         self._grid_after_op(first)
 
     def _grid_paste_cells(self, info, r, c):
@@ -2097,18 +2162,23 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             return
         first, nrows, ncols = context
         rows = self._grid_read_rows(first, nrows)
+        aligns = self._grid_read_aligns(first, nrows)
         while r + len(matrix) > len(rows):
             rows.append([""] * ncols)
+            aligns.append([core_tables.ALIGN_LEFT] * ncols)
         for dr, source_row in enumerate(matrix):
             for dc, value in enumerate(source_row):
                 if c + dc < len(rows[r + dr]):
                     rows[r + dr][c + dc] = value.replace(
                         core_tables.CELL, "/").strip()
+                    if c + dc < len(aligns[r + dr]):
+                        aligns[r + dr][c + dc] = core_tables.ALIGN_LEFT
         # The block may have grown; rewrite against its original height and
         # let format_table emit the extra rows.
         self.body_text.delete(f"{first}.0", f"{first + nrows - 1}.end")
         self.body_text.insert(
-            f"{first}.0", "\n".join(core_tables.format_table(rows)))
+            f"{first}.0",
+            "\n".join(core_tables.format_table(rows, aligns)))
         self._grid_after_op(first)
 
     def _grid_copy_cell(self, info, r, c):
@@ -2134,6 +2204,25 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self._grid_menu(fresh, event, at=(r, c))
         return "break"
 
+    def _grid_set_alignment(self, info, box, align):
+        """Alignment is the cell's padding, so setting it is a rewrite of
+        the padding -- nothing else about the cell moves."""
+        r0, c0, r1, c1 = box
+        context = self._grid_op_context(info)
+        if not context:
+            return
+        first, nrows, _ncols = context
+        rows = self._grid_read_rows(first, nrows)
+        aligns = self._grid_read_aligns(first, nrows)
+        for r in range(r0, min(r1 + 1, len(rows))):
+            for c in range(c0, min(c1 + 1, len(rows[r]))):
+                if (rows[r][c] not in (core_tables.MERGE_LEFT,
+                                       core_tables.MERGE_UP)
+                        and c < len(aligns[r])):
+                    aligns[r][c] = align
+        self._grid_replace_block(first, nrows, rows, aligns)
+        self._grid_after_op(first)
+
     def _grid_menu(self, info, event, at=None):
         canvas = info["canvas"]
         hit = at if at is not None else self._grid_cell_at_xy(
@@ -2157,12 +2246,22 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                                  info, sel["box"][0], sel["box"][1]))
             menu.add_command(label="Insert checkmarks",
                              command=lambda: self._grid_fill_selection(
-                                 sel, "\u2713"))
+                                 sel, "\u2713",
+                                 align=core_tables.ALIGN_CENTER))
             menu.add_command(label="Clear cells",
                              command=lambda: self._grid_fill_selection(
                                  sel, ""))
             menu.add_command(label="Merge cells",
                              command=lambda: self._grid_merge_selection(sel))
+            menu.add_separator()
+            for label, align_value in (
+                    ("Align left", core_tables.ALIGN_LEFT),
+                    ("Center text", core_tables.ALIGN_CENTER),
+                    ("Align right", core_tables.ALIGN_RIGHT)):
+                menu.add_command(
+                    label=label,
+                    command=lambda a=align_value, box=sel["box"]:
+                        self._grid_set_alignment(info, box, a))
             try:
                 menu.tk_popup(event.x_root, event.y_root)
             finally:
@@ -2181,8 +2280,18 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                          command=lambda: self._grid_paste_cells(info, r, c))
         menu.add_command(label="Insert checkmark",
                          command=lambda: self._grid_fill_selection(
-                             {"info": info, "box": (r, c, r, c)}, "\u2713"))
+                             {"info": info, "box": (r, c, r, c)}, "\u2713",
+                             align=core_tables.ALIGN_CENTER))
         menu.add_command(label="Insert emoji…", command=emoji_here)
+        menu.add_separator()
+        for label, align_value in (
+                ("Align left", core_tables.ALIGN_LEFT),
+                ("Center text", core_tables.ALIGN_CENTER),
+                ("Align right", core_tables.ALIGN_RIGHT)):
+            menu.add_command(
+                label=label,
+                command=lambda a=align_value: self._grid_set_alignment(
+                    info, (r, c, r, c), a))
         menu.add_separator()
         menu.add_command(label="Insert row above",
                          command=lambda: self._grid_insert_row(info, r))
@@ -2384,6 +2493,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             line = self.body_text.get(f"{n}.0", f"{n}.end")
             if is_table_row(line):
                 self.body_text.tag_add(self.TABLE_TAG, f"{n}.0", f"{n}.end")
+                # A paragraph-alignment tag left on a table's line centres
+                # the embedded window itself -- the whole table jumped to
+                # the middle of the note "for no reason". The line's text is
+                # hidden, so the tag can only ever mis-place the window.
+                for stray in ("align_center", "align_right"):
+                    self.body_text.tag_remove(stray, f"{n}.0", f"{n}.end+1c")
             else:
                 self.body_text.tag_remove(self.TABLE_TAG, f"{n}.0", f"{n}.end+1c")
             kind = self._list_kind_of(self.body_text, n)
@@ -4003,7 +4118,14 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             try:
                 # Skip re-focusing if this field already has focus — avoids
                 # redundant OS-level focus-change overhead on rapid clicks.
-                if self.focus_get() is not text_widget:
+                # focus_get raises KeyError, not TclError, while the focus
+                # sits in an override-redirect popup like this picker -- it
+                # is what made the second emoji die where the first landed.
+                try:
+                    has_focus = self.focus_get() is text_widget
+                except KeyError:
+                    has_focus = False
+                if not has_focus:
                     text_widget.focus_set()
                 if isinstance(text_widget, tk.Text):
                     text_widget.insert(tk.INSERT, emoji)
@@ -4015,7 +4137,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 # skip_word_count avoids re-reading the whole body on every
                 # single click — that's what made rapid emoji-clicking laggy.
                 self._schedule_autosave(skip_word_count=True)
-            except tk.TclError:
+            except (tk.TclError, KeyError):
                 pass
             # Left open on purpose — inserting a few emojis in a row is common.
             return "break"

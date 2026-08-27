@@ -218,6 +218,32 @@ check("the markers themselves never leak into the markup",
 _m_back, _m_bs, _m_bp = html_to_note(_m_out)
 check("a merged table survives the round trip", _m_back == _shear_text)
 
+# --- alignment lives in the padding --------------------------------------
+# "| x    |" is left, "|  x  |" centred, "|    x |" right. The spaces are
+# the store, so alignment survives save, share codes and export with no new
+# field, and align() must preserve it when widths move.
+_al_rows = [["Name", "Qty"], ["x", "2"]]
+_al = [["center", "left"], ["center", "right"]]
+_al_lines = tables.format_table(_al_rows, _al)
+check(f"formatting deals the padding by alignment ({_al_lines[0]!r})",
+      [tables.cell_alignments(l) for l in _al_lines] == _al)
+_al_body = "\n".join(_al_lines)
+_al_after, _ = tables.align(_al_body)
+check("align() preserves every cell's alignment",
+      [tables.cell_alignments(l) for l in _al_after.split("\n")] == _al)
+_al_html = note_to_html(_al_body)
+check("alignment leaves as text-align",
+      "text-align:center" in _al_html and "text-align:right" in _al_html)
+_al_back, _b1, _b2 = html_to_note(_al_html)
+check("and comes back through the round trip",
+      [tables.cell_alignments(l) for l in _al_back.split("\n")] == _al)
+# Widening a centred column keeps it centred.
+_wider, _ = tables.align("\n".join(
+    [_al_lines[0], "| a very much longer cell | 2 |"]))
+check(f"a centred cell stays centred as its column widens "
+      f"({_wider.splitlines()[0]!r})",
+      tables.cell_alignments(_wider.splitlines()[0])[0] == "center")
+
 print()
 print(f"FAILURES: {fails if fails else 'none'}")
 

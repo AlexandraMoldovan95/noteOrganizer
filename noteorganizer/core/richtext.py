@@ -261,6 +261,8 @@ class _Reader(HTMLParser):
                 self.paragraphs.append(entry)
         elif tag in _CELL_TAGS:
             self.cell_depth += 1
+            css = _css(dict(attrs).get("style"))
+            self._tbl_cell_align = css.get("text-align", "").strip().lower()
             # Columns still covered by a rowspan from an earlier row are
             # owed their marker before this cell can take its place --
             # without it every later cell lands one column too far left,
@@ -270,7 +272,12 @@ class _Reader(HTMLParser):
             self._tbl_cell = (getattr(self, "_tbl_col", 0),
                               self._span_attr(attrs, "colspan"),
                               self._span_attr(attrs, "rowspan"))
-            self._add(tables.CELL + " ")
+            # An extra lead space is how the padding says "not left":
+            # cell_alignments reads two-plus on the left as right-aligned,
+            # two-plus on both sides as centred.
+            lead = ("  " if self._tbl_cell_align in ("center", "right")
+                    else " ")
+            self._add(tables.CELL + lead)
         elif tag in _BLOCK_TAGS:
             if self.cell_depth:
                 # Whatever the block meant, inside a cell it can only be a
@@ -303,7 +310,8 @@ class _Reader(HTMLParser):
             self._newline()
         elif tag in _CELL_TAGS:
             self.cell_depth = max(0, self.cell_depth - 1)
-            self._add(" ")
+            self._add("  " if getattr(self, "_tbl_cell_align", "")
+                      == "center" else " ")
             col, span_c, span_r = getattr(self, "_tbl_cell", (0, 1, 1))
             # A colspan is written out as the anchor followed by "<" cells,
             # and a rowspan owes "^" cells to the rows below -- "^" under
@@ -538,6 +546,7 @@ def note_to_html(text, formatting=None, paragraphs=None):
                 out.append("<table>")
                 in_table = True
             row_spans, row_covered = merge_at.get(number, ({}, set()))
+            row_aligns = tables.cell_alignments(line)
             cells = []
             for c, (start, end) in enumerate(row):
                 if c in row_covered:
@@ -548,6 +557,8 @@ def note_to_html(text, formatting=None, paragraphs=None):
                     attr += f' colspan="{cs}"'
                 if rs > 1:
                     attr += f' rowspan="{rs}"'
+                if c < len(row_aligns) and row_aligns[c] != tables.ALIGN_LEFT:
+                    attr += f' style="text-align:{row_aligns[c]};"'
                 cells.append(f"<td{attr}>"
                              f"{_line_html(line[start:end], spans, offset + start)}"
                              f"</td>")

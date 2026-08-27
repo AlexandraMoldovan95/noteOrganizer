@@ -104,6 +104,61 @@ def cell_bounds(line):
 MIN_COLUMN = 8
 
 
+ALIGN_LEFT, ALIGN_CENTER, ALIGN_RIGHT = "left", "center", "right"
+
+
+def cell_alignments(line):
+    """Per-cell alignment, read off the padding itself.
+
+    Two or more spaces on both sides of the text is centred; two or more on
+    the left alone is right-aligned; anything else -- including an empty
+    cell -- is left. The padding is the store: no marker, no field, and a
+    row hand-typed with its text against the left pipe means exactly what
+    it looks like.
+    """
+    pipes = pipe_positions(line)
+    aligns = []
+    for i in range(len(pipes) - 1):
+        segment = (line or "")[pipes[i] + 1:pipes[i + 1]]
+        content = segment.strip()
+        if not content:
+            aligns.append(ALIGN_LEFT)
+            continue
+        lead = len(segment) - len(segment.lstrip(" "))
+        trail = len(segment) - len(segment.rstrip(" "))
+        if lead >= 2 and trail >= 2:
+            aligns.append(ALIGN_CENTER)
+        elif lead >= 2:
+            aligns.append(ALIGN_RIGHT)
+        else:
+            aligns.append(ALIGN_LEFT)
+    return aligns
+
+
+def _padding_need(align):
+    """Extra width a cell needs so its padding can say what it means:
+    centre needs a spare space on each side, right needs one on the left."""
+    if align == ALIGN_CENTER:
+        return 2
+    if align == ALIGN_RIGHT:
+        return 1
+    return 0
+
+
+def layout_widths(rows, aligns=None):
+    """Column widths honouring both content and each cell's padding need."""
+    widths = []
+    for r, row in enumerate(rows):
+        for i, cell in enumerate(row):
+            if i >= len(widths):
+                widths.append(0)
+            need = len(cell)
+            if aligns and r < len(aligns) and i < len(aligns[r]):
+                need += _padding_need(aligns[r][i])
+            widths[i] = max(widths[i], need)
+    return [max(MIN_COLUMN, w) for w in widths]
+
+
 def column_widths(rows):
     """How wide each column has to be to hold every cell in it.
 
@@ -120,22 +175,37 @@ def column_widths(rows):
     return [max(MIN_COLUMN, w) for w in widths]
 
 
-def format_row(cells, widths):
-    """One row, padded so its columns line up under the widths given."""
+def format_row(cells, widths, aligns=None):
+    """One row, padded so its columns line up under the widths given.
+
+    The padding carries the alignment: extra space is dealt to the left,
+    both sides, or the right of the text, and that layout is exactly what
+    cell_alignments reads back.
+    """
     padded = []
     for i, width in enumerate(widths):
         cell = cells[i] if i < len(cells) else ""
-        padded.append(" " + cell.ljust(width) + " ")
+        align = (aligns[i] if aligns and i < len(aligns) else ALIGN_LEFT)
+        extra = max(0, width - len(cell))
+        if align == ALIGN_CENTER and cell:
+            lead, trail = extra // 2, extra - extra // 2
+        elif align == ALIGN_RIGHT and cell:
+            lead, trail = extra, 0
+        else:
+            lead, trail = 0, extra
+        padded.append(" " + " " * lead + cell + " " * trail + " ")
     return CELL + CELL.join(padded) + CELL
 
 
-def format_table(rows):
+def format_table(rows, aligns=None):
     """A table's lines, every column as wide as its widest cell."""
-    widths = column_widths(rows)
-    return [format_row(row, widths) for row in rows]
+    widths = layout_widths(rows, aligns)
+    return [format_row(row, widths,
+                       aligns[r] if aligns and r < len(aligns) else None)
+            for r, row in enumerate(rows)]
 
 
-def pad_ops(line, widths):
+def pad_ops(line, widths, aligns=None):
     """The space edits that would line this row up, listed right to left.
 
     Each is ``(offset, delta)``: a positive delta inserts that many spaces at
@@ -146,6 +216,9 @@ def pad_ops(line, widths):
     usable in a widget. Tk moves a tag along with the text around it, so
     inserting a space beside a cell leaves the bold inside it exactly where
     it was; replacing the whole line would take the tags with it.
+
+    *aligns* preserves each cell's stored alignment: the padding is dealt to
+    the sides the alignment asks for, which is also how it is read back.
     """
     bounds = cell_bounds(line)
     if not bounds:
@@ -155,19 +228,25 @@ def pad_ops(line, widths):
     for i in range(len(bounds) - 1, -1, -1):
         start, end = bounds[i]
         width = widths[i] if i < len(widths) else (end - start)
-        # After the text: however many spaces are needed to reach the width,
-        # plus the one that always sits before the closing pipe.
+        align = (aligns[i] if aligns and i < len(aligns) else ALIGN_LEFT)
+        content = end - start
+        extra = max(0, width - content)
+        if align == ALIGN_CENTER and content:
+            want_lead, want_trail = 1 + extra // 2, 1 + extra - extra // 2
+        elif align == ALIGN_RIGHT and content:
+            want_lead, want_trail = 1 + extra, 1
+        else:
+            want_lead, want_trail = 1, 1 + extra
         closing = raw.index(CELL, end)
-        have, want = closing - end, width - (end - start) + 1
-        if have != want:
-            ops.append((end, want - have))
-        # Before the text: exactly one space after the opening pipe.
+        have_trail = closing - end
+        if have_trail != want_trail:
+            ops.append((end, want_trail - have_trail))
         opening = start - 1
         while opening >= 0 and raw[opening] != CELL:
             opening -= 1
         have_lead = start - opening - 1
-        if have_lead != 1:
-            ops.append((opening + 1, 1 - have_lead))
+        if have_lead != want_lead:
+            ops.append((opening + 1, want_lead - have_lead))
     return ops
 
 
@@ -239,7 +318,8 @@ def align(text):
     shifts = []
     for first, last in find_blocks(text):
         rows = [split_row(line) for line in lines[first:last + 1]]
-        widths = column_widths(rows)
+        aligns = [cell_alignments(line) for line in lines[first:last + 1]]
+        widths = layout_widths(rows, aligns)
         # Offsets are counted from the start of the body, so the length of
         # every line before this block has to be walked first. Done per
         # block rather than kept running, because a block's own lines change
@@ -253,7 +333,9 @@ def align(text):
             # line end left the bold in the second cell sitting on a space,
             # which only showed once columns had a minimum width and there
             # was padding to speak of.
-            for at, delta in pad_ops(old, widths):
+            for at, delta in pad_ops(old, widths,
+                                     aligns[offset] if offset < len(aligns)
+                                     else None):
                 if delta > 0:
                     new = new[:at] + " " * delta + new[at:]
                 else:
