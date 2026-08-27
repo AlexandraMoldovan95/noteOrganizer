@@ -2262,7 +2262,11 @@ check('and there is always a line under the last table to land on',
 # A click on a drawn cell opens the editor exactly there.
 _t = app._grid_at_line(1)
 _cell = _t['cells'][(0, 1)]
+# A click is a press AND a release now that dragging selects; the editor
+# opens on the release, so a drag can end without one.
 _t['canvas'].event_generate('<Button-1>',
+                            x=_cell['x'] + 5, y=_cell['y'] + 5)
+_t['canvas'].event_generate('<ButtonRelease-1>',
                             x=_cell['x'] + 5, y=_cell['y'] + 5)
 app.update()
 check(f'clicking a cell opens the editor on it '
@@ -2271,6 +2275,101 @@ check(f'clicking a cell opens the editor on it '
       and (app._cell_editor['r'], app._cell_editor['c']) == (0, 1))
 app._commit_cell_editor()
 app.update()
+
+# ---- ENTER BESIDE A TABLE, AND THE SELECTION MODEL ----
+# A specific binding beats the general <KeyPress> the caret guard rides on:
+# Enter beside a table used to write into the hidden text, split the block
+# in two, and surface the caret at the table's right edge.
+set_body('')
+_stub_clipboard(html='<table><tr><td>A</td><td>B</td></tr>'
+                     '<tr><td>C</td><td>D</td></tr></table>')
+app._on_body_paste()
+app.update()
+take_focus(app.body_text)
+app.body_text.mark_set('insert', '1.end')
+app.body_text.event_generate('<Return>')
+app.update()
+check(f'Enter beside a table leaves one block '
+      f'({core_tables.find_blocks(body())})',
+      core_tables.find_blocks(body()) == [(0, 1)])
+check(f'and the caret lands at the start of the line below '
+      f'({app.body_text.index("insert")})',
+      app.body_text.index('insert').endswith('.0')
+      and int(app.body_text.index('insert').split('.')[0]) > 2)
+
+# Dragging across cells selects a rectangle; releasing without a drag is
+# still just a click that opens the editor.
+_t = app._grid_at_line(1)
+_a, _b2 = _t['cells'][(0, 0)], _t['cells'][(1, 1)]
+_cv = _t['canvas']
+_cv.event_generate('<Button-1>', x=int(_a['x'] + 4), y=int(_a['y'] + 4))
+_cv.event_generate('<B1-Motion>', x=int(_b2['x'] + 4), y=int(_b2['y'] + 4))
+_cv.event_generate('<ButtonRelease-1>', x=int(_b2['x'] + 4), y=int(_b2['y'] + 4))
+app.update()
+check(f'dragging selects the spanned rectangle '
+      f'({app._grid_sel and app._grid_sel["box"]})',
+      app._grid_sel is not None and app._grid_sel['box'] == (0, 0, 1, 1))
+check('and a drag does not open the editor',
+      getattr(app, '_cell_editor', None) is None)
+
+# Copy cells: tab-separated lines for a spreadsheet, remembered exactly.
+app._grid_copy_selection(app._grid_sel)
+check(f'copied cells reach the clipboard as rows of tabs '
+      f'({app.clipboard_get()!r})',
+      app.clipboard_get() == 'A\tB\nC\tD'
+      and app._grid_cell_clip == [['A', 'B'], ['C', 'D']])
+
+# Checkmarks fill the selection, and a checkmark draws centred.
+_sel = app._grid_sel
+app._grid_fill_selection(_sel, '\u2713')
+app.update()
+check(f'checkmarks fill every selected cell ({lines_now()[0]!r})',
+      all(core_tables.split_row(l) == ['\u2713', '\u2713']
+          for l in lines_now()[:2]))
+_t = app._grid_at_line(1)
+check('a checkmark is drawn centred in its cell',
+      str(_t['canvas'].itemcget(_t['cells'][(0, 0)]['text'], 'anchor'))
+      in ('c', 'center'))
+
+# Merging the selection makes one cell anchored top-left.
+_a, _b2 = _t['cells'][(0, 0)], _t['cells'][(0, 1)]
+_cv = _t['canvas']
+_cv.event_generate('<Button-1>', x=int(_a['x'] + 4), y=int(_a['y'] + 4))
+_cv.event_generate('<B1-Motion>', x=int(_b2['x'] + 4), y=int(_b2['y'] + 4))
+_cv.event_generate('<ButtonRelease-1>', x=int(_b2['x'] + 4), y=int(_b2['y'] + 4))
+app.update()
+app._grid_merge_selection(app._grid_sel)
+app.update()
+_t = app._grid_at_line(1)
+check(f'merging the selection spans the anchor ({lines_now()[0]!r})',
+      _t['cells'][(0, 0)]['cs'] == 2
+      and core_tables.split_row(lines_now()[0])[1] == core_tables.MERGE_LEFT)
+
+# Pasting copied cells lands them as a block, growing the table downward.
+app._grid_paste_cells(_t, 1, 0)
+app.update()
+_t = app._grid_at_line(1)
+check(f'pasted cells land as a block and grow the table '
+      f'({_t["nrows"]} rows)',
+      _t['nrows'] == 3
+      and core_tables.split_row(lines_now()[1]) == ['A', 'B']
+      and core_tables.split_row(lines_now()[2]) == ['C', 'D'])
+
+# The cell being edited still answers a right-click.
+app._open_cell_editor(_t, 1, 0)
+check('the floating editor forwards a right-click to the menu',
+      bool(app._cell_editor['entry'].bind('<Button-3>')))
+app._commit_cell_editor()
+app.update()
+
+# Over a drawn table the pointer is a pointer, not an I-beam.
+check(f'the table shows an arrow cursor '
+      f'({_t["canvas"].cget("cursor")!r})',
+      str(_t['canvas'].cget('cursor')) == 'arrow')
+
+# The right and bottom rules are inside the canvas, not one pixel past it.
+check('the outer rules fit inside the drawn area',
+      int(_t['canvas'].cget('scrollregion').split()[2]) == _t['natural'] + 1)
 
 # The toolbar has an emoji button, and it knows about open cells.
 check('the toolbar has an emoji button', hasattr(app, 'emoji_btn'))

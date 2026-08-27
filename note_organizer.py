@@ -1281,6 +1281,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             except tk.TclError:
                 pass
         self._table_grids = []
+        self._grid_sel = None
+        self._grid_pressed = None
         try:
             self.body_text.tag_remove(self.TABLE_HIDE_TAG, "1.0", "end")
         except tk.TclError:
@@ -1375,6 +1377,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                    lambda _e: self.after_idle(self._maybe_close_cell_editor))
         entry.bind("<KeyRelease>", lambda _e: self._schedule_autosave())
         entry.bind("<MouseWheel>", self._forward_grid_wheel)
+        # The floating editor sits exactly over its cell, so a right-click
+        # lands on it, not the canvas -- commit and show the same menu.
+        entry.bind("<Button-3>",
+                   lambda e, i=info: self._editor_context_menu(i, e))
         # Keep the edited cell inside the scrolled viewport.
         try:
             shown = int(float(canvas.cget("width")))
@@ -1538,7 +1544,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         the open table cell if there is one, the note body otherwise."""
         editor = getattr(self, "_cell_editor", None)
         target = editor["entry"] if editor else self.body_text
-        self._show_emoji_picker(target)
+        self._show_emoji_picker(target, anchor=self.emoji_btn)
 
     def _grid_available_width(self):
         """How wide a table may draw before it has to scroll instead."""
@@ -1556,13 +1562,13 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if canvas is None:
             return
         avail = max(160, self._grid_available_width())
-        shown = min(info["natural"], avail)
+        shown = min(info["natural"] + 1, avail)
         try:
             if int(float(canvas.cget("width"))) != shown:
                 canvas.configure(width=shown)
         except tk.TclError:
             return
-        needs_bar = info["natural"] > avail
+        needs_bar = info["natural"] + 1 > avail
         hbar = info.get("hbar")
         if needs_bar and hbar is None:
             hbar = ttk.Scrollbar(info["frame"], orient="horizontal",
@@ -1626,10 +1632,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         natural = col_x[-1]
         height = row_h * len(rows)
 
-        host = tk.Frame(b, bg=self.colors["card"])
-        canvas = tk.Canvas(host, highlightthickness=0, bd=0,
-                           bg=self.colors["card"], height=height,
-                           scrollregion=(0, 0, natural, height))
+        host = tk.Frame(b, bg=self.colors["card"], cursor="arrow")
+        # One extra pixel each way, or the right and bottom rules land on
+        # the first pixel outside the canvas and are never seen.
+        canvas = tk.Canvas(host, highlightthickness=0, bd=0, cursor="arrow",
+                           bg=self.colors["card"], height=height + 1,
+                           scrollregion=(0, 0, natural + 1, height + 1))
         canvas.pack(side="top", anchor="w")
         cells = {}
         rule = hairline(self.colors)
@@ -1647,8 +1655,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     fill=(inset_surface(self.colors) if r == 0
                           else self.colors["card"]),
                     outline=rule)
+                # A checkmark is a state, not a sentence: it centres.
+                symbol = value in ("\u2713", "\u2717", "\u2714", "\u2716")
                 text = canvas.create_text(
-                    x + pad_x, y + h / 2, anchor="w",
+                    x + (w / 2 if symbol else pad_x),
+                    y + h / 2, anchor="c" if symbol else "w",
                     font=header_font if r == 0 else cell_font,
                     fill=self.colors["text"], text=value)
                 cells[(r, c)] = {"value": value, "rect": rect, "text": text,
@@ -1663,7 +1674,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 "row_h": row_h, "col_x": col_x,
                 "widths_chars": list(widths)}
         self._fit_grid(info)
-        canvas.bind("<Button-1>", lambda e, i=info: self._grid_click(i, e))
+        canvas.bind("<Button-1>", lambda e, i=info: self._grid_press(i, e))
+        canvas.bind("<B1-Motion>", lambda e, i=info: self._grid_drag(i, e))
+        canvas.bind("<ButtonRelease-1>",
+                    lambda e, i=info: self._grid_release(i, e))
         canvas.bind("<Button-3>", lambda e, i=info: self._grid_menu(i, e))
         for widget in (host, canvas):
             widget.bind("<MouseWheel>", self._forward_grid_wheel)
@@ -1680,6 +1694,86 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         b.tag_add(self.TABLE_HIDE_TAG, f"{first}.1", f"{last}.end")
         self._table_grids = getattr(self, "_table_grids", [])
         self._table_grids.append(info)
+
+    def _grid_clear_selection(self):
+        sel = getattr(self, "_grid_sel", None)
+        self._grid_sel = None
+        if not sel:
+            return
+        info = sel["info"]
+        rule = hairline(self.colors)
+        for key in sel["cells"]:
+            cell = info["cells"].get(key)
+            if cell is None:
+                continue
+            try:
+                info["canvas"].itemconfigure(cell["rect"],
+                                             outline=rule, width=1)
+            except tk.TclError:
+                pass
+
+    def _grid_select_range(self, info, a, b):
+        """Highlight the rectangle spanned by two cells.
+
+        Grown until it swallows every merge it touches -- half a merged
+        cell is not a thing a selection can hold.
+        """
+        r0, r1 = sorted((a[0], b[0]))
+        c0, c1 = sorted((a[1], b[1]))
+        grew = True
+        while grew:
+            grew = False
+            for (r, c), cell in info["cells"].items():
+                if r + cell["rs"] - 1 < r0 or r > r1:
+                    continue
+                if c + cell["cs"] - 1 < c0 or c > c1:
+                    continue
+                lo_r, hi_r = min(r0, r), max(r1, r + cell["rs"] - 1)
+                lo_c, hi_c = min(c0, c), max(c1, c + cell["cs"] - 1)
+                if (lo_r, hi_r, lo_c, hi_c) != (r0, r1, c0, c1):
+                    r0, r1, c0, c1 = lo_r, hi_r, lo_c, hi_c
+                    grew = True
+        self._grid_clear_selection()
+        chosen = [key for key, cell in info["cells"].items()
+                  if r0 <= key[0] <= r1 and c0 <= key[1] <= c1]
+        for key in chosen:
+            try:
+                info["canvas"].itemconfigure(info["cells"][key]["rect"],
+                                             outline=self.colors["accent"],
+                                             width=2)
+            except tk.TclError:
+                pass
+        self._grid_sel = {"info": info, "cells": chosen,
+                          "box": (r0, c0, r1, c1)}
+
+    def _grid_press(self, info, event):
+        canvas = info["canvas"]
+        hit = self._grid_cell_at_xy(info, canvas.canvasx(event.x),
+                                    canvas.canvasy(event.y))
+        self._grid_clear_selection()
+        self._grid_pressed = (info, hit) if hit else None
+        return "break"
+
+    def _grid_drag(self, info, event):
+        pressed = getattr(self, "_grid_pressed", None)
+        if not pressed or pressed[0] is not info:
+            return "break"
+        canvas = info["canvas"]
+        hit = self._grid_cell_at_xy(info, canvas.canvasx(event.x),
+                                    canvas.canvasy(event.y))
+        if hit and hit != pressed[1]:
+            self._grid_select_range(info, pressed[1], hit)
+        return "break"
+
+    def _grid_release(self, info, event):
+        """A plain click opens the editor; a drag leaves its selection."""
+        pressed = getattr(self, "_grid_pressed", None)
+        self._grid_pressed = None
+        if pressed is None or pressed[0] is not info:
+            return "break"
+        if getattr(self, "_grid_sel", None) is None and pressed[1]:
+            self._open_cell_editor(info, *pressed[1])
+        return "break"
 
     def _grid_click(self, info, event):
         canvas = info["canvas"]
@@ -1915,6 +2009,108 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._render_table_grids()
         self._schedule_autosave()
 
+    def _grid_selection_matrix(self, sel):
+        info = sel["info"]
+        r0, c0, r1, c1 = sel["box"]
+        first = self._grid_first_line(info)
+        if first is None:
+            return None
+        rows = self._grid_read_rows(first, info["nrows"])
+        return [[rows[r][c] if c < len(rows[r]) else ""
+                 for c in range(c0, c1 + 1)]
+                for r in range(r0, r1 + 1)]
+
+    def _grid_copy_selection(self, sel):
+        """Cells leave as tab-separated lines -- what a spreadsheet reads --
+        and are remembered exactly for pasting back into a table."""
+        matrix = self._grid_selection_matrix(sel)
+        if matrix is None:
+            return
+        self._grid_cell_clip = [list(row) for row in matrix]
+        try:
+            self.clipboard_clear()
+            self.clipboard_append(
+                "\n".join("\t".join(row) for row in matrix))
+        except tk.TclError:
+            pass
+
+    def _grid_fill_selection(self, sel, value):
+        info = sel["info"]
+        r0, c0, r1, c1 = sel["box"]
+        context = self._grid_op_context(info)
+        if not context:
+            return
+        first, nrows, _ncols = context
+        rows = self._grid_read_rows(first, nrows)
+        for r in range(r0, min(r1 + 1, len(rows))):
+            for c in range(c0, min(c1 + 1, len(rows[r]))):
+                if rows[r][c] not in (core_tables.MERGE_LEFT,
+                                      core_tables.MERGE_UP):
+                    rows[r][c] = value
+        self._grid_replace_block(first, nrows, rows)
+        self._grid_after_op(first)
+
+    def _grid_merge_selection(self, sel):
+        """The selected rectangle becomes one cell, anchored top-left.
+
+        Merges it touches are dissolved first -- the selection already grew
+        to swallow them whole, so nothing is half-merged afterwards.
+        """
+        info = sel["info"]
+        r0, c0, r1, c1 = sel["box"]
+        context = self._grid_op_context(info)
+        if not context:
+            return
+        first, nrows, _ncols = context
+        rows = self._grid_read_rows(first, nrows)
+        spans, _covered = core_tables.merge_map(rows)
+        for (ar, ac), (rs, cs) in spans.items():
+            if ar <= r1 and ar + rs - 1 >= r0 and ac <= c1 and ac + cs - 1 >= c0:
+                for rr in range(ar, ar + rs):
+                    for cc in range(ac, ac + cs):
+                        if (rr, cc) != (ar, ac) and cc < len(rows[rr]):
+                            rows[rr][cc] = ""
+        for r in range(r0, min(r1 + 1, len(rows))):
+            for c in range(c0, min(c1 + 1, len(rows[r]))):
+                if (r, c) == (r0, c0):
+                    continue
+                rows[r][c] = (core_tables.MERGE_LEFT if r == r0
+                              else (core_tables.MERGE_UP if c == c0
+                                    else core_tables.MERGE_LEFT))
+        self._grid_replace_block(first, nrows, rows)
+        self._grid_after_op(first)
+
+    def _grid_paste_cells(self, info, r, c):
+        """Copied cells land as a block starting at the clicked cell,
+        growing the table downward when they need more rows."""
+        matrix = getattr(self, "_grid_cell_clip", None)
+        if not matrix:
+            try:
+                raw = self.clipboard_get()
+            except tk.TclError:
+                return
+            matrix = [line.split("\t") for line in raw.split("\n") if line]
+        if not matrix:
+            return
+        context = self._grid_op_context(info)
+        if not context:
+            return
+        first, nrows, ncols = context
+        rows = self._grid_read_rows(first, nrows)
+        while r + len(matrix) > len(rows):
+            rows.append([""] * ncols)
+        for dr, source_row in enumerate(matrix):
+            for dc, value in enumerate(source_row):
+                if c + dc < len(rows[r + dr]):
+                    rows[r + dr][c + dc] = value.replace(
+                        core_tables.CELL, "/").strip()
+        # The block may have grown; rewrite against its original height and
+        # let format_table emit the extra rows.
+        self.body_text.delete(f"{first}.0", f"{first + nrows - 1}.end")
+        self.body_text.insert(
+            f"{first}.0", "\n".join(core_tables.format_table(rows)))
+        self._grid_after_op(first)
+
     def _grid_copy_cell(self, info, r, c):
         cell = info["cells"].get((r, c))
         if cell is None:
@@ -1925,11 +2121,24 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         except tk.TclError:
             pass
 
-    def _grid_menu(self, info, event):
+    def _editor_context_menu(self, info, event):
+        editor = getattr(self, "_cell_editor", None)
+        if editor is None:
+            return "break"
+        r, c = editor["r"], editor["c"]
+        anchor_line = self._grid_first_line(info)
+        self._commit_cell_editor()
+        fresh = (self._grid_at_line(anchor_line)
+                 if anchor_line is not None else None)
+        if fresh is not None:
+            self._grid_menu(fresh, event, at=(r, c))
+        return "break"
+
+    def _grid_menu(self, info, event, at=None):
         canvas = info["canvas"]
-        hit = self._grid_cell_at_xy(info, canvas.canvasx(event.x),
-                                    canvas.canvasy(event.y))
-        if hit is None:
+        hit = at if at is not None else self._grid_cell_at_xy(
+            info, canvas.canvasx(event.x), canvas.canvasy(event.y))
+        if hit is None or hit not in info["cells"]:
             return "break"
         r, c = hit
         cell = info["cells"][(r, c)]
@@ -1937,6 +2146,28 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                        fg=self.colors["text"],
                        activebackground=self.colors["accent"],
                        activeforeground="#ffffff")
+        sel = getattr(self, "_grid_sel", None)
+        if (sel and sel["info"] is info
+                and sel["box"][0] <= r <= sel["box"][2]
+                and sel["box"][1] <= c <= sel["box"][3]):
+            menu.add_command(label="Copy cells",
+                             command=lambda: self._grid_copy_selection(sel))
+            menu.add_command(label="Paste cells here",
+                             command=lambda: self._grid_paste_cells(
+                                 info, sel["box"][0], sel["box"][1]))
+            menu.add_command(label="Insert checkmarks",
+                             command=lambda: self._grid_fill_selection(
+                                 sel, "\u2713"))
+            menu.add_command(label="Clear cells",
+                             command=lambda: self._grid_fill_selection(
+                                 sel, ""))
+            menu.add_command(label="Merge cells",
+                             command=lambda: self._grid_merge_selection(sel))
+            try:
+                menu.tk_popup(event.x_root, event.y_root)
+            finally:
+                menu.grab_release()
+            return "break"
 
         def emoji_here():
             self._open_cell_editor(info, r, c, select=False)
@@ -1946,6 +2177,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
         menu.add_command(label="Copy cell",
                          command=lambda: self._grid_copy_cell(info, r, c))
+        menu.add_command(label="Paste cells here",
+                         command=lambda: self._grid_paste_cells(info, r, c))
+        menu.add_command(label="Insert checkmark",
+                         command=lambda: self._grid_fill_selection(
+                             {"info": info, "box": (r, c, r, c)}, "\u2713"))
         menu.add_command(label="Insert emoji…", command=emoji_here)
         menu.add_separator()
         menu.add_command(label="Insert row above",
@@ -2203,6 +2439,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
     def _replace_selection_with(self, text):
         """Drop the selection, if any, and put *text* where the cursor is."""
+        self._caret_out_of_hidden()
         try:
             self.body_text.delete("sel.first", "sel.last")
         except tk.TclError:
@@ -2859,6 +3096,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         people leave a list, so that removes the marker instead of adding
         another one.
         """
+        # A specific binding beats the general <KeyPress> the caret guard
+        # rides on, so Enter beside a table used to write into the hidden
+        # text and surface the caret at the table's right edge.
+        self._caret_out_of_hidden()
         line_no = int(self.body_text.index("insert").split(".")[0])
         kind = self._list_kind_of(self.body_text, line_no)
         if not kind:
@@ -2894,6 +3135,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         Otherwise the only way out of a list is to delete the bullet one
         character at a time, which reads as the app fighting you.
         """
+        self._caret_out_of_hidden()
         index = self.body_text.index("insert")
         line_no, col = (int(p) for p in index.split("."))
         kind = self._list_kind_of(self.body_text, line_no)
@@ -3725,7 +3967,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         ("Nature", ["☀️", "🌙", "⛅", "🌧️", "🌈", "🌸", "🍀", "🌳", "☕", "🍕"], "#B9FBC0"),
     ]
 
-    def _show_emoji_picker(self, text_widget):
+    def _show_emoji_picker(self, text_widget, anchor=None):
         """Small themed popup for inserting an emoji at the current cursor
         position of whichever field opened it (title, body, comments, etc.).
         Anchored to that field, not a separate window."""
@@ -3807,7 +4049,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # grid is built right below this).
         self._bind_mousewheel_recursive(inner, canvas)
 
-        self._place_dropdown_popup(pop, text_widget)
+        self._place_dropdown_popup(pop, anchor or text_widget)
 
     def _build_import_panel(self):
         """The inline import panel: a paste box + Import/close, shown under the
