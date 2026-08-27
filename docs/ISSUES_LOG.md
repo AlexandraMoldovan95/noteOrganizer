@@ -451,3 +451,39 @@ failed. When a bug reaches a user through code the suite covers heavily, the
 question is not "which case did we miss" but "is there a case this suite is
 unable to represent at all". Here, the very act of importing the module under
 test removed the condition that caused the bug.
+
+### The safety test that needed its own safety
+
+**Symptom:** The app, launched from the project root, opened onto an empty
+notebook. `notes_data.json` held two bytes — `[]` — and `settings.json` had
+been reset to defaults. The trash, templates and attachments were untouched.
+
+**Root cause:** `test_data_safety.py` exercises the backup/migration layer,
+so unlike the other unit tests it deletes and rewrites `notes_data.json` in
+its own directory (`os.remove(NO.DATA_FILE)` near the top, fixtures after).
+Its docstring says plainly that it must be run from a throwaway copy — but
+during a routine pre-commit sweep the whole unit suite was run from the
+project root, where `NO.DATA_FILE` resolves to the real notebook. The
+CLAUDE.md hard rule that exists for exactly this class of accident named
+only the `qa*.py` scripts; the unit tests were mentally filed as safe
+because most of them genuinely are pure. One wasn't, and a warning inside
+a file only protects the person who reads that file that day.
+
+**Recovery:** the app's own version-upgrade backups (`notes_data_backup_*`)
+held a copy from the previous evening — 27 notes, restored by a plain file
+copy. Everything changed between that backup and the wipe was lost, along
+with the settings. The `%APPDATA%` store and the trash were never touched.
+
+**Fix:** two layers. The test now refuses to run at all when the
+`notes_data.json` beside it holds real notes (a check at the top, before
+any import side effects or file operations — proven to refuse beside a
+populated file and to pass in a clean scratch copy and in CI, where the
+git-ignored file never exists). And the CLAUDE.md rule now covers every
+test file, `test_*.py` and `qa*.py` alike, with no per-file safety
+judgments allowed.
+
+**Takeaway:** a safety rule that lists specific filenames invites the
+accident to arrive under a filename it forgot to list. The durable form of
+the rule is categorical — *all tests run from scratch copies outside the
+tree* — and the file that can do damage carries its own refusal, so the
+last line of defence does not depend on anyone remembering anything.

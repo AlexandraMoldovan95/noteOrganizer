@@ -12,6 +12,30 @@ import os
 import json
 import shutil
 import tempfile
+# ---- REFUSE TO RUN BESIDE REAL NOTES ----
+# This file deletes and rewrites notes_data.json in its own directory.
+# Run from the project root it destroys the real notebook -- which
+# happened once, despite the warning above being here the whole time. A
+# warning depends on being read; this check does not. CI and a proper
+# scratch copy have no notes_data.json here, so they pass through.
+def _guard_real_notes():
+    here = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                        "notes_data.json")
+    try:
+        with open(here, encoding="utf-8") as f:
+            notes = json.load(f)
+    except (IOError, OSError, ValueError):
+        return
+    if isinstance(notes, list) and notes:
+        sys.exit(
+            "REFUSING to run: the notes_data.json beside this test holds "
+            "%d notes.\nThis test deletes and rewrites that file. Run it "
+            "only from a throwaway copy\noutside the project tree -- see "
+            "CLAUDE.md, 'QA testing safety'." % len(notes))
+
+
+_guard_real_notes()
+
 import note_organizer as NO
 # Patch targets live in the module that LOOKS THE NAME UP. run_migrations and
 # purge_stale_copies moved into noteorganizer.core.paths, so they resolve

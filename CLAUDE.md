@@ -122,21 +122,32 @@ After making a change:
 
 When fixing a bug, prefer adding a regression test when practical.
 
-### QA testing safety (hard rule — real data has been lost to this twice)
+### QA testing safety (hard rule — real data has been lost to this three times)
 
-Running the `qa*.py` scripts requires a working copy of `note_organizer.py`
-next to them, and each script wipes `*.json` and `attachments/` in its
-working directory before running. **This working directory must never be
-the project's own `qa/` folder in place.** Copying files into `qa/` and
-cleaning up there has twice caused a misdirected command to instead wipe
-the real `notes_data.json`, `trash.json`, `templates.json`,
-`settings.json`, and `attachments/` at the project root — both are
-git-ignored, so `git status` never flags the damage, and no automatic
-backup exists to recover from it.
+**This rule covers EVERY test file — `qa*.py` AND all `test_*.py` — with
+no per-file safety judgments.** Running the `qa*.py` scripts requires a
+working copy of `note_organizer.py` next to them, and each script wipes
+`*.json` and `attachments/` in its working directory before running.
+**This working directory must never be the project's own `qa/` folder in
+place.** Copying files into `qa/` and cleaning up there has twice caused
+a misdirected command to instead wipe the real `notes_data.json`,
+`trash.json`, `templates.json`, `settings.json`, and `attachments/` at
+the project root — both are git-ignored, so `git status` never flags the
+damage.
+
+The third loss came from the unit tests, which an earlier version of this
+rule did not name: `test_data_safety.py` deletes and rewrites
+`notes_data.json` in its own directory, and being run from the project
+root (during a routine full-suite sweep) it destroyed the real notebook —
+recovered only because the app's own `notes_data_backup_*.json` existed,
+minus that day's work. Most unit tests are genuinely pure; that is
+exactly what made the dangerous one easy to misfile. The test now refuses
+to run beside a `notes_data.json` that holds real notes, but the refusal
+is the LAST line of defence, not permission to run tests in place.
 
 Instead: copy `note_organizer.py`, the `noteorganizer/` package, and the
-target `qaN.py` script into a scratch directory **outside the project
-tree entirely** (e.g. the session's own scratchpad folder), and run and
+target test script into a scratch directory **outside the project tree
+entirely** (e.g. the session's own scratchpad folder), and run and
 clean up there. This makes it physically impossible for a wrong-directory
 mistake to reach real user data, rather than relying on correctly
 remembering the working directory every single time.
@@ -145,6 +156,11 @@ The `noteorganizer/` package must travel with `note_organizer.py` — the
 latter imports from it, so a copy on its own now fails with
 `ModuleNotFoundError`. Copy the whole directory (`cp -r`), not just the
 modules currently in use.
+
+This applies to "quick" runs too: a pre-commit sweep like
+`for t in test_*; do py $t.py; done` from the project root is exactly how
+the third loss happened. The scratch copy costs seconds; run everything
+there, every time.
 
 If a destructive command must reference `notes_data.json`, `trash.json`,
 `templates.json`, `settings.json`, or `attachments/` for any other reason,
