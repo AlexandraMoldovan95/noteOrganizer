@@ -171,6 +171,14 @@ def pad_ops(line, widths):
     return ops
 
 
+def pipe_positions(line):
+    """Where the pipes sit in a row, for edits at a column boundary."""
+    raw = line or ""
+    if not is_table_row(raw):
+        return []
+    return [i for i, ch in enumerate(raw) if ch == CELL]
+
+
 def merge_map(rows):
     """Resolve merge markers into spans.
 

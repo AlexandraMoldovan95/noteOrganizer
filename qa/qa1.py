@@ -1928,7 +1928,8 @@ check('the table rows are drawn in the monospace face',
 check('and a grid is rendered over them',
       app._grid_at_line(2) is not None)
 check('whose cells hold the pasted values',
-      [[e.get() for e in row] for row in app._grid_at_line(2)['entries']]
+      [[app._grid_at_line(2)['cells'][(r, c)]['value'] for c in range(2)]
+       for r in range(3)]
       == [['Name', 'Qty'], ['Milk', '2'], ['Eggs and bread', '12']])
 check('the text around the table is not', not _mono(1) and not _mono(5))
 check(f'the face is a monospace one '
@@ -2052,47 +2053,59 @@ check('its cells are wide enough to look like cells, not specks',
 check('its rows are drawn in the monospace face', _mono(1))
 _made = app._grid_at_line(1)
 check('a grid is rendered over the new table', _made is not None)
-check('focus starts in the first cell',
-      _made is not None and app.focus_get() is _made['entries'][0][0])
+check('the one floating editor opens on the first cell',
+      app._cell_editor is not None
+      and (app._cell_editor['r'], app._cell_editor['c']) == (0, 0)
+      and app.focus_get() is app._cell_editor['entry'])
 
-# The whole point of the grid: a table is filled in through its cells, and
-# what lands in them lands in the note's own text.
-for _i, _word in enumerate(('Name', 'Qty', 'Milk', '2', 'Eggs', '12')):
-    _r, _c = divmod(_i, 2)
-    _cell = _made['entries'][_r][_c]
-    _cell.focus_set()
+# Filling in through the editor: type, step, repeat -- the words land in
+# the note's own text, cell by cell.
+for _word in ('Name', 'Qty', 'Milk', '2', 'Eggs'):
+    _e = app._cell_editor['entry']
+    _e.delete(0, 'end')
+    _e.insert(0, _word)
+    app._editor_step(+1)
     app.update()
-    _cell.delete(0, 'end')
-    _cell.insert(0, _word)
-app._flush_table_grids()
+_e = app._cell_editor['entry']
+_e.delete(0, 'end')
+_e.insert(0, '12')
+app._commit_cell_editor()
 app.update()
-check(f'typing in the cells lands in the text ({lines_now()[0]!r})',
+check(f'typing through the editor lands in the text ({lines_now()[0]!r})',
       [core_tables.split_row(r) for r in lines_now()[:3]]
       == [['Name', 'Qty'], ['Milk', '2'], ['Eggs', '12']])
 
 # Tab walks the cells; at the very last one it makes a new row, which is
 # what lets a whole table be typed without reaching for the mouse.
-_made['entries'][0][0].focus_set()
+_made = app._grid_at_line(1)
+app._open_cell_editor(_made, 1, 0)
 app.update()
-_made['entries'][0][0].event_generate('<Tab>')
-app.update()
-check('Tab moves to the next cell',
-      app.focus_get() is _made['entries'][0][1])
-_made['entries'][1][0].focus_set()
-app.update()
-_made['entries'][1][0].event_generate('<Shift-Tab>')
+app._cell_editor['entry'].event_generate('<Shift-Tab>')
 app.update()
 check('Shift+Tab goes back to the row above',
-      app.focus_get() is _made['entries'][0][1])
-_made['entries'][-1][-1].focus_set()
+      app._cell_editor is not None
+      and (app._cell_editor['r'], app._cell_editor['c']) == (0, 1))
+_made = app._grid_at_line(1)
+app._open_cell_editor(_made, _made['nrows'] - 1, _made['ncols'] - 1)
 app.update()
-_made['entries'][-1][-1].event_generate('<Tab>')
+app._cell_editor['entry'].event_generate('<Tab>')
 app.update()
 check(f'Tab at the last cell makes a new row ({lines_now()[3]!r})',
       core_tables.split_row(lines_now()[3]) == ['', ''])
+check('and the editor opens in the new row',
+      app._cell_editor is not None
+      and (app._cell_editor['r'], app._cell_editor['c']) == (3, 0))
+
+# Enter finishes the cell and puts the caret on the line under the table,
+# at the start of the row -- writing continues from the left.
+app._cell_editor['entry'].event_generate('<Return>')
+app.update()
+check(f'Enter leaves the caret under the table '
+      f'({app.body_text.index("insert")})',
+      app._cell_editor is None
+      and app.body_text.index('insert') == '5.0'
+      and app.focus_get() is app.body_text)
 _made = app._grid_at_line(1)
-check('and focus lands in the new row',
-      _made is not None and app.focus_get() is _made['entries'][-1][0])
 
 # The hidden text is still reachable with arrows or a stray click, and
 # typing there would edit characters nobody can see -- so the caret is
@@ -2106,9 +2119,11 @@ check(f'the caret cannot rest inside the hidden rows (line {_landed})',
 
 # A pipe typed into a cell can never reach the text: it is what holds the
 # row together, and one more of it would split the row apart.
-_made['entries'][0][0].delete(0, 'end')
-_made['entries'][0][0].insert(0, 'a|b')
-app._flush_table_grids()
+app._open_cell_editor(_made, 0, 0)
+_e = app._cell_editor['entry']
+_e.delete(0, 'end')
+_e.insert(0, 'a|b')
+app._commit_cell_editor()
 app.update()
 check(f'a pipe typed into a cell cannot break the row ({lines_now()[0]!r})',
       core_tables.split_row(lines_now()[0])[0] == 'a/b'
@@ -2130,19 +2145,21 @@ app.update()
 _merged = app._grid_at_line(1)
 check('a merged paste renders a grid', _merged is not None)
 check(f'the rowspan anchor really spans its rows '
-      f'({_merged["entries"][0][0].grid_info().get("rowspan")})',
-      int(_merged['entries'][0][0].grid_info().get('rowspan', 1)) == 2)
+      f"({_merged['cells'][(0, 0)]['rs']})",
+      _merged['cells'][(0, 0)]['rs'] == 2)
 check(f'the colspan anchor really spans its columns '
-      f'({_merged["entries"][0][1].grid_info().get("columnspan")})',
-      int(_merged['entries'][0][1].grid_info().get('columnspan', 1)) == 2)
-check('covered positions hold no widget at all',
-      _merged['entries'][0][2] is None and _merged['entries'][1][0] is None)
+      f"({_merged['cells'][(0, 1)]['cs']})",
+      _merged['cells'][(0, 1)]['cs'] == 2)
+check('covered positions are not cells at all',
+      (0, 2) not in _merged['cells'] and (1, 0) not in _merged['cells'])
 
 # Editing the anchor rewrites the anchor cell and nothing else: the markers
 # that carry the merge stay exactly where they were.
-_merged['entries'][0][1].delete(0, 'end')
-_merged['entries'][0][1].insert(0, 'Cablu Nou')
-app._flush_table_grids()
+app._open_cell_editor(_merged, 0, 1)
+_e = app._cell_editor['entry']
+_e.delete(0, 'end')
+_e.insert(0, 'Cablu Nou')
+app._commit_cell_editor()
 app.update()
 check(f'editing a merge anchor keeps the merge ({lines_now()[0]!r})',
       core_tables.split_row(lines_now()[0]) == ['Nr', 'Cablu Nou', '<']
@@ -2166,6 +2183,97 @@ check(f'a wide table gets a horizontal scrollbar '
       f'(natural {_wide["natural"]}px, shown {_wide["canvas"].cget("width")}px)',
       _wide['hbar'] is not None and bool(_wide['hbar'].winfo_manager())
       and int(float(_wide['canvas'].cget('width'))) < _wide['natural'])
+
+# ---- THE TABLE'S OWN RIGHT-CLICK MENU, THROUGH ITS HANDLERS ----
+set_body('')
+_stub_clipboard(html='<table><tr><td>A</td><td>B</td></tr>'
+                     '<tr><td>C</td><td>D</td></tr></table>')
+app._on_body_paste()
+app.update()
+_t = app._grid_at_line(1)
+app._grid_insert_row(_t, 1)
+app.update()
+_t = app._grid_at_line(1)
+check(f'a row can be inserted from the menu ({_t["nrows"]} rows)',
+      _t['nrows'] == 3
+      and core_tables.split_row(lines_now()[1]) == ['', ''])
+app._grid_insert_col(_t, 1)
+app.update()
+_t = app._grid_at_line(1)
+check(f'and a column ({_t["ncols"]} columns)',
+      _t['ncols'] == 3
+      and core_tables.split_row(lines_now()[0]) == ['A', '', 'B'])
+app._grid_set_marker(_t, 0, 1, core_tables.MERGE_LEFT)
+app.update()
+_t = app._grid_at_line(1)
+check('merging from the menu spans the anchor',
+      _t['cells'][(0, 0)]['cs'] == 2 and (0, 1) not in _t['cells'])
+app._grid_split(_t, 0, 0)
+app.update()
+_t = app._grid_at_line(1)
+check('and splitting undoes it',
+      _t['cells'][(0, 0)]['cs'] == 1 and (0, 1) in _t['cells'])
+app._grid_delete_col(_t, 1)
+app.update()
+_t = app._grid_at_line(1)
+app._grid_delete_row(_t, 1)
+app.update()
+_t = app._grid_at_line(1)
+check(f'deleting the inserted row and column restores the shape '
+      f'({_t["nrows"]}x{_t["ncols"]})',
+      (_t['nrows'], _t['ncols']) == (2, 2)
+      and core_tables.split_row(lines_now()[0]) == ['A', 'B'])
+# Two columns is the floor -- a one-column row would read as prose, not
+# as a table -- so at two, deleting a column empties it instead.
+app._grid_delete_col(_t, 1)
+app.update()
+_t = app._grid_at_line(1)
+check(f'at two columns, deleting empties the chosen one '
+      f'({core_tables.split_row(lines_now()[0])})',
+      _t is not None and _t['ncols'] == 2
+      and core_tables.split_row(lines_now()[0]) == ['A', '']
+      and core_tables.split_row(lines_now()[1]) == ['C', ''])
+app._grid_delete_col(_t, 0)
+app.update()
+_t = app._grid_at_line(1)
+check('and the table itself is never dissolved by column deletes',
+      _t is not None and _t['ncols'] == 2
+      and core_tables.split_row(lines_now()[0]) == ['', ''])
+app._grid_delete_table(_t)
+app.update()
+check('and deleting the table removes it outright',
+      app._grid_at_line(1) is None and core_tables.find_blocks(body()) == [])
+
+# The window line itself is off-limits: the caret walks to the line under
+# the table, so writing continues from the start of a real row.
+set_body('')
+_stub_clipboard(html='<table><tr><td>A</td><td>B</td></tr></table>')
+app._on_body_paste()
+app.update()
+app.body_text.mark_set('insert', '1.0')
+app._caret_out_of_hidden()
+app.update()
+check(f'the window line itself is off-limits '
+      f'({app.body_text.index("insert")})',
+      app.body_text.index('insert').split('.')[0] == '2')
+check('and there is always a line under the last table to land on',
+      int(app.body_text.index('end-1c').split('.')[0]) >= 2)
+
+# A click on a drawn cell opens the editor exactly there.
+_t = app._grid_at_line(1)
+_cell = _t['cells'][(0, 1)]
+_t['canvas'].event_generate('<Button-1>',
+                            x=_cell['x'] + 5, y=_cell['y'] + 5)
+app.update()
+check(f'clicking a cell opens the editor on it '
+      f'({app._cell_editor and (app._cell_editor["r"], app._cell_editor["c"])})',
+      app._cell_editor is not None
+      and (app._cell_editor['r'], app._cell_editor['c']) == (0, 1))
+app._commit_cell_editor()
+app.update()
+
+# The toolbar has an emoji button, and it knows about open cells.
+check('the toolbar has an emoji button', hasattr(app, 'emoji_btn'))
 
 # And outside a table Tab still types a tab, as it always did.
 clear_selection()

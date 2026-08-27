@@ -1310,22 +1310,235 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     pass
         self.body_text.tag_configure(self.TABLE_HIDE_TAG, elide=True)
         text = self.body_text.get("1.0", "end-1c")
-        for first0, last0 in core_tables.find_blocks(text):
+        blocks = core_tables.find_blocks(text)
+        for first0, last0 in blocks:
             self._build_table_grid(first0 + 1, last0 + 1)
+        # There is always a line under the last table, or the caret guard
+        # would have nowhere to put the caret and writing could never
+        # continue past it.
+        if blocks:
+            total = int(self.body_text.index("end-1c").split(".")[0])
+            if blocks[-1][1] + 1 >= total:
+                self.body_text.insert("end", "\n")
 
-    def _grid_first_entry(self, info):
-        """The first real cell -- merged-over positions hold None."""
-        for row in info["entries"]:
-            for entry in row:
-                if entry is not None:
-                    return entry
+    def _grid_fonts(self):
+        key = (self.editor_font_family, self.editor_font_size)
+        cache = getattr(self, "_grid_font_cache", None)
+        if cache is None:
+            cache = self._grid_font_cache = {}
+        if key not in cache:
+            cache[key] = (
+                tkfont.Font(family=key[0], size=key[1], weight="bold"),
+                tkfont.Font(family=key[0], size=key[1]),
+            )
+        return cache[key]
+
+    def _grid_cell_at_xy(self, info, x, y):
+        """Which cell a canvas point falls in. Covered positions have no
+        cell of their own, so a click inside a merge finds its anchor."""
+        for (r, c), cell in info["cells"].items():
+            if (cell["x"] <= x < cell["x"] + cell["w"]
+                    and cell["y"] <= y < cell["y"] + cell["h"]):
+                return r, c
         return None
 
-    def _grid_last_row_entry(self, info):
-        for entry in info["entries"][-1]:
-            if entry is not None:
-                return entry
-        return None
+    def _open_cell_editor(self, info, r, c, select=True):
+        """One floating Entry over one cell -- the only live widget a table
+        ever has. Everything else is drawn, which is what lets a table of
+        hundreds of rows scroll without dragging the editor down."""
+        self._commit_cell_editor()
+        cell = info["cells"].get((r, c))
+        if cell is None:
+            return
+        canvas = info["canvas"]
+        header_font, cell_font = self._grid_fonts()
+        entry = tk.Entry(canvas, relief="flat", bd=0,
+                         font=header_font if r == 0 else cell_font,
+                         bg=self.colors["card"], fg=self.colors["text"],
+                         insertbackground=self.colors["text"])
+        entry.insert(0, cell["value"])
+        if select:
+            entry.select_range(0, "end")
+        entry.icursor("end")
+        win = canvas.create_window(cell["x"] + 1, cell["y"] + 1, anchor="nw",
+                                   width=cell["w"] - 2, height=cell["h"] - 2,
+                                   window=entry)
+        self._cell_editor = {"entry": entry, "win": win, "info": info,
+                             "r": r, "c": c}
+        entry.focus_set()
+        entry.bind("<Tab>", lambda _e: self._editor_step(+1))
+        entry.bind("<Shift-Tab>", lambda _e: self._editor_step(-1))
+        entry.bind("<Return>", lambda _e: self._editor_return())
+        entry.bind("<Escape>",
+                   lambda _e: (self._cancel_cell_editor(), "break")[1])
+        entry.bind("<FocusOut>",
+                   lambda _e: self.after_idle(self._maybe_close_cell_editor))
+        entry.bind("<KeyRelease>", lambda _e: self._schedule_autosave())
+        entry.bind("<MouseWheel>", self._forward_grid_wheel)
+        # Keep the edited cell inside the scrolled viewport.
+        try:
+            shown = int(float(canvas.cget("width")))
+            left = canvas.canvasx(0)
+            if cell["x"] < left or cell["x"] + cell["w"] > left + shown:
+                canvas.xview_moveto(
+                    max(0.0, cell["x"] / max(1, info["natural"])))
+        except tk.TclError:
+            pass
+
+    def _close_cell_editor(self):
+        editor = getattr(self, "_cell_editor", None)
+        if not editor:
+            return
+        self._cell_editor = None
+        try:
+            editor["info"]["canvas"].delete(editor["win"])
+        except tk.TclError:
+            pass
+        try:
+            editor["entry"].destroy()
+        except tk.TclError:
+            pass
+        # A commit that widened a column left the drawing behind the text;
+        # the rebuild waits for this moment so it never happens under an
+        # editor still open on the grid.
+        if editor["info"].pop("stale", False):
+            self._render_table_grids()
+
+    def _cancel_cell_editor(self):
+        self._close_cell_editor()
+
+    def _maybe_close_cell_editor(self):
+        """FocusOut closes the editor -- except while the emoji picker is
+        up, which holds the click without holding the focus, and the chosen
+        emoji still needs somewhere to land."""
+        editor = getattr(self, "_cell_editor", None)
+        if not editor:
+            return
+        try:
+            focus = self.focus_get()
+        except (tk.TclError, KeyError):
+            focus = None
+        if focus is editor["entry"]:
+            return
+        popup = getattr(self, "_mini_popup", None)
+        try:
+            if popup is not None and popup.winfo_exists():
+                return
+        except tk.TclError:
+            pass
+        self._commit_cell_editor()
+
+    def _commit_cell_editor(self, close=True):
+        """The editor's value reaches the hidden text, then the drawing.
+
+        The text is written while the grid's mark is still alive -- writing
+        after a teardown would find no line to write to, and the keystrokes
+        still sitting in the box would be lost.
+        """
+        editor = getattr(self, "_cell_editor", None)
+        if not editor:
+            return False
+        info, r, c = editor["info"], editor["r"], editor["c"]
+        try:
+            value = editor["entry"].get()
+        except tk.TclError:
+            value = None
+        wrote = False
+        cell = info["cells"].get((r, c))
+        if value is not None and cell is not None:
+            value = value.replace(core_tables.CELL, "/").strip()
+            if value != cell["value"]:
+                self._write_cell(info, r, c, value)
+                cell["value"] = value
+                try:
+                    info["canvas"].itemconfigure(cell["text"], text=value)
+                except tk.TclError:
+                    pass
+                first = self._grid_first_line(info)
+                if first is not None:
+                    lines = [self.body_text.get(f"{n}.0", f"{n}.end")
+                             for n in range(first, first + info["nrows"])]
+                    widths = core_tables.column_widths(
+                        [core_tables.split_row(line) for line in lines])
+                    if widths != info["widths_chars"]:
+                        info["stale"] = True
+                wrote = True
+        if close:
+            self._close_cell_editor()
+        if wrote:
+            self._schedule_autosave()
+        return wrote
+
+    def _write_cell(self, info, r, c, value):
+        b = self.body_text
+        first = self._grid_first_line(info)
+        if first is None:
+            return
+        line_no = first + r
+        base = 1 if r == 0 else 0
+        line = b.get(f"{line_no}.0", f"{line_no}.end")
+        bounds = core_tables.cell_bounds(line)
+        if c >= len(bounds):
+            return
+        start, end = bounds[c]
+        if line[start:end] != value:
+            b.delete(f"{line_no}.{start + base}", f"{line_no}.{end + base}")
+            b.insert(f"{line_no}.{start + base}", value)
+            self._align_table_block(first)
+
+    def _editor_step(self, delta):
+        """Tab and Shift+Tab between cells; Tab at the very last one adds
+        a row, which is what lets a whole table be typed without the
+        mouse. Backwards out of the first cell stays put."""
+        editor = getattr(self, "_cell_editor", None)
+        if not editor:
+            return "break"
+        info, r, c = editor["info"], editor["r"], editor["c"]
+        anchor_line = self._grid_first_line(info)
+        self._commit_cell_editor()
+        fresh = (self._grid_at_line(anchor_line)
+                 if anchor_line is not None else None)
+        if fresh is None:
+            return "break"
+        order = sorted(fresh["cells"])
+        try:
+            index = order.index((r, c)) + delta
+        except ValueError:
+            index = 0
+        if index >= len(order):
+            self._grid_add_row(fresh)
+            return "break"
+        if index < 0:
+            index = 0
+        self._open_cell_editor(fresh, *order[index])
+        return "break"
+
+    def _editor_return(self):
+        """Enter finishes the cell and puts the caret on the line under the
+        table, at the start of the row -- writing continues from the left,
+        not from wherever the table happened to end."""
+        editor = getattr(self, "_cell_editor", None)
+        if not editor:
+            return "break"
+        info = editor["info"]
+        first = self._grid_first_line(info)
+        rows = info["nrows"]
+        self._commit_cell_editor()
+        if first is not None:
+            try:
+                self.body_text.mark_set("insert", f"{first + rows}.0")
+                self.body_text.focus_set()
+                self.body_text.see("insert")
+            except tk.TclError:
+                pass
+        return "break"
+
+    def _insert_emoji_from_toolbar(self):
+        """The toolbar emoji button lands in whatever is being written --
+        the open table cell if there is one, the note body otherwise."""
+        editor = getattr(self, "_cell_editor", None)
+        target = editor["entry"] if editor else self.body_text
+        self._show_emoji_picker(target)
 
     def _grid_available_width(self):
         """How wide a table may draw before it has to scroll instead."""
@@ -1390,83 +1603,77 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if not widths:
             return
         merges, covered = core_tables.merge_map(rows)
-        # The grid proper lives on a canvas so that a table wider than the
-        # editor can scroll sideways instead of being cut off at the edge.
-        # The 1px gaps between cells show the frame behind them, and that is
-        # what draws the grid lines: every rule exactly once, horizontal and
-        # vertical, without the doubled edges adjacent borders would give.
+        header_font, cell_font = self._grid_fonts()
+        pad_x, pad_y = 10, 7
+        row_h = max(header_font.metrics("linespace"),
+                    cell_font.metrics("linespace")) + 2 * pad_y
+        # Pixel widths come from measuring the real strings in the real
+        # font; character counts alone lie in a proportional face. Cells
+        # spanning several columns answer to all of them and drive none.
+        floor = cell_font.measure("0") * core_tables.MIN_COLUMN
+        col_w = [floor] * len(widths)
+        for r, row in enumerate(rows):
+            font = header_font if r == 0 else cell_font
+            for c in range(len(widths)):
+                span = merges.get((r, c))
+                if (r, c) in covered or (span and span[1] > 1):
+                    continue
+                value = row[c] if c < len(row) else ""
+                col_w[c] = max(col_w[c], font.measure(value) + 2 * pad_x)
+        col_x = [0]
+        for width in col_w:
+            col_x.append(col_x[-1] + width)
+        natural = col_x[-1]
+        height = row_h * len(rows)
+
         host = tk.Frame(b, bg=self.colors["card"])
         canvas = tk.Canvas(host, highlightthickness=0, bd=0,
-                           bg=hairline(self.colors))
-        frame = tk.Frame(canvas, bg=hairline(self.colors))
-        header_font = (self.editor_font_family, self.editor_font_size, "bold")
-        cell_font = (self.editor_font_family, self.editor_font_size)
-        entries = []
+                           bg=self.colors["card"], height=height,
+                           scrollregion=(0, 0, natural, height))
+        canvas.pack(side="top", anchor="w")
+        cells = {}
+        rule = hairline(self.colors)
         for r, row in enumerate(rows):
-            entries.append([])
             for c in range(len(widths)):
                 if (r, c) in covered:
-                    # Swallowed by a merge: the anchor's widget covers this
-                    # position, so there is nothing to build here.
-                    entries[r].append(None)
                     continue
                 row_span, col_span = merges.get((r, c), (1, 1))
-                entry = tk.Entry(
-                    frame, relief="flat", bd=0,
-                    width=sum(widths[c:c + col_span]) + 2 * (col_span - 1) + 1,
+                x, y = col_x[c], r * row_h
+                w = col_x[min(c + col_span, len(col_w))] - x
+                h = row_span * row_h
+                value = row[c] if c < len(row) else ""
+                rect = canvas.create_rectangle(
+                    x, y, x + w, y + h,
+                    fill=(inset_surface(self.colors) if r == 0
+                          else self.colors["card"]),
+                    outline=rule)
+                text = canvas.create_text(
+                    x + pad_x, y + h / 2, anchor="w",
                     font=header_font if r == 0 else cell_font,
-                    bg=(inset_surface(self.colors) if r == 0
-                        else self.colors["card"]),
-                    fg=self.colors["text"],
-                    insertbackground=self.colors["text"],
-                )
-                entry.insert(0, row[c] if c < len(row) else "")
-                entry.grid(row=r, column=c,
-                           rowspan=row_span, columnspan=col_span,
-                           sticky="nsew",
-                           padx=(1, 1 if c + col_span == len(widths) else 0),
-                           pady=(1, 1 if r + row_span == len(rows) else 0),
-                           ipadx=6, ipady=5)
-                entry.bind("<FocusOut>", lambda _e: self._flush_table_grids())
-                entry.bind("<KeyRelease>",
-                           lambda _e: self._schedule_autosave())
-                entries[r].append(entry)
-        for widget in ([host, canvas, frame]
-                       + [e for row in entries for e in row if e is not None]):
-            widget.bind("<MouseWheel>", self._forward_grid_wheel)
-            widget.bind("<Shift-MouseWheel>",
-                        lambda ev, cv=canvas: self._grid_wheel_x(cv, ev))
-        canvas.create_window((0, 0), window=frame, anchor="nw")
-        frame.update_idletasks()
-        natural_w = frame.winfo_reqwidth()
-        canvas.configure(height=frame.winfo_reqheight(),
-                         scrollregion=(0, 0, natural_w,
-                                       frame.winfo_reqheight()))
-        canvas.pack(side="top", anchor="w")
+                    fill=self.colors["text"], text=value)
+                cells[(r, c)] = {"value": value, "rect": rect, "text": text,
+                                 "x": x, "y": y, "w": w, "h": h,
+                                 "rs": row_span, "cs": col_span}
         mark = f"table_grid_{id(host)}"
         b.mark_set(mark, f"{first}.0")
         b.mark_gravity(mark, "left")
         info = {"frame": host, "canvas": canvas, "hbar": None,
-                "natural": natural_w, "entries": entries, "mark": mark,
-                "nrows": len(rows), "ncols": len(widths)}
+                "natural": natural, "cells": cells, "mark": mark,
+                "nrows": len(rows), "ncols": len(widths),
+                "row_h": row_h, "col_x": col_x,
+                "widths_chars": list(widths)}
         self._fit_grid(info)
-        # Tab at the very last cell adds a row; Shift+Tab out of the first
-        # cell stays put, since silently leaving the table would be worse
-        # than staying. Both mirror what the text path already does.
-        # The bind belongs on the FINAL cell in traversal order -- the last
-        # real widget of the last row -- while _grid_last_row_entry answers
-        # the other question, where focus lands after a row is added.
-        tail = None
-        for candidate in reversed(info["entries"][-1]):
-            if candidate is not None:
-                tail = candidate
-                break
-        if tail is not None:
-            tail.bind("<Tab>", lambda _e, i=info: self._grid_add_row(i))
-        head = self._grid_first_entry(info)
-        if head is not None:
-            head.bind("<Shift-Tab>", lambda _e: "break")
-        b.window_create(f"{first}.0", window=host, padx=1, pady=6)
+        canvas.bind("<Button-1>", lambda e, i=info: self._grid_click(i, e))
+        canvas.bind("<Button-3>", lambda e, i=info: self._grid_menu(i, e))
+        for widget in (host, canvas):
+            widget.bind("<MouseWheel>", self._forward_grid_wheel)
+            widget.bind("<Shift-MouseWheel>",
+                        lambda ev, cv=canvas: self._grid_wheel_x(cv, ev))
+        # align="bottom": the caret beside the table sits at its foot
+        # rather than floating at mid-height, which read as typing landing
+        # in the middle of the note.
+        b.window_create(f"{first}.0", window=host, padx=1, pady=6,
+                        align="bottom")
         # The window itself sits at column 0; the pipe text starts at column
         # 1 and is hidden through the block's last line. Hidden, not removed:
         # get() still returns it, offsets still count it, save still keeps it.
@@ -1474,76 +1681,32 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._table_grids = getattr(self, "_table_grids", [])
         self._table_grids.append(info)
 
-    def _flush_table_grids(self):
-        """Write every cell's current value back into the hidden text.
+    def _grid_click(self, info, event):
+        canvas = info["canvas"]
+        hit = self._grid_cell_at_xy(info, canvas.canvasx(event.x),
+                                    canvas.canvasy(event.y))
+        if hit is not None:
+            self._open_cell_editor(info, *hit)
+        return "break"
 
-        Cell by cell and only where changed, so the tags on everything else
-        stay where they were -- the same reason re-padding edits spaces
-        rather than rewriting lines. Called from capture_editor_state, so
-        autosave, tab switching and the dirty poll all see cell edits.
+    def _flush_table_grids(self):
+        """Anything still sitting in the open cell editor reaches the text.
+
+        Every other value is in the text already -- each commit wrote it --
+        so capture, autosave and the dirty poll only need the one editor
+        flushed, without closing it under the user's typing.
         """
-        if not hasattr(self, "body_text"):
-            return False
-        b = self.body_text
-        changed = []
-        for info in list(getattr(self, "_table_grids", [])):
-            first = self._grid_first_line(info)
-            if first is None:
-                continue
-            for r, row_entries in enumerate(info["entries"]):
-                line_no = first + r
-                base = 1 if r == 0 else 0
-                line = b.get(f"{line_no}.0", f"{line_no}.end")
-                bounds = core_tables.cell_bounds(line)
-                for c, entry in enumerate(row_entries):
-                    if entry is None or c >= len(bounds):
-                        continue
-                    try:
-                        value = entry.get()
-                    except tk.TclError:
-                        continue
-                    # A pipe typed into a cell would split the row apart the
-                    # moment it reached the text, so it never reaches it.
-                    value = value.replace(core_tables.CELL, "/").strip()
-                    start, end = bounds[c]
-                    if line[start:end] == value:
-                        continue
-                    b.delete(f"{line_no}.{start + base}",
-                             f"{line_no}.{end + base}")
-                    b.insert(f"{line_no}.{start + base}", value)
-                    if info not in changed:
-                        changed.append(info)
-                    line = b.get(f"{line_no}.0", f"{line_no}.end")
-                    bounds = core_tables.cell_bounds(line)
-        for info in changed:
-            first = self._grid_first_line(info)
-            if first is not None:
-                self._align_table_block(first)
-            # Columns follow their content: the widest value in a column
-            # sets every cell in it, never narrower than the floor.
-            for c in range(info["ncols"]):
-                column = [row[c] for row in info["entries"]
-                          if c < len(row) and row[c] is not None]
-                # Cells spanning several columns answer to all of them, so
-                # only single-span cells drive a column's width.
-                single = [e for e in column
-                          if int(e.grid_info().get("columnspan", 1)) == 1]
-                if not single:
-                    continue
-                want = max([core_tables.MIN_COLUMN]
-                           + [len(e.get()) for e in single]) + 1
-                for e in single:
-                    e.configure(width=want)
-        if changed:
-            self._schedule_autosave()
-        return bool(changed)
+        return self._commit_cell_editor(close=False)
 
     def _grid_add_row(self, info):
         """Tab at the last cell: make somewhere to go, as the text path does."""
         first = self._grid_first_line(info)
         if first is None:
             return "break"
-        self._flush_table_grids()
+        self._commit_cell_editor()
+        again = self._grid_at_line(first)
+        if again is not None:
+            info = again
         last = first + info["nrows"] - 1
         self.body_text.insert(
             f"{last}.end",
@@ -1553,30 +1716,272 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._render_table_grids()
         fresh = self._grid_at_line(first)
         if fresh is not None:
-            landing = self._grid_last_row_entry(fresh)
-            if landing is not None:
-                landing.focus_set()
+            bottom = fresh["nrows"] - 1
+            for c in range(fresh["ncols"]):
+                if (bottom, c) in fresh["cells"]:
+                    self._open_cell_editor(fresh, bottom, c)
+                    break
         self._schedule_autosave()
         return "break"
 
     def _caret_out_of_hidden(self, _event=None):
-        """Keep the caret out of a rendered table's hidden text.
+        """Keep the caret off a rendered table's lines entirely.
 
-        Tk still lets it wander in with arrows or a stray click, and typing
-        there would edit characters nobody can see. Moved just past the
-        block instead -- on KeyPress so the key lands somewhere visible,
-        and on release so arrow keys settle outside too.
+        The hidden pipe text, and the window line's visible edges left and
+        right of the drawn table, are all places where typing would either
+        edit characters nobody can see or land text floating beside the
+        grid. The caret is walked to the line under the table instead, so
+        writing always continues from the start of a real row.
         """
         b = self.body_text
         try:
-            if self.TABLE_HIDE_TAG not in b.tag_names("insert"):
-                return None
-            containing = b.tag_prevrange(self.TABLE_HIDE_TAG, "insert +1c")
-        except tk.TclError:
+            line_no = int(b.index("insert").split(".")[0])
+        except (tk.TclError, ValueError):
             return None
-        if containing:
-            b.mark_set("insert", f"{containing[1]} +1c")
+        for info in getattr(self, "_table_grids", []):
+            first = self._grid_first_line(info)
+            if first is not None and first <= line_no < first + info["nrows"]:
+                try:
+                    b.mark_set("insert", f"{first + info['nrows']}.0")
+                except tk.TclError:
+                    pass
+                return None
         return None
+
+    # ---------- The table's own right-click menu ----------
+
+    def _grid_op_context(self, info):
+        """(first, nrows, ncols) with the editor committed and grids down.
+
+        Structural edits move real characters around the window's own
+        column; the simplest correct order is grids down, text edited
+        plain, grids back up.
+        """
+        first = self._grid_first_line(info)
+        if first is None:
+            return None
+        self._commit_cell_editor()
+        again = self._grid_at_line(first)
+        if again is not None:
+            info = again
+            first = self._grid_first_line(info) or first
+        shape = (first, info["nrows"], info["ncols"])
+        self._teardown_table_grids()
+        return shape
+
+    def _grid_after_op(self, first):
+        self._align_table_block(first)
+        self._resync_list_tags()
+        self._render_table_grids()
+        self._schedule_autosave()
+
+    def _grid_read_rows(self, first, nrows):
+        return [core_tables.split_row(
+                    self.body_text.get(f"{n}.0", f"{n}.end"))
+                for n in range(first, first + nrows)]
+
+    def _grid_replace_block(self, first, old_nrows, rows):
+        """Wholesale rewrite for the structural ops that reshape columns.
+
+        Character formatting inside the table does not survive these ops --
+        the accepted cost of reshaping; plain cell text does, which is what
+        a table almost always holds.
+        """
+        b = self.body_text
+        b.delete(f"{first}.0", f"{first + old_nrows - 1}.end")
+        b.insert(f"{first}.0",
+                 "\n".join(core_tables.format_table(rows)))
+
+    def _dissolve_orphan_markers(self, rows):
+        _spans, covered = core_tables.merge_map(rows)
+        for r, row in enumerate(rows):
+            for c, value in enumerate(row):
+                if (value in (core_tables.MERGE_LEFT, core_tables.MERGE_UP)
+                        and (r, c) not in covered):
+                    rows[r][c] = ""
+        return rows
+
+    def _grid_insert_row(self, info, at):
+        context = self._grid_op_context(info)
+        if not context:
+            return
+        first, nrows, ncols = context
+        blank = core_tables.blank_table(1, ncols)[0]
+        if at >= nrows:
+            self.body_text.insert(f"{first + nrows - 1}.end", "\n" + blank)
+        else:
+            self.body_text.insert(f"{first + at}.0", blank + "\n")
+        self._grid_after_op(first)
+
+    def _grid_insert_col(self, info, at):
+        context = self._grid_op_context(info)
+        if not context:
+            return
+        first, nrows, _ncols = context
+        b = self.body_text
+        for n in range(first, first + nrows):
+            line = b.get(f"{n}.0", f"{n}.end")
+            pipes = core_tables.pipe_positions(line)
+            if not pipes:
+                continue
+            boundary = pipes[min(at, len(pipes) - 1)]
+            b.insert(f"{n}.{boundary + 1}", "  |")
+        self._grid_after_op(first)
+
+    def _grid_delete_row(self, info, r):
+        context = self._grid_op_context(info)
+        if not context:
+            return
+        first, nrows, _ncols = context
+        if nrows <= 1:
+            self._grid_after_op(first)
+            return
+        rows = self._grid_read_rows(first, nrows)
+        del rows[r]
+        rows = self._dissolve_orphan_markers(rows)
+        self._grid_replace_block(first, nrows, rows)
+        self._grid_after_op(first)
+
+    def _grid_delete_col(self, info, c):
+        """At two columns, deleting empties the chosen column instead.
+
+        A one-column row reads as prose, not as a table -- "| just one |"
+        is deliberately not a row, or quoting something between pipes would
+        redraw it as a grid -- so two columns is the floor. Removing the
+        table outright is its own menu entry.
+        """
+        context = self._grid_op_context(info)
+        if not context:
+            return
+        first, nrows, ncols = context
+        rows = self._grid_read_rows(first, nrows)
+        if ncols <= 2:
+            for row in rows:
+                if c < len(row):
+                    row[c] = ""
+            rows = self._dissolve_orphan_markers(rows)
+        else:
+            spans, _covered = core_tables.merge_map(rows)
+            for (ar, ac), (rs, cs) in spans.items():
+                if ac <= c < ac + cs:
+                    for rr in range(ar, ar + rs):
+                        for cc in range(ac, ac + cs):
+                            if (rr, cc) != (ar, ac) and cc < len(rows[rr]):
+                                rows[rr][cc] = ""
+            for row in rows:
+                if c < len(row):
+                    del row[c]
+            rows = self._dissolve_orphan_markers(rows)
+        self._grid_replace_block(first, nrows, rows)
+        self._grid_after_op(first)
+
+    def _grid_set_marker(self, info, r, c, marker):
+        context = self._grid_op_context(info)
+        if not context:
+            return
+        first, nrows, _ncols = context
+        rows = self._grid_read_rows(first, nrows)
+        if r < len(rows) and c < len(rows[r]):
+            rows[r][c] = marker
+        self._grid_replace_block(first, nrows, rows)
+        self._grid_after_op(first)
+
+    def _grid_split(self, info, r, c):
+        context = self._grid_op_context(info)
+        if not context:
+            return
+        first, nrows, _ncols = context
+        rows = self._grid_read_rows(first, nrows)
+        spans, _covered = core_tables.merge_map(rows)
+        for (ar, ac), (rs, cs) in spans.items():
+            if ar <= r < ar + rs and ac <= c < ac + cs:
+                for rr in range(ar, ar + rs):
+                    for cc in range(ac, ac + cs):
+                        if (rr, cc) != (ar, ac) and cc < len(rows[rr]):
+                            rows[rr][cc] = ""
+                break
+        self._grid_replace_block(first, nrows, rows)
+        self._grid_after_op(first)
+
+    def _grid_delete_table(self, info):
+        first = self._grid_first_line(info)
+        if first is None:
+            return
+        nrows = info["nrows"]
+        self._commit_cell_editor()
+        self._teardown_table_grids()
+        self.body_text.delete(f"{first}.0", f"{first + nrows - 1}.end +1c")
+        self._resync_list_tags()
+        self._render_table_grids()
+        self._schedule_autosave()
+
+    def _grid_copy_cell(self, info, r, c):
+        cell = info["cells"].get((r, c))
+        if cell is None:
+            return
+        try:
+            self.clipboard_clear()
+            self.clipboard_append(cell["value"])
+        except tk.TclError:
+            pass
+
+    def _grid_menu(self, info, event):
+        canvas = info["canvas"]
+        hit = self._grid_cell_at_xy(info, canvas.canvasx(event.x),
+                                    canvas.canvasy(event.y))
+        if hit is None:
+            return "break"
+        r, c = hit
+        cell = info["cells"][(r, c)]
+        menu = tk.Menu(self, tearoff=0, bg=self.colors["card"],
+                       fg=self.colors["text"],
+                       activebackground=self.colors["accent"],
+                       activeforeground="#ffffff")
+
+        def emoji_here():
+            self._open_cell_editor(info, r, c, select=False)
+            editor = getattr(self, "_cell_editor", None)
+            if editor:
+                self._show_emoji_picker(editor["entry"])
+
+        menu.add_command(label="Copy cell",
+                         command=lambda: self._grid_copy_cell(info, r, c))
+        menu.add_command(label="Insert emoji…", command=emoji_here)
+        menu.add_separator()
+        menu.add_command(label="Insert row above",
+                         command=lambda: self._grid_insert_row(info, r))
+        menu.add_command(label="Insert row below",
+                         command=lambda: self._grid_insert_row(info, r + 1))
+        menu.add_command(label="Insert column left",
+                         command=lambda: self._grid_insert_col(info, c))
+        menu.add_command(label="Insert column right",
+                         command=lambda: self._grid_insert_col(info, c + 1))
+        menu.add_separator()
+        merged = cell["rs"] > 1 or cell["cs"] > 1
+        menu.add_command(label="Merge with cell to the left",
+                         state="normal" if c > 0 else "disabled",
+                         command=lambda: self._grid_set_marker(
+                             info, r, c, core_tables.MERGE_LEFT))
+        menu.add_command(label="Merge with cell above",
+                         state="normal" if r > 0 else "disabled",
+                         command=lambda: self._grid_set_marker(
+                             info, r, c, core_tables.MERGE_UP))
+        menu.add_command(label="Split merged cell",
+                         state="normal" if merged else "disabled",
+                         command=lambda: self._grid_split(info, r, c))
+        menu.add_separator()
+        menu.add_command(label="Delete row",
+                         state="normal" if info["nrows"] > 1 else "disabled",
+                         command=lambda: self._grid_delete_row(info, r))
+        menu.add_command(label="Delete column",
+                         command=lambda: self._grid_delete_col(info, c))
+        menu.add_command(label="Delete table",
+                         command=lambda: self._grid_delete_table(info))
+        try:
+            menu.tk_popup(event.x_root, event.y_root)
+        finally:
+            menu.grab_release()
+        return "break"
 
 
     def _configure_table_tag(self, text_widget):
@@ -2229,9 +2634,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if rendered:
             grid = self._grid_at_line(rendered[0])
             if grid is not None:
-                head = self._grid_first_entry(grid)
-                if delta > 0 and head is not None:
-                    head.focus_set()
+                if delta > 0 and grid["cells"]:
+                    self._open_cell_editor(grid, *sorted(grid["cells"])[0])
                 return True
         here = self._cell_at(line_no, column)
         if here is None:
@@ -2286,10 +2690,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._resync_list_tags()
         self._render_table_grids()
         made = self._grid_at_line(first)
-        if made is not None:
-            head = self._grid_first_entry(made)
-            if head is not None:
-                head.focus_set()
+        if made is not None and made["cells"]:
+            self._open_cell_editor(made, *sorted(made["cells"])[0])
         self._schedule_autosave()
         return first
 
@@ -5568,6 +5970,17 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self.table_btn, "Table",
             "Rows live in the note's own text, so a table survives being "
             "exported, shared as a code, or pasted anywhere else")
+
+        self.emoji_btn = tk.Button(
+            format_bar, text="\U0001f600", font=("Segoe UI Emoji", 10),
+            width=2, relief="flat", cursor="hand2",
+            command=self._insert_emoji_from_toolbar)
+        self.track_theme(self.emoji_btn, bg="sidebar", fg="text")
+        self._add_fmt_item(self.emoji_btn, padx=(0, 2), ipady=2)
+        self._attach_tooltip(
+            self.emoji_btn, "Emoji",
+            "Lands in the open table cell if there is one, otherwise at "
+            "the cursor in the note")
 
         text_frame = tk.Frame(self.editor)
         self.track_theme(text_frame, bg="card")
