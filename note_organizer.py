@@ -1303,6 +1303,16 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         """
         if not hasattr(self, "body_text"):
             return
+        # Tearing the grids down shrinks the editor page for a moment, and
+        # the page's own keep-short-content-at-top handler read that as a
+        # short note and snapped the scroll to the top -- on every insert,
+        # and on every commit that re-rendered. The handlers run from the
+        # event queue, so the view is restored after them, not merely after
+        # this function.
+        try:
+            restore_view = self.editor_canvas.yview()[0]
+        except (tk.TclError, AttributeError, IndexError):
+            restore_view = None
         self._teardown_table_grids()
         # Anything a plain destroy left behind -- a dead window dumps with an
         # empty name -- is swept out bottom-up, so the deletions do not move
@@ -1326,6 +1336,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             total = int(self.body_text.index("end-1c").split(".")[0])
             if blocks[-1][1] + 1 >= total:
                 self.body_text.insert("end", "\n")
+        if restore_view is not None:
+            self.after_idle(
+                lambda at=restore_view: self._restore_editor_view(at))
 
     def _grid_fonts(self):
         key = (self.editor_font_family, self.editor_font_size)
@@ -1825,6 +1838,22 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self._open_cell_editor(info, *pressed[1])
         return "break"
 
+    @staticmethod
+    def _tk_units(text):
+        """How many index steps *text* is wide in a Tk Entry.
+
+        Tk counts UTF-16 units, so an astral character -- every emoji past
+        the basic plane -- is two steps, and advancing by Python's len()
+        parks the caret inside the character just inserted.
+        """
+        return sum(2 if ord(ch) > 0xFFFF else 1 for ch in text)
+
+    def _restore_editor_view(self, at):
+        try:
+            self.editor_canvas.yview_moveto(at)
+        except tk.TclError:
+            pass
+
     def _grid_click(self, info, event):
         canvas = info["canvas"]
         hit = self._grid_cell_at_xy(info, canvas.canvasx(event.x),
@@ -2151,11 +2180,19 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         """Copied cells land as a block starting at the clicked cell,
         growing the table downward when they need more rows."""
         matrix = getattr(self, "_grid_cell_clip", None)
-        if not matrix:
-            try:
-                raw = self.clipboard_get()
-            except tk.TclError:
-                return
+        try:
+            raw = self.clipboard_get()
+        except tk.TclError:
+            raw = None
+        # The system clipboard is the ground truth. The remembered matrix is
+        # only trusted while it still MATCHES the clipboard -- someone who
+        # copied something newer meant the newer thing, and the remembered
+        # matrix used to shadow it.
+        if matrix is not None and raw is not None:
+            remembered = "\n".join("\t".join(row) for row in matrix)
+            if raw != remembered:
+                matrix = None
+        if not matrix and raw:
             matrix = [line.split("\t") for line in raw.split("\n") if line]
         if not matrix:
             return
@@ -2187,6 +2224,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         cell = info["cells"].get((r, c))
         if cell is None:
             return
+        # Remembered exactly like a multi-cell copy: pasting cells used to
+        # prefer whatever matrix an OLDER copy had remembered, so a fresh
+        # single-cell copy pasted stale content.
+        self._grid_cell_clip = [[cell["value"]]]
         try:
             self.clipboard_clear()
             self.clipboard_append(cell["value"])
@@ -2408,6 +2449,22 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         same way clicking a list button again turns the list off -- a button
         that is already pressed should undo itself rather than do nothing.
         """
+        # With a table cell open, the toolbar buttons mean that cell --
+        # reaching for the same button that aligns a paragraph is exactly
+        # what someone centring a cell will try first.
+        editor = getattr(self, "_cell_editor", None)
+        if editor is not None:
+            info, r, c = editor["info"], editor["r"], editor["c"]
+            anchor_line = self._grid_first_line(info)
+            self._grid_set_alignment(info, (r, c, r, c), {
+                "center": core_tables.ALIGN_CENTER,
+                "right": core_tables.ALIGN_RIGHT,
+            }.get(align, core_tables.ALIGN_LEFT))
+            fresh = (self._grid_at_line(anchor_line)
+                     if anchor_line is not None else None)
+            if fresh is not None and (r, c) in fresh["cells"]:
+                self._open_cell_editor(fresh, r, c, select=False)
+            return
         first, last = self._selected_line_range()
         if all(self._paragraph_align_of(self.body_text, n) == align
                for n in range(first, last + 1)):
@@ -4134,7 +4191,13 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 else:
                     pos = text_widget.index(tk.INSERT)
                     text_widget.insert(pos, emoji)
-                    text_widget.icursor(pos + len(emoji))
+                    # A Tk Entry counts UTF-16 units, not characters, so an
+                    # astral emoji is TWO steps wide. Advancing by Python's
+                    # len() parked the caret between the surrogates of the
+                    # emoji just placed, and the next one speared it apart
+                    # -- which the save's mend then faithfully turned into
+                    # replacement-character diamonds.
+                    text_widget.icursor(pos + self._tk_units(emoji))
                 # Best-effort: nudge autosave if this field participates in it.
                 # skip_word_count avoids re-reading the whole body on every
                 # single click — that's what made rapid emoji-clicking laggy.

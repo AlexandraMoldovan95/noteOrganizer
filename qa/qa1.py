@@ -2403,6 +2403,105 @@ app.update()
 check('a table line sheds paragraph alignment, so the table stays put',
       not app.body_text.tag_ranges('align_center'))
 
+# ---- THE SCROLL STAYS PUT, AND EVERYTHING LANDS IN THE OPEN CELL ----
+# Tearing the grids down shrinks the editor page for a moment, and the
+# page's keep-short-content-at-top handler snapped the scroll to the top on
+# every insert and every re-rendering commit.
+set_body('filler line\n' * 60)
+app.body_text.mark_set('insert', 'end -1c')
+app.update()
+app.editor_canvas.yview_moveto(1.0)
+app.update()
+_scroll_before = app.editor_canvas.yview()[0]
+app._insert_table(2, 2)
+# The snap this guards against comes from a queued handler, which a
+# headless run may never fire -- so the snap is forced here, between the
+# insert and the idle restore the render scheduled. If the restore is
+# gone, the page stays snapped and this fails.
+app.editor_canvas.yview_moveto(0.0)
+app.update()
+app.update_idletasks()
+app.update()
+_scroll_after = app.editor_canvas.yview()[0]
+check(f'inserting a table keeps the page where it was '
+      f'({_scroll_before:.3f} -> {_scroll_after:.3f})',
+      abs(_scroll_after - _scroll_before) < 0.1 and _scroll_after > 0.05)
+
+# Tk counts UTF-16 units, so an astral emoji is two steps wide; advancing
+# by len() parked the caret inside the emoji, and the next insert speared
+# it apart into what the mend then turned into replacement diamonds.
+check('an astral character is two Tk units wide',
+      app._tk_units(chr(0xD83D) + chr(0xDE00)) == 2
+      and app._tk_units(chr(0x1F600)) == 2 and app._tk_units('ab') == 2)
+
+# The calculator's insert lands in the open cell, cursor past what landed.
+_t9 = app._grid_at_line(app._grid_first_line(app._table_grids[0]))
+app._open_cell_editor(_t9, 1, 1)
+app._calc_insert_formula('2+2=4')
+check(f'the calculator lands in the open cell '
+      f'({app._cell_editor["entry"].get()!r})',
+      app._cell_editor is not None
+      and app._cell_editor['entry'].get() == '2+2=4'
+      and int(app._cell_editor['entry'].index('insert')) == 5)
+app._commit_cell_editor()
+app.update()
+
+# The toolbar alignment buttons mean the open cell while one is open.
+_t9 = app._grid_at_line(app._grid_first_line(app._table_grids[0]))
+app._open_cell_editor(_t9, 0, 0)
+_e9 = app._cell_editor['entry']
+_e9.delete(0, 'end')
+_e9.insert(0, 'Titlu')
+app._set_paragraph_align('center')
+app.update()
+_first9 = app._grid_first_line(app._table_grids[0])
+check('the toolbar centre button centres the open cell',
+      core_tables.cell_alignments(
+          app.body_text.get(f'{_first9}.0', f'{_first9}.end'))[0] == 'center')
+check('and the editor reopens on that same cell',
+      app._cell_editor is not None
+      and (app._cell_editor['r'], app._cell_editor['c']) == (0, 0))
+app._commit_cell_editor()
+app.update()
+
+# Copy cell remembers like copy cells, and the system clipboard outranks a
+# stale remembered matrix -- a fresh copy used to paste older content.
+app._grid_cell_clip = [['VECHI', 'STALE']]
+_t9 = app._grid_at_line(_first9)
+app._grid_copy_cell(_t9, 0, 0)
+app._grid_paste_cells(_t9, 1, 0)
+app.update()
+_t9 = app._grid_at_line(_first9)
+check(f'a fresh single-cell copy is what pastes '
+      f'({_t9["cells"][(1, 0)]["value"]!r})',
+      _t9['cells'][(1, 0)]['value'] == 'Titlu')
+app._grid_cell_clip = [['MEMORAT']]
+app.clipboard_clear()
+app.clipboard_append('EXTERN\tNOU')
+app._grid_paste_cells(_t9, 1, 0)
+app.update()
+_t9 = app._grid_at_line(_first9)
+check('a newer system clipboard outranks the remembered matrix',
+      _t9['cells'][(1, 0)]['value'] == 'EXTERN'
+      and _t9['cells'][(1, 1)]['value'] == 'NOU')
+
+# The remembered matrix earns its keep on the one copy the clipboard
+# cannot describe: an empty cell. Its clipboard text is '', which a parser
+# reads as nothing to paste -- only the matrix knows a cell was copied.
+app._open_cell_editor(_t9, 0, 1)
+app._cell_editor['entry'].delete(0, 'end')
+app._commit_cell_editor()
+app.update()
+_t9 = app._grid_at_line(_first9)
+app._grid_copy_cell(_t9, 0, 1)
+app._grid_paste_cells(_t9, 1, 1)
+app.update()
+_t9 = app._grid_at_line(_first9)
+check(f'copying an empty cell pastes emptiness, not nothing '
+      f'({_t9["cells"][(1, 1)]["value"]!r})',
+      _t9['cells'][(1, 1)]['value'] == '')
+set_body('')
+
 # The toolbar has an emoji button, and it knows about open cells.
 check('the toolbar has an emoji button', hasattr(app, 'emoji_btn'))
 
