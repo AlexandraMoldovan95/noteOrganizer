@@ -2502,6 +2502,117 @@ check(f'copying an empty cell pastes emptiness, not nothing '
       _t9['cells'][(1, 1)]['value'] == '')
 set_body('')
 
+# ---- CTRL+C / CTRL+V SPEAK THE CELL SELECTION ----
+# The exact reported flow: select two cells, Ctrl+C, select two other
+# cells, Ctrl+V. It used to copy the empty TEXT selection -- leaving last
+# week's clipboard in charge -- and paste into the body beside the table.
+set_body('')
+app.clipboard_clear()
+app.clipboard_append('VECHI DE SAPTAMANA TRECUTA')
+_stub_clipboard(html='<table><tr><td>Unu</td><td>Doi</td></tr>'
+                     '<tr><td></td><td></td></tr></table>')
+app._on_body_paste()
+app.update()
+_tX = app._grid_at_line(1)
+_linesX = len(body().split('\n'))
+
+
+def _select_cells(g, a, bcell):
+    _ca, _cb = g['cells'][a], g['cells'][bcell]
+    g['canvas'].event_generate('<Button-1>',
+                               x=int(_ca['x'] + 4), y=int(_ca['y'] + 4))
+    g['canvas'].event_generate('<B1-Motion>',
+                               x=int(_cb['x'] + 4), y=int(_cb['y'] + 4))
+    g['canvas'].event_generate('<ButtonRelease-1>',
+                               x=int(_cb['x'] + 4), y=int(_cb['y'] + 4))
+    app.update()
+
+
+_select_cells(_tX, (0, 0), (0, 1))
+take_focus(app.body_text)
+app.body_text.event_generate('<Control-c>')
+app.update()
+_select_cells(_tX, (1, 0), (1, 1))
+app.body_text.event_generate('<Control-v>')
+app.update()
+_tX = app._grid_at_line(1)
+check(f'Ctrl+C/Ctrl+V move the selected cells '
+      f'({_tX["cells"][(1, 0)]["value"]!r}, {_tX["cells"][(1, 1)]["value"]!r})',
+      _tX['cells'][(1, 0)]['value'] == 'Unu'
+      and _tX['cells'][(1, 1)]['value'] == 'Doi')
+check('nothing lands outside the table',
+      len(body().split('\n')) == _linesX
+      and 'VECHI' not in body())
+
+# Ctrl+V inside an open cell spreads a copied block from that cell. The
+# target row is cleared first: it already held these values from the check
+# above, and a spread that did nothing would have passed unnoticed.
+app._grid_copy_selection({'info': _tX, 'box': (0, 0, 0, 1),
+                          'cells': [(0, 0), (0, 1)]})
+app._grid_fill_selection({'info': _tX, 'box': (1, 0, 1, 1)}, '')
+app.update()
+_tX = app._grid_at_line(1)
+check('the target row really is empty before the spread',
+      _tX['cells'][(1, 0)]['value'] == ''
+      and _tX['cells'][(1, 1)]['value'] == '')
+app._open_cell_editor(_tX, 1, 0)
+app.update()          # focus settles; synthetic key events follow focus
+app._cell_editor['entry'].event_generate('<Control-v>')
+app.update()
+_tX = app._grid_at_line(1)
+check('Ctrl+V in a cell spreads the copied block from it',
+      _tX['cells'][(1, 0)]['value'] == 'Unu'
+      and _tX['cells'][(1, 1)]['value'] == 'Doi')
+
+# The editor grows with its content instead of hiding the overflow.
+app._open_cell_editor(_tX, 1, 0)
+app.update()          # focus settles; synthetic key events follow focus
+_edX = app._cell_editor
+_w0 = int(float(_tX['canvas'].itemcget(_edX['win'], 'width')))
+_edX['entry'].delete(0, 'end')
+_edX['entry'].insert(0, 'un continut mult mai lung decat coloana initiala')
+_edX['entry'].event_generate('<KeyRelease>')
+app.update()
+_w1 = int(float(_tX['canvas'].itemcget(_edX['win'], 'width')))
+check(f'the editor grows while typing ({_w0} -> {_w1})', _w1 > _w0 + 40)
+app._commit_cell_editor()
+app.update()
+
+# A wide table keeps its sideways place through the rebuild a commit
+# triggers, and the body keeps its own scroll through any rebuild.
+set_body('')
+_stub_clipboard(html='<table><tr>'
+                + ''.join(f'<th>Coloana cu nume lung {i}</th>'
+                          for i in range(9))
+                + '</tr><tr>'
+                + ''.join(f'<td>v{i}</td>' for i in range(9))
+                + '</tr></table>')
+app._on_body_paste()
+app.update()
+app.update_idletasks()
+_tX = app._grid_at_line(1)
+_tX['canvas'].xview_moveto(0.5)
+app.update()
+_x0 = _tX['canvas'].xview()[0]
+app._open_cell_editor(_tX, 1, 5)
+_edX = app._cell_editor
+_edX['entry'].delete(0, 'end')
+_edX['entry'].insert(0, 'modificare care lateste coloana vizibil')
+app._commit_cell_editor()
+app.update()
+app.update()
+_tX = app._grid_at_line(1)
+_x1 = _tX['canvas'].xview()[0]
+check(f'a wide table keeps its sideways place through a commit '
+      f'({_x0:.3f} -> {_x1:.3f})',
+      abs(_x1 - _x0) < 0.15 and _x1 > 0.1)
+
+# Deliberately not checked here: the body's own yview across a rebuild.
+# Teardown and rebuild run synchronously with no relayout between them, so
+# headless the view never moves and a check could not fail -- the restore
+# in _render_table_grids is insurance for the real, asynchronous session.
+set_body('')
+
 # The toolbar has an emoji button, and it knows about open cells.
 check('the toolbar has an emoji button', hasattr(app, 'emoji_btn'))
 

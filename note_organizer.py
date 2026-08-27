@@ -1313,6 +1313,20 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             restore_view = self.editor_canvas.yview()[0]
         except (tk.TclError, AttributeError, IndexError):
             restore_view = None
+        try:
+            restore_body = self.body_text.yview()[0]
+        except (tk.TclError, IndexError):
+            restore_body = None
+        # A wide table's sideways position is its reader's place in it;
+        # a rebuild used to snap every one back to its first column.
+        restore_x = {}
+        for info in getattr(self, "_table_grids", []):
+            line = self._grid_first_line(info)
+            if line is not None and info.get("canvas") is not None:
+                try:
+                    restore_x[line] = info["canvas"].xview()[0]
+                except (tk.TclError, IndexError):
+                    pass
         self._teardown_table_grids()
         # Anything a plain destroy left behind -- a dead window dumps with an
         # empty name -- is swept out bottom-up, so the deletions do not move
@@ -1336,6 +1350,18 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             total = int(self.body_text.index("end-1c").split(".")[0])
             if blocks[-1][1] + 1 >= total:
                 self.body_text.insert("end", "\n")
+        for info in getattr(self, "_table_grids", []):
+            line = self._grid_first_line(info)
+            if line in restore_x:
+                try:
+                    info["canvas"].xview_moveto(restore_x[line])
+                except tk.TclError:
+                    pass
+        if restore_body is not None:
+            try:
+                self.body_text.yview_moveto(restore_body)
+            except tk.TclError:
+                pass
         if restore_view is not None:
             self.after_idle(
                 lambda at=restore_view: self._restore_editor_view(at))
@@ -1395,6 +1421,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._cell_editor = {"entry": entry, "win": win, "info": info,
                              "r": r, "c": c}
         entry.focus_set()
+        # Destroying the previous editor hands focus to the root a moment
+        # later, clobbering the focus_set above. Re-asserting after the
+        # queue settles keeps the keyboard where the user is looking --
+        # and synthetic key events, which follow focus, reach the entry.
+        self.after_idle(lambda e=entry: e.focus_set()
+                        if e.winfo_exists() else None)
         entry.bind("<Tab>", lambda _e: self._editor_step(+1))
         entry.bind("<Shift-Tab>", lambda _e: self._editor_step(-1))
         entry.bind("<Return>", lambda _e: self._editor_return())
@@ -1403,12 +1435,19 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         entry.bind("<FocusOut>",
                    lambda _e, this=entry: self.after_idle(
                        lambda: self._maybe_close_cell_editor(this)))
-        entry.bind("<KeyRelease>", lambda _e: self._schedule_autosave())
+        entry.bind("<KeyRelease>",
+                   lambda _e, w=win, cv=canvas: self._grow_cell_editor(w, cv))
         entry.bind("<MouseWheel>", self._forward_grid_wheel)
         # The floating editor sits exactly over its cell, so a right-click
         # lands on it, not the canvas -- commit and show the same menu.
         entry.bind("<Button-3>",
                    lambda e, i=info: self._editor_context_menu(i, e))
+        # Ctrl+V with a copied block of cells spreads it from this cell;
+        # plain text falls through to the Entry's own paste.
+        entry.bind("<Control-v>",
+                   lambda e, i=info: self._editor_paste(i))
+        entry.bind("<Control-V>",
+                   lambda e, i=info: self._editor_paste(i))
         # Keep the edited cell inside the scrolled viewport.
         try:
             shown = int(float(canvas.cget("width")))
@@ -2234,6 +2273,55 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         except tk.TclError:
             pass
 
+    def _grow_cell_editor(self, win, canvas):
+        """The editor widens over its neighbours as its content grows.
+
+        A spreadsheet does exactly this: the cell itself resizes on commit,
+        but while typing, the overlay simply spreads -- hiding the overflow
+        until click-away read as the emoji not arriving at all.
+        """
+        self._schedule_autosave()
+        editor = getattr(self, "_cell_editor", None)
+        if editor is None:
+            return
+        header_font, cell_font = self._grid_fonts()
+        font = header_font if editor["r"] == 0 else cell_font
+        try:
+            needed = font.measure(editor["entry"].get()) + 24
+            if needed > int(float(canvas.itemcget(win, "width"))):
+                canvas.itemconfigure(win, width=needed)
+        except tk.TclError:
+            pass
+
+    def _editor_paste(self, info):
+        """Ctrl+V in a cell: a copied block of cells spreads from here.
+
+        Only when the clipboard actually holds a block -- several cells, or
+        the remembered matrix -- so pasting a plain word into a cell still
+        behaves like typing it.
+        """
+        editor = getattr(self, "_cell_editor", None)
+        if editor is None:
+            return None
+        try:
+            raw = self.clipboard_get()
+        except tk.TclError:
+            raw = None
+        remembered = getattr(self, "_grid_cell_clip", None)
+        block = ("\t" in (raw or "") or "\n" in (raw or "").strip()
+                 or (remembered is not None and raw is not None
+                     and raw == "\n".join("\t".join(r) for r in remembered)))
+        if not block:
+            return None
+        r, c = editor["r"], editor["c"]
+        anchor_line = self._grid_first_line(info)
+        self._commit_cell_editor()
+        fresh = (self._grid_at_line(anchor_line)
+                 if anchor_line is not None else None)
+        if fresh is not None:
+            self._grid_paste_cells(fresh, r, c)
+        return "break"
+
     def _editor_context_menu(self, info, event):
         editor = getattr(self, "_cell_editor", None)
         if editor is None:
@@ -2578,6 +2666,15 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         wrong reading it -- returning None leaves the default handler to
         run, which is exactly what happened before this existed.
         """
+        # With cells selected, Ctrl+V means those cells -- it used to
+        # paste into the body beside the table.
+        sel = getattr(self, "_grid_sel", None)
+        if sel is not None:
+            first = self._grid_first_line(sel["info"])
+            if first is not None:
+                self._grid_paste_cells(sel["info"],
+                                       sel["box"][0], sel["box"][1])
+                return "break"
         if self._paste_formatted():
             return "break"
         # Plain paste: Tk inserts the text after this returns, so the list
@@ -2672,7 +2769,15 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
         The plain text goes on the clipboard too, so pasting into something
         that cannot read markup still gives words rather than tags.
+
+        With table cells selected, Ctrl+C means those cells: it used to
+        copy the (empty) text selection instead, which left the OLD
+        clipboard in place -- pasting then produced last week's copy.
         """
+        sel = getattr(self, "_grid_sel", None)
+        if sel is not None:
+            self._grid_copy_selection(sel)
+            return "break"
         try:
             start = self.body_text.index("sel.first")
             end = self.body_text.index("sel.last")
