@@ -215,6 +215,7 @@ from noteorganizer.core.storage import (
     TRASH_RETENTION_DAYS,
     load_settings,
     save_settings,
+    mend_surrogates,
     normalize_template,
     load_templates,
     save_templates,
@@ -1483,6 +1484,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         cell = info["cells"].get((r, c))
         if value is not None and cell is not None:
             value = value.replace(core_tables.CELL, "/").strip()
+            value = mend_surrogates(value)
             if value != cell["value"]:
                 self._write_cell(info, r, c, value)
                 cell["value"] = value

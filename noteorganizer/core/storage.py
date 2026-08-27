@@ -67,6 +67,7 @@ def load_settings():
 
 
 def save_settings(settings):
+    settings = mend_surrogates(settings)
     try:
         with open(paths.SETTINGS_FILE, "w", encoding="utf-8") as f:
             json.dump(settings, f, indent=2)
@@ -309,6 +310,31 @@ def load_notes(version_change=None):
     return notes, report
 
 
+def mend_surrogates(value):
+    """Recombine UTF-16 surrogate pairs into the characters they spell.
+
+    Tk stores text in UTF-16 and hands astral characters -- every emoji
+    past the basic plane -- to Python as two surrogate code points. They
+    display, but they cannot be UTF-8 encoded, so the first emoji typed
+    into a note killed every save after it. A proper pair becomes the real
+    character; a lone surrogate, which spells nothing, becomes U+FFFD
+    rather than poisoning the file.
+    """
+    if isinstance(value, str):
+        try:
+            value.encode("utf-8")
+            return value
+        except UnicodeEncodeError:
+            return value.encode("utf-16", "surrogatepass").decode(
+                "utf-16", "replace")
+    if isinstance(value, dict):
+        return {mend_surrogates(k): mend_surrogates(v)
+                for k, v in value.items()}
+    if isinstance(value, list):
+        return [mend_surrogates(item) for item in value]
+    return value
+
+
 def save_notes(notes):
     """Write notes to disk.
 
@@ -324,12 +350,21 @@ def save_notes(notes):
     try:
         tmp_path = paths.DATA_FILE + ".tmp"
         with open(tmp_path, "w", encoding="utf-8") as f:
-            json.dump(notes, f, indent=2, ensure_ascii=False)
+            json.dump(mend_surrogates(notes), f, indent=2,
+                      ensure_ascii=False)
         # Atomic replace: a crash mid-write can't corrupt the real file,
         # it either fully updates or stays as it was.
         os.replace(tmp_path, paths.DATA_FILE)
         return True, None
-    except (IOError, OSError) as exc:
+    # ValueError covers UnicodeEncodeError, TypeError the unserializable:
+    # the old clause caught only I/O, so an emoji typed into a note flew
+    # straight past it, autosave crash-logged sixteen times in a row, and
+    # every edit after the first emoji lived only in the running app.
+    except (IOError, OSError, ValueError, TypeError) as exc:
+        try:
+            os.remove(tmp_path)
+        except OSError:
+            pass
         return False, exc
 
 
