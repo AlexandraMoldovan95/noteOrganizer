@@ -1084,6 +1084,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # The table face follows the base size too, or a table would stay at
         # whatever size it was built at while the text around it moved.
         self._configure_table_tag(self.body_text)
+        # Grids carry their own fonts and cell widths, so they are rebuilt
+        # at the new size rather than left at the old one.
+        self._render_table_grids()
         self._refresh_format_buttons()
 
     def _marker_room(self, kind):
@@ -1178,13 +1181,17 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             was_gravity = None
         for offset, line in enumerate(lines):
             row = first + offset
+            # A rendered grid's window occupies column 0 of its first line,
+            # so edits on that line land one Tk column further right than
+            # the offsets computed from get(), which skips windows.
+            base = self._col_base(row)
             for at, delta in core_tables.pad_ops(line, widths):
                 changed = True
                 if delta > 0:
-                    self.body_text.insert(f"{row}.{at}", " " * delta)
+                    self.body_text.insert(f"{row}.{at + base}", " " * delta)
                 else:
-                    self.body_text.delete(f"{row}.{at}",
-                                          f"{row}.{at + (-delta)}")
+                    self.body_text.delete(f"{row}.{at + base}",
+                                          f"{row}.{at + base + (-delta)}")
         if was_gravity:
             try:
                 self.body_text.mark_gravity("insert", was_gravity)
@@ -1216,6 +1223,244 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         leaving = self._table_block_at(was)
         if leaving and leaving != self._table_block_at(now):
             self._align_table_block(was)
+            # A table that has just been left is finished with, which is the
+            # moment it turns from typed pipes into a drawn grid.
+            self._render_table_grids()
+
+    # ---------- Tables drawn as real grids ----------
+    #
+    # The pipe text stays the stored form and the single source of truth;
+    # the grid is only how a table is shown and edited. Search, share codes,
+    # export, word counts and save never know the grid exists, because the
+    # text they read is the text the grid writes back into. The spike that
+    # cleared this approach also measured the one hazard: _char_offset counts
+    # with "chars", which skips embedded windows, so formatting offsets are
+    # safe -- but Tk *index* columns on the window's own line shift by one,
+    # which is what _col_base is for.
+
+    TABLE_HIDE_TAG = "table_hidden"
+
+    def _grid_first_line(self, info):
+        """The 1-based line a grid currently starts on, or None if gone.
+
+        Read from a mark rather than remembered as a number: text edited
+        above the table moves it, and a mark moves with it.
+        """
+        try:
+            return int(self.body_text.index(info["mark"]).split(".")[0])
+        except (tk.TclError, KeyError, ValueError):
+            return None
+
+    def _grid_at_line(self, line_no):
+        for info in getattr(self, "_table_grids", []):
+            if self._grid_first_line(info) == line_no:
+                return info
+        return None
+
+    def _col_base(self, line_no):
+        """1 when a grid window occupies column 0 of this line, else 0."""
+        return 1 if self._grid_at_line(line_no) is not None else 0
+
+    def _teardown_table_grids(self):
+        for info in getattr(self, "_table_grids", []):
+            # Deleting the window's character is what actually removes it
+            # from the text. Destroying the widget alone leaves the slot
+            # behind as a phantom index that still shifts every column on
+            # its line -- one more per re-render, which is how "a/b" once
+            # became " |a/be" as the edits landed a column further left
+            # each time.
+            try:
+                self.body_text.delete(self.body_text.index(info["frame"]))
+            except tk.TclError:
+                try:
+                    info["frame"].destroy()
+                except tk.TclError:
+                    pass
+            try:
+                self.body_text.mark_unset(info["mark"])
+            except tk.TclError:
+                pass
+        self._table_grids = []
+        try:
+            self.body_text.tag_remove(self.TABLE_HIDE_TAG, "1.0", "end")
+        except tk.TclError:
+            pass
+
+    def _render_table_grids(self):
+        """Draw every table in the note as a grid of real cells.
+
+        Torn down and rebuilt whole: a grid is cheap to make, and tracking
+        which of them an arbitrary edit invalidated is not. Never called
+        while focus is in a cell -- rebuilding would destroy the widget
+        being typed into -- which the call sites guarantee: they all run
+        with focus in the text or on a toolbar control.
+        """
+        if not hasattr(self, "body_text"):
+            return
+        self._teardown_table_grids()
+        # Anything a plain destroy left behind -- a dead window dumps with an
+        # empty name -- is swept out bottom-up, so the deletions do not move
+        # the indices still to be visited.
+        for _kind, name, index in reversed(
+                self.body_text.dump("1.0", "end", window=True)):
+            if not name:
+                try:
+                    self.body_text.delete(index)
+                except tk.TclError:
+                    pass
+        self.body_text.tag_configure(self.TABLE_HIDE_TAG, elide=True)
+        text = self.body_text.get("1.0", "end-1c")
+        for first0, last0 in core_tables.find_blocks(text):
+            self._build_table_grid(first0 + 1, last0 + 1)
+
+    def _build_table_grid(self, first, last):
+        b = self.body_text
+        rows = [core_tables.split_row(b.get(f"{n}.0", f"{n}.end"))
+                for n in range(first, last + 1)]
+        widths = core_tables.column_widths(rows)
+        if not widths:
+            return
+        # The 1px gaps between cells show the frame behind them, and that is
+        # what draws the grid lines: every rule exactly once, horizontal and
+        # vertical, without the doubled edges adjacent borders would give.
+        frame = tk.Frame(b, bg=hairline(self.colors))
+        header_font = (self.editor_font_family, self.editor_font_size, "bold")
+        cell_font = (self.editor_font_family, self.editor_font_size)
+        entries = []
+        for r, row in enumerate(rows):
+            entries.append([])
+            for c in range(len(widths)):
+                entry = tk.Entry(
+                    frame, relief="flat", bd=0,
+                    width=widths[c] + 1,
+                    font=header_font if r == 0 else cell_font,
+                    bg=(inset_surface(self.colors) if r == 0
+                        else self.colors["card"]),
+                    fg=self.colors["text"],
+                    insertbackground=self.colors["text"],
+                )
+                entry.insert(0, row[c] if c < len(row) else "")
+                entry.grid(row=r, column=c, sticky="nsew",
+                           padx=(1, 1 if c == len(widths) - 1 else 0),
+                           pady=(1, 1 if r == len(rows) - 1 else 0),
+                           ipadx=6, ipady=5)
+                entry.bind("<FocusOut>", lambda _e: self._flush_table_grids())
+                entry.bind("<KeyRelease>",
+                           lambda _e: self._schedule_autosave())
+                entries[r].append(entry)
+        mark = f"table_grid_{id(frame)}"
+        b.mark_set(mark, f"{first}.0")
+        b.mark_gravity(mark, "left")
+        info = {"frame": frame, "entries": entries, "mark": mark,
+                "nrows": len(rows), "ncols": len(widths)}
+        # Tab at the very last cell adds a row; Shift+Tab out of the first
+        # cell stays put, since silently leaving the table would be worse
+        # than staying. Both mirror what the text path already does.
+        entries[-1][-1].bind("<Tab>", lambda _e, i=info: self._grid_add_row(i))
+        entries[0][0].bind("<Shift-Tab>", lambda _e: "break")
+        b.window_create(f"{first}.0", window=frame, padx=1, pady=6)
+        # The window itself sits at column 0; the pipe text starts at column
+        # 1 and is hidden through the block's last line. Hidden, not removed:
+        # get() still returns it, offsets still count it, save still keeps it.
+        b.tag_add(self.TABLE_HIDE_TAG, f"{first}.1", f"{last}.end")
+        self._table_grids = getattr(self, "_table_grids", [])
+        self._table_grids.append(info)
+
+    def _flush_table_grids(self):
+        """Write every cell's current value back into the hidden text.
+
+        Cell by cell and only where changed, so the tags on everything else
+        stay where they were -- the same reason re-padding edits spaces
+        rather than rewriting lines. Called from capture_editor_state, so
+        autosave, tab switching and the dirty poll all see cell edits.
+        """
+        if not hasattr(self, "body_text"):
+            return False
+        b = self.body_text
+        changed = []
+        for info in list(getattr(self, "_table_grids", [])):
+            first = self._grid_first_line(info)
+            if first is None:
+                continue
+            for r, row_entries in enumerate(info["entries"]):
+                line_no = first + r
+                base = 1 if r == 0 else 0
+                line = b.get(f"{line_no}.0", f"{line_no}.end")
+                bounds = core_tables.cell_bounds(line)
+                for c, entry in enumerate(row_entries):
+                    if c >= len(bounds):
+                        continue
+                    try:
+                        value = entry.get()
+                    except tk.TclError:
+                        continue
+                    # A pipe typed into a cell would split the row apart the
+                    # moment it reached the text, so it never reaches it.
+                    value = value.replace(core_tables.CELL, "/").strip()
+                    start, end = bounds[c]
+                    if line[start:end] == value:
+                        continue
+                    b.delete(f"{line_no}.{start + base}",
+                             f"{line_no}.{end + base}")
+                    b.insert(f"{line_no}.{start + base}", value)
+                    if info not in changed:
+                        changed.append(info)
+                    line = b.get(f"{line_no}.0", f"{line_no}.end")
+                    bounds = core_tables.cell_bounds(line)
+        for info in changed:
+            first = self._grid_first_line(info)
+            if first is not None:
+                self._align_table_block(first)
+            # Columns follow their content: the widest value in a column
+            # sets every cell in it, never narrower than the floor.
+            for c in range(info["ncols"]):
+                column = [row[c] for row in info["entries"] if c < len(row)]
+                want = max([core_tables.MIN_COLUMN]
+                           + [len(e.get()) for e in column]) + 1
+                for e in column:
+                    e.configure(width=want)
+        if changed:
+            self._schedule_autosave()
+        return bool(changed)
+
+    def _grid_add_row(self, info):
+        """Tab at the last cell: make somewhere to go, as the text path does."""
+        first = self._grid_first_line(info)
+        if first is None:
+            return "break"
+        self._flush_table_grids()
+        last = first + info["nrows"] - 1
+        self.body_text.insert(
+            f"{last}.end",
+            "\n" + core_tables.blank_table(1, info["ncols"])[0])
+        self._align_table_block(first)
+        self._resync_list_tags()
+        self._render_table_grids()
+        fresh = self._grid_at_line(first)
+        if fresh is not None and fresh["entries"]:
+            fresh["entries"][-1][0].focus_set()
+        self._schedule_autosave()
+        return "break"
+
+    def _caret_out_of_hidden(self, _event=None):
+        """Keep the caret out of a rendered table's hidden text.
+
+        Tk still lets it wander in with arrows or a stray click, and typing
+        there would edit characters nobody can see. Moved just past the
+        block instead -- on KeyPress so the key lands somewhere visible,
+        and on release so arrow keys settle outside too.
+        """
+        b = self.body_text
+        try:
+            if self.TABLE_HIDE_TAG not in b.tag_names("insert"):
+                return None
+            containing = b.tag_prevrange(self.TABLE_HIDE_TAG, "insert +1c")
+        except tk.TclError:
+            return None
+        if containing:
+            b.mark_set("insert", f"{containing[1]} +1c")
+        return None
+
 
     def _configure_table_tag(self, text_widget):
         """Draw table rows in a monospace face, at the editor's own size.
@@ -1406,6 +1651,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # Plain paste: Tk inserts the text after this returns, so the list
         # tags can only be brought back into step once that has happened.
         self.after_idle(self._resync_list_tags)
+        self.after_idle(self._render_table_grids)
         return None
 
     def _paste_plain(self, event=None):
@@ -1429,6 +1675,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # decision reads the line structure and refuses to touch a list.
         self._replace_selection_with(strip_list_markers(reflow_wrapped(text)))
         self.after_idle(self._resync_list_tags)
+        self.after_idle(self._render_table_grids)
         self._schedule_autosave()
         return "break"
 
@@ -1482,6 +1729,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # derived from what those lines say -- a list's margin, a table's
         # monospace face -- are not carried by the text itself.
         self._resync_list_tags()
+        self._render_table_grids()
         self._refresh_format_buttons()
         self._schedule_autosave()
         return True
@@ -1859,6 +2107,14 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         """
         line_no = int(self.body_text.index("insert").split(".")[0])
         column = int(self.body_text.index("insert").split(".")[1])
+        # A rendered table is entered through its grid, not its text.
+        rendered = self._table_block_at(line_no)
+        if rendered:
+            grid = self._grid_at_line(rendered[0])
+            if grid is not None:
+                if delta > 0 and grid["entries"] and grid["entries"][0]:
+                    grid["entries"][0][0].focus_set()
+                return True
         here = self._cell_at(line_no, column)
         if here is None:
             return False
@@ -1910,8 +2166,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         first = line_no + (1 if before else 0)
         self._align_table_block(first)
         self._resync_list_tags()
-        self._move_to_cell(first, 0)
-        self.body_text.focus_set()
+        self._render_table_grids()
+        made = self._grid_at_line(first)
+        if made is not None and made["entries"] and made["entries"][0]:
+            made["entries"][0][0].focus_set()
         self._schedule_autosave()
         return first
 
@@ -3388,6 +3646,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.body_text.insert("1.0", note.get("body", ""))
         self._apply_formatting(self.body_text, note.get("formatting", []))
         self._apply_paragraphs(self.body_text, note.get("paragraphs", []))
+        self._render_table_grids()
         self.comments_text.delete("1.0", "end")
         self.comments_text.insert("1.0", note.get("comments", ""))
 
@@ -5234,6 +5493,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.body_text.bind("<ButtonRelease-1>", self._resync_pending_style_anchor, add="+")
         self.body_text.bind("<ButtonRelease-1>", self._refresh_format_buttons, add="+")
         self.body_text.bind("<ButtonRelease-1>", self._align_table_on_leaving, add="+")
+        # The text of a rendered table is elided, but Tk still lets the
+        # caret wander into it -- and typing there would edit characters
+        # nobody can see.
+        self.body_text.bind("<KeyPress>", self._caret_out_of_hidden, add="+")
+        self.body_text.bind("<KeyRelease>", self._caret_out_of_hidden, add="+")
+        self.body_text.bind("<ButtonRelease-1>", self._caret_out_of_hidden, add="+")
         # Overrides Tk's default double-click "select word" so punctuation
         # like "." always breaks a word (and an empty line selects
         # nothing), and its default triple-click "select line" so it stops
@@ -6809,6 +7074,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         """Snapshot everything the editor currently holds, so a note tab can be
         set aside and restored later exactly as the user left it — including
         unsaved edits. This is the backbone of having several notes open."""
+        # Grid cells buffer their edits in Entry widgets; anything captured
+        # here -- autosave, tab switching, the dirty poll -- must see them
+        # in the text, or a keystroke still sitting in a cell would be lost.
+        self._flush_table_grids()
         title = self.title_entry.get()
         if title == "Note title...":
             title = ""
@@ -6861,6 +7130,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.body_text.insert("1.0", st["body"])
         self._apply_formatting(self.body_text, st.get("formatting", []))
         self._apply_paragraphs(self.body_text, st.get("paragraphs", []))
+        self._render_table_grids()
         self.comments_text.delete("1.0", "end")
         self.comments_text.insert("1.0", st["comments"])
         self.category_var.set(st["category"])
@@ -7234,6 +7504,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if shown.get("body") == note.get("body"):
             self._apply_formatting(self.body_text, note.get("formatting", []))
         self._apply_paragraphs(self.body_text, note.get("paragraphs", []))
+        self._render_table_grids()
         self.comments_text.delete("1.0", "end")
         self.comments_text.insert("1.0", shown.get("comments", ""))
         self.category_var.set(shown["category"])

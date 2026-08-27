@@ -632,6 +632,8 @@ check('Return and BackSpace are bound on the body text',
 
 
 def set_body(text):
+    app._teardown_table_grids()
+    app._last_caret_line = None
     app.body_text.delete('1.0', 'end')
     app.body_text.insert('1.0', text)
     app.update()
@@ -1916,11 +1918,18 @@ check(f'a pasted table keeps its cells apart in the editor ({_rows[1]!r})',
 
 
 def _mono(line_no):
-    return app.TABLE_TAG in app.body_text.tag_names(f'{line_no}.0')
+    # Probed at the line's last character: a rendered grid's window sits at
+    # column 0 and carries no tags of its own.
+    return app.TABLE_TAG in app.body_text.tag_names(f'{line_no}.end -1c')
 
 
 check('the table rows are drawn in the monospace face',
       _mono(2) and _mono(3) and _mono(4))
+check('and a grid is rendered over them',
+      app._grid_at_line(2) is not None)
+check('whose cells hold the pasted values',
+      [[e.get() for e in row] for row in app._grid_at_line(2)['entries']]
+      == [['Name', 'Qty'], ['Milk', '2'], ['Eggs and bread', '12']])
 check('the text around the table is not', not _mono(1) and not _mono(5))
 check(f'the face is a monospace one '
       f'({app.body_text.tag_cget(app.TABLE_TAG, "font")!r})',
@@ -2040,43 +2049,70 @@ check(f'a blank table is inserted ({_blank[0]!r})',
       all(core_tables.split_row(r) == ['', ''] for r in _blank))
 check('its cells are wide enough to look like cells, not specks',
       len(_blank[0]) >= 2 * core_tables.MIN_COLUMN)
-check('its rows are drawn in the monospace face',
-      app.TABLE_TAG in app.body_text.tag_names('1.0'))
-check(f'the caret starts in the first cell ({app.body_text.index("insert")})',
-      app.body_text.index('insert') == '1.2')
+check('its rows are drawn in the monospace face', _mono(1))
+_made = app._grid_at_line(1)
+check('a grid is rendered over the new table', _made is not None)
+check('focus starts in the first cell',
+      _made is not None and app.focus_get() is _made['entries'][0][0])
 
-# The whole point of Tab: a table can be filled in without the mouse.
-take_focus(app.body_text)
-for _word in ('Name', 'Qty', 'Milk', '2', 'Eggs', '12'):
-    app.body_text.insert('insert', _word)
-    app.body_text.event_generate('<Tab>')
+# The whole point of the grid: a table is filled in through its cells, and
+# what lands in them lands in the note's own text.
+for _i, _word in enumerate(('Name', 'Qty', 'Milk', '2', 'Eggs', '12')):
+    _r, _c = divmod(_i, 2)
+    _cell = _made['entries'][_r][_c]
+    _cell.focus_set()
     app.update()
-check(f'a table can be typed straight through with Tab ({lines_now()[0]!r})',
+    _cell.delete(0, 'end')
+    _cell.insert(0, _word)
+app._flush_table_grids()
+app.update()
+check(f'typing in the cells lands in the text ({lines_now()[0]!r})',
       [core_tables.split_row(r) for r in lines_now()[:3]]
       == [['Name', 'Qty'], ['Milk', '2'], ['Eggs', '12']])
-check(f'and Tab at the last cell makes a new row ({lines_now()[3]!r})',
+
+# Tab walks the cells; at the very last one it makes a new row, which is
+# what lets a whole table be typed without reaching for the mouse.
+_made['entries'][0][0].focus_set()
+app.update()
+_made['entries'][0][0].event_generate('<Tab>')
+app.update()
+check('Tab moves to the next cell',
+      app.focus_get() is _made['entries'][0][1])
+_made['entries'][1][0].focus_set()
+app.update()
+_made['entries'][1][0].event_generate('<Shift-Tab>')
+app.update()
+check('Shift+Tab goes back to the row above',
+      app.focus_get() is _made['entries'][0][1])
+_made['entries'][-1][-1].focus_set()
+app.update()
+_made['entries'][-1][-1].event_generate('<Tab>')
+app.update()
+check(f'Tab at the last cell makes a new row ({lines_now()[3]!r})',
       core_tables.split_row(lines_now()[3]) == ['', ''])
+_made = app._grid_at_line(1)
+check('and focus lands in the new row',
+      _made is not None and app.focus_get() is _made['entries'][-1][0])
 
-# Tab selects the cell it lands on, so the next thing typed replaces it
-# rather than being appended -- which is what every other table does.
-app.body_text.mark_set('insert', '1.2')
-app.body_text.event_generate('<Tab>')
+# The hidden text is still reachable with arrows or a stray click, and
+# typing there would edit characters nobody can see -- so the caret is
+# walked out of it before anything can land.
+app.body_text.mark_set('insert', '2.3')
+app._caret_out_of_hidden()
 app.update()
-try:
-    _selected = app.body_text.get('sel.first', 'sel.last')
-except tk.TclError:
-    _selected = None
-check(f'tabbing into a cell selects what is in it ({_selected!r})',
-      _selected == 'Qty')
+_landed = int(app.body_text.index('insert').split('.')[0])
+check(f'the caret cannot rest inside the hidden rows (line {_landed})',
+      _landed > 4)
 
-# Shift+Tab goes back, including to the row above.
-clear_selection()
-app.body_text.mark_set('insert', '2.2')
-app.body_text.event_generate('<Shift-Tab>')
+# A pipe typed into a cell can never reach the text: it is what holds the
+# row together, and one more of it would split the row apart.
+_made['entries'][0][0].delete(0, 'end')
+_made['entries'][0][0].insert(0, 'a|b')
+app._flush_table_grids()
 app.update()
-check(f'Shift+Tab goes back to the row above '
-      f'({app.body_text.index("insert")})',
-      app.body_text.index('insert').startswith('1.'))
+check(f'a pipe typed into a cell cannot break the row ({lines_now()[0]!r})',
+      core_tables.split_row(lines_now()[0])[0] == 'a/b'
+      and len(core_tables.split_row(lines_now()[0])) == 2)
 
 # And outside a table Tab still types a tab, as it always did.
 clear_selection()
