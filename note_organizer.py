@@ -1478,6 +1478,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._cell_editor = {"entry": entry, "win": win, "info": info,
                              "r": r, "c": c}
         entry.focus_set()
+        self._refresh_list_buttons()
         # Destroying the previous editor hands focus to the root a moment
         # later, clobbering the focus_set above. Re-asserting after the
         # queue settles keeps the keyboard where the user is looking --
@@ -1938,15 +1939,42 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                           "box": (r0, c0, r1, c1)}
 
     def _grid_press(self, info, event):
+        # Canvas coordinates are read while the canvas is certainly alive:
+        # the commit below can destroy it, and a scrolled table would
+        # otherwise aim the click at the wrong cell.
+        press_x = info["canvas"].canvasx(event.x)
+        press_y = info["canvas"].canvasy(event.y)
+        if getattr(self, "_cell_editor", None) is not None:
+            # The press takes the keyboard back from the open editor --
+            # otherwise Ctrl+C/V keep talking to the entry (whose text
+            # opens selected) while the user is looking at the cells they
+            # just selected: copying two cells pasted the entry's word
+            # into the entry's own cell instead.
+            anchor_line = self._grid_first_line(info)
+            self._commit_cell_editor()
+            self.body_text.focus_set()
+            if not int(info["canvas"].winfo_exists()):
+                # The commit's rebuild took this canvas with it, and the
+                # implicit grab means no drag or release will follow. The
+                # cell the user aimed at is known from the geometry they
+                # were LOOKING at, so the click still lands: the editor
+                # opens there on the fresh grid, at press time.
+                self._grid_pressed = None
+                hit = self._grid_cell_at_xy(info, press_x, press_y)
+                fresh = (self._grid_at_line(anchor_line)
+                         if anchor_line is not None else None)
+                if fresh is not None and hit is not None:
+                    self._open_cell_editor(fresh, *hit)
+                return "break"
         canvas = info["canvas"]
-        x = canvas.canvasx(event.x)
+        x = press_x
         boundary = self._grid_boundary_at(info, x)
         if boundary is not None:
             # Grabbing a rule resizes its column instead of selecting.
             self._grid_resizing = {"info": info, "col": boundary, "x": x}
             self._grid_pressed = None
             return "break"
-        hit = self._grid_cell_at_xy(info, x, canvas.canvasy(event.y))
+        hit = self._grid_cell_at_xy(info, x, press_y)
         self._grid_clear_selection()
         self._grid_pressed = (info, hit) if hit else None
         return "break"
@@ -1966,6 +1994,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
     def _grid_release(self, info, event):
         """A plain click opens the editor; a drag leaves its selection."""
+        self.after_idle(self._refresh_list_buttons)
         resizing = getattr(self, "_grid_resizing", None)
         self._grid_resizing = None
         if resizing is not None and resizing["info"] is info:
@@ -1989,6 +2018,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             return "break"
         if getattr(self, "_grid_sel", None) is None and pressed[1]:
             self._open_cell_editor(info, *pressed[1])
+        else:
+            # A finished drag leaves a selection; the keyboard belongs to
+            # it now, so Delete and Ctrl+C/V land on the cells no matter
+            # where focus wandered before the drag.
+            self.body_text.focus_set()
         return "break"
 
     @staticmethod
@@ -2142,6 +2176,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._resync_list_tags()
         self._render_table_grids()
         self._schedule_autosave()
+        self._refresh_list_buttons()
 
     def _grid_block_parts(self, first, text_rows):
         """(data_rows, data_aligns, sep_cols, sep_at) for one block.
@@ -2371,6 +2406,23 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             for c in range(c0, min(c1 + 1, len(sep_cols))):
                 sep_cols[c]["hidden"] = True
         self._grid_column_mechanics(info, mutate)
+
+    def _grid_append_cols(self, info, count):
+        """*count* empty columns joined to the right edge of the table."""
+        context = self._grid_op_context(info)
+        if not context:
+            return
+        first, nrows, _ncols = context
+        rows, aligns, sep_cols, _sep_at = self._grid_block_parts(first, nrows)
+        for row in rows:
+            row.extend([""] * count)
+        for row_aligns in aligns:
+            row_aligns.extend([core_tables.ALIGN_LEFT] * count)
+        if sep_cols is not None:
+            sep_cols.extend({"width": None, "align": None, "hidden": False}
+                            for _ in range(count))
+        self._grid_replace_block(first, nrows, rows, aligns, sep_cols)
+        self._grid_after_op(first)
 
     def _grid_unhide_all(self, info):
         def mutate(sep_cols, rows, aligns):
@@ -2642,8 +2694,14 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         """The highlight cascade -- palette swatches plus Clear -- for
         whichever menu asks: a selection's, or a single cell's."""
         cascade = tk.Menu(parent, tearoff=0, bg=self.colors["card"],
-                          fg=self.colors["text"])
-        for hex_color in HIGHLIGHT_COLOR_PALETTE:
+                          fg=self.colors["text"],
+                          activeborderwidth=0, bd=1,
+                          relief="solid")
+        for i, hex_color in enumerate(HIGHLIGHT_COLOR_PALETTE):
+            if i:
+                # A hairline of the themed card colour between swatches --
+                # without it the palette read as one continuous smear.
+                cascade.add_separator()
             cascade.add_command(
                 label="        ", background=hex_color,
                 activebackground=hex_color,
@@ -2654,6 +2712,24 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             command=lambda: self._grid_apply_style(
                 info, box, "highlight", None))
         return cascade
+
+    def _grid_align_context(self):
+        """The alignment of the cell the user is in -- the open editor's,
+        or the selection's anchor -- or None outside any table."""
+        editor = getattr(self, "_cell_editor", None)
+        sel = getattr(self, "_grid_sel", None)
+        if editor is not None:
+            info, r, c = editor["info"], editor["r"], editor["c"]
+        elif sel is not None:
+            info, r, c = sel["info"], sel["box"][0], sel["box"][1]
+        else:
+            return None
+        line_no = self._grid_line_of_row(info, r)
+        if line_no is None:
+            return None
+        aligns = core_tables.cell_alignments(
+            self.body_text.get(f"{line_no}.0", f"{line_no}.end"))
+        return aligns[c] if c < len(aligns) else core_tables.ALIGN_LEFT
 
     def _grid_cell_text_range(self, info, r, c):
         """The body-text indices of one cell's content, or None when the
@@ -2876,6 +2952,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                            else "Hide columns"),
                     command=lambda: self._grid_hide_span(
                         info, sel["box"][1], sel["box"][3]))
+                span_cols = sel["box"][3] - sel["box"][1] + 1
+                menu.add_command(
+                    label=("Add a column at the end" if span_cols == 1
+                           else f"Add {span_cols} columns at the end"),
+                    command=lambda n=span_cols:
+                        self._grid_append_cols(info, n))
             menu.add_separator()
             menu.add_cascade(label="Highlight cells",
                              menu=self._grid_highlight_menu(
@@ -3328,7 +3410,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         current = self._list_kind_of(self.body_text, line_no)
         for kind, btn in self._list_buttons.items():
             self._set_button_pressed(btn, kind == current)
-        current_align = self._paragraph_align_of(self.body_text, line_no)
+        current_align = self._grid_align_context()
+        if current_align is None:
+            current_align = self._paragraph_align_of(self.body_text, line_no)
         for align, btn in getattr(self, "_align_buttons", {}).items():
             self._set_button_pressed(btn, align == current_align)
 
@@ -3922,12 +4006,25 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._schedule_autosave()
         return "break"
 
+    def _on_body_delete_key(self, event=None):
+        """Delete (and Backspace) with cells selected clears them, the way
+        a spreadsheet does -- the table's text is hidden, so Tk's own
+        deletion has nothing sensible to do there anyway."""
+        sel = getattr(self, "_grid_sel", None)
+        if sel is not None and self._grid_first_line(sel["info"]) is not None:
+            self._grid_fill_selection(sel, "")
+            return "break"
+        return None
+
     def _on_body_backspace(self, event):
         """Backspace just after a marker removes the marker, not a character.
 
         Otherwise the only way out of a list is to delete the bullet one
         character at a time, which reads as the app fighting you.
         """
+        cleared = self._on_body_delete_key(event)
+        if cleared:
+            return cleared
         self._caret_out_of_hidden()
         index = self.body_text.index("insert")
         line_no, col = (int(p) for p in index.split("."))
@@ -7062,6 +7159,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._configure_table_tag(self.body_text)
         self.body_text.bind("<Return>", self._on_body_return)
         self.body_text.bind("<BackSpace>", self._on_body_backspace)
+        self.body_text.bind("<Delete>", self._on_body_delete_key)
         self.body_text.bind("<<Paste>>", self._on_body_paste, add="+")
         self.body_text.bind("<<Copy>>", self._copy_formatted, add="+")
         # Ctrl+Shift+V is the usual way to ask for the text without its

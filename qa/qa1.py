@@ -3076,6 +3076,170 @@ app._commit_cell_editor()
 app.update()
 set_body('')
 
+# ---- THE SCREENSHOT FLOW: AN OPEN EDITOR MUST NOT EAT CTRL+C/V ----
+# With an editor open (its text arrives selected), dragging a selection
+# and copying used to copy the ENTRY's word and paste it back into the
+# entry's own cell. The press now closes the editor and hands the
+# keyboard to the grid.
+set_body('| Aliment | X | Y |\n| Fructe | Lapte |  |\n'
+         '| Cereale |  |  |\n| Oua |  |  |')
+app._render_table_grids()
+app.update()
+_tE = app._grid_at_line(1)
+app._open_cell_editor(_tE, 1, 1)
+app.update()
+_tE = app._grid_at_line(1)
+_select_cells(_tE, (1, 0), (2, 0))
+check('the press closes the open editor and keeps the drag selection',
+      app._cell_editor is None
+      and app._grid_sel is not None
+      and app._grid_sel['box'] == (1, 0, 2, 0)
+      and app.focus_get() is app.body_text)
+app.body_text.event_generate('<Control-c>')
+app.update()
+check(f'Ctrl+C copies the selected cells, not the entry '
+      f'({app.clipboard_get()!r})',
+      app.clipboard_get() == 'Fructe\nCereale')
+
+# The same, in one breath: a FAST Ctrl+C right on the heels of the
+# release, before the event queue settles. The press must have taken
+# the keyboard already -- a deferred, FocusOut-time close would leave
+# this copy to the entry.
+app.clipboard_clear()
+app.clipboard_append('vechi')
+app._open_cell_editor(_tE, 1, 1)
+app.update()
+_tE = app._grid_at_line(1)
+_aE, _bE = _tE['cells'][(1, 0)], _tE['cells'][(2, 0)]
+_cvE = _tE['canvas']
+_cvE.event_generate('<Button-1>', x=int(_aE['x'] + 12), y=int(_aE['y'] + 6))
+_cvE.event_generate('<B1-Motion>', x=int(_bE['x'] + 12), y=int(_bE['y'] + 6))
+_cvE.event_generate('<ButtonRelease-1>',
+                    x=int(_bE['x'] + 12), y=int(_bE['y'] + 6))
+app.body_text.event_generate('<Control-c>')
+app.update()
+check(f'a fast Ctrl+C straight after the drag still means the cells '
+      f'({app.clipboard_get()!r})',
+      app.clipboard_get() == 'Fructe\nCereale')
+
+# A drag started over an editor whose content WIDENED the column: the
+# commit's rebuild kills the gesture's canvas, so the one-gesture drag
+# cannot survive -- but it must degrade loudly (the press turns into a
+# click on the cell it started at, on the fresh grid), never into a
+# selection that flashes and silently vanishes a moment later.
+app._open_cell_editor(_tE, 1, 1)
+app.update()
+app._cell_editor['entry'].delete(0, 'end')
+app._cell_editor['entry'].insert(0, 'text destul de lat sa mute coloana')
+_tE2 = app._grid_at_line(1)
+_aE, _bE = _tE2['cells'][(1, 0)], _tE2['cells'][(2, 0)]
+_cvE = _tE2['canvas']
+_cvE.event_generate('<Button-1>', x=int(_aE['x'] + 12), y=int(_aE['y'] + 6))
+# The press killed this canvas (the commit rebuilt); a real mouse's
+# motion and release simply never arrive on it, but SYNTHETIC events on
+# a dead widget raise instead -- swallow that to mirror reality.
+try:
+    _cvE.event_generate('<B1-Motion>',
+                        x=int(_bE['x'] + 12), y=int(_bE['y'] + 6))
+    _cvE.event_generate('<ButtonRelease-1>',
+                        x=int(_bE['x'] + 12), y=int(_bE['y'] + 6))
+except NO.tk.TclError:
+    pass
+app.update()
+app.update()
+_tE = app._grid_at_line(1)
+check('a drag across a widening commit degrades to a click, not a '
+      'vanishing selection',
+      app._cell_editor is not None
+      and app._cell_editor['info'] is _tE
+      and (app._cell_editor['r'], app._cell_editor['c']) == (1, 0))
+app._commit_cell_editor()
+app.update()
+_tE = app._grid_at_line(1)
+# The widened text served its purpose; the flow below still expects
+# 'Lapte' in that cell.
+app._grid_fill_selection({'info': _tE, 'box': (1, 1, 1, 1)}, 'Lapte')
+app.update()
+_tE = app._grid_at_line(1)
+_select_cells(_tE, (1, 2), (2, 2))
+app.body_text.event_generate('<Control-v>')
+app.update()
+_tE = app._grid_at_line(1)
+check('a vertical pair lands in the vertical target',
+      _tE['cells'][(1, 2)]['value'] == 'Fructe'
+      and _tE['cells'][(2, 2)]['value'] == 'Cereale')
+check("and the editor's old cell is untouched",
+      _tE['cells'][(1, 1)]['value'] == 'Lapte')
+
+# ---- DELETE CLEARS THE SELECTED CELLS ----
+_select_cells(_tE, (1, 0), (2, 0))
+app.body_text.event_generate('<Delete>')
+app.update()
+_tE = app._grid_at_line(1)
+check('Delete clears exactly the selected cells',
+      _tE['cells'][(1, 0)]['value'] == ''
+      and _tE['cells'][(2, 0)]['value'] == ''
+      and _tE['cells'][(0, 0)]['value'] == 'Aliment')
+
+# ---- THE ALIGN BUTTONS FOLLOW THE CELL ----
+app._grid_set_alignment(_tE, (0, 1, 0, 1), core_tables.ALIGN_CENTER)
+app.update()
+_tE = app._grid_at_line(1)
+app._open_cell_editor(_tE, 0, 1)
+app.update()
+_accent = app.colors['accent']
+check('the centre button reads pressed while a centred cell is open',
+      str(app._align_buttons['center'].cget('bg')) == _accent
+      and str(app._align_buttons['left'].cget('bg')) != _accent)
+app._commit_cell_editor()
+app.update()
+
+# ---- ADD SEVERAL COLUMNS AT ONCE, AT THE END ----
+_tE = app._grid_at_line(1)
+_posted = []
+_real_popup = NO.tk.Menu.tk_popup
+NO.tk.Menu.tk_popup = lambda _m, *a, **k: _posted.append(_m)
+try:
+    _select_cells(_tE, (0, 1), (3, 2))
+    _cSel = _tE['cells'][(1, 1)]
+    app._grid_menu(_tE, type('E', (), {
+        'x': int(_cSel['x'] + 12), 'y': int(_cSel['y'] + 6),
+        'x_root': 0, 'y_root': 0})())
+    _labels = _menu_entries(_posted[-1]) if _posted else []
+    check('two whole columns selected offer adding two at the end',
+          'Add 2 columns at the end' in _labels)
+    _ncolsE = _tE['ncols']
+    if _posted:
+        _posted[-1].invoke('Add 2 columns at the end')
+        app.update()
+    _tE = app._grid_at_line(1)
+    check(f'and invoking it appends them ({_ncolsE} -> {_tE["ncols"]})',
+          _tE['ncols'] == _ncolsE + 2)
+
+    # The palette wears separators between its swatches.
+    _posted.clear()
+    _select_cells(_tE, (0, 0), (0, 1))
+    _cSel = _tE['cells'][(0, 0)]
+    app._grid_menu(_tE, type('E', (), {
+        'x': int(_cSel['x'] + 12), 'y': int(_cSel['y'] + 6),
+        'x_root': 0, 'y_root': 0})())
+    _casc = None
+    if _posted:
+        _m = _posted[-1]
+        for i in range(_m.index('end') + 1):
+            if (_m.type(i) == 'cascade'
+                    and _m.entrycget(i, 'label') == 'Highlight cells'):
+                _casc = app.nametowidget(_m.entrycget(i, 'menu'))
+    _seps = (sum(1 for i in range(_casc.index('end') + 1)
+                 if _casc.type(i) == 'separator') if _casc else 0)
+    check(f'the palette is framed with separators between swatches '
+          f'({_seps})',
+          _seps == len(NO.HIGHLIGHT_COLOR_PALETTE) - 1)
+finally:
+    NO.tk.Menu.tk_popup = _real_popup
+app._grid_clear_selection()
+set_body('')
+
 NO.clipboard.read_html = _real_read_html
 NO.clipboard.read_text = _real_read_text
 NO.clipboard.write = _real_write
