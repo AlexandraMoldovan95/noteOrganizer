@@ -1191,11 +1191,15 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     line, widths,
                     aligns[offset] if offset < len(aligns) else None):
                 changed = True
+                # Ops come right-to-left, so the prefix each one converts
+                # against is still the snapshot the offsets were computed
+                # from. The deltas themselves are spaces -- one unit each.
+                t_at = base + self._tk_col(line, at)
                 if delta > 0:
-                    self.body_text.insert(f"{row}.{at + base}", " " * delta)
+                    self.body_text.insert(f"{row}.{t_at}", " " * delta)
                 else:
-                    self.body_text.delete(f"{row}.{at + base}",
-                                          f"{row}.{at + base + (-delta)}")
+                    self.body_text.delete(f"{row}.{t_at}",
+                                          f"{row}.{t_at + (-delta)}")
         if was_gravity:
             try:
                 self.body_text.mark_gravity("insert", was_gravity)
@@ -1397,8 +1401,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             return
         canvas = info["canvas"]
         header_font, cell_font = self._grid_fonts()
+        astral = any(ord(ch) > 0xFFFF for ch in cell["value"])
         entry = tk.Entry(canvas, relief="flat", bd=0,
-                         font=header_font if r == 0 else cell_font,
+                         font=(("Segoe UI Emoji", self.editor_font_size)
+                               if astral else
+                               (header_font if r == 0 else cell_font)),
                          bg=self.colors["card"], fg=self.colors["text"],
                          insertbackground=self.colors["text"])
         entry.insert(0, cell["value"])
@@ -1542,6 +1549,15 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 cell["value"] = value
                 try:
                     info["canvas"].itemconfigure(cell["text"], text=value)
+                    # The face follows the content immediately: a commit
+                    # that only itemconfigures kept the pre-emoji font
+                    # until the next full rebuild, so the drawn cell showed
+                    # squares even though the text was right.
+                    header_font, cell_font = self._grid_fonts()
+                    wanted = (("Segoe UI Emoji", self.editor_font_size)
+                              if any(ord(ch) > 0xFFFF for ch in value)
+                              else (header_font if r == 0 else cell_font))
+                    info["canvas"].itemconfigure(cell["text"], font=wanted)
                 except tk.TclError:
                     pass
                 first = self._grid_first_line(info)
@@ -1572,8 +1588,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             return
         start, end = bounds[c]
         if line[start:end] != value:
-            b.delete(f"{line_no}.{start + base}", f"{line_no}.{end + base}")
-            b.insert(f"{line_no}.{start + base}", value)
+            t_start = base + self._tk_col(line, start)
+            t_end = base + self._tk_col(line, end)
+            b.delete(f"{line_no}.{t_start}", f"{line_no}.{t_end}")
+            b.insert(f"{line_no}.{t_start}", value)
             self._align_table_block(first)
 
     def _editor_step(self, delta):
@@ -1887,6 +1905,17 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         """
         return sum(2 if ord(ch) > 0xFFFF else 1 for ch in text)
 
+    @classmethod
+    def _tk_col(cls, line, char_col):
+        """A Python character offset into *line*, as a Tk Text column.
+
+        Tk counts UTF-16 units, so every astral character before the offset
+        widens it by one. Addressing the text with raw character offsets cut
+        into the wrong place the moment a cell held an emoji -- and every
+        flush re-cut at the drifted position, multiplying the damage.
+        """
+        return cls._tk_units(line[:char_col])
+
     def _restore_editor_view(self, at):
         try:
             self.editor_canvas.yview_moveto(at)
@@ -2042,7 +2071,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             if not pipes:
                 continue
             boundary = pipes[min(at, len(pipes) - 1)]
-            b.insert(f"{n}.{boundary + 1}", "  |")
+            b.insert(f"{n}.{self._tk_col(line, boundary + 1)}", "  |")
         self._grid_after_op(first)
 
     def _grid_delete_row(self, info, r):
@@ -2287,7 +2316,15 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         header_font, cell_font = self._grid_fonts()
         font = header_font if editor["r"] == 0 else cell_font
         try:
-            needed = font.measure(editor["entry"].get()) + 24
+            value = editor["entry"].get()
+            # Typing the first emoji switches the face live, or everything
+            # after it shows as squares until commit.
+            if any(ord(ch) > 0xFFFF for ch in value):
+                emoji_font = ("Segoe UI Emoji", self.editor_font_size)
+                if "Emoji" not in str(editor["entry"].cget("font")):
+                    editor["entry"].configure(font=emoji_font)
+                font = tkfont.Font(font=emoji_font)
+            needed = font.measure(value) + 24
             if needed > int(float(canvas.itemcget(win, "width"))):
                 canvas.itemconfigure(win, width=needed)
         except tk.TclError:
@@ -2414,6 +2451,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                              {"info": info, "box": (r, c, r, c)}, "\u2713",
                              align=core_tables.ALIGN_CENTER))
         menu.add_command(label="Insert emoji…", command=emoji_here)
+        menu.add_command(label="Clear cell",
+                         command=lambda: self._grid_fill_selection(
+                             {"info": info, "box": (r, c, r, c)}, ""))
         menu.add_separator()
         for label, align_value in (
                 ("Align left", core_tables.ALIGN_LEFT),

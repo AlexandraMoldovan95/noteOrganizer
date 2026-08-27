@@ -2613,6 +2613,58 @@ check(f'a wide table keeps its sideways place through a commit '
 # in _render_table_grids is insurance for the real, asynchronous session.
 set_body('')
 
+# ---- EMOJI IN CELLS: TK COLUMNS ARE UTF-16 UNITS ----
+# Every surgical edit addressed the text by Python character offsets, but a
+# Tk Text column is a UTF-16 unit -- one astral emoji in a cell shifted
+# every later cut, and each flush re-cut at the drifted position, which is
+# how one emoji multiplied into squares and diamonds.
+set_body('')
+app._insert_table(2, 2)
+app.update()
+_edU = app._cell_editor
+_pairU = chr(0xD83D) + chr(0xDE00)
+_edU['entry'].insert('end', _pairU)
+_edU['entry'].insert('end', _pairU)
+for _i in range(3):
+    app._flush_table_grids()
+    app.update()
+app._commit_cell_editor()
+app.update()
+_lineU = app.body_text.get('1.0', '1.end')
+check(f'two emoji land as two, through three flushes '
+      f'(gasit {_lineU.count(chr(0x1F600))})',
+      _lineU.count(chr(0x1F600)) == 2
+      and chr(0xFFFD) not in _lineU
+      and not any(0xD800 <= ord(ch) <= 0xDFFF for ch in _lineU))
+_tU = app._grid_at_line(1)
+check('and the drawn cell wears the emoji face at commit',
+      'Emoji' in str(_tU['canvas'].itemcget(
+          _tU['cells'][(0, 0)]['text'], 'font')))
+
+# The neighbouring cell, edited AFTER the emoji, must land in its own cell
+# -- this is the write the drifted columns used to cut apart.
+app._open_cell_editor(_tU, 0, 1)
+app.update()
+_eU = app._cell_editor['entry']
+_eU.delete(0, 'end')
+_eU.insert(0, 'vecina')
+app._commit_cell_editor()
+app.update()
+_tU = app._grid_at_line(1)
+check(f'the cell after an emoji is written where it belongs '
+      f'({_tU["cells"][(0, 1)]["value"]!r})',
+      _tU['cells'][(0, 0)]['value'].count(chr(0x1F600)) == 2
+      and _tU['cells'][(0, 1)]['value'] == 'vecina')
+
+# Clear cell, from the single-cell menu's handler.
+app._grid_fill_selection({'info': _tU, 'box': (0, 1, 0, 1)}, '')
+app.update()
+_tU = app._grid_at_line(1)
+check('Clear cell empties exactly that cell',
+      _tU['cells'][(0, 1)]['value'] == ''
+      and _tU['cells'][(0, 0)]['value'].count(chr(0x1F600)) == 2)
+set_body('')
+
 # The toolbar has an emoji button, and it knows about open cells.
 check('the toolbar has an emoji button', hasattr(app, 'emoji_btn'))
 
