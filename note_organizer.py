@@ -1313,24 +1313,17 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # and on every commit that re-rendered. The handlers run from the
         # event queue, so the view is restored after them, not merely after
         # this function.
-        try:
-            restore_view = self.editor_canvas.yview()[0]
-        except (tk.TclError, AttributeError, IndexError):
-            restore_view = None
-        try:
-            restore_body = self.body_text.yview()[0]
-        except (tk.TclError, IndexError):
-            restore_body = None
-        # A wide table's sideways position is its reader's place in it;
-        # a rebuild used to snap every one back to its first column.
-        restore_x = {}
-        for info in getattr(self, "_table_grids", []):
-            line = self._grid_first_line(info)
-            if line is not None and info.get("canvas") is not None:
-                try:
-                    restore_x[line] = info["canvas"].xview()[0]
-                except (tk.TclError, IndexError):
-                    pass
+        # A menu operation tears the grids down BEFORE this runs, and
+        # deleting the window characters shifts body_text's scroll on the
+        # spot -- capturing here was too late, and the restore faithfully
+        # pinned the already-jumped view. The op context captures first and
+        # leaves its snapshot for this render to honour.
+        saved = getattr(self, "_grid_saved_view", None)
+        self._grid_saved_view = None
+        if saved is not None:
+            restore_view, restore_body, restore_x = saved
+        else:
+            restore_view, restore_body, restore_x = self._capture_grid_views()
         self._teardown_table_grids()
         # Anything a plain destroy left behind -- a dead window dumps with an
         # empty name -- is swept out bottom-up, so the deletions do not move
@@ -1361,14 +1354,13 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     info["canvas"].xview_moveto(restore_x[line])
                 except tk.TclError:
                     pass
-        if restore_body is not None:
-            try:
-                self.body_text.yview_moveto(restore_body)
-            except tk.TclError:
-                pass
-        if restore_view is not None:
-            self.after_idle(
-                lambda at=restore_view: self._restore_editor_view(at))
+        # Both restores wait for the queue: the fresh windows are not yet
+        # mapped here, the Text estimates their heights wrong, and a
+        # fraction restored against those estimates lands somewhere else
+        # once geometry settles -- measured drifting 0.316 to 0.164.
+        if restore_body is not None or restore_view is not None:
+            self.after_idle(lambda page=restore_view, body=restore_body:
+                            self._restore_views_idle(page, body))
 
     def _grid_fonts(self):
         key = (self.editor_font_family, self.editor_font_size)
@@ -1922,6 +1914,15 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         except tk.TclError:
             pass
 
+    def _restore_views_idle(self, page, body):
+        if body is not None:
+            try:
+                self.body_text.yview_moveto(body)
+            except tk.TclError:
+                pass
+        if page is not None:
+            self._restore_editor_view(page)
+
     def _grid_click(self, info, event):
         canvas = info["canvas"]
         hit = self._grid_cell_at_xy(info, canvas.canvasx(event.x),
@@ -1991,6 +1992,27 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
     # ---------- The table's own right-click menu ----------
 
+    def _capture_grid_views(self):
+        """The page scroll, the body's own scroll, and each wide table's
+        sideways position -- everything a rebuild has to put back."""
+        try:
+            page = self.editor_canvas.yview()[0]
+        except (tk.TclError, AttributeError, IndexError):
+            page = None
+        try:
+            body = self.body_text.yview()[0]
+        except (tk.TclError, IndexError):
+            body = None
+        sideways = {}
+        for info in getattr(self, "_table_grids", []):
+            line = self._grid_first_line(info)
+            if line is not None and info.get("canvas") is not None:
+                try:
+                    sideways[line] = info["canvas"].xview()[0]
+                except (tk.TclError, IndexError):
+                    pass
+        return page, body, sideways
+
     def _grid_op_context(self, info):
         """(first, nrows, ncols) with the editor committed and grids down.
 
@@ -2007,6 +2029,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             info = again
             first = self._grid_first_line(info) or first
         shape = (first, info["nrows"], info["ncols"])
+        self._grid_saved_view = self._capture_grid_views()
         self._teardown_table_grids()
         return shape
 

@@ -2607,10 +2607,31 @@ check(f'a wide table keeps its sideways place through a commit '
       f'({_x0:.3f} -> {_x1:.3f})',
       abs(_x1 - _x0) < 0.15 and _x1 > 0.1)
 
-# Deliberately not checked here: the body's own yview across a rebuild.
-# Teardown and rebuild run synchronously with no relayout between them, so
-# headless the view never moves and a check could not fail -- the restore
-# in _render_table_grids is insurance for the real, asynchronous session.
+# A MENU operation is different: it tears the grids down before render
+# runs, and deleting the window characters shifts body_text's scroll on
+# the spot -- so this one IS reproducible headless, and was: 0.316 became
+# 0.164 on a checkmark. The op context captures the views first, and the
+# restore waits for the queue so the fresh windows are mapped when the
+# fraction is reapplied.
+set_body('rand de text\n' * 30)
+app.body_text.mark_set('insert', 'end -1c')
+app.update()
+app._insert_table(3, 3)
+app._commit_cell_editor()
+app.update()
+app.body_text.yview_moveto(1.0)
+app.update()
+_yv0 = app.body_text.yview()[0]
+_firstV = app._grid_first_line(app._table_grids[0])
+_tV = app._grid_at_line(_firstV)
+app._grid_fill_selection({'info': _tV, 'box': (0, 0, 0, 0)}, chr(0x2713),
+                         align='center')
+app.update()
+app.update_idletasks()
+app.update()
+_yv1 = app.body_text.yview()[0]
+check(f'a menu op keeps the body scrolled where it was '
+      f'({_yv0:.3f} -> {_yv1:.3f})', abs(_yv1 - _yv0) < 0.06)
 set_body('')
 
 # ---- EMOJI IN CELLS: TK COLUMNS ARE UTF-16 UNITS ----
