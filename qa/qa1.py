@@ -1567,7 +1567,10 @@ for _w in (1400, 900, 1400):
     check(f'no control is dropped when the bar is told it has {_w}px '
           f'({len(_past)} were)', not _past)
 
-app._on_format_bar_resize(_WidthEvent(1400))
+# 1800, not 1400: the bar has since gained the table and emoji
+# buttons, and the CI's Linux faces run wider than Segoe UI -- the
+# check is about having room, so it is given room on every platform.
+app._on_format_bar_resize(_WidthEvent(1800))
 app.update_idletasks()
 check('every control is on one row when there is room for one',
       len([r for r in app._fmt_bar_rows if r.winfo_ismapped()]) == 1)
@@ -1932,10 +1935,11 @@ check('whose cells hold the pasted values',
        for r in range(3)]
       == [['Name', 'Qty'], ['Milk', '2'], ['Eggs and bread', '12']])
 check('the text around the table is not', not _mono(1) and not _mono(5))
+_face = NO.tkfont.Font(root=app,
+                       font=app.body_text.tag_cget(app.TABLE_TAG, 'font'))
 check(f'the face is a monospace one '
       f'({app.body_text.tag_cget(app.TABLE_TAG, "font")!r})',
-      str(app.body_text.tag_cget(app.TABLE_TAG, 'font')).split()[0]
-      in ('Consolas', 'Courier'))
+      _face.measure('i') == _face.measure('W'))
 
 # Typed by hand rather than pasted: the same text has to give the same
 # result, since it is the text that decides.

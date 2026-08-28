@@ -1487,6 +1487,15 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                         if e.winfo_exists() else None)
         entry.bind("<Tab>", lambda _e: self._editor_step(+1))
         entry.bind("<Shift-Tab>", lambda _e: self._editor_step(-1))
+        # X11 reports Shift+Tab as its own keysym rather than a modified
+        # Tab -- the body text learned this long ago; the cell editor
+        # walked into the same wall on the CI. Unknown keysyms are an
+        # error on Windows, so the binding is allowed to fail there.
+        try:
+            entry.bind("<ISO_Left_Tab>",
+                       lambda _e: self._editor_step(-1))
+        except tk.TclError:
+            pass
         entry.bind("<Return>", lambda _e: self._editor_return())
         entry.bind("<Escape>",
                    lambda _e: (self._cancel_cell_editor(), "break")[1])

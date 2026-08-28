@@ -72,7 +72,12 @@ FONT_FAMILIES = (
 # width. Both of these ship with Windows; the first the system actually has
 # is the one used, and a table falls back to the note's own font rather than
 # to something the reader does not have.
-MONOSPACE_FAMILIES = ("Consolas", "Courier New")
+# Windows first (Consolas ships everywhere the app does), then the
+# families a Linux CI runner actually has -- without them the table
+# face silently fell back to the editor's proportional font there.
+MONOSPACE_FAMILIES = ("Consolas", "Courier New", "DejaVu Sans Mono",
+                      "Liberation Mono", "Noto Sans Mono", "Ubuntu Mono",
+                      "Courier")
 
 FONT_SIZES = (9, 10, 11, 12, 14, 16, 20, 24)
 
