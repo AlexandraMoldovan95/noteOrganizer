@@ -1884,6 +1884,13 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         b.window_create(f"{first}.0", window=host, padx=1, pady=6,
                         align="bottom")
         b.tag_add(self.TABLE_HIDE_TAG, f"{first}.1", f"{last}.end")
+        # Tk justifies a display line by its FIRST character's tags, and
+        # the window character just landed untagged at column 0 -- a
+        # centred table snapped back left on every rebuild until the
+        # window itself carried the position.
+        table_align = self._grid_table_align_of(first)
+        if table_align in ("center", "right"):
+            b.tag_add(f"align_{table_align}", f"{first}.0", f"{first}.1")
         self._table_grids = getattr(self, "_table_grids", [])
         self._table_grids.append(info)
 
@@ -2217,6 +2224,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         a table almost always holds.
         """
         b = self.body_text
+        # The rewrite deletes the tagged text, and the table's position on
+        # the page would go with it -- read it first, put it back after.
+        table_align = self._grid_table_align_of(first)
         b.delete(f"{first}.0", f"{first + old_nrows - 1}.end")
         lines = core_tables.format_table(rows, aligns)
         if sep_cols is not None and lines:
@@ -2229,6 +2239,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             ) + core_tables.CELL
             lines = [lines[0], sep_line] + lines[1:]
         b.insert(f"{first}.0", "\n".join(lines))
+        if table_align in ("center", "right"):
+            for n in range(first, first + len(lines)):
+                b.tag_add(f"align_{table_align}", f"{n}.0", f"{n}.end")
 
     def _dissolve_orphan_markers(self, rows):
         _spans, covered = core_tables.merge_map(rows)
@@ -2461,6 +2474,41 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                              if near is not None else "arrow")
         except tk.TclError:
             pass
+
+    _TABLE_ALIGN_TAGS = ("align_center", "align_right")
+
+    def _grid_set_table_align(self, info, align):
+        """The whole table sits left, centred or right on the page.
+
+        The block's lines carry an ordinary paragraph-alignment tag, which
+        is what positions the embedded window -- and what the paragraphs
+        store already saves and reloads. Deliberate, so it survives; the
+        PASTE path scrubs the same tags, so a table copied from a centred
+        source still lands flush left.
+        """
+        first = self._grid_first_line(info)
+        if first is None:
+            return
+        for n in range(first, first + info["nrows"]):
+            for stray in self._TABLE_ALIGN_TAGS:
+                self.body_text.tag_remove(stray, f"{n}.0", f"{n}.end")
+            if align in ("center", "right"):
+                self.body_text.tag_add(f"align_{align}",
+                                       f"{n}.0", f"{n}.end")
+        self._schedule_autosave()
+
+    def _grid_table_align_of(self, first):
+        """Which position the block's window line carries.
+
+        Read off the line's LAST character: the first may be the embedded
+        window, whose character arrives untagged on every rebuild.
+        """
+        for tag in self.body_text.tag_names(f"{first}.end-1c"):
+            if tag == "align_center":
+                return "center"
+            if tag == "align_right":
+                return "right"
+        return "left"
 
     def _grid_delete_table(self, info):
         first = self._grid_first_line(info)
@@ -2718,8 +2766,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         outer = tk.Frame(popup, bg=self.colors["card"], padx=1, pady=1)
         outer.pack()
         # The hairline is the COLUMN's background peeking through the
-        # one-pixel gaps between swatches, so it recolours with the theme.
-        column = tk.Frame(outer, bg=hairline(self.colors))
+        # one-pixel gaps between swatches: the theme's accent softened
+        # toward the card, so a purple theme parts them with a paler
+        # purple, dark or light alike.
+        column = tk.Frame(outer, bg=self._blend_hex(
+            self.colors["accent"], self.colors["card"], 0.35))
         column.pack(padx=8, pady=8)
 
         def choose(color):
@@ -3077,6 +3128,13 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                          command=lambda: self._grid_delete_col(info, c))
         menu.add_command(label="Delete table",
                          command=lambda: self._grid_delete_table(info))
+        menu.add_separator()
+        for pos_label, pos in (("Table left on page", "left"),
+                               ("Center table on page", "center"),
+                               ("Table right on page", "right")):
+            menu.add_command(
+                label=pos_label,
+                command=lambda p=pos: self._grid_set_table_align(info, p))
         try:
             menu.tk_popup(event.x_root, event.y_root)
         finally:
@@ -3275,12 +3333,14 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             line = self.body_text.get(f"{n}.0", f"{n}.end")
             if is_table_row(line):
                 self.body_text.tag_add(self.TABLE_TAG, f"{n}.0", f"{n}.end")
-                # A paragraph-alignment tag left on a table's line centres
-                # the embedded window itself -- the whole table jumped to
-                # the middle of the note "for no reason". The line's text is
-                # hidden, so the tag can only ever mis-place the window.
-                for stray in ("align_center", "align_right"):
-                    self.body_text.tag_remove(stray, f"{n}.0", f"{n}.end+1c")
+                # An alignment tag on a table's line positions the embedded
+                # window -- since "Center table on page" that is a feature,
+                # not a stray. The accidental path (pasted centred content)
+                # is scrubbed where it enters, in _apply_paragraphs. Only
+                # the tag's spill over the newline is trimmed here, so a
+                # line typed under the table does not inherit the position.
+                for tag in ("align_center", "align_right"):
+                    self.body_text.tag_remove(tag, f"{n}.end", f"{n}.end+1c")
             else:
                 self.body_text.tag_remove(self.TABLE_TAG, f"{n}.0", f"{n}.end+1c")
             kind = self._list_kind_of(self.body_text, n)
@@ -3385,7 +3445,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             [dict(s, start=s["start"] + at, end=s["end"] + at) for s in spans])
         self._apply_paragraphs(
             self.body_text,
-            [dict(p, line=p["line"] + line) for p in paragraphs])
+            [dict(p, line=p["line"] + line) for p in paragraphs],
+            scrub_table_align=True)
         # A pasted list starts its own numbering at one; renumbering makes
         # it continue whatever it was dropped into.
         self._renumber_lists()
@@ -3663,13 +3724,19 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 shifted.append(moved)
         return shifted
 
-    def _apply_paragraphs(self, text_widget, paragraphs):
+    def _apply_paragraphs(self, text_widget, paragraphs,
+                          scrub_table_align=False):
         """Re-apply saved list lines as live tags, for loading.
 
         A stored entry only earns an indent if the line still starts with a
         marker of that kind. Otherwise a note edited outside the app, or one
         whose body was rewritten while its paragraphs were not, would come back
         with a plain line indented as though it were an item.
+
+        *scrub_table_align* is the paste path: alignment a SOURCE document
+        carried on its table rows is not a decision the user made here, and
+        honouring it re-centred pasted tables "for no reason". A saved note
+        loads with False, so a deliberately placed table keeps its place.
         """
         total = int(text_widget.index("end-1c").split(".")[0])
         for paragraph in normalize_paragraphs(paragraphs, total):
@@ -3677,6 +3744,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             if line_no > total:
                 continue
             align = paragraph.get("align", "left")
+            if align != "left" and scrub_table_align and is_table_row(
+                    text_widget.get(f"{line_no}.0", f"{line_no}.end")):
+                align = "left"
             if align != "left":
                 text_widget.tag_add(f"align_{align}",
                                     f"{line_no}.0", f"{line_no}.end+1c")
@@ -3835,9 +3905,18 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         columns = max(1, min(self.TABLE_GRID_COLUMNS, int(columns)))
         line_no = int(self.body_text.index("insert").split(".")[0])
         line = self.body_text.get(f"{line_no}.0", f"{line_no}.end")
-        before = "" if not line.strip() else "\n"
+        # Two adjacent runs of pipe rows read as ONE block, so a table
+        # created right under another fused with it -- mismatched column
+        # counts and all. An empty line above (and below, when the next
+        # line is also a table) keeps every table a block of its own.
+        above = (self.body_text.get(f"{line_no - 1}.0", f"{line_no - 1}.end")
+                 if line_no > 1 else "")
+        below = self.body_text.get(f"{line_no + 1}.0", f"{line_no + 1}.end")
+        before = ("\n" if (line.strip()
+                           or core_tables.is_table_row(above)) else "")
+        after = "\n" + ("\n" if core_tables.is_table_row(below) else "")
         block = "\n".join(core_tables.blank_table(rows, columns))
-        self.body_text.insert("insert", before + block + "\n")
+        self.body_text.insert("insert", before + block + after)
         first = line_no + (1 if before else 0)
         self._align_table_block(first)
         self._resync_list_tags()
@@ -6137,6 +6216,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             except tk.TclError:
                 pass
         self._refresh_placeholder_colors()
+        # The drawn tables carry their colours in canvas items; without a
+        # rebuild they kept the OLD theme until the next edit touched them.
+        self._render_table_grids()
         self.refresh_weekday_buttons()
         self.on_end_mode_changed()
         self.style_notebook()

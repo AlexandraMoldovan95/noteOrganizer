@@ -2394,14 +2394,27 @@ app.update()
 check('committing an unchanged cell keeps the alignment',
       core_tables.cell_alignments(lines_now()[0])[0] == 'center')
 
-# A paragraph-alignment tag left on a table's line centres the embedded
-# window itself: the whole table jumped to the middle of the note. Table
-# lines refuse those tags.
-app.body_text.tag_add('align_center', '1.0', '1.end')
+# An alignment tag on a table's line positions the embedded window --
+# a FEATURE now (Center table on page). The accidental path is pasted
+# alignment, scrubbed as it enters; and the tag's spill over the newline
+# is trimmed so a line typed under the table inherits nothing.
+app.body_text.tag_add('align_center', '1.0', '1.end+1c')
 app._resync_list_tags()
 app.update()
-check('a table line sheds paragraph alignment, so the table stays put',
-      not app.body_text.tag_ranges('align_center'))
+check('a deliberate table position survives the resync',
+      app._grid_table_align_of(1) == 'center')
+check('but never bleeds past the newline onto the next line',
+      not any(str(t) == 'align_center'
+              for t in app.body_text.tag_names('1.end')))
+app.body_text.tag_remove('align_center', '1.0', '2.0')
+app._apply_paragraphs(app.body_text, [{'line': 0, 'align': 'center'}],
+                      scrub_table_align=True)
+check('pasted alignment on a table row is scrubbed to the left',
+      app._grid_table_align_of(1) == 'left')
+app._apply_paragraphs(app.body_text, [{'line': 0, 'align': 'center'}])
+check('while a loaded note keeps its deliberate position',
+      app._grid_table_align_of(1) == 'center')
+app.body_text.tag_remove('align_center', '1.0', '2.0')
 
 # ---- THE SCROLL STAYS PUT, AND EVERYTHING LANDS IN THE OPEN CELL ----
 # Tearing the grids down shrinks the editor page for a moment, and the
@@ -3239,10 +3252,11 @@ try:
              if isinstance(w, NO.tk.Frame)][0]
     _swF = [w for w in _colF.winfo_children()
             if isinstance(w, NO.tk.Button)]
-    check(f'the popup holds every swatch over a themed hairline '
+    check(f'the popup holds every swatch over the softened accent '
           f'({len(_swF)})',
           len(_swF) == len(NO.HIGHLIGHT_COLOR_PALETTE)
-          and str(_colF.cget('bg')) == NO.hairline(app.colors))
+          and str(_colF.cget('bg')) == app._blend_hex(
+              app.colors['accent'], app.colors['card'], 0.35))
     _swF[0].invoke()
     app.update()
     _tE = app._grid_at_line(1)
@@ -3307,6 +3321,90 @@ app._toggle_list('bullet')
 app.update()
 check('and a caret parked inside the table adds no marker either',
       body() == _beforeS4)
+set_body('')
+
+# ---- A NEW TABLE UNDER AN OLD ONE STAYS A TABLE OF ITS OWN ----
+# Two adjacent runs of pipe rows read as one block, so a table created
+# right under another fused with it: mismatched columns, a garbled grid,
+# loose '---' lines on screen.
+set_body('| Cap | G |\n| --- | --- |\n| unu | doi |')
+app._render_table_grids()
+app.update()
+app.body_text.mark_set('insert', 'end')
+app.update()
+app._insert_table(2, 3)
+app.update()
+app._commit_cell_editor()
+app.update()
+check(f'a table inserted under another gets a block of its own '
+      f'({len(app._table_grids)} grids)',
+      len(app._table_grids) == 2
+      and app.body_text.get('4.0', '4.end').strip() == '')
+
+# ---- THE TABLE TAKES A PLACE ON THE PAGE, AND KEEPS IT ----
+_tP = app._grid_at_line(1)
+_posted = []
+_real_popup = NO.tk.Menu.tk_popup
+NO.tk.Menu.tk_popup = lambda _m, *a, **k: _posted.append(_m)
+try:
+    _c00 = _tP['cells'][(0, 0)]
+    app._grid_menu(_tP, type('E', (), {
+        'x': int(_c00['x'] + 12), 'y': int(_c00['y'] + 6),
+        'x_root': 0, 'y_root': 0})())
+    _labels = _menu_entries(_posted[-1]) if _posted else []
+    check('the table menu offers a place on the page',
+          'Center table on page' in _labels
+          and 'Table right on page' in _labels)
+finally:
+    NO.tk.Menu.tk_popup = _real_popup
+app._grid_set_table_align(_tP, 'center')
+app.update()
+app.update_idletasks()
+_bboxL = app.body_text.bbox('1.0')
+check('a centred table really moves right on the page',
+      _bboxL is not None and _bboxL[0] > 40)
+app._grid_insert_row(_tP, 1)
+app.update()
+_tP = app._grid_at_line(1)
+# A WHOLESALE rewrite too (fill goes through replace_block, which
+# deletes the tagged text): the position must be read before the delete
+# and put back after -- and the freshly rebuilt WINDOW character must
+# carry the tag itself, because Tk justifies the display line by its
+# first character; without that the read said center while the table
+# visibly snapped left.
+app._grid_fill_selection({'info': _tP, 'box': (1, 0, 1, 0)}, 'x')
+app.update()
+app.update_idletasks()
+check('and an op on the table does not shake it loose',
+      app._grid_table_align_of(1) == 'center'
+      and any(str(t) == 'align_center'
+              for t in app.body_text.tag_names('1.0')))
+check('the position is saved with the note',
+      any(p.get('align') == 'center'
+          for p in app._extract_paragraphs(app.body_text)))
+_tP = app._grid_at_line(1)
+app._grid_set_table_align(_tP, 'left')
+app.update()
+check('and Table left on page brings it back',
+      app._grid_table_align_of(1) == 'left')
+set_body('')
+
+# ---- THE THEME SWITCH REPAINTS THE DRAWN TABLES ----
+set_body('| Cap | G |\n| unu | doi |')
+app._render_table_grids()
+app.update()
+_oldT = app.theme_name
+app.set_theme('light' if 'dark' in str(_oldT) else 'dark')
+app.apply_theme()
+app.update()
+_tT = app._grid_at_line(1)
+check('the theme switch repaints the drawn header',
+      _tT is not None
+      and _tT['canvas'].itemcget(_tT['cells'][(0, 0)]['rect'], 'fill')
+      == NO.inset_surface(app.colors))
+app.set_theme(_oldT)
+app.apply_theme()
+app.update()
 set_body('')
 
 NO.clipboard.read_html = _real_read_html
