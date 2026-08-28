@@ -57,6 +57,9 @@ jobs:
       - name: Calculator expression evaluator tests
         run: python3 test_calculator.py
 
+      - name: Table tests -- rows as lines of text, both ways through HTML
+        run: python3 test_tables.py
+
       - name: Entry-module identity — Settings labels survive a real launch
         # Builds a window, so it needs the virtual display. This one cannot
         # be folded into the QA scripts: they all do `import note_organizer`,

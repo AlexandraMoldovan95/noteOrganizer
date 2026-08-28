@@ -47,7 +47,8 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PAYLOAD = ["note_organizer.py", "noteorganizer"]
 
 STANDALONE = ["test_recurrence.py", "test_calculator.py", "test_data_safety.py",
-              "test_entry_module_identity.py", "test_richtext.py"]
+              "test_entry_module_identity.py", "test_richtext.py",
+              "test_tables.py"]
 QA = [f"qa{i}.py" for i in range(1, 10)]
 
 # The two checks CI runs before any of the above. They were missing here, so a

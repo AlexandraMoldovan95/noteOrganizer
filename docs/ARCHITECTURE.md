@@ -148,6 +148,22 @@ The formatting toolbar wraps when it will not fit on one row, so no control can 
 
 That split is deliberate, and it was learned the hard way. A check that measures widget widths is testing whatever font the machine has: the same bar is 577px here and 827px under Xvfb, and which control lands on a row boundary — and therefore whether the bug shows at all — moves with it. Given numbers, the same inputs give the same answer everywhere, so the behaviour can be pinned down exactly. The widget side keeps only the measuring and the packing.
 
+### Tables: plain text is the store, a drawn grid is the view
+
+A table in a note is stored as ordinary lines of text in the note body, in Markdown's own table syntax:
+
+```
+| Day       | Lunch  |
+| :-------: | ------ |
+| Monday    | Soup   |
+```
+
+What the user *sees* is none of that: the pipe lines are hidden, and a canvas-drawn grid is embedded in their place — real cell borders, a highlighted header, merged cells, one floating entry box that materialises over whichever cell is being edited (the spreadsheet architecture: hundreds of cells are cheap to *draw*, and only one of them ever needs to be a live widget).
+
+Keeping the text as the single source of truth is the load-bearing decision. Search finds words inside cells because they are simply words in the note. Share codes, backups, export and word count carry tables with zero table-specific code. A table pasted from Excel or a web page becomes text and therefore a grid; a table copied out arrives in any Markdown-aware tool as a table. And the second row — `| :---: | --- |` — is not decoration: the dash count stores each column's hand-dragged width, the colons store its alignment, and a `~` marks a hidden column, so even *layout* survives every trip through plain text.
+
+The grid is rebuilt (never patched) at settled moments — load, paste, leaving the block, a structural edit — and every editing gesture writes through to the hidden text first, so the drawn view can always be thrown away and rebuilt from it. The costs live where they can be tested: Tk counts text columns in UTF-16 units (an emoji is two of them), embedded windows occupy an index but are skipped by character counts, and a rebuild mid-gesture destroys the canvas under the mouse — each of those has burned this codebase once, and each now has a regression check in `qa/qa1.py` and a war story in [ISSUES_LOG.md](ISSUES_LOG.md).
+
 ### Large lists: paginate, don't virtualize (yet)
 
 Trash and the multi-note Share panel both cap how many rows they build at once (50 and 100 respectively), with a "Show more" button to reveal the next batch, rather than rendering every entry immediately. This was enough to take the Trash panel from ~1.8s to ~100ms with 600 entries. The main note list doesn't do this yet — see [ROADMAP.md](ROADMAP.md) for real windowed virtualization, which would help further at very large note counts.

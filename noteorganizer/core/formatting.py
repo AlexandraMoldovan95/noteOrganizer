@@ -68,6 +68,17 @@ FONT_FAMILIES = (
     "Courier New",
 )
 
+# Columns can only line up in a face where every character is the same
+# width. Both of these ship with Windows; the first the system actually has
+# is the one used, and a table falls back to the note's own font rather than
+# to something the reader does not have.
+# Windows first (Consolas ships everywhere the app does), then the
+# families a Linux CI runner actually has -- without them the table
+# face silently fell back to the editor's proportional font there.
+MONOSPACE_FAMILIES = ("Consolas", "Courier New", "DejaVu Sans Mono",
+                      "Liberation Mono", "Noto Sans Mono", "Ubuntu Mono",
+                      "Courier")
+
 FONT_SIZES = (9, 10, 11, 12, 14, 16, 20, 24)
 
 
@@ -556,12 +567,15 @@ def shift_spans(spans, shifts):
     out = []
     for span in spans:
         start, end = span["start"], span["end"]
-        for at, delta in shifts:
-            if at < start:
-                start += delta
-            if at < end:
-                end += delta
+        # Every offset in *shifts* describes the text as it was, so each one
+        # has to be judged against the span as it was. Adding the deltas one
+        # at a time and comparing against the running total counted a later
+        # shift as being "before" a span it had itself pushed past: with two
+        # cells padded on one row, the bold in the first cell ended up in the
+        # second. Renumbering never showed it, because a line rarely has more
+        # than one marker widening before the same word.
         moved = dict(span)
-        moved["start"], moved["end"] = start, end
+        moved["start"] = start + sum(d for at, d in shifts if at < start)
+        moved["end"] = end + sum(d for at, d in shifts if at < end)
         out.append(moved)
     return out

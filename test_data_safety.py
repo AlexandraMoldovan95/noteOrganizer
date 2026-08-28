@@ -12,6 +12,30 @@ import os
 import json
 import shutil
 import tempfile
+# ---- REFUSE TO RUN BESIDE REAL NOTES ----
+# This file deletes and rewrites notes_data.json in its own directory.
+# Run from the project root it destroys the real notebook -- which
+# happened once, despite the warning above being here the whole time. A
+# warning depends on being read; this check does not. CI and a proper
+# scratch copy have no notes_data.json here, so they pass through.
+def _guard_real_notes():
+    here = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                        "notes_data.json")
+    try:
+        with open(here, encoding="utf-8") as f:
+            notes = json.load(f)
+    except (IOError, OSError, ValueError):
+        return
+    if isinstance(notes, list) and notes:
+        sys.exit(
+            "REFUSING to run: the notes_data.json beside this test holds "
+            "%d notes.\nThis test deletes and rewrites that file. Run it "
+            "only from a throwaway copy\noutside the project tree -- see "
+            "CLAUDE.md, 'QA testing safety'." % len(notes))
+
+
+_guard_real_notes()
+
 import note_organizer as NO
 # Patch targets live in the module that LOOKS THE NAME UP. run_migrations and
 # purge_stale_copies moved into noteorganizer.core.paths, so they resolve
@@ -497,6 +521,45 @@ check('color_tag_name is stable and lowercase', _ctn('highlight', '#FFF3B0') == 
 check('font_tag_for gives bold+italic its own compound tag',
       _ftf(True, True) == 'bold_italic')
 check('font_tag_for returns None when neither is set', _ftf(False, False) is None)
+
+# --- the emoji that killed every save after it ---------------------------
+# Tk stores text in UTF-16 and hands astral characters over as surrogate
+# pairs. json.dump cannot encode those, and the old except clause caught
+# only I/O errors -- so the exception flew past it, autosave crash-logged
+# sixteen times in a row, and every edit after the first emoji lived only
+# in the running app. Saving now recombines pairs into the real character,
+# replaces lone surrogates, reports any other failure instead of raising,
+# and removes the half-written .tmp it would otherwise leave behind.
+from noteorganizer.core import storage as _storage
+from noteorganizer.core import paths as _paths
+
+# Earlier sections re-point the data paths at their own temp dirs; this one
+# depends on nothing they left behind and says so by pointing at the cwd
+# itself, the same way initialise() does at startup.
+_paths.DATA_FILE = os.path.join(os.getcwd(), "notes_data.json")
+
+_pair = chr(0xD83D) + chr(0xDE00)          # what Tk gives for U+1F600
+_ok, _exc = _storage.save_notes(
+    [{"id": 991, "title": "x " + _pair + " y", "body": ""}])
+check("a surrogate-pair emoji no longer kills the save", _ok and _exc is None)
+import json as _json
+_back = _json.load(open(_paths.DATA_FILE, encoding="utf-8"))
+check("and it lands as the real character, not the pair",
+      chr(0x1F600) in _back[0]["title"] and len(_back[0]["title"]) == 5)
+check("no half-written .tmp is left beside the file",
+      not os.path.exists(_paths.DATA_FILE + ".tmp"))
+
+_ok2, _exc2 = _storage.save_notes([{"id": 992, "title": "l " + chr(0xD83D)}])
+_back2 = _json.load(open(_paths.DATA_FILE, encoding="utf-8"))
+check("a lone surrogate is replaced rather than poisoning the file",
+      _ok2 and chr(0xFFFD) in _back2[0]["title"])
+
+_ok3, _exc3 = _storage.save_notes([{"id": 993, "bad": {1, 2}}])
+check("an unserializable note reports (False, exc) instead of raising",
+      _ok3 is False and isinstance(_exc3, TypeError))
+check("and cleans up its .tmp too",
+      not os.path.exists(_paths.DATA_FILE + ".tmp"))
+_storage.save_notes([])
 
 print()
 print(f"FAILURES: {fails if fails else 'none'}")

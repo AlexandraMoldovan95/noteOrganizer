@@ -37,6 +37,7 @@ import re
 from html import escape
 from html.parser import HTMLParser
 
+from . import tables
 from .formatting import (
     BULLET_GLYPHS,
     MAX_INDENT,
@@ -44,6 +45,7 @@ from .formatting import (
     normalize_formatting,
     normalize_paragraphs,
     parse_list_marker,
+    shift_spans,
 )
 
 # A pasted web page can carry a great deal of markup. These are not tuning
@@ -55,6 +57,12 @@ MAX_PASTE_SPANS = 2_000
 # Tags that mean "a new line starts here".
 _BLOCK_TAGS = {"p", "div", "br", "tr", "h1", "h2", "h3", "h4", "h5", "h6",
                "blockquote", "pre", "section", "article"}
+
+# A cell is not a block tag: a cell does not start a line, the row does. Its
+# text is wrapped in the pipes that make it a cell, opened at the start of
+# each cell and closed once at the end of the row, which puts exactly one
+# pipe between neighbours and one at either end -- "| A | B |".
+_CELL_TAGS = {"td", "th"}
 
 # Inline tags this app has a style for. Anything else is dropped.
 _STYLE_TAGS = {
@@ -156,6 +164,12 @@ class _Reader(HTMLParser):
     # collapsing them there throws away the only structure on offer and
     # produces one run-on paragraph.
     keep_newlines = False
+    # How deep inside <td>/<th> the parser currently is. A cell is one line
+    # of the note, so a block tag inside it -- and a spreadsheet puts a <p>
+    # or a <div> in every cell -- must not start a new one. Left unguarded,
+    # a pasted table shattered: the header row survived because its cells
+    # held bare text, and every row under it became six separate lines.
+    cell_depth = 0
 
     def _add(self, chunk):
         if self.length >= MAX_PASTE_CHARS:
@@ -200,8 +214,35 @@ class _Reader(HTMLParser):
                 return
 
     # -- parser callbacks ------------------------------------------------
+    @staticmethod
+    def _span_attr(attrs, name):
+        try:
+            return max(1, min(30, int(str(attrs.get(name, "1")).strip())))
+        except (TypeError, ValueError):
+            return 1
+
+    def _owed_merge_cell(self):
+        """Emit one owed marker cell if a rowspan covers the current column."""
+        pending = getattr(self, "_tbl_pending", None)
+        if not pending or self._tbl_col not in pending:
+            return False
+        left, marker = pending[self._tbl_col]
+        self._add(tables.CELL + " " + marker + " ")
+        if left - 1 > 0:
+            pending[self._tbl_col][0] = left - 1
+        else:
+            del pending[self._tbl_col]
+        self._tbl_col += 1
+        return True
+
     def handle_starttag(self, tag, attrs):
         attrs = dict(attrs)
+        if tag == "table":
+            self._tbl_active = getattr(self, "_tbl_active", 0) + 1
+            self._tbl_pending = {}
+            self._tbl_col = 0
+        elif tag == "tr" and getattr(self, "_tbl_active", 0):
+            self._tbl_col = 0
         if tag in _STYLE_TAGS:
             self._open.append((_STYLE_TAGS[tag], None, self.length))
         if tag in ("ul", "ol"):
@@ -218,8 +259,32 @@ class _Reader(HTMLParser):
                 if indent:
                     entry["indent"] = indent
                 self.paragraphs.append(entry)
+        elif tag in _CELL_TAGS:
+            self.cell_depth += 1
+            css = _css(dict(attrs).get("style"))
+            self._tbl_cell_align = css.get("text-align", "").strip().lower()
+            # Columns still covered by a rowspan from an earlier row are
+            # owed their marker before this cell can take its place --
+            # without it every later cell lands one column too far left,
+            # which is how a merged header shears the whole table under it.
+            while self._owed_merge_cell():
+                pass
+            self._tbl_cell = (getattr(self, "_tbl_col", 0),
+                              self._span_attr(attrs, "colspan"),
+                              self._span_attr(attrs, "rowspan"))
+            # An extra lead space is how the padding says "not left":
+            # cell_alignments reads two-plus on the left as right-aligned,
+            # two-plus on both sides as centred.
+            lead = ("  " if self._tbl_cell_align in ("center", "right")
+                    else " ")
+            self._add(tables.CELL + lead)
         elif tag in _BLOCK_TAGS:
-            self._newline()
+            if self.cell_depth:
+                # Whatever the block meant, inside a cell it can only be a
+                # gap between words.
+                self._add(" ")
+            else:
+                self._newline()
 
         style = _css(attrs.get("style"))
         for prop, name in (("color", "text_color"),
@@ -243,8 +308,47 @@ class _Reader(HTMLParser):
             if self._lists:
                 self._lists.pop()
             self._newline()
-        elif tag in _BLOCK_TAGS:
+        elif tag in _CELL_TAGS:
+            self.cell_depth = max(0, self.cell_depth - 1)
+            self._add("  " if getattr(self, "_tbl_cell_align", "")
+                      == "center" else " ")
+            col, span_c, span_r = getattr(self, "_tbl_cell", (0, 1, 1))
+            # A colspan is written out as the anchor followed by "<" cells,
+            # and a rowspan owes "^" cells to the rows below -- "^" under
+            # the anchor, "<" under the rest of its width, so the rectangle
+            # reads back unambiguously.
+            for _ in range(span_c - 1):
+                self._add(tables.CELL + " " + tables.MERGE_LEFT + " ")
+            if span_r > 1:
+                pending = getattr(self, "_tbl_pending", None)
+                if pending is None:
+                    pending = self._tbl_pending = {}
+                for cover in range(col, col + span_c):
+                    pending[cover] = [
+                        span_r - 1,
+                        tables.MERGE_UP if cover == col else tables.MERGE_LEFT]
+            self._tbl_col = col + span_c
+        elif tag == "table":
+            self._tbl_active = max(0, getattr(self, "_tbl_active", 1) - 1)
+            self._tbl_pending = {}
+        elif tag == "tr":
+            if getattr(self, "_tbl_active", 0):
+                # Rowspan columns the row never reached still owe markers,
+                # with empty filler for any gap on the way to them.
+                pending = getattr(self, "_tbl_pending", {})
+                for cover in sorted(list(pending)):
+                    if cover < self._tbl_col:
+                        continue
+                    while self._tbl_col < cover:
+                        self._add(tables.CELL + "  ")
+                        self._tbl_col += 1
+                    self._owed_merge_cell()
+            # The row's closing pipe, before the newline _BLOCK_TAGS gives it.
+            self._add(tables.CELL)
             self._newline()
+        elif tag in _BLOCK_TAGS:
+            if not self.cell_depth:
+                self._newline()
         elif tag in ("span", "font"):
             for name in ("text_color", "highlight", "bold", "italic"):
                 if any(o[0] == name for o in self._open):
@@ -298,6 +402,17 @@ def html_to_note(fragment):
     spans = [s for s in spans if s["end"] > s["start"] and s["start"] < len(text)]
     for span in spans:
         span["end"] = min(span["end"], len(text))
+    # A pasted table arrives with cells of whatever width they had. Padding
+    # them here rather than in the editor keeps the offsets and the text in
+    # step from the moment the note is built -- and align() reports what it
+    # moved, so the spans move with it.
+    if tables.find_blocks(text):
+        # A cell that held a block tag has picked up the space put in its
+        # place, and one that held several has picked up several. align()
+        # rebuilds each row from its cells' stripped text, which settles all
+        # of it, but the spans have to be moved by however much it removed.
+        text, table_shifts = tables.align(text)
+        spans = shift_spans(spans, table_shifts)
     paragraphs = [dict(p) for p in reader.paragraphs]
     return (text,
             normalize_formatting(spans),
@@ -362,7 +477,27 @@ def note_to_html(text, formatting=None, paragraphs=None):
     lines = text.split("\n")
     props = {p["line"]: p for p in normalize_paragraphs(paragraphs or [], len(lines))}
 
-    out, offset, open_lists = [], 0, []
+    # Merge markers only make sense against their whole block, so every
+    # block's matrix is resolved up front and looked up per line.
+    merge_at = {}
+    separator_lines = set()
+    for block_first, block_last in tables.find_blocks(text):
+        block = lines[block_first:block_last + 1]
+        sep_at = tables.separator_index(block)
+        if sep_at is not None:
+            # Mechanics, not data: the separator's dashes never reach the
+            # markup a word processor sees.
+            separator_lines.add(block_first + sep_at)
+        data_lines = [n for n in range(block_first, block_last + 1)
+                      if n - block_first != sep_at]
+        matrix = [tables.split_row(lines[n]) for n in data_lines]
+        m_spans, m_covered = tables.merge_map(matrix)
+        for r, n in enumerate(data_lines):
+            merge_at[n] = (
+                {c: m_spans[(ar, c)] for (ar, c) in m_spans if ar == r},
+                {c for (rr, c) in m_covered if rr == r})
+
+    out, offset, open_lists, in_table = [], 0, [], False
     for number, line in enumerate(lines):
         entry = props.get(number, {})
         kind = entry.get("kind")
@@ -392,6 +527,15 @@ def note_to_html(text, formatting=None, paragraphs=None):
             out.append("</ul>" if closed == "bullet" else "</ol>")
             if was_nested:
                 out.append("</li>")
+        row = None if kind else tables.cell_bounds(line) if tables.is_table_row(line) else None
+        if number in separator_lines:
+            # The separator stays inside the table run (so in_table holds)
+            # but emits nothing.
+            offset += len(line) + 1
+            continue
+        if in_table and row is None:
+            out.append("</table>")
+            in_table = False
         if kind:
             while len(open_lists) < target:
                 # A sub-list belongs *inside* the item it hangs off, so the
@@ -405,12 +549,41 @@ def note_to_html(text, formatting=None, paragraphs=None):
                 open_lists.append((kind, nested))
                 out.append("<ul>" if kind == "bullet" else "<ol>")
             out.append(f"<li>{_line_html(body, spans, body_offset)}</li>")
+        elif row is not None:
+            # Real <table> markup rather than the pipes, for the same reason
+            # a list goes out as <ul>: a word processor understands one and
+            # would paste the other as a row of pipe characters. Each cell
+            # is rendered from its own offsets so formatting inside it
+            # survives the trip.
+            if not in_table:
+                out.append("<table>")
+                in_table = True
+            row_spans, row_covered = merge_at.get(number, ({}, set()))
+            row_aligns = tables.cell_alignments(line)
+            cells = []
+            for c, (start, end) in enumerate(row):
+                if c in row_covered:
+                    continue
+                rs, cs = row_spans.get(c, (1, 1))
+                attr = ""
+                if cs > 1:
+                    attr += f' colspan="{cs}"'
+                if rs > 1:
+                    attr += f' rowspan="{rs}"'
+                if c < len(row_aligns) and row_aligns[c] != tables.ALIGN_LEFT:
+                    attr += f' style="text-align:{row_aligns[c]};"'
+                cells.append(f"<td{attr}>"
+                             f"{_line_html(line[start:end], spans, offset + start)}"
+                             f"</td>")
+            out.append(f"<tr>{''.join(cells)}</tr>")
         else:
             align = entry.get("align")
             style = f' style="text-align:{align};"' if align else ""
             out.append(f"<div{style}>{_line_html(body, spans, body_offset) or '<br>'}</div>")
         offset += len(line) + 1
 
+    if in_table:
+        out.append("</table>")
     while open_lists:
         closed, was_nested = open_lists.pop()
         out.append("</ul>" if closed == "bullet" else "</ol>")
@@ -495,9 +668,12 @@ def _looks_wrapped(lines):
     """True when these lines were broken by a column, not on purpose."""
     if len(lines) < _MIN_WRAPPED_LINES:
         return False
-    # A list's line breaks are the list. Never touch them, and do not let a
-    # list anywhere in the run make the rest of it look like prose.
+    # A list's line breaks are the list, and a table's rows are its rows.
+    # Never touch either, and do not let one anywhere in the run make the
+    # rest of it look like prose.
     if any(parse_list_marker(line.lstrip(" \t"))[0] for line in lines):
+        return False
+    if any(tables.is_table_row(line) for line in lines):
         return False
     width = max(len(line) for line in lines)
     if width < _MIN_COLUMN_WIDTH:

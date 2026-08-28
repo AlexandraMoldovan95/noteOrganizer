@@ -38,6 +38,12 @@ dist/
 Thumbs.db
 *.log
 
+# --- Runtime artifacts the app writes beside itself when run from source ---
+# crash_log.txt is the app's own last-resort logger; the .tmp is a save
+# that failed partway and is overwritten by the next successful save.
+crash_log.txt
+notes_data.json.tmp
+
 # --- QA scratch files (keep the tracked test plan, ignore working copies) ---
 qa/__pycache__/
 qa/*.json

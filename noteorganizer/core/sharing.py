@@ -64,8 +64,11 @@ MAX_SHARED_NOTES = 200                # most notes one code may carry
 
 # Only these fields travel in a share code. Notably absent: id (assigned fresh
 # on import), attachments, updated, overrides/exceptions.
+# "paragraphs" carries list indents/alignment and a table's place on the
+# page -- without it a shared note arrived flush left with flat lists.
 SHAREABLE_FIELDS = [
     "title", "body", "formatting", "comments", "category", "date", "color", "recurrence",
+    "paragraphs",
 ]
 
 

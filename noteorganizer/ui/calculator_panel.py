@@ -323,6 +323,20 @@ class CalculatorPanelMixin:
         from the main Insert button or clicking a history entry — builds
         a clean log downward instead of gluing results onto wherever the
         cursor happens to be sitting."""
+        # With a table cell open, the result belongs in the cell -- the
+        # insert used to land beside the table, where the caret guard had
+        # parked the body cursor.
+        editor = getattr(self, "_cell_editor", None)
+        if editor is not None:
+            try:
+                entry = editor["entry"]
+                pos = entry.index(tk.INSERT)
+                entry.insert(pos, formula)
+                entry.icursor(pos + self._tk_units(formula))
+            except tk.TclError:
+                pass
+            self._schedule_autosave(skip_word_count=True)
+            return
         has_prior = "calc_insert_end" in self.body_text.mark_names()
         if self.focus_get() is not self.body_text:
             self.body_text.focus_set()

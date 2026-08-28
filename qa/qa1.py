@@ -1,6 +1,7 @@
 import sys
 import time
 import note_organizer as NO, tkinter as tk, json, os, re
+from noteorganizer.core import tables as core_tables
 fails=[]
 def check(name, cond):
     print(('PASS' if cond else 'FAIL'), name)
@@ -631,6 +632,8 @@ check('Return and BackSpace are bound on the body text',
 
 
 def set_body(text):
+    app._teardown_table_grids()
+    app._last_caret_line = None
     app.body_text.delete('1.0', 'end')
     app.body_text.insert('1.0', text)
     app.update()
@@ -1564,10 +1567,30 @@ for _w in (1400, 900, 1400):
     check(f'no control is dropped when the bar is told it has {_w}px '
           f'({len(_past)} were)', not _past)
 
-app._on_format_bar_resize(_WidthEvent(1400))
+# The room has to be REAL: a synthetic width event is undone the
+# moment update_idletasks() delivers the bar's genuine <Configure>
+# with its true width -- which is exactly what happened on the CI,
+# where wider faces mean the same window genuinely lacks room for one
+# row (and the app wraps, correctly). So: widen the actual window by
+# what the controls request beyond what the bar really has, let the
+# genuine event reflow, assert, and put the window back.
+_fmt_need = sum(w.winfo_reqwidth() + px[0] + px[1]
+                for w, px, _ip, _fl, _py in app._fmt_bar_items)
+_geo_before = app.geometry()
+_bar_now = app._fmt_bar.winfo_width()
+if _bar_now < _fmt_need + 60:
+    _w_now = app.winfo_width()
+    app.geometry(f'{_w_now + (_fmt_need + 60 - _bar_now)}'
+                 f'x{app.winfo_height()}')
+app.update()
 app.update_idletasks()
-check('every control is on one row when there is room for one',
-      len([r for r in app._fmt_bar_rows if r.winfo_ismapped()]) == 1)
+_rows_state = list(getattr(app, '_fmt_rows_used', []))
+check(f'every control is on one row when there is room for one '
+      f'(rows={_rows_state}, need={_fmt_need}, '
+      f'bar={app._fmt_bar.winfo_width()})',
+      _rows_state.count(True) == 1)
+app.geometry(_geo_before)
+app.update()
 check('and all of them are showing',
       all(c.winfo_manager() == 'pack' for c in _fmt_real))
 app._reflow_format_bar()
@@ -1891,6 +1914,1646 @@ _stub_clipboard()
 clear_selection()
 app.update()
 check('copying nothing is left to Tk', app._copy_formatted() is None)
+
+# ---- TABLES IN THE EDITOR ----
+# A row is drawn in a monospace face, because columns cannot line up in a
+# proportional one. The face is derived from the text, exactly like a list's
+# margin: the pipes are what make the line a row, and the tag is only how
+# that is shown. Nothing about it is stored with the note.
+_stub_clipboard(html=('<p>Shopping</p><table>'
+                      '<tr><th>Name</th><th>Qty</th></tr>'
+                      '<tr><td>Milk</td><td>2</td></tr>'
+                      '<tr><td>Eggs and bread</td><td>12</td></tr></table>'
+                      '<p>Done</p>'))
+set_body('')
+app._on_body_paste()
+app.update()
+_rows = body().split('\n')
+# The cells are what matter; the spaces between them follow MIN_COLUMN and
+# would have to be rewritten here every time that moved.
+check(f'a pasted table keeps its cells apart in the editor ({_rows[1]!r})',
+      [_rows[0], _rows[4]] == ['Shopping', 'Done']
+      and [core_tables.split_row(r) for r in _rows[1:4]]
+      == [['Name', 'Qty'], ['Milk', '2'], ['Eggs and bread', '12']])
+
+
+def _mono(line_no):
+    # Probed at the line's last character: a rendered grid's window sits at
+    # column 0 and carries no tags of its own.
+    return app.TABLE_TAG in app.body_text.tag_names(f'{line_no}.end -1c')
+
+
+check('the table rows are drawn in the monospace face',
+      _mono(2) and _mono(3) and _mono(4))
+check('and a grid is rendered over them',
+      app._grid_at_line(2) is not None)
+check('whose cells hold the pasted values',
+      [[app._grid_at_line(2)['cells'][(r, c)]['value'] for c in range(2)]
+       for r in range(3)]
+      == [['Name', 'Qty'], ['Milk', '2'], ['Eggs and bread', '12']])
+check('the text around the table is not', not _mono(1) and not _mono(5))
+_face = NO.tkfont.Font(root=app,
+                       font=app.body_text.tag_cget(app.TABLE_TAG, 'font'))
+check(f'the face is a monospace one '
+      f'({app.body_text.tag_cget(app.TABLE_TAG, "font")!r})',
+      _face.measure('i') == _face.measure('W'))
+
+# Typed by hand rather than pasted: the same text has to give the same
+# result, since it is the text that decides.
+set_body('| a | b |')
+app._resync_list_tags()
+app.update()
+check('a row typed by hand is a row too', _mono(1))
+
+# And a line that stops being a row loses the face -- otherwise a table
+# taken apart by hand would leave monospace prose behind it.
+app.body_text.delete('1.0', '1.1')
+app._resync_list_tags(1)
+app.update()
+check(f'deleting the opening pipe ends the row ({body()!r})', not _mono(1))
+
+# The face follows the note's own size, or a table would stay at whatever
+# size it was built at while the text around it moved.
+_before_size = str(app.body_text.tag_cget(app.TABLE_TAG, 'font'))
+app._set_editor_font(size=20)
+app.update()
+_after_size = str(app.body_text.tag_cget(app.TABLE_TAG, 'font'))
+check(f'the table face follows the editor font size ({_before_size!r} -> '
+      f'{_after_size!r})', _after_size.endswith('20') and _before_size != _after_size)
+app._set_editor_font(size=12)
+app.update()
+
+# ---- A TABLE IS LINED UP AGAIN ONCE IT IS LEFT ----
+# Not on every keystroke: the columns would jump about under the hands of
+# whoever is typing, and each keystroke would rewrite characters. Waiting
+# until the row is left means one rewrite, at a moment nobody is mid-word.
+set_body('before\n| Name | Qty |\n| Milk | 2   |\nafter')
+app._resync_list_tags()
+app.update()
+_cell = app.body_text.search('Name', '1.0', 'end')
+app.body_text.tag_add('bold', _cell, _cell + '+4c')
+app.update()
+
+
+def _caret(index):
+    """Move the caret and let the app notice, as a key or a click would."""
+    app.body_text.mark_set('insert', index)
+    app._align_table_on_leaving()
+    app.update()
+
+
+_caret('3.7')
+app.body_text.insert('insert', ' and bread')
+app.update()
+check(f'a table is left alone while it is being typed in '
+      f'({lines_now()[2]!r})',
+      lines_now()[2] == '| Milk  and bread| 2   |')
+
+_caret('2.3')
+check('and while the caret moves between its own rows',
+      lines_now()[2] == '| Milk  and bread| 2   |')
+
+_caret('4.0')
+_after = lines_now()
+check(f'but is lined up once the caret leaves it ({_after[1]!r})',
+      [_after[0], _after[3]] == ['before', 'after']
+      and len(_after[1]) == len(_after[2])
+      and [core_tables.split_row(r) for r in _after[1:3]]
+      == [['Name', 'Qty'], ['Milk  and bread', '2']])
+
+# The reason only the spaces are edited: Tk carries a tag along with the
+# text around it, so bold inside a cell survives. Rewriting the line would
+# have taken its tags with it.
+_bold = app.body_text.tag_ranges('bold')
+check(f'bold inside a cell survives the re-padding '
+      f'({app.body_text.get(_bold[0], _bold[1]) if _bold else None!r})',
+      bool(_bold) and app.body_text.get(_bold[0], _bold[1]) == 'Name')
+check(f'and the caret is where it was left ({app.body_text.index("insert")})',
+      app.body_text.index('insert') == '4.0')
+
+# That check alone cannot fail: re-padding only happens once the caret has
+# left the block, and Tk moves an index on another line by itself. What can
+# fail is the caret when the block is lined up around it, which is what
+# inserting or editing a table will do. Tk keeps the mark beside the
+# character it was beside; putting it back to the index it held before would
+# drag it to a column that now holds something else -- which an earlier
+# version of this did, landing the caret on a space nineteen characters away.
+set_body('| a | Z |\n| a much longer cell | b |')
+app._resync_list_tags()
+app.update()
+app.body_text.mark_set('insert', '1.7')
+check("the caret starts just after 'Z'", app.body_text.get('insert -1c') == 'Z')
+app._align_table_block(1)
+app.update()
+check(f"and is still just after 'Z' once the columns are widened "
+      f"({app.body_text.index('insert')}, after "
+      f"{app.body_text.get('insert -1c')!r})",
+      app.body_text.get('insert -1c') == 'Z')
+
+# Padding that is no longer needed goes away as well, or a table would only
+# ever grow wider as it was edited.
+set_body('| Name                    | Qty |\n| Milk                    | 2   |\nafter')
+app._resync_list_tags()
+_caret('1.5')
+_caret('3.0')
+check(f'padding left over from deleted text is taken back ({lines_now()[0]!r})',
+      len(lines_now()[0]) < 34
+      and core_tables.split_row(lines_now()[0]) == ['Name', 'Qty'])
+
+# ---- MAKING A TABLE, AND TABBING THROUGH IT ----
+check('the toolbar has a table button', hasattr(app, 'table_btn'))
+
+set_body('')
+app._insert_table(3, 2)
+app.update()
+_blank = lines_now()[:3]
+check(f'a blank table is inserted ({_blank[0]!r})',
+      all(core_tables.split_row(r) == ['', ''] for r in _blank))
+check('its cells are wide enough to look like cells, not specks',
+      len(_blank[0]) >= 2 * core_tables.MIN_COLUMN)
+check('its rows are drawn in the monospace face', _mono(1))
+_made = app._grid_at_line(1)
+check('a grid is rendered over the new table', _made is not None)
+check('the one floating editor opens on the first cell',
+      app._cell_editor is not None
+      and (app._cell_editor['r'], app._cell_editor['c']) == (0, 0)
+      and app.focus_get() is app._cell_editor['entry'])
+
+# Filling in through the editor: type, step, repeat -- the words land in
+# the note's own text, cell by cell.
+for _word in ('Name', 'Qty', 'Milk', '2', 'Eggs'):
+    _e = app._cell_editor['entry']
+    _e.delete(0, 'end')
+    _e.insert(0, _word)
+    app._editor_step(+1)
+    app.update()
+_e = app._cell_editor['entry']
+_e.delete(0, 'end')
+_e.insert(0, '12')
+app._commit_cell_editor()
+app.update()
+check(f'typing through the editor lands in the text ({lines_now()[0]!r})',
+      [core_tables.split_row(r) for r in lines_now()[:3]]
+      == [['Name', 'Qty'], ['Milk', '2'], ['Eggs', '12']])
+
+# Tab walks the cells; at the very last one it makes a new row, which is
+# what lets a whole table be typed without reaching for the mouse.
+_made = app._grid_at_line(1)
+app._open_cell_editor(_made, 1, 0)
+app.update()
+app._cell_editor['entry'].event_generate('<Shift-Tab>')
+app.update()
+check('Shift+Tab goes back to the row above',
+      app._cell_editor is not None
+      and (app._cell_editor['r'], app._cell_editor['c']) == (0, 1))
+_made = app._grid_at_line(1)
+app._open_cell_editor(_made, _made['nrows'] - 1, _made['ncols'] - 1)
+app.update()
+app._cell_editor['entry'].event_generate('<Tab>')
+app.update()
+check(f'Tab at the last cell makes a new row ({lines_now()[3]!r})',
+      core_tables.split_row(lines_now()[3]) == ['', ''])
+check('and the editor opens in the new row',
+      app._cell_editor is not None
+      and (app._cell_editor['r'], app._cell_editor['c']) == (3, 0))
+
+# Enter finishes the cell and puts the caret on the line under the table,
+# at the start of the row -- writing continues from the left.
+app._cell_editor['entry'].event_generate('<Return>')
+app.update()
+check(f'Enter leaves the caret under the table '
+      f'({app.body_text.index("insert")})',
+      app._cell_editor is None
+      and app.body_text.index('insert') == '5.0'
+      and app.focus_get() is app.body_text)
+_made = app._grid_at_line(1)
+
+# The hidden text is still reachable with arrows or a stray click, and
+# typing there would edit characters nobody can see -- so the caret is
+# walked out of it before anything can land.
+app.body_text.mark_set('insert', '2.3')
+app._caret_out_of_hidden()
+app.update()
+_landed = int(app.body_text.index('insert').split('.')[0])
+check(f'the caret cannot rest inside the hidden rows (line {_landed})',
+      _landed > 4)
+
+# A pipe typed into a cell can never reach the text: it is what holds the
+# row together, and one more of it would split the row apart.
+app._open_cell_editor(_made, 0, 0)
+_e = app._cell_editor['entry']
+_e.delete(0, 'end')
+_e.insert(0, 'a|b')
+app._commit_cell_editor()
+app.update()
+check(f'a pipe typed into a cell cannot break the row ({lines_now()[0]!r})',
+      core_tables.split_row(lines_now()[0])[0] == 'a/b'
+      and len(core_tables.split_row(lines_now()[0])) == 2)
+
+# ---- MERGED CELLS, AND A TABLE WIDER THAN THE EDITOR ----
+# A source's rowspan/colspan arrives as merge markers in the text and is
+# drawn as genuinely spanned cells; a table wider than the editor scrolls
+# sideways instead of being cut off at the edge.
+set_body('')
+_stub_clipboard(html=('<table>'
+                      "<tr><th rowspan='2'>Nr</th>"
+                      "<th colspan='2'>Cablu</th></tr>"
+                      '<tr><th>Vodafone</th><th>Digi</th></tr>'
+                      '<tr><td>1.</td><td>da</td><td>nu</td></tr>'
+                      '</table>'))
+app._on_body_paste()
+app.update()
+_merged = app._grid_at_line(1)
+check('a merged paste renders a grid', _merged is not None)
+check(f'the rowspan anchor really spans its rows '
+      f"({_merged['cells'][(0, 0)]['rs']})",
+      _merged['cells'][(0, 0)]['rs'] == 2)
+check(f'the colspan anchor really spans its columns '
+      f"({_merged['cells'][(0, 1)]['cs']})",
+      _merged['cells'][(0, 1)]['cs'] == 2)
+check('covered positions are not cells at all',
+      (0, 2) not in _merged['cells'] and (1, 0) not in _merged['cells'])
+
+# Editing the anchor rewrites the anchor cell and nothing else: the markers
+# that carry the merge stay exactly where they were.
+app._open_cell_editor(_merged, 0, 1)
+_e = app._cell_editor['entry']
+_e.delete(0, 'end')
+_e.insert(0, 'Cablu Nou')
+app._commit_cell_editor()
+app.update()
+check(f'editing a merge anchor keeps the merge ({lines_now()[0]!r})',
+      core_tables.split_row(lines_now()[0]) == ['Nr', 'Cablu Nou', '<']
+      and core_tables.split_row(lines_now()[1])[0] == '^')
+
+# A narrow table needs no scrollbar; a wide one gets a live one.
+check('a narrow table shows no horizontal scrollbar',
+      _merged.get('hbar') is None or not _merged['hbar'].winfo_manager())
+set_body('')
+_stub_clipboard(html=('<table><tr>'
+                      + ''.join(f'<th>Column with a long name {i}</th>'
+                                for i in range(9))
+                      + '</tr><tr>'
+                      + ''.join(f'<td>value {i}</td>' for i in range(9))
+                      + '</tr></table>'))
+app._on_body_paste()
+app.update()
+app.update_idletasks()
+_wide = app._grid_at_line(1)
+check(f'a wide table gets a horizontal scrollbar '
+      f'(natural {_wide["natural"]}px, shown {_wide["canvas"].cget("width")}px)',
+      _wide['hbar'] is not None and bool(_wide['hbar'].winfo_manager())
+      and int(float(_wide['canvas'].cget('width'))) < _wide['natural'])
+
+# ---- THE TABLE'S OWN RIGHT-CLICK MENU, THROUGH ITS HANDLERS ----
+set_body('')
+_stub_clipboard(html='<table><tr><td>A</td><td>B</td></tr>'
+                     '<tr><td>C</td><td>D</td></tr></table>')
+app._on_body_paste()
+app.update()
+_t = app._grid_at_line(1)
+app._grid_insert_row(_t, 1)
+app.update()
+_t = app._grid_at_line(1)
+check(f'a row can be inserted from the menu ({_t["nrows"]} rows)',
+      _t['nrows'] == 3
+      and core_tables.split_row(lines_now()[1]) == ['', ''])
+app._grid_insert_col(_t, 1)
+app.update()
+_t = app._grid_at_line(1)
+check(f'and a column ({_t["ncols"]} columns)',
+      _t['ncols'] == 3
+      and core_tables.split_row(lines_now()[0]) == ['A', '', 'B'])
+app._grid_set_marker(_t, 0, 1, core_tables.MERGE_LEFT)
+app.update()
+_t = app._grid_at_line(1)
+check('merging from the menu spans the anchor',
+      _t['cells'][(0, 0)]['cs'] == 2 and (0, 1) not in _t['cells'])
+app._grid_split(_t, 0, 0)
+app.update()
+_t = app._grid_at_line(1)
+check('and splitting undoes it',
+      _t['cells'][(0, 0)]['cs'] == 1 and (0, 1) in _t['cells'])
+app._grid_delete_col(_t, 1)
+app.update()
+_t = app._grid_at_line(1)
+app._grid_delete_row(_t, 1)
+app.update()
+_t = app._grid_at_line(1)
+check(f'deleting the inserted row and column restores the shape '
+      f'({_t["nrows"]}x{_t["ncols"]})',
+      (_t['nrows'], _t['ncols']) == (2, 2)
+      and core_tables.split_row(lines_now()[0]) == ['A', 'B'])
+# Two columns is the floor -- a one-column row would read as prose, not
+# as a table -- so at two, deleting a column empties it instead.
+app._grid_delete_col(_t, 1)
+app.update()
+_t = app._grid_at_line(1)
+check(f'at two columns, deleting empties the chosen one '
+      f'({core_tables.split_row(lines_now()[0])})',
+      _t is not None and _t['ncols'] == 2
+      and core_tables.split_row(lines_now()[0]) == ['A', '']
+      and core_tables.split_row(lines_now()[1]) == ['C', ''])
+app._grid_delete_col(_t, 0)
+app.update()
+_t = app._grid_at_line(1)
+check('and the table itself is never dissolved by column deletes',
+      _t is not None and _t['ncols'] == 2
+      and core_tables.split_row(lines_now()[0]) == ['', ''])
+app._grid_delete_table(_t)
+app.update()
+check('and deleting the table removes it outright',
+      app._grid_at_line(1) is None and core_tables.find_blocks(body()) == [])
+
+# The window line itself is off-limits: the caret walks to the line under
+# the table, so writing continues from the start of a real row.
+set_body('')
+_stub_clipboard(html='<table><tr><td>A</td><td>B</td></tr></table>')
+app._on_body_paste()
+app.update()
+app.body_text.mark_set('insert', '1.0')
+app._caret_out_of_hidden()
+app.update()
+check(f'the window line itself is off-limits '
+      f'({app.body_text.index("insert")})',
+      app.body_text.index('insert').split('.')[0] == '2')
+check('and there is always a line under the last table to land on',
+      int(app.body_text.index('end-1c').split('.')[0]) >= 2)
+
+# A click on a drawn cell opens the editor exactly there.
+_t = app._grid_at_line(1)
+_cell = _t['cells'][(0, 1)]
+# A click is a press AND a release now that dragging selects; the editor
+# opens on the release, so a drag can end without one.
+_t['canvas'].event_generate('<Button-1>',
+                            x=_cell['x'] + 5, y=_cell['y'] + 5)
+_t['canvas'].event_generate('<ButtonRelease-1>',
+                            x=_cell['x'] + 5, y=_cell['y'] + 5)
+app.update()
+check(f'clicking a cell opens the editor on it '
+      f'({app._cell_editor and (app._cell_editor["r"], app._cell_editor["c"])})',
+      app._cell_editor is not None
+      and (app._cell_editor['r'], app._cell_editor['c']) == (0, 1))
+app._commit_cell_editor()
+app.update()
+
+# ---- ENTER BESIDE A TABLE, AND THE SELECTION MODEL ----
+# A specific binding beats the general <KeyPress> the caret guard rides on:
+# Enter beside a table used to write into the hidden text, split the block
+# in two, and surface the caret at the table's right edge.
+set_body('')
+_stub_clipboard(html='<table><tr><td>A</td><td>B</td></tr>'
+                     '<tr><td>C</td><td>D</td></tr></table>')
+app._on_body_paste()
+app.update()
+take_focus(app.body_text)
+app.body_text.mark_set('insert', '1.end')
+app.body_text.event_generate('<Return>')
+app.update()
+check(f'Enter beside a table leaves one block '
+      f'({core_tables.find_blocks(body())})',
+      core_tables.find_blocks(body()) == [(0, 1)])
+check(f'and the caret lands at the start of the line below '
+      f'({app.body_text.index("insert")})',
+      app.body_text.index('insert').endswith('.0')
+      and int(app.body_text.index('insert').split('.')[0]) > 2)
+
+# Dragging across cells selects a rectangle; releasing without a drag is
+# still just a click that opens the editor.
+_t = app._grid_at_line(1)
+_a, _b2 = _t['cells'][(0, 0)], _t['cells'][(1, 1)]
+_cv = _t['canvas']
+_cv.event_generate('<Button-1>', x=int(_a['x'] + 4), y=int(_a['y'] + 4))
+_cv.event_generate('<B1-Motion>', x=int(_b2['x'] + 4), y=int(_b2['y'] + 4))
+_cv.event_generate('<ButtonRelease-1>', x=int(_b2['x'] + 4), y=int(_b2['y'] + 4))
+app.update()
+check(f'dragging selects the spanned rectangle '
+      f'({app._grid_sel and app._grid_sel["box"]})',
+      app._grid_sel is not None and app._grid_sel['box'] == (0, 0, 1, 1))
+check('and a drag does not open the editor',
+      getattr(app, '_cell_editor', None) is None)
+
+# Copy cells: tab-separated lines for a spreadsheet, remembered exactly.
+app._grid_copy_selection(app._grid_sel)
+check(f'copied cells reach the clipboard as rows of tabs '
+      f'({app.clipboard_get()!r})',
+      app.clipboard_get() == 'A\tB\nC\tD'
+      and app._grid_cell_clip == [['A', 'B'], ['C', 'D']])
+
+# Checkmarks fill the selection, and a checkmark draws centred.
+_sel = app._grid_sel
+app._grid_fill_selection(_sel, '\u2713', align=core_tables.ALIGN_CENTER)
+app.update()
+check(f'checkmarks fill every selected cell ({lines_now()[0]!r})',
+      all(core_tables.split_row(l) == ['\u2713', '\u2713']
+          for l in lines_now()[:2]))
+_t = app._grid_at_line(1)
+check('a checkmark is drawn centred in its cell',
+      str(_t['canvas'].itemcget(_t['cells'][(0, 0)]['text'], 'anchor'))
+      in ('c', 'center'))
+
+# Merging the selection makes one cell anchored top-left.
+_a, _b2 = _t['cells'][(0, 0)], _t['cells'][(0, 1)]
+_cv = _t['canvas']
+_cv.event_generate('<Button-1>', x=int(_a['x'] + 4), y=int(_a['y'] + 4))
+_cv.event_generate('<B1-Motion>', x=int(_b2['x'] + 4), y=int(_b2['y'] + 4))
+_cv.event_generate('<ButtonRelease-1>', x=int(_b2['x'] + 4), y=int(_b2['y'] + 4))
+app.update()
+app._grid_merge_selection(app._grid_sel)
+app.update()
+_t = app._grid_at_line(1)
+check(f'merging the selection spans the anchor ({lines_now()[0]!r})',
+      _t['cells'][(0, 0)]['cs'] == 2
+      and core_tables.split_row(lines_now()[0])[1] == core_tables.MERGE_LEFT)
+
+# Pasting copied cells lands them as a block, growing the table downward.
+app._grid_paste_cells(_t, 1, 0)
+app.update()
+_t = app._grid_at_line(1)
+check(f'pasted cells land as a block and grow the table '
+      f'({_t["nrows"]} rows)',
+      _t['nrows'] == 3
+      and core_tables.split_row(lines_now()[1]) == ['A', 'B']
+      and core_tables.split_row(lines_now()[2]) == ['C', 'D'])
+
+# The cell being edited still answers a right-click.
+app._open_cell_editor(_t, 1, 0)
+check('the floating editor forwards a right-click to the menu',
+      bool(app._cell_editor['entry'].bind('<Button-3>')))
+app._commit_cell_editor()
+app.update()
+
+# Over a drawn table the pointer is a pointer, not an I-beam.
+check(f'the table shows an arrow cursor '
+      f'({_t["canvas"].cget("cursor")!r})',
+      str(_t['canvas'].cget('cursor')) == 'arrow')
+
+# The right and bottom rules are inside the canvas, not one pixel past it.
+check('the outer rules fit inside the drawn area',
+      int(_t['canvas'].cget('scrollregion').split()[2]) == _t['natural'] + 1)
+
+# ---- CELL ALIGNMENT, AND THE TABLE THAT JUMPED TO THE MIDDLE ----
+set_body('')
+_stub_clipboard(html='<table><tr><td>Titlu</td><td>B</td></tr>'
+                     '<tr><td>C</td><td>D</td></tr></table>')
+app._on_body_paste()
+app.update()
+_t = app._grid_at_line(1)
+app._grid_set_alignment(_t, (0, 0, 0, 0), core_tables.ALIGN_CENTER)
+app.update()
+check(f'centring a cell writes balanced padding ({lines_now()[0]!r})',
+      core_tables.cell_alignments(lines_now()[0])[0] == 'center')
+_t = app._grid_at_line(1)
+check('and the cell draws centred',
+      str(_t['canvas'].itemcget(_t['cells'][(0, 0)]['text'], 'anchor'))
+      in ('c', 'center'))
+app._open_cell_editor(_t, 0, 0)
+check('and its editor justifies to match',
+      str(app._cell_editor['entry'].cget('justify')) == 'center')
+app._commit_cell_editor()
+app.update()
+check('committing an unchanged cell keeps the alignment',
+      core_tables.cell_alignments(lines_now()[0])[0] == 'center')
+
+# An alignment tag on a table's line positions the embedded window --
+# a FEATURE now (Center table on page). The accidental path is pasted
+# alignment, scrubbed as it enters; and the tag's spill over the newline
+# is trimmed so a line typed under the table inherits nothing.
+app.body_text.tag_add('align_center', '1.0', '1.end+1c')
+app._resync_list_tags()
+app.update()
+check('a deliberate table position survives the resync',
+      app._grid_table_align_of(1) == 'center')
+check('but never bleeds past the newline onto the next line',
+      not any(str(t) == 'align_center'
+              for t in app.body_text.tag_names('1.end')))
+app.body_text.tag_remove('align_center', '1.0', '2.0')
+app._apply_paragraphs(app.body_text, [{'line': 0, 'align': 'center'}],
+                      scrub_table_align=True)
+check('pasted alignment on a table row is scrubbed to the left',
+      app._grid_table_align_of(1) == 'left')
+app._apply_paragraphs(app.body_text, [{'line': 0, 'align': 'center'}])
+check('while a loaded note keeps its deliberate position',
+      app._grid_table_align_of(1) == 'center')
+app.body_text.tag_remove('align_center', '1.0', '2.0')
+
+# ---- THE SCROLL STAYS PUT, AND EVERYTHING LANDS IN THE OPEN CELL ----
+# Tearing the grids down shrinks the editor page for a moment, and the
+# page's keep-short-content-at-top handler snapped the scroll to the top on
+# every insert and every re-rendering commit.
+set_body('filler line\n' * 60)
+app.body_text.mark_set('insert', 'end -1c')
+app.update()
+app.editor_canvas.yview_moveto(1.0)
+app.update()
+_scroll_before = app.editor_canvas.yview()[0]
+app._insert_table(2, 2)
+# The snap this guards against comes from a queued handler, which a
+# headless run may never fire -- so the snap is forced here, between the
+# insert and the idle restore the render scheduled. If the restore is
+# gone, the page stays snapped and this fails.
+app.editor_canvas.yview_moveto(0.0)
+app.update()
+app.update_idletasks()
+app.update()
+_scroll_after = app.editor_canvas.yview()[0]
+check(f'inserting a table keeps the page where it was '
+      f'({_scroll_before:.3f} -> {_scroll_after:.3f})',
+      abs(_scroll_after - _scroll_before) < 0.1 and _scroll_after > 0.05)
+
+# Tk counts UTF-16 units, so an astral emoji is two steps wide; advancing
+# by len() parked the caret inside the emoji, and the next insert speared
+# it apart into what the mend then turned into replacement diamonds.
+check('an astral character is two Tk units wide',
+      app._tk_units(chr(0xD83D) + chr(0xDE00)) == 2
+      and app._tk_units(chr(0x1F600)) == 2 and app._tk_units('ab') == 2)
+
+# The calculator's insert lands in the open cell, cursor past what landed.
+_t9 = app._grid_at_line(app._grid_first_line(app._table_grids[0]))
+app._open_cell_editor(_t9, 1, 1)
+app._calc_insert_formula('2+2=4')
+check(f'the calculator lands in the open cell '
+      f'({app._cell_editor["entry"].get()!r})',
+      app._cell_editor is not None
+      and app._cell_editor['entry'].get() == '2+2=4'
+      and int(app._cell_editor['entry'].index('insert')) == 5)
+app._commit_cell_editor()
+app.update()
+
+# The toolbar alignment buttons mean the open cell while one is open.
+_t9 = app._grid_at_line(app._grid_first_line(app._table_grids[0]))
+app._open_cell_editor(_t9, 0, 0)
+_e9 = app._cell_editor['entry']
+_e9.delete(0, 'end')
+_e9.insert(0, 'Titlu')
+app._set_paragraph_align('center')
+app.update()
+_first9 = app._grid_first_line(app._table_grids[0])
+check('the toolbar centre button centres the open cell',
+      core_tables.cell_alignments(
+          app.body_text.get(f'{_first9}.0', f'{_first9}.end'))[0] == 'center')
+check('and the editor reopens on that same cell',
+      app._cell_editor is not None
+      and (app._cell_editor['r'], app._cell_editor['c']) == (0, 0))
+app._commit_cell_editor()
+app.update()
+
+# Copy cell remembers like copy cells, and the system clipboard outranks a
+# stale remembered matrix -- a fresh copy used to paste older content.
+app._grid_cell_clip = [['VECHI', 'STALE']]
+_t9 = app._grid_at_line(_first9)
+app._grid_copy_cell(_t9, 0, 0)
+app._grid_paste_cells(_t9, 1, 0)
+app.update()
+_t9 = app._grid_at_line(_first9)
+check(f'a fresh single-cell copy is what pastes '
+      f'({_t9["cells"][(1, 0)]["value"]!r})',
+      _t9['cells'][(1, 0)]['value'] == 'Titlu')
+app._grid_cell_clip = [['MEMORAT']]
+app.clipboard_clear()
+app.clipboard_append('EXTERN\tNOU')
+app._grid_paste_cells(_t9, 1, 0)
+app.update()
+_t9 = app._grid_at_line(_first9)
+check('a newer system clipboard outranks the remembered matrix',
+      _t9['cells'][(1, 0)]['value'] == 'EXTERN'
+      and _t9['cells'][(1, 1)]['value'] == 'NOU')
+
+# The remembered matrix earns its keep on the one copy the clipboard
+# cannot describe: an empty cell. Its clipboard text is '', which a parser
+# reads as nothing to paste -- only the matrix knows a cell was copied.
+app._open_cell_editor(_t9, 0, 1)
+app._cell_editor['entry'].delete(0, 'end')
+app._commit_cell_editor()
+app.update()
+_t9 = app._grid_at_line(_first9)
+app._grid_copy_cell(_t9, 0, 1)
+app._grid_paste_cells(_t9, 1, 1)
+app.update()
+_t9 = app._grid_at_line(_first9)
+check(f'copying an empty cell pastes emptiness, not nothing '
+      f'({_t9["cells"][(1, 1)]["value"]!r})',
+      _t9['cells'][(1, 1)]['value'] == '')
+set_body('')
+
+# ---- CTRL+C / CTRL+V SPEAK THE CELL SELECTION ----
+# The exact reported flow: select two cells, Ctrl+C, select two other
+# cells, Ctrl+V. It used to copy the empty TEXT selection -- leaving last
+# week's clipboard in charge -- and paste into the body beside the table.
+set_body('')
+app.clipboard_clear()
+app.clipboard_append('VECHI DE SAPTAMANA TRECUTA')
+_stub_clipboard(html='<table><tr><td>Unu</td><td>Doi</td></tr>'
+                     '<tr><td></td><td></td></tr></table>')
+app._on_body_paste()
+app.update()
+_tX = app._grid_at_line(1)
+_linesX = len(body().split('\n'))
+
+
+def _select_cells(g, a, bcell):
+    # 12px in from the corner: pressing within 4px of a vertical rule is
+    # (by design) a grab of the rule, not the start of a selection.
+    _ca, _cb = g['cells'][a], g['cells'][bcell]
+    g['canvas'].event_generate('<Button-1>',
+                               x=int(_ca['x'] + 12), y=int(_ca['y'] + 6))
+    g['canvas'].event_generate('<B1-Motion>',
+                               x=int(_cb['x'] + 12), y=int(_cb['y'] + 6))
+    g['canvas'].event_generate('<ButtonRelease-1>',
+                               x=int(_cb['x'] + 12), y=int(_cb['y'] + 6))
+    app.update()
+
+
+_select_cells(_tX, (0, 0), (0, 1))
+take_focus(app.body_text)
+app.body_text.event_generate('<Control-c>')
+app.update()
+_select_cells(_tX, (1, 0), (1, 1))
+app.body_text.event_generate('<Control-v>')
+app.update()
+_tX = app._grid_at_line(1)
+check(f'Ctrl+C/Ctrl+V move the selected cells '
+      f'({_tX["cells"][(1, 0)]["value"]!r}, {_tX["cells"][(1, 1)]["value"]!r})',
+      _tX['cells'][(1, 0)]['value'] == 'Unu'
+      and _tX['cells'][(1, 1)]['value'] == 'Doi')
+check('nothing lands outside the table',
+      len(body().split('\n')) == _linesX
+      and 'VECHI' not in body())
+
+# Ctrl+V inside an open cell spreads a copied block from that cell. The
+# target row is cleared first: it already held these values from the check
+# above, and a spread that did nothing would have passed unnoticed.
+app._grid_copy_selection({'info': _tX, 'box': (0, 0, 0, 1),
+                          'cells': [(0, 0), (0, 1)]})
+app._grid_fill_selection({'info': _tX, 'box': (1, 0, 1, 1)}, '')
+app.update()
+_tX = app._grid_at_line(1)
+check('the target row really is empty before the spread',
+      _tX['cells'][(1, 0)]['value'] == ''
+      and _tX['cells'][(1, 1)]['value'] == '')
+app._open_cell_editor(_tX, 1, 0)
+app.update()          # focus settles; synthetic key events follow focus
+app._cell_editor['entry'].event_generate('<Control-v>')
+app.update()
+_tX = app._grid_at_line(1)
+check('Ctrl+V in a cell spreads the copied block from it',
+      _tX['cells'][(1, 0)]['value'] == 'Unu'
+      and _tX['cells'][(1, 1)]['value'] == 'Doi')
+
+# The editor grows with its content instead of hiding the overflow.
+app._open_cell_editor(_tX, 1, 0)
+app.update()          # focus settles; synthetic key events follow focus
+_edX = app._cell_editor
+_w0 = int(float(_tX['canvas'].itemcget(_edX['win'], 'width')))
+_edX['entry'].delete(0, 'end')
+_edX['entry'].insert(0, 'un continut mult mai lung decat coloana initiala')
+_edX['entry'].event_generate('<KeyRelease>')
+app.update()
+_w1 = int(float(_tX['canvas'].itemcget(_edX['win'], 'width')))
+check(f'the editor grows while typing ({_w0} -> {_w1})', _w1 > _w0 + 40)
+app._commit_cell_editor()
+app.update()
+
+# A wide table keeps its sideways place through the rebuild a commit
+# triggers, and the body keeps its own scroll through any rebuild.
+set_body('')
+_stub_clipboard(html='<table><tr>'
+                + ''.join(f'<th>Coloana cu nume lung {i}</th>'
+                          for i in range(9))
+                + '</tr><tr>'
+                + ''.join(f'<td>v{i}</td>' for i in range(9))
+                + '</tr></table>')
+app._on_body_paste()
+app.update()
+app.update_idletasks()
+_tX = app._grid_at_line(1)
+_tX['canvas'].xview_moveto(0.5)
+app.update()
+_x0 = _tX['canvas'].xview()[0]
+app._open_cell_editor(_tX, 1, 5)
+_edX = app._cell_editor
+_edX['entry'].delete(0, 'end')
+_edX['entry'].insert(0, 'modificare care lateste coloana vizibil')
+app._commit_cell_editor()
+app.update()
+app.update()
+_tX = app._grid_at_line(1)
+_x1 = _tX['canvas'].xview()[0]
+check(f'a wide table keeps its sideways place through a commit '
+      f'({_x0:.3f} -> {_x1:.3f})',
+      abs(_x1 - _x0) < 0.15 and _x1 > 0.1)
+
+# A MENU operation is different: it tears the grids down before render
+# runs, and deleting the window characters shifts body_text's scroll on
+# the spot -- so this one IS reproducible headless, and was: 0.316 became
+# 0.164 on a checkmark. The op context captures the views first, and the
+# restore waits for the queue so the fresh windows are mapped when the
+# fraction is reapplied.
+set_body('rand de text\n' * 30)
+app.body_text.mark_set('insert', 'end -1c')
+app.update()
+app._insert_table(3, 3)
+app._commit_cell_editor()
+app.update()
+app.body_text.yview_moveto(1.0)
+app.update()
+_yv0 = app.body_text.yview()[0]
+_firstV = app._grid_first_line(app._table_grids[0])
+_tV = app._grid_at_line(_firstV)
+app._grid_fill_selection({'info': _tV, 'box': (0, 0, 0, 0)}, chr(0x2713),
+                         align='center')
+app.update()
+app.update_idletasks()
+app.update()
+_yv1 = app.body_text.yview()[0]
+# The broken behaviour drifted 0.15+ (0.316 became 0.164); the fixed
+# one stays under ~0.03 on Windows and ~0.07 under the CI's Linux font
+# metrics -- the threshold sits between the two regimes, not inside
+# one platform's noise.
+check(f'a menu op keeps the body scrolled where it was '
+      f'({_yv0:.3f} -> {_yv1:.3f})', abs(_yv1 - _yv0) < 0.1)
+set_body('')
+
+# ---- EMOJI IN CELLS: TK COLUMNS ARE UTF-16 UNITS ----
+# Every surgical edit addressed the text by Python character offsets, but a
+# Tk Text column is a UTF-16 unit -- one astral emoji in a cell shifted
+# every later cut, and each flush re-cut at the drifted position, which is
+# how one emoji multiplied into squares and diamonds.
+set_body('')
+app._insert_table(2, 2)
+app.update()
+_edU = app._cell_editor
+_pairU = chr(0xD83D) + chr(0xDE00)
+try:
+    # Windows Tk hands text over in UTF-16, so an Entry there really can
+    # hold a severed pair -- the exact form that once multiplied into
+    # squares and killed a save. Linux Tcl refuses lone surrogates at
+    # the door, so the CI exercises the same two-in-two-out path with
+    # the real character instead.
+    _edU['entry'].insert('end', _pairU)
+    _edU['entry'].insert('end', _pairU)
+except (tk.TclError, UnicodeEncodeError):
+    _edU['entry'].delete(0, 'end')
+    _edU['entry'].insert('end', chr(0x1F600))
+    _edU['entry'].insert('end', chr(0x1F600))
+for _i in range(3):
+    app._flush_table_grids()
+    app.update()
+app._commit_cell_editor()
+app.update()
+_lineU = app.body_text.get('1.0', '1.end')
+check(f'two emoji land as two, through three flushes '
+      f'(gasit {_lineU.count(chr(0x1F600))})',
+      _lineU.count(chr(0x1F600)) == 2
+      and chr(0xFFFD) not in _lineU
+      and not any(0xD800 <= ord(ch) <= 0xDFFF for ch in _lineU))
+_tU = app._grid_at_line(1)
+check('and the drawn cell wears the emoji face at commit',
+      'Emoji' in str(_tU['canvas'].itemcget(
+          _tU['cells'][(0, 0)]['text'], 'font')))
+
+# The neighbouring cell, edited AFTER the emoji, must land in its own cell
+# -- this is the write the drifted columns used to cut apart.
+app._open_cell_editor(_tU, 0, 1)
+app.update()
+_eU = app._cell_editor['entry']
+_eU.delete(0, 'end')
+_eU.insert(0, 'vecina')
+app._commit_cell_editor()
+app.update()
+_tU = app._grid_at_line(1)
+check(f'the cell after an emoji is written where it belongs '
+      f'({_tU["cells"][(0, 1)]["value"]!r})',
+      _tU['cells'][(0, 0)]['value'].count(chr(0x1F600)) == 2
+      and _tU['cells'][(0, 1)]['value'] == 'vecina')
+
+# Clear cell, from the single-cell menu's handler.
+app._grid_fill_selection({'info': _tU, 'box': (0, 1, 0, 1)}, '')
+app.update()
+_tU = app._grid_at_line(1)
+check('Clear cell empties exactly that cell',
+      _tU['cells'][(0, 1)]['value'] == ''
+      and _tU['cells'][(0, 0)]['value'].count(chr(0x1F600)) == 2)
+set_body('')
+
+# The toolbar has an emoji button, and it knows about open cells.
+check('the toolbar has an emoji button', hasattr(app, 'emoji_btn'))
+
+# And outside a table Tab still types a tab, as it always did.
+clear_selection()
+set_body('ordinary prose')
+app.body_text.mark_set('insert', '1.8')
+take_focus(app.body_text)
+app.body_text.event_generate('<Tab>')
+app.update()
+check(f'Tab in ordinary prose still types a tab ({body()!r})',
+      '\t' in body())
+
+set_body('')
+
+# ---- THE SEPARATOR ROW: |---|:---:|~| IS MECHANICS, NOT DATA ----
+# Markdown's own separator line carries per-column width (the dash count),
+# alignment (the colons) and hiding (~). It must never be drawn as a row
+# of dashes, never counted when measuring, and never exported.
+_md = ('| Nume | Cant |\n|:-----:|---|\n| Lapte | 2 |\n| Paine | 1 |')
+set_body(_md)
+app._render_table_grids()
+app.update()
+_tS = app._grid_at_line(1)
+check(f'a pasted markdown separator becomes mechanics, not a data row '
+      f'({_tS["nrows"]} text rows, {_tS["data_rows"]} drawn)',
+      _tS['data_rows'] == 3 and _tS['nrows'] == 4
+      and _tS['sep_cols'] is not None
+      and _tS['cells'][(1, 0)]['value'] == 'Lapte')
+check('no drawn cell wears the dashes',
+      not any('---' in c['value'] for c in _tS['cells'].values()))
+
+# Widening a column pads the data rows out to the dash count.
+app._grid_set_col_width(_tS, 0, 24)
+app.update()
+_tS = app._grid_at_line(1)
+_dataS = app.body_text.get('3.0', '3.end')
+check(f'a hand-widened column pads its data cells ({len(_dataS)} chars)',
+      len(_dataS.split('|')[1]) >= 24
+      and core_tables.parse_separator(
+          app.body_text.get('2.0', '2.end'))[0]['width'] == 24)
+
+# Narrowing below the content is display-only: the drawn cell ellipsizes,
+# the text keeps every character.
+app._grid_set_col_width(_tS, 0, 4)
+app.update()
+_tS = app._grid_at_line(1)
+_shownS = _tS['canvas'].itemcget(_tS['cells'][(1, 0)]['text'], 'text')
+check(f'a too-narrow column draws an ellipsis and keeps its text '
+      f'({_shownS!r})',
+      chr(0x2026) in _shownS and _tS['cells'][(1, 0)]['value'] == 'Lapte')
+
+# Hiding draws a stub and takes the cells out of play; unhide restores.
+app._grid_hide_col(_tS, 1)
+app.update()
+_tS = app._grid_at_line(1)
+check('a hidden column is a stub with no cells',
+      1 in _tS['hidden_cols']
+      and not any(c == 1 for (_r, c) in _tS['cells']))
+app._grid_unhide_all(_tS)
+app.update()
+_tS = app._grid_at_line(1)
+check('unhide brings the column back',
+      not _tS['hidden_cols'] and _tS['cells'][(1, 1)]['value'] == '2')
+
+# A stub has no cells, so the cell menu cannot open on it -- with every
+# column hidden that would lock Unhide away for good. The sliver answers
+# with its own menu instead.
+app._grid_hide_col(_tS, 1)
+app.update()
+_tS = app._grid_at_line(1)
+_posted = []
+_real_popup = NO.tk.Menu.tk_popup
+NO.tk.Menu.tk_popup = lambda _m, *a, **k: _posted.append(_m)
+try:
+    _stub_x = (_tS['col_x'][1] + _tS['col_x'][2]) / 2
+    app._grid_menu(_tS, type('E', (), {
+        'x': int(_stub_x), 'y': 4, 'x_root': 0, 'y_root': 0})())
+    _stub_labels = ([_posted[-1].entrycget(i, 'label')
+                     for i in range(_posted[-1].index('end') + 1)]
+                    if _posted else [])
+    check(f'right-clicking a hidden stub offers Unhide ({_stub_labels})',
+          'Unhide column' in _stub_labels
+          and 'Unhide all columns' in _stub_labels)
+    if _posted:
+        _posted[-1].invoke('Unhide column')
+        app.update()
+    _tS = app._grid_at_line(1)
+    check('and invoking it brings the column back',
+          not _tS['hidden_cols'])
+
+    # Delete row answers to DATA rows: a table of header + separator has
+    # one data row, and deleting it must be off the table.
+    set_body('| a | b |\n| --- | --- |')
+    app._render_table_grids()
+    app.update()
+    _t1 = app._grid_at_line(1)
+    _posted.clear()
+    _c00 = _t1['cells'][(0, 0)]
+    app._grid_menu(_t1, type('E', (), {
+        'x': int(_c00['x'] + 4), 'y': int(_c00['y'] + 4),
+        'x_root': 0, 'y_root': 0})())
+    _del_state = None
+    if _posted:
+        _m = _posted[-1]
+        for i in range(_m.index('end') + 1):
+            if (_m.type(i) == 'command'
+                    and _m.entrycget(i, 'label') == 'Delete row'):
+                _del_state = str(_m.entrycget(i, 'state'))
+    check(f'Delete row is disabled at one data row ({_del_state})',
+          _del_state == 'disabled')
+finally:
+    NO.tk.Menu.tk_popup = _real_popup
+set_body(_md)
+app._render_table_grids()
+app.update()
+_tS = app._grid_at_line(1)
+app._grid_set_col_width(_tS, 0, 4)
+app.update()
+_tS = app._grid_at_line(1)
+
+# The separator survives a structural op, and the inserted column takes
+# a default of its own -- its neighbour's hand-set width must MOVE, not
+# be stolen. (replace_block pads a short separator at the end, so a
+# forgotten middle insert would leave the old width on the wrong column.)
+app._grid_set_col_width(_tS, 1, 15)
+app.update()
+_tS = app._grid_at_line(1)
+app._grid_insert_col(_tS, 1)
+app.update()
+_tS = app._grid_at_line(1)
+_sepS = app.body_text.get('2.0', '2.end')
+_colsS = core_tables.parse_separator(_sepS)
+check(f'insert-column keeps the separator a separator ({_sepS!r})',
+      core_tables.is_separator_row(_sepS)
+      and len(_colsS) == _tS['ncols'])
+check('the inserted column is default and its neighbour keeps its width',
+      _colsS[1]['width'] <= 8 and _colsS[2]['width'] == 15)
+
+# Export never carries the mechanics row.
+_htmlS = NO.note_to_html(body())
+check('exported HTML has no separator row',
+      '---' not in _htmlS and _htmlS.count('<tr>') == 3)
+
+# Dragging the first rule resizes column 0 through press/drag/release.
+_edgeS = int(_tS['col_x'][1])
+_tS['canvas'].event_generate('<Button-1>', x=_edgeS, y=4)
+_resS = getattr(app, '_grid_resizing', None)
+check('pressing a rule starts a resize, not a selection',
+      _resS is not None and _resS['col'] == 0
+      and getattr(app, '_grid_pressed', None) is None)
+_tS['canvas'].event_generate('<B1-Motion>', x=_edgeS + 70, y=4)
+_tS['canvas'].event_generate('<ButtonRelease-1>', x=_edgeS + 70, y=4)
+app.update()
+_tS = app._grid_at_line(1)
+_wS = core_tables.parse_separator(
+    app.body_text.get('2.0', '2.end'))[0]['width']
+check(f'releasing the drag stores the new width in the separator '
+      f'(W={_wS})', _wS is not None and _wS >= 8)
+
+# A click ON a rule that never moves is not a drag: the width must not
+# shift. (At the default font a motionless click could not cross the
+# rounding boundary anyway -- the release-side guard matters at small
+# fonts, where a char is narrower than the 4px grab tolerance. This
+# check pins the user-visible invariant, whichever layer provides it.)
+_tS = app._grid_at_line(1)
+_edgeS = int(_tS['col_x'][1])
+_tS['canvas'].event_generate('<Button-1>', x=_edgeS, y=4)
+_tS['canvas'].event_generate('<ButtonRelease-1>', x=_edgeS, y=4)
+app.update()
+_wS2 = core_tables.parse_separator(
+    app.body_text.get('2.0', '2.end'))[0]['width']
+check(f'a motionless click on a rule changes nothing (W={_wS2})',
+      _wS2 == _wS)
+set_body('')
+
+# ---- MERGE KEEPS THE TEXT IT SWALLOWS ----
+# Merging 'A' with an empty neighbour used to keep whichever cell was the
+# anchor -- and lose the text when the anchor was the empty one.
+# The text sits in the NON-anchor cell -- the case that actually lost
+# it: the anchor was empty, and the merge kept the anchor.
+set_body('|  | A |\n| x | y |')
+app._render_table_grids()
+app.update()
+_tF = app._grid_at_line(1)
+app._grid_merge_selection({'info': _tF, 'box': (0, 0, 0, 1)})
+app.update()
+_tF = app._grid_at_line(1)
+check(f"merging an empty anchor with 'A' keeps the A "
+      f"({_tF['cells'][(0, 0)]['value']!r})",
+      _tF['cells'][(0, 0)]['value'] == 'A')
+set_body('| A | B |\n| x | y |')
+app._render_table_grids()
+app.update()
+_tF = app._grid_at_line(1)
+app._grid_merge_selection({'info': _tF, 'box': (0, 0, 0, 1)})
+app.update()
+_tF = app._grid_at_line(1)
+check(f"merging two texts joins them ({_tF['cells'][(0, 0)]['value']!r})",
+      _tF['cells'][(0, 0)]['value'] == 'A B')
+set_body('')
+
+# ---- A LIST CAN START ON AN EMPTY LINE ----
+app.body_text.mark_set('insert', '1.0')
+app._toggle_list('bullet')
+app.update()
+check(f'a bullet lands on the empty line the caret is on '
+      f'({body()!r})', body().startswith(chr(0x2022)))
+set_body('')
+app.body_text.mark_set('insert', '1.0')
+app._toggle_list('number')
+app.update()
+check(f'and so does numbering ({body()!r})', body().startswith('1.'))
+set_body('')
+
+# ---- HIDE ONLY FROM A WHOLE-COLUMN SELECTION ----
+# Right-clicking one cell must not offer Hide -- the user cannot see what
+# would disappear. A column selected top to bottom can.
+set_body('| a | b |\n| c | d |\n| e | f |')
+app._render_table_grids()
+app.update()
+_tF = app._grid_at_line(1)
+_posted = []
+_real_popup = NO.tk.Menu.tk_popup
+NO.tk.Menu.tk_popup = lambda _m, *a, **k: _posted.append(_m)
+
+
+def _menu_entries(m):
+    out = []
+    for i in range(m.index('end') + 1):
+        if m.type(i) in ('command', 'cascade'):
+            out.append(m.entrycget(i, 'label'))
+    return out
+
+
+try:
+    _cF = _tF['cells'][(1, 0)]
+    app._grid_clear_selection()
+    app._grid_menu(_tF, type('E', (), {
+        'x': int(_cF['x'] + 4), 'y': int(_cF['y'] + 4),
+        'x_root': 0, 'y_root': 0})())
+    _labels = _menu_entries(_posted[-1]) if _posted else []
+    check(f'the cell menu no longer offers a blind Hide ({len(_labels)} entries)',
+          'Hide column' not in _labels
+          and 'Autofit column width' in _labels)
+    check('the cell menu highlights a single cell',
+          'Highlight cell…' in _labels)
+
+    # A whole-column selection (all three data rows) offers Hide...
+    _select_cells(_tF, (0, 1), (2, 1))
+    _posted.clear()
+    _cSel = _tF['cells'][(1, 1)]
+    app._grid_menu(_tF, type('E', (), {
+        'x': int(_cSel['x'] + 4), 'y': int(_cSel['y'] + 4),
+        'x_root': 0, 'y_root': 0})())
+    _labels = _menu_entries(_posted[-1]) if _posted else []
+    check('a whole-column selection offers Hide column',
+          'Hide column' in _labels)
+    check('and the selection menu carries Highlight cells',
+          'Highlight cells…' in _labels)
+
+    # ...and a partial selection does not.
+    _select_cells(_tF, (0, 0), (1, 0))
+    _posted.clear()
+    _cSel = _tF['cells'][(0, 0)]
+    app._grid_menu(_tF, type('E', (), {
+        'x': int(_cSel['x'] + 4), 'y': int(_cSel['y'] + 4),
+        'x_root': 0, 'y_root': 0})())
+    _labels = _menu_entries(_posted[-1]) if _posted else []
+    check('a partial selection does not offer Hide',
+          'Hide column' not in _labels and 'Merge cells' in _labels)
+finally:
+    NO.tk.Menu.tk_popup = _real_popup
+app._grid_clear_selection()
+set_body('')
+
+# ---- TOOLBAR FORMATTING REACHES THE CELLS ----
+# With cells selected, Bold means THOSE cells -- not a pending style for
+# the body. The tag lands on the cell's text (so save and export carry
+# it) and the drawn cell repaints.
+set_body('| Nume | Cant |\n| Lapte | 2 |')
+app._render_table_grids()
+app.update()
+_tF = app._grid_at_line(1)
+app._grid_sel = {'info': _tF, 'box': (1, 0, 1, 1),
+                 'cells': [(1, 0), (1, 1)]}
+app._toggle_body_style('bold')
+app.update()
+_tF = app._grid_at_line(1)
+_spanF = app._grid_cell_text_range(_tF, 1, 0)
+_fontF = str(_tF['canvas'].itemcget(_tF['cells'][(1, 0)]['text'], 'font'))
+check(f'Bold on selected cells tags the text and repaints ({_fontF!r})',
+      'bold' in app.body_text.tag_names(_spanF[0])
+      and 'bold' in _fontF and not app._pending_styles)
+app._toggle_body_style('bold')
+app.update()
+_tF = app._grid_at_line(1)
+_spanF = app._grid_cell_text_range(_tF, 1, 0)
+check('a second press turns it back off',
+      'bold' not in app.body_text.tag_names(_spanF[0]))
+
+# Highlight from the selection menu paints the drawn header and lands in
+# the saved formatting.
+_hexF = NO.HIGHLIGHT_COLOR_PALETTE[0]
+app._grid_apply_style(_tF, (0, 0, 0, 1), 'highlight', _hexF)
+app.update()
+_tF = app._grid_at_line(1)
+_fillF = _tF['canvas'].itemcget(_tF['cells'][(0, 0)]['rect'], 'fill')
+_surfF = NO.inset_surface(app.colors)
+_blendF = app._blend_hex(_hexF, _surfF, 0.45)
+_spansF = app._extract_formatting(app.body_text)
+check(f'a highlighted header cell is drawn as a 45% blend ({_fillF!r})',
+      _fillF == _blendF and _fillF != _hexF)
+check('every selected cell takes the paint, not just the last',
+      _tF['canvas'].itemcget(_tF['cells'][(0, 0)]['rect'], 'fill')
+      == _blendF
+      and _tF['canvas'].itemcget(_tF['cells'][(0, 1)]['rect'], 'fill')
+      == _blendF)
+# Exact offsets, not mere existence: the tag writer and reader share any
+# off-by-one (the first line's embedded window), so only the SAVED span's
+# slice of the body can prove the range is right.
+_hlF = [s for s in _spansF if 'highlight' in str(s)]
+_sliceF = (body()[_hlF[0]['start']:_hlF[0]['end']] if _hlF else '')
+check(f'and the saved highlight span covers exactly the cell text '
+      f'({_sliceF!r})', _sliceF == 'Nume')
+app._grid_apply_style(_tF, (0, 0, 0, 1), 'highlight', None)
+app.update()
+_tF = app._grid_at_line(1)
+check('Clear highlight restores the exact header surface',
+      _tF['canvas'].itemcget(_tF['cells'][(0, 0)]['rect'], 'fill')
+      == _surfF)
+
+# An open editor is a target too: the color button means that cell.
+app._grid_sel = None
+app._open_cell_editor(_tF, 1, 1)
+app.update()
+app._apply_body_color('text_color', '#ff0000')
+app.update()
+_tF = app._grid_at_line(1)
+_spanF = app._grid_cell_text_range(_tF, 1, 1)
+check('a color aimed at the open cell colors it, not a pending choice',
+      _spanF is not None
+      and any(t.startswith('text_color_')
+              for t in app.body_text.tag_names(_spanF[0]))
+      and not app._pending_text_color
+      and _tF['canvas'].itemcget(_tF['cells'][(1, 1)]['text'],
+                                 'fill') == '#ff0000')
+app._commit_cell_editor()
+app.update()
+set_body('')
+
+# ---- A CLICK ACROSS THE COMMIT'S REBUILD ----
+# Typing wide in one cell and clicking another: the commit inside the
+# click's open rebuilds the grids; the editor must land on the FRESH
+# grid, not crash on the dead canvas (the field failure that then broke
+# selections and dropped Ctrl+V into the body as literal text).
+set_body('| Nume | Cant |\n| a | 2 |\n| b | 3 |')
+app._render_table_grids()
+app.update()
+_tR = app._grid_at_line(1)
+app._open_cell_editor(_tR, 1, 0)
+app.update()
+app._cell_editor['entry'].delete(0, 'end')
+app._cell_editor['entry'].insert(0, 'un text mult mai lat decat coloana')
+_oldR = _tR['canvas']
+_cellR = _tR['cells'][(2, 0)]
+_evR = type('E', (), {'x': int(_cellR['x'] + 30),
+                      'y': int(_cellR['y'] + 6)})()
+_crashR = None
+try:
+    app._grid_press(_tR, _evR)
+    app._grid_release(_tR, _evR)
+    app.update()
+except NO.tk.TclError as exc:
+    _crashR = exc
+_freshR = app._grid_at_line(1)
+check(f'a click across the rebuild opens the editor on the fresh grid '
+      f'(crash={_crashR!r})',
+      _crashR is None and not int(_oldR.winfo_exists())
+      and app._cell_editor is not None
+      and app._cell_editor['info'] is _freshR
+      and (app._cell_editor['r'], app._cell_editor['c']) == (2, 0))
+check('and the wide value was committed on the way',
+      _freshR['cells'][(1, 0)]['value'].startswith('un text'))
+app._commit_cell_editor()
+app.update()
+set_body('')
+
+# ---- THE SCREENSHOT FLOW: AN OPEN EDITOR MUST NOT EAT CTRL+C/V ----
+# With an editor open (its text arrives selected), dragging a selection
+# and copying used to copy the ENTRY's word and paste it back into the
+# entry's own cell. The press now closes the editor and hands the
+# keyboard to the grid.
+set_body('| Aliment | X | Y |\n| Fructe | Lapte |  |\n'
+         '| Cereale |  |  |\n| Oua |  |  |')
+app._render_table_grids()
+app.update()
+take_focus(app.body_text)   # the window must own the desktop focus first
+_tE = app._grid_at_line(1)
+app._open_cell_editor(_tE, 1, 1)
+app.update()
+_tE = app._grid_at_line(1)
+_select_cells(_tE, (1, 0), (2, 0))
+take_focus(app.body_text)   # under a suite run focus_set alone may lag
+check('the press closes the open editor and keeps the drag selection',
+      app._cell_editor is None
+      and app._grid_sel is not None
+      and app._grid_sel['box'] == (1, 0, 2, 0)
+      and app.focus_get() is app.body_text)
+app.body_text.event_generate('<Control-c>')
+app.update()
+check(f'Ctrl+C copies the selected cells, not the entry '
+      f'({app.clipboard_get()!r})',
+      app.clipboard_get() == 'Fructe\nCereale')
+
+# The same, in one breath: a FAST Ctrl+C right on the heels of the
+# release, before the event queue settles. The press must have taken
+# the keyboard already -- a deferred, FocusOut-time close would leave
+# this copy to the entry.
+app.clipboard_clear()
+app.clipboard_append('vechi')
+app._open_cell_editor(_tE, 1, 1)
+app.update()
+_tE = app._grid_at_line(1)
+_aE, _bE = _tE['cells'][(1, 0)], _tE['cells'][(2, 0)]
+_cvE = _tE['canvas']
+_cvE.event_generate('<Button-1>', x=int(_aE['x'] + 12), y=int(_aE['y'] + 6))
+_cvE.event_generate('<B1-Motion>', x=int(_bE['x'] + 12), y=int(_bE['y'] + 6))
+_cvE.event_generate('<ButtonRelease-1>',
+                    x=int(_bE['x'] + 12), y=int(_bE['y'] + 6))
+app.body_text.event_generate('<Control-c>')
+app.update()
+check(f'a fast Ctrl+C straight after the drag still means the cells '
+      f'({app.clipboard_get()!r})',
+      app.clipboard_get() == 'Fructe\nCereale')
+
+# A drag started over an editor whose content WIDENED the column: the
+# commit's rebuild kills the gesture's canvas, so the one-gesture drag
+# cannot survive -- but it must degrade loudly (the press turns into a
+# click on the cell it started at, on the fresh grid), never into a
+# selection that flashes and silently vanishes a moment later.
+app._open_cell_editor(_tE, 1, 1)
+app.update()
+app._cell_editor['entry'].delete(0, 'end')
+app._cell_editor['entry'].insert(0, 'text destul de lat sa mute coloana')
+_tE2 = app._grid_at_line(1)
+_aE, _bE = _tE2['cells'][(1, 0)], _tE2['cells'][(2, 0)]
+_cvE = _tE2['canvas']
+_cvE.event_generate('<Button-1>', x=int(_aE['x'] + 12), y=int(_aE['y'] + 6))
+# The press killed this canvas (the commit rebuilt); a real mouse's
+# motion and release simply never arrive on it, but SYNTHETIC events on
+# a dead widget raise instead -- swallow that to mirror reality.
+try:
+    _cvE.event_generate('<B1-Motion>',
+                        x=int(_bE['x'] + 12), y=int(_bE['y'] + 6))
+    _cvE.event_generate('<ButtonRelease-1>',
+                        x=int(_bE['x'] + 12), y=int(_bE['y'] + 6))
+except NO.tk.TclError:
+    pass
+app.update()
+app.update()
+_tE = app._grid_at_line(1)
+check('a drag across a widening commit degrades to a click, not a '
+      'vanishing selection',
+      app._cell_editor is not None
+      and app._cell_editor['info'] is _tE
+      and (app._cell_editor['r'], app._cell_editor['c']) == (1, 0))
+app._commit_cell_editor()
+app.update()
+_tE = app._grid_at_line(1)
+# The widened text served its purpose; the flow below still expects
+# 'Lapte' in that cell.
+app._grid_fill_selection({'info': _tE, 'box': (1, 1, 1, 1)}, 'Lapte')
+app.update()
+_tE = app._grid_at_line(1)
+_select_cells(_tE, (1, 2), (2, 2))
+app.body_text.event_generate('<Control-v>')
+app.update()
+_tE = app._grid_at_line(1)
+check('a vertical pair lands in the vertical target',
+      _tE['cells'][(1, 2)]['value'] == 'Fructe'
+      and _tE['cells'][(2, 2)]['value'] == 'Cereale')
+check("and the editor's old cell is untouched",
+      _tE['cells'][(1, 1)]['value'] == 'Lapte')
+
+# ---- DELETE CLEARS THE SELECTED CELLS ----
+_select_cells(_tE, (1, 0), (2, 0))
+app.body_text.event_generate('<Delete>')
+app.update()
+_tE = app._grid_at_line(1)
+check('Delete clears exactly the selected cells',
+      _tE['cells'][(1, 0)]['value'] == ''
+      and _tE['cells'][(2, 0)]['value'] == ''
+      and _tE['cells'][(0, 0)]['value'] == 'Aliment')
+
+# ---- THE ALIGN BUTTONS FOLLOW THE CELL ----
+app._grid_set_alignment(_tE, (0, 1, 0, 1), core_tables.ALIGN_CENTER)
+app.update()
+_tE = app._grid_at_line(1)
+app._open_cell_editor(_tE, 0, 1)
+app.update()
+_accent = app.colors['accent']
+check('the centre button reads pressed while a centred cell is open',
+      str(app._align_buttons['center'].cget('bg')) == _accent
+      and str(app._align_buttons['left'].cget('bg')) != _accent)
+app._commit_cell_editor()
+app.update()
+
+# ---- ADD SEVERAL COLUMNS AT ONCE, AT THE END ----
+_tE = app._grid_at_line(1)
+_posted = []
+_real_popup = NO.tk.Menu.tk_popup
+NO.tk.Menu.tk_popup = lambda _m, *a, **k: _posted.append(_m)
+try:
+    _select_cells(_tE, (0, 1), (3, 2))
+    _cSel = _tE['cells'][(1, 1)]
+    app._grid_menu(_tE, type('E', (), {
+        'x': int(_cSel['x'] + 12), 'y': int(_cSel['y'] + 6),
+        'x_root': 0, 'y_root': 0})())
+    _labels = _menu_entries(_posted[-1]) if _posted else []
+    check('two whole columns selected offer copying two to the end',
+          'Copy 2 columns to the end' in _labels)
+    _ncolsE = _tE['ncols']
+    if _posted:
+        _posted[-1].invoke('Copy 2 columns to the end')
+        app.update()
+    _tE = app._grid_at_line(1)
+    check(f'and invoking it appends them ({_ncolsE} -> {_tE["ncols"]})',
+          _tE['ncols'] == _ncolsE + 2)
+    check('the copied columns carry their text, empties staying empty',
+          _tE['cells'][(0, _ncolsE)]['value'] == 'X'
+          and _tE['cells'][(0, _ncolsE + 1)]['value'] == 'Y'
+          and _tE['cells'][(2, _ncolsE)]['value'] == '')
+
+    # The palette is the app's own themed popup now: swatches parted
+    # by one-pixel hairlines in the theme's rule colour (a tk.Menu's
+    # separators are the OS's and looked nothing like the app).
+    _posted.clear()
+    _select_cells(_tE, (0, 0), (0, 1))
+    _cSel = _tE['cells'][(0, 0)]
+    app._grid_menu(_tE, type('E', (), {
+        'x': int(_cSel['x'] + 12), 'y': int(_cSel['y'] + 6),
+        'x_root': 0, 'y_root': 0})())
+    _labels = _menu_entries(_posted[-1]) if _posted else []
+    check('the selection menu opens the highlight popup',
+          'Highlight cells\u2026' in _labels)
+    app._grid_highlight_popup(_tE, (0, 0, 0, 1), 0, 0)
+    app.update()
+    _pop = app._mini_popup
+    _colF = [w for w in _pop.winfo_children()[0].winfo_children()
+             if isinstance(w, NO.tk.Frame)][0]
+    _swF = [w for w in _colF.winfo_children()
+            if isinstance(w, NO.tk.Button)]
+    check(f'the popup holds every swatch over the softened accent '
+          f'({len(_swF)})',
+          len(_swF) == len(NO.HIGHLIGHT_COLOR_PALETTE)
+          and str(_colF.cget('bg')) == app._blend_hex(
+              app.colors['accent'], app.colors['card'], 0.35))
+    _swF[0].invoke()
+    app.update()
+    _tE = app._grid_at_line(1)
+    check('a swatch click paints the selected cells',
+          _tE['canvas'].itemcget(_tE['cells'][(0, 0)]['rect'], 'fill')
+          == app._blend_hex(NO.HIGHLIGHT_COLOR_PALETTE[0],
+                            NO.inset_surface(app.colors), 0.45))
+    app._grid_apply_style(_tE, (0, 0, 0, 1), 'highlight', None)
+    app.update()
+    _tE = app._grid_at_line(1)
+finally:
+    NO.tk.Menu.tk_popup = _real_popup
+app._grid_clear_selection()
+set_body('')
+
+# ---- WITH A SEPARATOR, COPY READS THE ROW THE USER SEES ----
+# The selection matrix read TEXT rows, so in any resized table (which
+# has a separator) every copy took the line ABOVE the one on screen --
+# the phantom values that haunted the field tests.
+set_body('| Cap | G | H | I |\n| --- | --- | --- | --- |\n'
+         '| unu | doi |  |  |\n| trei | patru |  |  |')
+app._render_table_grids()
+app.update()
+take_focus(app.body_text)
+_tS4 = app._grid_at_line(1)
+_select_cells(_tS4, (1, 0), (1, 1))
+take_focus(app.body_text)
+app.body_text.event_generate('<Control-c>')
+app.update()
+check(f'with a separator, Ctrl+C copies the row on screen '
+      f'({app.clipboard_get()!r})',
+      app.clipboard_get() == 'unu\tdoi')
+_select_cells(_tS4, (1, 2), (1, 3))
+app.body_text.event_generate('<Control-v>')
+app.update()
+_tS4 = app._grid_at_line(1)
+check('and the horizontal pair lands whole',
+      _tS4['cells'][(1, 2)]['value'] == 'unu'
+      and _tS4['cells'][(1, 3)]['value'] == 'doi')
+
+# ---- THE TOOLBAR CENTRE MEANS THE SELECTED CELLS ----
+# The paragraph path applied an alignment the table lines shed at once,
+# which read as "it snaps back to the left".
+_select_cells(_tS4, (0, 0), (2, 3))
+app._set_paragraph_align('center')
+app.update()
+_tS4 = app._grid_at_line(1)
+check('the toolbar centre centres the selected cells, and it sticks',
+      core_tables.cell_alignments(
+          app.body_text.get('3.0', '3.end'))[0] == 'center'
+      and core_tables.cell_alignments(
+          app.body_text.get('1.0', '1.end'))[0] == 'center')
+
+# ---- THE LIST BUTTONS REFUSE A TABLE ----
+_select_cells(_tS4, (0, 0), (1, 1))
+_beforeS4 = body()
+app._toggle_list('number')
+app.update()
+check('numbering declines a cell selection, leaving the table intact',
+      body() == _beforeS4)
+app._grid_clear_selection()
+app.body_text.mark_set('insert', '1.2')
+app._toggle_list('bullet')
+app.update()
+check('and a caret parked inside the table adds no marker either',
+      body() == _beforeS4)
+set_body('')
+
+# ---- CELLS COPIED FROM A WEB TABLE KEEP THEIR SHAPE ----
+# A browser's plain text stacks every copied cell on its own line, so
+# two SIDE-BY-SIDE cells pasted one UNDER the other. The clipboard's
+# HTML knows the true rows and columns; the cell paste reads it.
+set_body('| Cap | G | H |\n|  |  |  |\n|  |  |  |')
+app._render_table_grids()
+app.update()
+_tW = app._grid_at_line(1)
+_stub_clipboard(
+    html='<table><tbody><tr><td>Franta</td><td>Paris</td></tr>'
+         '</tbody></table>',
+    text='Franta\nParis')
+app.clipboard_clear()
+app.clipboard_append('Franta\nParis')
+app._grid_cell_clip = None
+app._grid_paste_cells(_tW, 1, 0)
+app.update()
+_tW = app._grid_at_line(1)
+check(f'two side-by-side web cells paste side by side '
+      f'({_tW["cells"][(1, 0)]["value"]!r}, '
+      f'{_tW["cells"][(1, 1)]["value"]!r})',
+      _tW['cells'][(1, 0)]['value'] == 'Franta'
+      and _tW['cells'][(1, 1)]['value'] == 'Paris'
+      and _tW['cells'][(2, 0)]['value'] == '')
+
+# ...and a 2x2 web block keeps both its rows and its columns.
+_stub_clipboard(
+    html='<table><tr><td>a1</td><td>b1</td></tr>'
+         '<tr><td>a2</td><td>b2</td></tr></table>',
+    text='a1\nb1\na2\nb2')
+app.clipboard_clear()
+app.clipboard_append('a1\nb1\na2\nb2')
+app._grid_cell_clip = None
+app._grid_paste_cells(_tW, 1, 1)
+app.update()
+_tW = app._grid_at_line(1)
+check('a 2x2 web block lands as 2x2',
+      _tW['cells'][(1, 1)]['value'] == 'a1'
+      and _tW['cells'][(1, 2)]['value'] == 'b1'
+      and _tW['cells'][(2, 1)]['value'] == 'a2'
+      and _tW['cells'][(2, 2)]['value'] == 'b2')
+
+# Freshness still belongs to the plain clipboard: stale table HTML with
+# a NEWER, unrelated plain copy must not shape the paste.
+_stub_clipboard(
+    html='<table><tr><td>vechi1</td><td>vechi2</td></tr></table>',
+    text='proaspat')
+app.clipboard_clear()
+app.clipboard_append('proaspat')
+app._grid_cell_clip = None
+app._grid_paste_cells(_tW, 2, 0)
+app.update()
+_tW = app._grid_at_line(1)
+check('stale table HTML never outranks a newer plain copy',
+      _tW['cells'][(2, 0)]['value'] == 'proaspat'
+      and _tW['cells'][(2, 1)]['value'] == 'a2')
+set_body('')
+
+# ---- A NEW TABLE UNDER AN OLD ONE STAYS A TABLE OF ITS OWN ----
+# Two adjacent runs of pipe rows read as one block, so a table created
+# right under another fused with it: mismatched columns, a garbled grid,
+# loose '---' lines on screen.
+set_body('| Cap | G |\n| --- | --- |\n| unu | doi |')
+app._render_table_grids()
+app.update()
+app.body_text.mark_set('insert', 'end')
+app.update()
+app._insert_table(2, 3)
+app.update()
+app._commit_cell_editor()
+app.update()
+check(f'a table inserted under another gets a block of its own '
+      f'({len(app._table_grids)} grids)',
+      len(app._table_grids) == 2
+      and app.body_text.get('4.0', '4.end').strip() == '')
+
+# ---- THE TABLE TAKES A PLACE ON THE PAGE, AND KEEPS IT ----
+_tP = app._grid_at_line(1)
+_posted = []
+_real_popup = NO.tk.Menu.tk_popup
+NO.tk.Menu.tk_popup = lambda _m, *a, **k: _posted.append(_m)
+try:
+    _c00 = _tP['cells'][(0, 0)]
+    app._grid_menu(_tP, type('E', (), {
+        'x': int(_c00['x'] + 12), 'y': int(_c00['y'] + 6),
+        'x_root': 0, 'y_root': 0})())
+    _labels = _menu_entries(_posted[-1]) if _posted else []
+    check('the table menu offers a place on the page',
+          'Center table on page' in _labels
+          and 'Table right on page' in _labels)
+finally:
+    NO.tk.Menu.tk_popup = _real_popup
+app._grid_set_table_align(_tP, 'center')
+app.update()
+app.update_idletasks()
+_bboxL = app.body_text.bbox('1.0')
+check('a centred table really moves right on the page',
+      _bboxL is not None and _bboxL[0] > 40)
+app._grid_insert_row(_tP, 1)
+app.update()
+_tP = app._grid_at_line(1)
+# A WHOLESALE rewrite too (fill goes through replace_block, which
+# deletes the tagged text): the position must be read before the delete
+# and put back after -- and the freshly rebuilt WINDOW character must
+# carry the tag itself, because Tk justifies the display line by its
+# first character; without that the read said center while the table
+# visibly snapped left.
+app._grid_fill_selection({'info': _tP, 'box': (1, 0, 1, 0)}, 'x')
+app.update()
+app.update_idletasks()
+check('and an op on the table does not shake it loose',
+      app._grid_table_align_of(1) == 'center'
+      and any(str(t) == 'align_center'
+              for t in app.body_text.tag_names('1.0')))
+check('the position is saved with the note',
+      any(p.get('align') == 'center'
+          for p in app._extract_paragraphs(app.body_text)))
+_tP = app._grid_at_line(1)
+app._grid_set_table_align(_tP, 'left')
+app.update()
+check('and Table left on page brings it back',
+      app._grid_table_align_of(1) == 'left')
+set_body('')
+
+# ---- A TAG-ONLY CHANGE COUNTS AS A CHANGE ----
+# Centring the table touches no text, and the dirty comparison skipped
+# 'paragraphs' -- so the autosave decided nothing happened, and leaving
+# the note lost the position unless Save was pressed by hand.
+app.new_note()
+app.update()
+app.title_entry.insert(0, 'autosave pozitie')
+app.body_text.insert('1.0', '| Cap | G |\n| unu | doi |')
+app._render_table_grids()
+app.update()
+app.save_current_note()
+app.update()
+_tA = app._grid_at_line(1)
+check('a freshly saved table note reads clean',
+      app.editor_state_matches_saved(app.capture_editor_state()))
+app._grid_set_table_align(_tA, 'center')
+app.update()
+check('centring the table alone makes the note dirty',
+      not app.editor_state_matches_saved(app.capture_editor_state()))
+app._autosave_now()
+app.update()
+check('and the autosave banks it',
+      app.editor_state_matches_saved(app.capture_editor_state()))
+# The phantom only hatches on RELOAD: the loaded tag used to cover the
+# newline, so the writable line the renderer keeps under the table was
+# born centred -- an entry that kept the note dirty forever (an
+# autosave every half second, and stray centred typing under the table).
+_idA = app.selected_note_id
+app.open_note_in_tab(app.notes[0])
+app.update()
+app.open_note_in_tab(app.find_note(_idA))
+app.update()
+_stA = app.capture_editor_state()
+check(f'the reloaded note is clean, with no phantom centred line below '
+      f'the table ({_stA.get("paragraphs")})',
+      app.editor_state_matches_saved(_stA)
+      and len(_stA.get('paragraphs', [])) == 2)
+set_body('')
+
+# ---- THE THEME SWITCH REPAINTS THE DRAWN TABLES ----
+set_body('| Cap | G |\n| unu | doi |')
+app._render_table_grids()
+app.update()
+_oldT = app.theme_name
+app.set_theme('light' if 'dark' in str(_oldT) else 'dark')
+app.apply_theme()
+app.update()
+_tT = app._grid_at_line(1)
+check('the theme switch repaints the drawn header',
+      _tT is not None
+      and _tT['canvas'].itemcget(_tT['cells'][(0, 0)]['rect'], 'fill')
+      == NO.inset_surface(app.colors))
+
+# ...and a theme switched MID-TYPING banks the keystrokes first: the
+# rebuild used to destroy the editor's canvas under it, losing the text
+# and leaving a zombie editor over a dead widget.
+app._open_cell_editor(_tT, 1, 0)
+app.update()
+app._cell_editor['entry'].delete(0, 'end')
+app._cell_editor['entry'].insert(0, 'scris in timpul comutarii')
+app.set_theme(_oldT)
+app.apply_theme()
+app.update()
+_tT = app._grid_at_line(1)
+check('a theme switch mid-typing keeps the typed text',
+      _tT['cells'][(1, 0)]['value'] == 'scris in timpul comutarii'
+      and app._cell_editor is None)
+set_body('')
 
 NO.clipboard.read_html = _real_read_html
 NO.clipboard.read_text = _real_read_text
