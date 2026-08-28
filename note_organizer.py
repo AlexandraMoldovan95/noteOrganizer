@@ -1,5 +1,5 @@
 # note_organizer.py
-# A simple, colorful, offline Notes Organizer app
+# A simple, colorful, offline Note Organizer app
 # Notes are saved locally to notes_data.json, so they persist between sessions.
 
 import tkinter as tk
@@ -42,7 +42,7 @@ except ImportError:
 # Added/Fixed CHANGELOG.md entries, not per-release counts). The running
 # app records this into settings, so the next time a newer build opens
 # over older data it can tell the user what changed version-wise.
-APP_VERSION = "0.39.63"
+APP_VERSION = "0.39.64"
 
 
 def parse_version(v):
@@ -409,7 +409,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # call repeatedly; _main() calls it too.
         initialise()
         super().__init__()
-        self.title("Notes Organizer")
+        self.title("Note Organizer")
         self.geometry("900x600")
         self.minsize(500, 400)
 
@@ -794,7 +794,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             lines.append(summary)
 
         if lines:
-            self.show_info("Notes Organizer — setup complete", "\n\n———\n\n".join(lines))
+            self.show_info("Note Organizer — setup complete", "\n\n———\n\n".join(lines))
 
     # ---------- Data handling ----------
     def load_notes(self):
@@ -5589,7 +5589,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
                 imported_notes_path = os.path.join(temp_dir, "notes_data.json")
                 if not os.path.exists(imported_notes_path):
-                    state["error"] = "This .zip doesn't look like a Notes Organizer backup."
+                    state["error"] = "This .zip doesn't look like a Note Organizer backup."
                     state["done"] = True
                     return
 
@@ -10323,7 +10323,7 @@ def _main():
         try:
             root = tk.Tk()
             root.withdraw()
-            msg = ("Notes Organizer hit an unexpected error and needs to close.\n\n"
+            msg = ("Note Organizer hit an unexpected error and needs to close.\n\n"
                    f"{type(exc).__name__}: {exc}\n\n"
                    "Your saved notes are safe on disk.")
             if log_path:
@@ -10333,7 +10333,7 @@ def _main():
             # so nothing that depends on the app's own widgets/theming can be
             # trusted to work either.
             from tkinter import messagebox as _messagebox
-            _messagebox.showerror("Notes Organizer", msg)
+            _messagebox.showerror("Note Organizer", msg)
             root.destroy()
         except Exception:
             # Even the error dialog failed — print as a final fallback.

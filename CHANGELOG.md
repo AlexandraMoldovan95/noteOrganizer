@@ -6,6 +6,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ---
 
+## [0.39.64] — 2026-08-28
+
+### Fixed
+- The app could not agree on its own name: the window title, the crash dialog, the setup-complete message, and the share-code and backup error texts all said "Notes Organizer", while the README, the User Guide and every other document say "Note Organizer". A reviewer comparing a screenshot against the docs saw the mismatch immediately. It is **Note Organizer** everywhere now.
+
+---
+
 ## [0.39.63] — 2026-08-28
 
 ### Added
