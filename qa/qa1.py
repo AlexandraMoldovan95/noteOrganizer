@@ -2645,8 +2645,12 @@ app.update()
 app.update_idletasks()
 app.update()
 _yv1 = app.body_text.yview()[0]
+# The broken behaviour drifted 0.15+ (0.316 became 0.164); the fixed
+# one stays under ~0.03 on Windows and ~0.07 under the CI's Linux font
+# metrics -- the threshold sits between the two regimes, not inside
+# one platform's noise.
 check(f'a menu op keeps the body scrolled where it was '
-      f'({_yv0:.3f} -> {_yv1:.3f})', abs(_yv1 - _yv0) < 0.06)
+      f'({_yv0:.3f} -> {_yv1:.3f})', abs(_yv1 - _yv0) < 0.1)
 set_body('')
 
 # ---- EMOJI IN CELLS: TK COLUMNS ARE UTF-16 UNITS ----
@@ -2659,8 +2663,18 @@ app._insert_table(2, 2)
 app.update()
 _edU = app._cell_editor
 _pairU = chr(0xD83D) + chr(0xDE00)
-_edU['entry'].insert('end', _pairU)
-_edU['entry'].insert('end', _pairU)
+try:
+    # Windows Tk hands text over in UTF-16, so an Entry there really can
+    # hold a severed pair -- the exact form that once multiplied into
+    # squares and killed a save. Linux Tcl refuses lone surrogates at
+    # the door, so the CI exercises the same two-in-two-out path with
+    # the real character instead.
+    _edU['entry'].insert('end', _pairU)
+    _edU['entry'].insert('end', _pairU)
+except (tk.TclError, UnicodeEncodeError):
+    _edU['entry'].delete(0, 'end')
+    _edU['entry'].insert('end', chr(0x1F600))
+    _edU['entry'].insert('end', chr(0x1F600))
 for _i in range(3):
     app._flush_table_grids()
     app.update()
