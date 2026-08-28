@@ -3098,11 +3098,13 @@ set_body('| Aliment | X | Y |\n| Fructe | Lapte |  |\n'
          '| Cereale |  |  |\n| Oua |  |  |')
 app._render_table_grids()
 app.update()
+take_focus(app.body_text)   # the window must own the desktop focus first
 _tE = app._grid_at_line(1)
 app._open_cell_editor(_tE, 1, 1)
 app.update()
 _tE = app._grid_at_line(1)
 _select_cells(_tE, (1, 0), (2, 0))
+take_focus(app.body_text)   # under a suite run focus_set alone may lag
 check('the press closes the open editor and keeps the drag selection',
       app._cell_editor is None
       and app._grid_sel is not None
@@ -3280,8 +3282,10 @@ set_body('| Cap | G | H | I |\n| --- | --- | --- | --- |\n'
          '| unu | doi |  |  |\n| trei | patru |  |  |')
 app._render_table_grids()
 app.update()
+take_focus(app.body_text)
 _tS4 = app._grid_at_line(1)
 _select_cells(_tS4, (1, 0), (1, 1))
+take_focus(app.body_text)
 app.body_text.event_generate('<Control-c>')
 app.update()
 check(f'with a separator, Ctrl+C copies the row on screen '
@@ -3402,9 +3406,21 @@ check('the theme switch repaints the drawn header',
       _tT is not None
       and _tT['canvas'].itemcget(_tT['cells'][(0, 0)]['rect'], 'fill')
       == NO.inset_surface(app.colors))
+
+# ...and a theme switched MID-TYPING banks the keystrokes first: the
+# rebuild used to destroy the editor's canvas under it, losing the text
+# and leaving a zombie editor over a dead widget.
+app._open_cell_editor(_tT, 1, 0)
+app.update()
+app._cell_editor['entry'].delete(0, 'end')
+app._cell_editor['entry'].insert(0, 'scris in timpul comutarii')
 app.set_theme(_oldT)
 app.apply_theme()
 app.update()
+_tT = app._grid_at_line(1)
+check('a theme switch mid-typing keeps the typed text',
+      _tT['cells'][(1, 0)]['value'] == 'scris in timpul comutarii'
+      and app._cell_editor is None)
 set_body('')
 
 NO.clipboard.read_html = _real_read_html

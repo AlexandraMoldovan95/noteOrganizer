@@ -106,6 +106,20 @@ code_entry = find_text_widget(app.editor_code_area)
 check('share code text widget exists', code_entry is not None)
 
 # decode round trip
+# Paragraphs travel too: without them a shared note arrived flush
+# left with flat lists, and a table lost its place on the page.
+_para_note = {'title': 'P', 'body': '| A | B |\n| x | y |',
+              'formatting': [],
+              'paragraphs': [{'line': 0, 'align': 'center'},
+                             {'line': 1, 'align': 'center'}]}
+_para_back = NO.decode_share_code(
+    NO.encode_share_code([_para_note]))[0]
+check('a share code carries the paragraphs (table position, indents)',
+      _para_back.get('paragraphs') == _para_note['paragraphs'])
+check('and an old code without paragraphs still decodes',
+      'paragraphs' not in NO.decode_share_code(NO.encode_share_code([
+          {'title': 'v', 'body': 'x', 'formatting': []}]))[0])
+
 code = NO.encode_share_code([app.notes[0]])
 decoded = NO.decode_share_code(code)
 check('share code round-trips correctly', decoded[0]['title']=='ShareMe' and decoded[0]['body']=='share body')

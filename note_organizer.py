@@ -6218,6 +6218,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._refresh_placeholder_colors()
         # The drawn tables carry their colours in canvas items; without a
         # rebuild they kept the OLD theme until the next edit touched them.
+        # The commit first: render's contract is "never while focus is in
+        # a cell", and a theme switched mid-typing otherwise destroyed the
+        # editor's canvas under it -- the keystrokes went with it.
+        self._commit_cell_editor()
         self._render_table_grids()
         self.refresh_weekday_buttons()
         self.on_end_mode_changed()
