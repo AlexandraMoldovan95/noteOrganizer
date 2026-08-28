@@ -1575,8 +1575,10 @@ _fmt_need = sum(w.winfo_reqwidth() + px[0] + px[1]
                 for w, px, _ip, _fl, _py in app._fmt_bar_items)
 app._on_format_bar_resize(_WidthEvent(_fmt_need + 60))
 app.update_idletasks()
-check('every control is on one row when there is room for one',
-      len([r for r in app._fmt_bar_rows if r.winfo_ismapped()]) == 1)
+_rows_state = list(getattr(app, '_fmt_rows_used', []))
+check(f'every control is on one row when there is room for one '
+      f'(rows={_rows_state}, granted={_fmt_need + 60})',
+      _rows_state.count(True) == 1)
 check('and all of them are showing',
       all(c.winfo_manager() == 'pack' for c in _fmt_real))
 app._reflow_format_bar()

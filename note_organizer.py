@@ -3687,13 +3687,21 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 for row in split_toolbar_rows(measured, available,
                                               len(self._fmt_bar_rows))]
 
+        # The rows' packed/unpacked state is tracked here rather than
+        # read back from winfo_ismapped(): mapping is asynchronous, so a
+        # row packed a moment ago can still answer "not mapped" -- under
+        # Xvfb the reflow then declined to fold an empty row away and the
+        # bar kept two rows with room for one. Same lesson the calendar's
+        # deferred rebuild records: reliable state, not winfo_ismapped().
+        used = getattr(self, "_fmt_rows_used",
+                       [False] * len(self._fmt_bar_rows))
         for widget, _padx, _ipady, _fill, _pady in self._fmt_bar_items:
             widget.pack_forget()
         for n, row_items in enumerate(rows):
             row = self._fmt_bar_rows[n]
-            if row_items and not row.winfo_ismapped():
+            if row_items and not used[n]:
                 row.pack(side="top", fill="x")
-            elif not row_items and row.winfo_ismapped():
+            elif not row_items and used[n]:
                 row.pack_forget()
             for widget, padx, ipady, fill, pady in row_items:
                 opts = {"side": "left", "padx": padx, "in_": row}
@@ -3705,8 +3713,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     opts["pady"] = pady
                 widget.pack(**opts)
         for n in range(len(rows), len(self._fmt_bar_rows)):
-            if self._fmt_bar_rows[n].winfo_ismapped():
+            if used[n]:
                 self._fmt_bar_rows[n].pack_forget()
+        self._fmt_rows_used = [
+            n < len(rows) and bool(rows[n])
+            for n in range(len(self._fmt_bar_rows))]
 
     def _make_align_button(self, parent, align):
         """One alignment button, drawn as four bars on a small canvas.
