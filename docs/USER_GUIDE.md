@@ -138,7 +138,7 @@ Save any note as a reusable template (📋 **Save as template**), or build one f
 
 ### Trash
 
-Deleting a note moves it to **Recently deleted** (Settings), where it's recoverable for a configurable retention window before being purged automatically. Restore individual notes, delete them permanently one at a time, or empty the whole trash at once. With a lot of deleted notes, the list loads the most recent batch first, with a button to reveal more — so it stays quick to open no matter how much has accumulated there.
+Deleting a note moves it to **Recently deleted** (Settings), where it's recoverable for 30 days before being purged automatically. Restore individual notes, delete them permanently one at a time, or empty the whole trash at once. With a lot of deleted notes, the list loads the most recent batch first, with a button to reveal more — so it stays quick to open no matter how much has accumulated there.
 
 ![Trash panel](screenshots/trash-panel.png)
 
@@ -196,8 +196,6 @@ Paste a code you received into **Import code** in the sidebar. If any of the not
 ### Full backup: export
 
 Settings → Export notes creates a single `.zip` containing every note, your settings, and every attachment — the one file you need to move everything to another device. With a lot of attachments this can take a moment; a progress bar stays visible at the bottom of the window the whole time, and the app remains fully usable while it works.
-
-![Export progress](screenshots/export-progress.png)
 
 ### Full backup: import
 
