@@ -95,3 +95,4 @@ If the UI is ever rebuilt on a different toolkit, that is the moment to revisit 
 
 - Tags as a separate feature from categories — removed in 0.3.0 after concluding categories cover the need on their own; revisiting this isn't currently planned.
 - Cloud sync / accounts — the app is intentionally offline-only.
+- Recognising tables pasted from a PDF — decided against (2026-08-28). A PDF carries no table structure at all, only text positioned on a page; guessing columns from spacing is a large, unreliable feature of its own. Pasting from a PDF keeps working as it does today — the table's *text* arrives through the normal PDF paragraph-rejoin — and anyone who wants it structured can drop it into a table made from the toolbar. Tables pasted from Excel, Word or web pages (which *do* carry structure) arrive as real grids and stay fully supported.
