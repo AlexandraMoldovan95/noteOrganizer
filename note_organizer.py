@@ -2627,6 +2627,42 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             remembered = "\n".join("\t".join(row) for row in matrix)
             if raw != remembered:
                 matrix = None
+        if not matrix:
+            # Cells copied from a browser: the plain text stacks every
+            # cell on its own line ("A\nB" for two side-by-side cells),
+            # but the HTML still knows the true rows and columns. Read
+            # the shape from there, through the same parser a whole-table
+            # paste already trusts.
+            html = clipboard.read_html()
+            if html and "<table" in html.lower():
+                try:
+                    html_text, _spans, _paras = html_to_note(html)
+                    blocks = core_tables.find_blocks(html_text)
+                    if blocks:
+                        lines = html_text.split("\n")
+                        block = lines[blocks[0][0]:blocks[0][1] + 1]
+                        sep_at = core_tables.separator_index(block)
+                        matrix = [
+                            ["" if value in (core_tables.MERGE_LEFT,
+                                             core_tables.MERGE_UP)
+                             else value
+                             for value in core_tables.split_row(line)]
+                            for i, line in enumerate(block) if i != sep_at]
+                    # The plain clipboard stays the authority on
+                    # FRESHNESS: the HTML only supplies the shape when
+                    # its cells are the same ones the plain text holds --
+                    # i.e. both came from the same copy. A newer,
+                    # unrelated plain copy wins over stale HTML.
+                    if matrix is not None and raw is not None:
+                        html_cells = [v.strip() for row in matrix
+                                      for v in row if v.strip()]
+                        raw_cells = [t.strip() for line in raw.split("\n")
+                                     for t in line.split("\t")
+                                     if t.strip()]
+                        if html_cells != raw_cells:
+                            matrix = None
+                except Exception:
+                    matrix = None
         if not matrix and raw:
             matrix = [line.split("\t") for line in raw.split("\n") if line]
         if not matrix:

@@ -3327,6 +3327,64 @@ check('and a caret parked inside the table adds no marker either',
       body() == _beforeS4)
 set_body('')
 
+# ---- CELLS COPIED FROM A WEB TABLE KEEP THEIR SHAPE ----
+# A browser's plain text stacks every copied cell on its own line, so
+# two SIDE-BY-SIDE cells pasted one UNDER the other. The clipboard's
+# HTML knows the true rows and columns; the cell paste reads it.
+set_body('| Cap | G | H |\n|  |  |  |\n|  |  |  |')
+app._render_table_grids()
+app.update()
+_tW = app._grid_at_line(1)
+_stub_clipboard(
+    html='<table><tbody><tr><td>Franta</td><td>Paris</td></tr>'
+         '</tbody></table>',
+    text='Franta\nParis')
+app.clipboard_clear()
+app.clipboard_append('Franta\nParis')
+app._grid_cell_clip = None
+app._grid_paste_cells(_tW, 1, 0)
+app.update()
+_tW = app._grid_at_line(1)
+check(f'two side-by-side web cells paste side by side '
+      f'({_tW["cells"][(1, 0)]["value"]!r}, '
+      f'{_tW["cells"][(1, 1)]["value"]!r})',
+      _tW['cells'][(1, 0)]['value'] == 'Franta'
+      and _tW['cells'][(1, 1)]['value'] == 'Paris'
+      and _tW['cells'][(2, 0)]['value'] == '')
+
+# ...and a 2x2 web block keeps both its rows and its columns.
+_stub_clipboard(
+    html='<table><tr><td>a1</td><td>b1</td></tr>'
+         '<tr><td>a2</td><td>b2</td></tr></table>',
+    text='a1\nb1\na2\nb2')
+app.clipboard_clear()
+app.clipboard_append('a1\nb1\na2\nb2')
+app._grid_cell_clip = None
+app._grid_paste_cells(_tW, 1, 1)
+app.update()
+_tW = app._grid_at_line(1)
+check('a 2x2 web block lands as 2x2',
+      _tW['cells'][(1, 1)]['value'] == 'a1'
+      and _tW['cells'][(1, 2)]['value'] == 'b1'
+      and _tW['cells'][(2, 1)]['value'] == 'a2'
+      and _tW['cells'][(2, 2)]['value'] == 'b2')
+
+# Freshness still belongs to the plain clipboard: stale table HTML with
+# a NEWER, unrelated plain copy must not shape the paste.
+_stub_clipboard(
+    html='<table><tr><td>vechi1</td><td>vechi2</td></tr></table>',
+    text='proaspat')
+app.clipboard_clear()
+app.clipboard_append('proaspat')
+app._grid_cell_clip = None
+app._grid_paste_cells(_tW, 2, 0)
+app.update()
+_tW = app._grid_at_line(1)
+check('stale table HTML never outranks a newer plain copy',
+      _tW['cells'][(2, 0)]['value'] == 'proaspat'
+      and _tW['cells'][(2, 1)]['value'] == 'a2')
+set_body('')
+
 # ---- A NEW TABLE UNDER AN OLD ONE STAYS A TABLE OF ITS OWN ----
 # Two adjacent runs of pipe rows read as one block, so a table created
 # right under another fused with it: mismatched columns, a garbled grid,
