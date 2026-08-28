@@ -1567,18 +1567,30 @@ for _w in (1400, 900, 1400):
     check(f'no control is dropped when the bar is told it has {_w}px '
           f'({len(_past)} were)', not _past)
 
-# The check is about having room, so it grants the room the controls
-# actually request -- the same sum the reflow itself measures. A fixed
-# pixel guess (1400, then 1800) kept losing to wider Linux faces and a
-# toolbar that has since gained the table and emoji buttons.
+# The room has to be REAL: a synthetic width event is undone the
+# moment update_idletasks() delivers the bar's genuine <Configure>
+# with its true width -- which is exactly what happened on the CI,
+# where wider faces mean the same window genuinely lacks room for one
+# row (and the app wraps, correctly). So: widen the actual window by
+# what the controls request beyond what the bar really has, let the
+# genuine event reflow, assert, and put the window back.
 _fmt_need = sum(w.winfo_reqwidth() + px[0] + px[1]
                 for w, px, _ip, _fl, _py in app._fmt_bar_items)
-app._on_format_bar_resize(_WidthEvent(_fmt_need + 60))
+_geo_before = app.geometry()
+_bar_now = app._fmt_bar.winfo_width()
+if _bar_now < _fmt_need + 60:
+    _w_now = app.winfo_width()
+    app.geometry(f'{_w_now + (_fmt_need + 60 - _bar_now)}'
+                 f'x{app.winfo_height()}')
+app.update()
 app.update_idletasks()
 _rows_state = list(getattr(app, '_fmt_rows_used', []))
 check(f'every control is on one row when there is room for one '
-      f'(rows={_rows_state}, granted={_fmt_need + 60})',
+      f'(rows={_rows_state}, need={_fmt_need}, '
+      f'bar={app._fmt_bar.winfo_width()})',
       _rows_state.count(True) == 1)
+app.geometry(_geo_before)
+app.update()
 check('and all of them are showing',
       all(c.winfo_manager() == 'pack' for c in _fmt_real))
 app._reflow_format_bar()
