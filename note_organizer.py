@@ -5928,7 +5928,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 text_widget.configure(height=expanded if state["expanded"] else compact)
             except tk.TclError:
                 pass
-            btn.configure(text=("Restrânge ⌃" if state["expanded"] else "Extinde ⌄"))
+            btn.configure(text=("Collapse ⌃" if state["expanded"] else "Expand ⌄"))
 
         def toggle():
             state["expanded"] = not state["expanded"]
@@ -5966,7 +5966,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 target.configure(height=h)
             except tk.TclError:
                 pass
-            btn.configure(text=("Restrânge ⌃" if state["expanded"] else "Extinde ⌄"))
+            btn.configure(text=("Collapse ⌃" if state["expanded"] else "Expand ⌄"))
 
         def toggle():
             state["expanded"] = not state["expanded"]

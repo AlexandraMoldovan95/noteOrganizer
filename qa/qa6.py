@@ -719,7 +719,7 @@ app.update()
 check(f'one click takes it to 26 rows ({_rows(app.body_text)})',
       _rows(app.body_text) == 26)
 check(f'the button then offers to collapse ({_btn.cget("text")!r})',
-      'Restrânge' in str(_btn.cget('text')))
+      'Collapse' in str(_btn.cget('text')))
 check(f'the taller box is really taller on screen ({app.body_text.winfo_height()}px)',
       app.body_text.winfo_height() > 300)
 
@@ -757,10 +757,10 @@ NO.save_setting('editor_body_expanded', False)
 # toggle, still four rows, and still deliberately not remembered.
 check(f'the comments box is still compact at 4 rows ({_rows(app.comments_text)})',
       _rows(app.comments_text) == 4)
-# Both boxes now carry a toggle reading "Extinde", so the body's own button
+# Both boxes now carry a toggle reading "Expand", so the body's own button
 # has to be excluded by identity -- matching on the label alone finds two.
 _comment_btns = [w for w in app.editor.winfo_children()
-                 if isinstance(w, tk.Button) and 'Extinde' in str(w.cget('text'))
+                 if isinstance(w, tk.Button) and 'Expand' in str(w.cget('text'))
                  and w is not app.body_resize_btn]
 check(f'the comments box still has its own toggle ({len(_comment_btns)} found)',
       len(_comment_btns) == 1)
