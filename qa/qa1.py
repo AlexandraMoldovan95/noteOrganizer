@@ -1567,10 +1567,13 @@ for _w in (1400, 900, 1400):
     check(f'no control is dropped when the bar is told it has {_w}px '
           f'({len(_past)} were)', not _past)
 
-# 1800, not 1400: the bar has since gained the table and emoji
-# buttons, and the CI's Linux faces run wider than Segoe UI -- the
-# check is about having room, so it is given room on every platform.
-app._on_format_bar_resize(_WidthEvent(1800))
+# The check is about having room, so it grants the room the controls
+# actually request -- the same sum the reflow itself measures. A fixed
+# pixel guess (1400, then 1800) kept losing to wider Linux faces and a
+# toolbar that has since gained the table and emoji buttons.
+_fmt_need = sum(w.winfo_reqwidth() + px[0] + px[1]
+                for w, px, _ip, _fl, _py in app._fmt_bar_items)
+app._on_format_bar_resize(_WidthEvent(_fmt_need + 60))
 app.update_idletasks()
 check('every control is on one row when there is room for one',
       len([r for r in app._fmt_bar_rows if r.winfo_ismapped()]) == 1)
