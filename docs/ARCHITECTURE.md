@@ -148,6 +148,30 @@ The formatting toolbar wraps when it will not fit on one row, so no control can 
 
 That split is deliberate, and it was learned the hard way. A check that measures widget widths is testing whatever font the machine has: the same bar is 577px here and 827px under Xvfb, and which control lands on a row boundary — and therefore whether the bug shows at all — moves with it. Given numbers, the same inputs give the same answer everywhere, so the behaviour can be pinned down exactly. The widget side keeps only the measuring and the packing.
 
+### Paste from a PDF: lines are not paragraphs
+
+A PDF has no paragraphs — only lines placed on a page — so pasting from
+one hands over the column's line breaks as though the writer meant them.
+`reflow_wrapped()` (in `core/richtext.py`) rejoins what the column broke
+while leaving real breaks alone, judging each line by measurable signals
+rather than guesswork: would the next line's first word have fitted (a
+break with room to spare was chosen, not forced), does the line end in
+sentence punctuation (paragraphs almost never stop mid-sentence), and is
+the next line indented past the block's own left edge (many documents
+mark a new paragraph exactly that way). A run that does not look like a
+wrapped column at all — lists, addresses, poems, anything under three
+lines — comes back untouched: a break someone meant is worse to lose
+than a break left in.
+
+It runs on both paste paths, but only when the clipboard carried no real
+structure of its own — a source that sent block markup already has
+paragraphs, and rejoining would slide its formatting offsets. The
+trade-off is stated rather than hidden: without indentation, a paragraph
+whose last line lands nearly full cannot be told from a line the column
+broke, so the function can merge two paragraphs — never split one — and
+`test_richtext.py` asserts that as a property across eight column
+widths: no word lost, no word altered, no paragraph ever cut in half.
+
 ### Tables: plain text is the store, a drawn grid is the view
 
 A table in a note is stored as ordinary lines of text in the note body, in Markdown's own table syntax:
@@ -183,4 +207,4 @@ Typing pauses trigger a debounced autosave; switching notes (or tabs) flushes an
 
 ## Testing
 
-Manual QA lives as a structured spreadsheet in `qa/`. Automated coverage is a set of headless test scripts run under Xvfb (no visible display needed) — nine scripts covering CRUD/categories/templates, recurrence/calendar/duplicates, trash/share/import-export, theming/stress/leak-regression, data-corruption resilience, grouping/settings/attachments/combinations, calendar-delete/multi-select/image-preview/autosave fixes, search-debounce/background-timer robustness, and a nested-dropdown-inside-popup fix, plus three standalone suites that need no GUI at all: the recurrence engine, data-safety (backups & migration), and the in-note calculator's expression evaluator. All of them run automatically on every push and Pull Request via GitHub Actions (`.github/workflows/tests.yml`), so a regression shows up as a failed check rather than being found by hand later. See [ISSUES_LOG.md](ISSUES_LOG.md) for notable bugs these caught (and a few they didn't, caught by hand-testing instead).
+Manual QA lives as a structured spreadsheet in `qa/`. Automated coverage is a set of headless test scripts run under Xvfb (no visible display needed) — nine scripts covering CRUD/categories/templates, recurrence/calendar/duplicates, trash/share/import-export, theming/stress/leak-regression, data-corruption resilience, grouping/settings/attachments/combinations, calendar-delete/multi-select/image-preview/autosave fixes, search-debounce/background-timer robustness, and a nested-dropdown-inside-popup fix, plus five standalone suites that need no GUI at all: the recurrence engine, data-safety (backups & migration), the in-note calculator's expression evaluator, the rich-text conversion and PDF-rejoin logic (`test_richtext.py`), and the table engine (`test_tables.py`). All of them run automatically on every push and Pull Request via GitHub Actions (`.github/workflows/tests.yml`), so a regression shows up as a failed check rather than being found by hand later. See [ISSUES_LOG.md](ISSUES_LOG.md) for notable bugs these caught (and a few they didn't, caught by hand-testing instead).

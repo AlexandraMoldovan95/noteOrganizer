@@ -163,14 +163,20 @@ noteOrganizer/
 
 ## Testing
 
-Every push and Pull Request automatically runs the full QA suite via GitHub Actions (see `.github/workflows/tests.yml`) — recurrence engine tests, data-safety tests (backups made before a version upgrade, and the migration logic that moves notes between storage locations), the in-note calculator's expression evaluator, plus nine headless GUI test scripts covering notes/categories/templates, recurrence/calendar/duplicates, trash/sharing/import-export, theming/stress/leak-regression, data-corruption resilience, grouping/settings/attachments/multi-feature combinations, calendar-delete/multi-select/image-preview/autosave/memory fixes, search debounce/background-timer robustness, and the nested-dropdown-inside-popup fix. Check the **Actions** tab on GitHub for the latest run.
+Every push and Pull Request automatically runs the full QA suite via GitHub Actions (see `.github/workflows/tests.yml`) — recurrence engine tests, data-safety tests (backups made before a version upgrade, and the migration logic that moves notes between storage locations), the in-note calculator's expression evaluator, the rich-text/PDF-paste conversion tests, the table engine tests, an entry-module identity test, plus nine headless GUI test scripts covering notes/categories/templates, recurrence/calendar/duplicates, trash/sharing/import-export, theming/stress/leak-regression, data-corruption resilience, grouping/settings/attachments/multi-feature combinations, calendar-delete/multi-select/image-preview/autosave/memory fixes, search debounce/background-timer robustness, and the nested-dropdown-inside-popup fix. Check the **Actions** tab on GitHub for the latest run.
 
-To run them locally:
+To run them locally — from a scratch copy, the same way the CI does
+(the GUI scripts wipe the data files beside them before running, and
+`test_data_safety.py` refuses outright if it finds real notes next to
+itself):
+
 ```bash
-python test_recurrence.py
-python test_data_safety.py
-python test_calculator.py
-cd qa && python qa1.py   # and qa2.py – qa9.py
+# copy the app and the tests somewhere disposable first
+cp note_organizer.py test_*.py qa/qa*.py /tmp/scratch/ && cp -r noteorganizer /tmp/scratch/
+cd /tmp/scratch
+python test_recurrence.py     # likewise test_data_safety, test_calculator,
+python test_tables.py         # test_richtext, test_entry_module_identity
+python qa1.py                 # and qa2.py – qa9.py
 ```
 
 There's also a manual QA test plan (`qa/NoteOrganizer_TestPlan.xlsx`) covering scenarios that are easier to eyeball than to automate.

@@ -87,7 +87,9 @@ If you're working through this for the first time:
 3. **`model.py`** (section 10) — `normalize_note` is the single idea the
    whole data layer is built on.
 4. The rest in any order. `sharing.py` is the one to read if you're
-   interested in defending against hostile input.
+   interested in defending against hostile input, and `tables.py`
+   (section 4b) if you want to see a whole feature built on the idea
+   that plain text can be the single source of truth.
 5. The UI, once it's split.
 
 ---
@@ -506,6 +508,19 @@ offers, so matching would mean picking a nearest value and claiming the
 note is set in something it never was.
 
 ---
+
+**`reflow_wrapped()` — the PDF rejoiner.** The other big resident of
+`richtext.py`. Text copied from a PDF arrives as the column's lines, not
+the writer's paragraphs; this function decides, line by line, which
+breaks were forced and which were meant. Four small helpers carry the
+whole judgment — `_looks_wrapped()` (does this block behave like a
+wrapped column at all), `_forced_break()` (would the next word have
+fitted), `_ends_a_paragraph()` (sentence punctuation, or a line falling
+well short of the column), and `_join_wrapped()` — and each is pure
+string logic, which is why `test_richtext.py` can test the property
+(nothing lost, nothing split) across many widths instead of pinning one
+example. Blank lines always separate paragraphs and are never removed,
+and anything that does not look wrapped comes back byte-for-byte.
 
 ## 4b. `noteorganizer/core/tables.py`
 
