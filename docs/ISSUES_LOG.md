@@ -487,3 +487,131 @@ accident to arrive under a filename it forgot to list. The durable form of
 the rule is categorical — *all tests run from scratch copies outside the
 tree* — and the file that can do damage carries its own refusal, so the
 last line of defence does not depend on anyone remembering anything.
+
+### The emoji that multiplied into squares
+
+**Symptom:** Typing two emoji into a table cell showed one emoji and a
+square. Hovering made more squares. Committing the cell wrote diamonds
+and fragments into neighbouring cells, and eventually a save crashed the
+app outright.
+
+**Root cause:** Two facts about Tk, stacked. First, a Tk text widget
+addresses columns in UTF-16 units, while Python counts characters — an
+emoji beyond the basic plane is *two* Tk units but *one* Python
+character. Every surgical edit the grid made (write this cell, pad that
+column) computed offsets in Python characters and applied them as Tk
+columns, so after one emoji every later cut landed one unit early —
+slicing the second emoji in half, and re-slicing at the drifted position
+on every flush, which is how one emoji became a trail of broken pairs.
+Second, a Tk Entry hands back exactly what it holds — including a
+*severed half* of an emoji (a lone surrogate), which is a valid Python
+string that `json.dump` refuses to serialise. The save failed with the
+temp file already open, and the old `except (IOError, OSError)` did not
+catch a `UnicodeEncodeError`, so the failure escaped as a crash.
+
+**Fix:** every boundary between Python offsets and Tk columns goes
+through a pair of converters (`_tk_units`/`_tk_col`), and the storage
+layer mends surrogate pairs (`mend_surrogates`) before serialising —
+plus the save's `except` was widened and its temp file is removed on
+failure. The regression checks type two emoji through three flushes and
+assert two come out.
+
+**Takeaway:** an off-by-one that only appears after an emoji is not an
+emoji bug — it is a units bug, and it was everywhere the two counting
+systems met. Fixing the visible site (the cell write) without the
+audit would have left the same drift in the alignment ops and the
+column inserts. The mutation test that made `_tk_col` an identity
+function reproduced the user's exact "two in, one out" report, which is
+what confirmed the mechanism rather than the symptom had been fixed.
+
+### The copy that took the row above
+
+**Symptom:** Copying two cells and pasting them somewhere else put the
+wrong text in the target — sometimes an empty pair, sometimes a word
+from a different row, once a pair of literal `---` dashes. It looked
+random, and it haunted three field-test sessions under three different
+descriptions.
+
+**Root cause:** any table that has ever been resized carries an
+invisible mechanics row — the Markdown separator `|---|---|` — as its
+second line of *text*, which the drawn grid deliberately does not show.
+The copy's selection matrix indexed rows by grid position into the raw
+*text* rows, so in every such table the copy read one row above the one
+on screen. The user copied what they saw; the clipboard got the line
+above it.
+
+**Fix:** the selection matrix reads data rows through the same
+separator-aware mapping every other grid operation already used. The
+regression check pins the exact haunting: with a separator present,
+Ctrl+C must produce the row on screen — and the mutation that
+resurrects the bug fails it with the clipboard reading `---	---`,
+the ghost made visible.
+
+**Takeaway:** when the same feature breaks three field tests in three
+different costumes, stop patching the costumes. The reports ("pastes
+the wrong thing", "fills a random cell", "only the first cell landed")
+shared one cause, and it was found by following the data — what exactly
+was on the clipboard — rather than the behaviour.
+
+### The rebuild under the click
+
+**Symptom:** After typing something wide into a cell, the next click on
+another cell did nothing — and from then on the table misbehaved:
+selections stopped working, a paste landed in the note as literal
+`pasted text`, and the crash log filled with `bad window path name`.
+
+**Root cause:** committing a cell whose content widened its column
+rebuilds the whole drawn grid — tearing down the canvas and building a
+fresh one. The click that *triggered* that commit was still in flight:
+its release handler held references to the old, now-destroyed canvas,
+and opening the editor on it raised mid-callback. The wreckage was
+worse than the crash — the half-finished gesture left a dead selection
+behind, so the next Ctrl+V found no cells selected and fell through to
+the body's plain-text paste.
+
+**Fix:** the same dance `_editor_step` already knew, applied everywhere
+a gesture can cross a rebuild: anchor the table by its line number
+*before* the commit, pick up the fresh grid *after*, and read canvas
+coordinates while the canvas is certainly alive. Where the gesture
+physically cannot continue (the mouse grab dies with the canvas), it
+degrades loudly — the press becomes a click on the cell it started at,
+on the fresh grid — never into a selection that flashes and silently
+vanishes.
+
+**Takeaway:** "rebuild the world on change" is a fine architecture, but
+every pointer into the old world becomes a landmine the moment a
+rebuild can happen *inside* a user gesture. The durable pattern is
+re-anchoring by something that survives the rebuild (a line number, not
+a widget), and the honest part is deciding out loud what the one
+impossible case degrades into.
+
+### The centring that would not save itself
+
+**Symptom:** Centre a table on the page, switch to another note and
+back — the table is flush left again. Press Save by hand first and it
+stays. The autosave indicator never appeared.
+
+**Root cause:** two bugs stacked, the second hiding under the first.
+The autosave asks "did anything change?" by comparing the editor
+against the saved note — title, body, character formatting, comments,
+category, colour, checklist, date, recurrence… but not `paragraphs`,
+the field where line alignment, list indentation and a table's place on
+the page live. A change that touched only tags read as "nothing new".
+Fixing that exposed the second bug: on load, the alignment tag covered
+the line's newline, and the writable line the renderer keeps under
+every table was born *inside* the tag — a phantom centred empty line
+that made the note read as dirty forever, an autosave every half
+second, and stray centred typing under the table.
+
+**Fix:** `paragraphs` joined the dirty comparison, and on table rows
+the loaded tag stops at the text instead of covering the newline. The
+checks assert both directions: centring alone makes the note dirty, and
+a reloaded note is clean with exactly the entries it was saved with.
+
+**Takeaway:** a comparison that lists fields is a comparison that
+silently exempts whatever field is added next — the autosave had been
+skipping alignment-only edits since paragraph formatting shipped, and
+nobody noticed until a feature made tag-only changes worth noticing.
+And the first fix's perma-dirty loop is why "no stray saves when
+nothing changed" became its own assertion: the opposite failure mode of
+the bug being fixed is exactly where the fix's own bug will sit.

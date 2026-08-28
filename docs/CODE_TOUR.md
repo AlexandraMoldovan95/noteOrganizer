@@ -507,6 +507,68 @@ note is set in something it never was.
 
 ---
 
+## 4b. `noteorganizer/core/tables.py`
+
+**What it's for.** Everything a table *is*, with the screen nowhere in
+sight: rows as lines of text, cells as what sits between pipes, and the
+rules for keeping columns lined up, merging cells, and reading the
+separator row. The drawn grid the user sees lives in `note_organizer.py`;
+this module is what that grid reads from and writes back to.
+
+**The one idea everything follows from.** A table is stored in the note's
+own text, in Markdown's table syntax:
+
+```
+| Day       | Lunch  |
+| :-------: | ------ |
+| Monday    | Soup   |
+```
+
+Every function here is text-in, text-out. `split_row()` takes a line
+apart into cell strings; `cell_bounds()` says where each cell's text
+sits *inside* the line (so character formatting stored against the body
+can find its cell); `find_blocks()` walks a whole note and returns which
+line-ranges are tables. `is_table_row()` requires at least two cells —
+`| just one |` reads as prose, on purpose.
+
+**`align()` — the columns line up again.** After any edit, cells in one
+column can be different widths. `align()` re-pads every cell to the
+column's width — but the interesting part is that it *reports* every
+character it added or removed as `(offset, delta)` pairs, the same shape
+list renumbering uses, so `shift_spans()` can move the bold and the
+colors along with the text. Without that, padding a table would slide
+the formatting in every line after the edit. Each edit is recorded where
+it happens, not at the line's end — padding goes *between* cells, so a
+word in a later cell of the same row moves too.
+
+**Merges.** A cell holding `<` means "part of the cell to my left"; `^`
+means "part of the cell above". `merge_map()` resolves those markers
+into spans (which anchor cell covers what) and the set of covered
+positions. The markers are just text, so merges survive save, share and
+export like everything else, and `richtext.py` turns them into
+`colspan`/`rowspan` on the way out.
+
+**The separator row.** `|-----|:---:|~|` as a block's second row is
+mechanics, not data: the dash count is the column's display width (a
+hand-dragged resize is remembered as more or fewer dashes), the colons
+are its alignment, and `~` is a hidden column. `parse_separator()` reads
+those into plain dicts, `make_separator()` writes them back exactly —
+the width is honoured to the dash, so regenerating the row never forgets
+a resize — and `separator_index()` only accepts it in a block's first
+two rows, where Markdown puts it; a dashed line further down is far more
+likely to be content. `align()` treats the separator as mechanics too:
+its dashes are never measured as content, but a column hand-widened past
+its content pads the data out to match.
+
+**What deliberately is NOT here.** Anything that knows about pixels,
+fonts, clicks or canvases — that is the grid's half, in
+`note_organizer.py`, and the split is what makes this half testable in
+`test_tables.py` with no window at all. The border between the two
+halves is where the hard-won lessons live (Tk counts text in UTF-16
+units, embedded windows occupy an index but not a character, a rebuild
+can destroy the canvas mid-click) — see ARCHITECTURE's "Tables: plain
+text is the store" and the table entries in ISSUES_LOG.
+
 ## 5. `noteorganizer/core/sharing.py`
 
 **What it's for.** Turning notes into a block of text you can paste into a

@@ -6,6 +6,27 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ---
 
+## [Unreleased]
+
+### Added
+- **Tables.** A note can hold spreadsheet-style tables: drawn as a real grid with cell borders and a bold header row, edited through one floating entry box that appears over whichever cell is clicked (cells are drawings, not widgets — which is what lets a large table scroll without stutter). Tab moves between cells and adds a row at the last one; drag selects a block; Ctrl+C/Ctrl+V copy and paste blocks of cells in their true shape, in and out of the app — a table pasted from Excel, Word or a web page becomes a grid, cells copied from a web table land side by side the way they were on the page, and cells copied out arrive in Excel as cells. Cells merge (their texts join) and split; rows and columns insert, delete, and duplicate to the table's end with their content; Delete clears a selection. Columns resize by dragging the rule between them (double-click autofits; narrowing below the content only shortens the drawing, with an `…` — the text is never cut), and a column selected top-to-bottom can be hidden to a sliver and brought back. The formatting toolbar works inside tables — bold, italic, colors, and a highlight palette parted by theme-colored hairlines — and the alignment buttons align cell text, while the table itself can sit left, centred or right on the page from its right-click menu. Underneath it all, a table is stored as plain readable text in Markdown's own table syntax (the `|---|:---:|` separator row carries each column's width, alignment and hiding), so search finds words in cells, share codes, backups and export carry tables unchanged, and a table travels both ways between this app and any Markdown-aware tool.
+
+### Fixed
+- Share codes never carried the paragraph data, so a shared note arrived flush left with its list indentation and line alignment flattened — silently, ever since paragraph formatting shipped. The field travels now (a table's place on the page rides along with it), and codes made before the change still decode.
+- A change that touched only formatting tags — realigning a line without editing its text — never triggered the autosave, because the dirty comparison checked the title, body, character formatting and everything else, but not the paragraphs. Leaving the note quietly lost the change unless Save was pressed by hand.
+- The two editor-height toggles were the interface's last two Romanian strings — and the User Guide already called them **Expand** and **Collapse**, so the app and its own manual disagreed. They match now.
+- Renumbering a list applied its formatting shifts one at a time, comparing each shift's position against text it had already moved — so a later shift could count as "before" a span it had itself pushed past. In a list it happened never to show; the shared helper was corrected once, for every caller.
+
+### Changed
+- The table engine lives in `noteorganizer/core/tables.py` — pure text-in, text-out functions with no tkinter import, following the same core/UI split as the rest of the package. Emoji survive the whole path: Tk widgets count text in UTF-16 units while Python counts characters, and every surgical edit now converts between the two; a malformed half-of-an-emoji can no longer take down a save.
+
+### Testing
+- A standing cross-feature rule (written into the project's working instructions): a change is done when the *older* features still work with it, with a qa check on every risky seam. The first audit under the rule found and fixed two holes — a theme switched mid-typing destroyed the cell editor under the keystrokes, and the share-code gap above.
+- `test_data_safety.py` now refuses to run beside a `notes_data.json` that holds real notes — it deletes and rewrites that file as part of testing the backup layer, and run from the project root it once destroyed the real notebook (recovered from the app's own automatic backup). The QA-safety rule covers every test file, with no per-file judgment calls.
+- The table work landed with its checks throughout: over eighty new qa1 assertions and a dozen unit tests, each round mutation-tested — every new check was made to fail by deliberately re-breaking the code it guards, and checks that could not fail were sharpened or removed.
+
+---
+
 ## [0.38.59] — 2026-08-26
 
 ### Fixed
