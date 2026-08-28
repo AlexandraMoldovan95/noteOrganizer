@@ -2407,20 +2407,32 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 sep_cols[c]["hidden"] = True
         self._grid_column_mechanics(info, mutate)
 
-    def _grid_append_cols(self, info, count):
-        """*count* empty columns joined to the right edge of the table."""
+    def _grid_append_cols(self, info, c0, c1):
+        """The selected columns joined again to the table's right edge --
+        text and all, exactly as written, empty cells staying empty."""
         context = self._grid_op_context(info)
         if not context:
             return
         first, nrows, _ncols = context
         rows, aligns, sep_cols, _sep_at = self._grid_block_parts(first, nrows)
         for row in rows:
-            row.extend([""] * count)
+            copied = [row[c] if c < len(row) else ""
+                      for c in range(c0, c1 + 1)]
+            # A merge reaching in from the LEFT of the copied span points
+            # at a cell that did not travel; it lands as an empty cell.
+            if copied and copied[0] == core_tables.MERGE_LEFT:
+                copied[0] = ""
+            row.extend(copied)
         for row_aligns in aligns:
-            row_aligns.extend([core_tables.ALIGN_LEFT] * count)
+            row_aligns.extend([row_aligns[c] if c < len(row_aligns)
+                               else core_tables.ALIGN_LEFT
+                               for c in range(c0, c1 + 1)])
         if sep_cols is not None:
-            sep_cols.extend({"width": None, "align": None, "hidden": False}
-                            for _ in range(count))
+            sep_cols.extend(dict(sep_cols[c]) if c < len(sep_cols)
+                            else {"width": None, "align": None,
+                                  "hidden": False}
+                            for c in range(c0, c1 + 1))
+        rows = self._dissolve_orphan_markers(rows)
         self._grid_replace_block(first, nrows, rows, aligns, sep_cols)
         self._grid_after_op(first)
 
@@ -2468,8 +2480,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         first = self._grid_first_line(info)
         if first is None:
             return None
-        rows = self._grid_read_rows(first, info["nrows"])
-        return [[rows[r][c] if c < len(rows[r]) else ""
+        # DATA rows: reading raw text rows shifted every copy one row up
+        # in a table with a separator -- the user copied what they saw,
+        # and got the line above it.
+        rows, _aligns, _sep, _at = self._grid_block_parts(
+            first, info["nrows"])
+        return [[rows[r][c] if r < len(rows) and c < len(rows[r]) else ""
                  for c in range(c0, c1 + 1)]
                 for r in range(r0, r1 + 1)]
 
@@ -2690,28 +2706,41 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._grid_replace_block(first, nrows, rows, aligns, sep_cols)
         self._grid_after_op(first)
 
-    def _grid_highlight_menu(self, parent, info, box):
-        """The highlight cascade -- palette swatches plus Clear -- for
-        whichever menu asks: a selection's, or a single cell's."""
-        cascade = tk.Menu(parent, tearoff=0, bg=self.colors["card"],
-                          fg=self.colors["text"],
-                          activeborderwidth=0, bd=1,
-                          relief="solid")
+    def _grid_highlight_popup(self, info, box, x_root, y_root):
+        """The highlight palette as the app's own themed popup: swatches
+        parted by true one-pixel hairlines in the theme's rule colour --
+        a tk.Menu cannot draw that, its separators are the OS's."""
+        self._dismiss_mini_popup()
+        popup = tk.Toplevel(self)
+        self._mini_popup = popup
+        popup.wm_overrideredirect(True)
+        popup.configure(bg=self.colors["accent"])
+        outer = tk.Frame(popup, bg=self.colors["card"], padx=1, pady=1)
+        outer.pack()
+        # The hairline is the COLUMN's background peeking through the
+        # one-pixel gaps between swatches, so it recolours with the theme.
+        column = tk.Frame(outer, bg=hairline(self.colors))
+        column.pack(padx=8, pady=8)
+
+        def choose(color):
+            self._dismiss_mini_popup()
+            self._grid_apply_style(info, box, "highlight", color)
+
         for i, hex_color in enumerate(HIGHLIGHT_COLOR_PALETTE):
-            if i:
-                # A hairline of the themed card colour between swatches --
-                # without it the palette read as one continuous smear.
-                cascade.add_separator()
-            cascade.add_command(
-                label="        ", background=hex_color,
-                activebackground=hex_color,
-                command=lambda h=hex_color:
-                    self._grid_apply_style(info, box, "highlight", h))
-        cascade.add_command(
-            label="Clear highlight",
-            command=lambda: self._grid_apply_style(
-                info, box, "highlight", None))
-        return cascade
+            swatch = tk.Button(
+                column, bg=hex_color, activebackground=hex_color,
+                width=14, height=1, relief="flat", bd=0, cursor="hand2",
+                command=lambda h=hex_color: choose(h))
+            swatch.pack(pady=(0 if i == 0 else 1, 0))
+        clear = tk.Button(
+            outer, text="Clear highlight", relief="flat", cursor="hand2",
+            bg=self.colors["card"], fg=self.colors["text"],
+            command=lambda: choose(None))
+        clear.pack(pady=(0, 8))
+        popup.update_idletasks()
+        popup.geometry(f"+{x_root}+{y_root}")
+        popup.bind("<FocusOut>", lambda _e: self._dismiss_mini_popup())
+        popup.focus_set()
 
     def _grid_align_context(self):
         """The alignment of the cell the user is in -- the open editor's,
@@ -2954,14 +2983,16 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                         info, sel["box"][1], sel["box"][3]))
                 span_cols = sel["box"][3] - sel["box"][1] + 1
                 menu.add_command(
-                    label=("Add a column at the end" if span_cols == 1
-                           else f"Add {span_cols} columns at the end"),
-                    command=lambda n=span_cols:
-                        self._grid_append_cols(info, n))
+                    label=("Copy column to the end" if span_cols == 1
+                           else f"Copy {span_cols} columns to the end"),
+                    command=lambda box=sel["box"]:
+                        self._grid_append_cols(info, box[1], box[3]))
             menu.add_separator()
-            menu.add_cascade(label="Highlight cells",
-                             menu=self._grid_highlight_menu(
-                                 menu, info, sel["box"]))
+            menu.add_command(
+                label="Highlight cells\u2026",
+                command=lambda box=sel["box"], xr=event.x_root,
+                               yr=event.y_root:
+                    self._grid_highlight_popup(info, box, xr, yr))
             menu.add_separator()
             for label, align_value in (
                     ("Align left", core_tables.ALIGN_LEFT),
@@ -2995,9 +3026,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         menu.add_command(label="Clear cell",
                          command=lambda: self._grid_fill_selection(
                              {"info": info, "box": (r, c, r, c)}, ""))
-        menu.add_cascade(label="Highlight cell",
-                         menu=self._grid_highlight_menu(
-                             menu, info, (r, c, r, c)))
+        menu.add_command(
+            label="Highlight cell\u2026",
+            command=lambda xr=event.x_root, yr=event.y_root:
+                self._grid_highlight_popup(info, (r, c, r, c), xr, yr))
         menu.add_separator()
         for label, align_value in (
                 ("Align left", core_tables.ALIGN_LEFT),
@@ -3129,6 +3161,17 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         same way clicking a list button again turns the list off -- a button
         that is already pressed should undo itself rather than do nothing.
         """
+        # With cells selected, the toolbar buttons mean those cells: the
+        # paragraph path would apply an alignment the table lines shed at
+        # once, which read as "it snaps back to the left".
+        sel = getattr(self, "_grid_sel", None)
+        if (sel is not None
+                and self._grid_first_line(sel["info"]) is not None):
+            self._grid_set_alignment(sel["info"], sel["box"], {
+                "center": core_tables.ALIGN_CENTER,
+                "right": core_tables.ALIGN_RIGHT,
+            }.get(align, core_tables.ALIGN_LEFT))
+            return
         # With a table cell open, the toolbar buttons mean that cell --
         # reaching for the same button that aligns a paragraph is exactly
         # what someone centring a cell will try first.
@@ -3893,11 +3936,19 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         Toggling off is deliberate: pressing the same button twice should undo
         itself rather than stack a second marker onto the line.
         """
+        # A table is not a list. A marker in front of a pipe row broke the
+        # row's shape and dissolved the whole grid back into bare lines --
+        # with cells selected the buttons simply decline, and table lines
+        # inside a text selection are left out of the walk below.
+        if getattr(self, "_grid_sel", None) is not None:
+            self.set_status("A table cannot be a list")
+            return
         first, last = self._selected_line_range()
 
         def blank(line_no):
             line = self.body_text.get(f"{line_no}.0", f"{line_no}.end")
-            return not parse_list_marker(line)[2].strip()
+            return (core_tables.is_table_row(line)
+                    or not parse_list_marker(line)[2].strip())
 
         # An empty line is not a list item. Numbering a selection that had
         # blank lines between its items put a number on those too, so the
@@ -3906,7 +3957,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # of them may be carrying a marker put there before this.
         items = [n for n in range(first, last + 1) if not blank(n)]
         if not items:
-            if first != last:
+            if first != last or core_tables.is_table_row(
+                    self.body_text.get(f"{first}.0", f"{first}.end")):
                 return
             # A single empty line is not a gap between items -- it is the
             # user asking to START a list here, marker first, text after.

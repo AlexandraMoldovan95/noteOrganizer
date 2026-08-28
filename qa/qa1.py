@@ -2934,7 +2934,7 @@ try:
           'Hide column' not in _labels
           and 'Autofit column width' in _labels)
     check('the cell menu highlights a single cell',
-          'Highlight cell' in _labels)
+          'Highlight cell…' in _labels)
 
     # A whole-column selection (all three data rows) offers Hide...
     _select_cells(_tF, (0, 1), (2, 1))
@@ -2947,7 +2947,7 @@ try:
     check('a whole-column selection offers Hide column',
           'Hide column' in _labels)
     check('and the selection menu carries Highlight cells',
-          'Highlight cells' in _labels)
+          'Highlight cells…' in _labels)
 
     # ...and a partial selection does not.
     _select_cells(_tF, (0, 0), (1, 0))
@@ -3206,38 +3206,107 @@ try:
         'x': int(_cSel['x'] + 12), 'y': int(_cSel['y'] + 6),
         'x_root': 0, 'y_root': 0})())
     _labels = _menu_entries(_posted[-1]) if _posted else []
-    check('two whole columns selected offer adding two at the end',
-          'Add 2 columns at the end' in _labels)
+    check('two whole columns selected offer copying two to the end',
+          'Copy 2 columns to the end' in _labels)
     _ncolsE = _tE['ncols']
     if _posted:
-        _posted[-1].invoke('Add 2 columns at the end')
+        _posted[-1].invoke('Copy 2 columns to the end')
         app.update()
     _tE = app._grid_at_line(1)
     check(f'and invoking it appends them ({_ncolsE} -> {_tE["ncols"]})',
           _tE['ncols'] == _ncolsE + 2)
+    check('the copied columns carry their text, empties staying empty',
+          _tE['cells'][(0, _ncolsE)]['value'] == 'X'
+          and _tE['cells'][(0, _ncolsE + 1)]['value'] == 'Y'
+          and _tE['cells'][(2, _ncolsE)]['value'] == '')
 
-    # The palette wears separators between its swatches.
+    # The palette is the app's own themed popup now: swatches parted
+    # by one-pixel hairlines in the theme's rule colour (a tk.Menu's
+    # separators are the OS's and looked nothing like the app).
     _posted.clear()
     _select_cells(_tE, (0, 0), (0, 1))
     _cSel = _tE['cells'][(0, 0)]
     app._grid_menu(_tE, type('E', (), {
         'x': int(_cSel['x'] + 12), 'y': int(_cSel['y'] + 6),
         'x_root': 0, 'y_root': 0})())
-    _casc = None
-    if _posted:
-        _m = _posted[-1]
-        for i in range(_m.index('end') + 1):
-            if (_m.type(i) == 'cascade'
-                    and _m.entrycget(i, 'label') == 'Highlight cells'):
-                _casc = app.nametowidget(_m.entrycget(i, 'menu'))
-    _seps = (sum(1 for i in range(_casc.index('end') + 1)
-                 if _casc.type(i) == 'separator') if _casc else 0)
-    check(f'the palette is framed with separators between swatches '
-          f'({_seps})',
-          _seps == len(NO.HIGHLIGHT_COLOR_PALETTE) - 1)
+    _labels = _menu_entries(_posted[-1]) if _posted else []
+    check('the selection menu opens the highlight popup',
+          'Highlight cells\u2026' in _labels)
+    app._grid_highlight_popup(_tE, (0, 0, 0, 1), 0, 0)
+    app.update()
+    _pop = app._mini_popup
+    _colF = [w for w in _pop.winfo_children()[0].winfo_children()
+             if isinstance(w, NO.tk.Frame)][0]
+    _swF = [w for w in _colF.winfo_children()
+            if isinstance(w, NO.tk.Button)]
+    check(f'the popup holds every swatch over a themed hairline '
+          f'({len(_swF)})',
+          len(_swF) == len(NO.HIGHLIGHT_COLOR_PALETTE)
+          and str(_colF.cget('bg')) == NO.hairline(app.colors))
+    _swF[0].invoke()
+    app.update()
+    _tE = app._grid_at_line(1)
+    check('a swatch click paints the selected cells',
+          _tE['canvas'].itemcget(_tE['cells'][(0, 0)]['rect'], 'fill')
+          == app._blend_hex(NO.HIGHLIGHT_COLOR_PALETTE[0],
+                            NO.inset_surface(app.colors), 0.45))
+    app._grid_apply_style(_tE, (0, 0, 0, 1), 'highlight', None)
+    app.update()
+    _tE = app._grid_at_line(1)
 finally:
     NO.tk.Menu.tk_popup = _real_popup
 app._grid_clear_selection()
+set_body('')
+
+# ---- WITH A SEPARATOR, COPY READS THE ROW THE USER SEES ----
+# The selection matrix read TEXT rows, so in any resized table (which
+# has a separator) every copy took the line ABOVE the one on screen --
+# the phantom values that haunted the field tests.
+set_body('| Cap | G | H | I |\n| --- | --- | --- | --- |\n'
+         '| unu | doi |  |  |\n| trei | patru |  |  |')
+app._render_table_grids()
+app.update()
+_tS4 = app._grid_at_line(1)
+_select_cells(_tS4, (1, 0), (1, 1))
+app.body_text.event_generate('<Control-c>')
+app.update()
+check(f'with a separator, Ctrl+C copies the row on screen '
+      f'({app.clipboard_get()!r})',
+      app.clipboard_get() == 'unu\tdoi')
+_select_cells(_tS4, (1, 2), (1, 3))
+app.body_text.event_generate('<Control-v>')
+app.update()
+_tS4 = app._grid_at_line(1)
+check('and the horizontal pair lands whole',
+      _tS4['cells'][(1, 2)]['value'] == 'unu'
+      and _tS4['cells'][(1, 3)]['value'] == 'doi')
+
+# ---- THE TOOLBAR CENTRE MEANS THE SELECTED CELLS ----
+# The paragraph path applied an alignment the table lines shed at once,
+# which read as "it snaps back to the left".
+_select_cells(_tS4, (0, 0), (2, 3))
+app._set_paragraph_align('center')
+app.update()
+_tS4 = app._grid_at_line(1)
+check('the toolbar centre centres the selected cells, and it sticks',
+      core_tables.cell_alignments(
+          app.body_text.get('3.0', '3.end'))[0] == 'center'
+      and core_tables.cell_alignments(
+          app.body_text.get('1.0', '1.end'))[0] == 'center')
+
+# ---- THE LIST BUTTONS REFUSE A TABLE ----
+_select_cells(_tS4, (0, 0), (1, 1))
+_beforeS4 = body()
+app._toggle_list('number')
+app.update()
+check('numbering declines a cell selection, leaving the table intact',
+      body() == _beforeS4)
+app._grid_clear_selection()
+app.body_text.mark_set('insert', '1.2')
+app._toggle_list('bullet')
+app.update()
+check('and a caret parked inside the table adds no marker either',
+      body() == _beforeS4)
 set_body('')
 
 NO.clipboard.read_html = _real_read_html
