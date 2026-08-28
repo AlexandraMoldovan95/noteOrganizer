@@ -142,6 +142,40 @@ app.update()
 check('import code with skip-duplicates adds only the fresh note',
       len(app.notes)==before+1 and any(n['title']=='FreshOne' for n in app.notes))
 
+# ---- A TABLE THROUGH A SHARE CODE, END TO END ----
+# Not just the text: the separator's hand-set column width and the
+# table's place on the page (paragraphs) must arrive AND render -- the
+# imported note opens with a real grid built from them.
+_tbl_code = NO.encode_share_code([{
+    'title': 'TabelPrinCod',
+    'body': '| Cap | G |\n| :-------------: | --- |\n| unu | doi |',
+    'formatting': [],
+    'paragraphs': [{'line': 0, 'align': 'center'},
+                   {'line': 1, 'align': 'center'},
+                   {'line': 2, 'align': 'center'}],
+    'comments': '', 'category': 'General', 'date': '', 'color': '',
+    'recurrence': {},
+}])
+app.import_box.delete('1.0', 'end')
+app.import_box.insert('1.0', _tbl_code)
+# A single-note code opens straight in the EDITOR (unsaved), it is not
+# added to the list -- the check follows the real flow.
+app._do_inline_import()
+app.update()
+check('the table note opens in the editor from the code',
+      app.title_entry.get() == 'TabelPrinCod')
+_g3 = app._grid_at_line(1)
+from noteorganizer.core import tables as _ct
+_sep3 = (_ct.parse_separator(app.body_text.get('2.0', '2.end'))
+         if _g3 is not None else [])
+check('and opens as a drawn grid, data rows only',
+      _g3 is not None and _g3['data_rows'] == 2 and _g3['ncols'] == 2)
+check(f'with the hand-set column width intact '
+      f'(W={_sep3[0]["width"] if _sep3 else None})',
+      bool(_sep3) and _sep3[0]['width'] == 15)
+check('and its place on the page still centred',
+      app._grid_table_align_of(1) == 'center')
+
 # ---- IMPORT CODE: single-note duplicate detection (the exact scenario a
 # user found by hand: copying a code from a note you already have, then
 # re-importing it, used to silently open it for editing with no warning) ----

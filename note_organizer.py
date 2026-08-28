@@ -9659,6 +9659,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self.body_text.insert("1.0", tpl["body"])
             self._apply_formatting(self.body_text, tpl.get("formatting", []))
             self._apply_paragraphs(self.body_text, tpl.get("paragraphs", []))
+            # A template can hold a table; without the render it applied
+            # as raw pipe rows. The import path does this already -- the
+            # qa check that carries a table through a template found the
+            # one path that did not.
+            self._render_table_grids()
         if tpl.get("comments"):
             self.comments_text.delete("1.0", "end")
             self.comments_text.insert("1.0", tpl["comments"])

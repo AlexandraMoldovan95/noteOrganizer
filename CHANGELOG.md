@@ -6,6 +6,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ---
 
+## [Unreleased]
+
+### Fixed
+- A template holding a table applied as raw pipe rows instead of a drawn grid — the template path filled the editor and never rendered, while the import path already did. Found by the new automated check that carries a table through a template, written the same day.
+
+---
+
 ## [0.39.64] — 2026-08-28
 
 ### Fixed

@@ -3420,6 +3420,33 @@ check('stale table HTML never outranks a newer plain copy',
       and _tW['cells'][(2, 1)]['value'] == 'a2')
 set_body('')
 
+# ---- A TEMPLATE CARRYING A TABLE PRODUCES A WORKING GRID ----
+# The template store is plain note fields, so a table should ride along
+# like any text -- but only a check proves the applied note renders a
+# real, editable grid rather than bare pipes.
+_tplT = {'name': 'SablonTabel', 'title': 'Din sablon',
+         'body': '| Zi | Plan |\n| luni | scris |',
+         'category': 'General', 'checklist': []}
+app.templates.append(_tplT)
+app.ask_yes_no = lambda *a, **k: True
+app._apply_template(_tplT)
+app.update()
+_gT = app._grid_at_line(1)
+check('a template with a table applies as a drawn grid',
+      _gT is not None and _gT['data_rows'] == 2 and _gT['ncols'] == 2
+      and _gT['cells'][(1, 0)]['value'] == 'luni')
+app._open_cell_editor(_gT, 1, 1)
+app.update()
+app._cell_editor['entry'].delete(0, 'end')
+app._cell_editor['entry'].insert(0, 'citit')
+app._commit_cell_editor()
+app.update()
+_gT = app._grid_at_line(1)
+check('and the grid from the template is editable',
+      _gT['cells'][(1, 1)]['value'] == 'citit')
+app.templates.remove(_tplT)
+set_body('')
+
 # ---- A NEW TABLE UNDER AN OLD ONE STAYS A TABLE OF ITS OWN ----
 # Two adjacent runs of pipe rows read as one block, so a table created
 # right under another fused with it: mismatched columns, a garbled grid,
