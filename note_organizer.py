@@ -3744,12 +3744,19 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             if line_no > total:
                 continue
             align = paragraph.get("align", "left")
-            if align != "left" and scrub_table_align and is_table_row(
-                    text_widget.get(f"{line_no}.0", f"{line_no}.end")):
+            line_text = text_widget.get(f"{line_no}.0", f"{line_no}.end")
+            if (align != "left" and scrub_table_align
+                    and is_table_row(line_text)):
                 align = "left"
             if align != "left":
+                # On a table row the tag stops at the text: covering the
+                # newline let the writable line the renderer keeps under a
+                # table be born inside the tag -- a phantom centred empty
+                # line that kept the note reading as dirty forever.
+                end_index = (f"{line_no}.end" if is_table_row(line_text)
+                             else f"{line_no}.end+1c")
                 text_widget.tag_add(f"align_{align}",
-                                    f"{line_no}.0", f"{line_no}.end+1c")
+                                    f"{line_no}.0", end_index)
             kind = paragraph.get("kind")
             indent = paragraph.get("indent", 0)
             line = text_widget.get(f"{line_no}.0", f"{line_no}.end")
@@ -9012,6 +9019,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if (st["title"].strip() != shown["title"].strip()
                 or st["body"].strip() != shown["body"].strip()
                 or st.get("formatting", []) != note.get("formatting", [])
+                # Paragraphs carry what tags alone hold: list indents, line
+                # alignment, and a table's place on the page. Left out of
+                # this comparison, a tag-only change read as "nothing new"
+                # and the autosave quietly skipped it.
+                or st.get("paragraphs", []) != note.get("paragraphs", [])
                 or st["comments"].strip() != shown.get("comments", "").strip()
                 or st["category"] != shown["category"]
                 or st["color"] != shown.get("color", "")

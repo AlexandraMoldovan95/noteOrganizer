@@ -3393,6 +3393,45 @@ check('and Table left on page brings it back',
       app._grid_table_align_of(1) == 'left')
 set_body('')
 
+# ---- A TAG-ONLY CHANGE COUNTS AS A CHANGE ----
+# Centring the table touches no text, and the dirty comparison skipped
+# 'paragraphs' -- so the autosave decided nothing happened, and leaving
+# the note lost the position unless Save was pressed by hand.
+app.new_note()
+app.update()
+app.title_entry.insert(0, 'autosave pozitie')
+app.body_text.insert('1.0', '| Cap | G |\n| unu | doi |')
+app._render_table_grids()
+app.update()
+app.save_current_note()
+app.update()
+_tA = app._grid_at_line(1)
+check('a freshly saved table note reads clean',
+      app.editor_state_matches_saved(app.capture_editor_state()))
+app._grid_set_table_align(_tA, 'center')
+app.update()
+check('centring the table alone makes the note dirty',
+      not app.editor_state_matches_saved(app.capture_editor_state()))
+app._autosave_now()
+app.update()
+check('and the autosave banks it',
+      app.editor_state_matches_saved(app.capture_editor_state()))
+# The phantom only hatches on RELOAD: the loaded tag used to cover the
+# newline, so the writable line the renderer keeps under the table was
+# born centred -- an entry that kept the note dirty forever (an
+# autosave every half second, and stray centred typing under the table).
+_idA = app.selected_note_id
+app.open_note_in_tab(app.notes[0])
+app.update()
+app.open_note_in_tab(app.find_note(_idA))
+app.update()
+_stA = app.capture_editor_state()
+check(f'the reloaded note is clean, with no phantom centred line below '
+      f'the table ({_stA.get("paragraphs")})',
+      app.editor_state_matches_saved(_stA)
+      and len(_stA.get('paragraphs', [])) == 2)
+set_body('')
+
 # ---- THE THEME SWITCH REPAINTS THE DRAWN TABLES ----
 set_body('| Cap | G |\n| unu | doi |')
 app._render_table_grids()
