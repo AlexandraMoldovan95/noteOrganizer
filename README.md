@@ -151,6 +151,15 @@ noteOrganizer/
 
 ## Documentation
 
+Where to start depends on who you are. **Just curious what the app can
+do?** The [User Guide](docs/USER_GUIDE.md) walks every feature with
+screenshots. **A developer or reviewer?** [Architecture](docs/ARCHITECTURE.md)
+holds the design decisions, the [Code tour](docs/CODE_TOUR.md) reads the
+code with you, and the [Issues Log](docs/ISSUES_LOG.md) tells the war
+stories — each bug's cause, fix, and lesson. **Interested in how the
+project is run?** The [Roadmap](docs/ROADMAP.md) shows what's planned,
+what was decided against and why, and how versions are counted.
+
 - [User Guide](docs/USER_GUIDE.md) — full feature walkthrough
 - [Architecture](docs/ARCHITECTURE.md) — how the codebase is structured
 - [Code tour](docs/CODE_TOUR.md) — a guided, annotated walkthrough of the modules

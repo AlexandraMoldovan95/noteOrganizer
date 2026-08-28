@@ -8,8 +8,8 @@ This is a companion to [ARCHITECTURE.md](ARCHITECTURE.md), which is the
 short reference version for someone who already knows the codebase. Start
 here; go there when you want the summary.
 
-> **Status:** the data and rules layer is fully extracted — all twelve modules
-> below are covered here. The user interface hasn't been split yet and still
+> **Status:** the data and rules layer is fully extracted — all thirteen
+> modules below are covered here. The user interface hasn't been split yet and still
 > lives in `note_organizer.py`; sections for it will follow.
 
 ---
