@@ -120,7 +120,7 @@ def decode_share_code(code):
         )
     if not code.startswith(SHARE_CODE_PREFIX):
         raise ValueError(
-            "This isn't a Notes Organizer share code. A valid code starts "
+            "This isn't a Note Organizer share code. A valid code starts "
             f"with \u201c{SHARE_CODE_PREFIX}\u201d."
         )
     body = code[len(SHARE_CODE_PREFIX):]
@@ -149,7 +149,7 @@ def decode_share_code(code):
         raise ValueError("This share code doesn't contain any notes.")
     if payload.get("v", 1) > 1:
         raise ValueError(
-            "This code was made by a newer version of Notes Organizer. "
+            "This code was made by a newer version of Note Organizer. "
             "Update the app to import it."
         )
     notes = payload.get("notes")
