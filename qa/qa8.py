@@ -44,6 +44,29 @@ check('after the debounce elapses, search correctly filters',
       'Note1' in texts and 'Note2' not in texts)
 
 app.search_var.set('')
+
+# ---- SEARCH REACHES INSIDE TABLE CELLS ----
+# The design's whole promise is that a table is plain text in the note,
+# so a word in a cell is findable like any other word. Asserted both
+# ways: the table note is kept, the plain note is filtered out.
+_tbl_note = {'title': 'TabelNote',
+             'body': '| Produs | Pret |\n| CuvantUnicInCelula | 3 |'}
+_oth_note = {'title': 'AltaNota', 'body': 'nimic special aici'}
+app.notes.append(NO.normalize_note(_tbl_note))
+app.notes.append(NO.normalize_note(_oth_note))
+app.refresh_note_list()
+app.update()
+app.search_var.set('CuvantUnicInCelula')
+t0 = time.time()
+while time.time() - t0 < 0.4:
+    app.update()
+    time.sleep(0.02)
+_texts = find_all_labels(app.list_frame)
+check('search finds a word living inside a table cell',
+      'TabelNote' in _texts)
+check('and filters out the note that does not have it',
+      'AltaNota' not in _texts)
+app.search_var.set('')
 app.update()
 time.sleep(0.25)
 app.update()
