@@ -122,6 +122,26 @@ After making a change:
 
 When fixing a bug, prefer adding a regression test when practical.
 
+### Cross-feature verification (standing rule, 2026-08-28)
+
+A new feature is not done when it works alone — it is done when the
+older features it crosses still work with it. Before reporting a change
+complete:
+
+1. List the existing features whose paths the change touches (theming,
+   save/load, export/share codes, paste, lists, focus and keyboard,
+   scrolling, undo — whatever applies).
+2. Probe each seam, and add a qa check for every risky one. The check
+   lands with the feature, not after a field test finds the gap.
+3. Accept the extra work; the theme switch silently stopped recoloring
+   tables precisely because no check covered that seam.
+
+The quality bar that goes with it: the app stays efficient enough for
+weak machines, and a failure must not reach the user's face — guard the
+UI entry points and let the crash log carry the details. Blanket
+try/except everywhere is not the goal; hiding bugs is worse than
+logging them.
+
 ### QA testing safety (hard rule — real data has been lost to this three times)
 
 **This rule covers EVERY test file — `qa*.py` AND all `test_*.py` — with

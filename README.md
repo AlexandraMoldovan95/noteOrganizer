@@ -4,8 +4,8 @@ A fast, fully offline desktop notes app built with Python and Tkinter — no clo
 
 Built as a solo/pair project (developer + AI pairing partner) over an extended iterative development cycle, with a strong focus on real-world polish: a custom themed UI (no OS-native popups anywhere), a recurring-events engine, background-threaded import/export, and a defensive data layer that keeps the app usable even when things go wrong.
 
-![screenshot placeholder](docs/screenshots/main-window.png)
-*(screenshots to be added — see [docs/screenshots](docs/screenshots))*
+![The main window: a note with a table, the formatting toolbar, and the notes sidebar](docs/screenshots/main-window.png)
+*More screenshots throughout the [User Guide](docs/USER_GUIDE.md).*
 
 ---
 
@@ -32,6 +32,12 @@ Built as a solo/pair project (developer + AI pairing partner) over an extended i
 - End conditions: after N occurrences, by a date, or never
 - Per-occurrence editing and deletion ("just this one" vs "this and all future")
 - A full calendar view with month navigation, jump-to-date, and per-day coloring
+
+**Tables**
+- Spreadsheet-style tables drawn as a real grid: click a cell to edit, drag to select, Tab to move, Enter to leave
+- Excel-familiar editing: copy/paste blocks of cells (in and out of the app — a table pasted from Excel or a web page becomes a grid), merge cells, insert/delete/duplicate rows and columns, hide columns, drag a column edge to resize (double-click it to autofit)
+- Cell formatting from the same toolbar as regular text: bold, colors, highlights (with a theme-aware palette), per-cell alignment — plus the table itself can sit left, centred, or right on the page
+- Stored as plain readable text (Markdown table syntax) inside the note, so tables survive search, share codes, backups, and export, and travel cleanly to and from any Markdown-aware tool
 
 **Categories & templates**
 - Custom categories with colors, safely renameable/deletable (with reassignment of affected notes)

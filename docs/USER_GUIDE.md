@@ -65,6 +65,23 @@ Colours are treated carefully. If you copy from a site in dark mode, you get its
 
 Not every kind of styling can survive. A note can be bold, italic, underlined, struck through, coloured, highlighted, set in one of eight fonts, made into a list, indented and aligned. Anything a web page does beyond that — a heading style, a box, a background image — is dropped and its words kept, rather than being turned into an approximation of itself. Font sizes and typefaces from a web page are dropped for the same reason: the page is almost certainly using something this app does not offer, and picking the nearest one would claim the note is set in something it never was.
 
+### Tables
+
+The table button on the toolbar opens a small size grid — sweep across it to choose how many rows and columns, and a table appears at the cursor with the first cell ready to type into.
+
+![A table in a note, with a highlighted header row](screenshots/tables.png)
+
+A table works the way a spreadsheet has taught your hands to expect:
+
+- **Type** in a cell, press **Tab** to move to the next one (**Shift+Tab** goes back). Tab on the very last cell adds a fresh row, so a whole table can be filled without touching the mouse. **Enter** finishes the table and puts the cursor on the line below it.
+- **Click** any cell to edit it. **Drag** across cells to select a block of them — then **Ctrl+C** copies it, **Ctrl+V** somewhere else pastes it in the same shape, and **Delete** clears it. Copying works with the outside world in both directions: cells copied here paste into Excel as cells, and a table copied from Excel or a web page lands here as a real table.
+- **Right-click** a cell for everything else: merge the selected cells into one (their texts join), split a merge back apart, insert or delete rows and columns, duplicate whole columns to the end of the table, insert a checkmark or an emoji, and highlight cells from a small colour palette.
+- **Drag the line between two columns** to make a column wider or narrower; **double-click** the line to snap the column to its content. Narrowing below the content only shortens what is *drawn* (with an `…`) — the text itself is never cut.
+- **Hide a column** by selecting it top to bottom and right-clicking — it shrinks to a thin sliver, and right-clicking the sliver brings it back. Hiding only ever works on a fully selected column, so it is always clear what is about to disappear.
+- The **formatting toolbar works inside tables** too: select cells (or just have one open) and Bold, colours and highlights apply to them. The alignment buttons align the text inside the selected cells; to move the *table itself*, right-click it and choose **Center table on page** (or left / right).
+
+Under the hood a table is stored as plain, readable text inside the note — the same pipe-and-dash layout Markdown uses. That is why search finds words inside cells, why tables survive share codes, backups and export unchanged, and why a table pasted into any Markdown-aware tool arrives as a table. The bullet and numbering buttons deliberately do nothing to a table — a table is not a list, and turning its rows into list items would break it apart.
+
 ### How long a note takes to read
 
 Under the word and character counts, each note shows roughly how long it takes to read — "under a minute to read" for a short one, "about 4 minutes to read" for a longer one.
