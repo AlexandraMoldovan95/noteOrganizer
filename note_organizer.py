@@ -410,12 +410,16 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         initialise()
         super().__init__()
         self.title("Note Organizer")
-        # Armed from day one, for EVERY popup path: the -topmost popups
-        # must yield when another program takes the front, and arming
-        # lazily from one placement helper would miss the popups that
-        # position themselves.
-        self.bind("<Deactivate>", self._on_app_deactivated, add="+")
+        # Armed from day one, for EVERY popup path -- and with bind_all,
+        # for every WINDOW: typing in a popup makes the popup the active
+        # window, so its deactivation lands on the popup's own toplevel
+        # and a binding on the root alone never hears it.
+        self.bind_all("<Deactivate>", self._on_app_deactivated, add="+")
+        self.bind_all("<Activate>", self._on_app_activated, add="+")
         self._deactivate_bound = True
+        # ...and the heartbeat, because a popup holding the activation
+        # receives neither event when the user switches away.
+        self.after(300, self._popup_foreground_watch)
         self.geometry("900x600")
         self.minsize(500, 400)
 
@@ -2841,7 +2845,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         clear.pack(pady=(0, 8))
         popup.update_idletasks()
         popup.geometry(f"+{x_root}+{y_root}")
-        popup.bind("<FocusOut>", lambda _e: self._dismiss_mini_popup())
+        popup.bind("<FocusOut>",
+                   lambda _e: (None if getattr(self, "_hiding_popups", False)
+                               else self._dismiss_mini_popup()))
         popup.focus_set()
 
     def _grid_align_context(self):

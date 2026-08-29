@@ -3294,38 +3294,42 @@ try:
           len(_swF) == len(NO.HIGHLIGHT_COLOR_PALETTE)
           and str(_colF.cget('bg')) == app._blend_hex(
               app.colors['accent'], app.colors['card'], 0.35))
-    # ---- POPUPS YIELD THE FRONT TO OTHER PROGRAMS ----
+    # ---- POPUPS HIDE WITH THE APP AND COME BACK WITH IT ----
     # They are -topmost by design (the app's own focus shuffles must not
-    # bury them), so they floated over OTHER applications too. Closing
-    # happens only when the user has really left: focus out of the app
-    # AND the pointer not on a popup -- a click INTO a dropdown briefly
-    # deactivates the main window on Windows, and must not kill it.
-    check('the deactivate watch is armed from startup, for every popup path',
+    # bury them), so they floated over OTHER applications too. The OS is
+    # the only honest witness (a popup holding the activation receives
+    # no Deactivate at all), so a heartbeat asks who is in front:
+    # another program's window -> popups WITHDRAW, data intact; the
+    # app's own -> they come back. Never destroyed -- a half-typed
+    # dialog must survive a trip to the browser.
+    check('the foreground watch is armed from startup',
           getattr(app, '_deactivate_bound', False)
-          and bool(app.bind('<Deactivate>')))
+          and bool(app.bind_all('<Deactivate>')))
     _popD = app._mini_popup
-    _real_fg = app.focus_get
-    _real_pxy = app.winfo_pointerxy
-    app.focus_get = lambda: app.body_text      # focus still in the app
-    app.winfo_pointerxy = lambda: (30000, 30000)
-    app._close_popups_if_left()
+    _real_ours = app._foreground_is_ours
+    app._foreground_is_ours = lambda: True     # the app holds the front
+    app._popup_watch_step()
     app.update()
-    check('focus still inside: the popup stays',
-          app._mini_popup is _popD)
-    app.focus_get = lambda: None               # gone -- but onto the popup
-    app.winfo_pointerxy = lambda: (_popD.winfo_rootx() + 5,
-                                   _popD.winfo_rooty() + 5)
-    app._close_popups_if_left()
+    check('while the app is in front, the popup stays',
+          app._mini_popup is _popD and bool(_popD.winfo_viewable()))
+    app._foreground_is_ours = lambda: False    # another program takes it
+    app._popup_watch_step()
     app.update()
-    check('a click landing on the popup does not kill it',
-          app._mini_popup is _popD)
-    app.winfo_pointerxy = lambda: (30000, 30000)   # gone for real
-    app._close_popups_if_left()
+    check('another program in front hides the popup, data intact',
+          app._mini_popup is _popD and not _popD.winfo_viewable()
+          and _popD.winfo_exists())
+    app._popup_watch_step()
     app.update()
-    check('really leaving the app closes the popup',
-          app._mini_popup is None)
-    app.focus_get = _real_fg
-    app.winfo_pointerxy = _real_pxy
+    check('and it stays hidden while the user is away',
+          not _popD.winfo_viewable())
+    app._foreground_is_ours = lambda: True     # the user clicks back
+    app._popup_watch_step()
+    app.update()
+    check('coming back to the app brings the popup back',
+          bool(_popD.winfo_viewable()))
+    app._foreground_is_ours = _real_ours
+    app._dismiss_mini_popup()
+    app.update()
     app._grid_highlight_popup(_tE, (0, 0, 0, 1), 0, 0)
     app.update()
     _swF = [w for w in [c for c in app._mini_popup.winfo_children()[0]

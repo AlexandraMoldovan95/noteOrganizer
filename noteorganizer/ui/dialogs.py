@@ -392,55 +392,99 @@ class DialogsMixin:
                 break
         self._dismiss_mini_popup()
 
-    def _on_app_deactivated(self, event):
-        """Another program is coming to the front. Our popups are
-        -topmost (so the app's own focus shuffles cannot bury them), and
-        the price was that they floated over OTHER applications too.
+    def _foreground_is_ours(self):
+        """Is the OS foreground window one of this app's windows?
 
-        Deactivation alone is not proof the user left: on Windows a
-        click INTO one of our override-redirect popups can deactivate
-        the main window first, and closing on that instant would destroy
-        the dropdown mid-click. So the decision is deferred a beat and
-        double-checked: the keyboard focus must have left the app AND
-        the pointer must not be over any of our popups.
+        The only honest witness: override-redirect popups can hold the
+        activation without ever receiving <Activate>/<Deactivate>, so
+        event-based detection missed exactly the case where the user had
+        typed into a popup and then switched away. Off Windows there is
+        no GetForegroundWindow; answer "ours" so nothing ever hides.
         """
-        if event.widget is not self:
-            return
-        if getattr(self, "_mini_popup", None) is None:
-            return
-        self.after(150, self._close_popups_if_left)
+        try:
+            import ctypes
+            user32 = ctypes.windll.user32
+        except (ImportError, AttributeError, OSError):
+            return True
+        try:
+            fg = user32.GetAncestor(user32.GetForegroundWindow(), 2)
+            if not fg:
+                return True
+            ours = {user32.GetAncestor(self.winfo_id(), 2)}
+            for child in self.winfo_children():
+                if isinstance(child, tk.Toplevel):
+                    try:
+                        if child.winfo_exists():
+                            ours.add(user32.GetAncestor(child.winfo_id(), 2))
+                    except tk.TclError:
+                        continue
+            return fg in ours
+        except (tk.TclError, OSError):
+            return True
 
-    def _close_popups_if_left(self):
+    def _popup_foreground_watch(self):
+        """A light heartbeat while popups are involved: hide them when
+        another program truly holds the front, bring them back when the
+        app does. Popups are HIDDEN, never destroyed -- a half-typed
+        template dialog must survive a trip to the browser and back;
+        that round trip is exactly what the dialog is for."""
         try:
-            if self.focus_get() is not None:
-                return                    # focus is still somewhere in the app
-        except (tk.TclError, KeyError):
-            pass
-        try:
-            px, py = self.winfo_pointerxy()
-        except tk.TclError:
-            return
+            self._popup_watch_step()
+        finally:
+            try:
+                self.after(300, self._popup_foreground_watch)
+            except tk.TclError:
+                pass
+
+    def _popup_watch_step(self):
+        hidden = getattr(self, "_popups_hidden_by_deactivate", None)
+        popups = []
         for child in self.winfo_children():
             if not isinstance(child, tk.Toplevel):
                 continue
             try:
-                if not child.winfo_exists() or not child.wm_overrideredirect():
-                    continue
-                cx, cy = child.winfo_rootx(), child.winfo_rooty()
-                if (cx <= px < cx + child.winfo_width()
-                        and cy <= py < cy + child.winfo_height()):
-                    return                # the pointer is ON a popup: a click
+                if (child.winfo_exists() and child.wm_overrideredirect()
+                        and child.winfo_viewable()):
+                    popups.append(child)
             except tk.TclError:
                 continue
-        self._dismiss_mini_popup()
-        for child in list(self.winfo_children()):
-            if not isinstance(child, tk.Toplevel):
-                continue
-            try:
-                if child.winfo_exists() and child.wm_overrideredirect():
-                    child.destroy()
-            except tk.TclError:
-                pass
+        if not popups and not hidden:
+            return
+        ours = self._foreground_is_ours()
+        if popups and not ours:
+            self._hide_popups_if_left(popups)
+        elif hidden and ours:
+            self._popups_hidden_by_deactivate = None
+            for pop in hidden:
+                try:
+                    if pop.winfo_exists():
+                        pop.deiconify()
+                except tk.TclError:
+                    pass
+
+    def _hide_popups_if_left(self, popups):
+        self._hiding_popups = True
+        try:
+            for pop in popups:
+                try:
+                    pop.withdraw()
+                except tk.TclError:
+                    pass
+        finally:
+            self.after(200, lambda: setattr(self, "_hiding_popups", False))
+        self._popups_hidden_by_deactivate = popups
+
+    def _on_app_deactivated(self, event):
+        """Event-path fast lane: when a Deactivate does arrive (the main
+        window losing the front directly), react sooner than the timer."""
+        if not isinstance(event.widget, (tk.Tk, tk.Toplevel)):
+            return
+        self.after(150, self._popup_watch_step)
+
+    def _on_app_activated(self, event):
+        if not isinstance(event.widget, (tk.Tk, tk.Toplevel)):
+            return
+        self.after_idle(self._popup_watch_step)
 
     def _dismiss_mini_popup(self):
         gif_job = getattr(self, "_gif_anim_job", None)

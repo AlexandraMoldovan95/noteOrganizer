@@ -167,6 +167,21 @@ check(f'every table and every row is drawn ({_items9} items)',
 check('and the preview scrolls once it outgrows its budget',
       getattr(_pc9[0], '_preview_overflows', False)
       and bool(str(_pc9[0].cget('scrollregion'))))
+
+# A WIDE table needs the sideways scrollbar: every column reachable.
+NO.clipboard.read_html = lambda: None
+app.clipboard_clear()
+app.clipboard_append(
+    '| Coloana1 | Coloana2 | Coloana3 | Coloana4 | Coloana5 | Coloana6 |'
+    ' Coloana7 | Coloana8 |\n'
+    '| unsprezece | doisprezece | treisprezece | paisprezece |'
+    ' cincisprezece | saisprezece | saptesprezece | optsprezece |')
+_body9.delete('1.0', 'end')
+_body9.event_generate('<<Paste>>')
+app.update()
+app.update()
+check('a wide table reports sideways overflow for the h-scrollbar',
+      getattr(_pc9[0], '_preview_overflows_x', False))
 # <KeyRelease> is a REAL key event and follows the focus, which this
 # box does not hold under test -- the <<Paste>> virtual event delivers
 # to the widget it is generated on, so the hide path rides a plain

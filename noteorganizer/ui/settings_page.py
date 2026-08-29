@@ -655,10 +655,12 @@ class SettingsPageMixin:
             max_x = max(max_x, x0 + sum(widths))
             y += 8
         shown_h = min(y, 240)
-        canvas.configure(height=shown_h, width=min(max_x + 6, 460),
+        shown_w = min(max_x + 6, 430)
+        canvas.configure(height=shown_h, width=shown_w,
                          bg=self.colors["card"], highlightthickness=0,
                          scrollregion=(0, 0, max_x, y))
         canvas._preview_overflows = y > shown_h
+        canvas._preview_overflows_x = max_x > shown_w
         return blocks
 
     def _edit_template(self, tpl, redraw, anchor_widget=None):
@@ -731,8 +733,11 @@ class SettingsPageMixin:
                                    highlightthickness=0)
         preview_scroll = ttk.Scrollbar(preview_row, orient="vertical",
                                        command=preview_canvas.yview)
-        preview_canvas.configure(yscrollcommand=preview_scroll.set)
-        preview_canvas.pack(side="left", anchor="w")
+        preview_hscroll = ttk.Scrollbar(preview_row, orient="horizontal",
+                                        command=preview_canvas.xview)
+        preview_canvas.configure(yscrollcommand=preview_scroll.set,
+                                 xscrollcommand=preview_hscroll.set)
+        preview_canvas.grid(row=0, column=0, sticky="w")
         body_txt.tag_configure("tblhide", elide=True)
 
         def refresh_preview(_e=None):
@@ -765,9 +770,14 @@ class SettingsPageMixin:
                 preview_row.pack_forget()
             if blocks and getattr(preview_canvas, "_preview_overflows",
                                   False):
-                preview_scroll.pack(side="left", fill="y")
+                preview_scroll.grid(row=0, column=1, sticky="ns")
             else:
-                preview_scroll.pack_forget()
+                preview_scroll.grid_forget()
+            if blocks and getattr(preview_canvas, "_preview_overflows_x",
+                                  False):
+                preview_hscroll.grid(row=1, column=0, sticky="ew")
+            else:
+                preview_hscroll.grid_forget()
 
         def paste_and_preview(_e=None):
             # One combined handler: the table-aware paste returns "break"
