@@ -1,3 +1,30 @@
+# HERMETIC SEED -- BEFORE the note_organizer import below: the module
+# resolves its data directory and runs the data MIGRATIONS at import
+# time, so by the first line of test code the adoption has already
+# happened. The data directory must be this test's alone. An
+# empty directory invites run_migrations to adopt whatever real notebook
+# %APPDATA% holds, and real notes then leak into every scenario: the
+# checks start flaking whenever the OWNER's data changes. Seeding an
+# empty notebook plus the reclaim marker closes both migration doors
+# before the app is even constructed. The refusal is the same last-line
+# defence test_data_safety carries: run from a folder holding real
+# notes, the script stops instead of seeding over them.
+import io as _seed_io, json as _seed_json, os as _seed_os, sys as _seed_sys
+if _seed_os.path.exists('notes_data.json'):
+    try:
+        _seed_prev = _seed_json.load(
+            _seed_io.open('notes_data.json', encoding='utf-8'))
+    except Exception:
+        _seed_prev = []
+    if isinstance(_seed_prev, list) and _seed_prev:
+        _seed_sys.exit(
+            'REFUSING to run: notes_data.json here holds %d real note(s). '
+            'Copy this script to a scratch directory instead.'
+            % len(_seed_prev))
+_seed_io.open('notes_data.json', 'w', encoding='utf-8').write('[]')
+_seed_io.open('settings.json', 'w', encoding='utf-8').write(
+    _seed_json.dumps({'reclaimed_from_appdata': True}))
+
 import sys
 import time
 import note_organizer as NO, tkinter as tk, json, os, re
@@ -3672,6 +3699,50 @@ app.update()
 check('clear takes it back off',
       app._grid_cell_paint(app._grid_at_line(1), 1, 1)['bg'] is None)
 set_body('')
+
+# ---- EMOJI DO NOT SHIFT SAVED FORMATTING (the startup ghost) ----
+# Extraction counted UTF-16 units (an emoji = two) while application
+# counted characters (an emoji = one): every save of a formatted note
+# with an emoji stored its spans one further right per emoji, the note
+# read as 'changed' on every startup with no edit anywhere, autosave
+# rewrote it, and the span walked another character each launch.
+set_body('\U0001f600 salut\n| A | B |\n| c | d |\nvorbe alese aici')
+app.title_entry.delete(0, 'end')
+app.title_entry.insert(0, 'EmojiSpan')
+app._render_table_grids()
+app.update()
+_lnE = int(app.body_text.index('end-1c').split('.')[0])
+app.body_text.tag_add('bold', '%d.0' % _lnE, '%d.5' % _lnE)
+app.save_current_note()
+app.update()
+_noteE = app.find_note(app.selected_note_id)
+_spE = [s for s in _noteE.get('formatting', [])
+        if s.get('style') == 'bold']
+check('a bold span behind an emoji saves at its true character offsets',
+      len(_spE) == 1
+      and _noteE['body'][_spE[0]['start']:_spE[0]['end']] == 'vorbe')
+app.load_note(_noteE)
+app.update()
+check('reloading an emoji-and-table note reads clean, not phantom-dirty',
+      app.editor_state_matches_saved(app.capture_editor_state()))
+import copy as _copyE
+_fmtBeforeE = _copyE.deepcopy(_noteE.get('formatting'))
+app.save_current_note()
+app.update()
+check('a second save moves nothing (span drift is dead)',
+      app.find_note(app.selected_note_id).get('formatting') == _fmtBeforeE)
+
+# ---- AND A REAL EDIT STILL ANNOUNCES ITSELF ----
+_toastsE = []
+_origToastE = app._show_toast
+app._show_toast = lambda msg, *a, **k: _toastsE.append(str(msg))
+app.body_text.insert('end', ' si inca ceva')
+app._schedule_autosave()
+app._flush_autosave()
+app.update()
+app._show_toast = _origToastE
+check('a real edit still toasts Note updated',
+      any('updated' in t.lower() for t in _toastsE))
 
 # ---- LIST CARDS HIDE THE PIPE ROWS ----
 set_body('| C1 | C2 |\n| a | b |\n\nreadable words')

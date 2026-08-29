@@ -4415,13 +4415,17 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
     @staticmethod
     def _char_offset(w, index):
-        # text.count("1.0", index, "chars") returns None instead of (0,)
-        # when the distance is exactly zero (a documented Tkinter quirk) --
-        # which happens whenever a tag starts at "1.0" itself, e.g.
-        # formatting applied to the very first character(s) of the note.
-        # Treat that missing result as a real zero, not a crash.
-        result = w.count("1.0", index, "chars")
-        return result[0] if result else 0
+        # PYTHON characters -- the exact space the saved body string
+        # lives in. Tk's count("chars") counts UTF-16 units (an emoji is
+        # two) while the "+Nc" arithmetic that APPLIES spans counts
+        # characters (an emoji is one): extracting with the former
+        # against spans applied with the latter shifted every span one
+        # right per preceding emoji. The phantom difference then re-saved
+        # the note -- "Note updated" on every startup, no edit anywhere,
+        # and the stored span walked one character further each launch.
+        # len(get()) also skips embedded window characters, which the
+        # drawn tables add and count() semantics differ on.
+        return len(w.get("1.0", index))
 
 
     @classmethod
