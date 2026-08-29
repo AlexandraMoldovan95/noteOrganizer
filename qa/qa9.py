@@ -119,8 +119,9 @@ NO.clipboard.read_html = lambda: (
     '<tr><td>luni</td><td>scris</td></tr></table>')
 _body9.delete('1.0', 'end')
 _body9.event_generate('<<Paste>>')
-app.update()
-app.update()
+for _ in range(5):
+    app.update()
+    app.update_idletasks()
 _canv9 = []
 _stack9 = [editor_popup]
 while _stack9:
@@ -128,7 +129,10 @@ while _stack9:
     if isinstance(_w9, tk.Canvas):
         _canv9.append(_w9)
     _stack9.extend(_w9.winfo_children())
-_pc9 = [c for c in _canv9 if c.winfo_ismapped() and c.find_all()]
+# winfo_manager, not winfo_ismapped: the packing is synchronous, the OS
+# mapping is not -- twice the real-Windows run saw the drawn canvas
+# still unmapped and called a healthy preview absent.
+_pc9 = [c for c in _canv9 if c.winfo_manager() and c.find_all()]
 check(f'pasting a table shows the drawn preview '
       f'({len(_pc9[0].find_all()) if _pc9 else 0} items)',
       len(_pc9) == 1 and len(_pc9[0].find_all()) >= 8)
@@ -207,6 +211,7 @@ check('step-back drops topmost and reports the popup',
       _popQ in _steppedQ and not _popQ.attributes('-topmost'))
 app._popups_step_forward(_steppedQ)
 check('step-forward restores it', bool(_popQ.attributes('-topmost')))
+
 # <KeyRelease> is a REAL key event and follows the focus, which this
 # box does not hold under test -- the <<Paste>> virtual event delivers
 # to the widget it is generated on, so the hide path rides a plain
@@ -232,6 +237,88 @@ saved_tpl = app.templates[-1] if app.templates else None
 check('template actually saved', saved_tpl is not None)
 check('saved with the newly-picked category, not the default (bug 1)',
       saved_tpl and saved_tpl.get('category') == 'Work')
+
+# ---- THE DIALOG'S HIDDEN TABLE TEXT IS SAFE FROM THE CARET ----
+# A click in a table-only body (which LOOKS empty) landed the caret
+# inside the elided rows; typing glued letters onto an invisible pipe
+# row, broke the block, and its leftovers surfaced as bare pipe lines.
+_tplG = NO.normalize_template({
+    'name': 'GuardTpl', 'title': '',
+    'body': '| Cap | Doi |\n| --- | --- |\n| a | b |',
+    'comments': '', 'category': 'General', 'checklist': [],
+})
+app.templates.append(_tplG)
+app._edit_template(_tplG, lambda: None)
+app.update()
+app.update()
+_popG = app._mini_popup
+_txtsG = []
+def _walkTG(w):
+    for ch in w.winfo_children():
+        if isinstance(ch, tk.Text):
+            _txtsG.append(ch)
+        _walkTG(ch)
+_walkTG(_popG)
+_bodyG = max(_txtsG, key=lambda t: len(t.get('1.0', 'end')))
+_bodyG.focus_force()
+app.update()
+_bodyG.mark_set('insert', '1.0')
+app.update()
+# The guard runs on KeyPress; the class inserts at whatever caret the
+# guard left. Emulated in two steps because a synthetic key's %A does
+# not reliably insert -- the guard binding itself fires fine.
+_bodyG.event_generate('<KeyPress>', keysym='z')
+app.update()
+_bodyG.insert('insert', 'z')
+app.update()
+check('typing with the caret in hidden table text herds it to visible',
+      _bodyG.get('1.0', 'end-1c').startswith('| Cap | Doi |')
+      and 'tblhide' not in _bodyG.tag_names('insert - 1c'))
+_bodyG.mark_set('insert', '4.0')
+app.update()
+_beforeG = _bodyG.get('1.0', 'end-1c')
+_bodyG.event_generate('<BackSpace>')
+app.update()
+check('backspace at the visible edge refuses to eat the hidden table',
+      _bodyG.get('1.0', 'end-1c') == _beforeG)
+
+# a MID-text caret survives the refresh that every keystroke schedules
+# -- the refresh used to park it at the end unconditionally, scattering
+# the letters of an edit to the tail.
+_bodyG.mark_set('insert', 'end')
+_bodyG.insert('insert', 'coada')
+app.update()
+_lastG = int(_bodyG.index('end-1c').split('.')[0])
+_bodyG.mark_set('insert', '%d.2' % _lastG)
+app.update()
+_bodyG.event_generate('<KeyRelease>', keysym='M')
+for _ in range(3):
+    app.update()
+check('a mid-text caret survives the keystroke refresh un-yanked',
+      str(_bodyG.index('insert')) == '%d.2' % _lastG)
+
+# ---- A FAILING PREVIEW DRAW IS CONTAINED ----
+# The draw wipes the canvas FIRST; an exception escaping the refresh
+# reached Tk's callback handler and left the dialog half-updated.
+_origDraw = type(app)._draw_template_table_preview
+def _boomDraw(self, *_a, **_k):
+    raise ValueError('boom')
+type(app)._draw_template_table_preview = _boomDraw
+_hidBefore = len(_bodyG.tag_ranges('tblhide'))
+_tkerrs9 = []
+_origRep9 = app.report_callback_exception
+app.report_callback_exception = lambda *a, **k: _tkerrs9.append(1)
+_bodyG.event_generate('<KeyRelease>', keysym='q')
+app.update()
+app.update()
+type(app)._draw_template_table_preview = _origDraw
+app.report_callback_exception = _origRep9
+check('a failing preview draw is contained, hiding intact',
+      not _tkerrs9
+      and len(_bodyG.tag_ranges('tblhide')) == _hidBefore)
+_popG._confirm_dismiss = False
+app._dismiss_mini_popup()
+app.update()
 
 # ============================================================
 # BUG 2: editing an EXISTING template's category (e.g. one created via

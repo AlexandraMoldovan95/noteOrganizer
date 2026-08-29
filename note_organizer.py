@@ -1774,17 +1774,40 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             step = -1 if delta > 0 else 1
         return step
 
-    def _body_wheel(self, event):
+    def _text_wheel_scroll(self, text_widget, event, fallback_canvas=None):
+        """One wheel step over a text box, in PIXELS. THE handler for
+        every real wheel event over the body -- the box's own binding and
+        the grids' forwarding both land here, so there is exactly one
+        place deciding how a note scrolls. (A first pixel version lived
+        on a direct body binding that _bind_text_wheel then silently
+        REPLACED -- bind() without add overwrites -- so real wheels kept
+        leaping table to table while the tests, calling the method
+        directly, stayed green.) If the box's content fits, the page
+        scrolls instead, so the buttons below stay reachable."""
         try:
-            self.body_text.yview_scroll(self._wheel_pixels(event.delta),
-                                        "pixels")
+            first, last = text_widget.yview()
+        except (tk.TclError, ValueError):
+            return
+        fits = first <= 0.0 and last >= 1.0
+        if fits:
+            target = fallback_canvas or getattr(self, "editor_canvas", None)
+            if target is not None:
+                try:
+                    target.yview_scroll(int(-1 * (event.delta / 120)),
+                                        "units")
+                except (tk.TclError, ValueError):
+                    pass
+            return "break"
+        try:
+            text_widget.yview_scroll(self._wheel_pixels(event.delta),
+                                     "pixels")
         except tk.TclError:
             pass
         return "break"
 
     def _forward_grid_wheel(self, event):
         """The wheel over a table scrolls the note, as it does over text."""
-        return self._body_wheel(event)
+        return self._text_wheel_scroll(self.body_text, event)
 
     def _grid_wheel_x(self, canvas, event):
         """Shift+wheel pans a wide table sideways."""
@@ -2926,9 +2949,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self.body_text.get(f"{line_no}.0", f"{line_no}.end"))
         return aligns[c] if c < len(aligns) else core_tables.ALIGN_LEFT
 
-    def _grid_cell_text_range(self, info, r, c):
+    def _grid_cell_text_range(self, info, r, c, pad_ok=False):
         """The body-text indices of one cell's content, or None when the
-        cell is empty -- padding never carries formatting."""
+        cell is empty -- padding never carries formatting, EXCEPT that a
+        highlight (pad_ok) may sit on an empty cell's padding: it is the
+        only style with something to show on nothing, and text typed into
+        the cell later lands inside the tagged region and inherits it."""
         line_no = self._grid_line_of_row(info, r)
         first = self._grid_first_line(info)
         if line_no is None or first is None:
@@ -2940,7 +2966,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             return None
         start, end = bounds[c]
         if start >= end:
-            return None
+            if not pad_ok:
+                return None
+            pipes = core_tables.pipe_positions(line)
+            if c + 1 >= len(pipes) or pipes[c] + 1 >= pipes[c + 1]:
+                return None
+            start, end = pipes[c] + 1, pipes[c + 1]
         return (f"{line_no}.{base + self._tk_col(line, start)}",
                 f"{line_no}.{base + self._tk_col(line, end)}")
 
@@ -2969,7 +3000,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         ranges = []
         for r in range(r0, r1 + 1):
             for c in range(c0, c1 + 1):
-                span = self._grid_cell_text_range(info, r, c)
+                span = self._grid_cell_text_range(
+                    info, r, c, pad_ok=(kind == "highlight"))
                 if span:
                     ranges.append(span)
         if not ranges:
@@ -3013,7 +3045,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         """What the cell's text tags ask the drawing to look like."""
         paint = {"bg": None, "fg": None, "bold": False, "italic": False,
                  "underline": False, "strike": False}
-        span = self._grid_cell_text_range(info, r, c)
+        # pad_ok so an empty cell's padding-borne highlight still paints.
+        span = self._grid_cell_text_range(info, r, c, pad_ok=True)
         if not span:
             return paint
         tags = set(self.body_text.tag_names(span[0]))
@@ -4405,13 +4438,33 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if style == "text_color":
             text_widget.tag_configure(tag, foreground=hex_color)
         else:
-            text_widget.tag_configure(tag, background=hex_color)
+            # The saved colour stays pure (the tag NAME carries it); only
+            # the paint blends toward the page surface, exactly as the
+            # table cells draw theirs -- the solid palette fill buried
+            # the text under it. Theme switches re-blend via
+            # _retint_highlight_tags.
+            text_widget.tag_configure(tag, background=self._blend_hex(
+                hex_color, self.colors["card"], 0.45))
         # A newly created tag becomes the new highest display priority,
         # which would bury "sel" underneath it -- see the matching
         # tag_raise("sel") in _setup_body_formatting_tags for why that
         # matters.
         text_widget.tag_raise("sel")
         return tag
+
+    def _retint_highlight_tags(self, text_widget):
+        """Re-blend every highlight tag's paint toward the CURRENT
+        theme's surface. The tag names carry the pure colour, so the
+        stored data never changes -- only the ink follows the theme."""
+        for tag in text_widget.tag_names():
+            if tag.startswith("highlight_"):
+                try:
+                    text_widget.tag_configure(
+                        tag, background=self._blend_hex(
+                            "#" + tag[len("highlight_"):],
+                            self.colors["card"], 0.45))
+                except (tk.TclError, ValueError):
+                    pass
 
     @staticmethod
     def _tag_add_no_newline(text_widget, tag, start, end):
@@ -6396,6 +6449,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # editor's canvas under it -- the keystrokes went with it.
         self._commit_cell_editor()
         self._render_table_grids()
+        # Text highlights are painted blended toward the theme surface
+        # (the cells' own recipe); the new surface needs a re-blend.
+        if hasattr(self, "body_text"):
+            self._retint_highlight_tags(self.body_text)
         self.refresh_weekday_buttons()
         self.on_end_mode_changed()
         self.style_notebook()
@@ -7473,7 +7530,6 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._setup_list_tags(self.body_text)
         self._configure_table_tag(self.body_text)
         self.body_text.bind("<Return>", self._on_body_return)
-        self.body_text.bind("<MouseWheel>", self._body_wheel)
         self.body_text.bind("<BackSpace>", self._on_body_backspace)
         self.body_text.bind("<Delete>", self._on_body_delete_key)
         self.body_text.bind("<<Paste>>", self._on_body_paste, add="+")
@@ -8495,29 +8551,16 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
     def _bind_text_wheel(self, text_widget, fallback_canvas=None):
         """Mousewheel behavior over a text box:
-        - if the box has more text than fits, scroll the box's own content;
+        - if the box has more text than fits, scroll the box's own
+          content -- in pixels, see _text_wheel_scroll;
         - if everything fits, forward the scroll to the editor page instead, so
           the user can still reach the buttons below.
         We must return "break" in BOTH cases, otherwise tkinter's built-in Text
         wheel handling fires too and swallows the event."""
-        def _on_wheel(event):
-            try:
-                first, last = text_widget.yview()
-            except (tk.TclError, ValueError):
-                return
-            fits = first <= 0.0 and last >= 1.0
-            if fits:
-                # Nothing to scroll inside the box — move the whole editor page.
-                target = fallback_canvas or getattr(self, "editor_canvas", None)
-                if target is not None:
-                    try:
-                        target.yview_scroll(int(-1 * (event.delta / 120)), "units")
-                    except (tk.TclError, ValueError):
-                        pass
-                return "break"
-            text_widget.yview_scroll(int(-1 * (event.delta / 120)), "units")
-            return "break"
-        text_widget.bind("<MouseWheel>", _on_wheel)
+        text_widget.bind(
+            "<MouseWheel>",
+            lambda e: self._text_wheel_scroll(text_widget, e,
+                                              fallback_canvas))
 
     def _bind_mousewheel_recursive(self, widget, canvas, skip=None):
         # `skip` is a set of widgets that manage their own wheel scrolling

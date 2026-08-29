@@ -744,7 +744,10 @@ class SettingsPageMixin:
             try:
                 blocks = self._draw_template_table_preview(
                     preview_canvas, body_txt)
-            except tk.TclError:
+            except Exception:
+                # Broad on purpose: the draw wipes the canvas FIRST, so a
+                # failure escaping here left an empty preview and stale
+                # hiding for the rest of the dialog's life.
                 return
             # The body box shows only the NON-table text: the preview is
             # where tables are seen, and raw pipe rows with merge markers
@@ -762,16 +765,25 @@ class SettingsPageMixin:
                     a -= 1
                 while z + 1 < len(all_lines) and not all_lines[z + 1].strip():
                     z += 1
-                body_txt.tag_add("tblhide",
-                                 f"{a + 1}.0", f"{z + 1}.end+1c")
+                # Never over the text's own final newline: a hide range
+                # clamped to "end" swallows it, and everything typed at
+                # the end thereafter lands INSIDE the tag -- invisible.
+                hide_end = f"{z + 1}.end+1c"
+                if body_txt.compare(hide_end, ">=", "end"):
+                    hide_end = "end-1c"
+                body_txt.tag_add("tblhide", f"{a + 1}.0", hide_end)
             if blocks:
                 # A caret inside hidden text would edit a table row
                 # invisibly; park it at the end, after a visible newline.
+                # ONLY when it actually sits in hidden text: parking it
+                # unconditionally yanked the caret to the end after every
+                # keystroke, scattering mid-text edits to the tail.
                 last_line = body_txt.get("end-1c linestart", "end-1c")
                 from noteorganizer.core import tables as core_tables
                 if core_tables.is_table_row(last_line):
                     body_txt.insert("end", "\n")
-                body_txt.mark_set("insert", "end")
+                if "tblhide" in body_txt.tag_names("insert"):
+                    body_txt.mark_set("insert", "end")
             if blocks and not preview_row.winfo_ismapped():
                 preview_lbl.pack(fill="x", pady=(4, 0))
                 preview_row.pack(anchor="w", pady=(0, 2))
@@ -797,6 +809,50 @@ class SettingsPageMixin:
             pop.after_idle(refresh_preview)
             return self._paste_table_aware(body_txt)
 
+        # A click in the box can land the caret INSIDE the elided table
+        # text (a table-only body looks empty, so anywhere the user
+        # clicks resolves into hidden rows). Typing there glued letters
+        # onto an invisible pipe row: the row stopped being a table row,
+        # the block broke, and its leftover rows surfaced in the box as
+        # bare pipe lines. The caret is herded to visible text BEFORE a
+        # character lands, and deletions refuse to eat hidden text.
+        def caret_to_visible(_e=None):
+            try:
+                if "tblhide" in body_txt.tag_names("insert"):
+                    body_txt.mark_set("insert", "end")
+            except tk.TclError:
+                pass
+
+        def guard_backspace(_e=None):
+            # Deleting the newline that parts visible text from a hidden
+            # block glues the text onto an invisible pipe row -- the
+            # newline itself sits OUTSIDE the tag, so the char behind it
+            # is what gives the danger away.
+            try:
+                if ("tblhide" in body_txt.tag_names("insert - 1c")
+                        or "tblhide" in body_txt.tag_names("insert")
+                        or (body_txt.get("insert - 1c") == "\n"
+                            and "tblhide"
+                            in body_txt.tag_names("insert - 2c"))):
+                    return "break"
+            except tk.TclError:
+                pass
+
+        def guard_delete(_e=None):
+            try:
+                if ("tblhide" in body_txt.tag_names("insert")
+                        or (body_txt.get("insert") == "\n"
+                            and "tblhide"
+                            in body_txt.tag_names("insert + 1c"))):
+                    return "break"
+            except tk.TclError:
+                pass
+
+        body_txt.bind("<ButtonRelease-1>",
+                      lambda e: pop.after_idle(caret_to_visible), add="+")
+        body_txt.bind("<KeyPress>", caret_to_visible, add="+")
+        body_txt.bind("<BackSpace>", guard_backspace, add="+")
+        body_txt.bind("<Delete>", guard_delete, add="+")
         body_txt.bind("<KeyRelease>",
                       lambda e: pop.after_idle(refresh_preview), add="+")
         body_txt.bind("<<Paste>>", paste_and_preview)

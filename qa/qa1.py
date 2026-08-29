@@ -3532,9 +3532,22 @@ app._render_table_grids()
 app.update()
 app.body_text.yview_moveto(0.0)
 app.update()
-app._body_wheel(_typesE.SimpleNamespace(delta=-120))
+# A REAL event, through the binding chain: the first pixel handler sat
+# on a direct binding that _bind_text_wheel silently replaced, so real
+# wheels kept leaping while a direct method call stayed green.
+take_focus(app.body_text)
+app.body_text.event_generate('<MouseWheel>', delta=-120)
 app.update()
 check('one wheel notch over a tall table moves the view a little, not a table',
+      app.body_text.yview()[0] > 0
+      and app.body_text.index('@0,0').split('.')[0] == '1')
+# ...and over the drawn grid itself, the forwarded wheel does the same.
+app.body_text.yview_moveto(0.0)
+app.update()
+_gridW = app._grid_at_line(1)
+_gridW['canvas'].event_generate('<MouseWheel>', delta=-120)
+app.update()
+check('one wheel notch over the grid glides the note the same way',
       app.body_text.yview()[0] > 0
       and app.body_text.index('@0,0').split('.')[0] == '1')
 
@@ -3611,6 +3624,54 @@ check('the toolbar highlight picker is the hairline column, Clear included',
       _barsH == len(NO.HIGHLIGHT_COLOR_PALETTE) and _clearH == 1)
 app._dismiss_mini_popup()
 app.update()
+
+# ---- HIGHLIGHT INK IS BLENDED, AND FOLLOWS THE THEME ----
+# The applied tag paints the swatch colour blended toward the theme's
+# surface (the table cells' own recipe) -- the raw palette fill buried
+# the text under it. The tag NAME keeps the pure colour, so the stored
+# data never changes; a theme switch re-blends the ink.
+set_body('cuvinte de evidentiat')
+app.body_text.tag_add('sel', '1.0', '1.7')
+_pureH = NO.HIGHLIGHT_COLOR_PALETTE[0]
+app._apply_body_color('highlight', _pureH)
+app.update()
+_tagH = [t for t in app.body_text.tag_names('1.2')
+         if t.startswith('highlight_')][0]
+check('a text highlight paints blended toward the surface, name stays pure',
+      app.body_text.tag_cget(_tagH, 'background')
+      == app._blend_hex(_pureH, app.colors['card'], 0.45)
+      and _tagH == 'highlight_' + _pureH.lstrip('#'))
+_themeH = app.theme_name
+app.set_theme('light' if 'dark' in str(_themeH) else 'dark')
+app.apply_theme()
+app.update()
+check('a theme switch re-blends the highlight ink toward the NEW surface',
+      app.body_text.tag_cget(_tagH, 'background')
+      == app._blend_hex(_pureH, app.colors['card'], 0.45))
+app.set_theme(_themeH)
+app.apply_theme()
+app.update()
+
+# ---- AN EMPTY CELL TAKES A HIGHLIGHT, AND KEEPS IT WHEN FILLED ----
+set_body('| Cap | G |\n| plin |  |')
+app._render_table_grids()
+app.update()
+_gE = app._grid_at_line(1)
+app._grid_apply_style(_gE, (1, 1, 1, 1), 'highlight', _pureH)
+app.update()
+check('an empty cell takes a highlight on its padding',
+      app._grid_cell_paint(_gE, 1, 1)['bg'] == _pureH)
+app._write_cell(_gE, 1, 1, 'umplut')
+app.update()
+_gE2 = app._grid_at_line(1)
+check('the highlight survives the cell being filled in',
+      app._grid_cell_paint(_gE2, 1, 1)['bg'] == _pureH
+      and (app._grid_cell_text_range(_gE2, 1, 1) is not None))
+app._grid_apply_style(_gE2, (1, 1, 1, 1), 'highlight', None)
+app.update()
+check('clear takes it back off',
+      app._grid_cell_paint(app._grid_at_line(1), 1, 1)['bg'] is None)
+set_body('')
 
 # ---- LIST CARDS HIDE THE PIPE ROWS ----
 set_body('| C1 | C2 |\n| a | b |\n\nreadable words')
