@@ -751,9 +751,19 @@ class SettingsPageMixin:
             # read as noise. The box still HOLDS the full body -- elide
             # hides the lines without touching the stored text.
             body_txt.tag_remove("tblhide", "1.0", "end")
+            # Blank lines glued to a hidden table hide with it -- they
+            # exist to separate blocks in the STORED text, and keeping
+            # them visible left the remaining text full of gaps. A blank
+            # line between two runs of text is left alone.
+            all_lines = body_txt.get("1.0", "end-1c").split("\n")
             for first, last in blocks:
+                a, z = first, last
+                while a - 1 >= 0 and not all_lines[a - 1].strip():
+                    a -= 1
+                while z + 1 < len(all_lines) and not all_lines[z + 1].strip():
+                    z += 1
                 body_txt.tag_add("tblhide",
-                                 f"{first + 1}.0", f"{last + 1}.end+1c")
+                                 f"{a + 1}.0", f"{z + 1}.end+1c")
             if blocks:
                 # A caret inside hidden text would edit a table row
                 # invisibly; park it at the end, after a visible newline.

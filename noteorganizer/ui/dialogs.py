@@ -40,6 +40,32 @@ class DialogsMixin:
     (``self.colors``, ``self.winfo_rootx()`` and so on).
     """
 
+    def _popups_step_back(self):
+        """Drop -topmost on every override-redirect popup and slide them
+        under the main window; returns the list for _popups_step_forward."""
+        stepped = []
+        for child in self.winfo_children():
+            if not isinstance(child, tk.Toplevel):
+                continue
+            try:
+                if (child.winfo_exists() and child.wm_overrideredirect()
+                        and child.attributes("-topmost")):
+                    child.attributes("-topmost", False)
+                    child.lower(self)
+                    stepped.append(child)
+            except tk.TclError:
+                continue
+        return stepped
+
+    def _popups_step_forward(self, stepped):
+        for child in stepped:
+            try:
+                if child.winfo_exists():
+                    child.attributes("-topmost", True)
+                    child.lift()
+            except tk.TclError:
+                continue
+
     def _themed_dialog(self, title, message, kind="info", buttons=None):
         """A modal, in-theme replacement for tkinter's messagebox. Renders as an
         overlay INSIDE the app window (not a separate OS window), so it can't be
@@ -48,6 +74,11 @@ class DialogsMixin:
         if buttons is None:
             buttons = [("OK", True)]
 
+        # The overlay lives INSIDE the main window, and a -topmost
+        # popup floats above that -- so a question ABOUT the popup (save
+        # your changes?) rendered underneath it, unreachable. The popups
+        # step back for the dialog's duration and return after.
+        stepped_back = self._popups_step_back()
         icon = {"info": "ℹ️", "warning": "⚠️", "error": "⛔",
                 "question": "❓", "success": "✅"}.get(kind, "ℹ️")
         accent = {"error": self.colors["danger"], "warning": self.colors["danger"],
@@ -133,6 +164,7 @@ class DialogsMixin:
                 border.destroy()
             except tk.TclError:
                 pass
+            self._popups_step_forward(stepped_back)
         return result["value"]
 
     def show_info(self, title, message, **kw):

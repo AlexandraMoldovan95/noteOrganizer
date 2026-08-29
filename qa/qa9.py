@@ -182,6 +182,31 @@ app.update()
 app.update()
 check('a wide table reports sideways overflow for the h-scrollbar',
       getattr(_pc9[0], '_preview_overflows_x', False))
+
+# ---- THE BODY COMPACTS: blank lines glued to hidden tables hide too ----
+NO.clipboard.read_html = lambda: None
+app.clipboard_clear()
+app.clipboard_append('| T | X |\n| a | b |\n\n| Z | P |\n| c | d |\n\n'
+                     'randul de text ramas')
+_body9.delete('1.0', 'end')
+_body9.event_generate('<<Paste>>')
+app.update()
+app.update()
+_visC = _n9(_body9.count('1.0', 'end', 'displaychars'))
+check(f'blank lines around hidden tables hide with them '
+      f'({_visC} visible)',
+      _visC <= len('randul de text ramas') + 2)
+
+# ---- A THEMED QUESTION IS NEVER BURIED UNDER A -TOPMOST POPUP ----
+# The overlay lives in the main window; the popup floats above it. For
+# the dialog's duration the popups step back, then return.
+_popQ = app._mini_popup
+check('the popup starts topmost', bool(_popQ.attributes('-topmost')))
+_steppedQ = app._popups_step_back()
+check('step-back drops topmost and reports the popup',
+      _popQ in _steppedQ and not _popQ.attributes('-topmost'))
+app._popups_step_forward(_steppedQ)
+check('step-forward restores it', bool(_popQ.attributes('-topmost')))
 # <KeyRelease> is a REAL key event and follows the focus, which this
 # box does not hold under test -- the <<Paste>> virtual event delivers
 # to the widget it is generated on, so the hide path rides a plain

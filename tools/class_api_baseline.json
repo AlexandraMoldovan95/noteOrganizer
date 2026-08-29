@@ -238,6 +238,8 @@
   "_poll_import_progress": "(self)",
   "_popup_foreground_watch": "(self)",
   "_popup_watch_step": "(self)",
+  "_popups_step_back": "(self)",
+  "_popups_step_forward": "(self, stepped)",
   "_recolor_existing_combo_popups": "(self)",
   "_recolor_note_cards": "(self)",
   "_recolor_settings_nav_icons": "(self)",

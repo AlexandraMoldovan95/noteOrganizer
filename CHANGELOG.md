@@ -15,6 +15,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 - A note that begins with a table has somewhere to type above it now: clicking beside the table and pressing Enter pushes the table down a line and puts the cursor on the fresh first line. Between two adjacent tables the key keeps its old meaning.
 
 ### Fixed
+- A themed question could render UNDER a -topmost popup — the save-changes ask appeared behind the very dialog it was asking about, unreachable. Popups now step back for a dialog's duration and return after; the same fix surfaces the "Name needed" warning.
+- The template body showed gaps where its hidden tables lived: the blank lines that separate table blocks in the stored text stayed visible. Blank lines glued to a hidden table now hide with it, and the remaining text reads compactly; a blank line between two runs of text is left alone.
 - Editing a template through the Settings dialog silently wiped the formatting and paragraph data a template saved from the editor carries — the dialog cannot edit those, but it must not lose them either.
 - The template dialog's "Name needed" guard was unreachable: an empty name was defaulted to "Untitled template" before the check ran, so empty saves slipped through silently — the junk rows named exactly that were its proof. The guard now checks the raw field.
 - Pasting a table from Excel, Word or a web page into the template editor's body box dropped the structure and kept only the words — the box is a plain text field with the system's plain paste. When the clipboard's HTML holds a table, the same converter the main editor trusts now turns it into the note's own table text, from any source that carries real structure (a PDF does not, by decision).
