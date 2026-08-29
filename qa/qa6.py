@@ -156,6 +156,26 @@ check('truncated name is what gets persisted',
 check('greeting reflects the truncated name, not the original 70 chars',
       len(app.greeting_lbl.cget('text')) < 40)
 
+# ---- SETTINGS + THEME SWITCH + CLICKS: NO CALLBACK ERRORS ----
+# Flipping themes rebuilds settings widgets; a click that still named a
+# destroyed widget crashed the focus-clearing handler ('something went
+# wrong', intermittent). The whole flow must stay silent.
+_theme_before6 = app.theme_name
+_errs6 = []
+_origRep6 = app.report_callback_exception
+app.report_callback_exception = lambda *a, **k: _errs6.append(1)
+name_entry.focus_force()
+app.update()
+app.set_theme('light' if 'dark' in str(app.theme_name) else 'dark')
+app.update()
+for _xy6 in ((200, 200), (400, 300), (60, 60)):
+    app.event_generate('<Button-1>', x=_xy6[0], y=_xy6[1])
+    app.update()
+app.set_theme(_theme_before6)
+app.update()
+app.report_callback_exception = _origRep6
+check('settings + theme flip + stray clicks raise nothing', not _errs6)
+
 # ---- SETTINGS: clicking elsewhere on the page clears field focus (regression) ----
 # Previously, clicking a non-interactive part of the Settings page (a
 # section title, card background) left whatever field was focused — e.g.

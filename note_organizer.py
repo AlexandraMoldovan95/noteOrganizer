@@ -2697,7 +2697,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             return "break"
         hit = self._grid_cell_at_xy(info, x, press_y)
         self._grid_clear_selection()
-        self._grid_pressed = (info, hit) if hit else None
+        self._grid_pressed = (info, hit, x, press_y) if hit else None
         return "break"
 
     def _grid_drag(self, info, event):
@@ -2752,7 +2752,18 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if pressed is None or pressed[0] is not info:
             return "break"
         if getattr(self, "_grid_sel", None) is None and pressed[1]:
-            self._open_cell_editor(info, *pressed[1])
+            # A real drag that never left its cell selects THAT cell
+            # whole -- there was no way to select a single cell before
+            # (the drag had to reach a neighbour), so grabbing one cell
+            # meant grabbing two. A short click still opens the editor.
+            canvas = info["canvas"]
+            moved = max(abs(canvas.canvasx(event.x) - pressed[2]),
+                        abs(canvas.canvasy(event.y) - pressed[3]))
+            if moved >= 10:
+                self._grid_select_range(info, pressed[1], pressed[1])
+                self.body_text.focus_set()
+            else:
+                self._open_cell_editor(info, *pressed[1])
         else:
             # A finished drag leaves a selection; the keyboard belongs to
             # it now, so Delete and Ctrl+C/V land on the cells no matter
@@ -7193,6 +7204,13 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # (the cells' own recipe); the new surface needs a re-blend.
         if hasattr(self, "body_text"):
             self._retint_highlight_tags(self.body_text)
+        # The editor's quick toggle shows where a press would take you.
+        if hasattr(self, "editor_theme_btn"):
+            try:
+                self.editor_theme_btn.configure(
+                    text="☀" if self.theme_name in DARK_THEMES else "🌙")
+            except tk.TclError:
+                pass
         self.refresh_weekday_buttons()
         self.on_end_mode_changed()
         self.style_notebook()
@@ -8251,6 +8269,23 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             "Lands in the open table cell if there is one, otherwise at "
             "the cursor in the note")
 
+        # The quick light/dark flip, right where the writing happens --
+        # the full theme picker stays in Settings; this only swaps
+        # between the last light and last dark choice.
+        self.editor_theme_btn = tk.Button(
+            self.format_toolbar if hasattr(self, "format_toolbar") else
+            self.emoji_btn.master,
+            text="☀" if self.theme_name in DARK_THEMES else "🌙",
+            relief="flat", cursor="hand2", bd=0,
+            font=("Segoe UI", 10),
+            command=self.toggle_theme)
+        self.track_theme(self.editor_theme_btn, bg="sidebar", fg="text")
+        self._add_fmt_item(self.editor_theme_btn, padx=(6, 2), ipady=2)
+        self._attach_tooltip(
+            self.editor_theme_btn, "Light / Dark",
+            "Switches between your last light and last dark theme; the "
+            "full theme picker stays in Settings")
+
         text_frame = tk.Frame(self.editor)
         self.track_theme(text_frame, bg="card")
         text_frame.pack(fill="both", expand=True, padx=30, pady=(0, 10))
@@ -8293,6 +8328,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.body_text.bind("<KeyRelease>", self._apply_pending_style_to_typed_char, add="+")
         self.body_text.bind("<KeyRelease>", self._refresh_format_buttons, add="+")
         self.body_text.bind("<KeyRelease>", self._align_table_on_leaving, add="+")
+        # A click in the body means the user has LEFT the table: a cell
+        # selection lingering from an earlier drag would silently catch
+        # the next toolbar colour meant for the body text.
+        self.body_text.bind("<Button-1>",
+                            lambda _e: self._grid_clear_selection(), add="+")
         self.body_text.bind("<ButtonRelease-1>", self._resync_pending_style_anchor, add="+")
         self.body_text.bind("<ButtonRelease-1>", self._refresh_format_buttons, add="+")
         self.body_text.bind("<ButtonRelease-1>", self._align_table_on_leaving, add="+")

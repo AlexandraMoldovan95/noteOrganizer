@@ -4029,6 +4029,64 @@ check('a wide table shows its own horizontal scrollbar',
       and _gW['hbar'].winfo_manager() == 'pack')
 set_body('')
 
+# ---- A CLICK IN THE BODY RELEASES THE TABLE'S CELL SELECTION ----
+# A cell selection lingering from an earlier drag silently caught the
+# next toolbar colour meant for the body text -- 'coloring stopped
+# working' on plain notes that merely FOLLOWED a table interaction.
+set_body('| A | B |\n| c | d |\n\ncorp de colorat')
+app._render_table_grids()
+app.update()
+_gS = app._grid_at_line(1)
+app._grid_select_range(_gS, (1, 0), (1, 1))
+app.update()
+app.body_text.event_generate('<Button-1>', x=5, y=5)
+app.update()
+_lastS = int(app.body_text.index('end-1c').split('.')[0])
+app.body_text.tag_add('sel', '%d.0' % _lastS, '%d.4' % _lastS)
+take_focus(app.body_text)
+app._apply_body_color('text_color', '#ff0000')
+app.update()
+check('after a body click, the toolbar colour reaches the body again',
+      getattr(app, '_grid_sel', None) is None
+      and any(t == 'text_color_ff0000'
+              for t in app.body_text.tag_names('%d.2' % _lastS)))
+
+# ---- A DRAG INSIDE ONE CELL SELECTS THAT CELL WHOLE ----
+# Selection used to begin only when the drag REACHED a second cell, so
+# one cell alone could never be selected -- grabbing the checkmark
+# meant grabbing its neighbour too.
+_cS = _gS['cells'][(1, 1)]
+_cvS = _gS['canvas']
+_cvS.event_generate('<Button-1>', x=int(_cS['x'] + 12),
+                    y=int(_cS['y'] + 8))
+_cvS.event_generate('<B1-Motion>', x=int(_cS['x'] + 30),
+                    y=int(_cS['y'] + 20))
+_cvS.event_generate('<ButtonRelease-1>', x=int(_cS['x'] + 30),
+                    y=int(_cS['y'] + 20))
+app.update()
+check('a real drag inside one cell selects exactly that cell',
+      getattr(app, '_grid_sel', None) is not None
+      and app._grid_sel['box'] == (1, 1, 1, 1)
+      and getattr(app, '_cell_editor', None) is None)
+app._grid_clear_selection()
+set_body('')
+
+# ---- THE EDITOR'S LIGHT/DARK FLIP ----
+_wasT = app.theme_name
+check('the editor carries the quick light/dark toggle',
+      hasattr(app, 'editor_theme_btn')
+      and app.editor_theme_btn.winfo_exists())
+app.editor_theme_btn.invoke()
+app.update()
+_flippedT = app.theme_name
+app.editor_theme_btn.invoke()
+app.update()
+check('one press flips dark/light, the next flips back, glyph follows',
+      (_wasT in NO.DARK_THEMES) != (_flippedT in NO.DARK_THEMES)
+      and app.theme_name == _wasT
+      and str(app.editor_theme_btn.cget('text'))
+      == ('\u2600' if app.theme_name in NO.DARK_THEMES else '\U0001f319'))
+
 # ---- LIST CARDS HIDE THE PIPE ROWS ----
 set_body('| C1 | C2 |\n| a | b |\n\nreadable words')
 app.title_entry.delete(0, 'end')

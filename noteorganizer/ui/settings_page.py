@@ -1685,9 +1685,23 @@ class SettingsPageMixin:
         def _clear_settings_field_focus(event):
             if not self.settings_page.winfo_ismapped():
                 return
-            focused = self.focus_get()
-            if isinstance(focused, (tk.Entry, tk.Text)) and event.widget is not focused:
-                event.widget.focus_set()
+            try:
+                focused = self.focus_get()
+            except (tk.TclError, KeyError):
+                return
+            # event.widget can arrive as a bare STRING: Tk hands the path
+            # name when the clicked widget was destroyed and rebuilt (a
+            # theme switch does exactly that) before the event got here.
+            # Calling focus_set() on that string was the intermittent
+            # "something went wrong" while flipping themes.
+            target = event.widget
+            if not hasattr(target, "focus_set"):
+                return
+            if isinstance(focused, (tk.Entry, tk.Text)) and target is not focused:
+                try:
+                    target.focus_set()
+                except tk.TclError:
+                    pass
         self.bind("<Button-1>", _clear_settings_field_focus, add="+")
 
         # A frame per section, all created now so callers can reach them (the
