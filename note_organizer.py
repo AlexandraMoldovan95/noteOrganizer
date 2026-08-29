@@ -1869,20 +1869,43 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         "Left", "Right", "Up", "Down", "Home", "End", "Prior", "Next",
     }
 
-    def _editor_key_press(self, event=None):
-        """BEFORE the class binding inserts the typed character: remember
-        where it will land and what it should wear. Tk only inherits a
-        tag when both neighbours carry it, so a character typed at the
-        END of a coloured run -- or over a replaced selection -- arrived
-        plain and the cell read as 'reset to black'."""
+    def _editor_flush_type_paint(self):
+        """Dress whatever the last recorded keystroke typed, if it has
+        not been dressed yet. Called from BOTH ends of the key pair --
+        fast typing interleaves the events (press, press, release,
+        release), and a paint that waited for its own release skipped
+        every character whose bookkeeping the next press overwrote."""
         editor = getattr(self, "_cell_editor", None)
         if not editor:
             return
+        st = editor.pop("type_style", None)
+        if st is None:
+            return
+        t = editor["entry"]
+        try:
+            s, e = t.index("typestart"), t.index("insert")
+            if t.compare(s, "<", e):
+                self._editor_paint_range(t, s, e, st)
+                self._editor_retag_emoji(t)
+        except tk.TclError:
+            pass
+
+    def _editor_key_press(self, event=None):
+        """BEFORE the class binding inserts the typed character: paint
+        anything the previous keystroke left undressed, then remember
+        where this one will land and what it should wear. Tk only
+        inherits a tag when both neighbours carry it, so a character
+        typed at the END of a coloured run -- or over a replaced
+        selection -- arrived plain and the cell read as 'reset to
+        black'."""
+        editor = getattr(self, "_cell_editor", None)
+        if not editor:
+            return
+        self._editor_flush_type_paint()
         char = getattr(event, "char", "") or ""
         keysym = getattr(event, "keysym", "")
         if (len(char) != 1 or ord(char) < 32
                 or keysym in self._EDITOR_PASSTHROUGH_KEYS):
-            editor.pop("type_style", None)
             return
         t = editor["entry"]
         try:
@@ -1899,22 +1922,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             editor.pop("type_style", None)
 
     def _editor_key_release(self, event=None):
-        """AFTER the character landed: dress everything between the
-        remembered start and the caret in the remembered style."""
-        editor = getattr(self, "_cell_editor", None)
-        if not editor:
-            return
-        st = editor.pop("type_style", None)
-        if st is None:
-            return
-        t = editor["entry"]
-        try:
-            s, e = t.index("typestart"), t.index("insert")
-            if t.compare(s, "<", e):
-                self._editor_paint_range(t, s, e, st)
-                self._editor_retag_emoji(t)
-        except tk.TclError:
-            pass
+        """AFTER the character landed: dress it."""
+        self._editor_flush_type_paint()
 
     def _grid_line_of_row(self, info, r):
         """The text line a data row lives on -- the separator makes the
@@ -1933,6 +1942,53 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             if abs(x - info["col_x"][c]) <= 4:
                 return c - 1
         return None
+
+    def _grid_row_boundary_at(self, info, y):
+        """Which row's bottom edge sits within grabbing distance of y --
+        the vertical twin of the column rule, for dragging rows taller
+        or shorter."""
+        row_y = info.get("row_y") or []
+        for r in range(1, len(row_y)):
+            if abs(y - row_y[r]) <= 4:
+                return r - 1
+        return None
+
+    def _grid_set_row_lines(self, info, r, lines):
+        """One row's height, as its line count. Growing pads the row's
+        tallest cell with empty <br> lines; shrinking trims trailing
+        empty lines from every cell -- never below anyone's real
+        content, so the table's text is never cut by a drag."""
+        cells_in_row = [(c, cell) for (rr, c), cell in info["cells"].items()
+                        if rr == r and cell.get("rs", 1) == 1]
+        if not cells_in_row:
+            return
+        first = self._grid_first_line(info)
+        if first is None:
+            return
+
+        def core_of(value):
+            segs = core_tables.cell_display_lines(value)
+            while len(segs) > 1 and not segs[-1].strip():
+                segs.pop()
+            return segs
+
+        floor = max(len(core_of(cell["value"])) for _c, cell in cells_in_row)
+        target = max(max(1, lines), floor)
+        anchor_c = max(cells_in_row,
+                       key=lambda item: len(core_tables.cell_display_lines(
+                           item[1]["value"])))[0]
+        changed = False
+        for c, cell in cells_in_row:
+            core = core_of(cell["value"])
+            want = target if c == anchor_c else len(core)
+            new_value = core_tables.LINE_BREAK.join(
+                core + [""] * (want - len(core)))
+            if new_value != cell["value"]:
+                self._write_cell(info, r, c, new_value)
+                cell["value"] = new_value
+                changed = True
+        if changed:
+            self._grid_after_op(first)
 
     def _grid_cell_at_xy(self, info, x, y):
         """Which cell a canvas point falls in. Covered positions have no
@@ -2045,6 +2101,17 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                    lambda e, i=info: self._editor_paste(i))
         entry.bind("<Control-V>",
                    lambda e, i=info: self._editor_paste(i))
+        # Ctrl+A selects the whole cell -- Tk's Text default for it is
+        # an emacs-style line-start jump nobody here is looking for.
+        def _select_all_cell(_e, t=entry):
+            try:
+                t.tag_add("sel", "1.0", "end-1c")
+                t.mark_set("insert", "end-1c")
+            except tk.TclError:
+                pass
+            return "break"
+        entry.bind("<Control-a>", _select_all_cell)
+        entry.bind("<Control-A>", _select_all_cell)
         # Keep the edited cell inside the scrolled viewport.
         try:
             shown = int(float(canvas.cget("width")))
@@ -2124,6 +2191,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         editor = getattr(self, "_cell_editor", None)
         if not editor:
             return False
+        # A commit can arrive between a keystroke's press and release --
+        # the typed character gets its dress before it is sampled.
+        self._editor_flush_type_paint()
         info, r, c = editor["info"], editor["r"], editor["c"]
         try:
             content = editor["entry"].get("1.0", "end-1c")
@@ -2134,8 +2204,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         wrote = False
         cell = info["cells"].get((r, c))
         if content is not None and cell is not None:
-            lead = len(content) - len(content.lstrip())
-            trimmed = content.strip().replace(core_tables.CELL, "/")
+            # Spaces and tabs trim off the ends; NEWLINES stay -- an
+            # empty last line the user just made with Enter is the room
+            # they are about to type into, not stray whitespace.
+            lead = len(content) - len(content.lstrip(" \t"))
+            trimmed = content.strip(" \t").replace(core_tables.CELL, "/")
             display_styles = (display_styles or [])[lead:lead + len(trimmed)]
             while len(display_styles) < len(trimmed):
                 display_styles.append(dict(self._PLAIN_STYLE))
@@ -2229,19 +2302,36 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
     def _editor_newline(self):
         """Enter (and Shift+Enter) start a new line INSIDE the cell --
-        stored as markdown's own <br>, so the row grows to fit on commit.
-        Leaving the cell stays what it always was elsewhere: Tab, Escape,
-        or a click anywhere else."""
+        stored as markdown's own <br>. The ROW grows right now, not at
+        the eventual commit: the taller floating overlay used to hang
+        over the row below and hide it. Commit, rebuild, and reopen the
+        editor inside the properly sized cell, caret where it was.
+        Leaving the cell stays what it always was elsewhere: Tab,
+        Escape, or a click anywhere else."""
         editor = getattr(self, "_cell_editor", None)
         if not editor:
             return "break"
         entry = editor["entry"]
+        self._editor_flush_type_paint()
         try:
             entry.insert("insert", "\n")
             entry.tag_add("cellalign", "1.0", "end")
+            caret = entry.index("insert")
         except tk.TclError:
             return "break"
-        self._editor_fit_window()
+        info, r, c = editor["info"], editor["r"], editor["c"]
+        anchor_line = self._grid_first_line(info)
+        self._commit_cell_editor()
+        fresh = (self._grid_at_line(anchor_line)
+                 if anchor_line is not None else None)
+        if fresh is not None and (r, c) in fresh["cells"]:
+            self._open_cell_editor(fresh, r, c, select=False)
+            reopened = getattr(self, "_cell_editor", None)
+            if reopened is not None:
+                try:
+                    reopened["entry"].mark_set("insert", caret)
+                except tk.TclError:
+                    pass
         return "break"
 
     def _editor_fit_window(self):
@@ -2479,7 +2569,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 "row_off": row_off, "sep_cols": sep_cols,
                 "hidden_cols": hidden_cols,
                 "ncols": len(widths), "row_h": row_h, "col_x": col_x,
-                "widths_chars": list(widths)}
+                "row_y": row_y, "widths_chars": list(widths)}
         self._fit_grid(info)
         canvas.bind("<Button-1>", lambda e, i=info: self._grid_press(i, e))
         canvas.bind("<B1-Motion>", lambda e, i=info: self._grid_drag(i, e))
@@ -2597,13 +2687,22 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self._grid_resizing = {"info": info, "col": boundary, "x": x}
             self._grid_pressed = None
             return "break"
+        row_boundary = self._grid_row_boundary_at(info, press_y)
+        if row_boundary is not None:
+            # The horizontal rule resizes its row, the vertical twin of
+            # dragging a column wider.
+            self._grid_row_resizing = {"info": info, "row": row_boundary,
+                                       "y": press_y}
+            self._grid_pressed = None
+            return "break"
         hit = self._grid_cell_at_xy(info, x, press_y)
         self._grid_clear_selection()
         self._grid_pressed = (info, hit) if hit else None
         return "break"
 
     def _grid_drag(self, info, event):
-        if getattr(self, "_grid_resizing", None):
+        if (getattr(self, "_grid_resizing", None)
+                or getattr(self, "_grid_row_resizing", None)):
             return "break"
         pressed = getattr(self, "_grid_pressed", None)
         if not pressed or pressed[0] is not info:
@@ -2634,6 +2733,19 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             char_px = max(1, cell_font.measure("0"))
             self._grid_set_col_width(
                 info, col, max(2, round((new_px - 20) / char_px)))
+            return "break"
+        row_resizing = getattr(self, "_grid_row_resizing", None)
+        self._grid_row_resizing = None
+        if row_resizing is not None and row_resizing["info"] is info:
+            canvas = info["canvas"]
+            if abs(canvas.canvasy(event.y) - row_resizing["y"]) < 3:
+                return "break"
+            row = row_resizing["row"]
+            top = info.get("row_y", [0])[row] if row < len(
+                info.get("row_y", [])) else 0
+            new_px = canvas.canvasy(event.y) - top
+            self._grid_set_row_lines(
+                info, row, max(1, round(new_px / info["row_h"])))
             return "break"
         pressed = getattr(self, "_grid_pressed", None)
         self._grid_pressed = None
@@ -3094,12 +3206,18 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         return None
 
     def _grid_motion(self, info, event):
-        """The cursor telegraphs a grabbable rule."""
+        """The cursor telegraphs a grabbable rule -- vertical or
+        horizontal."""
         canvas = info["canvas"]
         near = self._grid_boundary_at(info, canvas.canvasx(event.x))
+        near_row = (None if near is not None
+                    else self._grid_row_boundary_at(
+                        info, canvas.canvasy(event.y)))
         try:
-            canvas.configure(cursor="sb_h_double_arrow"
-                             if near is not None else "arrow")
+            canvas.configure(cursor=(
+                "sb_h_double_arrow" if near is not None
+                else "sb_v_double_arrow" if near_row is not None
+                else "arrow"))
         except tk.TclError:
             pass
 

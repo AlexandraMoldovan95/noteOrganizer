@@ -2149,9 +2149,15 @@ check('and the editor opens in the new row',
 # Leaving the cell is Tab, Escape, or a click elsewhere.
 app._editor_newline()
 app.update()
-check('Enter stays in the cell and adds a line inside it',
+check('Enter stays in the cell, adds a line, and the ROW grows live',
       app._cell_editor is not None
-      and app._cell_editor['entry'].get('1.0', 'end-1c') == '\n')
+      and app._cell_editor['entry'].get('1.0', 'end-1c') == '\n'
+      and app._grid_at_line(1)['cells'][
+          (app._cell_editor['r'], app._cell_editor['c'])]['h']
+      == 2 * app._grid_at_line(1)['row_h'])
+# tidy the empty second line back out so the table the following checks
+# read is the one they were written against
+app._cell_editor['entry'].delete('1.0', 'end')
 app._commit_cell_editor()
 app.update()
 _made = app._grid_at_line(1)
@@ -3818,6 +3824,9 @@ check('the cell editor shows the saved colour live',
 # colours just that part -- through the real toolbar routing.
 _edM.mark_set('insert', 'end-1c')
 app._editor_newline()
+# Enter rebuilds the grids and REOPENS the editor in the grown cell --
+# the old editor widget is gone; talk to the fresh one.
+_edM = app._cell_editor['entry']
 _edM.insert('insert', 'sub')
 _edM.tag_add('sel', '2.0', '2.3')
 app._apply_body_color('text_color', '#00aa00')
@@ -3942,6 +3951,82 @@ _runsT = [(_gT['canvas'].itemcget(t, 'text'),
           for t in _gT['cells'][(1, 0)]['texts']]
 check('the retyped cell commits still coloured, not reset to plain',
       _runsT == [('n', '#0000ff')])
+set_body('')
+
+# ---- ROWS DRAG TALLER AND SHORTER; WIDE TABLES SCROLL SIDEWAYS ----
+set_body('| Cap | Doi |\n| unu<br>doi | x |\n| jos | y |')
+app._render_table_grids()
+app.update()
+_gR = app._grid_at_line(1)
+check('the rule between two rows is grabbable, the middle of a row is not',
+      app._grid_row_boundary_at(_gR, _gR['row_y'][1]) == 0
+      and app._grid_row_boundary_at(_gR, _gR['row_y'][1] + 20) is None)
+app._grid_set_row_lines(_gR, 2, 3)
+app.update()
+_gR = app._grid_at_line(1)
+check('dragging a row taller pads it with empty lines',
+      _gR['cells'][(2, 0)]['h'] == 3 * _gR['row_h']
+      and _gR['cells'][(2, 0)]['value'] == 'jos<br><br>')
+app._grid_set_row_lines(_gR, 2, 1)
+app.update()
+_gR = app._grid_at_line(1)
+check('dragging it back short trims the padding again',
+      _gR['cells'][(2, 0)]['h'] == _gR['row_h']
+      and _gR['cells'][(2, 0)]['value'] == 'jos')
+app._grid_set_row_lines(_gR, 1, 1)
+app.update()
+_gR = app._grid_at_line(1)
+check('a drag can never cut real content: two full lines stay two',
+      _gR['cells'][(1, 0)]['value'] == 'unu<br>doi'
+      and _gR['cells'][(1, 0)]['h'] == 2 * _gR['row_h'])
+
+# fast typing: press, press, release, release -- BOTH characters must
+# come out coloured; the paint used to wait for its own release and the
+# next press overwrote its bookkeeping.
+app._open_cell_editor(_gR, 2, 1, select=False)
+app.update()
+import types as _typesR
+app._apply_body_color('text_color', '#aa00aa')
+_edR = app._cell_editor['entry']
+_edR.mark_set('insert', 'end-1c')
+_evA = _typesR.SimpleNamespace(char='a', keysym='a')
+_evB = _typesR.SimpleNamespace(char='b', keysym='b')
+app._editor_key_press(_evA)
+_edR.insert('insert', 'a')
+app._editor_key_press(_evB)
+_edR.insert('insert', 'b')
+app._editor_key_release(_evA)
+app._editor_key_release(_evB)
+check('fast interleaved typing colours every character',
+      any(t == 'text_color_aa00aa'
+          for t in _edR.tag_names('insert -2c'))
+      and any(t == 'text_color_aa00aa'
+              for t in _edR.tag_names('insert -1c')))
+app._apply_body_color('text_color', None)
+
+# Ctrl+A selects the whole cell, not a line-start jump
+_edR.event_generate('<Control-a>')
+app.update()
+_selR = None
+try:
+    _selR = (str(_edR.index('sel.first')), str(_edR.index('sel.last')))
+except tk.TclError:
+    pass
+check('Ctrl+A in the cell editor selects the whole cell',
+      _selR == ('1.0', str(_edR.index('end-1c'))))
+app._commit_cell_editor()
+app.update()
+
+# a table wider than the editor grows its own horizontal scrollbar
+set_body('| ' + ' | '.join('Coloana%d' % i for i in range(12)) + ' |\n'
+         + '| ' + ' | '.join('valoare%d' % i for i in range(12)) + ' |')
+app._render_table_grids()
+app.update()
+app.update_idletasks()
+_gW = app._grid_at_line(1)
+check('a wide table shows its own horizontal scrollbar',
+      _gW.get('hbar') is not None
+      and _gW['hbar'].winfo_manager() == 'pack')
 set_body('')
 
 # ---- LIST CARDS HIDE THE PIPE ROWS ----
