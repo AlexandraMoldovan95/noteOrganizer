@@ -574,6 +574,83 @@ class SettingsPageMixin:
                       lambda _e: self._edit_template(tpl, redraw, edit_btn))
         edit_btn.pack(side="right", padx=1)
 
+    def _draw_template_table_preview(self, canvas, body_text):
+        """A read-only rendering of the body's tables, for the template
+        dialog: the editor's visual language (bold header on its own
+        surface, hairline rules, separator-aware widths, hidden columns
+        as slivers) without its machinery. Returns True when there was a
+        table to draw."""
+        from noteorganizer.core import tables as core_tables
+        from noteorganizer.core.themes import hairline, inset_surface
+        canvas.delete("all")
+        text = body_text.get("1.0", "end-1c")
+        blocks = core_tables.find_blocks(text)
+        if not blocks:
+            return False
+        lines = text.split("\n")
+        font = tkfont.Font(family="Consolas", size=9)
+        pad_x, row_h, y = 6, 22, 2
+        rule = hairline(self.colors)
+        for first, last in blocks[:2]:          # a preview, not a scroll
+            block = lines[first:last + 1]
+            sep_at = core_tables.separator_index(block)
+            sep_cols = (core_tables.parse_separator(block[sep_at])
+                        if sep_at is not None else None)
+            rows = [core_tables.split_row(line)
+                    for i, line in enumerate(block) if i != sep_at]
+            rows = rows[:6]                     # first rows are the preview
+            ncols = max((len(r) for r in rows), default=0)
+            widths = []
+            for c in range(ncols):
+                column = (sep_cols[c] if sep_cols and c < len(sep_cols)
+                          else None)
+                if column and column.get("hidden"):
+                    widths.append(8)
+                    continue
+                longest = max((font.measure(r[c]) for r in rows
+                               if c < len(r)), default=20)
+                if column and column.get("width"):
+                    longest = max(longest,
+                                  font.measure("0") * column["width"])
+                widths.append(min(longest + 2 * pad_x, 160))
+            x0 = 2
+            for r, row in enumerate(rows):
+                x = x0
+                for c in range(ncols):
+                    w = widths[c]
+                    canvas.create_rectangle(
+                        x, y, x + w, y + row_h,
+                        fill=(inset_surface(self.colors) if r == 0
+                              else self.colors["card"]),
+                        outline=rule)
+                    value = row[c] if c < len(row) else ""
+                    if value in (core_tables.MERGE_LEFT,
+                                 core_tables.MERGE_UP):
+                        value = ""
+                    hidden = (sep_cols and c < len(sep_cols)
+                              and sep_cols[c].get("hidden"))
+                    if value and not hidden:
+                        shown = value
+                        if font.measure(value) > w - 2 * pad_x:
+                            while (len(shown) > 1 and
+                                   font.measure(shown + "\u2026")
+                                   > w - 2 * pad_x):
+                                shown = shown[:-1]
+                            shown += "\u2026"
+                        canvas.create_text(
+                            x + pad_x, y + row_h / 2, anchor="w",
+                            font=("Consolas", 9,
+                                  "bold" if r == 0 else "normal"),
+                            fill=self.colors["text"], text=shown)
+                    x += w
+                y += row_h
+            y += 8
+        canvas.configure(height=min(y, 6 * row_h * 2 + 20),
+                         width=min(sum(widths) + 8, 460) if widths else 100,
+                         bg=self.colors["card"],
+                         highlightthickness=0)
+        return True
+
     def _edit_template(self, tpl, redraw, anchor_widget=None):
         """Open a small editor (inline window) to create or edit a template's
         name, title, body, comments and category."""
@@ -626,6 +703,47 @@ class SettingsPageMixin:
         name_var = field("Template name", data["name"])
         title_var = field("Note title (optional)", data["title"])
         body_txt = field("Note body", data["body"], height=4)
+        # Tables in the body show AS tables, right here -- the same
+        # visual language as the editor, in preview form. Hidden until
+        # the body actually holds one.
+        # The holder is packed NOW, right under the body box, so the
+        # preview appears here rather than at the frame's tail when it
+        # first shows up.
+        preview_holder = tk.Frame(frame, bg=self.colors["card"])
+        preview_holder.pack(fill="x")
+        preview_lbl = tk.Label(preview_holder, text="Table preview",
+                               bg=self.colors["card"],
+                               fg=self.colors["subtext"],
+                               font=("Segoe UI", 8, "bold"), anchor="w")
+        preview_canvas = tk.Canvas(preview_holder, height=10,
+                                   bg=self.colors["card"],
+                                   highlightthickness=0)
+
+        def refresh_preview(_e=None):
+            try:
+                has = self._draw_template_table_preview(
+                    preview_canvas, body_txt)
+            except tk.TclError:
+                return
+            if has and not preview_canvas.winfo_ismapped():
+                preview_lbl.pack(fill="x", pady=(4, 0))
+                preview_canvas.pack(anchor="w", pady=(0, 2))
+            elif not has and preview_canvas.winfo_ismapped():
+                preview_lbl.pack_forget()
+                preview_canvas.pack_forget()
+
+        def paste_and_preview(_e=None):
+            # One combined handler: the table-aware paste returns "break"
+            # (stopping every later binding), so the preview refresh is
+            # scheduled FIRST -- after_idle runs it once the pasted text
+            # has actually landed, whichever path handled it.
+            pop.after_idle(refresh_preview)
+            return self._paste_table_aware(body_txt)
+
+        body_txt.bind("<KeyRelease>",
+                      lambda e: pop.after_idle(refresh_preview), add="+")
+        body_txt.bind("<<Paste>>", paste_and_preview)
+        pop.after_idle(refresh_preview)
         comments_txt = field("Comments (optional)", data["comments"], height=2)
 
         # Interactive checklist editor (same feel as in a note): type + Enter

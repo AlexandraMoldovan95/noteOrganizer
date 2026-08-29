@@ -110,6 +110,42 @@ check(f'a pasted Excel/web table lands as pipe rows ({_lines9[:1]})',
 NO.clipboard.read_html = lambda: '<p>doar text</p>'
 check('a non-table paste falls through to the normal path',
       app._paste_table_aware(_body9) is None)
+
+# ---- AND THE DIALOG DRAWS A LIVE TABLE PREVIEW ----
+# The body box stays text (that is the store), but the dialog shows the
+# table AS a table underneath -- the same visual language as the editor.
+NO.clipboard.read_html = lambda: (
+    '<table><tr><th>Zi</th><th>Plan</th></tr>'
+    '<tr><td>luni</td><td>scris</td></tr></table>')
+_body9.delete('1.0', 'end')
+_body9.event_generate('<<Paste>>')
+app.update()
+app.update()
+_canv9 = []
+_stack9 = [editor_popup]
+while _stack9:
+    _w9 = _stack9.pop()
+    if isinstance(_w9, tk.Canvas):
+        _canv9.append(_w9)
+    _stack9.extend(_w9.winfo_children())
+_pc9 = [c for c in _canv9 if c.winfo_ismapped() and c.find_all()]
+check(f'pasting a table shows the drawn preview '
+      f'({len(_pc9[0].find_all()) if _pc9 else 0} items)',
+      len(_pc9) == 1 and len(_pc9[0].find_all()) >= 8)
+# <KeyRelease> is a REAL key event and follows the focus, which this
+# box does not hold under test -- the <<Paste>> virtual event delivers
+# to the widget it is generated on, so the hide path rides a plain
+# paste instead.
+_real_rt9 = NO.clipboard.read_text
+NO.clipboard.read_html = lambda: None
+NO.clipboard.read_text = lambda: 'doar un rand simplu'
+_body9.delete('1.0', 'end')
+_body9.event_generate('<<Paste>>')
+app.update()
+app.update()
+check('and a table-less body hides it again',
+      not any(c.winfo_ismapped() for c in _pc9))
+NO.clipboard.read_text = _real_rt9
 NO.clipboard.read_html = _real_rh9
 _body9.delete('1.0', 'end')
 

@@ -101,6 +101,7 @@
   "_dissolve_orphan_markers": "(self, rows)",
   "_do_inline_import": "(self)",
   "_draw_icon": "(self, canvas, kind, color, size=None)",
+  "_draw_template_table_preview": "(self, canvas, body_text)",
   "_edit_template": "(self, tpl, redraw, anchor_widget=None)",
   "_editor_context_menu": "(self, info, event)",
   "_editor_font_size": "(self)",
