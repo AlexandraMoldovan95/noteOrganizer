@@ -1735,7 +1735,23 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         t = editor["entry"]
         try:
             s, e = t.index("sel.first"), t.index("sel.last")
+            has_sel = t.compare(s, "<", e)
         except tk.TclError:
+            has_sel = False
+        if not has_sel and kind in ("text_color", "highlight"):
+            # No selection: the colour becomes the PENDING one -- shown
+            # as a swatch on the toolbar button, worn by whatever is
+            # typed next, in the cell and in the body alike.
+            label = "Highlight" if kind == "highlight" else "Text color"
+            if kind == "text_color":
+                self._pending_text_color = value
+            else:
+                self._pending_highlight_color = value
+            self.set_status(f"{label} on — applies to what you type next"
+                            if value else f"{label} off")
+            self._refresh_format_buttons()
+            return
+        if not has_sel:
             s, e = "1.0", "end-1c"
         if t.compare(s, ">=", e):
             return
@@ -1784,6 +1800,121 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             if value:
                 t.tag_add(self._ensure_color_tag(t, kind, value), s, e)
         self._refresh_format_buttons()
+
+    def _editor_typing_style(self, t):
+        """What the NEXT typed character in the cell should wear: the
+        pending colours first, otherwise the style of the character the
+        caret sits after (or of the selection about to be replaced, or of
+        the character ahead at the very start) -- typing in the middle of
+        a blue word stays blue instead of falling back to plain ink."""
+        ref = None
+        try:
+            if t.compare("sel.first", "<", "sel.last"):
+                ref = t.index("sel.first")
+        except tk.TclError:
+            pass
+        if ref is None:
+            ins = t.index("insert")
+            if (t.compare(ins, ">", "1.0")
+                    and t.get(f"{ins} -1c", ins) != "\n"):
+                ref = t.index(f"{ins} -1c")
+            elif t.get(ins, f"{ins} +1c") not in ("", "\n"):
+                ref = ins
+        st = dict(self._PLAIN_STYLE)
+        if ref is not None:
+            tags = set(t.tag_names(ref))
+            st = {"bold": bool(tags & {"bold", "bold_italic"}),
+                  "italic": bool(tags & {"italic", "bold_italic"}),
+                  "underline": "underline" in tags,
+                  "strike": "strike" in tags, "fg": None, "bg": None}
+            for tag in tags:
+                if tag.startswith("text_color_"):
+                    st["fg"] = "#" + tag[len("text_color_"):]
+                elif tag.startswith("highlight_"):
+                    st["bg"] = "#" + tag[len("highlight_"):]
+        if self._pending_text_color:
+            st["fg"] = self._pending_text_color
+        if self._pending_highlight_color:
+            st["bg"] = self._pending_highlight_color
+        return st
+
+    def _editor_paint_range(self, t, s, e, st):
+        """One uniform style over [s, e) in the editor -- the modeled
+        tags are cleared first, so the range wears exactly *st*."""
+        for tag in ("bold", "italic", "bold_italic", "underline", "strike"):
+            t.tag_remove(tag, s, e)
+        for tag in list(t.tag_names()):
+            if (tag.startswith("text_color_")
+                    or tag.startswith("highlight_")):
+                t.tag_remove(tag, s, e)
+        if st["bold"] and st["italic"]:
+            t.tag_add("bold_italic", s, e)
+        elif st["bold"]:
+            t.tag_add("bold", s, e)
+        elif st["italic"]:
+            t.tag_add("italic", s, e)
+        if st["underline"]:
+            t.tag_add("underline", s, e)
+        if st["strike"]:
+            t.tag_add("strike", s, e)
+        if st["fg"]:
+            t.tag_add(self._ensure_color_tag(t, "text_color", st["fg"]),
+                      s, e)
+        if st["bg"]:
+            t.tag_add(self._ensure_color_tag(t, "highlight", st["bg"]),
+                      s, e)
+
+    _EDITOR_PASSTHROUGH_KEYS = {
+        "Return", "KP_Enter", "Tab", "Escape", "BackSpace", "Delete",
+        "Left", "Right", "Up", "Down", "Home", "End", "Prior", "Next",
+    }
+
+    def _editor_key_press(self, event=None):
+        """BEFORE the class binding inserts the typed character: remember
+        where it will land and what it should wear. Tk only inherits a
+        tag when both neighbours carry it, so a character typed at the
+        END of a coloured run -- or over a replaced selection -- arrived
+        plain and the cell read as 'reset to black'."""
+        editor = getattr(self, "_cell_editor", None)
+        if not editor:
+            return
+        char = getattr(event, "char", "") or ""
+        keysym = getattr(event, "keysym", "")
+        if (len(char) != 1 or ord(char) < 32
+                or keysym in self._EDITOR_PASSTHROUGH_KEYS):
+            editor.pop("type_style", None)
+            return
+        t = editor["entry"]
+        try:
+            editor["type_style"] = self._editor_typing_style(t)
+            try:
+                start = (t.index("sel.first")
+                         if t.compare("sel.first", "<", "sel.last")
+                         else t.index("insert"))
+            except tk.TclError:
+                start = t.index("insert")
+            t.mark_set("typestart", start)
+            t.mark_gravity("typestart", "left")
+        except tk.TclError:
+            editor.pop("type_style", None)
+
+    def _editor_key_release(self, event=None):
+        """AFTER the character landed: dress everything between the
+        remembered start and the caret in the remembered style."""
+        editor = getattr(self, "_cell_editor", None)
+        if not editor:
+            return
+        st = editor.pop("type_style", None)
+        if st is None:
+            return
+        t = editor["entry"]
+        try:
+            s, e = t.index("typestart"), t.index("insert")
+            if t.compare(s, "<", e):
+                self._editor_paint_range(t, s, e, st)
+                self._editor_retag_emoji(t)
+        except tk.TclError:
+            pass
 
     def _grid_line_of_row(self, info, r):
         """The text line a data row lives on -- the separator makes the
@@ -1898,8 +2029,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         entry.bind("<FocusOut>",
                    lambda _e, this=entry: self.after_idle(
                        lambda: self._maybe_close_cell_editor(this)))
+        entry.bind("<KeyPress>", self._editor_key_press, add="+")
+        entry.bind("<KeyRelease>", self._editor_key_release, add="+")
         entry.bind("<KeyRelease>",
-                   lambda _e, w=win, cv=canvas: self._grow_cell_editor(w, cv))
+                   lambda _e, w=win, cv=canvas: self._grow_cell_editor(w, cv),
+                   add="+")
         entry.bind("<MouseWheel>", self._forward_grid_wheel)
         # The floating editor sits exactly over its cell, so a right-click
         # lands on it, not the canvas -- commit and show the same menu.

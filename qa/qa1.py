@@ -3108,28 +3108,41 @@ check('Clear highlight restores the exact header surface',
       _tF['canvas'].itemcget(_tF['cells'][(0, 0)]['rect'], 'fill')
       == _surfF)
 
-# An open editor is a target too: the color lands LIVE in the editor
-# (whole cell when nothing inside it is selected) and reaches the body
-# tags at commit -- not a pending choice either way.
+# An open editor with NO selection: the color becomes the PENDING one
+# -- worn by the toolbar button as a swatch, and by whatever is typed
+# next in the cell. With a selection inside the editor it styles just
+# that (covered by its own check further on).
 app._grid_sel = None
-app._open_cell_editor(_tF, 1, 1)
+app._open_cell_editor(_tF, 1, 1, select=False)
 app.update()
+_edP = app._cell_editor['entry']
+_edP.tag_remove('sel', '1.0', 'end')
 app._apply_body_color('text_color', '#ff0000')
 app.update()
-check('a color aimed at the open cell shows in the editor immediately',
+check('a color picked with the cell open becomes pending, and the '
+      'button wears it',
+      app._pending_text_color == '#ff0000'
+      and str(app.text_color_btn.cget('bg')) == '#ff0000')
+_edP.mark_set('insert', 'end-1c')
+import types as _typesP
+_evP = _typesP.SimpleNamespace(char='Q', keysym='Q')
+app._editor_key_press(_evP)
+_edP.insert('insert', 'Q')
+app._editor_key_release(_evP)
+check('the next typed character wears the pending color',
       any(t == 'text_color_ff0000'
-          for t in app._cell_editor['entry'].tag_names('1.0'))
-      and not app._pending_text_color)
+          for t in _edP.tag_names('insert -1c')))
 app._commit_cell_editor()
 app.update()
 _tF = app._grid_at_line(1)
-_spanF = app._grid_cell_text_range(_tF, 1, 1)
 check('and the commit carries it into the body and the drawing',
-      _spanF is not None
-      and any(t.startswith('text_color_')
-              for t in app.body_text.tag_names(_spanF[0]))
-      and any(_tF['canvas'].itemcget(t, 'fill') == '#ff0000'
-              for t in _tF['cells'][(1, 1)]['texts']))
+      any(_tF['canvas'].itemcget(t, 'fill') == '#ff0000'
+          for t in _tF['cells'][(1, 1)]['texts']))
+app._apply_body_color('text_color', None)
+app.update()
+check('turning the pending color off returns the button to the theme',
+      app._pending_text_color is None
+      and str(app.text_color_btn.cget('bg')) == app.colors['sidebar'])
 app.update()
 set_body('')
 
@@ -3883,6 +3896,52 @@ _runsK = [(_gM3['canvas'].itemcget(t, 'text'),
 check('the checkmark arrives wearing the picked colour',
       _gM3['cells'][(1, 1)]['value'] == '\u2713'
       and _runsK and _runsK[0][1] == NO.PRESET_NOTE_COLORS[0])
+set_body('')
+
+# ---- TYPING CONTINUES THE STYLE IT LANDS BESIDE ----
+# Tk only inherits a tag with it on both sides, so a character typed at
+# the END of a blue run arrived plain -- and retyping over the opening
+# select-all wiped a coloured cell to plain ink entirely.
+set_body('| Cap | Doi |\n| bleu | text |')
+app._render_table_grids()
+app.update()
+_gT = app._grid_at_line(1)
+app._grid_apply_style(_gT, (1, 0, 1, 0), 'text_color', '#0000ff')
+app.update()
+app._open_cell_editor(_gT, 1, 0, select=False)
+app.update()
+_edT = app._cell_editor['entry']
+import types as _typesT
+_edT.mark_set('insert', 'end-1c')
+_evT = _typesT.SimpleNamespace(char='X', keysym='X')
+app._editor_key_press(_evT)
+_edT.insert('insert', 'X')
+app._editor_key_release(_evT)
+check('a character typed after a blue run stays blue',
+      any(t == 'text_color_0000ff'
+          for t in _edT.tag_names('insert -1c')))
+
+# retyping over the select-all keeps the colour of what it replaces --
+# emulated the way the class binding does it: delete the selection,
+# then insert.
+_edT.tag_add('sel', '1.0', 'end-1c')
+_evT2 = _typesT.SimpleNamespace(char='n', keysym='n')
+app._editor_key_press(_evT2)
+_edT.delete('sel.first', 'sel.last')
+_edT.insert('insert', 'n')
+app._editor_key_release(_evT2)
+check('retyping over the opening select-all keeps the colour',
+      _edT.get('1.0', 'end-1c') == 'n'
+      and any(t == 'text_color_0000ff'
+              for t in _edT.tag_names('1.0')))
+app._commit_cell_editor()
+app.update()
+_gT = app._grid_at_line(1)
+_runsT = [(_gT['canvas'].itemcget(t, 'text'),
+           _gT['canvas'].itemcget(t, 'fill'))
+          for t in _gT['cells'][(1, 0)]['texts']]
+check('the retyped cell commits still coloured, not reset to plain',
+      _runsT == [('n', '#0000ff')])
 set_body('')
 
 # ---- LIST CARDS HIDE THE PIPE ROWS ----
