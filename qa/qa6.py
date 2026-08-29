@@ -129,8 +129,16 @@ while _stack6:
         name_entry = _w6
         break
     _stack6.extend(_w6.winfo_children())
-name_entry.focus_set()
-app.update()
+# Synthetic KEY events follow FOCUS; under a busy desktop focus_set is
+# silently refused and the KeyRelease lands elsewhere. Insist.
+for _try6 in range(40):
+    name_entry.focus_force()
+    app.update()
+    try:
+        if app.focus_get() is name_entry:
+            break
+    except (KeyError, tk.TclError):
+        pass
 
 app.username_var.set('3' * 70)
 name_entry.event_generate('<KeyRelease>')

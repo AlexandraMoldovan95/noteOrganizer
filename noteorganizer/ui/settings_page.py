@@ -610,15 +610,29 @@ class SettingsPageMixin:
                 if column and column.get("hidden"):
                     widths.append(8)
                     continue
-                longest = max((font.measure(r[c]) for r in rows
+                longest = max((font.measure(seg) for r in rows
                                if c < len(r)
                                and r[c] not in (core_tables.MERGE_LEFT,
-                                                core_tables.MERGE_UP)),
+                                                core_tables.MERGE_UP)
+                               for seg in core_tables.cell_display_lines(
+                                   r[c])),
                               default=20)
                 if column and column.get("width"):
                     longest = max(longest,
                                   font.measure("0") * column["width"])
                 widths.append(min(longest + 2 * pad_x, 160))
+            # A cell can hold <br> line breaks; its row grows to fit.
+            row_lines = []
+            for row in rows:
+                n = 1
+                for v in row:
+                    if v not in (core_tables.MERGE_LEFT,
+                                 core_tables.MERGE_UP):
+                        n = max(n, len(core_tables.cell_display_lines(v)))
+                row_lines.append(n)
+            row_ys = [y]
+            for n in row_lines:
+                row_ys.append(row_ys[-1] + n * row_h)
             x0 = 2
             for r, row in enumerate(rows):
                 x = x0
@@ -629,8 +643,9 @@ class SettingsPageMixin:
                         continue
                     rs, cs = spans.get((r, c), (1, 1))
                     w_span = sum(widths[c:c + cs])
+                    cell_h = (row_ys[min(r + rs, len(rows))] - row_ys[r])
                     canvas.create_rectangle(
-                        x, y, x + w_span, y + rs * row_h,
+                        x, row_ys[r], x + w_span, row_ys[r] + cell_h,
                         fill=(inset_surface(self.colors) if r == 0
                               else self.colors["card"]),
                         outline=rule)
@@ -638,20 +653,24 @@ class SettingsPageMixin:
                     hidden = (sep_cols and c < len(sep_cols)
                               and sep_cols[c].get("hidden"))
                     if value and not hidden:
-                        shown = value
-                        if font.measure(value) > w_span - 2 * pad_x:
-                            while (len(shown) > 1 and
-                                   font.measure(shown + "\u2026")
-                                   > w_span - 2 * pad_x):
-                                shown = shown[:-1]
-                            shown += "\u2026"
-                        canvas.create_text(
-                            x + pad_x, y + rs * row_h / 2, anchor="w",
-                            font=("Consolas", 9,
-                                  "bold" if r == 0 else "normal"),
-                            fill=self.colors["text"], text=shown)
+                        segs = core_tables.cell_display_lines(value)
+                        top = row_ys[r] + (cell_h - len(segs) * row_h) / 2
+                        for li, seg in enumerate(segs):
+                            shown = seg
+                            if font.measure(seg) > w_span - 2 * pad_x:
+                                while (len(shown) > 1 and
+                                       font.measure(shown + "\u2026")
+                                       > w_span - 2 * pad_x):
+                                    shown = shown[:-1]
+                                shown += "\u2026"
+                            canvas.create_text(
+                                x + pad_x, top + li * row_h + row_h / 2,
+                                anchor="w",
+                                font=("Consolas", 9,
+                                      "bold" if r == 0 else "normal"),
+                                fill=self.colors["text"], text=shown)
                     x += w
-                y += row_h
+            y = row_ys[-1]
             max_x = max(max_x, x0 + sum(widths))
             y += 8
         shown_h = min(y, 240)

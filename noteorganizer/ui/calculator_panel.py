@@ -329,10 +329,9 @@ class CalculatorPanelMixin:
         editor = getattr(self, "_cell_editor", None)
         if editor is not None:
             try:
-                entry = editor["entry"]
-                pos = entry.index(tk.INSERT)
-                entry.insert(pos, formula)
-                entry.icursor(pos + self._tk_units(formula))
+                # The cell editor is a Text now: inserting at the caret
+                # leaves the caret after what landed, no icursor needed.
+                editor["entry"].insert("insert", formula)
             except tk.TclError:
                 pass
             self._schedule_autosave(skip_word_count=True)

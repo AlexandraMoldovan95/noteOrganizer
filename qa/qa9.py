@@ -343,6 +343,25 @@ app.report_callback_exception = _origRep9
 check('a failing preview draw is contained, hiding intact',
       not _tkerrs9
       and len(_bodyG.tag_ranges('tblhide')) == _hidBefore)
+
+# ---- THE PREVIEW DRAWS A CELL'S <br> LINES AS LINES ----
+_bodyG.delete('1.0', 'end')
+_bodyG.insert('1.0', '| Cap | Doi |\n| unu<br>doi | x |')
+_bodyG.event_generate('<KeyRelease>', keysym='q')
+for _ in range(3):
+    app.update()
+_pvB = None
+_sB = [_popG]
+while _sB:
+    _wB = _sB.pop()
+    if isinstance(_wB, tk.Canvas) and _wB.find_all():
+        if _pvB is None or len(_wB.find_all()) > len(_pvB.find_all()):
+            _pvB = _wB
+    _sB.extend(_wB.winfo_children())
+_txB = [_pvB.itemcget(i, 'text') for i in (_pvB.find_all() if _pvB else ())
+        if _pvB.type(i) == 'text']
+check('the template preview splits a <br> cell into its lines',
+      'unu' in _txB and 'doi' in _txB and 'unu<br>doi' not in _txB)
 _popG._confirm_dismiss = False
 app._dismiss_mini_popup()
 app.update()

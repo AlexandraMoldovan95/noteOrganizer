@@ -1415,6 +1415,376 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 hi = mid - 1
         return value[:lo] + ellipsis
 
+    @staticmethod
+    def _char_is_emoji(ch):
+        return ord(ch) >= 0x1F000 or 0x2600 <= ord(ch) <= 0x27BF or ord(ch) > 0xFFFF
+
+    def _cell_value_styles(self, line_no, line, c):
+        """Per-character style of one cell's raw value, read straight off
+        the body tags: one dict per character. The drawing folds equal
+        neighbours into runs, so a single coloured letter -- or a single
+        coloured checkmark -- shows exactly as itself instead of painting
+        the whole cell."""
+        bounds = core_tables.cell_bounds(line)
+        if c >= len(bounds):
+            return []
+        start, end = bounds[c]
+        if start >= end:
+            return []
+        base = self._col_base(line_no)
+        out = []
+        for i in range(end - start):
+            col = base + self._tk_col(line, start + i)
+            try:
+                tags = set(self.body_text.tag_names(f"{line_no}.{col}"))
+            except tk.TclError:
+                tags = set()
+            st = {"bold": bool(tags & {"bold", "bold_italic"}),
+                  "italic": bool(tags & {"italic", "bold_italic"}),
+                  "underline": "underline" in tags,
+                  "strike": "strike" in tags, "fg": None, "bg": None}
+            for t in tags:
+                if t.startswith("text_color_"):
+                    st["fg"] = "#" + t[len("text_color_"):]
+                elif t.startswith("highlight_"):
+                    st["bg"] = "#" + t[len("highlight_"):]
+            out.append(st)
+        return out
+
+    _PLAIN_STYLE = {"bold": False, "italic": False, "underline": False,
+                    "strike": False, "fg": None, "bg": None}
+
+    def _grid_run_font(self, key, header):
+        """The face one run is drawn with. key is (bold, italic,
+        underline, strike, fg, emoji)."""
+        bold, italic, underline, strike, _fg, emoji = key
+        if emoji:
+            return ("Segoe UI Emoji", self.editor_font_size)
+        header_font, cell_font = self._grid_fonts()
+        base = header_font if header else cell_font
+        mods = [m for m, on in (("bold", bold or header),
+                                ("italic", italic),
+                                ("underline", underline),
+                                ("overstrike", strike)) if on]
+        family, size = base.cget("family"), base.cget("size")
+        return (family, size, " ".join(mods)) if mods else (family, size)
+
+    def _grid_draw_cell_text(self, canvas, cell, value, styles, align,
+                             header, pad_x, row_h):
+        """One cell's text as runs of equal style, one row of runs per
+        display line, vertically centred in the cell. Returns the canvas
+        item ids -- the caller keeps them to delete on redraw."""
+        items = []
+        lines = core_tables.cell_display_lines(value)
+        top = cell["y"] + (cell["h"] - len(lines) * row_h) / 2
+        raw_i = 0
+        for li, seg in enumerate(lines):
+            seg_styles = styles[raw_i:raw_i + len(seg)]
+            raw_i += len(seg) + len(core_tables.LINE_BREAK)
+            runs = []
+            for j, ch in enumerate(seg):
+                st = seg_styles[j] if j < len(seg_styles) else self._PLAIN_STYLE
+                key = (st["bold"], st["italic"], st["underline"],
+                       st["strike"], st["fg"], self._char_is_emoji(ch))
+                if runs and runs[-1][0] == key:
+                    runs[-1][1] += ch
+                else:
+                    runs.append([key, ch])
+            budget = cell["w"] - 2 * pad_x
+            laid, used = [], 0
+            for key, txt in runs:
+                font = self._grid_run_font(key, header)
+                width = self._measuring_font(font).measure(txt)
+                if used + width <= budget:
+                    laid.append((txt, font, key[4]))
+                    used += width
+                else:
+                    shown = self._ellipsize(txt, font, budget - used)
+                    if shown:
+                        laid.append((shown, font, key[4]))
+                        used += self._measuring_font(font).measure(shown)
+                    break
+            if align == core_tables.ALIGN_CENTER:
+                x = cell["x"] + (cell["w"] - used) / 2
+            elif align == core_tables.ALIGN_RIGHT:
+                x = cell["x"] + cell["w"] - pad_x - used
+            else:
+                x = cell["x"] + pad_x
+            y_mid = top + li * row_h + row_h / 2
+            for txt, font, fg in laid:
+                items.append(canvas.create_text(
+                    x, y_mid, anchor="w", font=font,
+                    fill=fg or self.colors["text"], text=txt))
+                x += self._measuring_font(font).measure(txt)
+        return items
+
+    def _grid_redraw_cell_text(self, info, r, c):
+        """Replace one drawn cell's text items with a fresh run layout --
+        after a commit, a restyle, or anything that changed the value or
+        the tags underneath it."""
+        cell = info["cells"].get((r, c))
+        if cell is None or c in info.get("hidden_cols", ()):
+            return
+        canvas = info["canvas"]
+        for item in cell.get("texts", ()):
+            try:
+                canvas.delete(item)
+            except tk.TclError:
+                pass
+        line_no = self._grid_line_of_row(info, r)
+        if line_no is None:
+            cell["texts"] = []
+            return
+        line = self.body_text.get(f"{line_no}.0", f"{line_no}.end")
+        aligns = core_tables.cell_alignments(line)
+        align = aligns[c] if c < len(aligns) else core_tables.ALIGN_LEFT
+        styles = self._cell_value_styles(line_no, line, c)
+        cell["texts"] = self._grid_draw_cell_text(
+            info["canvas"], cell, cell["value"], styles, align,
+            r == 0, 10, info["row_h"])
+
+    def _editor_configure_style_tags(self, t, header):
+        """The cell editor's own copies of the styles it can show live:
+        the same names the body uses, so sampling back out is one code
+        path."""
+        header_font, cell_font = self._grid_fonts()
+        base = header_font if header else cell_font
+        family, size = base.cget("family"), base.cget("size")
+        t.tag_configure("bold", font=(family, size, "bold"))
+        t.tag_configure("italic", font=(
+            family, size, "bold italic" if header else "italic"))
+        t.tag_configure("bold_italic", font=(family, size, "bold italic"))
+        t.tag_configure("underline", underline=True)
+        t.tag_configure("strike", overstrike=True)
+        t.tag_configure("emojif",
+                        font=("Segoe UI Emoji", self.editor_font_size))
+        t.tag_raise("sel")
+
+    def _editor_apply_display_styles(self, t, raw_value, raw_styles):
+        """Lay the cell's saved styles over the editor's display text, so
+        the user edits the coloured text they see -- not a plain black
+        stand-in that recolours only after commit."""
+        li, colu, i = 1, 0, 0
+        marker = core_tables.LINE_BREAK
+        while i < len(raw_value):
+            if raw_value.startswith(marker, i):
+                i += len(marker)
+                li += 1
+                colu = 0
+                continue
+            ch = raw_value[i]
+            st = raw_styles[i] if i < len(raw_styles) else self._PLAIN_STYLE
+            units = self._tk_units(ch)
+            s_idx = f"{li}.{colu}"
+            e_idx = f"{li}.{colu + units}"
+            try:
+                if st["bold"] and st["italic"]:
+                    t.tag_add("bold_italic", s_idx, e_idx)
+                elif st["bold"]:
+                    t.tag_add("bold", s_idx, e_idx)
+                elif st["italic"]:
+                    t.tag_add("italic", s_idx, e_idx)
+                if st["underline"]:
+                    t.tag_add("underline", s_idx, e_idx)
+                if st["strike"]:
+                    t.tag_add("strike", s_idx, e_idx)
+                if st["fg"]:
+                    t.tag_add(self._ensure_color_tag(
+                        t, "text_color", st["fg"]), s_idx, e_idx)
+                if st["bg"]:
+                    t.tag_add(self._ensure_color_tag(
+                        t, "highlight", st["bg"]), s_idx, e_idx)
+            except tk.TclError:
+                pass
+            colu += units
+            i += 1
+
+    def _editor_retag_emoji(self, t):
+        """Emoji get their face per character, live -- the old Entry
+        switched the WHOLE box to the emoji font at the first emoji."""
+        try:
+            t.tag_remove("emojif", "1.0", "end")
+            content = t.get("1.0", "end-1c")
+        except tk.TclError:
+            return
+        li, colu = 1, 0
+        for ch in content:
+            if ch == "\n":
+                li += 1
+                colu = 0
+                continue
+            units = self._tk_units(ch)
+            if self._char_is_emoji(ch):
+                try:
+                    t.tag_add("emojif", f"{li}.{colu}",
+                              f"{li}.{colu + units}")
+                except tk.TclError:
+                    pass
+            colu += units
+
+    def _editor_sample_styles(self, t, content):
+        """Read the editor's live tags back as per-character styles, in
+        the same shape _cell_value_styles returns; newlines read plain."""
+        out = []
+        li, colu = 1, 0
+        for ch in content:
+            if ch == "\n":
+                out.append(dict(self._PLAIN_STYLE))
+                li += 1
+                colu = 0
+                continue
+            try:
+                tags = set(t.tag_names(f"{li}.{colu}"))
+            except tk.TclError:
+                tags = set()
+            st = {"bold": bool(tags & {"bold", "bold_italic"}),
+                  "italic": bool(tags & {"italic", "bold_italic"}),
+                  "underline": "underline" in tags,
+                  "strike": "strike" in tags, "fg": None, "bg": None}
+            for tag in tags:
+                if tag.startswith("text_color_"):
+                    st["fg"] = "#" + tag[len("text_color_"):]
+                elif tag.startswith("highlight_"):
+                    st["bg"] = "#" + tag[len("highlight_"):]
+            out.append(st)
+            colu += self._tk_units(ch)
+        return out
+
+    def _styles_display_to_raw(self, display_value, display_styles):
+        """The editor's display text (real newlines) as the stored raw
+        value (<br> markers), with the style list stretched to match --
+        the marker's characters carry no style of their own."""
+        raw, out = [], []
+        for i, ch in enumerate(display_value):
+            st = (display_styles[i] if i < len(display_styles)
+                  else dict(self._PLAIN_STYLE))
+            if ch == "\n":
+                raw.append(core_tables.LINE_BREAK)
+                out.extend(dict(self._PLAIN_STYLE)
+                           for _ in core_tables.LINE_BREAK)
+            else:
+                raw.append(ch)
+                out.append(st)
+        return "".join(raw), out
+
+    def _apply_styles_to_cell(self, info, r, c, value, raw_styles):
+        """One cell's per-character styles, written back to the body tags
+        -- the inverse of _cell_value_styles. Only the styles the editor
+        models are cleared and re-laid; a font size or family tag already
+        on the cell is left exactly where it was."""
+        line_no = self._grid_line_of_row(info, r)
+        if line_no is None:
+            return
+        b = self.body_text
+        line = b.get(f"{line_no}.0", f"{line_no}.end")
+        bounds = core_tables.cell_bounds(line)
+        if c >= len(bounds):
+            return
+        start, end = bounds[c]
+        if line[start:end] != value:
+            # The text on the line is not what these styles were sampled
+            # against -- write nothing rather than style the wrong chars.
+            return
+        base = self._col_base(line_no)
+
+        def idx(off):
+            return f"{line_no}.{base + self._tk_col(line, off)}"
+
+        s_idx, e_idx = idx(start), idx(end)
+        if b.compare(s_idx, ">=", e_idx):
+            return
+        for tag in ("bold", "italic", "bold_italic", "underline", "strike"):
+            b.tag_remove(tag, s_idx, e_idx)
+        for tag in b.tag_names():
+            if (tag.startswith("text_color_")
+                    or tag.startswith("highlight_")):
+                b.tag_remove(tag, s_idx, e_idx)
+        i = 0
+        while i < len(raw_styles):
+            st = raw_styles[i]
+            j = i
+            while j < len(raw_styles) and raw_styles[j] == st:
+                j += 1
+            cs, ce = idx(start + i), idx(start + j)
+            if st["bold"] and st["italic"]:
+                b.tag_add("bold_italic", cs, ce)
+            elif st["bold"]:
+                b.tag_add("bold", cs, ce)
+            elif st["italic"]:
+                b.tag_add("italic", cs, ce)
+            if st["underline"]:
+                b.tag_add("underline", cs, ce)
+            if st["strike"]:
+                b.tag_add("strike", cs, ce)
+            if st["fg"]:
+                b.tag_add(self._ensure_color_tag(b, "text_color", st["fg"]),
+                          cs, ce)
+            if st["bg"]:
+                b.tag_add(self._ensure_color_tag(b, "highlight", st["bg"]),
+                          cs, ce)
+            i = j
+
+    def _editor_apply_style(self, kind, value=None):
+        """A toolbar action while the cell editor is open styles the
+        SELECTION inside the editor -- one letter, one emoji, one word --
+        or the whole cell when nothing is selected. Visible immediately,
+        in the editor itself; the commit carries it to the body."""
+        editor = getattr(self, "_cell_editor", None)
+        if not editor:
+            return
+        t = editor["entry"]
+        try:
+            s, e = t.index("sel.first"), t.index("sel.last")
+        except tk.TclError:
+            s, e = "1.0", "end-1c"
+        if t.compare(s, ">=", e):
+            return
+
+        def chars():
+            idx = s
+            while t.compare(idx, "<", e):
+                nxt = t.index(f"{idx}+1c")
+                if t.get(idx, nxt) != "\n":
+                    yield idx, nxt
+                idx = nxt
+
+        if kind in ("bold", "italic"):
+            family = {"bold": {"bold", "bold_italic"},
+                      "italic": {"italic", "bold_italic"}}[kind]
+            have = all(set(t.tag_names(i)) & family for i, _ in chars())
+            turn_on = not have
+            for i, n in chars():
+                tags = set(t.tag_names(i))
+                b_now = bool(tags & {"bold", "bold_italic"})
+                i_now = bool(tags & {"italic", "bold_italic"})
+                if kind == "bold":
+                    b_now = turn_on
+                else:
+                    i_now = turn_on
+                for tag in ("bold", "italic", "bold_italic"):
+                    t.tag_remove(tag, i, n)
+                if b_now and i_now:
+                    t.tag_add("bold_italic", i, n)
+                elif b_now:
+                    t.tag_add("bold", i, n)
+                elif i_now:
+                    t.tag_add("italic", i, n)
+        elif kind in ("underline", "strike"):
+            have = all(kind in t.tag_names(i) for i, _ in chars())
+            for i, n in chars():
+                if have:
+                    t.tag_remove(kind, i, n)
+                else:
+                    t.tag_add(kind, i, n)
+        elif kind in ("text_color", "highlight"):
+            prefix = kind + "_"
+            for tag in list(t.tag_names()):
+                if tag.startswith(prefix):
+                    t.tag_remove(tag, s, e)
+            if value:
+                t.tag_add(self._ensure_color_tag(t, kind, value), s, e)
+        self._refresh_format_buttons()
+
     def _grid_line_of_row(self, info, r):
         """The text line a data row lives on -- the separator makes the
         mapping non-trivial, and every write must go through it."""
@@ -1463,31 +1833,45 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if not int(canvas.winfo_exists()):
             return
         header_font, cell_font = self._grid_fonts()
-        astral = any(ord(ch) > 0xFFFF for ch in cell["value"])
-        entry = tk.Entry(canvas, relief="flat", bd=0,
-                         font=(("Segoe UI Emoji", self.editor_font_size)
-                               if astral else
-                               (header_font if r == 0 else cell_font)),
-                         bg=self.colors["card"], fg=self.colors["text"],
-                         insertbackground=self.colors["text"])
-        entry.insert(0, cell["value"])
+        base_font = header_font if r == 0 else cell_font
+        # A Text, not an Entry: a cell can hold line breaks now (stored
+        # as markdown's own <br>), and a Text can also SHOW the cell's
+        # colours and styles while it is being edited -- the Entry went
+        # plain black until commit.
+        entry = tk.Text(canvas, relief="flat", bd=0, wrap="none",
+                        font=(base_font.cget("family"),
+                              base_font.cget("size"),
+                              "bold" if r == 0 else "normal"),
+                        bg=self.colors["card"], fg=self.colors["text"],
+                        insertbackground=self.colors["text"],
+                        highlightthickness=0, padx=2, pady=2, undo=True)
+        entry.insert("1.0", cell["value"].replace(
+            core_tables.LINE_BREAK, "\n"))
+        self._editor_configure_style_tags(entry, r == 0)
+        raw_styles = []
         row_line = self._grid_line_of_row(info, r)
         if row_line is not None:
-            row_aligns = core_tables.cell_alignments(
-                self.body_text.get(f"{row_line}.0", f"{row_line}.end"))
+            line = self.body_text.get(f"{row_line}.0", f"{row_line}.end")
+            raw_styles = self._cell_value_styles(row_line, line, c)
+            self._editor_apply_display_styles(entry, cell["value"],
+                                              raw_styles)
+            row_aligns = core_tables.cell_alignments(line)
             if c < len(row_aligns):
-                entry.configure(justify={
+                entry.tag_configure("cellalign", justify={
                     core_tables.ALIGN_CENTER: "center",
                     core_tables.ALIGN_RIGHT: "right",
                 }.get(row_aligns[c], "left"))
+                entry.tag_add("cellalign", "1.0", "end")
+        self._editor_retag_emoji(entry)
         if select:
-            entry.select_range(0, "end")
-        entry.icursor("end")
+            entry.tag_add("sel", "1.0", "end-1c")
+        entry.mark_set("insert", "end-1c")
         win = canvas.create_window(cell["x"] + 1, cell["y"] + 1, anchor="nw",
                                    width=cell["w"] - 2, height=cell["h"] - 2,
                                    window=entry)
         self._cell_editor = {"entry": entry, "win": win, "info": info,
-                             "r": r, "c": c}
+                             "r": r, "c": c,
+                             "styles_in": [dict(s) for s in raw_styles]}
         entry.focus_set()
         self._refresh_list_buttons()
         # Destroying the previous editor hands focus to the root a moment
@@ -1507,7 +1891,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                        lambda _e: self._editor_step(-1))
         except tk.TclError:
             pass
-        entry.bind("<Return>", lambda _e: self._editor_return())
+        entry.bind("<Return>", lambda _e: self._editor_newline())
+        entry.bind("<Shift-Return>", lambda _e: self._editor_newline())
         entry.bind("<Escape>",
                    lambda _e: (self._cancel_cell_editor(), "break")[1])
         entry.bind("<FocusOut>",
@@ -1607,30 +1992,34 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             return False
         info, r, c = editor["info"], editor["r"], editor["c"]
         try:
-            value = editor["entry"].get()
+            content = editor["entry"].get("1.0", "end-1c")
+            display_styles = self._editor_sample_styles(
+                editor["entry"], content)
         except tk.TclError:
-            value = None
+            content, display_styles = None, None
         wrote = False
         cell = info["cells"].get((r, c))
-        if value is not None and cell is not None:
-            value = value.replace(core_tables.CELL, "/").strip()
-            value = mend_surrogates(value)
-            if value != cell["value"]:
+        if content is not None and cell is not None:
+            lead = len(content) - len(content.lstrip())
+            trimmed = content.strip().replace(core_tables.CELL, "/")
+            display_styles = (display_styles or [])[lead:lead + len(trimmed)]
+            while len(display_styles) < len(trimmed):
+                display_styles.append(dict(self._PLAIN_STYLE))
+            trimmed = mend_surrogates(trimmed)
+            display_styles = display_styles[:len(trimmed)]
+            value, raw_styles = self._styles_display_to_raw(
+                trimmed, display_styles)
+            changed_text = value != cell["value"]
+            styles_changed = raw_styles != editor.get("styles_in")
+            if changed_text:
+                old_lines = len(core_tables.cell_display_lines(
+                    cell["value"]))
                 self._write_cell(info, r, c, value)
                 cell["value"] = value
-                try:
-                    info["canvas"].itemconfigure(cell["text"], text=value)
-                    # The face follows the content immediately: a commit
-                    # that only itemconfigures kept the pre-emoji font
-                    # until the next full rebuild, so the drawn cell showed
-                    # squares even though the text was right.
-                    header_font, cell_font = self._grid_fonts()
-                    wanted = (("Segoe UI Emoji", self.editor_font_size)
-                              if any(ord(ch) > 0xFFFF for ch in value)
-                              else (header_font if r == 0 else cell_font))
-                    info["canvas"].itemconfigure(cell["text"], font=wanted)
-                except tk.TclError:
-                    pass
+                if len(core_tables.cell_display_lines(value)) != old_lines:
+                    # The row must grow or shrink to the new line count;
+                    # the rebuild waits for the editor to close.
+                    info["stale"] = True
                 first = self._grid_first_line(info)
                 if first is not None:
                     data = [self.body_text.get(f"{n}.0", f"{n}.end")
@@ -1641,6 +2030,14 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                         [core_tables.split_row(line) for line in data])
                     if widths != info["widths_chars"]:
                         info["stale"] = True
+            if changed_text or styles_changed:
+                # The editor's styles ARE the cell's styles now: what was
+                # bolded or coloured while typing reaches the body tags,
+                # then the drawing -- redrawn as runs, so the face, the
+                # colours, and the line breaks all follow immediately.
+                self._apply_styles_to_cell(info, r, c, value, raw_styles)
+                self._grid_redraw_cell_text(info, r, c)
+                editor["styles_in"] = [dict(s) for s in raw_styles]
                 wrote = True
         if close:
             self._close_cell_editor()
@@ -1696,25 +2093,41 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._open_cell_editor(fresh, *order[index])
         return "break"
 
-    def _editor_return(self):
-        """Enter finishes the cell and puts the caret on the line under the
-        table, at the start of the row -- writing continues from the left,
-        not from wherever the table happened to end."""
+    def _editor_newline(self):
+        """Enter (and Shift+Enter) start a new line INSIDE the cell --
+        stored as markdown's own <br>, so the row grows to fit on commit.
+        Leaving the cell stays what it always was elsewhere: Tab, Escape,
+        or a click anywhere else."""
         editor = getattr(self, "_cell_editor", None)
         if not editor:
             return "break"
-        info = editor["info"]
-        first = self._grid_first_line(info)
-        rows = info["nrows"]
-        self._commit_cell_editor()
-        if first is not None:
-            try:
-                self.body_text.mark_set("insert", f"{first + rows}.0")
-                self.body_text.focus_set()
-                self.body_text.see("insert")
-            except tk.TclError:
-                pass
+        entry = editor["entry"]
+        try:
+            entry.insert("insert", "\n")
+            entry.tag_add("cellalign", "1.0", "end")
+        except tk.TclError:
+            return "break"
+        self._editor_fit_window()
         return "break"
+
+    def _editor_fit_window(self):
+        """Grow the floating editor's window to its line count -- the
+        drawn row itself grows on commit, when the grids may rebuild."""
+        editor = getattr(self, "_cell_editor", None)
+        if not editor:
+            return
+        info, cell = editor["info"], editor["info"]["cells"].get(
+            (editor["r"], editor["c"]))
+        if cell is None:
+            return
+        try:
+            lines = int(editor["entry"].index("end-1c").split(".")[0])
+            need = max(cell["h"] - 2, lines * info["row_h"])
+            if need > int(float(info["canvas"].itemcget(
+                    editor["win"], "height"))):
+                info["canvas"].itemconfigure(editor["win"], height=need)
+        except (tk.TclError, ValueError):
+            pass
 
     def _insert_emoji_from_toolbar(self):
         """The toolbar emoji button lands in whatever is being written --
@@ -1861,12 +2274,30 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     continue
                 font = header_font if r == 0 else cell_font
                 value = row[c] if c < len(row) else ""
-                col_w[c] = max(col_w[c], font.measure(value) + 2 * pad_x)
+                # A multi-line cell is as wide as its WIDEST line, not as
+                # wide as its raw text with the break markers in it.
+                col_w[c] = max(col_w[c], max(
+                    (font.measure(seg)
+                     for seg in core_tables.cell_display_lines(value)),
+                    default=0) + 2 * pad_x)
         col_x = [0]
         for width in col_w:
             col_x.append(col_x[-1] + width)
         natural = col_x[-1]
-        height = row_h * len(rows)
+        # A row is as tall as its tallest cell's line count.
+        row_lines = []
+        for r, row in enumerate(rows):
+            n = 1
+            for c in range(len(widths)):
+                if (r, c) in covered or c in hidden_cols:
+                    continue
+                value = row[c] if c < len(row) else ""
+                n = max(n, len(core_tables.cell_display_lines(value)))
+            row_lines.append(n)
+        row_y = [0]
+        for n in row_lines:
+            row_y.append(row_y[-1] + n * row_h)
+        height = row_y[-1]
 
         host = tk.Frame(b, bg=self.colors["card"], cursor="arrow")
         canvas = tk.Canvas(host, highlightthickness=0, bd=0, cursor="arrow",
@@ -1880,9 +2311,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 if (r, c) in covered:
                     continue
                 row_span, col_span = merges.get((r, c), (1, 1))
-                x, y = col_x[c], r * row_h
+                x, y = col_x[c], row_y[r]
                 w = col_x[min(c + col_span, len(col_w))] - x
-                h = row_span * row_h
+                h = row_y[min(r + row_span, len(rows))] - y
                 value = row[c] if c < len(row) else ""
                 rect = canvas.create_rectangle(
                     x, y, x + w, y + h,
@@ -1895,24 +2326,16 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                          if r < len(aligns_matrix)
                          and c < len(aligns_matrix[r])
                          else core_tables.ALIGN_LEFT)
-                if align == core_tables.ALIGN_CENTER:
-                    tx, tanchor = x + w / 2, "c"
-                elif align == core_tables.ALIGN_RIGHT:
-                    tx, tanchor = x + w - pad_x, "e"
-                else:
-                    tx, tanchor = x + pad_x, "w"
-                emoji = any(ord(ch) >= 0x1F000 or 0x2600 <= ord(ch) <= 0x27BF
-                            for ch in value)
-                font = (("Segoe UI Emoji", self.editor_font_size)
-                        if emoji else
-                        (header_font if r == 0 else cell_font))
-                shown = self._ellipsize(value, font, w - 2 * pad_x)
-                text = canvas.create_text(
-                    tx, y + h / 2, anchor=tanchor,
-                    font=font, fill=self.colors["text"], text=shown)
-                cells[(r, c)] = {"value": value, "rect": rect, "text": text,
-                                 "x": x, "y": y, "w": w, "h": h,
-                                 "rs": row_span, "cs": col_span}
+                cell = {"value": value, "rect": rect, "texts": [],
+                        "x": x, "y": y, "w": w, "h": h,
+                        "rs": row_span, "cs": col_span}
+                line_no = first + row_off[r]
+                line = block[row_off[r]]
+                styles = self._cell_value_styles(line_no, line, c)
+                cell["texts"] = self._grid_draw_cell_text(
+                    canvas, cell, value, styles, align, r == 0,
+                    pad_x, row_h)
+                cells[(r, c)] = cell
         mark = f"table_grid_{id(host)}"
         b.mark_set(mark, f"{first}.0")
         b.mark_gravity(mark, "left")
@@ -2661,6 +3084,50 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._grid_replace_block(first, nrows, rows, aligns, sep_cols)
         self._grid_after_op(first)
 
+    def _grid_checkmark_popup(self, info, box, x_root, y_root):
+        """The checkmark palette: the check lands in the cell(s) already
+        wearing the picked colour -- the same swatches ordinary text
+        offers, plus the theme's own ink for a plain one."""
+        self._dismiss_mini_popup()
+        popup = tk.Toplevel(self)
+        self._mini_popup = popup
+        popup.wm_overrideredirect(True)
+        popup.configure(bg=self.colors["accent"])
+        outer = tk.Frame(popup, bg=self.colors["card"], padx=1, pady=1)
+        outer.pack()
+        grid_frame = tk.Frame(outer, bg=self.colors["card"])
+        grid_frame.pack(padx=10, pady=(8, 0))
+        anchor_line = self._grid_first_line(info)
+
+        def choose(color):
+            self._dismiss_mini_popup()
+            self._grid_fill_selection({"info": info, "box": box}, "✓",
+                                      align=core_tables.ALIGN_CENTER)
+            if color and anchor_line is not None:
+                # The fill rebuilt the grids; the colour goes on the
+                # fresh one.
+                fresh = self._grid_at_line(anchor_line)
+                if fresh is not None:
+                    self._grid_apply_style(fresh, box, "text_color", color)
+
+        for i, hex_color in enumerate(PRESET_NOTE_COLORS):
+            swatch = tk.Button(
+                grid_frame, bg=hex_color, activebackground=hex_color,
+                width=3, height=1, relief="flat", cursor="hand2",
+                command=lambda h=hex_color: choose(h))
+            swatch.grid(row=i // 5, column=i % 5, padx=4, pady=4)
+        plain = tk.Button(
+            outer, text="Theme color", relief="flat", cursor="hand2",
+            bg=self.colors["card"], fg=self.colors["text"],
+            command=lambda: choose(None))
+        plain.pack(pady=(4, 8))
+        popup.update_idletasks()
+        popup.geometry(f"+{x_root}+{y_root}")
+        popup.bind("<FocusOut>",
+                   lambda _e: (None if getattr(self, "_hiding_popups", False)
+                               else self._dismiss_mini_popup()))
+        popup.focus_set()
+
     def _grid_merge_selection(self, sel):
         """The selected rectangle becomes one cell, anchored top-left.
 
@@ -2808,17 +3275,20 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         header_font, cell_font = self._grid_fonts()
         font = header_font if editor["r"] == 0 else cell_font
         try:
-            value = editor["entry"].get()
-            # Typing the first emoji switches the face live, or everything
-            # after it shows as squares until commit.
-            if any(ord(ch) > 0xFFFF for ch in value):
-                emoji_font = ("Segoe UI Emoji", self.editor_font_size)
-                if "Emoji" not in str(editor["entry"].cget("font")):
-                    editor["entry"].configure(font=emoji_font)
-                font = tkfont.Font(font=emoji_font)
-            needed = font.measure(value) + 24
+            content = editor["entry"].get("1.0", "end-1c")
+            # Typing an emoji gets its face live, per character -- the
+            # whole-box font switch went with the Entry.
+            self._editor_retag_emoji(editor["entry"])
+            emoji_font = self._measuring_font(
+                ("Segoe UI Emoji", self.editor_font_size))
+            needed = 24 + max(
+                (max(font.measure(seg), emoji_font.measure(seg))
+                 if any(self._char_is_emoji(ch) for ch in seg)
+                 else font.measure(seg)
+                 for seg in content.split("\n")), default=0)
             if needed > int(float(canvas.itemcget(win, "width"))):
                 canvas.itemconfigure(win, width=needed)
+            self._editor_fit_window()
         except tk.TclError:
             pass
 
@@ -3022,6 +3492,15 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         selection behaves -- and the drawn grid repaints in place.
         """
         r0, c0, r1, c1 = box
+        editor = getattr(self, "_cell_editor", None)
+        if (editor is not None and editor.get("info") is info
+                and (r0, c0, r1, c1) == (editor["r"], editor["c"],
+                                         editor["r"], editor["c"])):
+            # The cell is OPEN: style the selection inside the editor --
+            # a single letter or emoji, not the whole cell -- and let the
+            # commit carry it to the body.
+            self._editor_apply_style(kind, value)
+            return
         ranges = []
         for r in range(r0, r1 + 1):
             for c in range(c0, c1 + 1):
@@ -3104,12 +3583,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
     def _grid_restyle(self, info):
         """Repaint every drawn cell from its text tags, in place.
 
-        A cell styled only in part is drawn styled whole -- the drawing is
-        one canvas item; the underlying spans stay exact, so export and
-        the round trip keep the precise extent.
-        """
+        The text is redrawn as runs, so a single coloured letter shows as
+        itself; the highlight stays a whole-cell wash -- a background is
+        the one style the drawing paints cell-wide."""
         canvas = info["canvas"]
-        header_font, cell_font = self._grid_fonts()
         for (r, c), cell in info["cells"].items():
             paint = self._grid_cell_paint(info, r, c)
             surface = (inset_surface(self.colors) if r == 0
@@ -3119,29 +3596,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             # on either theme -- a solid palette fill buried it.
             bg = (self._blend_hex(paint["bg"], surface, 0.45)
                   if paint["bg"] else surface)
-            fg = paint["fg"] or self.colors["text"]
-            value = cell["value"]
-            emoji = any(ord(ch) >= 0x1F000 or 0x2600 <= ord(ch) <= 0x27BF
-                        for ch in value)
-            if emoji:
-                family, size = "Segoe UI Emoji", self.editor_font_size
-            elif r == 0:
-                family = header_font.cget("family")
-                size = header_font.cget("size")
-            else:
-                family = cell_font.cget("family")
-                size = cell_font.cget("size")
-            mods = [m for m, on in (
-                ("bold", paint["bold"] or r == 0),
-                ("italic", paint["italic"]),
-                ("underline", paint["underline"]),
-                ("overstrike", paint["strike"])) if on]
-            font = (family, size, " ".join(mods)) if mods else (family, size)
             try:
                 canvas.itemconfigure(cell["rect"], fill=bg)
-                canvas.itemconfigure(cell["text"], fill=fg, font=font)
             except tk.TclError:
                 pass
+            self._grid_redraw_cell_text(info, r, c)
 
     def _grid_stub_menu(self, info, event, c):
         """The only menu a hidden column can offer: bring it back."""
@@ -3186,10 +3645,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             menu.add_command(label="Paste cells here",
                              command=lambda: self._grid_paste_cells(
                                  info, sel["box"][0], sel["box"][1]))
-            menu.add_command(label="Insert checkmarks",
-                             command=lambda: self._grid_fill_selection(
-                                 sel, "\u2713",
-                                 align=core_tables.ALIGN_CENTER))
+            menu.add_command(label="Insert checkmarks\u2026",
+                             command=lambda xr=event.x_root,
+                             yr=event.y_root: self._grid_checkmark_popup(
+                                 info, sel["box"], xr, yr))
             menu.add_command(label="Clear cells",
                              command=lambda: self._grid_fill_selection(
                                  sel, ""))
@@ -3242,10 +3701,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                          command=lambda: self._grid_copy_cell(info, r, c))
         menu.add_command(label="Paste cells here",
                          command=lambda: self._grid_paste_cells(info, r, c))
-        menu.add_command(label="Insert checkmark",
-                         command=lambda: self._grid_fill_selection(
-                             {"info": info, "box": (r, c, r, c)}, "\u2713",
-                             align=core_tables.ALIGN_CENTER))
+        menu.add_command(label="Insert checkmark\u2026",
+                         command=lambda xr=event.x_root,
+                         yr=event.y_root: self._grid_checkmark_popup(
+                             info, (r, c, r, c), xr, yr))
         menu.add_command(label="Insert emoji…", command=emoji_here)
         menu.add_command(label="Clear cell",
                          command=lambda: self._grid_fill_selection(

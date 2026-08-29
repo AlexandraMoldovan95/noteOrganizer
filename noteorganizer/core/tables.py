@@ -26,6 +26,10 @@ tested on any machine.
 """
 
 CELL = "|"
+# A line break INSIDE a cell, as markdown itself writes one -- a table
+# row must stay one line of text, so the break is a marker in the value.
+# Export, share codes and any markdown-aware tool read it natively.
+LINE_BREAK = "<br>"
 # A cell holding exactly one of these is not content but a merge marker:
 # "<" belongs to the cell on its left, "^" to the cell above. Anchors sit
 # at the top-left of their rectangle. Typing one of these alone into a cell
@@ -51,6 +55,15 @@ def is_table_row(line):
     if not stripped.endswith(CELL):
         return False
     return len(split_row(stripped)) >= _MIN_CELLS
+
+
+def cell_display_lines(value):
+    """A cell's display lines: the value split on the ``<br>`` marker.
+
+    The split is on the literal marker, so a cell without one is a
+    single line and nothing changes for it.
+    """
+    return (value or "").split(LINE_BREAK)
 
 
 def split_row(line):
