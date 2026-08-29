@@ -578,28 +578,31 @@ class SettingsPageMixin:
         """A read-only rendering of the body's tables, for the template
         dialog: the editor's visual language (bold header on its own
         surface, hairline rules, separator-aware widths, hidden columns
-        as slivers) without its machinery. Returns True when there was a
-        table to draw."""
+        as slivers, merges as spanned cells) without its machinery.
+        Every table and every row is drawn -- the canvas scrolls when it
+        grows past the dialog's budget. Returns the table blocks, empty
+        when there is nothing to draw."""
         from noteorganizer.core import tables as core_tables
         from noteorganizer.core.themes import hairline, inset_surface
         canvas.delete("all")
         text = body_text.get("1.0", "end-1c")
         blocks = core_tables.find_blocks(text)
         if not blocks:
-            return False
+            return []
         lines = text.split("\n")
         font = tkfont.Font(family="Consolas", size=9)
         pad_x, row_h, y = 6, 22, 2
         rule = hairline(self.colors)
-        for first, last in blocks[:2]:          # a preview, not a scroll
+        max_x = 100
+        for first, last in blocks:
             block = lines[first:last + 1]
             sep_at = core_tables.separator_index(block)
             sep_cols = (core_tables.parse_separator(block[sep_at])
                         if sep_at is not None else None)
             rows = [core_tables.split_row(line)
                     for i, line in enumerate(block) if i != sep_at]
-            rows = rows[:6]                     # first rows are the preview
             ncols = max((len(r) for r in rows), default=0)
+            spans, covered = core_tables.merge_map(rows)
             widths = []
             for c in range(ncols):
                 column = (sep_cols[c] if sep_cols and c < len(sep_cols)
@@ -608,7 +611,10 @@ class SettingsPageMixin:
                     widths.append(8)
                     continue
                 longest = max((font.measure(r[c]) for r in rows
-                               if c < len(r)), default=20)
+                               if c < len(r)
+                               and r[c] not in (core_tables.MERGE_LEFT,
+                                                core_tables.MERGE_UP)),
+                              default=20)
                 if column and column.get("width"):
                     longest = max(longest,
                                   font.measure("0") * column["width"])
@@ -618,38 +624,42 @@ class SettingsPageMixin:
                 x = x0
                 for c in range(ncols):
                     w = widths[c]
+                    if (r, c) in covered:
+                        x += w
+                        continue
+                    rs, cs = spans.get((r, c), (1, 1))
+                    w_span = sum(widths[c:c + cs])
                     canvas.create_rectangle(
-                        x, y, x + w, y + row_h,
+                        x, y, x + w_span, y + rs * row_h,
                         fill=(inset_surface(self.colors) if r == 0
                               else self.colors["card"]),
                         outline=rule)
                     value = row[c] if c < len(row) else ""
-                    if value in (core_tables.MERGE_LEFT,
-                                 core_tables.MERGE_UP):
-                        value = ""
                     hidden = (sep_cols and c < len(sep_cols)
                               and sep_cols[c].get("hidden"))
                     if value and not hidden:
                         shown = value
-                        if font.measure(value) > w - 2 * pad_x:
+                        if font.measure(value) > w_span - 2 * pad_x:
                             while (len(shown) > 1 and
                                    font.measure(shown + "\u2026")
-                                   > w - 2 * pad_x):
+                                   > w_span - 2 * pad_x):
                                 shown = shown[:-1]
                             shown += "\u2026"
                         canvas.create_text(
-                            x + pad_x, y + row_h / 2, anchor="w",
+                            x + pad_x, y + rs * row_h / 2, anchor="w",
                             font=("Consolas", 9,
                                   "bold" if r == 0 else "normal"),
                             fill=self.colors["text"], text=shown)
                     x += w
                 y += row_h
+            max_x = max(max_x, x0 + sum(widths))
             y += 8
-        canvas.configure(height=min(y, 6 * row_h * 2 + 20),
-                         width=min(sum(widths) + 8, 460) if widths else 100,
-                         bg=self.colors["card"],
-                         highlightthickness=0)
-        return True
+        shown_h = min(y, 240)
+        canvas.configure(height=shown_h, width=min(max_x + 6, 460),
+                         bg=self.colors["card"], highlightthickness=0,
+                         scrollregion=(0, 0, max_x, y))
+        canvas._preview_overflows = y > shown_h
+        return blocks
 
     def _edit_template(self, tpl, redraw, anchor_widget=None):
         """Open a small editor (inline window) to create or edit a template's
@@ -715,22 +725,49 @@ class SettingsPageMixin:
                                bg=self.colors["card"],
                                fg=self.colors["subtext"],
                                font=("Segoe UI", 8, "bold"), anchor="w")
-        preview_canvas = tk.Canvas(preview_holder, height=10,
+        preview_row = tk.Frame(preview_holder, bg=self.colors["card"])
+        preview_canvas = tk.Canvas(preview_row, height=10,
                                    bg=self.colors["card"],
                                    highlightthickness=0)
+        preview_scroll = ttk.Scrollbar(preview_row, orient="vertical",
+                                       command=preview_canvas.yview)
+        preview_canvas.configure(yscrollcommand=preview_scroll.set)
+        preview_canvas.pack(side="left", anchor="w")
+        body_txt.tag_configure("tblhide", elide=True)
 
         def refresh_preview(_e=None):
             try:
-                has = self._draw_template_table_preview(
+                blocks = self._draw_template_table_preview(
                     preview_canvas, body_txt)
             except tk.TclError:
                 return
-            if has and not preview_canvas.winfo_ismapped():
+            # The body box shows only the NON-table text: the preview is
+            # where tables are seen, and raw pipe rows with merge markers
+            # read as noise. The box still HOLDS the full body -- elide
+            # hides the lines without touching the stored text.
+            body_txt.tag_remove("tblhide", "1.0", "end")
+            for first, last in blocks:
+                body_txt.tag_add("tblhide",
+                                 f"{first + 1}.0", f"{last + 1}.end+1c")
+            if blocks:
+                # A caret inside hidden text would edit a table row
+                # invisibly; park it at the end, after a visible newline.
+                last_line = body_txt.get("end-1c linestart", "end-1c")
+                from noteorganizer.core import tables as core_tables
+                if core_tables.is_table_row(last_line):
+                    body_txt.insert("end", "\n")
+                body_txt.mark_set("insert", "end")
+            if blocks and not preview_row.winfo_ismapped():
                 preview_lbl.pack(fill="x", pady=(4, 0))
-                preview_canvas.pack(anchor="w", pady=(0, 2))
-            elif not has and preview_canvas.winfo_ismapped():
+                preview_row.pack(anchor="w", pady=(0, 2))
+            elif not blocks and preview_row.winfo_ismapped():
                 preview_lbl.pack_forget()
-                preview_canvas.pack_forget()
+                preview_row.pack_forget()
+            if blocks and getattr(preview_canvas, "_preview_overflows",
+                                  False):
+                preview_scroll.pack(side="left", fill="y")
+            else:
+                preview_scroll.pack_forget()
 
         def paste_and_preview(_e=None):
             # One combined handler: the table-aware paste returns "break"
@@ -1264,12 +1301,17 @@ class SettingsPageMixin:
         """Show the Settings page in place of the Notes/Calendar notebook.
         Settings lives outside the tab strip on purpose — see the comment
         where self.settings_page is created."""
+        # A popup anchored to the page being swapped out would keep
+        # floating over the new one -- the Settings dropdown was still on
+        # screen back in the editor.
+        self._dismiss_mini_popup()
         self._catch_up_deferred_refresh()
         self.notebook.pack_forget()
         self.settings_page.pack(fill="both", expand=True)
         self._render_statistics()
 
     def hide_settings_page(self):
+        self._dismiss_mini_popup()
         """Return from Settings to the Notes/Calendar notebook."""
         self.settings_page.pack_forget()
         self.notebook.pack(fill="both", expand=True)

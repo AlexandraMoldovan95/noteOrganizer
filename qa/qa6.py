@@ -531,6 +531,42 @@ check('checklist change is captured by autosave-on-switch', any(
 before_hidden = app._sidebar_hidden
 app.toggle_sidebar()
 app.update()
+# ---- PAGE SWITCHES DISMISS THE OPEN POPUP ----
+# A dropdown opened in Settings kept floating over the editor after
+# Back to Notes -- a popup belongs to the page it was opened on.
+_was_settings = bool(app.settings_page.winfo_ismapped())
+app._edit_template(None, lambda: None)
+app.update()
+check('a popup opens in Settings', app._mini_popup is not None)
+app.hide_settings_page()
+app.update()
+check('Back to Notes dismisses it', app._mini_popup is None)
+app.show_settings_page()
+app.update()
+app._edit_template(None, lambda: None)
+app.update()
+app.hide_settings_page()
+app.update()
+app._edit_template(None, lambda: None)
+app.update()
+_popT = app._mini_popup
+app.notebook.event_generate('<<NotebookTabChanged>>')
+app.update()
+check('a notebook tab change dismisses it too', app._mini_popup is None)
+app.hide_settings_page()
+app.update()
+app._edit_template(None, lambda: None)
+app.update()
+app.show_settings_page()
+app.update()
+check('and entering Settings dismisses a popup left open in Notes',
+      app._mini_popup is None)
+if _was_settings:
+    app.show_settings_page()
+else:
+    app.hide_settings_page()
+app.update()
+
 check('toggle_sidebar flips the hidden state', app._sidebar_hidden != before_hidden)
 app.toggle_sidebar()
 app.update()

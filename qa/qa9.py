@@ -132,20 +132,54 @@ _pc9 = [c for c in _canv9 if c.winfo_ismapped() and c.find_all()]
 check(f'pasting a table shows the drawn preview '
       f'({len(_pc9[0].find_all()) if _pc9 else 0} items)',
       len(_pc9) == 1 and len(_pc9[0].find_all()) >= 8)
+# The body box HOLDS the table but does not SHOW it -- the preview is
+# where tables are seen, and raw pipes with merge markers read as noise.
+def _n9(v):
+    if v is None:
+        return 0
+    return v[0] if isinstance(v, tuple) else v
+_vis9 = _n9(_body9.count('1.0', 'end', 'displaychars'))
+_tot9 = _n9(_body9.count('1.0', 'end', 'chars'))
+check(f'the body box hides its table text ({_vis9} of {_tot9} visible)',
+      _tot9 > 20 and _vis9 < 5)
+
+# Several tables, merges, and length: EVERYTHING is drawn -- the merged
+# header as one spanned cell, every row of every table, with a
+# scrollbar once the preview outgrows its budget.
+# The refresh rides <<Paste>> (virtual, delivered to the widget);
+# <KeyRelease> is a real key event and follows the focus, which this
+# box does not hold under test. The multi-table body goes through the
+# REAL clipboard so the class paste inserts exactly it.
+_multi9 = ('text liber\n| Tabel | < |\n| Aliment | Sursa |\n'
+           '| Carne | vita |\n\n| Zi | Plan |\n| luni | scris |\n'
+           '| marti | citit |\n| miercuri | sport |\n| joi | piata |\n'
+           '| vineri | film |\n| sambata | drum |\n| duminica | odihna |')
+NO.clipboard.read_html = lambda: None
+app.clipboard_clear()
+app.clipboard_append(_multi9)
+_body9.delete('1.0', 'end')
+_body9.event_generate('<<Paste>>')
+app.update()
+app.update()
+_items9 = len(_pc9[0].find_all())
+check(f'every table and every row is drawn ({_items9} items)',
+      _items9 == 42)
+check('and the preview scrolls once it outgrows its budget',
+      getattr(_pc9[0], '_preview_overflows', False)
+      and bool(str(_pc9[0].cget('scrollregion'))))
 # <KeyRelease> is a REAL key event and follows the focus, which this
 # box does not hold under test -- the <<Paste>> virtual event delivers
 # to the widget it is generated on, so the hide path rides a plain
 # paste instead.
-_real_rt9 = NO.clipboard.read_text
 NO.clipboard.read_html = lambda: None
-NO.clipboard.read_text = lambda: 'doar un rand simplu'
+app.clipboard_clear()
+app.clipboard_append('doar un rand simplu')
 _body9.delete('1.0', 'end')
 _body9.event_generate('<<Paste>>')
 app.update()
 app.update()
 check('and a table-less body hides it again',
       not any(c.winfo_ismapped() for c in _pc9))
-NO.clipboard.read_text = _real_rt9
 NO.clipboard.read_html = _real_rh9
 _body9.delete('1.0', 'end')
 

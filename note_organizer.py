@@ -6679,6 +6679,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             except (tk.TclError, KeyError):
                 pass
         self.notebook.bind("<<NotebookTabChanged>>", _on_tab_changed, add="+")
+        # Notes <-> Calendar: same rule -- a popup belongs to the page it
+        # was opened on.
+        self.notebook.bind("<<NotebookTabChanged>>",
+                           lambda e: self._dismiss_mini_popup(), add="+")
 
 
 
