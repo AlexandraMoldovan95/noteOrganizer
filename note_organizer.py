@@ -2865,21 +2865,46 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         return "break"
 
     def _grid_set_alignment(self, info, box, align):
-        """Alignment is the cell's padding, so setting it is a rewrite of
-        the padding -- nothing else about the cell moves."""
+        """Alignment is the cell's padding, so setting it edits ONLY the
+        padding -- through the same space-level ops the block aligner
+        uses, because Tk carries a tag along with the text around it. The
+        old wholesale-rewrite path silently dropped the bold (and every
+        other character style) from the very cells being aligned."""
         r0, c0, r1, c1 = box
         context = self._grid_op_context(info)
         if not context:
             return
         first, nrows, _ncols = context
-        rows, aligns, sep_cols, _sep_at = self._grid_block_parts(first, nrows)
-        for r in range(r0, min(r1 + 1, len(rows))):
-            for c in range(c0, min(c1 + 1, len(rows[r]))):
-                if (rows[r][c] not in (core_tables.MERGE_LEFT,
-                                       core_tables.MERGE_UP)
-                        and c < len(aligns[r])):
-                    aligns[r][c] = align
-        self._grid_replace_block(first, nrows, rows, aligns, sep_cols)
+        b = self.body_text
+        lines = [b.get(f"{n}.0", f"{n}.end")
+                 for n in range(first, first + nrows)]
+        aligns = [core_tables.cell_alignments(line) for line in lines]
+        rows = [core_tables.split_row(line) for line in lines]
+        # The grid numbers its rows with the separator skipped; the block
+        # lines include it.
+        sep_at = core_tables.separator_index(lines)
+        for r in range(r0, r1 + 1):
+            off = r if sep_at is None or r < sep_at else r + 1
+            if off >= len(lines):
+                continue
+            for c in range(c0, c1 + 1):
+                if (c < len(rows[off])
+                        and rows[off][c] not in (core_tables.MERGE_LEFT,
+                                                 core_tables.MERGE_UP)
+                        and c < len(aligns[off])):
+                    aligns[off][c] = align
+        widths = core_tables.layout_widths(rows, aligns)
+        for offset, line in enumerate(lines):
+            row = first + offset
+            base = self._col_base(row)
+            for at, delta in core_tables.pad_ops(
+                    line, widths,
+                    aligns[offset] if offset < len(aligns) else None):
+                t_at = base + self._tk_col(line, at)
+                if delta > 0:
+                    b.insert(f"{row}.{t_at}", " " * delta)
+                else:
+                    b.delete(f"{row}.{t_at}", f"{row}.{t_at + (-delta)}")
         self._grid_after_op(first)
 
     def _highlight_swatch_column(self, popup, choose):

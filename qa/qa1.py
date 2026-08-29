@@ -3744,6 +3744,32 @@ app._show_toast = _origToastE
 check('a real edit still toasts Note updated',
       any('updated' in t.lower() for t in _toastsE))
 
+# ---- ALIGNING A CELL KEEPS ITS FORMATTING ----
+# Alignment went through the wholesale block rewrite, whose accepted
+# cost is dropping character styles -- so centering a cell silently
+# stripped the bold the user had JUST applied to it. Alignment is a
+# padding edit, and padding edits are exactly what pad_ops does with
+# the tags left in place.
+set_body('| Cap | Doi |\n| :--- | ---: |\n| gros | colorat |')
+app._render_table_grids()
+app.update()
+_gA = app._grid_at_line(1)
+app._grid_apply_style(_gA, (1, 0, 1, 0), 'bold')
+app._grid_apply_style(_gA, (1, 1, 1, 1), 'highlight',
+                      NO.HIGHLIGHT_COLOR_PALETTE[0])
+app.update()
+app._grid_set_alignment(app._grid_at_line(1), (1, 0, 1, 0),
+                        core_tables.ALIGN_CENTER)
+app.update()
+_gA = app._grid_at_line(1)
+_ln3A = app.body_text.get('3.0', '3.end')
+check('centering a cell keeps its bold',
+      app._grid_cell_paint(_gA, 1, 0)['bold']
+      and core_tables.cell_alignments(_ln3A)[0] == core_tables.ALIGN_CENTER)
+check("the neighbour cell's highlight rides through untouched",
+      app._grid_cell_paint(_gA, 1, 1)['bg'] == NO.HIGHLIGHT_COLOR_PALETTE[0])
+set_body('')
+
 # ---- LIST CARDS HIDE THE PIPE ROWS ----
 set_body('| C1 | C2 |\n| a | b |\n\nreadable words')
 app.title_entry.delete(0, 'end')
