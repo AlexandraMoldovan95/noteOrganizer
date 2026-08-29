@@ -390,6 +390,12 @@ class DialogsMixin:
                 w = w.master
             except AttributeError:
                 break
+        # A popup holding real work may want a word first: its
+        # _confirm_dismiss returns False to stay open (or after having
+        # handled the closing itself, e.g. by saving).
+        confirm = getattr(pop, "_confirm_dismiss", None)
+        if confirm is not None and not confirm():
+            return
         self._dismiss_mini_popup()
 
     def _foreground_is_ours(self):

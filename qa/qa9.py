@@ -198,6 +198,8 @@ check('and a table-less body hides it again',
 NO.clipboard.read_html = _real_rh9
 _body9.delete('1.0', 'end')
 
+
+
 save_btn = find_widget(editor_popup, tk.Button, 'Save')
 save_btn.invoke()
 app.update()
@@ -239,6 +241,82 @@ reloaded = NO.load_templates()
 updated = next((t for t in reloaded if t['name'] == 'FromEditor'), None)
 check('category change to an EXISTING template persists to disk (bug 2)',
       updated is not None and updated.get('category') == 'Work')
+
+# ---- CLICK-AWAY CLOSES THE EDITOR, ASKING ONLY WHEN DIRTY ----
+# A click elsewhere closes the dialog like any dropdown -- but typed
+# work is never lost silently: a change raises a small save-ask first.
+import types as _types
+_outside = _types.SimpleNamespace(widget=app)
+
+
+def _entries_in_order9(w):
+    out = []
+    for ch in w.winfo_children():
+        if isinstance(ch, tk.Entry):
+            out.append(ch)
+        out.extend(_entries_in_order9(ch))
+    return out
+_asks = []
+
+
+def _fake_ask(*a, **k):
+    _asks.append(a[0] if a else '?')
+    return _fake_ask.answer
+
+
+_real_ask9 = app.ask_yes_no
+app.ask_yes_no = _fake_ask
+_tplC = NO.normalize_template({
+    'name': 'ConfTest', 'title': 'x', 'body': 'corp',
+    'category': 'General', 'checklist': [],
+    'formatting': [{'start': 0, 'end': 2, 'style': 'bold'}]})
+app.templates.append(_tplC)
+app._edit_template(_tplC, lambda: None)
+app.update()
+app._maybe_dismiss_mini_popup(_outside)
+app.update()
+check('an unchanged dialog closes on click-away with no questions',
+      app._mini_popup is None and len(_asks) == 0)
+
+_fake_ask.answer = False
+app._edit_template(_tplC, lambda: None)
+app.update()
+_entC = _entries_in_order9(app._mini_popup)
+_entC[0].delete(0, 'end')
+_entC[0].insert(0, 'ConfTest2')
+app._maybe_dismiss_mini_popup(_outside)
+app.update()
+check('a changed dialog asks, and No closes without saving',
+      app._mini_popup is None and len(_asks) == 1
+      and app.templates[-1]['name'] == 'ConfTest')
+
+_fake_ask.answer = True
+app._edit_template(_tplC, lambda: None)
+app.update()
+_entC = _entries_in_order9(app._mini_popup)
+_entC[0].delete(0, 'end')
+_entC[0].insert(0, 'ConfTest2')
+app._maybe_dismiss_mini_popup(_outside)
+app.update()
+check('...and Yes saves the change before closing',
+      app._mini_popup is None
+      and app.templates[-1]['name'] == 'ConfTest2')
+check('a save through the dialog keeps formatting it cannot edit',
+      app.templates[-1].get('formatting'))
+
+app._edit_template(app.templates[-1], lambda: None)
+app.update()
+_entC = _entries_in_order9(app._mini_popup)
+_entC[0].delete(0, 'end')
+app.show_warning = lambda *a, **k: True
+app._maybe_dismiss_mini_popup(_outside)
+app.update()
+check('Yes with an empty name keeps the dialog open for fixing',
+      app._mini_popup is not None)
+app._dismiss_mini_popup()
+app.update()
+app.templates.remove(app.templates[-1])
+app.ask_yes_no = _real_ask9
 
 # ============================================================
 # Same class of bug, second location: the calendar's Jump-to-month popup

@@ -877,18 +877,30 @@ class SettingsPageMixin:
             nested=True)
         cat_menu.pack(fill="x", pady=(0, 6))
 
-        def save():
-            new_tpl = normalize_template({
+        def collect():
+            return normalize_template({
                 "name": name_var.get(),
                 "title": title_var.get(),
                 "body": body_txt.get("1.0", "end").rstrip("\n"),
                 "comments": comments_txt.get("1.0", "end").rstrip("\n"),
                 "category": cat_var.get(),
                 "checklist": [dict(it) for it in tpl_checklist],
+                # The dialog cannot edit these, but it must not lose
+                # them either: a template saved from the editor carries
+                # its formatting, and saving it here used to wipe it.
+                "formatting": data.get("formatting", []),
+                "paragraphs": data.get("paragraphs", []),
             })
-            if not new_tpl["name"].strip():
+
+        def save():
+            # Checked on the RAW field: normalize defaults an empty name
+            # to "Untitled template", so checking after it made this
+            # guard unreachable -- the junk rows named exactly that in
+            # the templates list were its silent proof.
+            if not name_var.get().strip():
                 self.show_warning("Name needed", "Give the template a name.", parent=pop)
                 return
+            new_tpl = collect()
             if is_new:
                 self.templates.append(new_tpl)
             else:
@@ -911,22 +923,46 @@ class SettingsPageMixin:
                   cursor="hand2", bg=self.colors["sidebar"], fg=self.colors["text"],
                   font=("Segoe UI", 9)).pack(side="left", padx=(6, 0), ipadx=10, ipady=3)
 
-        # Anchored to whichever button opened it — same safe, proven
-        # mechanism every other popup uses (multi-monitor safe, correct
-        # -topmost ordering, live-tracks the app window if it moves). Falls
-        # back to centering on the app window if no anchor was given.
-        # click-outside-dismiss is turned off here — this editor holds more
-        # content than a typical dropdown, so an accidental outside click
-        # shouldn't discard it; Save/Cancel are the explicit ways out.
+        # A click elsewhere closes the editor like any dropdown -- but
+        # never at the price of typed work: when something was changed, a
+        # small ask decides whether the change is saved first. Unchanged
+        # dialogs just close, no ceremony.
+        confirm_state = {"asking": False}
+        # Dirty is measured against what the very same collector reads at
+        # open time -- comparing against the raw template tripped on
+        # normalization details (a trailing newline, filled defaults).
+        opened_snapshot = collect()
+
+        def confirm_dismiss():
+            if confirm_state["asking"]:
+                return False              # the ask itself is on screen
+            if collect() == opened_snapshot:
+                return True               # nothing changed: just close
+            confirm_state["asking"] = True
+            try:
+                wants_save = self.ask_yes_no(
+                    "Save changes?",
+                    "You changed this template. Save the changes "
+                    "before closing?", icon="question", default="yes")
+            finally:
+                confirm_state["asking"] = False
+            if wants_save:
+                save()                    # dismisses itself on success
+                # A failed save (no name) keeps the dialog for fixing.
+                return False
+            return True
+
+        pop._confirm_dismiss = confirm_dismiss
         if anchor_widget is not None and anchor_widget.winfo_exists():
-            self._place_dropdown_popup(pop, anchor_widget, enable_click_outside=False)
+            self._place_dropdown_popup(pop, anchor_widget)
         else:
             self._place_dropdown_popup(
                 pop, None,
                 anchor_xy=(self.winfo_rootx() + self.winfo_width() // 2,
-                          self.winfo_rooty() + self.winfo_height() // 3),
-                enable_click_outside=False)
-        pop.bind("<Escape>", lambda e: self._dismiss_mini_popup())
+                          self.winfo_rooty() + self.winfo_height() // 3))
+        pop.bind("<Escape>",
+                 lambda e: (self._dismiss_mini_popup()
+                            if confirm_dismiss() else None))
 
     def _build_trash_row(self, parent, entry, redraw):
         row = tk.Frame(parent, bg=self.colors["card"])

@@ -2310,13 +2310,19 @@ take_focus(app.body_text)
 app.body_text.mark_set('insert', '1.end')
 app.body_text.event_generate('<Return>')
 app.update()
-check(f'Enter beside a table leaves one block '
+check(f'Enter beside a LEADING table pushes it down in one block '
       f'({core_tables.find_blocks(body())})',
-      core_tables.find_blocks(body()) == [(0, 1)])
-check(f'and the caret lands at the start of the line below '
+      core_tables.find_blocks(body()) == [(1, 2)]
+      and app.body_text.get('1.0', '1.end') == '')
+check(f'and the caret takes the fresh first line '
       f'({app.body_text.index("insert")})',
-      app.body_text.index('insert').endswith('.0')
-      and int(app.body_text.index('insert').split('.')[0]) > 2)
+      str(app.body_text.index('insert')) == '1.0')
+# The sections below were written against the table at line 1; take the
+# fresh empty first line back out.
+app._teardown_table_grids()
+app.body_text.delete('1.0', '2.0')
+app._render_table_grids()
+app.update()
 
 # Dragging across cells selects a rectangle; releasing without a drag is
 # still just a click that opens the editor.
@@ -3487,6 +3493,34 @@ _gT = app._grid_at_line(1)
 check('and the grid from the template is editable',
       _gT['cells'][(1, 1)]['value'] == 'citit')
 app.templates.remove(_tplT)
+set_body('')
+
+# ---- ENTER BELOW A LEADING TABLE PUSHES IT DOWN ----
+# A note that BEGINS with a table has nowhere to type above it; Enter
+# on the line below (where clicking beside the table parks the caret)
+# pushes the table down and takes the fresh first line.
+import types as _typesE
+set_body('| A | B |\n| x | y |')
+app._render_table_grids()
+app.update()
+app.body_text.mark_set('insert', '3.0')
+app._on_body_return(_typesE.SimpleNamespace())
+app.update()
+check('Enter below a leading table pushes the table down',
+      app.body_text.get('1.0', '1.end') == ''
+      and app._grid_at_line(2) is not None
+      and str(app.body_text.index('insert')) == '1.0')
+# ...but between two ADJACENT tables the same key means what it always
+# did -- the gesture belongs to the FIRST block alone.
+set_body('| A | B |\n| x | y |\n\n| C | D |\n| z | w |')
+app._render_table_grids()
+app.update()
+app.body_text.mark_set('insert', '3.0')
+_resE = app._on_body_return(_typesE.SimpleNamespace())
+app.update()
+check('Enter on the line BETWEEN two tables does not hijack the push-down',
+      _resE != 'break'
+      and app.body_text.get('1.0', '1.end') != '')
 set_body('')
 
 # ---- A NEW TABLE UNDER AN OLD ONE STAYS A TABLE OF ITS OWN ----

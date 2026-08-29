@@ -4184,6 +4184,28 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # text and surface the caret at the table's right edge.
         self._caret_out_of_hidden()
         line_no = int(self.body_text.index("insert").split(".")[0])
+        # A note that BEGINS with a table has nowhere to type above it.
+        # Clicking beside the table parks the caret at the start of the
+        # line below (the guard's doing); Enter there pushes the table
+        # down a line instead, and the caret takes the fresh first line.
+        first_block = (self._table_block_at(1)
+                       if is_table_row(self.body_text.get("1.0", "1.end"))
+                       else None)
+        if (first_block is not None
+                and line_no == first_block[1] + 1
+                and self.body_text.index("insert") == f"{line_no}.0"
+                # ...unless a SECOND table follows right after: Enter on
+                # the separating line then means space between tables,
+                # as it always did.
+                and not is_table_row(self.body_text.get(
+                    f"{line_no + 1}.0", f"{line_no + 1}.end"))):
+            self._teardown_table_grids()
+            self.body_text.insert("1.0", "\n")
+            self.body_text.mark_set("insert", "1.0")
+            self._resync_list_tags()
+            self._render_table_grids()
+            self._schedule_autosave()
+            return "break"
         kind = self._list_kind_of(self.body_text, line_no)
         if not kind:
             return None
