@@ -3523,6 +3523,109 @@ check('Enter on the line BETWEEN two tables does not hijack the push-down',
       and app.body_text.get('1.0', '1.end') != '')
 set_body('')
 
+# ---- THE WHEEL GLIDES IN PIXELS OVER TABLES ----
+# A drawn table is ONE text line as tall as the whole grid, so a units
+# scroll leapt from table to table instead of gliding.
+set_body(('| W | X |\n| a | b |\n| c | d |\n| e | f |\n\n' * 3)
+         + 'plain\n' * 20)
+app._render_table_grids()
+app.update()
+app.body_text.yview_moveto(0.0)
+app.update()
+app._body_wheel(_typesE.SimpleNamespace(delta=-120))
+app.update()
+check('one wheel notch over a tall table moves the view a little, not a table',
+      app.body_text.yview()[0] > 0
+      and app.body_text.index('@0,0').split('.')[0] == '1')
+
+# ---- THE PUSH-DOWN KEEPS THE VIEW ON THE SAME CONTENT ----
+# The edit lands at line 1, far above a mid-note view, and the Text
+# keeps the view on its content by itself. A snapshot restored against
+# the fresh grids' ESTIMATED heights was measured yanking the view nine
+# lines up (0.30 to 0.14) -- this check pins the no-snapshot behaviour.
+set_body('\n'.join('| r%d | c%d |' % (i, i) for i in range(8))
+         + '\n' + 'below\n' * 40)
+app._render_table_grids()
+app.update()
+app.update_idletasks()
+app.body_text.yview_moveto(0.3)
+app.update()
+_vwP = app.body_text.yview()[0]
+_topP = int(app.body_text.index('@0,0').split('.')[0])
+app.body_text.mark_set('insert', '9.0')
+app._on_body_return(_typesE.SimpleNamespace())
+for _ in range(3):
+    app.update()
+    app.update_idletasks()
+check('the push-down keeps a mid-note view on the same content',
+      int(app.body_text.index('@0,0').split('.')[0]) == _topP + 1
+      and abs(app.body_text.yview()[0] - _vwP) < 0.05)
+
+# ---- THE MENU TWIN: ADD A LINE ABOVE THE TABLE ----
+set_body('| M | N |\n| p | q |')
+app._render_table_grids()
+app.update()
+app._grid_add_line_above(app._grid_at_line(1))
+app.update()
+check('the table menu adds a blank first line above a leading table',
+      app.body_text.get('1.0', '1.end') == ''
+      and app._grid_at_line(2) is not None
+      and str(app.body_text.index('insert')) == '1.0')
+
+# ---- PASTE FOLLOWS THE CARET ----
+# The body kept its old view, leaving the freshly pasted end below the
+# fold -- the user read that as the scroll jumping away from the text.
+set_body('start\n' * 3)
+app.body_text.mark_set('insert', 'end-1c')
+app.clipboard_clear()
+app.clipboard_append('pasted line\n' * 80)
+_origHtmlP = NO.clipboard.read_html
+NO.clipboard.read_html = lambda: None
+take_focus(app.body_text)
+app.body_text.event_generate('<<Paste>>')
+for _ in range(4):
+    app.update()
+    app.update_idletasks()
+NO.clipboard.read_html = _origHtmlP
+check('a long paste scrolls the note to the pasted end',
+      app.body_text.dlineinfo('insert') is not None)
+set_body('')
+
+# ---- ONE HIGHLIGHT LOOK EVERYWHERE ----
+# The toolbar and right-click picker show the table popup's hairline
+# column -- full-width flat swatches plus Clear -- not the old grid.
+app._open_color_swatch_popup('highlight')
+app.update()
+_barsH, _clearH = 0, 0
+def _walkH(w):
+    global _barsH, _clearH
+    for ch in w.winfo_children():
+        if isinstance(ch, tk.Button):
+            if ch.cget('text') == 'Clear highlight':
+                _clearH += 1
+            elif int(ch.cget('width') or 0) == 14:
+                _barsH += 1
+        _walkH(ch)
+_walkH(app._mini_popup)
+check('the toolbar highlight picker is the hairline column, Clear included',
+      _barsH == len(NO.HIGHLIGHT_COLOR_PALETTE) and _clearH == 1)
+app._dismiss_mini_popup()
+app.update()
+
+# ---- LIST CARDS HIDE THE PIPE ROWS ----
+set_body('| C1 | C2 |\n| a | b |\n\nreadable words')
+app.title_entry.delete(0, 'end')
+app.title_entry.insert(0, 'CardTables')
+app.save_current_note()
+app.update()
+_cardT = next(i for i in app._note_card_widgets.values()
+              if 'CardTables' in i['title'].cget('text'))
+check('a card previews the words, not the pipe rows',
+      '|' not in _cardT['preview'].cget('text')
+      and 'readable words' in _cardT['preview'].cget('text'))
+check('the card tags row counts the table',
+      '\u25a6 1 table' in _cardT['tags'].cget('text'))
+
 # ---- A NEW TABLE UNDER AN OLD ONE STAYS A TABLE OF ITS OWN ----
 # Two adjacent runs of pipe rows read as one block, so a table created
 # right under another fused with it: mismatched columns, a garbled grid,
@@ -4113,6 +4216,27 @@ check('load_notes takes a safety backup when VERSION_CHANGE reports an upgrade',
 if app._version_backup_path:
     os.remove(app._version_backup_path)
 NO.VERSION_CHANGE = _original_version_change
+
+# ---- CLOSING SAVES SILENTLY (dead last: it destroys the app) ----
+# The quit-time "Unsaved notes" ask could only ever cover the last
+# half-second of typing; the app now trusts its own autosave and closes
+# the way it switches notes -- saving, without a question.
+app.new_note()
+app.update()
+app.title_entry.insert(0, 'CloseSilent')
+app.body_text.insert('1.0', 'typed and never flushed')
+_askedC = []
+app.ask_yes_no_cancel = lambda *a, **k: _askedC.append(1) or None
+# The flush is silenced so a genuinely dirty tab reaches the close
+# itself -- the case the old dialog fired on -- proving the close's own
+# save loop does the saving, with no question asked.
+app._flush_autosave = lambda *a, **k: None
+app.on_app_close()
+import io as _ioC
+_notesC = json.load(_ioC.open('notes_data.json', encoding='utf-8'))
+check('closing asks no unsaved-notes question', not _askedC)
+check('closing saved the unflushed note on its way out',
+      any(n.get('title') == 'CloseSilent' for n in _notesC))
 
 print()
 print(f"=== QA1 FAILURES: {fails if fails else 'NONE'} ===")

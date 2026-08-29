@@ -651,6 +651,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # with only an attached file (no typed text at all) is genuinely
         # meaningful and shouldn't be silently dropped.
         if not (st.get("title", "").strip() or st.get("body", "").strip()
+                or st.get("comments", "").strip()
                 or st.get("attachments") or st.get("checklist")):
             return
         # Only save if something actually changed vs. the saved version.
@@ -1761,13 +1762,29 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         for info in getattr(self, "_table_grids", []):
             self._fit_grid(info)
 
-    def _forward_grid_wheel(self, event):
-        """The wheel over a table scrolls the note, as it does over text."""
+    def _wheel_pixels(self, delta):
+        """One notch of the wheel, in pixels. A unit is a text LINE, and
+        a drawn table is one line as tall as the whole grid -- so unit
+        scrolling leapt from table to table instead of gliding."""
+        if not delta:
+            return 0
+        notches = -delta / 120.0
+        step = int(notches * 60)
+        if step == 0:
+            step = -1 if delta > 0 else 1
+        return step
+
+    def _body_wheel(self, event):
         try:
-            self.body_text.yview_scroll(-1 if event.delta > 0 else 1, "units")
+            self.body_text.yview_scroll(self._wheel_pixels(event.delta),
+                                        "pixels")
         except tk.TclError:
             pass
         return "break"
+
+    def _forward_grid_wheel(self, event):
+        """The wheel over a table scrolls the note, as it does over text."""
+        return self._body_wheel(event)
 
     def _grid_wheel_x(self, canvas, event):
         """Shift+wheel pans a wide table sideways."""
@@ -2079,7 +2096,19 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             pass
 
     def _restore_views_idle(self, page, body):
-        if body is not None:
+        # After a paste the right view is wherever the caret ended up --
+        # the end of what was just pasted -- not the fraction captured
+        # before the note grew. A plain see() from the paste handler ran
+        # BEFORE this restore and was silently undone by it, which is why
+        # the flag is honoured here, at the moment the restore happens.
+        follow = getattr(self, "_body_follow_caret", False)
+        self._body_follow_caret = False
+        if follow:
+            try:
+                self.body_text.see("insert")
+            except tk.TclError:
+                pass
+        elif body is not None:
             try:
                 self.body_text.yview_moveto(body)
             except tk.TclError:
@@ -2496,6 +2525,27 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
     _TABLE_ALIGN_TAGS = ("align_center", "align_right")
 
+    def _grid_add_line_above(self, info):
+        """A blank line above the table -- the menu twin of pressing
+        Enter under a leading table, working for any table and needing
+        no gesture knowledge at all."""
+        first = self._grid_first_line(info)
+        if first is None:
+            return
+        self._commit_cell_editor()
+        again = self._grid_at_line(first)
+        if again is not None:
+            first = self._grid_first_line(again) or first
+        # Like the Enter gesture: no view snapshot -- the insert lands at
+        # the note's top, the Text keeps the view on its content, and a
+        # restore against estimated grid heights measurably yanks it.
+        self._teardown_table_grids()
+        self.body_text.insert(f"{first}.0", "\n")
+        self.body_text.mark_set("insert", f"{first}.0")
+        self._resync_list_tags()
+        self._render_table_grids()
+        self._schedule_autosave()
+
     def _grid_set_table_align(self, info, align):
         """The whole table sits left, centred or right on the page.
 
@@ -2809,15 +2859,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._grid_replace_block(first, nrows, rows, aligns, sep_cols)
         self._grid_after_op(first)
 
-    def _grid_highlight_popup(self, info, box, x_root, y_root):
-        """The highlight palette as the app's own themed popup: swatches
-        parted by true one-pixel hairlines in the theme's rule colour --
-        a tk.Menu cannot draw that, its separators are the OS's."""
-        self._dismiss_mini_popup()
-        popup = tk.Toplevel(self)
-        self._mini_popup = popup
-        popup.wm_overrideredirect(True)
-        popup.configure(bg=self.colors["accent"])
+    def _highlight_swatch_column(self, popup, choose):
+        """The one way a highlight palette looks anywhere in the app:
+        full-width swatches parted by true one-pixel hairlines in the
+        theme's rule colour, with Clear underneath. The table popup's
+        pattern, shared so the toolbar and the context menu cannot
+        drift away from it again."""
         outer = tk.Frame(popup, bg=self.colors["card"], padx=1, pady=1)
         outer.pack()
         # The hairline is the COLUMN's background peeking through the
@@ -2827,11 +2874,6 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         column = tk.Frame(outer, bg=self._blend_hex(
             self.colors["accent"], self.colors["card"], 0.35))
         column.pack(padx=8, pady=8)
-
-        def choose(color):
-            self._dismiss_mini_popup()
-            self._grid_apply_style(info, box, "highlight", color)
-
         for i, hex_color in enumerate(HIGHLIGHT_COLOR_PALETTE):
             swatch = tk.Button(
                 column, bg=hex_color, activebackground=hex_color,
@@ -2843,6 +2885,22 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             bg=self.colors["card"], fg=self.colors["text"],
             command=lambda: choose(None))
         clear.pack(pady=(0, 8))
+        return outer
+
+    def _grid_highlight_popup(self, info, box, x_root, y_root):
+        """The highlight palette as the app's own themed popup -- a
+        tk.Menu cannot draw the hairlines, its separators are the OS's."""
+        self._dismiss_mini_popup()
+        popup = tk.Toplevel(self)
+        self._mini_popup = popup
+        popup.wm_overrideredirect(True)
+        popup.configure(bg=self.colors["accent"])
+
+        def choose(color):
+            self._dismiss_mini_popup()
+            self._grid_apply_style(info, box, "highlight", color)
+
+        self._highlight_swatch_column(popup, choose)
         popup.update_idletasks()
         popup.geometry(f"+{x_root}+{y_root}")
         popup.bind("<FocusOut>",
@@ -3186,6 +3244,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         menu.add_command(label="Delete table",
                          command=lambda: self._grid_delete_table(info))
         menu.add_separator()
+        menu.add_command(label="Add a line above the table",
+                         command=lambda: self._grid_add_line_above(info))
         for pos_label, pos in (("Table left on page", "left"),
                                ("Center table on page", "center"),
                                ("Table right on page", "right")):
@@ -3431,6 +3491,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             return "break"
         # Plain paste: Tk inserts the text after this returns, so the list
         # tags can only be brought back into step once that has happened.
+        self._body_follow_caret = True
         self.after_idle(self._resync_list_tags)
         self.after_idle(self._render_table_grids)
         return None
@@ -3455,6 +3516,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # writer did. Rejoined before the markers are stripped, because that
         # decision reads the line structure and refuses to touch a list.
         self._replace_selection_with(strip_list_markers(reflow_wrapped(text)))
+        self._body_follow_caret = True
         self.after_idle(self._resync_list_tags)
         self.after_idle(self._render_table_grids)
         self._schedule_autosave()
@@ -3511,6 +3573,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # is not for: a paste can bring in many lines at once, and the tags
         # derived from what those lines say -- a list's margin, a table's
         # monospace face -- are not carried by the text itself.
+        self._body_follow_caret = True
         self._resync_list_tags()
         self._render_table_grids()
         self._refresh_format_buttons()
@@ -4199,6 +4262,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 # as it always did.
                 and not is_table_row(self.body_text.get(
                     f"{line_no + 1}.0", f"{line_no + 1}.end"))):
+            # No snapshot here, deliberately: the edit happens at line 1,
+            # far above wherever the user is scrolled, so the Text keeps
+            # the view on the same content by itself -- and a snapshot
+            # restored against the fresh grids' estimated heights was
+            # MEASURED yanking a mid-note view nine lines up (0.30 to
+            # 0.14). Render's own late capture still guards the page.
             self._teardown_table_grids()
             self.body_text.insert("1.0", "\n")
             self.body_text.mark_set("insert", "1.0")
@@ -4745,36 +4814,43 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._mini_popup = popup
         popup.wm_overrideredirect(True)
         popup.configure(bg=self.colors["accent"])
-        outer = tk.Frame(popup, bg=self.colors["card"], padx=1, pady=1)
-        outer.pack()
-        body = tk.Frame(outer, bg=self.colors["card"])
-        body.pack()
-
-        label = tk.Label(body, text=label_text, font=("Segoe UI", 10, "bold"),
-                          bg=self.colors["card"], fg=self.colors["text"])
-        label.pack(padx=15, pady=(12, 8))
-
-        swatch_grid = tk.Frame(body, bg=self.colors["card"])
-        swatch_grid.pack(padx=15)
 
         def _choose(color):
             self._apply_body_color(kind, color)
             self._dismiss_mini_popup()
 
-        for i, hex_color in enumerate(palette):
-            swatch = tk.Button(
-                swatch_grid, bg=hex_color, activebackground=hex_color, width=3, height=1,
-                relief="flat", cursor="hand2", command=lambda c=hex_color: _choose(c)
-            )
-            swatch.grid(row=i // 5, column=i % 5, padx=4, pady=4)
+        if kind == "highlight":
+            # The same column the table's highlight popup shows -- flat
+            # full-width swatches parted by theme-coloured hairlines --
+            # so every road to a highlight looks like every other.
+            self._highlight_swatch_column(popup, _choose)
+        else:
+            outer = tk.Frame(popup, bg=self.colors["card"], padx=1, pady=1)
+            outer.pack()
+            body = tk.Frame(outer, bg=self.colors["card"])
+            body.pack()
 
-        button_row = tk.Frame(body, bg=self.colors["card"])
-        button_row.pack(fill="x", padx=15, pady=(8, 14))
-        clear_btn = tk.Button(
-            button_row, text="Clear", command=lambda: _choose(None), relief="flat",
-            bg=self.colors["sidebar"], fg=self.colors["text"], cursor="hand2", font=("Segoe UI", 9)
-        )
-        clear_btn.pack(fill="x", ipady=5)
+            label = tk.Label(body, text=label_text, font=("Segoe UI", 10, "bold"),
+                              bg=self.colors["card"], fg=self.colors["text"])
+            label.pack(padx=15, pady=(12, 8))
+
+            swatch_grid = tk.Frame(body, bg=self.colors["card"])
+            swatch_grid.pack(padx=15)
+
+            for i, hex_color in enumerate(palette):
+                swatch = tk.Button(
+                    swatch_grid, bg=hex_color, activebackground=hex_color, width=3, height=1,
+                    relief="flat", cursor="hand2", command=lambda c=hex_color: _choose(c)
+                )
+                swatch.grid(row=i // 5, column=i % 5, padx=4, pady=4)
+
+            button_row = tk.Frame(body, bg=self.colors["card"])
+            button_row.pack(fill="x", padx=15, pady=(8, 14))
+            clear_btn = tk.Button(
+                button_row, text="Clear", command=lambda: _choose(None), relief="flat",
+                bg=self.colors["sidebar"], fg=self.colors["text"], cursor="hand2", font=("Segoe UI", 9)
+            )
+            clear_btn.pack(fill="x", ipady=5)
 
         self._place_dropdown_popup(popup, anchor_btn)
 
@@ -7397,6 +7473,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._setup_list_tags(self.body_text)
         self._configure_table_tag(self.body_text)
         self.body_text.bind("<Return>", self._on_body_return)
+        self.body_text.bind("<MouseWheel>", self._body_wheel)
         self.body_text.bind("<BackSpace>", self._on_body_backspace)
         self.body_text.bind("<Delete>", self._on_body_delete_key)
         self.body_text.bind("<<Paste>>", self._on_body_paste, add="+")
@@ -8693,9 +8770,18 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                              bg=self.colors["card"], fg=self.colors["text"])
         title_lbl.pack(fill="x")
 
-        preview = note_body[:40].replace("\n", " ")
+        # Table rows read as pipe soup at card size, so the preview shows
+        # only the note's plain text; the tags row says a table is there.
+        table_count = len(core_tables.find_blocks(note_body))
+        if table_count:
+            preview_src = " ".join(
+                ln.strip() for ln in note_body.split("\n")
+                if ln.strip() and not is_table_row(ln))
+        else:
+            preview_src = note_body.replace("\n", " ")
+        preview = preview_src[:40]
         preview_lbl = tk.Label(
-            content, text=preview + ("..." if len(note_body) > 40 else ""),
+            content, text=preview + ("..." if len(preview_src) > 40 else ""),
             font=("Segoe UI", 9), anchor="w",
             bg=self.colors["card"], fg=self.colors["subtext"]
         )
@@ -8714,6 +8800,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             tags_text += "   💬"
         if note.get("attachments"):
             tags_text += f"   📎×{len(note['attachments'])}"
+        if table_count:
+            tags_text += ("   ▦ 1 table" if table_count == 1
+                          else f"   ▦ {table_count} tables")
         checklist = note.get("checklist") or []
         if isinstance(checklist, list) and checklist:
             done = sum(1 for it in checklist
@@ -9265,6 +9354,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         except Exception:
             return
         if not (st.get("title", "").strip() or st.get("body", "").strip()
+                or st.get("comments", "").strip()
                 or st.get("attachments") or st.get("checklist")):
             return
         try:
@@ -10303,29 +10393,24 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             pass
 
     def on_app_close(self):
-        """Before the window closes, offer to save any tabs with unsaved work."""
+        """Closing is just switching away from everything -- and switching
+        away autosaves without asking. The old quit-time dialog could only
+        ever 'protect' the last half-second of typing (anything older was
+        already autosaved), so it read as the app doubting its own
+        autosave. Whatever is still unsaved is saved, silently, and the
+        window closes."""
         self._flush_autosave()
         self._sync_active_tab()
-        dirty = [t for t in self.open_tabs
-                 if not self.editor_state_matches_saved(t["state"])]
-        if dirty:
-            names = ", ".join(self._tab_title(t) for t in dirty[:4])
-            if len(dirty) > 4:
-                names += f", +{len(dirty) - 4} more"
-            choice = self.ask_yes_no_cancel(
-                "Unsaved notes",
-                f"You have {len(dirty)} unsaved note(s):\n{names}\n\n"
-                "Save them before quitting?\n\n"
-                "Yes = save all · No = discard · Cancel = keep working"
-            )
-            if choice is None:
-                return  # cancel: don't close
-            if choice:
-                # Save each dirty tab.
-                for i in range(len(self.open_tabs)):
+        for i in range(len(self.open_tabs)):
+            try:
+                if not self.editor_state_matches_saved(
+                        self.open_tabs[i]["state"]):
                     self.switch_to_tab(i)
-                    if not self.editor_state_matches_saved(self.open_tabs[i]["state"]):
-                        self.save_current_note()
+                    self.save_current_note(auto=True)
+            except Exception:
+                # Closing must not get stuck behind a broken tab; the
+                # autosaves along the way have the rest.
+                continue
         self.destroy()
 
     def set_status(self, text):

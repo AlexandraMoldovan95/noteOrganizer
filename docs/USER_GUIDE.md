@@ -20,7 +20,7 @@ Click **+ New Note** in the sidebar to open a blank editor. A note has a title, 
 
 ![Note editor](screenshots/note-editor.png)
 
-Notes save automatically a moment after you stop typing (look for the "Auto-saved" status), and always save immediately when you switch to a different note.
+Notes save automatically a moment after you stop typing (look for the "Auto-saved" status), and always save immediately when you switch to a different note. Closing the app works the same way: anything still unsaved is saved on the way out, silently — no "unsaved changes" question, because there is nothing to lose.
 
 The writing area starts at twelve lines. **Expand**, underneath it, makes it roughly twice as tall for a long note, and **Collapse** puts it back — the note itself is unaffected either way, only how much of it you can see at once. The buttons at the bottom of the editor do not go out of reach; the page simply gets longer and scrolls. The app remembers which you chose. The comments box has the same toggle, though it always opens small.
 
@@ -48,7 +48,6 @@ List markers are part of the note's own text — a bullet really is a "• " at 
 
 **To make everything bigger**, don't format each note — go to **Settings → Appearance** and set **Editor font** and **Text size**. That is the size notes start at; anything you set from the toolbar overrides it just for that text. This is the setting to reach for if the default is simply too small to read comfortably.
 
-Still ahead: paste that keeps (or discards) formatting from wherever it was copied.
 
 A title can be up to 200 characters. That is far more than a title needs, and it keeps the field quick to type in — a very long one makes the box itself sluggish. You do not have to count: once you are within 40 characters of the limit, a small counter appears beside the title (`175/200`) and turns red when it is full. Pasting something longer shortens it to fit rather than refusing it. Titles saved before this limit existed are left exactly as they are, however long they are.
 
@@ -115,6 +114,8 @@ Any text field in a note (title, body, comments) can have an emoji inserted at t
 ### Finding notes: search, sort, and grouping
 
 Search the note list by keyword, and sort by recency, title, category, or date, from the controls above the list.
+
+Each note's card previews its first words. A table would be pipe soup at that size, so the preview shows only the note's plain text and the card's tag row marks the table itself — **▦ 1 table**, or how many the note holds — next to the comment and attachment marks.
 
 ![Search and sort](screenshots/search-and-sort.png)
 
