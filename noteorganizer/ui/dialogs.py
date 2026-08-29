@@ -392,6 +392,56 @@ class DialogsMixin:
                 break
         self._dismiss_mini_popup()
 
+    def _on_app_deactivated(self, event):
+        """Another program is coming to the front. Our popups are
+        -topmost (so the app's own focus shuffles cannot bury them), and
+        the price was that they floated over OTHER applications too.
+
+        Deactivation alone is not proof the user left: on Windows a
+        click INTO one of our override-redirect popups can deactivate
+        the main window first, and closing on that instant would destroy
+        the dropdown mid-click. So the decision is deferred a beat and
+        double-checked: the keyboard focus must have left the app AND
+        the pointer must not be over any of our popups.
+        """
+        if event.widget is not self:
+            return
+        if getattr(self, "_mini_popup", None) is None:
+            return
+        self.after(150, self._close_popups_if_left)
+
+    def _close_popups_if_left(self):
+        try:
+            if self.focus_get() is not None:
+                return                    # focus is still somewhere in the app
+        except (tk.TclError, KeyError):
+            pass
+        try:
+            px, py = self.winfo_pointerxy()
+        except tk.TclError:
+            return
+        for child in self.winfo_children():
+            if not isinstance(child, tk.Toplevel):
+                continue
+            try:
+                if not child.winfo_exists() or not child.wm_overrideredirect():
+                    continue
+                cx, cy = child.winfo_rootx(), child.winfo_rooty()
+                if (cx <= px < cx + child.winfo_width()
+                        and cy <= py < cy + child.winfo_height()):
+                    return                # the pointer is ON a popup: a click
+            except tk.TclError:
+                continue
+        self._dismiss_mini_popup()
+        for child in list(self.winfo_children()):
+            if not isinstance(child, tk.Toplevel):
+                continue
+            try:
+                if child.winfo_exists() and child.wm_overrideredirect():
+                    child.destroy()
+            except tk.TclError:
+                pass
+
     def _dismiss_mini_popup(self):
         gif_job = getattr(self, "_gif_anim_job", None)
         if gif_job is not None:

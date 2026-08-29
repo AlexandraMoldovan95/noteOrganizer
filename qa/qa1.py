@@ -3294,6 +3294,44 @@ try:
           len(_swF) == len(NO.HIGHLIGHT_COLOR_PALETTE)
           and str(_colF.cget('bg')) == app._blend_hex(
               app.colors['accent'], app.colors['card'], 0.35))
+    # ---- POPUPS YIELD THE FRONT TO OTHER PROGRAMS ----
+    # They are -topmost by design (the app's own focus shuffles must not
+    # bury them), so they floated over OTHER applications too. Closing
+    # happens only when the user has really left: focus out of the app
+    # AND the pointer not on a popup -- a click INTO a dropdown briefly
+    # deactivates the main window on Windows, and must not kill it.
+    check('the deactivate watch is armed from startup, for every popup path',
+          getattr(app, '_deactivate_bound', False)
+          and bool(app.bind('<Deactivate>')))
+    _popD = app._mini_popup
+    _real_fg = app.focus_get
+    _real_pxy = app.winfo_pointerxy
+    app.focus_get = lambda: app.body_text      # focus still in the app
+    app.winfo_pointerxy = lambda: (30000, 30000)
+    app._close_popups_if_left()
+    app.update()
+    check('focus still inside: the popup stays',
+          app._mini_popup is _popD)
+    app.focus_get = lambda: None               # gone -- but onto the popup
+    app.winfo_pointerxy = lambda: (_popD.winfo_rootx() + 5,
+                                   _popD.winfo_rooty() + 5)
+    app._close_popups_if_left()
+    app.update()
+    check('a click landing on the popup does not kill it',
+          app._mini_popup is _popD)
+    app.winfo_pointerxy = lambda: (30000, 30000)   # gone for real
+    app._close_popups_if_left()
+    app.update()
+    check('really leaving the app closes the popup',
+          app._mini_popup is None)
+    app.focus_get = _real_fg
+    app.winfo_pointerxy = _real_pxy
+    app._grid_highlight_popup(_tE, (0, 0, 0, 1), 0, 0)
+    app.update()
+    _swF = [w for w in [c for c in app._mini_popup.winfo_children()[0]
+                        .winfo_children() if isinstance(c, NO.tk.Frame)][0]
+            .winfo_children() if isinstance(w, NO.tk.Button)]
+
     _swF[0].invoke()
     app.update()
     _tE = app._grid_at_line(1)

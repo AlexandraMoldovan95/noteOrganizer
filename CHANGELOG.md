@@ -9,6 +9,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 ## [Unreleased]
 
 ### Fixed
+- Pasting a table from Excel, Word or a web page into the template editor's body box dropped the structure and kept only the words — the box is a plain text field with the system's plain paste. When the clipboard's HTML holds a table, the same converter the main editor trusts now turns it into the note's own table text, from any source that carries real structure (a PDF does not, by decision).
+- The app's popups — dropdowns, pickers, palettes — floated over OTHER programs: they are deliberately kept on top so the app's own focus changes cannot bury them, and that flag does not distinguish between the app's windows and someone else's. They now close when another program truly takes the front, decided carefully: on Windows a click INTO a dropdown briefly deactivates the main window, so the popup is closed only once the keyboard focus has left the app and the pointer is not on any popup.
 - A template holding a table applied as raw pipe rows instead of a drawn grid — the template path filled the editor and never rendered, while the import path already did. Found by the new automated check that carries a table through a template, written the same day.
 
 ---

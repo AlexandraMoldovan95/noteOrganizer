@@ -410,6 +410,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         initialise()
         super().__init__()
         self.title("Note Organizer")
+        # Armed from day one, for EVERY popup path: the -topmost popups
+        # must yield when another program takes the front, and arming
+        # lazily from one placement helper would miss the popups that
+        # position themselves.
+        self.bind("<Deactivate>", self._on_app_deactivated, add="+")
+        self._deactivate_bound = True
         self.geometry("900x600")
         self.minsize(500, 400)
 
@@ -9689,6 +9695,33 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._refresh_format_buttons()
         self.set_status("New note started from template — edits here won't change the template")
         self._reset_text_undo()
+
+    def _paste_table_aware(self, text_widget):
+        """Paste for a plain text box that should still understand tables.
+
+        The template editor's body is a bare tk.Text: pasting a table
+        from Excel, Word or a web page dropped the structure and left
+        the words. When the clipboard's HTML holds a table, the same
+        converter the main editor trusts turns it into the note's own
+        pipe-text form; anything else falls through to the normal paste.
+        """
+        try:
+            html = clipboard.read_html()
+        except Exception:
+            html = None
+        if html and "<table" in html.lower():
+            try:
+                text, _spans, _paras = html_to_note(html)
+            except Exception:
+                return None
+            if core_tables.find_blocks(text):
+                try:
+                    text_widget.delete("sel.first", "sel.last")
+                except tk.TclError:
+                    pass
+                text_widget.insert("insert", text)
+                return "break"
+        return None
 
     def save_current_as_template(self):
         """Save the current editor content as a reusable template. Asks for a

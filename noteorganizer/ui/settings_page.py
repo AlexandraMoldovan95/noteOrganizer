@@ -616,6 +616,11 @@ class SettingsPageMixin:
                 t.insert("1.0", initial)
                 t.pack(fill="x")
                 self._add_paste_menu(t)
+                # A table copied from Excel, Word or a web page arrives
+                # as pipe text instead of losing its shape to the plain
+                # clipboard.
+                t.bind("<<Paste>>",
+                       lambda e, w=t: self._paste_table_aware(w))
                 return t
 
         name_var = field("Template name", data["name"])

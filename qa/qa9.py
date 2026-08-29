@@ -84,6 +84,35 @@ work_lbl.event_generate('<Button-1>')
 app.update()
 check('editor still open after picking a category', editor_popup.winfo_exists())
 
+# ---- THE TEMPLATE BODY UNDERSTANDS TABLES ----
+# Pasting a table from Excel, Word or a web page into this plain box
+# used to drop the structure and keep the words.
+_texts9 = []
+_stack9 = [editor_popup]
+while _stack9:
+    _w9 = _stack9.pop()
+    if isinstance(_w9, tk.Text):
+        _texts9.append(_w9)
+    _stack9.extend(_w9.winfo_children())
+_body9 = [w for w in _texts9 if int(w.cget('height')) >= 4][0]
+check('the body box carries the table-aware paste binding',
+      bool(_body9.bind('<<Paste>>')))
+_real_rh9 = NO.clipboard.read_html
+NO.clipboard.read_html = lambda: (
+    '<table><tr><th>Column1</th><th>Column2</th></tr>'
+    '<tr><td>2</td><td>3</td></tr></table>')
+_body9.delete('1.0', 'end')
+_took9 = app._paste_table_aware(_body9)
+_lines9 = [l for l in _body9.get('1.0', 'end-1c').split('\n') if l]
+check(f'a pasted Excel/web table lands as pipe rows ({_lines9[:1]})',
+      _took9 == 'break' and len(_lines9) == 2
+      and _lines9[0].count('|') == 3 and 'Column1' in _lines9[0])
+NO.clipboard.read_html = lambda: '<p>doar text</p>'
+check('a non-table paste falls through to the normal path',
+      app._paste_table_aware(_body9) is None)
+NO.clipboard.read_html = _real_rh9
+_body9.delete('1.0', 'end')
+
 save_btn = find_widget(editor_popup, tk.Button, 'Save')
 save_btn.invoke()
 app.update()
