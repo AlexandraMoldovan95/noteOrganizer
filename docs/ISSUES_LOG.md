@@ -615,3 +615,89 @@ nobody noticed until a feature made tag-only changes worth noticing.
 And the first fix's perma-dirty loop is why "no stray saves when
 nothing changed" became its own assertion: the opposite failure mode of
 the bug being fixed is exactly where the fix's own bug will sit.
+
+
+### The version that updated itself
+
+**Symptom:** a green "Note updated" toast on every single launch, with
+nothing edited — reported as a cosmetic annoyance. It was not cosmetic:
+the notes file was rewritten on every start, and one note's formatting
+span crept one character further from its text with each launch
+(measured live: 1176 → 1177 → 1178 across three starts).
+
+**Root cause:** two coordinate systems, both called "characters".
+Applying a span uses Tk's `+Nc` index arithmetic, which counts an emoji
+as ONE character — the same as Python's string offsets, which is what
+the note stores. Extracting spans back used `count("chars")`, which
+counts UTF-16 units — an emoji is TWO. Any formatted note holding an
+emoji before a span therefore read back one further right per emoji:
+"changed" the moment it loaded, so the startup autosave re-saved it,
+storing the shifted span, which shifted again next launch. The same
+phantom difference had earlier powered a "you have unsaved notes"
+question at quit that autosave should have made impossible.
+
+**Fix:** one method — `_char_offset` now measures `len(get("1.0",
+index))`, the exact space the saved body string lives in (it also skips
+embedded window characters, which the drawn tables add). Verified on a
+copy of the real notebook: two consecutive launches, zero toasts, file
+untouched, all 36 notes reading clean at load.
+
+**Takeaway:** when the same word ("characters") names two different
+units, every conversion site is a latent off-by-N. The bug also hid
+behind its own symptom: the toast looked like noise, and only tracing
+*why* the file was being rewritten exposed the data damage underneath.
+
+### The tests that borrowed the notebook
+
+**Symptom:** a qa check that had been green for days failed
+deterministically one morning — nothing in the code had changed
+overnight. Separately, qa1 had a rare unexplained crash (roughly one
+run in twenty-six) that four instrumented hypotheses had failed to
+pin.
+
+**Root cause:** the qa scripts were never running in a world of their
+own. Each starts beside an empty data folder — and the app's own
+first-run migration, which executes at `import note_organizer` time,
+helpfully adopted the developer's REAL notebook from
+`%APPDATA%\NoteOrganizer` into every test run. The checks were being
+graded against whatever the owner had done in her app that day; the
+morning failure appeared because she had field-tested the `.exe` the
+evening before, changing the very data the tests were unknowingly
+inheriting.
+
+**Fix:** a hermetic seed at the top of all nine qa scripts, ABOVE the
+`note_organizer` import: write an empty `notes_data.json` plus the
+migration marker, closing both migration doors — and refuse outright to
+run beside a file holding real notes. Going hermetic immediately
+surfaced two latent test bugs that the inherited data had been masking
+(a check grabbing "the first Entry on the page", and one replacing the
+app's username variable with its own detached copy).
+
+**Takeaway:** "starts from a clean directory" is not the same as
+"starts from a clean world" when the application under test actively
+imports data on first run. The flake that follows the owner's daily
+usage around is the signature of test-data contamination.
+
+### The fix that was dead on arrival
+
+**Symptom:** mouse-wheel scrolling over tables was fixed to glide in
+pixels; every automated check agreed. The user reported, correctly,
+that real wheels still leapt from table to table.
+
+**Root cause:** the pixel handler was bound to the body with
+`bind()` — and a later line in the same build sequence bound its own
+wheel handler to the same widget, which *replaces* a binding made
+without `add="+"`. The fix was dead code for every real wheel event.
+The checks stayed green because they called the handler method
+directly, bypassing the binding chain that reality uses.
+
+**Fix:** one real wheel handler (`_text_wheel_scroll`) that both the
+body's binding and the grids' forwarding land in — and the checks now
+drive genuine `<MouseWheel>` events through the binding chain, so a
+silent overwrite can never pass again. A deliberately manual test-plan
+case ("try the physical wheel") exists for the same reason.
+
+**Takeaway:** a test that calls the method proves the method; only a
+test that travels the same route as the user proves the feature. And
+`bind()` without `add="+"` is a quiet assassin: the second binding
+wins, and nothing anywhere reports the first one gone.

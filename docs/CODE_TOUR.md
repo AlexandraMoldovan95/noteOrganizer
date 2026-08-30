@@ -530,6 +530,8 @@ rules for keeping columns lined up, merging cells, and reading the
 separator row. The drawn grid the user sees lives in `note_organizer.py`;
 this module is what that grid reads from and writes back to.
 
+**Three in-cell markers, same idiom.** `LINE_BREAK` (`<br>`) is a line break inside a cell — Markdown's own — so a multi-line cell is still one line of note text; `CHECKBOX_EMPTY`/`CHECKBOX_DONE` (`[ ]`/`[x]`, Markdown's task syntax) make a cell a clickable checkbox, read back by `checkbox_state()`; and `cell_display_lines()` splits a value into what the grid draws. All three are plain text in the stored row, which is the whole point.
+
 **The one idea everything follows from.** A table is stored in the note's
 own text, in Markdown's table syntax:
 

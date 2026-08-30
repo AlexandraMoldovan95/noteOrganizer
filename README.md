@@ -14,7 +14,7 @@ Built as a solo/pair project (developer + AI pairing partner) over an extended i
 **Notes**
 - Create, edit, pin, duplicate, and soft-delete notes
 - Rich note metadata: category, color, date, comments, checklist, file attachments
-- Autosave on pause and on note switch — nothing is ever lost mid-edit
+- Autosave on pause, on note switch, and on close — nothing is ever lost mid-edit, and quitting never asks about "unsaved notes"
 - Full-text search and six sort modes (recency, title, category, date)
 - Group notes by category, with persistent collapse state per group
 - A collapsible in-note calculator (with parentheses and standard operator precedence), for quick sums without leaving the note
@@ -34,14 +34,16 @@ Built as a solo/pair project (developer + AI pairing partner) over an extended i
 - A full calendar view with month navigation, jump-to-date, and per-day coloring
 
 **Tables**
-- Spreadsheet-style tables drawn as a real grid: click a cell to edit, drag to select, Tab to move, Enter to leave
-- Excel-familiar editing: copy/paste blocks of cells (in and out of the app — a table pasted from Excel or a web page becomes a grid), merge cells, insert/delete/duplicate rows and columns, hide columns, drag a column edge to resize (double-click it to autofit)
-- Cell formatting from the same toolbar as regular text: bold, colors, highlights (with a theme-aware palette), per-cell alignment — plus the table itself can sit left, centred, or right on the page
+- Spreadsheet-style tables drawn as a real grid: click a cell to edit, drag to select (the view auto-scrolls with the pointer, and a firm drag inside one cell selects just that cell), Tab to move — and Enter starts a new line *inside* the cell, growing the whole row (multi-line cells, stored as Markdown's own `<br>`)
+- Excel-familiar editing: copy/paste blocks of cells (in and out of the app — a table pasted from Excel or a web page becomes a grid), merge cells, insert/delete/duplicate rows and columns (whole rows copy to the bottom, whole columns to the edge), hide columns, drag a column edge to resize (double-click it to autofit) and the rule between two rows to make a row taller or shorter
+- Real checkboxes in cells: click to tick and untick, coloured from a palette, stored as Markdown's own task syntax (`[ ]` / `[x]`)
+- Cell formatting character by character: one coloured letter, word or emoji shows as itself; the open cell displays its colours live while you type, and typing continues the style it lands beside — with an *active colour* worn as a swatch on the toolbar button when nothing is selected
+- Bold, colors, highlights (with a theme-aware palette) and per-cell alignment from the same toolbar as regular text — plus the table itself can sit left, centred, or right on the page, and a table wider than the editor gets its own horizontal scrollbar
 - Stored as plain readable text (Markdown table syntax) inside the note, so tables survive search, share codes, backups, and export, and travel cleanly to and from any Markdown-aware tool
 
 **Categories & templates**
 - Custom categories with colors, safely renameable/deletable (with reassignment of affected notes)
-- Reusable note templates, including checklist content, editable inline
+- Reusable note templates, including checklist content, editable inline — with a live drawn preview for templates holding tables, and a name-collision ask so saving over an existing template never happens silently
 
 **Data safety**
 - Soft-delete to a Trash with automatic purge after a configurable retention window
@@ -55,7 +57,7 @@ Built as a solo/pair project (developer + AI pairing partner) over an extended i
 
 **Interface**
 - A fully custom themed UI — dialogs, dropdowns, color pickers, and popups are all hand-built to match the active theme; nothing falls back to an OS-native white popup
-- 8 built-in themes (4 dark, 4 light variants), switchable live
+- 8 built-in themes (4 dark, 4 light variants), switchable live — with a one-press ☀/🌙 light/dark flip right in the editor toolbar
 - Single-editor-tab design (like a browser with one tab): switching notes always autosaves the previous one first
 
 ---
