@@ -4258,6 +4258,63 @@ for _ in range(4):
     app.update_idletasks()
 check('a full list rebuild restores the scroll in pixels, clamp or not',
       _px23 > 200 and abs(_cv23.canvasy(0) - _px23) < 30)
+
+# A rebuilt list's geometry settles over several event-loop passes (one
+# collapse measured heights 106 -> 276 -> 820 as separate Configure
+# events), and a LATER pass can re-clamp the canvas after the idle-time
+# restore already ran. The restore stays in force for a short window,
+# re-applied on Configure and on timers -- so a second clamp landing on
+# its own event-loop pass must lose too.
+_cv23.yview_moveto(0.6)
+app.update()
+_px24 = _cv23.canvasy(0)
+app.refresh_note_list()
+_cv23.yview_moveto(0.0)          # clamp before the idle restore
+app.update()
+app.update_idletasks()
+_cv23.yview_moveto(0.0)          # a later settling pass clamps AGAIN
+_t24_end = time.time() + 0.55
+while time.time() < _t24_end:
+    app.update()
+    time.sleep(0.01)
+check('the rebuild restore outlives staged re-clamps',
+      _px24 > 200 and abs(_cv23.canvasy(0) - _px24) < 30)
+
+# Collapsing a group while scrolled deep below its cards: the content
+# shrinks under the canvas, the now off-screen list frame never fires
+# Configure, and the stale scrollregion left a blank viewport (the
+# canvas parked past the end of the real content). The timed restore
+# must land the view at the END of the shorter list, not blank space
+# and not the top.
+_g24 = []
+for _i24 in range(16):
+    _g24.append(NO.normalize_note(
+        {'id': 9200 + _i24, 'title': 'General %d' % _i24,
+         'body': 'corp ' * 12, 'category': 'General'}))
+for _i24 in range(12):
+    _g24.append(NO.normalize_note(
+        {'id': 9300 + _i24, 'title': 'Work %d' % _i24,
+         'body': 'corp ' * 12, 'category': 'Work'}))
+app.notes = _g24
+app.group_by_category.set(True)
+app._on_toggle_group_by_category()
+app.update()
+app.update_idletasks()
+_cv23.yview_moveto(1.0)
+app.update()
+app._toggle_group_collapsed('General')
+_t24_end = time.time() + 0.6
+while time.time() < _t24_end:
+    app.update()
+    time.sleep(0.01)
+_bb24 = _cv23.bbox('all')
+_ch24 = (_bb24[3] - _bb24[1]) if _bb24 else 0
+_max24 = _ch24 - _cv23.winfo_height()
+check('collapsing from deep scroll lands at the end, not a blank view',
+      _max24 > 100 and abs(_cv23.canvasy(0) - _max24) < 30)
+app.collapsed_groups.discard('General')
+app.group_by_category.set(False)
+app._on_toggle_group_by_category()
 app.notes = _savedNotes23
 app.refresh_note_list()
 app.update()

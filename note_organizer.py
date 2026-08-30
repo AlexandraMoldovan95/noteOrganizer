@@ -13,6 +13,7 @@ import zipfile
 import tempfile
 import zlib
 import threading
+import time
 import base64
 import calendar as cal_module
 import re
@@ -739,9 +740,28 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if canvas is None:
             return
         try:
+            # While a rebuild's restore is still in force, every Configure
+            # re-applies it. A rebuilt list's geometry settles over SEVERAL
+            # event-loop passes (measured: one collapse reported heights
+            # 106 -> 276 -> 820 as separate Configure events), and each
+            # intermediate scrollregion re-clamps the canvas -- a single
+            # idle-time restore loses that race to whichever stage lands
+            # after it.
+            pending = getattr(self, "_list_restore_px", None)
+            if pending is not None:
+                if time.monotonic() <= getattr(self, "_list_restore_until", 0):
+                    self._apply_list_scroll_px(pending)
+                    return
+                self._list_restore_px = None
             bbox = canvas.bbox("all")
             if not bbox:
                 return
+            # Keep the scrollregion honest before judging the origin:
+            # yview_moveto() below works in region fractions, the region
+            # can lag behind the content (see _apply's comment), and
+            # shrinking it to the truth makes Tk clamp an origin sitting
+            # past the new end (a blank viewport otherwise) by itself.
+            canvas.configure(scrollregion=bbox)
             content_h = bbox[3] - bbox[1]
             if (content_h <= canvas.winfo_height()
                     or canvas.canvasy(0) < 0):
@@ -749,12 +769,14 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         except tk.TclError:
             pass
 
-    def _restore_list_scroll(self, pixels):
-        """Put the note list back where it was before a full rebuild --
-        in PIXELS from the top, because a rebuild can change the content
-        height (collapsing a group, say) and a remembered fraction would
-        land somewhere else. Clamped into the new content; a list that
-        now fits pins to the top like always."""
+    def _apply_list_scroll_px(self, pixels):
+        """Scroll the list to `pixels` from the top, clamped into the
+        content as it is RIGHT NOW; content that fits pins to the top.
+        Sets the scrollregion from bbox first: when content shrinks
+        while the canvas is scrolled past the new end, the embedded
+        frame ends up above the viewport, Tk stops resizing it, its
+        Configure never fires, and the scrollregion stays stale -- but
+        bbox already knows the real (requested) height."""
         canvas = getattr(self, "canvas", None)
         if canvas is None:
             return
@@ -762,6 +784,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             bbox = canvas.bbox("all")
             if not bbox:
                 return
+            canvas.configure(scrollregion=bbox)
             content_h = max(1, bbox[3] - bbox[1])
             view_h = canvas.winfo_height()
             if content_h <= view_h:
@@ -769,6 +792,42 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 return
             pixels = max(0, min(pixels, content_h - view_h))
             canvas.yview_moveto(pixels / content_h)
+        except tk.TclError:
+            pass
+
+    def _restore_list_scroll(self, pixels):
+        """Put the note list back where it was before a full rebuild --
+        in PIXELS from the top, because a rebuild can change the content
+        height (collapsing a group, say) and a remembered fraction would
+        land somewhere else. The restore stays in force for a short
+        window rather than firing once, re-applied from two directions:
+        _sync_list_scroll on every Configure (a rebuilt list's geometry
+        settles over several event-loop passes, each re-clamping the
+        canvas), and the timers below (a rebuild that only SHRINKS
+        content scrolled out of view fires no Configure at all, and at
+        this idle moment bbox may still report the old geometry)."""
+        self._list_restore_px = pixels
+        self._list_restore_until = time.monotonic() + 0.4
+        self._apply_list_scroll_px(pixels)
+        for delay in (60, 160, 360):
+            self.after(delay, self._reapply_list_restore)
+
+    def _reapply_list_restore(self):
+        """One timed beat of a still-in-force rebuild restore."""
+        pending = getattr(self, "_list_restore_px", None)
+        if pending is None or not self._still_alive():
+            return
+        if time.monotonic() > getattr(self, "_list_restore_until", 0):
+            self._list_restore_px = None
+            return
+        self._apply_list_scroll_px(pending)
+
+    def _list_scrollbar_moved(self, *args):
+        """The list scrollbar's command: a deliberate drag beats a
+        rebuild's still-pending restore, then scrolls as normal."""
+        self._list_restore_px = None
+        try:
+            self.canvas.yview(*args)
         except tk.TclError:
             pass
 
@@ -7998,7 +8057,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
         self.canvas = tk.Canvas(list_container, highlightthickness=0)
         self.track_theme(self.canvas, bg="sidebar")
-        scrollbar = ttk.Scrollbar(list_container, orient="vertical", command=self.canvas.yview)
+        scrollbar = ttk.Scrollbar(list_container, orient="vertical",
+                                  command=self._list_scrollbar_moved)
         self.list_frame = tk.Frame(self.canvas)
         self.track_theme(self.list_frame, bg="sidebar")
 
@@ -9577,6 +9637,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     return "break"
             except (tk.TclError, ValueError):
                 pass
+            # A deliberate scroll beats a rebuild's still-pending restore.
+            if canvas is getattr(self, "canvas", None):
+                self._list_restore_px = None
             canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
             return "break"
 
@@ -9621,7 +9684,15 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # The offset is remembered in pixels and put back once the new
         # content exists, whatever happened in between.
         try:
-            saved_list_scroll = max(0, self.canvas.canvasy(0))
+            # If the previous rebuild's restore is still in force, the
+            # canvas may sit at a transiently clamped position right now
+            # -- carry that restore's target forward instead.
+            pending = getattr(self, "_list_restore_px", None)
+            if (pending is not None and time.monotonic()
+                    <= getattr(self, "_list_restore_until", 0)):
+                saved_list_scroll = pending
+            else:
+                saved_list_scroll = max(0, self.canvas.canvasy(0))
         except (tk.TclError, AttributeError):
             saved_list_scroll = 0
         if saved_list_scroll > 0:

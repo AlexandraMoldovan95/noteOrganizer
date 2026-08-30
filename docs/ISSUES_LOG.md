@@ -701,3 +701,51 @@ case ("try the physical wheel") exists for the same reason.
 test that travels the same route as the user proves the feature. And
 `bind()` without `add="+"` is a quiet assassin: the second binding
 wins, and nothing anywhere reports the first one gone.
+
+### The list that lost its place, twice, for two silent reasons
+
+**Symptom:** two "known bugs to investigate" that had resisted every
+reproduction attempt: the note list sometimes jumped back to the top
+after an autosave or a category-group collapse, and a short list
+sometimes flickered and sat displaced while its scrollbar was
+dragged. "Sometimes" was the whole problem — scripted replays of the
+exact reported steps came out clean, run after run.
+
+**Root cause (found by instrumenting, not guessing):** logging every
+`Configure` on the list's inner frame showed a rebuilt list's
+geometry settling over *several* event-loop passes — one collapse
+reported heights 106 → 276 → 820 as three separate events. Each
+intermediate height becomes a too-small scrollregion for a moment,
+and Tk clamps a canvas scrolled beyond it: measured live, a scroll
+sitting at 546px was yanked to 380px by a transient 654px stage.
+Whether an intermediate stage lands at all depends on where the event
+loop happens to breathe — which is why the bug kept "sometimes" in
+its description for months. The same instrumentation caught a second,
+stranger shape: collapse a group while scrolled *below* it and the
+content shrinks entirely above the viewport — Tk stops resizing an
+embedded frame it no longer shows, so no Configure fires at all, the
+scrollregion goes stale, and the canvas stays parked past the end of
+the real content: a blank list until the next touch. Same family,
+opposite silence — one bug fired too many events, the other none.
+
+**Fix:** the scroll protections the editor page has carried since
+0.32.x, hardened for both shapes. A full rebuild remembers its offset
+in pixels and keeps the restore *in force* for a short window — 
+re-applied on every late Configure (for the staged re-clamps) and on
+short timers (for the shrink that announces nothing), with the
+scrollregion refreshed from `bbox("all")` first so the fractions are
+computed against the truth. A deliberate wheel or scrollbar move
+cancels the pending restore: the user always outranks the machinery.
+Four qa checks pin the behaviour — two forcing the transient states
+directly, two walking the real collapse and rebuild paths — and each
+was proven able to fail by mutation before it was trusted.
+
+**Takeaway:** "hard to reproduce" usually means the trigger lives in
+timing you haven't measured yet. The way in was not trying the steps
+again harder — it was instrumenting what the widget actually
+experiences until the "sometimes" resolved into two deterministic
+mechanisms. And Tk has opinions worth writing down: geometry settles
+in stages, each stage fires its own Configure; an embedded window
+scrolled out of view stops being resized, taking its Configure events
+with it; and a scrollregion is a claim, not a fact — refresh it from
+`bbox` before trusting any fraction math built on it.
