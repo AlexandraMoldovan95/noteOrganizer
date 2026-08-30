@@ -10755,6 +10755,15 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             name = name.strip()
             if not name:
                 return False  # keep the box open
+            if any(t.get("name") == name for t in self.templates):
+                # Never overwrite silently: the same name may hold
+                # entirely different content someone still needs.
+                if not self.ask_yes_no(
+                        "Template name taken",
+                        f"You already have a template named “{name}”.\n\n"
+                        "Replace the old template with this one?\n"
+                        "Choose No to give this one another name."):
+                    return False  # keep the box open for a new name
             tpl = normalize_template({
                 "name": name,
                 "title": st.get("title", ""),

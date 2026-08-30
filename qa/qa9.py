@@ -344,6 +344,7 @@ check('a failing preview draw is contained, hiding intact',
       not _tkerrs9
       and len(_bodyG.tag_ranges('tblhide')) == _hidBefore)
 
+
 # ---- THE PREVIEW DRAWS A CELL'S <br> LINES AS LINES ----
 _bodyG.delete('1.0', 'end')
 _bodyG.insert('1.0', '| Cap | Doi |\n| unu<br>doi | x |')
@@ -362,6 +363,73 @@ _txB = [_pvB.itemcget(i, 'text') for i in (_pvB.find_all() if _pvB else ())
         if _pvB.type(i) == 'text']
 check('the template preview splits a <br> cell into its lines',
       'unu' in _txB and 'doi' in _txB and 'unu<br>doi' not in _txB)
+
+# ---- A TAKEN TEMPLATE NAME ASKS, NEVER SILENTLY OVERWRITES ----
+app.templates = [NO.normalize_template({
+    'name': 'Cumparaturi', 'title': 'T', 'body': 'continut vechi',
+    'comments': '', 'category': 'General', 'checklist': []})]
+NO.save_templates(app.templates)
+app.new_note()
+app.update()
+app.title_entry.insert(0, 'Alta nota')
+app.body_text.insert('1.0', 'continut NOU')
+app.update()
+def _ents21(w):
+    out = []
+    for _chE in w.winfo_children():
+        if isinstance(_chE, tk.Entry):
+            out.append(_chE)
+        out.extend(_ents21(_chE))
+    return out
+_asksC = []
+_origAsk9 = app.ask_yes_no
+app.ask_yes_no = lambda *a, **k: (_asksC.append(1), False)[1]
+app.save_current_as_template()
+app.update()
+_entC9 = _ents21(app._mini_popup)[0]
+_entC9.delete(0, 'end')
+_entC9.insert(0, 'Cumparaturi')
+_entC9.event_generate('<Return>')
+app.update()
+check('saving over a taken name from the editor asks, and No keeps both',
+      len(_asksC) == 1
+      and len(app.templates) == 1
+      and app.templates[0]['body'] == 'continut vechi'
+      and app._mini_popup is not None and app._mini_popup.winfo_exists())
+app.ask_yes_no = lambda *a, **k: (_asksC.append(1), True)[1]
+_entC9 = _ents21(app._mini_popup)[0]
+_entC9.delete(0, 'end')
+_entC9.insert(0, 'Cumparaturi')
+_entC9.event_generate('<Return>')
+app.update()
+check('Yes replaces the old template, one copy of the name remains',
+      [t['name'] for t in app.templates].count('Cumparaturi') == 1
+      and app.templates[-1]['body'] == 'continut NOU')
+
+# renaming a template onto a neighbour in Settings asks the same way
+app.templates.append(NO.normalize_template({
+    'name': 'Retete', 'title': '', 'body': 'retetele mele',
+    'comments': '', 'category': 'General', 'checklist': []}))
+NO.save_templates(app.templates)
+app._edit_template(app.templates[-1], lambda: None)
+app.update()
+_entR9 = _ents21(app._mini_popup)[0]
+_entR9.delete(0, 'end')
+_entR9.insert(0, 'Cumparaturi')
+app.ask_yes_no = lambda *a, **k: (_asksC.append(1), False)[1]
+find_widget(app._mini_popup, tk.Button, 'Save').invoke()
+app.update()
+_names9 = [t['name'] for t in app.templates]
+check('renaming onto a neighbour asks too; No leaves no duplicate',
+      _names9.count('Cumparaturi') == 1 and 'Retete' in _names9)
+app.ask_yes_no = lambda *a, **k: (_asksC.append(1), True)[1]
+find_widget(app._mini_popup, tk.Button, 'Save').invoke()
+app.update()
+_names9 = [t['name'] for t in app.templates]
+check('Yes removes the neighbour and keeps one template with that name',
+      _names9 == ['Cumparaturi']
+      and app.templates[0]['body'] == 'retetele mele')
+app.ask_yes_no = _origAsk9
 _popG._confirm_dismiss = False
 app._dismiss_mini_popup()
 app.update()

@@ -986,6 +986,22 @@ class SettingsPageMixin:
                 self.show_warning("Name needed", "Give the template a name.", parent=pop)
                 return
             new_tpl = collect()
+            # A colliding name never overwrites (or duplicates) silently:
+            # saving a NEW template under a taken name, or renaming one
+            # onto a neighbour, both ask first.
+            taken_name = new_tpl.get("name")
+            others = [t for t in self.templates
+                      if t is not tpl and t.get("name") == taken_name]
+            if others:
+                if not self.ask_yes_no(
+                        "Template name taken",
+                        f"You already have a template named “{taken_name}”.\n\n"
+                        "Replace the old template with this one?\n"
+                        "Choose No to give this one another name.",
+                        parent=pop):
+                    return
+                self.templates = [t for t in self.templates
+                                  if t not in others]
             if is_new:
                 self.templates.append(new_tpl)
             else:
