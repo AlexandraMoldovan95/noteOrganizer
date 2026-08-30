@@ -32,18 +32,19 @@ section used to hold open were answered in the building:
   enough. The dead code was removed and the reason recorded in
   `settings_page.py`.
 
-Still open, in rough order of value:
+The four "still open" quick wins all shipped on 2026-08-30:
 
-- **A "last exported" line in Backup.** The app is offline by design, so an
-  export is the only copy of the notes that is not in the app's own folder,
-  and nothing currently says when one last happened. One settings key.
-- **Trash retention is not configurable.** `TRASH_RETENTION_DAYS = 30`
-  is a constant; `USER_GUIDE.md` now says 30 days plainly. Making it a
-  real setting remains a candidate.
-- **No keyboard-shortcut reference.** Thirteen shortcuts are bound and only
-  the formatting ones are discoverable, via the right-click menu.
-- **Template deletion is permanent and unlabelled as such** — templates are
-  not routed through Trash like everything else.
+- **A "last exported" line in Backup** — shipped: the panel shows the last
+  successful export's date and time (failed exports don't move it).
+- **Trash retention** — shipped as a real setting: a 7–90 day selector in
+  the Trash panel; the purge, the days-left column and every message quote
+  it, and unusable hand-edited values read as the 30-day default.
+- **A keyboard-shortcut reference** — shipped: Settings → Keyboard
+  shortcuts, every bound combo grouped and verified against the bindings.
+- **Template deletion** — the confirmation now says plainly it skips the
+  Trash and can't be undone. Actually routing templates through the Trash
+  (so they'd be restorable like notes) remains a candidate, but it is a
+  data-format change, not a quick win.
 
 ## Versioning
 

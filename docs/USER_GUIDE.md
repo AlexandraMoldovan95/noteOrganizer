@@ -135,13 +135,13 @@ Each note's card previews its first words. A table would be pipe soup at that si
 
 ### Templates
 
-Save any note as a reusable template (📋 **Save as template**), or build one from scratch in Settings → Templates. Starting a new note with **Use template** fills in the title, body, category, and checklist from the template — the template itself is never affected by what you do with the note afterward.
+Save any note as a reusable template (📋 **Save as template**), or build one from scratch in Settings → Templates. Starting a new note with **Use template** fills in the title, body, category, and checklist from the template — the template itself is never affected by what you do with the note afterward. Deleting a template is the one delete in the app that skips the Trash — it can't be undone, and the confirmation says so plainly.
 
 ![Templates panel](screenshots/templates-panel.png)
 
 ### Trash
 
-Deleting a note moves it to **Recently deleted** (Settings), where it's recoverable for 30 days before being purged automatically. Restore individual notes, delete them permanently one at a time, or empty the whole trash at once. With a lot of deleted notes, the list loads the most recent batch first, with a button to reveal more — so it stays quick to open no matter how much has accumulated there.
+Deleting a note moves it to **Recently deleted** (Settings), where it's recoverable for 30 days before being purged automatically — or for however long you choose: a **Keep deleted notes for** selector at the top of the same panel offers 7 to 90 days, and a change applies from the next startup's cleanup. Restore individual notes, delete them permanently one at a time, or empty the whole trash at once. With a lot of deleted notes, the list loads the most recent batch first, with a button to reveal more — so it stays quick to open no matter how much has accumulated there.
 
 ![Trash panel](screenshots/trash-panel.png)
 
@@ -198,7 +198,7 @@ Paste a code you received into **Import code** in the sidebar. If any of the not
 
 ### Full backup: export
 
-Settings → Export notes creates a single `.zip` containing every note, your settings, and every attachment — the one file you need to move everything to another device. With a lot of attachments this can take a moment; a progress bar stays visible at the bottom of the window the whole time, and the app remains fully usable while it works.
+Settings → Export notes creates a single `.zip` containing every note, your settings, and every attachment — the one file you need to move everything to another device. A line under the button remembers when you last did this — worth a glance now and then, because that `.zip` is the only copy of your notes outside the app's own folder. With a lot of attachments this can take a moment; a progress bar stays visible at the bottom of the window the whole time, and the app remains fully usable while it works.
 
 ### Full backup: import
 
@@ -210,7 +210,7 @@ Settings → Import notes brings a previously exported `.zip` back in — notes,
 
 ## Settings
 
-Categories, templates, trash, duplicate cleanup, appearance, your name, and usage statistics all live on one page, reached via the **⚙ Settings** button at the bottom of the sidebar. The page is split in two: a list of settings on the left, and whichever one you picked on the right. One section shows at a time, so you're only ever looking at the setting you came for. A **← Back to Notes** button at the top returns you to your notes.
+Categories, templates, trash, duplicate cleanup, appearance, your name, usage statistics, and a keyboard-shortcut reference all live on one page, reached via the **⚙ Settings** button at the bottom of the sidebar. The page is split in two: a list of settings on the left, and whichever one you picked on the right. One section shows at a time, so you're only ever looking at the setting you came for. A **← Back to Notes** button at the top returns you to your notes.
 
 ![Settings overview](screenshots/settings-overview.png)
 

@@ -48,8 +48,23 @@ from . import paths
 # paragraph formatting, so the storage layer needs both validators.
 from .formatting import normalize_formatting, normalize_paragraphs
 
-# Deleted notes live in the trash this many days, then auto-purge on startup.
+# Deleted notes live in the trash this many days, then auto-purge on
+# startup. This is the DEFAULT; the actual window is a setting, read
+# through trash_retention_days() below.
 TRASH_RETENTION_DAYS = 30
+
+
+def trash_retention_days():
+    """The trash retention window in days: the user's setting, or the
+    default. Clamped to a sane range -- a hand-edited settings file
+    saying 0 (or "forever", or -3) must not make startup purge
+    everything, so anything that isn't a usable number of days reads
+    as the default. Read fresh on every call: the setting can change
+    while the app runs, and the next purge should honour it."""
+    days = get_setting("trash_retention_days")
+    if isinstance(days, bool) or not isinstance(days, int):
+        return TRASH_RETENTION_DAYS
+    return max(1, min(days, 365))
 
 
 # ---- Settings file (read/modify/write, so keys never clobber each other) ----
@@ -181,7 +196,7 @@ def purge_expired_trash(trash):
     belonging to purged notes are permanently deleted too — this is the one
     place purging happens automatically, without an explicit user action, so
     it must not be the one place that silently leaves orphaned files behind."""
-    cutoff = datetime.now() - timedelta(days=TRASH_RETENTION_DAYS)
+    cutoff = datetime.now() - timedelta(days=trash_retention_days())
     kept = []
     purged_entries = []
     for entry in trash:
@@ -403,7 +418,7 @@ def days_left_in_trash(deleted_at):
     except (ValueError, TypeError):
         return None
     elapsed = (datetime.now() - when).days
-    return max(0, TRASH_RETENTION_DAYS - elapsed)
+    return max(0, trash_retention_days() - elapsed)
 
 
 def restore_from_trash(notes, trash, entry):

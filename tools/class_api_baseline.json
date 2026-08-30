@@ -45,6 +45,7 @@
   "_build_settings_categories_panel": "(self, parent)",
   "_build_settings_duplicates_panel": "(self, parent)",
   "_build_settings_name_panel": "(self, parent)",
+  "_build_settings_shortcuts_panel": "(self, parent)",
   "_build_settings_statistics_panel": "(self, parent)",
   "_build_settings_templates_panel": "(self, parent)",
   "_build_settings_trash_panel": "(self, parent)",
