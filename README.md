@@ -46,19 +46,20 @@ Built as a solo/pair project (developer + AI pairing partner) over an extended i
 - Reusable note templates, including checklist content, editable inline — with a live drawn preview for templates holding tables, and a name-collision ask so saving over an existing template never happens silently
 
 **Data safety**
-- Soft-delete to a Trash with automatic purge after a configurable retention window
+- Soft-delete to a Trash with automatic purge after a configurable retention window (7–90 days, chosen right in the Trash panel)
 - Duplicate detection (title/body/comments/category match), with per-group or one-click "clean up everything" resolution
 - A defensive data layer: corrupt or missing fields on any note degrade to safe defaults instead of crashing the app
 
 **Sharing & backup**
 - Share one or many notes as a compact, copy-pasteable text code (no attachments — content only)
-- Full backup export/import as a single `.zip` (notes, settings, attachments), running on a background thread with a live progress bar so the app never freezes during the operation
+- Full backup export/import as a single `.zip` (notes, settings, attachments), running on a background thread with a live progress bar so the app never freezes during the operation — and the Backup panel says when the last export happened, since that file is the only copy outside the app's own folder
 - Import safely checks for duplicates before merging, rather than silently doubling up your notes
 
 **Interface**
 - A fully custom themed UI — dialogs, dropdowns, color pickers, and popups are all hand-built to match the active theme; nothing falls back to an OS-native white popup
 - 8 built-in themes (4 dark, 4 light variants), switchable live — with a one-press ☀/🌙 light/dark flip right in the editor toolbar
 - Single-editor-tab design (like a browser with one tab): switching notes always autosaves the previous one first
+- A keyboard-shortcut reference in Settings → Keyboard shortcuts — every bound combo in one place, from the formatting four to table and calendar navigation
 
 ---
 
