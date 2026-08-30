@@ -1044,6 +1044,14 @@ check('and the undiscoverable rest',
       all(k in _allQW for k in ('Ctrl+Shift+V', 'Page Up', 'Home',
                                 'Shift+Tab')))
 
+# Every nav entry draws a real glyph -- a section registered without a
+# branch in _draw_icon would show a BLANK icon and nothing would error
+# (exactly how the shortcuts section first shipped, caught in review).
+_blankQW = [k for k, cv in app._settings_nav_icons.items()
+            if not cv.find_withtag('glyph')]
+check('every settings nav entry draws a glyph (blank: %s)' % _blankQW,
+      _blankQW == [])
+
 # F4: deleting a template says plainly that nothing comes back.
 _askedQW = {}
 _ansQW = {'v': False}

@@ -1890,6 +1890,13 @@ class SettingsPageMixin:
             canvas.create_rectangle(2.8, 9, 5.2, 13.6, **f)
             canvas.create_rectangle(6.8, 5, 9.2, 13.6, **f)
             canvas.create_rectangle(10.8, 7, 13.2, 13.6, **f)
+        elif kind == "shortcuts":               # a keyboard
+            canvas.create_rectangle(2.2, 4.6, 13.8, 12.0, fill="", **o)
+            # Filled keys, not outlined -- at nav size an outlined 1.4px
+            # square collapses into noise, same reason as the bin above.
+            for x in (4.3, 6.75, 9.2, 11.65):
+                canvas.create_rectangle(x - 0.75, 6.2, x + 0.75, 7.7, **f)
+            canvas.create_rectangle(5.0, 9.2, 11.0, 10.6, **f)  # space bar
         elif kind == "about":                   # an info disc
             canvas.create_oval(2.5, 2.5, 13.5, 13.5, **o)
             canvas.create_oval(7.2, 4.8, 8.8, 6.4, **f)
