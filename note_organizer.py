@@ -184,6 +184,7 @@ from noteorganizer.core import clipboard
 from noteorganizer.core import tables as core_tables
 from noteorganizer.core.tables import is_table_row
 from noteorganizer.core.richtext import (html_to_note, note_to_html,
+                                        note_to_markdown, html_document,
                                         reflow_wrapped)
 from noteorganizer.core.formatting import (
     normalize_paragraphs,
@@ -6635,6 +6636,64 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                   fg="white", relief="flat", font=("Segoe UI", 9, "bold"), cursor="hand2"
                   ).pack(fill="x", pady=(4, 0), ipady=3)
 
+    def export_note_as_file(self, note, fmt):
+        """Write one note to a standalone file the rest of the world reads.
+
+        Three formats, honestly labelled: HTML carries everything the
+        note has (styles, colours, tables as real tables) and is the
+        road to PDF (open, Ctrl+P) and Word (opens .html natively);
+        Markdown keeps the structure -- tables and checkboxes are
+        already its own syntax -- but drops colours; plain text is the
+        body as stored. Attachments never travel with a single-note
+        export -- that is what the full Backup export is for.
+        """
+        title = (note.get("title") or "").strip() or "Untitled note"
+        kinds = {"html": ("HTML file", ".html"),
+                 "md": ("Markdown file", ".md"),
+                 "txt": ("Text file", ".txt")}
+        label, ext = kinds[fmt]
+        # A title is prose; a filename is not. Strip what Windows forbids.
+        safe = re.sub(r'[<>:"/\\|?*\n\r\t]', "_", title).strip(" ._")[:60]
+        path = filedialog.asksaveasfilename(
+            title=f"Export “{title}” as a {label.lower()}",
+            defaultextension=ext,
+            initialfile=(safe or "note") + ext,
+            filetypes=[(label, "*" + ext), ("All files", "*.*")])
+        if not path:
+            return
+        body = note.get("body", "")
+        comments = (note.get("comments") or "").strip()
+        if fmt == "html":
+            fragment = note_to_html(body, note.get("formatting"),
+                                    note.get("paragraphs"))
+            if comments:
+                fragment += ("<hr>\n<div><i>Comments</i></div>\n"
+                             + note_to_html(comments))
+            content = html_document(title, fragment)
+        elif fmt == "md":
+            content = f"# {title}\n\n" + note_to_markdown(
+                body, note.get("formatting"), note.get("paragraphs"))
+            if comments:
+                content += "\n\n---\n\nComments:\n\n" + comments
+            content += "\n"
+        else:
+            content = title + "\n\n" + body
+            if comments:
+                content += "\n\nComments:\n" + comments
+            content += "\n"
+        try:
+            with open(path, "w", encoding="utf-8") as f:
+                f.write(content)
+        except (IOError, OSError) as exc:
+            self.show_error("Export failed",
+                            f"Couldn't write the file:\n{exc}")
+            return
+        self._show_toast(f"Exported to {os.path.basename(path)}")
+        if note.get("attachments"):
+            self.set_status(
+                "Attached files aren't part of a note export — "
+                "use Settings → Backup → Export for those.")
+
     def share_current_note_as_code(self):
         """Generate a share code for the note currently open and show it inline
         in the editor (no pop-up), with a Copy button."""
@@ -10769,6 +10828,25 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         )
         pin_label = "📌  Unpin from top" if note.get("pinned") else "📌  Pin to top"
         menu.add_command(label=pin_label, command=lambda: self.toggle_pin(note))
+
+        # One note out into the world as a file. HTML is the complete
+        # export (colours, tables, everything) and doubles as the road
+        # to PDF (browser, Ctrl+P) and Word (opens .html natively);
+        # Markdown is portable but drops what Markdown cannot say.
+        export_menu = tk.Menu(menu, tearoff=0)
+        export_menu.configure(
+            bg=self.colors["card"], fg=self.colors["text"],
+            activebackground=self.colors["accent"], activeforeground="white",
+            relief="flat", bd=0, font=("Segoe UI", 9)
+        )
+        for fmt, fmt_label in (
+                ("html", "Web page (.html) — full formatting; opens in a browser or Word"),
+                ("md", "Markdown (.md) — tables and checkboxes, no colours"),
+                ("txt", "Plain text (.txt)")):
+            export_menu.add_command(
+                label=fmt_label,
+                command=lambda f=fmt: self.export_note_as_file(note, f))
+        menu.add_cascade(label="💾  Export as file", menu=export_menu)
 
         # Recurrence-specific actions, only meaningful from the calendar.
         if occurrence_date is not None:

@@ -4919,6 +4919,66 @@ app.update()
 # ---- PERSISTENCE TO DISK ----
 app.save_notes()
 disk_path = NO.DATA_FILE
+# ---- EXPORT ONE NOTE AS A FILE ----
+# The context menu's three formats, driven through the real method with
+# the save dialog stubbed. Runs in this script's own scratch directory.
+import tkinter.filedialog as _fdX
+import io as _ioX
+_exp_note = NO.normalize_note({
+    'id': 8800, 'title': 'Export <proba>',
+    'body': ('linia intai' + chr(10)
+             + chr(0x2022) + ' bullet' + chr(10)
+             + '| A | B |' + chr(10) + '| --- | --- |' + chr(10)
+             + '| [x] | val |' + chr(10) + 'coada'),
+    'formatting': [{'start': 0, 'end': 5, 'style': 'bold'}],
+    'paragraphs': [{'line': 1, 'kind': 'bullet'}],
+    'comments': 'un comentariu', 'category': 'General'})
+_exp_dir = os.path.abspath('qa_export_out')
+os.makedirs(_exp_dir, exist_ok=True)
+_toastsX = []
+_origToastX = app._show_toast
+app._show_toast = lambda text, kind='success': _toastsX.append(text)
+_origAskSaveX = _fdX.asksaveasfilename
+
+_pX = os.path.join(_exp_dir, 'nota.html')
+_fdX.asksaveasfilename = lambda **kw: _pX
+app.export_note_as_file(_exp_note, 'html')
+_htmlX = _ioX.open(_pX, encoding='utf-8').read() if os.path.exists(_pX) else ''
+check('HTML export writes a full document with the table as a table',
+      _htmlX.startswith('<!DOCTYPE html>') and '<table>' in _htmlX
+      and '&lt;proba&gt;' in _htmlX and '<b>linia</b>' in _htmlX)
+
+_pX = os.path.join(_exp_dir, 'nota.md')
+_fdX.asksaveasfilename = lambda **kw: _pX
+app.export_note_as_file(_exp_note, 'md')
+_mdX = _ioX.open(_pX, encoding='utf-8').read() if os.path.exists(_pX) else ''
+check('Markdown export keeps tables verbatim and maps the bullet',
+      '| [x] | val |' in _mdX and '- bullet' in _mdX
+      and '**linia**' in _mdX and _mdX.startswith('# Export'))
+
+_pX = os.path.join(_exp_dir, 'nota.txt')
+_fdX.asksaveasfilename = lambda **kw: _pX
+app.export_note_as_file(_exp_note, 'txt')
+_txtX = _ioX.open(_pX, encoding='utf-8').read() if os.path.exists(_pX) else ''
+check('text export is the body as stored, comments included',
+      'linia intai' in _txtX and 'un comentariu' in _txtX)
+check('each export announces itself with a toast',
+      len(_toastsX) == 3 and all('Exported to' in t for t in _toastsX))
+
+_before_cancelX = sorted(os.listdir(_exp_dir))
+_fdX.asksaveasfilename = lambda **kw: ''
+app.export_note_as_file(_exp_note, 'html')
+check('cancelling the save dialog writes nothing',
+      sorted(os.listdir(_exp_dir)) == _before_cancelX)
+
+_seenX = {}
+_fdX.asksaveasfilename = lambda **kw: _seenX.update(kw) or ''
+app.export_note_as_file(_exp_note, 'html')
+check('the suggested filename is scrubbed of forbidden characters',
+      _seenX.get('initialfile') == 'Export _proba.html')
+_fdX.asksaveasfilename = _origAskSaveX
+app._show_toast = _origToastX
+
 check('notes file exists on disk', os.path.exists(disk_path))
 with open(disk_path) as f:
     disk_notes = json.load(f)

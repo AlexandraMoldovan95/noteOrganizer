@@ -10,6 +10,7 @@ does: printing a bullet crashes a plain Windows console on cp1252.
 """
 import note_organizer as NO
 from noteorganizer.core.richtext import (html_to_note, note_to_html,
+                                        note_to_markdown, html_document,
                                         reflow_wrapped)
 from html.parser import HTMLParser
 
@@ -451,6 +452,66 @@ check("already-joined paragraphs are returned untouched",
       reflow_wrapped(ORIGINAL) == ORIGINAL)
 check("empty text is handled", reflow_wrapped("") == "")
 check("None is handled", reflow_wrapped(None) == "")
+
+
+# ---------------------------------------------------------- markdown ----
+# The single-note export: the body is already half Markdown (tables,
+# checkboxes), so the converter's job is the other half -- list markers,
+# emphasis runs -- and knowing what Markdown cannot say.
+_md_body = (BULLET + "primul" + chr(10)
+            + SUB_BULLET + "dedesubt" + chr(10)
+            + "3. numarat" + chr(10)
+            + "| A | B |" + chr(10) + "| --- | --- |" + chr(10)
+            + "| [x] | gros |" + chr(10)
+            + "text cu stil aici")
+_md_paras = [{"line": 0, "kind": "bullet"},
+             {"line": 1, "kind": "bullet", "indent": 1},
+             {"line": 2, "kind": "number"}]
+_off = _md_body.index("text cu stil")
+_cell_off = _md_body.index("| [x] | gros |") + 8
+_md_spans = [{"start": _cell_off, "end": _cell_off + 4, "style": "bold"},
+             {"start": _off, "end": _off + 4, "style": "bold"},
+             {"start": _off + 5, "end": _off + 7, "style": "bold_italic"},
+             {"start": _off + 8, "end": _off + 12, "style": "strike"},
+             {"start": _off + 13, "end": _off + 17, "style": "text_color",
+              "value": "#ff0000"}]
+_md = note_to_markdown(_md_body, _md_spans, _md_paras)
+_md_lines = _md.split(chr(10))
+check("a bullet maps to Markdown's own dash", _md_lines[0] == "- primul")
+check("a nested bullet indents under its parent",
+      _md_lines[1] == "    - dedesubt")
+check("a numbered item keeps the number the text already has",
+      _md_lines[2] == "3. numarat")
+check("table rows pass through verbatim",
+      _md_lines[3] == "| A | B |" and _md_lines[4] == "| --- | --- |")
+check("a checkbox cell survives as task syntax",
+      _md_lines[5] == "| [x] | gros |")
+check("styles inside a table cell stay out of the pipes",
+      "**" not in _md_lines[5])
+check("bold becomes starred markers", "**text**" in _md_lines[6])
+check("bold_italic nests its markers the right way around",
+      "***cu***" in _md_lines[6])
+check("strike becomes tilde markers", "~~stil~~" in _md_lines[6])
+check("a colour has no Markdown form and is dropped silently",
+      "aici" in _md_lines[6] and "#ff0000" not in _md)
+
+# Emphasis touching whitespace does not parse -- spaces stay outside.
+_sp = note_to_markdown("un  gros  x",
+                       [{"start": 2, "end": 9, "style": "bold"}], [])
+check("markers hug the word, not the spaces the span swallowed",
+      _sp == "un  **gros**  x")
+
+check("empty text converts to empty", note_to_markdown("", [], []) == "")
+
+_doc = html_document("Nota <mea>", "<div>corpul</div>")
+check("the HTML document declares its doctype and charset",
+      _doc.startswith("<!DOCTYPE html>") and "utf-8" in _doc)
+check("the title is escaped, not injected",
+      "&lt;mea&gt;" in _doc and "<mea>" not in _doc)
+check("the fragment lands inside the body",
+      "<div>corpul</div>" in _doc)
+check("table borders exist in the styling, or a table reads as loose words",
+      "border" in _doc)
 
 print()
 print(f"FAILURES: {fails if fails else 'none'}")

@@ -464,6 +464,109 @@ def _line_html(line, spans, offset):
     return "".join(pieces)
 
 
+def _md_wrap(chunk, plain):
+    """One run of identically-styled text, with Markdown's own markers.
+
+    Markdown has markers for bold, italic and strikethrough only --
+    underline and colours have no plain-Markdown form and are dropped
+    (the HTML export is the one that keeps them). Emphasis markers that
+    touch whitespace don't parse ("** text**" is not bold), so a run's
+    leading and trailing spaces stay outside the markers.
+    """
+    if not chunk.strip():
+        return chunk
+    marker = ""
+    if "bold" in plain:
+        marker += "**"
+    if "italic" in plain:
+        marker += "*"
+    if "strike" in plain:
+        marker += "~~"
+    if not marker:
+        return chunk
+    lead = chunk[:len(chunk) - len(chunk.lstrip())]
+    trail = chunk[len(chunk.rstrip()):] if chunk.rstrip() else ""
+    return f"{lead}{marker}{chunk.strip()}{marker[::-1]}{trail}"
+
+
+def _line_markdown(line, spans, offset):
+    """One line's text with its character styles as Markdown markers."""
+    if not line:
+        return ""
+    pieces, run_start = [], 0
+    current = _styles_at(spans, offset)
+    for i in range(1, len(line) + 1):
+        here = _styles_at(spans, offset + i) if i < len(line) else None
+        if here != current:
+            pieces.append(_md_wrap(line[run_start:i], current[0]))
+            run_start, current = i, here
+    return "".join(pieces)
+
+
+def note_to_markdown(text, formatting=None, paragraphs=None):
+    """Render a note as portable Markdown.
+
+    The body is already half Markdown -- tables are pipe rows and
+    checkboxes are task syntax -- so table lines pass through verbatim
+    (in-cell character styles stay behind with the colours: pipes and
+    asterisks interleave badly). List markers map to Markdown's own
+    ("- " for bullets; numbered items keep the "N. " already in the
+    text), nested by indent. Bold, italic and strikethrough become
+    markers; underline, colours and alignment have no Markdown form and
+    are dropped -- export to HTML when those must survive the trip.
+    """
+    text = text or ""
+    spans = normalize_formatting(formatting or [])
+    lines = text.split("\n")
+    props = {p["line"]: p
+             for p in normalize_paragraphs(paragraphs or [], len(lines))}
+    out, offset = [], 0
+    for number, line in enumerate(lines):
+        entry = props.get(number, {})
+        kind = entry.get("kind")
+        if tables.is_table_row(line):
+            out.append(line)
+        elif kind:
+            marker = ""
+            for glyph in BULLET_GLYPHS:
+                if line.startswith(glyph + " "):
+                    marker = glyph + " "
+                    break
+            if not marker:
+                match = re.match(r"^\d+\. ", line)
+                marker = match.group(0) if match else ""
+            body = line[len(marker):]
+            md_marker = "- " if kind == "bullet" else (marker or "1. ")
+            out.append("    " * entry.get("indent", 0) + md_marker
+                       + _line_markdown(body, spans, offset + len(marker)))
+        else:
+            out.append(_line_markdown(line, spans, offset))
+        offset += len(line) + 1
+    return "\n".join(out)
+
+
+def html_document(title, body_html):
+    """A complete standalone HTML file around one note's fragment.
+
+    note_to_html() makes clipboard fragments; a FILE needs the document
+    around one -- doctype, charset, a title, and just enough styling
+    that the table borders exist (the fragment's <td>s carry none, and
+    a borderless table reads as loose words in a browser).
+    """
+    safe_title = escape(title or "Untitled note")
+    return (
+        "<!DOCTYPE html>\n<html>\n<head>\n<meta charset=\"utf-8\">\n"
+        f"<title>{safe_title}</title>\n"
+        "<style>\n"
+        "body { font-family: 'Segoe UI', Arial, sans-serif; "
+        "max-width: 800px; margin: 2em auto; padding: 0 1em; "
+        "line-height: 1.5; }\n"
+        "table { border-collapse: collapse; margin: 0.5em 0; }\n"
+        "td { border: 1px solid #999; padding: 4px 10px; }\n"
+        "</style>\n</head>\n<body>\n"
+        f"<h1>{safe_title}</h1>\n{body_html}\n</body>\n</html>\n")
+
+
 def note_to_html(text, formatting=None, paragraphs=None):
     """Render a note as an HTML fragment other applications understand.
 

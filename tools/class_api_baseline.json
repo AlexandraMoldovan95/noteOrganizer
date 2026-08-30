@@ -396,6 +396,7 @@
   "duplicate_note": "(self, note)",
   "editor_state_matches_saved": "(self, st)",
   "export_data": "(self)",
+  "export_note_as_file": "(self, note, fmt)",
   "find_note": "(self, note_id)",
   "get_note_color": "(self, note)",
   "go_to_today": "(self)",
