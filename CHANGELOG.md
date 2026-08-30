@@ -6,6 +6,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ---
 
+## [Unreleased]
+
+### Fixed
+- **The note list stopped losing its place.** Both long-standing "known bugs to investigate" traced to one root, now measured rather than guessed: a rebuilt list's geometry settles over several event-loop passes (one collapse reported heights 106 → 276 → 820 as separate events), and each intermediate, too-small scroll area re-clamps the canvas — scrolled down during a save or a group expand, the view got yanked upward. And a rebuild that only *shrinks* the list under a deep scroll (collapsing a group from below) fires no such event at all, leaving the canvas parked past the end of the real content — a blank list until the next touch of the scrollbar. The list now carries the same protections the editor page has had since `0.32.x`, hardened for both failure shapes: content that fits pins to the top and an origin above the first card snaps back; a full rebuild (autosave included) remembers its scroll position in pixels and holds that restore *in force* briefly — re-applied whenever a late settling pass tries to re-clamp, and on short timers for the shrink case that announces nothing — so editing a note during a pause no longer teleports the list to the top, expanding a group keeps your place, and collapsing one from below lands at the end of the shorter list instead of blank space. A deliberate wheel or scrollbar move during that brief window wins over the restore, always.
+
+---
+
 ## [0.55.81] — 2026-08-30
 
 ### Added
