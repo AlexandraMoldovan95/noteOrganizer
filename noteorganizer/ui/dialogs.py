@@ -53,8 +53,14 @@ class DialogsMixin:
                 if (child.winfo_exists() and child.wm_overrideredirect()
                         and int(child.attributes("-topmost") or 0)):
                     child.attributes("-topmost", False)
-                    child.lower(self)
+                    # Into the restore list BEFORE the restack: if
+                    # lower() errors (window-manager quirks on X11), the
+                    # popup must still get its topmost back afterwards.
                     stepped.append(child)
+                    try:
+                        child.lower(self)
+                    except tk.TclError:
+                        pass
             except tk.TclError:
                 continue
         return stepped

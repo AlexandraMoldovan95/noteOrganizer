@@ -236,7 +236,11 @@ _popQ = app._mini_popup
 check('the popup starts topmost',
       bool(int(_popQ.attributes('-topmost') or 0)))
 _steppedQ = app._popups_step_back()
-check('step-back drops topmost and reports the popup',
+check('step-back drops topmost and reports the popup '
+      f'(in={_popQ in _steppedQ}, '
+      f'top={_popQ.attributes("-topmost")!r}, '
+      f'ovr={_popQ.wm_overrideredirect()!r}, '
+      f'n_stepped={len(_steppedQ)})',
       _popQ in _steppedQ
       and not int(_popQ.attributes('-topmost') or 0))
 app._popups_step_forward(_steppedQ)
