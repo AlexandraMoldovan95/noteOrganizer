@@ -48,8 +48,10 @@ class DialogsMixin:
             if not isinstance(child, tk.Toplevel):
                 continue
             try:
+                # int(): on X11 the attribute can come back as the STRING
+                # '0', which is truthy and read as "still topmost".
                 if (child.winfo_exists() and child.wm_overrideredirect()
-                        and child.attributes("-topmost")):
+                        and int(child.attributes("-topmost") or 0)):
                     child.attributes("-topmost", False)
                     child.lower(self)
                     stepped.append(child)

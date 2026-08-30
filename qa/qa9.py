@@ -232,12 +232,16 @@ check(f'blank lines around hidden tables hide with them '
 # The overlay lives in the main window; the popup floats above it. For
 # the dialog's duration the popups step back, then return.
 _popQ = app._mini_popup
-check('the popup starts topmost', bool(_popQ.attributes('-topmost')))
+# int(): on X11 the attribute answers as a STRING ('0' is truthy).
+check('the popup starts topmost',
+      bool(int(_popQ.attributes('-topmost') or 0)))
 _steppedQ = app._popups_step_back()
 check('step-back drops topmost and reports the popup',
-      _popQ in _steppedQ and not _popQ.attributes('-topmost'))
+      _popQ in _steppedQ
+      and not int(_popQ.attributes('-topmost') or 0))
 app._popups_step_forward(_steppedQ)
-check('step-forward restores it', bool(_popQ.attributes('-topmost')))
+check('step-forward restores it',
+      bool(int(_popQ.attributes('-topmost') or 0)))
 
 # <KeyRelease> is a REAL key event and follows the focus, which this
 # box does not hold under test -- the <<Paste>> virtual event delivers
@@ -389,6 +393,16 @@ app.update()
 _entC9 = _ents21(app._mini_popup)[0]
 _entC9.delete(0, 'end')
 _entC9.insert(0, 'Cumparaturi')
+# Synthetic KEY events follow FOCUS; under Xvfb nothing had focused
+# the box, so the Return sailed past it. Insist first.
+for _tryC in range(40):
+    _entC9.focus_force()
+    app.update()
+    try:
+        if app.focus_get() is _entC9:
+            break
+    except (KeyError, tk.TclError):
+        pass
 _entC9.event_generate('<Return>')
 app.update()
 check('saving over a taken name from the editor asks, and No keeps both',
@@ -400,6 +414,16 @@ app.ask_yes_no = lambda *a, **k: (_asksC.append(1), True)[1]
 _entC9 = _ents21(app._mini_popup)[0]
 _entC9.delete(0, 'end')
 _entC9.insert(0, 'Cumparaturi')
+# Synthetic KEY events follow FOCUS; under Xvfb nothing had focused
+# the box, so the Return sailed past it. Insist first.
+for _tryC in range(40):
+    _entC9.focus_force()
+    app.update()
+    try:
+        if app.focus_get() is _entC9:
+            break
+    except (KeyError, tk.TclError):
+        pass
 _entC9.event_generate('<Return>')
 app.update()
 check('Yes replaces the old template, one copy of the name remains',
