@@ -194,6 +194,12 @@ The grid is rebuilt (never patched) at settled moments — load, paste, leaving 
 
 Trash and the multi-note Share panel both cap how many rows they build at once (50 and 100 respectively), with a "Show more" button to reveal the next batch, rather than rendering every entry immediately. This was enough to take the Trash panel from ~1.8s to ~100ms with 600 entries. The main note list doesn't do this yet — see [ROADMAP.md](ROADMAP.md) for real windowed virtualization, which would help further at very large note counts.
 
+### Scrollable canvases guard their own view
+
+A Tk canvas holding rebuilt content will lie to you twice. A rebuilt frame's geometry settles over *several* event-loop passes — one measured collapse reported heights 106 → 276 → 820 as three separate Configure events — and each intermediate, too-small scrollregion re-clamps a canvas that was scrolled down. And a rebuild that only *shrinks* content scrolled out of view fires no Configure at all (Tk stops resizing an embedded window it no longer shows), leaving a stale scrollregion and a viewport parked past the end of the real content. Both were caught by instrumentation, not deduction — see ISSUES_LOG, "The list that lost its place, twice, for two silent reasons".
+
+So the two scrolling canvases carry the same guard family. The editor page has pinned short content to the top since `0.32.x`; the note list (since `0.58.82`) additionally remembers its offset in **pixels** across a full rebuild and keeps that restore *in force* for a short window — re-applied on every late Configure and on short timers for the silent-shrink case, with the scrollregion refreshed from `bbox("all")` before any fraction math, because a scrollregion is a claim, not a fact. A deliberate wheel or scrollbar move cancels the pending restore: the user always outranks the machinery. Any new scrollable canvas whose content gets rebuilt should either reuse this family or consciously argue why it can't suffer the same two failures.
+
 ## Background work: exporting and importing
 
 Full backup export/import (`.zip`, including attachments) runs on a `threading.Thread`, not the main thread — with enough attachments, doing this synchronously visibly froze the UI for several seconds. The pattern used, and the one to follow for any future long-running I/O:
