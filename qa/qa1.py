@@ -3883,7 +3883,7 @@ check('the multi-line coloured cell survives save and reload',
       ('vopsit', '#ff0000') in _runsM2 and ('sub', '#00aa00') in _runsM2
       and app.editor_state_matches_saved(app.capture_editor_state()))
 
-# the checkmark palette: a coloured check lands in the cell
+# the checkbox palette: an UNCHECKED box lands, wearing the colour
 app._grid_checkmark_popup(_gM2, (1, 1, 1, 1), 100, 100)
 app.update()
 _swK = None
@@ -3899,12 +3899,51 @@ _swK.invoke()
 app.update()
 app.update()
 _gM3 = app._grid_at_line(1)
-_runsK = [(_gM3['canvas'].itemcget(t, 'text'),
-           _gM3['canvas'].itemcget(t, 'fill'))
-          for t in _gM3['cells'][(1, 1)]['texts']]
-check('the checkmark arrives wearing the picked colour',
-      _gM3['cells'][(1, 1)]['value'] == '\u2713'
-      and _runsK and _runsK[0][1] == NO.PRESET_NOTE_COLORS[0])
+_cK = _gM3['cells'][(1, 1)]
+check('the palette drops an UNCHECKED box wearing the picked colour',
+      _cK['value'] == core_tables.CHECKBOX_EMPTY
+      and len(_cK['texts']) == 1
+      and _gM3['canvas'].type(_cK['texts'][0]) == 'rectangle'
+      and str(_gM3['canvas'].itemcget(_cK['texts'][0], 'outline'))
+      == NO.PRESET_NOTE_COLORS[0])
+
+# a click on the box TICKS it -- no text editor -- and keeps its colour
+_cvK = _gM3['canvas']
+_cvK.event_generate('<Button-1>', x=int(_cK['x'] + _cK['w'] / 2),
+                    y=int(_cK['y'] + _cK['h'] / 2))
+_cvK.event_generate('<ButtonRelease-1>', x=int(_cK['x'] + _cK['w'] / 2),
+                    y=int(_cK['y'] + _cK['h'] / 2))
+app.update()
+_gM3 = app._grid_at_line(1)
+_cK = _gM3['cells'][(1, 1)]
+check('a click ticks the box, opens no editor, and the colour holds',
+      _cK['value'] == core_tables.CHECKBOX_DONE
+      and getattr(app, '_cell_editor', None) is None
+      and len(_cK['texts']) == 2
+      and _gM3['canvas'].type(_cK['texts'][1]) == 'text'
+      and str(_gM3['canvas'].itemcget(_cK['texts'][1], 'fill'))
+      == NO.PRESET_NOTE_COLORS[0])
+
+# the second of two FAST clicks arrives as a double-click; it unticks
+import types as _typesK
+app._grid_double(_gM3, _typesK.SimpleNamespace(
+    x=int(_cK['x'] + _cK['w'] / 2), y=int(_cK['y'] + _cK['h'] / 2)))
+app.update()
+_gM3 = app._grid_at_line(1)
+check('a fast second click unticks instead of being swallowed',
+      _gM3['cells'][(1, 1)]['value'] == core_tables.CHECKBOX_EMPTY)
+
+# delete the marker and type: the cell is ordinary text again
+app._open_cell_editor(_gM3, 1, 1, select=True)
+app.update()
+app._cell_editor['entry'].delete('1.0', 'end')
+app._cell_editor['entry'].insert('1.0', 'text simplu')
+app._commit_cell_editor()
+app.update()
+_gM3 = app._grid_at_line(1)
+check('overwriting the marker turns the cell back into text',
+      _gM3['cells'][(1, 1)]['value'] == 'text simplu'
+      and core_tables.checkbox_state('text simplu') is None)
 set_body('')
 
 # ---- TYPING CONTINUES THE STYLE IT LANDS BESIDE ----
@@ -4005,6 +4044,7 @@ check('fast interleaved typing colours every character',
 app._apply_body_color('text_color', None)
 
 # Ctrl+A selects the whole cell, not a line-start jump
+take_focus(_edR)
 _edR.event_generate('<Control-a>')
 app.update()
 _selR = None

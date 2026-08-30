@@ -1474,6 +1474,24 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         """One cell's text as runs of equal style, one row of runs per
         display line, vertically centred in the cell. Returns the canvas
         item ids -- the caller keeps them to delete on redraw."""
+        state = core_tables.checkbox_state(value)
+        if state is not None:
+            # The cell IS a checkbox: drawn as a real box, not as text.
+            # The colour it was given rides as a text_color span on the
+            # marker characters, so it survives every save unchanged.
+            ink = next((st["fg"] for st in styles if st.get("fg")), None) \
+                or self.colors["text"]
+            side = max(12, min(18, row_h - 14))
+            cx = cell["x"] + cell["w"] / 2
+            cy = cell["y"] + cell["h"] / 2
+            items = [canvas.create_rectangle(
+                cx - side / 2, cy - side / 2, cx + side / 2, cy + side / 2,
+                outline=ink, width=2)]
+            if state:
+                items.append(canvas.create_text(
+                    cx, cy, text="✓", fill=ink,
+                    font=("Segoe UI", max(9, int(side * 0.7)), "bold")))
+            return items
         items = []
         lines = core_tables.cell_display_lines(value)
         top = cell["y"] + (cell["h"] - len(lines) * row_h) / 2
@@ -2762,7 +2780,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             if moved >= 10:
                 self._grid_select_range(info, pressed[1], pressed[1])
                 self.body_text.focus_set()
-            else:
+            elif not self._grid_toggle_checkbox(info, *pressed[1]):
+                # A checkbox cell toggles on click; every other cell
+                # opens for typing, as always. Editing a checkbox AS
+                # TEXT stays available from its right-click menu.
                 self._open_cell_editor(info, *pressed[1])
         else:
             # A finished drag leaves a selection; the keyboard belongs to
@@ -3207,12 +3228,20 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._grid_column_mechanics(info, mutate)
 
     def _grid_double(self, info, event):
-        """A double-click on a rule autofits its column."""
+        """A double-click on a rule autofits its column. On a checkbox
+        cell it toggles AGAIN: Tk turns the second of two fast clicks
+        into a double-click instead of a plain one, and without this a
+        quick tick-untick only ticked."""
         canvas = info["canvas"]
         boundary = self._grid_boundary_at(info, canvas.canvasx(event.x))
         if boundary is not None:
             self._grid_resizing = None
             self._grid_autofit_col(info, boundary)
+            return "break"
+        hit = self._grid_cell_at_xy(info, canvas.canvasx(event.x),
+                                    canvas.canvasy(event.y))
+        if hit is not None and self._grid_toggle_checkbox(info, *hit):
+            self._grid_pressed = None
             return "break"
         return None
 
@@ -3347,9 +3376,36 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._grid_replace_block(first, nrows, rows, aligns, sep_cols)
         self._grid_after_op(first)
 
+    def _grid_toggle_checkbox(self, info, r, c):
+        """One click on a checkbox cell flips it. The colour spans on the
+        marker characters are re-laid after the write, so a coloured box
+        keeps its colour through every toggle."""
+        cell = info["cells"].get((r, c))
+        if cell is None:
+            return False
+        state = core_tables.checkbox_state(cell["value"])
+        if state is None:
+            return False
+        line_no = self._grid_line_of_row(info, r)
+        if line_no is None:
+            return False
+        line = self.body_text.get(f"{line_no}.0", f"{line_no}.end")
+        styles = self._cell_value_styles(line_no, line, c)
+        new_value = (core_tables.CHECKBOX_EMPTY if state
+                     else core_tables.CHECKBOX_DONE)
+        self._write_cell(info, r, c, new_value)
+        cell["value"] = new_value
+        # Same length either way, so the styles land where they were.
+        self._apply_styles_to_cell(info, r, c, new_value,
+                                   styles[:len(new_value)])
+        self._grid_redraw_cell_text(info, r, c)
+        self._schedule_autosave()
+        return True
+
     def _grid_checkmark_popup(self, info, box, x_root, y_root):
-        """The checkmark palette: the check lands in the cell(s) already
-        wearing the picked colour -- the same swatches ordinary text
+        """The checkbox palette: an UNCHECKED box lands in the cell(s),
+        already wearing the picked colour -- ready to be ticked with a
+        click once its condition is met. Same swatches ordinary text
         offers, plus the theme's own ink for a plain one."""
         self._dismiss_mini_popup()
         popup = tk.Toplevel(self)
@@ -3364,7 +3420,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
         def choose(color):
             self._dismiss_mini_popup()
-            self._grid_fill_selection({"info": info, "box": box}, "✓",
+            self._grid_fill_selection({"info": info, "box": box},
+                                      core_tables.CHECKBOX_EMPTY,
                                       align=core_tables.ALIGN_CENTER)
             if color and anchor_line is not None:
                 # The fill rebuilt the grids; the colour goes on the
@@ -3908,7 +3965,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             menu.add_command(label="Paste cells here",
                              command=lambda: self._grid_paste_cells(
                                  info, sel["box"][0], sel["box"][1]))
-            menu.add_command(label="Insert checkmarks\u2026",
+            menu.add_command(label="Insert checkboxes\u2026",
                              command=lambda xr=event.x_root,
                              yr=event.y_root: self._grid_checkmark_popup(
                                  info, sel["box"], xr, yr))
@@ -3964,10 +4021,18 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                          command=lambda: self._grid_copy_cell(info, r, c))
         menu.add_command(label="Paste cells here",
                          command=lambda: self._grid_paste_cells(info, r, c))
-        menu.add_command(label="Insert checkmark\u2026",
+        menu.add_command(label="Insert checkbox\u2026",
                          command=lambda xr=event.x_root,
                          yr=event.y_root: self._grid_checkmark_popup(
                              info, (r, c, r, c), xr, yr))
+        if core_tables.checkbox_state(
+                info["cells"].get((r, c), {}).get("value")) is not None:
+            # A click on a checkbox toggles it, so the way into its text
+            # lives here: delete the marker and type, and the cell is an
+            # ordinary text cell again.
+            menu.add_command(label="Edit cell as text",
+                             command=lambda: self._open_cell_editor(
+                                 info, r, c))
         menu.add_command(label="Insert emoji…", command=emoji_here)
         menu.add_command(label="Clear cell",
                          command=lambda: self._grid_fill_selection(
