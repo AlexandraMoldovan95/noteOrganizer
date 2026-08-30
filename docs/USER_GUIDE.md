@@ -259,4 +259,5 @@ Drop image files into `docs/screenshots/` using the exact filenames referenced a
 | `export-progress.png` | The export progress bar visible at the bottom of the window mid-export |
 | `import-backup.png` | The Import notes file picker or its resulting confirmation |
 | `settings-overview.png` | The Settings page, showing the section list on the left and a section open on the right |
+| `keyboard-shortcuts.png` | Settings → Keyboard shortcuts, the grouped reference visible |
 | `theme-picker.png` | Settings → Appearance, with the theme variant cards visible |

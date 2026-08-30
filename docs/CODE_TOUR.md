@@ -799,6 +799,19 @@ Both are the general shape of moving code down here: the logic comes as-is,
 but anything that reached *up* — to a global on the entry module, or to a
 widget — has to become an argument or a return value.
 
+### A setting read fresh, clamped on the way in
+
+`trash_retention_days()` is small but shows a pattern worth copying: the
+trash window is a *setting*, so the function reads it from disk on every
+call rather than caching it — the user can change it mid-session and the
+next purge should honour the change. And it never trusts what it reads:
+booleans and non-integers fall back to the 30-day default, and integers
+clamp into 1–365. The failure it guards against is concrete — a
+hand-edited `settings.json` saying `0` or `"forever"` must degrade to
+"keep notes the normal length of time", never to "purge everything at
+startup". When a bad value can choose between two wrong behaviours, pick
+the one that keeps data.
+
 ### The binding rule this module is built around
 
 Storage doesn't decide *where* the files are — `paths` does. It reads them

@@ -6,7 +6,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ---
 
-## [Unreleased]
+## [0.58.82] — 2026-08-30
 
 ### Added
 - **The Backup panel says when the notes last left the computer.** The app is offline by design, so an export is the only copy of the notes outside its own folder — and until now nothing said when that copy was last made. A line under the Export button shows the date and time of the last successful export ("Never exported from this computer." before the first one); a failed export leaves the stamp untouched.
