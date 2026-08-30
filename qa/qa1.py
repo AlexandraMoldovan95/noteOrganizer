@@ -4127,6 +4127,100 @@ check('one press flips dark/light, the next flips back, glyph follows',
       and str(app.editor_theme_btn.cget('text'))
       == ('\u2600' if app.theme_name in NO.DARK_THEMES else '\U0001f319'))
 
+# ---- WHOLE ROWS COPY TO THE BOTTOM, LIKE COLUMNS COPY TO THE EDGE ----
+set_body('| Cap | Doi |\n| unu | doi |\n| trei | patru |')
+app._render_table_grids()
+app.update()
+_gV = app._grid_at_line(1)
+app._grid_append_rows(_gV, 1, 2)
+app.update()
+_gV = app._grid_at_line(1)
+_rowsV = [core_tables.split_row(app.body_text.get('%d.0' % n,
+                                                  '%d.end' % n))
+          for n in range(1, 6)]
+check('selected rows are copied again to the bottom, text and all',
+      _gV['data_rows'] == 5
+      and _rowsV[3] == ['unu', 'doi'] and _rowsV[4] == ['trei', 'patru'])
+set_body('| A | B |\n| ^ | c |\n| x | y |')
+app._render_table_grids()
+app.update()
+app._grid_append_rows(app._grid_at_line(1), 1, 1)
+app.update()
+check('a merge marker pointing above the copied span lands empty',
+      core_tables.split_row(app.body_text.get('4.0', '4.end'))
+      == ['', 'c'])
+
+# ---- DRAG-SELECTING FOLLOWS THE POINTER PAST THE VIEW ----
+# The pointer is faked at the grid's right edge / under the note's
+# bottom edge; the autoscroll must pan the grid, scroll the note, and
+# stretch the selection to what the pointer now covers.
+set_body('| ' + ' | '.join('C%d' % i for i in range(14)) + ' |\n'
+         + '| ' + ' | '.join('v%d' % i for i in range(14)) + ' |')
+app._render_table_grids()
+app.update()
+app.update_idletasks()
+_gV = app._grid_at_line(1)
+_cvV = _gV['canvas']
+_c00V = _gV['cells'][(0, 0)]
+_cvV.event_generate('<Button-1>', x=int(_c00V['x'] + 20),
+                    y=int(_c00V['y'] + 8))
+_shownV = int(float(_cvV.cget('width')))
+_origPtr = app.winfo_pointerxy
+app.winfo_pointerxy = lambda: (_cvV.winfo_rootx() + _shownV - 5,
+                               _cvV.winfo_rooty() + int(_c00V['y']) + 8)
+_xv0 = _cvV.xview()[0]
+for _ in range(14):
+    app._grid_drag_autoscroll(_gV)
+app.update()
+check('holding the drag at the right edge pans the grid and grows the '
+      'selection to the far columns',
+      _cvV.xview()[0] > _xv0
+      and getattr(app, '_grid_sel', None) is not None
+      and app._grid_sel['box'][3] >= 10)
+app.winfo_pointerxy = _origPtr
+_cvV.event_generate('<ButtonRelease-1>', x=_shownV - 5,
+                    y=int(_c00V['y'] + 8))
+app.update()
+
+set_body('| Cap | Doi |\n'
+         + '\n'.join('| r%02d | v%02d |' % (i, i) for i in range(40)))
+app._render_table_grids()
+app.update()
+app.update_idletasks()
+app.body_text.yview_moveto(0.0)
+app.update()
+_gV = app._grid_at_line(1)
+_cvV = _gV['canvas']
+_c00V = _gV['cells'][(0, 0)]
+_cvV.event_generate('<Button-1>', x=int(_c00V['x'] + 20),
+                    y=int(_c00V['y'] + 8))
+app.winfo_pointerxy = lambda: (
+    app.body_text.winfo_rootx() + 60,
+    app.body_text.winfo_rooty() + app.body_text.winfo_height() - 4)
+_yv0 = app.body_text.yview()[0]
+for _ in range(16):
+    app._grid_drag_autoscroll(_gV)
+app.update()
+check('holding the drag under the note scrolls it and grows the '
+      'selection downward',
+      app.body_text.yview()[0] > _yv0
+      and getattr(app, '_grid_sel', None) is not None
+      and app._grid_sel['box'][2] >= 5)
+app.winfo_pointerxy = _origPtr
+# the timer wiring: a motion arms it, the release stops it
+_cvV.event_generate('<B1-Motion>', x=int(_c00V['x'] + 25),
+                    y=int(_c00V['y'] + 9))
+app.update()
+_armedV = getattr(app, '_grid_autoscroll_job', None) is not None
+_cvV.event_generate('<ButtonRelease-1>', x=int(_c00V['x'] + 25),
+                    y=int(_c00V['y'] + 9))
+app.update()
+check('the autoscroll timer arms on drag and stops on release',
+      _armedV
+      and getattr(app, '_grid_autoscroll_job', None) is None)
+app._grid_clear_selection()
+set_body('')
+
 # ---- LIST CARDS HIDE THE PIPE ROWS ----
 set_body('| C1 | C2 |\n| a | b |\n\nreadable words')
 app.title_entry.delete(0, 'end')

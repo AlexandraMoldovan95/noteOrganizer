@@ -2673,6 +2673,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # Canvas coordinates are read while the canvas is certainly alive:
         # the commit below can destroy it, and a scrolled table would
         # otherwise aim the click at the wrong cell.
+        self._grid_autoscroll_stop()
         press_x = info["canvas"].canvasx(event.x)
         press_y = info["canvas"].canvasy(event.y)
         if getattr(self, "_cell_editor", None) is not None:
@@ -2718,6 +2719,66 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._grid_pressed = (info, hit, x, press_y) if hit else None
         return "break"
 
+    def _grid_drag_autoscroll(self, info):
+        """While a cell drag runs, the view follows the pointer: the
+        grid pans sideways past its own viewport, and the NOTE scrolls
+        when the pointer crosses the editor's top or bottom edge -- so a
+        selection can reach cells that were not on screen when the drag
+        began, the way any spreadsheet allows. The selection is then
+        re-stretched to whatever sits under the pointer now."""
+        canvas = info.get("canvas")
+        try:
+            if canvas is None or not int(canvas.winfo_exists()):
+                return
+            px, py = self.winfo_pointerxy()
+            wx = px - canvas.winfo_rootx()
+            wy = py - canvas.winfo_rooty()
+            try:
+                shown = int(float(canvas.cget("width")))
+            except (tk.TclError, ValueError):
+                shown = canvas.winfo_width()
+            natural = max(1, info.get("natural", 1))
+            if wx > shown - 24 and canvas.xview()[1] < 1.0:
+                canvas.xview_moveto(min(1.0, canvas.xview()[0]
+                                        + 24.0 / natural))
+            elif wx < 24 and canvas.xview()[0] > 0.0:
+                canvas.xview_moveto(max(0.0, canvas.xview()[0]
+                                        - 24.0 / natural))
+            body = self.body_text
+            top = body.winfo_rooty()
+            bottom = top + body.winfo_height()
+            if py > bottom - 16:
+                body.yview_scroll(24, "pixels")
+            elif py < top + 16:
+                body.yview_scroll(-24, "pixels")
+            pressed = getattr(self, "_grid_pressed", None)
+            if pressed and pressed[0] is info:
+                hit = self._grid_cell_at_xy(info, canvas.canvasx(wx),
+                                            canvas.canvasy(wy))
+                if hit and hit != pressed[1]:
+                    self._grid_select_range(info, pressed[1], hit)
+        except tk.TclError:
+            pass
+
+    def _grid_autoscroll_tick(self):
+        self._grid_autoscroll_job = None
+        info = getattr(self, "_grid_drag_hold", None)
+        if info is None:
+            return
+        self._grid_drag_autoscroll(info)
+        self._grid_autoscroll_job = self.after(
+            60, self._grid_autoscroll_tick)
+
+    def _grid_autoscroll_stop(self):
+        self._grid_drag_hold = None
+        job = getattr(self, "_grid_autoscroll_job", None)
+        self._grid_autoscroll_job = None
+        if job is not None:
+            try:
+                self.after_cancel(job)
+            except (tk.TclError, ValueError):
+                pass
+
     def _grid_drag(self, info, event):
         if (getattr(self, "_grid_resizing", None)
                 or getattr(self, "_grid_row_resizing", None)):
@@ -2725,6 +2786,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         pressed = getattr(self, "_grid_pressed", None)
         if not pressed or pressed[0] is not info:
             return "break"
+        # A held pointer at an edge produces no more motion events; the
+        # timer keeps the view (and the selection) moving until release.
+        self._grid_drag_hold = info
+        if getattr(self, "_grid_autoscroll_job", None) is None:
+            self._grid_autoscroll_job = self.after(
+                60, self._grid_autoscroll_tick)
         canvas = info["canvas"]
         hit = self._grid_cell_at_xy(info, canvas.canvasx(event.x),
                                     canvas.canvasy(event.y))
@@ -2734,6 +2801,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
     def _grid_release(self, info, event):
         """A plain click opens the editor; a drag leaves its selection."""
+        self._grid_autoscroll_stop()
         self.after_idle(self._refresh_list_buttons)
         resizing = getattr(self, "_grid_resizing", None)
         self._grid_resizing = None
@@ -3217,6 +3285,30 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                             else {"width": None, "align": None,
                                   "hidden": False}
                             for c in range(c0, c1 + 1))
+        rows = self._dissolve_orphan_markers(rows)
+        self._grid_replace_block(first, nrows, rows, aligns, sep_cols)
+        self._grid_after_op(first)
+
+    def _grid_append_rows(self, info, r0, r1):
+        """The selected rows joined again to the table's bottom edge --
+        the vertical twin of copying columns to the end. A merge
+        reaching DOWN into the copied span from above points at a row
+        that did not travel; it lands as an empty cell."""
+        context = self._grid_op_context(info)
+        if not context:
+            return
+        first, nrows, _ncols = context
+        rows, aligns, sep_cols, _sep_at = self._grid_block_parts(first, nrows)
+        copied_rows, copied_aligns = [], []
+        for r in range(r0, min(r1 + 1, len(rows))):
+            copied_rows.append(list(rows[r]))
+            copied_aligns.append(list(aligns[r]) if r < len(aligns)
+                                 else [core_tables.ALIGN_LEFT] * len(rows[r]))
+        if copied_rows:
+            copied_rows[0] = ["" if v == core_tables.MERGE_UP else v
+                              for v in copied_rows[0]]
+        rows.extend(copied_rows)
+        aligns.extend(copied_aligns)
         rows = self._dissolve_orphan_markers(rows)
         self._grid_replace_block(first, nrows, rows, aligns, sep_cols)
         self._grid_after_op(first)
@@ -3990,6 +4082,16 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                            else f"Copy {span_cols} columns to the end"),
                     command=lambda box=sel["box"]:
                         self._grid_append_cols(info, box[1], box[3]))
+            # The vertical twin: whole ROWS selected edge to edge can be
+            # duplicated downward.
+            if (sel["box"][1] == 0
+                    and sel["box"][3] >= info["ncols"] - 1):
+                span_rows = sel["box"][2] - sel["box"][0] + 1
+                menu.add_command(
+                    label=("Copy row to the end" if span_rows == 1
+                           else f"Copy {span_rows} rows to the end"),
+                    command=lambda box=sel["box"]:
+                        self._grid_append_rows(info, box[0], box[2]))
             menu.add_separator()
             menu.add_command(
                 label="Highlight cells\u2026",
