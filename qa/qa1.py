@@ -4221,6 +4221,47 @@ check('the autoscroll timer arms on drag and stops on release',
 app._grid_clear_selection()
 set_body('')
 
+# ---- THE NOTE LIST'S SCROLL GUARDS ----
+# The editor page has pinned short content to the top since 0.32.x;
+# the list showed the same family of symptoms (a displaced origin, and
+# a rebuild clamping the scroll to the top) without either guard.
+_savedNotes23 = app.notes
+app.notes = [NO.normalize_note({'id': 9000 + i, 'title': 'Scurt %d' % i,
+                                'body': 'x', 'category': 'General'})
+             for i in range(2)]
+app.refresh_note_list()
+app.update()
+app.update_idletasks()
+_cv23 = app.canvas
+_cv23.configure(scrollregion=(0, 0, 250, 1200))
+_cv23.yview_moveto(0.3)
+app.update()
+_disp23 = _cv23.canvasy(0)
+app._sync_list_scroll()
+app.update()
+check('a displaced list origin snaps back to the top',
+      _disp23 > 100 and _cv23.canvasy(0) == 0)
+
+app.notes = [NO.normalize_note({'id': 9100 + i, 'title': 'Lung %d' % i,
+                                'body': 'corp', 'category': 'General'})
+             for i in range(30)]
+app.refresh_note_list()
+app.update()
+app.update_idletasks()
+_cv23.yview_moveto(0.6)
+app.update()
+_px23 = _cv23.canvasy(0)
+app.refresh_note_list()
+_cv23.yview_moveto(0.0)   # the transient clamp a mid-rebuild Configure does
+for _ in range(4):
+    app.update()
+    app.update_idletasks()
+check('a full list rebuild restores the scroll in pixels, clamp or not',
+      _px23 > 200 and abs(_cv23.canvasy(0) - _px23) < 30)
+app.notes = _savedNotes23
+app.refresh_note_list()
+app.update()
+
 # ---- LIST CARDS HIDE THE PIPE ROWS ----
 set_body('| C1 | C2 |\n| a | b |\n\nreadable words')
 app.title_entry.delete(0, 'end')

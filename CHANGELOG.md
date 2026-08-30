@@ -6,6 +6,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ---
 
+## [Unreleased]
+
+### Fixed
+- The note list learned the two scroll protections the editor page has had since `0.32.x`, closing both long-standing "known bugs to investigate": a short list can no longer sit displaced (visible flicker while dragging the scrollbar, and unexplained space above the first note) — content that fits pins to the top, and an origin that drifts above the first card snaps back; and a full list rebuild (saving, collapsing a category group) now remembers its scroll position in pixels and restores it afterwards, so the transient clamp a rebuild can trigger no longer throws the list back to the top.
+
+---
+
 ## [0.55.81] — 2026-08-30
 
 ### Added

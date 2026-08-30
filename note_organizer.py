@@ -728,6 +728,50 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         save_settings(settings)
         self.refresh_note_list()
 
+    def _sync_list_scroll(self, _event=None):
+        """Keep the note list honest about where its top is: content
+        that fits the viewport sits AT the top, and the origin never
+        rests above the first card (which showed as unexplained space
+        between the top bar and the first title). The editor page has
+        carried this exact guard for its own canvas since 0.32.x; the
+        list showed the same family of symptoms without it."""
+        canvas = getattr(self, "canvas", None)
+        if canvas is None:
+            return
+        try:
+            bbox = canvas.bbox("all")
+            if not bbox:
+                return
+            content_h = bbox[3] - bbox[1]
+            if (content_h <= canvas.winfo_height()
+                    or canvas.canvasy(0) < 0):
+                canvas.yview_moveto(0)
+        except tk.TclError:
+            pass
+
+    def _restore_list_scroll(self, pixels):
+        """Put the note list back where it was before a full rebuild --
+        in PIXELS from the top, because a rebuild can change the content
+        height (collapsing a group, say) and a remembered fraction would
+        land somewhere else. Clamped into the new content; a list that
+        now fits pins to the top like always."""
+        canvas = getattr(self, "canvas", None)
+        if canvas is None:
+            return
+        try:
+            bbox = canvas.bbox("all")
+            if not bbox:
+                return
+            content_h = max(1, bbox[3] - bbox[1])
+            view_h = canvas.winfo_height()
+            if content_h <= view_h:
+                canvas.yview_moveto(0)
+                return
+            pixels = max(0, min(pixels, content_h - view_h))
+            canvas.yview_moveto(pixels / content_h)
+        except tk.TclError:
+            pass
+
     def _toggle_group_collapsed(self, category):
         if category in self.collapsed_groups:
             self.collapsed_groups.discard(category)
@@ -7959,8 +8003,16 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.track_theme(self.list_frame, bg="sidebar")
 
         self.list_frame.bind(
-            "<Configure>", lambda e: self.canvas.configure(scrollregion=self.canvas.bbox("all"))
+            "<Configure>", lambda e: (
+                self.canvas.configure(
+                    scrollregion=self.canvas.bbox("all")),
+                self._sync_list_scroll())
         )
+        # The same guard the editor page has carried since 0.32.x: when
+        # the content fits (or the origin drifts above the first card),
+        # the list pins back to the top instead of sitting displaced.
+        self.canvas.bind("<Configure>",
+                         lambda e: self._sync_list_scroll(), add="+")
         self.canvas.create_window((0, 0), window=self.list_frame, anchor="nw", width=250)
         self.canvas.configure(yscrollcommand=scrollbar.set)
 
@@ -9563,6 +9615,18 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
     def refresh_note_list(self):
         if not hasattr(self, "list_frame") or not self._still_alive():
             return
+        # The rebuild empties the frame for a moment, and a Configure
+        # landing in that window clamps the canvas to the top -- the
+        # 'scroll jumps back to the top' report on the grouped list.
+        # The offset is remembered in pixels and put back once the new
+        # content exists, whatever happened in between.
+        try:
+            saved_list_scroll = max(0, self.canvas.canvasy(0))
+        except (tk.TclError, AttributeError):
+            saved_list_scroll = 0
+        if saved_list_scroll > 0:
+            self.after_idle(lambda px=saved_list_scroll:
+                            self._restore_list_scroll(px))
         # Called from everywhere note/category data changes (save, delete,
         # category rename/delete, import, ...) — piggyback the Statistics
         # panel's refresh here too, so it stays live while Settings happens
