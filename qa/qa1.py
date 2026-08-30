@@ -2517,7 +2517,7 @@ _t9 = app._grid_at_line(app._grid_first_line(app._table_grids[0]))
 app._open_cell_editor(_t9, 1, 1)
 app._calc_insert_formula('2+2=4')
 check(f'the calculator lands in the open cell '
-      f'({app._cell_editor["entry"].get('1.0', 'end-1c')!r})',
+      f'({app._cell_editor["entry"].get("1.0", "end-1c")!r})',
       app._cell_editor is not None
       and app._cell_editor['entry'].get('1.0', 'end-1c') == '2+2=4'
       and app._cell_editor['entry'].index('insert') == '1.5')
