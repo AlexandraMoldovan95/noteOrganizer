@@ -214,6 +214,7 @@ from noteorganizer.core.formatting import (
 
 from noteorganizer.core.storage import (
     TRASH_RETENTION_DAYS,
+    trash_retention_days,
     load_settings,
     save_settings,
     mend_surrogates,
@@ -1039,6 +1040,17 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 self.show_error("Export failed",
                                f"Couldn't create the backup file:\n{state['error']}")
             else:
+                # Remember when the last successful export happened -- the
+                # Backup panel shows it, since an export is the only copy
+                # of the notes outside the app's own folder.
+                stamp = datetime.now().strftime("%Y-%m-%d %H:%M")
+                save_setting("last_export_at", stamp)
+                lbl = getattr(self, "last_export_lbl", None)
+                if lbl is not None:
+                    try:
+                        lbl.config(text=f"Last exported: {stamp}")
+                    except tk.TclError:
+                        pass
                 self.show_info(
                     "Export complete",
                     f"Your notes, settings, and attachments were saved to:\n"
@@ -10146,7 +10158,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if not self.ask_yes_no(
             "Move to trash",
             f"Move {count} selected note(s) to the trash? "
-            f"You can restore them within {TRASH_RETENTION_DAYS} days.{warning}",
+            f"You can restore them within {trash_retention_days()} days.{warning}",
             icon="question"
         ):
             return

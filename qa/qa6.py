@@ -936,6 +936,157 @@ check('expanding and collapsing leaves the packing alone',
 # filled a 752px box perfectly well -- so that measurement cannot tell the
 # two apart. What distinguishes them is the box against its frame, above.
 
+# ---- SETTINGS QUICK WINS ----
+# F1: the Backup panel says when the notes last left this computer --
+# the export is the only copy outside the app's own folder.
+app.show_settings_page()
+app.toggle_settings_panel('backup')
+app.update()
+check('backup admits nothing was ever exported',
+      'Never exported' in str(app.last_export_lbl.cget('text')))
+app._export_state = {'current': 1, 'total': 1, 'done': True,
+                     'error': None, 'save_path': 'X:/fake.zip'}
+app._poll_export_progress()
+app.update()
+check('a finished export stamps the Backup line',
+      'Last exported: 20' in str(app.last_export_lbl.cget('text')))
+check('and remembers the stamp in settings',
+      str(NO.get_setting('last_export_at', ''))[:2] == '20')
+NO.save_setting('last_export_at', 'marker')
+_origErrQW = app.show_error
+app.show_error = lambda *a, **k: None
+app._export_state = {'current': 0, 'total': 1, 'done': True,
+                     'error': 'disc plin', 'save_path': 'X:/fake.zip'}
+app._poll_export_progress()
+app.show_error = _origErrQW
+check('a FAILED export leaves the stamp alone',
+      NO.get_setting('last_export_at') == 'marker')
+
+# F2: trash retention is a real setting now, honoured end to end.
+app.toggle_settings_panel('trash')
+app.update()
+check('the trash panel names the current retention window',
+      'Kept for 30 days' in str(app._trash_subtitle_lbl.cget('text')))
+_ddQW = []
+
+
+def _find_dd_qw(w):
+    for ch in w.winfo_children():
+        try:
+            if (ch.winfo_class() == 'Label' and str(ch.cget('textvariable'))
+                    == str(app.trash_retention_var)):
+                _ddQW.append(ch.master)
+                return
+        except Exception:
+            pass
+        _find_dd_qw(ch)
+
+
+_find_dd_qw(app.settings_trash_panel)
+_ddQW[0].event_generate('<Button-1>')
+app.update()
+_optQW = []
+
+
+def _find_opt_qw(w):
+    for ch in w.winfo_children():
+        if ch.winfo_class() == 'Label' and str(ch.cget('text')) == '60 days':
+            _optQW.append(ch)
+        _find_opt_qw(ch)
+
+
+_find_opt_qw(app._mini_popup)
+_optQW[0].event_generate('<Button-1>')
+app.update()
+check('picking 60 days in the dropdown saves the setting',
+      NO.get_setting('trash_retention_days') == 60)
+check('the subtitle follows the choice',
+      'Kept for 60 days' in str(app._trash_subtitle_lbl.cget('text')))
+check('the purge window follows too', NO.trash_retention_days() == 60)
+NO.save_setting('trash_retention_days', 'forever')
+check("a hand-edited 'forever' reads as the default",
+      NO.trash_retention_days() == 30)
+NO.save_setting('trash_retention_days', 0)
+check('zero days clamps to one -- never purge-everything',
+      NO.trash_retention_days() == 1)
+import datetime as _dtQW
+_oldQW = (_dtQW.datetime.now()
+          - _dtQW.timedelta(days=10)).strftime('%Y-%m-%d %H:%M:%S')
+_entryQW = {'id': 9990, 'title': 'veche', 'deleted_at': _oldQW,
+            'attachments': []}
+NO.save_setting('trash_retention_days', 7)
+_keptQW, _nQW = NO.purge_expired_trash([dict(_entryQW)])
+NO.save_setting('trash_retention_days', 30)
+_keptQW2, _nQW2 = NO.purge_expired_trash([dict(_entryQW)])
+check('a 10-day-old entry purges under a 7-day window', _nQW == 1)
+check('and survives under the 30-day default', _nQW2 == 0)
+
+# F3: the keyboard-shortcut reference exists and lists what is bound.
+app.toggle_settings_panel('shortcuts')
+app.update()
+_txtQW = []
+
+
+def _walk_qw(w):
+    for ch in w.winfo_children():
+        try:
+            _txtQW.append(str(ch.cget('text')))
+        except Exception:
+            pass
+        _walk_qw(ch)
+
+
+_walk_qw(app.settings_shortcuts_panel)
+_allQW = ' | '.join(_txtQW)
+check('the shortcuts panel lists the formatting four',
+      all(k in _allQW for k in ('Ctrl+B', 'Ctrl+I', 'Ctrl+U', 'Ctrl+D')))
+check('and the undiscoverable rest',
+      all(k in _allQW for k in ('Ctrl+Shift+V', 'Page Up', 'Home',
+                                'Shift+Tab')))
+
+# F4: deleting a template says plainly that nothing comes back.
+_askedQW = {}
+_ansQW = {'v': False}
+_origAskQW = app.ask_yes_no
+
+
+def _fake_ask_qw(title, msg, **kw):
+    _askedQW['title'] = title
+    _askedQW['msg'] = msg
+    return _ansQW['v']
+
+
+app.ask_yes_no = _fake_ask_qw
+app.templates = [NO.normalize_template({'name': 'Proba QW', 'body': 'x'})]
+_holdQW = tk.Toplevel(app)
+_frameQW = tk.Frame(_holdQW)
+_frameQW.pack()
+app._build_template_row(_frameQW, app.templates[0], lambda: None)
+app.update()
+_trashBtnQW = []
+
+
+def _find_trash_qw(w):
+    for ch in w.winfo_children():
+        if getattr(ch, '_icon_kind', None) == 'trash':
+            _trashBtnQW.append(ch)
+        _find_trash_qw(ch)
+
+
+_find_trash_qw(_frameQW)
+_trashBtnQW[0].event_generate('<Button-1>')
+app.update()
+check('the delete ask says templates skip the Trash',
+      "don't go to the Trash" in str(_askedQW.get('msg', ''))
+      and "can't be undone" in str(_askedQW.get('msg', '')))
+check('No keeps the template', len(app.templates) == 1)
+_ansQW['v'] = True
+_trashBtnQW[0].event_generate('<Button-1>')
+app.update()
+check('Yes deletes it for good', len(app.templates) == 0)
+app.ask_yes_no = _origAskQW
+_holdQW.destroy()
+
 print()
 print(f"=== QA6 FAILURES: {fails if fails else 'NONE'} ===")
 

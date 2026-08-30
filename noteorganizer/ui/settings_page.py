@@ -49,7 +49,10 @@ from ..core.formatting import FONT_FAMILIES, FONT_SIZES
 from ..core.duplicates import find_duplicate_groups
 from ..core.storage import (
     TRASH_RETENTION_DAYS,
+    trash_retention_days,
     _delete_attachment_files,
+    get_setting,
+    save_setting,
     load_settings,
     normalize_template,
     save_templates,
@@ -218,10 +221,11 @@ class SettingsPageMixin:
         had nothing left to close -- it re-selected the section it was
         already on.
         """
-        tk.Label(parent, text=text, font=("Segoe UI", 10), anchor="w",
-                 justify="left", wraplength=self.SETTINGS_CONTENT_MAX - 20,
-                 bg=self.colors["bg"], fg=self.colors["subtext"]
-                 ).pack(fill="x", pady=(0, 22))
+        lbl = tk.Label(parent, text=text, font=("Segoe UI", 10), anchor="w",
+                       justify="left", wraplength=self.SETTINGS_CONTENT_MAX - 20,
+                       bg=self.colors["bg"], fg=self.colors["subtext"])
+        lbl.pack(fill="x", pady=(0, 22))
+        return lbl
 
     def _render_statistics(self):
         """Compute and draw a compact, read-only snapshot: total notes; a
@@ -560,8 +564,13 @@ class SettingsPageMixin:
                  ).pack(side="left", fill="x", expand=True, padx=6, pady=8)
 
         def delete():
-            if self.ask_yes_no("Delete template",
-                                   f"Delete the template “{name}”?", parent=parent):
+            # Honest about the stakes: notes go to the Trash and can come
+            # back for the whole retention window -- templates do not.
+            if self.ask_yes_no(
+                    "Delete template",
+                    f"Delete the template “{name}” for good?\n\n"
+                    "Templates don't go to the Trash — this can't be undone.",
+                    parent=parent):
                 self.templates = [t for t in self.templates if t is not tpl]
                 save_templates(self.templates)
                 redraw()
@@ -1106,9 +1115,39 @@ class SettingsPageMixin:
                   font=("Segoe UI", 8, "bold")).pack(side="right", padx=2, ipadx=4, ipady=1)
 
     def _build_settings_trash_panel(self, parent):
-        self._settings_subtitle(
+        self._trash_subtitle_lbl = self._settings_subtitle(
             parent,
-            f"Kept for {TRASH_RETENTION_DAYS} days, then removed automatically.")
+            f"Kept for {trash_retention_days()} days, then removed automatically.")
+
+        card = self._settings_card(parent)
+        row = self._card_row(
+            card, "Keep deleted notes for",
+            "How long the trash holds a note before removing it for good. "
+            "A change applies from the next startup's cleanup.",
+            first=True)
+        self.trash_retention_var = tk.StringVar(
+            value=f"{trash_retention_days()} days")
+
+        def set_retention(value):
+            try:
+                days = int(value.split()[0])
+            except (ValueError, IndexError):
+                return
+            save_setting("trash_retention_days", days)
+            # The subtitle above quotes the window -- keep it honest
+            # without rebuilding the panel under the dropdown's feet.
+            try:
+                self._trash_subtitle_lbl.config(
+                    text=f"Kept for {trash_retention_days()} days, "
+                         "then removed automatically.")
+            except (tk.TclError, AttributeError):
+                pass
+
+        self._build_themed_dropdown(
+            row, self.trash_retention_var,
+            ["7 days", "14 days", "30 days", "60 days", "90 days"],
+            set_retention, width_chars=10
+        ).pack(side="right")
         wrap = tk.Frame(parent, bg=self.colors["card"], height=240)
         wrap.pack(fill="x", padx=12, pady=(0, 0))
         wrap.pack_propagate(False)
@@ -1485,6 +1524,7 @@ class SettingsPageMixin:
         ("trash",      "Recently deleted", "_build_settings_trash_panel",      False),
         ("duplicates", "Duplicates",       "_build_settings_duplicates_panel", False),
         ("statistics", "Statistics",       "_build_settings_statistics_panel", True),
+        ("shortcuts",  "Keyboard shortcuts", "_build_settings_shortcuts_panel", True),
         ("about",      "About",            "_build_settings_about_panel",      True),
     )
 
@@ -1497,7 +1537,7 @@ class SettingsPageMixin:
         ("General", ("name", "appearance")),
         ("Content", ("categories", "templates")),
         ("Data",    ("backup", "trash", "duplicates")),
-        ("More",    ("statistics", "about")),
+        ("More",    ("statistics", "shortcuts", "about")),
     )
 
     # The nav is a fixed width. It does not need a narrow breakpoint: the app
@@ -2352,7 +2392,7 @@ class SettingsPageMixin:
             # they were sitting in Trash.
             buttons=[("Cancel", None),
                      (f"Delete the notes too (restorable for "
-                      f"{TRASH_RETENTION_DAYS} days)", "delete_notes", "danger"),
+                      f"{trash_retention_days()} days)", "delete_notes", "danger"),
                      (f"Move them to “{PROTECTED_CATEGORY}” (keep the notes)", "move")]
         )
 
@@ -2398,7 +2438,7 @@ class SettingsPageMixin:
         if not self.ask_yes_no(
             "Move duplicates to trash",
             f"Move {len(to_trash)} selected note(s) to the trash? "
-            f"You can restore them within {TRASH_RETENTION_DAYS} days.",
+            f"You can restore them within {trash_retention_days()} days.",
             parent=dlg, icon="question"
         ):
             return
@@ -2596,6 +2636,16 @@ class SettingsPageMixin:
             first=True)
         self._text_button(control, "Export", self.export_data,
                           kind="primary").pack()
+        # The app is offline by design, so an export is the only copy of
+        # the notes outside the app's own folder -- and this line is the
+        # only thing that says when that copy was last made.
+        last = get_setting("last_export_at", "", expect=str)
+        self.last_export_lbl = tk.Label(
+            card, text=(f"Last exported: {last}" if last
+                        else "Never exported from this computer."),
+            font=("Segoe UI", 8), anchor="w",
+            bg=self._surface(), fg=self.colors["subtext"])
+        self.last_export_lbl.pack(fill="x", pady=(0, 6))
 
         control = self._card_row(
             card, "Import notes",
@@ -2612,6 +2662,65 @@ class SettingsPageMixin:
         self.track_theme(self.stats_frame, bg="bg")
         self.stats_frame.pack(fill="x")
         self._render_statistics()
+
+    # Every combo listed here is verified against a real binding -- the
+    # groups below name the widget the binding lives on, and the calendar
+    # keys only act while that tab is showing (see _calendar_key's guard).
+    SHORTCUT_GROUPS = (
+        ("Text formatting", (
+            ("Ctrl+B", "Bold the selection — or with nothing selected, "
+                       "bold whatever you type next."),
+            ("Ctrl+I", "Italic, the same way."),
+            ("Ctrl+U", "Underline."),
+            ("Ctrl+D", "Strikethrough."),
+        )),
+        ("Clipboard", (
+            ("Ctrl+V", "Paste, keeping the source's bold, colours, lists "
+                       "and tables."),
+            ("Ctrl+Shift+V", "Paste the words alone, with no styling."),
+            ("Ctrl+C", "Copy — a selected block of table cells copies as "
+                       "cells, and pastes into Excel as cells too."),
+        )),
+        ("Editing", (
+            ("Ctrl+Z", "Undo, in the note body and comments."),
+            ("Ctrl+Y  /  Ctrl+Shift+Z", "Redo."),
+        )),
+        ("Tables", (
+            ("Tab  /  Shift+Tab", "Next / previous cell — Tab on the very "
+                                  "last cell adds a fresh row."),
+            ("Enter  /  Shift+Enter", "A new line inside the cell; the row "
+                                      "grows to fit."),
+            ("Ctrl+A", "Select the whole cell."),
+            ("Escape", "Leave the cell."),
+            ("Delete", "Clear the selected cells."),
+        )),
+        ("Calendar (while the Calendar tab is showing)", (
+            ("Page Up  /  Page Down", "Previous / next month."),
+            ("Ctrl+Page Up  /  Ctrl+Page Down", "Previous / next year."),
+            ("Home", "Jump back to today."),
+        )),
+    )
+
+    def _build_settings_shortcuts_panel(self, parent):
+        """A read-only reference of every keyboard shortcut the app binds.
+
+        Thirteen combos were bound and only the formatting four were
+        discoverable (via the right-click menu) -- everything else lived
+        in the user guide or in nobody's memory.
+        """
+        self._settings_subtitle(
+            parent,
+            "Everything the keyboard can do. The formatting four are also "
+            "on the note body's right-click menu.")
+        for title, rows in self.SHORTCUT_GROUPS:
+            tk.Label(parent, text=title, font=("Segoe UI", 9, "bold"),
+                     anchor="w", bg=self.colors["bg"],
+                     fg=self.colors["subtext"]).pack(fill="x", pady=(0, 6))
+            card = self._settings_card(parent, pad=(22, 6))
+            for i, (combo, what) in enumerate(rows):
+                row = self._card_row(card, combo, what, first=(i == 0))
+                # No control on the right -- the row IS the information.
+                row.pack_forget()
 
     def _build_settings_about_panel(self, parent):
         """Version, where the data lives, and what changed."""
