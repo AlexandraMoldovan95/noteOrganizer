@@ -4932,7 +4932,9 @@ _exp_note = NO.normalize_note({
              + '| [x] | val |' + chr(10) + 'coada'),
     'formatting': [{'start': 0, 'end': 5, 'style': 'bold'}],
     'paragraphs': [{'line': 1, 'kind': 'bullet'}],
-    'comments': 'un comentariu', 'category': 'General'})
+    'comments': 'un comentariu', 'category': 'General',
+    'checklist': [{'text': 'facut deja', 'done': True},
+                  {'text': 'de facut <inca>', 'done': False}]})
 _exp_dir = os.path.abspath('qa_export_out')
 os.makedirs(_exp_dir, exist_ok=True)
 _toastsX = []
@@ -4962,6 +4964,12 @@ app.export_note_as_file(_exp_note, 'txt')
 _txtX = _ioX.open(_pX, encoding='utf-8').read() if os.path.exists(_pX) else ''
 check('text export is the body as stored, comments included',
       'linia intai' in _txtX and 'un comentariu' in _txtX)
+check('the checklist exports in all three formats, states kept',
+      chr(0x2611) + ' facut deja' in _htmlX
+      and chr(0x2610) + ' de facut' in _htmlX
+      and '&lt;inca&gt;' in _htmlX
+      and '- [x] facut deja' in _mdX and '- [ ] de facut <inca>' in _mdX
+      and '[x] facut deja' in _txtX)
 check('each export announces itself with a toast',
       len(_toastsX) == 3 and all('Exported to' in t for t in _toastsX))
 

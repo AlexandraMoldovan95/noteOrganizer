@@ -15,6 +15,7 @@ import zlib
 import threading
 import time
 import base64
+from html import escape
 import calendar as cal_module
 import re
 import math
@@ -6663,9 +6664,21 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             return
         body = note.get("body", "")
         comments = (note.get("comments") or "").strip()
+        # The checklist is its own section beside the body, like the
+        # comments -- content, not chrome, so it exports with the note.
+        checklist = note.get("checklist") or []
         if fmt == "html":
             fragment = note_to_html(body, note.get("formatting"),
                                     note.get("paragraphs"))
+            if checklist:
+                # Glyphs, not <input> boxes: a disabled form control is
+                # at Word's mercy; a character renders everywhere.
+                items = "\n".join(
+                    "<div>{} {}</div>".format(
+                        "☑" if it.get("done") else "☐",
+                        escape(it.get("text", "")))
+                    for it in checklist)
+                fragment += ("<hr>\n<div><i>Checklist</i></div>\n" + items)
             if comments:
                 fragment += ("<hr>\n<div><i>Comments</i></div>\n"
                              + note_to_html(comments))
@@ -6673,11 +6686,21 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         elif fmt == "md":
             content = f"# {title}\n\n" + note_to_markdown(
                 body, note.get("formatting"), note.get("paragraphs"))
+            if checklist:
+                content += "\n\n---\n\nChecklist:\n\n" + "\n".join(
+                    "- [{}] {}".format("x" if it.get("done") else " ",
+                                       it.get("text", ""))
+                    for it in checklist)
             if comments:
                 content += "\n\n---\n\nComments:\n\n" + comments
             content += "\n"
         else:
             content = title + "\n\n" + body
+            if checklist:
+                content += "\n\nChecklist:\n" + "\n".join(
+                    "[{}] {}".format("x" if it.get("done") else " ",
+                                     it.get("text", ""))
+                    for it in checklist)
             if comments:
                 content += "\n\nComments:\n" + comments
             content += "\n"
