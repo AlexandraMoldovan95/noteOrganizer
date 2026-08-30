@@ -23,7 +23,11 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          # Kept in step with the development machine (and therefore the
+          # packaged .exe, which bundles that same Python). A mismatch
+          # here once turned a locally-valid f-string (PEP 701, 3.12+)
+          # into a CI-only syntax error.
+          python-version: "3.13"
 
       - name: Install Tkinter and a virtual display
         # GitHub's runners have no physical screen — Tkinter still needs
