@@ -26,6 +26,28 @@ tested on any machine.
 """
 
 CELL = "|"
+# A line break INSIDE a cell, as markdown itself writes one -- a table
+# row must stay one line of text, so the break is a marker in the value.
+# Export, share codes and any markdown-aware tool read it natively.
+LINE_BREAK = "<br>"
+# A cell holding exactly one of these IS a checkbox -- markdown's own
+# task idiom, so the stored text stays plainly readable and any
+# markdown-aware tool shows a task box. The app draws it as a real
+# box and a click toggles it; delete it and type, and the cell is
+# ordinary text again.
+CHECKBOX_EMPTY = "[ ]"
+CHECKBOX_DONE = "[x]"
+
+
+def checkbox_state(value):
+    """None when the cell is not a checkbox; False unchecked, True
+    checked. Tolerates a capital X, which hand-written markdown uses."""
+    v = (value or "").strip()
+    if v == CHECKBOX_EMPTY:
+        return False
+    if v.lower() == CHECKBOX_DONE:
+        return True
+    return None
 # A cell holding exactly one of these is not content but a merge marker:
 # "<" belongs to the cell on its left, "^" to the cell above. Anchors sit
 # at the top-left of their rectangle. Typing one of these alone into a cell
@@ -51,6 +73,15 @@ def is_table_row(line):
     if not stripped.endswith(CELL):
         return False
     return len(split_row(stripped)) >= _MIN_CELLS
+
+
+def cell_display_lines(value):
+    """A cell's display lines: the value split on the ``<br>`` marker.
+
+    The split is on the literal marker, so a cell without one is a
+    single line and nothing changes for it.
+    """
+    return (value or "").split(LINE_BREAK)
 
 
 def split_row(line):

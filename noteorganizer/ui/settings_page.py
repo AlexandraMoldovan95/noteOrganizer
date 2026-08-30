@@ -574,6 +574,114 @@ class SettingsPageMixin:
                       lambda _e: self._edit_template(tpl, redraw, edit_btn))
         edit_btn.pack(side="right", padx=1)
 
+    def _draw_template_table_preview(self, canvas, body_text):
+        """A read-only rendering of the body's tables, for the template
+        dialog: the editor's visual language (bold header on its own
+        surface, hairline rules, separator-aware widths, hidden columns
+        as slivers, merges as spanned cells) without its machinery.
+        Every table and every row is drawn -- the canvas scrolls when it
+        grows past the dialog's budget. Returns the table blocks, empty
+        when there is nothing to draw."""
+        from noteorganizer.core import tables as core_tables
+        from noteorganizer.core.themes import hairline, inset_surface
+        canvas.delete("all")
+        text = body_text.get("1.0", "end-1c")
+        blocks = core_tables.find_blocks(text)
+        if not blocks:
+            return []
+        lines = text.split("\n")
+        font = tkfont.Font(family="Consolas", size=9)
+        pad_x, row_h, y = 6, 22, 2
+        rule = hairline(self.colors)
+        max_x = 100
+        for first, last in blocks:
+            block = lines[first:last + 1]
+            sep_at = core_tables.separator_index(block)
+            sep_cols = (core_tables.parse_separator(block[sep_at])
+                        if sep_at is not None else None)
+            rows = [core_tables.split_row(line)
+                    for i, line in enumerate(block) if i != sep_at]
+            ncols = max((len(r) for r in rows), default=0)
+            spans, covered = core_tables.merge_map(rows)
+            widths = []
+            for c in range(ncols):
+                column = (sep_cols[c] if sep_cols and c < len(sep_cols)
+                          else None)
+                if column and column.get("hidden"):
+                    widths.append(8)
+                    continue
+                longest = max((font.measure(seg) for r in rows
+                               if c < len(r)
+                               and r[c] not in (core_tables.MERGE_LEFT,
+                                                core_tables.MERGE_UP)
+                               for seg in core_tables.cell_display_lines(
+                                   r[c])),
+                              default=20)
+                if column and column.get("width"):
+                    longest = max(longest,
+                                  font.measure("0") * column["width"])
+                widths.append(min(longest + 2 * pad_x, 160))
+            # A cell can hold <br> line breaks; its row grows to fit.
+            row_lines = []
+            for row in rows:
+                n = 1
+                for v in row:
+                    if v not in (core_tables.MERGE_LEFT,
+                                 core_tables.MERGE_UP):
+                        n = max(n, len(core_tables.cell_display_lines(v)))
+                row_lines.append(n)
+            row_ys = [y]
+            for n in row_lines:
+                row_ys.append(row_ys[-1] + n * row_h)
+            x0 = 2
+            for r, row in enumerate(rows):
+                x = x0
+                for c in range(ncols):
+                    w = widths[c]
+                    if (r, c) in covered:
+                        x += w
+                        continue
+                    rs, cs = spans.get((r, c), (1, 1))
+                    w_span = sum(widths[c:c + cs])
+                    cell_h = (row_ys[min(r + rs, len(rows))] - row_ys[r])
+                    canvas.create_rectangle(
+                        x, row_ys[r], x + w_span, row_ys[r] + cell_h,
+                        fill=(inset_surface(self.colors) if r == 0
+                              else self.colors["card"]),
+                        outline=rule)
+                    value = row[c] if c < len(row) else ""
+                    hidden = (sep_cols and c < len(sep_cols)
+                              and sep_cols[c].get("hidden"))
+                    if value and not hidden:
+                        segs = core_tables.cell_display_lines(value)
+                        top = row_ys[r] + (cell_h - len(segs) * row_h) / 2
+                        for li, seg in enumerate(segs):
+                            shown = seg
+                            if font.measure(seg) > w_span - 2 * pad_x:
+                                while (len(shown) > 1 and
+                                       font.measure(shown + "\u2026")
+                                       > w_span - 2 * pad_x):
+                                    shown = shown[:-1]
+                                shown += "\u2026"
+                            canvas.create_text(
+                                x + pad_x, top + li * row_h + row_h / 2,
+                                anchor="w",
+                                font=("Consolas", 9,
+                                      "bold" if r == 0 else "normal"),
+                                fill=self.colors["text"], text=shown)
+                    x += w
+            y = row_ys[-1]
+            max_x = max(max_x, x0 + sum(widths))
+            y += 8
+        shown_h = min(y, 240)
+        shown_w = min(max_x + 6, 430)
+        canvas.configure(height=shown_h, width=shown_w,
+                         bg=self.colors["card"], highlightthickness=0,
+                         scrollregion=(0, 0, max_x, y))
+        canvas._preview_overflows = y > shown_h
+        canvas._preview_overflows_x = max_x > shown_w
+        return blocks
+
     def _edit_template(self, tpl, redraw, anchor_widget=None):
         """Open a small editor (inline window) to create or edit a template's
         name, title, body, comments and category."""
@@ -616,11 +724,158 @@ class SettingsPageMixin:
                 t.insert("1.0", initial)
                 t.pack(fill="x")
                 self._add_paste_menu(t)
+                # A table copied from Excel, Word or a web page arrives
+                # as pipe text instead of losing its shape to the plain
+                # clipboard.
+                t.bind("<<Paste>>",
+                       lambda e, w=t: self._paste_table_aware(w))
                 return t
 
         name_var = field("Template name", data["name"])
         title_var = field("Note title (optional)", data["title"])
         body_txt = field("Note body", data["body"], height=4)
+        # Tables in the body show AS tables, right here -- the same
+        # visual language as the editor, in preview form. Hidden until
+        # the body actually holds one.
+        # The holder is packed NOW, right under the body box, so the
+        # preview appears here rather than at the frame's tail when it
+        # first shows up.
+        preview_holder = tk.Frame(frame, bg=self.colors["card"])
+        preview_holder.pack(fill="x")
+        preview_lbl = tk.Label(preview_holder, text="Table preview",
+                               bg=self.colors["card"],
+                               fg=self.colors["subtext"],
+                               font=("Segoe UI", 8, "bold"), anchor="w")
+        preview_row = tk.Frame(preview_holder, bg=self.colors["card"])
+        preview_canvas = tk.Canvas(preview_row, height=10,
+                                   bg=self.colors["card"],
+                                   highlightthickness=0)
+        preview_scroll = ttk.Scrollbar(preview_row, orient="vertical",
+                                       command=preview_canvas.yview)
+        preview_hscroll = ttk.Scrollbar(preview_row, orient="horizontal",
+                                        command=preview_canvas.xview)
+        preview_canvas.configure(yscrollcommand=preview_scroll.set,
+                                 xscrollcommand=preview_hscroll.set)
+        preview_canvas.grid(row=0, column=0, sticky="w")
+        body_txt.tag_configure("tblhide", elide=True)
+
+        def refresh_preview(_e=None):
+            try:
+                blocks = self._draw_template_table_preview(
+                    preview_canvas, body_txt)
+            except Exception:
+                # Broad on purpose: the draw wipes the canvas FIRST, so a
+                # failure escaping here left an empty preview and stale
+                # hiding for the rest of the dialog's life.
+                return
+            # The body box shows only the NON-table text: the preview is
+            # where tables are seen, and raw pipe rows with merge markers
+            # read as noise. The box still HOLDS the full body -- elide
+            # hides the lines without touching the stored text.
+            body_txt.tag_remove("tblhide", "1.0", "end")
+            # Blank lines glued to a hidden table hide with it -- they
+            # exist to separate blocks in the STORED text, and keeping
+            # them visible left the remaining text full of gaps. A blank
+            # line between two runs of text is left alone.
+            all_lines = body_txt.get("1.0", "end-1c").split("\n")
+            for first, last in blocks:
+                a, z = first, last
+                while a - 1 >= 0 and not all_lines[a - 1].strip():
+                    a -= 1
+                while z + 1 < len(all_lines) and not all_lines[z + 1].strip():
+                    z += 1
+                # Never over the text's own final newline: a hide range
+                # clamped to "end" swallows it, and everything typed at
+                # the end thereafter lands INSIDE the tag -- invisible.
+                hide_end = f"{z + 1}.end+1c"
+                if body_txt.compare(hide_end, ">=", "end"):
+                    hide_end = "end-1c"
+                body_txt.tag_add("tblhide", f"{a + 1}.0", hide_end)
+            if blocks:
+                # A caret inside hidden text would edit a table row
+                # invisibly; park it at the end, after a visible newline.
+                # ONLY when it actually sits in hidden text: parking it
+                # unconditionally yanked the caret to the end after every
+                # keystroke, scattering mid-text edits to the tail.
+                last_line = body_txt.get("end-1c linestart", "end-1c")
+                from noteorganizer.core import tables as core_tables
+                if core_tables.is_table_row(last_line):
+                    body_txt.insert("end", "\n")
+                if "tblhide" in body_txt.tag_names("insert"):
+                    body_txt.mark_set("insert", "end")
+            if blocks and not preview_row.winfo_ismapped():
+                preview_lbl.pack(fill="x", pady=(4, 0))
+                preview_row.pack(anchor="w", pady=(0, 2))
+            elif not blocks and preview_row.winfo_ismapped():
+                preview_lbl.pack_forget()
+                preview_row.pack_forget()
+            if blocks and getattr(preview_canvas, "_preview_overflows",
+                                  False):
+                preview_scroll.grid(row=0, column=1, sticky="ns")
+            else:
+                preview_scroll.grid_forget()
+            if blocks and getattr(preview_canvas, "_preview_overflows_x",
+                                  False):
+                preview_hscroll.grid(row=1, column=0, sticky="ew")
+            else:
+                preview_hscroll.grid_forget()
+
+        def paste_and_preview(_e=None):
+            # One combined handler: the table-aware paste returns "break"
+            # (stopping every later binding), so the preview refresh is
+            # scheduled FIRST -- after_idle runs it once the pasted text
+            # has actually landed, whichever path handled it.
+            pop.after_idle(refresh_preview)
+            return self._paste_table_aware(body_txt)
+
+        # A click in the box can land the caret INSIDE the elided table
+        # text (a table-only body looks empty, so anywhere the user
+        # clicks resolves into hidden rows). Typing there glued letters
+        # onto an invisible pipe row: the row stopped being a table row,
+        # the block broke, and its leftover rows surfaced in the box as
+        # bare pipe lines. The caret is herded to visible text BEFORE a
+        # character lands, and deletions refuse to eat hidden text.
+        def caret_to_visible(_e=None):
+            try:
+                if "tblhide" in body_txt.tag_names("insert"):
+                    body_txt.mark_set("insert", "end")
+            except tk.TclError:
+                pass
+
+        def guard_backspace(_e=None):
+            # Deleting the newline that parts visible text from a hidden
+            # block glues the text onto an invisible pipe row -- the
+            # newline itself sits OUTSIDE the tag, so the char behind it
+            # is what gives the danger away.
+            try:
+                if ("tblhide" in body_txt.tag_names("insert - 1c")
+                        or "tblhide" in body_txt.tag_names("insert")
+                        or (body_txt.get("insert - 1c") == "\n"
+                            and "tblhide"
+                            in body_txt.tag_names("insert - 2c"))):
+                    return "break"
+            except tk.TclError:
+                pass
+
+        def guard_delete(_e=None):
+            try:
+                if ("tblhide" in body_txt.tag_names("insert")
+                        or (body_txt.get("insert") == "\n"
+                            and "tblhide"
+                            in body_txt.tag_names("insert + 1c"))):
+                    return "break"
+            except tk.TclError:
+                pass
+
+        body_txt.bind("<ButtonRelease-1>",
+                      lambda e: pop.after_idle(caret_to_visible), add="+")
+        body_txt.bind("<KeyPress>", caret_to_visible, add="+")
+        body_txt.bind("<BackSpace>", guard_backspace, add="+")
+        body_txt.bind("<Delete>", guard_delete, add="+")
+        body_txt.bind("<KeyRelease>",
+                      lambda e: pop.after_idle(refresh_preview), add="+")
+        body_txt.bind("<<Paste>>", paste_and_preview)
+        pop.after_idle(refresh_preview)
         comments_txt = field("Comments (optional)", data["comments"], height=2)
 
         # Interactive checklist editor (same feel as in a note): type + Enter
@@ -707,18 +962,46 @@ class SettingsPageMixin:
             nested=True)
         cat_menu.pack(fill="x", pady=(0, 6))
 
-        def save():
-            new_tpl = normalize_template({
+        def collect():
+            return normalize_template({
                 "name": name_var.get(),
                 "title": title_var.get(),
                 "body": body_txt.get("1.0", "end").rstrip("\n"),
                 "comments": comments_txt.get("1.0", "end").rstrip("\n"),
                 "category": cat_var.get(),
                 "checklist": [dict(it) for it in tpl_checklist],
+                # The dialog cannot edit these, but it must not lose
+                # them either: a template saved from the editor carries
+                # its formatting, and saving it here used to wipe it.
+                "formatting": data.get("formatting", []),
+                "paragraphs": data.get("paragraphs", []),
             })
-            if not new_tpl["name"].strip():
+
+        def save():
+            # Checked on the RAW field: normalize defaults an empty name
+            # to "Untitled template", so checking after it made this
+            # guard unreachable -- the junk rows named exactly that in
+            # the templates list were its silent proof.
+            if not name_var.get().strip():
                 self.show_warning("Name needed", "Give the template a name.", parent=pop)
                 return
+            new_tpl = collect()
+            # A colliding name never overwrites (or duplicates) silently:
+            # saving a NEW template under a taken name, or renaming one
+            # onto a neighbour, both ask first.
+            taken_name = new_tpl.get("name")
+            others = [t for t in self.templates
+                      if t is not tpl and t.get("name") == taken_name]
+            if others:
+                if not self.ask_yes_no(
+                        "Template name taken",
+                        f"You already have a template named “{taken_name}”.\n\n"
+                        "Replace the old template with this one?\n"
+                        "Choose No to give this one another name.",
+                        parent=pop):
+                    return
+                self.templates = [t for t in self.templates
+                                  if t not in others]
             if is_new:
                 self.templates.append(new_tpl)
             else:
@@ -741,22 +1024,46 @@ class SettingsPageMixin:
                   cursor="hand2", bg=self.colors["sidebar"], fg=self.colors["text"],
                   font=("Segoe UI", 9)).pack(side="left", padx=(6, 0), ipadx=10, ipady=3)
 
-        # Anchored to whichever button opened it — same safe, proven
-        # mechanism every other popup uses (multi-monitor safe, correct
-        # -topmost ordering, live-tracks the app window if it moves). Falls
-        # back to centering on the app window if no anchor was given.
-        # click-outside-dismiss is turned off here — this editor holds more
-        # content than a typical dropdown, so an accidental outside click
-        # shouldn't discard it; Save/Cancel are the explicit ways out.
+        # A click elsewhere closes the editor like any dropdown -- but
+        # never at the price of typed work: when something was changed, a
+        # small ask decides whether the change is saved first. Unchanged
+        # dialogs just close, no ceremony.
+        confirm_state = {"asking": False}
+        # Dirty is measured against what the very same collector reads at
+        # open time -- comparing against the raw template tripped on
+        # normalization details (a trailing newline, filled defaults).
+        opened_snapshot = collect()
+
+        def confirm_dismiss():
+            if confirm_state["asking"]:
+                return False              # the ask itself is on screen
+            if collect() == opened_snapshot:
+                return True               # nothing changed: just close
+            confirm_state["asking"] = True
+            try:
+                wants_save = self.ask_yes_no(
+                    "Save changes?",
+                    "You changed this template. Save the changes "
+                    "before closing?", icon="question", default="yes")
+            finally:
+                confirm_state["asking"] = False
+            if wants_save:
+                save()                    # dismisses itself on success
+                # A failed save (no name) keeps the dialog for fixing.
+                return False
+            return True
+
+        pop._confirm_dismiss = confirm_dismiss
         if anchor_widget is not None and anchor_widget.winfo_exists():
-            self._place_dropdown_popup(pop, anchor_widget, enable_click_outside=False)
+            self._place_dropdown_popup(pop, anchor_widget)
         else:
             self._place_dropdown_popup(
                 pop, None,
                 anchor_xy=(self.winfo_rootx() + self.winfo_width() // 2,
-                          self.winfo_rooty() + self.winfo_height() // 3),
-                enable_click_outside=False)
-        pop.bind("<Escape>", lambda e: self._dismiss_mini_popup())
+                          self.winfo_rooty() + self.winfo_height() // 3))
+        pop.bind("<Escape>",
+                 lambda e: (self._dismiss_mini_popup()
+                            if confirm_dismiss() else None))
 
     def _build_trash_row(self, parent, entry, redraw):
         row = tk.Frame(parent, bg=self.colors["card"])
@@ -1141,12 +1448,17 @@ class SettingsPageMixin:
         """Show the Settings page in place of the Notes/Calendar notebook.
         Settings lives outside the tab strip on purpose — see the comment
         where self.settings_page is created."""
+        # A popup anchored to the page being swapped out would keep
+        # floating over the new one -- the Settings dropdown was still on
+        # screen back in the editor.
+        self._dismiss_mini_popup()
         self._catch_up_deferred_refresh()
         self.notebook.pack_forget()
         self.settings_page.pack(fill="both", expand=True)
         self._render_statistics()
 
     def hide_settings_page(self):
+        self._dismiss_mini_popup()
         """Return from Settings to the Notes/Calendar notebook."""
         self.settings_page.pack_forget()
         self.notebook.pack(fill="both", expand=True)
@@ -1389,9 +1701,23 @@ class SettingsPageMixin:
         def _clear_settings_field_focus(event):
             if not self.settings_page.winfo_ismapped():
                 return
-            focused = self.focus_get()
-            if isinstance(focused, (tk.Entry, tk.Text)) and event.widget is not focused:
-                event.widget.focus_set()
+            try:
+                focused = self.focus_get()
+            except (tk.TclError, KeyError):
+                return
+            # event.widget can arrive as a bare STRING: Tk hands the path
+            # name when the clicked widget was destroyed and rebuilt (a
+            # theme switch does exactly that) before the event got here.
+            # Calling focus_set() on that string was the intermittent
+            # "something went wrong" while flipping themes.
+            target = event.widget
+            if not hasattr(target, "focus_set"):
+                return
+            if isinstance(focused, (tk.Entry, tk.Text)) and target is not focused:
+                try:
+                    target.focus_set()
+                except tk.TclError:
+                    pass
         self.bind("<Button-1>", _clear_settings_field_focus, add="+")
 
         # A frame per section, all created now so callers can reach them (the

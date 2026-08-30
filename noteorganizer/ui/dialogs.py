@@ -40,6 +40,40 @@ class DialogsMixin:
     (``self.colors``, ``self.winfo_rootx()`` and so on).
     """
 
+    def _popups_step_back(self):
+        """Drop -topmost on every override-redirect popup and slide them
+        under the main window; returns the list for _popups_step_forward."""
+        stepped = []
+        for child in self.winfo_children():
+            if not isinstance(child, tk.Toplevel):
+                continue
+            try:
+                # int(): on X11 the attribute can come back as the STRING
+                # '0', which is truthy and read as "still topmost".
+                if (child.winfo_exists() and child.wm_overrideredirect()
+                        and int(child.attributes("-topmost") or 0)):
+                    child.attributes("-topmost", False)
+                    # Into the restore list BEFORE the restack: if
+                    # lower() errors (window-manager quirks on X11), the
+                    # popup must still get its topmost back afterwards.
+                    stepped.append(child)
+                    try:
+                        child.lower(self)
+                    except tk.TclError:
+                        pass
+            except tk.TclError:
+                continue
+        return stepped
+
+    def _popups_step_forward(self, stepped):
+        for child in stepped:
+            try:
+                if child.winfo_exists():
+                    child.attributes("-topmost", True)
+                    child.lift()
+            except tk.TclError:
+                continue
+
     def _themed_dialog(self, title, message, kind="info", buttons=None):
         """A modal, in-theme replacement for tkinter's messagebox. Renders as an
         overlay INSIDE the app window (not a separate OS window), so it can't be
@@ -48,6 +82,11 @@ class DialogsMixin:
         if buttons is None:
             buttons = [("OK", True)]
 
+        # The overlay lives INSIDE the main window, and a -topmost
+        # popup floats above that -- so a question ABOUT the popup (save
+        # your changes?) rendered underneath it, unreachable. The popups
+        # step back for the dialog's duration and return after.
+        stepped_back = self._popups_step_back()
         icon = {"info": "ℹ️", "warning": "⚠️", "error": "⛔",
                 "question": "❓", "success": "✅"}.get(kind, "ℹ️")
         accent = {"error": self.colors["danger"], "warning": self.colors["danger"],
@@ -133,6 +172,7 @@ class DialogsMixin:
                 border.destroy()
             except tk.TclError:
                 pass
+            self._popups_step_forward(stepped_back)
         return result["value"]
 
     def show_info(self, title, message, **kw):
@@ -390,7 +430,107 @@ class DialogsMixin:
                 w = w.master
             except AttributeError:
                 break
+        # A popup holding real work may want a word first: its
+        # _confirm_dismiss returns False to stay open (or after having
+        # handled the closing itself, e.g. by saving).
+        confirm = getattr(pop, "_confirm_dismiss", None)
+        if confirm is not None and not confirm():
+            return
         self._dismiss_mini_popup()
+
+    def _foreground_is_ours(self):
+        """Is the OS foreground window one of this app's windows?
+
+        The only honest witness: override-redirect popups can hold the
+        activation without ever receiving <Activate>/<Deactivate>, so
+        event-based detection missed exactly the case where the user had
+        typed into a popup and then switched away. Off Windows there is
+        no GetForegroundWindow; answer "ours" so nothing ever hides.
+        """
+        try:
+            import ctypes
+            user32 = ctypes.windll.user32
+        except (ImportError, AttributeError, OSError):
+            return True
+        try:
+            fg = user32.GetAncestor(user32.GetForegroundWindow(), 2)
+            if not fg:
+                return True
+            ours = {user32.GetAncestor(self.winfo_id(), 2)}
+            for child in self.winfo_children():
+                if isinstance(child, tk.Toplevel):
+                    try:
+                        if child.winfo_exists():
+                            ours.add(user32.GetAncestor(child.winfo_id(), 2))
+                    except tk.TclError:
+                        continue
+            return fg in ours
+        except (tk.TclError, OSError):
+            return True
+
+    def _popup_foreground_watch(self):
+        """A light heartbeat while popups are involved: hide them when
+        another program truly holds the front, bring them back when the
+        app does. Popups are HIDDEN, never destroyed -- a half-typed
+        template dialog must survive a trip to the browser and back;
+        that round trip is exactly what the dialog is for."""
+        try:
+            self._popup_watch_step()
+        finally:
+            try:
+                self.after(300, self._popup_foreground_watch)
+            except tk.TclError:
+                pass
+
+    def _popup_watch_step(self):
+        hidden = getattr(self, "_popups_hidden_by_deactivate", None)
+        popups = []
+        for child in self.winfo_children():
+            if not isinstance(child, tk.Toplevel):
+                continue
+            try:
+                if (child.winfo_exists() and child.wm_overrideredirect()
+                        and child.winfo_viewable()):
+                    popups.append(child)
+            except tk.TclError:
+                continue
+        if not popups and not hidden:
+            return
+        ours = self._foreground_is_ours()
+        if popups and not ours:
+            self._hide_popups_if_left(popups)
+        elif hidden and ours:
+            self._popups_hidden_by_deactivate = None
+            for pop in hidden:
+                try:
+                    if pop.winfo_exists():
+                        pop.deiconify()
+                except tk.TclError:
+                    pass
+
+    def _hide_popups_if_left(self, popups):
+        self._hiding_popups = True
+        try:
+            for pop in popups:
+                try:
+                    pop.withdraw()
+                except tk.TclError:
+                    pass
+        finally:
+            self.after(200, lambda: setattr(self, "_hiding_popups", False))
+        self._popups_hidden_by_deactivate = popups
+
+    def _on_app_deactivated(self, event):
+        """Event-path fast lane: when a Deactivate does arrive (the main
+        window losing the front directly), react sooner than the timer."""
+        if not isinstance(event.widget, (tk.Tk, tk.Toplevel)):
+            return
+        self.after(150, self._popup_watch_step)
+
+    def _on_app_activated(self, event):
+        if not isinstance(event.widget, (tk.Tk, tk.Toplevel)):
+            return
+        self.after_idle(self._popup_watch_step)
 
     def _dismiss_mini_popup(self):
         gif_job = getattr(self, "_gif_anim_job", None)

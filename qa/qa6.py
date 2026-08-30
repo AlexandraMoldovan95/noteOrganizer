@@ -1,3 +1,30 @@
+# HERMETIC SEED -- BEFORE the note_organizer import below: the module
+# resolves its data directory and runs the data MIGRATIONS at import
+# time, so by the first line of test code the adoption has already
+# happened. The data directory must be this test's alone. An
+# empty directory invites run_migrations to adopt whatever real notebook
+# %APPDATA% holds, and real notes then leak into every scenario: the
+# checks start flaking whenever the OWNER's data changes. Seeding an
+# empty notebook plus the reclaim marker closes both migration doors
+# before the app is even constructed. The refusal is the same last-line
+# defence test_data_safety carries: run from a folder holding real
+# notes, the script stops instead of seeding over them.
+import io as _seed_io, json as _seed_json, os as _seed_os, sys as _seed_sys
+if _seed_os.path.exists('notes_data.json'):
+    try:
+        _seed_prev = _seed_json.load(
+            _seed_io.open('notes_data.json', encoding='utf-8'))
+    except Exception:
+        _seed_prev = []
+    if isinstance(_seed_prev, list) and _seed_prev:
+        _seed_sys.exit(
+            'REFUSING to run: notes_data.json here holds %d real note(s). '
+            'Copy this script to a scratch directory instead.'
+            % len(_seed_prev))
+_seed_io.open('notes_data.json', 'w', encoding='utf-8').write('[]')
+_seed_io.open('settings.json', 'w', encoding='utf-8').write(
+    _seed_json.dumps({'reclaimed_from_appdata': True}))
+
 import sys
 import time
 import note_organizer as NO, tkinter as tk, tkinter.filedialog as fd, os, tempfile
@@ -56,7 +83,11 @@ app.refresh_note_list()
 app.update()
 
 # ---- SETTINGS: username greeting ----
-app.username_var = tk.StringVar(value='Alexandra')
+# The REAL variable, not a replacement: assigning a fresh StringVar
+# here detached the attribute from the entry built at startup, and the
+# KeyRelease-correction checks below then talked to a variable no
+# widget was listening to.
+app.username_var.set('Alexandra')
 app.save_username('Alexandra')
 app._refresh_greeting()
 app.update()
@@ -79,9 +110,35 @@ app._refresh_greeting()
 # over the limit the way a validation bypass would.
 app.show_settings_page()
 app.update()
-name_entry = find_widget(app.settings_page, tk.Entry)
-name_entry.focus_set()
+# THE username entry, found by its variable -- 'the first Entry on the
+# page' silently became a different field once the tests stopped
+# inheriting a real settings file (hermetic seed) and the page rendered
+# its fresh-install state.
+# The 'name' section first: Settings shows exactly one section at a
+# time and a section's widgets only exist while it is the one showing.
+# On the pre-hermetic runs an inherited real settings file happened to
+# leave the right section up; a fresh install does not.
+app.toggle_settings_panel('name')
 app.update()
+name_entry = None
+_stack6 = [app]
+while _stack6:
+    _w6 = _stack6.pop()
+    if (isinstance(_w6, tk.Entry)
+            and str(_w6.cget('textvariable')) == str(app.username_var)):
+        name_entry = _w6
+        break
+    _stack6.extend(_w6.winfo_children())
+# Synthetic KEY events follow FOCUS; under a busy desktop focus_set is
+# silently refused and the KeyRelease lands elsewhere. Insist.
+for _try6 in range(40):
+    name_entry.focus_force()
+    app.update()
+    try:
+        if app.focus_get() is name_entry:
+            break
+    except (KeyError, tk.TclError):
+        pass
 
 app.username_var.set('3' * 70)
 name_entry.event_generate('<KeyRelease>')
@@ -98,6 +155,26 @@ check('truncated name is what gets persisted',
       len(NO.load_settings().get('username', '')) == 30)
 check('greeting reflects the truncated name, not the original 70 chars',
       len(app.greeting_lbl.cget('text')) < 40)
+
+# ---- SETTINGS + THEME SWITCH + CLICKS: NO CALLBACK ERRORS ----
+# Flipping themes rebuilds settings widgets; a click that still named a
+# destroyed widget crashed the focus-clearing handler ('something went
+# wrong', intermittent). The whole flow must stay silent.
+_theme_before6 = app.theme_name
+_errs6 = []
+_origRep6 = app.report_callback_exception
+app.report_callback_exception = lambda *a, **k: _errs6.append(1)
+name_entry.focus_force()
+app.update()
+app.set_theme('light' if 'dark' in str(app.theme_name) else 'dark')
+app.update()
+for _xy6 in ((200, 200), (400, 300), (60, 60)):
+    app.event_generate('<Button-1>', x=_xy6[0], y=_xy6[1])
+    app.update()
+app.set_theme(_theme_before6)
+app.update()
+app.report_callback_exception = _origRep6
+check('settings + theme flip + stray clicks raise nothing', not _errs6)
 
 # ---- SETTINGS: clicking elsewhere on the page clears field focus (regression) ----
 # Previously, clicking a non-interactive part of the Settings page (a
@@ -531,6 +608,42 @@ check('checklist change is captured by autosave-on-switch', any(
 before_hidden = app._sidebar_hidden
 app.toggle_sidebar()
 app.update()
+# ---- PAGE SWITCHES DISMISS THE OPEN POPUP ----
+# A dropdown opened in Settings kept floating over the editor after
+# Back to Notes -- a popup belongs to the page it was opened on.
+_was_settings = bool(app.settings_page.winfo_ismapped())
+app._edit_template(None, lambda: None)
+app.update()
+check('a popup opens in Settings', app._mini_popup is not None)
+app.hide_settings_page()
+app.update()
+check('Back to Notes dismisses it', app._mini_popup is None)
+app.show_settings_page()
+app.update()
+app._edit_template(None, lambda: None)
+app.update()
+app.hide_settings_page()
+app.update()
+app._edit_template(None, lambda: None)
+app.update()
+_popT = app._mini_popup
+app.notebook.event_generate('<<NotebookTabChanged>>')
+app.update()
+check('a notebook tab change dismisses it too', app._mini_popup is None)
+app.hide_settings_page()
+app.update()
+app._edit_template(None, lambda: None)
+app.update()
+app.show_settings_page()
+app.update()
+check('and entering Settings dismisses a popup left open in Notes',
+      app._mini_popup is None)
+if _was_settings:
+    app.show_settings_page()
+else:
+    app.hide_settings_page()
+app.update()
+
 check('toggle_sidebar flips the hidden state', app._sidebar_hidden != before_hidden)
 app.toggle_sidebar()
 app.update()

@@ -20,9 +20,11 @@ Click **+ New Note** in the sidebar to open a blank editor. A note has a title, 
 
 ![Note editor](screenshots/note-editor.png)
 
-Notes save automatically a moment after you stop typing (look for the "Auto-saved" status), and always save immediately when you switch to a different note.
+Notes save automatically a moment after you stop typing (look for the "Auto-saved" status), and always save immediately when you switch to a different note. Closing the app works the same way: anything still unsaved is saved on the way out, silently — no "unsaved changes" question, because there is nothing to lose.
 
 The writing area starts at twelve lines. **Expand**, underneath it, makes it roughly twice as tall for a long note, and **Collapse** puts it back — the note itself is unaffected either way, only how much of it you can see at once. The buttons at the bottom of the editor do not go out of reach; the page simply gets longer and scrolls. The app remembers which you chose. The comments box has the same toggle, though it always opens small.
+
+At the end of the formatting toolbar sits a small **light/dark switch** (☀ / 🌙): one press flips between your last light and last dark theme without leaving the note. The full theme picker, with all eight variants, stays in **Settings → Appearance**.
 
 ### Formatting
 
@@ -48,7 +50,6 @@ List markers are part of the note's own text — a bullet really is a "• " at 
 
 **To make everything bigger**, don't format each note — go to **Settings → Appearance** and set **Editor font** and **Text size**. That is the size notes start at; anything you set from the toolbar overrides it just for that text. This is the setting to reach for if the default is simply too small to read comfortably.
 
-Still ahead: paste that keeps (or discards) formatting from wherever it was copied.
 
 A title can be up to 200 characters. That is far more than a title needs, and it keeps the field quick to type in — a very long one makes the box itself sluggish. You do not have to count: once you are within 40 characters of the limit, a small counter appears beside the title (`175/200`) and turns red when it is full. Pasting something longer shortens it to fit rather than refusing it. Titles saved before this limit existed are left exactly as they are, however long they are.
 
@@ -73,12 +74,12 @@ The table button on the toolbar opens a small size grid — sweep across it to c
 
 A table works the way a spreadsheet has taught your hands to expect:
 
-- **Type** in a cell, press **Tab** to move to the next one (**Shift+Tab** goes back). Tab on the very last cell adds a fresh row, so a whole table can be filled without touching the mouse. **Enter** finishes the table and puts the cursor on the line below it.
-- **Click** any cell to edit it. **Drag** across cells to select a block of them — then **Ctrl+C** copies it, **Ctrl+V** somewhere else pastes it in the same shape, and **Delete** clears it. Copying works with the outside world in both directions: cells copied here paste into Excel as cells, and a table copied from Excel or a web page lands here as a real table.
-- **Right-click** a cell for everything else: merge the selected cells into one (their texts join), split a merge back apart, insert or delete rows and columns, duplicate whole columns to the end of the table, insert a checkmark or an emoji, and highlight cells from a small colour palette.
-- **Drag the line between two columns** to make a column wider or narrower; **double-click** the line to snap the column to its content. Narrowing below the content only shortens what is *drawn* (with an `…`) — the text itself is never cut.
+- **Type** in a cell, press **Tab** to move to the next one (**Shift+Tab** goes back). Tab on the very last cell adds a fresh row, so a whole table can be filled without touching the mouse. **Enter** (or **Shift+Enter**) starts a new line *inside* the cell — the whole row grows to fit — stored as Markdown's own `<br>`, so export still round-trips. The row grows on screen the moment you press it, so nothing below is ever covered. To leave the cell, press **Tab**, **Escape**, or click anywhere else; **Ctrl+A** selects the whole cell. A table wider than the editor gets its own horizontal scrollbar, drawn just underneath it.
+- **Click** any cell to edit it. **Drag** across cells to select a block of them — a firm drag *inside* one cell selects just that cell; drag toward an edge and the view scrolls along with you, so a selection can reach cells that started off screen — then **Ctrl+C** copies it, **Ctrl+V** somewhere else pastes it in the same shape, and **Delete** clears it. Copying works with the outside world in both directions: cells copied here paste into Excel as cells, and a table copied from Excel or a web page lands here as a real table.
+- **Right-click** a cell for everything else: merge the selected cells into one (their texts join), split a merge back apart, insert or delete rows and columns, duplicate whole columns to the end of the table (and whole rows to the bottom), insert a **checkbox** (with its own colour palette) or an emoji, and highlight cells from a small colour palette. A checkbox is a real little box, not text: **click it to tick and untick it** — for marking when a row's condition is met, a habit done, anything you invent. It is stored as Markdown's own task syntax (`[ ]` / `[x]`), so it survives export and share codes as readable text. To turn that cell back into words, right-click it and choose **Edit cell as text**, delete the marker, and type.
+- **Drag the line between two columns** to make a column wider or narrower; **double-click** the line to snap the column to its content. **Drag the line between two rows** up or down to make a row taller or shorter — the whole row resizes together, and a drag can never cut into text a cell actually holds. Narrowing below the content only shortens what is *drawn* (with an `…`) — the text itself is never cut.
 - **Hide a column** by selecting it top to bottom and right-clicking — it shrinks to a thin sliver, and right-clicking the sliver brings it back. Hiding only ever works on a fully selected column, so it is always clear what is about to disappear.
-- The **formatting toolbar works inside tables** too: select cells (or just have one open) and Bold, colours and highlights apply to them. The alignment buttons align the text inside the selected cells; to move the *table itself*, right-click it and choose **Center table on page** (or left / right).
+- The **formatting toolbar works inside tables** too: select cells and Bold, colours and highlights apply to them whole. With a cell *open*, the toolbar styles just the part you selected inside it — a single word, letter, or emoji can carry its own colour — and the open cell shows its colours while you edit, not after. Typing continues the style it lands beside: adding to a blue word stays blue. Pick a colour with nothing selected and it becomes the *active* colour — the toolbar button wears it as a swatch so you can see what you are writing with — and everything you type next, in a cell or in the note body, comes out in that colour until you pick another or click the same colour off. The alignment buttons align the text inside the selected cells; to move the *table itself*, right-click it and choose **Center table on page** (or left / right).
 
 Under the hood a table is stored as plain, readable text inside the note — the same pipe-and-dash layout Markdown uses. That is why search finds words inside cells, why tables survive share codes, backups and export unchanged, and why a table pasted into any Markdown-aware tool arrives as a table. The bullet and numbering buttons deliberately do nothing to a table — a table is not a list, and turning its rows into list items would break it apart.
 
@@ -115,6 +116,8 @@ Any text field in a note (title, body, comments) can have an emoji inserted at t
 ### Finding notes: search, sort, and grouping
 
 Search the note list by keyword, and sort by recency, title, category, or date, from the controls above the list.
+
+Each note's card previews its first words. A table would be pipe soup at that size, so the preview shows only the note's plain text and the card's tag row marks the table itself — **▦ 1 table**, or how many the note holds — next to the comment and attachment marks.
 
 ![Search and sort](screenshots/search-and-sort.png)
 

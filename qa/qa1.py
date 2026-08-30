@@ -1,3 +1,30 @@
+# HERMETIC SEED -- BEFORE the note_organizer import below: the module
+# resolves its data directory and runs the data MIGRATIONS at import
+# time, so by the first line of test code the adoption has already
+# happened. The data directory must be this test's alone. An
+# empty directory invites run_migrations to adopt whatever real notebook
+# %APPDATA% holds, and real notes then leak into every scenario: the
+# checks start flaking whenever the OWNER's data changes. Seeding an
+# empty notebook plus the reclaim marker closes both migration doors
+# before the app is even constructed. The refusal is the same last-line
+# defence test_data_safety carries: run from a folder holding real
+# notes, the script stops instead of seeding over them.
+import io as _seed_io, json as _seed_json, os as _seed_os, sys as _seed_sys
+if _seed_os.path.exists('notes_data.json'):
+    try:
+        _seed_prev = _seed_json.load(
+            _seed_io.open('notes_data.json', encoding='utf-8'))
+    except Exception:
+        _seed_prev = []
+    if isinstance(_seed_prev, list) and _seed_prev:
+        _seed_sys.exit(
+            'REFUSING to run: notes_data.json here holds %d real note(s). '
+            'Copy this script to a scratch directory instead.'
+            % len(_seed_prev))
+_seed_io.open('notes_data.json', 'w', encoding='utf-8').write('[]')
+_seed_io.open('settings.json', 'w', encoding='utf-8').write(
+    _seed_json.dumps({'reclaimed_from_appdata': True}))
+
 import sys
 import time
 import note_organizer as NO, tkinter as tk, json, os, re
@@ -2083,13 +2110,13 @@ check('the one floating editor opens on the first cell',
 # the note's own text, cell by cell.
 for _word in ('Name', 'Qty', 'Milk', '2', 'Eggs'):
     _e = app._cell_editor['entry']
-    _e.delete(0, 'end')
-    _e.insert(0, _word)
+    _e.delete('1.0', 'end')
+    _e.insert('1.0', _word)
     app._editor_step(+1)
     app.update()
 _e = app._cell_editor['entry']
-_e.delete(0, 'end')
-_e.insert(0, '12')
+_e.delete('1.0', 'end')
+_e.insert('1.0', '12')
 app._commit_cell_editor()
 app.update()
 check(f'typing through the editor lands in the text ({lines_now()[0]!r})',
@@ -2117,15 +2144,22 @@ check('and the editor opens in the new row',
       app._cell_editor is not None
       and (app._cell_editor['r'], app._cell_editor['c']) == (3, 0))
 
-# Enter finishes the cell and puts the caret on the line under the table,
-# at the start of the row -- writing continues from the left.
-app._cell_editor['entry'].event_generate('<Return>')
+# Enter now stays IN the cell: it starts a new line inside it (stored
+# as markdown's <br>), instead of dumping the caret under the table.
+# Leaving the cell is Tab, Escape, or a click elsewhere.
+app._editor_newline()
 app.update()
-check(f'Enter leaves the caret under the table '
-      f'({app.body_text.index("insert")})',
-      app._cell_editor is None
-      and app.body_text.index('insert') == '5.0'
-      and app.focus_get() is app.body_text)
+check('Enter stays in the cell, adds a line, and the ROW grows live',
+      app._cell_editor is not None
+      and app._cell_editor['entry'].get('1.0', 'end-1c') == '\n'
+      and app._grid_at_line(1)['cells'][
+          (app._cell_editor['r'], app._cell_editor['c'])]['h']
+      == 2 * app._grid_at_line(1)['row_h'])
+# tidy the empty second line back out so the table the following checks
+# read is the one they were written against
+app._cell_editor['entry'].delete('1.0', 'end')
+app._commit_cell_editor()
+app.update()
 _made = app._grid_at_line(1)
 
 # The hidden text is still reachable with arrows or a stray click, and
@@ -2142,8 +2176,8 @@ check(f'the caret cannot rest inside the hidden rows (line {_landed})',
 # row together, and one more of it would split the row apart.
 app._open_cell_editor(_made, 0, 0)
 _e = app._cell_editor['entry']
-_e.delete(0, 'end')
-_e.insert(0, 'a|b')
+_e.delete('1.0', 'end')
+_e.insert('1.0', 'a|b')
 app._commit_cell_editor()
 app.update()
 check(f'a pipe typed into a cell cannot break the row ({lines_now()[0]!r})',
@@ -2178,8 +2212,8 @@ check('covered positions are not cells at all',
 # that carry the merge stay exactly where they were.
 app._open_cell_editor(_merged, 0, 1)
 _e = app._cell_editor['entry']
-_e.delete(0, 'end')
-_e.insert(0, 'Cablu Nou')
+_e.delete('1.0', 'end')
+_e.insert('1.0', 'Cablu Nou')
 app._commit_cell_editor()
 app.update()
 check(f'editing a merge anchor keeps the merge ({lines_now()[0]!r})',
@@ -2310,13 +2344,19 @@ take_focus(app.body_text)
 app.body_text.mark_set('insert', '1.end')
 app.body_text.event_generate('<Return>')
 app.update()
-check(f'Enter beside a table leaves one block '
+check(f'Enter beside a LEADING table pushes it down in one block '
       f'({core_tables.find_blocks(body())})',
-      core_tables.find_blocks(body()) == [(0, 1)])
-check(f'and the caret lands at the start of the line below '
+      core_tables.find_blocks(body()) == [(1, 2)]
+      and app.body_text.get('1.0', '1.end') == '')
+check(f'and the caret takes the fresh first line '
       f'({app.body_text.index("insert")})',
-      app.body_text.index('insert').endswith('.0')
-      and int(app.body_text.index('insert').split('.')[0]) > 2)
+      str(app.body_text.index('insert')) == '1.0')
+# The sections below were written against the table at line 1; take the
+# fresh empty first line back out.
+app._teardown_table_grids()
+app.body_text.delete('1.0', '2.0')
+app._render_table_grids()
+app.update()
 
 # Dragging across cells selects a rectangle; releasing without a drag is
 # still just a click that opens the editor.
@@ -2348,9 +2388,11 @@ check(f'checkmarks fill every selected cell ({lines_now()[0]!r})',
       all(core_tables.split_row(l) == ['\u2713', '\u2713']
           for l in lines_now()[:2]))
 _t = app._grid_at_line(1)
+_ck = _t['cells'][(0, 0)]
+_ckbb = _t['canvas'].bbox(_ck['texts'][0]) if _ck['texts'] else None
 check('a checkmark is drawn centred in its cell',
-      str(_t['canvas'].itemcget(_t['cells'][(0, 0)]['text'], 'anchor'))
-      in ('c', 'center'))
+      _ckbb is not None
+      and abs((_ckbb[0] + _ckbb[2]) / 2 - (_ck['x'] + _ck['w'] / 2)) <= 8)
 
 # Merging the selection makes one cell anchored top-left.
 _a, _b2 = _t['cells'][(0, 0)], _t['cells'][(0, 1)]
@@ -2404,12 +2446,14 @@ app.update()
 check(f'centring a cell writes balanced padding ({lines_now()[0]!r})',
       core_tables.cell_alignments(lines_now()[0])[0] == 'center')
 _t = app._grid_at_line(1)
+_cc = _t['cells'][(0, 0)]
+_ccbb = _t['canvas'].bbox(_cc['texts'][0]) if _cc['texts'] else None
 check('and the cell draws centred',
-      str(_t['canvas'].itemcget(_t['cells'][(0, 0)]['text'], 'anchor'))
-      in ('c', 'center'))
+      _ccbb is not None
+      and abs((_ccbb[0] + _ccbb[2]) / 2 - (_cc['x'] + _cc['w'] / 2)) <= 8)
 app._open_cell_editor(_t, 0, 0)
 check('and its editor justifies to match',
-      str(app._cell_editor['entry'].cget('justify')) == 'center')
+      str(app._cell_editor['entry'].tag_cget('cellalign', 'justify')) == 'center')
 app._commit_cell_editor()
 app.update()
 check('committing an unchanged cell keeps the alignment',
@@ -2473,10 +2517,10 @@ _t9 = app._grid_at_line(app._grid_first_line(app._table_grids[0]))
 app._open_cell_editor(_t9, 1, 1)
 app._calc_insert_formula('2+2=4')
 check(f'the calculator lands in the open cell '
-      f'({app._cell_editor["entry"].get()!r})',
+      f'({app._cell_editor["entry"].get("1.0", "end-1c")!r})',
       app._cell_editor is not None
-      and app._cell_editor['entry'].get() == '2+2=4'
-      and int(app._cell_editor['entry'].index('insert')) == 5)
+      and app._cell_editor['entry'].get('1.0', 'end-1c') == '2+2=4'
+      and app._cell_editor['entry'].index('insert') == '1.5')
 app._commit_cell_editor()
 app.update()
 
@@ -2484,8 +2528,8 @@ app.update()
 _t9 = app._grid_at_line(app._grid_first_line(app._table_grids[0]))
 app._open_cell_editor(_t9, 0, 0)
 _e9 = app._cell_editor['entry']
-_e9.delete(0, 'end')
-_e9.insert(0, 'Titlu')
+_e9.delete('1.0', 'end')
+_e9.insert('1.0', 'Titlu')
 app._set_paragraph_align('center')
 app.update()
 _first9 = app._grid_first_line(app._table_grids[0])
@@ -2523,7 +2567,7 @@ check('a newer system clipboard outranks the remembered matrix',
 # cannot describe: an empty cell. Its clipboard text is '', which a parser
 # reads as nothing to paste -- only the matrix knows a cell was copied.
 app._open_cell_editor(_t9, 0, 1)
-app._cell_editor['entry'].delete(0, 'end')
+app._cell_editor['entry'].delete('1.0', 'end')
 app._commit_cell_editor()
 app.update()
 _t9 = app._grid_at_line(_first9)
@@ -2605,8 +2649,8 @@ app._open_cell_editor(_tX, 1, 0)
 app.update()          # focus settles; synthetic key events follow focus
 _edX = app._cell_editor
 _w0 = int(float(_tX['canvas'].itemcget(_edX['win'], 'width')))
-_edX['entry'].delete(0, 'end')
-_edX['entry'].insert(0, 'un continut mult mai lung decat coloana initiala')
+_edX['entry'].delete('1.0', 'end')
+_edX['entry'].insert('1.0', 'un continut mult mai lung decat coloana initiala')
 _edX['entry'].event_generate('<KeyRelease>')
 app.update()
 _w1 = int(float(_tX['canvas'].itemcget(_edX['win'], 'width')))
@@ -2632,8 +2676,8 @@ app.update()
 _x0 = _tX['canvas'].xview()[0]
 app._open_cell_editor(_tX, 1, 5)
 _edX = app._cell_editor
-_edX['entry'].delete(0, 'end')
-_edX['entry'].insert(0, 'modificare care lateste coloana vizibil')
+_edX['entry'].delete('1.0', 'end')
+_edX['entry'].insert('1.0', 'modificare care lateste coloana vizibil')
 app._commit_cell_editor()
 app.update()
 app.update()
@@ -2693,7 +2737,7 @@ try:
     _edU['entry'].insert('end', _pairU)
     _edU['entry'].insert('end', _pairU)
 except (tk.TclError, UnicodeEncodeError):
-    _edU['entry'].delete(0, 'end')
+    _edU['entry'].delete('1.0', 'end')
     _edU['entry'].insert('end', chr(0x1F600))
     _edU['entry'].insert('end', chr(0x1F600))
 for _i in range(3):
@@ -2709,16 +2753,16 @@ check(f'two emoji land as two, through three flushes '
       and not any(0xD800 <= ord(ch) <= 0xDFFF for ch in _lineU))
 _tU = app._grid_at_line(1)
 check('and the drawn cell wears the emoji face at commit',
-      'Emoji' in str(_tU['canvas'].itemcget(
-          _tU['cells'][(0, 0)]['text'], 'font')))
+      any('Emoji' in str(_tU['canvas'].itemcget(t, 'font'))
+          for t in _tU['cells'][(0, 0)]['texts']))
 
 # The neighbouring cell, edited AFTER the emoji, must land in its own cell
 # -- this is the write the drifted columns used to cut apart.
 app._open_cell_editor(_tU, 0, 1)
 app.update()
 _eU = app._cell_editor['entry']
-_eU.delete(0, 'end')
-_eU.insert(0, 'vecina')
+_eU.delete('1.0', 'end')
+_eU.insert('1.0', 'vecina')
 app._commit_cell_editor()
 app.update()
 _tU = app._grid_at_line(1)
@@ -2783,7 +2827,8 @@ check(f'a hand-widened column pads its data cells ({len(_dataS)} chars)',
 app._grid_set_col_width(_tS, 0, 4)
 app.update()
 _tS = app._grid_at_line(1)
-_shownS = _tS['canvas'].itemcget(_tS['cells'][(1, 0)]['text'], 'text')
+_shownS = ''.join(_tS['canvas'].itemcget(t, 'text')
+                  for t in _tS['cells'][(1, 0)]['texts'])
 check(f'a too-narrow column draws an ellipsis and keeps its text '
       f'({_shownS!r})',
       chr(0x2026) in _shownS and _tS['cells'][(1, 0)]['value'] == 'Lapte')
@@ -3026,7 +3071,8 @@ app._toggle_body_style('bold')
 app.update()
 _tF = app._grid_at_line(1)
 _spanF = app._grid_cell_text_range(_tF, 1, 0)
-_fontF = str(_tF['canvas'].itemcget(_tF['cells'][(1, 0)]['text'], 'font'))
+_fontF = ' '.join(str(_tF['canvas'].itemcget(t, 'font'))
+                  for t in _tF['cells'][(1, 0)]['texts'])
 check(f'Bold on selected cells tags the text and repaints ({_fontF!r})',
       'bold' in app.body_text.tag_names(_spanF[0])
       and 'bold' in _fontF and not app._pending_styles)
@@ -3068,22 +3114,41 @@ check('Clear highlight restores the exact header surface',
       _tF['canvas'].itemcget(_tF['cells'][(0, 0)]['rect'], 'fill')
       == _surfF)
 
-# An open editor is a target too: the color button means that cell.
+# An open editor with NO selection: the color becomes the PENDING one
+# -- worn by the toolbar button as a swatch, and by whatever is typed
+# next in the cell. With a selection inside the editor it styles just
+# that (covered by its own check further on).
 app._grid_sel = None
-app._open_cell_editor(_tF, 1, 1)
+app._open_cell_editor(_tF, 1, 1, select=False)
 app.update()
+_edP = app._cell_editor['entry']
+_edP.tag_remove('sel', '1.0', 'end')
 app._apply_body_color('text_color', '#ff0000')
 app.update()
-_tF = app._grid_at_line(1)
-_spanF = app._grid_cell_text_range(_tF, 1, 1)
-check('a color aimed at the open cell colors it, not a pending choice',
-      _spanF is not None
-      and any(t.startswith('text_color_')
-              for t in app.body_text.tag_names(_spanF[0]))
-      and not app._pending_text_color
-      and _tF['canvas'].itemcget(_tF['cells'][(1, 1)]['text'],
-                                 'fill') == '#ff0000')
+check('a color picked with the cell open becomes pending, and the '
+      'button wears it',
+      app._pending_text_color == '#ff0000'
+      and str(app.text_color_btn.cget('bg')) == '#ff0000')
+_edP.mark_set('insert', 'end-1c')
+import types as _typesP
+_evP = _typesP.SimpleNamespace(char='Q', keysym='Q')
+app._editor_key_press(_evP)
+_edP.insert('insert', 'Q')
+app._editor_key_release(_evP)
+check('the next typed character wears the pending color',
+      any(t == 'text_color_ff0000'
+          for t in _edP.tag_names('insert -1c')))
 app._commit_cell_editor()
+app.update()
+_tF = app._grid_at_line(1)
+check('and the commit carries it into the body and the drawing',
+      any(_tF['canvas'].itemcget(t, 'fill') == '#ff0000'
+          for t in _tF['cells'][(1, 1)]['texts']))
+app._apply_body_color('text_color', None)
+app.update()
+check('turning the pending color off returns the button to the theme',
+      app._pending_text_color is None
+      and str(app.text_color_btn.cget('bg')) == app.colors['sidebar'])
 app.update()
 set_body('')
 
@@ -3098,8 +3163,8 @@ app.update()
 _tR = app._grid_at_line(1)
 app._open_cell_editor(_tR, 1, 0)
 app.update()
-app._cell_editor['entry'].delete(0, 'end')
-app._cell_editor['entry'].insert(0, 'un text mult mai lat decat coloana')
+app._cell_editor['entry'].delete('1.0', 'end')
+app._cell_editor['entry'].insert('1.0', 'un text mult mai lat decat coloana')
 _oldR = _tR['canvas']
 _cellR = _tR['cells'][(2, 0)]
 _evR = type('E', (), {'x': int(_cellR['x'] + 30),
@@ -3179,8 +3244,8 @@ check(f'a fast Ctrl+C straight after the drag still means the cells '
 # selection that flashes and silently vanishes a moment later.
 app._open_cell_editor(_tE, 1, 1)
 app.update()
-app._cell_editor['entry'].delete(0, 'end')
-app._cell_editor['entry'].insert(0, 'text destul de lat sa mute coloana')
+app._cell_editor['entry'].delete('1.0', 'end')
+app._cell_editor['entry'].insert('1.0', 'text destul de lat sa mute coloana')
 _tE2 = app._grid_at_line(1)
 _aE, _bE = _tE2['cells'][(1, 0)], _tE2['cells'][(2, 0)]
 _cvE = _tE2['canvas']
@@ -3294,6 +3359,48 @@ try:
           len(_swF) == len(NO.HIGHLIGHT_COLOR_PALETTE)
           and str(_colF.cget('bg')) == app._blend_hex(
               app.colors['accent'], app.colors['card'], 0.35))
+    # ---- POPUPS HIDE WITH THE APP AND COME BACK WITH IT ----
+    # They are -topmost by design (the app's own focus shuffles must not
+    # bury them), so they floated over OTHER applications too. The OS is
+    # the only honest witness (a popup holding the activation receives
+    # no Deactivate at all), so a heartbeat asks who is in front:
+    # another program's window -> popups WITHDRAW, data intact; the
+    # app's own -> they come back. Never destroyed -- a half-typed
+    # dialog must survive a trip to the browser.
+    check('the foreground watch is armed from startup',
+          getattr(app, '_deactivate_bound', False)
+          and bool(app.bind_all('<Deactivate>')))
+    _popD = app._mini_popup
+    _real_ours = app._foreground_is_ours
+    app._foreground_is_ours = lambda: True     # the app holds the front
+    app._popup_watch_step()
+    app.update()
+    check('while the app is in front, the popup stays',
+          app._mini_popup is _popD and bool(_popD.winfo_viewable()))
+    app._foreground_is_ours = lambda: False    # another program takes it
+    app._popup_watch_step()
+    app.update()
+    check('another program in front hides the popup, data intact',
+          app._mini_popup is _popD and not _popD.winfo_viewable()
+          and _popD.winfo_exists())
+    app._popup_watch_step()
+    app.update()
+    check('and it stays hidden while the user is away',
+          not _popD.winfo_viewable())
+    app._foreground_is_ours = lambda: True     # the user clicks back
+    app._popup_watch_step()
+    app.update()
+    check('coming back to the app brings the popup back',
+          bool(_popD.winfo_viewable()))
+    app._foreground_is_ours = _real_ours
+    app._dismiss_mini_popup()
+    app.update()
+    app._grid_highlight_popup(_tE, (0, 0, 0, 1), 0, 0)
+    app.update()
+    _swF = [w for w in [c for c in app._mini_popup.winfo_children()[0]
+                        .winfo_children() if isinstance(c, NO.tk.Frame)][0]
+            .winfo_children() if isinstance(w, NO.tk.Button)]
+
     _swF[0].invoke()
     app.update()
     _tE = app._grid_at_line(1)
@@ -3437,8 +3544,8 @@ check('a template with a table applies as a drawn grid',
       and _gT['cells'][(1, 0)]['value'] == 'luni')
 app._open_cell_editor(_gT, 1, 1)
 app.update()
-app._cell_editor['entry'].delete(0, 'end')
-app._cell_editor['entry'].insert(0, 'citit')
+app._cell_editor['entry'].delete('1.0', 'end')
+app._cell_editor['entry'].insert('1.0', 'citit')
 app._commit_cell_editor()
 app.update()
 _gT = app._grid_at_line(1)
@@ -3446,6 +3553,687 @@ check('and the grid from the template is editable',
       _gT['cells'][(1, 1)]['value'] == 'citit')
 app.templates.remove(_tplT)
 set_body('')
+
+# ---- ENTER BELOW A LEADING TABLE PUSHES IT DOWN ----
+# A note that BEGINS with a table has nowhere to type above it; Enter
+# on the line below (where clicking beside the table parks the caret)
+# pushes the table down and takes the fresh first line.
+import types as _typesE
+set_body('| A | B |\n| x | y |')
+app._render_table_grids()
+app.update()
+app.body_text.mark_set('insert', '3.0')
+app._on_body_return(_typesE.SimpleNamespace())
+app.update()
+check('Enter below a leading table pushes the table down',
+      app.body_text.get('1.0', '1.end') == ''
+      and app._grid_at_line(2) is not None
+      and str(app.body_text.index('insert')) == '1.0')
+# ...but between two ADJACENT tables the same key means what it always
+# did -- the gesture belongs to the FIRST block alone.
+set_body('| A | B |\n| x | y |\n\n| C | D |\n| z | w |')
+app._render_table_grids()
+app.update()
+app.body_text.mark_set('insert', '3.0')
+_resE = app._on_body_return(_typesE.SimpleNamespace())
+app.update()
+check('Enter on the line BETWEEN two tables does not hijack the push-down',
+      _resE != 'break'
+      and app.body_text.get('1.0', '1.end') != '')
+set_body('')
+
+# ---- THE WHEEL GLIDES IN PIXELS OVER TABLES ----
+# A drawn table is ONE text line as tall as the whole grid, so a units
+# scroll leapt from table to table instead of gliding.
+set_body(('| W | X |\n| a | b |\n| c | d |\n| e | f |\n\n' * 3)
+         + 'plain\n' * 20)
+app._render_table_grids()
+app.update()
+app.body_text.yview_moveto(0.0)
+app.update()
+# A REAL event, through the binding chain: the first pixel handler sat
+# on a direct binding that _bind_text_wheel silently replaced, so real
+# wheels kept leaping while a direct method call stayed green.
+take_focus(app.body_text)
+app.body_text.event_generate('<MouseWheel>', delta=-120)
+app.update()
+check('one wheel notch over a tall table moves the view a little, not a table',
+      app.body_text.yview()[0] > 0
+      and app.body_text.index('@0,0').split('.')[0] == '1')
+# ...and over the drawn grid itself, the forwarded wheel does the same.
+app.body_text.yview_moveto(0.0)
+app.update()
+_gridW = app._grid_at_line(1)
+_gridW['canvas'].event_generate('<MouseWheel>', delta=-120)
+app.update()
+check('one wheel notch over the grid glides the note the same way',
+      app.body_text.yview()[0] > 0
+      and app.body_text.index('@0,0').split('.')[0] == '1')
+
+# ---- THE PUSH-DOWN KEEPS THE VIEW ON THE SAME CONTENT ----
+# The edit lands at line 1, far above a mid-note view, and the Text
+# keeps the view on its content by itself. A snapshot restored against
+# the fresh grids' ESTIMATED heights was measured yanking the view nine
+# lines up (0.30 to 0.14) -- this check pins the no-snapshot behaviour.
+set_body('\n'.join('| r%d | c%d |' % (i, i) for i in range(8))
+         + '\n' + 'below\n' * 40)
+app._render_table_grids()
+app.update()
+app.update_idletasks()
+app.body_text.yview_moveto(0.3)
+for _ in range(4):
+    app.update()
+    app.update_idletasks()
+_vwP = app.body_text.yview()[0]
+_topP = int(app.body_text.index('@0,0').split('.')[0])
+app.body_text.mark_set('insert', '9.0')
+app._on_body_return(_typesE.SimpleNamespace())
+for _ in range(6):
+    app.update()
+    app.update_idletasks()
+check('the push-down keeps a mid-note view on the same content',
+      int(app.body_text.index('@0,0').split('.')[0]) == _topP + 1
+      and abs(app.body_text.yview()[0] - _vwP) < 0.05)
+
+# ---- THE MENU TWIN: ADD A LINE ABOVE THE TABLE ----
+set_body('| M | N |\n| p | q |')
+app._render_table_grids()
+app.update()
+app._grid_add_line_above(app._grid_at_line(1))
+app.update()
+check('the table menu adds a blank first line above a leading table',
+      app.body_text.get('1.0', '1.end') == ''
+      and app._grid_at_line(2) is not None
+      and str(app.body_text.index('insert')) == '1.0')
+
+# ---- PASTE FOLLOWS THE CARET ----
+# The body kept its old view, leaving the freshly pasted end below the
+# fold -- the user read that as the scroll jumping away from the text.
+set_body('start\n' * 3)
+app.body_text.mark_set('insert', 'end-1c')
+app.clipboard_clear()
+app.clipboard_append('pasted line\n' * 80)
+_origHtmlP = NO.clipboard.read_html
+NO.clipboard.read_html = lambda: None
+take_focus(app.body_text)
+app.body_text.event_generate('<<Paste>>')
+for _ in range(4):
+    app.update()
+    app.update_idletasks()
+NO.clipboard.read_html = _origHtmlP
+check('a long paste scrolls the note to the pasted end',
+      app.body_text.dlineinfo('insert') is not None)
+set_body('')
+
+# ---- ONE HIGHLIGHT LOOK EVERYWHERE ----
+# The toolbar and right-click picker show the table popup's hairline
+# column -- full-width flat swatches plus Clear -- not the old grid.
+app._open_color_swatch_popup('highlight')
+app.update()
+_barsH, _clearH = 0, 0
+def _walkH(w):
+    global _barsH, _clearH
+    for ch in w.winfo_children():
+        if isinstance(ch, tk.Button):
+            if ch.cget('text') == 'Clear highlight':
+                _clearH += 1
+            elif int(ch.cget('width') or 0) == 14:
+                _barsH += 1
+        _walkH(ch)
+_walkH(app._mini_popup)
+check('the toolbar highlight picker is the hairline column, Clear included',
+      _barsH == len(NO.HIGHLIGHT_COLOR_PALETTE) and _clearH == 1)
+app._dismiss_mini_popup()
+app.update()
+
+# ---- HIGHLIGHT INK IS BLENDED, AND FOLLOWS THE THEME ----
+# The applied tag paints the swatch colour blended toward the theme's
+# surface (the table cells' own recipe) -- the raw palette fill buried
+# the text under it. The tag NAME keeps the pure colour, so the stored
+# data never changes; a theme switch re-blends the ink.
+set_body('cuvinte de evidentiat')
+app.body_text.tag_add('sel', '1.0', '1.7')
+_pureH = NO.HIGHLIGHT_COLOR_PALETTE[0]
+app._apply_body_color('highlight', _pureH)
+app.update()
+_tagH = [t for t in app.body_text.tag_names('1.2')
+         if t.startswith('highlight_')][0]
+check('a text highlight paints blended toward the surface, name stays pure',
+      app.body_text.tag_cget(_tagH, 'background')
+      == app._blend_hex(_pureH, app.colors['card'], 0.45)
+      and _tagH == 'highlight_' + _pureH.lstrip('#'))
+_themeH = app.theme_name
+app.set_theme('light' if 'dark' in str(_themeH) else 'dark')
+app.apply_theme()
+app.update()
+check('a theme switch re-blends the highlight ink toward the NEW surface',
+      app.body_text.tag_cget(_tagH, 'background')
+      == app._blend_hex(_pureH, app.colors['card'], 0.45))
+app.set_theme(_themeH)
+app.apply_theme()
+app.update()
+
+# ---- AN EMPTY CELL TAKES A HIGHLIGHT, AND KEEPS IT WHEN FILLED ----
+set_body('| Cap | G |\n| plin |  |')
+app._render_table_grids()
+app.update()
+_gE = app._grid_at_line(1)
+app._grid_apply_style(_gE, (1, 1, 1, 1), 'highlight', _pureH)
+app.update()
+check('an empty cell takes a highlight on its padding',
+      app._grid_cell_paint(_gE, 1, 1)['bg'] == _pureH)
+app._write_cell(_gE, 1, 1, 'umplut')
+app.update()
+_gE2 = app._grid_at_line(1)
+check('the highlight survives the cell being filled in',
+      app._grid_cell_paint(_gE2, 1, 1)['bg'] == _pureH
+      and (app._grid_cell_text_range(_gE2, 1, 1) is not None))
+app._grid_apply_style(_gE2, (1, 1, 1, 1), 'highlight', None)
+app.update()
+check('clear takes it back off',
+      app._grid_cell_paint(app._grid_at_line(1), 1, 1)['bg'] is None)
+set_body('')
+
+# ---- EMOJI DO NOT SHIFT SAVED FORMATTING (the startup ghost) ----
+# Extraction counted UTF-16 units (an emoji = two) while application
+# counted characters (an emoji = one): every save of a formatted note
+# with an emoji stored its spans one further right per emoji, the note
+# read as 'changed' on every startup with no edit anywhere, autosave
+# rewrote it, and the span walked another character each launch.
+set_body('\U0001f600 salut\n| A | B |\n| c | d |\nvorbe alese aici')
+app.title_entry.delete(0, 'end')
+app.title_entry.insert(0, 'EmojiSpan')
+app._render_table_grids()
+app.update()
+_lnE = int(app.body_text.index('end-1c').split('.')[0])
+app.body_text.tag_add('bold', '%d.0' % _lnE, '%d.5' % _lnE)
+app.save_current_note()
+app.update()
+_noteE = app.find_note(app.selected_note_id)
+_spE = [s for s in _noteE.get('formatting', [])
+        if s.get('style') == 'bold']
+check('a bold span behind an emoji saves at its true character offsets',
+      len(_spE) == 1
+      and _noteE['body'][_spE[0]['start']:_spE[0]['end']] == 'vorbe')
+app.load_note(_noteE)
+app.update()
+check('reloading an emoji-and-table note reads clean, not phantom-dirty',
+      app.editor_state_matches_saved(app.capture_editor_state()))
+import copy as _copyE
+_fmtBeforeE = _copyE.deepcopy(_noteE.get('formatting'))
+app.save_current_note()
+app.update()
+check('a second save moves nothing (span drift is dead)',
+      app.find_note(app.selected_note_id).get('formatting') == _fmtBeforeE)
+
+# ---- AND A REAL EDIT STILL ANNOUNCES ITSELF ----
+_toastsE = []
+_origToastE = app._show_toast
+app._show_toast = lambda msg, *a, **k: _toastsE.append(str(msg))
+app.body_text.insert('end', ' si inca ceva')
+app._schedule_autosave()
+app._flush_autosave()
+app.update()
+app._show_toast = _origToastE
+check('a real edit still toasts Note updated',
+      any('updated' in t.lower() for t in _toastsE))
+
+# ---- ALIGNING A CELL KEEPS ITS FORMATTING ----
+# Alignment went through the wholesale block rewrite, whose accepted
+# cost is dropping character styles -- so centering a cell silently
+# stripped the bold the user had JUST applied to it. Alignment is a
+# padding edit, and padding edits are exactly what pad_ops does with
+# the tags left in place.
+set_body('| Cap | Doi |\n| :--- | ---: |\n| gros | colorat |')
+app._render_table_grids()
+app.update()
+_gA = app._grid_at_line(1)
+app._grid_apply_style(_gA, (1, 0, 1, 0), 'bold')
+app._grid_apply_style(_gA, (1, 1, 1, 1), 'highlight',
+                      NO.HIGHLIGHT_COLOR_PALETTE[0])
+app.update()
+app._grid_set_alignment(app._grid_at_line(1), (1, 0, 1, 0),
+                        core_tables.ALIGN_CENTER)
+app.update()
+_gA = app._grid_at_line(1)
+_ln3A = app.body_text.get('3.0', '3.end')
+check('centering a cell keeps its bold',
+      app._grid_cell_paint(_gA, 1, 0)['bold']
+      and core_tables.cell_alignments(_ln3A)[0] == core_tables.ALIGN_CENTER)
+check("the neighbour cell's highlight rides through untouched",
+      app._grid_cell_paint(_gA, 1, 1)['bg'] == NO.HIGHLIGHT_COLOR_PALETTE[0])
+set_body('')
+
+# ---- MULTI-LINE CELLS, RUN COLOURS, LIVE EDITOR STYLES, CHECKMARKS ----
+set_body('| Cap | Doi |\n| vopsit | text |')
+app._render_table_grids()
+app.update()
+_gM = app._grid_at_line(1)
+app._grid_apply_style(_gM, (1, 0, 1, 0), 'text_color', '#ff0000')
+app.update()
+
+# the open editor SHOWS the colour it is editing
+app._open_cell_editor(_gM, 1, 0, select=False)
+app.update()
+_edM = app._cell_editor['entry']
+check('the cell editor shows the saved colour live',
+      any(t.startswith('text_color_')
+          for t in _edM.tag_names('1.2')))
+
+# Enter inside the editor makes a second line; styling a SELECTION
+# colours just that part -- through the real toolbar routing.
+_edM.mark_set('insert', 'end-1c')
+app._editor_newline()
+# Enter rebuilds the grids and REOPENS the editor in the grown cell --
+# the old editor widget is gone; talk to the fresh one.
+_edM = app._cell_editor['entry']
+_edM.insert('insert', 'sub')
+_edM.tag_add('sel', '2.0', '2.3')
+app._apply_body_color('text_color', '#00aa00')
+app.update()
+check('the toolbar colours only the selected part of the open cell',
+      any(t == 'text_color_00aa00' for t in _edM.tag_names('2.1'))
+      and not any(t == 'text_color_00aa00'
+                  for t in _edM.tag_names('1.1')))
+app._commit_cell_editor()
+app.update()
+app._render_table_grids()
+app.update()
+_gM = app._grid_at_line(1)
+_cM = _gM['cells'][(1, 0)]
+_runsM = [(_gM['canvas'].itemcget(t, 'text'),
+           _gM['canvas'].itemcget(t, 'fill')) for t in _cM['texts']]
+check('the committed cell stores the break and draws two coloured runs',
+      _cM['value'] == 'vopsit<br>sub'
+      and ('vopsit', '#ff0000') in _runsM
+      and ('sub', '#00aa00') in _runsM
+      and _cM['h'] == 2 * _gM['row_h'])
+
+# a single character coloured in a cell stays a single coloured run
+app._open_cell_editor(_gM, 1, 1, select=False)
+app.update()
+_edN = app._cell_editor['entry']
+_edN.tag_add('sel', '1.0', '1.1')
+app._apply_body_color('text_color', '#0000ff')
+app._commit_cell_editor()
+app.update()
+_gM = app._grid_at_line(1)
+_runsN = [(_gM['canvas'].itemcget(t, 'text'),
+           _gM['canvas'].itemcget(t, 'fill'))
+          for t in _gM['cells'][(1, 1)]['texts']]
+check('one coloured letter is its own run, the rest stay theme ink',
+      ('t', '#0000ff') in _runsN
+      and ('ext', app.colors['text']) in _runsN)
+
+# save + reload keeps all of it, cleanly
+app.title_entry.delete(0, 'end')
+app.title_entry.insert(0, 'MultiCell')
+app.save_current_note()
+app.update()
+_noteM = app.find_note(app.selected_note_id)
+app.new_note()
+app.update()
+app.load_note(_noteM)
+app.update()
+_gM2 = app._grid_at_line(1)
+_runsM2 = [(_gM2['canvas'].itemcget(t, 'text'),
+            _gM2['canvas'].itemcget(t, 'fill'))
+           for t in _gM2['cells'][(1, 0)]['texts']]
+check('the multi-line coloured cell survives save and reload',
+      ('vopsit', '#ff0000') in _runsM2 and ('sub', '#00aa00') in _runsM2
+      and app.editor_state_matches_saved(app.capture_editor_state()))
+
+# the checkbox palette: an UNCHECKED box lands, wearing the colour
+app._grid_checkmark_popup(_gM2, (1, 1, 1, 1), 100, 100)
+app.update()
+_swK = None
+def _findswK(w):
+    global _swK
+    for ch in w.winfo_children():
+        if (isinstance(ch, tk.Button)
+                and int(ch.cget('width') or 0) == 3 and _swK is None):
+            _swK = ch
+        _findswK(ch)
+_findswK(app._mini_popup)
+_swK.invoke()
+app.update()
+app.update()
+_gM3 = app._grid_at_line(1)
+_cK = _gM3['cells'][(1, 1)]
+check('the palette drops an UNCHECKED box wearing the picked colour',
+      _cK['value'] == core_tables.CHECKBOX_EMPTY
+      and len(_cK['texts']) == 1
+      and _gM3['canvas'].type(_cK['texts'][0]) == 'rectangle'
+      and str(_gM3['canvas'].itemcget(_cK['texts'][0], 'outline'))
+      == NO.PRESET_NOTE_COLORS[0])
+
+# a click on the box TICKS it -- no text editor -- and keeps its colour
+_cvK = _gM3['canvas']
+_cvK.event_generate('<Button-1>', x=int(_cK['x'] + _cK['w'] / 2),
+                    y=int(_cK['y'] + _cK['h'] / 2))
+_cvK.event_generate('<ButtonRelease-1>', x=int(_cK['x'] + _cK['w'] / 2),
+                    y=int(_cK['y'] + _cK['h'] / 2))
+app.update()
+_gM3 = app._grid_at_line(1)
+_cK = _gM3['cells'][(1, 1)]
+check('a click ticks the box, opens no editor, and the colour holds',
+      _cK['value'] == core_tables.CHECKBOX_DONE
+      and getattr(app, '_cell_editor', None) is None
+      and len(_cK['texts']) == 2
+      and _gM3['canvas'].type(_cK['texts'][1]) == 'text'
+      and str(_gM3['canvas'].itemcget(_cK['texts'][1], 'fill'))
+      == NO.PRESET_NOTE_COLORS[0])
+
+# the second of two FAST clicks arrives as a double-click; it unticks
+import types as _typesK
+app._grid_double(_gM3, _typesK.SimpleNamespace(
+    x=int(_cK['x'] + _cK['w'] / 2), y=int(_cK['y'] + _cK['h'] / 2)))
+app.update()
+_gM3 = app._grid_at_line(1)
+check('a fast second click unticks instead of being swallowed',
+      _gM3['cells'][(1, 1)]['value'] == core_tables.CHECKBOX_EMPTY)
+
+# delete the marker and type: the cell is ordinary text again
+app._open_cell_editor(_gM3, 1, 1, select=True)
+app.update()
+app._cell_editor['entry'].delete('1.0', 'end')
+app._cell_editor['entry'].insert('1.0', 'text simplu')
+app._commit_cell_editor()
+app.update()
+_gM3 = app._grid_at_line(1)
+check('overwriting the marker turns the cell back into text',
+      _gM3['cells'][(1, 1)]['value'] == 'text simplu'
+      and core_tables.checkbox_state('text simplu') is None)
+set_body('')
+
+# ---- TYPING CONTINUES THE STYLE IT LANDS BESIDE ----
+# Tk only inherits a tag with it on both sides, so a character typed at
+# the END of a blue run arrived plain -- and retyping over the opening
+# select-all wiped a coloured cell to plain ink entirely.
+set_body('| Cap | Doi |\n| bleu | text |')
+app._render_table_grids()
+app.update()
+_gT = app._grid_at_line(1)
+app._grid_apply_style(_gT, (1, 0, 1, 0), 'text_color', '#0000ff')
+app.update()
+app._open_cell_editor(_gT, 1, 0, select=False)
+app.update()
+_edT = app._cell_editor['entry']
+import types as _typesT
+_edT.mark_set('insert', 'end-1c')
+_evT = _typesT.SimpleNamespace(char='X', keysym='X')
+app._editor_key_press(_evT)
+_edT.insert('insert', 'X')
+app._editor_key_release(_evT)
+check('a character typed after a blue run stays blue',
+      any(t == 'text_color_0000ff'
+          for t in _edT.tag_names('insert -1c')))
+
+# retyping over the select-all keeps the colour of what it replaces --
+# emulated the way the class binding does it: delete the selection,
+# then insert.
+_edT.tag_add('sel', '1.0', 'end-1c')
+_evT2 = _typesT.SimpleNamespace(char='n', keysym='n')
+app._editor_key_press(_evT2)
+_edT.delete('sel.first', 'sel.last')
+_edT.insert('insert', 'n')
+app._editor_key_release(_evT2)
+check('retyping over the opening select-all keeps the colour',
+      _edT.get('1.0', 'end-1c') == 'n'
+      and any(t == 'text_color_0000ff'
+              for t in _edT.tag_names('1.0')))
+app._commit_cell_editor()
+app.update()
+_gT = app._grid_at_line(1)
+_runsT = [(_gT['canvas'].itemcget(t, 'text'),
+           _gT['canvas'].itemcget(t, 'fill'))
+          for t in _gT['cells'][(1, 0)]['texts']]
+check('the retyped cell commits still coloured, not reset to plain',
+      _runsT == [('n', '#0000ff')])
+set_body('')
+
+# ---- ROWS DRAG TALLER AND SHORTER; WIDE TABLES SCROLL SIDEWAYS ----
+set_body('| Cap | Doi |\n| unu<br>doi | x |\n| jos | y |')
+app._render_table_grids()
+app.update()
+_gR = app._grid_at_line(1)
+check('the rule between two rows is grabbable, the middle of a row is not',
+      app._grid_row_boundary_at(_gR, _gR['row_y'][1]) == 0
+      and app._grid_row_boundary_at(_gR, _gR['row_y'][1] + 20) is None)
+app._grid_set_row_lines(_gR, 2, 3)
+app.update()
+_gR = app._grid_at_line(1)
+check('dragging a row taller pads it with empty lines',
+      _gR['cells'][(2, 0)]['h'] == 3 * _gR['row_h']
+      and _gR['cells'][(2, 0)]['value'] == 'jos<br><br>')
+app._grid_set_row_lines(_gR, 2, 1)
+app.update()
+_gR = app._grid_at_line(1)
+check('dragging it back short trims the padding again',
+      _gR['cells'][(2, 0)]['h'] == _gR['row_h']
+      and _gR['cells'][(2, 0)]['value'] == 'jos')
+app._grid_set_row_lines(_gR, 1, 1)
+app.update()
+_gR = app._grid_at_line(1)
+check('a drag can never cut real content: two full lines stay two',
+      _gR['cells'][(1, 0)]['value'] == 'unu<br>doi'
+      and _gR['cells'][(1, 0)]['h'] == 2 * _gR['row_h'])
+
+# fast typing: press, press, release, release -- BOTH characters must
+# come out coloured; the paint used to wait for its own release and the
+# next press overwrote its bookkeeping.
+app._open_cell_editor(_gR, 2, 1, select=False)
+app.update()
+import types as _typesR
+app._apply_body_color('text_color', '#aa00aa')
+_edR = app._cell_editor['entry']
+_edR.mark_set('insert', 'end-1c')
+_evA = _typesR.SimpleNamespace(char='a', keysym='a')
+_evB = _typesR.SimpleNamespace(char='b', keysym='b')
+app._editor_key_press(_evA)
+_edR.insert('insert', 'a')
+app._editor_key_press(_evB)
+_edR.insert('insert', 'b')
+app._editor_key_release(_evA)
+app._editor_key_release(_evB)
+check('fast interleaved typing colours every character',
+      any(t == 'text_color_aa00aa'
+          for t in _edR.tag_names('insert -2c'))
+      and any(t == 'text_color_aa00aa'
+              for t in _edR.tag_names('insert -1c')))
+app._apply_body_color('text_color', None)
+
+# Ctrl+A selects the whole cell, not a line-start jump
+take_focus(_edR)
+_edR.event_generate('<Control-a>')
+app.update()
+_selR = None
+try:
+    _selR = (str(_edR.index('sel.first')), str(_edR.index('sel.last')))
+except tk.TclError:
+    pass
+check('Ctrl+A in the cell editor selects the whole cell',
+      _selR == ('1.0', str(_edR.index('end-1c'))))
+app._commit_cell_editor()
+app.update()
+
+# a table wider than the editor grows its own horizontal scrollbar
+set_body('| ' + ' | '.join('Coloana%d' % i for i in range(12)) + ' |\n'
+         + '| ' + ' | '.join('valoare%d' % i for i in range(12)) + ' |')
+app._render_table_grids()
+app.update()
+app.update_idletasks()
+_gW = app._grid_at_line(1)
+check('a wide table shows its own horizontal scrollbar',
+      _gW.get('hbar') is not None
+      and _gW['hbar'].winfo_manager() == 'pack')
+set_body('')
+
+# ---- A CLICK IN THE BODY RELEASES THE TABLE'S CELL SELECTION ----
+# A cell selection lingering from an earlier drag silently caught the
+# next toolbar colour meant for the body text -- 'coloring stopped
+# working' on plain notes that merely FOLLOWED a table interaction.
+set_body('| A | B |\n| c | d |\n\ncorp de colorat')
+app._render_table_grids()
+app.update()
+_gS = app._grid_at_line(1)
+app._grid_select_range(_gS, (1, 0), (1, 1))
+app.update()
+app.body_text.event_generate('<Button-1>', x=5, y=5)
+app.update()
+_lastS = int(app.body_text.index('end-1c').split('.')[0])
+app.body_text.tag_add('sel', '%d.0' % _lastS, '%d.4' % _lastS)
+take_focus(app.body_text)
+app._apply_body_color('text_color', '#ff0000')
+app.update()
+check('after a body click, the toolbar colour reaches the body again',
+      getattr(app, '_grid_sel', None) is None
+      and any(t == 'text_color_ff0000'
+              for t in app.body_text.tag_names('%d.2' % _lastS)))
+
+# ---- A DRAG INSIDE ONE CELL SELECTS THAT CELL WHOLE ----
+# Selection used to begin only when the drag REACHED a second cell, so
+# one cell alone could never be selected -- grabbing the checkmark
+# meant grabbing its neighbour too.
+_cS = _gS['cells'][(1, 1)]
+_cvS = _gS['canvas']
+_cvS.event_generate('<Button-1>', x=int(_cS['x'] + 12),
+                    y=int(_cS['y'] + 8))
+_cvS.event_generate('<B1-Motion>', x=int(_cS['x'] + 30),
+                    y=int(_cS['y'] + 20))
+_cvS.event_generate('<ButtonRelease-1>', x=int(_cS['x'] + 30),
+                    y=int(_cS['y'] + 20))
+app.update()
+check('a real drag inside one cell selects exactly that cell',
+      getattr(app, '_grid_sel', None) is not None
+      and app._grid_sel['box'] == (1, 1, 1, 1)
+      and getattr(app, '_cell_editor', None) is None)
+app._grid_clear_selection()
+set_body('')
+
+# ---- THE EDITOR'S LIGHT/DARK FLIP ----
+_wasT = app.theme_name
+check('the editor carries the quick light/dark toggle',
+      hasattr(app, 'editor_theme_btn')
+      and app.editor_theme_btn.winfo_exists())
+app.editor_theme_btn.invoke()
+app.update()
+_flippedT = app.theme_name
+app.editor_theme_btn.invoke()
+app.update()
+check('one press flips dark/light, the next flips back, glyph follows',
+      (_wasT in NO.DARK_THEMES) != (_flippedT in NO.DARK_THEMES)
+      and app.theme_name == _wasT
+      and str(app.editor_theme_btn.cget('text'))
+      == ('\u2600' if app.theme_name in NO.DARK_THEMES else '\U0001f319'))
+
+# ---- WHOLE ROWS COPY TO THE BOTTOM, LIKE COLUMNS COPY TO THE EDGE ----
+set_body('| Cap | Doi |\n| unu | doi |\n| trei | patru |')
+app._render_table_grids()
+app.update()
+_gV = app._grid_at_line(1)
+app._grid_append_rows(_gV, 1, 2)
+app.update()
+_gV = app._grid_at_line(1)
+_rowsV = [core_tables.split_row(app.body_text.get('%d.0' % n,
+                                                  '%d.end' % n))
+          for n in range(1, 6)]
+check('selected rows are copied again to the bottom, text and all',
+      _gV['data_rows'] == 5
+      and _rowsV[3] == ['unu', 'doi'] and _rowsV[4] == ['trei', 'patru'])
+set_body('| A | B |\n| ^ | c |\n| x | y |')
+app._render_table_grids()
+app.update()
+app._grid_append_rows(app._grid_at_line(1), 1, 1)
+app.update()
+check('a merge marker pointing above the copied span lands empty',
+      core_tables.split_row(app.body_text.get('4.0', '4.end'))
+      == ['', 'c'])
+
+# ---- DRAG-SELECTING FOLLOWS THE POINTER PAST THE VIEW ----
+# The pointer is faked at the grid's right edge / under the note's
+# bottom edge; the autoscroll must pan the grid, scroll the note, and
+# stretch the selection to what the pointer now covers.
+set_body('| ' + ' | '.join('C%d' % i for i in range(14)) + ' |\n'
+         + '| ' + ' | '.join('v%d' % i for i in range(14)) + ' |')
+app._render_table_grids()
+app.update()
+app.update_idletasks()
+_gV = app._grid_at_line(1)
+_cvV = _gV['canvas']
+_c00V = _gV['cells'][(0, 0)]
+_cvV.event_generate('<Button-1>', x=int(_c00V['x'] + 20),
+                    y=int(_c00V['y'] + 8))
+_shownV = int(float(_cvV.cget('width')))
+_origPtr = app.winfo_pointerxy
+app.winfo_pointerxy = lambda: (_cvV.winfo_rootx() + _shownV - 5,
+                               _cvV.winfo_rooty() + int(_c00V['y']) + 8)
+_xv0 = _cvV.xview()[0]
+for _ in range(14):
+    app._grid_drag_autoscroll(_gV)
+app.update()
+check('holding the drag at the right edge pans the grid and grows the '
+      'selection to the far columns',
+      _cvV.xview()[0] > _xv0
+      and getattr(app, '_grid_sel', None) is not None
+      and app._grid_sel['box'][3] >= 10)
+app.winfo_pointerxy = _origPtr
+_cvV.event_generate('<ButtonRelease-1>', x=_shownV - 5,
+                    y=int(_c00V['y'] + 8))
+app.update()
+
+set_body('| Cap | Doi |\n'
+         + '\n'.join('| r%02d | v%02d |' % (i, i) for i in range(40)))
+app._render_table_grids()
+app.update()
+app.update_idletasks()
+app.body_text.yview_moveto(0.0)
+app.update()
+_gV = app._grid_at_line(1)
+_cvV = _gV['canvas']
+_c00V = _gV['cells'][(0, 0)]
+_cvV.event_generate('<Button-1>', x=int(_c00V['x'] + 20),
+                    y=int(_c00V['y'] + 8))
+app.winfo_pointerxy = lambda: (
+    app.body_text.winfo_rootx() + 60,
+    app.body_text.winfo_rooty() + app.body_text.winfo_height() - 4)
+_yv0 = app.body_text.yview()[0]
+for _ in range(16):
+    app._grid_drag_autoscroll(_gV)
+app.update()
+check('holding the drag under the note scrolls it and grows the '
+      'selection downward',
+      app.body_text.yview()[0] > _yv0
+      and getattr(app, '_grid_sel', None) is not None
+      and app._grid_sel['box'][2] >= 5)
+app.winfo_pointerxy = _origPtr
+# the timer wiring: a motion arms it, the release stops it
+_cvV.event_generate('<B1-Motion>', x=int(_c00V['x'] + 25),
+                    y=int(_c00V['y'] + 9))
+app.update()
+_armedV = getattr(app, '_grid_autoscroll_job', None) is not None
+_cvV.event_generate('<ButtonRelease-1>', x=int(_c00V['x'] + 25),
+                    y=int(_c00V['y'] + 9))
+app.update()
+check('the autoscroll timer arms on drag and stops on release',
+      _armedV
+      and getattr(app, '_grid_autoscroll_job', None) is None)
+app._grid_clear_selection()
+set_body('')
+
+# ---- LIST CARDS HIDE THE PIPE ROWS ----
+set_body('| C1 | C2 |\n| a | b |\n\nreadable words')
+app.title_entry.delete(0, 'end')
+app.title_entry.insert(0, 'CardTables')
+app.save_current_note()
+app.update()
+_cardT = next(i for i in app._note_card_widgets.values()
+              if 'CardTables' in i['title'].cget('text'))
+check('a card previews the words, not the pipe rows',
+      '|' not in _cardT['preview'].cget('text')
+      and 'readable words' in _cardT['preview'].cget('text'))
+check('the card tags row counts the table',
+      '\u25a6 1 table' in _cardT['tags'].cget('text'))
 
 # ---- A NEW TABLE UNDER AN OLD ONE STAYS A TABLE OF ITS OWN ----
 # Two adjacent runs of pipe rows read as one block, so a table created
@@ -3571,8 +4359,8 @@ check('the theme switch repaints the drawn header',
 # and leaving a zombie editor over a dead widget.
 app._open_cell_editor(_tT, 1, 0)
 app.update()
-app._cell_editor['entry'].delete(0, 'end')
-app._cell_editor['entry'].insert(0, 'scris in timpul comutarii')
+app._cell_editor['entry'].delete('1.0', 'end')
+app._cell_editor['entry'].insert('1.0', 'scris in timpul comutarii')
 app.set_theme(_oldT)
 app.apply_theme()
 app.update()
@@ -4037,6 +4825,27 @@ check('load_notes takes a safety backup when VERSION_CHANGE reports an upgrade',
 if app._version_backup_path:
     os.remove(app._version_backup_path)
 NO.VERSION_CHANGE = _original_version_change
+
+# ---- CLOSING SAVES SILENTLY (dead last: it destroys the app) ----
+# The quit-time "Unsaved notes" ask could only ever cover the last
+# half-second of typing; the app now trusts its own autosave and closes
+# the way it switches notes -- saving, without a question.
+app.new_note()
+app.update()
+app.title_entry.insert(0, 'CloseSilent')
+app.body_text.insert('1.0', 'typed and never flushed')
+_askedC = []
+app.ask_yes_no_cancel = lambda *a, **k: _askedC.append(1) or None
+# The flush is silenced so a genuinely dirty tab reaches the close
+# itself -- the case the old dialog fired on -- proving the close's own
+# save loop does the saving, with no question asked.
+app._flush_autosave = lambda *a, **k: None
+app.on_app_close()
+import io as _ioC
+_notesC = json.load(_ioC.open('notes_data.json', encoding='utf-8'))
+check('closing asks no unsaved-notes question', not _askedC)
+check('closing saved the unflushed note on its way out',
+      any(n.get('title') == 'CloseSilent' for n in _notesC))
 
 print()
 print(f"=== QA1 FAILURES: {fails if fails else 'NONE'} ===")
