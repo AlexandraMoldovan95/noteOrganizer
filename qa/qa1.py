@@ -2709,7 +2709,23 @@ app._grid_fill_selection({'info': _tV, 'box': (0, 0, 0, 0)}, chr(0x2713),
 app.update()
 app.update_idletasks()
 app.update()
+# X11 maps the fresh grid windows asynchronously, so a fixed number of
+# pumps can catch the body mid-reflow -- one CI run measured 0.172
+# here while the settled state sits at ~0.07 (its re-run was green).
+# Measure the SETTLED view, not a race: pump until the fraction holds
+# still for several consecutive reads, with a hard time cap. This
+# stays honest about the regression it pins -- with the op's
+# capture/restore removed the view shifts and STAYS shifted 0.15+, so
+# settling never brings a broken build back under the threshold.
 _yv1 = app.body_text.yview()[0]
+_stableV = 0
+_settle_cap = time.time() + 1.5
+while _stableV < 5 and time.time() < _settle_cap:
+    app.update()
+    time.sleep(0.02)
+    _nowV = app.body_text.yview()[0]
+    _stableV = _stableV + 1 if abs(_nowV - _yv1) < 0.001 else 0
+    _yv1 = _nowV
 # The broken behaviour drifted 0.15+ (0.316 became 0.164); the fixed
 # one stays under ~0.03 on Windows and ~0.07 under the CI's Linux font
 # metrics -- the threshold sits between the two regimes, not inside
