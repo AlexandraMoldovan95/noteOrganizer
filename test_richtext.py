@@ -498,13 +498,14 @@ _pl_body = "| A | B |" + chr(10) + "| --- | --- |" + chr(10) + "| a | b |"
 _pl_paras = [{"line": 0, "align": "center"}, {"line": 1, "align": "center"},
              {"line": 2, "align": "center"}]
 _pl_html = note_to_html(_pl_body, [], _pl_paras)
-check("a centred table exports with auto margins",
-      '<table style="margin:0.5em auto;">' in _pl_html)
+check("a centred table centres in browsers AND in Word",
+      'align="center"' in _pl_html and "margin:0.5em auto;" in _pl_html)
 _pr_paras = [{"line": 0, "align": "right"}, {"line": 1, "align": "right"},
              {"line": 2, "align": "right"}]
 _pr_html = note_to_html(_pl_body, [], _pr_paras)
-check("a right-placed table pushes itself to the right margin",
-      'margin:0.5em 0 0.5em auto;' in _pr_html)
+check("a right-placed table pushes right in Word without floating in browsers",
+      'align="right"' in _pr_html and "float:none" in _pr_html
+      and "margin:0.5em 0 0.5em auto;" in _pr_html)
 check("an unplaced table carries no margin style",
       "<table>" in note_to_html(_pl_body, [], []))
 

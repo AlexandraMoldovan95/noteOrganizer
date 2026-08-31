@@ -619,13 +619,19 @@ def note_to_html(text, formatting=None, paragraphs=None):
             # survives the trip.
             if not in_table:
                 # The table's place on the page (centred / right) lives
-                # as an alignment entry on its lines -- carry it out as
-                # margins, or an exported centred table hugs the left.
+                # as an alignment entry on its lines. It goes out TWICE:
+                # auto margins for browsers, and the legacy align
+                # attribute for Word, which ignores margin:auto on
+                # tables entirely. align="right" would also make
+                # browsers float the table with text wrapping around it
+                # (the UA sheet maps it to float:right), so float:none
+                # rides along to keep the browser on the margin path.
                 place = entry.get("align")
                 if place == "center":
-                    t_style = ' style="margin:0.5em auto;"'
+                    t_style = ' align="center" style="margin:0.5em auto;"'
                 elif place == "right":
-                    t_style = ' style="margin:0.5em 0 0.5em auto;"'
+                    t_style = (' align="right" style="float:none; '
+                               'margin:0.5em 0 0.5em auto;"')
                 else:
                     t_style = ""
                 out.append(f"<table{t_style}>")
