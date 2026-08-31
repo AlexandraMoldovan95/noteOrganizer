@@ -204,7 +204,7 @@ Right-click any note in the list (or on the calendar) → **Export as file** and
 - **Markdown (.md)** — the portable format: tables and checkboxes are already Markdown's own syntax, lists and bold/italic/strikethrough convert — but colours and highlights have no Markdown form and are left behind.
 - **Plain text (.txt)** — the words alone.
 
-The note's checklist and comments come along too, as their own sections — in Markdown the checklist uses task syntax (`- [x]`), so it stays tickable in tools that support it. Attached files never travel with a single-note export — that's what the full backup below is for, and the app reminds you when the note has attachments.
+The note's checklist and comments come along too, as their own sections — in Markdown the checklist uses task syntax (`- [x]`), so it stays tickable in tools that support it. After a save the app offers to open the file right away — the exported file itself is the honest preview of how the note lays out on a page, so adjusting the note and re-exporting is a quick loop. To export **several notes at once**, turn on ☑ Select above the list, tick the notes, and use **Export ▾** in the action bar: pick a format and a folder, and each note becomes its own file (same-titled notes get “(2)”, “(3)” — nothing ever overwrites). Attached files never travel with a single-note export — that's what the full backup below is for, and the app reminds you when the note has attachments.
 
 ### Full backup: export
 

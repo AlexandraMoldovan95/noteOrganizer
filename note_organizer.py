@@ -6662,6 +6662,37 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             filetypes=[(label, "*" + ext), ("All files", "*.*")])
         if not path:
             return
+        content = self._note_export_content(note, fmt, title)
+        try:
+            with open(path, "w", encoding="utf-8") as f:
+                f.write(content)
+        except (IOError, OSError) as exc:
+            self.show_error("Export failed",
+                            f"Couldn't write the file:\n{exc}")
+            return
+        self._show_toast(f"Exported to {os.path.basename(path)}")
+        if note.get("attachments"):
+            self.set_status(
+                "Attached files aren't part of a note export — "
+                "use Settings → Backup → Export for those.")
+        # The file itself is the only honest preview of how the note
+        # lays out -- the browser's (or Word's) fonts and wrapping,
+        # not Tk's. Offer the look right away, so adjusting the note
+        # and re-exporting is a tight loop.
+        if self.ask_yes_no(
+                "Open it now?",
+                f"“{os.path.basename(path)}” was saved.\n\n"
+                "Open it to see how the note lays out on the page?",
+                icon="question"):
+            try:
+                os.startfile(path)
+            except OSError:
+                self.set_status(f"Saved to {path}")
+
+    def _note_export_content(self, note, fmt, title):
+        """One note rendered for one export format -- shared by the
+        single-note export and the bulk export, so the two can never
+        drift apart."""
         body = note.get("body", "")
         comments = (note.get("comments") or "").strip()
         # The checklist is its own section beside the body, like the
@@ -6704,18 +6735,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             if comments:
                 content += "\n\nComments:\n" + comments
             content += "\n"
-        try:
-            with open(path, "w", encoding="utf-8") as f:
-                f.write(content)
-        except (IOError, OSError) as exc:
-            self.show_error("Export failed",
-                            f"Couldn't write the file:\n{exc}")
-            return
-        self._show_toast(f"Exported to {os.path.basename(path)}")
-        if note.get("attachments"):
-            self.set_status(
-                "Attached files aren't part of a note export — "
-                "use Settings → Backup → Export for those.")
+        return content
 
     def share_current_note_as_code(self):
         """Generate a share code for the note currently open and show it inline
@@ -8132,8 +8152,16 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             relief="flat", font=("Segoe UI", 7), cursor="hand2")
         self.track_theme(bulk_category_btn, bg="accent")
         bulk_category_btn.configure(fg="white")
-        bulk_category_btn.pack(side="left", ipadx=2, ipady=2)
+        bulk_category_btn.pack(side="left", padx=(0, 2), ipadx=2, ipady=2)
         self._bulk_category_btn = bulk_category_btn
+        # No 💾 glyph: with it the bar's four controls need 281px and the
+        # sidebar is a fixed 280 — the emoji alone is the overflow.
+        bulk_export_btn = tk.Button(
+            self.bulk_action_bar, text="Export ▾", command=self._bulk_export,
+            relief="flat", font=("Segoe UI", 7), cursor="hand2")
+        self.track_theme(bulk_export_btn, bg="card", fg="text")
+        bulk_export_btn.pack(side="left", ipadx=2, ipady=2)
+        self._bulk_export_btn = bulk_export_btn
         # Not packed yet — shown by _toggle_selection_mode() when active.
 
         # Bottom action zone — pinned to the bottom of the sidebar so New Note /
@@ -10306,6 +10334,83 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 w.bind("<Button-1>", lambda e, c=cat: apply_category(c))
 
         self._place_dropdown_popup(pop, self._bulk_category_btn)
+
+    def _bulk_export(self):
+        """Format picker for exporting every ticked note, one file each."""
+        if not self.selected_note_ids:
+            self.show_info("Nothing selected", "Tick one or more notes first.")
+            return
+        self._dismiss_mini_popup()
+        pop = tk.Toplevel(self)
+        self._mini_popup = pop
+        pop.wm_overrideredirect(True)
+        pop.configure(bg=self.colors["accent"])
+        frame = tk.Frame(pop, bg=self.colors["card"], padx=4, pady=4)
+        frame.pack(padx=1, pady=1)
+        tk.Label(frame,
+                 text=f"Export {len(self.selected_note_ids)} note(s) as:",
+                 bg=self.colors["card"], fg=self.colors["subtext"],
+                 font=("Segoe UI", 8, "bold")).pack(anchor="w", padx=6,
+                                                    pady=(4, 2))
+        for fmt, fmt_label in (("html", "Web pages (.html)"),
+                               ("md", "Markdown (.md)"),
+                               ("txt", "Plain text (.txt)")):
+            row = tk.Frame(frame, bg=self.colors["card"], cursor="hand2")
+            row.pack(fill="x")
+            lbl = tk.Label(row, text=fmt_label, bg=self.colors["card"],
+                           fg=self.colors["text"], font=("Segoe UI", 9),
+                           anchor="w")
+            lbl.pack(side="left", fill="x", expand=True, padx=10, pady=5)
+            for w in (row, lbl):
+                w.bind("<Button-1>",
+                       lambda e, f=fmt: (self._dismiss_mini_popup(),
+                                         self._bulk_export_run(f)))
+        self._place_dropdown_popup(pop, self._bulk_export_btn)
+
+    def _bulk_export_run(self, fmt):
+        """Write every ticked note into a chosen folder, one file per
+        note, through the same rendering the single-note export uses.
+        Same-title notes get " (2)", " (3)" -- never an overwrite."""
+        ext = {"html": ".html", "md": ".md", "txt": ".txt"}[fmt]
+        folder = filedialog.askdirectory(
+            title=f"Export {len(self.selected_note_ids)} note(s) into…")
+        if not folder:
+            return
+        written, failed, used = 0, 0, set()
+        for note in self.notes:
+            if note["id"] not in self.selected_note_ids:
+                continue
+            title = (note.get("title") or "").strip() or "Untitled note"
+            safe = (re.sub(r'[<>:"/\\|?*\n\r\t]', "_", title)
+                    .strip(" ._")[:60] or "note")
+            name, n = safe, 1
+            while (name.lower() in used
+                   or os.path.exists(os.path.join(folder, name + ext))):
+                n += 1
+                name = f"{safe} ({n})"
+            used.add(name.lower())
+            try:
+                with open(os.path.join(folder, name + ext), "w",
+                          encoding="utf-8") as f:
+                    f.write(self._note_export_content(note, fmt, title))
+                written += 1
+            except (IOError, OSError):
+                failed += 1
+        if failed:
+            self.show_error(
+                "Export incomplete",
+                f"{written} note(s) exported, {failed} failed to write.")
+        else:
+            self._show_toast(f"Exported {written} note(s)")
+        self._exit_selection_mode_after_bulk_action()
+        if written and not failed and self.ask_yes_no(
+                "Open the folder?",
+                f"{written} file(s) were saved.\n\nOpen the folder now?",
+                icon="question"):
+            try:
+                os.startfile(folder)
+            except OSError:
+                self.set_status(f"Saved to {folder}")
 
     # ---------- Note actions ----------
     # ---------- Editor state snapshot (for multi-note tabs) ----------

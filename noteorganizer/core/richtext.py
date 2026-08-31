@@ -552,6 +552,13 @@ def html_document(title, body_html):
     around one -- doctype, charset, a title, and just enough styling
     that the table borders exist (the fragment's <td>s carry none, and
     a borderless table reads as loose words in a browser).
+
+    The visible title is a styled <div>, deliberately NOT an <h1>: Word
+    maps HTML headings onto its own Heading styles, and a modern Word
+    puts a collapse triangle on every heading -- with the whole note
+    under the one heading, the exported document arrived offering to
+    fold itself away. A div that merely looks like a title renders the
+    same everywhere and means nothing to Word's outline.
     """
     safe_title = escape(title or "Untitled note")
     return (
@@ -564,7 +571,9 @@ def html_document(title, body_html):
         "table { border-collapse: collapse; margin: 0.5em 0; }\n"
         "td { border: 1px solid #999; padding: 4px 10px; }\n"
         "</style>\n</head>\n<body>\n"
-        f"<h1>{safe_title}</h1>\n{body_html}\n</body>\n</html>\n")
+        f'<div style="font-size: 1.7em; font-weight: bold; '
+        f'margin: 0 0 0.6em 0;">{safe_title}</div>\n'
+        f"{body_html}\n</body>\n</html>\n")
 
 
 def note_to_html(text, formatting=None, paragraphs=None):
@@ -673,8 +682,25 @@ def note_to_html(text, formatting=None, paragraphs=None):
                     attr += f' colspan="{cs}"'
                 if rs > 1:
                     attr += f' rowspan="{rs}"'
+                styles = []
                 if c < len(row_aligns) and row_aligns[c] != tables.ALIGN_LEFT:
-                    attr += f' style="text-align:{row_aligns[c]};"'
+                    styles.append(f"text-align:{row_aligns[c]};")
+                # A highlight covering the whole cell colours the <td>
+                # itself, the way the app draws it. Left as a <span>, an
+                # EMPTY highlighted cell (the highlight rides the pad
+                # spaces) would collapse with the whitespace and show as
+                # a sliver or nothing.
+                cell_a, cell_b = offset + start, offset + end
+                if cell_b > cell_a:
+                    for sp in spans:
+                        if (sp["style"] == "highlight"
+                                and sp["start"] <= cell_a
+                                and sp["end"] >= cell_b):
+                            styles.append(
+                                f"background-color:{sp['value']};")
+                            break
+                if styles:
+                    attr += f' style="{"".join(styles)}"'
                 cells.append(f"<td{attr}>"
                              f"{_line_html(line[start:end], spans, offset + start)}"
                              f"</td>")

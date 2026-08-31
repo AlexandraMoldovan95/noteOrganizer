@@ -508,10 +508,30 @@ check("the HTML document declares its doctype and charset",
       _doc.startswith("<!DOCTYPE html>") and "utf-8" in _doc)
 check("the title is escaped, not injected",
       "&lt;mea&gt;" in _doc and "<mea>" not in _doc)
+check("the title is a styled div, not a heading Word would fold away",
+      "<h1" not in _doc and "font-weight: bold" in _doc)
 check("the fragment lands inside the body",
       "<div>corpul</div>" in _doc)
 check("table borders exist in the styling, or a table reads as loose words",
       "border" in _doc)
+
+# A highlight covering a whole cell lands on the <td> itself -- an empty
+# highlighted cell's colour would otherwise ride pad spaces that HTML
+# collapses into nothing.
+_hl_body = "| plin | gol |" + chr(10) + "| --- | --- |" + chr(10) + "| aa | bb |"
+_hl_row = _hl_body.index("| aa | bb |")
+_hl_spans = [{"start": _hl_row + 5, "end": _hl_row + 10, "style": "highlight",
+              "value": "#c8f7c5"}]
+_hl_html = note_to_html(_hl_body, _hl_spans, [])
+check("a full-cell highlight colours the td itself",
+      'td style="background-color:#c8f7c5;"' in _hl_html
+      or 'td style="background-color:#c8f7c5;"'.replace("td ", "td  ") in _hl_html)
+_part_spans = [{"start": _hl_row + 7, "end": _hl_row + 8, "style": "highlight",
+                "value": "#c8f7c5"}]
+_part_html = note_to_html(_hl_body, _part_spans, [])
+check("a partial highlight stays a span inside the cell",
+      "background-color" in _part_html
+      and 'td style="background-color' not in _part_html)
 
 print()
 print(f"FAILURES: {fails if fails else 'none'}")

@@ -4941,6 +4941,10 @@ _toastsX = []
 _origToastX = app._show_toast
 app._show_toast = lambda text, kind='success': _toastsX.append(text)
 _origAskSaveX = _fdX.asksaveasfilename
+_origAskYNX = app.ask_yes_no
+_openAsksX = []
+app.ask_yes_no = (lambda title, msg, **kw:
+                  (_openAsksX.append(title), False)[1])
 
 _pX = os.path.join(_exp_dir, 'nota.html')
 _fdX.asksaveasfilename = lambda **kw: _pX
@@ -4984,6 +4988,50 @@ _fdX.asksaveasfilename = lambda **kw: _seenX.update(kw) or ''
 app.export_note_as_file(_exp_note, 'html')
 check('the suggested filename is scrubbed of forbidden characters',
       _seenX.get('initialfile') == 'Export _proba.html')
+check('each single export offers to open the file',
+      len([t for t in _openAsksX if 'Open it now' in t]) == 3)
+
+# ---- BULK EXPORT ----
+# Doua notite cu ACELASI titlu -> a doua primeste sufixul " (2)".
+_exp_note2 = NO.normalize_note({
+    'id': 8801, 'title': 'Export <proba>', 'body': 'alt corp',
+    'category': 'General'})
+_savedNotesX = app.notes
+app.notes = [_exp_note, _exp_note2]
+app.selected_note_ids = {8800, 8801}
+_bulk_dir = os.path.join(_exp_dir, 'bulk')
+os.makedirs(_bulk_dir, exist_ok=True)
+_fdX.askdirectory = lambda **kw: _bulk_dir
+_toastsX.clear()
+app._bulk_export_run('md')
+_bulk_files = sorted(os.listdir(_bulk_dir))
+check('bulk export writes one file per note',
+      _bulk_files == ['Export _proba (2).md', 'Export _proba.md'])
+_first = _ioX.open(os.path.join(_bulk_dir, 'Export _proba.md'),
+                   encoding='utf-8').read()
+_second = _ioX.open(os.path.join(_bulk_dir, 'Export _proba (2).md'),
+                    encoding='utf-8').read()
+check('same-title notes never overwrite each other',
+      '**linia** intai' in _first and 'alt corp' in _second)
+check('bulk export renders through the same pipeline as single',
+      _first == app._note_export_content(_exp_note, 'md', 'Export <proba>'))
+check('bulk export announces the count',
+      any('Exported 2 note(s)' in t for t in _toastsX))
+check('bulk export leaves selection mode',
+      not app.selection_mode and not app.selected_note_ids)
+app._toggle_selection_mode()
+app.update()
+app.update_idletasks()
+check('the bulk action bar fits the fixed sidebar (%dpx of %dpx)'
+      % (app.bulk_action_bar.winfo_reqwidth(), app.sidebar.winfo_width()),
+      app.bulk_action_bar.winfo_reqwidth()
+      <= app.sidebar.winfo_width() - 8)
+app._toggle_selection_mode()
+app.update()
+app.notes = _savedNotesX
+app.refresh_note_list()
+app.update()
+app.ask_yes_no = _origAskYNX
 _fdX.asksaveasfilename = _origAskSaveX
 app._show_toast = _origToastX
 
