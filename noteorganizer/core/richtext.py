@@ -464,85 +464,27 @@ def _line_html(line, spans, offset):
     return "".join(pieces)
 
 
-def _md_wrap(chunk, plain):
-    """One run of identically-styled text, with Markdown's own markers.
+def _cell_html(line, spans, offset, start, end):
+    """One table cell's inner HTML.
 
-    Markdown has markers for bold, italic and strikethrough only --
-    underline and colours have no plain-Markdown form and are dropped
-    (the HTML export is the one that keeps them). Emphasis markers that
-    touch whitespace don't parse ("** text**" is not bold), so a run's
-    leading and trailing spaces stay outside the markers.
+    A multi-line cell stores its breaks as the literal ``<br>`` marker
+    inside the value (see core/tables.LINE_BREAK). Left to _line_html
+    alone, escaping turned each one into visible ``&lt;br&gt;`` text in
+    the exported page -- so the value is split ON the markers, each
+    segment styled from its own offsets, and rejoined with real breaks.
     """
-    if not chunk.strip():
-        return chunk
-    marker = ""
-    if "bold" in plain:
-        marker += "**"
-    if "italic" in plain:
-        marker += "*"
-    if "strike" in plain:
-        marker += "~~"
-    if not marker:
-        return chunk
-    lead = chunk[:len(chunk) - len(chunk.lstrip())]
-    trail = chunk[len(chunk.rstrip()):] if chunk.rstrip() else ""
-    return f"{lead}{marker}{chunk.strip()}{marker[::-1]}{trail}"
-
-
-def _line_markdown(line, spans, offset):
-    """One line's text with its character styles as Markdown markers."""
-    if not line:
-        return ""
-    pieces, run_start = [], 0
-    current = _styles_at(spans, offset)
-    for i in range(1, len(line) + 1):
-        here = _styles_at(spans, offset + i) if i < len(line) else None
-        if here != current:
-            pieces.append(_md_wrap(line[run_start:i], current[0]))
-            run_start, current = i, here
-    return "".join(pieces)
-
-
-def note_to_markdown(text, formatting=None, paragraphs=None):
-    """Render a note as portable Markdown.
-
-    The body is already half Markdown -- tables are pipe rows and
-    checkboxes are task syntax -- so table lines pass through verbatim
-    (in-cell character styles stay behind with the colours: pipes and
-    asterisks interleave badly). List markers map to Markdown's own
-    ("- " for bullets; numbered items keep the "N. " already in the
-    text), nested by indent. Bold, italic and strikethrough become
-    markers; underline, colours and alignment have no Markdown form and
-    are dropped -- export to HTML when those must survive the trip.
-    """
-    text = text or ""
-    spans = normalize_formatting(formatting or [])
-    lines = text.split("\n")
-    props = {p["line"]: p
-             for p in normalize_paragraphs(paragraphs or [], len(lines))}
-    out, offset = [], 0
-    for number, line in enumerate(lines):
-        entry = props.get(number, {})
-        kind = entry.get("kind")
-        if tables.is_table_row(line):
-            out.append(line)
-        elif kind:
-            marker = ""
-            for glyph in BULLET_GLYPHS:
-                if line.startswith(glyph + " "):
-                    marker = glyph + " "
-                    break
-            if not marker:
-                match = re.match(r"^\d+\. ", line)
-                marker = match.group(0) if match else ""
-            body = line[len(marker):]
-            md_marker = "- " if kind == "bullet" else (marker or "1. ")
-            out.append("    " * entry.get("indent", 0) + md_marker
-                       + _line_markdown(body, spans, offset + len(marker)))
-        else:
-            out.append(_line_markdown(line, spans, offset))
-        offset += len(line) + 1
-    return "\n".join(out)
+    value = line[start:end]
+    parts, pos = [], 0
+    while True:
+        cut = value.find(tables.LINE_BREAK, pos)
+        if cut < 0:
+            parts.append((pos, len(value)))
+            break
+        parts.append((pos, cut))
+        pos = cut + len(tables.LINE_BREAK)
+    return "<br>".join(
+        _line_html(value[a:b], spans, offset + start + a)
+        for a, b in parts)
 
 
 def html_document(title, body_html):
@@ -568,8 +510,16 @@ def html_document(title, body_html):
         "body { font-family: 'Segoe UI', Arial, sans-serif; "
         "max-width: 800px; margin: 2em auto; padding: 0 1em; "
         "line-height: 1.5; }\n"
-        "table { border-collapse: collapse; margin: 0.5em 0; }\n"
-        "td { border: 1px solid #999; padding: 4px 10px; }\n"
+        # Browsers drop background colours when printing unless told
+        # not to -- without this, Ctrl+P -> PDF lost every highlight.
+        "* { -webkit-print-color-adjust: exact; "
+        "print-color-adjust: exact; }\n"
+        # A wide table must wrap inside the page rather than run off
+        # its right edge; long cell content breaks rather than pushes.
+        "table { border-collapse: collapse; margin: 0.5em 0; "
+        "max-width: 100%; }\n"
+        "td { border: 1px solid #999; padding: 4px 10px; "
+        "overflow-wrap: anywhere; }\n"
         "</style>\n</head>\n<body>\n"
         f'<div style="font-size: 1.7em; font-weight: bold; '
         f'margin: 0 0 0.6em 0;">{safe_title}</div>\n'
@@ -668,7 +618,17 @@ def note_to_html(text, formatting=None, paragraphs=None):
             # is rendered from its own offsets so formatting inside it
             # survives the trip.
             if not in_table:
-                out.append("<table>")
+                # The table's place on the page (centred / right) lives
+                # as an alignment entry on its lines -- carry it out as
+                # margins, or an exported centred table hugs the left.
+                place = entry.get("align")
+                if place == "center":
+                    t_style = ' style="margin:0.5em auto;"'
+                elif place == "right":
+                    t_style = ' style="margin:0.5em 0 0.5em auto;"'
+                else:
+                    t_style = ""
+                out.append(f"<table{t_style}>")
                 in_table = True
             row_spans, row_covered = merge_at.get(number, ({}, set()))
             row_aligns = tables.cell_alignments(line)
@@ -702,7 +662,7 @@ def note_to_html(text, formatting=None, paragraphs=None):
                 if styles:
                     attr += f' style="{"".join(styles)}"'
                 cells.append(f"<td{attr}>"
-                             f"{_line_html(line[start:end], spans, offset + start)}"
+                             f"{_cell_html(line, spans, offset, start, end)}"
                              f"</td>")
             out.append(f"<tr>{''.join(cells)}</tr>")
         else:

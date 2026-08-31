@@ -185,8 +185,7 @@ from noteorganizer.core import clipboard
 from noteorganizer.core import tables as core_tables
 from noteorganizer.core.tables import is_table_row
 from noteorganizer.core.richtext import (html_to_note, note_to_html,
-                                        note_to_markdown, html_document,
-                                        reflow_wrapped)
+                                        html_document, reflow_wrapped)
 from noteorganizer.core.formatting import (
     normalize_paragraphs,
     parse_list_marker,
@@ -6650,7 +6649,6 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         """
         title = (note.get("title") or "").strip() or "Untitled note"
         kinds = {"html": ("HTML file", ".html"),
-                 "md": ("Markdown file", ".md"),
                  "txt": ("Text file", ".txt")}
         label, ext = kinds[fmt]
         # A title is prose; a filename is not. Strip what Windows forbids.
@@ -6714,17 +6712,6 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 fragment += ("<hr>\n<div><i>Comments</i></div>\n"
                              + note_to_html(comments))
             content = html_document(title, fragment)
-        elif fmt == "md":
-            content = f"# {title}\n\n" + note_to_markdown(
-                body, note.get("formatting"), note.get("paragraphs"))
-            if checklist:
-                content += "\n\n---\n\nChecklist:\n\n" + "\n".join(
-                    "- [{}] {}".format("x" if it.get("done") else " ",
-                                       it.get("text", ""))
-                    for it in checklist)
-            if comments:
-                content += "\n\n---\n\nComments:\n\n" + comments
-            content += "\n"
         else:
             content = title + "\n\n" + body
             if checklist:
@@ -10353,7 +10340,6 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                  font=("Segoe UI", 8, "bold")).pack(anchor="w", padx=6,
                                                     pady=(4, 2))
         for fmt, fmt_label in (("html", "Web pages (.html)"),
-                               ("md", "Markdown (.md)"),
                                ("txt", "Plain text (.txt)")):
             row = tk.Frame(frame, bg=self.colors["card"], cursor="hand2")
             row.pack(fill="x")
@@ -10371,7 +10357,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         """Write every ticked note into a chosen folder, one file per
         note, through the same rendering the single-note export uses.
         Same-title notes get " (2)", " (3)" -- never an overwrite."""
-        ext = {"html": ".html", "md": ".md", "txt": ".txt"}[fmt]
+        ext = {"html": ".html", "txt": ".txt"}[fmt]
         folder = filedialog.askdirectory(
             title=f"Export {len(self.selected_note_ids)} note(s) into…")
         if not folder:
@@ -10969,7 +10955,6 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         )
         for fmt, fmt_label in (
                 ("html", "Web page (.html) — full formatting; opens in a browser or Word"),
-                ("md", "Markdown (.md) — tables and checkboxes, no colours"),
                 ("txt", "Plain text (.txt)")):
             export_menu.add_command(
                 label=fmt_label,

@@ -4954,28 +4954,19 @@ check('HTML export writes a full document with the table as a table',
       _htmlX.startswith('<!DOCTYPE html>') and '<table>' in _htmlX
       and '&lt;proba&gt;' in _htmlX and '<b>linia</b>' in _htmlX)
 
-_pX = os.path.join(_exp_dir, 'nota.md')
-_fdX.asksaveasfilename = lambda **kw: _pX
-app.export_note_as_file(_exp_note, 'md')
-_mdX = _ioX.open(_pX, encoding='utf-8').read() if os.path.exists(_pX) else ''
-check('Markdown export keeps tables verbatim and maps the bullet',
-      '| [x] | val |' in _mdX and '- bullet' in _mdX
-      and '**linia**' in _mdX and _mdX.startswith('# Export'))
-
 _pX = os.path.join(_exp_dir, 'nota.txt')
 _fdX.asksaveasfilename = lambda **kw: _pX
 app.export_note_as_file(_exp_note, 'txt')
 _txtX = _ioX.open(_pX, encoding='utf-8').read() if os.path.exists(_pX) else ''
 check('text export is the body as stored, comments included',
       'linia intai' in _txtX and 'un comentariu' in _txtX)
-check('the checklist exports in all three formats, states kept',
+check('the checklist exports in both formats, states kept',
       chr(0x2611) + ' facut deja' in _htmlX
       and chr(0x2610) + ' de facut' in _htmlX
       and '&lt;inca&gt;' in _htmlX
-      and '- [x] facut deja' in _mdX and '- [ ] de facut <inca>' in _mdX
       and '[x] facut deja' in _txtX)
 check('each export announces itself with a toast',
-      len(_toastsX) == 3 and all('Exported to' in t for t in _toastsX))
+      len(_toastsX) == 2 and all('Exported to' in t for t in _toastsX))
 
 _before_cancelX = sorted(os.listdir(_exp_dir))
 _fdX.asksaveasfilename = lambda **kw: ''
@@ -4989,7 +4980,7 @@ app.export_note_as_file(_exp_note, 'html')
 check('the suggested filename is scrubbed of forbidden characters',
       _seenX.get('initialfile') == 'Export _proba.html')
 check('each single export offers to open the file',
-      len([t for t in _openAsksX if 'Open it now' in t]) == 3)
+      len([t for t in _openAsksX if 'Open it now' in t]) == 2)
 
 # ---- BULK EXPORT ----
 # Doua notite cu ACELASI titlu -> a doua primeste sufixul " (2)".
@@ -5003,18 +4994,18 @@ _bulk_dir = os.path.join(_exp_dir, 'bulk')
 os.makedirs(_bulk_dir, exist_ok=True)
 _fdX.askdirectory = lambda **kw: _bulk_dir
 _toastsX.clear()
-app._bulk_export_run('md')
+app._bulk_export_run('txt')
 _bulk_files = sorted(os.listdir(_bulk_dir))
 check('bulk export writes one file per note',
-      _bulk_files == ['Export _proba (2).md', 'Export _proba.md'])
-_first = _ioX.open(os.path.join(_bulk_dir, 'Export _proba.md'),
+      _bulk_files == ['Export _proba (2).txt', 'Export _proba.txt'])
+_first = _ioX.open(os.path.join(_bulk_dir, 'Export _proba.txt'),
                    encoding='utf-8').read()
-_second = _ioX.open(os.path.join(_bulk_dir, 'Export _proba (2).md'),
+_second = _ioX.open(os.path.join(_bulk_dir, 'Export _proba (2).txt'),
                     encoding='utf-8').read()
 check('same-title notes never overwrite each other',
-      '**linia** intai' in _first and 'alt corp' in _second)
+      'linia intai' in _first and 'alt corp' in _second)
 check('bulk export renders through the same pipeline as single',
-      _first == app._note_export_content(_exp_note, 'md', 'Export <proba>'))
+      _first == app._note_export_content(_exp_note, 'txt', 'Export <proba>'))
 check('bulk export announces the count',
       any('Exported 2 note(s)' in t for t in _toastsX))
 check('bulk export leaves selection mode',

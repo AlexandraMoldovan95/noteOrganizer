@@ -10,8 +10,7 @@ does: printing a bullet crashes a plain Windows console on cp1252.
 """
 import note_organizer as NO
 from noteorganizer.core.richtext import (html_to_note, note_to_html,
-                                        note_to_markdown, html_document,
-                                        reflow_wrapped)
+                                        html_document, reflow_wrapped)
 from html.parser import HTMLParser
 
 fails = []
@@ -454,54 +453,7 @@ check("empty text is handled", reflow_wrapped("") == "")
 check("None is handled", reflow_wrapped(None) == "")
 
 
-# ---------------------------------------------------------- markdown ----
-# The single-note export: the body is already half Markdown (tables,
-# checkboxes), so the converter's job is the other half -- list markers,
-# emphasis runs -- and knowing what Markdown cannot say.
-_md_body = (BULLET + "primul" + chr(10)
-            + SUB_BULLET + "dedesubt" + chr(10)
-            + "3. numarat" + chr(10)
-            + "| A | B |" + chr(10) + "| --- | --- |" + chr(10)
-            + "| [x] | gros |" + chr(10)
-            + "text cu stil aici")
-_md_paras = [{"line": 0, "kind": "bullet"},
-             {"line": 1, "kind": "bullet", "indent": 1},
-             {"line": 2, "kind": "number"}]
-_off = _md_body.index("text cu stil")
-_cell_off = _md_body.index("| [x] | gros |") + 8
-_md_spans = [{"start": _cell_off, "end": _cell_off + 4, "style": "bold"},
-             {"start": _off, "end": _off + 4, "style": "bold"},
-             {"start": _off + 5, "end": _off + 7, "style": "bold_italic"},
-             {"start": _off + 8, "end": _off + 12, "style": "strike"},
-             {"start": _off + 13, "end": _off + 17, "style": "text_color",
-              "value": "#ff0000"}]
-_md = note_to_markdown(_md_body, _md_spans, _md_paras)
-_md_lines = _md.split(chr(10))
-check("a bullet maps to Markdown's own dash", _md_lines[0] == "- primul")
-check("a nested bullet indents under its parent",
-      _md_lines[1] == "    - dedesubt")
-check("a numbered item keeps the number the text already has",
-      _md_lines[2] == "3. numarat")
-check("table rows pass through verbatim",
-      _md_lines[3] == "| A | B |" and _md_lines[4] == "| --- | --- |")
-check("a checkbox cell survives as task syntax",
-      _md_lines[5] == "| [x] | gros |")
-check("styles inside a table cell stay out of the pipes",
-      "**" not in _md_lines[5])
-check("bold becomes starred markers", "**text**" in _md_lines[6])
-check("bold_italic nests its markers the right way around",
-      "***cu***" in _md_lines[6])
-check("strike becomes tilde markers", "~~stil~~" in _md_lines[6])
-check("a colour has no Markdown form and is dropped silently",
-      "aici" in _md_lines[6] and "#ff0000" not in _md)
 
-# Emphasis touching whitespace does not parse -- spaces stay outside.
-_sp = note_to_markdown("un  gros  x",
-                       [{"start": 2, "end": 9, "style": "bold"}], [])
-check("markers hug the word, not the spaces the span swallowed",
-      _sp == "un  **gros**  x")
-
-check("empty text converts to empty", note_to_markdown("", [], []) == "")
 
 _doc = html_document("Nota <mea>", "<div>corpul</div>")
 check("the HTML document declares its doctype and charset",
@@ -532,6 +484,35 @@ _part_html = note_to_html(_hl_body, _part_spans, [])
 check("a partial highlight stays a span inside the cell",
       "background-color" in _part_html
       and 'td style="background-color' not in _part_html)
+
+# A multi-line cell stores its breaks as the literal <br> marker; left
+# to escaping alone they arrived as visible "&lt;br&gt;" text in the page.
+_br_body = ("| unu<br>doi | trei |" + chr(10) + "| --- | --- |" + chr(10)
+            + "| a | b |")
+_br_html = note_to_html(_br_body, [], [])
+check("a cell's <br> markers become real line breaks",
+      "unu<br>doi" in _br_html and "&lt;br&gt;" not in _br_html)
+
+# The table's place on the page rides its lines' alignment entries.
+_pl_body = "| A | B |" + chr(10) + "| --- | --- |" + chr(10) + "| a | b |"
+_pl_paras = [{"line": 0, "align": "center"}, {"line": 1, "align": "center"},
+             {"line": 2, "align": "center"}]
+_pl_html = note_to_html(_pl_body, [], _pl_paras)
+check("a centred table exports with auto margins",
+      '<table style="margin:0.5em auto;">' in _pl_html)
+_pr_paras = [{"line": 0, "align": "right"}, {"line": 1, "align": "right"},
+             {"line": 2, "align": "right"}]
+_pr_html = note_to_html(_pl_body, [], _pr_paras)
+check("a right-placed table pushes itself to the right margin",
+      'margin:0.5em 0 0.5em auto;' in _pr_html)
+check("an unplaced table carries no margin style",
+      "<table>" in note_to_html(_pl_body, [], []))
+
+_doc2 = html_document("T", "<div>x</div>")
+check("printing keeps background colours (PDF road)",
+      "print-color-adjust: exact" in _doc2)
+check("a wide table wraps instead of running off the page",
+      "max-width: 100%" in _doc2 and "overflow-wrap" in _doc2)
 
 print()
 print(f"FAILURES: {fails if fails else 'none'}")
