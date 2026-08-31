@@ -464,6 +464,68 @@ def _line_html(line, spans, offset):
     return "".join(pieces)
 
 
+def _cell_html(line, spans, offset, start, end):
+    """One table cell's inner HTML.
+
+    A multi-line cell stores its breaks as the literal ``<br>`` marker
+    inside the value (see core/tables.LINE_BREAK). Left to _line_html
+    alone, escaping turned each one into visible ``&lt;br&gt;`` text in
+    the exported page -- so the value is split ON the markers, each
+    segment styled from its own offsets, and rejoined with real breaks.
+    """
+    value = line[start:end]
+    parts, pos = [], 0
+    while True:
+        cut = value.find(tables.LINE_BREAK, pos)
+        if cut < 0:
+            parts.append((pos, len(value)))
+            break
+        parts.append((pos, cut))
+        pos = cut + len(tables.LINE_BREAK)
+    return "<br>".join(
+        _line_html(value[a:b], spans, offset + start + a)
+        for a, b in parts)
+
+
+def html_document(title, body_html):
+    """A complete standalone HTML file around one note's fragment.
+
+    note_to_html() makes clipboard fragments; a FILE needs the document
+    around one -- doctype, charset, a title, and just enough styling
+    that the table borders exist (the fragment's <td>s carry none, and
+    a borderless table reads as loose words in a browser).
+
+    The visible title is a styled <div>, deliberately NOT an <h1>: Word
+    maps HTML headings onto its own Heading styles, and a modern Word
+    puts a collapse triangle on every heading -- with the whole note
+    under the one heading, the exported document arrived offering to
+    fold itself away. A div that merely looks like a title renders the
+    same everywhere and means nothing to Word's outline.
+    """
+    safe_title = escape(title or "Untitled note")
+    return (
+        "<!DOCTYPE html>\n<html>\n<head>\n<meta charset=\"utf-8\">\n"
+        f"<title>{safe_title}</title>\n"
+        "<style>\n"
+        "body { font-family: 'Segoe UI', Arial, sans-serif; "
+        "max-width: 800px; margin: 2em auto; padding: 0 1em; "
+        "line-height: 1.5; }\n"
+        # Browsers drop background colours when printing unless told
+        # not to -- without this, Ctrl+P -> PDF lost every highlight.
+        "* { -webkit-print-color-adjust: exact; "
+        "print-color-adjust: exact; }\n"
+        # A wide table must wrap inside the page rather than run off
+        # its right edge; long cell content breaks rather than pushes.
+        "table { border-collapse: collapse; margin: 0.5em 0; "
+        "max-width: 100%; }\n"
+        "td { border: 1px solid #999; padding: 4px 10px; "
+        "overflow-wrap: anywhere; }\n"
+        "</style>\n</head>\n<body>\n"
+        f'<div style="font-size: 1.7em; font-weight: bold; '
+        f'margin: 0 0 0.6em 0;">{safe_title}</div>\n'
+        f"{body_html}\n</body>\n</html>\n")
+
+
 def note_to_html(text, formatting=None, paragraphs=None):
     """Render a note as an HTML fragment other applications understand.
 
@@ -556,7 +618,23 @@ def note_to_html(text, formatting=None, paragraphs=None):
             # is rendered from its own offsets so formatting inside it
             # survives the trip.
             if not in_table:
-                out.append("<table>")
+                # The table's place on the page (centred / right) lives
+                # as an alignment entry on its lines. It goes out TWICE:
+                # auto margins for browsers, and the legacy align
+                # attribute for Word, which ignores margin:auto on
+                # tables entirely. align="right" would also make
+                # browsers float the table with text wrapping around it
+                # (the UA sheet maps it to float:right), so float:none
+                # rides along to keep the browser on the margin path.
+                place = entry.get("align")
+                if place == "center":
+                    t_style = ' align="center" style="margin:0.5em auto;"'
+                elif place == "right":
+                    t_style = (' align="right" style="float:none; '
+                               'margin:0.5em 0 0.5em auto;"')
+                else:
+                    t_style = ""
+                out.append(f"<table{t_style}>")
                 in_table = True
             row_spans, row_covered = merge_at.get(number, ({}, set()))
             row_aligns = tables.cell_alignments(line)
@@ -570,10 +648,27 @@ def note_to_html(text, formatting=None, paragraphs=None):
                     attr += f' colspan="{cs}"'
                 if rs > 1:
                     attr += f' rowspan="{rs}"'
+                styles = []
                 if c < len(row_aligns) and row_aligns[c] != tables.ALIGN_LEFT:
-                    attr += f' style="text-align:{row_aligns[c]};"'
+                    styles.append(f"text-align:{row_aligns[c]};")
+                # A highlight covering the whole cell colours the <td>
+                # itself, the way the app draws it. Left as a <span>, an
+                # EMPTY highlighted cell (the highlight rides the pad
+                # spaces) would collapse with the whitespace and show as
+                # a sliver or nothing.
+                cell_a, cell_b = offset + start, offset + end
+                if cell_b > cell_a:
+                    for sp in spans:
+                        if (sp["style"] == "highlight"
+                                and sp["start"] <= cell_a
+                                and sp["end"] >= cell_b):
+                            styles.append(
+                                f"background-color:{sp['value']};")
+                            break
+                if styles:
+                    attr += f' style="{"".join(styles)}"'
                 cells.append(f"<td{attr}>"
-                             f"{_line_html(line[start:end], spans, offset + start)}"
+                             f"{_cell_html(line, spans, offset, start, end)}"
                              f"</td>")
             out.append(f"<tr>{''.join(cells)}</tr>")
         else:

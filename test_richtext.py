@@ -10,7 +10,7 @@ does: printing a bullet crashes a plain Windows console on cp1252.
 """
 import note_organizer as NO
 from noteorganizer.core.richtext import (html_to_note, note_to_html,
-                                        reflow_wrapped)
+                                        html_document, reflow_wrapped)
 from html.parser import HTMLParser
 
 fails = []
@@ -451,6 +451,69 @@ check("already-joined paragraphs are returned untouched",
       reflow_wrapped(ORIGINAL) == ORIGINAL)
 check("empty text is handled", reflow_wrapped("") == "")
 check("None is handled", reflow_wrapped(None) == "")
+
+
+
+
+_doc = html_document("Nota <mea>", "<div>corpul</div>")
+check("the HTML document declares its doctype and charset",
+      _doc.startswith("<!DOCTYPE html>") and "utf-8" in _doc)
+check("the title is escaped, not injected",
+      "&lt;mea&gt;" in _doc and "<mea>" not in _doc)
+check("the title is a styled div, not a heading Word would fold away",
+      "<h1" not in _doc and "font-weight: bold" in _doc)
+check("the fragment lands inside the body",
+      "<div>corpul</div>" in _doc)
+check("table borders exist in the styling, or a table reads as loose words",
+      "border" in _doc)
+
+# A highlight covering a whole cell lands on the <td> itself -- an empty
+# highlighted cell's colour would otherwise ride pad spaces that HTML
+# collapses into nothing.
+_hl_body = "| plin | gol |" + chr(10) + "| --- | --- |" + chr(10) + "| aa | bb |"
+_hl_row = _hl_body.index("| aa | bb |")
+_hl_spans = [{"start": _hl_row + 5, "end": _hl_row + 10, "style": "highlight",
+              "value": "#c8f7c5"}]
+_hl_html = note_to_html(_hl_body, _hl_spans, [])
+check("a full-cell highlight colours the td itself",
+      'td style="background-color:#c8f7c5;"' in _hl_html
+      or 'td style="background-color:#c8f7c5;"'.replace("td ", "td  ") in _hl_html)
+_part_spans = [{"start": _hl_row + 7, "end": _hl_row + 8, "style": "highlight",
+                "value": "#c8f7c5"}]
+_part_html = note_to_html(_hl_body, _part_spans, [])
+check("a partial highlight stays a span inside the cell",
+      "background-color" in _part_html
+      and 'td style="background-color' not in _part_html)
+
+# A multi-line cell stores its breaks as the literal <br> marker; left
+# to escaping alone they arrived as visible "&lt;br&gt;" text in the page.
+_br_body = ("| unu<br>doi | trei |" + chr(10) + "| --- | --- |" + chr(10)
+            + "| a | b |")
+_br_html = note_to_html(_br_body, [], [])
+check("a cell's <br> markers become real line breaks",
+      "unu<br>doi" in _br_html and "&lt;br&gt;" not in _br_html)
+
+# The table's place on the page rides its lines' alignment entries.
+_pl_body = "| A | B |" + chr(10) + "| --- | --- |" + chr(10) + "| a | b |"
+_pl_paras = [{"line": 0, "align": "center"}, {"line": 1, "align": "center"},
+             {"line": 2, "align": "center"}]
+_pl_html = note_to_html(_pl_body, [], _pl_paras)
+check("a centred table centres in browsers AND in Word",
+      'align="center"' in _pl_html and "margin:0.5em auto;" in _pl_html)
+_pr_paras = [{"line": 0, "align": "right"}, {"line": 1, "align": "right"},
+             {"line": 2, "align": "right"}]
+_pr_html = note_to_html(_pl_body, [], _pr_paras)
+check("a right-placed table pushes right in Word without floating in browsers",
+      'align="right"' in _pr_html and "float:none" in _pr_html
+      and "margin:0.5em 0 0.5em auto;" in _pr_html)
+check("an unplaced table carries no margin style",
+      "<table>" in note_to_html(_pl_body, [], []))
+
+_doc2 = html_document("T", "<div>x</div>")
+check("printing keeps background colours (PDF road)",
+      "print-color-adjust: exact" in _doc2)
+check("a wide table wraps instead of running off the page",
+      "max-width: 100%" in _doc2 and "overflow-wrap" in _doc2)
 
 print()
 print(f"FAILURES: {fails if fails else 'none'}")

@@ -210,6 +210,12 @@ tk.Button(_old_bar, text="Select all", font=("Segoe UI", 8)
 tk.Button(_old_bar, text="\U0001F5D1 Trash", font=("Segoe UI", 8, "bold")
           ).pack(side="left", padx=(0, 4), ipadx=4, ipady=2)
 tk.Button(_old_bar, text="\U0001F5C2 Category ▾", font=("Segoe UI", 8)
+          ).pack(side="left", padx=(0, 4), ipadx=4, ipady=2)
+# The bar gained an Export button since this check was written; the
+# reconstruction carries it too, in the original sizing idiom, so the
+# comparison stays four-against-four -- compact styling vs pre-fix
+# styling, not four buttons vs three.
+tk.Button(_old_bar, text="\U0001F4BE Export ▾", font=("Segoe UI", 8)
           ).pack(side="left", ipadx=4, ipady=2)
 _old_bar.update_idletasks()
 old_width = _old_bar.winfo_reqwidth()

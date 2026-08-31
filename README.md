@@ -52,6 +52,7 @@ Built as a solo/pair project (developer + AI pairing partner) over an extended i
 
 **Sharing & backup**
 - Share one or many notes as a compact, copy-pasteable text code (no attachments — content only)
+- Export one note — or a whole selection of notes — as standalone files: HTML with the full formatting, colours and tables (opens in any browser or in Word; print to PDF from there, highlights included), or plain text
 - Full backup export/import as a single `.zip` (notes, settings, attachments), running on a background thread with a live progress bar so the app never freezes during the operation — and the Backup panel says when the last export happened, since that file is the only copy outside the app's own folder
 - Import safely checks for duplicates before merging, rather than silently doubling up your notes
 

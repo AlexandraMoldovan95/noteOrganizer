@@ -196,6 +196,15 @@ Paste a code you received into **Import code** in the sidebar. If any of the not
 
 ![Import code](screenshots/import-code.png)
 
+### Export one note as a file
+
+Right-click any note in the list (or on the calendar) → **Export as file** and pick a format — the menu says plainly what each one keeps:
+
+- **Web page (.html)** — the complete note: styles, colours, highlights, and tables as real tables. It opens in any browser (press **Ctrl+P** there and "Save as PDF" to get a PDF) and Word opens it directly too (then Save As → .docx if you need one).
+- **Plain text (.txt)** — the words alone.
+
+The note's checklist and comments come along too, as their own sections, and a table centred (or right-placed) in the note keeps its place on the exported page. When you print the page to PDF, highlights and cell colours survive — the export tells the browser to keep them. After a save the app offers to open the file right away — the exported file itself is the honest preview of how the note lays out on a page, so adjusting the note and re-exporting is a quick loop. To export **several notes at once**, turn on ☑ Select above the list, tick the notes, and use **Export ▾** in the action bar: pick a format and a folder, and each note becomes its own file (same-titled notes get “(2)”, “(3)” — nothing ever overwrites). Attached files never travel with a single-note export — that's what the full backup below is for, and the app reminds you when the note has attachments.
+
 ### Full backup: export
 
 Settings → Export notes creates a single `.zip` containing every note, your settings, and every attachment — the one file you need to move everything to another device. A line under the button remembers when you last did this — worth a glance now and then, because that `.zip` is the only copy of your notes outside the app's own folder. With a lot of attachments this can take a moment; a progress bar stays visible at the bottom of the window the whole time, and the app remains fully usable while it works.

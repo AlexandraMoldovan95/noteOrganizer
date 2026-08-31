@@ -6,6 +6,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ---
 
+## [Unreleased]
+
+### Added
+- **Export notes as files.** Right-click a note → **Export as file** (or tick several in Select mode and use **Export ▾**): a standalone **HTML** page carrying everything the note has — styles, colours, highlights, the checklist, tables as real tables with multi-line cells as real line breaks, a centred table still centred, and a full-cell highlight on the cell itself — or **plain text**. The page opens in any browser (Ctrl+P → PDF, with highlights kept — the export tells the browser to print backgrounds) and directly in Word (no collapsible outline: the title is a styled line, not a heading). Wide tables wrap inside the page instead of running off it. One file per note in bulk, same-titled notes suffixed “(2)” rather than overwritten; after a save the app offers to open the result — the file itself is the only honest preview. A Markdown export was built, measured against these two, and removed before shipping: everything it could say, the HTML says with the colours on.
+
+---
+
 ## [0.58.82] — 2026-08-30
 
 ### Added
