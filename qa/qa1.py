@@ -5463,15 +5463,31 @@ set_body('| a | b |' + chr(10) + '| --- | --- |' + chr(10)
 app._render_table_grids()
 app.update()
 _iL = app._grid_at_line(1)
+app._grid_set_table_align(_iL, 'center')
+app.update()
+_iL = app._grid_at_line(1)
+# Preconditia benzii din teren, simulata direct: capatul ultimei
+# linii de tabel poarta un highlight -- captionul iese CURAT.
+app._ensure_color_tag(app.body_text, 'highlight', '#c8b8a8')
+app.body_text.tag_add('highlight_c8b8a8', '3.0', '4.0')
 app._grid_add_caption(_iL)
 app.update()
 _linesL = app.body_text.get('1.0', 'end-1c').split(chr(10))
-check('the table caption arrives numbered, centred, with a source line '
-      'and the placeholder selected',
+check('the caption and its source line both match the table '
+      'placement, numbered, placeholder selected',
       _linesL[3] == 'Tab. 1: descriere'
       and _linesL[4].startswith('Sursa:')
       and 'align_center' in app.body_text.tag_names('4.2')
+      and 'align_center' in app.body_text.tag_names('5.2')
       and bool(app.body_text.tag_ranges('sel')))
+check('and the caption is scrubbed clean of inherited styling '
+      '(no full-width bars)',
+      not [t for t in app.body_text.tag_names('4.2')
+           if t.startswith('highlight')]
+      and not [t for t in app.body_text.tag_names('4.end')
+               if t.startswith('highlight')]
+      and not [t for t in app.body_text.tag_names('5.2')
+               if t.startswith('highlight')])
 app.body_text.insert('end', chr(10) + '| x | y |' + chr(10)
                      + '| --- | --- |' + chr(10) + '| 3 | 4 |')
 app._resync_list_tags()

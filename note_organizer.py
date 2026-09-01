@@ -3766,7 +3766,26 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         caption_text = f"Tab. {n}: descriere"
         b.insert(f"{below}.end", "\n" + caption_text + "\nSursa: ")
         cap_line = below + 1
-        b.tag_add("align_center", f"{cap_line}.0", f"{cap_line}.end")
+        # SCRUB, then dress: text inserted at the table's last line can
+        # inherit whatever styling that line's edge happens to carry
+        # (field-tested: the caption arrived wearing the table's cell
+        # highlight, full-width bars included). The caption starts from
+        # zero, always.
+        for tag in b.tag_names():
+            if (tag.startswith("highlight_") or tag.startswith("text_color_")
+                    or tag in ("bold", "italic", "bold_italic",
+                               "underline", "strike")
+                    or tag.startswith("align_")):
+                b.tag_remove(tag, f"{cap_line}.0", f"{cap_line + 2}.0")
+        # Both lines follow the TABLE's own place on the page -- a left
+        # table gets a left caption, a centred one a centred pair
+        # (field request: the label and the source line must never sit
+        # at two different alignments).
+        place = self._grid_table_align_of(first)
+        if place in ("center", "right"):
+            b.tag_add(f"align_{place}", f"{cap_line}.0", f"{cap_line}.end")
+            b.tag_add(f"align_{place}",
+                      f"{cap_line + 1}.0", f"{cap_line + 1}.end")
         # The placeholder comes selected, so typing replaces it at once.
         start = f"{cap_line}.{len(caption_text) - len('descriere')}"
         b.tag_remove("sel", "1.0", "end")
