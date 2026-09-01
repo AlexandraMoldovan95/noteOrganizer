@@ -2509,6 +2509,15 @@ app.body_text.mark_set('insert', 'end -1c')
 app.update()
 app.editor_canvas.yview_moveto(1.0)
 app.update()
+# The page's scrollregion can still be settling after the 60-line
+# set_body under load -- a moveto against the not-yet-grown region
+# lands at 0 and the whole check starts from a false floor. Insist
+# until the region accepts the scroll (settle pattern, capped).
+_setP = time.time() + 1.5
+while app.editor_canvas.yview()[0] <= 0.05 and time.time() < _setP:
+    app.update()
+    time.sleep(0.02)
+    app.editor_canvas.yview_moveto(1.0)
 _scroll_before = app.editor_canvas.yview()[0]
 app._insert_table(2, 2)
 # The snap this guards against comes from a queued handler, which a
@@ -5362,6 +5371,62 @@ _tagsYH = [t for t in _b.tag_names('1.end-1c')
 check('letters glued onto a coloured word inherit colour AND highlight',
       len(_tagsXH) == 2)
 check('but a word started after a space stays plain', _tagsYH == [])
+set_body('')
+
+# ---- FIELD ROUND 4 ----
+# Restaurarea view-ului dupa un rebuild de griduri sta IN VIGOARE:
+# un yank tarziu (geometria ferestrelor incorporate asezandu-se) e
+# corectat de timere -- one-shot-ul de alta data ramanea sus.
+set_body(chr(10).join('| r%d | c%d |' % (i, i) for i in range(8))
+         + chr(10) + ('text jos' + chr(10)) * 50)
+app._render_table_grids()
+app.update()
+app._grid_view_restore = None
+app.body_text.yview_moveto(0.5)
+app.update()
+_y0J = app.body_text.yview()[0]
+_iJ = app._grid_at_line(1)
+app._grid_set_alignment(_iJ, (1, 0, 1, 0), core_tables.ALIGN_CENTER)
+app.update()
+app.body_text.yview_moveto(0.0)      # yank-ul tarziu, simulat
+_t_endJ = time.time() + 0.6
+while time.time() < _t_endJ:
+    app.update()
+    time.sleep(0.02)
+check('the grid-rebuild view restore outlives a late yank (in force, '
+      'not one-shot)',
+      abs(app.body_text.yview()[0] - _y0J) < 0.05)
+
+# Scrollbarul e gest deliberat: anuleaza restaurarea pendinte.
+_iJ = app._grid_at_line(1)
+app._grid_set_alignment(_iJ, (2, 0, 2, 0), core_tables.ALIGN_CENTER)
+app.update()
+app._body_scrollbar_moved('moveto', '0.1')
+_t_endJ = time.time() + 0.6
+while time.time() < _t_endJ:
+    app.update()
+    time.sleep(0.02)
+check('a deliberate scrollbar drag beats the pending restore',
+      abs(app.body_text.yview()[0] - 0.1) < 0.08)
+set_body('')
+
+# Textul cu pipe-uri lipit la mijloc de linie aterizeaza pe liniile lui.
+set_body('inceput fig2')
+app.body_text.mark_set('insert', '1.8')
+app.clipboard_clear()
+app.clipboard_append('| x | [x] |' + chr(10) + 'legenda')
+app.update()
+# Prin _on_body_paste, ruta REALA a unui Ctrl+V -- o metoda chemata
+# direct ramane verde si cand hook-ul ei dispare (lectia "dead on
+# arrival").
+_stub_clipboard(html=None, text='| x | [x] |' + chr(10) + 'legenda')
+_okJ = app._on_body_paste() == 'break'
+app.update()
+_linesJ = app.body_text.get('1.0', 'end-1c').split(chr(10))
+check('pipe rows pasted mid-line land on their own lines, never '
+      'spliced into the caret\'s line',
+      _okJ and len(_linesJ) >= 3 and _linesJ[1] == '| x | [x] |'
+      and '|fig2' not in app.body_text.get('1.0', 'end-1c'))
 set_body('')
 
 # ---- OLD TEETH, SHARPENED (auditul din 2026-08-31) ----

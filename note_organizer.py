@@ -1448,6 +1448,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # leaves its snapshot for this render to honour.
         saved = getattr(self, "_grid_saved_view", None)
         self._grid_saved_view = None
+        explicit_capture = saved is not None
         if saved is not None:
             restore_view, restore_body, restore_x = saved
         else:
@@ -1487,8 +1488,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # fraction restored against those estimates lands somewhere else
         # once geometry settles -- measured drifting 0.316 to 0.164.
         if restore_body is not None or restore_view is not None:
-            self.after_idle(lambda page=restore_view, body=restore_body:
-                            self._restore_views_idle(page, body))
+            self.after_idle(lambda page=restore_view, body=restore_body,
+                            expl=explicit_capture:
+                            self._restore_views_idle(page, body, expl))
 
     def _grid_fonts(self):
         key = (self.editor_font_family, self.editor_font_size)
@@ -2304,6 +2306,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # the rebuild waits for this moment so it never happens under an
         # editor still open on the grid.
         if editor["info"].pop("stale", False):
+            # The commit promises the view stays where the user was --
+            # capture explicitly so the restore holds in force through
+            # the late window-mapping (the double-click jump's root).
+            self._grid_saved_view = self._capture_grid_views()
             self._render_table_grids()
 
     def _cancel_cell_editor(self):
@@ -2602,6 +2608,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         leaping table to table while the tests, calling the method
         directly, stayed green.) If the box's content fits, the page
         scrolls instead, so the buttons below stay reachable."""
+        # A deliberate wheel move beats a grid rebuild's pending
+        # view restore -- the user outranks the machinery here just
+        # as on the note list.
+        self._grid_view_restore = None
         try:
             first, last = text_widget.yview()
         except (tk.TclError, ValueError):
@@ -2883,6 +2893,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         return "break"
 
     def _grid_drag_autoscroll(self, info):
+        self._grid_view_restore = None
         """While a cell drag runs, the view follows the pointer: the
         grid pans sideways past its own viewport, and the NOTE scrolls
         when the pointer crosses the editor's top or bottom edge -- so a
@@ -3050,7 +3061,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         except tk.TclError:
             pass
 
-    def _restore_views_idle(self, page, body):
+    def _restore_views_idle(self, page, body, explicit=False):
         # After a paste the right view is wherever the caret ended up --
         # the end of what was just pasted -- not the fraction captured
         # before the note grew. A plain see() from the paste handler ran
@@ -3059,17 +3070,72 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         follow = getattr(self, "_body_follow_caret", False)
         self._body_follow_caret = False
         if follow:
+            self._grid_view_restore = None
             try:
                 self.body_text.see("insert")
             except tk.TclError:
                 pass
-        elif body is not None:
+        elif body is not None or page is not None:
+            if body is not None:
+                try:
+                    self.body_text.yview_moveto(body)
+                except tk.TclError:
+                    pass
+            if page is not None:
+                self._restore_editor_view(page)
+            # One idle-time application is not enough for the ops that
+            # PROMISE the view stays put (the op-context family and the
+            # editor's commit -- the ones that capture the view
+            # explicitly before tearing grids down): the fresh grid
+            # windows can map AFTER this runs, the Text's estimates
+            # settle late, and the fraction lands at the top of the
+            # table once they do -- "double-click near the table and
+            # the scroll jumps to its start". Same cure as the note
+            # list: the target stays in force briefly, on timers.
+            # AMBIENT renders (a push-down, an inserted table) keep the
+            # single application: their content legitimately moves, and
+            # re-pinning a stale fraction is exactly the yank the
+            # push-down fix removed.
+            if explicit:
+                self._grid_view_restore = {
+                    "page": page, "body": body,
+                    "until": time.monotonic() + 0.5}
+                for delay in (60, 160, 360):
+                    self.after(delay, self._reapply_grid_view_restore)
+            else:
+                self._grid_view_restore = None
+        if page is None and body is None and not follow:
+            self._grid_view_restore = None
+
+    def _editor_scrollbar_moved(self, *args):
+        self._grid_view_restore = None
+        try:
+            self.editor_canvas.yview(*args)
+        except tk.TclError:
+            pass
+
+    def _body_scrollbar_moved(self, *args):
+        self._grid_view_restore = None
+        try:
+            self.body_text.yview(*args)
+        except tk.TclError:
+            pass
+
+    def _reapply_grid_view_restore(self):
+        """One timed beat of a still-in-force grid-rebuild restore."""
+        pend = getattr(self, "_grid_view_restore", None)
+        if not pend or not self._still_alive():
+            return
+        if time.monotonic() > pend["until"]:
+            self._grid_view_restore = None
+            return
+        if pend["body"] is not None:
             try:
-                self.body_text.yview_moveto(body)
+                self.body_text.yview_moveto(pend["body"])
             except tk.TclError:
                 pass
-        if page is not None:
-            self._restore_editor_view(page)
+        if pend["page"] is not None:
+            self._restore_editor_view(pend["page"])
 
     def _grid_click(self, info, event):
         canvas = info["canvas"]
@@ -4793,12 +4859,61 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             return "break"
         if self._paste_tsv_as_table():
             return "break"
+        if self._paste_pipe_text_on_own_lines():
+            return "break"
         # Plain paste: Tk inserts the text after this returns, so the list
         # tags can only be brought back into step once that has happened.
         self._body_follow_caret = True
         self.after_idle(self._resync_list_tags)
         self.after_idle(self._render_table_grids)
         return None
+
+    def _paste_pipe_text_on_own_lines(self):
+        """Plain text whose edge lines are table rows lands on its own
+        lines, never glued into the caret's line.
+
+        Copying half a table plus its caption as ordinary body text and
+        pasting it mid-line spliced the first pipe row onto the caret's
+        line -- '|   | [x] |fig2...' in the field report -- and the
+        caption onto the last one. Tk's default paste is right for
+        prose; pipe rows only mean something at a line start, so they
+        get the newlines that keep them rows. Selection replacement is
+        left to the default handler -- this path only runs caret-only.
+        """
+        try:
+            if self.body_text.tag_ranges("sel"):
+                return False
+        except tk.TclError:
+            return False
+        raw = clipboard.read_text()
+        if raw is None:
+            try:
+                raw = self.body_text.clipboard_get()
+            except tk.TclError:
+                return False
+        if not raw or "\n" not in raw.strip():
+            single = raw or ""
+            if not core_tables.is_table_row(single.strip("\n")):
+                return False
+        raw = raw.replace("\r\n", "\n").replace("\r", "\n")
+        lines = raw.strip("\n").split("\n")
+        if not (core_tables.is_table_row(lines[0])
+                or core_tables.is_table_row(lines[-1])):
+            return False
+        b = self.body_text
+        before = b.get("insert linestart", "insert")
+        after = b.get("insert", "insert lineend")
+        text = raw.strip("\n")
+        if core_tables.is_table_row(lines[0]) and before.strip():
+            text = "\n" + text
+        if core_tables.is_table_row(lines[-1]) and after.strip():
+            text = text + "\n"
+        b.insert("insert", text)
+        self._body_follow_caret = True
+        self._resync_list_tags()
+        self._render_table_grids()
+        self._schedule_autosave()
+        return True
 
     def _paste_tsv_as_table(self, raw=None):
         """Tab-separated clipboard text pasted into the body becomes a
@@ -8581,7 +8696,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
         self.editor_canvas = tk.Canvas(self.editor_outer, highlightthickness=0)
         self.track_theme(self.editor_canvas, bg="bg")
-        editor_scrollbar = ttk.Scrollbar(self.editor_outer, orient="vertical", command=self.editor_canvas.yview)
+        # The scrollbar, like the wheel, is a deliberate gesture: it
+        # cancels any grid rebuild's still-pending view restore.
+        editor_scrollbar = ttk.Scrollbar(
+            self.editor_outer, orient="vertical",
+            command=self._editor_scrollbar_moved)
         self.editor = tk.Frame(self.editor_canvas)
         self.track_theme(self.editor, bg="bg")
 
@@ -9000,7 +9119,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             font=(self.editor_font_family, self.editor_font_size),
             yscrollcommand=body_sb.set, undo=True, autoseparators=True, maxundo=-1
         )
-        body_sb.config(command=self.body_text.yview)
+        body_sb.config(command=self._body_scrollbar_moved)
         self.track_theme(self.body_text, bg="card", fg="text")
         body_sb.pack(side="right", fill="y")
         self.body_text.pack(side="left", fill="both", expand=True)
