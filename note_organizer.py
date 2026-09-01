@@ -3114,6 +3114,44 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._schedule_autosave()
         return "break"
 
+    def _extend_word_styles_on_typing(self, event=None):
+        """Letters glued onto a styled word wear the word's styles.
+
+        Tk extends a tag over an inserted character only when BOTH its
+        neighbours carry it -- so typing at the END of a coloured word
+        produced bare letters ("the new letters don't get the colour").
+        The rule follows the word boundary the field report asked for:
+        a non-space character typed directly after a styled non-space
+        character inherits that character's colour, highlight and font
+        styles; type a space first and the styles stay behind.
+        """
+        b = self.body_text
+        try:
+            typed = b.index("insert-1c")
+            prev = b.index("insert-2c")
+            if b.compare(prev, ">=", typed):
+                return
+            # The characters come from the BUFFER, not the event: a
+            # synthetic KeyRelease carries no char at all, and reading
+            # what actually sits left of the caret is true for real
+            # typing, IME input and tests alike.
+            typed_ch = b.get(typed)
+            if not typed_ch.strip():
+                return
+            prev_ch = b.get(prev)
+            if not prev_ch.strip():
+                return
+            carry = [t for t in b.tag_names(prev)
+                     if t in ("bold", "italic", "bold_italic",
+                              "underline", "strike")
+                     or t.startswith("text_color_")
+                     or t.startswith("highlight_")]
+            for tag in carry:
+                if tag not in b.tag_names(typed):
+                    b.tag_add(tag, typed, "insert")
+        except tk.TclError:
+            pass
+
     def _reassert_line_alignment(self, _event=None):
         """Keep the caret's line wearing its own alignment while it is
         typed into.
@@ -3472,6 +3510,19 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 sep_cols[c]["hidden"] = False
         self._grid_column_mechanics(info, mutate)
 
+    def _grid_autofit_cols(self, info, c0, c1):
+        """Autofit every column a selection touches, in ONE pass -- the
+        per-column call exists on the single-cell menu, and running it
+        once per selected column would tear the grid down that many
+        times for one gesture."""
+        def mutate(sep_cols, rows, aligns):
+            widths = core_tables.layout_widths(rows, aligns)
+            for c in range(c0, min(c1 + 1, len(sep_cols))):
+                if c < len(widths):
+                    sep_cols[c]["width"] = widths[c]
+                    sep_cols[c]["hidden"] = False
+        self._grid_column_mechanics(info, mutate)
+
     def _grid_hide_col(self, info, c, hidden=True):
         def mutate(sep_cols, rows, aligns):
             if c < len(sep_cols):
@@ -3661,18 +3712,44 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 for r in range(r0, r1 + 1)]
 
     def _grid_copy_selection(self, sel):
-        """Cells leave as tab-separated lines -- what a spreadsheet reads --
-        and are remembered exactly for pasting back into a table."""
+        """Cells leave three ways at once: tab-separated text (what a
+        spreadsheet reads), an HTML table (what Word and mail clients
+        read -- pasted outside the app, the cells used to arrive as one
+        line of raw tabs), and an internal note of the copied columns'
+        set widths, so pasting the table back into a note rebuilds it
+        at the SAME widths instead of shrinking to the default."""
         matrix = self._grid_selection_matrix(sel)
         if matrix is None:
             return
         self._grid_cell_clip = [list(row) for row in matrix]
-        try:
-            self.clipboard_clear()
-            self.clipboard_append(
-                "\n".join("\t".join(row) for row in matrix))
-        except tk.TclError:
-            pass
+        tsv = "\n".join("\t".join(row) for row in matrix)
+        self._grid_cell_clip_text = tsv
+        self._grid_cell_clip_widths = None
+        info, (r0, c0, r1, c1) = sel["info"], sel["box"]
+        first = self._grid_first_line(info)
+        if first is not None:
+            _rows, _aligns, sep_cols, _sep_at = self._grid_block_parts(
+                first, info["nrows"])
+            if sep_cols is not None:
+                self._grid_cell_clip_widths = [
+                    dict(sep_cols[c]) if c < len(sep_cols)
+                    else {"width": None, "align": None, "hidden": False}
+                    for c in range(c0, c1 + 1)]
+        html_rows = "".join(
+            "<tr>" + "".join(
+                "<td>{}</td>".format(
+                    escape(v).replace(
+                        escape(core_tables.LINE_BREAK), "<br>"))
+                for v in row) + "</tr>"
+            for row in matrix)
+        if not clipboard.write(tsv, html=f"<table>{html_rows}</table>"):
+            # Off Windows (the CI runners included) the CF_HTML writer
+            # does nothing at all -- the plain text still has to land.
+            try:
+                self.clipboard_clear()
+                self.clipboard_append(tsv)
+            except tk.TclError:
+                pass
 
     def _grid_fill_selection(self, sel, value, align=None):
         info = sel["info"]
@@ -3757,12 +3834,28 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
         def choose(color):
             self._dismiss_mini_popup()
-            self._grid_fill_selection({"info": info, "box": box},
-                                      core_tables.CHECKBOX_EMPTY,
-                                      align=core_tables.ALIGN_CENTER)
-            if color and anchor_line is not None:
-                # The fill rebuilt the grids; the colour goes on the
-                # fresh one.
+            # Surgical writes, NOT the wholesale fill: the fill's block
+            # rewrite expelled the caret to the line under the table
+            # (the caret guard walks it out of rebuilt table lines) and
+            # the view scrolled after it -- "the cursor lands outside
+            # the table and the scroll jumps". An emoji dropped into a
+            # cell never moved anything because it goes through
+            # surgical paths; the checkbox now does the same.
+            fresh = (self._grid_at_line(anchor_line)
+                     if anchor_line is not None else None)
+            if fresh is None:
+                return
+            r0, c0, r1, c1 = box
+            for r in range(r0, r1 + 1):
+                for c in range(c0, c1 + 1):
+                    cell = fresh["cells"].get((r, c))
+                    if cell is None:
+                        continue
+                    self._write_cell(fresh, r, c,
+                                     core_tables.CHECKBOX_EMPTY)
+                    cell["value"] = core_tables.CHECKBOX_EMPTY
+            self._grid_set_alignment(fresh, box, core_tables.ALIGN_CENTER)
+            if color:
                 fresh = self._grid_at_line(anchor_line)
                 if fresh is not None:
                     self._grid_apply_style(fresh, box, "text_color", color)
@@ -4322,6 +4415,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                                  sel, ""))
             menu.add_command(label="Merge cells",
                              command=lambda: self._grid_merge_selection(sel))
+            menu.add_command(
+                label=("Autofit column width"
+                       if sel["box"][1] == sel["box"][3]
+                       else "Autofit column widths"),
+                command=lambda: self._grid_autofit_cols(
+                    info, sel["box"][1], sel["box"][3]))
             # Hide asks for a whole column selected top to bottom -- the
             # user can SEE what is about to disappear. Anything less and
             # the option stays away, on purpose.
@@ -4738,7 +4837,23 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         rows = [row + [""] * (ncols - len(row)) for row in rows]
         aligns = [[core_tables.ALIGN_LEFT] * ncols for _ in rows]
         lines = core_tables.format_table(rows, aligns)
-        sep = ("|" + "|".join([" --- "] * ncols) + "|")
+        # Our own copy remembers the source columns' set widths -- a
+        # duplicated table comes back at the SAME widths, not shrunk
+        # to the default. Text from elsewhere gets the plain rule.
+        clip_widths = None
+        if (raw == getattr(self, "_grid_cell_clip_text", None)
+                and getattr(self, "_grid_cell_clip_widths", None)):
+            clip_widths = list(self._grid_cell_clip_widths)
+            while len(clip_widths) < ncols:
+                clip_widths.append({"width": None, "align": None,
+                                    "hidden": False})
+        if clip_widths:
+            sep = core_tables.CELL + core_tables.CELL.join(
+                " " + cell + " "
+                for cell in core_tables.make_separator(clip_widths)
+            ) + core_tables.CELL
+        else:
+            sep = ("|" + "|".join([" --- "] * ncols) + "|")
         lines = [lines[0], sep] + lines[1:]
         prefix = "" if not here.strip() else "\n"
         if not here.strip():
@@ -8931,6 +9046,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.body_text.bind("<Configure>", self._on_body_resize_grids, add="+")
         self.body_text.bind("<KeyRelease>", self._caret_out_of_hidden, add="+")
         self.body_text.bind("<KeyRelease>", self._reassert_line_alignment,
+                            add="+")
+        self.body_text.bind("<KeyRelease>", self._extend_word_styles_on_typing,
                             add="+")
         # KeyRelease alone re-centred the line one frame LATE -- the
         # character appears left-justified for a blink, then snaps to the

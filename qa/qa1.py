@@ -1816,9 +1816,18 @@ def _stub_clipboard(html=None, text=None):
     NO.clipboard.read_text = lambda: text
     _written.clear()
 
-    def _capture(t, h=None):
-        _written['text'], _written['html'] = t, h
-        return bool(h)
+    def _capture(t, h=None, html=None):
+        _written['text'], _written['html'] = t, (html if html is not None
+                                                 else h)
+        # Mirror the text into Tk's clipboard too: on real Windows the
+        # CF writer sets both, and the older checks read what a paste
+        # would actually see via clipboard_get().
+        try:
+            app.clipboard_clear()
+            app.clipboard_append(t or '')
+        except Exception:
+            pass
+        return _written['html'] is not None
 
     NO.clipboard.write = _capture
 
@@ -5244,6 +5253,115 @@ check('pasting copied cells below the table makes a SECOND table',
 _secondG = _bodyG.split(chr(10))[_blocksG[1][0]:_blocksG[1][1] + 1]     if len(_blocksG) == 2 else []
 check('and the two tables stay separate blocks with the values intact',
       len(_blocksG) == 2 and any('val' in ln for ln in _secondG))
+set_body('')
+
+# ---- FIELD ROUND 3 ----
+# Autofit pe o selectie de coloane, intr-o singura trecere.
+set_body('| lung continut aici | x |' + chr(10) + '| --- | --- |'
+         + chr(10) + '| a | b |')
+app._render_table_grids()
+app.update()
+_iH = app._grid_at_line(1)
+app._grid_set_col_width(_iH, 0, 40)
+app.update()
+_iH = app._grid_at_line(1)
+_sepH0 = app.body_text.get('2.0', '2.end')
+app._grid_autofit_cols(_iH, 0, 1)
+app.update()
+_sepH1 = app.body_text.get('2.0', '2.end')
+check('autofit over a column selection shrinks the set widths',
+      len(_sepH1) < len(_sepH0))
+
+# Copy-ul tine minte latimile; paste-ul le reconstruieste identic.
+_iH = app._grid_at_line(1)
+app._grid_set_col_width(_iH, 0, 30)
+app.update()
+_iH = app._grid_at_line(1)
+_sepSrcH = app.body_text.get('2.0', '2.end')
+app._grid_select_range(_iH, (0, 0), (1, 1))
+app._grid_copy_selection({'info': _iH, 'box': (0, 0, 1, 1)})
+app._grid_clear_selection()
+app.body_text.mark_set('insert', '4.0')
+app.update()
+app._paste_tsv_as_table()
+app.update()
+_bodyH = app.body_text.get('1.0', 'end-1c')
+_blkH = core_tables.find_blocks(_bodyH)
+_sepNewH = (_bodyH.split(chr(10))[_blkH[1][0] + 1]
+            if len(_blkH) == 2 else '')
+check('a duplicated table comes back at the SAME column widths',
+      len(_blkH) == 2 and _sepSrcH.strip() == _sepNewH.strip())
+set_body('')
+
+# Checkboxul prin POPUPUL REAL: caretul si scrollul raman pe loc.
+set_body('sus' + chr(10) + '| a | b |' + chr(10) + '| --- | --- |'
+         + chr(10) + '|   |   |' + chr(10) + ('jos ' * 200))
+app._render_table_grids()
+app.update()
+_iH = app._grid_at_line(2)
+app.body_text.mark_set('insert', '1.0')
+app.body_text.yview_moveto(0.0)
+app.update()
+_y0H = app.body_text.yview()[0]
+# Un mark pe HEADER (linie pe care scrierea chirurgicala n-o atinge):
+# fill-ul de alta data stergea si reinsera tot blocul, prabusind markul
+# -- exact rescrierea care expulza caretul si muta scrollul.
+app.body_text.mark_set('probeH', '2.3')
+app._grid_checkmark_popup(_iH, (1, 0, 1, 0), 200, 200)
+app.update()
+_btnH = []
+
+
+def _find_theme_btn(w):
+    for ch in w.winfo_children():
+        try:
+            if (ch.winfo_class() == 'Button'
+                    and str(ch.cget('text')) == 'Theme color'):
+                _btnH.append(ch)
+        except Exception:
+            pass
+        _find_theme_btn(ch)
+
+
+_find_theme_btn(app._mini_popup)
+_btnH[0].invoke()
+app.update()
+_iH = app._grid_at_line(2)
+check('the checkbox palette writes surgically: value set, caret and '
+      'scroll unmoved',
+      _iH['cells'][(1, 0)]['value'] == core_tables.CHECKBOX_EMPTY
+      and app.body_text.index('insert').split('.')[0] == '1'
+      and abs(app.body_text.yview()[0] - _y0H) < 0.02
+      and app.body_text.index('probeH') == '2.3')
+set_body('')
+
+# Literele lipite de un cuvant colorat ii poarta culorile; dupa spatiu nu.
+set_body('cuvant ')
+_b = app.body_text
+app._ensure_color_tag(_b, 'highlight', '#ffff00')
+app._ensure_color_tag(_b, 'text_color', '#e63946')
+_b.tag_add('highlight_ffff00', '1.0', '1.6')
+_b.tag_add('text_color_e63946', '1.0', '1.6')
+take_focus(_b)
+_b.mark_set('insert', '1.6')
+# Insert + KeyRelease, WITHOUT a synthetic KeyPress: with real focus
+# on Windows the generated KeyPress itself types the character too
+# (the class binding inserts), and the doubled letter becomes the
+# untagged neighbour the handler then reads.
+_b.insert('insert', 'X')
+_b.event_generate('<KeyRelease>', keysym='X')
+app.update()
+_tagsXH = sorted(t for t in _b.tag_names('1.6')
+                 if 'color' in t or 'highlight' in t)
+_b.mark_set('insert', '1.end')
+_b.insert('insert', ' Y')
+_b.event_generate('<KeyRelease>', keysym='Y')
+app.update()
+_tagsYH = [t for t in _b.tag_names('1.end-1c')
+           if 'color' in t or 'highlight' in t]
+check('letters glued onto a coloured word inherit colour AND highlight',
+      len(_tagsXH) == 2)
+check('but a word started after a space stays plain', _tagsYH == [])
 set_body('')
 
 # ---- OLD TEETH, SHARPENED (auditul din 2026-08-31) ----
