@@ -48,9 +48,13 @@ git branch
 # 3. Put the new file(s) in place, rebuild, TEST IT LOCALLY
 #    (rebuild never touches Git — it's just for me to look at)
 
-# 4. Happy with it? Commit + push (first push on a new branch needs one extra flag):
+# 4. Happy with it? Commit, run the two-second static gates, then push
+#    (py tools/pre_push_check.py = the same checks CI runs first: names
+#    resolve, class surface unchanged, every .py compiles -- two PRs went
+#    red learning that the hard way; the full suite is run_tests.py):
 git add .
 git commit -m "feat: short description"
+py tools/pre_push_check.py
 git push
 #    ^ if this errors about "no upstream branch", copy-paste the exact
 #      command it suggests (git push --set-upstream origin <branch-name>)
