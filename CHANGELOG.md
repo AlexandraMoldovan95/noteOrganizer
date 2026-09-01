@@ -8,6 +8,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ## [Unreleased]
 
+### Testing
+- **The old teeth, audited.** Six long-standing regression fixes were sabotaged on purpose (each mutant = the original bug from ISSUES_LOG, reintroduced) to prove their guarding checks can actually fail. Four bit immediately; two had gone dull — nothing pinned the startup purge deleting a purged note's attachment files, and nothing pinned the editor's 0.32.x "short content stays at the top" guard. Both have named, deterministic checks now, proven against the same mutants; the autosave-over-a-vanished-note guard additionally gained a named check so a regression fails with a message instead of hanging the suite in a modal dialog.
+
 ### Added
 - **Export notes as files.** Right-click a note → **Export as file** (or tick several in Select mode and use **Export ▾**): a standalone **HTML** page carrying everything the note has — styles, colours, highlights, the checklist, tables as real tables with multi-line cells as real line breaks, a centred table still centred, and a full-cell highlight on the cell itself — or **plain text**. The page opens in any browser (Ctrl+P → PDF, with highlights kept — the export tells the browser to print backgrounds) and directly in Word (no collapsible outline: the title is a styled line, not a heading). Wide tables wrap inside the page instead of running off it. One file per note in bulk, same-titled notes suffixed “(2)” rather than overwritten; after a save the app offers to open the result — the file itself is the only honest preview. A Markdown export was built, measured against these two, and removed before shipping: everything it could say, the HTML says with the colours on.
 

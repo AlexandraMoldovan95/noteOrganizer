@@ -749,3 +749,35 @@ in stages, each stage fires its own Configure; an embedded window
 scrolled out of view stops being resized, taking its Configure events
 with it; and a scrollregion is a claim, not a fact — refresh it from
 `bbox` before trusting any fraction math built on it.
+
+### The teeth that had gone dull
+
+**Symptom:** none — that was the problem. Every test was green, and the
+question nobody usually asks is whether green still means anything.
+After a run of CI failures the owner asked for exactly that audit.
+
+**Method:** each old regression fix documented in this log names the
+bug it killed — so the perfect mutant is the original bug itself,
+reintroduced on purpose in a scratch copy. Six fixes were sabotaged
+this way; a guarding check was required to go red.
+
+**Findings:** four bit immediately (the title cap, share codes
+carrying paragraphs, restore-from-trash normalising, and the autosave
+guard — though that one "bit" by hanging the whole suite in a modal
+error dialog rather than failing a named check). Two had gone dull:
+nothing anywhere pinned the startup purge deleting a purged note's
+attachment files — the exact bug of "Files that outlived the notes
+they belonged to" could have quietly returned — and nothing pinned the
+editor's `0.32.x` short-content-stays-at-top guard, whose list-canvas
+sibling had gained mutation-proven checks only the day before.
+
+**Fix:** named, deterministic checks for all three weak spots, each
+proven against the same mutant that exposed it. The editor-guard check
+stubs `winfo_height` huge so "content fits" holds on any platform and
+any font — the check targets the pin, not the geometry lottery.
+
+**Takeaway:** a check written the day a bug is fixed can stop matching
+the code years later while staying green the whole time. Reintroducing
+the original bug is the cheapest possible proof either way — and the
+fixes this log documents are a ready-made mutant catalogue. Audit a
+few, every so often; green should have to earn itself.
