@@ -4,18 +4,52 @@ name: QA Tests
 # GitHub's own machines (not your computer) check out the code fresh and run
 # the whole test suite. If anything fails, the commit/PR gets a clear red X
 # instead of finding out later by hand.
+#
+# THE SUITE RUNS ON TWO PLATFORMS, AND THE ROLES DIFFER:
+#
+# - windows-latest is the platform the app actually ships on: real Segoe UI
+#   metrics, Windows Tk, no virtual display. A red here is a product bug --
+#   the fix goes in the app, never in the check.
+# - ubuntu-latest keeps exercising the pure logic and everything that turned
+#   out to behave differently under X11 (async window mapping, focus
+#   semantics, attribute types) -- differences that have caught real bugs.
+#
+# House rule, learned the long way: a failing check is never routed around.
+# The handful of checks that measure Windows-specific pixels are asserted
+# where that claim applies (sys.platform gates inside the qa scripts) --
+# and the Windows job below is exactly what makes those assertions bite in
+# CI rather than only on a developer's machine.
 on:
   push:
   pull_request:
 
 jobs:
   qa:
-    runs-on: ubuntu-latest
+    strategy:
+      # One platform failing must not cancel the other -- seeing BOTH
+      # verdicts is the point of running both.
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
     # A safety net, not a normal expectation — the whole suite runs in well
-    # under 5 minutes. If anything ever hangs (a dialog waiting for a click
-    # that will never come in a headless run, for example), this stops it
-    # from silently occupying a runner for hours instead of failing loudly.
-    timeout-minutes: 15
+    # under 5 minutes on Linux; Windows runners are roughly twice as slow,
+    # hence the larger number. If anything ever hangs (a dialog waiting for
+    # a click that will never come in a headless run, for example), this
+    # stops it from silently occupying a runner for hours instead of
+    # failing loudly.
+    timeout-minutes: 25
+    env:
+      # The qa scripts print check names containing emoji and box glyphs;
+      # a Windows console defaults to cp1252 and dies on the first one.
+      # (The same variable is set when running the suite locally.)
+      PYTHONIOENCODING: utf-8
+    defaults:
+      run:
+        # Git Bash exists on the Windows runners too, so ONE set of steps
+        # serves both platforms -- a second, PowerShell copy of every step
+        # would be one more thing to forget to update.
+        shell: bash
     steps:
       - name: Check out the code
         uses: actions/checkout@v4
@@ -29,15 +63,28 @@ jobs:
           # into a CI-only syntax error.
           python-version: "3.13"
 
-      - name: Install Tkinter and a virtual display
-        # GitHub's runners have no physical screen — Tkinter still needs
-        # SOMETHING to draw to. Xvfb ("X virtual framebuffer") is a fake
-        # display that lives entirely in memory, just for this: real widgets
-        # get created and interacted with exactly like on a real screen, the
-        # only difference is nobody's looking at it.
+      - name: Install Tkinter and a virtual display (Linux only)
+        # GitHub's Linux runners have no physical screen — Tkinter still
+        # needs SOMETHING to draw to. Xvfb ("X virtual framebuffer") is a
+        # fake display that lives entirely in memory, just for this: real
+        # widgets get created and interacted with exactly like on a real
+        # screen, the only difference is nobody's looking at it. The
+        # Windows runner needs none of this: Windows Tk draws through the
+        # normal win32 windowing that is always there.
+        if: runner.os == 'Linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y python3-tk xvfb
+
+      - name: Decide how a GUI test runs here
+        # Every step below says "$GUI script.py" and stays identical on
+        # both platforms; only this line knows the difference.
+        run: |
+          if [ "$RUNNER_OS" = "Linux" ]; then
+            echo "GUI=xvfb-run -a python" >> "$GITHUB_ENV"
+          else
+            echo "GUI=python" >> "$GITHUB_ENV"
+          fi
 
       - name: Install Python dependencies
         run: pip install -r requirements.txt
@@ -49,26 +96,29 @@ jobs:
         # so the module still imports), and a method lost, duplicated or
         # re-signatured while being moved between files.
         run: |
-          python3 tools/check_undefined_names.py note_organizer.py noteorganizer/core/*.py
-          python3 tools/check_class_api.py
+          python tools/check_undefined_names.py note_organizer.py noteorganizer/core/*.py
+          python tools/check_class_api.py
 
       - name: Recurrence engine tests
-        run: python3 test_recurrence.py
+        run: python test_recurrence.py
 
       - name: Data safety tests — backups and migration
-        run: python3 test_data_safety.py
+        run: python test_data_safety.py
 
       - name: Calculator expression evaluator tests
-        run: python3 test_calculator.py
+        run: python test_calculator.py
 
       - name: Table tests -- rows as lines of text, both ways through HTML
-        run: python3 test_tables.py
+        run: python test_tables.py
+
+      - name: Rich text tests -- HTML in, HTML out, the exported document
+        run: python test_richtext.py
 
       - name: Entry-module identity — Settings labels survive a real launch
-        # Builds a window, so it needs the virtual display. This one cannot
-        # be folded into the QA scripts: they all do `import note_organizer`,
-        # which is exactly the condition that hides the bug it guards.
-        run: xvfb-run -a python3 test_entry_module_identity.py
+        # Builds a window, so it needs a display. This one cannot be folded
+        # into the QA scripts: they all do `import note_organizer`, which is
+        # exactly the condition that hides the bug it guards.
+        run: $GUI test_entry_module_identity.py
 
       - name: QA1 — Notes, categories, templates
         # The QA scripts run with qa/ as the working directory, so they need
@@ -84,7 +134,7 @@ jobs:
           cp ../note_organizer.py .
           cp -r ../noteorganizer .
           rm -rf attachments *.json
-          xvfb-run -a python3 qa1.py
+          $GUI qa1.py
 
       - name: QA2 — Recurrence, calendar, duplicates
         # Each QA step starts from a clean slate (no leftover settings.json,
@@ -94,46 +144,46 @@ jobs:
         run: |
           cd qa
           rm -rf attachments *.json
-          xvfb-run -a python3 qa2.py
+          $GUI qa2.py
 
       - name: QA3 — Trash, share, import/export
         run: |
           cd qa
           rm -rf attachments *.json
-          xvfb-run -a python3 qa3.py
+          $GUI qa3.py
 
       - name: QA4 — Theming, stress, memory-leak regression
         run: |
           cd qa
           rm -rf attachments *.json
-          xvfb-run -a python3 qa4.py
+          $GUI qa4.py
 
       - name: QA5 — Corrupt data, edge cases
         run: |
           cd qa
           rm -rf attachments *.json
-          xvfb-run -a python3 qa5.py
+          $GUI qa5.py
 
       - name: QA6 — Grouping, Settings, Attachments, Combinations, Layout
         run: |
           cd qa
           rm -rf attachments *.json
-          xvfb-run -a python3 qa6.py
+          $GUI qa6.py
 
       - name: QA7 — Calendar delete, multi-select, image preview, autosave & memory fixes
         run: |
           cd qa
           rm -rf attachments *.json
-          xvfb-run -a python3 qa7.py
+          $GUI qa7.py
 
       - name: QA8 — Search debounce and background-timer robustness
         run: |
           cd qa
           rm -rf attachments *.json
-          xvfb-run -a python3 qa8.py
+          $GUI qa8.py
 
       - name: QA9 — Nested-dropdown-inside-popup fix (template editor, jump-to-month)
         run: |
           cd qa
           rm -rf attachments *.json
-          xvfb-run -a python3 qa9.py
+          $GUI qa9.py

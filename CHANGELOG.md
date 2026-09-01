@@ -8,6 +8,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ## [Unreleased]
 
+### Testing
+- CI now runs the entire suite on **Windows too** — the platform the app actually ships on (real Segoe UI metrics, Windows Tk, no virtual display) — alongside the Linux run that keeps exercising the pure logic and the X11 behaviours that have caught real bugs. One matrix, one set of steps, both verdicts always visible (`fail-fast: false`). The handful of checks that measure Windows-specific pixels now assert in CI instead of only on a developer's machine — a failing check is fixed in the app, never routed around. Found and closed on the way: `test_richtext.py` was never wired into CI at all.
+
 ### Added
 - **Export notes as files.** Right-click a note → **Export as file** (or tick several in Select mode and use **Export ▾**): a standalone **HTML** page carrying everything the note has — styles, colours, highlights, the checklist, tables as real tables with multi-line cells as real line breaks, a centred table still centred, and a full-cell highlight on the cell itself — or **plain text**. The page opens in any browser (Ctrl+P → PDF, with highlights kept — the export tells the browser to print backgrounds) and directly in Word (no collapsible outline: the title is a styled line, not a heading). Wide tables wrap inside the page instead of running off it. One file per note in bulk, same-titled notes suffixed “(2)” rather than overwritten; after a save the app offers to open the result — the file itself is the only honest preview. A Markdown export was built, measured against these two, and removed before shipping: everything it could say, the HTML says with the colours on.
 
