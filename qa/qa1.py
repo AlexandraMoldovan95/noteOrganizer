@@ -1832,6 +1832,42 @@ def _stub_clipboard(html=None, text=None):
     NO.clipboard.write = _capture
 
 
+def _menu_entries(m):
+    # Recursiv prin cascade: meniul de tabel s-a grupat (Rows/Columns/
+    # Merge/Table/Align cell), iar checkurile intreaba de ETICHETE,
+    # oriunde ar locui ele acum.
+    out = []
+    for i in range(m.index('end') + 1):
+        kind = m.type(i)
+        if kind == 'command':
+            out.append(m.entrycget(i, 'label'))
+        elif kind == 'cascade':
+            out.append(m.entrycget(i, 'label'))
+            try:
+                sub = m.nametowidget(m.entrycget(i, 'menu'))
+                out.extend(_menu_entries(sub))
+            except Exception:
+                pass
+    return out
+
+
+def _menu_entry_state(m, label):
+    for i in range(m.index('end') + 1):
+        kind = m.type(i)
+        if kind == 'command' and m.entrycget(i, 'label') == label:
+            return str(m.entrycget(i, 'state'))
+        if kind == 'cascade':
+            try:
+                sub = m.nametowidget(m.entrycget(i, 'menu'))
+            except Exception:
+                continue
+            found = _menu_entry_state(sub, label)
+            if found is not None:
+                return found
+    return None
+
+
+
 def _body_state():
     return (body(),
             sorted((s['start'], s['end'], s['style'])
@@ -2927,13 +2963,8 @@ try:
     app._grid_menu(_t1, type('E', (), {
         'x': int(_c00['x'] + 4), 'y': int(_c00['y'] + 4),
         'x_root': 0, 'y_root': 0})())
-    _del_state = None
-    if _posted:
-        _m = _posted[-1]
-        for i in range(_m.index('end') + 1):
-            if (_m.type(i) == 'command'
-                    and _m.entrycget(i, 'label') == 'Delete row'):
-                _del_state = str(_m.entrycget(i, 'state'))
+    _del_state = (_menu_entry_state(_posted[-1], 'Delete row')
+                  if _posted else None)
     check(f'Delete row is disabled at one data row ({_del_state})',
           _del_state == 'disabled')
 finally:
@@ -3052,12 +3083,7 @@ _real_popup = NO.tk.Menu.tk_popup
 NO.tk.Menu.tk_popup = lambda _m, *a, **k: _posted.append(_m)
 
 
-def _menu_entries(m):
-    out = []
-    for i in range(m.index('end') + 1):
-        if m.type(i) in ('command', 'cascade'):
-            out.append(m.entrycget(i, 'label'))
-    return out
+
 
 
 try:
@@ -5427,6 +5453,59 @@ check('pipe rows pasted mid-line land on their own lines, never '
       'spliced into the caret\'s line',
       _okJ and len(_linesJ) >= 3 and _linesJ[1] == '| x | [x] |'
       and '|fig2' not in app.body_text.get('1.0', 'end-1c'))
+set_body('')
+
+# ---- FIELD ROUND 5 ----
+# Captionul gestionat de sistem: numerotat, centrat, cu linia de sursa,
+# placeholderul selectat pentru scriere imediata.
+set_body('| a | b |' + chr(10) + '| --- | --- |' + chr(10)
+         + '| 1 | 2 |')
+app._render_table_grids()
+app.update()
+_iL = app._grid_at_line(1)
+app._grid_add_caption(_iL)
+app.update()
+_linesL = app.body_text.get('1.0', 'end-1c').split(chr(10))
+check('the table caption arrives numbered, centred, with a source line '
+      'and the placeholder selected',
+      _linesL[3] == 'Tab. 1: descriere'
+      and _linesL[4].startswith('Sursa:')
+      and 'align_center' in app.body_text.tag_names('4.2')
+      and bool(app.body_text.tag_ranges('sel')))
+app.body_text.insert('end', chr(10) + '| x | y |' + chr(10)
+                     + '| --- | --- |' + chr(10) + '| 3 | 4 |')
+app._resync_list_tags()
+app._render_table_grids()
+app.update()
+_blkL = core_tables.find_blocks(app.body_text.get('1.0', 'end-1c'))
+_iL2 = app._grid_at_line(_blkL[1][0] + 1)
+app._grid_add_caption(_iL2)
+app.update()
+check('a second caption counts on: Tab. 2',
+      'Tab. 2: descriere' in app.body_text.get('1.0', 'end-1c'))
+set_body('')
+
+# Plasarea tabelului calatoreste cu copy-ul de celule.
+set_body('| p | q |' + chr(10) + '| --- | --- |' + chr(10)
+         + '| 1 | 2 |' + chr(10) + chr(10) + 'coada')
+app._render_table_grids()
+app.update()
+_iL = app._grid_at_line(1)
+app._grid_set_table_align(_iL, 'center')
+app.update()
+_iL = app._grid_at_line(1)
+app._grid_select_range(_iL, (0, 0), (1, 1))
+_stub_clipboard()   # read_text -> None; paste cade pe clipboardul Tk real
+app._grid_copy_selection({'info': _iL, 'box': (0, 0, 1, 1)})
+app._grid_clear_selection()
+app.body_text.mark_set('insert', '6.0')
+app.update()
+app._paste_tsv_as_table()
+app.update()
+_blkL = core_tables.find_blocks(app.body_text.get('1.0', 'end-1c'))
+check('a duplicated CENTRED table pastes back centred',
+      len(_blkL) == 2
+      and app._grid_table_align_of(_blkL[1][0] + 1) == 'center')
 set_body('')
 
 # ---- OLD TEETH, SHARPENED (auditul din 2026-08-31) ----

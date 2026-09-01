@@ -3750,6 +3750,32 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 return "right"
         return "left"
 
+    def _grid_add_caption(self, info):
+        """A system-managed caption under the table: a centred, numbered
+        label line plus a source line -- ordinary body text after that,
+        editable like anything else. Exists so nobody has to hand-build
+        a caption above or below a table and fight its alignment (the
+        field request: "the system should insert an editable label")."""
+        first = self._grid_first_line(info)
+        if first is None:
+            return
+        below = first + info["nrows"] - 1
+        b = self.body_text
+        n = 1 + sum(1 for ln in b.get("1.0", "end-1c").split("\n")
+                    if ln.strip().startswith("Tab. "))
+        caption_text = f"Tab. {n}: descriere"
+        b.insert(f"{below}.end", "\n" + caption_text + "\nSursa: ")
+        cap_line = below + 1
+        b.tag_add("align_center", f"{cap_line}.0", f"{cap_line}.end")
+        # The placeholder comes selected, so typing replaces it at once.
+        start = f"{cap_line}.{len(caption_text) - len('descriere')}"
+        b.tag_remove("sel", "1.0", "end")
+        b.tag_add("sel", start, f"{cap_line}.end")
+        b.mark_set("insert", f"{cap_line}.end")
+        b.focus_set()
+        self._resync_list_tags()
+        self._schedule_autosave()
+
     def _grid_delete_table(self, info):
         first = self._grid_first_line(info)
         if first is None:
@@ -3801,6 +3827,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     dict(sep_cols[c]) if c < len(sep_cols)
                     else {"width": None, "align": None, "hidden": False}
                     for c in range(c0, c1 + 1)]
+            # The table's place on the page travels with the cells
+            # too, so a duplicated centred table comes back centred.
+            self._grid_cell_clip_place = self._grid_table_align_of(first)
         html_rows = "".join(
             "<tr>" + "".join(
                 "<td>{}</td>".format(
@@ -3920,11 +3949,15 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     self._write_cell(fresh, r, c,
                                      core_tables.CHECKBOX_EMPTY)
                     cell["value"] = core_tables.CHECKBOX_EMPTY
-            self._grid_set_alignment(fresh, box, core_tables.ALIGN_CENTER)
+                    self._grid_redraw_cell_text(fresh, r, c)
+            # No forced centring: it went through the alignment op's
+            # full teardown-and-rebuild and the whole table visibly
+            # flickered for one dropped checkbox. The box sits with the
+            # cell's own alignment, redrawn in place -- same quiet path
+            # a toggle uses.
             if color:
-                fresh = self._grid_at_line(anchor_line)
-                if fresh is not None:
-                    self._grid_apply_style(fresh, box, "text_color", color)
+                self._grid_apply_style(fresh, box, "text_color", color)
+            self._schedule_autosave()
 
         for i, hex_color in enumerate(PRESET_NOTE_COLORS):
             swatch = tk.Button(
@@ -4565,61 +4598,93 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             command=lambda xr=event.x_root, yr=event.y_root:
                 self._grid_highlight_popup(info, (r, c, r, c), xr, yr))
         menu.add_separator()
+        # Grouped: the flat run had grown past fifteen entries and
+        # "finding the one you need takes minutes" (field report). The
+        # everyday cell actions stay on top; everything about rows,
+        # columns, merging, or the table as a whole lives one hover
+        # away, under the word you would look for.
+
+        def _sub():
+            m = tk.Menu(menu, tearoff=0, bg=self.colors["card"],
+                        fg=self.colors["text"],
+                        activebackground=self.colors["accent"],
+                        activeforeground="white",
+                        relief="flat", bd=0, font=("Segoe UI", 9))
+            return m
+
+        align_menu = _sub()
         for label, align_value in (
                 ("Align left", core_tables.ALIGN_LEFT),
                 ("Center text", core_tables.ALIGN_CENTER),
                 ("Align right", core_tables.ALIGN_RIGHT)):
-            menu.add_command(
+            align_menu.add_command(
                 label=label,
                 command=lambda a=align_value: self._grid_set_alignment(
                     info, (r, c, r, c), a))
-        menu.add_separator()
-        menu.add_command(label="Insert row above",
-                         command=lambda: self._grid_insert_row(info, r))
-        menu.add_command(label="Insert row below",
-                         command=lambda: self._grid_insert_row(info, r + 1))
-        menu.add_command(label="Insert column left",
-                         command=lambda: self._grid_insert_col(info, c))
-        menu.add_command(label="Insert column right",
-                         command=lambda: self._grid_insert_col(info, c + 1))
-        menu.add_separator()
-        menu.add_command(
+        menu.add_cascade(label="Align cell", menu=align_menu)
+
+        rows_menu = _sub()
+        rows_menu.add_command(label="Insert row above",
+                              command=lambda: self._grid_insert_row(info, r))
+        rows_menu.add_command(
+            label="Insert row below",
+            command=lambda: self._grid_insert_row(info, r + 1))
+        rows_menu.add_command(
+            label="Delete row",
+            state=("normal" if info["data_rows"] > 1 else "disabled"),
+            command=lambda: self._grid_delete_row(info, r))
+        menu.add_cascade(label="Rows", menu=rows_menu)
+
+        cols_menu = _sub()
+        cols_menu.add_command(label="Insert column left",
+                              command=lambda: self._grid_insert_col(info, c))
+        cols_menu.add_command(
+            label="Insert column right",
+            command=lambda: self._grid_insert_col(info, c + 1))
+        cols_menu.add_command(label="Autofit column width",
+                              command=lambda: self._grid_autofit_col(info, c))
+        cols_menu.add_command(
             label="Unhide all columns",
             state=("normal" if info.get("hidden_cols") else "disabled"),
             command=lambda: self._grid_unhide_all(info))
-        menu.add_command(label="Autofit column width",
-                         command=lambda: self._grid_autofit_col(info, c))
-        menu.add_separator()
+        cols_menu.add_command(label="Delete column",
+                              command=lambda: self._grid_delete_col(info, c))
+        menu.add_cascade(label="Columns", menu=cols_menu)
+
         merged = cell["rs"] > 1 or cell["cs"] > 1
-        menu.add_command(label="Merge with cell to the left",
-                         state="normal" if c > 0 else "disabled",
-                         command=lambda: self._grid_set_marker(
-                             info, r, c, core_tables.MERGE_LEFT))
-        menu.add_command(label="Merge with cell above",
-                         state="normal" if r > 0 else "disabled",
-                         command=lambda: self._grid_set_marker(
-                             info, r, c, core_tables.MERGE_UP))
-        menu.add_command(label="Split merged cell",
-                         state="normal" if merged else "disabled",
-                         command=lambda: self._grid_split(info, r, c))
-        menu.add_separator()
-        menu.add_command(label="Delete row",
-                         state=("normal" if info["data_rows"] > 1
-                                else "disabled"),
-                         command=lambda: self._grid_delete_row(info, r))
-        menu.add_command(label="Delete column",
-                         command=lambda: self._grid_delete_col(info, c))
-        menu.add_command(label="Delete table",
-                         command=lambda: self._grid_delete_table(info))
-        menu.add_separator()
-        menu.add_command(label="Add a line above the table",
-                         command=lambda: self._grid_add_line_above(info))
+        merge_menu = _sub()
+        merge_menu.add_command(label="Merge with cell to the left",
+                               state="normal" if c > 0 else "disabled",
+                               command=lambda: self._grid_set_marker(
+                                   info, r, c, core_tables.MERGE_LEFT))
+        merge_menu.add_command(label="Merge with cell above",
+                               state="normal" if r > 0 else "disabled",
+                               command=lambda: self._grid_set_marker(
+                                   info, r, c, core_tables.MERGE_UP))
+        merge_menu.add_command(label="Split merged cell",
+                               state="normal" if merged else "disabled",
+                               command=lambda: self._grid_split(info, r, c))
+        menu.add_cascade(label="Merge", menu=merge_menu)
+
+        table_menu = _sub()
         for pos_label, pos in (("Table left on page", "left"),
                                ("Center table on page", "center"),
                                ("Table right on page", "right")):
-            menu.add_command(
+            table_menu.add_command(
                 label=pos_label,
                 command=lambda p=pos: self._grid_set_table_align(info, p))
+        table_menu.add_separator()
+        table_menu.add_command(
+            label="Add caption below…",
+            command=lambda: self._grid_add_caption(info))
+        table_menu.add_command(
+            label="Add a line above the table",
+            command=lambda: self._grid_add_line_above(info))
+        table_menu.add_separator()
+        table_menu.add_command(
+            label="Delete table",
+            command=lambda: self._grid_delete_table(info))
+        menu.add_cascade(label="Table", menu=table_menu)
         try:
             menu.tk_popup(event.x_root, event.y_root)
         finally:
@@ -4970,6 +5035,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         else:
             sep = ("|" + "|".join([" --- "] * ncols) + "|")
         lines = [lines[0], sep] + lines[1:]
+        clip_place = None
+        if raw == getattr(self, "_grid_cell_clip_text", None):
+            clip_place = getattr(self, "_grid_cell_clip_place", None)
         prefix = "" if not here.strip() else "\n"
         if not here.strip():
             # Pasting ONTO an empty line directly under a table would
@@ -4982,7 +5050,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 above = ""
             if core_tables.is_table_row(above):
                 prefix = "\n"
+        ins_line = int(b.index("insert").split(".")[0])
         b.insert("insert lineend", prefix + "\n".join(lines) + "\n")
+        if clip_place in ("center", "right"):
+            first_new = ins_line + (1 if prefix else 0)
+            for n in range(first_new, first_new + len(lines)):
+                b.tag_add(f"align_{clip_place}", f"{n}.0", f"{n}.end")
         self._body_follow_caret = True
         self._resync_list_tags()
         self._render_table_grids()
