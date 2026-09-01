@@ -3647,6 +3647,21 @@ app._on_body_return(_typesE.SimpleNamespace())
 for _ in range(6):
     app.update()
     app.update_idletasks()
+# The rebuilt grids' geometry settles over several event-loop passes
+# (embedded windows), and a fixed pump count can measure MID-settle
+# under desktop load -- the same race the menu-op check fixed. Settle
+# first; the pinned regression (a snapshot restore yanking the view
+# 0.16 and KEEPING it there) is a settled state, so settling never
+# rescues that mutant.
+_pvP = app.body_text.yview()[0]
+_stableP = 0
+_capP = time.time() + 1.5
+while _stableP < 5 and time.time() < _capP:
+    app.update()
+    time.sleep(0.02)
+    _nowP = app.body_text.yview()[0]
+    _stableP = _stableP + 1 if abs(_nowP - _pvP) < 0.001 else 0
+    _pvP = _nowP
 check('the push-down keeps a mid-note view on the same content',
       int(app.body_text.index('@0,0').split('.')[0]) == _topP + 1
       and abs(app.body_text.yview()[0] - _vwP) < 0.05)
@@ -5031,6 +5046,37 @@ app.update()
 app.ask_yes_no = _origAskYNX
 _fdX.asksaveasfilename = _origAskSaveX
 app._show_toast = _origToastX
+
+# ---- OLD TEETH, SHARPENED (auditul din 2026-08-31) ----
+# 1. Garda editorului din 0.32.x (continut scurt sta sus) nu era
+# pinuita de nimic: scoasa, totul ramanea verde. winfo_height e
+# stub-uit urias ca "incape" sa fie adevarat indiferent de fereastra
+# si de fontul platformei -- checkul tinteste PIN-ul, determinist.
+_ecT = app.editor_canvas
+_ecT.configure(scrollregion=(0, 0, 500, 5000))
+_ecT.yview_moveto(0.3)
+app.update()
+_dispT = _ecT.canvasy(0)
+_ecT.winfo_height = lambda: 10 ** 6
+app._sync_editor_scroll()
+del _ecT.winfo_height
+app.update()
+check('editor content that fits pins back to the top (the 0.32.x guard)',
+      _dispT > 300 and _ecT.canvasy(0) == 0)
+
+# 2. Autosave peste o nota disparuta: garda exista, dar mutantul fara
+# ea ATARNA suita in dialogul modal in loc sa pice un check numit.
+_errsT = []
+_origErrT = app.show_error
+app.show_error = lambda *a, **k: _errsT.append(a)
+_savedSelT = app.selected_note_id
+app.selected_note_id = 999999          # id care nu exista
+app._autosave_now()
+app._flush_autosave()
+app.show_error = _origErrT
+app.selected_note_id = _savedSelT
+check('autosave over a vanished note stays silent -- no Note missing dialog',
+      _errsT == [])
 
 check('notes file exists on disk', os.path.exists(disk_path))
 with open(disk_path) as f:
