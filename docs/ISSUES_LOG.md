@@ -781,3 +781,36 @@ the code years later while staying green the whole time. Reintroducing
 the original bug is the cheapest possible proof either way — and the
 fixes this log documents are a ready-made mutant catalogue. Audit a
 few, every so often; green should have to earn itself.
+
+### The accepted cost that nobody had accepted
+
+**Symptom:** colour a cell, drag a column edge to widen it, colour
+gone — every character style in the whole table, gone. Dragging a
+row's height quietly did the same to the one cell it padded.
+
+**Root cause:** the wholesale block rewrite behind the structural
+table operations says, in its own docstring, "character formatting
+does not survive these ops — the accepted cost of reshaping." The
+cost was accepted for operations that genuinely move text between
+cells. Column WIDTH is not one of them: width lives in the separator
+line's dashes, and not a single character of any data row changes —
+yet the resize path went through the same rewrite and paid the full
+price for nothing. The row-height drag was subtler: it edits cell
+values properly, one at a time, but the cell writer replaced the whole
+value, and a Tk delete takes every tag with it — so padding a styled
+cell with empty trailing lines re-created its text bare.
+
+**Fix:** the column-mechanics family (width, autofit, hide, unhide)
+writes ONLY the separator line — replaced in place when it exists,
+inserted under the header when it does not; every tag elsewhere stays
+untouched because nothing else is touched. The cell writer now diffs
+the old and new value and edits only the differing middle, so a pad
+appends its markers after the styled text instead of rewriting through
+it. The genuinely structural operations keep the wholesale rewrite and
+its documented cost.
+
+**Takeaway:** when a docstring says "accepted cost", check who is
+paying it and for what. A cost accepted for reshaping was being
+charged on a resize — the operation users do most, on the tables they
+styled most carefully. The fix was not making the rewrite cleverer;
+it was noticing which operations never needed it at all.

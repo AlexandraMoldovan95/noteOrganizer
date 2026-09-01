@@ -2159,11 +2159,22 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # as markdown's own <br>), and a Text can also SHOW the cell's
         # colours and styles while it is being edited -- the Entry went
         # plain black until commit.
+        # The editor wears the cell's own background, the same blend the
+        # drawing uses. Left at the theme surface, an empty highlighted
+        # cell went bare the moment typing started, and a filled one
+        # kept its colour only where text lines carried highlight tags
+        # -- the editor's empty area below them showed the theme
+        # through, "half the cell's colour gone" in the field report.
+        paint = self._grid_cell_paint(info, r, c)
+        surface = (inset_surface(self.colors) if r == 0
+                   else self.colors["card"])
+        editor_bg = (self._blend_hex(paint["bg"], surface, 0.45)
+                     if paint["bg"] else surface)
         entry = tk.Text(canvas, relief="flat", bd=0, wrap="none",
                         font=(base_font.cget("family"),
                               base_font.cget("size"),
                               "bold" if r == 0 else "normal"),
-                        bg=self.colors["card"], fg=self.colors["text"],
+                        bg=editor_bg, fg=self.colors["text"],
                         insertbackground=self.colors["text"],
                         highlightthickness=0, padx=2, pady=2, undo=True)
         entry.insert("1.0", cell["value"].replace(
@@ -2400,11 +2411,27 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if c >= len(bounds):
             return
         start, end = bounds[c]
-        if line[start:end] != value:
-            t_start = base + self._tk_col(line, start)
-            t_end = base + self._tk_col(line, end)
-            b.delete(f"{line_no}.{t_start}", f"{line_no}.{t_end}")
-            b.insert(f"{line_no}.{t_start}", value)
+        old = line[start:end]
+        if old != value:
+            # Edit only the differing middle. A whole-range delete took
+            # every tag on the cell with it -- a styled cell being padded
+            # with trailing <br>s by a row-height drag came back plain.
+            # The untouched prefix/suffix keep their tags; the markers a
+            # pad appends arrive unstyled, which is what they should be.
+            p = 0
+            while p < len(old) and p < len(value) and old[p] == value[p]:
+                p += 1
+            sfx = 0
+            while (sfx < len(old) - p and sfx < len(value) - p
+                   and old[len(old) - 1 - sfx] == value[len(value) - 1 - sfx]):
+                sfx += 1
+            t_a = base + self._tk_col(line, start + p)
+            t_b = base + self._tk_col(line, end - sfx)
+            if t_b > t_a:
+                b.delete(f"{line_no}.{t_a}", f"{line_no}.{t_b}")
+            mid = value[p:len(value) - sfx]
+            if mid:
+                b.insert(f"{line_no}.{t_a}", mid)
             self._align_table_block(first)
 
     def _editor_step(self, delta):
@@ -3067,6 +3094,34 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._schedule_autosave()
         return "break"
 
+    def _reassert_line_alignment(self, _event=None):
+        """Keep the caret's line wearing its own alignment while it is
+        typed into.
+
+        Tk justifies a line by the tag on its FIRST character, and a
+        typed character lands untagged -- so typing at the start of a
+        centred line yanked the whole line left, and the first
+        character typed into an EMPTY centred line lost the centring
+        outright. The line's newline keeps the tag through all of it
+        (which is why deleting the text snapped the cursor back to the
+        middle -- the report that exposed this). Re-dress the whole
+        line in whatever alignment its surviving characters remember.
+        """
+        b = self.body_text
+        try:
+            ln = int(b.index("insert").split(".")[0])
+            for align in ("center", "right"):
+                tag = f"align_{align}"
+                # Anywhere on the line counts, the newline included --
+                # typing at the START leaves the tag alive only on the
+                # middle of the line, and an empty centred line keeps
+                # it only on its newline.
+                if b.tag_nextrange(tag, f"{ln}.0", f"{ln}.end+1c"):
+                    b.tag_add(tag, f"{ln}.0", f"{ln}.end")
+                    break
+        except (tk.TclError, ValueError):
+            pass
+
     def _caret_out_of_hidden(self, _event=None):
         """Keep the caret off a rendered table's lines entirely.
 
@@ -3340,14 +3395,47 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         nrows = info["nrows"]
         self._grid_saved_view = self._capture_grid_views()
         self._teardown_table_grids()
-        rows, aligns, sep_cols, _sep_at = self._grid_block_parts(first, nrows)
+        rows, aligns, sep_cols, sep_at = self._grid_block_parts(first, nrows)
         if sep_cols is None:
             widths = core_tables.layout_widths(rows, aligns)
             sep_cols = [{"width": width, "align": None, "hidden": False}
                         for width in widths]
         mutate(sep_cols, rows, aligns)
-        self._grid_replace_block(first, nrows, rows, aligns, sep_cols)
+        # These ops change ONLY the separator's story (widths, hidden
+        # flags) -- no data row's text moves. The wholesale
+        # _grid_replace_block this used to go through re-formatted every
+        # row, and every character style in the table died for a column
+        # drag that touched none of them (field-tested: colour a cell,
+        # resize a column, colour gone). Writing just the separator line
+        # leaves every tag exactly where it is.
+        self._grid_write_separator(first, nrows, rows, sep_cols, sep_at)
         self._grid_after_op(first)
+
+    def _grid_write_separator(self, first, nrows, rows, sep_cols, sep_at):
+        """Write the block's separator line surgically: replace it in
+        place when it exists, insert one under the header when it does
+        not. Tags elsewhere in the block are never touched -- an insert
+        shifts them along, a same-line replace never reaches them (the
+        separator itself holds only mechanics, never user styling)."""
+        b = self.body_text
+        while len(sep_cols) < len(core_tables.column_widths(rows)):
+            sep_cols.append({"width": None, "align": None,
+                             "hidden": False})
+        sep_line = core_tables.CELL + core_tables.CELL.join(
+            " " + cell + " "
+            for cell in core_tables.make_separator(sep_cols)
+        ) + core_tables.CELL
+        table_align = self._grid_table_align_of(first)
+        if sep_at is not None:
+            line_no = first + sep_at
+            b.delete(f"{line_no}.0", f"{line_no}.end")
+            b.insert(f"{line_no}.0", sep_line)
+        else:
+            line_no = first + 1
+            b.insert(f"{first}.end", "\n" + sep_line)
+        if table_align in ("center", "right"):
+            b.tag_add(f"align_{table_align}",
+                      f"{line_no}.0", f"{line_no}.end")
 
     def _grid_set_col_width(self, info, c, width):
         def mutate(sep_cols, rows, aligns):
@@ -8730,6 +8818,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.body_text.bind("<KeyPress>", self._caret_out_of_hidden, add="+")
         self.body_text.bind("<Configure>", self._on_body_resize_grids, add="+")
         self.body_text.bind("<KeyRelease>", self._caret_out_of_hidden, add="+")
+        self.body_text.bind("<KeyRelease>", self._reassert_line_alignment,
+                            add="+")
         self.body_text.bind("<ButtonRelease-1>", self._caret_out_of_hidden, add="+")
         # Overrides Tk's default double-click "select word" so punctuation
         # like "." always breaks a word (and an empty line selects

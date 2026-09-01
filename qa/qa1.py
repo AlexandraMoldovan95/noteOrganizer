@@ -5047,6 +5047,119 @@ app.ask_yes_no = _origAskYNX
 _fdX.asksaveasfilename = _origAskSaveX
 app._show_toast = _origToastX
 
+# ---- FIELD ROUND: RESIZE KEEPS STYLES, ALIGNMENT SURVIVES TYPING,
+# ---- THE CELL EDITOR WEARS ITS CELL ----
+
+def _table_spans_F():
+    _st = app.capture_editor_state()
+    return sorted((sp['style'], sp.get('value', ''),
+                   _st['body'][sp['start']:sp['end']])
+                  for sp in _st['formatting'])
+
+
+def _styled_table_F():
+    set_body('| rosu | verde |' + chr(10) + '| --- | --- |' + chr(10)
+             + '| gros | plin |')
+    app._render_table_grids()
+    app.update()
+    _b = app.body_text
+    app._ensure_color_tag(_b, 'text_color', '#e63946')
+    app._ensure_color_tag(_b, 'highlight', '#ffff00')
+    _l1 = _b.get('1.0', '1.end')
+    _b.tag_add('text_color_e63946', '1.%d' % _l1.index('rosu'),
+               '1.%d' % (_l1.index('rosu') + 4))
+    _l3 = _b.get('3.0', '3.end')
+    _b.tag_add('highlight_ffff00', '3.%d' % _l3.index('plin'),
+               '3.%d' % (_l3.index('plin') + 4))
+    _b.tag_add('bold', '3.%d' % _l3.index('gros'),
+               '3.%d' % (_l3.index('gros') + 4))
+    app.update()
+    return app._grid_at_line(1)
+
+
+# 1. Dragul latimii de coloana nu mai arde stilurile intregului tabel.
+_infoF = _styled_table_F()
+_beforeF = _table_spans_F()
+app._grid_set_col_width(_infoF, 0, 20)
+app.update()
+check('a column-width drag keeps every style in the table',
+      len(_beforeF) == 3 and _table_spans_F() == _beforeF)
+
+# 2. Dragul inaltimii de rand pastreaza stilurile celulei-ancora.
+_infoF = _styled_table_F()
+_beforeF = _table_spans_F()
+app._grid_set_row_lines(_infoF, 1, 3)
+app.update()
+check('a row-height drag keeps the padded cell styled too',
+      len(_beforeF) == 3 and _table_spans_F() == _beforeF)
+
+# 3. Tastarea pe o linie centrata o lasa centrata -- prin bindingul
+# REAL de KeyRelease, nu prin apelul direct al handlerului.
+set_body('fig1')
+_b = app.body_text
+_b.tag_add('align_center', '1.0', '1.end')
+take_focus(_b)
+_b.mark_set('insert', '1.0')
+_b.event_generate('<KeyPress>', keysym='X')
+_b.insert('insert', 'X')
+_b.event_generate('<KeyRelease>', keysym='X')
+app.update()
+check('typing at the start of a centred line keeps it centred',
+      'align_center' in _b.tag_names('1.0'))
+_b.delete('1.0', 'end')
+_b.tag_add('align_center', '1.0', '1.end+1c')
+take_focus(_b)
+_b.mark_set('insert', '1.0')
+_b.event_generate('<KeyPress>', keysym='f')
+_b.insert('insert', 'f')
+_b.event_generate('<KeyRelease>', keysym='f')
+app.update()
+check('the first character typed into an empty centred line is centred',
+      'align_center' in _b.tag_names('1.0'))
+set_body('')
+
+# 4. Editorul de celula poarta fundalul celulei -- plin, gol, si in
+# timpul tastarii; o celula fara stil ramane pe suprafata temei.
+set_body('| plin | gol | simplu |' + chr(10) + '| --- | --- | --- |'
+         + chr(10) + '| text |  | alt |')
+app._render_table_grids()
+app.update()
+_infoF = app._grid_at_line(1)
+_b = app.body_text
+app._ensure_color_tag(_b, 'highlight', '#ffff00')
+_l3 = _b.get('3.0', '3.end')
+_b.tag_add('highlight_ffff00', '3.%d' % _l3.index('text'),
+           '3.%d' % (_l3.index('text') + 4))
+import re as _reF
+_pipesF = [m.start() for m in _reF.finditer(_reF.escape('|'), _l3)]
+_b.tag_add('highlight_ffff00', '3.%d' % (_pipesF[1] + 1),
+           '3.%d' % _pipesF[2])
+app._grid_restyle(_infoF)
+app.update()
+_wantF = app._blend_hex('#ffff00', app.colors['card'], 0.45)
+app._open_cell_editor(_infoF, 1, 0)
+_bgFull = str(app._cell_editor['entry'].cget('bg'))
+app._commit_cell_editor()
+app.update()
+_infoF = app._grid_at_line(1)
+app._open_cell_editor(_infoF, 1, 1)
+_edF = app._cell_editor['entry']
+_bgEmpty = str(_edF.cget('bg'))
+_edF.insert('insert', 'nou')
+app.update()
+_bgTyping = str(_edF.cget('bg'))
+app._commit_cell_editor()
+app.update()
+_infoF = app._grid_at_line(1)
+app._open_cell_editor(_infoF, 1, 2)
+_bgPlain = str(app._cell_editor['entry'].cget('bg'))
+app._commit_cell_editor()
+check('the cell editor wears a highlighted cell (filled, empty, mid-typing)',
+      _bgFull == _wantF and _bgEmpty == _wantF and _bgTyping == _wantF)
+check('and stays on the theme surface for an unstyled cell',
+      _bgPlain == app.colors['card'])
+set_body('')
+
 # ---- OLD TEETH, SHARPENED (auditul din 2026-08-31) ----
 # 1. Garda editorului din 0.32.x (continut scurt sta sus) nu era
 # pinuita de nimic: scoasa, totul ramanea verde. winfo_height e
