@@ -430,18 +430,28 @@ app.body_text.event_generate('<Control-b>')
 app.update()
 check('Ctrl+B toggles bold via keyboard, same handler as the toolbar button',
       ('bold' in app.body_text.tag_names(bold_start)) != was_bold)
+take_focus(app.body_text)
 app.body_text.event_generate('<Control-b>')  # toggle back off for the button test below
 app.update()
+# Belt for a lost synthetic key under desktop load: the button test
+# below MUST start from bold-off, or its toggle reads inverted and
+# poisons the compound checks after it (seen: one dropped Ctrl+B
+# cascaded into five downstream failures).
+app.body_text.tag_remove('bold', bold_start, bold_end)
+app.body_text.tag_remove('bold_italic', bold_start, bold_end)
 
 app.body_text.tag_remove('sel', '1.0', 'end')
 app.body_text.tag_add('sel', '1.0', '1.0+3c')
 app.update()
+take_focus(app.body_text)
 app.body_text.event_generate('<Control-u>')
 app.update()
 check('Ctrl+U toggles underline via keyboard', 'underline' in app.body_text.tag_names('1.0'))
+take_focus(app.body_text)
 app.body_text.event_generate('<Control-d>')
 app.update()
 check('Ctrl+D toggles strikethrough via keyboard', 'strike' in app.body_text.tag_names('1.0'))
+take_focus(app.body_text)
 app.body_text.event_generate('<Control-U>')  # uppercase (shift held) variant
 app.update()
 check('the uppercase Ctrl+Shift+U variant also fires the underline binding',
@@ -3121,8 +3131,15 @@ check('every selected cell takes the paint, not just the last',
 # slice of the body can prove the range is right.
 _hlF = [s for s in _spansF if 'highlight' in str(s)]
 _sliceF = (body()[_hlF[0]['start']:_hlF[0]['end']] if _hlF else '')
-check(f'and the saved highlight span covers exactly the cell text '
-      f'({_sliceF!r})', _sliceF == 'Nume')
+# The model changed on 2026-09-01: a CELL-level highlight covers the
+# whole pipe-to-pipe region (pads included), so everything later
+# inserted into the cell -- typed text, re-align pads, a checkbox --
+# lands inside the tag and inherits it. The span therefore holds the
+# text WITH its padding, never crossing the pipes.
+check(f'and the saved highlight span covers the whole cell region '
+      f'({_sliceF!r})',
+      'Nume' in _sliceF and '|' not in _sliceF
+      and _sliceF.strip() == 'Nume')
 app._grid_apply_style(_tF, (0, 0, 0, 1), 'highlight', None)
 app.update()
 _tF = app._grid_at_line(1)
@@ -5158,6 +5175,75 @@ check('the cell editor wears a highlighted cell (filled, empty, mid-typing)',
       _bgFull == _wantF and _bgEmpty == _wantF and _bgTyping == _wantF)
 check('and stays on the theme surface for an unstyled cell',
       _bgPlain == app.colors['card'])
+set_body('')
+
+# ---- FIELD ROUND 2: THE CELL-LEVEL HIGHLIGHT SURVIVES EVERYTHING ----
+def _fresh_G(cols=3):
+    set_body('|' + '|'.join(['     '] * cols) + '|' + chr(10)
+             + '|' + '|'.join([' --- '] * cols) + '|' + chr(10)
+             + '|' + '|'.join(['     '] * cols) + '|')
+    app._render_table_grids()
+    app.update()
+    return app._grid_at_line(1)
+
+
+# Lantul exact din raport: coloreaza celula goala -> scrie text ->
+# commit -> trage de coloana. Culoarea logic murea la commit si vizibil
+# la drag (prima reconstructie).
+_infoG = _fresh_G(3)
+app._grid_apply_style(_infoG, (1, 0, 1, 0), 'highlight', '#ffff00')
+app.update()
+app._open_cell_editor(_infoG, 1, 0)
+_edG = app._cell_editor['entry']
+_edG.delete('1.0', 'end')
+_edG.insert('1.0', 'text')
+app._commit_cell_editor()
+app.update()
+_infoG = app._grid_at_line(1)
+_bg1G = app._grid_cell_paint(_infoG, 1, 0)['bg']
+app._grid_set_col_width(_infoG, 0, 12)
+app.update()
+_infoG = app._grid_at_line(1)
+_bg2G = app._grid_cell_paint(_infoG, 1, 0)['bg']
+app._grid_set_alignment(_infoG, (1, 0, 1, 0), 'center')
+app.update()
+_infoG = app._grid_at_line(1)
+_bg3G = app._grid_cell_paint(_infoG, 1, 0)['bg']
+check('typing into a coloured cell keeps its colour through commit, '
+      'drag and centring',
+      _bg1G == _bg2G == _bg3G == '#ffff00')
+
+# Checkboxul prin calea popupului (fill) pe o celula colorata.
+_infoG = _fresh_G(3)
+app._grid_apply_style(_infoG, (1, 1, 1, 1), 'highlight', '#c8f7c5')
+app.update()
+app._grid_fill_selection({'info': _infoG, 'box': (1, 1, 1, 1)},
+                         core_tables.CHECKBOX_EMPTY,
+                         align=core_tables.ALIGN_CENTER)
+app.update()
+_infoG = app._grid_at_line(1)
+check('a checkbox dropped into a coloured cell keeps the cell coloured',
+      app._grid_cell_paint(_infoG, 1, 1)['bg'] == '#c8f7c5'
+      and _infoG['cells'][(1, 1)]['value'] == core_tables.CHECKBOX_EMPTY)
+
+# Duplicarea tabelului: copy celule -> click sub tabel -> paste.
+_infoG = _fresh_G(2)
+app._write_cell(_infoG, 1, 1, 'val')
+app.update()
+_infoG = app._grid_at_line(1)
+app._grid_copy_selection({'info': _infoG, 'box': (0, 0, 1, 1)})
+app._grid_clear_selection()
+app.body_text.mark_set('insert', '4.0')
+app.update()
+_okG = app._paste_tsv_as_table()
+app.update()
+_bodyG = app.body_text.get('1.0', 'end-1c')
+_blocksG = core_tables.find_blocks(_bodyG)
+check('pasting copied cells below the table makes a SECOND table',
+      _okG and len(_blocksG) == 2)
+_secondG = _bodyG.split(chr(10))[_blocksG[1][0]:_blocksG[1][1] + 1]     if len(_blocksG) == 2 else []
+check('and the two tables stay separate blocks with the values intact',
+      len(_blocksG) == 2 and any('val' in ln for ln in _secondG))
 set_body('')
 
 # ---- OLD TEETH, SHARPENED (auditul din 2026-08-31) ----

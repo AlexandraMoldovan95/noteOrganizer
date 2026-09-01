@@ -1857,6 +1857,26 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 b.tag_add(self._ensure_color_tag(b, "highlight", st["bg"]),
                           cs, ce)
             i = j
+        self._grid_reassert_cell_highlight(info, r, c)
+
+    def _grid_reassert_cell_highlight(self, info, r, c):
+        """A CELL-level highlight lives pipe-to-pipe; keep it whole.
+
+        The style re-lay above clears the value range and re-applies what
+        the editor sampled -- which, for text typed into an empty
+        highlighted cell, is nothing. The pads still carry the cell's
+        highlight; re-dress the full region so the new text sits inside
+        it instead of punching a hole that surfaces at the next rebuild
+        ("type in a coloured cell, drag the column, colour gone")."""
+        span = self._grid_cell_text_range(info, r, c, pad_ok=True, full=True)
+        if not span:
+            return
+        b = self.body_text
+        for tag in b.tag_names():
+            if (tag.startswith("highlight_")
+                    and b.tag_nextrange(tag, span[0], span[1])):
+                b.tag_add(tag, span[0], span[1])
+                return
 
     def _editor_apply_style(self, kind, value=None):
         """A toolbar action while the cell editor is open styles the
@@ -3657,6 +3677,16 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
     def _grid_fill_selection(self, sel, value, align=None):
         info = sel["info"]
         r0, c0, r1, c1 = sel["box"]
+        # The wholesale rewrite below takes every tag with it -- fair for
+        # the text styles a fill overwrites anyway, but a CELL-level
+        # highlight describes the cell, not the text, and inserting a
+        # checkbox into a coloured cell stripped the colour. Remember
+        # each cell's highlight before, re-dress the cells after.
+        cell_bgs = {}
+        for (r, c) in list(info.get("cells", {})):
+            bg = self._grid_cell_paint(info, r, c).get("bg")
+            if bg:
+                cell_bgs[(r, c)] = bg
         context = self._grid_op_context(info)
         if not context:
             return
@@ -3671,6 +3701,17 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                         aligns[r][c] = align
         self._grid_replace_block(first, nrows, rows, aligns, sep_cols)
         self._grid_after_op(first)
+        if cell_bgs:
+            fresh = self._grid_at_line(first)
+            if fresh is not None:
+                for (r, c), bg in cell_bgs.items():
+                    span = self._grid_cell_text_range(
+                        fresh, r, c, pad_ok=True, full=True)
+                    if span:
+                        tag = self._ensure_color_tag(
+                            self.body_text, "highlight", bg)
+                        self.body_text.tag_add(tag, span[0], span[1])
+                self._grid_restyle(fresh)
 
     def _grid_toggle_checkbox(self, info, r, c):
         """One click on a checkbox cell flips it. The colour spans on the
@@ -4060,12 +4101,22 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self.body_text.get(f"{line_no}.0", f"{line_no}.end"))
         return aligns[c] if c < len(aligns) else core_tables.ALIGN_LEFT
 
-    def _grid_cell_text_range(self, info, r, c, pad_ok=False):
+    def _grid_cell_text_range(self, info, r, c, pad_ok=False, full=False):
         """The body-text indices of one cell's content, or None when the
         cell is empty -- padding never carries formatting, EXCEPT that a
         highlight (pad_ok) may sit on an empty cell's padding: it is the
         only style with something to show on nothing, and text typed into
-        the cell later lands inside the tagged region and inherits it."""
+        the cell later lands inside the tagged region and inherits it.
+
+        ``full`` widens the range to the whole pipe-to-pipe region even
+        when the cell HOLDS text. A cell-level highlight lives there so
+        that everything later inserted inside the cell -- typed text on
+        commit, the pad spaces a re-align shuffles, a checkbox marker --
+        lands strictly INSIDE the tagged region and inherits it. Applied
+        to the text alone, the highlight died the moment a commit wrote
+        new characters beside it (logically at once, visibly at the next
+        rebuild -- 'drag the column and the colour is gone' in the field
+        report)."""
         line_no = self._grid_line_of_row(info, r)
         first = self._grid_first_line(info)
         if line_no is None or first is None:
@@ -4076,8 +4127,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if c >= len(bounds):
             return None
         start, end = bounds[c]
-        if start >= end:
-            if not pad_ok:
+        if full or start >= end:
+            if not (pad_ok or full):
                 return None
             pipes = core_tables.pipe_positions(line)
             if c + 1 >= len(pipes) or pipes[c] + 1 >= pipes[c + 1]:
@@ -4121,7 +4172,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         for r in range(r0, r1 + 1):
             for c in range(c0, c1 + 1):
                 span = self._grid_cell_text_range(
-                    info, r, c, pad_ok=(kind == "highlight"))
+                    info, r, c, pad_ok=(kind == "highlight"),
+                    full=(kind == "highlight"))
                 if span:
                     ranges.append(span)
         if not ranges:
@@ -4640,12 +4692,72 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 return "break"
         if self._paste_formatted():
             return "break"
+        if self._paste_tsv_as_table():
+            return "break"
         # Plain paste: Tk inserts the text after this returns, so the list
         # tags can only be brought back into step once that has happened.
         self._body_follow_caret = True
         self.after_idle(self._resync_list_tags)
         self.after_idle(self._render_table_grids)
         return None
+
+    def _paste_tsv_as_table(self, raw=None):
+        """Tab-separated clipboard text pasted into the body becomes a
+        real table.
+
+        This is what makes duplicating a table WORK: copying cells puts
+        tab-separated lines on the clipboard (what a spreadsheet reads),
+        and pasting that below the table used to fall through to the
+        plain-text path -- raw tabs on one line, stored <br> markers
+        showing as text, "nothing happens or <br> <br> appears" in the
+        field report. Same shape arrives from a spreadsheet copied as
+        plain text, so both now land as a grid. Single cells (no tab)
+        keep pasting as ordinary text.
+        """
+        if raw is None:
+            raw = clipboard.read_text()
+            if raw is None:
+                try:
+                    raw = self.body_text.clipboard_get()
+                except tk.TclError:
+                    return False
+        if not raw or "\t" not in raw:
+            return False
+        raw = raw.replace("\r\n", "\n").replace("\r", "\n")
+        b = self.body_text
+        try:
+            here = b.get("insert linestart", "insert lineend")
+        except tk.TclError:
+            return False
+        if core_tables.is_table_row(here):
+            # Inside a table, pasting cells is the grid's business (the
+            # cell-selection branch above); don't nest pipes into pipes.
+            return False
+        rows = [line.split("\t") for line in raw.strip("\n").split("\n")]
+        ncols = max(len(row) for row in rows)
+        rows = [row + [""] * (ncols - len(row)) for row in rows]
+        aligns = [[core_tables.ALIGN_LEFT] * ncols for _ in rows]
+        lines = core_tables.format_table(rows, aligns)
+        sep = ("|" + "|".join([" --- "] * ncols) + "|")
+        lines = [lines[0], sep] + lines[1:]
+        prefix = "" if not here.strip() else "\n"
+        if not here.strip():
+            # Pasting ONTO an empty line directly under a table would
+            # glue the new rows to that block and merge the two tables
+            # into one misshapen grid -- keep the empty line as the gap.
+            try:
+                ln = int(b.index("insert").split(".")[0])
+                above = b.get(f"{ln - 1}.0", f"{ln - 1}.end") if ln > 1 else ""
+            except (tk.TclError, ValueError):
+                above = ""
+            if core_tables.is_table_row(above):
+                prefix = "\n"
+        b.insert("insert lineend", prefix + "\n".join(lines) + "\n")
+        self._body_follow_caret = True
+        self._resync_list_tags()
+        self._render_table_grids()
+        self._schedule_autosave()
+        return True
 
     def _paste_plain(self, event=None):
         """Paste the clipboard's text with none of its formatting.
@@ -8820,6 +8932,15 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.body_text.bind("<KeyRelease>", self._caret_out_of_hidden, add="+")
         self.body_text.bind("<KeyRelease>", self._reassert_line_alignment,
                             add="+")
+        # KeyRelease alone re-centred the line one frame LATE -- the
+        # character appears left-justified for a blink, then snaps to the
+        # middle. An idle callback scheduled at KeyPress runs right after
+        # the class binding inserts the character and BEFORE Tk repaints,
+        # so the line never shows its uncentred moment.
+        self.body_text.bind(
+            "<KeyPress>",
+            lambda e: self.after_idle(self._reassert_line_alignment),
+            add="+")
         self.body_text.bind("<ButtonRelease-1>", self._caret_out_of_hidden, add="+")
         # Overrides Tk's default double-click "select word" so punctuation
         # like "." always breaks a word (and an empty line selects
