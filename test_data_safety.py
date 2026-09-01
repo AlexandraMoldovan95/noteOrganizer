@@ -561,6 +561,37 @@ check("and cleans up its .tmp too",
       not os.path.exists(_paths.DATA_FILE + ".tmp"))
 _storage.save_notes([])
 
+# ---- Purge deletes the files of what it purges ----
+# "Files that outlived the notes they belonged to" (ISSUES_LOG): the
+# startup purge is the ONE automatic permanent deletion, so it must not
+# be the one place that leaves orphaned attachment files behind. The
+# old-teeth audit (2026-08-31) found nothing pinned this -- removing
+# the deletion call left every suite green.
+import datetime as _dtT
+os.makedirs(_paths.ATTACHMENTS_DIR, exist_ok=True)
+_old_att = os.path.join(_paths.ATTACHMENTS_DIR, "teeth_old.bin")
+_new_att = os.path.join(_paths.ATTACHMENTS_DIR, "teeth_new.bin")
+with open(_old_att, "w") as _f:
+    _f.write("x")
+with open(_new_att, "w") as _f:
+    _f.write("x")
+_stampO = (_dtT.datetime.now()
+           - _dtT.timedelta(days=90)).strftime("%Y-%m-%d %H:%M:%S")
+_stampN = _dtT.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+_keptT, _nT = _storage.purge_expired_trash([
+    {"id": 1, "deleted_at": _stampO,
+     "attachments": [{"stored_as": "teeth_old.bin"}]},
+    {"id": 2, "deleted_at": _stampN,
+     "attachments": [{"stored_as": "teeth_new.bin"}]},
+])
+check("purge removes the expired entry and keeps the fresh one",
+      _nT == 1 and len(_keptT) == 1 and _keptT[0]["id"] == 2)
+check("purge permanently deletes the expired entry's attachment file",
+      not os.path.exists(_old_att))
+check("while the kept entry's file is untouched",
+      os.path.exists(_new_att))
+os.remove(_new_att)
+
 print()
 print(f"FAILURES: {fails if fails else 'none'}")
 
