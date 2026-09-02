@@ -144,7 +144,7 @@ _note = "Before\n" + "\n".join(
     tables.format_table([["Name", "Qty"], ["Milk", "2"]])) + "\nAfter"
 _out = note_to_html(_note)
 check(f"a table goes out as real markup ({_out[:60]!r})",
-      "<table><tr><td>Name</td><td>Qty</td></tr>"
+      "<table><tr><th>Name</th><th>Qty</th></tr>"
       "<tr><td>Milk</td><td>2</td></tr></table>" in _out)
 check("the text around it is unaffected",
       _out.startswith("<div>Before</div>") and _out.endswith("<div>After</div>"))
@@ -160,6 +160,59 @@ check(f"a table survives a round trip ({_back.splitlines()[1]!r})",
 check("and so does the formatting inside it",
       len(_back_spans) == 1
       and _back[_back_spans[0]["start"]:_back_spans[0]["end"]] == "Milk")
+
+# --- what the page shows is what the app shows ---------------------------
+# A hidden column (the ~ separator marker) stays hidden in the export;
+# the data itself never leaves the note's text, so unhiding brings it back.
+_hid = "\n".join(["| a | SECRET | c |",
+                  "| --- | ~ | --- |",
+                  "| 1 | ascuns | 3 |"])
+_hid_out = note_to_html(_hid)
+check("a hidden column stays hidden in the export",
+      "SECRET" not in _hid_out and "ascuns" not in _hid_out
+      and "<th>a</th><th>c</th>" in _hid_out)
+_span_hid = "\n".join(["| a | b | c |",
+                       "| --- | ~ | --- |",
+                       "| wide | < | < |"])
+check("a merge across a hidden column narrows to what shows",
+      '<td colspan="2">wide</td>' in note_to_html(_span_hid))
+
+# A checkbox leaves as the glyph the app draws, and the glyph comes back
+# as the checkbox -- brackets never reach Word, boxes always come home.
+# The app draws every checkbox centred in its cell, so the page does too.
+_cb = "\n".join(["| task | done |", "| --- | --- |", "| nu | [ ] |",
+                 "| da | [x] |"])
+_cb_out = note_to_html(_cb)
+check("checkboxes export as centred glyphs",
+      'text-align:center;">☐</td>' in _cb_out
+      and 'text-align:center;">☑</td>' in _cb_out
+      and "[x]" not in _cb_out)
+_cb_back, _, _ = html_to_note(_cb_out)
+check("and the glyphs come back as checkboxes",
+      "[ ]" in _cb_back and "[x]" in _cb_back and "☑" not in _cb_back)
+
+# The FILE export's borders live in its stylesheet; a CLIPBOARD fragment
+# travels alone, and Word paints a bare HTML table with no borders at
+# all -- a selectable phantom. inline_tables rides them on every tag.
+check("the file-export markup stays bare of inline borders",
+      "border:1px solid" not in _out)
+_clip_out = note_to_html(_note, inline_tables=True)
+check("the clipboard-flavoured markup carries its borders inline",
+      "border-collapse:collapse;" in _clip_out
+      and _clip_out.count("border:1px solid #999;") >= 4)
+
+# --- counting and searching see the writing, not the plumbing ------------
+_ct = tables.content_text("\n".join([
+    "doua vorbe",
+    "| Milk | 2 |",
+    "| --- | ~ |",
+    "| [x] | note<br>aici |",
+]))
+check("content_text keeps prose and cell words only",
+      "doua vorbe" in _ct and "Milk" in _ct and "note aici" in _ct)
+check("content_text drops pipes, dashes, markers and checkboxes",
+      "|" not in _ct and "---" not in _ct and "[x]" not in _ct
+      and "<br>" not in _ct)
 
 # --- the PDF reflow must not eat a table ---------------------------------
 # A table's line breaks are its rows, exactly as a list's are its items.

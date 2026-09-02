@@ -363,6 +363,12 @@ class _Reader(HTMLParser):
             cleaned = re.sub(r" *\n *", "\n", cleaned)
         else:
             cleaned = re.sub(r"[ \t\r\n]+", " ", data)
+        if self.cell_depth:
+            # The export draws a checkbox cell as its glyph; coming back,
+            # the glyph is the checkbox again. Only inside a cell -- the
+            # same glyph in prose is just a character someone typed.
+            cleaned = (cleaned.replace("☑", tables.CHECKBOX_DONE)
+                              .replace("☐", tables.CHECKBOX_EMPTY))
         if self._at_line_start():
             cleaned = cleaned.lstrip(" ")
         if cleaned.strip() or self._line_has_text:
@@ -518,15 +524,20 @@ def html_document(title, body_html):
         # its right edge; long cell content breaks rather than pushes.
         "table { border-collapse: collapse; margin: 0.5em 0; "
         "max-width: 100%; }\n"
-        "td { border: 1px solid #999; padding: 4px 10px; "
+        "th, td { border: 1px solid #999; padding: 4px 10px; "
         "overflow-wrap: anywhere; }\n"
+        # Browsers centre <th> by default; the app's headers are
+        # left like everything else, and a cell's own alignment
+        # still wins via its inline style.
+        "th { text-align: left; }\n"
         "</style>\n</head>\n<body>\n"
         f'<div style="font-size: 1.7em; font-weight: bold; '
         f'margin: 0 0 0.6em 0;">{safe_title}</div>\n'
         f"{body_html}\n</body>\n</html>\n")
 
 
-def note_to_html(text, formatting=None, paragraphs=None):
+def note_to_html(text, formatting=None, paragraphs=None,
+                 inline_tables=False):
     """Render a note as an HTML fragment other applications understand.
 
     List markers are taken back out of the text and expressed as real
@@ -543,13 +554,22 @@ def note_to_html(text, formatting=None, paragraphs=None):
     # block's matrix is resolved up front and looked up per line.
     merge_at = {}
     separator_lines = set()
+    hidden_at = {}
     for block_first, block_last in tables.find_blocks(text):
         block = lines[block_first:block_last + 1]
         sep_at = tables.separator_index(block)
+        hidden_cols = set()
         if sep_at is not None:
             # Mechanics, not data: the separator's dashes never reach the
             # markup a word processor sees.
             separator_lines.add(block_first + sep_at)
+            # A column the author hid is hidden in the export too: the
+            # page should show what the app shows. The data itself stays
+            # in the note -- unhide, and the next export carries it.
+            hidden_cols = {
+                i for i, col in enumerate(
+                    tables.parse_separator(block[sep_at]))
+                if col.get("hidden")}
         data_lines = [n for n in range(block_first, block_last + 1)
                       if n - block_first != sep_at]
         matrix = [tables.split_row(lines[n]) for n in data_lines]
@@ -558,6 +578,7 @@ def note_to_html(text, formatting=None, paragraphs=None):
             merge_at[n] = (
                 {c: m_spans[(ar, c)] for (ar, c) in m_spans if ar == r},
                 {c for (rr, c) in m_covered if rr == r})
+            hidden_at[n] = hidden_cols
 
     out, offset, open_lists, in_table = [], 0, [], False
     for number, line in enumerate(lines):
@@ -627,29 +648,49 @@ def note_to_html(text, formatting=None, paragraphs=None):
                 # (the UA sheet maps it to float:right), so float:none
                 # rides along to keep the browser on the margin path.
                 place = entry.get("align")
+                # A clipboard fragment travels without the document's
+                # stylesheet, and Word gives a bare HTML table no visible
+                # borders at all -- the pasted table was a selectable
+                # phantom. inline_tables rides the border on every tag.
+                base = "border-collapse:collapse;" if inline_tables else ""
                 if place == "center":
-                    t_style = ' align="center" style="margin:0.5em auto;"'
+                    t_style = f' align="center" style="{base}margin:0.5em auto;"'
                 elif place == "right":
-                    t_style = (' align="right" style="float:none; '
-                               'margin:0.5em 0 0.5em auto;"')
+                    t_style = (f' align="right" style="float:none; '
+                               f'{base}margin:0.5em 0 0.5em auto;"')
+                elif base:
+                    t_style = f' style="{base}"'
                 else:
                     t_style = ""
                 out.append(f"<table{t_style}>")
                 in_table = True
+                header_row = True
+            else:
+                header_row = False
             row_spans, row_covered = merge_at.get(number, ({}, set()))
+            row_hidden = hidden_at.get(number, set())
             row_aligns = tables.cell_alignments(line)
             cells = []
             for c, (start, end) in enumerate(row):
-                if c in row_covered:
+                if c in row_covered or c in row_hidden:
                     continue
                 rs, cs = row_spans.get(c, (1, 1))
+                # A merge reaching across a hidden column narrows by the
+                # columns the page will not show.
+                cs -= len([h for h in row_hidden if c < h < c + cs])
                 attr = ""
                 if cs > 1:
                     attr += f' colspan="{cs}"'
                 if rs > 1:
                     attr += f' rowspan="{rs}"'
+                state = tables.checkbox_state(line[start:end])
                 styles = []
-                if c < len(row_aligns) and row_aligns[c] != tables.ALIGN_LEFT:
+                if state is not None:
+                    # The app draws a checkbox centred in its cell no
+                    # matter what the padding says -- the page does too,
+                    # or a left-padded box sits left only once exported.
+                    styles.append("text-align:center;")
+                elif c < len(row_aligns) and row_aligns[c] != tables.ALIGN_LEFT:
                     styles.append(f"text-align:{row_aligns[c]};")
                 # A highlight covering the whole cell colours the <td>
                 # itself, the way the app draws it. Left as a <span>, an
@@ -665,11 +706,32 @@ def note_to_html(text, formatting=None, paragraphs=None):
                             styles.append(
                                 f"background-color:{sp['value']};")
                             break
+                if inline_tables:
+                    styles.append("border:1px solid #999;padding:4px 10px;")
                 if styles:
                     attr += f' style="{"".join(styles)}"'
-                cells.append(f"<td{attr}>"
-                             f"{_cell_html(line, spans, offset, start, end)}"
-                             f"</td>")
+                # The FIRST row is the header the app draws bold on
+                # its own surface -- exported as <th>, so Word and the
+                # browsers bold it too instead of flattening it into an
+                # ordinary row.
+                tag_name = "th" if header_row else "td"
+                # A checkbox cell leaves as the glyph the app draws, not
+                # as its bracket markers; its colour (a text_color span
+                # riding the markers) comes along. The import maps the
+                # glyphs back, so a round trip keeps a real checkbox.
+                if state is not None:
+                    glyph = "☑" if state else "☐"
+                    for sp in spans:
+                        if (sp["style"] == "text_color"
+                                and sp["start"] <= offset + start
+                                and sp["end"] >= offset + end):
+                            glyph = (f'<span style="color:{sp["value"]};">'
+                                     f"{glyph}</span>")
+                            break
+                    inner = glyph
+                else:
+                    inner = _cell_html(line, spans, offset, start, end)
+                cells.append(f"<{tag_name}{attr}>{inner}</{tag_name}>")
             out.append(f"<tr>{''.join(cells)}</tr>")
         else:
             align = entry.get("align")

@@ -19,6 +19,7 @@ from html import escape
 import calendar as cal_module
 import re
 import math
+import functools
 from datetime import datetime, date as date_cls, timedelta
 
 try:
@@ -402,6 +403,56 @@ from noteorganizer.core.themes import (
 )
 
 
+def _undo_atom(method):
+    """One table operation = ONE undo unit.
+
+    A commit, a resize, a fill are each a burst of small inserts and
+    deletes, and Tk's autoseparators made every one its own Ctrl+Z step:
+    undoing a cell edit could stop halfway -- the old value gone, the
+    padding collapsed. The wrapper opens a unit, runs the operation,
+    closes the unit; nested wrapped calls keep the outermost unit.
+    """
+    @functools.wraps(method)
+    def wrapped(self, *args, **kwargs):
+        self._undo_atom_begin()
+        try:
+            return method(self, *args, **kwargs)
+        finally:
+            self._undo_atom_end()
+    return wrapped
+
+
+def _undo_hidden(method):
+    """The method's edits never reach the undo stack.
+
+    Rebuilding the drawn grids deletes and re-creates embedded window
+    characters; recorded, they turned every second Ctrl+Z into "undo the
+    redraw" instead of "undo my edit", stepping through phantom windows.
+    The pipe text is the truth and stays recorded; the drawing is not an
+    edit. Tk keeps the existing stack across the undo=False window --
+    verified against a live Text widget, not assumed.
+    """
+    @functools.wraps(method)
+    def wrapped(self, *args, **kwargs):
+        depth = getattr(self, "_undo_hidden_depth", 0)
+        self._undo_hidden_depth = depth + 1
+        prev = None
+        if depth == 0 and hasattr(self, "body_text"):
+            try:
+                prev = self.body_text.cget("undo")
+                self.body_text.configure(undo=False)
+            except tk.TclError:
+                prev = None
+        try:
+            return method(self, *args, **kwargs)
+        finally:
+            self._undo_hidden_depth = depth
+            if depth == 0 and prev is not None:
+                try:
+                    self.body_text.configure(undo=prev)
+                except tk.TclError:
+                    pass
+    return wrapped
 
 
 
@@ -1273,6 +1324,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             last += 1
         return first, last
 
+    @_undo_atom
     def _align_table_block(self, line_no):
         """Line the columns of one table up again.
 
@@ -1396,6 +1448,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         """1 when a grid window occupies column 0 of this line, else 0."""
         return 1 if self._grid_at_line(line_no) is not None else 0
 
+    @_undo_hidden
     def _teardown_table_grids(self):
         for info in getattr(self, "_table_grids", []):
             # Deleting the window's character is what actually removes it
@@ -1424,6 +1477,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         except tk.TclError:
             pass
 
+    @_undo_hidden
     def _render_table_grids(self):
         """Draw every table in the note as a grid of real cells.
 
@@ -1448,6 +1502,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # leaves its snapshot for this render to honour.
         saved = getattr(self, "_grid_saved_view", None)
         self._grid_saved_view = None
+        explicit_capture = saved is not None
         if saved is not None:
             restore_view, restore_body, restore_x = saved
         else:
@@ -1487,8 +1542,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # fraction restored against those estimates lands somewhere else
         # once geometry settles -- measured drifting 0.316 to 0.164.
         if restore_body is not None or restore_view is not None:
-            self.after_idle(lambda page=restore_view, body=restore_body:
-                            self._restore_views_idle(page, body))
+            self.after_idle(lambda page=restore_view, body=restore_body,
+                            expl=explicit_capture:
+                            self._restore_views_idle(page, body, expl))
 
     def _grid_fonts(self):
         key = (self.editor_font_family, self.editor_font_size)
@@ -1857,6 +1913,26 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 b.tag_add(self._ensure_color_tag(b, "highlight", st["bg"]),
                           cs, ce)
             i = j
+        self._grid_reassert_cell_highlight(info, r, c)
+
+    def _grid_reassert_cell_highlight(self, info, r, c):
+        """A CELL-level highlight lives pipe-to-pipe; keep it whole.
+
+        The style re-lay above clears the value range and re-applies what
+        the editor sampled -- which, for text typed into an empty
+        highlighted cell, is nothing. The pads still carry the cell's
+        highlight; re-dress the full region so the new text sits inside
+        it instead of punching a hole that surfaces at the next rebuild
+        ("type in a coloured cell, drag the column, colour gone")."""
+        span = self._grid_cell_text_range(info, r, c, pad_ok=True, full=True)
+        if not span:
+            return
+        b = self.body_text
+        for tag in b.tag_names():
+            if (tag.startswith("highlight_")
+                    and b.tag_nextrange(tag, span[0], span[1])):
+                b.tag_add(tag, span[0], span[1])
+                return
 
     def _editor_apply_style(self, kind, value=None):
         """A toolbar action while the cell editor is open styles the
@@ -2087,6 +2163,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 return r - 1
         return None
 
+    @_undo_atom
     def _grid_set_row_lines(self, info, r, lines):
         """One row's height, as its line count. Growing pads the row's
         tallest cell with empty <br> lines; shrinking trims trailing
@@ -2159,11 +2236,22 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # as markdown's own <br>), and a Text can also SHOW the cell's
         # colours and styles while it is being edited -- the Entry went
         # plain black until commit.
+        # The editor wears the cell's own background, the same blend the
+        # drawing uses. Left at the theme surface, an empty highlighted
+        # cell went bare the moment typing started, and a filled one
+        # kept its colour only where text lines carried highlight tags
+        # -- the editor's empty area below them showed the theme
+        # through, "half the cell's colour gone" in the field report.
+        paint = self._grid_cell_paint(info, r, c)
+        surface = (inset_surface(self.colors) if r == 0
+                   else self.colors["card"])
+        editor_bg = (self._blend_hex(paint["bg"], surface, 0.45)
+                     if paint["bg"] else surface)
         entry = tk.Text(canvas, relief="flat", bd=0, wrap="none",
                         font=(base_font.cget("family"),
                               base_font.cget("size"),
                               "bold" if r == 0 else "normal"),
-                        bg=self.colors["card"], fg=self.colors["text"],
+                        bg=editor_bg, fg=self.colors["text"],
                         insertbackground=self.colors["text"],
                         highlightthickness=0, padx=2, pady=2, undo=True)
         entry.insert("1.0", cell["value"].replace(
@@ -2273,6 +2361,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # the rebuild waits for this moment so it never happens under an
         # editor still open on the grid.
         if editor["info"].pop("stale", False):
+            # The commit promises the view stays where the user was --
+            # capture explicitly so the restore holds in force through
+            # the late window-mapping (the double-click jump's root).
+            self._grid_saved_view = self._capture_grid_views()
             self._render_table_grids()
 
     def _cancel_cell_editor(self):
@@ -2315,6 +2407,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             pass
         self._commit_cell_editor()
 
+    @_undo_atom
     def _commit_cell_editor(self, close=True):
         """The editor's value reaches the hidden text, then the drawing.
 
@@ -2400,11 +2493,27 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if c >= len(bounds):
             return
         start, end = bounds[c]
-        if line[start:end] != value:
-            t_start = base + self._tk_col(line, start)
-            t_end = base + self._tk_col(line, end)
-            b.delete(f"{line_no}.{t_start}", f"{line_no}.{t_end}")
-            b.insert(f"{line_no}.{t_start}", value)
+        old = line[start:end]
+        if old != value:
+            # Edit only the differing middle. A whole-range delete took
+            # every tag on the cell with it -- a styled cell being padded
+            # with trailing <br>s by a row-height drag came back plain.
+            # The untouched prefix/suffix keep their tags; the markers a
+            # pad appends arrive unstyled, which is what they should be.
+            p = 0
+            while p < len(old) and p < len(value) and old[p] == value[p]:
+                p += 1
+            sfx = 0
+            while (sfx < len(old) - p and sfx < len(value) - p
+                   and old[len(old) - 1 - sfx] == value[len(value) - 1 - sfx]):
+                sfx += 1
+            t_a = base + self._tk_col(line, start + p)
+            t_b = base + self._tk_col(line, end - sfx)
+            if t_b > t_a:
+                b.delete(f"{line_no}.{t_a}", f"{line_no}.{t_b}")
+            mid = value[p:len(value) - sfx]
+            if mid:
+                b.insert(f"{line_no}.{t_a}", mid)
             self._align_table_block(first)
 
     def _editor_step(self, delta):
@@ -2555,6 +2664,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         leaping table to table while the tests, calling the method
         directly, stayed green.) If the box's content fits, the page
         scrolls instead, so the buttons below stay reachable."""
+        # A deliberate wheel move beats a grid rebuild's pending
+        # view restore -- the user outranks the machinery here just
+        # as on the note list.
+        self._grid_view_restore = None
         try:
             first, last = text_widget.yview()
         except (tk.TclError, ValueError):
@@ -2836,6 +2949,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         return "break"
 
     def _grid_drag_autoscroll(self, info):
+        self._grid_view_restore = None
         """While a cell drag runs, the view follows the pointer: the
         grid pans sideways past its own viewport, and the NOTE scrolls
         when the pointer crosses the editor's top or bottom edge -- so a
@@ -3003,7 +3117,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         except tk.TclError:
             pass
 
-    def _restore_views_idle(self, page, body):
+    def _restore_views_idle(self, page, body, explicit=False):
         # After a paste the right view is wherever the caret ended up --
         # the end of what was just pasted -- not the fraction captured
         # before the note grew. A plain see() from the paste handler ran
@@ -3012,17 +3126,72 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         follow = getattr(self, "_body_follow_caret", False)
         self._body_follow_caret = False
         if follow:
+            self._grid_view_restore = None
             try:
                 self.body_text.see("insert")
             except tk.TclError:
                 pass
-        elif body is not None:
+        elif body is not None or page is not None:
+            if body is not None:
+                try:
+                    self.body_text.yview_moveto(body)
+                except tk.TclError:
+                    pass
+            if page is not None:
+                self._restore_editor_view(page)
+            # One idle-time application is not enough for the ops that
+            # PROMISE the view stays put (the op-context family and the
+            # editor's commit -- the ones that capture the view
+            # explicitly before tearing grids down): the fresh grid
+            # windows can map AFTER this runs, the Text's estimates
+            # settle late, and the fraction lands at the top of the
+            # table once they do -- "double-click near the table and
+            # the scroll jumps to its start". Same cure as the note
+            # list: the target stays in force briefly, on timers.
+            # AMBIENT renders (a push-down, an inserted table) keep the
+            # single application: their content legitimately moves, and
+            # re-pinning a stale fraction is exactly the yank the
+            # push-down fix removed.
+            if explicit:
+                self._grid_view_restore = {
+                    "page": page, "body": body,
+                    "until": time.monotonic() + 0.5}
+                for delay in (60, 160, 360):
+                    self.after(delay, self._reapply_grid_view_restore)
+            else:
+                self._grid_view_restore = None
+        if page is None and body is None and not follow:
+            self._grid_view_restore = None
+
+    def _editor_scrollbar_moved(self, *args):
+        self._grid_view_restore = None
+        try:
+            self.editor_canvas.yview(*args)
+        except tk.TclError:
+            pass
+
+    def _body_scrollbar_moved(self, *args):
+        self._grid_view_restore = None
+        try:
+            self.body_text.yview(*args)
+        except tk.TclError:
+            pass
+
+    def _reapply_grid_view_restore(self):
+        """One timed beat of a still-in-force grid-rebuild restore."""
+        pend = getattr(self, "_grid_view_restore", None)
+        if not pend or not self._still_alive():
+            return
+        if time.monotonic() > pend["until"]:
+            self._grid_view_restore = None
+            return
+        if pend["body"] is not None:
             try:
-                self.body_text.yview_moveto(body)
+                self.body_text.yview_moveto(pend["body"])
             except tk.TclError:
                 pass
-        if page is not None:
-            self._restore_editor_view(page)
+        if pend["page"] is not None:
+            self._restore_editor_view(pend["page"])
 
     def _grid_click(self, info, event):
         canvas = info["canvas"]
@@ -3041,6 +3210,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         """
         return self._commit_cell_editor(close=False)
 
+    @_undo_atom
     def _grid_add_row(self, info):
         """Tab at the last cell: make somewhere to go, as the text path does."""
         first = self._grid_first_line(info)
@@ -3066,6 +3236,72 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     break
         self._schedule_autosave()
         return "break"
+
+    def _extend_word_styles_on_typing(self, event=None):
+        """Letters glued onto a styled word wear the word's styles.
+
+        Tk extends a tag over an inserted character only when BOTH its
+        neighbours carry it -- so typing at the END of a coloured word
+        produced bare letters ("the new letters don't get the colour").
+        The rule follows the word boundary the field report asked for:
+        a non-space character typed directly after a styled non-space
+        character inherits that character's colour, highlight and font
+        styles; type a space first and the styles stay behind.
+        """
+        b = self.body_text
+        try:
+            typed = b.index("insert-1c")
+            prev = b.index("insert-2c")
+            if b.compare(prev, ">=", typed):
+                return
+            # The characters come from the BUFFER, not the event: a
+            # synthetic KeyRelease carries no char at all, and reading
+            # what actually sits left of the caret is true for real
+            # typing, IME input and tests alike.
+            typed_ch = b.get(typed)
+            if not typed_ch.strip():
+                return
+            prev_ch = b.get(prev)
+            if not prev_ch.strip():
+                return
+            carry = [t for t in b.tag_names(prev)
+                     if t in ("bold", "italic", "bold_italic",
+                              "underline", "strike")
+                     or t.startswith("text_color_")
+                     or t.startswith("highlight_")]
+            for tag in carry:
+                if tag not in b.tag_names(typed):
+                    b.tag_add(tag, typed, "insert")
+        except tk.TclError:
+            pass
+
+    def _reassert_line_alignment(self, _event=None):
+        """Keep the caret's line wearing its own alignment while it is
+        typed into.
+
+        Tk justifies a line by the tag on its FIRST character, and a
+        typed character lands untagged -- so typing at the start of a
+        centred line yanked the whole line left, and the first
+        character typed into an EMPTY centred line lost the centring
+        outright. The line's newline keeps the tag through all of it
+        (which is why deleting the text snapped the cursor back to the
+        middle -- the report that exposed this). Re-dress the whole
+        line in whatever alignment its surviving characters remember.
+        """
+        b = self.body_text
+        try:
+            ln = int(b.index("insert").split(".")[0])
+            for align in ("center", "right"):
+                tag = f"align_{align}"
+                # Anywhere on the line counts, the newline included --
+                # typing at the START leaves the tag alive only on the
+                # middle of the line, and an empty centred line keeps
+                # it only on its newline.
+                if b.tag_nextrange(tag, f"{ln}.0", f"{ln}.end+1c"):
+                    b.tag_add(tag, f"{ln}.0", f"{ln}.end")
+                    break
+        except (tk.TclError, ValueError):
+            pass
 
     def _caret_out_of_hidden(self, _event=None):
         """Keep the caret off a rendered table's lines entirely.
@@ -3208,6 +3444,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     rows[r][c] = ""
         return rows
 
+    @_undo_atom
     def _grid_insert_row(self, info, at):
         context = self._grid_op_context(info)
         if not context:
@@ -3225,6 +3462,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self.body_text.insert(f"{first + data_off[at]}.0", blank + "\n")
         self._grid_after_op(first)
 
+    @_undo_atom
     def _grid_insert_col(self, info, at):
         context = self._grid_op_context(info)
         if not context:
@@ -3242,6 +3480,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._grid_replace_block(first, nrows, rows, aligns, sep_cols)
         self._grid_after_op(first)
 
+    @_undo_atom
     def _grid_delete_row(self, info, r):
         context = self._grid_op_context(info)
         if not context:
@@ -3260,6 +3499,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._grid_replace_block(first, nrows, rows, aligns, sep_cols)
         self._grid_after_op(first)
 
+    @_undo_atom
     def _grid_delete_col(self, info, c):
         """At two columns, deleting empties the chosen column instead.
 
@@ -3309,6 +3549,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._grid_replace_block(first, nrows, rows, aligns, sep_cols)
         self._grid_after_op(first)
 
+    @_undo_atom
     def _grid_split(self, info, r, c):
         context = self._grid_op_context(info)
         if not context:
@@ -3340,15 +3581,49 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         nrows = info["nrows"]
         self._grid_saved_view = self._capture_grid_views()
         self._teardown_table_grids()
-        rows, aligns, sep_cols, _sep_at = self._grid_block_parts(first, nrows)
+        rows, aligns, sep_cols, sep_at = self._grid_block_parts(first, nrows)
         if sep_cols is None:
             widths = core_tables.layout_widths(rows, aligns)
             sep_cols = [{"width": width, "align": None, "hidden": False}
                         for width in widths]
         mutate(sep_cols, rows, aligns)
-        self._grid_replace_block(first, nrows, rows, aligns, sep_cols)
+        # These ops change ONLY the separator's story (widths, hidden
+        # flags) -- no data row's text moves. The wholesale
+        # _grid_replace_block this used to go through re-formatted every
+        # row, and every character style in the table died for a column
+        # drag that touched none of them (field-tested: colour a cell,
+        # resize a column, colour gone). Writing just the separator line
+        # leaves every tag exactly where it is.
+        self._grid_write_separator(first, nrows, rows, sep_cols, sep_at)
         self._grid_after_op(first)
 
+    def _grid_write_separator(self, first, nrows, rows, sep_cols, sep_at):
+        """Write the block's separator line surgically: replace it in
+        place when it exists, insert one under the header when it does
+        not. Tags elsewhere in the block are never touched -- an insert
+        shifts them along, a same-line replace never reaches them (the
+        separator itself holds only mechanics, never user styling)."""
+        b = self.body_text
+        while len(sep_cols) < len(core_tables.column_widths(rows)):
+            sep_cols.append({"width": None, "align": None,
+                             "hidden": False})
+        sep_line = core_tables.CELL + core_tables.CELL.join(
+            " " + cell + " "
+            for cell in core_tables.make_separator(sep_cols)
+        ) + core_tables.CELL
+        table_align = self._grid_table_align_of(first)
+        if sep_at is not None:
+            line_no = first + sep_at
+            b.delete(f"{line_no}.0", f"{line_no}.end")
+            b.insert(f"{line_no}.0", sep_line)
+        else:
+            line_no = first + 1
+            b.insert(f"{first}.end", "\n" + sep_line)
+        if table_align in ("center", "right"):
+            b.tag_add(f"align_{table_align}",
+                      f"{line_no}.0", f"{line_no}.end")
+
+    @_undo_atom
     def _grid_set_col_width(self, info, c, width):
         def mutate(sep_cols, rows, aligns):
             if c < len(sep_cols):
@@ -3356,6 +3631,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 sep_cols[c]["hidden"] = False
         self._grid_column_mechanics(info, mutate)
 
+    @_undo_atom
     def _grid_autofit_col(self, info, c):
         def mutate(sep_cols, rows, aligns):
             widths = core_tables.layout_widths(rows, aligns)
@@ -3364,12 +3640,28 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 sep_cols[c]["hidden"] = False
         self._grid_column_mechanics(info, mutate)
 
+    @_undo_atom
+    def _grid_autofit_cols(self, info, c0, c1):
+        """Autofit every column a selection touches, in ONE pass -- the
+        per-column call exists on the single-cell menu, and running it
+        once per selected column would tear the grid down that many
+        times for one gesture."""
+        def mutate(sep_cols, rows, aligns):
+            widths = core_tables.layout_widths(rows, aligns)
+            for c in range(c0, min(c1 + 1, len(sep_cols))):
+                if c < len(widths):
+                    sep_cols[c]["width"] = widths[c]
+                    sep_cols[c]["hidden"] = False
+        self._grid_column_mechanics(info, mutate)
+
+    @_undo_atom
     def _grid_hide_col(self, info, c, hidden=True):
         def mutate(sep_cols, rows, aligns):
             if c < len(sep_cols):
                 sep_cols[c]["hidden"] = hidden
         self._grid_column_mechanics(info, mutate)
 
+    @_undo_atom
     def _grid_hide_span(self, info, c0, c1):
         def mutate(sep_cols, rows, aligns):
             for c in range(c0, min(c1 + 1, len(sep_cols))):
@@ -3429,6 +3721,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._grid_replace_block(first, nrows, rows, aligns, sep_cols)
         self._grid_after_op(first)
 
+    @_undo_atom
     def _grid_unhide_all(self, info):
         def mutate(sep_cols, rows, aligns):
             for column in sep_cols:
@@ -3471,6 +3764,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
     _TABLE_ALIGN_TAGS = ("align_center", "align_right")
 
+    @_undo_atom
     def _grid_add_line_above(self, info):
         """A blank line above the table -- the menu twin of pressing
         Enter under a leading table, working for any table and needing
@@ -3492,6 +3786,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._render_table_grids()
         self._schedule_autosave()
 
+    @_undo_atom
     def _grid_set_table_align(self, info, align):
         """The whole table sits left, centred or right on the page.
 
@@ -3525,6 +3820,53 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 return "right"
         return "left"
 
+    @_undo_atom
+    def _grid_add_caption(self, info):
+        """A system-managed caption under the table: a centred, numbered
+        label line plus a source line -- ordinary body text after that,
+        editable like anything else. Exists so nobody has to hand-build
+        a caption above or below a table and fight its alignment (the
+        field request: "the system should insert an editable label")."""
+        first = self._grid_first_line(info)
+        if first is None:
+            return
+        below = first + info["nrows"] - 1
+        b = self.body_text
+        n = 1 + sum(1 for ln in b.get("1.0", "end-1c").split("\n")
+                    if ln.strip().startswith("Tab. "))
+        caption_text = f"Tab. {n}: descriere"
+        b.insert(f"{below}.end", "\n" + caption_text + "\nSursa: ")
+        cap_line = below + 1
+        # SCRUB, then dress: text inserted at the table's last line can
+        # inherit whatever styling that line's edge happens to carry
+        # (field-tested: the caption arrived wearing the table's cell
+        # highlight, full-width bars included). The caption starts from
+        # zero, always.
+        for tag in b.tag_names():
+            if (tag.startswith("highlight_") or tag.startswith("text_color_")
+                    or tag in ("bold", "italic", "bold_italic",
+                               "underline", "strike")
+                    or tag.startswith("align_")):
+                b.tag_remove(tag, f"{cap_line}.0", f"{cap_line + 2}.0")
+        # Both lines follow the TABLE's own place on the page -- a left
+        # table gets a left caption, a centred one a centred pair
+        # (field request: the label and the source line must never sit
+        # at two different alignments).
+        place = self._grid_table_align_of(first)
+        if place in ("center", "right"):
+            b.tag_add(f"align_{place}", f"{cap_line}.0", f"{cap_line}.end")
+            b.tag_add(f"align_{place}",
+                      f"{cap_line + 1}.0", f"{cap_line + 1}.end")
+        # The placeholder comes selected, so typing replaces it at once.
+        start = f"{cap_line}.{len(caption_text) - len('descriere')}"
+        b.tag_remove("sel", "1.0", "end")
+        b.tag_add("sel", start, f"{cap_line}.end")
+        b.mark_set("insert", f"{cap_line}.end")
+        b.focus_set()
+        self._resync_list_tags()
+        self._schedule_autosave()
+
+    @_undo_atom
     def _grid_delete_table(self, info):
         first = self._grid_first_line(info)
         if first is None:
@@ -3553,22 +3895,93 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 for r in range(r0, r1 + 1)]
 
     def _grid_copy_selection(self, sel):
-        """Cells leave as tab-separated lines -- what a spreadsheet reads --
-        and are remembered exactly for pasting back into a table."""
+        """Cells leave three ways at once: tab-separated text (what a
+        spreadsheet reads), an HTML table (what Word and mail clients
+        read -- pasted outside the app, the cells used to arrive as one
+        line of raw tabs), and an internal note of the copied columns'
+        set widths, so pasting the table back into a note rebuilds it
+        at the SAME widths instead of shrinking to the default."""
         matrix = self._grid_selection_matrix(sel)
         if matrix is None:
             return
         self._grid_cell_clip = [list(row) for row in matrix]
-        try:
-            self.clipboard_clear()
-            self.clipboard_append(
-                "\n".join("\t".join(row) for row in matrix))
-        except tk.TclError:
-            pass
+        tsv = "\n".join("\t".join(row) for row in matrix)
+        self._grid_cell_clip_text = tsv
+        self._grid_cell_clip_widths = None
+        info, (r0, c0, r1, c1) = sel["info"], sel["box"]
+        first = self._grid_first_line(info)
+        if first is not None:
+            _rows, _aligns, sep_cols, _sep_at = self._grid_block_parts(
+                first, info["nrows"])
+            if sep_cols is not None:
+                self._grid_cell_clip_widths = [
+                    dict(sep_cols[c]) if c < len(sep_cols)
+                    else {"width": None, "align": None, "hidden": False}
+                    for c in range(c0, c1 + 1)]
+            # The table's place on the page travels with the cells
+            # too, so a duplicated centred table comes back centred.
+            self._grid_cell_clip_place = self._grid_table_align_of(first)
+        # The HTML mirror of the copy follows the file export's rules:
+        # the table's first row leaves as <th>, merges leave as real
+        # colspan/rowspan cells instead of literal markers, hidden
+        # columns stay hidden, and a checkbox leaves as its glyph. The
+        # TSV keeps every cell verbatim -- it is what a spreadsheet
+        # reads AND what pasting back into the app rebuilds from, so
+        # fidelity lives there.
+        m_spans, m_covered = core_tables.merge_map(matrix)
+        hidden = {i for i, col in enumerate(self._grid_cell_clip_widths or [])
+                  if col.get("hidden")}
+        parts = []
+        for ri, mrow in enumerate(matrix):
+            cells = []
+            for ci, v in enumerate(mrow):
+                if (ri, ci) in m_covered or ci in hidden:
+                    continue
+                rs, cs = m_spans.get((ri, ci), (1, 1))
+                cs -= len([h for h in hidden if ci < h < ci + cs])
+                attr = ((f' colspan="{cs}"' if cs > 1 else "")
+                        + (f' rowspan="{rs}"' if rs > 1 else ""))
+                state = core_tables.checkbox_state(v)
+                if state is not None:
+                    inner = "☑" if state else "☐"
+                else:
+                    inner = escape(v).replace(
+                        escape(core_tables.LINE_BREAK), "<br>")
+                tag = "th" if r0 + ri == 0 else "td"
+                # Without inline borders Word paints nothing: the pasted
+                # table was a selectable phantom (round-8 field report).
+                # A checkbox rides centred, the way the app draws it.
+                css = "border:1px solid #999;padding:4px 10px;"
+                if state is not None:
+                    css = "text-align:center;" + css
+                cells.append(f'<{tag}{attr} style="{css}">{inner}</{tag}>')
+            parts.append("<tr>" + "".join(cells) + "</tr>")
+        html_rows = "".join(parts)
+        if not clipboard.write(
+                tsv, html=('<table style="border-collapse:collapse;">'
+                           f"{html_rows}</table>")):
+            # Off Windows (the CI runners included) the CF_HTML writer
+            # does nothing at all -- the plain text still has to land.
+            try:
+                self.clipboard_clear()
+                self.clipboard_append(tsv)
+            except tk.TclError:
+                pass
 
+    @_undo_atom
     def _grid_fill_selection(self, sel, value, align=None):
         info = sel["info"]
         r0, c0, r1, c1 = sel["box"]
+        # The wholesale rewrite below takes every tag with it -- fair for
+        # the text styles a fill overwrites anyway, but a CELL-level
+        # highlight describes the cell, not the text, and inserting a
+        # checkbox into a coloured cell stripped the colour. Remember
+        # each cell's highlight before, re-dress the cells after.
+        cell_bgs = {}
+        for (r, c) in list(info.get("cells", {})):
+            bg = self._grid_cell_paint(info, r, c).get("bg")
+            if bg:
+                cell_bgs[(r, c)] = bg
         context = self._grid_op_context(info)
         if not context:
             return
@@ -3583,7 +3996,19 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                         aligns[r][c] = align
         self._grid_replace_block(first, nrows, rows, aligns, sep_cols)
         self._grid_after_op(first)
+        if cell_bgs:
+            fresh = self._grid_at_line(first)
+            if fresh is not None:
+                for (r, c), bg in cell_bgs.items():
+                    span = self._grid_cell_text_range(
+                        fresh, r, c, pad_ok=True, full=True)
+                    if span:
+                        tag = self._ensure_color_tag(
+                            self.body_text, "highlight", bg)
+                        self.body_text.tag_add(tag, span[0], span[1])
+                self._grid_restyle(fresh)
 
+    @_undo_atom
     def _grid_toggle_checkbox(self, info, r, c):
         """One click on a checkbox cell flips it. The colour spans on the
         marker characters are re-laid after the write, so a coloured box
@@ -3628,15 +4053,41 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
         def choose(color):
             self._dismiss_mini_popup()
-            self._grid_fill_selection({"info": info, "box": box},
-                                      core_tables.CHECKBOX_EMPTY,
-                                      align=core_tables.ALIGN_CENTER)
-            if color and anchor_line is not None:
-                # The fill rebuilt the grids; the colour goes on the
-                # fresh one.
-                fresh = self._grid_at_line(anchor_line)
-                if fresh is not None:
+            # Surgical writes, NOT the wholesale fill: the fill's block
+            # rewrite expelled the caret to the line under the table
+            # (the caret guard walks it out of rebuilt table lines) and
+            # the view scrolled after it -- "the cursor lands outside
+            # the table and the scroll jumps". An emoji dropped into a
+            # cell never moved anything because it goes through
+            # surgical paths; the checkbox now does the same.
+            fresh = (self._grid_at_line(anchor_line)
+                     if anchor_line is not None else None)
+            if fresh is None:
+                return
+            # One palette gesture = one undo unit, however many cells it
+            # dresses (a closure cannot wear the @_undo_atom decorator).
+            self._undo_atom_begin()
+            try:
+                r0, c0, r1, c1 = box
+                for r in range(r0, r1 + 1):
+                    for c in range(c0, c1 + 1):
+                        cell = fresh["cells"].get((r, c))
+                        if cell is None:
+                            continue
+                        self._write_cell(fresh, r, c,
+                                         core_tables.CHECKBOX_EMPTY)
+                        cell["value"] = core_tables.CHECKBOX_EMPTY
+                        self._grid_redraw_cell_text(fresh, r, c)
+                # No forced centring: it went through the alignment op's
+                # full teardown-and-rebuild and the whole table visibly
+                # flickered for one dropped checkbox. The box sits with
+                # the cell's own alignment, redrawn in place -- same
+                # quiet path a toggle uses.
+                if color:
                     self._grid_apply_style(fresh, box, "text_color", color)
+            finally:
+                self._undo_atom_end()
+            self._schedule_autosave()
 
         for i, hex_color in enumerate(PRESET_NOTE_COLORS):
             swatch = tk.Button(
@@ -3656,6 +4107,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                                else self._dismiss_mini_popup()))
         popup.focus_set()
 
+    @_undo_atom
     def _grid_merge_selection(self, sel):
         """The selected rectangle becomes one cell, anchored top-left.
 
@@ -3698,6 +4150,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._grid_replace_block(first, nrows, rows, aligns, sep_cols)
         self._grid_after_op(first)
 
+    @_undo_atom
     def _grid_paste_cells(self, info, r, c):
         """Copied cells land as a block starting at the clicked cell,
         growing the table downward when they need more rows."""
@@ -3862,6 +4315,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self._grid_menu(fresh, event, at=(r, c))
         return "break"
 
+    @_undo_atom
     def _grid_set_alignment(self, info, box, align):
         """Alignment is the cell's padding, so setting it edits ONLY the
         padding -- through the same space-level ops the block aligner
@@ -3972,12 +4426,22 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self.body_text.get(f"{line_no}.0", f"{line_no}.end"))
         return aligns[c] if c < len(aligns) else core_tables.ALIGN_LEFT
 
-    def _grid_cell_text_range(self, info, r, c, pad_ok=False):
+    def _grid_cell_text_range(self, info, r, c, pad_ok=False, full=False):
         """The body-text indices of one cell's content, or None when the
         cell is empty -- padding never carries formatting, EXCEPT that a
         highlight (pad_ok) may sit on an empty cell's padding: it is the
         only style with something to show on nothing, and text typed into
-        the cell later lands inside the tagged region and inherits it."""
+        the cell later lands inside the tagged region and inherits it.
+
+        ``full`` widens the range to the whole pipe-to-pipe region even
+        when the cell HOLDS text. A cell-level highlight lives there so
+        that everything later inserted inside the cell -- typed text on
+        commit, the pad spaces a re-align shuffles, a checkbox marker --
+        lands strictly INSIDE the tagged region and inherits it. Applied
+        to the text alone, the highlight died the moment a commit wrote
+        new characters beside it (logically at once, visibly at the next
+        rebuild -- 'drag the column and the colour is gone' in the field
+        report)."""
         line_no = self._grid_line_of_row(info, r)
         first = self._grid_first_line(info)
         if line_no is None or first is None:
@@ -3988,8 +4452,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if c >= len(bounds):
             return None
         start, end = bounds[c]
-        if start >= end:
-            if not pad_ok:
+        if full or start >= end:
+            if not (pad_ok or full):
                 return None
             pipes = core_tables.pipe_positions(line)
             if c + 1 >= len(pipes) or pipes[c] + 1 >= pipes[c + 1]:
@@ -4033,7 +4497,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         for r in range(r0, r1 + 1):
             for c in range(c0, c1 + 1):
                 span = self._grid_cell_text_range(
-                    info, r, c, pad_ok=(kind == "highlight"))
+                    info, r, c, pad_ok=(kind == "highlight"),
+                    full=(kind == "highlight"))
                 if span:
                     ranges.append(span)
         if not ranges:
@@ -4182,6 +4647,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                                  sel, ""))
             menu.add_command(label="Merge cells",
                              command=lambda: self._grid_merge_selection(sel))
+            menu.add_command(
+                label=("Autofit column width"
+                       if sel["box"][1] == sel["box"][3]
+                       else "Autofit column widths"),
+                command=lambda: self._grid_autofit_cols(
+                    info, sel["box"][1], sel["box"][3]))
             # Hide asks for a whole column selected top to bottom -- the
             # user can SEE what is about to disappear. Anything less and
             # the option stays away, on purpose.
@@ -4260,61 +4731,93 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             command=lambda xr=event.x_root, yr=event.y_root:
                 self._grid_highlight_popup(info, (r, c, r, c), xr, yr))
         menu.add_separator()
+        # Grouped: the flat run had grown past fifteen entries and
+        # "finding the one you need takes minutes" (field report). The
+        # everyday cell actions stay on top; everything about rows,
+        # columns, merging, or the table as a whole lives one hover
+        # away, under the word you would look for.
+
+        def _sub():
+            m = tk.Menu(menu, tearoff=0, bg=self.colors["card"],
+                        fg=self.colors["text"],
+                        activebackground=self.colors["accent"],
+                        activeforeground="white",
+                        relief="flat", bd=0, font=("Segoe UI", 9))
+            return m
+
+        align_menu = _sub()
         for label, align_value in (
                 ("Align left", core_tables.ALIGN_LEFT),
                 ("Center text", core_tables.ALIGN_CENTER),
                 ("Align right", core_tables.ALIGN_RIGHT)):
-            menu.add_command(
+            align_menu.add_command(
                 label=label,
                 command=lambda a=align_value: self._grid_set_alignment(
                     info, (r, c, r, c), a))
-        menu.add_separator()
-        menu.add_command(label="Insert row above",
-                         command=lambda: self._grid_insert_row(info, r))
-        menu.add_command(label="Insert row below",
-                         command=lambda: self._grid_insert_row(info, r + 1))
-        menu.add_command(label="Insert column left",
-                         command=lambda: self._grid_insert_col(info, c))
-        menu.add_command(label="Insert column right",
-                         command=lambda: self._grid_insert_col(info, c + 1))
-        menu.add_separator()
-        menu.add_command(
+        menu.add_cascade(label="Align cell", menu=align_menu)
+
+        rows_menu = _sub()
+        rows_menu.add_command(label="Insert row above",
+                              command=lambda: self._grid_insert_row(info, r))
+        rows_menu.add_command(
+            label="Insert row below",
+            command=lambda: self._grid_insert_row(info, r + 1))
+        rows_menu.add_command(
+            label="Delete row",
+            state=("normal" if info["data_rows"] > 1 else "disabled"),
+            command=lambda: self._grid_delete_row(info, r))
+        menu.add_cascade(label="Rows", menu=rows_menu)
+
+        cols_menu = _sub()
+        cols_menu.add_command(label="Insert column left",
+                              command=lambda: self._grid_insert_col(info, c))
+        cols_menu.add_command(
+            label="Insert column right",
+            command=lambda: self._grid_insert_col(info, c + 1))
+        cols_menu.add_command(label="Autofit column width",
+                              command=lambda: self._grid_autofit_col(info, c))
+        cols_menu.add_command(
             label="Unhide all columns",
             state=("normal" if info.get("hidden_cols") else "disabled"),
             command=lambda: self._grid_unhide_all(info))
-        menu.add_command(label="Autofit column width",
-                         command=lambda: self._grid_autofit_col(info, c))
-        menu.add_separator()
+        cols_menu.add_command(label="Delete column",
+                              command=lambda: self._grid_delete_col(info, c))
+        menu.add_cascade(label="Columns", menu=cols_menu)
+
         merged = cell["rs"] > 1 or cell["cs"] > 1
-        menu.add_command(label="Merge with cell to the left",
-                         state="normal" if c > 0 else "disabled",
-                         command=lambda: self._grid_set_marker(
-                             info, r, c, core_tables.MERGE_LEFT))
-        menu.add_command(label="Merge with cell above",
-                         state="normal" if r > 0 else "disabled",
-                         command=lambda: self._grid_set_marker(
-                             info, r, c, core_tables.MERGE_UP))
-        menu.add_command(label="Split merged cell",
-                         state="normal" if merged else "disabled",
-                         command=lambda: self._grid_split(info, r, c))
-        menu.add_separator()
-        menu.add_command(label="Delete row",
-                         state=("normal" if info["data_rows"] > 1
-                                else "disabled"),
-                         command=lambda: self._grid_delete_row(info, r))
-        menu.add_command(label="Delete column",
-                         command=lambda: self._grid_delete_col(info, c))
-        menu.add_command(label="Delete table",
-                         command=lambda: self._grid_delete_table(info))
-        menu.add_separator()
-        menu.add_command(label="Add a line above the table",
-                         command=lambda: self._grid_add_line_above(info))
+        merge_menu = _sub()
+        merge_menu.add_command(label="Merge with cell to the left",
+                               state="normal" if c > 0 else "disabled",
+                               command=lambda: self._grid_set_marker(
+                                   info, r, c, core_tables.MERGE_LEFT))
+        merge_menu.add_command(label="Merge with cell above",
+                               state="normal" if r > 0 else "disabled",
+                               command=lambda: self._grid_set_marker(
+                                   info, r, c, core_tables.MERGE_UP))
+        merge_menu.add_command(label="Split merged cell",
+                               state="normal" if merged else "disabled",
+                               command=lambda: self._grid_split(info, r, c))
+        menu.add_cascade(label="Merge", menu=merge_menu)
+
+        table_menu = _sub()
         for pos_label, pos in (("Table left on page", "left"),
                                ("Center table on page", "center"),
                                ("Table right on page", "right")):
-            menu.add_command(
+            table_menu.add_command(
                 label=pos_label,
                 command=lambda p=pos: self._grid_set_table_align(info, p))
+        table_menu.add_separator()
+        table_menu.add_command(
+            label="Add caption below…",
+            command=lambda: self._grid_add_caption(info))
+        table_menu.add_command(
+            label="Add a line above the table",
+            command=lambda: self._grid_add_line_above(info))
+        table_menu.add_separator()
+        table_menu.add_command(
+            label="Delete table",
+            command=lambda: self._grid_delete_table(info))
+        menu.add_cascade(label="Table", menu=table_menu)
         try:
             menu.tk_popup(event.x_root, event.y_root)
         finally:
@@ -4550,7 +5053,29 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 self._grid_paste_cells(sel["info"],
                                        sel["box"][0], sel["box"][1])
                 return "break"
-        if self._paste_formatted():
+        # Our own cell copy puts an HTML table on the clipboard for Word's
+        # sake, and on Windows the rich-paste route saw it FIRST -- so
+        # pasting a copied table back into a note took the generic HTML
+        # road: no set widths, no placement, and the first row glued onto
+        # the caret's line ("Sursa: | fff |..." in the field report). The
+        # TSV route carries everything the copy knew, so our own copies go
+        # there; the rich route is for content from OTHER applications.
+        # Detection reads the system clipboard directly, no Tk fallback:
+        # our copy always writes the plain text alongside the HTML, and
+        # when the clipboard is momentarily locked the HTML is unreadable
+        # too, so the paste falls through to the TSV route anyway.
+        own = getattr(self, "_grid_cell_clip_text", None)
+        own_copy = bool(own) and clipboard.read_text() == own
+        if own_copy:
+            if self._paste_tsv_as_table():
+                return "break"
+            # A single copied cell has no tabs: it pastes as the plain
+            # text it is, never as a one-cell table the HTML would make.
+        elif self._paste_formatted():
+            return "break"
+        if not own_copy and self._paste_tsv_as_table():
+            return "break"
+        if self._paste_pipe_text_on_own_lines():
             return "break"
         # Plain paste: Tk inserts the text after this returns, so the list
         # tags can only be brought back into step once that has happened.
@@ -4558,6 +5083,137 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.after_idle(self._resync_list_tags)
         self.after_idle(self._render_table_grids)
         return None
+
+    @_undo_atom
+    def _paste_pipe_text_on_own_lines(self):
+        """Plain text whose edge lines are table rows lands on its own
+        lines, never glued into the caret's line.
+
+        Copying half a table plus its caption as ordinary body text and
+        pasting it mid-line spliced the first pipe row onto the caret's
+        line -- '|   | [x] |fig2...' in the field report -- and the
+        caption onto the last one. Tk's default paste is right for
+        prose; pipe rows only mean something at a line start, so they
+        get the newlines that keep them rows. Selection replacement is
+        left to the default handler -- this path only runs caret-only.
+        """
+        try:
+            if self.body_text.tag_ranges("sel"):
+                return False
+        except tk.TclError:
+            return False
+        raw = clipboard.read_text()
+        if raw is None:
+            try:
+                raw = self.body_text.clipboard_get()
+            except tk.TclError:
+                return False
+        if not raw or "\n" not in raw.strip():
+            single = raw or ""
+            if not core_tables.is_table_row(single.strip("\n")):
+                return False
+        raw = raw.replace("\r\n", "\n").replace("\r", "\n")
+        lines = raw.strip("\n").split("\n")
+        if not (core_tables.is_table_row(lines[0])
+                or core_tables.is_table_row(lines[-1])):
+            return False
+        b = self.body_text
+        before = b.get("insert linestart", "insert")
+        after = b.get("insert", "insert lineend")
+        text = raw.strip("\n")
+        if core_tables.is_table_row(lines[0]) and before.strip():
+            text = "\n" + text
+        if core_tables.is_table_row(lines[-1]) and after.strip():
+            text = text + "\n"
+        b.insert("insert", text)
+        self._body_follow_caret = True
+        self._resync_list_tags()
+        self._render_table_grids()
+        self._schedule_autosave()
+        return True
+
+    @_undo_atom
+    def _paste_tsv_as_table(self, raw=None):
+        """Tab-separated clipboard text pasted into the body becomes a
+        real table.
+
+        This is what makes duplicating a table WORK: copying cells puts
+        tab-separated lines on the clipboard (what a spreadsheet reads),
+        and pasting that below the table used to fall through to the
+        plain-text path -- raw tabs on one line, stored <br> markers
+        showing as text, "nothing happens or <br> <br> appears" in the
+        field report. Same shape arrives from a spreadsheet copied as
+        plain text, so both now land as a grid. Single cells (no tab)
+        keep pasting as ordinary text.
+        """
+        if raw is None:
+            raw = clipboard.read_text()
+            if raw is None:
+                try:
+                    raw = self.body_text.clipboard_get()
+                except tk.TclError:
+                    return False
+        if not raw or "\t" not in raw:
+            return False
+        raw = raw.replace("\r\n", "\n").replace("\r", "\n")
+        b = self.body_text
+        try:
+            here = b.get("insert linestart", "insert lineend")
+        except tk.TclError:
+            return False
+        if core_tables.is_table_row(here):
+            # Inside a table, pasting cells is the grid's business (the
+            # cell-selection branch above); don't nest pipes into pipes.
+            return False
+        rows = [line.split("\t") for line in raw.strip("\n").split("\n")]
+        ncols = max(len(row) for row in rows)
+        rows = [row + [""] * (ncols - len(row)) for row in rows]
+        aligns = [[core_tables.ALIGN_LEFT] * ncols for _ in rows]
+        lines = core_tables.format_table(rows, aligns)
+        # Our own copy remembers the source columns' set widths -- a
+        # duplicated table comes back at the SAME widths, not shrunk
+        # to the default. Text from elsewhere gets the plain rule.
+        clip_widths = None
+        if (raw == getattr(self, "_grid_cell_clip_text", None)
+                and getattr(self, "_grid_cell_clip_widths", None)):
+            clip_widths = list(self._grid_cell_clip_widths)
+            while len(clip_widths) < ncols:
+                clip_widths.append({"width": None, "align": None,
+                                    "hidden": False})
+        if clip_widths:
+            sep = core_tables.CELL + core_tables.CELL.join(
+                " " + cell + " "
+                for cell in core_tables.make_separator(clip_widths)
+            ) + core_tables.CELL
+        else:
+            sep = ("|" + "|".join([" --- "] * ncols) + "|")
+        lines = [lines[0], sep] + lines[1:]
+        clip_place = None
+        if raw == getattr(self, "_grid_cell_clip_text", None):
+            clip_place = getattr(self, "_grid_cell_clip_place", None)
+        prefix = "" if not here.strip() else "\n"
+        if not here.strip():
+            # Pasting ONTO an empty line directly under a table would
+            # glue the new rows to that block and merge the two tables
+            # into one misshapen grid -- keep the empty line as the gap.
+            try:
+                ln = int(b.index("insert").split(".")[0])
+                above = b.get(f"{ln - 1}.0", f"{ln - 1}.end") if ln > 1 else ""
+            except (tk.TclError, ValueError):
+                above = ""
+            if core_tables.is_table_row(above):
+                prefix = "\n"
+        ins_line = int(b.index("insert").split(".")[0])
+        b.insert("insert lineend", prefix + "\n".join(lines) + "\n")
+        if clip_place in ("center", "right"):
+            first_new = ins_line + (1 if prefix else 0)
+            for n in range(first_new, first_new + len(lines)):
+                b.tag_add(f"align_{clip_place}", f"{n}.0", f"{n}.end")
+        self._body_follow_caret = True
+        self._resync_list_tags()
+        self._render_table_grids()
+        self._schedule_autosave()
+        return True
 
     def _paste_plain(self, event=None):
         """Paste the clipboard's text with none of its formatting.
@@ -4594,6 +5250,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             pass
         self.body_text.insert("insert", text)
 
+    @_undo_atom
     def _paste_formatted(self):
         """Paste rich clipboard content. True if that actually happened."""
         markup = clipboard.read_html()
@@ -4679,7 +5336,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             for p in self._extract_paragraphs(self.body_text)
             if 0 <= p["line"] - first_line < len(text.split("\n"))]
 
-        if not clipboard.write(text, note_to_html(text, clipped, paragraphs)):
+        # inline_tables: a clipboard fragment travels without the file
+        # export's stylesheet, and Word shows a bare HTML table with no
+        # borders at all -- a selectable phantom (the round-8 field
+        # report, with screenshots of the invisible table).
+        if not clipboard.write(text, note_to_html(text, clipped, paragraphs,
+                                                  inline_tables=True)):
             return None                      # nothing written; Tk's copy runs
         return "break"
 
@@ -5095,6 +5757,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
     TABLE_GRID_ROWS = 6
     TABLE_GRID_COLUMNS = 8
 
+    @_undo_atom
     def _insert_table(self, rows, columns):
         """Put a blank table at the caret, on lines of its own.
 
@@ -5103,7 +5766,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         something, and after it so there is somewhere to carry on writing.
         """
         rows = max(1, min(self.TABLE_GRID_ROWS * 4, int(rows)))
-        columns = max(1, min(self.TABLE_GRID_COLUMNS, int(columns)))
+        # Never fewer than two columns: is_table_row needs two cells to
+        # tell a row from prose containing a pipe, so a one-column table
+        # would insert as dead pipe text that never becomes a grid.
+        columns = max(2, min(self.TABLE_GRID_COLUMNS, int(columns)))
         line_no = int(self.body_text.index("insert").split(".")[0])
         line = self.body_text.get(f"{line_no}.0", f"{line_no}.end")
         # Two adjacent runs of pipe rows read as ONE block, so a table
@@ -5164,8 +5830,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             highlight(0, 0)
             caption.configure(text="Insert table")
 
+        # Columns start at two: a one-column run of pipes is not
+        # recognisable as a table row (| x | in prose would be one), so
+        # the picker never offers a shape that cannot exist.
         for r in range(1, self.TABLE_GRID_ROWS + 1):
-            for c in range(1, self.TABLE_GRID_COLUMNS + 1):
+            for c in range(2, self.TABLE_GRID_COLUMNS + 1):
                 cell = tk.Frame(grid, width=14, height=14, cursor="hand2",
                                 bg=inset_surface(self.colors))
                 cell.grid(row=r, column=c, padx=1, pady=1)
@@ -7190,10 +7859,17 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
     # ---------- In-note calculator ----------
 
     def update_word_count(self):
-        """Refresh the words · characters readout for the note body."""
+        """Refresh the words · characters readout for the note body.
+
+        Tables are counted by what the user wrote in them, not by their
+        plumbing: every pipe used to count as a "word", so an empty 3x3
+        table claimed twelve words and inflated the reading time.
+        """
         if not hasattr(self, "word_count_lbl"):
             return
         text = self.body_text.get("1.0", "end-1c")
+        if core_tables.CELL in text:
+            text = core_tables.content_text(text)
         chars = len(text)
         words = len(text.split())
         if chars == 0:
@@ -8266,7 +8942,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
         self.editor_canvas = tk.Canvas(self.editor_outer, highlightthickness=0)
         self.track_theme(self.editor_canvas, bg="bg")
-        editor_scrollbar = ttk.Scrollbar(self.editor_outer, orient="vertical", command=self.editor_canvas.yview)
+        # The scrollbar, like the wheel, is a deliberate gesture: it
+        # cancels any grid rebuild's still-pending view restore.
+        editor_scrollbar = ttk.Scrollbar(
+            self.editor_outer, orient="vertical",
+            command=self._editor_scrollbar_moved)
         self.editor = tk.Frame(self.editor_canvas)
         self.track_theme(self.editor, bg="bg")
 
@@ -8685,7 +9365,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             font=(self.editor_font_family, self.editor_font_size),
             yscrollcommand=body_sb.set, undo=True, autoseparators=True, maxundo=-1
         )
-        body_sb.config(command=self.body_text.yview)
+        body_sb.config(command=self._body_scrollbar_moved)
         self.track_theme(self.body_text, bg="card", fg="text")
         body_sb.pack(side="right", fill="y")
         self.body_text.pack(side="left", fill="both", expand=True)
@@ -8730,6 +9410,19 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.body_text.bind("<KeyPress>", self._caret_out_of_hidden, add="+")
         self.body_text.bind("<Configure>", self._on_body_resize_grids, add="+")
         self.body_text.bind("<KeyRelease>", self._caret_out_of_hidden, add="+")
+        self.body_text.bind("<KeyRelease>", self._reassert_line_alignment,
+                            add="+")
+        self.body_text.bind("<KeyRelease>", self._extend_word_styles_on_typing,
+                            add="+")
+        # KeyRelease alone re-centred the line one frame LATE -- the
+        # character appears left-justified for a blink, then snaps to the
+        # middle. An idle callback scheduled at KeyPress runs right after
+        # the class binding inserts the character and BEFORE Tk repaints,
+        # so the line never shows its uncentred moment.
+        self.body_text.bind(
+            "<KeyPress>",
+            lambda e: self.after_idle(self._reassert_line_alignment),
+            add="+")
         self.body_text.bind("<ButtonRelease-1>", self._caret_out_of_hidden, add="+")
         # Overrides Tk's default double-click "select word" so punctuation
         # like "." always breaks a word (and an empty line selects
@@ -8865,14 +9558,23 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                                      compact=4, expanded=12,
                                      pack_kwargs={"padx": 30, "pady": (0, 8)})
 
-        # Reliable undo/redo on both editors (Ctrl+Z / Ctrl+Y and Ctrl+Shift+Z).
-        for _tw in (self.body_text, self.comments_text):
-            _tw.bind("<Control-z>", lambda e, w=_tw: (w.edit_undo(), "break")[1]
-                     if self._can_edit_undo(w) else "break")
-            _tw.bind("<Control-y>", lambda e, w=_tw: (w.edit_redo(), "break")[1]
-                     if self._can_edit_redo(w) else "break")
-            _tw.bind("<Control-Shift-Z>", lambda e, w=_tw: (w.edit_redo(), "break")[1]
-                     if self._can_edit_redo(w) else "break")
+        # Reliable undo/redo on both editors (Ctrl+Z / Ctrl+Y and
+        # Ctrl+Shift+Z). The body goes through _body_undo_redo, which also
+        # redraws the tables the undone text describes; the comments box
+        # has no tables and keeps the plain stack walk.
+        self.body_text.bind("<Control-z>",
+                            lambda e: self._body_undo_redo("undo"))
+        self.body_text.bind("<Control-y>",
+                            lambda e: self._body_undo_redo("redo"))
+        self.body_text.bind("<Control-Shift-Z>",
+                            lambda e: self._body_undo_redo("redo"))
+        _tw = self.comments_text
+        _tw.bind("<Control-z>", lambda e, w=_tw: (w.edit_undo(), "break")[1]
+                 if self._can_edit_undo(w) else "break")
+        _tw.bind("<Control-y>", lambda e, w=_tw: (w.edit_redo(), "break")[1]
+                 if self._can_edit_redo(w) else "break")
+        _tw.bind("<Control-Shift-Z>", lambda e, w=_tw: (w.edit_redo(), "break")[1]
+                 if self._can_edit_redo(w) else "break")
 
         # Attachments section
         attach_header = tk.Frame(self.editor)
@@ -9717,6 +10419,59 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         except tk.TclError:
             return False
 
+    def _undo_atom_begin(self):
+        """Open one undo unit on the body (see the _undo_atom decorator).
+        Re-entrant: nested opens keep the outermost unit."""
+        depth = getattr(self, "_undo_atom_depth", 0)
+        self._undo_atom_depth = depth + 1
+        if depth == 0 and hasattr(self, "body_text"):
+            try:
+                self.body_text.edit_separator()
+                self.body_text.configure(autoseparators=False)
+            except tk.TclError:
+                pass
+
+    def _undo_atom_end(self):
+        depth = max(0, getattr(self, "_undo_atom_depth", 1) - 1)
+        self._undo_atom_depth = depth
+        if depth == 0 and hasattr(self, "body_text"):
+            try:
+                self.body_text.configure(autoseparators=True)
+                self.body_text.edit_separator()
+            except tk.TclError:
+                pass
+
+    def _body_undo_redo(self, action):
+        """Ctrl+Z / Ctrl+Y on the note body.
+
+        Tk walks its stack; what Tk cannot know is that the text it just
+        put back may hold tables -- the drawn grids would keep showing
+        the OLD cells over the new text (the drawing itself is kept off
+        the stack by _undo_hidden). So every step resyncs the line tags
+        and redraws the grids from the text that undo produced.
+        """
+        b = self.body_text
+        # A still-open cell editor holds uncommitted text; commit it so
+        # the undo works against what the note actually says.
+        if getattr(self, "_cell_editor", None):
+            self._commit_cell_editor()
+        can = (self._can_edit_undo if action == "undo"
+               else self._can_edit_redo)(b)
+        if not can:
+            return "break"
+        try:
+            (b.edit_undo if action == "undo" else b.edit_redo)()
+        except tk.TclError:
+            return "break"
+        self._body_follow_caret = True
+        self._resync_list_tags()
+        if (getattr(self, "_table_grids", None)
+                or core_tables.find_blocks(b.get("1.0", "end-1c"))):
+            self._render_table_grids()
+        self._refresh_format_buttons()
+        self._schedule_autosave()
+        return "break"
+
     def _bind_text_wheel(self, text_widget, fallback_canvas=None):
         """Mousewheel behavior over a text box:
         - if the box has more text than fits, scroll the box's own
@@ -9836,10 +10591,19 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         def _txt(value):
             return value.lower() if isinstance(value, str) else ""
 
+        def _body_txt(value):
+            # A body is searched by what the user wrote, not by table
+            # plumbing: searching "---" or "br" used to match every note
+            # holding a table. Only bodies that actually contain a pipe
+            # pay for the stripping.
+            if isinstance(value, str) and core_tables.CELL in value:
+                return core_tables.content_text(value).lower()
+            return _txt(value)
+
         filtered = [
             n for n in self.notes
             if query in _txt(n.get("title"))
-            or query in _txt(n.get("body"))
+            or query in _body_txt(n.get("body"))
             or query in _txt(n.get("comments"))
         ]
 
