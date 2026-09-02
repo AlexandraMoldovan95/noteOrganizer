@@ -250,6 +250,7 @@
   "_on_body_resize_grids": "(self, _event=None)",
   "_on_body_return": "(self, event)",
   "_on_body_tab": "(self, event, delta)",
+  "_on_comments_paste": "(self, event=None)",
   "_on_format_bar_resize": "(self, event)",
   "_on_title_paste": "(self, event=None)",
   "_on_toggle_group_by_category": "(self)",

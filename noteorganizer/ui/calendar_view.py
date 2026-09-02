@@ -36,6 +36,7 @@ keep them working.
 """
 
 import calendar as cal_module
+import re
 import tkinter as tk
 from tkinter import ttk
 from datetime import datetime, timedelta, date as date_cls
@@ -57,6 +58,7 @@ from ..core.storage import (
     save_setting,
     save_settings,
 )
+from ..core import tables as core_tables
 
 
 class CalendarViewMixin:
@@ -723,6 +725,38 @@ class CalendarViewMixin:
                  bg=self.colors["sidebar"], fg=self.colors["text"], anchor="w",
                  wraplength=700, justify="left").pack(fill="x", padx=15, pady=(2, 4))
 
+        # The preview is a QUICK LOOK, not the editor: it shows the note's
+        # plain text and, like the note-list cards, only SAYS what else the
+        # note carries (a table, a checklist, comments) rather than trying
+        # to render it. Tables drawn here were raw pipe soup, and comments
+        # dumped inline read as part of the body -- both belong in the
+        # editor, which is one "Open in editor" click away.
+        note_body = _note_str(note, "body")
+        table_count = len(core_tables.find_blocks(note_body))
+        # Drop the table rows; keep the prose, collapse the gap they leave.
+        text_only = "\n".join(ln for ln in note_body.split("\n")
+                              if not core_tables.is_table_row(ln))
+        text_only = re.sub(r"\n{3,}", "\n\n", text_only).strip("\n")
+
+        chips = []
+        if table_count:
+            chips.append("▦ 1 table" if table_count == 1
+                         else f"▦ {table_count} tables")
+        checklist = note.get("checklist") or []
+        if isinstance(checklist, list) and checklist:
+            done = sum(1 for it in checklist
+                       if isinstance(it, dict) and it.get("done"))
+            chips.append(f"☑ {done}/{len(checklist)}")
+        if _note_str(note, "comments").strip():
+            chips.append("💬 comments")
+        if note.get("attachments"):
+            chips.append(f"📎×{len(note['attachments'])}")
+        if chips:
+            tk.Label(self.day_panel, text="   ".join(chips),
+                     font=("Segoe UI", 8, "bold"), anchor="w",
+                     bg=self.colors["sidebar"], fg=self.colors["accent"]
+                     ).pack(fill="x", padx=15, pady=(0, 6))
+
         body = tk.Frame(self.day_panel, bg=self.colors["sidebar"])
         body.pack(fill="both", expand=True, padx=15, pady=(0, 10))
         txt_sb = ttk.Scrollbar(body, orient="vertical")
@@ -732,10 +766,7 @@ class CalendarViewMixin:
         txt_sb.config(command=txt.yview)
         txt_sb.pack(side="right", fill="y")
         txt.pack(side="left", fill="both", expand=True)
-        content = _note_str(note, "body") or "(empty note)"
-        if note.get("comments"):
-            content += f"\n\n— Comments —\n{note['comments']}"
-        txt.insert("1.0", content)
+        txt.insert("1.0", text_only or "(empty note)")
         txt.config(state="disabled")
 
     def _open_note_from_calendar(self, base_note, date_str):

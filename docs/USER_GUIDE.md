@@ -22,7 +22,7 @@ Click **+ New Note** in the sidebar to open a blank editor. A note has a title, 
 
 Notes save automatically a moment after you stop typing (look for the "Auto-saved" status), and always save immediately when you switch to a different note. Closing the app works the same way: anything still unsaved is saved on the way out, silently — no "unsaved changes" question, because there is nothing to lose.
 
-The writing area starts at twelve lines. **Expand**, underneath it, makes it roughly twice as tall for a long note, and **Collapse** puts it back — the note itself is unaffected either way, only how much of it you can see at once. The buttons at the bottom of the editor do not go out of reach; the page simply gets longer and scrolls. The app remembers which you chose. The comments box has the same toggle, though it always opens small.
+The writing area starts at twelve lines. **Expand**, underneath it, makes it roughly twice as tall for a long note, and **Collapse** puts it back — the note itself is unaffected either way, only how much of it you can see at once. The buttons at the bottom of the editor do not go out of reach; the page simply gets longer and scrolls. The app remembers which you chose. The comments box has the same toggle, though it always opens small. Comments are plain text only — pasting a table there keeps the words and drops the table (tables live in the body, which draws them as a real grid), with a brief note telling you it happened.
 
 At the end of the formatting toolbar sits a small **light/dark switch** (☀ / 🌙): one press flips between your last light and last dark theme without leaving the note. The full theme picker, with all eight variants, stays in **Settings → Appearance**.
 
@@ -174,6 +174,8 @@ Editing or deleting one specific occurrence (rather than the whole series) is al
 ## Calendar
 
 The Calendar tab shows every note (including every occurrence of every recurring note) on the day it falls on. Navigate month-to-month, jump directly to a specific month/year, or return to today. Multiple notes on one day show up to two title previews plus a "+N more" indicator; hovering a day gives a quick summary.
+
+Clicking a note in the day panel opens a **quick-look preview** — the note's plain text, plus a line of small flags saying what else it carries (▦ a table, ☑ a checklist, 💬 comments). Like the note-list cards, the preview does not draw the table or spell out the checklist and comments; those show when you open the note in the editor (**✏ Open in editor**).
 
 ![Calendar view](screenshots/calendar-view.png)
 
