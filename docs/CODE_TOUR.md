@@ -9,8 +9,13 @@ short reference version for someone who already knows the codebase. Start
 here; go there when you want the summary.
 
 > **Status:** the data and rules layer is fully extracted — all thirteen
-> modules below are covered here. The user interface hasn't been split yet and still
-> lives in `note_organizer.py`; sections for it will follow.
+> `core/` modules below are covered here. The user interface has since been
+> split too: five areas now live in `noteorganizer/ui/` as mixins
+> (calculator panel, Settings page, dialogs/popups, calendar, attachments),
+> while `note_organizer.py` stays the entry point and the shared UI hub the
+> rest hangs off. This tour walks the `core/` modules; the `ui/` mixins are
+> plain cut-and-paste moves of methods that already lived on the class, so
+> they read the same as they did in the single file.
 
 ---
 
@@ -22,9 +27,10 @@ Nothing about running the app has changed, or will:
 py note_organizer.py
 ```
 
-`note_organizer.py` is still the front door. It's just getting shorter, as
-code moves into the `noteorganizer/` package next to it and gets imported
-back in.
+`note_organizer.py` is still the front door. The pure logic has moved into
+the `noteorganizer/` package next to it and is imported back in; the entry
+file itself stays large (~12,700 lines) because it is the UI hub the pieces
+hang off, not a junk drawer of stray logic.
 
 The tests are unchanged too:
 
@@ -43,32 +49,43 @@ files in whatever folder they run from.
 ## The shape of the project
 
 ```
-note_organizer.py         the entry point you run, plus the UI (for now)
+note_organizer.py         the entry point you run, and the UI hub
 noteorganizer/
-└── core/                 data and rules — never imports tkinter
-    ├── calculator.py     the in-note calculator's expression parser
-    ├── recurrence.py     repeat rules, and which dates a note lands on
-    ├── themes.py         colour palettes and layout numbers (pure data)
-    ├── formatting.py     how rich-text spans are stored on a note
-    ├── richtext.py       HTML in and out, for paste and copy
-    ├── clipboard.py      the Windows clipboard's richer formats
-    ├── sharing.py        share codes, and the guards that make import safe
-    ├── duplicates.py     deciding when two notes are the same note
-    ├── paths.py          where data lives, migrations, safe cleanup
-    ├── storage.py        reading/writing notes, settings, templates, trash
-    ├── categories.py     the live category map
-    └── model.py          what a note is; normalize_note validates every one
+├── core/                 data and rules — never imports tkinter
+│   ├── calculator.py     the in-note calculator's expression parser
+│   ├── recurrence.py     repeat rules, and which dates a note lands on
+│   ├── themes.py         colour palettes and layout numbers (pure data)
+│   ├── formatting.py     how rich-text spans are stored on a note
+│   ├── richtext.py       HTML in and out, for paste, copy and export
+│   ├── clipboard.py      the Windows clipboard's richer formats
+│   ├── tables.py         tables as lines of text (pipes are the store)
+│   ├── sharing.py        share codes, and the guards that make import safe
+│   ├── duplicates.py     deciding when two notes are the same note
+│   ├── paths.py          where data lives, migrations, safe cleanup
+│   ├── storage.py        reading/writing notes, settings, templates, trash
+│   ├── categories.py     the live category map
+│   └── model.py          what a note is; normalize_note validates every one
+└── ui/                   on-screen areas, as mixins NoteOrganizer inherits
+    ├── calculator_panel.py  the in-note calculator panel
+    ├── settings_page.py     the Settings page and its sections
+    ├── dialogs.py           the hand-built dialogs and popups
+    ├── calendar_view.py     the Calendar tab
+    └── attachments.py       the attachments section
 docs/                     these documents
 qa/                       headless GUI tests
 test_*.py                 tests for the core logic, no GUI needed
 ```
 
-The plan is two layers:
+The layers are two:
 
 * **`core`** — everything that would still make sense if the app had no
   windows at all: reading and writing notes, validating them, working out
   recurring dates, evaluating calculator expressions.
-* **`ui`** — everything the user sees. Not created yet.
+* **`ui`** — on-screen areas, extracted into mixin classes that
+  `NoteOrganizer` inherits from. The methods are unchanged — they still
+  reach for `self.colors`, `self.notes` and each other exactly as before —
+  so each move was cut-and-paste, not a redesign. What remains in
+  `note_organizer.py` is the shared hub they all lean on.
 
 The rule that keeps them apart: **nothing in `core` may import tkinter.**
 That's what lets the core be tested without opening a window, and what
@@ -208,7 +225,7 @@ place.**
 
 ### Where it's tested
 
-`test_calculator.py` — 28 checks, no GUI needed, runs in under a second.
+`test_calculator.py` — roughly fifty checks, no GUI needed, runs in under a second.
 It's a good file to read straight after the module: each test names the
 behaviour it's pinning down, so it doubles as a specification.
 
@@ -961,4 +978,7 @@ not change anything.**
 
 ---
 
-*More sections will be added here as further modules are extracted.*
+*This tour covers the `core/` modules in depth. The `ui/` mixins are
+cut-and-paste extractions of methods that already lived on `NoteOrganizer`,
+so they behave exactly as they did in the single file — see
+[ARCHITECTURE.md](ARCHITECTURE.md) for how the five were chosen.*
