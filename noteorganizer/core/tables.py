@@ -482,6 +482,29 @@ def to_rows(text, first, last):
     return [split_row(line) for line in lines[first:last + 1]]
 
 
+def content_text(text):
+    """*text* with the table mechanics stripped out.
+
+    Separator rows vanish, pipes and merge markers vanish, checkbox cells
+    vanish (a checkbox is a control, not a word), and the ``<br>`` marker
+    becomes the gap it draws. What remains is what the user actually
+    wrote -- the right text to count words in or search through. Prose
+    lines pass through untouched.
+    """
+    out = []
+    for line in (text or "").split("\n"):
+        if is_table_row(line):
+            if is_separator_row(line):
+                continue
+            cells = [c.replace(LINE_BREAK, " ")
+                     for c in split_row(line)
+                     if c not in (MERGE_LEFT, MERGE_UP)
+                     and checkbox_state(c) is None]
+            line = " ".join(c for c in cells if c)
+        out.append(line)
+    return "\n".join(out)
+
+
 def blank_table(rows, columns):
     """A new empty table, ready to be typed into."""
     rows = max(1, int(rows))

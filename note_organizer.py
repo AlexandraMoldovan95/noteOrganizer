@@ -19,6 +19,7 @@ from html import escape
 import calendar as cal_module
 import re
 import math
+import functools
 from datetime import datetime, date as date_cls, timedelta
 
 try:
@@ -402,6 +403,56 @@ from noteorganizer.core.themes import (
 )
 
 
+def _undo_atom(method):
+    """One table operation = ONE undo unit.
+
+    A commit, a resize, a fill are each a burst of small inserts and
+    deletes, and Tk's autoseparators made every one its own Ctrl+Z step:
+    undoing a cell edit could stop halfway -- the old value gone, the
+    padding collapsed. The wrapper opens a unit, runs the operation,
+    closes the unit; nested wrapped calls keep the outermost unit.
+    """
+    @functools.wraps(method)
+    def wrapped(self, *args, **kwargs):
+        self._undo_atom_begin()
+        try:
+            return method(self, *args, **kwargs)
+        finally:
+            self._undo_atom_end()
+    return wrapped
+
+
+def _undo_hidden(method):
+    """The method's edits never reach the undo stack.
+
+    Rebuilding the drawn grids deletes and re-creates embedded window
+    characters; recorded, they turned every second Ctrl+Z into "undo the
+    redraw" instead of "undo my edit", stepping through phantom windows.
+    The pipe text is the truth and stays recorded; the drawing is not an
+    edit. Tk keeps the existing stack across the undo=False window --
+    verified against a live Text widget, not assumed.
+    """
+    @functools.wraps(method)
+    def wrapped(self, *args, **kwargs):
+        depth = getattr(self, "_undo_hidden_depth", 0)
+        self._undo_hidden_depth = depth + 1
+        prev = None
+        if depth == 0 and hasattr(self, "body_text"):
+            try:
+                prev = self.body_text.cget("undo")
+                self.body_text.configure(undo=False)
+            except tk.TclError:
+                prev = None
+        try:
+            return method(self, *args, **kwargs)
+        finally:
+            self._undo_hidden_depth = depth
+            if depth == 0 and prev is not None:
+                try:
+                    self.body_text.configure(undo=prev)
+                except tk.TclError:
+                    pass
+    return wrapped
 
 
 
@@ -1273,6 +1324,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             last += 1
         return first, last
 
+    @_undo_atom
     def _align_table_block(self, line_no):
         """Line the columns of one table up again.
 
@@ -1396,6 +1448,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         """1 when a grid window occupies column 0 of this line, else 0."""
         return 1 if self._grid_at_line(line_no) is not None else 0
 
+    @_undo_hidden
     def _teardown_table_grids(self):
         for info in getattr(self, "_table_grids", []):
             # Deleting the window's character is what actually removes it
@@ -1424,6 +1477,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         except tk.TclError:
             pass
 
+    @_undo_hidden
     def _render_table_grids(self):
         """Draw every table in the note as a grid of real cells.
 
@@ -2109,6 +2163,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 return r - 1
         return None
 
+    @_undo_atom
     def _grid_set_row_lines(self, info, r, lines):
         """One row's height, as its line count. Growing pads the row's
         tallest cell with empty <br> lines; shrinking trims trailing
@@ -2352,6 +2407,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             pass
         self._commit_cell_editor()
 
+    @_undo_atom
     def _commit_cell_editor(self, close=True):
         """The editor's value reaches the hidden text, then the drawing.
 
@@ -3154,6 +3210,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         """
         return self._commit_cell_editor(close=False)
 
+    @_undo_atom
     def _grid_add_row(self, info):
         """Tab at the last cell: make somewhere to go, as the text path does."""
         first = self._grid_first_line(info)
@@ -3387,6 +3444,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     rows[r][c] = ""
         return rows
 
+    @_undo_atom
     def _grid_insert_row(self, info, at):
         context = self._grid_op_context(info)
         if not context:
@@ -3404,6 +3462,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self.body_text.insert(f"{first + data_off[at]}.0", blank + "\n")
         self._grid_after_op(first)
 
+    @_undo_atom
     def _grid_insert_col(self, info, at):
         context = self._grid_op_context(info)
         if not context:
@@ -3421,6 +3480,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._grid_replace_block(first, nrows, rows, aligns, sep_cols)
         self._grid_after_op(first)
 
+    @_undo_atom
     def _grid_delete_row(self, info, r):
         context = self._grid_op_context(info)
         if not context:
@@ -3439,6 +3499,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._grid_replace_block(first, nrows, rows, aligns, sep_cols)
         self._grid_after_op(first)
 
+    @_undo_atom
     def _grid_delete_col(self, info, c):
         """At two columns, deleting empties the chosen column instead.
 
@@ -3488,6 +3549,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._grid_replace_block(first, nrows, rows, aligns, sep_cols)
         self._grid_after_op(first)
 
+    @_undo_atom
     def _grid_split(self, info, r, c):
         context = self._grid_op_context(info)
         if not context:
@@ -3561,6 +3623,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             b.tag_add(f"align_{table_align}",
                       f"{line_no}.0", f"{line_no}.end")
 
+    @_undo_atom
     def _grid_set_col_width(self, info, c, width):
         def mutate(sep_cols, rows, aligns):
             if c < len(sep_cols):
@@ -3568,6 +3631,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 sep_cols[c]["hidden"] = False
         self._grid_column_mechanics(info, mutate)
 
+    @_undo_atom
     def _grid_autofit_col(self, info, c):
         def mutate(sep_cols, rows, aligns):
             widths = core_tables.layout_widths(rows, aligns)
@@ -3576,6 +3640,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 sep_cols[c]["hidden"] = False
         self._grid_column_mechanics(info, mutate)
 
+    @_undo_atom
     def _grid_autofit_cols(self, info, c0, c1):
         """Autofit every column a selection touches, in ONE pass -- the
         per-column call exists on the single-cell menu, and running it
@@ -3589,12 +3654,14 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     sep_cols[c]["hidden"] = False
         self._grid_column_mechanics(info, mutate)
 
+    @_undo_atom
     def _grid_hide_col(self, info, c, hidden=True):
         def mutate(sep_cols, rows, aligns):
             if c < len(sep_cols):
                 sep_cols[c]["hidden"] = hidden
         self._grid_column_mechanics(info, mutate)
 
+    @_undo_atom
     def _grid_hide_span(self, info, c0, c1):
         def mutate(sep_cols, rows, aligns):
             for c in range(c0, min(c1 + 1, len(sep_cols))):
@@ -3654,6 +3721,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._grid_replace_block(first, nrows, rows, aligns, sep_cols)
         self._grid_after_op(first)
 
+    @_undo_atom
     def _grid_unhide_all(self, info):
         def mutate(sep_cols, rows, aligns):
             for column in sep_cols:
@@ -3696,6 +3764,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
     _TABLE_ALIGN_TAGS = ("align_center", "align_right")
 
+    @_undo_atom
     def _grid_add_line_above(self, info):
         """A blank line above the table -- the menu twin of pressing
         Enter under a leading table, working for any table and needing
@@ -3717,6 +3786,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._render_table_grids()
         self._schedule_autosave()
 
+    @_undo_atom
     def _grid_set_table_align(self, info, align):
         """The whole table sits left, centred or right on the page.
 
@@ -3750,6 +3820,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 return "right"
         return "left"
 
+    @_undo_atom
     def _grid_add_caption(self, info):
         """A system-managed caption under the table: a centred, numbered
         label line plus a source line -- ordinary body text after that,
@@ -3795,6 +3866,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._resync_list_tags()
         self._schedule_autosave()
 
+    @_undo_atom
     def _grid_delete_table(self, info):
         first = self._grid_first_line(info)
         if first is None:
@@ -3849,13 +3921,36 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             # The table's place on the page travels with the cells
             # too, so a duplicated centred table comes back centred.
             self._grid_cell_clip_place = self._grid_table_align_of(first)
-        html_rows = "".join(
-            "<tr>" + "".join(
-                "<td>{}</td>".format(
-                    escape(v).replace(
-                        escape(core_tables.LINE_BREAK), "<br>"))
-                for v in row) + "</tr>"
-            for row in matrix)
+        # The HTML mirror of the copy follows the file export's rules:
+        # the table's first row leaves as <th>, merges leave as real
+        # colspan/rowspan cells instead of literal markers, hidden
+        # columns stay hidden, and a checkbox leaves as its glyph. The
+        # TSV keeps every cell verbatim -- it is what a spreadsheet
+        # reads AND what pasting back into the app rebuilds from, so
+        # fidelity lives there.
+        m_spans, m_covered = core_tables.merge_map(matrix)
+        hidden = {i for i, col in enumerate(self._grid_cell_clip_widths or [])
+                  if col.get("hidden")}
+        parts = []
+        for ri, mrow in enumerate(matrix):
+            cells = []
+            for ci, v in enumerate(mrow):
+                if (ri, ci) in m_covered or ci in hidden:
+                    continue
+                rs, cs = m_spans.get((ri, ci), (1, 1))
+                cs -= len([h for h in hidden if ci < h < ci + cs])
+                attr = ((f' colspan="{cs}"' if cs > 1 else "")
+                        + (f' rowspan="{rs}"' if rs > 1 else ""))
+                state = core_tables.checkbox_state(v)
+                if state is not None:
+                    inner = "☑" if state else "☐"
+                else:
+                    inner = escape(v).replace(
+                        escape(core_tables.LINE_BREAK), "<br>")
+                tag = "th" if r0 + ri == 0 else "td"
+                cells.append(f"<{tag}{attr}>{inner}</{tag}>")
+            parts.append("<tr>" + "".join(cells) + "</tr>")
+        html_rows = "".join(parts)
         if not clipboard.write(tsv, html=f"<table>{html_rows}</table>"):
             # Off Windows (the CI runners included) the CF_HTML writer
             # does nothing at all -- the plain text still has to land.
@@ -3865,6 +3960,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             except tk.TclError:
                 pass
 
+    @_undo_atom
     def _grid_fill_selection(self, sel, value, align=None):
         info = sel["info"]
         r0, c0, r1, c1 = sel["box"]
@@ -3904,6 +4000,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                         self.body_text.tag_add(tag, span[0], span[1])
                 self._grid_restyle(fresh)
 
+    @_undo_atom
     def _grid_toggle_checkbox(self, info, r, c):
         """One click on a checkbox cell flips it. The colour spans on the
         marker characters are re-laid after the write, so a coloured box
@@ -3959,23 +4056,29 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                      if anchor_line is not None else None)
             if fresh is None:
                 return
-            r0, c0, r1, c1 = box
-            for r in range(r0, r1 + 1):
-                for c in range(c0, c1 + 1):
-                    cell = fresh["cells"].get((r, c))
-                    if cell is None:
-                        continue
-                    self._write_cell(fresh, r, c,
-                                     core_tables.CHECKBOX_EMPTY)
-                    cell["value"] = core_tables.CHECKBOX_EMPTY
-                    self._grid_redraw_cell_text(fresh, r, c)
-            # No forced centring: it went through the alignment op's
-            # full teardown-and-rebuild and the whole table visibly
-            # flickered for one dropped checkbox. The box sits with the
-            # cell's own alignment, redrawn in place -- same quiet path
-            # a toggle uses.
-            if color:
-                self._grid_apply_style(fresh, box, "text_color", color)
+            # One palette gesture = one undo unit, however many cells it
+            # dresses (a closure cannot wear the @_undo_atom decorator).
+            self._undo_atom_begin()
+            try:
+                r0, c0, r1, c1 = box
+                for r in range(r0, r1 + 1):
+                    for c in range(c0, c1 + 1):
+                        cell = fresh["cells"].get((r, c))
+                        if cell is None:
+                            continue
+                        self._write_cell(fresh, r, c,
+                                         core_tables.CHECKBOX_EMPTY)
+                        cell["value"] = core_tables.CHECKBOX_EMPTY
+                        self._grid_redraw_cell_text(fresh, r, c)
+                # No forced centring: it went through the alignment op's
+                # full teardown-and-rebuild and the whole table visibly
+                # flickered for one dropped checkbox. The box sits with
+                # the cell's own alignment, redrawn in place -- same
+                # quiet path a toggle uses.
+                if color:
+                    self._grid_apply_style(fresh, box, "text_color", color)
+            finally:
+                self._undo_atom_end()
             self._schedule_autosave()
 
         for i, hex_color in enumerate(PRESET_NOTE_COLORS):
@@ -3996,6 +4099,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                                else self._dismiss_mini_popup()))
         popup.focus_set()
 
+    @_undo_atom
     def _grid_merge_selection(self, sel):
         """The selected rectangle becomes one cell, anchored top-left.
 
@@ -4038,6 +4142,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._grid_replace_block(first, nrows, rows, aligns, sep_cols)
         self._grid_after_op(first)
 
+    @_undo_atom
     def _grid_paste_cells(self, info, r, c):
         """Copied cells land as a block starting at the clicked cell,
         growing the table downward when they need more rows."""
@@ -4202,6 +4307,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self._grid_menu(fresh, event, at=(r, c))
         return "break"
 
+    @_undo_atom
     def _grid_set_alignment(self, info, box, align):
         """Alignment is the cell's padding, so setting it edits ONLY the
         padding -- through the same space-level ops the block aligner
@@ -4970,6 +5076,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.after_idle(self._render_table_grids)
         return None
 
+    @_undo_atom
     def _paste_pipe_text_on_own_lines(self):
         """Plain text whose edge lines are table rows lands on its own
         lines, never glued into the caret's line.
@@ -5017,6 +5124,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._schedule_autosave()
         return True
 
+    @_undo_atom
     def _paste_tsv_as_table(self, raw=None):
         """Tab-separated clipboard text pasted into the body becomes a
         real table.
@@ -5134,6 +5242,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             pass
         self.body_text.insert("insert", text)
 
+    @_undo_atom
     def _paste_formatted(self):
         """Paste rich clipboard content. True if that actually happened."""
         markup = clipboard.read_html()
@@ -5635,6 +5744,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
     TABLE_GRID_ROWS = 6
     TABLE_GRID_COLUMNS = 8
 
+    @_undo_atom
     def _insert_table(self, rows, columns):
         """Put a blank table at the caret, on lines of its own.
 
@@ -5643,7 +5753,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         something, and after it so there is somewhere to carry on writing.
         """
         rows = max(1, min(self.TABLE_GRID_ROWS * 4, int(rows)))
-        columns = max(1, min(self.TABLE_GRID_COLUMNS, int(columns)))
+        # Never fewer than two columns: is_table_row needs two cells to
+        # tell a row from prose containing a pipe, so a one-column table
+        # would insert as dead pipe text that never becomes a grid.
+        columns = max(2, min(self.TABLE_GRID_COLUMNS, int(columns)))
         line_no = int(self.body_text.index("insert").split(".")[0])
         line = self.body_text.get(f"{line_no}.0", f"{line_no}.end")
         # Two adjacent runs of pipe rows read as ONE block, so a table
@@ -5704,8 +5817,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             highlight(0, 0)
             caption.configure(text="Insert table")
 
+        # Columns start at two: a one-column run of pipes is not
+        # recognisable as a table row (| x | in prose would be one), so
+        # the picker never offers a shape that cannot exist.
         for r in range(1, self.TABLE_GRID_ROWS + 1):
-            for c in range(1, self.TABLE_GRID_COLUMNS + 1):
+            for c in range(2, self.TABLE_GRID_COLUMNS + 1):
                 cell = tk.Frame(grid, width=14, height=14, cursor="hand2",
                                 bg=inset_surface(self.colors))
                 cell.grid(row=r, column=c, padx=1, pady=1)
@@ -7730,10 +7846,17 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
     # ---------- In-note calculator ----------
 
     def update_word_count(self):
-        """Refresh the words · characters readout for the note body."""
+        """Refresh the words · characters readout for the note body.
+
+        Tables are counted by what the user wrote in them, not by their
+        plumbing: every pipe used to count as a "word", so an empty 3x3
+        table claimed twelve words and inflated the reading time.
+        """
         if not hasattr(self, "word_count_lbl"):
             return
         text = self.body_text.get("1.0", "end-1c")
+        if core_tables.CELL in text:
+            text = core_tables.content_text(text)
         chars = len(text)
         words = len(text.split())
         if chars == 0:
@@ -9422,14 +9545,23 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                                      compact=4, expanded=12,
                                      pack_kwargs={"padx": 30, "pady": (0, 8)})
 
-        # Reliable undo/redo on both editors (Ctrl+Z / Ctrl+Y and Ctrl+Shift+Z).
-        for _tw in (self.body_text, self.comments_text):
-            _tw.bind("<Control-z>", lambda e, w=_tw: (w.edit_undo(), "break")[1]
-                     if self._can_edit_undo(w) else "break")
-            _tw.bind("<Control-y>", lambda e, w=_tw: (w.edit_redo(), "break")[1]
-                     if self._can_edit_redo(w) else "break")
-            _tw.bind("<Control-Shift-Z>", lambda e, w=_tw: (w.edit_redo(), "break")[1]
-                     if self._can_edit_redo(w) else "break")
+        # Reliable undo/redo on both editors (Ctrl+Z / Ctrl+Y and
+        # Ctrl+Shift+Z). The body goes through _body_undo_redo, which also
+        # redraws the tables the undone text describes; the comments box
+        # has no tables and keeps the plain stack walk.
+        self.body_text.bind("<Control-z>",
+                            lambda e: self._body_undo_redo("undo"))
+        self.body_text.bind("<Control-y>",
+                            lambda e: self._body_undo_redo("redo"))
+        self.body_text.bind("<Control-Shift-Z>",
+                            lambda e: self._body_undo_redo("redo"))
+        _tw = self.comments_text
+        _tw.bind("<Control-z>", lambda e, w=_tw: (w.edit_undo(), "break")[1]
+                 if self._can_edit_undo(w) else "break")
+        _tw.bind("<Control-y>", lambda e, w=_tw: (w.edit_redo(), "break")[1]
+                 if self._can_edit_redo(w) else "break")
+        _tw.bind("<Control-Shift-Z>", lambda e, w=_tw: (w.edit_redo(), "break")[1]
+                 if self._can_edit_redo(w) else "break")
 
         # Attachments section
         attach_header = tk.Frame(self.editor)
@@ -10274,6 +10406,59 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         except tk.TclError:
             return False
 
+    def _undo_atom_begin(self):
+        """Open one undo unit on the body (see the _undo_atom decorator).
+        Re-entrant: nested opens keep the outermost unit."""
+        depth = getattr(self, "_undo_atom_depth", 0)
+        self._undo_atom_depth = depth + 1
+        if depth == 0 and hasattr(self, "body_text"):
+            try:
+                self.body_text.edit_separator()
+                self.body_text.configure(autoseparators=False)
+            except tk.TclError:
+                pass
+
+    def _undo_atom_end(self):
+        depth = max(0, getattr(self, "_undo_atom_depth", 1) - 1)
+        self._undo_atom_depth = depth
+        if depth == 0 and hasattr(self, "body_text"):
+            try:
+                self.body_text.configure(autoseparators=True)
+                self.body_text.edit_separator()
+            except tk.TclError:
+                pass
+
+    def _body_undo_redo(self, action):
+        """Ctrl+Z / Ctrl+Y on the note body.
+
+        Tk walks its stack; what Tk cannot know is that the text it just
+        put back may hold tables -- the drawn grids would keep showing
+        the OLD cells over the new text (the drawing itself is kept off
+        the stack by _undo_hidden). So every step resyncs the line tags
+        and redraws the grids from the text that undo produced.
+        """
+        b = self.body_text
+        # A still-open cell editor holds uncommitted text; commit it so
+        # the undo works against what the note actually says.
+        if getattr(self, "_cell_editor", None):
+            self._commit_cell_editor()
+        can = (self._can_edit_undo if action == "undo"
+               else self._can_edit_redo)(b)
+        if not can:
+            return "break"
+        try:
+            (b.edit_undo if action == "undo" else b.edit_redo)()
+        except tk.TclError:
+            return "break"
+        self._body_follow_caret = True
+        self._resync_list_tags()
+        if (getattr(self, "_table_grids", None)
+                or core_tables.find_blocks(b.get("1.0", "end-1c"))):
+            self._render_table_grids()
+        self._refresh_format_buttons()
+        self._schedule_autosave()
+        return "break"
+
     def _bind_text_wheel(self, text_widget, fallback_canvas=None):
         """Mousewheel behavior over a text box:
         - if the box has more text than fits, scroll the box's own
@@ -10393,10 +10578,19 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         def _txt(value):
             return value.lower() if isinstance(value, str) else ""
 
+        def _body_txt(value):
+            # A body is searched by what the user wrote, not by table
+            # plumbing: searching "---" or "br" used to match every note
+            # holding a table. Only bodies that actually contain a pipe
+            # pay for the stripping.
+            if isinstance(value, str) and core_tables.CELL in value:
+                return core_tables.content_text(value).lower()
+            return _txt(value)
+
         filtered = [
             n for n in self.notes
             if query in _txt(n.get("title"))
-            or query in _txt(n.get("body"))
+            or query in _body_txt(n.get("body"))
             or query in _txt(n.get("comments"))
         ]
 

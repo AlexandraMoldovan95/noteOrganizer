@@ -161,6 +161,47 @@ check("and so does the formatting inside it",
       len(_back_spans) == 1
       and _back[_back_spans[0]["start"]:_back_spans[0]["end"]] == "Milk")
 
+# --- what the page shows is what the app shows ---------------------------
+# A hidden column (the ~ separator marker) stays hidden in the export;
+# the data itself never leaves the note's text, so unhiding brings it back.
+_hid = "\n".join(["| a | SECRET | c |",
+                  "| --- | ~ | --- |",
+                  "| 1 | ascuns | 3 |"])
+_hid_out = note_to_html(_hid)
+check("a hidden column stays hidden in the export",
+      "SECRET" not in _hid_out and "ascuns" not in _hid_out
+      and "<th>a</th><th>c</th>" in _hid_out)
+_span_hid = "\n".join(["| a | b | c |",
+                       "| --- | ~ | --- |",
+                       "| wide | < | < |"])
+check("a merge across a hidden column narrows to what shows",
+      '<td colspan="2">wide</td>' in note_to_html(_span_hid))
+
+# A checkbox leaves as the glyph the app draws, and the glyph comes back
+# as the checkbox -- brackets never reach Word, boxes always come home.
+_cb = "\n".join(["| task | done |", "| --- | --- |", "| nu | [ ] |",
+                 "| da | [x] |"])
+_cb_out = note_to_html(_cb)
+check("checkboxes export as glyphs",
+      "<td>☐</td>" in _cb_out and "<td>☑</td>" in _cb_out
+      and "[x]" not in _cb_out)
+_cb_back, _, _ = html_to_note(_cb_out)
+check("and the glyphs come back as checkboxes",
+      "[ ]" in _cb_back and "[x]" in _cb_back and "☑" not in _cb_back)
+
+# --- counting and searching see the writing, not the plumbing ------------
+_ct = tables.content_text("\n".join([
+    "doua vorbe",
+    "| Milk | 2 |",
+    "| --- | ~ |",
+    "| [x] | note<br>aici |",
+]))
+check("content_text keeps prose and cell words only",
+      "doua vorbe" in _ct and "Milk" in _ct and "note aici" in _ct)
+check("content_text drops pipes, dashes, markers and checkboxes",
+      "|" not in _ct and "---" not in _ct and "[x]" not in _ct
+      and "<br>" not in _ct)
+
 # --- the PDF reflow must not eat a table ---------------------------------
 # A table's line breaks are its rows, exactly as a list's are its items.
 # Rejoining them would destroy the table rather than tidy it.

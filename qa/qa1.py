@@ -5581,6 +5581,139 @@ check('our own table copy pastes below the Sursa line, not into it',
 _stub_clipboard()
 set_body('')
 
+# Clipboardul HTML urmeaza regulile exportului de fisier: header <th>,
+# merge-uri reale (nu markeri literali), coloana ascunsa nu pleaca,
+# checkboxul pleaca glifa. TSV-ul ramane complet -- fidelitatea interna.
+set_body('| h1 | h2 | h3 | h4 |' + chr(10)
+         + '| --- | --- | --- | ~ |' + chr(10)
+         + '| wide | < | [x] | secret |')
+app._render_table_grids()
+app.update()
+_iV = app._grid_at_line(1)
+app._grid_select_range(_iV, (0, 0), (1, 3))
+_stub_clipboard()
+app._grid_copy_selection({'info': _iV, 'box': (0, 0, 1, 3)})
+_htmlV = _written.get('html') or ''
+check('the cell copy HTML wears th, merges, hides and draws the box',
+      '<th>h1</th>' in _htmlV and 'colspan="2"' in _htmlV
+      and 'secret' not in _htmlV and 'h4' not in _htmlV
+      and chr(0x2611) in _htmlV)
+check('while the TSV keeps every column verbatim',
+      'secret' in (_written.get('text') or '')
+      and '[x]' in (_written.get('text') or ''))
+app._grid_clear_selection()
+set_body('')
+
+# Word count-ul numara ce a SCRIS omul, nu instalatia: fiecare pipe
+# conta ca "un cuvant", un tabel gol 3x3 pretindea 12 vorbe.
+set_body('doua vorbe' + chr(10) + chr(10).join(core_tables.blank_table(3, 3)))
+app._render_table_grids()
+app.update()
+app.update_word_count()
+check('the word count sees the writing, not the table plumbing',
+      app.word_count_lbl.cget('text').startswith('2 words'))
+set_body('')
+
+# Cautarea la fel: "---" nu mai prinde orice nota cu tabel, dar
+# continutul celulelor ramane cautabil.
+app.new_note()
+app.title_entry.delete(0, 'end')
+app.title_entry.insert(0, 'NotaTabelQ')
+app.body_text.insert('1.0', '| gergebe | x |' + chr(10)
+                     + '| --- | --- |' + chr(10) + '| a | b |')
+app.save_current_note(auto=False)
+app.update()
+_idQ = app.selected_note_id
+app.search_var.set('---')
+app.refresh_note_list()
+app.update()
+_hitQ1 = _idQ in getattr(app, '_note_card_widgets', {})
+app.search_var.set('gergebe')
+app.refresh_note_list()
+app.update()
+_hitQ2 = _idQ in getattr(app, '_note_card_widgets', {})
+app.search_var.set('')
+app.refresh_note_list()
+app.update()
+check('search skips table plumbing but still finds cell content',
+      not _hitQ1 and _hitQ2)
+
+# Un tabel de 1 coloana nu poate exista ca rand (is_table_row cere doua
+# celule) -- inserarea il ridica la doua, altfel iesea text mort cu pipe.
+set_body('')
+app._insert_table(2, 1)
+app.update()
+check('a one-column insert becomes a real two-column grid',
+      len(app._table_grids) == 1 and app._table_grids[0]['ncols'] == 2)
+if getattr(app, '_cell_editor', None):
+    app._commit_cell_editor()
+app.update()
+set_body('')
+
+# ---- UNDO x TABELE: o operatie = un singur Ctrl+Z ----
+# Commitul unei celule e o rafala de editari mici; fara unitatea de
+# undo, un Ctrl+Z se oprea la jumatate -- valoarea veche pierduta,
+# paddingul prabusit ('|  | 2 |' in sonda auditului).
+set_body('| a | b |' + chr(10) + '| --- | --- |' + chr(10)
+         + '| 1 | 2 |' + chr(10) + 'final')
+app._render_table_grids()
+app.update()
+app.body_text.edit_reset()
+_iU = app._grid_at_line(1)
+app._open_cell_editor(_iU, 1, 0)
+app.update()
+app._cell_editor['entry'].delete('1.0', 'end')
+app._cell_editor['entry'].insert('1.0', 'unu-nou')
+app._commit_cell_editor()
+app.update()
+app._open_cell_editor(app._grid_at_line(1), 1, 1)
+app.update()
+app._cell_editor['entry'].delete('1.0', 'end')
+app._cell_editor['entry'].insert('1.0', 'doi-nou')
+app._commit_cell_editor()
+app.update()
+_txtU0 = app.body_text.get('1.0', 'end-1c')
+app._body_undo_redo('undo')
+app.update()
+_txtU1 = app.body_text.get('1.0', 'end-1c')
+app._body_undo_redo('undo')
+app.update()
+_txtU2 = app.body_text.get('1.0', 'end-1c')
+check('one Ctrl+Z takes back one whole cell edit',
+      'unu-nou' in _txtU0 and 'doi-nou' in _txtU0
+      and 'unu-nou' in _txtU1 and 'doi-nou' not in _txtU1)
+check('the second Ctrl+Z takes back the edit before it, not the redraw',
+      'unu-nou' not in _txtU2
+      and '| 1 | 2 |' in _txtU2.split(chr(10))[2])
+_iU2 = app._grid_at_line(1)
+check('the drawn grid follows the undone text',
+      _iU2 is not None and _iU2['cells'][(1, 0)]['value'] == '1')
+app._body_undo_redo('redo')
+app.update()
+check('redo brings the edit and its drawing back',
+      'unu-nou' in app.body_text.get('1.0', 'end-1c')
+      and app._grid_at_line(1)['cells'][(1, 0)]['value'] == 'unu-nou')
+
+# Un tabel inserat pleaca intreg la un singur undo, cu desenul cu tot.
+set_body('text sus')
+app.update()
+app.body_text.edit_reset()
+app.body_text.mark_set('insert', 'end -1c')
+app._insert_table(2, 3)
+app.update()
+if getattr(app, '_cell_editor', None):
+    app._commit_cell_editor()
+app.update()
+check('the inserted table is there before the undo',
+      len(app._table_grids) == 1)
+app._body_undo_redo('undo')
+app.update()
+_txtU3 = app.body_text.get('1.0', 'end-1c')
+check('one undo removes the whole inserted table, drawing included',
+      '|' not in _txtU3 and len(app._table_grids) == 0
+      and 'text sus' in _txtU3)
+set_body('')
+
 # ---- OLD TEETH, SHARPENED (auditul din 2026-08-31) ----
 # 1. Garda editorului din 0.32.x (continut scurt sta sus) nu era
 # pinuita de nimic: scoasa, totul ramanea verde. winfo_height e

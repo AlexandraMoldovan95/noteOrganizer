@@ -814,3 +814,41 @@ paying it and for what. A cost accepted for reshaping was being
 charged on a resize — the operation users do most, on the tables they
 styled most carefully. The fix was not making the rewrite cleverer;
 it was noticing which operations never needed it at all.
+
+### The undo that stopped halfway
+
+**Symptom:** found by an audit probe, not a field report — edit a
+table cell from `1` to `schimbat`, press Ctrl+Z once, and the cell
+reads neither: `|  | 2 |`. The old value gone, the padding collapsed,
+and the drawn grid still showing the text from before the undo.
+
+**Root cause:** three separate holes lined up. A cell commit is a
+burst of small inserts and deletes (the value write, then the padding
+shuffle on every row), and Tk's autoseparators made each its own undo
+step — so one Ctrl+Z peeled back half an operation. Nothing after an
+undo redrew the grids, so the canvas kept showing text the undo had
+already changed underneath it. And the rebuild machinery was writing
+its own edits into the same stack: probes against a live Text widget
+showed `window_create` never records, but DELETING an embedded
+window's character does — and undoing that delete re-inserts a
+phantom character that shifts every index after it (the same
+phantom-index family as "a/b became |a/be" above).
+
+**Fix:** three layers, matched to the three holes. Every table
+operation now runs as ONE undo unit (a decorator brackets it with
+separators and holds autoseparators off, re-entrant for ops that call
+ops). The grid teardown and redraw run with undo recording off —
+verified first that Tk keeps the existing stack across that toggle.
+And Ctrl+Z/Ctrl+Y on the body go through a handler that, after Tk
+walks the stack, resyncs the tags and redraws the tables the restored
+text describes. Mutants: the missing atom and the missing handler both
+die by named checks; the recording-off layer's mutant survives the
+suite because the other two layers repair every scenario the checks
+can reach — kept anyway, on the strength of the probes, as layered
+defence and said so here rather than dressed up as a pinned mechanism.
+
+**Takeaway:** undo is a feature, and features cross. Every operation
+that writes text in bursts owes the undo stack a boundary, everything
+that redraws owes it silence, and the probe that settles what Tk
+actually records costs one minute — cheaper than the theory it
+replaces.

@@ -363,6 +363,12 @@ class _Reader(HTMLParser):
             cleaned = re.sub(r" *\n *", "\n", cleaned)
         else:
             cleaned = re.sub(r"[ \t\r\n]+", " ", data)
+        if self.cell_depth:
+            # The export draws a checkbox cell as its glyph; coming back,
+            # the glyph is the checkbox again. Only inside a cell -- the
+            # same glyph in prose is just a character someone typed.
+            cleaned = (cleaned.replace("☑", tables.CHECKBOX_DONE)
+                              .replace("☐", tables.CHECKBOX_EMPTY))
         if self._at_line_start():
             cleaned = cleaned.lstrip(" ")
         if cleaned.strip() or self._line_has_text:
@@ -547,13 +553,22 @@ def note_to_html(text, formatting=None, paragraphs=None):
     # block's matrix is resolved up front and looked up per line.
     merge_at = {}
     separator_lines = set()
+    hidden_at = {}
     for block_first, block_last in tables.find_blocks(text):
         block = lines[block_first:block_last + 1]
         sep_at = tables.separator_index(block)
+        hidden_cols = set()
         if sep_at is not None:
             # Mechanics, not data: the separator's dashes never reach the
             # markup a word processor sees.
             separator_lines.add(block_first + sep_at)
+            # A column the author hid is hidden in the export too: the
+            # page should show what the app shows. The data itself stays
+            # in the note -- unhide, and the next export carries it.
+            hidden_cols = {
+                i for i, col in enumerate(
+                    tables.parse_separator(block[sep_at]))
+                if col.get("hidden")}
         data_lines = [n for n in range(block_first, block_last + 1)
                       if n - block_first != sep_at]
         matrix = [tables.split_row(lines[n]) for n in data_lines]
@@ -562,6 +577,7 @@ def note_to_html(text, formatting=None, paragraphs=None):
             merge_at[n] = (
                 {c: m_spans[(ar, c)] for (ar, c) in m_spans if ar == r},
                 {c for (rr, c) in m_covered if rr == r})
+            hidden_at[n] = hidden_cols
 
     out, offset, open_lists, in_table = [], 0, [], False
     for number, line in enumerate(lines):
@@ -644,12 +660,16 @@ def note_to_html(text, formatting=None, paragraphs=None):
             else:
                 header_row = False
             row_spans, row_covered = merge_at.get(number, ({}, set()))
+            row_hidden = hidden_at.get(number, set())
             row_aligns = tables.cell_alignments(line)
             cells = []
             for c, (start, end) in enumerate(row):
-                if c in row_covered:
+                if c in row_covered or c in row_hidden:
                     continue
                 rs, cs = row_spans.get(c, (1, 1))
+                # A merge reaching across a hidden column narrows by the
+                # columns the page will not show.
+                cs -= len([h for h in row_hidden if c < h < c + cs])
                 attr = ""
                 if cs > 1:
                     attr += f' colspan="{cs}"'
@@ -679,9 +699,24 @@ def note_to_html(text, formatting=None, paragraphs=None):
                 # browsers bold it too instead of flattening it into an
                 # ordinary row.
                 tag_name = "th" if header_row else "td"
-                cells.append(f"<{tag_name}{attr}>"
-                             f"{_cell_html(line, spans, offset, start, end)}"
-                             f"</{tag_name}>")
+                # A checkbox cell leaves as the glyph the app draws, not
+                # as its bracket markers; its colour (a text_color span
+                # riding the markers) comes along. The import maps the
+                # glyphs back, so a round trip keeps a real checkbox.
+                state = tables.checkbox_state(line[start:end])
+                if state is not None:
+                    glyph = "☑" if state else "☐"
+                    for sp in spans:
+                        if (sp["style"] == "text_color"
+                                and sp["start"] <= offset + start
+                                and sp["end"] >= offset + end):
+                            glyph = (f'<span style="color:{sp["value"]};">'
+                                     f"{glyph}</span>")
+                            break
+                    inner = glyph
+                else:
+                    inner = _cell_html(line, spans, offset, start, end)
+                cells.append(f"<{tag_name}{attr}>{inner}</{tag_name}>")
             out.append(f"<tr>{''.join(cells)}</tr>")
         else:
             align = entry.get("align")
