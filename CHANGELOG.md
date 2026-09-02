@@ -8,6 +8,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ## [Unreleased]
 
+## [0.64.95] — 2026-09-02
+
 ### Testing
 - `tools/pre_push_check.py` — CI's three static gates (names resolve, class surface unchanged, every tracked `.py` compiles, tests included), runnable locally in two seconds; two pull requests went red learning why this should exist. `qa/README.md` now carries the suite's **seam map** — which files guard which UI surface (the bulk bar's qa1+qa7 split taught this) — plus the house rules for new checks: land with the feature, mutation-tested, platform-aimed, settled not raced.
 - CI now runs the entire suite on **Windows too** — the platform the app actually ships on (real Segoe UI metrics, Windows Tk, no virtual display) — alongside the Linux run that keeps exercising the pure logic and the X11 behaviours that have caught real bugs. One matrix, one set of steps, both verdicts always visible (`fail-fast: false`). The handful of checks that measure Windows-specific pixels now assert in CI instead of only on a developer's machine — a failing check is fixed in the app, never routed around. Found and closed on the way: `test_richtext.py` was never wired into CI at all. Its first flight promptly caught the push-down settling flake fixed alongside it — the new runner earning its keep in its first five minutes.
