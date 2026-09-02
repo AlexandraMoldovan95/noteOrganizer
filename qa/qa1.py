@@ -1811,9 +1811,18 @@ _real_write = NO.clipboard.write
 _written = {}
 
 
-def _stub_clipboard(html=None, text=None):
-    NO.clipboard.read_html = lambda: html
-    NO.clipboard.read_text = lambda: text
+def _stub_clipboard(html=None, text=None, loopback=False):
+    # loopback=True serves back whatever the app last WROTE -- the real
+    # Windows clipboard behaves exactly like that, and the rich-paste
+    # route only sees our own table copies through it. Without this mode
+    # the suite never exercised the Windows route order, and the pasted
+    # table gluing itself onto the "Sursa:" line shipped unseen.
+    if loopback:
+        NO.clipboard.read_html = lambda: _written.get('html')
+        NO.clipboard.read_text = lambda: _written.get('text')
+    else:
+        NO.clipboard.read_html = lambda: html
+        NO.clipboard.read_text = lambda: text
     _written.clear()
 
     def _capture(t, h=None, html=None):
@@ -5542,6 +5551,34 @@ _blkL = core_tables.find_blocks(app.body_text.get('1.0', 'end-1c'))
 check('a duplicated CENTRED table pastes back centred',
       len(_blkL) == 2
       and app._grid_table_align_of(_blkL[1][0] + 1) == 'center')
+set_body('')
+
+# RUTA WINDOWS (runda 6): copy-ul nostru pune si HTML pe clipboard, iar
+# ruta rich-paste il vedea PRIMA -- tabelul copiat se lipea generic:
+# fara latimi, fara plasare, si cu primul rand aterizat in coada liniei
+# "Sursa: " ('Sursa: | fff |...' in raportul de teren). Loopback-ul
+# serveste inapoi exact ce s-a scris, cum face clipboardul Windows;
+# copia proprie trebuie sa ia ruta TSV, cu toate gardurile ei.
+set_body('| a | b |' + chr(10) + '| --- | --- |' + chr(10)
+         + '| 1 | 2 |' + chr(10) + 'Tab. 1: descriere' + chr(10)
+         + 'Sursa: ')
+app._render_table_grids()
+app.update()
+_iW = app._grid_at_line(1)
+app._grid_select_range(_iW, (0, 0), (1, 1))
+_stub_clipboard(loopback=True)
+app._grid_copy_selection({'info': _iW, 'box': (0, 0, 1, 1)})
+app._grid_clear_selection()
+_lnW = app.body_text.get('1.0', 'end-1c').split(chr(10)).index('Sursa: ') + 1
+app.body_text.mark_set('insert', '%d.end' % _lnW)
+app.update()
+app._on_body_paste()
+app.update()
+_bodyW = app.body_text.get('1.0', 'end-1c').split(chr(10))
+check('our own table copy pastes below the Sursa line, not into it',
+      _bodyW[_lnW - 1] == 'Sursa: '
+      and len(core_tables.find_blocks(chr(10).join(_bodyW))) == 2)
+_stub_clipboard()
 set_body('')
 
 # ---- OLD TEETH, SHARPENED (auditul din 2026-08-31) ----

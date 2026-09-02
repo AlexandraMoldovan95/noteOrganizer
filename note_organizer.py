@@ -4939,9 +4939,27 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 self._grid_paste_cells(sel["info"],
                                        sel["box"][0], sel["box"][1])
                 return "break"
-        if self._paste_formatted():
+        # Our own cell copy puts an HTML table on the clipboard for Word's
+        # sake, and on Windows the rich-paste route saw it FIRST -- so
+        # pasting a copied table back into a note took the generic HTML
+        # road: no set widths, no placement, and the first row glued onto
+        # the caret's line ("Sursa: | fff |..." in the field report). The
+        # TSV route carries everything the copy knew, so our own copies go
+        # there; the rich route is for content from OTHER applications.
+        # Detection reads the system clipboard directly, no Tk fallback:
+        # our copy always writes the plain text alongside the HTML, and
+        # when the clipboard is momentarily locked the HTML is unreadable
+        # too, so the paste falls through to the TSV route anyway.
+        own = getattr(self, "_grid_cell_clip_text", None)
+        own_copy = bool(own) and clipboard.read_text() == own
+        if own_copy:
+            if self._paste_tsv_as_table():
+                return "break"
+            # A single copied cell has no tabs: it pastes as the plain
+            # text it is, never as a one-cell table the HTML would make.
+        elif self._paste_formatted():
             return "break"
-        if self._paste_tsv_as_table():
+        if not own_copy and self._paste_tsv_as_table():
             return "break"
         if self._paste_pipe_text_on_own_lines():
             return "break"
