@@ -7699,11 +7699,35 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self.checklist_btn.config(text="☑ Checklist  ▲")
             self._render_checklist_items()
 
+    def _toggle_checklist_expand(self):
+        """Grow or shrink the checklist list area. Expanded, the whole box
+        matches the calculator with its history open; compact, it matches
+        the calculator closed. The scroll works in both — this is extra
+        reach when the list is long, not a replacement for scrolling."""
+        self._checklist_expanded = not getattr(self, "_checklist_expanded", False)
+        self._checklist_list_wrap.configure(
+            height=(self.CHECKLIST_LIST_EXPANDED if self._checklist_expanded
+                    else self.CHECKLIST_LIST_COMPACT))
+        self.checklist_expand_btn.config(
+            text="⤡ Collapse" if self._checklist_expanded else "⤢ Expand")
+
+    # The list area is sized so the whole checklist box matches the
+    # calculator beside it. Measured 2026-09-02: the calculator is 359px
+    # with its history closed and 459px with it open, while the checklist
+    # box's non-list parts (header + add row + paddings) are ~73px. So the
+    # list area carries the difference — 286 compact (box → 359, equal to
+    # the calculator closed) and 386 expanded (box → 459, equal to it with
+    # history open). The Expand toggle switches between the two; the scroll
+    # works in both states, so this is extra reach, not a replacement.
+    CHECKLIST_LIST_COMPACT = 286
+    CHECKLIST_LIST_EXPANDED = 386
+
     def _build_checklist_section(self):
         """Build the (initially hidden) checklist UI: a scrollable list of items
         plus an entry to add new ones and Save/Close buttons."""
         sec = self.checklist_section
-        # Header with progress + close.
+        self._checklist_expanded = False
+        # Header with progress + expand + close.
         head = tk.Frame(sec, bg=self.colors["card"])
         head.pack(fill="x", padx=10, pady=(8, 4))
         self.checklist_progress_lbl = tk.Label(
@@ -7714,11 +7738,19 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                   relief="flat", cursor="hand2", bg=self.colors["card"],
                   fg=self.colors["subtext"], font=("Segoe UI", 8, "bold"), bd=0
                   ).pack(side="right")
+        self.checklist_expand_btn = tk.Button(
+            head, text="⤢ Expand", command=self._toggle_checklist_expand,
+            relief="flat", cursor="hand2", bg=self.colors["card"],
+            fg=self.colors["subtext"], font=("Segoe UI", 8, "bold"), bd=0)
+        self.track_theme(self.checklist_expand_btn, bg="card", fg="subtext")
+        self.checklist_expand_btn.pack(side="right", padx=(0, 10))
 
         # Scrollable list of items.
-        wrap = tk.Frame(sec, bg=self.colors["card"], height=160)
+        wrap = tk.Frame(sec, bg=self.colors["card"],
+                        height=self.CHECKLIST_LIST_COMPACT)
         wrap.pack(fill="x", padx=10, pady=(0, 4))
         wrap.pack_propagate(False)
+        self._checklist_list_wrap = wrap
         canvas = tk.Canvas(wrap, bg=self.colors["card"], highlightthickness=0)
         sb = ttk.Scrollbar(wrap, orient="vertical", command=canvas.yview)
         self.checklist_items_frame = tk.Frame(canvas, bg=self.colors["card"])
@@ -7853,6 +7885,16 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if getattr(self, "_checklist_open", False):
             self.checklist_section.pack_forget()
             self._checklist_open = False
+        # Also drop the expand back to compact — the expanded height is a
+        # transient view choice, not part of the note, so it shouldn't
+        # carry from one note into the next.
+        if getattr(self, "_checklist_expanded", False):
+            self._checklist_expanded = False
+            if hasattr(self, "_checklist_list_wrap"):
+                self._checklist_list_wrap.configure(
+                    height=self.CHECKLIST_LIST_COMPACT)
+            if hasattr(self, "checklist_expand_btn"):
+                self.checklist_expand_btn.config(text="⤢ Expand")
         if hasattr(self, "checklist_btn"):
             self._update_checklist_progress()
 

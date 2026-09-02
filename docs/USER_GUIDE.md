@@ -98,7 +98,7 @@ Attach one or more files to a note from the editor. Attached files show as a sma
 
 ### Checklists
 
-Any note can have a checklist. Click **☑ Checklist** in the editor to open it, add items, and check them off as you go — the note's card in the list shows progress at a glance (e.g. "☑ 2/5").
+Any note can have a checklist. Click **☑ Checklist** in the editor to open it, add items, and check them off as you go — the note's card in the list shows progress at a glance (e.g. "☑ 2/5"). The box sits beside the calculator at the same size; when a list gets long, **⤢ Expand** in its header grows it to give more room (and it always scrolls, expanded or not). The expanded size is a per-view choice — switching notes returns it to the compact size.
 
 ![Checklist](screenshots/checklist.png)
 

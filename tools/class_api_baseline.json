@@ -373,6 +373,7 @@
   "_toggle_body_style": "(self, style)",
   "_toggle_calc_history": "(self)",
   "_toggle_calc_more": "(self)",
+  "_toggle_checklist_expand": "(self)",
   "_toggle_group_collapsed": "(self, category)",
   "_toggle_list": "(self, kind)",
   "_toggle_note_selected": "(self, note_id, now_selected)",

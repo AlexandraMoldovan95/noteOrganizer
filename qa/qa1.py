@@ -252,6 +252,51 @@ check(f'checklist and calculator columns are equal width '
       f'({checklist_col_width}px vs {calculator_col_width}px)',
       abs(checklist_col_width - calculator_col_width) <= 2)
 
+# The checklist box is sized to MATCH the calculator beside it, in both
+# states: compact equals the calculator closed, expanded equals it with
+# history open. A settle loop because winfo_height needs the layout to
+# stop moving under a full-suite run's load.
+def _stable_h(w):
+    last = -1
+    for _ in range(40):
+        app.update(); app.update_idletasks()
+        h = w.winfo_height()
+        if h == last and h > 1:
+            return h
+        last = h
+        time.sleep(0.02)
+    return last
+app.toggle_checklist_section()          # calculator is already open here
+_chk_compact = _stable_h(app.checklist_section)
+_calc_closed = _stable_h(app.calculator_section)
+check(f'checklist compact matches the calculator closed '
+      f'({_chk_compact}px vs {_calc_closed}px)',
+      abs(_chk_compact - _calc_closed) <= 4)
+# Expand the checklist and open the calculator history: still equal.
+app._toggle_checklist_expand()
+app._toggle_calc_history()
+_chk_exp = _stable_h(app.checklist_section)
+_calc_open = _stable_h(app.calculator_section)
+check(f'checklist expanded matches the calculator with history '
+      f'({_chk_exp}px vs {_calc_open}px)',
+      abs(_chk_exp - _calc_open) <= 4 and _chk_exp > _chk_compact + 40)
+check('the expand button flips to Collapse when expanded',
+      '⤡' in app.checklist_expand_btn.cget('text')
+      or 'Collapse' in app.checklist_expand_btn.cget('text'))
+# The scroll survives the expand -- extra reach, not a replacement.
+check('the checklist keeps its own scroll canvas while expanded',
+      app._checklist_canvas.winfo_ismapped())
+# The note-switch reset path (which does NOT touch the calculator) drops
+# the expand back to compact -- a transient view choice, not saved state.
+app._sync_checklist_open_state()
+check('the note-switch reset returns the checklist to compact',
+      app._checklist_expanded is False
+      and int(app._checklist_list_wrap.cget('height')) == app.CHECKLIST_LIST_COMPACT)
+# Restore the calculator to how the checks below expect it: open, history
+# closed (the checklist reset above already collapsed the checklist).
+app._toggle_calc_history()
+app.update()
+
 for label in ['7', '×', '8']:  # 7 x 8, no "=" yet
     find_calc_btn(label).invoke()
     app.update()
