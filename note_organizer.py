@@ -7709,41 +7709,33 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             height=(self.CHECKLIST_LIST_EXPANDED if self._checklist_expanded
                     else self.CHECKLIST_LIST_COMPACT))
         self.checklist_expand_btn.config(
-            text="⤡ Collapse" if self._checklist_expanded else "⤢ Expand")
+            text="Collapse ⌃" if self._checklist_expanded else "Expand ⌄")
 
     # The list area is sized so the whole checklist box matches the
     # calculator beside it. Measured 2026-09-02: the calculator is 359px
     # with its history closed and 459px with it open, while the checklist
-    # box's non-list parts (header + add row + paddings) are ~73px. So the
-    # list area carries the difference — 286 compact (box → 359, equal to
-    # the calculator closed) and 386 expanded (box → 459, equal to it with
-    # history open). The Expand toggle switches between the two; the scroll
-    # works in both states, so this is extra reach, not a replacement.
-    CHECKLIST_LIST_COMPACT = 286
-    CHECKLIST_LIST_EXPANDED = 386
+    # box's non-list parts (header + expand bar + add row + paddings) are
+    # ~94px. So the list area carries the difference — 265 compact (box →
+    # 359, equal to the calculator closed) and 365 expanded (box → 459,
+    # equal to it with history open). The Expand toggle switches between
+    # the two; the scroll works in both states, so this is extra reach,
+    # not a replacement.
+    CHECKLIST_LIST_COMPACT = 265
+    CHECKLIST_LIST_EXPANDED = 365
 
     def _build_checklist_section(self):
         """Build the (initially hidden) checklist UI: a scrollable list of items
         plus an entry to add new ones and Save/Close buttons."""
         sec = self.checklist_section
         self._checklist_expanded = False
-        # Header with progress + expand + close.
+        # Header: just the progress label. No in-panel Close button -- the
+        # "☑ Checklist ▲" bar above already toggles it shut.
         head = tk.Frame(sec, bg=self.colors["card"])
         head.pack(fill="x", padx=10, pady=(8, 4))
         self.checklist_progress_lbl = tk.Label(
             head, text="Checklist", bg=self.colors["card"], fg=self.colors["subtext"],
             font=("Segoe UI", 9, "bold"), anchor="w")
         self.checklist_progress_lbl.pack(side="left")
-        tk.Button(head, text="✕ Close", command=self.toggle_checklist_section,
-                  relief="flat", cursor="hand2", bg=self.colors["card"],
-                  fg=self.colors["subtext"], font=("Segoe UI", 8, "bold"), bd=0
-                  ).pack(side="right")
-        self.checklist_expand_btn = tk.Button(
-            head, text="⤢ Expand", command=self._toggle_checklist_expand,
-            relief="flat", cursor="hand2", bg=self.colors["card"],
-            fg=self.colors["subtext"], font=("Segoe UI", 8, "bold"), bd=0)
-        self.track_theme(self.checklist_expand_btn, bg="card", fg="subtext")
-        self.checklist_expand_btn.pack(side="right", padx=(0, 10))
 
         # Scrollable list of items.
         wrap = tk.Frame(sec, bg=self.colors["card"],
@@ -7764,6 +7756,16 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._checklist_canvas = canvas
         self._bind_wheel_tree(self.checklist_items_frame,
                               lambda e: self._panel_or_page_wheel(canvas, e))
+
+        # Expand/Collapse bar, the same full-width flat bar the note body and
+        # comments boxes carry (_add_text_resize_toggle), so the three read
+        # the same. Directly under the list, like those sit under their box.
+        self.checklist_expand_btn = tk.Button(
+            sec, text="Expand ⌄", command=self._toggle_checklist_expand,
+            relief="flat", cursor="hand2", font=("Segoe UI", 8, "bold"), bd=0)
+        self.track_theme(self.checklist_expand_btn, bg="card", fg="subtext",
+                         activebackground="card", activeforeground="text")
+        self.checklist_expand_btn.pack(fill="x", padx=10, pady=(0, 2))
 
         # Add-item row.
         add_row = tk.Frame(sec, bg=self.colors["card"])
@@ -7894,7 +7896,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 self._checklist_list_wrap.configure(
                     height=self.CHECKLIST_LIST_COMPACT)
             if hasattr(self, "checklist_expand_btn"):
-                self.checklist_expand_btn.config(text="⤢ Expand")
+                self.checklist_expand_btn.config(text="Expand ⌄")
         if hasattr(self, "checklist_btn"):
             self._update_checklist_progress()
 

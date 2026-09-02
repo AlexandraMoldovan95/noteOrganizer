@@ -217,11 +217,9 @@ check('checklist done-state preserved', clnote['checklist'][1]['done']==True)
 # Exercises the real button widgets (via .invoke(), like a real click) end
 # to end, not just the evaluate_calculator_expression() function directly
 # — that pure-logic side is covered separately in test_calculator.py.
-# Uses an EXACT text match (not find_widget's substring match): the "C"
-# clear button and the "✕ Close" button both live in this section, and
-# "C" is a substring of "Close" — a substring search for "C" finds the
-# Close button first, since the header (with Close) comes before the
-# button grid (with Clear) in the widget tree.
+# Uses an EXACT text match (not find_widget's substring match): several
+# short labels ("C" clear, "=", operators) are substrings of longer ones,
+# so an exact match is the only reliable way to pick the intended button.
 def find_calc_btn(text):
     for c in app.calculator_section.winfo_children():
         if isinstance(c, tk.Button) and str(c.cget('text')) == text:
@@ -428,9 +426,11 @@ check('the Clear (history) button wipes the history', app._calc_history == [])
 check('clearing history does not touch the current expression on display',
       app._calc_display_var.get() == '27')
 
-find_calc_btn('✕ Close').invoke()
+# The in-panel Close button was removed -- the "🧮 Calculator ▲" bar above
+# the panel is the one control that opens and closes it now.
+app.calculator_btn.invoke()
 app.update()
-check('closing collapses the calculator', app._calculator_open == False)
+check('the header bar collapses the calculator', app._calculator_open == False)
 
 app.toggle_calculator_section()
 find_calc_btn('9').invoke()

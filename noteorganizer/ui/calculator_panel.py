@@ -65,15 +65,13 @@ class CalculatorPanelMixin:
         every time it's opened. Built once per editor (like the checklist
         section above), not rebuilt on every note switch."""
         sec = self.calculator_section
+        # No in-panel Close button: the "🧮 Calculator ▲" bar above the panel
+        # already toggles it shut, so a second control said the same thing.
         head = tk.Frame(sec, bg=self.colors["card"])
         head.pack(fill="x", padx=10, pady=(8, 4))
         tk.Label(head, text="Calculator", bg=self.colors["card"],
                  fg=self.colors["subtext"], font=("Segoe UI", 9, "bold"),
                  anchor="w").pack(side="left")
-        tk.Button(head, text="✕ Close", command=self.toggle_calculator_section,
-                  relief="flat", cursor="hand2", bg=self.colors["card"],
-                  fg=self.colors["subtext"], font=("Segoe UI", 8, "bold"), bd=0
-                  ).pack(side="right")
 
         self._calc_display_var = tk.StringVar(value="")
         self._calc_just_evaluated = False
