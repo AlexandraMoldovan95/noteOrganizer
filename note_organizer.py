@@ -5036,6 +5036,41 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             if wanted:
                 self.body_text.tag_add(wanted, f"{n}.0", f"{n}.end")
 
+    def _on_comments_paste(self, event=None):
+        """Keep tables OUT of the comments box.
+
+        Comments are drawn as plain text -- there is no grid renderer for
+        them the way there is for the body -- so a pasted table only ever
+        showed as raw pipe rows ("| a | b |"), never a real table. Rather
+        than let that broken-looking soup in, a paste that carries table
+        rows has them stripped and the prose kept, with a quiet note that
+        it happened. A paste with no table rows falls through to Tk's own
+        paste untouched (return None)."""
+        raw = clipboard.read_text()
+        if raw is None:
+            try:
+                raw = self.comments_text.clipboard_get()
+            except tk.TclError:
+                return None
+        if not raw:
+            return None
+        lines = raw.replace("\r\n", "\n").replace("\r", "\n").split("\n")
+        if not any(core_tables.is_table_row(ln) for ln in lines):
+            return None                      # no table -- let Tk paste it
+        kept = [ln for ln in lines if not core_tables.is_table_row(ln)]
+        # Collapse the blank runs a removed table leaves behind, so the
+        # prose does not arrive with a gap where the grid was.
+        cleaned = re.sub(r"\n{3,}", "\n\n", "\n".join(kept)).strip("\n")
+        try:
+            self.comments_text.delete("sel.first", "sel.last")
+        except tk.TclError:
+            pass
+        if cleaned:
+            self.comments_text.insert("insert", cleaned)
+        self._schedule_autosave()
+        self._show_toast("Comments keep text only — the table wasn't added")
+        return "break"
+
     def _on_body_paste(self, event=None):
         """Paste, keeping the source's formatting where there is any.
 
@@ -9632,6 +9667,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._bind_text_wheel(self.comments_text)
         self._add_paste_menu(self.comments_text)
         self._bind_text_selection_fixes(self.comments_text)
+        # Comments never render tables (only the body does), so a pasted
+        # table used to land as raw pipe soup. Strip table rows out of a
+        # paste here and say so, rather than leaving broken-looking pipes.
+        self.comments_text.bind("<<Paste>>", self._on_comments_paste, add="+")
         self.comments_text.bind("<KeyRelease>", self._schedule_autosave)
         # Expand/Collapse toggle for the comments box (compact 4 rows <-> 12).
         self._add_text_resize_toggle(self.editor, self.comments_text,

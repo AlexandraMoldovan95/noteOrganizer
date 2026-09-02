@@ -5079,6 +5079,40 @@ _c.tag_remove('sel', '1.0', 'end')
 _c.delete('1.0', 'end')
 app.update()
 
+# ---- COMMENTS KEEP TABLES OUT ----
+# Comments render as plain text (no grid), so a pasted table used to land
+# as raw pipe soup. A paste carrying table rows drops them, keeps the
+# prose, and says so; a plain paste is untouched.
+_toastsCP = []
+_origToastCP = app._show_toast
+app._show_toast = lambda text, kind='success': _toastsCP.append(text)
+_c.delete('1.0', 'end')
+app.clipboard_clear()
+app.clipboard_append('Inainte' + chr(10) + '| Nume | Cant |' + chr(10)
+                     + '| --- | --- |' + chr(10) + '| Lapte | 2 |' + chr(10)
+                     + 'Dupa')
+_c.focus_force()
+app.update()
+_c.event_generate('<<Paste>>')
+app.update()
+_cpTxt = _c.get('1.0', 'end-1c')
+check('comments strip a pasted table to its prose, with a note',
+      '|' not in _cpTxt and 'Inainte' in _cpTxt and 'Dupa' in _cpTxt
+      and any('text only' in t.lower() or "wasn't added" in t
+              for t in _toastsCP))
+# A plain paste (no table) still lands untouched.
+_c.delete('1.0', 'end')
+app.clipboard_clear(); app.clipboard_append('doar text')
+_c.focus_force(); app.update()
+_c.event_generate('<<Paste>>')
+app.update()
+check('comments still accept ordinary pasted text',
+      _c.get('1.0', 'end-1c').strip() == 'doar text')
+app._show_toast = _origToastCP
+_c.tag_remove('sel', '1.0', 'end')
+_c.delete('1.0', 'end')
+app.update()
+
 # ---- PERSISTENCE TO DISK ----
 app.save_notes()
 disk_path = NO.DATA_FILE

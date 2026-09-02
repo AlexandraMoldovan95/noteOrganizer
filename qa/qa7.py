@@ -168,6 +168,44 @@ check('only that occurrence removed, series intact', '2026-07-08' in app.notes[0
 
 app.close_day_panel(); app.update()
 
+# ---- CALENDAR PREVIEW IS A QUICK LOOK: text + chips, not the editor ----
+# A note with a table drew raw pipe soup in the day preview, and its
+# comments were dumped inline. The preview now shows plain text only and,
+# like the note-list cards, just SAYS what else the note carries.
+from noteorganizer.core import tables as _core_tables_q7
+app.notes = [{'id': 9, 'title': 'PreviewNote', 'category': 'General',
+              'date': '2026-07-20', 'updated': '2026-01-01 00:00',
+              'created': '2026-01-01 00:00', 'attachments': [],
+              'body': 'Text sus\n| A | B |\n| --- | --- |\n| 1 | 2 |\nText jos',
+              'comments': 'comentariu care nu trebuie afisat',
+              'checklist': [{'text': 'a', 'done': True},
+                            {'text': 'b', 'done': False}]}]
+app.save_notes()
+app.render_calendar()
+app.open_day_popup('2026-07-20')
+app.update()
+app.show_day_note(app.notes[0], '2026-07-20')
+app.update()
+_pv_texts = []
+def _walk_q7(w):
+    _pv_texts.append(w)
+    for c in w.winfo_children():
+        _walk_q7(c)
+_walk_q7(app.day_panel)
+_pv_text = next((w.get('1.0', 'end-1c') for w in _pv_texts
+                 if isinstance(w, tk.Text)), '')
+_pv_chip = next((w.cget('text') for w in _pv_texts
+                 if isinstance(w, tk.Label)
+                 and ('▦' in str(w.cget('text')) or '💬' in str(w.cget('text')))),
+                '')
+check('calendar preview strips the table to plain text',
+      '|' not in _pv_text and 'Text sus' in _pv_text and 'Text jos' in _pv_text)
+check('calendar preview does not dump the comments inline',
+      'comentariu care nu trebuie' not in _pv_text)
+check('calendar preview flags table + checklist + comments as chips',
+      '▦' in _pv_chip and '1/2' in _pv_chip and '💬' in _pv_chip)
+app.close_day_panel(); app.update()
+
 # ============================================================
 # 3. MULTI-SELECT BULK ACTIONS
 # ============================================================

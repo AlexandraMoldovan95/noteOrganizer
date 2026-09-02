@@ -8,6 +8,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ## [Unreleased]
 
+### Fixed
+- **Comments keep tables out.** The comments box draws plain text — there is no grid renderer for it the way there is for the body — so a pasted table only ever showed as raw pipe rows (`| a | b |`), never a real table. A paste that carries table rows now drops them, keeps the prose, and says so with a brief note; a paste with no table is untouched.
+- **The calendar preview is a quick look, not the editor.** A note with a table drew raw pipe rows in the calendar day preview, and its comments were dumped inline as if part of the body. The preview now shows the note's plain text only and, like the note-list cards, just flags what else the note carries (▦ a table, ☑ a checklist, 💬 comments); the full content shows when the note is opened in the editor.
+
 ## [0.64.95] — 2026-09-02
 
 ### Testing
