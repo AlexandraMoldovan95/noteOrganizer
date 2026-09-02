@@ -3792,27 +3792,29 @@ for _ in range(6):
     app.update_idletasks()
 # The rebuilt grids' geometry settles over several event-loop passes
 # (embedded windows), and a fixed pump count can measure MID-settle
-# under desktop load -- the same race the menu-op check fixed. Settle
-# first; the pinned regression (a snapshot restore yanking the view
-# 0.16 and KEEPING it there) is a settled state, so settling never
-# rescues that mutant.
-_pvP = app.body_text.yview()[0]
+# under load -- the same race the menu-op check fixed. Settle on the
+# TOP VISIBLE LINE, not the scroll fraction: adding a line above the
+# view changes the total height, so the fraction shifts on its own and
+# jitters as the heights settle (that jitter is what flaked this check
+# red on CI even at a 4s cap). The line number is an integer -- it is
+# either the same content or it is not -- so it settles cleanly and IS
+# the thing being promised: the same content stays under the viewport's
+# top edge, one line lower because one line was inserted above it.
+_prev_top = None
 _stableP = 0
-# 4s cap, not 1.5: a loaded CI runner settles the rebuilt grids slower,
-# and the shorter cap timed the read mid-settle (seen red on CI). The
-# loop still exits the instant it reads five stable frames, so a fast
-# machine pays nothing; and the pinned regression is a SETTLED yanked
-# view, which more settling time can never rescue.
 _capP = time.time() + 4.0
 while _stableP < 5 and time.time() < _capP:
     app.update()
     time.sleep(0.02)
-    _nowP = app.body_text.yview()[0]
-    _stableP = _stableP + 1 if abs(_nowP - _pvP) < 0.001 else 0
-    _pvP = _nowP
+    _now_top = int(app.body_text.index('@0,0').split('.')[0])
+    _stableP = _stableP + 1 if _now_top == _prev_top else 0
+    _prev_top = _now_top
+# The pinned regression yanked the view nine lines up and KEPT it there
+# (0.30 -> 0.14) -- so the top line lands far from _topP + 1, and this
+# content-based assertion fails hard on it, with no dependence on a
+# sub-pixel fraction that a slow runner never quite settles.
 check('the push-down keeps a mid-note view on the same content',
-      int(app.body_text.index('@0,0').split('.')[0]) == _topP + 1
-      and abs(app.body_text.yview()[0] - _vwP) < 0.05)
+      int(app.body_text.index('@0,0').split('.')[0]) == _topP + 1)
 
 # ---- THE MENU TWIN: ADD A LINE ABOVE THE TABLE ----
 set_body('| M | N |\n| p | q |')
