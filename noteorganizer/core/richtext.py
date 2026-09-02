@@ -536,7 +536,8 @@ def html_document(title, body_html):
         f"{body_html}\n</body>\n</html>\n")
 
 
-def note_to_html(text, formatting=None, paragraphs=None):
+def note_to_html(text, formatting=None, paragraphs=None,
+                 inline_tables=False):
     """Render a note as an HTML fragment other applications understand.
 
     List markers are taken back out of the text and expressed as real
@@ -647,11 +648,18 @@ def note_to_html(text, formatting=None, paragraphs=None):
                 # (the UA sheet maps it to float:right), so float:none
                 # rides along to keep the browser on the margin path.
                 place = entry.get("align")
+                # A clipboard fragment travels without the document's
+                # stylesheet, and Word gives a bare HTML table no visible
+                # borders at all -- the pasted table was a selectable
+                # phantom. inline_tables rides the border on every tag.
+                base = "border-collapse:collapse;" if inline_tables else ""
                 if place == "center":
-                    t_style = ' align="center" style="margin:0.5em auto;"'
+                    t_style = f' align="center" style="{base}margin:0.5em auto;"'
                 elif place == "right":
-                    t_style = (' align="right" style="float:none; '
-                               'margin:0.5em 0 0.5em auto;"')
+                    t_style = (f' align="right" style="float:none; '
+                               f'{base}margin:0.5em 0 0.5em auto;"')
+                elif base:
+                    t_style = f' style="{base}"'
                 else:
                     t_style = ""
                 out.append(f"<table{t_style}>")
@@ -675,8 +683,14 @@ def note_to_html(text, formatting=None, paragraphs=None):
                     attr += f' colspan="{cs}"'
                 if rs > 1:
                     attr += f' rowspan="{rs}"'
+                state = tables.checkbox_state(line[start:end])
                 styles = []
-                if c < len(row_aligns) and row_aligns[c] != tables.ALIGN_LEFT:
+                if state is not None:
+                    # The app draws a checkbox centred in its cell no
+                    # matter what the padding says -- the page does too,
+                    # or a left-padded box sits left only once exported.
+                    styles.append("text-align:center;")
+                elif c < len(row_aligns) and row_aligns[c] != tables.ALIGN_LEFT:
                     styles.append(f"text-align:{row_aligns[c]};")
                 # A highlight covering the whole cell colours the <td>
                 # itself, the way the app draws it. Left as a <span>, an
@@ -692,6 +706,8 @@ def note_to_html(text, formatting=None, paragraphs=None):
                             styles.append(
                                 f"background-color:{sp['value']};")
                             break
+                if inline_tables:
+                    styles.append("border:1px solid #999;padding:4px 10px;")
                 if styles:
                     attr += f' style="{"".join(styles)}"'
                 # The FIRST row is the header the app draws bold on
@@ -703,7 +719,6 @@ def note_to_html(text, formatting=None, paragraphs=None):
                 # as its bracket markers; its colour (a text_color span
                 # riding the markers) comes along. The import maps the
                 # glyphs back, so a round trip keeps a real checkbox.
-                state = tables.checkbox_state(line[start:end])
                 if state is not None:
                     glyph = "☑" if state else "☐"
                     for sp in spans:

@@ -5595,13 +5595,38 @@ _stub_clipboard()
 app._grid_copy_selection({'info': _iV, 'box': (0, 0, 1, 3)})
 _htmlV = _written.get('html') or ''
 check('the cell copy HTML wears th, merges, hides and draws the box',
-      '<th>h1</th>' in _htmlV and 'colspan="2"' in _htmlV
+      '>h1</th>' in _htmlV and 'colspan="2"' in _htmlV
       and 'secret' not in _htmlV and 'h4' not in _htmlV
       and chr(0x2611) in _htmlV)
 check('while the TSV keeps every column verbatim',
       'secret' in (_written.get('text') or '')
       and '[x]' in (_written.get('text') or ''))
+# Fara borduri inline, Word picta tabelul lipit INVIZIBIL -- fantoma
+# selectabila din raportul de teren 8. Checkboxul pleaca centrat, cum
+# il si deseneaza aplicatia.
+check('the cell copy pastes with visible borders and a centred box',
+      'border-collapse:collapse;' in _htmlV
+      and 'border:1px solid #999;' in _htmlV
+      and 'text-align:center;border:1px solid #999;' in _htmlV)
 app._grid_clear_selection()
+set_body('')
+
+# Si copierea tabelului ca TEXT (selectie in body peste liniile pipe)
+# pleaca cu bordurile inline -- acelasi drum spre Word, aceeasi fantoma.
+set_body('| c1 | c2 |' + chr(10) + '| --- | --- |' + chr(10)
+         + '| v1 | v2 |')
+app._render_table_grids()
+app.update()
+_stub_clipboard()
+app.body_text.tag_remove('sel', '1.0', 'end')
+app.body_text.tag_add('sel', '1.0', '3.end')
+app.update()
+_rF8 = app._copy_formatted()
+_htmlF8 = _written.get('html') or ''
+check('a text-selection copy of a table carries inline borders too',
+      _rF8 == 'break' and '<table' in _htmlF8
+      and 'border:1px solid #999;' in _htmlF8)
+app.body_text.tag_remove('sel', '1.0', 'end')
 set_body('')
 
 # Word count-ul numara ce a SCRIS omul, nu instalatia: fiecare pipe

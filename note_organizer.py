@@ -3948,10 +3948,18 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     inner = escape(v).replace(
                         escape(core_tables.LINE_BREAK), "<br>")
                 tag = "th" if r0 + ri == 0 else "td"
-                cells.append(f"<{tag}{attr}>{inner}</{tag}>")
+                # Without inline borders Word paints nothing: the pasted
+                # table was a selectable phantom (round-8 field report).
+                # A checkbox rides centred, the way the app draws it.
+                css = "border:1px solid #999;padding:4px 10px;"
+                if state is not None:
+                    css = "text-align:center;" + css
+                cells.append(f'<{tag}{attr} style="{css}">{inner}</{tag}>')
             parts.append("<tr>" + "".join(cells) + "</tr>")
         html_rows = "".join(parts)
-        if not clipboard.write(tsv, html=f"<table>{html_rows}</table>"):
+        if not clipboard.write(
+                tsv, html=('<table style="border-collapse:collapse;">'
+                           f"{html_rows}</table>")):
             # Off Windows (the CI runners included) the CF_HTML writer
             # does nothing at all -- the plain text still has to land.
             try:
@@ -5328,7 +5336,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             for p in self._extract_paragraphs(self.body_text)
             if 0 <= p["line"] - first_line < len(text.split("\n"))]
 
-        if not clipboard.write(text, note_to_html(text, clipped, paragraphs)):
+        # inline_tables: a clipboard fragment travels without the file
+        # export's stylesheet, and Word shows a bare HTML table with no
+        # borders at all -- a selectable phantom (the round-8 field
+        # report, with screenshots of the invisible table).
+        if not clipboard.write(text, note_to_html(text, clipped, paragraphs,
+                                                  inline_tables=True)):
             return None                      # nothing written; Tk's copy runs
         return "break"
 

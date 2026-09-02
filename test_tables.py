@@ -179,15 +179,27 @@ check("a merge across a hidden column narrows to what shows",
 
 # A checkbox leaves as the glyph the app draws, and the glyph comes back
 # as the checkbox -- brackets never reach Word, boxes always come home.
+# The app draws every checkbox centred in its cell, so the page does too.
 _cb = "\n".join(["| task | done |", "| --- | --- |", "| nu | [ ] |",
                  "| da | [x] |"])
 _cb_out = note_to_html(_cb)
-check("checkboxes export as glyphs",
-      "<td>☐</td>" in _cb_out and "<td>☑</td>" in _cb_out
+check("checkboxes export as centred glyphs",
+      'text-align:center;">☐</td>' in _cb_out
+      and 'text-align:center;">☑</td>' in _cb_out
       and "[x]" not in _cb_out)
 _cb_back, _, _ = html_to_note(_cb_out)
 check("and the glyphs come back as checkboxes",
       "[ ]" in _cb_back and "[x]" in _cb_back and "☑" not in _cb_back)
+
+# The FILE export's borders live in its stylesheet; a CLIPBOARD fragment
+# travels alone, and Word paints a bare HTML table with no borders at
+# all -- a selectable phantom. inline_tables rides them on every tag.
+check("the file-export markup stays bare of inline borders",
+      "border:1px solid" not in _out)
+_clip_out = note_to_html(_note, inline_tables=True)
+check("the clipboard-flavoured markup carries its borders inline",
+      "border-collapse:collapse;" in _clip_out
+      and _clip_out.count("border:1px solid #999;") >= 4)
 
 # --- counting and searching see the writing, not the plumbing ------------
 _ct = tables.content_text("\n".join([
