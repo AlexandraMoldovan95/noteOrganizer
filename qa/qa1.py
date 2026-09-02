@@ -5497,6 +5497,26 @@ _blkL = core_tables.find_blocks(app.body_text.get('1.0', 'end-1c'))
 _iL2 = app._grid_at_line(_blkL[1][0] + 1)
 app._grid_add_caption(_iL2)
 app.update()
+# Captionul e text de body: fontul si marimea din toolbar i se
+# aplica per-selectie, ca oricarui text, si ajung in nota salvata.
+app.body_text.tag_remove('sel', '1.0', 'end')
+app.body_text.tag_add('sel', '4.0', '4.6')
+app.update()
+app._apply_body_font('font_family', 'Times New Roman')
+app.body_text.tag_add('sel', '4.0', '4.6')
+app.update()
+app._apply_body_font('font_size', 16)
+app.update()
+_stF5 = app.capture_editor_state()
+_capF5 = [sp for sp in _stF5['formatting']
+          if sp['style'] in ('font_family', 'font_size')
+          and sp['start'] < _stF5['body'].index('descriere')]
+check('the caption takes a font family AND size like any body text',
+      any(sp['style'] == 'font_family'
+          and sp['value'] == 'Times New Roman' for sp in _capF5)
+      and any(sp['style'] == 'font_size' and int(sp['value']) == 16
+              for sp in _capF5))
+
 check('a second caption counts on: Tab. 2',
       'Tab. 2: descriere' in app.body_text.get('1.0', 'end-1c'))
 set_body('')

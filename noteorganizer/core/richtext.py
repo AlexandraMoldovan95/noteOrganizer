@@ -518,8 +518,12 @@ def html_document(title, body_html):
         # its right edge; long cell content breaks rather than pushes.
         "table { border-collapse: collapse; margin: 0.5em 0; "
         "max-width: 100%; }\n"
-        "td { border: 1px solid #999; padding: 4px 10px; "
+        "th, td { border: 1px solid #999; padding: 4px 10px; "
         "overflow-wrap: anywhere; }\n"
+        # Browsers centre <th> by default; the app's headers are
+        # left like everything else, and a cell's own alignment
+        # still wins via its inline style.
+        "th { text-align: left; }\n"
         "</style>\n</head>\n<body>\n"
         f'<div style="font-size: 1.7em; font-weight: bold; '
         f'margin: 0 0 0.6em 0;">{safe_title}</div>\n'
@@ -636,6 +640,9 @@ def note_to_html(text, formatting=None, paragraphs=None):
                     t_style = ""
                 out.append(f"<table{t_style}>")
                 in_table = True
+                header_row = True
+            else:
+                header_row = False
             row_spans, row_covered = merge_at.get(number, ({}, set()))
             row_aligns = tables.cell_alignments(line)
             cells = []
@@ -667,9 +674,14 @@ def note_to_html(text, formatting=None, paragraphs=None):
                             break
                 if styles:
                     attr += f' style="{"".join(styles)}"'
-                cells.append(f"<td{attr}>"
+                # The FIRST row is the header the app draws bold on
+                # its own surface -- exported as <th>, so Word and the
+                # browsers bold it too instead of flattening it into an
+                # ordinary row.
+                tag_name = "th" if header_row else "td"
+                cells.append(f"<{tag_name}{attr}>"
                              f"{_cell_html(line, spans, offset, start, end)}"
-                             f"</td>")
+                             f"</{tag_name}>")
             out.append(f"<tr>{''.join(cells)}</tr>")
         else:
             align = entry.get("align")

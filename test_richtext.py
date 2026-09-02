@@ -485,6 +485,18 @@ check("a partial highlight stays a span inside the cell",
       "background-color" in _part_html
       and 'td style="background-color' not in _part_html)
 
+# The first row is the header the app draws bold -- exported as <th>
+# so Word and the browsers bold it too; data rows stay <td>. Browsers
+# centre th by default, so the stylesheet pins it back to the left.
+_th_html = note_to_html(_hl_body, [], [])
+check("the header row exports as th and data rows as td",
+      "<th>plin</th>" in _th_html and "<td>aa</td>" in _th_html
+      and "<td>plin</td>" not in _th_html)
+_th_doc = html_document("T", "<div>x</div>")
+check("the document CSS keeps th left-aligned and bordered",
+      "th { text-align: left; }" in _th_doc
+      and "th, td { border" in _th_doc)
+
 # A multi-line cell stores its breaks as the literal <br> marker; left
 # to escaping alone they arrived as visible "&lt;br&gt;" text in the page.
 _br_body = ("| unu<br>doi | trei |" + chr(10) + "| --- | --- |" + chr(10)

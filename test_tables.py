@@ -144,7 +144,7 @@ _note = "Before\n" + "\n".join(
     tables.format_table([["Name", "Qty"], ["Milk", "2"]])) + "\nAfter"
 _out = note_to_html(_note)
 check(f"a table goes out as real markup ({_out[:60]!r})",
-      "<table><tr><td>Name</td><td>Qty</td></tr>"
+      "<table><tr><th>Name</th><th>Qty</th></tr>"
       "<tr><td>Milk</td><td>2</td></tr></table>" in _out)
 check("the text around it is unaffected",
       _out.startswith("<div>Before</div>") and _out.endswith("<div>After</div>"))
