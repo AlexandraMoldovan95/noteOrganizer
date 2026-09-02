@@ -7693,32 +7693,92 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             # button and section both live inside a column Frame (see
             # build_notes_tab) that already carries the outer margin, now
             # that Checklist and Calculator sit side by side.
+            # Size the list to match the calculator before showing it.
+            self._match_checklist_to_calculator()
             self.checklist_section.pack(fill="x", pady=(0, 8),
                                         after=self.checklist_btn)
             self._checklist_open = True
             self.checklist_btn.config(text="☑ Checklist  ▲")
             self._render_checklist_items()
 
+    def _match_checklist_to_calculator(self):
+        """Size the checklist list area so the whole box matches the
+        calculator beside it -- computed at RUNTIME from the calculator's
+        own requested height, not a fixed number.
+
+        The calculator's height is platform-dependent (font metrics differ
+        between machines), so a value tuned on one machine left the
+        checklist 14px short on the CI runner. winfo_reqheight reports each
+        section's wanted height without either panel having to be open, so
+        the two can be made genuinely equal wherever the app runs:
+
+            list_compact  = calc height (history closed)  - the checklist's
+                            non-list parts
+            list_expanded = list_compact + the calculator's history block
+
+        so the boxes match closed-to-closed AND open-to-open."""
+        try:
+            self.update_idletasks()
+            calc_h = self.calculator_section.winfo_reqheight()
+            non_list = (self.checklist_section.winfo_reqheight()
+                        - int(self._checklist_list_wrap.cget("height")))
+            hist_delta = self.calculator_history_section.winfo_reqheight()
+            # Guard against a not-yet-realised layout reporting a stub 1px:
+            # keep the fallback constants until the real numbers arrive.
+            if calc_h > 50 and non_list > 0:
+                self._checklist_list_compact = max(120, calc_h - non_list)
+                self._checklist_list_expanded = (
+                    self._checklist_list_compact + max(40, hist_delta))
+            self._checklist_list_wrap.configure(
+                height=(self._checklist_list_expanded if self._checklist_expanded
+                        else self._checklist_list_compact))
+        except (tk.TclError, AttributeError, ValueError):
+            pass
+
+    def _toggle_checklist_expand(self):
+        """Grow or shrink the checklist list area. Expanded, the whole box
+        matches the calculator with its history open; compact, it matches
+        the calculator closed. The scroll works in both — this is extra
+        reach when the list is long, not a replacement for scrolling."""
+        self._checklist_expanded = not getattr(self, "_checklist_expanded", False)
+        self._checklist_list_wrap.configure(
+            height=(self._checklist_list_expanded if self._checklist_expanded
+                    else self._checklist_list_compact))
+        self.checklist_expand_btn.config(
+            text="Collapse ⌃" if self._checklist_expanded else "Expand ⌄")
+
+    # Fallback sizes, used only until _match_checklist_to_calculator has
+    # measured the real ones at runtime (see there for why a fixed number
+    # cannot stay equal to the calculator across platforms). These are the
+    # values measured on the development machine (calculator 359px closed,
+    # 459px open; ~94px of non-list parts).
+    CHECKLIST_LIST_COMPACT = 265
+    CHECKLIST_LIST_EXPANDED = 365
+
     def _build_checklist_section(self):
         """Build the (initially hidden) checklist UI: a scrollable list of items
         plus an entry to add new ones and Save/Close buttons."""
         sec = self.checklist_section
-        # Header with progress + close.
+        self._checklist_expanded = False
+        # Runtime-measured sizes start at the fallback constants; the first
+        # open recomputes them from the calculator's actual height.
+        self._checklist_list_compact = self.CHECKLIST_LIST_COMPACT
+        self._checklist_list_expanded = self.CHECKLIST_LIST_EXPANDED
+        # Header: just the progress label. No in-panel Close button -- the
+        # "☑ Checklist ▲" bar above already toggles it shut.
         head = tk.Frame(sec, bg=self.colors["card"])
         head.pack(fill="x", padx=10, pady=(8, 4))
         self.checklist_progress_lbl = tk.Label(
             head, text="Checklist", bg=self.colors["card"], fg=self.colors["subtext"],
             font=("Segoe UI", 9, "bold"), anchor="w")
         self.checklist_progress_lbl.pack(side="left")
-        tk.Button(head, text="✕ Close", command=self.toggle_checklist_section,
-                  relief="flat", cursor="hand2", bg=self.colors["card"],
-                  fg=self.colors["subtext"], font=("Segoe UI", 8, "bold"), bd=0
-                  ).pack(side="right")
 
         # Scrollable list of items.
-        wrap = tk.Frame(sec, bg=self.colors["card"], height=160)
+        wrap = tk.Frame(sec, bg=self.colors["card"],
+                        height=self.CHECKLIST_LIST_COMPACT)
         wrap.pack(fill="x", padx=10, pady=(0, 4))
         wrap.pack_propagate(False)
+        self._checklist_list_wrap = wrap
         canvas = tk.Canvas(wrap, bg=self.colors["card"], highlightthickness=0)
         sb = ttk.Scrollbar(wrap, orient="vertical", command=canvas.yview)
         self.checklist_items_frame = tk.Frame(canvas, bg=self.colors["card"])
@@ -7732,6 +7792,16 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._checklist_canvas = canvas
         self._bind_wheel_tree(self.checklist_items_frame,
                               lambda e: self._panel_or_page_wheel(canvas, e))
+
+        # Expand/Collapse bar, the same full-width flat bar the note body and
+        # comments boxes carry (_add_text_resize_toggle), so the three read
+        # the same. Directly under the list, like those sit under their box.
+        self.checklist_expand_btn = tk.Button(
+            sec, text="Expand ⌄", command=self._toggle_checklist_expand,
+            relief="flat", cursor="hand2", font=("Segoe UI", 8, "bold"), bd=0)
+        self.track_theme(self.checklist_expand_btn, bg="card", fg="subtext",
+                         activebackground="card", activeforeground="text")
+        self.checklist_expand_btn.pack(fill="x", padx=10, pady=(0, 2))
 
         # Add-item row.
         add_row = tk.Frame(sec, bg=self.colors["card"])
@@ -7853,6 +7923,16 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if getattr(self, "_checklist_open", False):
             self.checklist_section.pack_forget()
             self._checklist_open = False
+        # Also drop the expand back to compact — the expanded height is a
+        # transient view choice, not part of the note, so it shouldn't
+        # carry from one note into the next.
+        if getattr(self, "_checklist_expanded", False):
+            self._checklist_expanded = False
+            if hasattr(self, "_checklist_list_wrap"):
+                self._checklist_list_wrap.configure(
+                    height=self._checklist_list_compact)
+            if hasattr(self, "checklist_expand_btn"):
+                self.checklist_expand_btn.config(text="Expand ⌄")
         if hasattr(self, "checklist_btn"):
             self._update_checklist_progress()
 

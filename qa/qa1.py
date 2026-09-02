@@ -217,11 +217,9 @@ check('checklist done-state preserved', clnote['checklist'][1]['done']==True)
 # Exercises the real button widgets (via .invoke(), like a real click) end
 # to end, not just the evaluate_calculator_expression() function directly
 # — that pure-logic side is covered separately in test_calculator.py.
-# Uses an EXACT text match (not find_widget's substring match): the "C"
-# clear button and the "✕ Close" button both live in this section, and
-# "C" is a substring of "Close" — a substring search for "C" finds the
-# Close button first, since the header (with Close) comes before the
-# button grid (with Clear) in the widget tree.
+# Uses an EXACT text match (not find_widget's substring match): several
+# short labels ("C" clear, "=", operators) are substrings of longer ones,
+# so an exact match is the only reliable way to pick the intended button.
 def find_calc_btn(text):
     for c in app.calculator_section.winfo_children():
         if isinstance(c, tk.Button) and str(c.cget('text')) == text:
@@ -251,6 +249,79 @@ calculator_col_width = app.calculator_btn.master.winfo_width()
 check(f'checklist and calculator columns are equal width '
       f'({checklist_col_width}px vs {calculator_col_width}px)',
       abs(checklist_col_width - calculator_col_width) <= 2)
+
+# The checklist box is sized to MATCH the calculator beside it, in both
+# states: compact equals the calculator closed, expanded equals it with
+# history open. A settle loop because winfo_height needs the layout to
+# stop moving under a full-suite run's load.
+def _stable_h(w):
+    last = -1
+    for _ in range(40):
+        app.update(); app.update_idletasks()
+        h = w.winfo_height()
+        if h == last and h > 1:
+            return h
+        last = h
+        time.sleep(0.02)
+    return last
+app.toggle_checklist_section()          # calculator is already open here
+_chk_compact = _stable_h(app.checklist_section)
+_calc_closed = _stable_h(app.calculator_section)
+check(f'checklist compact matches the calculator closed '
+      f'({_chk_compact}px vs {_calc_closed}px)',
+      abs(_chk_compact - _calc_closed) <= 4)
+# Expand the checklist and open the calculator history: still equal.
+app._toggle_checklist_expand()
+app._toggle_calc_history()
+_chk_exp = _stable_h(app.checklist_section)
+_calc_open = _stable_h(app.calculator_section)
+check(f'checklist expanded matches the calculator with history '
+      f'({_chk_exp}px vs {_calc_open}px)',
+      abs(_chk_exp - _calc_open) <= 4 and _chk_exp > _chk_compact + 40)
+check('the expand button flips to Collapse when expanded',
+      'Collapse' in app.checklist_expand_btn.cget('text'))
+# The scroll survives the expand -- extra reach, not a replacement.
+check('the checklist keeps its own scroll canvas while expanded',
+      app._checklist_canvas.winfo_ismapped())
+# Back to a clean closed-calc state for the perturbation below.
+app._toggle_calc_history()
+app._toggle_checklist_expand()
+_stable_h(app.checklist_section)
+
+# The size is MEASURED from the calculator at runtime, not a fixed number
+# (a fixed one only matched the dev machine and left the box 14px short on
+# CI). Prove the re-measure by making the calculator 60px taller and
+# reopening: the checklist must track it. On the dev machine the fallback
+# constant happens to equal the real size, so only this perturbation tells
+# a working match from a dead one here; CI's other platform catches it too.
+_spacerP = tk.Frame(app.calculator_section, height=60,
+                    bg=app.colors['card'])
+_spacerP.pack(fill='x')
+app.update_idletasks()
+app.toggle_checklist_section()          # close
+app.toggle_checklist_section()          # reopen -> re-match to taller calc
+_chk_p = _stable_h(app.checklist_section)
+_calc_p = _stable_h(app.calculator_section)
+check(f'the checklist re-measures the calculator, not a fixed size '
+      f'({_chk_p}px vs {_calc_p}px after +60)',
+      abs(_chk_p - _calc_p) <= 4 and _chk_p > _chk_compact + 40)
+_spacerP.destroy()
+app.update_idletasks()
+# The note-switch reset path (which does NOT touch the calculator) drops
+# the expand back to compact -- a transient view choice, not saved state.
+# Expand FIRST, so the reset has something to undo (otherwise a removed
+# reset would pass trivially against an already-compact box).
+if not app._checklist_expanded:
+    app._toggle_checklist_expand()
+_stable_h(app.checklist_section)
+check('the checklist is expanded before the reset', app._checklist_expanded is True)
+app._sync_checklist_open_state()
+check('the note-switch reset returns the checklist to compact',
+      app._checklist_expanded is False
+      and int(app._checklist_list_wrap.cget('height')) == app._checklist_list_compact)
+# The calculator is left open with its history closed -- the state the
+# checks below expect (the checklist reset above collapsed the checklist).
+app.update()
 
 for label in ['7', '×', '8']:  # 7 x 8, no "=" yet
     find_calc_btn(label).invoke()
@@ -383,9 +454,11 @@ check('the Clear (history) button wipes the history', app._calc_history == [])
 check('clearing history does not touch the current expression on display',
       app._calc_display_var.get() == '27')
 
-find_calc_btn('✕ Close').invoke()
+# The in-panel Close button was removed -- the "🧮 Calculator ▲" bar above
+# the panel is the one control that opens and closes it now.
+app.calculator_btn.invoke()
 app.update()
-check('closing collapses the calculator', app._calculator_open == False)
+check('the header bar collapses the calculator', app._calculator_open == False)
 
 app.toggle_calculator_section()
 find_calc_btn('9').invoke()
@@ -3725,7 +3798,12 @@ for _ in range(6):
 # rescues that mutant.
 _pvP = app.body_text.yview()[0]
 _stableP = 0
-_capP = time.time() + 1.5
+# 4s cap, not 1.5: a loaded CI runner settles the rebuilt grids slower,
+# and the shorter cap timed the read mid-settle (seen red on CI). The
+# loop still exits the instant it reads five stable frames, so a fast
+# machine pays nothing; and the pinned regression is a SETTLED yanked
+# view, which more settling time can never rescue.
+_capP = time.time() + 4.0
 while _stableP < 5 and time.time() < _capP:
     app.update()
     time.sleep(0.02)
