@@ -39,6 +39,7 @@ Built as a solo/pair project (developer + AI pairing partner) over an extended i
 - Real checkboxes in cells: click to tick and untick, coloured from a palette, stored as Markdown's own task syntax (`[ ]` / `[x]`)
 - Cell formatting character by character: one coloured letter, word or emoji shows as itself; the open cell displays its colours live while you type, and typing continues the style it lands beside — with an *active colour* worn as a swatch on the toolbar button when nothing is selected
 - Bold, colors, highlights (with a theme-aware palette) and per-cell alignment from the same toolbar as regular text — plus the table itself can sit left, centred, or right on the page, and a table wider than the editor gets its own horizontal scrollbar
+- A system-managed **caption** ("Tab. N: …" plus a "Sursa:" line), added from the table menu — centred and numbered, editable like any other text
 - Stored as plain readable text (Markdown table syntax) inside the note, so tables survive search, share codes, backups, and export, and travel cleanly to and from any Markdown-aware tool
 
 **Categories & templates**
@@ -108,28 +109,37 @@ noteOrganizer/
 ├── .github/
 │   └── workflows/
 │       └── tests.yml         # runs the full QA suite automatically on every push
-├── note_organizer.py         # entry point + the UI (run this); being split up — see docs/ARCHITECTURE.md
-├── noteorganizer/            # the application package, growing as code is extracted
-│   └── core/                 #   data & rules layer — never imports tkinter
-│       ├── calculator.py     #   the in-note calculator's expression parser
-│       ├── recurrence.py     #   repeat rules & which dates a note falls on
-│       ├── themes.py         #   colour palettes and layout constants (pure data)
-│       ├── formatting.py     #   how rich-text spans are stored on a note
-│       ├── sharing.py        #   share codes + safe-import guards
-│       ├── duplicates.py     #   deciding when two notes are the same note
-│       ├── paths.py          #   data location, migrations, safe cleanup
-│       ├── storage.py        #   reading/writing settings, templates, trash
-│       ├── categories.py     #   the live category map, saved in settings
-│       └── model.py          #   what a note is; normalize_note validates every one
-│   └── ui/                   #   the interface, one mixin per area
+├── note_organizer.py         # entry point + the UI hub (run this) — see docs/ARCHITECTURE.md
+├── noteorganizer/            # the application package (core + ui both extracted)
+│   ├── core/                 #   data & rules layer — never imports tkinter
+│   │   ├── calculator.py     #   the in-note calculator's expression parser
+│   │   ├── recurrence.py     #   repeat rules & which dates a note falls on
+│   │   ├── themes.py         #   colour palettes and layout constants (pure data)
+│   │   ├── formatting.py     #   how rich-text spans are stored on a note
+│   │   ├── richtext.py       #   HTML in/out, for paste, copy and export
+│   │   ├── clipboard.py      #   the Windows clipboard's richer formats
+│   │   ├── tables.py         #   tables as lines of text (pipes are the store)
+│   │   ├── sharing.py        #   share codes + safe-import guards
+│   │   ├── duplicates.py     #   deciding when two notes are the same note
+│   │   ├── paths.py          #   data location, migrations, safe cleanup
+│   │   ├── storage.py        #   reading/writing settings, templates, trash
+│   │   ├── categories.py     #   the live category map, saved in settings
+│   │   └── model.py          #   what a note is; normalize_note validates every one
+│   └── ui/                   #   on-screen areas, one mixin per area
 │       ├── calculator_panel.py  #   the in-note calculator panel
-│       └── settings_page.py     #   the Settings page and its panels
+│       ├── settings_page.py     #   the Settings page and its panels
+│       ├── dialogs.py           #   the hand-built dialogs and popups
+│       ├── calendar_view.py     #   the Calendar tab
+│       └── attachments.py       #   the attachments section
 ├── tools/                    # refactor safety net, run by CI
 │   ├── check_undefined_names.py  # names used but never imported (moving code breaks these)
 │   └── check_class_api.py        # the app class must keep exactly the same methods
 ├── test_recurrence.py        # standalone tests for the recurrence engine (no GUI needed)
 ├── test_data_safety.py       # standalone tests for backups & migration safety (no GUI needed)
 ├── test_calculator.py        # standalone tests for the in-note calculator's expression evaluator (no GUI needed)
+├── test_tables.py            # standalone tests for the tables text model + HTML export (no GUI needed)
+├── test_richtext.py          # standalone tests for HTML ↔ note conversion (no GUI needed)
+├── test_entry_module_identity.py  # guards against a second copy of the entry module
 ├── docs/
 │   ├── USER_GUIDE.md          # full walkthrough with screenshots
 │   ├── ARCHITECTURE.md        # how the code is organized, and why

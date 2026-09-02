@@ -4,7 +4,7 @@ How Note Organizer is built, and why. Written for anyone reading the code for th
 
 ## Overview
 
-Note Organizer is a Python/Tkinter desktop app, entered through `note_organizer.py`. It was a single file by design for most of its life — no build step, no import graph to reason about, readable top-to-bottom — but at ~11,000 lines that stopped paying for itself, and the app is now being reorganised into a `noteorganizer/` package one module at a time.
+Note Organizer is a Python/Tkinter desktop app, entered through `note_organizer.py`. It was a single file by design for most of its life — no build step, no import graph to reason about, readable top-to-bottom — but at ~11,000 lines that stopped paying for itself, and the app was reorganised into a `noteorganizer/` package, module by module. Both layers are now extracted (thirteen `core/` modules, five `ui/` mixins — see below); `note_organizer.py` remains the entry point and the UI hub the pieces hang off, ~12,700 lines of genuinely shared surface that grew again through the rich-text and tables work even as the pure logic behind it went into `core/`.
 
 The target is two layers:
 
@@ -38,13 +38,13 @@ So the plan was: extract what measures as cohesive, re-measure afterwards, and s
 | open-note tabs | 26% |
 | editor | **17%** |
 
-The editor moved from 11% to 17% across three extractions, which is the strongest evidence available that it is not a module hiding inside the class. What remains is 144 methods and about 4,300 lines belonging to no group at all — `set_status` has sixteen callers, `_schedule_autosave` eleven, `find_note` ten. That is the app's genuinely shared surface, and moving any of it into a file would relocate the tangle rather than remove it.
+The editor moved from 11% to 17% across three extractions, which is the strongest evidence available that it is not a module hiding inside the class. That analysis found ~144 methods belonging to no group at all — `set_status` has sixteen callers, `_schedule_autosave` eleven, `find_note` ten. That is the app's genuinely shared surface, and moving any of it into a file would relocate the tangle rather than remove it. (The entry file has grown well past that measurement since — ~12,700 lines now — but the growth is the rich-text and tables UI, which is more of exactly this shared surface, not a new extractable module.)
 
 **One blind spot in the measurement, worth knowing before trusting it again.** The call graph is built from `note_organizer.py` alone, so it cannot see calls made from the mixins already extracted. That made it pull `_rounded_rect` and `_show_color_palette` into the calendar group -- both are used by `settings_page.py`, so their only *visible* callers were calendar ones. Neither belongs there. Read the methods before moving them; the graph shortlists, it does not decide. Scope is decided by what an area *owns*, not by keyword: the theming engine (`apply_theme`, `set_theme`, `track_theme`) and shared widgets (`_themed_dialog`, `_build_themed_dropdown`) stay on `NoteOrganizer`, because the whole app uses them — only the Settings *UI* for picking a theme moved. Where a mixin needs a value that lives on the entry module and is only filled in by `initialise()` (`APP_VERSION`, `APP_DIR`, `FIRST_LAUNCH_DATE`), it reads it through a small local-import helper rather than importing `note_organizer` at module level, which would be circular — and reading it at call time is what the original code did anyway.
 
 `note_organizer.py` stays the entry point (`py note_organizer.py`) and re-exports the names that have moved, so existing callers — including the ~154 `note_organizer.<name>` references across the QA scripts — keep working untouched while the move happens. That's deliberate: it means each extraction is a pure move that leaves the whole test suite green, rather than a rewrite.
 
-Moved so far: `core/calculator.py`, `core/recurrence.py`, `core/themes.py`, `core/formatting.py`, `core/sharing.py`, `core/duplicates.py`, `core/paths.py`, `core/storage.py`, `core/categories.py`, `core/model.py` — the core layer is complete. [CODE_TOUR.md](CODE_TOUR.md) walks through the modules for someone learning the codebase.
+Moved so far — all thirteen: `core/calculator.py`, `core/recurrence.py`, `core/themes.py`, `core/formatting.py`, `core/sharing.py`, `core/duplicates.py`, `core/paths.py`, `core/storage.py`, `core/categories.py`, `core/model.py`, and the three the rich-text and tables work added — `core/richtext.py` (HTML ↔ note conversion for paste, copy and export), `core/clipboard.py` (the Windows rich-clipboard formats), and `core/tables.py` (tables as lines of text). The core layer is complete. [CODE_TOUR.md](CODE_TOUR.md) walks through the modules for someone learning the codebase.
 
 ## Startup
 
