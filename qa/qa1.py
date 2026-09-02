@@ -279,20 +279,48 @@ check(f'checklist expanded matches the calculator with history '
       f'({_chk_exp}px vs {_calc_open}px)',
       abs(_chk_exp - _calc_open) <= 4 and _chk_exp > _chk_compact + 40)
 check('the expand button flips to Collapse when expanded',
-      '⤡' in app.checklist_expand_btn.cget('text')
-      or 'Collapse' in app.checklist_expand_btn.cget('text'))
+      'Collapse' in app.checklist_expand_btn.cget('text'))
 # The scroll survives the expand -- extra reach, not a replacement.
 check('the checklist keeps its own scroll canvas while expanded',
       app._checklist_canvas.winfo_ismapped())
+# Back to a clean closed-calc state for the perturbation below.
+app._toggle_calc_history()
+app._toggle_checklist_expand()
+_stable_h(app.checklist_section)
+
+# The size is MEASURED from the calculator at runtime, not a fixed number
+# (a fixed one only matched the dev machine and left the box 14px short on
+# CI). Prove the re-measure by making the calculator 60px taller and
+# reopening: the checklist must track it. On the dev machine the fallback
+# constant happens to equal the real size, so only this perturbation tells
+# a working match from a dead one here; CI's other platform catches it too.
+_spacerP = tk.Frame(app.calculator_section, height=60,
+                    bg=app.colors['card'])
+_spacerP.pack(fill='x')
+app.update_idletasks()
+app.toggle_checklist_section()          # close
+app.toggle_checklist_section()          # reopen -> re-match to taller calc
+_chk_p = _stable_h(app.checklist_section)
+_calc_p = _stable_h(app.calculator_section)
+check(f'the checklist re-measures the calculator, not a fixed size '
+      f'({_chk_p}px vs {_calc_p}px after +60)',
+      abs(_chk_p - _calc_p) <= 4 and _chk_p > _chk_compact + 40)
+_spacerP.destroy()
+app.update_idletasks()
 # The note-switch reset path (which does NOT touch the calculator) drops
 # the expand back to compact -- a transient view choice, not saved state.
+# Expand FIRST, so the reset has something to undo (otherwise a removed
+# reset would pass trivially against an already-compact box).
+if not app._checklist_expanded:
+    app._toggle_checklist_expand()
+_stable_h(app.checklist_section)
+check('the checklist is expanded before the reset', app._checklist_expanded is True)
 app._sync_checklist_open_state()
 check('the note-switch reset returns the checklist to compact',
       app._checklist_expanded is False
-      and int(app._checklist_list_wrap.cget('height')) == app.CHECKLIST_LIST_COMPACT)
-# Restore the calculator to how the checks below expect it: open, history
-# closed (the checklist reset above already collapsed the checklist).
-app._toggle_calc_history()
+      and int(app._checklist_list_wrap.cget('height')) == app._checklist_list_compact)
+# The calculator is left open with its history closed -- the state the
+# checks below expect (the checklist reset above collapsed the checklist).
 app.update()
 
 for label in ['7', '×', '8']:  # 7 x 8, no "=" yet
@@ -3770,7 +3798,12 @@ for _ in range(6):
 # rescues that mutant.
 _pvP = app.body_text.yview()[0]
 _stableP = 0
-_capP = time.time() + 1.5
+# 4s cap, not 1.5: a loaded CI runner settles the rebuilt grids slower,
+# and the shorter cap timed the read mid-settle (seen red on CI). The
+# loop still exits the instant it reads five stable frames, so a fast
+# machine pays nothing; and the pinned regression is a SETTLED yanked
+# view, which more settling time can never rescue.
+_capP = time.time() + 4.0
 while _stableP < 5 and time.time() < _capP:
     app.update()
     time.sleep(0.02)

@@ -234,6 +234,7 @@
   "_make_align_button": "(self, parent, align)",
   "_mark_day_emoji": "(self, date_str, event=None)",
   "_marker_room": "(self, kind)",
+  "_match_checklist_to_calculator": "(self)",
   "_maybe_close_cell_editor": "(self, source=None)",
   "_maybe_dismiss_mini_popup": "(self, event)",
   "_measuring_font": "(self, font)",
