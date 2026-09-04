@@ -1915,9 +1915,9 @@ def _stub_clipboard(html=None, text=None, loopback=False):
 
 
 def _menu_entries(m):
-    # Recursiv prin cascade: meniul de tabel s-a grupat (Rows/Columns/
-    # Merge/Table/Align cell), iar checkurile intreaba de ETICHETE,
-    # oriunde ar locui ele acum.
+    # Recursive through cascades: the table menu grew groups (Rows/
+    # Columns/Merge/Table/Align cell), and the checks ask by LABEL,
+    # wherever the entries happen to live now.
     out = []
     for i in range(m.index('end') + 1):
         kind = m.type(i)
@@ -5182,7 +5182,7 @@ check('each single export offers to open the file',
       len([t for t in _openAsksX if 'Open it now' in t]) == 2)
 
 # ---- BULK EXPORT ----
-# Doua notite cu ACELASI titlu -> a doua primeste sufixul " (2)".
+# Two notes with the SAME title -> the second gets the " (2)" suffix.
 _exp_note2 = NO.normalize_note({
     'id': 8801, 'title': 'Export <proba>', 'body': 'alt corp',
     'category': 'General'})
@@ -5261,7 +5261,7 @@ def _styled_table_F():
     return app._grid_at_line(1)
 
 
-# 1. Dragul latimii de coloana nu mai arde stilurile intregului tabel.
+# 1. Dragging a column's width no longer burns the whole table's styles.
 _infoF = _styled_table_F()
 _beforeF = _table_spans_F()
 app._grid_set_col_width(_infoF, 0, 20)
@@ -5269,7 +5269,7 @@ app.update()
 check('a column-width drag keeps every style in the table',
       len(_beforeF) == 3 and _table_spans_F() == _beforeF)
 
-# 2. Dragul inaltimii de rand pastreaza stilurile celulei-ancora.
+# 2. Dragging a row's height keeps the anchor cell's styles.
 _infoF = _styled_table_F()
 _beforeF = _table_spans_F()
 app._grid_set_row_lines(_infoF, 1, 3)
@@ -5277,8 +5277,8 @@ app.update()
 check('a row-height drag keeps the padded cell styled too',
       len(_beforeF) == 3 and _table_spans_F() == _beforeF)
 
-# 3. Tastarea pe o linie centrata o lasa centrata -- prin bindingul
-# REAL de KeyRelease, nu prin apelul direct al handlerului.
+# 3. Typing on a centred line leaves it centred -- through the REAL
+# KeyRelease binding, not a direct call to the handler.
 set_body('fig1')
 _b = app.body_text
 _b.tag_add('align_center', '1.0', '1.end')
@@ -5302,8 +5302,8 @@ check('the first character typed into an empty centred line is centred',
       'align_center' in _b.tag_names('1.0'))
 set_body('')
 
-# 4. Editorul de celula poarta fundalul celulei -- plin, gol, si in
-# timpul tastarii; o celula fara stil ramane pe suprafata temei.
+# 4. The cell editor wears the cell's background -- full, empty, and
+# while typing; an unstyled cell stays on the theme's surface.
 set_body('| plin | gol | simplu |' + chr(10) + '| --- | --- | --- |'
          + chr(10) + '| text |  | alt |')
 app._render_table_grids()
@@ -5354,9 +5354,9 @@ def _fresh_G(cols=3):
     return app._grid_at_line(1)
 
 
-# Lantul exact din raport: coloreaza celula goala -> scrie text ->
-# commit -> trage de coloana. Culoarea logic murea la commit si vizibil
-# la drag (prima reconstructie).
+# The exact chain from the report: colour the empty cell -> type text ->
+# commit -> drag the column. The colour died logically at the commit and
+# visibly at the drag (the first rebuild).
 _infoG = _fresh_G(3)
 app._grid_apply_style(_infoG, (1, 0, 1, 0), 'highlight', '#ffff00')
 app.update()
@@ -5380,7 +5380,7 @@ check('typing into a coloured cell keeps its colour through commit, '
       'drag and centring',
       _bg1G == _bg2G == _bg3G == '#ffff00')
 
-# Checkboxul prin calea popupului (fill) pe o celula colorata.
+# The checkbox through the popup path (fill) on a coloured cell.
 _infoG = _fresh_G(3)
 app._grid_apply_style(_infoG, (1, 1, 1, 1), 'highlight', '#c8f7c5')
 app.update()
@@ -5393,7 +5393,7 @@ check('a checkbox dropped into a coloured cell keeps the cell coloured',
       app._grid_cell_paint(_infoG, 1, 1)['bg'] == '#c8f7c5'
       and _infoG['cells'][(1, 1)]['value'] == core_tables.CHECKBOX_EMPTY)
 
-# Duplicarea tabelului: copy celule -> click sub tabel -> paste.
+# Duplicating the table: copy cells -> click below the table -> paste.
 _infoG = _fresh_G(2)
 app._write_cell(_infoG, 1, 1, 'val')
 app.update()
@@ -5414,7 +5414,7 @@ check('and the two tables stay separate blocks with the values intact',
 set_body('')
 
 # ---- FIELD ROUND 3 ----
-# Autofit pe o selectie de coloane, intr-o singura trecere.
+# Autofit over a selection of columns, in a single pass.
 set_body('| lung continut aici | x |' + chr(10) + '| --- | --- |'
          + chr(10) + '| a | b |')
 app._render_table_grids()
@@ -5430,7 +5430,7 @@ _sepH1 = app.body_text.get('2.0', '2.end')
 check('autofit over a column selection shrinks the set widths',
       len(_sepH1) < len(_sepH0))
 
-# Copy-ul tine minte latimile; paste-ul le reconstruieste identic.
+# The copy remembers the widths; the paste rebuilds them identically.
 _iH = app._grid_at_line(1)
 app._grid_set_col_width(_iH, 0, 30)
 app.update()
@@ -5451,7 +5451,7 @@ check('a duplicated table comes back at the SAME column widths',
       len(_blkH) == 2 and _sepSrcH.strip() == _sepNewH.strip())
 set_body('')
 
-# Checkboxul prin POPUPUL REAL: caretul si scrollul raman pe loc.
+# The checkbox through the REAL popup: caret and scroll stay put.
 set_body('sus' + chr(10) + '| a | b |' + chr(10) + '| --- | --- |'
          + chr(10) + '|   |   |' + chr(10) + ('jos ' * 200))
 app._render_table_grids()
@@ -5461,9 +5461,9 @@ app.body_text.mark_set('insert', '1.0')
 app.body_text.yview_moveto(0.0)
 app.update()
 _y0H = app.body_text.yview()[0]
-# Un mark pe HEADER (linie pe care scrierea chirurgicala n-o atinge):
-# fill-ul de alta data stergea si reinsera tot blocul, prabusind markul
-# -- exact rescrierea care expulza caretul si muta scrollul.
+# A mark on the HEADER (a line the surgical writes never touch): the
+# old fill deleted and reinserted the whole block, collapsing the mark
+# -- exactly the rewrite that expelled the caret and moved the scroll.
 app.body_text.mark_set('probeH', '2.3')
 app._grid_checkmark_popup(_iH, (1, 0, 1, 0), 200, 200)
 app.update()
@@ -5493,7 +5493,7 @@ check('the checkbox palette writes surgically: value set, caret and '
       and app.body_text.index('probeH') == '2.3')
 set_body('')
 
-# Literele lipite de un cuvant colorat ii poarta culorile; dupa spatiu nu.
+# Letters glued onto a coloured word wear its colours; after a space, not.
 set_body('cuvant ')
 _b = app.body_text
 app._ensure_color_tag(_b, 'highlight', '#ffff00')
@@ -5523,9 +5523,9 @@ check('but a word started after a space stays plain', _tagsYH == [])
 set_body('')
 
 # ---- FIELD ROUND 4 ----
-# Restaurarea view-ului dupa un rebuild de griduri sta IN VIGOARE:
-# un yank tarziu (geometria ferestrelor incorporate asezandu-se) e
-# corectat de timere -- one-shot-ul de alta data ramanea sus.
+# The view restore after a grid rebuild stays IN FORCE: a late yank
+# (the embedded windows' geometry settling) is corrected by the timers
+# -- the old one-shot restore stayed scrolled away.
 set_body(chr(10).join('| r%d | c%d |' % (i, i) for i in range(8))
          + chr(10) + ('text jos' + chr(10)) * 50)
 app._render_table_grids()
@@ -5546,7 +5546,7 @@ check('the grid-rebuild view restore outlives a late yank (in force, '
       'not one-shot)',
       abs(app.body_text.yview()[0] - _y0J) < 0.05)
 
-# Scrollbarul e gest deliberat: anuleaza restaurarea pendinte.
+# The scrollbar is a deliberate gesture: it cancels the pending restore.
 _iJ = app._grid_at_line(1)
 app._grid_set_alignment(_iJ, (2, 0, 2, 0), core_tables.ALIGN_CENTER)
 app.update()
@@ -5559,15 +5559,15 @@ check('a deliberate scrollbar drag beats the pending restore',
       abs(app.body_text.yview()[0] - 0.1) < 0.08)
 set_body('')
 
-# Textul cu pipe-uri lipit la mijloc de linie aterizeaza pe liniile lui.
+# Pipe text pasted mid-line lands on lines of its own.
 set_body('inceput fig2')
 app.body_text.mark_set('insert', '1.8')
 app.clipboard_clear()
 app.clipboard_append('| x | [x] |' + chr(10) + 'legenda')
 app.update()
-# Prin _on_body_paste, ruta REALA a unui Ctrl+V -- o metoda chemata
-# direct ramane verde si cand hook-ul ei dispare (lectia "dead on
-# arrival").
+# Through _on_body_paste, the REAL route of a Ctrl+V -- a method called
+# directly stays green even when its hook disappears (the "dead on
+# arrival" lesson).
 _stub_clipboard(html=None, text='| x | [x] |' + chr(10) + 'legenda')
 _okJ = app._on_body_paste() == 'break'
 app.update()
@@ -5579,8 +5579,8 @@ check('pipe rows pasted mid-line land on their own lines, never '
 set_body('')
 
 # ---- FIELD ROUND 5 ----
-# Captionul gestionat de sistem: numerotat, centrat, cu linia de sursa,
-# placeholderul selectat pentru scriere imediata.
+# The system-managed caption: numbered, centred, with its source line,
+# the placeholder selected for immediate typing.
 set_body('| a | b |' + chr(10) + '| --- | --- |' + chr(10)
          + '| 1 | 2 |')
 app._render_table_grids()
@@ -5589,8 +5589,8 @@ _iL = app._grid_at_line(1)
 app._grid_set_table_align(_iL, 'center')
 app.update()
 _iL = app._grid_at_line(1)
-# Preconditia benzii din teren, simulata direct: capatul ultimei
-# linii de tabel poarta un highlight -- captionul iese CURAT.
+# The field footage's precondition, simulated directly: the end of the
+# table's last line wears a highlight -- the caption comes out CLEAN.
 app._ensure_color_tag(app.body_text, 'highlight', '#c8b8a8')
 app.body_text.tag_add('highlight_c8b8a8', '3.0', '4.0')
 app._grid_add_caption(_iL)
@@ -5620,8 +5620,8 @@ _blkL = core_tables.find_blocks(app.body_text.get('1.0', 'end-1c'))
 _iL2 = app._grid_at_line(_blkL[1][0] + 1)
 app._grid_add_caption(_iL2)
 app.update()
-# Captionul e text de body: fontul si marimea din toolbar i se
-# aplica per-selectie, ca oricarui text, si ajung in nota salvata.
+# The caption is body text: the toolbar's font and size apply to it
+# per-selection, like any text, and reach the saved note.
 app.body_text.tag_remove('sel', '1.0', 'end')
 app.body_text.tag_add('sel', '4.0', '4.6')
 app.update()
@@ -5644,10 +5644,10 @@ check('a second caption counts on: Table 2',
       'Table 2: description' in app.body_text.get('1.0', 'end-1c'))
 set_body('')
 
-# Notitele mai vechi poarta captionuri cu etichetele de dinainte de
-# trecerea la engleza ("Tab. N: ..."); numerotarea trebuie sa le numere
-# SI pe ele (altfel un caption nou intr-o notita veche o ia de la 1),
-# dar NU si proza care doar incepe cu cuvantul "Table".
+# Older notes carry captions with the labels from before the switch to
+# English ("Tab. N: ..."); the numbering must count those TOO (otherwise
+# a new caption in an old note restarts at 1), but NOT prose that merely
+# starts with the word "Table".
 set_body('Table of contents idea' + chr(10) + 'Tab. 3: old caption'
          + chr(10) + '| m | n |' + chr(10) + '| --- | --- |' + chr(10)
          + '| 5 | 6 |')
@@ -5661,7 +5661,7 @@ check('numbering counts old-label captions but not prose starting '
       'Table 2: description' in app.body_text.get('1.0', 'end-1c'))
 set_body('')
 
-# Plasarea tabelului calatoreste cu copy-ul de celule.
+# The table's placement travels with the cell copy.
 set_body('| p | q |' + chr(10) + '| --- | --- |' + chr(10)
          + '| 1 | 2 |' + chr(10) + chr(10) + 'coada')
 app._render_table_grids()
@@ -5684,12 +5684,13 @@ check('a duplicated CENTRED table pastes back centred',
       and app._grid_table_align_of(_blkL[1][0] + 1) == 'center')
 set_body('')
 
-# RUTA WINDOWS (runda 6): copy-ul nostru pune si HTML pe clipboard, iar
-# ruta rich-paste il vedea PRIMA -- tabelul copiat se lipea generic:
-# fara latimi, fara plasare, si cu primul rand aterizat in coada liniei
-# "Sursa: " ('Sursa: | fff |...' in raportul de teren). Loopback-ul
-# serveste inapoi exact ce s-a scris, cum face clipboardul Windows;
-# copia proprie trebuie sa ia ruta TSV, cu toate gardurile ei.
+# THE WINDOWS ROUTE (round 6): our copy also puts HTML on the clipboard,
+# and the rich-paste route saw that FIRST -- a copied table pasted back
+# generically: no widths, no placement, and the first row landing at the
+# tail of the source line ('Sursa: | fff |...' in the field report, from
+# when the caption labels were Romanian). The loopback serves back
+# exactly what was written, as the Windows clipboard does; our own copy
+# must take the TSV route, with all its guards.
 set_body('| a | b |' + chr(10) + '| --- | --- |' + chr(10)
          + '| 1 | 2 |' + chr(10) + 'Table 1: description' + chr(10)
          + 'Source: ')
@@ -5712,9 +5713,10 @@ check('our own table copy pastes below the Source line, not into it',
 _stub_clipboard()
 set_body('')
 
-# Clipboardul HTML urmeaza regulile exportului de fisier: header <th>,
-# merge-uri reale (nu markeri literali), coloana ascunsa nu pleaca,
-# checkboxul pleaca glifa. TSV-ul ramane complet -- fidelitatea interna.
+# The HTML clipboard follows the file export's rules: a <th> header,
+# real merges (not literal markers), a hidden column stays home, the
+# checkbox leaves as a glyph. The TSV stays complete -- internal
+# fidelity.
 set_body('| h1 | h2 | h3 | h4 |' + chr(10)
          + '| --- | --- | --- | ~ |' + chr(10)
          + '| wide | < | [x] | secret |')
@@ -5732,9 +5734,9 @@ check('the cell copy HTML wears th, merges, hides and draws the box',
 check('while the TSV keeps every column verbatim',
       'secret' in (_written.get('text') or '')
       and '[x]' in (_written.get('text') or ''))
-# Fara borduri inline, Word picta tabelul lipit INVIZIBIL -- fantoma
-# selectabila din raportul de teren 8. Checkboxul pleaca centrat, cum
-# il si deseneaza aplicatia.
+# Without inline borders, Word painted the pasted table INVISIBLE --
+# the selectable phantom from field report 8. The checkbox leaves
+# centred, exactly as the app draws it.
 check('the cell copy pastes with visible borders and a centred box',
       'border-collapse:collapse;' in _htmlV
       and 'border:1px solid #999;' in _htmlV
@@ -5742,8 +5744,9 @@ check('the cell copy pastes with visible borders and a centred box',
 app._grid_clear_selection()
 set_body('')
 
-# Si copierea tabelului ca TEXT (selectie in body peste liniile pipe)
-# pleaca cu bordurile inline -- acelasi drum spre Word, aceeasi fantoma.
+# Copying the table as TEXT (a body selection across the pipe lines)
+# leaves with the inline borders too -- same road to Word, same
+# phantom.
 set_body('| c1 | c2 |' + chr(10) + '| --- | --- |' + chr(10)
          + '| v1 | v2 |')
 app._render_table_grids()
@@ -5760,8 +5763,8 @@ check('a text-selection copy of a table carries inline borders too',
 app.body_text.tag_remove('sel', '1.0', 'end')
 set_body('')
 
-# Word count-ul numara ce a SCRIS omul, nu instalatia: fiecare pipe
-# conta ca "un cuvant", un tabel gol 3x3 pretindea 12 vorbe.
+# The word count counts what the PERSON wrote, not the plumbing: every
+# pipe used to count as "a word", an empty 3x3 table claimed twelve.
 set_body('doua vorbe' + chr(10) + chr(10).join(core_tables.blank_table(3, 3)))
 app._render_table_grids()
 app.update()
@@ -5770,8 +5773,8 @@ check('the word count sees the writing, not the table plumbing',
       app.word_count_lbl.cget('text').startswith('2 words'))
 set_body('')
 
-# Cautarea la fel: "---" nu mai prinde orice nota cu tabel, dar
-# continutul celulelor ramane cautabil.
+# Search likewise: "---" no longer catches every note holding a table,
+# while cell content stays searchable.
 app.new_note()
 app.title_entry.delete(0, 'end')
 app.title_entry.insert(0, 'NotaTabelQ')
@@ -5794,8 +5797,8 @@ app.update()
 check('search skips table plumbing but still finds cell content',
       not _hitQ1 and _hitQ2)
 
-# Un tabel de 1 coloana nu poate exista ca rand (is_table_row cere doua
-# celule) -- inserarea il ridica la doua, altfel iesea text mort cu pipe.
+# A one-column table cannot exist as a row (is_table_row wants two
+# cells) -- the insert raises it to two, else dead pipe text came out.
 set_body('')
 app._insert_table(2, 1)
 app.update()
@@ -5806,10 +5809,10 @@ if getattr(app, '_cell_editor', None):
 app.update()
 set_body('')
 
-# ---- UNDO x TABELE: o operatie = un singur Ctrl+Z ----
-# Commitul unei celule e o rafala de editari mici; fara unitatea de
-# undo, un Ctrl+Z se oprea la jumatate -- valoarea veche pierduta,
-# paddingul prabusit ('|  | 2 |' in sonda auditului).
+# ---- UNDO x TABLES: one operation = one single Ctrl+Z ----
+# A cell commit is a burst of small edits; without the undo unit, one
+# Ctrl+Z stopped halfway -- the old value lost, the padding collapsed
+# ('|  | 2 |' in the audit's probe).
 set_body('| a | b |' + chr(10) + '| --- | --- |' + chr(10)
          + '| 1 | 2 |' + chr(10) + 'final')
 app._render_table_grids()
@@ -5850,7 +5853,7 @@ check('redo brings the edit and its drawing back',
       'unu-nou' in app.body_text.get('1.0', 'end-1c')
       and app._grid_at_line(1)['cells'][(1, 0)]['value'] == 'unu-nou')
 
-# Un tabel inserat pleaca intreg la un singur undo, cu desenul cu tot.
+# An inserted table leaves whole on a single undo, drawing included.
 set_body('text sus')
 app.update()
 app.body_text.edit_reset()
@@ -5870,11 +5873,11 @@ check('one undo removes the whole inserted table, drawing included',
       and 'text sus' in _txtU3)
 set_body('')
 
-# ---- OLD TEETH, SHARPENED (auditul din 2026-08-31) ----
-# 1. Garda editorului din 0.32.x (continut scurt sta sus) nu era
-# pinuita de nimic: scoasa, totul ramanea verde. winfo_height e
-# stub-uit urias ca "incape" sa fie adevarat indiferent de fereastra
-# si de fontul platformei -- checkul tinteste PIN-ul, determinist.
+# ---- OLD TEETH, SHARPENED (the 2026-08-31 audit) ----
+# 1. The 0.32.x editor guard (short content stays at the top) was pinned
+# by nothing: removed, everything stayed green. winfo_height is stubbed
+# huge so "it fits" holds regardless of the window and the platform's
+# font -- the check aims at the PIN itself, deterministically.
 _ecT = app.editor_canvas
 _ecT.configure(scrollregion=(0, 0, 500, 5000))
 _ecT.yview_moveto(0.3)
@@ -5887,13 +5890,14 @@ app.update()
 check('editor content that fits pins back to the top (the 0.32.x guard)',
       _dispT > 300 and _ecT.canvasy(0) == 0)
 
-# 2. Autosave peste o nota disparuta: garda exista, dar mutantul fara
-# ea ATARNA suita in dialogul modal in loc sa pice un check numit.
+# 2. Autosave over a vanished note: the guard exists, but the mutant
+# without it HUNG the suite in the modal dialog instead of failing a
+# named check.
 _errsT = []
 _origErrT = app.show_error
 app.show_error = lambda *a, **k: _errsT.append(a)
 _savedSelT = app.selected_note_id
-app.selected_note_id = 999999          # id care nu exista
+app.selected_note_id = 999999          # an id that does not exist
 app._autosave_now()
 app._flush_autosave()
 app.show_error = _origErrT
