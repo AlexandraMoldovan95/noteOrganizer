@@ -8,6 +8,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ## [Unreleased]
 
+### Added
+- **App-wide keyboard shortcuts: Ctrl+N and Ctrl+S.** New note, and save the current note now — bound across the whole app so they work whichever pane has focus. The Settings → Keyboard shortcuts reference lists them under a new "App" group. Ctrl+N switches to the Notes tab first; Ctrl+S stays silent when there's nothing to save rather than popping a warning from wherever you pressed it. (Ctrl+F is left free for a future find-in-the-current-note bar, which is what Ctrl+F means in an editor.)
+
 ## [0.64.97] — 2026-09-02
 
 ### Fixed

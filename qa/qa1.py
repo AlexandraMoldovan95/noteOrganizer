@@ -5905,6 +5905,54 @@ if app._version_backup_path:
     os.remove(app._version_backup_path)
 NO.VERSION_CHANGE = _original_version_change
 
+# ---- APP-WIDE SHORTCUTS: Ctrl+N / Ctrl+S (bind_all) ----
+# Verified through the real bindings on the app, not just the handlers.
+# (Ctrl+F is intentionally NOT bound here -- it is reserved for a future
+# find-in-the-current-note bar, the editor meaning of Ctrl+F.)
+check('Ctrl+N and Ctrl+S are bound app-wide',
+      all(app.bind_all(c) for c in ('<Control-n>', '<Control-s>')))
+check('Ctrl+F is left unbound for a future find-in-note',
+      not app.bind_all('<Control-f>'))
+_sc_groups = dict((g[0], [c for c, _d in g[1]]) for g in app.SHORTCUT_GROUPS)
+check('the shortcuts reference lists them under an App group',
+      _sc_groups.get('App') == ['Ctrl+N', 'Ctrl+S'])
+
+# Ctrl+N: a fresh, unsaved note, through the real binding.
+app.new_note()
+app.title_entry.insert(0, 'BeforeCtrlN')
+app.body_text.insert('1.0', 'body')
+app.save_current_note(auto=False)
+app.update()
+take_focus(app.body_text)
+app.body_text.event_generate('<Control-n>')
+app.update()
+check('Ctrl+N starts a new, unsaved note',
+      app.selected_note_id is None
+      and app.title_entry.get().strip() in ('', 'Note title...'))
+
+# Ctrl+S: saves the note being edited.
+app.new_note()
+app.title_entry.insert(0, 'SavedByCtrlS')
+app.body_text.insert('1.0', 'content here')
+take_focus(app.body_text)
+app.body_text.event_generate('<Control-s>')
+app.update()
+check('Ctrl+S saves the note being edited',
+      any(n.get('title') == 'SavedByCtrlS' for n in app.notes))
+
+# ...but a blank new note saves nothing, and pops no warning.
+_warnedS = []
+_origWS = app.show_warning
+app.show_warning = lambda *a, **k: _warnedS.append(a)
+app.new_note()
+_nS = len(app.notes)
+take_focus(app.body_text)
+app.body_text.event_generate('<Control-s>')
+app.update()
+app.show_warning = _origWS
+check('Ctrl+S on a blank note saves nothing and warns nothing',
+      len(app.notes) == _nS and _warnedS == [])
+
 # ---- CLOSING SAVES SILENTLY (dead last: it destroys the app) ----
 # The quit-time "Unsaved notes" ask could only ever cover the last
 # half-second of typing; the app now trusts its own autosave and closes
