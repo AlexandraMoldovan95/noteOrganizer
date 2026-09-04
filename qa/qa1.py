@@ -6147,6 +6147,12 @@ check('find/theme: a theme switch keeps the open cell search alive',
 check('find/theme: the find highlight is re-tinted to the new accent',
       app.body_text.tag_cget('find_current', 'background').lower()
       == app.colors['accent'].lower())
+# The "Aa" case checkbox is long-lived (built once with the bar); its
+# selectcolor -- the box's own fill -- must follow the theme too, or a
+# switch leaves a stuck (dark-on-light) box you can't read as checked.
+check('find/theme: the case checkbox selectcolor follows the theme',
+      str(app._find_case_cb.cget('selectcolor')).lower()
+      == app.colors['sidebar'].lower())
 app._close_find()
 app.update()
 

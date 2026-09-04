@@ -11773,11 +11773,15 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._find_case = tk.BooleanVar(value=False)
         cb = tk.Checkbutton(bar, text="Aa", variable=self._find_case,
                             command=lambda: self._find_rescan(reveal=False),
-                            relief="flat", bd=0, font=("Segoe UI", 8, "bold"),
-                            bg=self.colors["card"], fg=self.colors["subtext"],
-                            selectcolor=self.colors["sidebar"],
-                            activebackground=self.colors["card"])
-        self.track_theme(cb, bg="card", fg="subtext")
+                            relief="flat", bd=0, font=("Segoe UI", 8, "bold"))
+        # Built once with the bar and long-lived, so selectcolor (the box's
+        # own fill) and activebackground need LIVE tracking too -- left off
+        # the map they stay stuck at whichever theme was active when the bar
+        # was first built, leaving a dark box on a light theme where the
+        # checkmark can't be read (the group-by checkbox hit the same trap).
+        self.track_theme(cb, bg="card", fg="subtext", selectcolor="sidebar",
+                         activebackground="card")
+        self._find_case_cb = cb
         cb.pack(side="left", padx=(2, 2))
         close = tk.Button(bar, text="✕", command=self._close_find,
                           relief="flat", cursor="hand2", bd=0,
