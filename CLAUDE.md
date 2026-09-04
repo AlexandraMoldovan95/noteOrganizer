@@ -288,6 +288,9 @@ summary.
   `fix/...`, `feat/...`, `refactor/...`, `test/...`, or `docs/...`.
 - Keep each branch focused on one logical task; don't mix unrelated changes
   into it unless explicitly asked to.
+- Exception by agreement (2026-09-05): small, *related* docs-only changes
+  may share one branch/PR to reduce review ceremony. Code changes always
+  get their own branch.
 
 ### Commits
 
@@ -310,9 +313,16 @@ summary.
 
 - Do not automatically create or merge pull requests.
 - The user decides whether and when to open or merge a PR.
-- GitHub CLI (`gh`) is currently not installed.
-- Until `gh` is available, after pushing a branch, provide the GitHub PR
-  creation link plus ready-to-paste PR title, description, and suggested label.
+- GitHub CLI (`gh`) is not installed — a deliberate choice (2026-09-05),
+  not a gap: the user reviews PR texts here before they go up, and wants
+  to stay hands-on with the GitHub side. Do not propose installing it.
+- After pushing a branch, provide the GitHub PR creation link plus
+  ready-to-paste PR title, description, and suggested label.
+- **When an issue accompanies a PR** (agreed 2026-09-05): a user-visible
+  bug — field-reported or shipped to `main` — gets an issue, and its PR
+  description carries `Fixes #N`; provide ready-to-paste issue title and
+  body alongside the PR text. Enhancements are tracked in ROADMAP, not
+  issues. Internal-only work (tests, docs, refactors) needs no issue.
 - Never merge a PR into `main` without explicit user approval.
 
 ### Main / remote safety
@@ -442,6 +452,28 @@ being re-asked:
   "dialog" for blocking asks.
 - Docs-only changes still get no version bump, matching the Versioning
   policy.
+- **Release-time freshness check (agreed 2026-09-05).** Every release cut
+  includes an unprompted currency pass over all `.md` files — the
+  audit-all-docs discipline, on a schedule instead of on request. When
+  shipped work has accumulated enough to warrant it, proactively propose
+  a full editorial audit rather than waiting to be asked.
+
+## Agent protocol (standing rule, 2026-09-05)
+
+For any work that fans out to subagents (audits, rewrites, parallel
+builds):
+
+- **Ownership.** An agent reads or edits only the area it is assigned;
+  agents that write files get isolated worktrees where they could
+  collide. Changes to the hub (`note_organizer.py`) or `core/` integrate
+  only through the session itself — the session is the integrator,
+  because it carries the seam map and the memory.
+- **Coverage confession.** Every agent report ends with what was NOT
+  covered — files skipped, cases untried, checks not run. An audit that
+  does not declare its gaps is more dangerous than an incomplete one.
+- **Real numbers only.** Aggregation never smooths results: failed
+  rounds, raw scores, and open gaps reach the user as they are. Never
+  inflate, never summarize a failure into silence.
 
 ## Existing project documentation
 
