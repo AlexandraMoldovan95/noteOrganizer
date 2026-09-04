@@ -41,6 +41,34 @@ How the numbers themselves are counted is the
 
 ## [Unreleased]
 
+### Fixed
+- **A shared note keeps its checklist.** Share codes carried every piece of a note's content
+  except one: the checklist was silently left behind, so a shared packing list arrived as a
+  title and a body with the actual list missing. The checklist now travels in the code, done
+  states included; older codes without one still decode exactly as before, and codes carrying
+  one degrade gracefully in older builds (the import path has always normalized the field).
+
+### Changed
+- **The table caption speaks English.** The inserted labels were "Tab. N: descriere" / "Sursa:"
+  (the academic convention the feature was first built around, in Romanian); they are now
+  "Table N: description" / "Source: " — the app's own functions are English everywhere, and the
+  caption stays plain editable text, so what's written after the labels (or instead of them) is
+  the user's, in any language. Numbering now counts only caption-shaped lines ("Table 3:"), not
+  prose that happens to start with the word — and it still counts the old "Tab. N:" labels, so
+  the next caption in an older note carries on instead of restarting at 1.
+
+### Testing
+- **Multi-script input, proven through the real routes.** A new qa5 block pushes Arabic, Hebrew,
+  Chinese, Japanese, Korean, Devanagari, Cyrillic, Greek and ZWJ-emoji text through the editor
+  fields, a table cell, save → reload from disk, find-in-note, a share-code round-trip, the HTML
+  export and the sidebar search — asserting the data survives byte-for-byte. The data-level
+  half (normalize, share code, export) runs on both CI platforms; the widget routes run on the
+  Windows job, the platform the app ships on, because Linux's Xft font stack can segfault Tk
+  outright when *rendering* exotic glyph sequences — which says nothing about the shipped
+  product (glyph shaping stays the platform's job, eyeballed via the manual test plan). The
+  audit that came with it confirmed no validator anywhere restricts input to Latin characters,
+  and every file the app opens is explicit UTF-8.
+
 ## [0.66.97] — 2026-09-04
 
 *Highlights: keyboard reach — app-wide Ctrl+N and Ctrl+S shortcuts, and an in-note Ctrl+F find bar.*

@@ -218,11 +218,9 @@ A table works the way a spreadsheet has taught your hands to expect:
   page lands here as a real table.
 - **Right-click** a cell for everything else — the everyday actions sit on top, and **Align cell /
   Rows / Columns / Merge / Table** each hold their group one hover away.
-- Under **Table** lives **Add caption below…**: a centred, auto-numbered "Tab. N" (Table N)
-  label, typing replaces the selected placeholder, plus a "Sursa:" (Source) line for links and
-  sources. Those are the literal labels the app inserts — the caption follows the academic
-  table-caption convention it was built for, and since it's plain, editable body text ever after,
-  you can retype the labels however you like.
+- Under **Table** lives **Add caption below…**: a centred, auto-numbered "Table N: description"
+  label (typing replaces the selected placeholder) plus a "Source:" line for links and sources —
+  plain, editable body text ever after, so the wording is yours to change.
 - The full set: merge the selected cells into one (their texts join), split a merge back apart,
   insert or delete rows and columns, duplicate whole columns to the end of the table (and whole
   rows to the bottom), insert a **checkbox** (with its own colour palette) or an emoji, and
@@ -432,8 +430,8 @@ note's own colour — useful for marking something about the day itself, like a 
 ### Share a note as a code
 
 Open a note → Generate code. This generates a compact block of text representing that note's
-content (not its attachments) — paste it to someone else, and they can import it with **Import
-code** in the sidebar. You can also select several notes at once and generate one code covering
+content, checklist included (attachments stay home — use Export for files) — paste it to someone
+else, and they can import it with **Import code** in the sidebar. You can also select several notes at once and generate one code covering
 all of them.
 
 ![Share panel](screenshots/share-panel.png)

@@ -142,6 +142,115 @@ def purge():
     app.update()
 safe('purge survives bad deleted_at in trash', purge)
 
+# ---- MULTI-SCRIPT INPUT ----
+# The app's own functions speak English; the USER writes in whatever
+# language they choose. The DATA guarantees are asserted on every CI
+# platform through the core routes, which involve no display at all.
+# The WIDGET routes run on Windows -- the platform the app ships on --
+# because Linux's Xft font stack can segfault the Tk interpreter
+# outright when asked to RENDER exotic glyph sequences (ZWJ emoji,
+# complex scripts), which says nothing about the shipped product. Same
+# rule as the pixel checks: aim the assertion, never delete it. Glyph
+# shaping itself (RTL display) is the platform's job, eyeballed via
+# the manual test plan.
+import io as _mio, json as _mjson
+_SCRIPTS = {
+    'arabic':   'مرحبا بالعالم',
+    'hebrew':   'שלום עולם',
+    'chinese':  '你好世界',
+    'japanese': 'こんにちは世界',
+    'korean':   '안녕하세요 세계',
+    'hindi':    'नमस्ते दुनिया',
+    'cyrillic': 'Привет мир',
+    'greek':    'Γειά σου Κόσμε',
+    'emoji':    '👨‍👩‍👧‍👦✨',
+}
+_all_scripts = ' '.join(_SCRIPTS.values())
+_mbody = (_all_scripts + chr(10)
+          + '| ' + _SCRIPTS['arabic'] + ' | '
+          + _SCRIPTS['chinese'] + ' |' + chr(10)
+          + '| --- | --- |' + chr(10)
+          + '| ' + _SCRIPTS['hindi'] + ' | '
+          + _SCRIPTS['emoji'] + ' |')
+
+# -- Data level, every platform: normalize -> share code -> export. --
+_mnorm = NO.normalize_note({
+    'id': 424242, 'title': ('多言語 ' + _SCRIPTS['arabic'])[:80],
+    'body': _mbody, 'comments': _SCRIPTS['hebrew'],
+    'checklist': [{'text': _SCRIPTS['korean'], 'done': False}]})
+check('multi-script: normalize_note keeps every script intact',
+      all(v in (_mnorm['title'] + _mnorm['body'] + _mnorm['comments']
+                + _mjson.dumps(_mnorm['checklist'], ensure_ascii=False))
+          for v in _SCRIPTS.values()))
+
+# Share codes carry the note's content -- checklist included since the
+# field joined SHAREABLE_FIELDS; attachments stay home by design.
+from noteorganizer.core import sharing as _msharing
+_mback = _msharing.decode_share_code(
+    _msharing.encode_share_code([_mnorm]))
+check('multi-script: a share code round-trips every script unchanged',
+      bool(_mback)
+      and all(v in (_mback[0]['title'] + _mback[0]['body']
+                    + _mback[0].get('comments', ''))
+              for v in _SCRIPTS.values())
+      and _SCRIPTS['korean'] in _mjson.dumps(
+          _mback[0].get('checklist', []), ensure_ascii=False))
+
+_mhtml = app._note_export_content(_mnorm, 'html', _mnorm['title'])
+check('multi-script: the HTML export carries every script',
+      all(v in _mhtml for v in _SCRIPTS.values()))
+
+# -- Widget level, the shipping platform's real routes. --
+if sys.platform == 'win32':
+    app.new_note()
+    app.title_entry.delete(0, 'end')
+    app.title_entry.insert(0, _mnorm['title'])
+    app.body_text.insert('1.0', _mbody)
+    app.comments_text.insert('1.0', _SCRIPTS['hebrew'])
+    app._working_checklist = [{'text': _SCRIPTS['korean'], 'done': False}]
+    app._render_table_grids()
+    app.update()
+    app.save_current_note(auto=False)
+    app.update()
+    _msid = app.selected_note_id
+    _mdisk = _mjson.load(_mio.open('notes_data.json', encoding='utf-8'))
+    _mnote = next(n for n in _mdisk if n['id'] == _msid)
+    _mflat = (_mnote['title'] + _mnote['body'] + _mnote.get('comments', '')
+              + _mjson.dumps(_mnote.get('checklist', []),
+                             ensure_ascii=False))
+    check('multi-script: every script survives the disk round-trip intact',
+          all(v in _mflat for v in _SCRIPTS.values()))
+
+    _mgrid = app._grid_at_line(2)
+    check('multi-script: a table cell holds Devanagari and renders as a grid',
+          _mgrid is not None
+          and _mgrid['cells'][(1, 0)]['value'] == _SCRIPTS['hindi'])
+
+    app._open_find()
+    app._find_var.set(_SCRIPTS['hindi'])
+    app._find_rescan(reveal=True)
+    app.update()
+    _mhits = list(app._find_matches)
+    check('multi-script: find-in-note matches Devanagari in prose AND cell',
+          any(m['kind'] == 'prose' for m in _mhits)
+          and any(m['kind'] == 'cell' for m in _mhits))
+    app._close_find()
+    app.update()
+
+    app.search_var.set(_SCRIPTS['chinese'])
+    app.update()
+    app.refresh_note_list()
+    app.update()
+    _mq = app.search_var.get().lower()
+    check('multi-script: the sidebar search query lowercases safely and '
+          'matches the note body',
+          _mq == _SCRIPTS['chinese'] and _mq in _mnote['body'])
+    app.search_var.set('')
+    app.update()
+else:
+    print('SKIP multi-script widget routes (non-Windows display stack; '
+          'asserted in full on the Windows CI job)')
+
 print()
 print(f"=== QA5 FAILURES: {fails if fails else 'NONE'} ===")
 

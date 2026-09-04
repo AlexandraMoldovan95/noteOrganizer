@@ -68,7 +68,7 @@ MAX_SHARED_NOTES = 200                # most notes one code may carry
 # page -- without it a shared note arrived flush left with flat lists.
 SHAREABLE_FIELDS = [
     "title", "body", "formatting", "comments", "category", "date", "color", "recurrence",
-    "paragraphs",
+    "paragraphs", "checklist",
 ]
 
 

@@ -85,7 +85,18 @@ run before *every* push.
 - Windows-specific pixel checks assert on `sys.platform == 'win32'`
   only (fonts differ on Xvfb), and the Windows CI job is what makes
   them bite remotely — never delete the assertion, aim it.
-- Timing-sensitive measurements settle first (five stable reads with a
-  hard cap) instead of counting update() pumps — see the menu-op and
-  push-down checks for the pattern, and prove the settled check still
-  fails under its mutant before trusting it.
+- Timing-sensitive measurements wait for the **promised state** (five
+  consecutive reads inside the asserted band, with a hard cap), never
+  for generic stability or a fixed window — the app's view-restore
+  choreography re-pins on timers up to 360ms, and "any stable value"
+  can certify the pause between a late yank and the re-pin that
+  corrects it (the push-down check flaked exactly that way, twice
+  settled wrongly before this pattern). A real regression parks
+  outside the band, the band is never entered, and the cap expires
+  into a hard failure — prove that asymmetry under the mutant before
+  trusting the check.
+- A failure gets a **permanent fix, at the root of its class**: when a
+  check fails without a real regression, the check's *strategy* is
+  wrong — fix the strategy, sweep the suite for every sibling using
+  the same strategy, and record the lesson here. After the fix, the
+  check may fail only when the promised behaviour is actually broken.

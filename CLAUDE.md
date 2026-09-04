@@ -127,6 +127,24 @@ After making a change:
 
 When fixing a bug, prefer adding a regression test when practical.
 
+**Permanent fixes only (standing rule, 2026-09-05).** Every failure —
+in the app or in a check — gets a fix at the root of its *class*, not a
+patch over the instance, so the same failure cannot reappear:
+
+1. Diagnose the mechanism, not the symptom. Name what class of failure
+   it belongs to.
+2. Fix the class: sweep the codebase/suite for every sibling with the
+   same mechanism and fix those in the same change.
+3. Prove the fix's asymmetry: after it, the thing may only fail when
+   the promised behaviour is genuinely broken (for checks, that means
+   the mutant still fails hard while load/timing can no longer produce
+   a false red).
+4. Record the lesson where the next person will meet it (qa/README's
+   house rules for test strategy; ISSUES_LOG for app mechanisms).
+
+A flaky check is a bug in the check's strategy and gets this same
+treatment — "re-run it and it went green" is never the resolution.
+
 ### Cross-feature verification (standing rule, 2026-08-28)
 
 A new feature is not done when it works alone — it is done when the
