@@ -2858,20 +2858,21 @@ app.update()
 # X11 maps the fresh grid windows asynchronously, so a fixed number of
 # pumps can catch the body mid-reflow -- one CI run measured 0.172
 # here while the settled state sits at ~0.07 (its re-run was green).
-# Measure the SETTLED view, not a race: pump until the fraction holds
-# still for several consecutive reads, with a hard time cap. This
+# Wait for the PROMISED band, not for generic stability: the restore
+# choreography re-pins on timers up to 360ms, and a short stable
+# stretch can land exactly in the pause between a late yank and the
+# re-pin that corrects it (the push-down check flaked that way). This
 # stays honest about the regression it pins -- with the op's
 # capture/restore removed the view shifts and STAYS shifted 0.15+, so
-# settling never brings a broken build back under the threshold.
+# the band is never entered and the cap expires into a hard failure.
 _yv1 = app.body_text.yview()[0]
 _stableV = 0
-_settle_cap = time.time() + 1.5
+_settle_cap = time.time() + 8.0
 while _stableV < 5 and time.time() < _settle_cap:
     app.update()
     time.sleep(0.02)
-    _nowV = app.body_text.yview()[0]
-    _stableV = _stableV + 1 if abs(_nowV - _yv1) < 0.001 else 0
-    _yv1 = _nowV
+    _yv1 = app.body_text.yview()[0]
+    _stableV = _stableV + 1 if abs(_yv1 - _yv0) < 0.1 else 0
 # The broken behaviour drifted 0.15+ (0.316 became 0.164); the fixed
 # one stays under ~0.03 on Windows and ~0.07 under the CI's Linux font
 # metrics -- the threshold sits between the two regimes, not inside
@@ -3796,19 +3797,22 @@ for _ in range(6):
 # TOP VISIBLE LINE, not the scroll fraction: adding a line above the
 # view changes the total height, so the fraction shifts on its own and
 # jitters as the heights settle (that jitter is what flaked this check
-# red on CI even at a 4s cap). The line number is an integer -- it is
-# either the same content or it is not -- so it settles cleanly and IS
-# the thing being promised: the same content stays under the viewport's
-# top edge, one line lower because one line was inserted above it.
-_prev_top = None
+# red on CI even at a 4s cap). And settle on the PROMISED line, not on
+# any stable line: the restore choreography re-pins on timers up to
+# 360ms, so generic five-reads-stable (a 100ms window) can certify the
+# pause BETWEEN a late geometry yank and the re-pin that corrects it --
+# which is exactly how this check flaked a third time on CI. Waiting
+# for the promised line keeps the mutant asymmetry: a real regression
+# never reaches it, and the cap expires into a hard failure.
 _stableP = 0
-_capP = time.time() + 4.0
+_capP = time.time() + 8.0
 while _stableP < 5 and time.time() < _capP:
     app.update()
     time.sleep(0.02)
-    _now_top = int(app.body_text.index('@0,0').split('.')[0])
-    _stableP = _stableP + 1 if _now_top == _prev_top else 0
-    _prev_top = _now_top
+    if int(app.body_text.index('@0,0').split('.')[0]) == _topP + 1:
+        _stableP += 1
+    else:
+        _stableP = 0
 # The pinned regression yanked the view nine lines up and KEPT it there
 # (0.30 -> 0.14) -- so the top line lands far from _topP + 1, and this
 # content-based assertion fails hard on it, with no dependence on a
@@ -4454,10 +4458,16 @@ _cv23.yview_moveto(0.0)          # clamp before the idle restore
 app.update()
 app.update_idletasks()
 _cv23.yview_moveto(0.0)          # a later settling pass clamps AGAIN
-_t24_end = time.time() + 0.55
-while time.time() < _t24_end:
+# Wait for the promised landing (the restore winning), not a fixed
+# window -- on a loaded runner the restore timers can land after any
+# fixed wait. With the restore gone the canvas stays clamped at 0,
+# the band is never entered, and the cap expires into a hard failure.
+_t24_end = time.time() + 8.0
+_st24 = 0
+while _st24 < 5 and time.time() < _t24_end:
     app.update()
-    time.sleep(0.01)
+    time.sleep(0.02)
+    _st24 = _st24 + 1 if abs(_cv23.canvasy(0) - _px24) < 30 else 0
 check('the rebuild restore outlives staged re-clamps',
       _px24 > 200 and abs(_cv23.canvasy(0) - _px24) < 30)
 
@@ -4484,10 +4494,19 @@ app.update_idletasks()
 _cv23.yview_moveto(1.0)
 app.update()
 app._toggle_group_collapsed('General')
-_t24_end = time.time() + 0.6
-while time.time() < _t24_end:
+# Same promised-landing wait: the target (end of the shorter list) is
+# recomputed each read because the content height itself settles.
+_t24_end = time.time() + 8.0
+_st24b = 0
+while _st24b < 5 and time.time() < _t24_end:
     app.update()
-    time.sleep(0.01)
+    time.sleep(0.02)
+    _bb24 = _cv23.bbox('all')
+    _ch24 = (_bb24[3] - _bb24[1]) if _bb24 else 0
+    _max24 = _ch24 - _cv23.winfo_height()
+    _st24b = (_st24b + 1
+              if _max24 > 100 and abs(_cv23.canvasy(0) - _max24) < 30
+              else 0)
 _bb24 = _cv23.bbox('all')
 _ch24 = (_bb24[3] - _bb24[1]) if _bb24 else 0
 _max24 = _ch24 - _cv23.winfo_height()
