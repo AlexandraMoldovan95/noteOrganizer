@@ -8,6 +8,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ## [Unreleased]
 
+## [0.66.97] — 2026-09-04
+
 ### Added
 - **App-wide keyboard shortcuts: Ctrl+N and Ctrl+S.** New note, and save the current note now — bound across the whole app so they work whichever pane has focus. The Settings → Keyboard shortcuts reference lists them under a new "App" group. Ctrl+N switches to the Notes tab first; Ctrl+S stays silent when there's nothing to save rather than popping a warning from wherever you pressed it.
 - **Find in the current note: Ctrl+F.** A small find bar opens in the top-right of the editor — inside the app window, not a separate OS dialog — and searches the note you're in (the left-hand search still finds *which* note; this finds *within* it). It looks through the note's text **and its tables**: a match inside a table cell scrolls the table into view and outlines the cell, and a cell's `<br>` line-break reads as a space so a phrase split across two lines still matches (separator rows, checkboxes and merge markers are never "words"). Enter / Shift+Enter step forward and back through the matches (wrapping around), the count shows as "3/12", "Aa" toggles case-sensitivity, and Esc or the ✕ closes it. It only ever highlights — it never changes the note, so opening it never marks the note edited; editing while it's open re-counts on the fly without twitching the view, and switching notes or themes keeps up. Reserved earlier when Ctrl+N/Ctrl+S landed; this is that bar.
