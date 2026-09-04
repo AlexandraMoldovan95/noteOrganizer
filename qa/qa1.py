@@ -5905,17 +5905,13 @@ if app._version_backup_path:
     os.remove(app._version_backup_path)
 NO.VERSION_CHANGE = _original_version_change
 
-# ---- APP-WIDE SHORTCUTS: Ctrl+N / Ctrl+S (bind_all) ----
+# ---- APP-WIDE SHORTCUTS: Ctrl+N / Ctrl+S / Ctrl+F (bind_all) ----
 # Verified through the real bindings on the app, not just the handlers.
-# (Ctrl+F is intentionally NOT bound here -- it is reserved for a future
-# find-in-the-current-note bar, the editor meaning of Ctrl+F.)
-check('Ctrl+N and Ctrl+S are bound app-wide',
-      all(app.bind_all(c) for c in ('<Control-n>', '<Control-s>')))
-check('Ctrl+F is left unbound for a future find-in-note',
-      not app.bind_all('<Control-f>'))
+check('Ctrl+N, Ctrl+S and Ctrl+F are bound app-wide',
+      all(app.bind_all(c) for c in ('<Control-n>', '<Control-s>', '<Control-f>')))
 _sc_groups = dict((g[0], [c for c, _d in g[1]]) for g in app.SHORTCUT_GROUPS)
 check('the shortcuts reference lists them under an App group',
-      _sc_groups.get('App') == ['Ctrl+N', 'Ctrl+S'])
+      _sc_groups.get('App') == ['Ctrl+N', 'Ctrl+S', 'Ctrl+F'])
 
 # Ctrl+N: a fresh, unsaved note, through the real binding.
 app.new_note()
@@ -5952,6 +5948,229 @@ app.update()
 app.show_warning = _origWS
 check('Ctrl+S on a blank note saves nothing and warns nothing',
       len(app.notes) == _nS and _warnedS == [])
+
+# ---- FIND IN THE CURRENT NOTE (Ctrl+F) ----
+# Covers BOTH prose and table cells, the in-window popup bar, reveal without
+# flicker, and every seam the feature crosses (theme, save/dirty, edits,
+# note switches). See _find_* in note_organizer.py.
+def _frow(*cells):
+    return '| ' + ' | '.join(cells) + ' |'
+_FSEP = '| --- | --- |'
+_FLB = core_tables.LINE_BREAK
+
+# The real Ctrl+F binding switches to Notes, opens an in-window bar, and
+# focuses its entry -- from anywhere in the app (here, the Calendar tab).
+app.new_note()
+app.notebook.select(app.TAB_CALENDAR)
+app.update()
+app.event_generate('<Control-f>')
+app.update()
+check('Ctrl+F switches back to the Notes tab',
+      app.notebook.index('current') == app.TAB_NOTES)
+check('Ctrl+F opens the in-window find bar (a placed Frame, not a Toplevel)',
+      app._find_open is True and app._find_bar is not None
+      and app._find_bar.winfo_manager() == 'place'
+      and isinstance(app._find_bar, tk.Frame))
+check('Ctrl+F puts the focus in the find entry',
+      app.focus_get() is app._find_entry)
+app._close_find()
+app.update()
+check('the X (close) hides the bar and drops the find tags',
+      app._find_open is False
+      and not app.body_text.tag_ranges('find_all'))
+
+# Prose: nocase by default, navigation wraps, a miss reddens to 0/0.
+app.new_note()
+app.body_text.delete('1.0', 'end')
+app.body_text.insert('1.0', 'alpha beta alpha gamma ALPHA')
+app.update()
+app._open_find()
+app._find_var.set('alpha')
+app._find_rescan(reveal=True)
+app.update()
+check('find/prose: nocase finds all three (incl ALPHA)',
+      len(app._find_matches) == 3
+      and all(x['kind'] == 'prose' for x in app._find_matches))
+check('find/prose: the current match carries the find_current tag',
+      bool(app.body_text.tag_ranges('find_current')))
+app._find_nav(1); app._find_nav(1); app._find_nav(1)
+app.update()
+check('find/prose: Next wraps back to the first match', app._find_index == 0)
+app._find_case.set(True)
+app._find_rescan(reveal=False)
+app.update()
+check('find/prose: case-sensitive drops ALPHA -> two', len(app._find_matches) == 2)
+app._find_case.set(False)
+app._find_var.set('nowhere-zzz')
+app._find_rescan(reveal=True)
+app.update()
+check('find/prose: a miss shows 0/0 and clears the highlight',
+      app._find_count_lbl.cget('text') == '0/0'
+      and not app.body_text.tag_ranges('find_all'))
+app._close_find()
+app.update()
+
+# Table cells: header counts as data row 0, separator excluded; a <br>
+# reads as a space; checkbox and merge cells are never words.
+app.new_note()
+set_body('\n'.join([
+    _frow('Fruit', 'Note'),                 # data row 0
+    _FSEP,                                   # separator (skipped)
+    _frow('Milk', 'fresh today'),           # data row 1
+    _frow('Bread%sloaf' % _FLB, 'plain'),   # data row 2: <br> in col 0
+    _frow('[x]', 'done'),                    # data row 3: checkbox col 0
+]))
+app._render_table_grids()
+app.update()
+_finfo = app._grid_at_line(1)
+check('find/cell: the grid rendered for the search table', _finfo is not None)
+app._open_find()
+app._find_var.set('fresh')
+app._find_rescan(reveal=True)
+app.update()
+_fcm = [x for x in app._find_matches if x['kind'] == 'cell']
+check('find/cell: a data cell match maps to (data-row 1, col 1)',
+      len(_fcm) == 1 and _fcm
+      and (_fcm[0]['row'], _fcm[0]['col']) == (1, 1)
+      and (1, 1) in _finfo['cells'])
+app._find_var.set('bread loaf')
+app._find_rescan(reveal=True)
+app.update()
+_fcm = [x for x in app._find_matches if x['kind'] == 'cell']
+check('find/cell: a <br> reads as a space ("bread loaf" hits row2 col0)',
+      len(_fcm) == 1 and _fcm and (_fcm[0]['row'], _fcm[0]['col']) == (2, 0))
+app._find_var.set('[x]')
+app._find_rescan(reveal=True)
+app.update()
+check('find/cell: a checkbox cell is never a match',
+      not any(x['kind'] == 'cell' for x in app._find_matches))
+app._close_find()
+app.update()
+
+# One matching cell = one stop even if the needle repeats inside it.
+app.new_note()
+set_body('\n'.join([_frow('X', 'Y'), _FSEP, _frow('foo foo foo', 'bar')]))
+app._render_table_grids()
+app.update()
+app._open_find()
+app._find_var.set('foo')
+app._find_rescan(reveal=True)
+app.update()
+check('find/cell: a repeated needle in one cell counts as a single stop',
+      len([x for x in app._find_matches if x['kind'] == 'cell']) == 1)
+app._close_find()
+app.update()
+
+# Reveal: a match 40+ lines down scrolls the body's own inner viewport.
+app.new_note()
+_ffill = '\n'.join('line %d' % i for i in range(40))
+set_body(_ffill + '\n' + '\n'.join(
+    [_frow('NeedleCell', 'Z'), _FSEP, _frow('target', 'v')]))
+app._render_table_grids()
+app.update()
+app.body_text.yview_moveto(0.0)
+app.update()
+app._open_find()
+app._find_var.set('target')
+app._find_rescan(reveal=True)
+app.update(); app.update_idletasks()
+check('find/reveal: revealing a far cell scrolls the body viewport to it',
+      app.body_text.yview()[0] > 0.0
+      and any(x['kind'] == 'cell' for x in app._find_matches))
+app._close_find()
+app.update()
+
+# The feature is read-only: it never dirties the note nor serializes a tag.
+app.new_note()
+app.title_entry.delete(0, 'end'); app.title_entry.insert(0, 'FindClean')
+app.title_entry.config(fg=app.colors['text'])
+app.body_text.delete('1.0', 'end')
+app.body_text.insert('1.0', 'needle here and needle there')
+app.save_current_note(auto=False)
+app.update()
+app._open_find()
+app._find_var.set('needle')
+app._find_rescan(reveal=True)
+app.update()
+app._find_nav(1)
+app.update()
+_ffmt = {f.get('style') for f in app._extract_formatting(app.body_text)}
+check('find: its tags never leak into the serialized formatting',
+      'find_all' not in _ffmt and 'find_current' not in _ffmt)
+check('find: an open search leaves the note clean (no phantom edit)',
+      app.editor_state_matches_saved(app.capture_editor_state()))
+app._close_find()
+app.update()
+
+# Editing while the bar is open: the model goes stale, nav is gated until a
+# debounced rescan, and the rescan does NOT twitch the view.
+app.new_note()
+app.body_text.delete('1.0', 'end')
+app.body_text.insert('1.0', 'cat cat cat')
+app.update()
+app._open_find()
+app._find_var.set('cat')
+app._find_rescan(reveal=True)
+app.update()
+app.body_text.insert('end', ' cat')
+app._find_on_body_edit()
+_fidx = app._find_index
+app._find_nav(1)
+check('find/edit: an edit marks the model dirty and gates navigation',
+      app._find_model_dirty is True and app._find_index == _fidx)
+for _ in range(60):
+    app.update(); app.update_idletasks(); time.sleep(0.01)
+    if not app._find_model_dirty:
+        break
+check('find/edit: the debounced rescan clears dirty and re-counts (4)',
+      app._find_model_dirty is False and len(app._find_matches) == 4)
+app._close_find()
+app.update()
+
+# Theme switch with the bar open on a CELL match: survives, and the find
+# highlight follows the new palette (the theme x tables seam).
+app.new_note()
+set_body('\n'.join([_frow('Col', 'Val'), _FSEP, _frow('phantom', 'x')]))
+app._render_table_grids()
+app.update()
+app._open_find()
+app._find_var.set('phantom')
+app._find_rescan(reveal=True)
+app.update()
+_fother = [t for t in NO.THEMES if t != app.theme_name]
+if _fother:
+    app.set_theme(_fother[0])
+app.update(); app.update_idletasks()
+check('find/theme: a theme switch keeps the open cell search alive',
+      app._find_open is True
+      and len([x for x in app._find_matches if x['kind'] == 'cell']) == 1)
+check('find/theme: the find highlight is re-tinted to the new accent',
+      app.body_text.tag_cget('find_current', 'background').lower()
+      == app.colors['accent'].lower())
+app._close_find()
+app.update()
+
+# Switching notes clears the model so no navigation runs on stale indices.
+app.new_note()
+app.title_entry.delete(0, 'end'); app.title_entry.insert(0, 'FindA')
+app.title_entry.config(fg=app.colors['text'])
+app.body_text.delete('1.0', 'end')
+app.body_text.insert('1.0', 'switchword switchword')
+app.save_current_note(auto=False)
+app.update()
+app._open_find()
+app._find_var.set('switchword')
+app._find_rescan(reveal=True)
+app.update()
+_fbefore = len(app._find_matches)
+app.new_note()  # fires _find_on_context_switch
+app.update()
+check('find/switch: opening another note clears the match model',
+      _fbefore == 2 and len(app._find_matches) == 0 and app._find_index == -1)
+check('find/switch: no stale find highlight survives the switch',
+      not app.body_text.tag_ranges('find_all'))
+app._close_find()
+app.update()
 
 # ---- CLOSING SAVES SILENTLY (dead last: it destroys the app) ----
 # The quit-time "Unsaved notes" ask could only ever cover the last

@@ -116,7 +116,9 @@ Any text field in a note (title, body, comments) can have an emoji inserted at t
 
 ### Finding notes: search, sort, and grouping
 
-Search the note list by keyword, and sort by recency, title, category, or date, from the controls above the list.
+Search the note list by keyword, and sort by recency, title, category, or date, from the controls above the list. This is the search for finding *which* note you want, across the whole notebook.
+
+To search *within* the note you already have open, press **Ctrl+F**. A small find bar appears in the top-right corner of the editor — inside the window, not a separate dialog. It looks through the note's text and its tables: type a word and every match highlights, with the current one picked out; **Enter** and **Shift+Enter** step forward and back (wrapping around at the ends), the count reads "3/12", and **Aa** switches on case-sensitivity. A match inside a table scrolls the table into view and outlines the cell it's in. Find only highlights — it never changes the note — and **Esc** or the **✕** closes the bar.
 
 Each note's card previews its first words. A table would be pipe soup at that size, so the preview shows only the note's plain text and the card's tag row marks the table itself — **▦ 1 table**, or how many the note holds — next to the comment and attachment marks.
 
@@ -224,7 +226,7 @@ Settings → Import notes brings a previously exported `.zip` back in — notes,
 
 Categories, templates, trash, duplicate cleanup, appearance, your name, usage statistics, and a keyboard-shortcut reference all live on one page, reached via the **⚙ Settings** button at the bottom of the sidebar. The page is split in two: a list of settings on the left, and whichever one you picked on the right. One section shows at a time, so you're only ever looking at the setting you came for. A **← Back to Notes** button at the top returns you to your notes.
 
-Two shortcuts work from anywhere in the app: **Ctrl+N** starts a new note, and **Ctrl+S** saves the note you're editing. They, and every other bound combo, are listed under Settings → Keyboard shortcuts.
+Three shortcuts work from anywhere in the app: **Ctrl+N** starts a new note, **Ctrl+S** saves the note you're editing, and **Ctrl+F** opens the find bar for searching within the current note (see *Finding notes*, above). They, and every other bound combo, are listed under Settings → Keyboard shortcuts.
 
 ![Settings overview](screenshots/settings-overview.png)
 

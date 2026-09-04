@@ -2677,6 +2677,8 @@ class SettingsPageMixin:
         ("App", (
             ("Ctrl+N", "New note (switches to the Notes tab first)."),
             ("Ctrl+S", "Save the current note now."),
+            ("Ctrl+F", "Find in the current note — searches its text and "
+                       "its tables; Enter / Shift+Enter step the matches."),
         )),
         ("Text formatting", (
             ("Ctrl+B", "Bold the selection — or with nothing selected, "

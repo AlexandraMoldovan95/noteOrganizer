@@ -6140,6 +6140,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         text_widget.tag_configure("bold_italic", font=self._fmt_bold_italic_font)
         text_widget.tag_configure("underline", underline=True)
         text_widget.tag_configure("strike", overstrike=True)
+        # Find-in-note highlights: background ONLY, so any text style under a
+        # match keeps its exact look. Raised over highlight_* at find time.
+        # Their names match no serialized style, so they never dirty the note.
+        # Blended from the palette, so apply_theme re-runs this to re-tint them.
+        self._retint_find_tags(text_widget)
         # Tk gives later-configured tags higher display priority, and "sel"
         # is created before any of these -- left alone, a highlight/text
         # color tag always paints over the selection color, making selected
@@ -6189,6 +6194,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # tag_raise("sel") in _setup_body_formatting_tags for why that
         # matters.
         text_widget.tag_raise("sel")
+        # Same trap for the find highlights: a colour applied from the
+        # toolbar fires no KeyRelease, so the edit-rescan that normally
+        # re-raises them wouldn't run. Lift them back over the new tag now.
+        if getattr(self, "_find_open", False) and text_widget is getattr(self, "body_text", None):
+            self._find_raise_tags()
         return tag
 
     def _retint_highlight_tags(self, text_widget):
@@ -8420,6 +8430,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # the straggler pass and left showing the wrong colour. Running last
         # makes the note's own data authoritative. See _recolor_note_cards.
         self._recolor_note_cards()
+        # The find highlights are blended from the palette, so re-tint them
+        # for the new theme; then re-draw the current cell flash, which the
+        # grid rebuild above tore off the canvas (a no-op if find is closed).
+        if hasattr(self, "body_text"):
+            self._retint_find_tags(self.body_text)
+        self._find_reflash()
 
     def _calendar_is_showing(self):
         """True only if the Calendar tab is the one currently selected AND
@@ -9512,6 +9528,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.body_text.bind("<KeyRelease>", self._apply_pending_style_to_typed_char, add="+")
         self.body_text.bind("<KeyRelease>", self._refresh_format_buttons, add="+")
         self.body_text.bind("<KeyRelease>", self._align_table_on_leaving, add="+")
+        # If the find bar is open, an edit invalidates the match model; a
+        # guarded, debounced rescan refreshes it WITHOUT moving the view.
+        self.body_text.bind("<KeyRelease>",
+                            lambda _e: self._find_on_body_edit(), add="+")
         # A click in the body means the user has LEFT the table: a cell
         # selection lingering from an earlier drag would silently catch
         # the next toolbar colour meant for the body text.
@@ -11375,6 +11395,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._reset_editor_scroll()
         self._reset_text_undo()
         self._update_restore_button()
+        self._find_on_context_switch()
     def editor_state_matches_saved(self, st):
         """True if the captured state equals what's on disk for its note — i.e.
         there are no unsaved changes. A brand-new note (no id) counts as unsaved
@@ -11664,11 +11685,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         default Text or Entry binding on this Tk, so nothing is being
         overridden; each handler returns 'break' so the combo is never
         also typed. Both letter cases are bound, to survive Caps Lock --
-        the same as the Ctrl+V bindings elsewhere. (Ctrl+F is deliberately
-        left free for a future find-in-the-current-note bar, which is what
-        Ctrl+F means in every editor.)"""
+        the same as the Ctrl+V bindings elsewhere. Ctrl+F opens the
+        find-in-the-current-note bar (the editor meaning of Ctrl+F)."""
         for lower, upper, handler in (
                 ("<Control-n>", "<Control-N>", self._shortcut_new_note),
+                ("<Control-f>", "<Control-F>", self._shortcut_find),
                 ("<Control-s>", "<Control-S>", self._shortcut_save_now)):
             self.bind_all(lower, handler, add="+")
             self.bind_all(upper, handler, add="+")
@@ -11694,6 +11715,465 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 or st.get("attachments") or st.get("checklist")):
             self.save_current_note(auto=False)
         return "break"
+
+    # ---------- Find in the current note (Ctrl+F) ----------
+    # Read-only: this feature ONLY adds/removes its own two background tags
+    # (find_all / find_current) and draws/deletes one throwaway canvas
+    # rectangle. It never inserts/deletes body text, never moves the caret,
+    # never calls _render_table_grids, and never touches a serialized tag --
+    # so it cannot dirty the note, autosave, or fight the grid-render/
+    # view-restore machinery. (A pre-existing cell-editor commit-on-focus-
+    # loss may still rebuild grids when Ctrl+F steals focus; the canvas
+    # flash is always re-resolved live to survive that.)
+    FIND_MATCH_CAP = 2000
+
+    def _shortcut_find(self, event=None):
+        """Ctrl+F: open the in-note find bar (on the Notes tab)."""
+        try:
+            self.notebook.select(self.TAB_NOTES)
+        except tk.TclError:
+            pass
+        self._open_find()
+        return "break"
+
+    def _build_find_bar(self):
+        """The find bar is a Frame place()'d INTO editor_outer (the
+        non-scrolling viewport frame), so it lives inside the app window,
+        never scrolls away, and -- because place() is outside pack -- never
+        reflows the editor or churns the scrollregion."""
+        bar = tk.Frame(self.editor_outer, bg=self.colors["card"],
+                       highlightthickness=1,
+                       highlightbackground=self.colors["accent"])
+        self.track_theme(bar, bg="card")
+        self._find_var = tk.StringVar()
+        entry = tk.Entry(bar, textvariable=self._find_var, relief="flat",
+                         width=22, font=("Segoe UI", 10),
+                         bg=self.colors["sidebar"], fg=self.colors["text"],
+                         insertbackground=self.colors["text"])
+        self.track_theme(entry, bg="sidebar", fg="text", insertbackground="text")
+        entry.pack(side="left", padx=(6, 4), pady=4, ipady=2)
+        self._find_entry = entry
+        self._add_paste_menu(entry)
+        self._find_var.trace_add("write", lambda *a: self._find_on_query_change())
+        entry.bind("<Return>", lambda e: (self._find_nav(1), "break")[1])
+        entry.bind("<Shift-Return>", lambda e: (self._find_nav(-1), "break")[1])
+        entry.bind("<Escape>", lambda e: (self._close_find(), "break")[1])
+        self._find_count_lbl = tk.Label(
+            bar, text="", bg=self.colors["card"], fg=self.colors["subtext"],
+            font=("Segoe UI", 8), width=8, anchor="w")
+        self.track_theme(self._find_count_lbl, bg="card", fg="subtext")
+        self._find_count_lbl.pack(side="left", padx=(0, 4))
+        for txt, delta in (("▴", -1), ("▾", 1)):
+            b = tk.Button(bar, text=txt, command=lambda d=delta: self._find_nav(d),
+                          relief="flat", cursor="hand2", bd=0,
+                          font=("Segoe UI", 9, "bold"),
+                          bg=self.colors["card"], fg=self.colors["text"])
+            self.track_theme(b, bg="card", fg="text")
+            b.pack(side="left", padx=1)
+        self._find_case = tk.BooleanVar(value=False)
+        cb = tk.Checkbutton(bar, text="Aa", variable=self._find_case,
+                            command=lambda: self._find_rescan(reveal=False),
+                            relief="flat", bd=0, font=("Segoe UI", 8, "bold"),
+                            bg=self.colors["card"], fg=self.colors["subtext"],
+                            selectcolor=self.colors["sidebar"],
+                            activebackground=self.colors["card"])
+        self.track_theme(cb, bg="card", fg="subtext")
+        cb.pack(side="left", padx=(2, 2))
+        close = tk.Button(bar, text="✕", command=self._close_find,
+                          relief="flat", cursor="hand2", bd=0,
+                          font=("Segoe UI", 9, "bold"),
+                          bg=self.colors["card"], fg=self.colors["subtext"])
+        self.track_theme(close, bg="card", fg="subtext")
+        close.pack(side="left", padx=(2, 6))
+        self._find_bar = bar
+
+    def _open_find(self):
+        if not hasattr(self, "body_text"):
+            return
+        if getattr(self, "_find_bar", None) is None:
+            self._build_find_bar()
+        # Prefill from the current selection, if any.
+        try:
+            sel = self.body_text.get("sel.first", "sel.last")
+        except tk.TclError:
+            sel = ""
+        if sel and "\n" not in sel:
+            self._find_var.set(sel)
+        self._find_bar.place(relx=1.0, x=-8, y=6, anchor="ne")
+        self._find_bar.lift()
+        self._find_open = True
+        self._find_entry.focus_set()
+        self._find_entry.select_range(0, "end")
+        self._find_rescan(reveal=True)
+
+    def _close_find(self, event=None):
+        if getattr(self, "_find_bar", None) is not None:
+            self._find_bar.place_forget()
+        self._find_open = False
+        self._find_clear()
+        try:
+            self.body_text.focus_set()
+        except tk.TclError:
+            pass
+
+    def _find_clear(self):
+        """Remove ONLY the find tags and the throwaway flash. No existing
+        tag is ever in scope."""
+        for tag in ("find_all", "find_current"):
+            try:
+                self.body_text.tag_remove(tag, "1.0", "end")
+            except tk.TclError:
+                pass
+        self._find_delete_flash()
+        self._find_matches = []
+        self._find_index = -1
+
+    def _find_delete_flash(self):
+        """Delete the current cell flash by RE-RESOLVING the live grid --
+        never through a cached canvas, which a rebuild may have destroyed."""
+        cur = getattr(self, "_find_flash", None)
+        if not cur:
+            return
+        line = cur.get("line")
+        info = self._grid_at_line(line) if line is not None else None
+        if info is not None:
+            try:
+                info["canvas"].delete("find_flash")
+            except tk.TclError:
+                pass
+        self._find_flash = None
+
+    def _find_on_query_change(self):
+        # Typing in the find box: debounce a rescan that DOES reveal the
+        # first hit (this is a search gesture, not a note edit).
+        job = getattr(self, "_find_debounce", None)
+        if job is not None:
+            try:
+                self.after_cancel(job)
+            except (tk.TclError, ValueError):
+                pass
+        self._find_debounce = self.after(180, lambda: self._find_rescan(reveal=True))
+
+    def _find_on_body_edit(self):
+        # The body changed while the bar is open: the match model is now
+        # stale. Gate navigation until a rescan completes, and rescan WITHOUT
+        # revealing (revealing here would twitch the view on every keystroke).
+        if not getattr(self, "_find_open", False):
+            return
+        self._find_model_dirty = True
+        job = getattr(self, "_find_debounce", None)
+        if job is not None:
+            try:
+                self.after_cancel(job)
+            except (tk.TclError, ValueError):
+                pass
+        self._find_debounce = self.after(180, lambda: self._find_rescan(reveal=False))
+
+    def _find_on_context_switch(self):
+        """Note/tab switch or load: the old note's match model is invalid.
+        Clear synchronously and cancel any pending debounce so no navigation
+        runs against stale indices; rescan the new note if the bar is open."""
+        job = getattr(self, "_find_debounce", None)
+        if job is not None:
+            try:
+                self.after_cancel(job)
+            except (tk.TclError, ValueError):
+                pass
+            self._find_debounce = None
+        self._find_clear()
+        self._find_model_dirty = False
+        if getattr(self, "_find_open", False) and getattr(self, "_find_bar", None):
+            self._find_rescan(reveal=False)
+
+    def _find_norm_cell(self, value):
+        """A cell's searchable text, exactly as the sidebar search sees it
+        (core_tables.content_text): the <br> marker becomes a space; merge
+        markers and checkboxes are not words."""
+        if value in (core_tables.MERGE_LEFT, core_tables.MERGE_UP):
+            return None
+        if core_tables.checkbox_state(value) is not None:
+            return None
+        return value.replace(core_tables.LINE_BREAK, " ")
+
+    def _find_scan_model(self, query):
+        """Build the ordered match list for `query`. Prose matches are Tk
+        ranges (skipping any that cross an elided table); table-cell matches
+        are (live_line, data_row, col), located via core/tables and keyed
+        the way info['cells'] is (separator excluded)."""
+        nocase = not self._find_case.get()
+        needle = query.lower() if nocase else query
+        matches = []
+        b = self.body_text
+        # Prose: body_text.search skips elided (table) text by default.
+        countv = tk.IntVar()
+        start = "1.0"
+        while len(matches) < self.FIND_MATCH_CAP:
+            pos = b.search(query, start, stopindex="end", nocase=nocase,
+                           count=countv)
+            if not pos:
+                break
+            n = countv.get() or len(query)
+            end = f"{pos}+{n}c"
+            start = f"{pos}+1c"
+            # Drop a hit that spans an elided table (search concatenates the
+            # prose on either side): it would tag hidden cells and double a
+            # cell hit.
+            if b.tag_nextrange(self.TABLE_HIDE_TAG, pos, end):
+                continue
+            line = int(pos.split(".")[0])
+            col = int(pos.split(".")[1])
+            matches.append({"kind": "prose", "start": pos, "end": end,
+                            "line": line, "col": col})
+        # Table cells: read the plain text, walk each block's DATA rows.
+        text = b.get("1.0", "end-1c")
+        for first0, last0 in core_tables.find_blocks(text):
+            info = self._grid_at_line(first0 + 1)
+            if info is None:
+                continue  # typed pipes not yet a grid -> already prose above
+            live_first = self._grid_first_line(info)
+            if live_first is None:
+                continue
+            block = text.split("\n")[first0:last0 + 1]
+            sep_at = core_tables.separator_index(block)
+            data_r = 0
+            for i, line_text in enumerate(block):
+                if i == sep_at:
+                    continue
+                for c, raw in enumerate(core_tables.split_row(line_text)):
+                    val = self._find_norm_cell(raw)
+                    if val is None:
+                        continue
+                    hay = val.lower() if nocase else val
+                    if needle and needle in hay and (data_r, c) in info["cells"]:
+                        matches.append({"kind": "cell", "line": live_first,
+                                        "row": data_r, "col": c,
+                                        "sortcol": 10000 + c})
+                        if len(matches) >= self.FIND_MATCH_CAP:
+                            break
+                data_r += 1
+        # Order top-to-bottom; cell matches sort after prose on the same
+        # (table window) line via the large sortcol.
+        matches.sort(key=lambda m: (m["line"], m.get("sortcol", m.get("col", 0))))
+        return matches
+
+    def _find_rescan(self, reveal=False):
+        self._find_debounce = None
+        if not getattr(self, "_find_open", False):
+            return
+        query = self._find_var.get()
+        prev = None
+        if 0 <= self._find_index < len(getattr(self, "_find_matches", [])):
+            prev = self._find_matches[self._find_index]
+        # Clear old tags/flash before re-tagging.
+        for tag in ("find_all", "find_current"):
+            try:
+                self.body_text.tag_remove(tag, "1.0", "end")
+            except tk.TclError:
+                pass
+        self._find_delete_flash()
+        if not query:
+            self._find_matches = []
+            self._find_index = -1
+            self._find_model_dirty = False
+            self._find_count_lbl.config(text="")
+            try:
+                self._find_entry.configure(bg=self.colors["sidebar"])
+            except tk.TclError:
+                pass
+            return
+        self._find_matches = self._find_scan_model(query)
+        self._find_model_dirty = False
+        # Tag every prose match with the field tag.
+        for m in self._find_matches:
+            if m["kind"] == "prose":
+                try:
+                    self.body_text.tag_add("find_all", m["start"], m["end"])
+                except tk.TclError:
+                    pass
+        self._find_raise_tags()
+        n = len(self._find_matches)
+        if not n:
+            self._find_index = -1
+            self._find_count_lbl.config(text="0/0")
+            try:
+                self._find_entry.configure(bg="#5a2b2b")
+            except tk.TclError:
+                pass
+            return
+        try:
+            self._find_entry.configure(bg=self.colors["sidebar"])
+        except tk.TclError:
+            pass
+        capped = n >= self.FIND_MATCH_CAP
+        if reveal:
+            self._find_index = 0
+            self._find_reveal(self._find_matches[0])
+        else:
+            # Keep the current position across an edit rescan: clamp to a
+            # near match, DO NOT reveal (that would twitch the view).
+            self._find_index = min(
+                self._find_index if self._find_index >= 0 else 0, n - 1)
+            self._find_mark_current(scroll=False)
+        self._find_count_lbl.config(
+            text=f"{self._find_index + 1}/{n}{'+' if capped else ''}")
+
+    def _find_raise_tags(self):
+        # find tags win over highlight_* backgrounds; sel stays on top.
+        for tag in ("find_all", "find_current", "sel"):
+            try:
+                self.body_text.tag_raise(tag)
+            except tk.TclError:
+                pass
+
+    def _find_nav(self, delta):
+        matches = getattr(self, "_find_matches", [])
+        if not matches or getattr(self, "_find_model_dirty", False):
+            return
+        self._find_index = (self._find_index + delta) % len(matches)
+        self._find_reveal(matches[self._find_index])
+        self._find_count_lbl.config(
+            text=f"{self._find_index + 1}/{len(matches)}"
+                 f"{'+' if len(matches) >= self.FIND_MATCH_CAP else ''}")
+
+    def _find_mark_current(self, scroll=True):
+        matches = getattr(self, "_find_matches", [])
+        if not (0 <= self._find_index < len(matches)):
+            return
+        if scroll:
+            self._find_reveal(matches[self._find_index])
+        else:
+            m = matches[self._find_index]
+            try:
+                self.body_text.tag_remove("find_current", "1.0", "end")
+                if m["kind"] == "prose":
+                    self.body_text.tag_add("find_current", m["start"], m["end"])
+            except tk.TclError:
+                pass
+            self._find_raise_tags()
+
+    def _find_reveal(self, m):
+        self._grid_view_restore = None
+        try:
+            self.body_text.tag_remove("find_current", "1.0", "end")
+        except tk.TclError:
+            pass
+        self._find_delete_flash()
+        if m["kind"] == "prose":
+            try:
+                self.body_text.tag_add("find_current", m["start"], m["end"])
+                self.body_text.see(m["start"])
+            except tk.TclError:
+                pass
+        else:
+            self._find_flash_cell(m)
+        self._find_raise_tags()
+        self._find_ensure_visible()
+        # Win the race against a grid rebuild's own after_idle restore and
+        # its 60/160/360ms re-pin timers: re-assert the reveal after them.
+        self.after_idle(self._find_reassert_reveal)
+        self.after(220, self._find_reassert_reveal)
+
+    def _find_reassert_reveal(self):
+        if not getattr(self, "_find_open", False):
+            return
+        matches = getattr(self, "_find_matches", [])
+        if not (0 <= self._find_index < len(matches)):
+            return
+        self._grid_view_restore = None
+        m = matches[self._find_index]
+        try:
+            if m["kind"] == "prose":
+                self.body_text.see(m["start"])
+            else:
+                info = self._grid_at_line(m["line"])
+                if info is not None:
+                    self.body_text.see(f"{self._grid_first_line(info)}.0")
+        except tk.TclError:
+            pass
+        self._find_ensure_visible()
+
+    def _find_flash_cell(self, m):
+        """Draw a throwaway rectangle on the LIVE grid canvas (re-resolved),
+        never a cached one. Bail to a see()-only reveal if the grid is gone."""
+        info = self._grid_at_line(m["line"])
+        if info is None:
+            return
+        first = self._grid_first_line(info)
+        if first is None:
+            return
+        try:
+            self.body_text.see(f"{first}.0")
+        except tk.TclError:
+            return
+        cell = info["cells"].get((m["row"], m["col"]))
+        canvas = info.get("canvas")
+        if cell is None or canvas is None:
+            self._find_flash = {"line": m["line"]}  # counted, no box (hidden col)
+            return
+        try:
+            x, y = cell["x"], cell["y"]
+            w, h = cell["w"], cell.get("h", info.get("row_h", 24))
+            canvas.delete("find_flash")
+            canvas.create_rectangle(x + 1, y + 1, x + w - 1, y + h - 1,
+                                    outline=self.colors["accent"], width=2,
+                                    tags="find_flash")
+            # Bring a horizontally off-screen cell into view.
+            total = canvas.bbox("all")
+            if total and total[2] > canvas.winfo_width():
+                canvas.xview_moveto(max(0.0, x / total[2]))
+        except tk.TclError:
+            pass
+        self._find_flash = {"line": m["line"]}
+
+    def _retint_find_tags(self, text_widget):
+        """(Re)apply the find highlight colours for the current palette.
+        Both colours are blended from the theme, so a theme switch must
+        refresh them or the next find would paint in the old accent."""
+        try:
+            text_widget.tag_configure(
+                "find_all",
+                background=self._blend_hex(self.colors["accent"],
+                                           self.colors["card"], 0.35))
+            text_widget.tag_configure("find_current",
+                                      background=self.colors["accent"])
+        except tk.TclError:
+            pass
+
+    def _find_reflash(self):
+        """Re-draw the current cell flash after a rebuild (e.g. theme
+        switch tore the canvas down)."""
+        if not getattr(self, "_find_open", False):
+            return
+        matches = getattr(self, "_find_matches", [])
+        if 0 <= self._find_index < len(matches):
+            m = matches[self._find_index]
+            if m["kind"] == "cell":
+                self._find_flash_cell(m)
+        self._find_raise_tags()
+
+    def _find_ensure_visible(self):
+        """Scroll the editor PAGE (editor_canvas) so the body's own 12-line
+        viewport is on screen -- body_text.see() only drives the body's
+        inner scroll, not the page it sits inside."""
+        try:
+            self.editor_canvas.update_idletasks()
+            bbox = self.editor_canvas.bbox(self._editor_window)
+            if not bbox:
+                return
+            total = bbox[3] - bbox[1]
+            if total <= 0:
+                return
+            y = self.body_text.winfo_rooty() - self.editor.winfo_rooty()
+            h = self.body_text.winfo_height()
+            canvas_h = self.editor_canvas.winfo_height()
+            cur = self.editor_canvas.yview()[0] * total
+            if y < cur:
+                self.editor_canvas.yview_moveto(max(0.0, y) / total)
+            elif y + h > cur + canvas_h:
+                self.editor_canvas.yview_moveto(
+                    max(0.0, y + h - canvas_h) / total)
+        except (tk.TclError, ZeroDivisionError):
+            pass
 
     def new_note(self):
         self.selected_note_id = None
@@ -11729,6 +12209,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._reset_editor_scroll()
         self._reset_text_undo()
         self._update_restore_button()
+        self._find_on_context_switch()
 
     def load_note(self, note, occurrence_date=None):
         """Open a note. If occurrence_date is given, the note is being opened
@@ -11805,6 +12286,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._reset_editor_scroll()
         self._reset_text_undo()
         self._update_restore_button()
+        self._find_on_context_switch()
 
     # ---------- Right-click context menu ----------
     def duplicate_note(self, note):
