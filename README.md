@@ -2,75 +2,89 @@
 
 A fast, fully offline desktop notes app built with Python and Tkinter — no cloud, no accounts, and a single third-party dependency (Pillow, for image previews). Every note, attachment, and setting lives in a folder on your own machine.
 
-Built as a solo/pair project (developer + AI pairing partner) over an extended iterative development cycle, with a strong focus on real-world polish: a custom themed UI (no OS-native popups anywhere), a recurring-events engine, background-threaded import/export, and a defensive data layer that keeps the app usable even when things go wrong.
+Built as a solo/pair project (developer + AI pairing partner) across 27 versioned releases, with a strong focus on real-world polish: a custom themed UI (no OS-native popups anywhere), a recurring-events engine, background-threaded import/export, and a defensive data layer that keeps the app usable even when things go wrong.
 
 ![The main window: a note with a table, the formatting toolbar, and the notes sidebar](docs/screenshots/main-window.png)
 *More screenshots throughout the [User Guide](docs/USER_GUIDE.md).*
+
+## Project highlights
+
+- **Ships as a real Windows app** — a PyInstaller one-folder build, released and field-tested across 27 versions (the [Changelog](CHANGELOG.md) tells the whole story).
+- **~870 automated checks on every push** — six standalone unit suites plus a nine-script headless GUI suite, run in CI on both Windows and Linux.
+- **Fully offline by design** — plain local JSON files, no accounts, no network calls, one dependency.
+- **A hand-built themed UI** — every dialog, dropdown and picker is custom-drawn; 8 themes, switchable live.
+- **Everything is plain text underneath** — tables drawn as real grids, checkboxes, rich text and lists are all stored as readable Markdown-style text, so notes survive export, sharing and backup intact.
 
 ---
 
 ## Features
 
-**Notes**
-- Create, edit, pin, duplicate, and soft-delete notes
-- Rich note metadata: category, color, date, comments, checklist, file attachments
-- Autosave on pause, on note switch, and on close — nothing is ever lost mid-edit, and quitting never asks about "unsaved notes"
-- Full-text search across the notebook and six sort modes (recency, title, category, date), plus **Ctrl+F** to find within the open note — text and tables — in an in-window find bar
-- Group notes by category, with persistent collapse state per group
-- A collapsible in-note calculator (with parentheses and standard operator precedence), for quick sums without leaving the note
-- Rich text formatting (Bold, Italic, Underline, Strikethrough, text color, highlight) in the note body — via a toolbar, the right-click menu, or keyboard shortcuts — applied to a selection or to whatever's typed next
-- Paste from a browser, a word processor or a PDF: formatting is kept where there is any, and a PDF's line breaks are rejoined into the paragraphs they came from
-- Paste from a browser or a word processor and keep the bold, colours and lists (Ctrl+Shift+V for plain text); copy a note out and it arrives formatted in email or Word
-- A reading-time estimate for each note, beside its word and character counts
-- Font size and family, per selection or as the default for every note (Settings → Appearance), from a curated list that ships with Windows so a shared note renders as it was written
-- A writing area that can be made taller with one click, and stays that way; the comments box has the same toggle
-- Paragraph formatting: bullet and numbered lists that nest with Tab, indentation for any paragraph, and left/centre/right alignment. List markers are kept in the note's own text, so a list stays readable when exported, shared as a code, or pasted anywhere else
+### Notes & writing
 
-**Recurring notes**
-- Daily / weekly / monthly / yearly recurrence, with custom intervals
-- Weekly: pick specific weekdays. Monthly: pick specific days, with a *clamp* or *skip* policy for months that don't have that day (e.g. "the 31st")
-- End conditions: after N occurrences, by a date, or never
-- Per-occurrence editing and deletion ("just this one" vs "this and all future")
-- A full calendar view with month navigation, jump-to-date, and per-day coloring
+- Create, edit, pin, duplicate and soft-delete notes; each carries a category, colour, date, comments, a checklist and file attachments
+- Autosave on pause, on note switch and on close — quitting never asks about "unsaved notes"
+- Rich text (bold, italic, underline, strikethrough, colour, highlight, font size & family) plus nested bullet/numbered lists, indentation and alignment
+- Paste from a browser, a word processor or a PDF and keep the formatting (**Ctrl+Shift+V** for plain text); a PDF's broken line endings are rejoined into the paragraphs they came from
+- Full-text search across the notebook with six sort modes — plus **Ctrl+F** to find within the open note, text and tables alike
+- A collapsible in-note calculator, and a reading-time estimate beside the word count
 
-**Tables**
-- Spreadsheet-style tables drawn as a real grid: click a cell to edit, drag to select (the view auto-scrolls with the pointer, and a firm drag inside one cell selects just that cell), Tab to move — and Enter starts a new line *inside* the cell, growing the whole row (multi-line cells, stored as Markdown's own `<br>`)
-- Excel-familiar editing: copy/paste blocks of cells (in and out of the app — a table pasted from Excel or a web page becomes a grid), merge cells, insert/delete/duplicate rows and columns (whole rows copy to the bottom, whole columns to the edge), hide columns, drag a column edge to resize (double-click it to autofit) and the rule between two rows to make a row taller or shorter
-- Real checkboxes in cells: click to tick and untick, coloured from a palette, stored as Markdown's own task syntax (`[ ]` / `[x]`)
-- Cell formatting character by character: one coloured letter, word or emoji shows as itself; the open cell displays its colours live while you type, and typing continues the style it lands beside — with an *active colour* worn as a swatch on the toolbar button when nothing is selected
-- Bold, colors, highlights (with a theme-aware palette) and per-cell alignment from the same toolbar as regular text — plus the table itself can sit left, centred, or right on the page, and a table wider than the editor gets its own horizontal scrollbar
-- A system-managed **caption** ("Tab. N: …" plus a "Sursa:" line), added from the table menu — centred and numbered, editable like any other text
-- Stored as plain readable text (Markdown table syntax) inside the note, so tables survive search, share codes, backups, and export, and travel cleanly to and from any Markdown-aware tool
+*Full walkthrough: [User Guide → Notes](docs/USER_GUIDE.md#notes)*
 
-**Categories & templates**
-- Custom categories with colors, safely renameable/deletable (with reassignment of affected notes)
-- Reusable note templates, including checklist content, editable inline — with a live drawn preview for templates holding tables, and a name-collision ask so saving over an existing template never happens silently
+### Tables
 
-**Data safety**
-- Soft-delete to a Trash with automatic purge after a configurable retention window (7–90 days, chosen right in the Trash panel)
-- Duplicate detection (title/body/comments/category match), with per-group or one-click "clean up everything" resolution
-- A defensive data layer: corrupt or missing fields on any note degrade to safe defaults instead of crashing the app
+- Spreadsheet-style grids drawn in the note: click a cell to edit, drag to select, Tab to move, Enter for a new line inside the cell
+- Excel-familiar editing: copy/paste blocks of cells in and out of the app, merge, insert/duplicate/hide rows and columns, drag edges to resize, double-click to autofit
+- Real clickable checkboxes, per-character colours and styles inside cells, per-cell alignment, and an auto-numbered caption from the table menu
+- Stored as plain, readable Markdown table text inside the note — tables survive search, share codes, backups and export, and travel cleanly to any Markdown-aware tool
 
-**Sharing & backup**
-- Share one or many notes as a compact, copy-pasteable text code (no attachments — content only)
-- Export one note — or a whole selection of notes — as standalone files: HTML with the full formatting, colours and tables (opens in any browser or in Word; print to PDF from there, highlights included), or plain text
-- Full backup export/import as a single `.zip` (notes, settings, attachments), running on a background thread with a live progress bar so the app never freezes during the operation — and the Backup panel says when the last export happened, since that file is the only copy outside the app's own folder
-- Import safely checks for duplicates before merging, rather than silently doubling up your notes
+*Full walkthrough: [User Guide → Tables](docs/USER_GUIDE.md#tables)*
 
-**Interface**
-- A fully custom themed UI — dialogs, dropdowns, color pickers, and popups are all hand-built to match the active theme; nothing falls back to an OS-native white popup
-- 8 built-in themes (4 dark, 4 light variants), switchable live — with a one-press ☀/🌙 light/dark flip right in the editor toolbar
-- Single-editor-tab design (like a browser with one tab): switching notes always autosaves the previous one first
-- App-wide keyboard shortcuts: **Ctrl+N** (new note), **Ctrl+S** (save now), and **Ctrl+F** (find within the open note); a full reference lives in Settings → Keyboard shortcuts — every bound combo in one place, from the formatting four to table and calendar navigation
+### Recurring notes & calendar
+
+- Daily / weekly / monthly / yearly repeats with custom intervals — specific weekdays, or month-days with a *clamp/skip* choice for "the 31st"
+- End after N occurrences, by a date, or never; edit or delete "just this one" vs "this and all future"
+- A full calendar view with month navigation, jump-to-date and per-day colouring
+
+*Full walkthrough: [User Guide → Recurring notes](docs/USER_GUIDE.md#recurring-notes)*
+
+### Organizing
+
+- Custom colour-coded categories, safely renameable and deletable (affected notes are reassigned, never lost)
+- Group the note list by category with per-group collapse; reusable note templates with a live preview
+- Duplicate detection with per-group or one-click cleanup
+
+*Full walkthrough: [User Guide → Finding notes](docs/USER_GUIDE.md#finding-notes-search-sort-and-grouping)*
+
+### Data safety, sharing & backup
+
+- Soft-delete to a Trash with a retention window you choose (7–90 days); a corrupt or half-missing note degrades to safe defaults instead of crashing the app
+- Share one or many notes as a compact copy-pasteable text code; export a note or a selection as formatted HTML (opens in any browser or Word) or plain text
+- Full backup as a single `.zip` on a background thread with live progress; import checks for duplicates before merging instead of silently doubling notes
+
+*Full walkthrough: [User Guide → Sharing & backup](docs/USER_GUIDE.md#sharing--backup)*
+
+### Interface
+
+- A fully custom themed UI — nothing ever falls back to an OS-native white popup; 8 themes with a one-press ☀/🌙 flip in the editor
+- Single-editor design, like a browser with one tab: switching notes always autosaves the previous one first
+- App-wide shortcuts — **Ctrl+N** new note, **Ctrl+S** save, **Ctrl+F** find in note — with every bound combo listed under Settings → Keyboard shortcuts
+
+*Full walkthrough: [User Guide → Settings](docs/USER_GUIDE.md#settings)*
+
+<p align="center">
+<img src="docs/screenshots/tables.png" alt="A table drawn as a grid inside a note" width="32%"> <img src="docs/screenshots/theme-picker.png" alt="The theme picker with live preview cards" width="32%"> <img src="docs/screenshots/calendar-view.png" alt="The calendar view with coloured days" width="32%">
+</p>
 
 ---
 
 ## Tech notes
 
-- **Pure Python + Tkinter, with one dependency.** No GUI framework beyond the standard library — packages to a self-contained Windows app folder via PyInstaller with no bundled runtime beyond Python itself. The one exception is [Pillow](https://pypi.org/project/Pillow/), used specifically for correctly decoding and scaling image attachments (including composing animated GIF frames properly, which plain Tkinter doesn't do).
-- **Custom widget system throughout.** Every dropdown, color palette, and confirmation dialog is a hand-positioned `Toplevel` popup, anchored and multi-monitor-safe, rather than relying on `tkinter.messagebox` / `ttk.Combobox` defaults.
-- **Background threading for I/O.** Export and import (both of which can move a meaningful amount of data through attachments) run on a worker thread; the main thread only ever touches Tkinter widgets from a polling callback, keeping the UI responsive throughout.
-- **A defensive data layer.** `normalize_note()` coerces any note — however old, however malformed — into a known-good shape before it ever reaches the UI, so a single corrupted entry can't take down the whole app.
+- **Pure Python + Tkinter, with one dependency.** No GUI framework beyond the standard library; [Pillow](https://pypi.org/project/Pillow/) is the one exception, used to decode and scale image attachments (including composing animated GIF frames, which plain Tkinter doesn't do).
+- **Custom widget system throughout.** Every dropdown, palette and confirmation is a hand-positioned `Toplevel` popup, anchored and multi-monitor-safe, rather than `tkinter.messagebox` / `ttk.Combobox` defaults.
+- **Background threading for I/O.** Export and import run on a worker thread; the main thread only ever touches Tkinter widgets from a polling callback, keeping the UI responsive.
+- **A defensive data layer.** `normalize_note()` coerces any note — however old, however malformed — into a known-good shape before it reaches the UI, so one corrupted entry can't take down the app.
+
+*The reasoning behind these and every other design decision: [Architecture](docs/ARCHITECTURE.md).*
 
 ---
 
@@ -92,15 +106,29 @@ pip install pyinstaller
 pyinstaller --noconfirm NoteOrganizer.spec
 ```
 
-Build from the spec file rather than passing options on the command line: it
-is what the project's build settings live in, and building the script
-directly would generate a competing spec of its own.
+The built app appears under `dist/NoteOrganizer/` as a folder — move the whole folder, not the `.exe` on its own. Why the build goes through the spec file, and the distribution channels the result can ship through: [Windows Release Reference](docs/RELEASE_WINDOWS.md).
 
-The built app appears under `dist/NoteOrganizer/` as a folder — `NoteOrganizer.exe`
-alongside an `_internal` folder it needs. Move the whole folder, not the `.exe`
-on its own.
+## Documentation
 
----
+Where to start depends on who you are. **Just curious what the app can
+do?** The [User Guide](docs/USER_GUIDE.md) walks every feature with
+screenshots. **Wondering why things behave the way they do?** The User
+Guide notes the reasoning beside each behaviour, and the
+[Roadmap](docs/ROADMAP.md) records what was decided against, and why.
+**A developer or reviewer?** [Architecture](docs/ARCHITECTURE.md) holds
+the design decisions, the [Code tour](docs/CODE_TOUR.md) reads the code
+with you, and the [Issues Log](docs/ISSUES_LOG.md) tells the war
+stories — each bug's cause, fix, and lesson. **Interested in the
+testing?** [qa/README](qa/README.md) maps which suite guards which
+surface and sets the house rules for new checks. **How the project is
+run?** The [Changelog](CHANGELOG.md) holds the full release history, the
+[Roadmap](docs/ROADMAP.md) what's planned and how versions are counted,
+the [Git Workflow](docs/GIT_WORKFLOW.md) the exact branch/commit/PR flow,
+and [CLAUDE.md](CLAUDE.md) the working agreement the AI-assisted sessions
+follow. Platform packaging lives in the
+[Windows](docs/RELEASE_WINDOWS.md) and
+[Android](docs/RELEASE_ANDROID.md) release references (the latter
+exploratory only).
 
 ## Project structure
 
@@ -133,13 +161,11 @@ noteOrganizer/
 │       └── attachments.py       #   the attachments section
 ├── tools/                    # refactor safety net, run by CI
 │   ├── check_undefined_names.py  # names used but never imported (moving code breaks these)
-│   └── check_class_api.py        # the app class must keep exactly the same methods
-├── test_recurrence.py        # standalone tests for the recurrence engine (no GUI needed)
-├── test_data_safety.py       # standalone tests for backups & migration safety (no GUI needed)
-├── test_calculator.py        # standalone tests for the in-note calculator's expression evaluator (no GUI needed)
-├── test_tables.py            # standalone tests for the tables text model + HTML export (no GUI needed)
-├── test_richtext.py          # standalone tests for HTML ↔ note conversion (no GUI needed)
-├── test_entry_module_identity.py  # guards against a second copy of the entry module
+│   ├── check_class_api.py        # the app class must keep exactly the same methods
+│   ├── pre_push_check.py         # the static gates, runnable locally in seconds
+│   └── run_tests.py              # the whole suite, safely, from a scratch copy
+├── test_*.py                 # six standalone unit suites: recurrence, data safety,
+│                             #   calculator, tables, rich text, entry-module identity
 ├── docs/
 │   ├── USER_GUIDE.md          # full walkthrough with screenshots
 │   ├── ARCHITECTURE.md        # how the code is organized, and why
@@ -151,55 +177,26 @@ noteOrganizer/
 │   ├── RELEASE_ANDROID.md     # exploratory only, not current work
 │   └── screenshots/
 └── qa/
+    ├── README.md                     # the suite map: which script guards which surface
     ├── NoteOrganizer_TestPlan.xlsx   # manual QA test case tracker
-    ├── qa1.py                        # automated: notes, categories, templates
-    ├── qa2.py                        # automated: recurrence, calendar, duplicates
-    ├── qa3.py                        # automated: trash, sharing, import/export
-    ├── qa4.py                        # automated: theming, stress tests, leak regression
-    ├── qa5.py                        # automated: corrupt data, edge cases
-    ├── qa6.py                        # automated: grouping, settings, attachments, combinations
-    ├── qa7.py                        # automated: calendar delete, multi-select, image preview, autosave & memory fixes
-    ├── qa8.py                        # automated: search debounce, background-timer robustness
-    └── qa9.py                        # automated: nested-dropdown-inside-popup fix
+    └── qa1.py … qa9.py               # the headless GUI suite (per-script index in qa/README.md)
 ```
-
-## Documentation
-
-Where to start depends on who you are. **Just curious what the app can
-do?** The [User Guide](docs/USER_GUIDE.md) walks every feature with
-screenshots. **A developer or reviewer?** [Architecture](docs/ARCHITECTURE.md)
-holds the design decisions, the [Code tour](docs/CODE_TOUR.md) reads the
-code with you, and the [Issues Log](docs/ISSUES_LOG.md) tells the war
-stories — each bug's cause, fix, and lesson. **Interested in how the
-project is run?** The [Roadmap](docs/ROADMAP.md) shows what's planned,
-what was decided against and why, and how versions are counted.
-
-- [User Guide](docs/USER_GUIDE.md) — full feature walkthrough
-- [Architecture](docs/ARCHITECTURE.md) — how the codebase is structured
-- [Code tour](docs/CODE_TOUR.md) — a guided, annotated walkthrough of the modules
-- [Roadmap](docs/ROADMAP.md) — planned features and known open items
-- [Changelog](CHANGELOG.md) — release history
-- [Issues Log](docs/ISSUES_LOG.md) — notable bugs encountered during development, and how they were diagnosed/fixed
-- [Git Workflow](docs/GIT_WORKFLOW.md) — the exact commands I use for this project's branch/commit/PR flow
-- [Windows Release Reference](docs/RELEASE_WINDOWS.md) — Microsoft Store (MSIX) and alternative Windows distribution channels
-- [Android Release Reference](docs/RELEASE_ANDROID.md) — exploratory only, not current work; kept ready for if an Android release is ever scoped
 
 ## Testing
 
-Every push and Pull Request automatically runs the full QA suite via GitHub Actions (see `.github/workflows/tests.yml`) — recurrence engine tests, data-safety tests (backups made before a version upgrade, and the migration logic that moves notes between storage locations), the in-note calculator's expression evaluator, the rich-text/PDF-paste conversion tests, the table engine tests, an entry-module identity test, plus nine headless GUI test scripts covering notes/categories/templates, recurrence/calendar/duplicates, trash/sharing/import-export, theming/stress/leak-regression, data-corruption resilience, grouping/settings/attachments/multi-feature combinations, calendar-delete/multi-select/image-preview/autosave/memory fixes, search debounce/background-timer robustness, and the nested-dropdown-inside-popup fix. Check the **Actions** tab on GitHub for the latest run.
+Every push and Pull Request runs the whole suite on GitHub Actions, on
+**both Windows and Linux**: the six unit suites plus the nine-script
+headless GUI suite — about 870 checks in all. [qa/README](qa/README.md)
+maps which script guards which surface and carries the house rules new
+checks follow; the [Issues Log](docs/ISSUES_LOG.md) tells how some of
+those rules were earned. Check the **Actions** tab for the latest run.
 
-To run them locally — from a scratch copy, the same way the CI does
-(the GUI scripts wipe the data files beside them before running, and
-`test_data_safety.py` refuses outright if it finds real notes next to
-itself):
+Locally, one command runs everything the same safe way CI does — from a
+scratch copy, because the GUI scripts wipe the data files beside them
+(and `test_data_safety.py` refuses outright to run next to real notes):
 
 ```bash
-# copy the app and the tests somewhere disposable first
-cp note_organizer.py test_*.py qa/qa*.py /tmp/scratch/ && cp -r noteorganizer /tmp/scratch/
-cd /tmp/scratch
-python test_recurrence.py     # likewise test_data_safety, test_calculator,
-python test_tables.py         # test_richtext, test_entry_module_identity
-python qa1.py                 # and qa2.py – qa9.py
+py tools/run_tests.py          # everything — or one script: py tools/run_tests.py qa6
 ```
 
 There's also a manual QA test plan (`qa/NoteOrganizer_TestPlan.xlsx`) covering scenarios that are easier to eyeball than to automate.
