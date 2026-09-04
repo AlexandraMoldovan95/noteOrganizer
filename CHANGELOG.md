@@ -61,10 +61,13 @@ How the numbers themselves are counted is the
 - **Multi-script input, proven through the real routes.** A new qa5 block pushes Arabic, Hebrew,
   Chinese, Japanese, Korean, Devanagari, Cyrillic, Greek and ZWJ-emoji text through the editor
   fields, a table cell, save → reload from disk, find-in-note, a share-code round-trip, the HTML
-  export and the sidebar search — asserting the data survives byte-for-byte (glyph shaping stays
-  the platform's job, eyeballed via the manual test plan). The audit that came with it confirmed
-  no validator anywhere restricts input to Latin characters, and every file the app opens is
-  explicit UTF-8.
+  export and the sidebar search — asserting the data survives byte-for-byte. The data-level
+  half (normalize, share code, export) runs on both CI platforms; the widget routes run on the
+  Windows job, the platform the app ships on, because Linux's Xft font stack can segfault Tk
+  outright when *rendering* exotic glyph sequences — which says nothing about the shipped
+  product (glyph shaping stays the platform's job, eyeballed via the manual test plan). The
+  audit that came with it confirmed no validator anywhere restricts input to Latin characters,
+  and every file the app opens is explicit UTF-8.
 
 ## [0.66.97] — 2026-09-04
 
