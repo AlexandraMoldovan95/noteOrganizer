@@ -12,6 +12,7 @@ How the numbers themselves are counted is the
 
 | Version | Date | In one line |
 |---|---|---|
+| [0.66.99](#06699--2026-09-05) | 2026-09-05 | A note shared from the editor arrives whole — checklist, formatting and paragraphs included. |
 | [0.66.98](#06698--2026-09-05) | 2026-09-05 | The app speaks English everywhere; a shared note keeps its checklist; any-script input proven. |
 | [0.66.97](#06697--2026-09-04) | 2026-09-04 | Keyboard reach — app-wide Ctrl+N and Ctrl+S shortcuts, and an in-note Ctrl+F find bar. |
 | [0.64.97](#06497--2026-09-02) | 2026-09-02 | The comments box and the calendar preview stop showing tables as raw pipe rows. |
@@ -41,6 +42,10 @@ How the numbers themselves are counted is the
 ---
 
 ## [Unreleased]
+
+## [0.66.99] — 2026-09-05
+
+*Highlights: a note shared from the editor arrives whole — checklist, formatting and paragraphs included.*
 
 ### Fixed
 - **The editor's own share code carries everything now.** "Copy code" on the open note built its
