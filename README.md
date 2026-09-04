@@ -9,8 +9,8 @@ Built as a solo/pair project (developer + AI pairing partner) across 27 versione
 
 ## Project highlights
 
-- **Ships as a real Windows app** — a PyInstaller one-folder build, released and field-tested across 27 versions (the [Changelog](CHANGELOG.md) tells the whole story).
-- **~870 automated checks on every push** — six standalone unit suites plus a nine-script headless GUI suite, run in CI on both Windows and Linux.
+- **Ships as a real Windows app** — a PyInstaller one-folder build, released and field-tested across 27 versions: five early milestones plus 22 numbered bumps (the [Changelog](CHANGELOG.md) tells the story; the [version ledger](docs/ROADMAP.md#version-ledger) accounts for every number).
+- **~870 GUI checks on every push** — a nine-script headless suite driving the real app, plus six standalone unit suites, run in CI on both Windows and Linux.
 - **Fully offline by design** — plain local JSON files, no accounts, no network calls, one dependency.
 - **A hand-built themed UI** — every dialog, dropdown and picker is custom-drawn; 8 themes, switchable live.
 - **Everything is plain text underneath** — tables drawn as real grids, checkboxes, rich text and lists are all stored as readable Markdown-style text, so notes survive export, sharing and backup intact.
@@ -116,7 +116,7 @@ Where to start depends on who you are. **Just curious what the app can
 do?** The [User Guide](docs/USER_GUIDE.md) walks every feature with
 screenshots. **Wondering why things behave the way they do?** The User
 Guide notes the reasoning beside each behaviour, and the
-[Roadmap](docs/ROADMAP.md) records what was decided against, and why.
+[Roadmap records what was decided against, and why](docs/ROADMAP.md#explicitly-not-planned-right-now).
 **A developer or reviewer?** [Architecture](docs/ARCHITECTURE.md) holds
 the design decisions, the [Code tour](docs/CODE_TOUR.md) reads the code
 with you, and the [Issues Log](docs/ISSUES_LOG.md) tells the war
@@ -152,7 +152,7 @@ noteOrganizer/
 │   │   ├── sharing.py        #   share codes + safe-import guards
 │   │   ├── duplicates.py     #   deciding when two notes are the same note
 │   │   ├── paths.py          #   data location, migrations, safe cleanup
-│   │   ├── storage.py        #   reading/writing settings, templates, trash
+│   │   ├── storage.py        #   reading/writing notes, settings, templates, trash
 │   │   ├── categories.py     #   the live category map, saved in settings
 │   │   └── model.py          #   what a note is; normalize_note validates every one
 │   └── ui/                   #   on-screen areas, one mixin per area
@@ -187,8 +187,8 @@ noteOrganizer/
 ## Testing
 
 Every push and Pull Request runs the whole suite on GitHub Actions, on
-**both Windows and Linux**: the six unit suites plus the nine-script
-headless GUI suite — about 870 checks in all. [qa/README](qa/README.md)
+**both Windows and Linux**: about 870 checks across the nine-script
+headless GUI suite, plus the six unit suites. [qa/README](qa/README.md)
 maps which script guards which surface and carries the house rules new
 checks follow; the [Issues Log](docs/ISSUES_LOG.md) tells how some of
 those rules were earned. Check the **Actions** tab for the latest run.

@@ -6,21 +6,19 @@ Note Organizer is a fully offline desktop notes app: Python + Tkinter, one
 runtime dependency (Pillow, for image/GIF preview rendering). No network
 calls, no accounts, no database.
 
-- **Being reorganised into a package (current work):** the app was a single
-  file by design for most of its life, and most of it still is —
-  `note_organizer.py` holds the UI and the logic not yet moved. Code is being
-  extracted into `noteorganizer/` one module at a time, into a `core/` layer
-  (data and rules; **must never import tkinter**) and a `ui/` layer of mixin
-  classes. Both layers now exist — thirteen `core/` modules and five `ui/`
-  mixins — with `note_organizer.py` still the entry point and shared UI hub
-  (see `docs/ARCHITECTURE.md` for why the split stopped where it did).
-  `note_organizer.py` remains the entry point and re-exports whatever
-  has moved, so `py note_organizer.py`, `import note_organizer as NO` in the
-  QA scripts, and the PyInstaller build all keep working untouched. Each
-  extraction should be a pure move that leaves the full test suite green —
-  if a step needs behaviour changes to pass, split the step. See
-  `docs/ARCHITECTURE.md` for the target shape and `docs/CODE_TOUR.md` for the
-  annotated walkthrough (kept up to date as modules land).
+- **Organised as a package (split complete, stopped deliberately):** the
+  app was a single file by design for most of its life; it now lives as a
+  `core/` layer (data and rules; **must never import tkinter**) and a `ui/`
+  layer of mixin classes — thirteen `core/` modules and five `ui/` mixins —
+  with `note_organizer.py` (~13,250 lines) remaining the entry point and
+  the genuinely shared UI hub, by measurement rather than by neglect (see
+  `docs/ARCHITECTURE.md`'s call-graph case study for why the split stopped
+  where it did). The entry file re-exports whatever has moved, so
+  `py note_organizer.py`, `import note_organizer as NO` in the QA scripts,
+  and the PyInstaller build all keep working untouched. If a further
+  extraction is ever attempted, it must be a pure move that leaves the full
+  test suite green — if a step needs behaviour changes to pass, split the
+  step. `docs/CODE_TOUR.md` is the annotated walkthrough.
 - **Storage:** plain local JSON — `notes_data.json`, `settings.json`,
   `trash.json`, `templates.json` — plus an `attachments/` folder, no
   database. Location is chosen by `resolve_data_dir()`: beside the script
