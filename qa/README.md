@@ -1,6 +1,6 @@
 # The qa suite — read me before touching a guarded surface
 
-Nine scripts, ~790 checks, all driving the real app headlessly (Xvfb on
+Nine scripts, ~870 checks, all driving the real app headlessly (Xvfb on
 Linux CI, real Windows Tk on the Windows CI job and every dev machine).
 Each script's banner says what it owns. Two things live here that are
 not obvious from the file names, and both have cost a red CI run to
@@ -23,6 +23,7 @@ the one you happen to be editing:
 | Editor page scroll/canvas | **qa1**, qa6 |
 | Note list (refresh, scroll guards, grouping) | **qa1**, qa4, qa5, qa6, qa7, qa8 |
 | Tables / drawn grids | **qa1** (heavily), qa2, qa3 |
+| Find in note (Ctrl+F) / find bar | **qa1** (crosses theming, tables, editor scroll) |
 | Templates | **qa1**, **qa6**, **qa9**, qa4 |
 | Settings panels | **qa6**, qa3, qa4, qa7 |
 | Calendar | **qa7**, qa1, qa2, qa4, qa5, qa9 |

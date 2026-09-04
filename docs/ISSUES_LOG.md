@@ -142,7 +142,7 @@ A narrative log of the more interesting bugs found and fixed during development 
 
 **Root cause:** The panel built and individually wired up (including recursive mousewheel bindings) a full row of widgets for *every* entry, every time it opened — regardless of how many were actually visible in the scrollable area at once.
 
-**Fix:** Paginated: render the most recent 50 entries, with a "Show more" button to reveal further batches. Cut the time for 600 entries from ~1.8 seconds to roughly 100ms. The same pattern (build-everything-at-once, no cap) turned out to affect the multi-note Share panel too, and got the same fix pre-emptively before it caused a user-visible problem there.
+**Fix:** Paginated: render only an initial batch of entries (currently 25, via `TRASH_PAGE_SIZE`), with a "Show more" button to reveal further batches. Cut the time for 600 entries from ~1.8 seconds to roughly 100ms. The same pattern (build-everything-at-once, no cap) turned out to affect the multi-note Share panel too, and got the same fix pre-emptively before it caused a user-visible problem there.
 
 ---
 

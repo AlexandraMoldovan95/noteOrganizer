@@ -29,16 +29,22 @@ py note_organizer.py
 
 `note_organizer.py` is still the front door. The pure logic has moved into
 the `noteorganizer/` package next to it and is imported back in; the entry
-file itself stays large (~12,700 lines) because it is the UI hub the pieces
+file itself stays large (~13,250 lines) because it is the UI hub the pieces
 hang off, not a junk drawer of stray logic.
 
-The tests are unchanged too:
+The tests are unchanged too — six standalone `test_*.py` suites:
 
 ```
 py test_calculator.py
 py test_recurrence.py
 py test_data_safety.py
+py test_richtext.py
+py test_tables.py
+py test_entry_module_identity.py
 ```
+
+(or run everything — units + qa1–qa9 — safely in a scratch copy with
+`py tools/run_tests.py`).
 
 The GUI tests in `qa/` need a copy of the app beside them — see the QA
 safety rule in `CLAUDE.md` before running those, because they delete data
@@ -107,7 +113,7 @@ If you're working through this for the first time:
    interested in defending against hostile input, and `tables.py`
    (section 4b) if you want to see a whole feature built on the idea
    that plain text can be the single source of truth.
-5. The UI, once it's split.
+5. The UI mixins in `noteorganizer/ui/` (see [ARCHITECTURE.md](ARCHITECTURE.md)).
 
 ---
 
@@ -383,9 +389,12 @@ palette is known, the app can spot a widget still holding a colour from a
 that if themes were ad-hoc.
 
 `CATEGORY_COLORS` — the *live* category map the user edits — is
-deliberately **not** here. It reads and writes `settings.json`, so it
-belongs with the storage layer, which hasn't moved yet. Only the immutable
-defaults live in this module.
+deliberately **not** here. It reads and writes `settings.json`, so it now
+lives in its own module, `noteorganizer/core/categories.py` (Section 9),
+alongside the storage layer that was since extracted to
+`noteorganizer/core/storage.py` (Section 8). Only the immutable defaults
+(`DEFAULT_CATEGORY_COLORS`) live in this module, and `categories.py`
+imports them.
 
 ---
 
@@ -879,8 +888,9 @@ settings.
 
 ### Shared mutable state, and the one rule that makes it safe
 
-`CATEGORY_COLORS` is a plain dict that the UI writes to in 36 places, and
-which `model.py` reads to decide whether a note's category still exists.
+`CATEGORY_COLORS` is a plain dict that the UI mutates in a handful of
+places, and which `model.py` reads to decide whether a note's category
+still exists.
 Sharing mutable state across modules is usually asking for trouble. It
 works here because of a single rule:
 

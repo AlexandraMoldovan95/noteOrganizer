@@ -10,8 +10,11 @@ calls, no accounts, no database.
   file by design for most of its life, and most of it still is —
   `note_organizer.py` holds the UI and the logic not yet moved. Code is being
   extracted into `noteorganizer/` one module at a time, into a `core/` layer
-  (data and rules; **must never import tkinter**) and eventually a `ui/`
-  layer. `note_organizer.py` remains the entry point and re-exports whatever
+  (data and rules; **must never import tkinter**) and a `ui/` layer of mixin
+  classes. Both layers now exist — thirteen `core/` modules and five `ui/`
+  mixins — with `note_organizer.py` still the entry point and shared UI hub
+  (see `docs/ARCHITECTURE.md` for why the split stopped where it did).
+  `note_organizer.py` remains the entry point and re-exports whatever
   has moved, so `py note_organizer.py`, `import note_organizer as NO` in the
   QA scripts, and the PyInstaller build all keep working untouched. Each
   extraction should be a pure move that leaves the full test suite green —
@@ -39,12 +42,16 @@ calls, no accounts, no database.
   format, **not encryption**. Full backup export/import uses a `.zip` with
   path-traversal and decompression-bomb guards. There is no encryption,
   password protection, or seed-based functionality anywhere in the app.
-- **Testing:** `test_recurrence.py` is a standalone unit-style suite (no
-  GUI). `qa/qa1.py`–`qa9.py` are headless GUI tests run under Xvfb, each
-  starting from a clean data directory. Both run automatically via
-  `.github/workflows/tests.yml` on every push/PR. There's also a manual
-  test plan spreadsheet (`qa/NoteOrganizer_TestPlan.xlsx`) for scenarios
-  not worth automating.
+- **Testing:** the `test_*.py` files are standalone unit-style suites —
+  `test_recurrence.py`, `test_calculator.py`, `test_data_safety.py`,
+  `test_richtext.py` and `test_tables.py` need no GUI;
+  `test_entry_module_identity.py` builds a window. `qa/qa1.py`–`qa9.py` are
+  headless GUI tests, each starting from a clean data directory. All of them
+  run automatically via `.github/workflows/tests.yml` on every push/PR — on
+  **both** Windows and Linux (the Linux job supplies the display via Xvfb;
+  Windows runs through native win32). There's also a manual test plan
+  spreadsheet (`qa/NoteOrganizer_TestPlan.xlsx`) for scenarios not worth
+  automating.
 - **Build:** packaged via PyInstaller using `NoteOrganizer.spec`
   (`--windowed`, one-folder output to `dist/NoteOrganizer/`).
 
@@ -165,9 +172,17 @@ exactly what made the dangerous one easy to misfile. The test now refuses
 to run beside a `notes_data.json` that holds real notes, but the refusal
 is the LAST line of defence, not permission to run tests in place.
 
-Instead: copy `note_organizer.py`, the `noteorganizer/` package, and the
-target test script into a scratch directory **outside the project tree
-entirely** (e.g. the session's own scratchpad folder), and run and
+The safest way is to let `tools/run_tests.py` do it for you: it makes a
+fresh temp folder far outside the project, copies in `note_organizer.py`,
+the `noteorganizer/` package and the tests, runs everything (units +
+qa1–qa9, plus the two static gates CI runs) there, and deletes the folder
+afterward — the project's own files are only ever read (`py
+tools/run_tests.py`, or `py tools/run_tests.py qa6` for one script). The
+manual ritual below is the fallback, and the reason that tool exists.
+
+Instead (by hand): copy `note_organizer.py`, the `noteorganizer/` package,
+and the target test script into a scratch directory **outside the project
+tree entirely** (e.g. the session's own scratchpad folder), and run and
 clean up there. This makes it physically impossible for a wrong-directory
 mistake to reach real user data, rather than relying on correctly
 remembering the working directory every single time.

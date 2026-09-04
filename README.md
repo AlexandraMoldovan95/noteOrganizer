@@ -1,6 +1,6 @@
 # Note Organizer
 
-A fast, fully offline desktop notes app built with Python and Tkinter — no cloud, no accounts, no dependencies beyond the standard library. Every note, attachment, and setting lives in a folder on your own machine.
+A fast, fully offline desktop notes app built with Python and Tkinter — no cloud, no accounts, and a single third-party dependency (Pillow, for image previews). Every note, attachment, and setting lives in a folder on your own machine.
 
 Built as a solo/pair project (developer + AI pairing partner) over an extended iterative development cycle, with a strong focus on real-world polish: a custom themed UI (no OS-native popups anywhere), a recurring-events engine, background-threaded import/export, and a defensive data layer that keeps the app usable even when things go wrong.
 
@@ -61,7 +61,7 @@ Built as a solo/pair project (developer + AI pairing partner) over an extended i
 - A fully custom themed UI — dialogs, dropdowns, color pickers, and popups are all hand-built to match the active theme; nothing falls back to an OS-native white popup
 - 8 built-in themes (4 dark, 4 light variants), switchable live — with a one-press ☀/🌙 light/dark flip right in the editor toolbar
 - Single-editor-tab design (like a browser with one tab): switching notes always autosaves the previous one first
-- A keyboard-shortcut reference in Settings → Keyboard shortcuts — every bound combo in one place, from the formatting four to table and calendar navigation
+- App-wide keyboard shortcuts: **Ctrl+N** (new note), **Ctrl+S** (save now), and **Ctrl+F** (find within the open note); a full reference lives in Settings → Keyboard shortcuts — every bound combo in one place, from the formatting four to table and calendar navigation
 
 ---
 
@@ -206,7 +206,7 @@ There's also a manual QA test plan (`qa/NoteOrganizer_TestPlan.xlsx`) covering s
 
 ## Local data
 
-The app stores everything next to the script (or next to the `.exe` when built), never anywhere else: `notes_data.json`, `settings.json`, `trash.json`, `templates.json`, and an `attachments/` folder. Nothing is sent anywhere — the app has no network calls.
+The app keeps everything in one folder — `notes_data.json`, `settings.json`, `trash.json`, `templates.json`, and an `attachments/` folder — and nothing is sent anywhere (there are no network calls). When run from source, that folder sits next to the script; the built `.exe` stores it per-user under `%APPDATA%\NoteOrganizer` instead (so copying the `dist` folder to another machine does not carry your notes with it).
 
 ## License
 

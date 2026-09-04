@@ -1,6 +1,6 @@
 # Android Release Reference (exploratory — not current work)
 
-**This is reference material only, kept ready for if/when an Android release is ever scoped.** Android is explicitly out of scope for implementation right now — see `CLAUDE.md`'s "Project focus" and `docs/ROADMAP.md`'s "Exploratory / long-term" section, both of which state plainly that no Android work should begin without an explicit decision to do so. Nothing in this file should be read as a plan or a commitment.
+**This is reference material only, kept ready for if/when an Android release is ever scoped.** Android is explicitly out of scope for implementation right now — see `CLAUDE.md`'s "Project focus" and `docs/ROADMAP.md`'s "Explicitly not planned right now" section, both of which state plainly that no Android work should begin without an explicit decision to do so. Nothing in this file should be read as a plan or a commitment.
 
 ## Two separate version numbers
 
