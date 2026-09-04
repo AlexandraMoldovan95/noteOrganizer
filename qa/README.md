@@ -127,6 +127,13 @@ A new surface joins this list the moment it ships.
   outside the band, the band is never entered, and the cap expires
   into a hard failure — prove that asymmetry under the mutant before
   trusting the check.
+- The promise's **preconditions are content-addressed and asserted**,
+  never assumed from a fraction: `yview_moveto(0.3)` lands on a
+  different LINE per font metric (on the CI's Xvfb fonts, eight tall
+  grids kept it inside line 1 — above the edit the check was about, so
+  its +1 promise didn't even apply and the app was right to "fail" it).
+  Scroll to an index (`yview('15.0')`), settle, then `check()` the
+  precondition itself with its numbers in the message.
 - The promise's **baseline settles first** (qa1's `settled()` helper:
   one value held for 500ms straight — longer than any restore timer —
   capped). The push-down check failed a *fourth* time with its

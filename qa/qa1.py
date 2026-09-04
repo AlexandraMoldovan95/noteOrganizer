@@ -3805,12 +3805,21 @@ set_body('\n'.join('| r%d | c%d |' % (i, i) for i in range(8))
 app._render_table_grids()
 app.update()
 app.update_idletasks()
-app.body_text.yview_moveto(0.3)
+# The mid-note position is CONTENT-addressed, never a fraction: on the
+# CI's Xvfb fonts the eight grids are so tall that yview_moveto(0.3)
+# still lands INSIDE line 1 -- above the line the Enter edits -- and
+# then the +1 promise simply doesn't apply (the app correctly held
+# top=1 while the check expected 2). yview('15.0') puts line 15 at the
+# top on any font metric, and the precondition the promise depends on
+# is asserted outright instead of assumed.
+app.body_text.yview('15.0')
 # The BASELINE settles first: eight fresh grids' embedded-window
-# geometry keeps shifting the fraction-to-line mapping for several
-# passes, so a top line read after a fixed pump count can be measured
-# mid-settle -- and then the post-Enter promise targets the wrong line.
+# geometry keeps shifting the mapping for several passes, so a top line
+# read after a fixed pump count can be measured mid-settle -- and then
+# the post-Enter promise targets the wrong line.
 _topP = settled(lambda: int(app.body_text.index('@0,0').split('.')[0]))
+check(f'precondition: the push-down view sits below the edit point '
+      f'(top {_topP}, editing line 9)', _topP > 9)
 app.body_text.mark_set('insert', '9.0')
 app._on_body_return(_typesE.SimpleNamespace())
 for _ in range(6):
