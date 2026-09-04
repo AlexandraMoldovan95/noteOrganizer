@@ -163,6 +163,53 @@ code = NO.encode_share_code([app.notes[0]])
 decoded = NO.decode_share_code(code)
 check('share code round-trips correctly', decoded[0]['title']=='ShareMe' and decoded[0]['body']=='share body')
 
+# ---- THE EDITOR'S OWN SHARE ROUTE, END TO END ----
+# The core round-trips above can all pass while the UI still loses
+# content: the editor's "Copy code" built its note dict from a
+# hand-rolled field list (dropping formatting, paragraphs AND the
+# checklist), and the single-note import loader never loaded the
+# checklist it received -- found in a field test, both ends. This walks
+# the REAL route: editor state -> share_current_note_as_code -> the
+# rendered code widget -> the import box -> the opened editor.
+app.new_note()
+app.title_entry.delete(0, 'end'); app.title_entry.insert(0, 'RouteFull')
+app.body_text.insert('1.0', 'bold word here\ncentred line')
+app.body_text.tag_add('sel', '1.0', '1.4')
+app._fmt_buttons['bold'].invoke()
+app.body_text.tag_remove('sel', '1.0', 'end')
+app.body_text.mark_set('insert', '2.0')
+app._set_paragraph_align('center')
+app._working_checklist = [{'text': 'pack bags', 'done': True},
+                          {'text': 'call venue', 'done': False}]
+app.update()
+app.share_current_note_as_code()
+app.update()
+_rt_code = find_text_widget(app.editor_code_area).get('1.0', 'end-1c')
+_rt_saved_notes = list(app.notes)
+app.notes = []          # clean notebook: no duplicate dialog in the way
+app.save_notes()
+app.toggle_import_panel(); app.update()
+app.import_box.delete('1.0', 'end')
+app.import_box.insert('1.0', _rt_code)
+app._do_inline_import()
+app.update()
+_rt_st = app.capture_editor_state()
+check('the editor-shared code arrives with its checklist, done states '
+      'included',
+      _rt_st.get('checklist') == [{'text': 'pack bags', 'done': True},
+                                  {'text': 'call venue', 'done': False}])
+check('...and with its character formatting and paragraph alignment',
+      any(sp.get('style') == 'bold' for sp in _rt_st.get('formatting', []))
+      and any(p.get('align') == 'center'
+              for p in _rt_st.get('paragraphs', [])))
+check('...and the checklist section opened so the items are visible',
+      app._checklist_open)
+# State hygiene: the sections below expect the ShareMe note to exist
+# (it is the duplicate their dialog path skips).
+app.notes = _rt_saved_notes
+app.save_notes()
+app.new_note(); app.update()
+
 # ---- IMPORT CODE with duplicate detection ----
 app.import_box.delete('1.0','end')
 app.import_box.insert('1.0', code)
