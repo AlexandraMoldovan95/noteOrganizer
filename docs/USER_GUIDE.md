@@ -430,8 +430,8 @@ note's own colour — useful for marking something about the day itself, like a 
 ### Share a note as a code
 
 Open a note → Generate code. This generates a compact block of text representing that note's
-content (not its attachments) — paste it to someone else, and they can import it with **Import
-code** in the sidebar. You can also select several notes at once and generate one code covering
+content, checklist included (attachments stay home — use Export for files) — paste it to someone
+else, and they can import it with **Import code** in the sidebar. You can also select several notes at once and generate one code covering
 all of them.
 
 ![Share panel](screenshots/share-panel.png)

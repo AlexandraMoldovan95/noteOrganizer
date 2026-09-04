@@ -147,6 +147,18 @@ check('and an old code without paragraphs still decodes',
       'paragraphs' not in NO.decode_share_code(NO.encode_share_code([
           {'title': 'v', 'body': 'x', 'formatting': []}]))[0])
 
+# The checklist travels too: a shared note used to arrive without it --
+# the one piece of content a code silently dropped.
+_ck_note = {'title': 'C', 'body': 'b', 'formatting': [],
+            'checklist': [{'text': 'pack bags', 'done': True},
+                          {'text': 'call venue', 'done': False}]}
+_ck_back = NO.decode_share_code(NO.encode_share_code([_ck_note]))[0]
+check('a share code carries the checklist, done states included',
+      _ck_back.get('checklist') == _ck_note['checklist'])
+check('and an old code without a checklist still decodes',
+      'checklist' not in NO.decode_share_code(NO.encode_share_code([
+          {'title': 'v', 'body': 'x', 'formatting': []}]))[0])
+
 code = NO.encode_share_code([app.notes[0]])
 decoded = NO.decode_share_code(code)
 check('share code round-trips correctly', decoded[0]['title']=='ShareMe' and decoded[0]['body']=='share body')

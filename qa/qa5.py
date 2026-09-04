@@ -202,10 +202,8 @@ check('multi-script: find-in-note matches Devanagari in prose AND cell',
 app._close_find()
 app.update()
 
-# Share codes carry content only -- checklist and attachments stay home
-# by design (SHAREABLE_FIELDS) -- so the round-trip is judged on the
-# fields a code actually carries; the body's first line holds every
-# script, Korean included.
+# Share codes carry the note's content -- checklist included since the
+# field joined SHAREABLE_FIELDS; attachments stay home by design.
 from noteorganizer.core import sharing as _msharing
 _mcode = _msharing.encode_share_code([_mnote])
 _mback = _msharing.decode_share_code(_mcode)
@@ -213,7 +211,9 @@ check('multi-script: a share code round-trips every script unchanged',
       bool(_mback)
       and all(v in (_mback[0]['title'] + _mback[0]['body']
                     + _mback[0].get('comments', ''))
-              for v in _SCRIPTS.values()))
+              for v in _SCRIPTS.values())
+      and _SCRIPTS['korean'] in _mjson.dumps(
+          _mback[0].get('checklist', []), ensure_ascii=False))
 
 _mhtml = app._note_export_content(_mnote, 'html', _mnote['title'])
 check('multi-script: the HTML export carries every script',

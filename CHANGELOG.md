@@ -41,6 +41,13 @@ How the numbers themselves are counted is the
 
 ## [Unreleased]
 
+### Fixed
+- **A shared note keeps its checklist.** Share codes carried every piece of a note's content
+  except one: the checklist was silently left behind, so a shared packing list arrived as a
+  title and a body with the actual list missing. The checklist now travels in the code, done
+  states included; older codes without one still decode exactly as before, and codes carrying
+  one degrade gracefully in older builds (the import path has always normalized the field).
+
 ### Changed
 - **The table caption speaks English.** The inserted labels were "Tab. N: descriere" / "Sursa:"
   (the academic convention the feature was first built around, in Romanian); they are now
