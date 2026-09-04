@@ -241,35 +241,3 @@ A quick snapshot of your total note count and this week's activity, with a click
 Switch between Dark and Light mode, and pick from four variants of each, in Settings → Appearance. The choice is remembered the next time you open the app.
 
 ![Theme picker](screenshots/theme-picker.png)
-
----
-
-## Adding your own screenshots
-
-Drop image files into `docs/screenshots/` using the exact filenames referenced above. Once a file exists at that path, it renders automatically wherever this guide references it — no other changes needed.
-
-| Filename | What to capture |
-|---|---|
-| `main-window.png` | The main window, Notes tab, with a few notes in the list |
-| `note-editor.png` | A note open in the editor, with some content filled in |
-| `formatting-toolbar.png` | The formatting toolbar, with a mix of bold/italic/underlined/struck-through/colored/highlighted text visible in the body |
-| `attachments.png` | The attachments section of a note with at least one file attached |
-| `checklist.png` | The checklist section open, with a mix of checked and unchecked items |
-| `calculator.png` | The calculator section open, with an expression entered and its result inserted into the note |
-| `emoji-picker.png` | The emoji picker open over a text field |
-| `search-and-sort.png` | The search box and sort dropdown, ideally mid-search |
-| `grouped-notes.png` | The note list with "Group by category" on, showing at least two groups (one collapsed, one expanded, if possible) |
-| `categories-panel.png` | Settings → Categories, with a few categories listed |
-| `templates-panel.png` | Settings → Templates, with at least one template listed |
-| `trash-panel.png` | Settings → Recently deleted, with a few entries |
-| `duplicates-panel.png` | Settings → Duplicates, with at least one group showing |
-| `recurrence-setup.png` | The Repeat section of the editor, mid-setup (e.g. Weekly with a couple of days picked) |
-| `calendar-view.png` | The Calendar tab, a month with a few notes visible on different days |
-| `calendar-day-color.png` | The right-click menu / result of painting a calendar day a custom color |
-| `share-panel.png` | The Share notes panel with a couple of notes ticked |
-| `import-code.png` | The Import code panel, ideally showing the duplicate-check prompt |
-| `export-progress.png` | The export progress bar visible at the bottom of the window mid-export |
-| `import-backup.png` | The Import notes file picker or its resulting confirmation |
-| `settings-overview.png` | The Settings page, showing the section list on the left and a section open on the right |
-| `keyboard-shortcuts.png` | Settings → Keyboard shortcuts, the grouped reference visible |
-| `theme-picker.png` | Settings → Appearance, with the theme variant cards visible |
