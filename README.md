@@ -61,7 +61,7 @@ Built as a solo/pair project (developer + AI pairing partner) over an extended i
 - A fully custom themed UI — dialogs, dropdowns, color pickers, and popups are all hand-built to match the active theme; nothing falls back to an OS-native white popup
 - 8 built-in themes (4 dark, 4 light variants), switchable live — with a one-press ☀/🌙 light/dark flip right in the editor toolbar
 - Single-editor-tab design (like a browser with one tab): switching notes always autosaves the previous one first
-- A keyboard-shortcut reference in Settings → Keyboard shortcuts — every bound combo in one place, from the formatting four to table and calendar navigation
+- App-wide keyboard shortcuts: **Ctrl+N** (new note), **Ctrl+S** (save now), and **Ctrl+F** (find within the open note); a full reference lives in Settings → Keyboard shortcuts — every bound combo in one place, from the formatting four to table and calendar navigation
 
 ---
 

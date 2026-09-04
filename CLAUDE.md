@@ -172,9 +172,17 @@ exactly what made the dangerous one easy to misfile. The test now refuses
 to run beside a `notes_data.json` that holds real notes, but the refusal
 is the LAST line of defence, not permission to run tests in place.
 
-Instead: copy `note_organizer.py`, the `noteorganizer/` package, and the
-target test script into a scratch directory **outside the project tree
-entirely** (e.g. the session's own scratchpad folder), and run and
+The safest way is to let `tools/run_tests.py` do it for you: it makes a
+fresh temp folder far outside the project, copies in `note_organizer.py`,
+the `noteorganizer/` package and the tests, runs everything (units +
+qa1–qa9, plus the two static gates CI runs) there, and deletes the folder
+afterward — the project's own files are only ever read (`py
+tools/run_tests.py`, or `py tools/run_tests.py qa6` for one script). The
+manual ritual below is the fallback, and the reason that tool exists.
+
+Instead (by hand): copy `note_organizer.py`, the `noteorganizer/` package,
+and the target test script into a scratch directory **outside the project
+tree entirely** (e.g. the session's own scratchpad folder), and run and
 clean up there. This makes it physically impossible for a wrong-directory
 mistake to reach real user data, rather than relying on correctly
 remembering the working directory every single time.

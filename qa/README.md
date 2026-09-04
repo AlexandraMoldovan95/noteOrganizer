@@ -23,6 +23,7 @@ the one you happen to be editing:
 | Editor page scroll/canvas | **qa1**, qa6 |
 | Note list (refresh, scroll guards, grouping) | **qa1**, qa4, qa5, qa6, qa7, qa8 |
 | Tables / drawn grids | **qa1** (heavily), qa2, qa3 |
+| Find in note (Ctrl+F) / find bar | **qa1** (crosses theming, tables, editor scroll) |
 | Templates | **qa1**, **qa6**, **qa9**, qa4 |
 | Settings panels | **qa6**, qa3, qa4, qa7 |
 | Calendar | **qa7**, qa1, qa2, qa4, qa5, qa9 |

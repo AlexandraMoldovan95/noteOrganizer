@@ -40,7 +40,9 @@ Use this when I'm not sure yet if I'll like the result (e.g. a UI change), or wa
 
 ```powershell
 # 1. Create a branch and switch to it, in one step
-git checkout -b feature/short-name
+#    (name it with one of the project's prefixes: fix/ feat/ refactor/
+#     test/ docs/ -- see CLAUDE.md's Git workflow)
+git checkout -b feat/short-name
 
 # 2. Confirm I'm on it (look for the *)
 git branch
@@ -51,7 +53,7 @@ git branch
 # 4. Happy with it? Commit, run the two-second static gates, then push
 #    (py tools/pre_push_check.py = the same checks CI runs first: names
 #    resolve, class surface unchanged, every .py compiles -- two PRs went
-#    red learning that the hard way; the full suite is run_tests.py):
+#    red learning that the hard way; the full suite is tools/run_tests.py):
 git add .
 git commit -m "feat: short description"
 py tools/pre_push_check.py
@@ -69,7 +71,7 @@ git checkout main
 git pull
 
 # 8. Clean up the now-merged local branch (optional, but tidy):
-git branch -d feature/short-name
+git branch -d feat/short-name
 ```
 
 **Not happy with the result on step 4?** Don't commit. Ask for an adjusted file, replace it again, rebuild again, repeat until it looks right — nothing is "saved" in Git until I actually commit.
