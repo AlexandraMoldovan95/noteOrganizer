@@ -643,7 +643,7 @@ replaces.
 
 *([0.4.0](../CHANGELOG.md#040--performance-overhaul--test-infrastructure))*
 
-**Symptom:** Opening "Recently deleted" with several hundred entries visibly paused the app.
+**Symptom:** Opening the Trash (Settings → Recently deleted) with several hundred entries visibly paused the app.
 
 **Root cause:** The panel built and individually wired up (including recursive mousewheel bindings) a full row of widgets for *every* entry, every time it opened — regardless of how many were actually visible in the scrollable area at once.
 

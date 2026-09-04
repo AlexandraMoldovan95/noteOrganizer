@@ -1,22 +1,25 @@
 # Git Workflow — my cheat sheet
 
+The owner's working command reference for this repo; the fuller working agreement (branch rules,
+approvals, safety) is [CLAUDE.md's Git & GitHub workflow](../CLAUDE.md#git--github-workflow).
+
 Not a general Git tutorial — just the exact commands I actually use on this project, organized by "what am I trying to do right now."
 
 ---
 
-## Scenario A: Small fix, straight to `main`
+## Scenario A: Trivial docs-only fix, straight to `main`
 
-Use this for most day-to-day changes — a bug fix, a doc update, anything that doesn't need a trial run.
+Only for typo-level, docs-only changes — a spelling fix, a broken link, a one-line wording tweak —
+where there's genuinely nothing to test and no need for a trial run. Anything that touches code,
+and any docs change bigger than that, goes through Scenario B — that's the project's branch-always
+rule (see [CLAUDE.md](../CLAUDE.md#git--github-workflow)).
+
+Put the updated file(s) in place, check what changed, then stage, commit, and send it:
 
 ```powershell
-# 1. Put the new/updated file(s) in place (replace the old ones)
-
-# 2. See what changed
 git status
-
-# 3. Stage everything, commit, send it
 git add .
-git commit -m "fix: short description of what changed"
+git commit -m "docs: short description of what changed"
 git push
 ```
 
@@ -34,47 +37,53 @@ If a commit resolves a GitHub Issue, add `(Fixes #N)` at the end of the message 
 
 ---
 
-## Scenario B: Trying something out, want to test before it's "real"
+## Scenario B: A branch and a PR — the normal path for code
 
-Use this when I'm not sure yet if I'll like the result (e.g. a UI change), or want a proper PR-review exercise.
+Use this for any code change, and for anything I want to test before it's "real" (e.g. a UI
+change) or want a proper PR-review exercise on.
+
+Create a branch and switch to it in one step, then confirm I'm on it (look for the `*`). Name it
+with one of the project's prefixes — `fix/` `feat/` `refactor/` `test/` `docs/` — per
+[CLAUDE.md's Git workflow](../CLAUDE.md#git--github-workflow).
 
 ```powershell
-# 1. Create a branch and switch to it, in one step
-#    (name it with one of the project's prefixes: fix/ feat/ refactor/
-#     test/ docs/ -- see CLAUDE.md's Git workflow)
 git checkout -b feat/short-name
-
-# 2. Confirm I'm on it (look for the *)
 git branch
+```
 
-# 3. Put the new file(s) in place, rebuild, TEST IT LOCALLY
-#    (rebuild never touches Git — it's just for me to look at)
+Put the new file(s) in place, rebuild, and **test it locally** — a rebuild never touches Git, it's
+just for me to look at.
 
-# 4. Happy with it? Commit, run the two-second static gates, then push
-#    (py tools/pre_push_check.py = the same checks CI runs first: names
-#    resolve, class surface unchanged, every .py compiles -- two PRs went
-#    red learning that the hard way; the full suite is tools/run_tests.py):
+Happy with it? Commit, run the two-second static gates, then push. `py tools/pre_push_check.py` is
+the same set of checks CI runs first — names resolve, class surface unchanged, every `.py`
+compiles — and two PRs went red learning that the hard way. The full suite is `tools/run_tests.py`.
+
+```powershell
 git add .
 git commit -m "feat: short description"
 py tools/pre_push_check.py
 git push
-#    ^ if this errors about "no upstream branch", copy-paste the exact
-#      command it suggests (git push --set-upstream origin <branch-name>)
+```
 
-# 5. Go to GitHub -> open the "Create pull request" link it gave me
-#    -> fill in title/description -> Create pull request
+If the push errors about "no upstream branch", copy-paste the exact command it suggests
+(`git push --set-upstream origin <branch-name>`).
 
-# 6. Review the diff on the PR page, then click "Merge pull request" -> Confirm
+On GitHub: open the "Create pull request" link the push printed, fill in the title/description,
+and click **Create pull request**. Review the diff on the PR page, then click
+**Merge pull request** → **Confirm**.
 
-# 7. Back in terminal, bring main up to date locally:
+Back in the terminal, bring `main` up to date locally and clean up the now-merged local branch
+(optional, but tidy):
+
+```powershell
 git checkout main
 git pull
-
-# 8. Clean up the now-merged local branch (optional, but tidy):
 git branch -d feat/short-name
 ```
 
-**Not happy with the result on step 4?** Don't commit. Ask for an adjusted file, replace it again, rebuild again, repeat until it looks right — nothing is "saved" in Git until I actually commit.
+**Not happy with the result before committing?** Don't commit. Ask for an adjusted file, replace
+it again, rebuild again, repeat until it looks right — nothing is "saved" in Git until I actually
+commit.
 
 ---
 

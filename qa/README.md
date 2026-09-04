@@ -20,6 +20,12 @@ easier to eyeball than to automate.
 | `qa8` | search debounce, background-timer robustness |
 | `qa9` | the nested-dropdown-inside-popup fix |
 
+Beside the GUI suite run six standalone **unit suites**, each runnable on
+its own (`py test_<name>.py`, from a scratch copy like everything else):
+`test_recurrence`, `test_calculator`, `test_data_safety`, `test_richtext`,
+`test_tables` need no GUI; `test_entry_module_identity` builds a window —
+it guards against a second copy of the entry module.
+
 Each script's banner carries the finer print. "Primary" matters: checks
 about one surface deliberately live in several files — which is the
 first of two things here that are not obvious from the file names, and

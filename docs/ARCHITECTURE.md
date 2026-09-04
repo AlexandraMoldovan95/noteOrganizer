@@ -398,9 +398,9 @@ regression check in `qa/qa1.py` and a war story in [ISSUES_LOG.md](ISSUES_LOG.md
 
 ### Large lists: paginate, don't virtualize (yet)
 
-Trash and the multi-note Share panel both cap how many rows they build at once (50 and 100
-respectively), with a "Show more" button to reveal the next batch, rather than rendering every
-entry immediately. This was enough to take the Trash panel from ~1.8s to ~100ms with 600
+The Trash (Settings → Recently deleted) and the multi-note Share panel both cap how many rows
+they build at once (50 and 100 respectively), with a "Show more" button to reveal the next
+batch, rather than rendering every entry immediately. This was enough to take the Trash panel from ~1.8s to ~100ms with 600
 entries. The main note list doesn't do this yet — see [ROADMAP.md](ROADMAP.md) for real
 windowed virtualization, which would help further at very large note counts.
 
