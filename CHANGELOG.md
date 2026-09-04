@@ -12,6 +12,7 @@ How the numbers themselves are counted is the
 
 | Version | Date | In one line |
 |---|---|---|
+| [0.66.98](#06698--2026-09-05) | 2026-09-05 | The app speaks English everywhere; a shared note keeps its checklist; any-script input proven. |
 | [0.66.97](#06697--2026-09-04) | 2026-09-04 | Keyboard reach — app-wide Ctrl+N and Ctrl+S shortcuts, and an in-note Ctrl+F find bar. |
 | [0.64.97](#06497--2026-09-02) | 2026-09-02 | The comments box and the calendar preview stop showing tables as raw pipe rows. |
 | [0.64.95](#06495--2026-09-02) | 2026-09-02 | A tables hardening wave — export, clipboard, Word, undo, search, styling and scroll all learn to treat a table as a table — alongside a Windows CI leg and a mutation audit of the old regression checks. |
@@ -40,6 +41,10 @@ How the numbers themselves are counted is the
 ---
 
 ## [Unreleased]
+
+## [0.66.98] — 2026-09-05
+
+*Highlights: the app speaks English everywhere — and a shared note finally keeps its checklist.*
 
 ### Fixed
 - **A shared note keeps its checklist.** Share codes carried every piece of a note's content
