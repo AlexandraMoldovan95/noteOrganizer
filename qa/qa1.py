@@ -5598,8 +5598,8 @@ app.update()
 _linesL = app.body_text.get('1.0', 'end-1c').split(chr(10))
 check('the caption and its source line both match the table '
       'placement, numbered, placeholder selected',
-      _linesL[3] == 'Tab. 1: descriere'
-      and _linesL[4].startswith('Sursa:')
+      _linesL[3] == 'Table 1: description'
+      and _linesL[4].startswith('Source:')
       and 'align_center' in app.body_text.tag_names('4.2')
       and 'align_center' in app.body_text.tag_names('5.2')
       and bool(app.body_text.tag_ranges('sel')))
@@ -5633,15 +5633,32 @@ app.update()
 _stF5 = app.capture_editor_state()
 _capF5 = [sp for sp in _stF5['formatting']
           if sp['style'] in ('font_family', 'font_size')
-          and sp['start'] < _stF5['body'].index('descriere')]
+          and sp['start'] < _stF5['body'].index('description')]
 check('the caption takes a font family AND size like any body text',
       any(sp['style'] == 'font_family'
           and sp['value'] == 'Times New Roman' for sp in _capF5)
       and any(sp['style'] == 'font_size' and int(sp['value']) == 16
               for sp in _capF5))
 
-check('a second caption counts on: Tab. 2',
-      'Tab. 2: descriere' in app.body_text.get('1.0', 'end-1c'))
+check('a second caption counts on: Table 2',
+      'Table 2: description' in app.body_text.get('1.0', 'end-1c'))
+set_body('')
+
+# Notitele mai vechi poarta captionuri cu etichetele de dinainte de
+# trecerea la engleza ("Tab. N: ..."); numerotarea trebuie sa le numere
+# SI pe ele (altfel un caption nou intr-o notita veche o ia de la 1),
+# dar NU si proza care doar incepe cu cuvantul "Table".
+set_body('Table of contents idea' + chr(10) + 'Tab. 3: old caption'
+         + chr(10) + '| m | n |' + chr(10) + '| --- | --- |' + chr(10)
+         + '| 5 | 6 |')
+app._render_table_grids()
+app.update()
+_blkO = core_tables.find_blocks(app.body_text.get('1.0', 'end-1c'))
+app._grid_add_caption(app._grid_at_line(_blkO[0][0] + 1))
+app.update()
+check('numbering counts old-label captions but not prose starting '
+      'with "Table"',
+      'Table 2: description' in app.body_text.get('1.0', 'end-1c'))
 set_body('')
 
 # Plasarea tabelului calatoreste cu copy-ul de celule.
@@ -5674,8 +5691,8 @@ set_body('')
 # serveste inapoi exact ce s-a scris, cum face clipboardul Windows;
 # copia proprie trebuie sa ia ruta TSV, cu toate gardurile ei.
 set_body('| a | b |' + chr(10) + '| --- | --- |' + chr(10)
-         + '| 1 | 2 |' + chr(10) + 'Tab. 1: descriere' + chr(10)
-         + 'Sursa: ')
+         + '| 1 | 2 |' + chr(10) + 'Table 1: description' + chr(10)
+         + 'Source: ')
 app._render_table_grids()
 app.update()
 _iW = app._grid_at_line(1)
@@ -5683,14 +5700,14 @@ app._grid_select_range(_iW, (0, 0), (1, 1))
 _stub_clipboard(loopback=True)
 app._grid_copy_selection({'info': _iW, 'box': (0, 0, 1, 1)})
 app._grid_clear_selection()
-_lnW = app.body_text.get('1.0', 'end-1c').split(chr(10)).index('Sursa: ') + 1
+_lnW = app.body_text.get('1.0', 'end-1c').split(chr(10)).index('Source: ') + 1
 app.body_text.mark_set('insert', '%d.end' % _lnW)
 app.update()
 app._on_body_paste()
 app.update()
 _bodyW = app.body_text.get('1.0', 'end-1c').split(chr(10))
-check('our own table copy pastes below the Sursa line, not into it',
-      _bodyW[_lnW - 1] == 'Sursa: '
+check('our own table copy pastes below the Source line, not into it',
+      _bodyW[_lnW - 1] == 'Source: '
       and len(core_tables.find_blocks(chr(10).join(_bodyW))) == 2)
 _stub_clipboard()
 set_body('')

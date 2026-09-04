@@ -3833,10 +3833,14 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             return
         below = first + info["nrows"] - 1
         b = self.body_text
+        # Count only caption-shaped lines ("Table 3:"), not any prose that
+        # happens to start with the word -- and keep counting the "Tab. N:"
+        # captions inserted before the labels went English, so numbering in
+        # an older note carries on instead of restarting at 1.
         n = 1 + sum(1 for ln in b.get("1.0", "end-1c").split("\n")
-                    if ln.strip().startswith("Tab. "))
-        caption_text = f"Tab. {n}: descriere"
-        b.insert(f"{below}.end", "\n" + caption_text + "\nSursa: ")
+                    if re.match(r"(?:Table|Tab\.) \d+:", ln.strip()))
+        caption_text = f"Table {n}: description"
+        b.insert(f"{below}.end", "\n" + caption_text + "\nSource: ")
         cap_line = below + 1
         # SCRUB, then dress: text inserted at the table's last line can
         # inherit whatever styling that line's edge happens to carry
@@ -3859,7 +3863,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             b.tag_add(f"align_{place}",
                       f"{cap_line + 1}.0", f"{cap_line + 1}.end")
         # The placeholder comes selected, so typing replaces it at once.
-        start = f"{cap_line}.{len(caption_text) - len('descriere')}"
+        start = f"{cap_line}.{len(caption_text) - len('description')}"
         b.tag_remove("sel", "1.0", "end")
         b.tag_add("sel", start, f"{cap_line}.end")
         b.mark_set("insert", f"{cap_line}.end")

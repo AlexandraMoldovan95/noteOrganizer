@@ -41,6 +41,24 @@ How the numbers themselves are counted is the
 
 ## [Unreleased]
 
+### Changed
+- **The table caption speaks English.** The inserted labels were "Tab. N: descriere" / "Sursa:"
+  (the academic convention the feature was first built around, in Romanian); they are now
+  "Table N: description" / "Source: " — the app's own functions are English everywhere, and the
+  caption stays plain editable text, so what's written after the labels (or instead of them) is
+  the user's, in any language. Numbering now counts only caption-shaped lines ("Table 3:"), not
+  prose that happens to start with the word — and it still counts the old "Tab. N:" labels, so
+  the next caption in an older note carries on instead of restarting at 1.
+
+### Testing
+- **Multi-script input, proven through the real routes.** A new qa5 block pushes Arabic, Hebrew,
+  Chinese, Japanese, Korean, Devanagari, Cyrillic, Greek and ZWJ-emoji text through the editor
+  fields, a table cell, save → reload from disk, find-in-note, a share-code round-trip, the HTML
+  export and the sidebar search — asserting the data survives byte-for-byte (glyph shaping stays
+  the platform's job, eyeballed via the manual test plan). The audit that came with it confirmed
+  no validator anywhere restricts input to Latin characters, and every file the app opens is
+  explicit UTF-8.
+
 ## [0.66.97] — 2026-09-04
 
 *Highlights: keyboard reach — app-wide Ctrl+N and Ctrl+S shortcuts, and an in-note Ctrl+F find bar.*

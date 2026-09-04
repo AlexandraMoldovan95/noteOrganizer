@@ -142,6 +142,94 @@ def purge():
     app.update()
 safe('purge survives bad deleted_at in trash', purge)
 
+# ---- MULTI-SCRIPT INPUT ----
+# The app's own functions speak English; the USER writes in whatever
+# language they choose. These checks push real text from many writing
+# systems -- including right-to-left scripts and combining marks --
+# through the real routes: editor fields -> save -> reload FROM DISK,
+# a table cell, find-in-note, a share-code round-trip, and the HTML
+# export. Data integrity is what is asserted (glyph shaping is the
+# platform's job and is eyeballed in the manual test plan).
+import io as _mio, json as _mjson
+_SCRIPTS = {
+    'arabic':   'مرحبا بالعالم',
+    'hebrew':   'שלום עולם',
+    'chinese':  '你好世界',
+    'japanese': 'こんにちは世界',
+    'korean':   '안녕하세요 세계',
+    'hindi':    'नमस्ते दुनिया',
+    'cyrillic': 'Привет мир',
+    'greek':    'Γειά σου Κόσμε',
+    'emoji':    '👨‍👩‍👧‍👦✨',
+}
+_all_scripts = ' '.join(_SCRIPTS.values())
+app.new_note()
+app.title_entry.delete(0, 'end')
+app.title_entry.insert(0, ('多言語 ' + _SCRIPTS['arabic'])[:80])
+app.body_text.insert('1.0', _all_scripts + chr(10)
+                     + '| ' + _SCRIPTS['arabic'] + ' | '
+                     + _SCRIPTS['chinese'] + ' |' + chr(10)
+                     + '| --- | --- |' + chr(10)
+                     + '| ' + _SCRIPTS['hindi'] + ' | '
+                     + _SCRIPTS['emoji'] + ' |')
+app.comments_text.insert('1.0', _SCRIPTS['hebrew'])
+app._working_checklist = [{'text': _SCRIPTS['korean'], 'done': False}]
+app._render_table_grids()
+app.update()
+app.save_current_note(auto=False)
+app.update()
+_msid = app.selected_note_id
+_mdisk = _mjson.load(_mio.open('notes_data.json', encoding='utf-8'))
+_mnote = next(n for n in _mdisk if n['id'] == _msid)
+_mflat = (_mnote['title'] + _mnote['body'] + _mnote.get('comments', '')
+          + _mjson.dumps(_mnote.get('checklist', []), ensure_ascii=False))
+check('multi-script: every script survives the disk round-trip intact',
+      all(v in _mflat for v in _SCRIPTS.values()))
+
+_mgrid = app._grid_at_line(2)
+check('multi-script: a table cell holds Arabic and renders as a grid',
+      _mgrid is not None
+      and _mgrid['cells'][(1, 0)]['value'] == _SCRIPTS['hindi'])
+
+app._open_find()
+app._find_var.set(_SCRIPTS['hindi'])
+app._find_rescan(reveal=True)
+app.update()
+_mhits = list(app._find_matches)
+check('multi-script: find-in-note matches Devanagari in prose AND cell',
+      any(m['kind'] == 'prose' for m in _mhits)
+      and any(m['kind'] == 'cell' for m in _mhits))
+app._close_find()
+app.update()
+
+# Share codes carry content only -- checklist and attachments stay home
+# by design (SHAREABLE_FIELDS) -- so the round-trip is judged on the
+# fields a code actually carries; the body's first line holds every
+# script, Korean included.
+from noteorganizer.core import sharing as _msharing
+_mcode = _msharing.encode_share_code([_mnote])
+_mback = _msharing.decode_share_code(_mcode)
+check('multi-script: a share code round-trips every script unchanged',
+      bool(_mback)
+      and all(v in (_mback[0]['title'] + _mback[0]['body']
+                    + _mback[0].get('comments', ''))
+              for v in _SCRIPTS.values()))
+
+_mhtml = app._note_export_content(_mnote, 'html', _mnote['title'])
+check('multi-script: the HTML export carries every script',
+      all(v in _mhtml for v in _SCRIPTS.values()))
+
+app.search_var.set(_SCRIPTS['chinese'])
+app.update()
+app.refresh_note_list()
+app.update()
+_mq = app.search_var.get().lower()
+check('multi-script: the sidebar search query lowercases safely and '
+      'matches the note body',
+      _mq == _SCRIPTS['chinese'] and _mq in _mnote['body'])
+app.search_var.set('')
+app.update()
+
 print()
 print(f"=== QA5 FAILURES: {fails if fails else 'NONE'} ===")
 
