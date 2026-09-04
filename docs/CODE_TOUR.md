@@ -383,9 +383,12 @@ palette is known, the app can spot a widget still holding a colour from a
 that if themes were ad-hoc.
 
 `CATEGORY_COLORS` — the *live* category map the user edits — is
-deliberately **not** here. It reads and writes `settings.json`, so it
-belongs with the storage layer, which hasn't moved yet. Only the immutable
-defaults live in this module.
+deliberately **not** here. It reads and writes `settings.json`, so it now
+lives in its own module, `noteorganizer/core/categories.py` (Section 9),
+alongside the storage layer that was since extracted to
+`noteorganizer/core/storage.py` (Section 8). Only the immutable defaults
+(`DEFAULT_CATEGORY_COLORS`) live in this module, and `categories.py`
+imports them.
 
 ---
 

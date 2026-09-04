@@ -68,7 +68,7 @@ The version becomes exactly `1.0.0` at the actual public release, regardless of 
 This section is only about the app's own `APP_VERSION`/`CHANGELOG.md` numbering — how a build actually gets packaged and published on a given platform (store-specific package versions, submission requirements) is documented separately, since it's not decided or in progress and doesn't belong mixed into the numbering policy above:
 
 - [`docs/RELEASE_WINDOWS.md`](RELEASE_WINDOWS.md) — Microsoft Store (MSIX) and alternative Windows distribution channels.
-- [`docs/RELEASE_ANDROID.md`](RELEASE_ANDROID.md) — exploratory only, kept ready for if an Android release is ever scoped; not current work (see "Exploratory / long-term" below and `CLAUDE.md`'s Project focus).
+- [`docs/RELEASE_ANDROID.md`](RELEASE_ANDROID.md) — exploratory only, kept ready for if an Android release is ever scoped; not current work (see "Explicitly not planned right now" below and `CLAUDE.md`'s Project focus).
 
 ## Under consideration
 
