@@ -134,7 +134,14 @@ patch over the instance, so the same failure cannot reappear:
 1. Diagnose the mechanism, not the symptom. Name what class of failure
    it belongs to.
 2. Fix the class: sweep the codebase/suite for every sibling with the
-   same mechanism and fix those in the same change.
+   same mechanism and fix those in the same change. And for a reported
+   bug, sweep the FEATURE's neighbourhood too: walk the affected
+   feature's row in the interaction inventory — its producers,
+   consumers and seams — probing each for related breakage before the
+   fix is declared done. A report about one seam is evidence the
+   neighbouring seams were never exercised either (the field report
+   about a shared note's missing checklist turned out to also cover
+   formatting and paragraphs, silently dropped on the same route).
 3. Prove the fix's asymmetry: after it, the thing may only fail when
    the promised behaviour is genuinely broken (for checks, that means
    the mutant still fails hard while load/timing can no longer produce
