@@ -1,6 +1,6 @@
 # The qa suite — read me before touching a guarded surface
 
-Nine scripts, ~790 checks, all driving the real app headlessly (Xvfb on
+Nine scripts, ~870 checks, all driving the real app headlessly (Xvfb on
 Linux CI, real Windows Tk on the Windows CI job and every dev machine).
 Each script's banner says what it owns. Two things live here that are
 not obvious from the file names, and both have cost a red CI run to

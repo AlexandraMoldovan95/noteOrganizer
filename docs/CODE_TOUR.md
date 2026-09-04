@@ -29,7 +29,7 @@ py note_organizer.py
 
 `note_organizer.py` is still the front door. The pure logic has moved into
 the `noteorganizer/` package next to it and is imported back in; the entry
-file itself stays large (~12,700 lines) because it is the UI hub the pieces
+file itself stays large (~13,250 lines) because it is the UI hub the pieces
 hang off, not a junk drawer of stray logic.
 
 The tests are unchanged too:
@@ -882,8 +882,9 @@ settings.
 
 ### Shared mutable state, and the one rule that makes it safe
 
-`CATEGORY_COLORS` is a plain dict that the UI writes to in 36 places, and
-which `model.py` reads to decide whether a note's category still exists.
+`CATEGORY_COLORS` is a plain dict that the UI mutates in a handful of
+places, and which `model.py` reads to decide whether a note's category
+still exists.
 Sharing mutable state across modules is usually asking for trouble. It
 works here because of a single rule:
 
