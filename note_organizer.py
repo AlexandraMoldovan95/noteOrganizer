@@ -11744,7 +11744,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         bar = tk.Frame(self.editor_outer, bg=self.colors["card"],
                        highlightthickness=1,
                        highlightbackground=self.colors["accent"])
-        self.track_theme(bar, bg="card")
+        # The accent-coloured border must be tracked too, not just the fill:
+        # left off the map it stays frozen at the theme the bar was first
+        # built under, so changing the accent (mov -> albastru) leaves the
+        # old colour framing the bar until it is rebuilt.
+        self.track_theme(bar, bg="card", highlightbackground="accent")
         self._find_var = tk.StringVar()
         entry = tk.Entry(bar, textvariable=self._find_var, relief="flat",
                          width=22, font=("Segoe UI", 10),

@@ -6153,6 +6153,12 @@ check('find/theme: the find highlight is re-tinted to the new accent',
 check('find/theme: the case checkbox selectcolor follows the theme',
       str(app._find_case_cb.cget('selectcolor')).lower()
       == app.colors['sidebar'].lower())
+# The bar's accent-coloured border is likewise long-lived; changing the
+# accent while the bar is open must recolour it, not leave the old accent
+# framing the bar.
+check('find/theme: the bar border follows the accent',
+      str(app._find_bar.cget('highlightbackground')).lower()
+      == app.colors['accent'].lower())
 app._close_find()
 app.update()
 
