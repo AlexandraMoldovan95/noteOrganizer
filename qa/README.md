@@ -73,6 +73,38 @@ is the verdict that counts before a push; `py tools/pre_push_check.py`
 is the two-second static half (names, API surface, compile-all) you
 run before *every* push.
 
+## The surface inventory: what every new feature is walked against
+
+The complete list of the app's functionality surfaces. Before a feature
+or improvement is built, **every row gets an explicit verdict** in the
+interaction pass (see CLAUDE.md, "Cross-feature verification"):
+`none` / `touches` / `risky — with the weaving decision`. Walking all of
+it is what makes "we thought of everything" checkable rather than felt.
+A new surface joins this list the moment it ships.
+
+- **Data & lifecycle:** save/load + `normalize_note` · autosave
+  (debounce, flush, note switch, close) · undo/redo · Trash & restore ·
+  duplicates · templates · data dir & migrations
+- **Editor:** rich text (character styles) · paragraph formatting
+  (lists, indent, alignment) · font size/family · tables (grid, cells,
+  merges, widths, checkboxes, caption) · checklist · calculator ·
+  comments · attachments · emoji picker · find-in-note · word count &
+  reading time · Expand toggles · caret/scroll & view restore
+- **Organization:** sidebar search · sort modes · categories · grouping ·
+  pinning · multi-select & bulk bar · note list rendering & scroll guards
+- **Time:** date field · recurrence · calendar (view, day colours,
+  preview)
+- **In/out:** clipboard in (rich, plain, TSV) · clipboard out (HTML,
+  TSV) · share codes · single-note export (HTML, TXT) · backup `.zip`
+  export/import · background threading
+- **Shell:** theming (both patterns, canvas repaints) · popups & dialogs
+  (positioning, multi-monitor) · keyboard shortcuts · Settings page ·
+  statistics · open-note tabs · window sizing
+- **Standing invariants:** plain text is the store · `core/` never
+  imports tkinter · the worker thread never touches a widget · offsets
+  counted in characters · any-script input · fast on weak machines ·
+  the built `.exe` and `%APPDATA%`
+
 ## House rules for new checks
 
 - A new feature's checks land **with the feature**, covering its seams

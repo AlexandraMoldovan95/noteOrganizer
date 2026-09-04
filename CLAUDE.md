@@ -145,17 +145,30 @@ patch over the instance, so the same failure cannot reappear:
 A flaky check is a bug in the check's strategy and gets this same
 treatment — "re-run it and it went green" is never the resolution.
 
-### Cross-feature verification (standing rule, 2026-08-28)
+### Cross-feature verification (standing rule, 2026-08-28; extended 2026-09-05 with the interaction pass)
 
 A new feature is not done when it works alone — it is done when the
-older features it crosses still work with it. Before reporting a change
-complete:
+older features it crosses still work with it. And that thinking starts
+BEFORE the first line of code, not at the end:
 
-1. List the existing features whose paths the change touches (theming,
-   save/load, export/share codes, paste, lists, focus and keyboard,
-   scrolling, undo — whatever applies).
+0. **The interaction pass (before code).** For any feature or
+   improvement beyond a trivial fix, walk the FULL surface inventory in
+   `qa/README.md` ("The surface inventory") — every row, every time,
+   never just what comes to mind — and give each an explicit verdict:
+   `none` / `touches` / `risky — with the weaving decision`. Where the
+   new work couples two existing surfaces in a new way (as find-in-note
+   coupled theming with tables), name that pair explicitly. Present the
+   resulting table together with the plan, before editing anything.
+   The point of walking all of it is that nothing can be missed by not
+   being thought of.
+
+Then, before reporting the change complete:
+
+1. The pass's `touches`/`risky` rows are the list of seams — kept
+   honest by the full walk above, not by memory.
 2. Probe each seam, and add a qa check for every risky one. The check
-   lands with the feature, not after a field test finds the gap.
+   lands with the feature, not after a field test finds the gap —
+   mutation-tested, per qa/README's house rules.
 3. Accept the extra work; the theme switch silently stopped recoloring
    tables precisely because no check covered that seam.
 
