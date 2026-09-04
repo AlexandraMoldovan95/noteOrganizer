@@ -1,6 +1,9 @@
 # Android Release Reference (exploratory — not current work)
 
-**This is reference material only, kept ready for if/when an Android release is ever scoped.** Android is explicitly out of scope for implementation right now — see `CLAUDE.md`'s "Project focus" and `docs/ROADMAP.md`'s "Explicitly not planned right now" section, both of which state plainly that no Android work should begin without an explicit decision to do so. Nothing in this file should be read as a plan or a commitment.
+**Reference material only, kept ready for if/when an Android release is ever scoped — nothing here
+is a plan or a commitment.** Android work stays out of scope until an explicit decision says
+otherwise: see `CLAUDE.md`'s "Project focus" and
+[ROADMAP's "Explicitly not planned right now"](ROADMAP.md#explicitly-not-planned-right-now).
 
 ## Two separate version numbers
 
@@ -9,7 +12,7 @@ Google Play tracks two distinct values per release, not one:
 - **`versionName`** — the user-facing string shown in the Play Store listing (e.g. `"2.3.1"`). Free-form; commonly follows semantic versioning for clarity, but Google doesn't require any particular format.
 - **`versionCode`** — an internal integer that **must strictly increase with every single submission**. The Play Store rejects an update whose `versionCode` isn't greater than the current live version's. Capped at 2,100,000,000.
 
-A common way to derive `versionCode` from a semver `versionName` is `MAJOR × 10000 + MINOR × 100 + PATCH` — keeps it monotonically increasing as long as the semver itself only moves forward.
+A common way to derive `versionCode` from a semver `versionName` is `MAJOR × 10000 + MINOR × 100 + PATCH` — keeps it monotonically increasing as long as the semver itself only moves forward, and assumes the post-1.0 reset-at-each-level scheme from [ROADMAP's Versioning](ROADMAP.md#versioning), not today's pre-1.0 cumulative numbers.
 
 Source: [Android Developers — Version your app](https://developer.android.com/studio/publish/versioning)
 

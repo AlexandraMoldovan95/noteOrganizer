@@ -8,14 +8,40 @@ This is a companion to [ARCHITECTURE.md](ARCHITECTURE.md), which is the
 short reference version for someone who already knows the codebase. Start
 here; go there when you want the summary.
 
-> **Status:** the data and rules layer is fully extracted — all thirteen
-> `core/` modules below are covered here. The user interface has since been
-> split too: five areas now live in `noteorganizer/ui/` as mixins
+> **Scope:** the data and rules layer is fully extracted — all thirteen
+> `core/` modules below are covered here in depth. The user interface has
+> since been split too: five areas now live in `noteorganizer/ui/` as mixins
 > (calculator panel, Settings page, dialogs/popups, calendar, attachments),
 > while `note_organizer.py` stays the entry point and the shared UI hub the
 > rest hangs off. This tour walks the `core/` modules; the `ui/` mixins are
 > plain cut-and-paste moves of methods that already lived on the class, so
-> they read the same as they did in the single file.
+> they read the same as they did in the single file — see
+> [ARCHITECTURE.md](ARCHITECTURE.md) for how the five were chosen.
+
+## Contents
+
+- [How to run it](#how-to-run-it)
+- [The shape of the project](#the-shape-of-the-project)
+- [Reading order](#reading-order)
+- [`noteorganizer/core/calculator.py`](#noteorganizercorecalculatorpy)
+- [`noteorganizer/core/recurrence.py`](#noteorganizercorerecurrencepy)
+- [`noteorganizer/core/themes.py`](#noteorganizercorethemespy)
+- [`noteorganizer/core/formatting.py`](#noteorganizercoreformattingpy)
+- [`noteorganizer/core/richtext.py` and `core/clipboard.py`](#noteorganizercorerichtextpy-and-coreclipboardpy)
+- [`noteorganizer/core/tables.py`](#noteorganizercoretablespy)
+- [`noteorganizer/core/sharing.py`](#noteorganizercoresharingpy)
+- [`noteorganizer/core/duplicates.py`](#noteorganizercoreduplicatespy)
+- [`noteorganizer/core/paths.py`](#noteorganizercorepathspy)
+- [`noteorganizer/core/storage.py`](#noteorganizercorestoragepy)
+- [`noteorganizer/core/categories.py`](#noteorganizercorecategoriespy)
+- [`noteorganizer/core/model.py`](#noteorganizercoremodelpy)
+- [Where the app starts](#where-the-app-starts)
+
+**Short on time?** Three sections repay a quick read:
+[the calculator](#noteorganizercorecalculatorpy) (hand-rolled parsing
+instead of `eval()`), [sharing](#noteorganizercoresharingpy) (defending
+against hostile input), and [paths](#noteorganizercorepathspy) (the two
+extraction bugs).
 
 ---
 
@@ -32,23 +58,18 @@ the `noteorganizer/` package next to it and is imported back in; the entry
 file itself stays large (~13,250 lines) because it is the UI hub the pieces
 hang off, not a junk drawer of stray logic.
 
-The tests are unchanged too — six standalone `test_*.py` suites:
+To run every test — units + qa1–qa9 — safely in a scratch copy:
 
 ```
-py test_calculator.py
-py test_recurrence.py
-py test_data_safety.py
-py test_richtext.py
-py test_tables.py
-py test_entry_module_identity.py
+py tools/run_tests.py
 ```
 
-(or run everything — units + qa1–qa9 — safely in a scratch copy with
-`py tools/run_tests.py`).
-
-The GUI tests in `qa/` need a copy of the app beside them — see the QA
-safety rule in `CLAUDE.md` before running those, because they delete data
-files in whatever folder they run from.
+The six unit suites — `test_recurrence`, `test_calculator`,
+`test_data_safety`, `test_richtext`, `test_tables`,
+`test_entry_module_identity` — also run individually (`py test_<name>.py`).
+See [qa/README.md](../qa/README.md) for the map of the whole suite,
+and the QA safety rule in `CLAUDE.md` before running any test by hand —
+the GUI tests delete data files in whatever folder they run from.
 
 ---
 
@@ -107,17 +128,18 @@ If you're working through this for the first time:
    it teaches a genuinely useful pattern (two-stage parsing).
 2. **`recurrence.py`** — the best example of a design decision: store the
    rule, compute the results.
-3. **`model.py`** (section 10) — `normalize_note` is the single idea the
-   whole data layer is built on.
+3. **[`model.py`](#noteorganizercoremodelpy)** — `normalize_note` is the
+   single idea the whole data layer is built on.
 4. The rest in any order. `sharing.py` is the one to read if you're
-   interested in defending against hostile input, and `tables.py`
-   (section 4b) if you want to see a whole feature built on the idea
-   that plain text can be the single source of truth.
+   interested in defending against hostile input, and
+   [`tables.py`](#noteorganizercoretablespy) if you want to see a whole
+   feature built on the idea that plain text can be the single source of
+   truth.
 5. The UI mixins in `noteorganizer/ui/` (see [ARCHITECTURE.md](ARCHITECTURE.md)).
 
 ---
 
-## 1. `noteorganizer/core/calculator.py`
+## `noteorganizer/core/calculator.py`
 
 **What it's for.** The note editor has a calculator panel. Whatever the
 user builds — by tapping buttons or by typing and pasting into the display
@@ -237,7 +259,7 @@ behaviour it's pinning down, so it doubles as a specification.
 
 ---
 
-## 2. `noteorganizer/core/recurrence.py`
+## `noteorganizer/core/recurrence.py`
 
 **What it's for.** Notes can repeat — daily, weekly, monthly, yearly — and
 the calendar needs to know which days each one lands on.
@@ -357,7 +379,7 @@ the performance case above.
 
 ---
 
-## 3. `noteorganizer/core/themes.py`
+## `noteorganizer/core/themes.py`
 
 **What it's for.** Eight colour palettes and a few fixed layout numbers.
 Pure data — no logic, no file access, nothing that can fail.
@@ -390,15 +412,16 @@ that if themes were ad-hoc.
 
 `CATEGORY_COLORS` — the *live* category map the user edits — is
 deliberately **not** here. It reads and writes `settings.json`, so it now
-lives in its own module, `noteorganizer/core/categories.py` (Section 9),
+lives in its own module,
+[`noteorganizer/core/categories.py`](#noteorganizercorecategoriespy),
 alongside the storage layer that was since extracted to
-`noteorganizer/core/storage.py` (Section 8). Only the immutable defaults
-(`DEFAULT_CATEGORY_COLORS`) live in this module, and `categories.py`
-imports them.
+[`noteorganizer/core/storage.py`](#noteorganizercorestoragepy). Only the
+immutable defaults (`DEFAULT_CATEGORY_COLORS`) live in this module, and
+`categories.py` imports them.
 
 ---
 
-## 4. `noteorganizer/core/formatting.py`
+## `noteorganizer/core/formatting.py`
 
 **What it's for.** Deciding what a note's `formatting` field is allowed to
 contain.
@@ -503,7 +526,7 @@ toolbar check that measured the wrong thing, three times".
 
 ---
 
-## 4a. `noteorganizer/core/richtext.py` and `core/clipboard.py`
+## `noteorganizer/core/richtext.py` and `core/clipboard.py`
 
 **What they're for.** Pasting formatted text in, and copying it back out.
 
@@ -548,7 +571,13 @@ string logic, which is why `test_richtext.py` can test the property
 example. Blank lines always separate paragraphs and are never removed,
 and anything that does not look wrapped comes back byte-for-byte.
 
-## 4b. `noteorganizer/core/tables.py`
+### Where it's tested
+
+`test_richtext.py` — needs no window and no clipboard, and covers
+`reflow_wrapped()`'s property (nothing lost, nothing split) across many
+widths.
+
+## `noteorganizer/core/tables.py`
 
 **What it's for.** Everything a table *is*, with the screen nowhere in
 sight: rows as lines of text, cells as what sits between pipes, and the
@@ -612,7 +641,11 @@ units, embedded windows occupy an index but not a character, a rebuild
 can destroy the canvas mid-click) — see ARCHITECTURE's "Tables: plain
 text is the store" and the table entries in ISSUES_LOG.
 
-## 5. `noteorganizer/core/sharing.py`
+### Where it's tested
+
+`test_tables.py` — no window at all.
+
+## `noteorganizer/core/sharing.py`
 
 **What it's for.** Turning notes into a block of text you can paste into a
 chat, and back again.
@@ -664,7 +697,7 @@ the fact has already paid the cost.
 
 ---
 
-## 6. `noteorganizer/core/duplicates.py`
+## `noteorganizer/core/duplicates.py`
 
 **What it's for.** Deciding when two notes are really the same note, so
 Settings can offer to tidy them up.
@@ -698,7 +731,7 @@ instincts in everyday Python.
 
 ---
 
-## 7. `noteorganizer/core/paths.py`
+## `noteorganizer/core/paths.py`
 
 **What it's for.** Deciding which folder holds your notes, migrating data
 forward from older locations, and cleaning up leftovers.
@@ -802,7 +835,7 @@ other. Both bugs are pinned by regression tests now.
 
 ---
 
-## 8. `noteorganizer/core/storage.py`
+## `noteorganizer/core/storage.py`
 
 **What it's for.** Everything that reads or writes `notes_data.json`,
 `settings.json`, `templates.json` and `trash.json`, plus the pre-flight
@@ -847,27 +880,12 @@ as **attributes**:
 with open(paths.SETTINGS_FILE) as f: ...
 ```
 
-That indirection isn't stylistic, and it's worth understanding properly
-because it trips people up constantly.
-
-When `storage.py` is imported, the paths are still `None` — they only get
-filled in later, when `paths.configure()` runs. So this would be broken:
-
-```python
-from .paths import SETTINGS_FILE      # copies None, permanently
-```
-
-`from X import Y` copies **the value as it is right now**. Rebinding
-`paths.SETTINGS_FILE` afterwards changes the name *in the paths module*,
-but the copy you took keeps pointing at the old value — `None` — forever.
-Going through `paths.SETTINGS_FILE` means the lookup happens when the
-function actually runs, by which time it's real.
-
-The same rule explains a bug we hit earlier: a test monkeypatched
-`note_organizer.get_appdata_dir`, but the function that *uses* it had moved
-into `core.paths` and looks it up in **its own** module. Patching the
-re-exported copy did nothing. **Patch the module that looks the name up,
-not the one you happen to have imported it from.**
+When `storage.py` is imported the paths are still `None` — they only get
+filled in later, when `paths.configure()` runs — so `from .paths import
+SETTINGS_FILE` would copy `None` permanently, while `paths.SETTINGS_FILE`
+is looked up when the function actually runs; this is the same
+import-binding trap that broke the monkeypatched test, told in full under
+[the paths extraction bugs](#two-bugs-this-extraction-caused--both-worth-learning-from).
 
 ### The pattern every loader follows
 
@@ -881,7 +899,7 @@ features updating different keys can't clobber each other.
 
 ---
 
-## 9. `noteorganizer/core/categories.py`
+## `noteorganizer/core/categories.py`
 
 **What it's for.** The live category map, and moving it to and from
 settings.
@@ -930,7 +948,7 @@ guarantee enforced at the data layer can't be forgotten by a caller.
 
 ---
 
-## 10. `noteorganizer/core/model.py`
+## `noteorganizer/core/model.py`
 
 **What it's for.** What a note *is* — and `normalize_note`, the single gate
 every note passes through before the rest of the app is allowed to touch
@@ -985,10 +1003,3 @@ once. Anything wanting the data layer without opening a window —
 
 If you take one habit from this file, make it that one: **an import should
 not change anything.**
-
----
-
-*This tour covers the `core/` modules in depth. The `ui/` mixins are
-cut-and-paste extractions of methods that already lived on `NoteOrganizer`,
-so they behave exactly as they did in the single file — see
-[ARCHITECTURE.md](ARCHITECTURE.md) for how the five were chosen.*

@@ -97,6 +97,8 @@ pip install -r requirements.txt
 python note_organizer.py
 ```
 
+(Three spellings, one app: **Note Organizer** is the app, **NoteOrganizer** the built folder and the PyInstaller spec, and **noteOrganizer** the GitHub repository.)
+
 Requires Python 3.9+ with Tkinter (bundled with most standard Python installs; on Linux you may need `sudo apt install python3-tk`), plus [Pillow](https://pypi.org/project/Pillow/) for image previews (installed above via `requirements.txt`).
 
 ### Building a standalone `.exe` (Windows)
