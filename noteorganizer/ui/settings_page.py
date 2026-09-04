@@ -2674,6 +2674,10 @@ class SettingsPageMixin:
     # groups below name the widget the binding lives on, and the calendar
     # keys only act while that tab is showing (see _calendar_key's guard).
     SHORTCUT_GROUPS = (
+        ("App", (
+            ("Ctrl+N", "New note (switches to the Notes tab first)."),
+            ("Ctrl+S", "Save the current note now."),
+        )),
         ("Text formatting", (
             ("Ctrl+B", "Bold the selection — or with nothing selected, "
                        "bold whatever you type next."),

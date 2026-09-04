@@ -537,6 +537,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
         self.configure(bg=self.colors["bg"])
         self.build_ui()
+        self._bind_global_shortcuts()
         self.refresh_note_list()
         self.render_calendar()
         last_open_id = load_settings().get("last_open_note_id")
@@ -11655,6 +11656,44 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             x.bind("<Button-1>", lambda e, idx=i: self.close_tab(idx))
             x.bind("<Enter>", lambda e, w=x: w.configure(fg="#ff5c7c"))
             x.bind("<Leave>", lambda e, w=x, c=fg: w.configure(fg=c))
+
+    def _bind_global_shortcuts(self):
+        """App-wide keyboard shortcuts, bound with bind_all so they fire
+        whichever widget holds focus (same mechanism the app already uses
+        for Activate/Deactivate). Neither Ctrl+N nor Ctrl+S carries a
+        default Text or Entry binding on this Tk, so nothing is being
+        overridden; each handler returns 'break' so the combo is never
+        also typed. Both letter cases are bound, to survive Caps Lock --
+        the same as the Ctrl+V bindings elsewhere. (Ctrl+F is deliberately
+        left free for a future find-in-the-current-note bar, which is what
+        Ctrl+F means in every editor.)"""
+        for lower, upper, handler in (
+                ("<Control-n>", "<Control-N>", self._shortcut_new_note),
+                ("<Control-s>", "<Control-S>", self._shortcut_save_now)):
+            self.bind_all(lower, handler, add="+")
+            self.bind_all(upper, handler, add="+")
+
+    def _shortcut_new_note(self, event=None):
+        """Ctrl+N: a fresh note. Switches to the Notes tab first, since the
+        editor lives there and the shortcut can fire from the Calendar."""
+        self.notebook.select(self.TAB_NOTES)
+        self.new_note()
+        return "break"
+
+    def _shortcut_save_now(self, event=None):
+        """Ctrl+S: save the note being edited. Stays silent when there is
+        genuinely nothing to save, rather than popping the "write something"
+        warning a global shortcut would otherwise trigger from anywhere
+        (same emptiness test the autosave uses)."""
+        try:
+            st = self.capture_editor_state()
+        except Exception:
+            return "break"
+        if (st.get("title", "").strip() or st.get("body", "").strip()
+                or st.get("comments", "").strip()
+                or st.get("attachments") or st.get("checklist")):
+            self.save_current_note(auto=False)
+        return "break"
 
     def new_note(self):
         self.selected_note_id = None
