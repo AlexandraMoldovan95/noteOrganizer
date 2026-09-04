@@ -54,6 +54,28 @@ def take_focus(widget, attempts=60):
     return False
 
 
+def settled(read, hold=0.5, cap=8.0):
+    """Wait until read() holds ONE value for `hold` seconds straight,
+    capped, and return it. The settled-BASELINE twin of the
+    promised-state wait: every view-restore timer in the app fires
+    within 360ms of its trigger, so a value unchanged for 500ms has no
+    scheduled mover left behind it. A baseline measured mid-choreography
+    makes the later promise target the wrong value -- the push-down
+    check failed a fourth time on CI exactly so, with its post-Enter
+    wait already promised-state."""
+    last = read()
+    t0 = time.time()
+    cap_t = t0 + cap
+    while time.time() - t0 < hold and time.time() < cap_t:
+        app.update()
+        time.sleep(0.02)
+        now = read()
+        if now != last:
+            last = now
+            t0 = time.time()
+    return last
+
+
 app=NO.NoteOrganizer(); app._poll_active_dirty=lambda:None
 app.show_info=lambda *a,**k: True
 app.show_warning=lambda *a,**k: True
@@ -2847,6 +2869,9 @@ app._commit_cell_editor()
 app.update()
 app.body_text.yview_moveto(1.0)
 app.update()
+# Settled baseline, same reason as the push-down check: measure only
+# once the freshly committed grid has stopped moving the mapping.
+settled(lambda: int(app.body_text.index('@0,0').split('.')[0]))
 _yv0 = app.body_text.yview()[0]
 _firstV = app._grid_first_line(app._table_grids[0])
 _tV = app._grid_at_line(_firstV)
@@ -3781,11 +3806,11 @@ app._render_table_grids()
 app.update()
 app.update_idletasks()
 app.body_text.yview_moveto(0.3)
-for _ in range(4):
-    app.update()
-    app.update_idletasks()
-_vwP = app.body_text.yview()[0]
-_topP = int(app.body_text.index('@0,0').split('.')[0])
+# The BASELINE settles first: eight fresh grids' embedded-window
+# geometry keeps shifting the fraction-to-line mapping for several
+# passes, so a top line read after a fixed pump count can be measured
+# mid-settle -- and then the post-Enter promise targets the wrong line.
+_topP = settled(lambda: int(app.body_text.index('@0,0').split('.')[0]))
 app.body_text.mark_set('insert', '9.0')
 app._on_body_return(_typesE.SimpleNamespace())
 for _ in range(6):
@@ -3817,8 +3842,10 @@ while _stableP < 5 and time.time() < _capP:
 # (0.30 -> 0.14) -- so the top line lands far from _topP + 1, and this
 # content-based assertion fails hard on it, with no dependence on a
 # sub-pixel fraction that a slow runner never quite settles.
-check('the push-down keeps a mid-note view on the same content',
-      int(app.body_text.index('@0,0').split('.')[0]) == _topP + 1)
+_landP = int(app.body_text.index('@0,0').split('.')[0])
+check(f'the push-down keeps a mid-note view on the same content '
+      f'(expected top {_topP + 1}, landed {_landP})',
+      _landP == _topP + 1)
 
 # ---- THE MENU TWIN: ADD A LINE ABOVE THE TABLE ----
 set_body('| M | N |\n| p | q |')
@@ -4452,7 +4479,10 @@ check('a full list rebuild restores the scroll in pixels, clamp or not',
 # its own event-loop pass must lose too.
 _cv23.yview_moveto(0.6)
 app.update()
-_px24 = _cv23.canvasy(0)
+# Settled baseline: the app's own restore snapshots the position when
+# refresh runs -- our reference must be the value that has stopped
+# moving, or the promised band below targets a mid-settle read.
+_px24 = settled(lambda: _cv23.canvasy(0))
 app.refresh_note_list()
 _cv23.yview_moveto(0.0)          # clamp before the idle restore
 app.update()
