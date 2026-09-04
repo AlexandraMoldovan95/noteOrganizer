@@ -42,6 +42,17 @@ How the numbers themselves are counted is the
 
 ## [Unreleased]
 
+### Fixed
+- **The editor's own share code carries everything now.** "Copy code" on the open note built its
+  note from a hand-rolled seven-field list, so a code generated there — unlike one from the
+  multi-note Share panel, which passes whole notes — silently dropped the formatting, the
+  paragraphs and the checklist; and the single-note import loader skipped the checklist even
+  when a code carried it (found in a field test: a shared checklist arrived missing at both
+  ends). Both ends fixed — the editor's code is now built from the shared field list itself, and
+  the import loader brings the checklist along, opening the section so the items are visible —
+  and the whole path is pinned end-to-end through the real route: editor state → Copy code → the
+  rendered code → the import box → the opened editor.
+
 ## [0.66.98] — 2026-09-05
 
 *Highlights: the app speaks English everywhere — and a shared note finally keeps its checklist.*

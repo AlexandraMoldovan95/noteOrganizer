@@ -7450,11 +7450,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if not (st["title"].strip() or st["body"].strip()):
             self.set_status("Write something before copying a code.")
             return
-        note = {
-            "title": st["title"], "body": st["body"], "comments": st["comments"],
-            "category": st["category"], "date": st["date"], "color": st["color"],
-            "recurrence": st["recurrence"],
-        }
+        # Built from SHAREABLE_FIELDS, never a hand-rolled list: this dict
+        # once named seven fields by hand and silently dropped everything
+        # added to sharing later -- a code generated HERE lost the
+        # formatting, the paragraphs and the checklist that a code from
+        # the multi-note Share panel (which passes whole notes) carried.
+        note = {k: st.get(k) for k in SHAREABLE_FIELDS if st.get(k) is not None}
         had_attachments = bool(st["attachments"])
         code = encode_share_code(note)
         # Render inline in the editor's code area.
@@ -7542,6 +7543,20 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._update_color_swatch()
 
         self.write_recurrence_to_ui(note.get("recurrence"))
+
+        # Bring the imported note's checklist along -- the one field this
+        # loader used to skip, so a shared checklist vanished on import
+        # even when the code carried it. Same idiom as loading a template.
+        self._working_checklist = [
+            {"text": it.get("text", ""), "done": bool(it.get("done"))}
+            for it in note.get("checklist", []) if isinstance(it, dict)
+        ]
+        if hasattr(self, "checklist_items_frame"):
+            self._render_checklist_items()
+        if self._working_checklist and not self._checklist_open:
+            self.toggle_checklist_section()
+        else:
+            self._sync_checklist_open_state()
 
         self.update_word_count()
         self.set_status("Imported from code — review, then Save to keep it")
