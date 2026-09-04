@@ -364,6 +364,49 @@ for the intended case while breaking normal mid-typing or partial-input
 behavior. Explicitly test realistic interaction paths before considering
 the change ready for merge.
 
+## Documentation standards (standing rule, 2026-09-04)
+
+The documentation serves both technical and non-technical readers, and it
+is part of the product. Every docs change — documenting a new feature,
+updating after a fix, or restructuring — follows these principles without
+being re-asked:
+
+- **Progressive disclosure.** Every major doc opens with a short,
+  plain-language layer anyone can follow; behaviour and context next;
+  implementation depth last. A reader should be able to stop early and
+  still get the point.
+- **Information density over word count.** Cut repetition, filler, and
+  restated context — never substance. Decisions, trade-offs, constraints,
+  and the stories behind fixes stay.
+- **History is preserved, organized, never flattened.** CHANGELOG entries,
+  ISSUES_LOG stories, and ROADMAP history are not deleted or summarized
+  away; make them scannable with indexes, dates, grouping, and links.
+  CHANGELOG's Added/Fixed bullet **counts are an invariant** — the version
+  number is derived from them (see Versioning), so compression may shorten
+  a bullet but never merge or split bullets.
+- **One canonical home per topic.** Detail lives in exactly one doc; every
+  other mention is a line plus a link. Homes: usage → `USER_GUIDE`,
+  design decisions → `ARCHITECTURE`, code walkthrough → `CODE_TOUR`,
+  release deltas → `CHANGELOG`, investigations → `ISSUES_LOG`,
+  plans/versioning → `ROADMAP`, test map and house rules → `qa/README`,
+  git commands → `GIT_WORKFLOW`.
+- **README is the hub and stays a 1–2 minute read**: curated highlights
+  rather than exhaustive lists, one hero screenshot plus a small gallery
+  row, and a reader-routing Documentation section linking every deeper
+  doc. No separate docs index file.
+- **Style.** Short paragraphs — no single-line walls of text; real
+  headings (they give anchors) instead of bold run-in pseudo-headings;
+  small tables for keystrokes and comparisons; a TOC on any long doc;
+  links instead of prose citations of other docs' section titles; wrap
+  source lines at a readable width.
+- **Terminology is consistent across all docs**: "Trash" (with
+  "Settings → Recently deleted" on first mention per doc), "the entry
+  file (`note_organizer.py`)", "the qa suite (qa1–qa9)" vs "the unit
+  suites (`test_*.py`)", "popup" for anchored non-blocking windows vs
+  "dialog" for blocking asks.
+- Docs-only changes still get no version bump, matching the Versioning
+  policy.
+
 ## Existing project documentation
 
 Before making architectural or behavioral decisions, consult the relevant
