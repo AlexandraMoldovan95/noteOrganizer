@@ -115,7 +115,8 @@ regression checks.*
 ### Fixed
 - **A copied table is no longer an invisible phantom in Word.** A clipboard fragment travels
   without the stylesheet the file export draws its borders from, so Word painted a bare HTML table
-  with no borders at all — there but invisible, selectable only as "nothing". Copied cells (and a
+  with no borders at all — there but invisible, selectable only as "nothing", and inserting it
+  rebuilt one row at a time. Copied cells (and a
   table copied as body text) now carry their borders as inline styles on every cell, so the table
   arrives drawn in Word, mail, anywhere; verified end-to-end against real Word via COM — visible
   single-line borders, the right shape, header bold.
@@ -282,11 +283,12 @@ regression checks.*
   too-small scroll area re-clamping the canvas — while a rebuild that only *shrinks* the list
   fired no event at all, parking the view past the real content as a blank list. The list now
   carries the editor page's protections from `0.32.x`, hardened for both shapes: content that
-  fits pins to the top, and a full rebuild (autosave included) remembers its scroll position in
-  pixels and holds that restore *in force* briefly — re-applied when a late settling pass tries
-  to re-clamp, and on short timers for the silent shrink case — so saving, expanding, and
-  collapsing a group all keep your place. A deliberate wheel or scrollbar move during that brief
-  window wins over the restore, always.
+  fits pins to the top, an origin above the first card snaps back, and a full rebuild (autosave
+  included) remembers its scroll position in pixels and holds that restore *in force* briefly —
+  re-applied when a late settling pass tries to re-clamp, and on short timers for the silent
+  shrink case — so saving and expanding keep your place, and collapsing a group from below lands
+  at the end of the shorter list instead of blank space. A deliberate wheel or scrollbar move
+  during that brief window wins over the restore, always.
   ([the full story](docs/ISSUES_LOG.md#the-list-that-lost-its-place-twice-for-two-silent-reasons))
 
 ### Testing
@@ -876,10 +878,10 @@ dependency.*
   empty line. Both fields use the same handlers now: double-click treats punctuation as a word
   boundary (either side of `something.else` selects just that word), an empty row selects nothing,
   and triple-click stops at the real end of the line instead of swallowing the newline.
-- **A note's own colour is no longer silently repainted on theme switch.** Switching to a theme
-  whose palette didn't contain that colour let the safety pass that remaps leftover colours
-  mistake a deliberately coloured note for a themed widget. Note cards are now recoloured last,
-  from the note's own data, so the note's colour always wins.
+- **A note's own colour is no longer silently repainted with the theme's accent on theme
+  switch.** Switching to a theme whose palette didn't contain that colour let the safety pass
+  that remaps leftover colours mistake a deliberately coloured note for a themed widget. Note
+  cards are now recoloured last, from the note's own data, so the note's colour always wins.
 - **Switching themes no longer flickers** with dark bands across a half-recoloured page. The bulk
   of a switch was destroying and rebuilding every note card (about 85ms of 121ms, with the list
   visibly emptying and refilling), plus rebuilding the statistics panel and the off-screen
