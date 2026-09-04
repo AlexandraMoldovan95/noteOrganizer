@@ -4,8 +4,16 @@ The images in this folder illustrate [`docs/USER_GUIDE.md`](../USER_GUIDE.md)
 and [`README.md`](../../README.md). They are referenced by exact filename, so
 **to replace or add one, drop a PNG here using the filename below** — it then
 renders automatically everywhere the docs reference it, no other change needed.
-Keep the current app on screen (window title **Note Organizer**) and one theme
-throughout so the set reads as one app.
+
+Rules that keep the set reading as one app:
+
+- **The current app on screen** — window title **Note Organizer**, current UI
+  (the ☀/🌙 theme button visible where a capture includes the toolbar).
+- **One theme throughout** — a partial refresh in another theme silently
+  produces a mixed set.
+
+**Current set:** captured in the default dark (purple) theme, refreshed for
+app version 0.64.97; update this line whenever the set is recaptured.
 
 | Filename | What to capture |
 |---|---|

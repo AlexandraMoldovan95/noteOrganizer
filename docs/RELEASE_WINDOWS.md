@@ -1,10 +1,32 @@
 # Windows Release Reference
 
-Reference material for actually publishing the built `.exe` on Windows, once the app is stable enough for that. Nothing here is decided or in progress — see `docs/ROADMAP.md`'s "Versioning" section for the app's own internal version-numbering policy (`APP_VERSION`, `CHANGELOG.md`); this file is specifically about packaging/distribution once a real release is ready.
+Reference material for actually publishing the built `.exe` on Windows,
+once the app is stable enough for that. Nothing here is decided or in
+progress. This file is specifically about building and distributing;
+the app's own version-numbering policy lives in
+[`docs/ROADMAP.md`](ROADMAP.md), "Versioning".
+
+## Building the artifact
+
+Everything below distributes the same artifact: the PyInstaller
+one-folder build.
+
+```powershell
+pip install pyinstaller
+pyinstaller --noconfirm NoteOrganizer.spec
+```
+
+Build from the spec file rather than passing options on the command
+line: `NoteOrganizer.spec` is where the project's build settings live
+(windowed mode, the numpy exclusion that saves 28 MB), and building the
+script directly would generate a competing spec of its own. The result
+lands in `dist/NoteOrganizer/` — `NoteOrganizer.exe` beside the
+`_internal` folder it needs; ship the whole folder, never the `.exe`
+alone.
 
 ## Microsoft Store (MSIX)
 
-The Microsoft Store expects the app packaged as MSIX. MSIX packages use a 4-part version number, `Major.Minor.Build.Revision` (e.g. `1.5.6.0`), with two hard requirements:
+The Microsoft Store expects the app packaged as MSIX. MSIX packages use a 4-part version number, `Major.Minor.Build.Revision` (e.g. `1.5.6.0`), with three hard requirements:
 
 - The first part (Major) **cannot be `0`** — which our own rule of staying at `0.x.x` until real launch already satisfies by the time this matters, since we'd be at `1.0.0` or higher.
 - The last part (Revision) **must be left as `0`** when building the package — it's reserved for the Store's own use.
