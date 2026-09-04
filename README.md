@@ -15,7 +15,7 @@ Built as a solo/pair project (developer + AI pairing partner) over an extended i
 - Create, edit, pin, duplicate, and soft-delete notes
 - Rich note metadata: category, color, date, comments, checklist, file attachments
 - Autosave on pause, on note switch, and on close — nothing is ever lost mid-edit, and quitting never asks about "unsaved notes"
-- Full-text search and six sort modes (recency, title, category, date)
+- Full-text search across the notebook and six sort modes (recency, title, category, date), plus **Ctrl+F** to find within the open note — text and tables — in an in-window find bar
 - Group notes by category, with persistent collapse state per group
 - A collapsible in-note calculator (with parentheses and standard operator precedence), for quick sums without leaving the note
 - Rich text formatting (Bold, Italic, Underline, Strikethrough, text color, highlight) in the note body — via a toolbar, the right-click menu, or keyboard shortcuts — applied to a selection or to whatever's typed next
