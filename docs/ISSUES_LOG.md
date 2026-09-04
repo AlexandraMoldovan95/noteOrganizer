@@ -63,7 +63,7 @@ day-to-day tracking.
 
 ### Importing the same backup twice
 
-*(0.4.0)*
+*([0.4.0](../CHANGELOG.md#040--performance-overhaul--test-infrastructure))*
 
 **Symptom:** Importing an export `.zip` that overlapped with notes already present silently created duplicates, with no warning.
 
@@ -75,7 +75,7 @@ day-to-day tracking.
 
 ### A crash handler that would have crashed itself
 
-*(0.4.0)*
+*([0.4.0](../CHANGELOG.md#040--performance-overhaul--test-infrastructure))*
 
 **Symptom:** Never actually observed in practice — found during an unrelated cleanup pass, not from a bug report.
 
@@ -87,7 +87,7 @@ day-to-day tracking.
 
 ### Files that outlived the notes they belonged to
 
-*(0.5.0 · 2026-08-09)*
+*([0.5.0](../CHANGELOG.md#050--2026-08-09) · 2026-08-09)*
 
 **Symptom:** Attachment files were still sitting in the `attachments/` folder well after the note (or the specific attachment) they belonged to had been deleted — noticed by accident while testing an unrelated change, not from a bug report.
 
@@ -99,7 +99,7 @@ day-to-day tracking.
 
 ### "Recently updated" sort that couldn't tell recent apart from recent
 
-*(0.28.38 · 2026-08-12)*
+*([0.28.38](../CHANGELOG.md#02838--2026-08-17) · 2026-08-12)*
 
 **Symptom:** Sorting by "Recently updated" didn't always put the note you *just* edited at the top, even though it genuinely had been saved.
 
@@ -111,7 +111,7 @@ day-to-day tracking.
 
 ### A backup that assumed it had worked
 
-*(0.28.38 · 2026-08-14)*
+*([0.28.38](../CHANGELOG.md#02838--2026-08-17) · 2026-08-14)*
 
 **Symptom:** Never actually observed in practice — found during a deliberate review of the app's data-safety guarantees, prompted by real (unrelated) data loss during development itself: two separate incidents where a misdirected terminal command wiped the real `notes_data.json` at the project root. Neither incident involved this code path, but they raised the right question: what *else* in this app assumes a backup succeeded without checking?
 
@@ -123,7 +123,7 @@ day-to-day tracking.
 
 ### The cleanup that deleted the real notebook
 
-*(0.30.39 · 2026-08-18)*
+*([0.30.39](../CHANGELOG.md#03039--2026-08-18) · 2026-08-18)*
 
 **Symptom:** After rebuilding and testing the `.exe`, the notes it showed were completely different from — and far fewer than — the notes visible when running `python note_organizer.py` from the project folder. It looked as if the `.exe`'s notebook had simply reset itself.
 
@@ -139,7 +139,7 @@ day-to-day tracking.
 
 ### The safety test that needed its own safety
 
-*(0.39.63 · 2026-08-27)*
+*([0.39.63](../CHANGELOG.md#03963--2026-08-28) · 2026-08-27)*
 
 **Symptom:** The app, launched from the project root, opened onto an empty
 notebook. `notes_data.json` held two bytes — `[]` — and `settings.json` had
@@ -181,7 +181,7 @@ last line of defence does not depend on anyone remembering anything.
 
 ### The template editor that "did nothing" when clicked
 
-*(0.3.0)*
+*([0.3.0](../CHANGELOG.md#030--tags-removed-categories-as-the-sole-organization-system))*
 
 **Symptom:** Clicking Edit on a template appeared to do nothing at all — no window, no error, no console output (the app ships `--windowed`, so any silent exception would be invisible).
 
@@ -191,7 +191,7 @@ last line of defence does not depend on anyone remembering anything.
 
 ### The panel that lost its content depending on how you got there
 
-*(0.3.0)*
+*([0.3.0](../CHANGELOG.md#030--tags-removed-categories-as-the-sole-organization-system))*
 
 **Symptom:** A Settings panel would intermittently show its content correctly, or not, depending on the exact sequence of panels opened before it — hard to pin down because it wasn't reproducible on the first open, only after certain navigation paths.
 
@@ -201,7 +201,7 @@ last line of defence does not depend on anyone remembering anything.
 
 ### The scroll that stopped twice, for two different reasons
 
-*(0.28.38 · 2026-08-12)*
+*([0.28.38](../CHANGELOG.md#02838--2026-08-17) · 2026-08-12)*
 
 **Symptom:** Scrolling the mouse wheel while hovering over the theme picker's preview cards did nothing, instead of scrolling the Settings page underneath.
 
@@ -215,7 +215,7 @@ last line of defence does not depend on anyone remembering anything.
 
 ### The chip that looked clickable, and the fix that looked like it worked
 
-*(0.28.38 · 2026-08-17)*
+*([0.28.38](../CHANGELOG.md#02838--2026-08-17) · 2026-08-17)*
 
 **Symptom:** Two things, found close together while working on the same panel. First: Statistics category chips visibly highlighted on hover and showed a hand cursor, but clicking one did nothing — reproduced consistently in both the plain script and the packaged `.exe`, after scrolling the Settings page first. Second, found while building a live-update fix for the first: after deleting a category (or, later, adding a template), Statistics kept showing the old data until the page was left and reopened.
 
@@ -231,7 +231,7 @@ last line of defence does not depend on anyone remembering anything.
 
 ### The DPI fix that made things worse
 
-*(0.30.38 · 2026-08-18)*
+*([0.30.38](../CHANGELOG.md#03038--2026-08-18) · 2026-08-18)*
 
 **Symptom:** Two side-by-side sections in the note editor (Checklist and Calculator), built with `grid()` and a shared `uniform` group specifically to force equal column widths, still rendered visibly unequal in a real screenshot from the user — despite `winfo_width()` proving both columns were pixel-identical inside Tk's own geometry math, on every window size and maximize state tested locally.
 
@@ -245,7 +245,7 @@ last line of defence does not depend on anyone remembering anything.
 
 ### The module that existed twice
 
-*(0.32.51 · 2026-08-21)*
+*([0.32.51](../CHANGELOG.md#03251--2026-08-21) · 2026-08-21)*
 
 **Symptom:** Settings → About showed a blank space where the storage folder
 should be, and Settings → Statistics read "Using Note Organizer since None".
@@ -297,7 +297,7 @@ test removed the condition that caused the bug.
 
 ### The bullet that had no bullet in it
 
-*(0.34.51 · 2026-08-24)*
+*([0.34.51](../CHANGELOG.md#03451--2026-08-25) · 2026-08-24)*
 
 **Symptom:** Put the cursor at the end of the last item in a bullet list, paste a couple of lines, and the pasted lines behaved as though they were list items — they were saved that way and came back indented on reload — while showing no bullet at all. Worse, clicking the bullet button on one of them appeared to do nothing: the app thought the line was already a bullet, so the button toggled it *off*.
 
@@ -311,7 +311,7 @@ test removed the condition that caused the bug.
 
 ### The text box that was always eighty characters wide
 
-*(0.38.59 · 2026-08-26)*
+*([0.38.59](../CHANGELOG.md#03859--2026-08-26) · 2026-08-26)*
 
 **Symptom:** pasted text used only about half the width of the note, and deleting a character further down did not make it reflow into the space. It behaved as though the box were half its apparent size.
 
@@ -327,7 +327,7 @@ test removed the condition that caused the bug.
 
 ### The list that lost its place, twice, for two silent reasons
 
-*(0.58.82 · 2026-08-30)*
+*([0.58.82](../CHANGELOG.md#05882--2026-08-30) · 2026-08-30)*
 
 **Symptom:** two "known bugs to investigate" that had resisted every
 reproduction attempt: the note list sometimes jumped back to the top
@@ -381,7 +381,7 @@ with it; and a scrollregion is a claim, not a fact — refresh it from
 
 ### A calendar that kept navigating behind the user's back
 
-*(0.5.0 · 2026-08-09)*
+*([0.5.0](../CHANGELOG.md#050--2026-08-09) · 2026-08-09)*
 
 **Symptom:** Found while testing the Settings-page restructuring, not reported by a user. If Calendar was the last tab open before switching to the new Settings page, the calendar's own keyboard shortcuts (Page Up/Down, Home) still worked — silently changing the month shown on a calendar the user could no longer see, behind the now-covering Settings page.
 
@@ -393,7 +393,7 @@ with it; and a scrollregion is a claim, not a fact — refresh it from
 
 ### The date field that either lost your edit, or wouldn't let you finish typing it
 
-*(0.28.38 · 2026-08-10)*
+*([0.28.38](../CHANGELOG.md#02838--2026-08-17) · 2026-08-10)*
 
 **Symptom:** Typing a date into a note and clicking away (rather than pressing Save) silently didn't save it — the only field in the editor that behaved this way; Title, Body, and Comments all autosaved fine.
 
@@ -405,7 +405,7 @@ with it; and a scrollregion is a claim, not a fact — refresh it from
 
 ### The autosave that could interrupt you over a note that was already gone
 
-*(0.28.38 · 2026-08-12)*
+*([0.28.38](../CHANGELOG.md#02838--2026-08-17) · 2026-08-12)*
 
 **Symptom:** Never reported by a user — found while testing the fix above. An automatic, silent autosave could, in rare timing-dependent cases, pop a real "Note missing" error dialog and block until clicked.
 
@@ -417,7 +417,7 @@ with it; and a scrollregion is a claim, not a fact — refresh it from
 
 ### The username cap that took three tries
 
-*(0.28.38 · 2026-08-12)*
+*([0.28.38](../CHANGELOG.md#02838--2026-08-17) · 2026-08-12)*
 
 **Symptom:** Found during manual testing of a planned 30-character cap on the username field. Typing past the limit was still sometimes accepted well beyond 30 characters, and the eventual correction only happened silently when the name was saved — visually indistinguishable from the app just losing whatever was typed past that point.
 
@@ -429,7 +429,7 @@ with it; and a scrollregion is a claim, not a fact — refresh it from
 
 ### The focus fix that broke the thing it wasn't touching
 
-*(0.28.38 · 2026-08-12)*
+*([0.28.38](../CHANGELOG.md#02838--2026-08-17) · 2026-08-12)*
 
 **Symptom:** Clicking a non-interactive part of the Settings page didn't move keyboard focus away from a field that had it, leaving its cursor blinking even after the value had autosaved. A first attempt at fixing this — binding a click handler individually on every section's title, subtitle, and card — worked inconsistently under rapid clicking, and, worse, broke the "switch tabs and back" case, which had already been working correctly before this fix was ever written.
 
@@ -441,7 +441,7 @@ with it; and a scrollregion is a claim, not a fact — refresh it from
 
 ### The fast-typing fix that took three tries to land safely
 
-*(0.31.39 · 2026-08-18)*
+*([0.31.39](../CHANGELOG.md#03139--2026-08-18) · 2026-08-18)*
 
 **Symptom:** Building Phase 1 of rich text formatting, a user asked for "sticky" formatting — toggle Bold with nothing selected, and it should apply to whatever gets typed next, until toggled off again. The first working version tagged "the one character right before the cursor" on every `<KeyRelease>`. It passed every test, including manual use — until the same user reported that typing quickly while Bold was on left some letters un-bolded.
 
@@ -457,7 +457,7 @@ with it; and a scrollregion is a claim, not a fact — refresh it from
 
 ### The paste that kept the formatting it was told to drop
 
-*(0.37.56 · 2026-08-26)*
+*([0.37.56](../CHANGELOG.md#03756--2026-08-26) · 2026-08-26)*
 
 **Symptom:** "paste without formatting" pasted a bullet list. Both choices did the same thing, which made it look like the wrong function was wired to the shortcut.
 
@@ -473,7 +473,7 @@ with it; and a scrollregion is a claim, not a fact — refresh it from
 
 ### The paragraphs a PDF does not have
 
-*(0.38.59 · 2026-08-26)*
+*([0.38.59](../CHANGELOG.md#03859--2026-08-26) · 2026-08-26)*
 
 **Symptom:** text copied from a PDF arrived either as one run-on block (**Ctrl+V**) or as narrow ragged lines a third of the way across the note (**Ctrl+Shift+V**). Numbering it then put a number on every line, including mid-sentence.
 
@@ -495,7 +495,7 @@ with it; and a scrollregion is a claim, not a fact — refresh it from
 
 ### The rebuild under the click
 
-*(0.39.63 · 2026-08-28)*
+*([0.39.63](../CHANGELOG.md#03963--2026-08-28) · 2026-08-28)*
 
 **Symptom:** After typing something wide into a cell, the next click on
 another cell did nothing — and from then on the table misbehaved:
@@ -529,7 +529,7 @@ impossible case degrades into.
 
 ### The centring that would not save itself
 
-*(0.39.63 · 2026-08-28)*
+*([0.39.63](../CHANGELOG.md#03963--2026-08-28) · 2026-08-28)*
 
 **Symptom:** Centre a table on the page, switch to another note and
 back — the table is flush left again. Press Save by hand first and it
@@ -562,7 +562,7 @@ the bug being fixed is exactly where the fix's own bug will sit.
 
 ### The accepted cost that nobody had accepted
 
-*(0.64.95 · 2026-09-01)*
+*([0.64.95](../CHANGELOG.md#06495--2026-09-02) · 2026-09-01)*
 
 **Symptom:** colour a cell, drag a column edge to widen it, colour
 gone — every character style in the whole table, gone. Dragging a
@@ -597,7 +597,7 @@ it was noticing which operations never needed it at all.
 
 ### The undo that stopped halfway
 
-*(0.64.95 · 2026-09-02)*
+*([0.64.95](../CHANGELOG.md#06495--2026-09-02) · 2026-09-02)*
 
 **Symptom:** found by an audit probe, not a field report — edit a
 table cell from `1` to `schimbat`, press Ctrl+Z once, and the cell
@@ -641,7 +641,7 @@ replaces.
 
 ### The Trash panel that took two seconds to open
 
-*(0.4.0)*
+*([0.4.0](../CHANGELOG.md#040--performance-overhaul--test-infrastructure))*
 
 **Symptom:** Opening "Recently deleted" with several hundred entries visibly paused the app.
 
@@ -651,7 +651,7 @@ replaces.
 
 ### The slowdown that only showed up after a long session
 
-*(0.4.0)*
+*([0.4.0](../CHANGELOG.md#040--performance-overhaul--test-infrastructure))*
 
 **Symptom:** No single action was slow. The app simply felt progressively heavier the longer a session went on — more saves, more note switches, more sluggish each one felt.
 
@@ -663,7 +663,7 @@ replaces.
 
 ### Export/import freezing the app
 
-*(0.4.0)*
+*([0.4.0](../CHANGELOG.md#040--performance-overhaul--test-infrastructure))*
 
 **Symptom:** Exporting a backup with a meaningful number of attachments froze the entire UI — no feedback, just an unresponsive window — until the file finished writing.
 
@@ -675,7 +675,7 @@ replaces.
 
 ### The theme-switch flicker, and three ways not to fix it
 
-*(0.32.49 · 2026-08-20)*
+*([0.32.49](../CHANGELOG.md#03249--2026-08-20) · 2026-08-20)*
 
 **Symptom:** Switching between dark and light showed a visible flicker — briefly, a half-recoloured page with dark bands across it. Colors always ended up correct; it was the transition itself that looked broken. It also got worse as more notes accumulated.
 
@@ -727,7 +727,7 @@ replaces.
 
 ### The dropdown that opened on the wrong monitor
 
-*(0.2.0)*
+*([0.2.0](../CHANGELOG.md#020--inline-ui-overhaul--data-resilience))*
 
 **Symptom:** On a multi-monitor setup, dropdowns (category picker, sort menu) could pop up on a completely different screen than the app itself.
 
@@ -739,7 +739,7 @@ replaces.
 
 ### The emoji that multiplied into squares
 
-*(0.39.63 · 2026-08-28)*
+*([0.39.63](../CHANGELOG.md#03963--2026-08-28) · 2026-08-28)*
 
 **Symptom:** Typing two emoji into a table cell showed one emoji and a
 square. Hovering made more squares. Committing the cell wrote diamonds
@@ -779,7 +779,7 @@ what confirmed the mechanism rather than the symptom had been fixed.
 
 ### The copy that took the row above
 
-*(0.39.63 · 2026-08-28)*
+*([0.39.63](../CHANGELOG.md#03963--2026-08-28) · 2026-08-28)*
 
 **Symptom:** Copying two cells and pasting them somewhere else put the
 wrong text in the target — sometimes an empty pair, sometimes a word
@@ -810,7 +810,7 @@ was on the clipboard — rather than the behaviour.
 
 ### The version that updated itself
 
-*(0.55.81 · 2026-08-29)*
+*([0.55.81](../CHANGELOG.md#05581--2026-08-30) · 2026-08-29)*
 
 **Symptom:** a green "Note updated" toast on every single launch, with
 nothing edited — reported as a cosmetic annoyance. It was not cosmetic:
@@ -848,7 +848,7 @@ behind its own symptom: the toast looked like noise, and only tracing
 
 ### Tests that always passed, no matter what
 
-*(0.5.0 · 2026-08-09)*
+*([0.5.0](../CHANGELOG.md#050--2026-08-09) · 2026-08-09)*
 
 **Symptom:** Not a runtime bug in the app — found while setting up automated test runs (GitHub Actions). Two of the five automated QA scripts were failing when run by hand, but nothing about their own output made that obvious at a glance.
 
@@ -860,7 +860,7 @@ behind its own symptom: the toast looked like noise, and only tracing
 
 ### The pixel-perfect test that only worked on Windows
 
-*(0.28.38 · 2026-08-12)*
+*([0.28.38](../CHANGELOG.md#02838--2026-08-17) · 2026-08-12)*
 
 **Symptom:** Three small layout cramps (a cut-off sort label, a cramped bulk-action button, a Settings button that scrolled out of view) were fixed and verified with exact `tkinter.font` pixel measurements — genuinely precise, not eyeballed. The regression test for one of them then failed in CI, even though the fix itself was correct.
 
@@ -890,7 +890,7 @@ behind its own symptom: the toast looked like noise, and only tracing
 
 ### The tests that borrowed the notebook
 
-*(0.55.81 · 2026-08-29)*
+*([0.55.81](../CHANGELOG.md#05581--2026-08-30) · 2026-08-29)*
 
 **Symptom:** a qa check that had been green for days failed
 deterministically one morning — nothing in the code had changed
@@ -923,7 +923,7 @@ usage around is the signature of test-data contamination.
 
 ### The fix that was dead on arrival
 
-*(0.55.81 · 2026-08-29)*
+*([0.55.81](../CHANGELOG.md#05581--2026-08-30) · 2026-08-29)*
 
 **Symptom:** mouse-wheel scrolling over tables was fixed to glide in
 pixels; every automated check agreed. The user reported, correctly,
@@ -949,7 +949,7 @@ wins, and nothing anywhere reports the first one gone.
 
 ### The teeth that had gone dull
 
-*(0.64.95 · 2026-09-01)*
+*([0.64.95](../CHANGELOG.md#06495--2026-09-02) · 2026-09-01)*
 
 **Symptom:** none — that was the problem. Every test was green, and the
 question nobody usually asks is whether green still means anything.
