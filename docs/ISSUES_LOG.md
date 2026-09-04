@@ -1,6 +1,6 @@
 # Notable Issues Log
 
-A narrative log of the more interesting bugs found and fixed during development — chosen because each one taught something worth remembering, not because they were the only bugs. Routine fixes are just commits; these are the ones with a real "why did this happen" behind them. See also the repository's [Issues](../../issues) for day-to-day tracking.
+A narrative log of the more interesting bugs found and fixed during development — chosen because each one taught something worth remembering, not because they were the only bugs. Routine fixes are just commits; these are the ones with a real "why did this happen" behind them. See also the repository's [Issues](https://github.com/AlexandraMoldovan95/noteOrganizer/issues) for day-to-day tracking.
 
 ---
 
