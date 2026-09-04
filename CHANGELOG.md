@@ -2,7 +2,38 @@
 
 All notable changes to Note Organizer are documented here.
 
-The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version numbers below are retrospective groupings of related work — this project didn't tag formal releases from day one, so early history is grouped by theme rather than exact date.
+The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
+numbers are retrospective groupings of related work — the project didn't tag formal
+releases from day one, so early history is grouped by theme rather than exact date. How
+the numbers themselves are counted is the
+[Roadmap's Versioning section](docs/ROADMAP.md#versioning).
+
+| Version | Date | In one line |
+|---|---|---|
+| [0.66.97](#06697--2026-09-04) | 2026-09-04 | Keyboard reach — app-wide Ctrl+N and Ctrl+S shortcuts, and an in-note Ctrl+F find bar. |
+| [0.64.97](#06497--2026-09-02) | 2026-09-02 | The comments box and the calendar preview stop showing tables as raw pipe rows. |
+| [0.64.95](#06495--2026-09-02) | 2026-09-02 | A tables hardening wave — export, clipboard, Word, undo, search, styling and scroll all learn to treat a table as a table — alongside a Windows CI leg and a mutation audit of the old regression checks. |
+| [0.58.82](#05882--2026-08-30) | 2026-08-30 | Scroll-position stability for the note list, plus new backup, trash and shortcut settings. |
+| [0.55.81](#05581--2026-08-30) | 2026-08-30 | Tables grow up — per-character styling, multi-line cells, real checkboxes, draggable rows — while the template editor learns to draw them and the GUI tests become hermetic. |
+| [0.39.64](#03964--2026-08-28) | 2026-08-28 | One fix — the app now calls itself Note Organizer everywhere, matching its docs. |
+| [0.39.63](#03963--2026-08-28) | 2026-08-28 | Tables arrive as Markdown-backed grids, with cross-feature checks guarding the seams. |
+| [0.38.59](#03859--2026-08-26) | 2026-08-26 | The editor's text boxes get their width back, and PDF paste builds real paragraphs. |
+| [0.38.56](#03856--2026-08-26) | 2026-08-26 | The note body gains a remembered Expand toggle for long notes. |
+| [0.37.56](#03756--2026-08-26) | 2026-08-26 | Paste becomes format-aware — rich text travels into and out of notes, with no new dependency. |
+| [0.36.56](#03656--2026-08-25) | 2026-08-25 | Fonts land in notes and Settings, alongside theming, toolbar and title-field fixes. |
+| [0.34.51](#03451--2026-08-25) | 2026-08-25 | Paragraph formatting lands — lists, indentation, alignment and quote blocks. |
+| [0.32.51](#03251--2026-08-21) | 2026-08-21 | Settings rebuilt around a section list, and the core layer becomes a package. |
+| [0.32.49](#03249--2026-08-20) | 2026-08-20 | Theme switching goes flicker-free and ~5× faster; selection quirks ironed out. |
+| [0.32.44](#03244--2026-08-19) | 2026-08-19 | Text color and highlight join the toolbar, plus a round of selection fixes. |
+| [0.31.39](#03139--2026-08-18) | 2026-08-18 | Rich text begins — Bold, Italic, Underline and Strikethrough in the editor. |
+| [0.30.39](#03039--2026-08-18) | 2026-08-18 | One critical data-safety fix — script-mode runs can no longer delete the real notebook in `%APPDATA%\NoteOrganizer`. |
+| [0.30.38](#03038--2026-08-18) | 2026-08-18 | An in-note calculator — hand-rolled parser, insert-into-note logging, session history — with 47 evaluator checks behind it. |
+| [0.28.38](#02838--2026-08-17) | 2026-08-17 | A broad stability sweep — search debounce, a 16-timer crash-safety audit, autosave and backup hardening, a livelier Statistics page, and two new QA suites. |
+| [0.5.0](#050--2026-08-09) | 2026-08-09 | Going public — docs, GitHub and CI arrive alongside bulk actions and image previews. |
+| [0.4.0](#040--performance-overhaul--test-infrastructure) | — | Performance overhaul plus the first automated test suite backing it up. |
+| [0.3.0](#030--tags-removed-categories-as-the-sole-organization-system) | — | Tags come out entirely, leaving categories as the app's one organization system. |
+| [0.2.0](#020--inline-ui-overhaul--data-resilience) | — | Every OS-native popup becomes an in-app themed one, and the calendar grows richer. |
+| [0.1.0](#010--core-application) | — | The founding feature set — notes, recurrence, calendar, templates, sharing, themes. |
 
 ---
 
@@ -10,433 +41,1385 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ## [0.66.97] — 2026-09-04
 
+*Highlights: keyboard reach — app-wide Ctrl+N and Ctrl+S shortcuts, and an in-note Ctrl+F find bar.*
+
 ### Added
-- **App-wide keyboard shortcuts: Ctrl+N and Ctrl+S.** New note, and save the current note now — bound across the whole app so they work whichever pane has focus. The Settings → Keyboard shortcuts reference lists them under a new "App" group. Ctrl+N switches to the Notes tab first; Ctrl+S stays silent when there's nothing to save rather than popping a warning from wherever you pressed it.
-- **Find in the current note: Ctrl+F.** A small find bar opens in the top-right of the editor — inside the app window, not a separate OS dialog — and searches the note you're in (the left-hand search still finds *which* note; this finds *within* it). It looks through the note's text **and its tables**: a match inside a table cell scrolls the table into view and outlines the cell, and a cell's `<br>` line-break reads as a space so a phrase split across two lines still matches (separator rows, checkboxes and merge markers are never "words"). Enter / Shift+Enter step forward and back through the matches (wrapping around), the count shows as "3/12", "Aa" toggles case-sensitivity, and Esc or the ✕ closes it. It only ever highlights — it never changes the note, so opening it never marks the note edited; editing while it's open re-counts on the fly without twitching the view, and switching notes or themes keeps up. Reserved earlier when Ctrl+N/Ctrl+S landed; this is that bar.
+- **App-wide keyboard shortcuts: Ctrl+N and Ctrl+S.** New note, and save the current note now —
+  bound across the whole app so they work whichever pane has focus, and listed in Settings →
+  Keyboard shortcuts under a new "App" group. Ctrl+N switches to the Notes tab first; Ctrl+S stays
+  silent when there's nothing to save rather than popping a warning from wherever you pressed it.
+- **Find in the current note: Ctrl+F.** A small find bar opens in the editor's top-right — inside
+  the app window, not an OS dialog — and searches the note you're in (the left-hand search finds
+  *which* note; this finds *within* it), tables included: a match in a cell scrolls the table into
+  view and outlines the cell, and a cell's `<br>` line-break reads as a space so a phrase split
+  across two lines still matches (separator rows, checkboxes and merge markers are never "words").
+  Enter / Shift+Enter step through the matches with a "3/12" count (wrapping around), "Aa" toggles
+  case-sensitivity, and Esc or the ✕ closes it. It only ever highlights — the note is never
+  changed or marked edited — editing while it's open re-counts on the fly without twitching the
+  view, and switching notes or themes keeps up. Reserved earlier when Ctrl+N/Ctrl+S landed; this
+  is that bar.
 
 ## [0.64.97] — 2026-09-02
 
+*Highlights: the comments box and the calendar preview stop showing tables as raw pipe rows.*
+
 ### Fixed
-- **Comments keep tables out.** The comments box draws plain text — there is no grid renderer for it the way there is for the body — so a pasted table only ever showed as raw pipe rows (`| a | b |`), never a real table. A paste that carries table rows now drops them, keeps the prose, and says so with a brief note; a paste with no table is untouched.
-- **The calendar preview is a quick look, not the editor.** A note with a table drew raw pipe rows in the calendar day preview, and its comments were dumped inline as if part of the body. The preview now shows the note's plain text only and, like the note-list cards, just flags what else the note carries (▦ a table, ☑ a checklist, 💬 comments); the full content shows when the note is opened in the editor.
+- **Comments keep tables out.** The comments box draws plain text — it has no grid renderer the
+  way the body does — so a pasted table only ever showed as raw pipe rows (`| a | b |`), never a
+  real table. A paste that carries table rows now drops them, keeps the prose, and says so with a
+  brief note; a paste with no table is untouched.
+- **The calendar preview is a quick look, not the editor.** A note with a table drew raw pipe rows
+  in the calendar day preview, and its comments were dumped inline as if part of the body. The
+  preview now shows the note's plain text only and, like the note-list cards, just flags what else
+  the note carries (▦ a table, ☑ a checklist, 💬 comments); the full content shows when the note
+  is opened in the editor.
 
 ## [0.64.95] — 2026-09-02
 
-### Testing
-- `tools/pre_push_check.py` — CI's three static gates (names resolve, class surface unchanged, every tracked `.py` compiles, tests included), runnable locally in two seconds; two pull requests went red learning why this should exist. `qa/README.md` now carries the suite's **seam map** — which files guard which UI surface (the bulk bar's qa1+qa7 split taught this) — plus the house rules for new checks: land with the feature, mutation-tested, platform-aimed, settled not raced.
-- CI now runs the entire suite on **Windows too** — the platform the app actually ships on (real Segoe UI metrics, Windows Tk, no virtual display) — alongside the Linux run that keeps exercising the pure logic and the X11 behaviours that have caught real bugs. One matrix, one set of steps, both verdicts always visible (`fail-fast: false`). The handful of checks that measure Windows-specific pixels now assert in CI instead of only on a developer's machine — a failing check is fixed in the app, never routed around. Found and closed on the way: `test_richtext.py` was never wired into CI at all. Its first flight promptly caught the push-down settling flake fixed alongside it — the new runner earning its keep in its first five minutes.
-- **The old teeth, audited.** Six long-standing regression fixes were sabotaged on purpose (each mutant = the original bug from ISSUES_LOG, reintroduced) to prove their guarding checks can actually fail. Four bit immediately; two had gone dull — nothing pinned the startup purge deleting a purged note's attachment files, and nothing pinned the editor's 0.32.x "short content stays at the top" guard. Both have named, deterministic checks now, proven against the same mutants; the autosave-over-a-vanished-note guard additionally gained a named check so a regression fails with a message instead of hanging the suite in a modal dialog.
-
-### Fixed
-- **A copied table is no longer an invisible phantom in Word.** The file export draws its borders from the document's stylesheet — but a clipboard fragment travels without one, and Word paints a bare HTML table with no borders at all: the pasted table was there but invisible, selectable only as "nothing", and inserting it rebuilt one row at a time. Copied cells (and a table copied as body text) now carry their borders as inline styles on every cell, so the table arrives drawn — in Word, mail, anywhere. Verified end-to-end against real Word via COM: visible single-line borders, the right shape, header bold.
-- **Checkboxes stay centred everywhere.** The app draws every checkbox centred in its cell regardless of padding; the export left it to the cell's alignment, so a box in a left-aligned column sat left in the HTML, the PDF and Word. A checkbox cell now carries `text-align:center` in every exported flavour, matching what the app shows.
-- **Ctrl+Z understands tables.** A cell commit, a resize, a fill, a checkbox drop are each a burst of small inserts and deletes, and Tk's undo treated every one as its own step: undoing a cell edit could stop halfway — the old value gone, the padding collapsed (`|  | 2 |` in the audit's probe). Every table operation now forms ONE undo unit, the grid redraw is kept off the undo stack entirely (recorded, every second Ctrl+Z undid the redraw instead of the edit), and undo/redo on the body redraws the tables the restored text describes — so one Ctrl+Z takes back one whole operation, drawing included.
-- **A one-column table can no longer be asked for.** `| x |` is indistinguishable from prose containing a pipe, so a one-column insert produced dead pipe lines that never became a grid. The size picker starts at two columns and the insert clamps to two.
-- **The word count counts words, not plumbing.** Every pipe counted as a "word" — an empty 3×3 table claimed twelve and inflated the reading estimate. Tables are now counted by what is written in their cells; checkboxes, merge markers, separators and pipes count for nothing.
-- **Search reads tables the way you do.** Searching "---" or "br" matched every note holding a table, because the raw pipe text was the haystack. A body is now searched by its prose and cell contents; the mechanics are invisible to search too.
-- **A hidden column stays hidden in the export.** The exported page used to show the column the app was hiding. What you see is what exports; the data itself never leaves the note's text, so unhiding brings it back into the next export. A merge reaching across a hidden column narrows to the columns the page shows.
-- **Checkboxes export as boxes.** `[x]` went out as bracket characters; the file now shows ☑/☐ (with the checkbox's colour), and a re-import turns the glyphs back into real checkboxes — the round trip keeps them clickable.
-- **The clipboard copy caught up with the file export.** Copied cells went to Word with a flattened header, literal `<`/`^` merge markers and bracket checkboxes; the copy's HTML now wears `<th>`, real colspan/rowspan cells, the checkbox glyphs, and leaves hidden columns out — while the tab-separated text keeps every column verbatim, so a duplicate inside the app stays faithful and a spreadsheet still gets all the data.
-- **Our own table copy takes its own road home.** The cell copy puts an HTML table on the clipboard for Word's sake — and on Windows the rich-paste route saw that HTML first, so pasting a copied table back into a note took the generic road: no remembered widths, no placement, and the first row glued onto whatever line the caret sat in ("`Sursa: | fff |…`" in the field report — the very fixes for widths, placement and own-line landing were being bypassed on the shipping platform). A paste whose plain text matches our own cell copy now goes straight to the table route with all its guards; content from other applications keeps the rich route. The qa clipboard stub gained a loopback mode that serves back exactly what the app wrote — the Windows behaviour the suite never exercised, which is how this shipped unseen.
-- **The header row is bold in Word and the browser too.** The app draws the first table row bold on its own; the export flattened it into an ordinary row. Header cells now leave as `<th>` — bolded by every renderer, kept left-aligned like the app's own headers, and re-imported unchanged (the paste path always understood both).
-- **A duplicated centred table pastes back centred.** The table's place on the page now travels with the copied cells, like the widths already did.
-- **Dropping a checkbox no longer flickers the table.** It centred the cell through the full teardown-and-rebuild alignment op; the box now lands with the cell's own alignment, redrawn in place — the same quiet path a toggle uses.
-- **The scroll stays put through cell edits.** Double-clicking into a table (or dropping a checkbox on a coloured cell) could throw the view to the table's start: the after-rebuild view restore ran once, at idle, and the fresh grid windows can map AFTER it — the fraction then lands against the wrong heights. For the operations that promise the view stays put (the menu-op family and the editor's commit), the restore now holds in force briefly on short timers, and a deliberate wheel or scrollbar move — or the drag-selection's autoscroll — cancels it; ambient renders (a push-down, an inserted table) deliberately keep the single application, because their content legitimately moves.
-- **Pipe rows pasted mid-line land on their own lines.** Copying half a table plus its caption as body text and pasting it inside a line spliced the first row onto the caret's line ("`|   | [x] |fig2…`"). Table rows only mean something at a line start; the paste now gives the edge rows the newlines that keep them rows — prose keeps Tk's default paste.
-- **A duplicated table keeps its widths.** Pasting copied cells rebuilt the table at default column widths; the copy now remembers the source columns' set widths and the paste rebuilds the separator from them.
-- **Letters glued onto a styled word wear its styles.** Tk extends a tag over an inserted character only when both neighbours carry it, so typing at the end of a coloured word produced bare letters. A non-space character typed directly after a styled non-space character now inherits its colour, highlight and font styles — type a space first and the styles stay behind, the word boundary the report asked for.
-- **The checkbox palette went surgical.** It filled cells through the wholesale block rewrite, which expelled the caret to the line under the table and scrolled the view after it; an emoji never moved anything because it goes through surgical paths. The checkbox now writes each cell in place and centres via pad edits — caret, scroll and every untouched line stay exactly where they were.
-- **Resizing a table no longer burns its styles.** Dragging a column edge went through the wholesale block rewrite meant for structural reshaping, and every colour, highlight and bold in the table died for an operation that moves no text at all — width lives in the separator line alone, which is now the only line written. Dragging a row's height likewise kept re-writing the padded cell's whole value; the cell write now edits only the differing middle, so the styled text it pads around keeps its tags.
-- **Typing on a centred line keeps it centred.** Tk justifies a line by the tag on its first character, and a typed character lands untagged — so typing at the start of a centred line yanked it left, and the first character in an empty centred line lost the centring outright (deleting the text snapped the cursor back to the middle, because the line's newline remembered the tag all along — the field report's exact riddle). The caret's line now re-dresses itself in its own alignment on every keystroke.
-- **A cell's highlight became cell-deep.** Colour an empty cell, type into it, drag a column — the colour used to die at the commit (logically at once, visibly at the next rebuild). A cell-level highlight now lives across the whole pipe-to-pipe region, so everything later inserted into the cell — typed text, the pad spaces a re-align shuffles, a checkbox — lands inside the tag and inherits it; the commit re-asserts it, and the checkbox palette (whose fill rewrites the block) snapshots and re-dresses every coloured cell.
-- **Duplicating a table works.** Copying cells puts spreadsheet-style tab-separated lines on the clipboard, but pasting them below the table fell through to the plain-text path — raw tabs, stored `<br>` markers showing as text ("nothing happens or `<br> <br>` appears"). Tab-separated clipboard text pasted into the body now becomes a real table — one blank line kept between it and any table above, single cells (no tab) still paste as plain text — and the same shape arriving from a real spreadsheet lands as a grid too.
-- **The cell editor wears its cell.** Editing a highlighted cell showed the highlight only where text lines carried it — the editor's empty area below showed the theme through ("half the cell's colour gone"), and an empty highlighted cell went bare the moment typing started, colour returning only on leaving. The editor now opens on the same blended background the cell draws, full and empty alike.
+*Highlights: a tables hardening wave — export, clipboard, Word, undo, search, styling and scroll
+all learn to treat a table as a table — alongside a Windows CI leg and a mutation audit of the old
+regression checks.*
 
 ### Added
-- **The checklist box matches the calculator, and expands.** The checklist sat noticeably shorter than the calculator beside it; it now opens at the same size (equal to the calculator with its history closed), and an **Expand** bar — the same full-width one the note body and comments boxes use — grows it to the calculator-with-history size when a list runs long. Its size is measured from the calculator at runtime rather than hard-coded, so the two stay equal on any machine (font metrics differ between platforms). The scrollbar stays in both states — the expand is extra reach, not a replacement — and the expanded size resets to compact when you switch notes, since it's a per-view choice rather than saved note content. The redundant in-panel "Close" buttons were dropped from both boxes, since their header bars already toggle them shut.
-- **A system-managed table caption.** Table menu → **Table → Add caption below…**: a centred, auto-numbered label line ("Tab. N: descriere", the placeholder pre-selected so typing replaces it) plus a "Sursa:" line for as many sources or links as needed — ordinary body text after that, editable like anything else. Nobody has to hand-build a caption and fight its alignment again.
-- **The table menu got shelves.** The flat run had grown past fifteen entries ("finding the one you need takes minutes"). The everyday cell actions stay on top; Align cell, Rows, Columns, Merge and Table each hold their own group one hover away.
-- **Autofit for a whole selection.** "Autofit column width(s)" joined the cell-selection menu, sizing every selected column in one pass — it existed only on the single-cell menu before.
-- **Copied cells arrive in Word as a table.** The cell copy now puts an HTML table on the clipboard beside the spreadsheet text, so pasting into Word, mail or any rich editor lands a real table instead of one line of raw tabs.
-- **Export notes as files.** Right-click a note → **Export as file** (or tick several in Select mode and use **Export ▾**): a standalone **HTML** page carrying everything the note has — styles, colours, highlights, the checklist, tables as real tables with multi-line cells as real line breaks, a centred table still centred, and a full-cell highlight on the cell itself — or **plain text**. The page opens in any browser (Ctrl+P → PDF, with highlights kept — the export tells the browser to print backgrounds) and directly in Word (no collapsible outline: the title is a styled line, not a heading). Wide tables wrap inside the page instead of running off it. One file per note in bulk, same-titled notes suffixed “(2)” rather than overwritten; after a save the app offers to open the result — the file itself is the only honest preview. A Markdown export was built, measured against these two, and removed before shipping: everything it could say, the HTML says with the colours on.
+- **The checklist box matches the calculator, and expands.** It now opens at the calculator's size
+  (measured at runtime rather than hard-coded, so the two stay equal on any machine's font
+  metrics), and the same full-width **Expand** bar the note body and comments boxes use grows it to
+  the calculator-with-history size when a list runs long. The scrollbar stays in both states — the
+  expand is extra reach, not a replacement — and the expanded size resets to compact on a note
+  switch, a per-view choice rather than saved note content. The redundant in-panel "Close" buttons
+  were dropped from both boxes, since their header bars already toggle them shut.
+- **A system-managed table caption.** Table menu → **Table → Add caption below…** inserts a
+  centred, auto-numbered label line ("Tab. N: descriere", the placeholder pre-selected so typing
+  replaces it) plus a "Sursa:" line for as many sources or links as needed — ordinary body text
+  after that, editable like anything else. Nobody has to hand-build a caption and fight its
+  alignment again.
+- **The table menu got shelves.** The flat run had grown past fifteen entries ("finding the one you
+  need takes minutes"). The everyday cell actions stay on top; Align cell, Rows, Columns, Merge and
+  Table each hold their own group one hover away.
+- **Autofit for a whole selection.** "Autofit column width(s)" joined the cell-selection menu,
+  sizing every selected column in one pass — it existed only on the single-cell menu before.
+- **Copied cells arrive in Word as a table.** The cell copy now puts an HTML table on the clipboard
+  beside the spreadsheet text, so pasting into Word, mail or any rich editor lands a real table
+  instead of one line of raw tabs.
+- **Export notes as files.** Right-click a note → **Export as file** (or tick several in Select
+  mode and use **Export ▾**) saves a standalone **HTML** page carrying everything the note has —
+  styles, colours, highlights, the checklist, tables as real tables with real line breaks, kept
+  centring and full-cell highlights — or **plain text**; wide tables wrap inside the page instead
+  of running off it. The page opens in any browser (Ctrl+P → PDF, highlights kept — the export
+  tells the browser to print backgrounds) and directly in Word (the title is a styled line, not a
+  heading, so no collapsible outline); bulk export writes one file per note, suffixing same-titled
+  notes "(2)" rather than overwriting, and after a save the app offers to open the result — the
+  file itself is the only honest preview. A Markdown export was built, measured against these two,
+  and removed before shipping: everything it could say, the HTML says with the colours on.
+
+### Fixed
+- **A copied table is no longer an invisible phantom in Word.** A clipboard fragment travels
+  without the stylesheet the file export draws its borders from, so Word painted a bare HTML table
+  with no borders at all — there but invisible, selectable only as "nothing", and inserting it
+  rebuilt one row at a time. Copied cells (and a
+  table copied as body text) now carry their borders as inline styles on every cell, so the table
+  arrives drawn in Word, mail, anywhere; verified end-to-end against real Word via COM — visible
+  single-line borders, the right shape, header bold.
+- **Checkboxes stay centred everywhere.** The app draws every checkbox centred in its cell; the
+  export left it to the cell's alignment, so a box in a left-aligned column sat left in the HTML,
+  the PDF and Word. A checkbox cell now carries `text-align:center` in every exported flavour,
+  matching what the app shows.
+- **Ctrl+Z understands tables.** A cell commit, a resize, a fill or a checkbox drop is a burst of
+  small inserts and deletes, and Tk's undo treated every one as its own step — undoing a cell edit
+  could stop halfway, the old value gone and the padding collapsed (`|  | 2 |` in the audit's
+  probe). Every table operation now forms one undo unit, the grid redraw stays off the undo stack
+  entirely (recorded, every second Ctrl+Z undid the redraw instead of the edit), and undo/redo on
+  the body redraws the tables the restored text describes — one Ctrl+Z takes back one whole
+  operation, drawing included. ([the full story](docs/ISSUES_LOG.md#the-undo-that-stopped-halfway))
+- **A one-column table can no longer be asked for.** `| x |` is indistinguishable from prose
+  containing a pipe, so a one-column insert produced dead pipe lines that never became a grid. The
+  size picker starts at two columns and the insert clamps to two.
+- **The word count counts words, not plumbing.** Every pipe counted as a "word" — an empty 3×3
+  table claimed twelve and inflated the reading estimate. Tables are now counted by what is written
+  in their cells; checkboxes, merge markers, separators and pipes count for nothing.
+- **Search reads tables the way you do.** Searching "---" or "br" matched every note holding a
+  table, because the raw pipe text was the haystack. A body is now searched by its prose and cell
+  contents; the mechanics are invisible to search too.
+- **A hidden column stays hidden in the export.** The exported page used to show the column the app
+  was hiding. What you see is what exports — the data never leaves the note's text, so unhiding
+  brings it back into the next export — and a merge reaching across a hidden column narrows to the
+  columns the page shows.
+- **Checkboxes export as boxes.** `[x]` went out as bracket characters; the file now shows ☑/☐
+  (with the checkbox's colour), and a re-import turns the glyphs back into real checkboxes — the
+  round trip keeps them clickable.
+- **The clipboard copy caught up with the file export.** Copied cells went to Word with a flattened
+  header, literal `<`/`^` merge markers and bracket checkboxes. The copy's HTML now wears `<th>`,
+  real colspan/rowspan cells and the checkbox glyphs, and leaves hidden columns out — while the
+  tab-separated text keeps every column verbatim, so a duplicate inside the app stays faithful and
+  a spreadsheet still gets all the data.
+- **Our own table copy takes its own road home.** The cell copy puts an HTML table on the clipboard
+  for Word's sake — and on Windows the rich-paste route saw that HTML first, so pasting a copied
+  table back into a note bypassed the table route's own fixes on the shipping platform: no
+  remembered widths, no placement, the first row glued onto the caret's line ("`Sursa: | fff |…`"
+  in the field report). A paste whose plain text matches our own cell copy now goes straight to the
+  table route with all its guards; content from other applications keeps the rich route. The qa
+  clipboard stub gained a loopback mode that serves back exactly what the app wrote — the Windows
+  behaviour the suite never exercised, which is how this shipped unseen.
+- **The header row is bold in Word and the browser too.** The app draws the first table row bold on
+  its own; the export flattened it into an ordinary row. Header cells now leave as `<th>` — bolded
+  by every renderer, kept left-aligned like the app's own headers, and re-imported unchanged (the
+  paste path always understood both).
+- **A duplicated centred table pastes back centred.** The table's place on the page now travels
+  with the copied cells, like the widths already did.
+- **Dropping a checkbox no longer flickers the table.** It centred the cell through the full
+  teardown-and-rebuild alignment op; the box now lands with the cell's own alignment, redrawn in
+  place — the same quiet path a toggle uses.
+- **The scroll stays put through cell edits.** Double-clicking into a table (or dropping a checkbox
+  on a coloured cell) could throw the view to the table's start: the after-rebuild view restore ran
+  once, at idle, and fresh grid windows mapping after it left the fraction landing against the
+  wrong heights. For the operations that promise the view stays put (the menu-op family and the
+  editor's commit) the restore now holds in force briefly on short timers — a deliberate wheel,
+  scrollbar or drag-autoscroll move cancels it — while ambient renders (a push-down, an inserted
+  table) deliberately keep the single application, because their content legitimately moves.
+- **Pipe rows pasted mid-line land on their own lines.** Copying half a table plus its caption as
+  body text and pasting it inside a line spliced the first row onto the caret's line
+  ("`|   | [x] |fig2…`"). Table rows only mean something at a line start, so the paste now gives
+  the edge rows the newlines that keep them rows — prose keeps Tk's default paste.
+- **A duplicated table keeps its widths.** Pasting copied cells rebuilt the table at default column
+  widths; the copy now remembers the source columns' set widths and the paste rebuilds the
+  separator from them.
+- **Letters glued onto a styled word wear its styles.** Tk extends a tag over an inserted character
+  only when both neighbours carry it, so typing at the end of a coloured word produced bare
+  letters. A non-space character typed directly after a styled non-space character now inherits its
+  colour, highlight and font styles — type a space first and the styles stay behind, the word
+  boundary the report asked for.
+- **The checkbox palette went surgical.** It filled cells through the wholesale block rewrite,
+  which expelled the caret to the line under the table and scrolled the view after it — an emoji
+  never moved anything, because it goes through surgical paths. The checkbox now writes each cell
+  in place and centres via pad edits; caret, scroll and every untouched line stay exactly where
+  they were.
+- **Resizing a table no longer burns its styles.** Dragging a column edge went through the
+  wholesale block rewrite meant for structural reshaping, and every colour, highlight and bold in
+  the table died for an operation that moves no text at all — width lives in the separator line
+  alone, which is now the only line written. Dragging a row's height likewise kept re-writing the
+  padded cell's whole value; the cell write now edits only the differing middle, so the styled text
+  it pads around keeps its tags.
+  ([the full story](docs/ISSUES_LOG.md#the-accepted-cost-that-nobody-had-accepted))
+- **Typing on a centred line keeps it centred.** Tk justifies a line by the tag on its first
+  character, and a typed character lands untagged — typing at the start of a centred line yanked it
+  left, and the first character in an empty centred line lost the centring outright (deleting the
+  text snapped the cursor back to the middle, because the line's newline remembered the tag all
+  along — the field report's exact riddle). The caret's line now re-dresses itself in its own
+  alignment on every keystroke.
+- **A cell's highlight became cell-deep.** Colour an empty cell, type into it, drag a column — the
+  colour used to die at the commit (logically at once, visibly at the next rebuild). A cell-level
+  highlight now lives across the whole pipe-to-pipe region, so everything later inserted into the
+  cell — typed text, the pad spaces a re-align shuffles, a checkbox — lands inside the tag and
+  inherits it; the commit re-asserts it, and the checkbox palette (whose fill rewrites the block)
+  snapshots and re-dresses every coloured cell.
+- **Duplicating a table works.** Copying cells puts spreadsheet-style tab-separated lines on the
+  clipboard, but pasting them below the table fell through to the plain-text path — raw tabs,
+  stored `<br>` markers showing as text ("nothing happens or `<br> <br>` appears"). Tab-separated
+  clipboard text pasted into the body now becomes a real table — one blank line kept between it and
+  any table above, single cells (no tab) still paste as plain text — and the same shape arriving
+  from a real spreadsheet lands as a grid too.
+- **The cell editor wears its cell.** Editing a highlighted cell showed the highlight only where
+  text lines carried it — the editor's empty area below showed the theme through ("half the cell's
+  colour gone"), and an empty highlighted cell went bare the moment typing started, colour
+  returning only on leaving. The editor now opens on the same blended background the cell draws,
+  full and empty alike.
+
+### Testing
+- **CI's three static gates now run locally, in two seconds.** `tools/pre_push_check.py` bundles
+  them — names resolve, class surface unchanged, every tracked `.py` compiles, tests included —
+  after two pull requests went red learning why this should exist. `qa/README.md` now carries the
+  suite's **seam map** — which files guard which UI surface (the bulk bar's qa1+qa7 split taught
+  this) — plus the house rules for new checks: land with the feature, mutation-tested,
+  platform-aimed, settled not raced.
+- **CI now runs the entire suite on Windows too** — the platform the app actually ships on (real
+  Segoe UI metrics, Windows Tk, no virtual display) — alongside the Linux run that keeps exercising
+  the pure logic and the X11 behaviours that have caught real bugs. One matrix, one set of steps,
+  both verdicts always visible (`fail-fast: false`); the handful of checks that measure
+  Windows-specific pixels now assert in CI instead of only on a developer's machine — a failing
+  check is fixed in the app, never routed around. Found and closed on the way: `test_richtext.py`
+  was never wired into CI at all, and its first flight promptly caught the push-down settling flake
+  fixed alongside it — the new runner earning its keep in its first five minutes.
+- **The old teeth, audited.** Six long-standing regression fixes were sabotaged on purpose (each
+  mutant = the original bug from ISSUES_LOG, reintroduced) to prove their guarding checks can
+  actually fail: four bit immediately, two had gone dull — nothing pinned the startup purge
+  deleting a purged note's attachment files, and nothing pinned the editor's 0.32.x "short content
+  stays at the top" guard. Both have named, deterministic checks now, proven against the same
+  mutants; the autosave-over-a-vanished-note guard additionally gained a named check, so a
+  regression fails with a message instead of hanging the suite in a modal dialog.
+  ([the full story](docs/ISSUES_LOG.md#the-teeth-that-had-gone-dull))
 
 ---
 
 ## [0.58.82] — 2026-08-30
 
+*Highlights: Scroll-position stability for the note list, plus new backup, trash and shortcut settings.*
+
 ### Added
-- **The Backup panel says when the notes last left the computer.** The app is offline by design, so an export is the only copy of the notes outside its own folder — and until now nothing said when that copy was last made. A line under the Export button shows the date and time of the last successful export ("Never exported from this computer." before the first one); a failed export leaves the stamp untouched.
-- **Trash retention is a real setting.** The 30-day window was a hard-coded constant; the Trash panel now opens with a **Keep deleted notes for** selector (7–90 days). The startup purge, the days-left column, and every "restorable for N days" message quote the chosen window. A hand-edited settings file saying `0`, `"forever"`, or anything else unusable reads as the default — a nonsense value must never make startup purge everything.
-- **A keyboard-shortcut reference in Settings.** Thirteen combos were bound and only the formatting four were discoverable (via the right-click menu). Settings → Keyboard shortcuts lists every one of them, grouped and verified against the actual bindings: formatting, clipboard, undo/redo, table navigation, and the calendar keys (which act only while that tab is showing).
+- **The Backup panel says when the notes last left the computer.** The app is offline by design,
+  so an export is the only copy of the notes outside its own folder — and until now nothing said
+  when that copy was last made. A line under the Export button shows the date and time of the
+  last successful export ("Never exported from this computer." before the first one); a failed
+  export leaves the stamp untouched.
+- **Trash retention is a real setting.** The 30-day window was a hard-coded constant; the Trash
+  panel now opens with a **Keep deleted notes for** selector (7–90 days), and the startup purge,
+  the days-left column, and every "restorable for N days" message quote the chosen window. A
+  hand-edited settings file saying `0`, `"forever"`, or anything else unusable reads as the
+  default — a nonsense value must never make startup purge everything.
+- **A keyboard-shortcut reference in Settings.** Thirteen combos were bound and only the
+  formatting four were discoverable (via the right-click menu). Settings → Keyboard shortcuts
+  lists every one of them, grouped and verified against the actual bindings: formatting,
+  clipboard, undo/redo, table navigation, and the calendar keys (which act only while that tab
+  is showing).
 
 ### Changed
-- Deleting a template now says plainly that it is the one delete in the app that skips the Trash — "Templates don't go to the Trash — this can't be undone." — instead of a bare "Delete?" that read like every other, safely undoable delete.
+- **Deleting a template says it skips the Trash.** The confirmation now reads "Templates don't
+  go to the Trash — this can't be undone." instead of a bare "Delete?" that read like every
+  other, safely undoable delete.
 
 ### Fixed
-- **The note list stopped losing its place.** Both long-standing "known bugs to investigate" traced to one root, now measured rather than guessed: a rebuilt list's geometry settles over several event-loop passes (one collapse reported heights 106 → 276 → 820 as separate events), and each intermediate, too-small scroll area re-clamps the canvas — scrolled down during a save or a group expand, the view got yanked upward. And a rebuild that only *shrinks* the list under a deep scroll (collapsing a group from below) fires no such event at all, leaving the canvas parked past the end of the real content — a blank list until the next touch of the scrollbar. The list now carries the same protections the editor page has had since `0.32.x`, hardened for both failure shapes: content that fits pins to the top and an origin above the first card snaps back; a full rebuild (autosave included) remembers its scroll position in pixels and holds that restore *in force* briefly — re-applied whenever a late settling pass tries to re-clamp, and on short timers for the shrink case that announces nothing — so editing a note during a pause no longer teleports the list to the top, expanding a group keeps your place, and collapsing one from below lands at the end of the shorter list instead of blank space. A deliberate wheel or scrollbar move during that brief window wins over the restore, always.
+- **The note list stopped losing its place.** Both long-standing "known bugs to investigate"
+  traced to one root, measured rather than guessed: a rebuilt list's geometry settles over
+  several event-loop passes (one collapse reported heights 106 → 276 → 820), each intermediate,
+  too-small scroll area re-clamping the canvas — while a rebuild that only *shrinks* the list
+  fired no event at all, parking the view past the real content as a blank list. The list now
+  carries the editor page's protections from `0.32.x`, hardened for both shapes: content that
+  fits pins to the top, an origin above the first card snaps back, and a full rebuild (autosave
+  included) remembers its scroll position in pixels and holds that restore *in force* briefly —
+  re-applied when a late settling pass tries to re-clamp, and on short timers for the silent
+  shrink case — so saving and expanding keep your place, and collapsing a group from below lands
+  at the end of the shorter list instead of blank space. A deliberate wheel or scrollbar move
+  during that brief window wins over the restore, always.
+  ([the full story](docs/ISSUES_LOG.md#the-list-that-lost-its-place-twice-for-two-silent-reasons))
 
 ### Testing
-- The "a menu op keeps the body scrolled" check now measures the *settled* body view instead of racing a fixed three pumps against X11's asynchronous window mapping — one CI run caught a mid-reflow 0.172 where the settled state sits at ~0.07, under the 0.1 threshold. Settling never rescues a broken build (verified by mutation: with the restore removed the view stays shifted 0.15+ and the check still fails).
+- **The menu-op scroll check now measures the settled body view.** It used to race a fixed three
+  pumps against X11's asynchronous window mapping — one CI run caught a mid-reflow 0.172 where
+  the settled state sits at ~0.07, under the 0.1 threshold. Settling never rescues a broken
+  build (verified by mutation: with the restore removed the view stays shifted 0.15+ and the
+  check still fails).
 
 ---
 
 ## [0.55.81] — 2026-08-30
 
-### Added
-- The template editor shows its tables AS tables: a live, read-only preview drawn under the body box in the editor's own visual language — bold header on its surface, hairline rules, the separator row's hand-set widths honoured, hidden columns as slivers, merged cells drawn as one spanned cell. Every table and every row is drawn, with scrollbars — vertical and horizontal — once the preview outgrows the dialog in either direction. The body box shows only the note's plain text — its table lines are hidden from display, since the preview is where tables are seen — while still holding the full body underneath, because the text is the store.
+*Highlights: Tables grow up — per-character styling, multi-line cells, real checkboxes,
+draggable rows — while the template editor learns to draw them and the GUI tests become hermetic.*
 
-- The template editor closes on a click elsewhere, like any dropdown — but typed work is never lost silently: if something was changed, a small ask decides whether the change is saved first; an unchanged dialog just closes, no ceremony. Escape goes through the same question.
-- A note that begins with a table has somewhere to type above it now: clicking beside the table and pressing Enter pushes the table down a line and puts the cursor on the fresh first line. Between two adjacent tables the key keeps its old meaning.
-- The same move sits on the table's right-click menu as **Add a line above the table** — for anyone who would never guess the Enter gesture, on any table, not just one being clicked beside.
-- A note's card in the list says what a table cannot show at that size: the preview line skips the table's raw `| pipe |` rows and shows only the note's plain text, and the card's tag row notes **▦ 1 table** (or how many there are) alongside the attachment and comment marks.
-- An empty table cell can be highlighted now — the color rides on the cell's padding, the only style with something to show on nothing, and text typed into the cell later lands inside the colored region and keeps it.
-- **Multi-line table cells.** Enter (or Shift+Enter) inside a cell starts a new line *in the cell* — the whole row grows to fit — instead of dumping the cursor under the table. The break is stored as Markdown's own `<br>`, so a multi-line cell survives share codes, backups, export, and any Markdown-aware tool unchanged; the template preview draws the lines as lines too. Leaving the cell is what it always was elsewhere: Tab, Escape, or a click somewhere else.
-- **Styling inside a cell, character by character.** A drawn cell used to paint itself one style whole — colouring a single letter or emoji coloured everything. Cells now draw their text as runs, each with its own bold, italics, and colour, so one green checkmark next to plain text shows exactly as itself. With a cell open, the toolbar styles just the selection inside it; with cells merely selected, it still styles them whole.
-- **The open cell shows its colours.** Editing a coloured cell used to show plain black text until the edit was committed. The floating editor is a real rich-text box now: it opens wearing the cell's colours, bold and highlights, keeps them while typing, and hands them back on commit.
-- **Typing continues the style it lands beside.** In a table cell, adding to a blue word used to come out plain — Tk only carries a style onto a typed character when both its neighbours wear it — and retyping over the select-all a click opens with wiped a coloured cell to plain ink entirely. Typed characters now dress themselves in the style of what they land beside (or of what they replace), so a coloured cell stays coloured through ordinary editing.
-- **An active colour you can see.** Picking a colour with nothing selected makes it the active one: the toolbar button wears it as a swatch — the same in a table cell as in the note body — and everything typed next comes out in that colour, until it is switched or clicked off. The body half of this existed; a cell used to swallow the choice as an instant whole-cell repaint, so the swatch never showed and typing stayed plain.
-- **Rows drag taller and shorter.** The rule between two rows drags up and down the way the one between columns always dragged sideways — the whole row resizes together, stored as empty in-cell lines so nothing about the table's format changes, and a drag can never cut into text a cell actually holds. Pressing Enter in a cell also grows the row on screen immediately, so the floating editor no longer hangs over (and hides) the row below while you type. Ctrl+A selects the whole cell; fast typing can no longer outrun the colour it should be wearing — every character gets dressed the moment it lands, however quickly the next one follows.
-- **A light/dark switch in the editor.** The end of the formatting toolbar carries a small ☀ / 🌙 button: one press flips between the last light and last dark theme without leaving the note. The full theme picker stays in Settings.
-- **Checkboxes in cells are real checkboxes now.** The checkmark was a text character, which meant you could type next to it, delete it by accident, and never simply *click* it. A cell now holds an actual little box: click ticks it, click again unticks it (a fast second click counts too), the palette colours it, dragging selects its cell whole for highlighting, and the text editor never opens on it by accident. Underneath it is stored as Markdown's own task syntax — `[ ]` and `[x]` — so export, share codes and any Markdown tool read it natively; right-click → Edit cell as text turns it back into an ordinary cell.
-- **Rows copy to the bottom, and drag-selection follows the pointer.** "Copy columns to the end" gained its vertical twin: select whole rows and copy them again to the table's bottom, text and all. And drag-selecting now auto-scrolls: hold the drag at the grid's edge and it pans sideways, hold it past the note's bottom (or top) and the note scrolls — fluidly, with the pointer — so a selection can reach every column of a wide table and every row of a tall one, which simply could not be done before.
-- A single table cell can be selected at last: a firm drag that stays inside one cell selects that cell whole (selection used to begin only when the drag reached a neighbour, so grabbing one cell always grabbed two). A short click still opens the cell for editing.
+### Added
+- **The template editor shows its tables AS tables.** A live, read-only preview under the body box
+  draws every table and every row in the editor's own visual language — bold header, hairline
+  rules, the separator row's hand-set widths honoured, hidden columns as slivers, merged cells
+  drawn as one spanned cell — with scrollbars both ways once it outgrows the dialog. The body box
+  shows only the note's plain text, its table lines hidden from display, while still holding the
+  full body underneath, because the text is the store.
+- **The template editor closes on a click elsewhere, like any dropdown.** Typed work is never lost
+  silently: if something was changed, a small ask decides whether the change is saved first; an
+  unchanged dialog just closes, no ceremony. Escape goes through the same question.
+- **A note that begins with a table has somewhere to type above it now.** Clicking beside the
+  table and pressing Enter pushes the table down a line and puts the cursor on the fresh first
+  line. Between two adjacent tables the key keeps its old meaning.
+- **"Add a line above the table" on the table's right-click menu.** The same move as the Enter
+  gesture, for anyone who would never guess it — on any table, not just one being clicked beside.
+- **A note's card says what a table cannot show at that size.** The preview line skips the table's
+  raw `| pipe |` rows and shows only the note's plain text, and the card's tag row notes
+  **▦ 1 table** (or how many there are) alongside the attachment and comment marks.
+- **An empty table cell can be highlighted now.** The color rides on the cell's padding — the only
+  style with something to show on nothing — and text typed into the cell later lands inside the
+  colored region and keeps it.
+- **Multi-line table cells.** Enter (or Shift+Enter) inside a cell starts a new line *in the
+  cell* — the whole row grows to fit — instead of dumping the cursor under the table. The break is
+  stored as Markdown's own `<br>`, so a multi-line cell survives share codes, backups, export, and
+  any Markdown-aware tool unchanged; the template preview draws the lines as lines too. Leaving
+  the cell is what it always was elsewhere: Tab, Escape, or a click somewhere else.
+- **Styling inside a cell, character by character.** A drawn cell used to paint itself one style
+  whole — colouring a single letter or emoji coloured everything. Cells now draw their text as
+  runs, each with its own bold, italics, and colour, so one green checkmark next to plain text
+  shows exactly as itself. With a cell open, the toolbar styles just the selection inside it; with
+  cells merely selected, it still styles them whole.
+- **The open cell shows its colours.** Editing a coloured cell used to show plain black text until
+  the edit was committed. The floating editor is a real rich-text box now: it opens wearing the
+  cell's colours, bold and highlights, keeps them while typing, and hands them back on commit.
+- **Typing continues the style it lands beside.** Adding to a blue word in a cell used to come out
+  plain — Tk only carries a style onto a typed character when both its neighbours wear it — and
+  retyping over the select-all a click opens with wiped a coloured cell to plain ink. Typed
+  characters now dress themselves in the style of what they land beside (or of what they replace),
+  so a coloured cell stays coloured through ordinary editing.
+- **An active colour you can see.** Picking a colour with nothing selected makes it the active
+  one: the toolbar button wears it as a swatch — the same in a table cell as in the note body —
+  and everything typed next comes out in that colour until it is switched or clicked off. The body
+  half of this existed; a cell used to swallow the choice as an instant whole-cell repaint, so the
+  swatch never showed and typing stayed plain.
+- **Rows drag taller and shorter.** The rule between two rows drags up and down the way the one
+  between columns always dragged sideways — the whole row resizes together, stored as empty
+  in-cell lines so nothing about the table's format changes, and a drag can never cut into text a
+  cell actually holds. Pressing Enter in a cell also grows the row on screen immediately, so the
+  floating editor no longer hides the row below while you type. Ctrl+A selects the whole cell, and
+  fast typing can no longer outrun the colour it should be wearing — every character gets dressed
+  the moment it lands.
+- **A light/dark switch in the editor.** The end of the formatting toolbar carries a small ☀ / 🌙
+  button: one press flips between the last light and last dark theme without leaving the note. The
+  full theme picker stays in Settings.
+- **Checkboxes in cells are real checkboxes now.** The checkmark was a text character — you could
+  type next to it, delete it by accident, and never simply *click* it. A cell now holds an actual
+  little box: click ticks it, click again unticks it (a fast second click counts too), the palette
+  colours it, dragging selects its cell whole for highlighting, and the text editor never opens on
+  it by accident. It is stored as Markdown's own task syntax — `[ ]` and `[x]` — so export, share
+  codes, and any Markdown tool read it natively; right-click → Edit cell as text turns it back
+  into an ordinary cell.
+- **Rows copy to the bottom, and drag-selection follows the pointer.** "Copy columns to the end"
+  gained its vertical twin: select whole rows and copy them again to the table's bottom, text and
+  all. Drag-selecting now auto-scrolls — hold the drag at the grid's edge and it pans sideways,
+  hold it past the note's bottom (or top) and the note scrolls, fluidly, with the pointer — so a
+  selection can reach every column of a wide table and every row of a tall one, which simply could
+  not be done before.
+- **A single table cell can be selected at last.** A firm drag that stays inside one cell selects
+  that cell whole — selection used to begin only when the drag reached a neighbour, so grabbing
+  one cell always grabbed two. A short click still opens the cell for editing.
+
 ### Fixed
-- A themed question could render UNDER a -topmost popup — the save-changes ask appeared behind the very dialog it was asking about, unreachable. Popups now step back for a dialog's duration and return after; the same fix surfaces the "Name needed" warning.
-- The template body showed gaps where its hidden tables lived: the blank lines that separate table blocks in the stored text stayed visible. Blank lines glued to a hidden table now hide with it, and the remaining text reads compactly; a blank line between two runs of text is left alone.
-- Editing a template through the Settings dialog silently wiped the formatting and paragraph data a template saved from the editor carries — the dialog cannot edit those, but it must not lose them either.
-- The template dialog's "Name needed" guard was unreachable: an empty name was defaulted to "Untitled template" before the check ran, so empty saves slipped through silently — the junk rows named exactly that were its proof. The guard now checks the raw field.
-- Pasting a table from Excel, Word or a web page into the template editor's body box dropped the structure and kept only the words — the box is a plain text field with the system's plain paste. When the clipboard's HTML holds a table, the same converter the main editor trusts now turns it into the note's own table text, from any source that carries real structure (a PDF does not, by decision).
-- A popup opened on one page — a Settings dropdown, say — kept floating over the next page after switching: entering Settings, Back to Notes, and Notes/Calendar tab changes now dismiss whatever popup the previous page left open.
-- The app's popups — dropdowns, pickers, palettes, the template dialog — floated over OTHER programs: they are deliberately kept on top so the app's own focus changes cannot bury them, and that flag does not distinguish between the app's windows and someone else's. They now HIDE while another program holds the front and come back with the app — never destroyed, because a half-typed template dialog must survive a trip to the browser and back; that round trip is exactly what it is for. The decision asks Windows directly which window is in front, on a light heartbeat: a popup that holds the keyboard focus receives no deactivation event at all, so events alone missed exactly the case where the user had typed into a dialog before switching away.
-- A template holding a table applied as raw pipe rows instead of a drawn grid — the template path filled the editor and never rendered, while the import path already did. Found by the new automated check that carries a table through a template, written the same day.
-- Scrolling a note with the mouse wheel leapt from one table to the next instead of gliding: a drawn table is one text line as tall as the whole grid, and the wheel scrolled in lines. It scrolls in pixels now, over tables and text alike. The first version of this fix turned out to be dead code for real mouse wheels — it sat on a direct binding that a later line silently replaced (Tk's `bind()` without `add` overwrites), while the automated checks, calling the handler directly, stayed green. Field testing caught it; the pixel scrolling now lives in the one real wheel handler, and the checks drive genuine wheel events through the binding chain so an overwrite like this can never pass again.
-- Pasting a long text left the view behind: the freshly pasted end sat below the fold and the scrollbar read as having jumped away. After a paste — plain, formatted, or via Ctrl+Shift+V — the note now scrolls to where the pasted text ends, the way every editor does.
-- Quitting the app popped an "Unsaved notes" question — odd for an app that autosaves everything. The question could only ever cover the last half-second of typing, so the app now trusts its own autosave: closing saves whatever is still pending, silently, exactly like switching notes always has. Along the way a real gap closed: a brand-new note holding only comments never autosaved at all.
-- The highlight color pickers disagreed with each other: the table's right-click palette showed flat full-width swatches parted by one-pixel hairlines in the theme's own color, while the toolbar button and the text right-click menu still opened an older grid of small squares. The hairline column is now the one highlight palette everywhere, built from a single shared piece so the looks cannot drift apart again.
-- A highlight applied to normal text painted the palette color at full strength and buried the words under it, while the same color on a table cell showed as a soft translucent wash. The text ink now uses the cells' own recipe — the swatch color blended toward the page surface — and re-blends itself when the theme changes; the stored data still carries the pure color, so nothing about saving, sharing, or export moves.
-- Editing a template that holds a table could destroy the very thing the dialog was protecting: a click in a table-only body (which looks empty) landed the cursor inside the hidden table text, and typing there glued letters onto an invisible pipe row — the row stopped being a table row, the preview broke, and the block's leftovers surfaced in the box as bare pipe lines. Backspace and Delete at the edge of the hidden text quietly ate it the same way, and — separately — the preview refresh yanked the cursor to the end after every keystroke, scattering mid-text edits to the tail. The cursor is now herded to visible text before a character can land, deletions refuse to touch the hidden table, the hide-tag no longer swallows the text's final newline (typing at the end used to inherit invisibility from it), the cursor stays where the user is typing, and a preview drawing failure is contained instead of leaving a half-updated dialog.
-- An Enter that pushes a leading table down no longer disturbs a mid-note scroll: measurement showed a view-restore against the fresh grid's estimated heights yanked the view several lines up, while doing nothing extra keeps the reader exactly where they were — so the code now deliberately does nothing extra, and a check pins that.
-- A green "Note updated" greeted every launch of the app, with nothing edited — and it was not just cosmetic. Saving read formatting positions back in UTF-16 units (an emoji counts as two) while applying them counted characters (an emoji counts as one), so any formatted note holding an emoji read as "changed" the moment it loaded: the startup autosave rewrote it, and the stored span crept one character further from its text on every single launch — silent, cumulative data damage dressed up as a friendly toast. The same phantom difference is what made quitting ask about "unsaved notes" that nothing had touched. Extraction now counts the exact same characters the saved note stores; opening the app touches nothing, says nothing, and the toast still appears when a real edit is saved — all of it pinned by checks that a deliberate re-break of either half makes fail.
-- Centering (or right/left-aligning) a table cell threw away the bold, color, and highlight the user had just applied to it: alignment went through the wholesale block rewrite, whose accepted cost is dropping character styles -- a fair price for reshaping columns, and entirely the wrong tool for what is really a padding change. Alignment now edits only the spaces, through the same surgical operations the column aligner already used precisely because Tk keeps a tag attached to the text around it -- so the formatting stays put, in the aligned cell and its neighbours alike.
-- Saving a template under a name that already exists silently overwrote the old one — different content, same name, gone without a word. Both roads now ask first: "You already have a template named X. Replace the old template with this one?" — No keeps both and leaves the name box open for a different name. The Settings dialog had the same hole from the other side: renaming a template onto a neighbour's name quietly produced two templates with one name; it asks the same question now.
-- Colouring plain text could silently stop working after any visit to a table: a cell selection left over from an earlier drag kept catching the toolbar's colour, so the body selection got nothing and no pending colour was ever set. Clicking into the note body now releases the table's cell selection, the way any spreadsheet lets go when you click elsewhere.
-- The intermittent "something went wrong" while flipping themes from Settings is fixed: a theme switch rebuilds the settings widgets, and a click that still named a destroyed widget reached the focus-clearing handler as a bare string, which crashed it. The handler now checks it was handed a real widget.
+- **The save-changes question no longer hides behind the popup it is about.** A themed ask could
+  render under a `-topmost` popup, unreachable. Popups now step back for a dialog's duration and
+  return after; the same fix surfaces the "Name needed" warning.
+- **The template body no longer shows gaps where its hidden tables live.** Blank lines glued to a
+  hidden table now hide with it, so the remaining text reads compactly; a blank line between two
+  runs of text is left alone.
+- **Editing a template through Settings no longer wipes its formatting.** The dialog cannot edit
+  the formatting and paragraph data a template saved from the editor carries — but it no longer
+  loses them either.
+- **Empty template names are caught again.** The "Name needed" guard was unreachable — an empty
+  name was defaulted to "Untitled template" before the check ran, so empty saves slipped through
+  silently; the junk rows named exactly that were its proof. The guard now checks the raw field.
+- **Tables paste as tables into the template editor.** Pasting from Excel, Word, or a web page
+  used to drop the structure and keep only the words — the body box is a plain text field with the
+  system's plain paste. When the clipboard's HTML holds a table, the same converter the main
+  editor trusts now turns it into the note's own table text, from any source that carries real
+  structure (a PDF does not, by decision).
+- **Popups no longer follow you to the next page.** A popup opened on one page — a Settings
+  dropdown, say — kept floating over the next page after switching. Entering Settings, Back to
+  Notes, and Notes/Calendar tab changes now dismiss whatever popup the previous page left open.
+- **The app's popups no longer float over OTHER programs.** They are deliberately kept on top so
+  the app's own focus changes cannot bury them, and that flag cannot tell the app's windows from
+  someone else's. They now hide while another program holds the front and come back with the
+  app — never destroyed, because a half-typed template dialog must survive a trip to the browser
+  and back; that round trip is exactly what it is for. The decision asks Windows directly which
+  window is in front, on a light heartbeat: a popup holding keyboard focus receives no
+  deactivation event at all, so events alone missed exactly the case where the user had typed into
+  a dialog before switching away.
+- **A template holding a table applies as a drawn grid now, not raw pipe rows.** The template path
+  filled the editor and never rendered, while the import path already did. Found by the new
+  automated check that carries a table through a template, written the same day.
+- **The mouse wheel glides over tables instead of leaping.** A drawn table is one text line as
+  tall as the whole grid, and the wheel scrolled in lines; it scrolls in pixels now, over tables
+  and text alike. The first version of this fix was dead code for real mouse wheels — it sat on a
+  direct binding a later line silently replaced (Tk's `bind()` without `add` overwrites) while the
+  automated checks, calling the handler directly, stayed green; field testing caught it. The pixel
+  scrolling now lives in the one real wheel handler, and the checks drive genuine wheel events
+  through the binding chain so an overwrite like this can never pass again.
+  ([the full story](docs/ISSUES_LOG.md#the-fix-that-was-dead-on-arrival))
+- **Pasting a long text no longer leaves the view behind.** The freshly pasted end sat below the
+  fold and the scrollbar read as having jumped away. After a paste — plain, formatted, or via
+  Ctrl+Shift+V — the note now scrolls to where the pasted text ends, the way every editor does.
+- **Quitting no longer asks about "unsaved notes" in an app that autosaves everything.** The
+  question could only ever cover the last half-second of typing, so closing now saves whatever is
+  still pending, silently, exactly like switching notes always has. Along the way a real gap
+  closed: a brand-new note holding only comments never autosaved at all.
+- **One highlight palette everywhere.** The table's right-click palette showed flat full-width
+  swatches parted by one-pixel hairlines in the theme's own color, while the toolbar button and
+  the text right-click menu opened an older grid of small squares. The hairline column is now the
+  one highlight palette, built from a single shared piece so the looks cannot drift apart again.
+- **A highlight on normal text no longer buries the words under it.** Plain text painted the
+  palette color at full strength while the same color on a table cell showed as a soft translucent
+  wash. The text ink now uses the cells' own recipe — the swatch color blended toward the page
+  surface, re-blended when the theme changes — while the stored data still carries the pure color,
+  so nothing about saving, sharing, or export moves.
+- **Typing in a table-only template body can no longer destroy the table.** A click in a body that
+  looks empty landed the cursor inside the hidden table text: typing glued letters onto an
+  invisible pipe row — the row stopped being a table row, the preview broke, and the block's
+  leftovers surfaced as bare pipe lines — while Backspace and Delete at the hidden text's edge
+  quietly ate it, and the preview refresh yanked the cursor to the end after every keystroke. The
+  cursor is now herded to visible text before a character can land, deletions refuse to touch the
+  hidden table, the hide-tag no longer swallows the text's final newline (typing at the end used
+  to inherit invisibility from it), the cursor stays where the user is typing, and a preview
+  drawing failure is contained instead of leaving a half-updated dialog.
+- **An Enter that pushes a leading table down no longer disturbs a mid-note scroll.** Measurement
+  showed a view-restore against the fresh grid's estimated heights yanked the view several lines
+  up, while doing nothing extra keeps the reader exactly where they were — so the code now
+  deliberately does nothing extra, and a check pins that.
+- **No more phantom "Note updated" on every launch — and it was not just cosmetic.** Saving read
+  formatting positions back in UTF-16 units (an emoji counts as two) while applying them counted
+  characters (an emoji counts as one), so any formatted note holding an emoji read as "changed"
+  the moment it loaded: the startup autosave rewrote it, and the stored span crept one character
+  further from its text on every single launch — silent, cumulative data damage dressed up as a
+  friendly toast, and the same phantom difference made quitting ask about "unsaved notes" nothing
+  had touched. Extraction now counts the exact same characters the saved note stores; opening the
+  app touches nothing and says nothing, all pinned by checks that a deliberate re-break of either
+  half makes fail. ([the full story](docs/ISSUES_LOG.md#the-version-that-updated-itself))
+- **Aligning a table cell no longer throws away its styling.** Centering or right/left-aligning
+  went through the wholesale block rewrite, whose accepted cost is dropping character styles — a
+  fair price for reshaping columns, and entirely the wrong tool for what is really a padding
+  change. Alignment now edits only the spaces, through the same surgical operations the column
+  aligner already used precisely because Tk keeps a tag attached to the text around it — so bold,
+  color, and highlight stay put, in the aligned cell and its neighbours alike.
+- **Saving a template under an existing name asks before replacing.** Both roads used to silently
+  overwrite the old template — different content, same name, gone without a word. They now ask
+  "You already have a template named X. Replace the old template with this one?" — No keeps both
+  and leaves the name box open for a different name. The Settings dialog had the same hole from
+  the other side: renaming a template onto a neighbour's name quietly produced two templates with
+  one name; it asks the same question now.
+- **Colouring plain text works again after any visit to a table.** A cell selection left over from
+  an earlier drag kept catching the toolbar's colour, so the body selection got nothing and no
+  pending colour was ever set. Clicking into the note body now releases the table's cell
+  selection, the way any spreadsheet lets go when you click elsewhere.
+- **The intermittent "something went wrong" while flipping themes from Settings is fixed.** A
+  theme switch rebuilds the settings widgets, and a click that still named a destroyed widget
+  reached the focus-clearing handler as a bare string, which crashed it. The handler now checks it
+  was handed a real widget.
+
 ### Testing
-- The automated GUI tests turned out not to be running in a world of their own: each starts beside an empty data folder, and the app's own first-run migration then helpfully adopted the REAL notebook from `%APPDATA%` — so the owner's actual notes leaked into every scenario, and checks began passing or failing depending on what she had done in the app that day. Every qa script now seeds an empty notebook and the migration marker before the app is even imported, making runs hermetic; run beside a folder holding real notes, the script refuses to start at all rather than seed over them. Two latent test bugs surfaced the moment the world went hermetic — a check that grabbed "the first Entry on the page" (a different widget on a fresh install) and one that replaced the app's username variable with its own copy, detaching it from the field it meant to type into — both fixed. This contamination is also the strongest suspect yet for the suite's rare unexplained flake.
+- **The GUI tests now run in a world of their own.** Each starts beside an empty data folder, and
+  the app's own first-run migration then helpfully adopted the REAL notebook from `%APPDATA%` —
+  the owner's actual notes leaked into every scenario, and checks passed or failed depending on
+  what she had done in the app that day. Every qa script now seeds an empty notebook and the
+  migration marker before the app is even imported, making runs hermetic; run beside a folder
+  holding real notes, the script refuses to start at all rather than seed over them. Going
+  hermetic surfaced two latent test bugs — a check that grabbed "the first Entry on the page" (a
+  different widget on a fresh install) and one that replaced the app's username variable with its
+  own copy, detached from the field it meant to type into — both fixed; this contamination is also
+  the strongest suspect yet for the suite's rare unexplained flake.
+  ([the full story](docs/ISSUES_LOG.md#the-tests-that-borrowed-the-notebook))
 
 ---
 
-
 ## [0.39.64] — 2026-08-28
 
+*Highlights: One fix — the app now calls itself Note Organizer everywhere, matching its docs.*
+
 ### Fixed
-- The app could not agree on its own name: the window title, the crash dialog, the setup-complete message, and the share-code and backup error texts all said "Notes Organizer", while the README, the User Guide and every other document say "Note Organizer". A reviewer comparing a screenshot against the docs saw the mismatch immediately. It is **Note Organizer** everywhere now.
+- **The app agrees on its own name.** The window title, the crash dialog, the setup-complete
+  message, and the share-code and backup error texts all said "Notes Organizer", while the
+  README, the User Guide and every other document say "Note Organizer" — a mismatch a reviewer
+  comparing a screenshot against the docs saw immediately. It is **Note Organizer** everywhere
+  now.
 
 ---
 
 ## [0.39.63] — 2026-08-28
 
-### Added
-- **Tables.** A note can hold spreadsheet-style tables: drawn as a real grid with cell borders and a bold header row, edited through one floating entry box that appears over whichever cell is clicked (cells are drawings, not widgets — which is what lets a large table scroll without stutter). Tab moves between cells and adds a row at the last one; drag selects a block; Ctrl+C/Ctrl+V copy and paste blocks of cells in their true shape, in and out of the app — a table pasted from Excel, Word or a web page becomes a grid, cells copied from a web table land side by side the way they were on the page, and cells copied out arrive in Excel as cells. Cells merge (their texts join) and split; rows and columns insert, delete, and duplicate to the table's end with their content; Delete clears a selection. Columns resize by dragging the rule between them (double-click autofits; narrowing below the content only shortens the drawing, with an `…` — the text is never cut), and a column selected top-to-bottom can be hidden to a sliver and brought back. The formatting toolbar works inside tables — bold, italic, colors, and a highlight palette parted by theme-colored hairlines — and the alignment buttons align cell text, while the table itself can sit left, centred or right on the page from its right-click menu. Underneath it all, a table is stored as plain readable text in Markdown's own table syntax (the `|---|:---:|` separator row carries each column's width, alignment and hiding), so search finds words in cells, share codes, backups and export carry tables unchanged, and a table travels both ways between this app and any Markdown-aware tool.
+*Highlights: Tables arrive as Markdown-backed grids, with cross-feature checks guarding the seams.*
 
-### Fixed
-- Share codes never carried the paragraph data, so a shared note arrived flush left with its list indentation and line alignment flattened — silently, ever since paragraph formatting shipped. The field travels now (a table's place on the page rides along with it), and codes made before the change still decode.
-- A change that touched only formatting tags — realigning a line without editing its text — never triggered the autosave, because the dirty comparison checked the title, body, character formatting and everything else, but not the paragraphs. Leaving the note quietly lost the change unless Save was pressed by hand.
-- The two editor-height toggles were the interface's last two Romanian strings — and the User Guide already called them **Expand** and **Collapse**, so the app and its own manual disagreed. They match now.
-- Renumbering a list applied its formatting shifts one at a time, comparing each shift's position against text it had already moved — so a later shift could count as "before" a span it had itself pushed past. In a list it happened never to show; the shared helper was corrected once, for every caller.
+### Added
+- **Tables.** A note can hold spreadsheet-style tables: drawn as a real grid with cell borders
+  and a bold header row, edited through one floating entry box over whichever cell is clicked
+  (cells are drawings, not widgets — which is what lets a large table scroll without stutter).
+  Tab moves between cells and adds a row at the last one; drag selects a block; Delete clears a
+  selection; Ctrl+C/Ctrl+V copy and paste blocks of cells in their true shape, in and out of the
+  app — a table pasted from Excel, Word or a web page becomes a grid, cells copied from a web
+  table land side by side the way they were on the page, and cells copied out arrive in Excel as
+  cells. Cells merge (their texts join) and split; rows and columns insert, delete, and
+  duplicate to the table's end with their content. Columns resize by dragging the rule between
+  them (double-click autofits; narrowing below the content only shortens the drawing, with an
+  `…` — the text is never cut), and a column selected top-to-bottom can be hidden to a sliver
+  and brought back. The formatting toolbar works inside tables — bold, italic, colors, and a
+  highlight palette parted by theme-colored hairlines — the alignment buttons align cell text,
+  and the table itself can sit left, centred or right on the page from its right-click menu.
+  Underneath it all, a table is stored as plain readable text in Markdown's own table syntax
+  (the `|---|:---:|` separator row carries each column's width, alignment and hiding), so search
+  finds words in cells, share codes, backups and export carry tables unchanged, and a table
+  travels both ways between this app and any Markdown-aware tool.
 
 ### Changed
-- The table engine lives in `noteorganizer/core/tables.py` — pure text-in, text-out functions with no tkinter import, following the same core/UI split as the rest of the package. Emoji survive the whole path: Tk widgets count text in UTF-16 units while Python counts characters, and every surgical edit now converts between the two; a malformed half-of-an-emoji can no longer take down a save.
+- **The table engine is pure core code.** It lives in `noteorganizer/core/tables.py` — text-in,
+  text-out functions with no tkinter import, the same core/UI split as the rest of the package.
+  Emoji survive the whole path: Tk widgets count text in UTF-16 units while Python counts
+  characters, and every surgical edit now converts between the two — a malformed
+  half-of-an-emoji can no longer take down a save.
+  ([the full story](docs/ISSUES_LOG.md#the-emoji-that-multiplied-into-squares))
+
+### Fixed
+- **Shared notes keep their paragraph formatting.** Share codes never carried the paragraph
+  data, so a shared note arrived flush left, its list indentation and line alignment flattened —
+  silently, ever since paragraph formatting shipped. The field travels now (a table's place on
+  the page rides along with it), and codes made before the change still decode.
+- **A formatting-only change autosaves now.** Realigning a line without editing its text never
+  triggered the autosave — the dirty comparison checked the title, body, character formatting
+  and everything else, but not the paragraphs — so leaving the note quietly lost the change
+  unless Save was pressed by hand.
+  ([the full story](docs/ISSUES_LOG.md#the-centring-that-would-not-save-itself))
+- **The interface's last two Romanian strings are gone.** The two editor-height toggles now say
+  **Expand** and **Collapse** — what the User Guide already called them, so the app and its own
+  manual agree again.
+- **List renumbering can no longer misplace formatting.** It applied its formatting shifts one
+  at a time, comparing each shift's position against text it had already moved — so a later
+  shift could count as "before" a span it had itself pushed past. In a list it happened never to
+  show; the shared helper was corrected once, for every caller.
 
 ### Testing
-- A standing cross-feature rule (written into the project's working instructions): a change is done when the *older* features still work with it, with a qa check on every risky seam. The first audit under the rule found and fixed two holes — a theme switched mid-typing destroyed the cell editor under the keystrokes, and the share-code gap above.
-- `test_data_safety.py` now refuses to run beside a `notes_data.json` that holds real notes — it deletes and rewrites that file as part of testing the backup layer, and run from the project root it once destroyed the real notebook (recovered from the app's own automatic backup). The QA-safety rule covers every test file, with no per-file judgment calls.
-- The table work landed with its checks throughout: over eighty new qa1 assertions and a dozen unit tests, each round mutation-tested — every new check was made to fail by deliberately re-breaking the code it guards, and checks that could not fail were sharpened or removed.
+- **A standing cross-feature rule, written into the project's working instructions.** A change
+  is done when the *older* features still work with it, with a qa check on every risky seam. The
+  first audit under the rule found and fixed two holes — a theme switched mid-typing destroyed
+  the cell editor under the keystrokes, and the share-code gap above.
+- **The data-safety test refuses to run beside real notes.** `test_data_safety.py` deletes and
+  rewrites `notes_data.json` as part of testing the backup layer, and run from the project root
+  it once destroyed the real notebook (recovered from the app's own automatic backup). It now
+  refuses to start beside a `notes_data.json` that holds real notes; the QA-safety rule covers
+  every test file, with no per-file judgment calls.
+  ([the full story](docs/ISSUES_LOG.md#the-safety-test-that-needed-its-own-safety))
+- **The table work landed with its checks throughout.** Over eighty new qa1 assertions and a
+  dozen unit tests, each round mutation-tested — every new check was made to fail by
+  deliberately re-breaking the code it guards, and checks that could not fail were sharpened or
+  removed.
 
 ---
 
 ## [0.38.59] — 2026-08-26
 
+*Highlights: The editor's text boxes get their width back, and PDF paste builds real paragraphs.*
+
 ### Fixed
-- Both text boxes in the editor were stuck at eighty characters wide, however wide the window. The body measured 752px inside a 1027px frame, comments 672px — text wrapped halfway across the box and deleting a character did not reflow it, because the box really was that narrow. The Expand toggle was calling `pack_configure(expand=False)` on the box it was given; both are packed with `side="left"`, where expand hands out horizontal space rather than vertical, so it never affected the height it was meant to control and only ever cost width. The height is governed by the frame around the box, which sizes itself to what the box asks for, so removing the line costs nothing. The body inherited this in `0.38.56`; the comments box had it for far longer.
-- Text pasted from a PDF arrived as the PDF's own lines rather than as paragraphs. A PDF has no paragraphs — it has lines placed on a page, and copying from one hands those breaks over as though they were meant. Keeping them gave narrow ragged text a third of the way across the note; **Ctrl+V** dropped them all instead and gave one run-on block, because HTML treats a newline in text as whitespace. That is right for a web page, whose markup is laid out for a human to read, and wrong for a fragment carrying no block tag at all, which is what a PDF viewer offers. Those breaks are now kept, and both paste paths rejoin the lines a column broke: each break is judged by whether the next line's first word would have fitted, by whether the line ends in any sentence punctuation at all — a paragraph almost never stops mid-sentence — and by indentation where the document offers it. A line falling well short of the column ends a paragraph whatever it looks like, which is how a heading keeps its own line. Lists, addresses, poems and anything under three lines are left exactly as they came: a break someone meant is worse to lose than a break left in.
-- Turning a selection into a numbered list numbered the blank lines between its items too, so it read 1, 3, 5 with the even numbers sitting on nothing. An empty line is not an item and is now skipped. A single blank line no longer ends a numbered run either, so a list written with space between its items numbers 1, 2, 3 rather than 1, 1, 1; two blank lines still end it, which is how a genuinely new list is told apart from a spaced-out one.
+- **Both editor text boxes now use the window's full width.** They were stuck at eighty
+  characters — the body measured 752px inside a 1027px frame, the comments box 672px — because
+  the Expand toggle's `pack_configure(expand=False)` on a `side="left"` box gives away
+  horizontal space rather than the height it was meant to control. The height comes from the
+  frame around the box, so removing the line costs nothing; the body inherited the bug in
+  `0.38.56`, the comments box had it far longer.
+  ([the full story](docs/ISSUES_LOG.md#the-text-box-that-was-always-eighty-characters-wide))
+- **Pasting from a PDF now produces real paragraphs.** A PDF has lines placed on a page, not
+  paragraphs, so pasted text arrived either narrow and ragged (breaks kept) or as one run-on
+  block (Ctrl+V dropped every break, since HTML treats a newline as whitespace). Both paste
+  paths now rejoin the lines a column broke — judging each break by whether the next line's
+  first word would have fitted, by sentence punctuation, and by indentation where the document
+  offers it — while a line falling well short of the column still ends a paragraph, which is
+  how a heading keeps its own line. Lists, addresses, poems and anything under three lines are
+  left exactly as they came: a break someone meant is worse to lose than a break left in.
+  ([the full story](docs/ISSUES_LOG.md#the-paragraphs-a-pdf-does-not-have))
+- **Numbered lists skip the blank lines between items.** Numbering a spaced-out selection used
+  to count the empty lines too, reading 1, 3, 5 — and a single blank line ended the run, so it
+  could also read 1, 1, 1. Blank lines are no longer numbered and no longer end the run; two
+  blank lines still do, which is how a genuinely new list is told apart from a spaced-out one.
 
 ### Testing
-- The rejoining is checked by property rather than by result: at eight column widths, indented and not, no word is ever lost or altered and no paragraph is ever split in two. Merging two paragraphs is possible and is asserted as a known limit rather than hidden — without indentation, a paragraph whose last line lands nearly full cannot be told from a line the column broke.
+- **The PDF rejoining is checked by property, not by result.** At eight column widths, indented
+  and not, no word is ever lost or altered and no paragraph is ever split in two. Merging two
+  paragraphs remains possible and is asserted as a known limit rather than hidden: without
+  indentation, a paragraph whose last line lands nearly full cannot be told from a line the
+  column broke.
 
 ---
 
 ## [0.38.56] — 2026-08-26
 
+*Highlights: The note body gains a remembered Expand toggle for long notes.*
+
 ### Added
-- The writing area can be made taller. Twelve rows suits most notes and is cramped for a long one, so an **Expand** toggle under the body switches it to twenty-six and back — the same one-click control the comments box already had, which until now was the only box in the editor that could be resized at all. Unlike that one, the body remembers the choice: someone who writes long notes wants the taller box every time, not once per launch. Nothing below it becomes unreachable, because the editor already scrolls — the page simply gets longer. Dragging the box's edge was built first and abandoned: the editor sits inside a scrolling canvas that recomputes its scrollregion whenever its contents resize, and a drag sends that dozens of times a second, leaving widgets drawn at stale positions. The codebase had already reached that conclusion — both existing resize helpers say "no dragging" and "flicker-free" in as many words.
+- **The writing area can be made taller.** An **Expand** toggle under the body switches it from
+  twelve rows to twenty-six and back — the same one-click control the comments box already had,
+  until now the only resizable box in the editor — and unlike that one, the body remembers the
+  choice across launches. Nothing below becomes unreachable, because the editor already scrolls;
+  the page simply gets longer. Dragging the box's edge was built first and abandoned: the editor
+  sits inside a scrolling canvas that recomputes its scrollregion whenever its contents resize,
+  and a drag fires that dozens of times a second, leaving widgets drawn at stale positions — a
+  conclusion both existing resize helpers had already written down in as many words.
 
 ### Testing
-- Seventeen checks in `qa6.py`, covering the toggle, the stored choice being written and read back, and the comments box — which shares the helper — being left exactly as it was, still four rows and still deliberately not remembered.
+- **Seventeen checks in `qa6.py`.** They cover the toggle, the stored choice being written and
+  read back, and the comments box — which shares the helper — being left exactly as it was:
+  still four rows, still deliberately not remembered.
 
 ---
 
 ## [0.37.56] — 2026-08-26
 
+*Highlights: Paste becomes format-aware — rich text travels into and out of notes, with no new
+dependency.*
+
 ### Added
-- Pasting keeps the formatting it came with. **Ctrl+V** brings bold, italics, colours and lists across from a browser or a word processor instead of flattening them to plain text; **Ctrl+Shift+V** pastes the words alone — including dropping any list markers the source wrote into its own plain-text copy, since a marker in the text is what makes a line a list here and pasting them verbatim produced the very formatting that was asked to be left behind. That choice is on the right-click menu too. Copying works the same way in reverse: a note copied into an email or Word arrives still formatted, and two notes copy between each other exactly. This does change what Ctrl+V does — it used to paste plain text — but keeping formatting is what Word, Google Docs and every browser already do, so the surprising behaviour was the old one. Everything falls back rather than failing: nothing rich on the clipboard, or anything at all going wrong reading it, and the ordinary paste happens instead. A page's own theme is not treated as formatting — pasting from a dark-mode site brings its words, its bold and its lists, but not its near-white text on a near-black background, which is unreadable in a note and was never a decision anyone made about the words. Colour survives only where it is actually coloured: a red warning or a yellow highlight comes through, greys and blacks and whites do not, and a highlight has to be pale enough to read through.
+- **Pasting keeps the formatting it came with.** **Ctrl+V** brings bold, italics, colours and
+  lists across from a browser or a word processor; **Ctrl+Shift+V** (also on the right-click
+  menu) pastes the words alone, dropping even the list markers a source writes into its own
+  plain-text copy. Copying works the same way in reverse: a note lands in an email or Word
+  still formatted, and two notes copy between each other exactly. Ctrl+V used to paste plain
+  text, but keeping formatting is what Word, Google Docs and every browser already do — and
+  nothing rich on the clipboard, or anything at all going wrong reading it, falls back to the
+  ordinary paste. A page's own theme is not treated as formatting: a dark-mode site's
+  near-white-on-near-black stays behind, and colour survives only where it is actually coloured
+  — a red warning or a pale-enough highlight comes through, greys, blacks and whites do not.
+  ([the full story](docs/ISSUES_LOG.md#the-paste-that-kept-the-formatting-it-was-told-to-drop))
 
 ### Changed
-- Rich clipboard content is read through `ctypes`, which is in the standard library, so this costs no new dependency — Tkinter's own clipboard only ever offers plain text, which is why paste was lossy. The conversion between HTML and a note is kept separate from the clipboard itself, in `core/richtext.py`: it turns strings into strings, so it can be tested on any machine, while the part that only works on Windows is small and isolated. The mapping is deliberately lossy — HTML can express unlimited styling and a note cannot, so anything with no equivalent is dropped rather than approximated, the same choice the app already makes about malformed formatting. Font size and family are dropped on the way in for a related reason: the app offers eight of each and a web page uses neither, so matching would mean claiming a note is set in something it never was.
+- **Rich clipboard reading costs no new dependency.** It goes through `ctypes`, in the standard
+  library — Tkinter's own clipboard only ever offers plain text, which is why paste was lossy.
+  The HTML-to-note conversion lives apart from the clipboard in `core/richtext.py`, strings in
+  and strings out, so it tests on any machine while the Windows-only part stays small and
+  isolated. The mapping is deliberately lossy: anything HTML expresses that a note cannot is
+  dropped rather than approximated — the app's existing choice for malformed formatting — and
+  font size and family are dropped on the way in too, since the app offers eight of each and a
+  web page uses neither.
 
 ### Testing
-- The paste checks drove `_on_body_paste` and `_paste_plain` by calling them, so a broken key binding would have passed unnoticed. They now press the keys instead — the `<<Paste>>` virtual event that Tk turns Ctrl+V into, and `<Control-Shift-V>` — which is how anyone actually reaches either choice.
+- **The paste checks now press the actual keys.** They used to drive `_on_body_paste` and
+  `_paste_plain` by calling them, so a broken key binding would have passed unnoticed. They now
+  send the `<<Paste>>` virtual event Tk turns Ctrl+V into, and `<Control-Shift-V>` — which is
+  how anyone actually reaches either choice.
 
 ---
 
 ## [0.36.56] — 2026-08-25
 
+*Highlights: Fonts land in notes and Settings, alongside theming, toolbar and title-field fixes.*
+
 ### Added
-- Font size and family in the note body, as a **Font** group in the toolbar, plus the baseline both start from under Settings → Appearance. The toolbar pair sets the typeface and size of the selected text, or sticks for whatever is typed next the way the colour pickers already do; the Settings pair sets what every note uses unless it says otherwise, since "my notes should be bigger" is a statement about reading rather than about one note. Choosing **Default** stores no span at all, which is what lets a note follow the setting instead of being pinned to whatever it happened to be the day it was written. A selection spanning two different sizes reads as Default rather than as the first run's size, which would claim the whole selection is that size. Families are a curated list of eight that ship with every Windows install rather than whatever is installed here: notes travel as share codes and backups, and Tk silently substitutes a font the reader does not have, with nothing to say the note is no longer showing what it was written in.
-- An estimate of how long a note takes to read, under the word and character counts. Based on 200 words a minute, the slow end of the usual adult range — a reader who finishes sooner has lost nothing, while one who runs over was told the note was shorter than it is. Notes under a minute say so rather than rounding to zero.
-
-### Fixed
-- The information bars in Settings → General, Backup and About stayed dark after switching to a light theme, leaving their text almost unreadable. Settings builds two surfaces by blending (`card` toward `text` for the well inside a card, toward `subtext` for its hairlines), and neither result is an entry in any theme's palette — so the pass that remaps a widget left holding another theme's colour could not see them. Measured, 19 widgets across those three panels were still carrying the dark inset. Both derivations now live in one place and that pass knows about them, which fixes all 44 blended call sites rather than any one of them.
-- The formatting toolbar ran off the right-hand edge of the editor: it needed 868px against 787px of pane, so the last group was unreachable without widening the window. Two things fixed it. The four group captions are gone, which was 182px of the width — the dividers still separate the groups, and every button gained a hover label last release, which is what the captions were carrying. And the bar now wraps: whatever will not fit moves to a second row. Trimming alone would only have been a fix for one set of font metrics, since a width in pixels depends on the font — the same bar measures 577px here and 827px on a machine without this one's fonts — so wrapping is what makes it correct at any width, any font and any display scaling.
-- The Settings section list could not be scrolled. Nine entries in four groups, plus the brand and the theme toggle, need more height than a short window has, and the list was a plain frame — whatever did not fit was simply unreachable. It scrolls to the wheel now, anywhere over the list, while the brand and the theme toggle stay put.
-
-- A note title is now limited to 200 characters. Not for storage or layout — the note list already shortens titles to 60 for display — but because tk.Entry slows roughly with the square of what it holds: one keystroke measured 0.5ms at 30 characters, 38ms at 10,000 and 3.5 seconds at 100,000. Paste a document into the title by accident and the field froze, with no way to edit it back. Pasting something longer now shortens it to fit rather than refusing it whole, which would have left the field empty and looked like the paste failing. A counter appears beside the title once it comes within 40 characters of the limit, reading 175/200 and turning the warning colour when it is full — hidden until then, since a permanent 12/200 beside a twelve-character title is noise about a limit nobody is near. Titles already saved are never touched: validation fires on programmatic inserts too, so a note written before this cap loads in full and saves back in full.
-
-- The label beside a note's colour swatch is gone. It printed the raw hex value once a colour was picked — "#7c5cff" — which means nothing to most people, and which the picker itself deliberately avoids by offering swatches only and no hex entry. Naming the state instead ("custom color") only replaced one redundant thing with another: the swatch already shows the colour, and the picker is one click away. The row now reads "Color:" and a swatch, and nothing else.
-
-### Removed
-- The quote block, from the app and from the code rather than merely hidden. It read as a heavy visual device for something a note rarely needs, and it was the only paragraph property carrying colours of its own. A note that still holds the old `block` key loads as an ordinary paragraph, keeping whatever list kind, indent and alignment it also had; nothing needs migrating.
+- **Font size and family in the note body.** A **Font** group in the toolbar sets the typeface
+  and size of the selection — or sticks for whatever is typed next, the way the colour pickers
+  already do — while Settings → Appearance sets the baseline every note starts from, since "my
+  notes should be bigger" is a statement about reading rather than one note. Choosing
+  **Default** stores no span at all, which is what lets a note follow the setting instead of
+  staying pinned; a selection spanning two sizes reads as Default rather than claiming the
+  first run's size for the whole selection. Families are a curated eight that ship with every
+  Windows install: notes travel as share codes and backups, and Tk silently substitutes a font
+  the reader does not have, with nothing to say the note is no longer showing what it was
+  written in.
+- **Notes show an estimated reading time** under the word and character counts. It assumes 200
+  words a minute — the slow end of the usual adult range, so a faster reader loses nothing
+  while a slower one is never told the note is shorter than it is. Notes under a minute say so
+  rather than rounding to zero.
 
 ### Changed
-- Size and family are stored as ordinary spans like the colours, but unlike the colours they collide with bold and italic over Tk's font option — two tags that set it do not compose, one simply wins, which is the same collision that made `bold_italic` a tag of its own. All four therefore stay separate in the note and are merged only at render time, into one composite tag per run built on demand. A note that never touches size or family tags exactly as it did before, and the plain `bold` tag stays on the text underneath as the marker the toolbar reads, so "is this selection bold?" still answers correctly inside a resized run. Two things that follow from the base font had to be made to move with it: bold and italic are separate font objects built from it, and the list hanging indent is measured in pixels while the marker is not — `• ` is 11px at 12pt and 22px at 24pt, so the fixed margin that hung correctly at the default left a large-font item's second line out of true.
+- **Size and family are stored as ordinary spans, merged with bold and italic only at render
+  time.** All four collide over Tk's font option — two tags that set it do not compose, one
+  simply wins, the same collision that made `bold_italic` a tag of its own — so they stay
+  separate in the note and merge into one composite tag per run, built on demand. A note that
+  never touches size or family tags exactly as it did before, and the plain `bold` tag stays on
+  the text underneath as the marker the toolbar reads, so "is this selection bold?" still
+  answers correctly inside a resized run. Two things follow the base font now: bold and italic
+  are separate font objects built from it, and the list hanging indent moves with it — `• ` is
+  11px at 12pt and 22px at 24pt, so the fixed margin that hung correctly at the default left a
+  large-font item's second line out of true.
+
+### Fixed
+- **The information bars in Settings → General, Backup and About recolour with the theme.**
+  They stayed dark after switching to a light theme, leaving their text almost unreadable:
+  Settings builds both surfaces by blending (`card` toward `text` for the well inside a card,
+  toward `subtext` for its hairlines), so neither result is an entry in any theme's palette and
+  the pass that remaps stale colours could not see them — measured, 19 widgets across the three
+  panels still carried the dark inset. Both derivations now live in one place that pass knows
+  about, fixing all 44 blended call sites rather than any one of them.
+  ([the full story](docs/ISSUES_LOG.md#the-settings-panels-that-stayed-dark-on-a-light-theme))
+- **The formatting toolbar no longer runs off the editor's right edge.** It needed 868px
+  against 787px of pane, leaving the last group unreachable without widening the window. Two
+  things fixed it: the four group captions are gone — 182px of width whose job the hover labels
+  added last release already carry — and the bar now wraps whatever will not fit onto a second
+  row. Trimming alone would only fix one set of font metrics, since the same bar measures 577px
+  here and 827px on a machine without these fonts — wrapping is what makes it correct at any
+  width, any font and any display scaling.
+  ([the full story](docs/ISSUES_LOG.md#a-toolbar-check-that-measured-the-wrong-thing-three-times))
+- **The Settings section list scrolls.** Nine entries in four groups, plus the brand and the
+  theme toggle, need more height than a short window has, and the list was a plain frame —
+  whatever did not fit was simply unreachable. The wheel now scrolls it anywhere over the list,
+  while the brand and the theme toggle stay put.
+- **A note title is now limited to 200 characters.** Not for storage or layout — the note list
+  already shortens titles to 60 for display — but because tk.Entry slows roughly with the
+  square of what it holds: one keystroke measured 0.5ms at 30 characters, 38ms at 10,000 and
+  3.5 seconds at 100,000, so a document pasted into the title by accident froze the field with
+  no way to edit it back. An over-long paste is shortened to fit rather than refused whole,
+  which would have left the field empty and looked like the paste failing; a counter (175/200)
+  appears once within 40 characters of the limit and turns the warning colour when full, hidden
+  until then. Titles already saved are never touched: a note written before the cap loads in
+  full and saves back in full.
+  ([the full story](docs/ISSUES_LOG.md#the-title-box-that-took-three-and-a-half-seconds-a-keystroke))
+- **The raw hex label beside a note's colour swatch is gone.** It printed the value once a
+  colour was picked — "#7c5cff" — which means nothing to most people, and which the swatch-only
+  picker itself deliberately avoids. Naming the state instead ("custom color") only swapped one
+  redundant thing for another, so the row now reads "Color:" and a swatch, and nothing else.
+
+### Removed
+- **The quote block is removed** — from the app and from the code, not merely hidden. It read
+  as a heavy visual device for something a note rarely needs, and it was the only paragraph
+  property carrying colours of its own. A note that still holds the old `block` key loads as an
+  ordinary paragraph, keeping whatever list kind, indent and alignment it also had; nothing
+  needs migrating.
 
 ---
 
 ## [0.34.51] — 2026-08-25
+*Highlights: paragraph formatting lands — lists, indentation, alignment and quote blocks.*
 
 ### Added
-- Paragraph formatting in the note body, as a **Paragraph** group in the toolbar: bullet and numbered lists, nesting to eight levels with Tab and Shift+Tab, indentation for ordinary paragraphs as well as list items, left/centre/right alignment, and quote blocks. Enter continues a list and, on an item you never typed into, steps out one level before leaving the list altogether; Backspace against a marker outdents a nested item and only removes the marker once it is back at the margin. Numbered lists keep a separate count per level, so a sub-list restarts at one under every parent and resumes the outer count when it ends. The marker itself lives in the note's text ("• milk", "1. milk"), so a list survives export, share codes, and being copied into anything else as readable plain text; the indent is a Tk tag drawn over it. Bullets change glyph with depth (•, ◦, ▪) and numbers deliberately do not — the usual nested scheme of 1. then a. then i. is ambiguous with ordinary prose, and a note is exactly the kind of document where a line can begin "a. " innocently, so depth shows through indentation and the restarting count instead. A quote block is a coloured bar with a tinted background rather than a border: Tk draws a bordered range as one box per display line, so a paragraph that wraps comes out as several boxes with the last ending mid-sentence, while the bar reads as one block at any width.
+- **Paragraph formatting in the note body**, as a **Paragraph** toolbar group: bullet and numbered
+  lists nesting to eight levels with Tab and Shift+Tab, indentation for ordinary paragraphs too,
+  left/centre/right alignment, and quote blocks. Enter continues a list — on an item you never
+  typed into, it steps out one level before leaving the list — Backspace against a marker outdents
+  a nested item and only removes the marker once it is back at the margin, and numbered lists keep
+  a separate count per level, restarting at one under every parent and resuming the outer count
+  after. The marker lives in the note's text ("• milk", "1. milk"), so a list survives export,
+  share codes and being copied anywhere as readable plain text; only the indent is a Tk tag drawn
+  over it. Bullets change glyph with depth (•, ◦, ▪) and numbers deliberately don't — 1. then a.
+  then i. is ambiguous with ordinary prose — and a quote block is a coloured bar with a tinted
+  background rather than a border, since Tk draws a bordered wrapped paragraph as several broken
+  boxes instead of one block.
 
-- Every button on the formatting toolbar now explains itself on hover: its name and a line saying what it acts on, appearing after a short pause so sweeping across the bar does not flash a row of labels, and going away when the pointer leaves or you click. All thirteen carry one — the four style toggles, both colour pickers, both list buttons, the three alignment icons, indent and outdent, and the quote block. The alignment ones say outright that alignment applies to whole paragraphs and not to part of one, which is the question those buttons actually raise: selecting a few words inside a paragraph and centring moves the whole paragraph, and in a note written as one long block that looks like the button ignoring the selection entirely.
+- **Every formatting-toolbar button now explains itself on hover** — its name plus a line saying
+  what it acts on, appearing after a short pause so sweeping across the bar doesn't flash a row of
+  labels. All thirteen carry one: the four style toggles, both colour pickers, both list buttons,
+  the three alignment icons, indent and outdent, and the quote block. The alignment ones say
+  outright that alignment applies to whole paragraphs and not to part of one — exactly the
+  question those buttons raise when centring a selection moves the whole paragraph.
 
 ### Changed
-- Notes gained a `paragraphs` field recording line-level formatting — which lines are list items, at what depth, how they are aligned, and whether they sit in a quote. Only non-default properties are stored, so a note with no paragraph formatting gains nothing at all, and `normalize_note` bounds every entry by the body's real line count so an entry left pointing past the end of a shortened note is dropped rather than kept to indent a line that no longer exists.
+- **Notes gained a `paragraphs` field** recording line-level formatting — which lines are list
+  items, at what depth, how they are aligned, and whether they sit in a quote. Only non-default
+  properties are stored, so a note with no paragraph formatting gains nothing at all, and
+  `normalize_note` bounds every entry by the body's real line count, dropping an entry left
+  pointing past the end of a shortened note rather than keeping it to indent a line that no longer
+  exists.
 
 ---
 
 ## [0.32.51] — 2026-08-21
-
-### Fixed
-- Settings → About showed a blank space where the storage folder should be, and Settings → Statistics read "Using Note Organizer since None". Both appeared when the Settings page moved into its own module: it could no longer read `APP_DIR` and `FIRST_LAUNCH_DATE` directly, so it imported the entry module to reach them — but launching the app as `py note_organizer.py` makes the running copy `__main__`, so that import returns a *second* copy of the module whose `initialise()` never ran and whose values are all still `None`. Both labels now read from the core layer instead, which is only ever imported by name and so can't be duplicated this way. The nine QA scripts could never have caught it: they all `import note_organizer`, which is precisely the condition under which the bug disappears, so this gets a dedicated test (`test_entry_module_identity.py`) that loads the app the way a real launch does.
-- Deleting a category that still held notes offered "Delete the notes too (permanent)". Nothing permanent happened — the notes went to Trash with the usual 30-day grace period, the same as any other delete. The label now says so, instead of scaring people away from a safe choice or convincing them notes were unrecoverable when they were sitting in Trash.
+*Highlights: Settings rebuilt around a section list, and the core layer becomes a package.*
 
 ### Changed
-- Settings was rebuilt against a reference design. The section list is grouped under General / Content / Data / More instead of running as one flat column, "Back to Notes" moved into that list so the bar that used to span the top of every section is gone, and light/dark became a small toggle at the foot of the list — reachable from any section rather than only from Appearance. Each section now sits on the page background with its controls grouped into bordered cards, so a setting reads as a row: what it is on the left, what you do about it on the right. "Your name" became "General" since it carries the greeting settings.
-- The theme picker shows both the dark and the light sets at once, each swatch previewing that theme in its own colours with a tick on the one in use. Picking a light theme used to mean switching mode first and then choosing; now it is one click either way.
-- Statistics no longer reads as a paragraph. It used to render its figures as sentences — "Added: 0 this week 0 this month 5 this year 0 older" in one run of same-size text, so the number and the word beside it carried identical weight and nothing could be taken in at a glance, which is the entire point of a snapshot. Now the standalone counts are tiles with the number leading and its caption underneath, the time breakdown is a small table with a header row saying each period once instead of repeating it in every cell, counts are right-aligned so digits line up in a column, zeros are dimmed so the non-zero figures stand out, and the per-category split is a row of pills carrying each category's own colour.
-- The pencil, wastebasket and padlock on category and template rows are drawn glyphs rather than emoji, matching the section list. The old set mixed a colour-bitmap wastebasket that stayed the same shade on all eight themes with a monochrome pencil that recoloured correctly, so the two never matched each other or the interface around them. Rows are also separated by a hairline now, rather than running together as one block.
-- The Settings section list now has an icon beside each entry, drawn as shapes rather than set as emoji or loaded as images — which is what lets each one take the current theme's colour instead of staying the same on all eight. Nielsen Norman Group measured people finding items in a list about 37% faster when entries carry both a distinct icon and colour rather than text alone, with text-only the slowest of the four arrangements they tested.
-- Recently deleted paints 25 rows before "Show more" instead of 50, halving how long the section takes to open with a large trash (about 585ms to about 405ms). Profiling put roughly 95% of that time in Tk laying the widgets out rather than in any code here, so the number of rows painted up front is the only real lever. The cost was always there; the old expand-in-place panel just re-closed on every other click, so it was only paid half the time.
-- Settings got a visual pass. The selected entry in the section list was a solid block of the accent colour — the loudest thing on the page, permanently — and is now an accent rail beside a tinted row, which says "you are here" just as clearly and much more quietly. Nav entries and action buttons respond to the cursor, using the same hover convention the sort menu, emoji picker and category picker already used; Settings was the one area with none. "Empty trash" is outlined rather than filled: it keeps the warning colour, which stays reserved for destructive actions, but a button that deletes notes permanently should no longer be the heaviest element on screen.
-- Settings is now a list of sections on the left and one open section on the right, instead of a single long column you scrolled through. Everything used to compete for the same vertical space, and section titles sat left while their buttons sat centred, so reading the page meant zig-zagging; now one section shows at a time and everything in it lines up against the same left edge. Categories, Templates, Recently deleted and Duplicates were panels that expanded in place behind a button — they're entries in the list like everything else, and the ✕ that used to close them is gone, since a section is always open. Three entries are named for what they are rather than what you do to them: "Manage categories" → "Categories", "Manage templates" → "Templates", "Clean up duplicates" → "Duplicates". The content column is capped so a short form isn't stretched across a wide window, and the theme preview cards wrap to fit it instead of running off the edge.
-- The app is being reorganised from one ~11,000-line file into a package. The data and rules layer now lives in `noteorganizer/core/` as ten modules — the calculator's expression parser, the recurrence engine, themes, rich-text spans, share codes, duplicate detection, data location and migrations, storage, categories, and the note model. No module in that layer imports tkinter, so all of it can be tested without opening a window — a rule the data-safety tests now enforce rather than only document. Reading and writing the notes file moved there too; those were methods on the app class only because that is where all the code used to live, and neither drew anything. There is also a test runner (`tools/run_tests.py`) that copies the suite to a throwaway folder before running it, since every QA script deletes the data files in whatever directory it starts in. `note_organizer.py` is still the file you run and still re-exports everything that moved, so nothing about running the app, the tests, or the build changed. `note_organizer.py` went from 11,147 to 9,739 lines; the interface itself hasn't been split yet.
-- Importing `note_organizer` no longer does anything. It previously resolved a data folder, migrated notes into it, deleted files it judged redundant, and wrote settings — meaning an import alone could destroy a notebook, which is exactly how one was lost once. That work moved into `initialise()`, called by the app and by the entry point. Anything that wants the data layer without opening a window now has to ask for it deliberately.
+- **Settings was rebuilt against a reference design.** The section list is grouped under
+  General / Content / Data / More instead of running as one flat column, "Back to Notes" moved
+  into that list (retiring the bar that used to span the top of every section), and light/dark
+  became a small toggle at the foot of the list — reachable from any section rather than only from
+  Appearance. Controls now sit in bordered cards where each setting reads as a row — what it is on
+  the left, what you do about it on the right — and "Your name" became "General", since it carries
+  the greeting settings.
+- **The theme picker shows both the dark and the light sets at once**, each swatch previewing that
+  theme in its own colours with a tick on the one in use. Picking a light theme used to mean
+  switching mode first and then choosing; now it is one click either way.
+- **Statistics no longer reads as a paragraph.** Figures used to render as sentences — "Added: 0
+  this week 0 this month 5 this year 0 older" in one run of same-size text — so nothing could be
+  taken in at a glance, which is the entire point of a snapshot. Standalone counts are now tiles
+  with the number leading and its caption underneath, the time breakdown is a small table with
+  right-aligned digits and dimmed zeros so the non-zero figures stand out, and the per-category
+  split is a row of pills carrying each category's own colour.
+- **The pencil, wastebasket and padlock on category and template rows are drawn glyphs rather than
+  emoji**, matching the section list. The old set mixed a colour-bitmap wastebasket stuck at one
+  shade on all eight themes with a monochrome pencil that recoloured correctly, so the two never
+  matched each other or the interface around them. Rows are also separated by a hairline now,
+  rather than running together as one block.
+- **Every Settings section entry now carries an icon**, drawn as shapes rather than emoji or
+  images — which is what lets each one take the current theme's colour instead of staying the same
+  on all eight. Nielsen Norman Group measured people finding items in a list about 37% faster when
+  entries carry both a distinct icon and colour rather than text alone, with text-only the slowest
+  of the four arrangements they tested.
+- **Recently deleted paints 25 rows before "Show more" instead of 50**, halving how long the
+  section takes to open with a large trash (about 585ms to about 405ms). Profiling put roughly 95%
+  of that time in Tk laying the widgets out rather than in any code here, so rows painted up front
+  is the only real lever. The cost was always there; the old expand-in-place panel just re-closed
+  on every other click, so it was only paid half the time.
+- **Settings got a visual pass.** The selected section entry — previously a solid block of the
+  accent colour, the loudest thing on the page, permanently — is now an accent rail beside a
+  tinted row, and nav entries and action buttons respond to the cursor with the same hover
+  convention the sort menu, emoji picker and category picker already used. "Empty trash" is
+  outlined rather than filled: it keeps the warning colour reserved for destructive actions
+  without a permanent-delete button being the heaviest element on screen.
+- **Settings is now a list of sections on the left and one open section on the right**, instead of
+  a single long scrolled column where everything competed for the same vertical space and reading
+  meant zig-zagging. Categories, Templates, Recently deleted and Duplicates — formerly panels that
+  expanded in place behind a button — are now ordinary list entries with no closing ✕, renamed for
+  what they are ("Manage categories" → "Categories", "Manage templates" → "Templates", "Clean up
+  duplicates" → "Duplicates"). The content column is capped so a short form isn't stretched across
+  a wide window, and the theme preview cards wrap to fit it instead of running off the edge.
+- **The app is being reorganised from one ~11,000-line file into a package.** The data and rules
+  layer now lives in `noteorganizer/core/` as ten modules — the calculator's expression parser,
+  recurrence, themes, rich-text spans, share codes, duplicate detection, data location and
+  migrations, storage, categories, and the note model — and none of them imports tkinter, a rule
+  the data-safety tests now enforce rather than only document. A new runner (`tools/run_tests.py`)
+  copies the suite to a throwaway folder before running it, since every QA script deletes the data
+  files in whatever directory it starts in. `note_organizer.py` went from 11,147 to 9,739 lines
+  and still runs and re-exports everything that moved, so nothing about running the app, the
+  tests, or the build changed; the interface itself hasn't been split yet.
+- **Importing `note_organizer` no longer does anything.** It previously resolved a data folder,
+  migrated notes into it, deleted files it judged redundant, and wrote settings — meaning an
+  import alone could destroy a notebook, which is exactly how one was lost once. That work moved
+  into `initialise()`, called by the app and by the entry point; anything that wants the data
+  layer without opening a window now has to ask for it deliberately.
 
+### Fixed
+- **Settings → About showed a blank storage folder, and Statistics read "Using Note Organizer
+  since None".** When Settings moved into its own module it imported the entry module to reach
+  those values — but a real launch makes the running copy `__main__`, so that import returned a
+  second, never-initialised copy of the module where everything was still `None`. Both labels now
+  read from the core layer, which is only ever imported by name and can't be duplicated this way;
+  the nine QA scripts all `import note_organizer` — precisely the condition under which the bug
+  disappears — so a dedicated test (`test_entry_module_identity.py`) loads the app the way a real
+  launch does. ([the full story](docs/ISSUES_LOG.md#the-module-that-existed-twice))
+- **"Delete the notes too (permanent)" wasn't permanent.** Deleting a category that still held
+  notes offered that wording, but the notes went to Trash with the usual 30-day grace period, the
+  same as any other delete. The label now says so, instead of scaring people away from a safe
+  choice or convincing them notes were unrecoverable while they sat in Trash.
 
 ## [0.32.49] — 2026-08-20
-
-### Fixed
-- Highlighting text that spanned more than one line painted a full-width bar across every fully covered line, stretching far past the words instead of hugging them. Tk paints a background across the whole remaining width of a line whenever the highlight covers that line's invisible newline; highlights are now applied line by line and never include it. Notes highlighted before this fix render correctly too, without needing to be re-highlighted — and typing with a highlight still "stuck" on no longer bleeds when you press Enter.
-- The note body's right-click menu didn't line up: its entries mixed four kinds of decorative prefix (styled mathematical letters, combining underline/strike marks, plain letters and an emoji) which render at different widths, so the words after them lined up with neither each other nor the plain Cut/Copy/Paste entries above. All labels are plain text now, so every entry starts in the same place.
-- The comments box never received the note body's selection fixes, so double-clicking a row with no words in it selected that row's invisible newline and painted a full-width highlight over an empty line. Both fields now share the same handlers: double-click treats punctuation as a word boundary (clicking either side of `something.else` selects just that word), an empty row selects nothing, and triple-click stops at the real end of the line instead of swallowing the newline.
-- A note's own colour could be silently repainted with the current theme's accent when switching to a theme whose palette didn't contain that colour — the theme-switch safety pass that remaps leftover colours couldn't tell a themed widget from a note deliberately coloured the same way. Note cards are now recoloured last, from the note's own data, so the note's colour always wins.
-- Switching themes visibly flickered, showing a half-recoloured page with dark bands across it, and got worse the more notes existed. The bulk of a theme switch was destroying and rebuilding every note card (about 85ms of 121ms, with the list visibly emptying and refilling), plus rebuilding the statistics panel — where no statistic changes when only the palette does — and rebuilding the calendar even while it was off screen. None of that is needed when only colours changed. A switch now takes roughly 26ms instead of about 140ms, and no longer slows down as notes accumulate (going from 40 to 100 notes used to add 117ms; it now adds 19ms).
+*Highlights: theme switching goes flicker-free and ~5× faster; selection quirks ironed out.*
 
 ### Changed
-- The Windows build no longer bundles numpy, which was never imported by the app — it was only included because Pillow can optionally use it for array conversions that nothing here does. This cuts the packaged folder from 68 MB to 38 MB with no change in behaviour; the image and animated-GIF preview path was verified to work with numpy made unavailable. `NoteOrganizer.spec` is now tracked in git as well, so the build recipe can be reproduced from a fresh clone instead of living on one machine.
+- **The Windows build no longer bundles numpy**, which the app never imported — it was only
+  included because Pillow can optionally use it for array conversions that nothing here does. The
+  packaged folder drops from 68 MB to 38 MB with no change in behaviour, and the image and
+  animated-GIF preview path was verified to work with numpy made unavailable.
+  `NoteOrganizer.spec` is now tracked in git as well, so the build recipe can be reproduced from a
+  fresh clone instead of living on one machine.
+
+### Fixed
+- **Highlighting text across multiple lines no longer paints full-width bars** stretching far past
+  the words. Tk paints a background across a line's whole remaining width whenever the highlight
+  covers that line's invisible newline; highlights are now applied line by line and never include
+  it. Notes highlighted before this fix render correctly too, without re-highlighting — and typing
+  with a highlight still "stuck" on no longer bleeds when you press Enter.
+- **The note body's right-click menu lines up.** Its entries mixed four kinds of decorative prefix
+  (styled mathematical letters, combining underline/strike marks, plain letters and an emoji)
+  which render at different widths, so the words after them lined up with neither each other nor
+  the plain Cut/Copy/Paste entries above. All labels are plain text now, so every entry starts in
+  the same place.
+- **The comments box now shares the note body's selection fixes.** Double-clicking a row with no
+  words in it used to select that row's invisible newline and paint a full-width highlight over an
+  empty line. Both fields use the same handlers now: double-click treats punctuation as a word
+  boundary (either side of `something.else` selects just that word), an empty row selects nothing,
+  and triple-click stops at the real end of the line instead of swallowing the newline.
+- **A note's own colour is no longer silently repainted with the theme's accent on theme
+  switch.** Switching to a theme whose palette didn't contain that colour let the safety pass
+  that remaps leftover colours mistake a deliberately coloured note for a themed widget. Note
+  cards are now recoloured last, from the note's own data, so the note's colour always wins.
+- **Switching themes no longer flickers** with dark bands across a half-recoloured page. The bulk
+  of a switch was destroying and rebuilding every note card (about 85ms of 121ms, with the list
+  visibly emptying and refilling), plus rebuilding the statistics panel and the off-screen
+  calendar — none of it needed when only colours changed. A switch now takes roughly 26ms instead
+  of about 140ms and no longer slows as notes accumulate: going from 40 to 100 notes used to add
+  117ms; it now adds 19ms.
+  ([the full story](docs/ISSUES_LOG.md#the-theme-switch-flicker-and-three-ways-not-to-fix-it))
 
 ## [0.32.44] — 2026-08-19
+*Highlights: text color and highlight join the toolbar, plus a round of selection fixes.*
 
 ### Added
-- Phase 2a of rich text formatting: text color and highlight, added to the same toolbar as Bold/Italic/Underline/Strikethrough (and to the right-click menu). Text color and highlight can be combined with each other and with the boolean styles, applied to a selection or queued to "stick" for whatever's typed next, the same way the Phase 1 styles work. The toolbar buttons themselves preview the active color as a real swatch, with the letter's contrast computed automatically so it stays legible against any color on any theme — and the four style toggles and the two color pickers are visually grouped apart from each other ("Style" / "Colors" labels with a divider between them), since they work differently (toggle vs. open-a-picker) and previously all looked like one undifferentiated row of buttons.
-
-### Fixed
-- Switching themes after opening (and closing) the text-color or highlight picker could crash with `TclError: invalid command name` — the picker's hex-code entry (since removed, see Changed below) registered itself for live theme-tracking but was never un-registered once destroyed, the same class of bug as an unbounded-growth leak fixed earlier in the project, just in a different tracking list. This also retroactively fixes the pre-existing note-color picker, which had the exact same latent bug.
-- Right-click → "Select All" in the note body selected through the widget's invisible trailing newline, which visibly stretched the highlight to the full width of the last line regardless of how short it actually was.
-- Triple-clicking a line (or two double-clicks landing close enough together in time to be counted as one) selected through to the start of the *next* line, including the invisible newline in between — which also meant a copy right after picked up an unwanted extra newline. Triple-click now stops at the real end of the line's text.
-- Double-clicking a word right up against punctuation, like `something.else`, selected the whole punctuated run as one "word" regardless of which side was clicked. Double-click now treats punctuation as a hard word boundary, the way most editors do — clicking `something` selects only `something`, clicking `else` selects only `else`.
-- Selecting text that already had a text color or highlight applied showed no visible selection at all, since Tk gives later-created tags higher display priority and the color tags were created after the built-in `sel` tag — the color's own background was silently painting over the selection color. Selection (and re-coloring already-colored text) was never actually broken, just invisible; the `sel` tag is now kept on top of the tag stack so the selection color always wins visually.
+- **Phase 2a of rich text: text color and highlight**, on the same toolbar as
+  Bold/Italic/Underline/Strikethrough and in the right-click menu. Both combine with each other
+  and with the boolean styles, applied to a selection or queued to "stick" for whatever's typed
+  next, the same way the Phase 1 styles work — and the toolbar buttons preview the active color as
+  a real swatch, with the letter's contrast computed automatically so it stays legible against any
+  color on any theme. The four style toggles and the two color pickers are visually grouped apart
+  ("Style" / "Colors" labels with a divider), since they work differently — toggle vs.
+  open-a-picker — and previously all looked like one undifferentiated row of buttons.
 
 ### Changed
-- Removed the hex-code entry from both color pickers (the note's own color, and the new text-color/highlight pickers) — swatches only now, since most users don't think in hex. Both palettes were enlarged to compensate: the shared note-color/text-color palette grew from 10 to 15 colors, and the highlight palette from 6 to 10.
+- **The hex-code entry is gone from both color pickers** (the note's own color, and the new
+  text-color/highlight pickers) — swatches only now, since most users don't think in hex. Both
+  palettes were enlarged to compensate: the shared note-color/text-color palette grew from 10 to
+  15 colors, and the highlight palette from 6 to 10.
+
+### Fixed
+- **Switching themes after opening a color picker could crash** with `TclError: invalid command
+  name` — the picker's hex-code entry (since removed, see Changed) registered itself for live
+  theme-tracking but was never un-registered once destroyed, the same class of bug as an
+  unbounded-growth leak fixed earlier in the project, just in a different tracking list. This also
+  retroactively fixes the pre-existing note-color picker, which had the exact same latent bug.
+- **Right-click → "Select All" no longer selects the invisible trailing newline**, which visibly
+  stretched the highlight to the full width of the last line regardless of how short it actually
+  was.
+- **Triple-clicking a line stops at the real end of its text.** It used to select through to the
+  start of the next line (two double-clicks landing close enough in time counted the same),
+  including the invisible newline in between — so a copy right after picked up an unwanted extra
+  newline.
+- **Double-clicking a word right up against punctuation selects just that word.** `something.else`
+  used to select as one punctuated "word" regardless of which side was clicked; punctuation is now
+  a hard word boundary, the way most editors treat it — clicking `something` selects only
+  `something`, clicking `else` only `else`.
+- **Selecting colored or highlighted text shows the selection again.** Tk gives later-created tags
+  higher display priority, and the color tags were created after the built-in `sel` tag, so the
+  color's own background silently painted over the selection color. Selection (and re-coloring
+  already-colored text) was never actually broken, just invisible; `sel` is now kept on top of the
+  tag stack so the selection color always wins visually.
 
 ## [0.31.39] — 2026-08-18
+*Highlights: rich text begins — Bold, Italic, Underline and Strikethrough in the editor.*
 
 ### Added
-- A rich text formatting toolbar (Bold, Italic, Underline, Strikethrough) in the note editor, plus the same four options in the right-click menu with keyboard shortcuts (Ctrl+B/I/U/D). Select existing text and apply a style, or toggle a style with nothing selected so it "sticks" for whatever you type next until turned off again — including correct handling of fast typing, where a burst of several keystrokes doesn't drop the style on any of them. This is Phase 1 of a larger rich-text effort; font size/color/highlight, bullet lists, and paste-with-formatting are still ahead.
+- **A rich text formatting toolbar (Bold, Italic, Underline, Strikethrough)** in the note editor,
+  with the same four options in the right-click menu and keyboard shortcuts (Ctrl+B/I/U/D). Apply
+  a style to selected text, or toggle one with nothing selected so it "sticks" for whatever you
+  type next until turned off — including correct handling of fast typing, where a burst of several
+  keystrokes doesn't drop the style on any of them. This is Phase 1 of a larger rich-text effort;
+  font size/color/highlight, bullet lists, and paste-with-formatting are still ahead.
+  ([the full story](docs/ISSUES_LOG.md#the-fast-typing-fix-that-took-three-tries-to-land-safely))
 
 ## [0.30.39] — 2026-08-18
 
+*Highlights: one critical data-safety fix — script-mode runs can no longer delete the real
+notebook in `%APPDATA%\NoteOrganizer`.*
+
 ### Fixed
-- Found by hand: running `note_organizer.py` in script mode (`python note_organizer.py`, or any script that imports it, including the project's own headless test scripts) from any directory that hadn't already reclaimed once could silently **delete the real notes in `%APPDATA%\NoteOrganizer`** — the store the distributed `.exe` actually reads from. The migration logic that pulls old notes forward from AppData would copy them into the running directory, then a separate cleanup step immediately treated the AppData originals as a "redundant leftover copy" (since they now existed elsewhere too) and deleted `notes_data.json`, `settings.json`, and the whole `attachments/` folder outright. `%APPDATA%\NoteOrganizer` is now permanently exempt from that cleanup, regardless of how "redundant" it looks — it's the durable, cross-run store, never a disposable one.
+- **Running in script mode could silently delete the real notes in `%APPDATA%\NoteOrganizer`** —
+  the store the distributed `.exe` actually reads from. Found by hand: `python note_organizer.py`
+  (or any script that imports it, including the project's own headless test scripts), run from any
+  directory that hadn't already reclaimed once, triggered migration logic that copied the AppData
+  notes into the running directory — and a separate cleanup step then treated the AppData
+  originals as a "redundant leftover copy" and deleted `notes_data.json`, `settings.json`, and the
+  whole `attachments/` folder outright. `%APPDATA%\NoteOrganizer` is now permanently exempt from
+  that cleanup, no matter how "redundant" it looks — it's the durable, cross-run store, never a
+  disposable one. ([the full story](docs/ISSUES_LOG.md#the-cleanup-that-deleted-the-real-notebook))
 
 ## [0.30.38] — 2026-08-18
 
+*Highlights: an in-note calculator — hand-rolled parser, insert-into-note logging, session
+history — with 47 evaluator checks behind it.*
+
 ### Added
-- A collapsible in-note calculator, next to Checklist in the note editor. Supports standard +/−/×/÷ arithmetic with three interchangeable bracket styles, a square root, a general power operator (any exponent, not just squaring), and percent — evaluated via a small hand-rolled parser rather than eval(). The display accepts typing and pasting directly, not just button presses, so an expression copied from elsewhere can be evaluated as-is.
-- Insert the calculator's result into the note body — inserts the whole formula (not just the answer), and repeated use builds a clean log downward (each insertion lands on its own line after the previous one) instead of gluing onto wherever the cursor happens to be. A collapsible, session-only history of past calculations is available too, with a Clear button and click-to-insert on any past entry.
+- **A collapsible in-note calculator**, next to Checklist in the note editor. Standard +/−/×/÷
+  with three interchangeable bracket styles, a square root, a general power operator (any
+  exponent, not just squaring), and percent — evaluated by a small hand-rolled parser rather than
+  `eval()`. The display accepts typing and pasting directly, not just button presses, so an
+  expression copied from elsewhere can be evaluated as-is.
+- **Insert the calculator's result into the note body.** Inserts the whole formula (not just the
+  answer), and repeated use builds a clean log downward — each insertion lands on its own line
+  after the previous one — instead of gluing onto wherever the cursor happens to be. A
+  collapsible, session-only history of past calculations comes with it, with a Clear button and
+  click-to-insert on any past entry.
 
 ### Testing
-- Added test_calculator.py (47 checks) covering the expression evaluator directly — precedence, brackets, power/root/percent, and a wide range of malformed input. Added extensive qa1.py coverage for the real button/paste/history UI flow.
+- **Added `test_calculator.py` (47 checks)** covering the expression evaluator directly —
+  precedence, brackets, power/root/percent, and a wide range of malformed input. Added extensive
+  `qa1.py` coverage for the real button/paste/history UI flow.
 
 ## [0.28.38] — 2026-08-17
 
-### Fixed
-- Typing in the note search box rebuilt the entire note list on every single keystroke — measured at ~800ms for 300 notes, meaning a short search term could cost several seconds of cumulative rebuild time, with visible input lag on every character. Now waits for a brief pause in typing before rebuilding once, the same debounce pattern already used for autosave.
-- Audited every scheduled timer/callback in the app (16 in total) for crash-safety if the window closes while one is still pending — a genuine risk for anything that fires after a delay, since the user can close the app at any point in between. Nine were found unguarded and fixed: the export/import progress poller, the periodic unsaved-edit check, the debounced autosave, the debounced search refresh, the username-field autosave, the startup version-change/reminder banners, the editor's scroll-region sync, and the image preview's click-outside-to-dismiss binding. Also discovered that even checking "is the window still there" can itself fail once the whole application (not just one widget) has been torn down — added one shared, properly-guarded check used everywhere this matters now.
-- An unexpected error inside any button click or keyboard shortcut (not related to the timer-safety issue above — any genuinely unanticipated bug) used to fail completely silently: Tkinter's default behavior only prints to the console, which doesn't exist in this app's windowed build, so the user would see nothing at all — no crash, but no explanation either, and no way to know if their data was affected. Now logged to the same crash log the top-level handler uses, with a brief on-screen toast so there's at least some signal instead of pure silence.
-- The background export/import threads only caught `IOError`/`OSError` — any other unexpected error type killed the thread silently (Python's default behavior for an uncaught thread exception) without ever marking the operation as finished, leaving the progress bar stuck forever with nothing shown as wrong. Both now catch anything unexpected as a last resort, so the operation always resolves — with a specific message for the failure cases already understood, and a generic-but-honest one for anything else.
-- Found by hand: changing a template's category (either while creating a new one, or editing an existing one — including templates originally saved from the note editor's "Save as template" shortcut) silently closed the entire template editor and discarded all unsaved changes, the moment the category dropdown was clicked. The dropdown's own opening logic was closing whatever popup was "currently open" before showing its list — but the template editor *was* that currently-open popup, so opening the category picker destroyed the very editor it lived inside, before the picker could even be used. The same bug affected the calendar's "Jump to month" popup. Both now correctly distinguish a dropdown that's nested inside another popup from one that's replacing an unrelated, previous one — fixing this also fixed the category list appearing anchored to the top-left corner of the window instead of under the button, which was a side effect of positioning against a button that had just been destroyed along with its parent.
-- Typing a date directly into a note's Date field (rather than using the calendar-icon picker) never triggered autosave — the only field in the editor missing that wiring — so a typed date change could be silently lost if the user clicked away instead of pressing Save. Fixed by adding the same autosave binding the other fields already have. Doing so surfaced a second issue: autosave shares its date-format validation with the manual Save button, so wiring it up naively made autosave interrupt the user mid-keystroke with an "Invalid date" warning on an as-yet-incomplete date. Both that warning and the related "repeating note needs a start date" one now only show for an explicit manual Save; autosave silently waits for a valid/complete value instead.
-- "Recently updated" / "Oldest updated" sort could show notes in the wrong order: the saved timestamp only tracked minutes, not seconds, so two notes saved within the same minute looked identical to the sort and fell back to an unrelated order instead of true edit recency. Now saved with second-level precision everywhere a note's timestamp gets written.
-- A silent background autosave could show a real "Note missing" error dialog — meant only for an explicit Save click — if its debounced timer fired after the note it was about to save had been removed some other way in the meantime. Now silently does nothing in that case, matching how switching notes already handled the same situation.
-- The calendar's right-click menu had a redundant "View this day" entry — a plain left-click on the day already opens the same panel. Removed.
-- The username field (Settings → Your name) had no length limit, which could make the sidebar greeting look broken. Capped at 30 characters, checked in real time as you type (not just when the name is saved), so the field simply stops accepting more instead of accepting everything and quietly trimming it later. Also removed the field's redundant "Save" button, since it already autosaves shortly after typing stops, and immediately on Enter or clicking away.
-- Settings: clicking a non-interactive part of the page (a section title, a card's background) — including going straight to "Back to Notes" — left a previously-focused field's cursor visibly blinking even after its value had already autosaved. Now correctly clears focus in both cases.
-- Scrolling did nothing while hovering over certain parts of the Settings page — the theme picker's preview cards (a Canvas quirk: they have their own built-in scroll behavior that swallowed the wheel event) and the Statistics summary/category chips (plain widgets that were simply never wired into the page's scroll-forwarding). Both now scroll the page correctly, using the same forwarding pattern already used elsewhere in Settings.
-- Three small layout fits, each measured and verified with exact pixel numbers rather than assumed: the sort dropdown's "Recently updated" option was cut off (it rendered at exactly its natural text width with zero margin); the multi-select bulk "Category" button was cramped (the bulk-action bar's four widgets needed more width than the fixed-width sidebar allowed); and Settings' "← Back to Notes" button scrolled out of view instead of staying pinned (it was just another row inside the scrollable content, with nothing making it special). Widened the sort label, tightened the bulk bar's font and spacing, and moved the Back button into its own fixed row outside the scrollable area.
-- Found during a deliberate review of the app's data-safety guarantees (not from an observed failure): when reclaiming notes from `%APPDATA%` back into a local install, the app backed up the local file before overwriting it with the AppData copy, but never checked whether that backup actually succeeded. If it silently failed (disk full, permissions, the file locked by something else), the overwrite proceeded anyway with no safety copy of what was about to be replaced. Now aborts and leaves the local file untouched if the backup fails, instead of proceeding blind.
-- A version upgrade only ever backed up `notes_data.json` on a brand-new first run — a normal upgrade re-reading (and potentially rewriting, via whatever changed in that version) the same file had no equivalent snapshot taken beforehand. Now every detected version upgrade takes a timestamped backup first, kept forever (never auto-deleted — clearing old ones out is the user's call, not the app's).
-- Settings → Statistics category chips looked clickable (hover highlight, hand cursor) but clicking silently did nothing — reproduced in both the script and the packaged `.exe`, after scrolling the Settings page, but never in a headless test despite several attempts at a synthetic repro. Rather than keep chasing the exact cause, removed the click-to-filter interactivity outright: Statistics is a read-only snapshot, not another way to filter notes.
-- Statistics only ever recomputed when Settings was first opened or the theme changed, so category renames/deletes, new notes, and template changes made while staying on the Settings page left stale data on screen until the user left and came back. An intermediate fix gated the refresh on the Settings page's `winfo_ismapped()` state, which looked like a safe optimization but doesn't reliably reflect `pack()`/`pack_forget()` synchronously in real interactive use — that gate silently skipped real updates instead of just avoiding unnecessary redraws. Statistics now refreshes unconditionally (a cheap operation) whenever the note list refreshes or a template is added/edited/deleted, so it stays live without needing to switch away and back.
-
-### Changed
-- The GitHub Actions workflow didn't reset app state (settings, notes, trash) between QA test steps, so each script silently inherited whatever the previous one left behind — investigated after two workflow runs got stuck for hours at the QA5 step. Couldn't reproduce the exact hang locally, but this order-dependency was a real, independently-worth-fixing gap regardless of whether it was the specific cause; each step now starts from a clean slate. Also added a 15-minute job timeout, so any future hang (whatever the cause) fails loudly within minutes instead of silently occupying a runner for hours.
-- Settings → Statistics: category counts now show as a colored dot plus plain text instead of a box-styled chip, since they're no longer clickable. The whole section moved from right after "Your name" to between "Clean up duplicates" and "Storage info."
+*Highlights: a broad stability sweep — search debounce, a 16-timer crash-safety audit, autosave
+and backup hardening, a livelier Statistics page, and two new QA suites.*
 
 ### Added
-- Settings → Statistics now breaks "new/updated this week" out into a fuller week/month/this year/older breakdown for both added and updated notes, laid out in an aligned grid so the numbers line up between the two rows regardless of digit count or icon width.
-- Settings → Statistics also shows standalone counts for saved templates, notes with a checklist, and notes currently in Trash — each counts the thing itself, not how many notes reference it (a template can be reused across many notes; a checklist only ever lives inside the one note it's on).
-- A first-launch date, stamped once and never overwritten, shown in Statistics as "Using Note Organizer since `<date>`". Existing installs get the date of their first launch *after* this update, since there's no way to know their real first-use date retroactively.
+- **Fuller Statistics breakdown.** Settings → Statistics now splits "new/updated this week" into
+  a week / month / this year / older breakdown for both added and updated notes, laid out in an
+  aligned grid so the numbers line up between the two rows regardless of digit count or icon
+  width.
+- **Standalone counts for templates, checklists, and Trash.** Statistics now shows counts for
+  saved templates, notes with a checklist, and notes currently in Trash — each counts the thing
+  itself, not how many notes reference it (a template can be reused across many notes; a checklist
+  only ever lives inside the one note it's on).
+- **"Using Note Organizer since `<date>`".** A first-launch date, stamped once and never
+  overwritten, shown in Statistics. Existing installs get the date of their first launch *after*
+  this update, since there's no way to know their real first-use date retroactively.
+
+### Changed
+- **QA steps in CI now start from a clean slate.** The GitHub Actions workflow didn't reset app
+  state (settings, notes, trash) between QA test steps, so each script silently inherited whatever
+  the previous one left behind — investigated after two workflow runs sat stuck for hours at the
+  QA5 step. The exact hang never reproduced locally, but the order-dependency was worth fixing
+  regardless; a new 15-minute job timeout also makes any future hang fail loudly within minutes
+  instead of silently occupying a runner for hours.
+- **Statistics counts restyled and moved.** Category counts now show as a colored dot plus plain
+  text instead of a box-styled chip, since they're no longer clickable. The whole section moved
+  from right after "Your name" to between "Clean up duplicates" and "Storage info."
+
+### Fixed
+- **Typing in the search box no longer lags.** Every keystroke rebuilt the entire note list —
+  measured at ~800ms for 300 notes, so a short search term could cost several seconds of
+  cumulative rebuild time. Now waits for a brief pause in typing before rebuilding once, the same
+  debounce pattern already used for autosave.
+- **Every scheduled timer audited for close-mid-wait crashes.** All 16 timers/callbacks in the app
+  were checked for what happens if the window closes while one is still pending; nine were found
+  unguarded and fixed (the export/import progress poller, the periodic unsaved-edit check, the
+  debounced autosave and search refresh, the username-field autosave, the startup
+  version-change/reminder banners, the editor's scroll-region sync, and the image preview's
+  click-outside dismiss). Even checking "is the window still there" can itself fail once the whole
+  application is torn down — one shared, properly-guarded check is now used everywhere this
+  matters.
+- **Unexpected errors in clicks and shortcuts are no longer silent.** Tkinter's default behavior
+  only prints to a console the windowed build doesn't have, so the user saw nothing at all — no
+  crash, no explanation, no way to know if their data was affected. Now logged to the same crash
+  log the top-level handler uses, plus a brief on-screen toast so there's at least some signal.
+- **Export/import can no longer hang the progress bar forever.** The background threads only
+  caught `IOError`/`OSError`; any other unexpected error type killed the thread silently without
+  ever marking the operation finished. Both now catch anything unexpected as a last resort, so the
+  operation always resolves — a specific message for the failure cases already understood, a
+  generic-but-honest one for anything else.
+- **Changing a template's category no longer destroys the template editor.** Found by hand: the
+  dropdown's opening logic closed whatever popup was "currently open" before showing its list —
+  but the template editor *was* that popup, so clicking the category dropdown destroyed the very
+  editor it lived inside, discarding unsaved changes; the calendar's "Jump to month" popup had the
+  same bug. Both now distinguish a dropdown nested inside another popup from one replacing an
+  unrelated previous one — which also fixed the category list appearing anchored to the window's
+  top-left corner, a side effect of positioning against a just-destroyed button.
+- **Typing a date into the Date field now autosaves.** It was the only editor field missing that
+  wiring, so a typed date change could be silently lost by clicking away instead of pressing Save.
+  Wiring it up naively made autosave interrupt mid-keystroke with an "Invalid date" warning on an
+  as-yet-incomplete date — that warning and the "repeating note needs a start date" one now only
+  show on an explicit manual Save, while autosave silently waits for a valid, complete value.
+  ([the full story](docs/ISSUES_LOG.md#the-date-field-that-either-lost-your-edit-or-wouldnt-let-you-finish-typing-it))
+- **"Recently updated" / "Oldest updated" sort could misorder notes.** The saved timestamp only
+  tracked minutes, so two notes saved within the same minute looked identical to the sort and fell
+  back to an unrelated order instead of true edit recency. Timestamps now carry second-level
+  precision everywhere a note's timestamp gets written.
+  ([the full story](docs/ISSUES_LOG.md#recently-updated-sort-that-couldnt-tell-recent-apart-from-recent))
+- **Background autosave no longer shows a "Note missing" error.** Its debounced timer could fire
+  after the note it was about to save had been removed some other way in the meantime, raising a
+  dialog meant only for an explicit Save click. It now silently does nothing in that case,
+  matching how switching notes already handled the same situation.
+  ([the full story](docs/ISSUES_LOG.md#the-autosave-that-could-interrupt-you-over-a-note-that-was-already-gone))
+- **Removed the calendar's redundant "View this day" right-click entry.** A plain left-click on
+  the day already opens the same panel.
+- **Username capped at 30 characters.** The Settings → Your name field had no length limit, which
+  could make the sidebar greeting look broken. The cap is checked in real time as you type — the
+  field simply stops accepting more instead of accepting everything and quietly trimming later —
+  and the redundant "Save" button is gone, since the field already autosaves shortly after typing
+  stops and immediately on Enter or clicking away.
+  ([the full story](docs/ISSUES_LOG.md#the-username-cap-that-took-three-tries))
+- **Clicking empty Settings space now clears field focus.** Clicking a non-interactive part of the
+  page (a section title, a card's background) — including going straight to "Back to Notes" —
+  left a previously-focused field's cursor visibly blinking even after its value had already
+  autosaved. Both cases now clear focus correctly.
+  ([the full story](docs/ISSUES_LOG.md#the-focus-fix-that-broke-the-thing-it-wasnt-touching))
+- **The whole Settings page scrolls now.** The theme picker's preview cards swallowed the wheel
+  event (a Canvas quirk — they have built-in scroll behavior of their own), and the Statistics
+  summary/category chips were simply never wired into the page's scroll-forwarding. Both now
+  scroll the page correctly, using the same forwarding pattern already used elsewhere in Settings.
+  ([the full story](docs/ISSUES_LOG.md#the-scroll-that-stopped-twice-for-two-different-reasons))
+- **Three layout fits, each measured with exact pixel numbers rather than assumed.** The sort
+  dropdown's "Recently updated" option was cut off (it rendered at exactly its natural text width
+  with zero margin), the bulk "Category" button was cramped (the bulk-action bar's four widgets
+  needed more width than the fixed-width sidebar allowed), and Settings' "← Back to Notes"
+  scrolled out of view (it was just another row inside the scrollable content). Widened the sort
+  label, tightened the bulk bar's font and spacing, and pinned the Back button in its own fixed
+  row outside the scrollable area.
+- **Reclaiming notes from `%APPDATA%` now verifies its backup before overwriting.** Found during a
+  deliberate review of the app's data-safety guarantees, not from an observed failure: the app
+  backed up the local file before overwriting it with the AppData copy but never checked whether
+  that backup succeeded — disk full, permissions, or a locked file meant the overwrite proceeded
+  with no safety copy. It now aborts and leaves the local file untouched if the backup fails.
+  ([the full story](docs/ISSUES_LOG.md#a-backup-that-assumed-it-had-worked))
+- **Every version upgrade now takes a timestamped backup of `notes_data.json` first.** Previously
+  only a brand-new first run got a backup; a normal upgrade re-reading (and potentially
+  rewriting) the same file had no equivalent snapshot. Upgrade backups are kept forever, never
+  auto-deleted — clearing old ones out is the user's call, not the app's.
+- **Statistics category chips are no longer fake-clickable.** They looked clickable (hover
+  highlight, hand cursor) but clicking silently did nothing — reproduced in both the script and
+  the packaged `.exe` after scrolling the Settings page, yet never in a headless test despite
+  several synthetic-repro attempts. Rather than keep chasing the exact cause, click-to-filter was
+  removed outright: Statistics is a read-only snapshot, not another way to filter notes.
+  ([the full story](docs/ISSUES_LOG.md#the-chip-that-looked-clickable-and-the-fix-that-looked-like-it-worked))
+- **Statistics stays live while Settings is open.** It only recomputed when Settings first opened
+  or the theme changed, so category renames/deletes, new notes, and template changes left stale
+  numbers on screen until the user left and came back. An intermediate fix gated the refresh on
+  `winfo_ismapped()` — which doesn't reliably reflect `pack()`/`pack_forget()` synchronously in
+  real interactive use, so it silently skipped real updates. Statistics now refreshes
+  unconditionally (a cheap operation) whenever the note list refreshes or a template is
+  added/edited/deleted.
 
 ### Testing
-- Added `qa8.py`: automated coverage for the search debounce (no rebuild while typing, correct filtering after the pause), all nine timer-safety fixes, the callback-exception handler, and the export/import worker exception-safety fixes (each confirmed to resolve, not hang, when an unexpected error type is deliberately injected).
-- Added `qa9.py`: automated coverage for the nested-dropdown-destroys-its-own-parent-popup fix, across both places it occurred (template editor, calendar's jump-to-month) — including the exact scenario reported (editing an already-saved template's category and confirming the change survives a reload from disk).
-- Added a regression check to `qa5.py` confirming that typing a date schedules an autosave.
-- Fixed `qa1.py`'s sort-option test: it previously looped over made-up option labels ('Newest first', 'Title A-Z', etc.) that matched none of the app's real sort options, so it silently never exercised any actual sorting logic — only proved the app didn't crash. Now uses the real option labels against a small fixture of notes and checks each mode produces the exact correct order.
-- Added regression tests to `qa6.py` for the username length cap (both the real-time and save-time correction) and the Settings focus-clearing fix (same-page clicks and the direct "Back to Notes" path).
-- Added a regression check confirming a freshly-saved note's timestamp includes seconds (the fix for the "Recently updated" ordering bug).
-- Fixed `qa5.py`'s own date-autosave regression check to flush its pending autosave timer immediately after confirming it was scheduled, instead of leaving it dangling for a later, unrelated test to potentially trip over — this dangling timer is what surfaced the "Note missing" autosave bug above.
-- Added regression checks to `qa1.py`, `qa6.py`, and `qa7.py` for the three layout fits above (pixel-measurement checks for the sort label and bulk-action bar, a scroll-position check for the sticky Back button).
-- Fixed the bulk-action-bar width regression test itself after it failed in CI: it compared against an absolute pixel number measured locally on Windows using "Segoe UI," but the CI runner is Linux, which doesn't have that font — Tk silently substitutes a wider fallback there. Now compares the fixed bar against a reconstruction of the pre-fix sizing, built with whatever font actually resolves on the machine running the test, so the check verifies the fix's real effect instead of a Windows-specific pixel target.
-- Added regression checks to `qa6.py` confirming a wheel event over a theme preview card, and over a Statistics chip, both scroll the Settings page.
-- Added `test_data_safety.py`: a new standalone suite (no GUI, like `test_recurrence.py`) covering the backup/migration safety net directly — the version-upgrade backup, the migration backup-verification fix above, and the underlying `backup_notes_file`/`_timestamped_backup`/`detect_version_change` helpers — using temporary directories so it never touches real data. Added a companion check to `qa1.py` confirming the running app actually takes the backup when a version upgrade is detected. Both now run in CI on every push and PR.
-- Added a `get_first_launch_date` check to `test_data_safety.py`: confirms it stamps a date on first call and never overwrites an existing one.
-- Replaced `qa6.py`'s old "statistics chip navigation" test (which never actually clicked the chip — it just called the underlying functions directly, so it would have passed even if the real click were completely broken) with regression checks confirming chips have no hand cursor and clicking one changes neither the active tab nor the filter.
-- Added regression checks to `qa6.py` for the new Statistics content: template/checklist/deleted counts and the first-launch date render correctly; stats reflect a category deletion, a normal multi-category save sequence, and a template add/edit/delete — all without needing to leave and reopen Settings; and separately, that switching away to the editor and back still shows current data for the one thing that genuinely can't update while Settings itself is open (checklists, edited only in the note editor).
+- **Added `qa8.py`.** Automated coverage for the search debounce (no rebuild while typing, correct
+  filtering after the pause), all nine timer-safety fixes, the callback-exception handler, and the
+  export/import worker exception-safety fixes — each confirmed to resolve, not hang, when an
+  unexpected error type is deliberately injected.
+- **Added `qa9.py`.** Covers the nested-dropdown-destroys-its-own-parent-popup fix in both places
+  it occurred (template editor, calendar's jump-to-month) — including the exact scenario reported:
+  editing an already-saved template's category and confirming the change survives a reload from
+  disk.
+- **Typing a date schedules an autosave.** Added a regression check to `qa5.py` confirming it.
+- **Fixed `qa1.py`'s sort-option test, which tested nothing.** It looped over made-up option
+  labels ("Newest first", "Title A-Z", etc.) that matched none of the app's real sort options, so
+  it never exercised any actual sorting logic — it only proved the app didn't crash. Now uses the
+  real option labels against a small fixture of notes and checks each mode produces the exact
+  correct order.
+- **Regression tests added to `qa6.py`** for the username length cap (both the real-time and
+  save-time correction) and the Settings focus-clearing fix (same-page clicks and the direct
+  "Back to Notes" path).
+- **Timestamps include seconds.** Added a regression check confirming a freshly-saved note's
+  timestamp includes seconds — the fix for the "Recently updated" ordering bug.
+- **Fixed `qa5.py`'s own date-autosave check** to flush its pending autosave timer immediately
+  after confirming it was scheduled, instead of leaving it dangling for a later, unrelated test to
+  potentially trip over — that dangling timer is what surfaced the "Note missing" autosave bug
+  above.
+- **Regression checks for the three layout fits** added to `qa1.py`, `qa6.py`, and `qa7.py` —
+  pixel-measurement checks for the sort label and bulk-action bar, and a scroll-position check for
+  the sticky Back button.
+- **Fixed the bulk-action-bar width test itself after it failed in CI.** It compared against an
+  absolute pixel number measured locally on Windows using "Segoe UI," but the CI runner is Linux,
+  which doesn't have that font — Tk silently substitutes a wider fallback there. It now compares
+  the fixed bar against a reconstruction of the pre-fix sizing, built with whatever font actually
+  resolves on the machine running the test, verifying the fix's real effect instead of a
+  Windows-specific pixel target.
+  ([the full story](docs/ISSUES_LOG.md#the-pixel-perfect-test-that-only-worked-on-windows))
+- **Wheel-over-widget scrolling is covered.** Added regression checks to `qa6.py` confirming a
+  wheel event over a theme preview card, and over a Statistics chip, both scroll the Settings
+  page.
+- **Added `test_data_safety.py`.** A new standalone suite (no GUI, like `test_recurrence.py`)
+  covering the backup/migration safety net directly — the version-upgrade backup, the migration
+  backup-verification fix above, and the underlying
+  `backup_notes_file`/`_timestamped_backup`/`detect_version_change` helpers — using temporary
+  directories so it never touches real data. A companion `qa1.py` check confirms the running app
+  actually takes the backup when a version upgrade is detected; both now run in CI on every push
+  and PR.
+- **`get_first_launch_date` is covered too.** A `test_data_safety.py` check confirms it stamps a
+  date on first call and never overwrites an existing one.
+- **Replaced `qa6.py`'s old "statistics chip navigation" test.** It never actually clicked the
+  chip — it called the underlying functions directly, so it would have passed even if the real
+  click were completely broken. The replacement confirms chips have no hand cursor and that
+  clicking one changes neither the active tab nor the filter.
+- **Regression checks for the new Statistics content in `qa6.py`.** Template/checklist/deleted
+  counts and the first-launch date render correctly; stats reflect a category deletion, a normal
+  multi-category save sequence, and a template add/edit/delete — all without needing to leave and
+  reopen Settings; and separately, switching away to the editor and back still shows current data
+  for the one thing that genuinely can't update while Settings itself is open (checklists, edited
+  only in the note editor).
+
+*(The jump from 0.28.38 down to 0.5.0 is the numbering policy changing: from here up,
+versions are cumulative Added/Fixed totals — see the
+[Roadmap's Versioning section](docs/ROADMAP.md#versioning).)*
 
 ## [0.5.0] — 2026-08-09
 
-### Fixed
-- Attachment files were never actually deleted from disk — removing an attachment from a note, permanently deleting a trashed note (individually, via "Empty trash", or through automatic purge after the retention window) all removed the note/reference but left the underlying file behind indefinitely. All four paths now clean up the physical file too. Moving a note to trash (the reversible, soft-delete path) correctly still leaves files untouched, since the note might be restored.
-- Calendar keyboard navigation (PgUp/PgDn/Home) and the resize-driven font relayout could still act on the calendar while it was hidden behind the new Settings page, if Calendar had been the last-selected tab before opening Settings — silently changing the visible month behind the scenes. Both now check that the calendar is actually on screen, not just that it's the notebook's internally "selected" tab.
-- Importing a single-note share code (as opposed to a multi-note one) skipped the duplicate check entirely and went straight to opening it for editing — found by hand, by copying a code from a note already present and re-importing it. Now checks for an exact match first and asks before opening it, same as the multi-note path.
-- The calendar day panel's delete actions (including the pre-existing right-click menu one) refreshed the panel unconditionally after being clicked — including when the user canceled the confirmation dialog, which incorrectly bounced the view back to the day's note list instead of leaving it exactly as it was. Now only refreshes if the note actually stopped occurring on that date.
-- Selecting notes for a bulk action, and switching which note is open, both used to rebuild the entire note list just to reflect a small change — visibly flickering the whole list on every click. Both are now targeted, direct updates to just the card(s) that actually changed. A bulk Trash/Category action still does a full rebuild afterward, since those genuinely change which notes exist or what they show — skipping that briefly left deleted notes' cards on screen, looking present but acting as if already gone.
-- Deleting a note via right-click or the calendar, while a *different* note was open in the editor with unsaved changes, could show a spurious "Note missing" error. The delete flow temporarily repoints the editor's internal note-selection at the note being deleted, to reuse the normal delete logic — if anything then tried to autosave-flush using that temporary value, it would try to save against the note that's about to be gone rather than the one genuinely open. Fixed at the root: an autosave flush now silently does nothing if the note it would save against no longer exists, instead of surfacing an error — appropriate for an automatic background action the user never directly asked for.
-- A note with only an attachment (or only checklist items) and no typed title or body was never autosaved, and even a manual Save attempt was rejected as "empty" — attachments and checklist items now count as real, savable content everywhere this is checked.
+*Highlights: Going public — docs, GitHub and CI arrive alongside bulk actions and image previews.*
 
 ### Added
-- Project documentation set (`README.md`, this changelog, architecture notes, roadmap, issues log)
-- Git version control, hosted on GitHub
-- Continuous integration via GitHub Actions (`.github/workflows/tests.yml`): the full automated test suite now runs on every push and Pull Request.
-- Delete a note directly from the calendar day panel — a small trash icon on each row in a day's note list, and a Delete button on the note-detail view reached from there. Reuses the same confirmation and recurring-series-scope prompts as deleting from anywhere else, so nothing about safety changes; it just no longer requires opening the full editor first.
-- Multi-select notes for bulk actions — a "Select" toggle in the sidebar shows a checkbox on each note; pick several and move them all to trash or reassign them all to a different category in one action, instead of one at a time. The currently-open note's card is also now outlined in the theme's accent color, so it's clear at a glance which one is open.
-- Image attachments (PNG, GIF, JPEG, WEBP, BMP) now show a large in-app preview when clicked — most of the window, with a Close button and an "Open externally" option — instead of always handing off to an external viewer. Animated GIFs actually play, using real per-frame timing.
-- Delete confirmations (single note or bulk) now mention how many attached files will go to the trash along with the note(s).
-- The app remembers which note was last open and reopens directly into it on the next launch, with all its content — title, body, comments, checklist, attachments — restored.
+- **Project documentation set** — `README.md`, this changelog, architecture notes, roadmap,
+  issues log.
+- **Git version control**, hosted on GitHub.
+- **Continuous integration via GitHub Actions** (`.github/workflows/tests.yml`): the full
+  automated test suite now runs on every push and Pull Request.
+- **Delete a note directly from the calendar day panel.** A small trash icon on each row in a
+  day's note list, and a Delete button on the note-detail view reached from there. Reuses the
+  same confirmation and recurring-series-scope prompts as deleting from anywhere else, so
+  nothing about safety changes — it just no longer requires opening the full editor first.
+- **Multi-select notes for bulk actions.** A "Select" toggle in the sidebar shows a checkbox on
+  each note; pick several and move them all to trash or reassign them all to a different
+  category in one action, instead of one at a time. The currently-open note's card is also now
+  outlined in the theme's accent color, so it's clear at a glance which one is open.
+- **Image attachments show a large in-app preview when clicked** (PNG, GIF, JPEG, WEBP, BMP) —
+  most of the window, with a Close button and an "Open externally" option — instead of always
+  handing off to an external viewer. Animated GIFs actually play, using real per-frame timing.
+- **Delete confirmations count the attachments.** Single-note and bulk confirmations now
+  mention how many attached files will go to the trash along with the note(s).
+- **The app reopens the note you left off in.** It remembers which note was last open and
+  restores it on the next launch with all its content — title, body, comments, checklist,
+  attachments.
 
 ### Changed
-- Settings moved out of the Notes/Calendar tab strip entirely, into its own button in the sidebar (alongside New Note / Import / Share), with a "← Back to Notes" button to return. Originally planned as "push it to the far right of the tab strip" (see ROADMAP), but that risked sitting too close to the window's own close button — the sidebar button avoids that concern and tested better in practice.
-- The note editor's "📋 Copy code" button renamed to "📋 Generate code" — nothing has been generated or copied to the clipboard yet at the point it's clicked, which "Copy" implied. Matches the wording already used by the multi-note Share panel's equivalent button.
-- Added [Pillow](https://pypi.org/project/Pillow/) as the app's first external dependency, specifically for image handling. Plain Tkinter can only decode PNG/GIF natively, and — critically — doesn't correctly composite animated GIF frames: many GIFs only store the region that changed from the previous frame, relying on the viewer to place it correctly on a fixed canvas, which plain Tkinter doesn't do (the in-app preview visibly jumped and resized itself every frame before this). Pillow fixes that, adds JPEG/WEBP/BMP support, and gives noticeably cleaner scaling.
+- **Settings moved into its own sidebar button** (alongside New Note / Import / Share), out of
+  the Notes/Calendar tab strip entirely, with a "← Back to Notes" button to return. Originally
+  planned as "push it to the far right of the tab strip" (see ROADMAP), but that risked sitting
+  too close to the window's own close button — the sidebar button avoids that concern and
+  tested better in practice.
+- **"📋 Copy code" renamed to "📋 Generate code".** Nothing has been generated or copied to the
+  clipboard yet at the point it's clicked, which "Copy" implied. Matches the wording already
+  used by the multi-note Share panel's equivalent button.
+- **[Pillow](https://pypi.org/project/Pillow/) added as the app's first external dependency**,
+  specifically for image handling. Plain Tkinter can only decode PNG/GIF natively and doesn't
+  correctly composite animated GIF frames — many GIFs store only the region that changed from
+  the previous frame, relying on the viewer to place it on a fixed canvas, and the in-app
+  preview visibly jumped and resized itself every frame before this. Pillow fixes that, adds
+  JPEG/WEBP/BMP support, and gives noticeably cleaner scaling.
+
+### Fixed
+- **Attachment files are now genuinely deleted from disk.** Removing an attachment from a note,
+  and permanently deleting a trashed note (individually, via "Empty trash", or through the
+  automatic purge after the retention window) all removed the note or reference but left the
+  underlying file behind indefinitely — all four paths now clean up the physical file too.
+  Moving a note to trash (the reversible, soft-delete path) correctly still leaves files
+  untouched, since the note might be restored.
+  ([the full story](docs/ISSUES_LOG.md#files-that-outlived-the-notes-they-belonged-to))
+- **The calendar no longer navigates while hidden.** Keyboard navigation (PgUp/PgDn/Home) and
+  the resize-driven font relayout could still act on the calendar behind the new Settings page
+  if Calendar had been the last-selected tab — silently changing the visible month. Both now
+  check that the calendar is actually on screen, not just that it's the notebook's internally
+  "selected" tab.
+  ([the full story](docs/ISSUES_LOG.md#a-calendar-that-kept-navigating-behind-the-users-back))
+- **Single-note share codes get the duplicate check too.** Importing one skipped the check
+  entirely and went straight to opening it for editing — found by hand, by re-importing a code
+  copied from a note already present. Now checks for an exact match first and asks before
+  opening it, same as the multi-note path.
+- **Cancelling a calendar delete no longer bounces the view.** The day panel's delete actions
+  (including the pre-existing right-click menu one) refreshed the panel unconditionally — even
+  when the user canceled the confirmation dialog, which incorrectly bounced the view back to
+  the day's note list. Now only refreshes if the note actually stopped occurring on that date.
+- **Selecting notes and switching notes stopped flickering the list.** Both used to rebuild the
+  entire note list just to reflect a small change; both are now targeted, direct updates to
+  just the card(s) that actually changed. A bulk Trash/Category action still does a full
+  rebuild afterward, since those genuinely change which notes exist or what they show —
+  skipping that briefly left deleted notes' cards on screen, looking present but acting as if
+  already gone.
+- **No more spurious "Note missing" error** when deleting a note via right-click or the
+  calendar while a *different* note sat open in the editor with unsaved changes. The delete
+  flow temporarily repoints the editor's internal note-selection at the note being deleted to
+  reuse the normal delete logic, so an autosave flush at that moment tried to save against the
+  note about to be gone. Fixed at the root: an autosave flush now silently does nothing if the
+  note it would save against no longer exists — appropriate for an automatic background action
+  the user never directly asked for.
+- **A note with only an attachment (or only checklist items) can now be saved.** Such a note
+  was never autosaved, and even a manual Save was rejected as "empty" — attachments and
+  checklist items now count as real, savable content everywhere this is checked.
 
 ### Testing
-- Two of the five automated QA scripts (`qa3.py`, `qa4.py`) still referenced the Settings page's old, removed notebook-tab index, and had been silently passing for the wrong reason (their own exit code was never actually checked, so a script erroring out still reported as a successful test run). Both issues are fixed: the scripts now call `show_settings_page()` directly, and every test script exits with a real failure status when a check fails, which is what makes the new CI integration meaningful rather than always green.
-- Added `qa6.py`: automated coverage for category grouping (collapse state and persistence), Settings (username greeting, statistics navigation), attachments through the actual UI functions (not just the file-cleanup fix), several multi-feature combination scenarios, and the parts of window layout that have a real right/wrong answer (sidebar toggle, dialogs staying within the app window). Wired into the CI workflow alongside the rest.
-- Added `qa7.py`, closing a coverage audit across everything built in recent sessions: three of the four attachment-cleanup paths (permanent delete, empty trash, automatic purge) had never had a permanent regression test, only the fourth (removing a single attachment) did. Also newly covered: deleting a note from the calendar (including the Cancel-doesn't-bounce fix), multi-select bulk actions (including the no-rebuild-on-select/switch behavior and the currently-open-note cleanup fix), the Pillow-based image preview (scaling in both directions, corrupt-file handling), attachment mentions in delete confirmations, the "Note missing" bug fix, attachment-only-note autosave, and the last-open-note memory feature.
+- **Two QA scripts had been passing for the wrong reason.** `qa3.py` and `qa4.py` still
+  referenced the Settings page's old, removed notebook-tab index, and their exit code was never
+  actually checked — a script erroring out still reported as a successful run. The scripts now
+  call `show_settings_page()` directly, and every test script exits with a real failure status
+  when a check fails, which is what makes the new CI integration meaningful rather than always
+  green. ([the full story](docs/ISSUES_LOG.md#tests-that-always-passed-no-matter-what))
+- **Added `qa6.py`** — automated coverage for category grouping (collapse state and
+  persistence), Settings (username greeting, statistics navigation), attachments through the
+  actual UI functions (not just the file-cleanup fix), several multi-feature combination
+  scenarios, and the parts of window layout with a real right/wrong answer (sidebar toggle,
+  dialogs staying within the app window). Wired into the CI workflow alongside the rest.
+- **Added `qa7.py`, closing a coverage audit** across everything built in recent sessions:
+  three of the four attachment-cleanup paths (permanent delete, empty trash, automatic purge)
+  had never had a permanent regression test — only the fourth (removing a single attachment)
+  did. Also newly covered: deleting a note from the calendar (including the
+  Cancel-doesn't-bounce fix), multi-select bulk actions (including the no-rebuild-on-select/
+  switch behavior and the currently-open-note cleanup fix), the Pillow-based image preview
+  (scaling in both directions, corrupt-file handling), attachment mentions in delete
+  confirmations, the "Note missing" bug fix, attachment-only-note autosave, and the
+  last-open-note memory feature.
 
 ---
 
 ## [0.4.0] — Performance overhaul & test infrastructure
 
-### Fixed
-- **Recently Deleted (Trash) panel** was rendering every entry at once — opening it with 600 deleted notes took ~1.8 seconds. Now paginates to 50 entries at a time with a "Show more" button; opens in ~100ms regardless of trash size.
-- **Memory leak affecting long sessions**: five different frequently-rebuilt UI areas (note cards, calendar cells, attachments list, the multi-note share panel, and the generated share-code display) were registering themselves for live theme updates every time they were redrawn, without ever cleaning up the old registrations. Over a long session with many saves, this list grew unbounded and progressively slowed the app down. Fixed by only tracking widgets that persist for the app's lifetime — rebuilt content now picks up the current theme naturally each time it redraws instead.
-- **Share Notes panel** had the same "render everything, no cap" issue as the Trash panel (one checkbox per note). Fixed with the same pagination approach.
-- Export and Import (both the full `.zip` backup and the text share-code) used to block the entire UI while running — a backup with a lot of attachments could freeze the app for several seconds with no feedback. Both now run on a background thread with a live progress bar, and the app stays fully interactive throughout.
-- Import (both code and `.zip` backup) could silently create duplicate notes if the same data was imported twice. Now checks incoming notes against what's already there and asks whether to skip duplicates, import everyone anyway, or cancel.
-- Scroll wheel could get "stuck" trying to scroll an already-fully-visible small panel (e.g. an empty Trash list) instead of falling through to scroll the page underneath it — added a small tolerance to the "is this panel already fully shown" check to make it robust against minor platform differences in how scroll position is reported.
-- A module-level crash-recovery handler referenced `self` in a context where it didn't exist — if the app had ever failed to start, the intended friendly error dialog would itself have crashed instead of showing.
+*Highlights: Performance overhaul plus the first automated test suite backing it up.*
 
 ### Added
-- "Clean up ALL duplicate groups" — a one-click action that applies "keep the first copy, remove the rest" across every detected duplicate group at once, instead of working through each group individually.
-- A "Clear" button on the Import Code panel, to wipe a pasted code (and any leftover status message) without manually selecting and deleting it.
+- **"Clean up ALL duplicate groups"** — a one-click action that applies "keep the first copy,
+  remove the rest" across every detected duplicate group at once, instead of working through
+  each group individually.
+- **A "Clear" button on the Import Code panel**, to wipe a pasted code (and any leftover status
+  message) without manually selecting and deleting it.
+
+### Fixed
+- **Recently Deleted (Trash) panel opens fast.** It was rendering every entry at once — opening
+  it with 600 deleted notes took ~1.8 seconds. Now paginates to 50 entries at a time with a
+  "Show more" button; opens in ~100ms regardless of trash size.
+  ([the full story](docs/ISSUES_LOG.md#the-trash-panel-that-took-two-seconds-to-open))
+- **Memory leak affecting long sessions.** Five frequently-rebuilt UI areas (note cards,
+  calendar cells, attachments list, the multi-note share panel, and the generated share-code
+  display) registered for live theme updates on every redraw without ever cleaning up the old
+  registrations, so the list grew unbounded and progressively slowed the app down. Fixed by
+  only tracking widgets that persist for the app's lifetime — rebuilt content now picks up the
+  current theme naturally each time it redraws.
+  ([the full story](docs/ISSUES_LOG.md#the-slowdown-that-only-showed-up-after-a-long-session))
+- **Share Notes panel paginated too.** It had the same "render everything, no cap" issue as the
+  Trash panel (one checkbox per note); fixed with the same pagination approach.
+- **Export and Import no longer freeze the app.** Both the full `.zip` backup and the text
+  share-code used to block the entire UI while running — a backup with a lot of attachments
+  could freeze the app for several seconds with no feedback. Both now run on a background
+  thread with a live progress bar, and the app stays fully interactive throughout.
+  ([the full story](docs/ISSUES_LOG.md#exportimport-freezing-the-app))
+- **Importing the same data twice no longer creates duplicates.** Import (both code and `.zip`
+  backup) could silently duplicate notes; it now checks incoming notes against what's already
+  there and asks whether to skip duplicates, import everything anyway, or cancel.
+  ([the full story](docs/ISSUES_LOG.md#importing-the-same-backup-twice))
+- **Scroll wheel no longer gets "stuck" on small panels.** It could keep trying to scroll an
+  already-fully-visible panel (e.g. an empty Trash list) instead of falling through to scroll
+  the page underneath — added a small tolerance to the "is this panel already fully shown"
+  check, making it robust against minor platform differences in how scroll position is
+  reported.
+- **The crash-recovery handler could itself have crashed.** A module-level handler referenced
+  `self` in a context where it didn't exist — if the app had ever failed to start, the intended
+  friendly error dialog would itself have crashed instead of showing.
+  ([the full story](docs/ISSUES_LOG.md#a-crash-handler-that-would-have-crashed-itself))
 
 ### Removed
-- ~700 lines of dead code: several old dialog-based flows (category manager, tag manager, duplicate finder, trash dialog, share-all dialog, import-code dialog) that had been fully superseded by inline panels earlier in development but were never deleted, plus a handful of smaller orphaned helper functions.
-- Unused `messagebox` and `colorchooser` imports, left over from before those were replaced by the app's own themed dialog and color-palette systems.
+- **~700 lines of dead code** — several old dialog-based flows (category manager, tag manager,
+  duplicate finder, trash dialog, share-all dialog, import-code dialog) fully superseded by
+  inline panels earlier in development but never deleted, plus a handful of smaller orphaned
+  helper functions.
+- **Unused `messagebox` and `colorchooser` imports**, left over from before those were replaced
+  by the app's own themed dialog and color-palette systems.
 
 ### Testing
-- Rebuilt the manual QA test plan (spreadsheet) into a structured set of 5 automated headless test scripts (87 checks total) plus a dedicated recurrence-engine test suite (18 checks), covering notes CRUD, categories, templates, recurrence, calendar, duplicate detection, trash, share codes, threaded import/export, theming, popup/panel stress testing, and data-corruption resilience.
+- **The manual QA plan became an automated suite.** Rebuilt the spreadsheet test plan into a
+  structured set of 5 automated headless test scripts (87 checks total) plus a dedicated
+  recurrence-engine test suite (18 checks), covering notes CRUD, categories, templates,
+  recurrence, calendar, duplicate detection, trash, share codes, threaded import/export,
+  theming, popup/panel stress testing, and data-corruption resilience.
 
 ---
 
 ## [0.3.0] — Tags removed; categories as the sole organization system
 
-### Removed
-- The Tags feature, entirely: the tag registry and persistence layer, all tag UI (note editor tag entry/chips, sidebar tag filter, Settings → Manage Tags panel), tag-based duplicate-merge logic, and tag fields from the share-code and data model. Categories were judged sufficient on their own, and tags added complexity without enough distinct value to justify maintaining two overlapping organization systems.
-- Old notes with a leftover `tags` field from before this change load normally; the field is silently dropped on next save.
+*Highlights: Tags come out entirely, leaving categories as the app's one organization system.*
 
 ### Fixed
-- The Manage Tags panel intermittently lost its content when switching between Settings accordion panels — root-caused to a layout calculation that ran before the panel had actually become visible, using an unreliable width. Superseded by removing the feature, but the underlying `<Map>`-event-based fix (relaying out deterministically the moment a panel becomes visible, instead of guessing a timer delay) is reused elsewhere in the Settings UI.
-- Template editor (New/Edit) could open positioned behind the main window, appearing to do nothing when clicked. Root cause: the `-topmost` window attribute was being set *after* a layout recalculation call, which silently failed to take effect in that order on this platform. Also switched the editor to the same shared, multi-monitor-safe popup positioning used everywhere else in the app, after the editor's own hand-rolled positioning logic was found capable of placing it off-screen entirely.
-- Category deletion confirmation was still a separate OS-style window rather than the app's inline themed dialogs; converted to match.
+- **The Manage Tags panel intermittently lost its content** when switching between Settings
+  accordion panels — root-caused to a layout calculation that ran before the panel had actually
+  become visible, using an unreliable width. Superseded by removing the feature, but the
+  underlying `<Map>`-event-based fix (relaying out deterministically the moment a panel becomes
+  visible, instead of guessing a timer delay) is reused elsewhere in the Settings UI.
+  ([the full story](docs/ISSUES_LOG.md#the-panel-that-lost-its-content-depending-on-how-you-got-there))
+- **Template editor (New/Edit) could open behind the main window**, appearing to do nothing
+  when clicked. Root cause: the `-topmost` window attribute was set *after* a layout
+  recalculation call, which silently failed to take effect in that order on this platform. Also
+  switched the editor to the same shared, multi-monitor-safe popup positioning used everywhere
+  else in the app, after its own hand-rolled positioning logic was found capable of placing it
+  off-screen entirely.
+  ([the full story](docs/ISSUES_LOG.md#the-template-editor-that-did-nothing-when-clicked))
+- **Category deletion confirmation matches the app's own dialogs.** It was still a separate
+  OS-style window rather than the app's inline themed dialogs; converted to match.
+
+### Removed
+- **The Tags feature, entirely** — the tag registry and persistence layer, all tag UI (note
+  editor tag entry/chips, sidebar tag filter, Settings → Manage Tags panel), tag-based
+  duplicate-merge logic, and tag fields from the share-code and data model. Categories were
+  judged sufficient on their own; tags added complexity without enough distinct value to
+  justify maintaining two overlapping organization systems.
+- **Old notes with a leftover `tags` field load normally** — the field is silently dropped on
+  next save.
 
 ---
 
 ## [0.2.0] — Inline UI overhaul & data resilience
 
-### Changed
-- Converted essentially every remaining OS-native popup (dialogs, dropdowns, color pickers, date pickers) to the app's own borderless, themed, anchored popups — nothing falls back to a native white Windows dialog anymore.
-- Multi-monitor dropdown positioning: popups now measure against the app's own window bounds rather than the full virtual screen, with live position tracking as the window moves, so a dropdown can no longer land on a different monitor than the app itself.
-
-### Fixed
-- A placeholder-text race condition in the tag and title entry fields, where fast typing immediately after clicking could concatenate with the placeholder text instead of replacing it.
-- Note list scrollbar was invisible in some layouts due to pack ordering; scrollbar is now packed before the canvas so it always reserves its width.
-- Several popups (emoji picker, tag filter, calendar day list) had their mousewheel binding wired up before their content existed, so scrolling silently didn't work; moved the binding to after content creation throughout.
-- Autosave while a popup (e.g. the emoji picker) was open used to visibly flicker the sidebar as the note list refreshed underneath it; autosave now defers the refresh until the popup closes.
+*Highlights: Every OS-native popup becomes an in-app themed one, and the calendar grows richer.*
 
 ### Added
-- Calendar: day-level emoji markers, hover previews per note (not just per day), create-note-from-calendar-day, visual separators between multiple notes shown in one day cell, adaptive preview text size based on window width.
-- Emoji picker for the note editor (title/body/comments), with categorized emoji groups.
-- Username greeting on the sidebar ("Hi \<name\>,"), configurable in Settings.
+- **Calendar quality-of-life layer** — day-level emoji markers, hover previews per note (not
+  just per day), create-note-from-calendar-day, visual separators between multiple notes shown
+  in one day cell, and adaptive preview text size based on window width.
+- **Emoji picker for the note editor** (title/body/comments), with categorized emoji groups.
+- **Username greeting on the sidebar** ("Hi \<name\>,"), configurable in Settings.
+
+### Changed
+- **Every remaining OS-native popup converted to the app's own.** Dialogs, dropdowns, color
+  pickers, and date pickers are now borderless, themed, anchored popups — nothing falls back to
+  a native white Windows dialog anymore.
+- **Multi-monitor dropdown positioning.** Popups now measure against the app's own window
+  bounds rather than the full virtual screen, with live position tracking as the window moves,
+  so a dropdown can no longer land on a different monitor than the app itself.
+  ([the full story](docs/ISSUES_LOG.md#the-dropdown-that-opened-on-the-wrong-monitor))
+
+### Fixed
+- **Fast typing no longer merges with placeholder text.** A race condition in the tag and title
+  entry fields could concatenate fast typing immediately after clicking with the placeholder
+  text instead of replacing it.
+- **Note list scrollbar always reserves its width.** It was invisible in some layouts due to
+  pack ordering; the scrollbar is now packed before the canvas.
+- **Several popups couldn't scroll at all.** The emoji picker, tag filter, and calendar day
+  list had their mousewheel binding wired up before their content existed, so scrolling
+  silently didn't work; moved the binding to after content creation throughout.
+- **Autosave no longer flickers the sidebar under an open popup.** Autosave while a popup (e.g.
+  the emoji picker) was open used to visibly flicker the sidebar as the note list refreshed
+  underneath it; the refresh is now deferred until the popup closes.
 
 ---
 
 ## [0.1.0] — Core application
 
+*Highlights: The founding feature set — notes, recurrence, calendar, templates, sharing, themes.*
+
 ### Added
-- Note CRUD: create, edit, pin, duplicate, soft-delete to trash with automatic purge after a configurable retention window.
-- Categories: create, rename, delete (with reassignment of affected notes), custom colors.
-- Recurring notes: daily / weekly / monthly / yearly recurrence with custom intervals, specific-weekday and specific-day-of-month selection, a clamp/skip policy for month-end edge cases, end conditions (count or date), and per-occurrence editing/deletion separate from the base series.
-- Calendar view with month navigation and jump-to-date.
-- Templates: reusable note content, including checklist items.
-- Checklist items within a note, with progress shown on the note's card in the list.
-- Duplicate detection (matching on title/body/comments/category) with per-group cleanup.
-- Search and six sort modes; grouping by category with persistent collapse state.
-- Sharing: single or multiple notes as a compact copy-pasteable text code; full backup export/import as a `.zip` including attachments.
-- File attachments per note.
-- Eight built-in themes (four dark, four light variants).
-- Single-editor-tab design: switching notes always autosaves the one being left, no explicit tab management needed.
+- **Note CRUD** — create, edit, pin, duplicate, soft-delete to trash with automatic purge after
+  a configurable retention window.
+- **Categories** — create, rename, delete (with reassignment of affected notes), custom colors.
+- **Recurring notes** — daily / weekly / monthly / yearly recurrence with custom intervals,
+  specific-weekday and specific-day-of-month selection, a clamp/skip policy for month-end edge
+  cases, end conditions (count or date), and per-occurrence editing/deletion separate from the
+  base series.
+- **Calendar view** with month navigation and jump-to-date.
+- **Templates** — reusable note content, including checklist items.
+- **Checklist items within a note**, with progress shown on the note's card in the list.
+- **Duplicate detection** (matching on title/body/comments/category) with per-group cleanup.
+- **Search and six sort modes**; grouping by category with persistent collapse state.
+- **Sharing** — single or multiple notes as a compact copy-pasteable text code; full backup
+  export/import as a `.zip` including attachments.
+- **File attachments per note.**
+- **Eight built-in themes** (four dark, four light variants).
+- **Single-editor-tab design** — switching notes always autosaves the one being left, no
+  explicit tab management needed.
