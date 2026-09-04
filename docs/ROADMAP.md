@@ -87,6 +87,21 @@ Genuinely open ideas, roughly ordered by how soon they're likely to happen.
   drop it into a table made from the toolbar. Tables pasted from Excel, Word or web pages (which
   *do* carry structure) arrive as real grids and stay fully supported.
 
+Three more features were tried and deliberately taken out again — the decision record, since
+"we had it and removed it" is a stronger ruling than "we never built it":
+
+- **Quote blocks** — shipped with paragraph formatting (0.34.51), removed at 0.36.54: a heavy
+  visual device for something a note rarely needs, and the only paragraph property carrying
+  colours of its own. Old notes load cleanly as ordinary paragraphs
+  (see the [Changelog](../CHANGELOG.md#03656--2026-08-25)).
+- **A Markdown export** — built alongside the HTML and plain-text exports (0.64.95), measured
+  against them, and removed before shipping: everything it could say, the HTML says with the
+  colours on.
+- **Clickable Statistics chips** — the chips highlighted on hover but the click's failure never
+  reproduced under test; rather than chase it, the interactivity was removed outright, because
+  Statistics is a quick snapshot, not another way to filter notes
+  (the investigation: ["The chip that looked clickable"](ISSUES_LOG.md#the-chip-that-looked-clickable-and-the-fix-that-looked-like-it-worked)).
+
 ## Shipped & settled
 
 Work that reached `main`, kept here as a decision record — the questions each piece settled, so

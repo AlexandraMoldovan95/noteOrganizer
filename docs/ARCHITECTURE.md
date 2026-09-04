@@ -140,7 +140,10 @@ override; editing "this and all future" (or the whole series) edits the base not
 Every dropdown, color picker, confirmation prompt, and date picker in this app is a hand-built
 `Toplevel` popup — never `tkinter.messagebox`, `ttk.Combobox`, or `colorchooser`. The trade-off
 is more code to maintain; what it buys is a UI that's fully themed (dark/light variants apply
-everywhere, including every dialog) and behaves consistently across the app.
+everywhere, including every dialog) and behaves consistently across the app. The single
+deliberate exception is the last-resort startup-crash dialog, which uses the plain
+standard-library messagebox precisely because it must not depend on the app's own UI having come
+up (see [ISSUES_LOG.md](ISSUES_LOG.md#a-crash-handler-that-would-have-crashed-itself)).
 
 The shared building block is `_place_dropdown_popup()`: given a popup and an anchor widget, it
 positions the popup against the *app's own window bounds* (not the full virtual screen — this

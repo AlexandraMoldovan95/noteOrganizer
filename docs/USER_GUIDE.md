@@ -43,7 +43,9 @@ every major feature.
 
 Note Organizer runs as a single window with two tabs, **Notes** and **Calendar**, plus a
 **Settings** page reached via its own button at the bottom of the sidebar. Everything is stored
-locally, next to the app — there's no account to create and no internet connection required.
+locally on your own computer — there's no account to create and no internet connection required.
+Run from source, the data folder sits next to the script; the installed app keeps it per-user
+under `%APPDATA%\NoteOrganizer` (worth knowing if you ever go looking for your notes folder).
 
 ![Main window](screenshots/main-window.png)
 
@@ -54,7 +56,7 @@ locally, next to the app — there's no account to create and no internet connec
 ### Creating and editing
 
 Click **+ New Note** in the sidebar to open a blank editor. A note has a title, a body, optional
-comments, a category, an optional date, an optional color, and an optional checklist. There's only
+comments, a category, an optional date, an optional colour, and an optional checklist. There's only
 ever one editor open at a time — clicking a different note in the list automatically saves
 whatever you were working on first, so there's no tab-juggling and no risk of losing an edit.
 
@@ -87,12 +89,12 @@ hiding anything.
 - Hover any button and it tells you what it does.
 - **Style**: **Bold**, *Italic*, <u>Underline</u>, and ~~Strikethrough~~ — also on the right-click
   menu, and available as keyboard shortcuts (**Ctrl+B**, **Ctrl+I**, **Ctrl+U**, **Ctrl+D**).
-- **Colors**: text color and highlight, each opening a small swatch picker (no hex codes to type —
-  just pick a color) with a Clear option to remove it again.
+- **Colours**: text colour and highlight, each opening a small swatch picker (no hex codes to type —
+  just pick a colour) with a Clear option to remove it again.
 - All six work the same way: select some text and click (or press) one to apply it there, or click
   one with nothing selected — it "sticks" for whatever you type next, until you click it again to
   turn it off.
-- Text color and highlight can be combined with each other and with any of the four styles.
+- Text colour and highlight can be combined with each other and with any of the four styles.
 
 ![Formatting toolbar](screenshots/formatting-toolbar.png)
 
@@ -216,9 +218,11 @@ A table works the way a spreadsheet has taught your hands to expect:
   page lands here as a real table.
 - **Right-click** a cell for everything else — the everyday actions sit on top, and **Align cell /
   Rows / Columns / Merge / Table** each hold their group one hover away.
-- Under **Table** lives **Add caption below…**: a centred, auto-numbered „Tab. N” label (typing
-  replaces the selected placeholder) plus a „Sursa:” line for links and sources — plain, editable
-  text ever after.
+- Under **Table** lives **Add caption below…**: a centred, auto-numbered "Tab. N" (Table N)
+  label, typing replaces the selected placeholder, plus a "Sursa:" (Source) line for links and
+  sources. Those are the literal labels the app inserts — the caption follows the academic
+  table-caption convention it was built for, and since it's plain, editable body text ever after,
+  you can retype the labels however you like.
 - The full set: merge the selected cells into one (their texts join), split a merge back apart,
   insert or delete rows and columns, duplicate whole columns to the end of the table (and whole
   rows to the bottom), insert a **checkbox** (with its own colour palette) or an emoji, and
@@ -343,7 +347,7 @@ remembered.
 
 - **Pin** a note (right-click → Pin) to keep it at the top of the list regardless of sort order.
 - **Duplicate** a note to create an editable copy, titled "(copy)".
-- **Categories** act as folders — create, rename, recolor, or delete them from Settings →
+- **Categories** act as folders — create, rename, recolour, or delete them from Settings →
   Categories. Deleting a category with notes in it asks where to move them first; nothing is ever
   silently lost.
 
@@ -416,10 +420,10 @@ those show when you open the note in the editor (**✏ Open in editor**).
 
 ![Calendar view](screenshots/calendar-view.png)
 
-You can also paint a specific calendar day a custom color (right-click it), independent of any
-note's own color — useful for marking something about the day itself, like a holiday or deadline.
+You can also paint a specific calendar day a custom colour (right-click it), independent of any
+note's own colour — useful for marking something about the day itself, like a holiday or deadline.
 
-![Calendar day coloring](screenshots/calendar-day-color.png)
+![Calendar day colouring](screenshots/calendar-day-color.png)
 
 ---
 
@@ -438,7 +442,7 @@ all of them.
 
 Paste a code you received into **Import code** in the sidebar. If any of the notes it contains
 look identical to ones you already have, you'll be asked whether to skip the duplicates, import
-everyone anyway, or cancel — nothing is silently duplicated.
+everything anyway, or cancel — nothing is silently duplicated.
 
 ![Import code](screenshots/import-code.png)
 
@@ -468,7 +472,7 @@ attachments.
 Settings → Export notes creates a single `.zip` containing every note, your settings, and every
 attachment — the one file you need to move everything to another device. A line under the button
 remembers when you last did this — worth a glance now and then, because that `.zip` is the only
-copy of your notes outside the app's own folder. With a lot of attachments this can take a moment;
+copy of your notes outside the app's data folder (see Getting started for where that lives). With a lot of attachments this can take a moment;
 a progress bar stays visible at the bottom of the window the whole time, and the app remains fully
 usable while it works.
 

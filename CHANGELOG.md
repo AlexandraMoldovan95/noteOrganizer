@@ -4,8 +4,10 @@ All notable changes to Note Organizer are documented here.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 numbers are retrospective groupings of related work — the project didn't tag formal
-releases from day one, so early history is grouped by theme rather than exact date. How
-the numbers themselves are counted is the
+releases from day one, so early history is grouped by theme rather than exact date, and a
+few back-to-back bumps ship inside one grouped section (the
+[Roadmap's version ledger](docs/ROADMAP.md#version-ledger) records every single number).
+How the numbers themselves are counted is the
 [Roadmap's Versioning section](docs/ROADMAP.md#versioning).
 
 | Version | Date | In one line |
@@ -89,9 +91,10 @@ regression checks.*
   switch, a per-view choice rather than saved note content. The redundant in-panel "Close" buttons
   were dropped from both boxes, since their header bars already toggle them shut.
 - **A system-managed table caption.** Table menu → **Table → Add caption below…** inserts a
-  centred, auto-numbered label line ("Tab. N: descriere", the placeholder pre-selected so typing
-  replaces it) plus a "Sursa:" line for as many sources or links as needed — ordinary body text
-  after that, editable like anything else. Nobody has to hand-build a caption and fight its
+  centred, auto-numbered label line ("Tab. N: descriere" — *Table N: description*, the placeholder
+  pre-selected so typing replaces it) plus a "Sursa:" (*Source*) line for as many sources or links
+  as needed — the literal labels the app inserts, following the academic table-caption convention
+  it was built for, as ordinary body text after that, editable like anything else. Nobody has to hand-build a caption and fight its
   alignment again.
 - **The table menu got shelves.** The flat run had grown past fifteen entries ("finding the one you
   need takes minutes"). The everyday cell actions stay on top; Align cell, Rows, Columns, Merge and
@@ -665,7 +668,9 @@ dependency.*
 
 ## [0.36.56] — 2026-08-25
 
-*Highlights: Fonts land in notes and Settings, alongside theming, toolbar and title-field fixes.*
+*Highlights: Fonts land in notes and Settings, alongside theming, toolbar and title-field fixes.
+(This grouped section covers the 0.35.51, 0.36.54 and 0.36.55 bumps too — see the
+[version ledger](docs/ROADMAP.md#version-ledger).)*
 
 ### Added
 - **Font size and family in the note body.** A **Font** group in the toolbar sets the typeface
