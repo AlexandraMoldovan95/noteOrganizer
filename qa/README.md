@@ -71,7 +71,11 @@ real notebook (it has happened; see [CLAUDE.md](../CLAUDE.md),
 `py tools/run_tests.py` does the whole safe-scratch ritual for you and
 is the verdict that counts before a push; `py tools/pre_push_check.py`
 is the two-second static half (names, API surface, compile-all) you
-run before *every* push.
+run before *every* push. The CI's **Linux leg** runs locally too, via
+Docker (`tools/linux-ci/` — build once, then
+`docker run --rm -v "${PWD}:/repo:ro" noteorg-linux-ci`), so the
+Xvfb-only behaviours that used to surface as red CI runs can be caught
+before the push.
 
 ## The surface inventory: what every new feature is walked against
 
