@@ -127,6 +127,14 @@ A new surface joins this list the moment it ships.
   outside the band, the band is never entered, and the cap expires
   into a hard failure — prove that asymmetry under the mutant before
   trusting the check.
+- The promise's **baseline settles first** (qa1's `settled()` helper:
+  one value held for 500ms straight — longer than any restore timer —
+  capped). The push-down check failed a *fourth* time with its
+  promised-state wait already in place, because the baseline it
+  promised `+1` against had been read mid-settle; a promise measured
+  against a moving reference targets the wrong value no matter how
+  well the wait afterwards is built. Failure messages carry the
+  expected and landed values, so the next red names its mechanism.
 - A failure gets a **permanent fix, at the root of its class**: when a
   check fails without a real regression, the check's *strategy* is
   wrong — fix the strategy, sweep the suite for every sibling using
