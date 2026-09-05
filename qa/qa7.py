@@ -418,6 +418,68 @@ check('the genuinely-open note stays open', app.selected_note_id == 40)
 check('its unsaved edit was correctly flushed and saved', 'unsaved' in app.find_note(40)['title'])
 
 # ============================================================
+# 6b. CANCELLED CONTEXT-DELETE MUST NOT HIJACK THE SELECTION
+# ============================================================
+# The delete-selection-hijack bug: _context_delete_note used to repoint
+# selected_note_id at the right-clicked note so delete_current_note
+# would act on it. Answering No to the confirm (or cancelling the
+# occurrence-scope prompt) returned with the selection still on the
+# WRONG note, and the next autosave silently overwrote that note with
+# the open note's content. The delete target travels as a parameter
+# now; a cancel must leave every bit of state exactly as it was.
+import copy as _copy_q7
+
+app.notes = [
+    {'id': 45, 'title': 'OpenNote', 'body': 'open body', 'category': 'General',
+     'updated': '2026-01-01 00:00', 'created': '2026-01-01 00:00', 'checklist': [], 'attachments': []},
+    {'id': 46, 'title': 'VictimNote', 'body': 'victim body', 'category': 'General',
+     'updated': '2026-01-01 00:00', 'created': '2026-01-01 00:00', 'checklist': [], 'attachments': []},
+]
+app.save_notes()
+app.refresh_note_list(); app.update()
+app.open_note_in_tab(app.find_note(45))
+app.update()
+
+victim_before = _copy_q7.deepcopy(app.find_note(46))
+trash_before = len(app.trash)
+app.ask_yes_no = lambda *a, **k: False  # user answers No
+app._context_delete_note(app.find_note(46))
+app.update()
+check('cancelled context-delete keeps the selection on the open note',
+      app.selected_note_id == 45)
+
+# Keep typing, then let the autosave path the bug rode fire for real.
+app.title_entry.insert(tk.END, ' typed-after-cancel')
+app._autosave_now()
+app.update()
+check('autosave after a cancelled context-delete lands in the OPEN note',
+      'typed-after-cancel' in app.find_note(45)['title'])
+check('the right-clicked note is untouched bit for bit',
+      app.find_note(46) == victim_before)
+check('a cancelled delete moves nothing to trash', len(app.trash) == trash_before)
+
+# Same contract on the occurrence-scope cancel (the calendar route).
+app.notes = app.notes + [
+    {'id': 48, 'title': 'RecurringVictim', 'body': 'x', 'category': 'General', 'date': '2026-07-01',
+     'recurrence': {'freq': 'daily'}, 'updated': '2026-01-01 00:00', 'created': '2026-01-01 00:00',
+     'checklist': [], 'attachments': [], 'exceptions': [], 'overrides': {}},
+]
+app.save_notes()
+app.refresh_note_list(); app.update()
+_orig_scope_q7 = app.ask_occurrence_scope
+app.ask_occurrence_scope = lambda *a, **k: None  # user cancels the scope prompt
+app._context_delete_note(app.find_note(48), '2026-07-09')
+app.update()
+check('cancelled scope prompt keeps the selection on the open note',
+      app.selected_note_id == 45)
+check('cancelled scope prompt leaves the series untouched',
+      app.find_note(48).get('exceptions') == [])
+check('cancelled scope prompt leaves the occurrence date alone',
+      app.current_occurrence_date is None)
+app.ask_occurrence_scope = _orig_scope_q7
+app.ask_yes_no = lambda *a, **k: True
+
+# ============================================================
 # 7. ATTACHMENT-ONLY NOTE AUTOSAVE
 # ============================================================
 tmp_file = os.path.join(tempfile.gettempdir(), 'qa7_attach_only.txt')
