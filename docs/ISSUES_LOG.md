@@ -19,6 +19,7 @@ day-to-day tracking.
 | [A backup that assumed it had worked](#a-backup-that-assumed-it-had-worked) | A backup whose result is never checked is an assumption, not a safety net. | 0.28.38 |
 | [The cleanup that deleted the real notebook](#the-cleanup-that-deleted-the-real-notebook) | Copy-then-delete-the-original must never touch a permanent store; cleanups name their exemptions explicitly. | 0.30.39 |
 | [The safety test that needed its own safety](#the-safety-test-that-needed-its-own-safety) | Safety rules must be categorical, not filename lists; dangerous tests carry their own refusal. | 0.39.63 |
+| [The delete that kept aiming at the wrong note](#the-delete-that-kept-aiming-at-the-wrong-note) | An operation aimed by mutating shared state lies on every cancel path — pass the target as a parameter. | 0.66.100 |
 | [The template editor that "did nothing" when clicked](#the-template-editor-that-did-nothing-when-clicked) | 'Nothing happens' in a --windowed build is a real bug report — the exception was invisible. | 0.3.0 |
 | [The panel that lost its content depending on how you got there](#the-panel-that-lost-its-content-depending-on-how-you-got-there) | Recalculate layout on Tk's `<Map>` event, not after a guessed delay. | 0.3.0 |
 | [The scroll that stopped twice, for two different reasons](#the-scroll-that-stopped-twice-for-two-different-reasons) | Same symptom, unrelated causes — check neighbouring areas instead of assuming one fix covers all. | 0.28.38 |
@@ -174,6 +175,44 @@ accident to arrive under a filename it forgot to list. The durable form of
 the rule is categorical — *all tests run from scratch copies outside the
 tree* — and the file that can do damage carries its own refusal, so the
 last line of defence does not depend on anyone remembering anything.
+
+### The delete that kept aiming at the wrong note
+
+*([0.66.100](../CHANGELOG.md#066100--2026-09-05) · 2026-09-05)*
+
+**Symptom:** Never reported from the field — surfaced by a code audit,
+then reproduced by hand. Editing note A, right-clicking note B in the
+list, choosing Delete and answering **No** left the app looking perfectly
+normal — and the next autosave silently overwrote note B, title to
+checklist, with note A's content. Nothing arrived in the Trash
+("Settings → Recently deleted"), because officially nothing was deleted.
+
+**Root cause:** `delete_current_note` could only act on "the selected
+note", so the context menu aimed it by overwriting `selected_note_id`
+with the right-clicked note's id — relying on the delete itself to reset
+the editor afterwards. Both cancel paths (answering No, or dismissing the
+occurrence-scope prompt of a repeating note) returned without restoring
+the selection, leaving the editor's content and its identity pointing at
+two different notes. Autosave trusted the identity: its only guard
+checked that the selected note *exists* — and it did, since the delete
+had just been cancelled. A comment in the flush path even documented the
+repointing as a known hazard, but the guard written for it covered only
+the confirmed-delete half (note gone), never the cancelled half (note
+alive and about to be overwritten).
+
+**Fix:** The delete target now travels as a parameter
+(`_delete_note(note, occurrence_date)`) and the editor's selection is
+never touched on the way in — a cancel leaves no state to restore because
+none was borrowed. The regression checks drive the real cancel routes (No
+on the confirm, cancel on the scope prompt) and then fire a genuine
+autosave, asserting the right-clicked note survives bit for bit;
+reintroducing the old repointing makes five of them fail.
+
+**Takeaway:** an operation that aims itself by mutating shared state
+leaves a lie behind on every path that doesn't finish the job — and
+cancel paths never finish the job. Pass the target explicitly instead of
+steering shared state, and when a comment says "restoring isn't needed",
+ask on which branch that's actually true.
 
 ## Tk & platform gotchas
 

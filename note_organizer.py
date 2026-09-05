@@ -45,7 +45,7 @@ except ImportError:
 # Added/Fixed CHANGELOG.md entries, not per-release counts). The running
 # app records this into settings, so the next time a newer build opens
 # over older data it can tell the user what changed version-wise.
-APP_VERSION = "0.66.99"
+APP_VERSION = "0.66.100"
 
 
 def parse_version(v):
@@ -11573,10 +11573,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if self.selected_note_id is None and not self.open_tabs:
             return
         # selected_note_id can end up stale — pointing at a note that no
-        # longer exists — in the brief window some code paths (e.g.
-        # _context_delete_note) temporarily repoint it at a DIFFERENT note
-        # than the one genuinely open in the editor, to reuse the normal
-        # delete logic. If that happens, there's nothing real to flush
+        # longer exists — in the brief window between a delete removing the
+        # note from self.notes and the editor being repointed somewhere
+        # real (e.g. the flush switch_to_tab performs during the
+        # post-delete cleanup, before it restores the next tab's state).
+        # If that happens, there's nothing real to flush
         # against; skip silently rather than falling through to a save
         # attempt that fails with a "Note missing" dialog — an automatic,
         # invisible safety net shouldn't ever surface an interruptive error
@@ -12461,20 +12462,15 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         """Delete triggered from the right-click menu. Routes through the normal
         delete logic so recurring-series scope prompts still apply."""
         # Flush whatever's genuinely open in the editor FIRST, under its real
-        # selected_note_id. If the note being deleted here isn't the one
-        # actually open, delete_current_note()'s own internal tab-switch
-        # (which flushes again, as part of switching to the next tab)
-        # would otherwise try to save against the note we're ABOUT to
-        # delete below rather than the real one — and since that note is
-        # gone by the time the flush runs, it fails with a spurious
-        # "Note missing" error dialog, for a delete the user never asked
-        # this note to be part of.
+        # selected_note_id, so the list re-render after the delete shows the
+        # editor's latest content rather than a stale preview.
         self._flush_autosave()
-        # Point the editor's selection at this note so delete_current_note acts
-        # on it, then restore afterward isn't needed (delete resets the editor).
-        self.selected_note_id = note["id"]
-        self.current_occurrence_date = occurrence_date
-        self.delete_current_note()
+        # The target travels as a parameter — never by repointing the
+        # editor's selection at it. An earlier version did exactly that,
+        # and when the user cancelled the confirm dialog the selection
+        # stayed on the wrong note, so the next autosave overwrote it
+        # with the open note's content (see ISSUES_LOG).
+        self._delete_note(note, occurrence_date)
 
     def show_template_picker(self):
         """Inline picker listing saved templates. Clicking one fills the current
@@ -13078,27 +13074,45 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         core_move_to_trash(self.trash, notes_to_trash)
 
     def delete_current_note(self):
-        if self.selected_note_id is None:
-            self.show_info("Nothing to delete", "No note is selected.")
-            return
-
-        note = self.find_note(self.selected_note_id)
+        """Delete the note open in the editor (the Delete button / shortcut)."""
+        note = (self.find_note(self.selected_note_id)
+                if self.selected_note_id is not None else None)
         if note is None:
             self.show_info("Nothing to delete", "No note is selected.")
             return
+        self._delete_note(note, self.current_occurrence_date)
 
-        if is_recurring(note) and self.current_occurrence_date:
-            scope = self.ask_occurrence_scope("Delete", self.current_occurrence_date)
+    def _delete_note(self, note, occurrence_date):
+        """Delete a specific note (or one occurrence of it), no matter what
+        the editor is showing. The target arrives as a parameter and the
+        editor's selection is never touched on the way in, so cancelling
+        either prompt leaves every bit of editor state exactly as it was —
+        the selection-repointing shortcut this replaces let a cancelled
+        delete aim the next autosave at the wrong note (see ISSUES_LOG)."""
+        # Re-anchor on the stored dict: the calendar hands out
+        # per-occurrence copies, and mutations below must land in
+        # self.notes, not in a copy.
+        note = self.find_note(note["id"])
+        if note is None:
+            return
+
+        if is_recurring(note) and occurrence_date:
+            scope = self.ask_occurrence_scope("Delete", occurrence_date)
             if scope is None:
                 return
             if scope == "occurrence":
                 exceptions = set(note.get("exceptions") or [])
-                exceptions.add(self.current_occurrence_date)
+                exceptions.add(occurrence_date)
                 note["exceptions"] = sorted(exceptions)
-                note["overrides"].pop(self.current_occurrence_date, None)
+                note["overrides"].pop(occurrence_date, None)
                 note["updated"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 self.save_notes()
-                self.new_note()
+                if (self.selected_note_id == note["id"]
+                        and self.current_occurrence_date == occurrence_date):
+                    # The editor was showing the occurrence that just
+                    # stopped existing; start it fresh. Deleting some
+                    # other note's occurrence leaves the editor alone.
+                    self.new_note()
                 self.refresh_note_list()
                 self.render_calendar()
                 self.set_status("Removed that one occurrence")
@@ -13115,7 +13129,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
              else "Are you sure you want to delete this note?") + warning
         )
         if confirm:
-            deleted_id = self.selected_note_id
+            deleted_id = note["id"]
             # Move to trash (30-day recovery) rather than destroying it.
             doomed = [n for n in self.notes if n["id"] == deleted_id]
             self._move_notes_to_trash(doomed)

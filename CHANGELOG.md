@@ -12,6 +12,7 @@ How the numbers themselves are counted is the
 
 | Version | Date | In one line |
 |---|---|---|
+| [0.66.100](#066100--2026-09-05) | 2026-09-05 | A cancelled right-click delete can no longer hand the autosave a wrong target. |
 | [0.66.99](#06699--2026-09-05) | 2026-09-05 | A note shared from the editor arrives whole — checklist, formatting and paragraphs included. |
 | [0.66.98](#06698--2026-09-05) | 2026-09-05 | The app speaks English everywhere; a shared note keeps its checklist; any-script input proven. |
 | [0.66.97](#06697--2026-09-04) | 2026-09-04 | Keyboard reach — app-wide Ctrl+N and Ctrl+S shortcuts, and an in-note Ctrl+F find bar. |
@@ -42,6 +43,20 @@ How the numbers themselves are counted is the
 ---
 
 ## [Unreleased]
+
+## [0.66.100] — 2026-09-05
+
+*Highlights: a cancelled right-click delete can no longer hand the autosave a wrong target.*
+
+### Fixed
+- **A cancelled right-click delete can no longer overwrite a different note.** The context
+  menu's Delete aimed the shared delete routine by repointing the editor's selection at the
+  right-clicked note; answering No (or cancelling the occurrence-scope prompt) left the
+  selection there, so the next autosave silently wrote the open note's content over the
+  right-clicked one — no trash entry, no visible sign. The target now travels as a
+  parameter and the selection is never touched; the cancel routes are pinned by regression
+  checks that fire a real autosave and assert the other note survives bit for bit. Found by
+  the code audit, not a field report.
 
 ## [0.66.99] — 2026-09-05
 

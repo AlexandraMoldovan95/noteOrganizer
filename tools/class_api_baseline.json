@@ -107,6 +107,7 @@
   "_ctx_open": "(self, note, occurrence_date)",
   "_days_left_in_trash": "(self, deleted_at)",
   "_delete_category": "(self, name, redraw)",
+  "_delete_note": "(self, note, occurrence_date)",
   "_delete_note_from_calendar": "(self, note, date_str)",
   "_dismiss_mini_popup": "(self)",
   "_dissolve_orphan_markers": "(self, rows)",
