@@ -182,9 +182,40 @@ check('settings + theme flip + stray clicks raise nothing', not _errs6)
 # the username entry — still showing a blinking cursor, even though the
 # value had already autosaved. Switching tabs and back already cleared it
 # correctly; this is specifically the same-page click case.
+def _focus_settles_on(widget, cap_s=2.0):
+    """Focus under Windows lands asynchronously — a bare focus_set +
+    update read the OLD focus now and then (a 1-in-3 flake, solo runs
+    included). Promised-state wait: poll until the widget HOLDS focus,
+    hard-capped so a real regression still fails red."""
+    t0 = time.time()
+    while time.time() - t0 < cap_s:
+        try:
+            if app.focus_get() is widget:
+                return True
+        except (KeyError, tk.TclError):
+            pass
+        app.update()
+        time.sleep(0.02)
+    return False
+
+def _focus_leaves(widget, cap_s=2.0):
+    """The mirror wait: poll until focus is NOT on the widget — clearing
+    focus is as asynchronous as granting it."""
+    t0 = time.time()
+    while time.time() - t0 < cap_s:
+        try:
+            if app.focus_get() is not widget:
+                return True
+        except (KeyError, tk.TclError):
+            return True
+        app.update()
+        time.sleep(0.02)
+    return False
+
 name_entry.focus_set()
 app.update()
-check('username entry has focus before clicking elsewhere', app.focus_get() is name_entry)
+check('username entry has focus before clicking elsewhere',
+      _focus_settles_on(name_entry))
 # Click the section's own title. It has to be a title that's actually on
 # screen: Settings shows one section at a time, so reaching into a section
 # that isn't selected would be clicking a widget the user cannot see, and
@@ -199,7 +230,7 @@ check('the shown section\'s title is actually visible', name_title.winfo_ismappe
 name_title.event_generate('<Button-1>')
 app.update()
 check('clicking a section title elsewhere in Settings clears the field\'s focus',
-      app.focus_get() is not name_entry)
+      _focus_leaves(name_entry))
 
 # Regression: clicking "Back to Notes" directly (without clicking elsewhere
 # in Settings first) must also clear focus — this is the exact path a user
@@ -208,13 +239,14 @@ check('clicking a section title elsewhere in Settings clears the field\'s focus'
 # (bound to individual widgets instead of centrally).
 name_entry.focus_set()
 app.update()
-check('username entry has focus before leaving Settings', app.focus_get() is name_entry)
+check('username entry has focus before leaving Settings',
+      _focus_settles_on(name_entry))
 back_btn = find_widget(app.settings_page, tk.Button, 'Back to Notes')
 back_btn.event_generate('<Button-1>')
 back_btn.event_generate('<ButtonRelease-1>')
 app.update()
 check('clicking "Back to Notes" directly clears the field\'s focus',
-      app.focus_get() is not name_entry)
+      _focus_leaves(name_entry))
 app.show_settings_page()
 app.update()
 

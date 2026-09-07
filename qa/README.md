@@ -155,6 +155,14 @@ A new surface joins this list the moment it ships.
   wrong — fix the strategy, sweep the suite for every sibling using
   the same strategy, and record the lesson here. After the fix, the
   check may fail only when the promised behaviour is actually broken.
+- **Focus is asynchronous both ways** — granting AND clearing. A check
+  about where the app put the focus polls for the promised holder
+  (qa1's `focus_settles_on`, the assert-only twin of `take_focus` —
+  which FORCES focus and must never wrap an assertion about the app's
+  own placement, or the check turns tautological), and a check about
+  focus being cleared polls for it leaving (qa6's `_focus_leaves`).
+  A bare `focus_get() is widget` assert reads the old focus now and
+  then, even in solo runs — that flake blocked a release cut once.
 - **A mocked method is un-mocked with `del app.<name>`**, which
   un-shadows the real bound method — never by re-assigning a value
   saved earlier, unless that value is the script's own top-of-file

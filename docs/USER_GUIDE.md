@@ -408,6 +408,22 @@ specific date.
 Editing or deleting one specific occurrence (rather than the whole series) is always offered as a
 separate choice — your edit only applies where you meant it to.
 
+A day you edited with **"only this occurrence"** keeps its own content from then on: later edits
+to the series deliberately do not touch it (that day is *yours*), which can look surprising — a
+series edit appears everywhere except there. The app now says this out loud wherever it matters:
+the editor shows a line above the title — "🔁 This note repeats — edits here apply to every day ·
+1 day keeps its own edits (✎)" — and in the calendar, such a day carries a ✎ mark in the day list
+and an "✎ edited for this day" chip in the preview. To make a day follow the series again,
+right-click it in the calendar and choose **↺ Reset this day to the series content**.
+
+The small symbols on a repeating note's card in the list mean: `✎N` — N days edited separately,
+`✕N` — N occurrences deleted individually. The sidebar's filter dropdown also offers
+**🔁 Repeating** and **📅 Dated** alongside your categories, to see just the notes that live on
+the calendar — and the sort dropdown speaks calendar too: **Calendar: soonest** ranks notes by
+their next relevant date from today (a repeating series by its next occurrence, upcoming dates
+first, undated notes last — a mini-agenda), while **Calendar: oldest** walks the archive in plain
+chronological order by each note's own date.
+
 ---
 
 ## Calendar
@@ -421,6 +437,15 @@ Clicking a note in the day panel opens a **quick-look preview** — the note's p
 line of small flags saying what else it carries (▦ a table, ☑ a checklist, 💬 comments). Like the
 note-list cards, the preview does not draw the table or spell out the checklist and comments;
 those show when you open the note in the editor (**✏ Open in editor**).
+
+Opening a note from the calendar — the panel's Edit button or any right-click edit entry —
+remembers where you came from: a **← Back to Calendar** link appears at the top of the editor and
+returns you to that exact month and day, saving your edits on the way (for one day of a repeating
+note, it asks the usual "this occurrence or the whole series?" first — cancel that question and
+you simply stay in the editor, nothing lost). While you're editing one
+day of a repeating note, a line above the title names that day — the date field always shows the
+series' start date, so this is what tells you *which* day you opened. Saving stays in the editor;
+only the quick "Add note for this day" flow returns you to the calendar on Save.
 
 ![Calendar view](screenshots/calendar-view.png)
 

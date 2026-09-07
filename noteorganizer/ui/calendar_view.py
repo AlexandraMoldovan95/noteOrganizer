@@ -675,6 +675,10 @@ class CalendarViewMixin:
             if is_recurring(base_note):
                 title_text = "🔁 " + title_text
             icons = ""
+            if date_str in (base_note.get("overrides") or {}):
+                # This day was edited with "only this occurrence" — it
+                # keeps its own content and series edits don't reach it.
+                icons += "  ✎"
             if note.get("comments"):
                 icons += "  💬"
             if note.get("attachments"):
@@ -739,6 +743,8 @@ class CalendarViewMixin:
         text_only = re.sub(r"\n{3,}", "\n\n", text_only).strip("\n")
 
         chips = []
+        if date_str in (base_note.get("overrides") or {}):
+            chips.append("✎ edited for this day")
         if table_count:
             chips.append("▦ 1 table" if table_count == 1
                          else f"▦ {table_count} tables")
@@ -775,7 +781,8 @@ class CalendarViewMixin:
         open_note_in_tab clears any pending return first (it's meant to, for
         the normal case of switching between notes), so we set it again right
         after, once that's done."""
-        remembered = {"year": self.cal_year, "month": self.cal_month, "date_str": date_str}
+        remembered = {"year": self.cal_year, "month": self.cal_month,
+                      "date_str": date_str, "origin": "edit"}
         self.notebook.select(self.TAB_NOTES)
         self.open_note_in_tab(base_note, occurrence_date=date_str)
         self._pending_calendar_return = remembered
@@ -789,11 +796,17 @@ class CalendarViewMixin:
         # Flush before clearing, like every other route into an empty
         # editor — this path once discarded pending edits silently.
         self._flush_autosave()
-        self._pending_calendar_return = {
-            "year": self.cal_year, "month": self.cal_month, "date_str": date_str,
-        }
         self.notebook.select(self.TAB_NOTES)
         self.new_note()
+        # Set AFTER new_note — new_note clears any pending return, since
+        # every other route into a fresh editor means the calendar trip
+        # is over (a pending that outlived a delete once made a later,
+        # unrelated Save yank the user onto a stale calendar day).
+        self._pending_calendar_return = {
+            "year": self.cal_year, "month": self.cal_month,
+            "date_str": date_str, "origin": "add",
+        }
+        self._update_calendar_return_button()
         self.date_entry.delete(0, "end")
         self.date_entry.insert(0, date_str)
         self.date_entry.config(fg=self.colors["text"])

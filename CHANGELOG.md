@@ -12,6 +12,7 @@ How the numbers themselves are counted is the
 
 | Version | Date | In one line |
 |---|---|---|
+| [0.69.108](#069108--2026-09-07) | 2026-09-07 | The occurrence world becomes visible: banners, ✎ marks, per-day reset, calendar filters and sorts, the way back on every route. |
 | [0.66.105](#066105--2026-09-07) | 2026-09-07 | BackSpace and Delete treat an emoji as one character in every text field. |
 | [0.66.104](#066104--2026-09-07) | 2026-09-07 | Every data file saves atomically; an unreadable one is preserved and announced, never silently emptied. |
 | [0.66.102](#066102--2026-09-07) | 2026-09-07 | Autosave goes mute — no background dialog, and every editor-clearing gesture saves first. |
@@ -46,6 +47,63 @@ How the numbers themselves are counted is the
 ---
 
 ## [Unreleased]
+
+## [0.69.108] — 2026-09-07
+
+*Highlights: the calendar's occurrence world becomes visible and navigable — the editor names what it holds, edited days are marked and resettable, and every calendar route keeps the way back.*
+
+### Added
+- **The editor says what kind of note it holds.** Opening one day of a repeating note from
+  the calendar shows a line above the title — "📅 Editing this day of the series:
+  Wednesday, 15 July 2026" — and opening the note normally shows the series line instead:
+  "🔁 This note repeats (Every day) — edits here apply to every day · 1 day keeps its own
+  edits (✎)". The date field only ever shows the series' start date, and a day edited with
+  "only this occurrence" keeps its own content through later series edits — both were
+  invisible, and the second read as "my edit skipped a day" (field report).
+- **Days that live on their own are marked, and can come back.** A day carrying an
+  "only this occurrence" edit now shows a ✎ mark in the calendar's day list and an
+  "✎ edited for this day" chip in the preview — and its right-click menu gains
+  "↺ Reset this day to the series content", the way back that never existed: dropping the
+  day's separate edits (with a confirmation) so it follows the series again.
+- **The sidebar filter and sort know calendar notes.** The filter dropdown offers
+  🔁 Repeating and 📅 Dated alongside the categories — one judgment shared with bulk
+  select-all, so the list and "select all visible" can never disagree about what is
+  visible — and the sort dropdown gains **Calendar: soonest**, ranking by the note's NEXT
+  relevant date from today: a repeating series by its next occurrence (not its start
+  date), upcoming dates before past ones, the freshest past date leading that group,
+  undated notes last — a mini-agenda in the sidebar. The filter button also stopped
+  truncating its selected value (it read "🔁 R…" — caught in a screenshot).
+
+### Fixed
+- **The right-click edit routes keep the "Back to Calendar" button.** Opening a note
+  through the calendar's right-click menu (Edit only this occurrence, Edit whole series,
+  Open/Edit, Make this repeat) silently skipped the way-back memory that the day panel's
+  own Edit button always kept — field-reported as the button having vanished. All calendar
+  routes remember the way back now.
+- **A dropdown's button now closes its open list.** Clicking the sort/filter/category
+  button while its list was open blinked it — the shared click-outside dismiss closed the
+  list and the button's handler reopened it in the same breath — so the only way to close
+  it was clicking somewhere else (field report). The second click is a real toggle now.
+- **"Back to Calendar" saves before it leaves.** Returning with unsaved occurrence edits
+  used to render the day panel from the store — the old content, looking exactly like the
+  edit had been lost. The button now saves first, asking the occurrence question as part
+  of the click, like every other gesture that leaves the editor — and cancelling that
+  question keeps you in the editor with the way back intact, instead of navigating anyway.
+
+### Changed
+- **"Date (soonest)" is now "Calendar: oldest", the name it always deserved.** The old
+  sort was plain chronology by the note's own date — past dates first, a repeating series
+  by its start date — which "soonest" never quite promised. Same behaviour, honest name:
+  the archive walk. Its promise-keeping sibling is the new "Calendar: soonest" above.
+- **A recurring note's calendar menu drops the redundant "Open / Edit".** The two explicit
+  entries — only this occurrence, or the whole series — are the entire choice; a generic
+  third option beside them was noise (field feedback).
+- **Save returns you to the calendar only on the quick-add flow.** When editing an
+  existing note opened from a calendar day, Save now stays in the editor: with occurrence
+  saves riding on explicit gestures, the old always-return yanked you out on every save.
+  The Back to Calendar button is the way back — and a trip that stops making sense ends
+  cleanly: deleting a note or restoring a tab clears any pending return, so a later,
+  unrelated Save can never teleport you onto a stale calendar day.
 
 ## [0.66.105] — 2026-09-07
 
