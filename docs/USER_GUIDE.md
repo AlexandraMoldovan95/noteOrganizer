@@ -425,7 +425,8 @@ those show when you open the note in the editor (**✏ Open in editor**).
 Opening a note from the calendar — the panel's Edit button or any right-click edit entry —
 remembers where you came from: a **← Back to Calendar** link appears at the top of the editor and
 returns you to that exact month and day, saving your edits on the way (for one day of a repeating
-note, it asks the usual "this occurrence or the whole series?" first). While you're editing one
+note, it asks the usual "this occurrence or the whole series?" first — cancel that question and
+you simply stay in the editor, nothing lost). While you're editing one
 day of a repeating note, a line above the title names that day — the date field always shows the
 series' start date, so this is what tells you *which* day you opened. Saving stays in the editor;
 only the quick "Add note for this day" flow returns you to the calendar on Save.

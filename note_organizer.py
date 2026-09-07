@@ -10059,6 +10059,24 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # edit looked lost. The scope question, if one is pending, rides
         # this click like every other explicit gesture.
         self._flush_autosave()
+        # If the editor is STILL dirty, the flush did not finish — the
+        # user cancelled the scope prompt, or the date field is mid-edit.
+        # Navigating anyway would land them on a day panel showing the
+        # old content while their edit sits only in the editor (and the
+        # panel's "Open in editor" would then load disk content over it).
+        # Stay put instead; the way back stays armed.
+        try:
+            st = self.capture_editor_state()
+            if ((st.get("title", "").strip() or st.get("body", "").strip()
+                 or st.get("comments", "").strip() or st.get("attachments")
+                 or st.get("checklist"))
+                    and not self.editor_state_matches_saved(st)):
+                self.set_status(
+                    "Not saved yet — answer the save question (or fix the "
+                    "date) to go back to the calendar")
+                return
+        except Exception:
+            pass
         info = getattr(self, "_pending_calendar_return", None)
         self._pending_calendar_return = None
         if hasattr(self, "calendar_return_btn"):
@@ -11492,6 +11510,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._update_restore_button()
         self._find_on_context_switch()
         self._update_occurrence_banner()
+        # A tab snapshot never carries a calendar trip — restoring one
+        # means the editor's context changed, so any pending return is
+        # over (a stale one made a later Save yank the user onto an
+        # unrelated calendar day; see the delete cleanup's switch path).
+        self._pending_calendar_return = None
+        self._update_calendar_return_button()
 
     def editor_state_matches_saved(self, st):
         """True if the captured state equals what's on disk for its note — i.e.
@@ -12322,6 +12346,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._update_restore_button()
         self._find_on_context_switch()
         self._update_occurrence_banner()
+        # A fresh editor means any calendar trip is over — a pending
+        # return that survived (e.g. across a delete) made a later,
+        # unrelated Save yank the user onto a stale calendar day.
+        # _add_note_for_date re-arms its own pending right after this.
+        self._pending_calendar_return = None
+        self._update_calendar_return_button()
 
     def load_note(self, note, occurrence_date=None):
         """Open a note. If occurrence_date is given, the note is being opened
@@ -13058,6 +13088,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 self.set_status(("Auto-saved " if auto else "Saved at ") + now)
                 if auto:
                     self._show_toast("Note updated")
+            # A series save can have just removed the recurrence — an
+            # occurrence view of a note that no longer repeats is a lie
+            # the day banner must not keep telling.
+            if self.current_occurrence_date and not is_recurring(note):
+                self.current_occurrence_date = None
+                self._update_occurrence_banner()
 
         self.save_notes()
         # If this is an autosave AND a popup (e.g. the emoji picker) is open,

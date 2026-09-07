@@ -61,7 +61,8 @@ How the numbers themselves are counted is the
 - **"Back to Calendar" saves before it leaves.** Returning with unsaved occurrence edits
   used to render the day panel from the store — the old content, looking exactly like the
   edit had been lost. The button now saves first, asking the occurrence question as part
-  of the click, like every other gesture that leaves the editor.
+  of the click, like every other gesture that leaves the editor — and cancelling that
+  question keeps you in the editor with the way back intact, instead of navigating anyway.
 
 ### Changed
 - **A recurring note's calendar menu drops the redundant "Open / Edit".** The two explicit
@@ -70,7 +71,9 @@ How the numbers themselves are counted is the
 - **Save returns you to the calendar only on the quick-add flow.** When editing an
   existing note opened from a calendar day, Save now stays in the editor: with occurrence
   saves riding on explicit gestures, the old always-return yanked you out on every save.
-  The Back to Calendar button is the way back.
+  The Back to Calendar button is the way back — and a trip that stops making sense ends
+  cleanly: deleting a note or restoring a tab clears any pending return, so a later,
+  unrelated Save can never teleport you onto a stale calendar day.
 
 ## [0.66.104] — 2026-09-07
 

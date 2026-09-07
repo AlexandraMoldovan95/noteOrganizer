@@ -790,12 +790,17 @@ class CalendarViewMixin:
         # Flush before clearing, like every other route into an empty
         # editor — this path once discarded pending edits silently.
         self._flush_autosave()
+        self.notebook.select(self.TAB_NOTES)
+        self.new_note()
+        # Set AFTER new_note — new_note clears any pending return, since
+        # every other route into a fresh editor means the calendar trip
+        # is over (a pending that outlived a delete once made a later,
+        # unrelated Save yank the user onto a stale calendar day).
         self._pending_calendar_return = {
             "year": self.cal_year, "month": self.cal_month,
             "date_str": date_str, "origin": "add",
         }
-        self.notebook.select(self.TAB_NOTES)
-        self.new_note()
+        self._update_calendar_return_button()
         self.date_entry.delete(0, "end")
         self.date_entry.insert(0, date_str)
         self.date_entry.config(fg=self.colors["text"])
