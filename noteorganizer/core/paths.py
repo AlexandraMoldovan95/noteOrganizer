@@ -205,6 +205,47 @@ def _timestamped_backup(path, label):
         return None
 
 
+def preserve_corrupt_file(path):
+    """Copy an unreadable data file aside before anything can overwrite it.
+
+    A file that exists but cannot be parsed still holds the user's bytes —
+    and the very next write would replace it with whatever the caller has,
+    turning a recoverable corruption into a permanent loss. The copy is
+    timestamped, sits beside the original, matches no OWNED_* pattern (so
+    no cleanup can ever remove it), and is never auto-deleted.
+
+    Lives here rather than in storage.py because the pre-configure
+    migration code below needs it too, and paths cannot import storage
+    back. storage re-exports it as its own ``_preserve_corrupt``.
+
+    Returns:
+        The copy's path, or None if even the copy failed.
+    """
+    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    root, ext = os.path.splitext(path)
+    backup_path = f"{root}_corrupt_{stamp}{ext or '.json'}"
+    try:
+        shutil.copy2(path, backup_path)
+        return backup_path
+    except (IOError, OSError):
+        return None
+
+
+def _preserve_settings_if_unreadable(settings_path):
+    """Before migration code overwrites settings.json, keep its bytes if it
+    exists but holds no usable dict — the reclaim path used to clobber a
+    corrupt settings file with no trace at all."""
+    if not os.path.exists(settings_path):
+        return
+    try:
+        with open(settings_path, "r", encoding="utf-8") as f:
+            if isinstance(json.load(f), dict):
+                return
+    except (json.JSONDecodeError, IOError, OSError):
+        pass
+    preserve_corrupt_file(settings_path)
+
+
 def run_migrations(app_dir):
     """Bring data into app_dir from wherever a previous version left it.
 
@@ -255,6 +296,7 @@ def run_migrations(app_dir):
 
         appdata_settings = os.path.join(appdata_dir, "settings.json")
         if os.path.exists(appdata_settings):
+            _preserve_settings_if_unreadable(settings_path)
             try:
                 shutil.copy2(appdata_settings, settings_path)
             except (IOError, OSError):
@@ -264,11 +306,19 @@ def run_migrations(app_dir):
 
         settings = _settings()
         settings["reclaimed_from_appdata"] = True
+        # The same tmp-then-replace every other data-file write uses: a
+        # crash mid-write must not truncate settings.json (this was the
+        # one naive writer left after the storage layer learned better).
+        tmp_path = settings_path + ".tmp"
         try:
-            with open(settings_path, "w", encoding="utf-8") as f:
+            with open(tmp_path, "w", encoding="utf-8") as f:
                 json.dump(settings, f, indent=2)
+            os.replace(tmp_path, settings_path)
         except (IOError, OSError):
-            pass
+            try:
+                os.remove(tmp_path)
+            except OSError:
+                pass
 
         message = (
             f"Moved your notebook back into the app folder:\n{app_dir}\n\n"
@@ -302,6 +352,7 @@ def run_migrations(app_dir):
 
     legacy_settings = os.path.join(best_dir, "settings.json")
     if os.path.exists(legacy_settings):
+        _preserve_settings_if_unreadable(settings_path)
         try:
             shutil.copy2(legacy_settings, settings_path)
         except (IOError, OSError):

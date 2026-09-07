@@ -12,6 +12,7 @@ How the numbers themselves are counted is the
 
 | Version | Date | In one line |
 |---|---|---|
+| [0.66.104](#066104--2026-09-07) | 2026-09-07 | Every data file saves atomically; an unreadable one is preserved and announced, never silently emptied. |
 | [0.66.102](#066102--2026-09-07) | 2026-09-07 | Autosave goes mute — no background dialog, and every editor-clearing gesture saves first. |
 | [0.66.100](#066100--2026-09-05) | 2026-09-05 | A cancelled right-click delete can no longer hand the autosave a wrong target. |
 | [0.66.99](#06699--2026-09-05) | 2026-09-05 | A note shared from the editor arrives whole — checklist, formatting and paragraphs included. |
@@ -44,6 +45,31 @@ How the numbers themselves are counted is the
 ---
 
 ## [Unreleased]
+
+## [0.66.104] — 2026-09-07
+
+*Highlights: every data file saves atomically with surrogates mended, and an unreadable file is preserved and announced instead of silently emptied.*
+
+### Fixed
+- **Every data file now saves the way notes_data.json learned to.** trash.json,
+  templates.json and settings.json wrote with a bare `open('w')`: an emoji carrying a lone
+  surrogate half raised mid-dump and left the file truncated, and a crash mid-write
+  truncated it just the same — guards the notes file had earned from real losses, never
+  propagated to its siblings. All of them (plus the one-time cleanup rewrite and the
+  migration's settings write, the last naive writer standing) now route through one
+  atomic writer: surrogates mended, dumped to a sibling `.tmp`, replaced atomically — a
+  failed write leaves the previous file intact. From the code audit's high-severity
+  findings.
+- **An unreadable data file is preserved and announced, never silently emptied.** A corrupt
+  notes_data.json used to become an empty notebook without a word — and the very next save
+  overwrote the corrupt file, turning recoverable corruption into permanent loss. Every
+  loader now copies the unreadable file aside first (`*_corrupt_<timestamp>.json`, kept
+  forever, exempt from every cleanup), and for the notebook the startup notice says plainly
+  what happened, that the notes did not delete themselves, and where the preserved copy
+  sits. The adversarial review of the fix itself then caught the leftovers — a list-shaped
+  file of pure junk slipping past the net, the one-time cleanup racing to overwrite the
+  corrupt bytes, and the reclaim migration clobbering an unreadable settings file — all
+  closed in the same change.
 
 ## [0.66.102] — 2026-09-07
 
