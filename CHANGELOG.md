@@ -47,10 +47,21 @@ How the numbers themselves are counted is the
 ## [Unreleased]
 
 ### Added
-- **The editor names the day you're editing.** Opening one day of a repeating note from
-  the calendar now shows a line above the title — "📅 Editing this day of the series:
-  Wednesday, 15 July 2026" — because the date field only ever shows the series' start
-  date, and it is easy to forget which day you opened (field request).
+- **The editor says what kind of note it holds.** Opening one day of a repeating note from
+  the calendar shows a line above the title — "📅 Editing this day of the series:
+  Wednesday, 15 July 2026" — and opening the note normally shows the series line instead:
+  "🔁 This note repeats (Every day) — edits here apply to every day · 1 day keeps its own
+  edits (✎)". The date field only ever shows the series' start date, and a day edited with
+  "only this occurrence" keeps its own content through later series edits — both were
+  invisible, and the second read as "my edit skipped a day" (field report).
+- **Days that live on their own are marked, and can come back.** A day carrying an
+  "only this occurrence" edit now shows a ✎ mark in the calendar's day list and an
+  "✎ edited for this day" chip in the preview — and its right-click menu gains
+  "↺ Reset this day to the series content", the way back that never existed: dropping the
+  day's separate edits (with a confirmation) so it follows the series again.
+- **The sidebar filter knows calendar notes.** The filter dropdown offers 🔁 Repeating and
+  📅 Dated alongside the categories — one judgment shared with bulk select-all, so the
+  list and "select all visible" can never disagree about what is visible.
 
 ### Fixed
 - **The right-click edit routes keep the "Back to Calendar" button.** Opening a note

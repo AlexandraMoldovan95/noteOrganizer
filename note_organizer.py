@@ -8934,7 +8934,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.filter_var = tk.StringVar(value="All")
         self.filter_menu = self._build_themed_dropdown(
             filter_row, self.filter_var,
-            lambda: ["All"] + list(CATEGORY_COLORS.keys()),
+            lambda: (["All", self.FILTER_REPEATING, self.FILTER_DATED]
+                     + list(CATEGORY_COLORS.keys())),
             on_change=lambda v: self.refresh_note_list(),
             dot_color_fn=lambda v: CATEGORY_COLORS.get(v), width_chars=9)
         self.filter_menu.pack(side="left")
@@ -10109,13 +10110,30 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if not hasattr(self, "occurrence_banner") or not hasattr(self, "editor_top_row"):
             return
         occ = getattr(self, "current_occurrence_date", None)
+        text = ""
         if occ:
             try:
                 pretty = datetime.strptime(occ, "%Y-%m-%d").strftime("%A, %d %B %Y")
             except ValueError:
                 pretty = occ
-            self.occurrence_banner.config(
-                text=f"📅 Editing this day of the series: {pretty}")
+            text = f"📅 Editing this day of the series: {pretty}"
+        elif self.selected_note_id is not None:
+            # The series view of a repeating note gets its own line: edits
+            # here reach every day — EXCEPT days that were edited with
+            # "only this occurrence", which keep their own content and
+            # would otherwise look like the edit silently failed (a field
+            # report: one day out of three "didn't take" a series edit).
+            note = self.find_note(self.selected_note_id)
+            if note is not None and is_recurring(note):
+                text = (f"🔁 This note repeats ({describe_recurrence(note)}) "
+                        "— edits here apply to every day")
+                n_over = len(note.get("overrides") or {})
+                if n_over == 1:
+                    text += " · 1 day keeps its own edits (✎)"
+                elif n_over:
+                    text += f" · {n_over} days keep their own edits (✎)"
+        if text:
+            self.occurrence_banner.config(text=text)
             if not self.occurrence_banner.winfo_ismapped():
                 self.occurrence_banner.pack(fill="x", padx=30, pady=(6, 0),
                                             before=self.editor_top_row)
@@ -10792,6 +10810,23 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         entry.bind("<FocusOut>", on_focus_out)
 
     # ---------- Note list rendering ----------
+    # The sidebar dropdown mixes two kinds of choice: a category name, or
+    # one of these two type filters. Every consumer of filter_var goes
+    # through _note_passes_filter, so the list render and the bulk
+    # select-all can never diverge on what "visible" means.
+    FILTER_REPEATING = "🔁 Repeating"
+    FILTER_DATED = "📅 Dated"
+
+    def _note_passes_filter(self, note, selected):
+        """One judgment for the sidebar filter dropdown's current choice."""
+        if selected == "All":
+            return True
+        if selected == self.FILTER_REPEATING:
+            return is_recurring(note)
+        if selected == self.FILTER_DATED:
+            return not is_recurring(note) and bool(note.get("date"))
+        return note.get("category") == selected
+
     def refresh_note_list(self):
         if not hasattr(self, "list_frame") or not self._still_alive():
             return
@@ -10860,12 +10895,13 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             or query in _txt(n.get("comments"))
         ]
 
-        # Category filter (from the dropdown). "All" shows everything.
+        # Category/type filter (from the dropdown). "All" shows everything.
         chosen_category = getattr(self, "filter_var", None)
         if chosen_category is not None:
             selected = self.filter_var.get()
             if selected != "All":
-                filtered = [n for n in filtered if n.get("category") == selected]
+                filtered = [n for n in filtered
+                            if self._note_passes_filter(n, selected)]
 
         self._sort_notes(filtered)
 
@@ -11253,7 +11289,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         ]
         chosen_category = getattr(self, "filter_var", None)
         if chosen_category is not None and self.filter_var.get() != "All":
-            visible = [n for n in visible if n.get("category") == self.filter_var.get()]
+            visible = [n for n in visible
+                       if self._note_passes_filter(n, self.filter_var.get())]
         self.selected_note_ids = {n["id"] for n in visible}
         self._update_bulk_selected_label()
         self.refresh_note_list()
@@ -12527,6 +12564,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     command=lambda: self._ctx_open(note, None,
                                                    return_day=occurrence_date)
                 )
+                if occurrence_date in (note.get("overrides") or {}):
+                    menu.add_command(
+                        label="↺  Reset this day to the series content",
+                        command=lambda: self._reset_occurrence_override(
+                            note, occurrence_date)
+                    )
             else:
                 # A plain dated note: offer to turn it into a repeating series.
                 menu.add_separator()
@@ -12594,6 +12637,34 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 "date_str": return_day, "origin": "edit",
             }
             self._update_calendar_return_button()
+
+    def _reset_occurrence_override(self, note, occurrence_date):
+        """Drop one day's separate edits so it follows the series again.
+
+        An override is the only way a day stops tracking series edits —
+        and until this entry existed there was no way back: the day kept
+        its own content forever, invisibly (a field report: a series edit
+        that seemed to skip one day out of three)."""
+        note = self.find_note(note["id"])
+        if note is None or occurrence_date not in (note.get("overrides") or {}):
+            return
+        if not self.ask_yes_no(
+                "Reset this day",
+                f"Return {occurrence_date} to the series content?\n\n"
+                "The separate edits made for this day will be discarded."):
+            return
+        note["overrides"].pop(occurrence_date, None)
+        note["updated"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        self.save_notes()
+        # If the editor is showing exactly this day, reload it so the
+        # series content replaces the dropped override on screen too.
+        if (self.selected_note_id == note["id"]
+                and self.current_occurrence_date == occurrence_date):
+            self.load_note(note, occurrence_date)
+        self.refresh_note_list()
+        self.render_calendar()
+        self.refresh_day_panel()
+        self.set_status("This day follows the series again")
         # Nudge focus toward the recurrence dropdown so it's obvious what to do.
         try:
             self.rec_freq_menu.focus_set()
@@ -13093,7 +13164,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             # the day banner must not keep telling.
             if self.current_occurrence_date and not is_recurring(note):
                 self.current_occurrence_date = None
-                self._update_occurrence_banner()
+        # Recurrence or override counts may have just changed either way.
+        self._update_occurrence_banner()
 
         self.save_notes()
         # If this is an autosave AND a popup (e.g. the emoji picker) is open,

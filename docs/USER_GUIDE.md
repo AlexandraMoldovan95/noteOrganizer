@@ -408,6 +408,19 @@ specific date.
 Editing or deleting one specific occurrence (rather than the whole series) is always offered as a
 separate choice — your edit only applies where you meant it to.
 
+A day you edited with **"only this occurrence"** keeps its own content from then on: later edits
+to the series deliberately do not touch it (that day is *yours*), which can look surprising — a
+series edit appears everywhere except there. The app now says this out loud wherever it matters:
+the editor shows a line above the title — "🔁 This note repeats — edits here apply to every day ·
+1 day keeps its own edits (✎)" — and in the calendar, such a day carries a ✎ mark in the day list
+and an "✎ edited for this day" chip in the preview. To make a day follow the series again,
+right-click it in the calendar and choose **↺ Reset this day to the series content**.
+
+The small symbols on a repeating note's card in the list mean: `✎N` — N days edited separately,
+`✕N` — N occurrences deleted individually. The sidebar's filter dropdown also offers
+**🔁 Repeating** and **📅 Dated** alongside your categories, to see just the notes that live on
+the calendar.
+
 ---
 
 ## Calendar

@@ -583,8 +583,9 @@ app.load_note(app.find_note(61)); app.update()
 check('the banner hides on a plain note',
       not app.occurrence_banner.winfo_ismapped())
 app.load_note(app.find_note(60)); app.update()
-check('the banner hides on the series view of the same note',
-      not app.occurrence_banner.winfo_ismapped())
+check('the banner switches to the series text on the series view',
+      bool(app.occurrence_banner.winfo_ismapped())
+      and 'edits here apply to every day' in app.occurrence_banner.cget('text'))
 
 # An explicit Save on an EDIT-origin visit stays in the editor...
 app._ctx_open(app.find_note(60), '2026-07-15', return_day='2026-07-15')
@@ -658,16 +659,20 @@ check('a plain dated note keeps Open/Edit in the calendar menu',
 # The captured commands are the REAL menu lambdas — invoke them, so the
 # return_day plumbing one frame above _ctx_open is exercised too (the
 # same frame class a hijack once hid in for deletes).
-_series_cmd = next(c for l, c in _rec_items if 'whole series' in l)
-_series_cmd(); app.update()
+_series_cmd = next((c for l, c in _rec_items if 'whole series' in l), None)
+if _series_cmd is not None:
+    _series_cmd(); app.update()
 check("the menu's Edit-whole-series lambda arms the way back",
-      (app._pending_calendar_return or {}).get('date_str') == '2026-07-15'
+      _series_cmd is not None
+      and (app._pending_calendar_return or {}).get('date_str') == '2026-07-15'
       and (app._pending_calendar_return or {}).get('origin') == 'edit'
       and app.current_occurrence_date is None)
-_repeat_cmd = next(c for l, c in _plain_items if 'Make this repeat' in l)
-_repeat_cmd(); app.update()
+_repeat_cmd = next((c for l, c in _plain_items if 'Make this repeat' in l), None)
+if _repeat_cmd is not None:
+    _repeat_cmd(); app.update()
 check('Make-this-repeat from a calendar day arms the way back too',
-      (app._pending_calendar_return or {}).get('origin') == 'edit')
+      _repeat_cmd is not None
+      and (app._pending_calendar_return or {}).get('origin') == 'edit')
 
 # The banner follows an occurrence-to-occurrence switch — the text must
 # update even when the label is already packed.
@@ -738,6 +743,108 @@ check('un-repeating via a series save retires the day banner',
       len(_scopeF) == 1 and app.current_occurrence_date is None
       and not app.occurrence_banner.winfo_ismapped())
 del app.ask_occurrence_scope
+
+# ============================================================
+# 6e. OCCURRENCE VISIBILITY: SERIES BANNER, ✎ MARKS, RESET, FILTER
+# ============================================================
+# The invisible-override field report: a series edit seemed to skip one
+# day out of three — that day carried an "only this occurrence" edit,
+# which shadows series content forever with nothing saying so and no
+# way back. Now the series view names it, the calendar marks it, a menu
+# entry resets it, and the sidebar filter can isolate calendar notes.
+app.notes = [
+    {'id': 64, 'title': 'SeriesVis', 'body': 'series body', 'category': 'General',
+     'date': '2026-07-01', 'recurrence': {'freq': 'daily'},
+     'updated': '2026-01-01 00:00', 'created': '2026-01-01 00:00',
+     'checklist': [], 'attachments': [], 'exceptions': [],
+     'overrides': {'2026-07-15': {'title': 'SeriesVis', 'body': 'my special day',
+                                  'comments': '', 'category': 'General',
+                                  'color': ''}}},
+    {'id': 65, 'title': 'DatedVis', 'body': 'x', 'category': 'General',
+     'date': '2026-07-20', 'updated': '2026-01-01 00:00',
+     'created': '2026-01-01 00:00', 'checklist': [], 'attachments': []},
+    {'id': 66, 'title': 'PlainVis', 'body': 'x', 'category': 'General',
+     'updated': '2026-01-01 00:00', 'created': '2026-01-01 00:00',
+     'checklist': [], 'attachments': []},
+]
+app.save_notes()
+app.refresh_note_list(); app.render_calendar(); app.update()
+
+# The series view names the repeat AND the days living on their own.
+app.open_note_in_tab(app.find_note(64)); app.update()
+_btext = app.occurrence_banner.cget('text')
+check('the series banner says edits apply to every day',
+      app.occurrence_banner.winfo_ismapped()
+      and 'edits here apply to every day' in _btext)
+check('the series banner counts the days with their own edits',
+      '1 day keeps its own edits' in _btext)
+
+# The calendar marks the overridden day: list row icon + preview chip.
+app.open_day_popup('2026-07-15'); app.update()
+_rows15 = find_all_labels(app.day_panel)
+check('the day list marks an overridden day with the pencil',
+      any('✎' in t and 'SeriesVis' in t for t in _rows15))
+app.show_day_note(app.find_note(64), '2026-07-15'); app.update()
+check('the day preview carries the edited-for-this-day chip',
+      any('✎ edited for this day' in t for t in find_all_labels(app.day_panel)))
+app.close_day_panel(); app.update()
+
+# The menu offers the reset only where an override exists.
+_labels6e = []
+_o_add6e, _o_casc6e, _o_pop6e = (tk.Menu.add_command, tk.Menu.add_cascade,
+                                 tk.Menu.tk_popup)
+tk.Menu.add_command = lambda self, **kw: _labels6e.append(
+    (kw.get('label', ''), kw.get('command')))
+tk.Menu.add_cascade = lambda self, **kw: _labels6e.append(
+    (kw.get('label', ''), None))
+tk.Menu.tk_popup = lambda self, *a, **k: None
+try:
+    _ev6e = _types_q7.SimpleNamespace(x_root=100, y_root=100)
+    app.show_note_context_menu(_ev6e, app.find_note(64),
+                               occurrence_date='2026-07-15')
+    _with_ov = list(_labels6e); _labels6e.clear()
+    app.show_note_context_menu(_ev6e, app.find_note(64),
+                               occurrence_date='2026-07-16')
+    _without_ov = list(_labels6e)
+finally:
+    tk.Menu.add_command, tk.Menu.add_cascade, tk.Menu.tk_popup = (
+        _o_add6e, _o_casc6e, _o_pop6e)
+check('the reset entry appears exactly where an override exists',
+      any('Reset this day' in l for l, _ in _with_ov)
+      and not any('Reset this day' in l for l, _ in _without_ov))
+
+# Invoke the REAL reset command: the day follows the series again.
+# (next() with a default: a missing entry must FAIL the check, not
+# crash the suite mid-run — the footer rule.)
+_reset_cmd = next((c for l, c in _with_ov if 'Reset this day' in l), None)
+app.ask_yes_no = lambda *a, **k: True
+if _reset_cmd is not None:
+    _reset_cmd(); app.update()
+check('reset drops the override and the day shows series content',
+      _reset_cmd is not None
+      and '2026-07-15' not in (app.find_note(64).get('overrides') or {})
+      and NO.effective_note(app.find_note(64),
+                            '2026-07-15')['body'] == 'series body')
+app.close_day_panel(); app.update()
+
+# The sidebar filter isolates calendar notes — one judgment, used by
+# the list render AND bulk select-all, exercised through the render.
+app.filter_var.set(app.FILTER_REPEATING)
+app.refresh_note_list(); app.update()
+_vis = find_all_labels(app.list_frame)
+check('the Repeating filter shows only repeating notes',
+      any('SeriesVis' in t for t in _vis)
+      and not any('DatedVis' in t for t in _vis)
+      and not any('PlainVis' in t for t in _vis))
+app.filter_var.set(app.FILTER_DATED)
+app.refresh_note_list(); app.update()
+_vis = find_all_labels(app.list_frame)
+check('the Dated filter shows only dated non-repeating notes',
+      any('DatedVis' in t for t in _vis)
+      and not any('SeriesVis' in t for t in _vis)
+      and not any('PlainVis' in t for t in _vis))
+app.filter_var.set('All')
+app.refresh_note_list(); app.update()
 
 # ============================================================
 # 7. ATTACHMENT-ONLY NOTE AUTOSAVE

@@ -675,6 +675,10 @@ class CalendarViewMixin:
             if is_recurring(base_note):
                 title_text = "🔁 " + title_text
             icons = ""
+            if date_str in (base_note.get("overrides") or {}):
+                # This day was edited with "only this occurrence" — it
+                # keeps its own content and series edits don't reach it.
+                icons += "  ✎"
             if note.get("comments"):
                 icons += "  💬"
             if note.get("attachments"):
@@ -739,6 +743,8 @@ class CalendarViewMixin:
         text_only = re.sub(r"\n{3,}", "\n\n", text_only).strip("\n")
 
         chips = []
+        if date_str in (base_note.get("overrides") or {}):
+            chips.append("✎ edited for this day")
         if table_count:
             chips.append("▦ 1 table" if table_count == 1
                          else f"▦ {table_count} tables")
