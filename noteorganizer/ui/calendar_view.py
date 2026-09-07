@@ -786,6 +786,9 @@ class CalendarViewMixin:
         the Notes tab (the editor lives there), but we remember where we came
         from in the calendar so saving (or 'Back to Calendar') returns you to
         the exact same month/day — it shouldn't feel like being sent away."""
+        # Flush before clearing, like every other route into an empty
+        # editor — this path once discarded pending edits silently.
+        self._flush_autosave()
         self._pending_calendar_return = {
             "year": self.cal_year, "month": self.cal_month, "date_str": date_str,
         }

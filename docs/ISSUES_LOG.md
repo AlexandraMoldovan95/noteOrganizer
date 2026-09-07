@@ -32,6 +32,7 @@ day-to-day tracking.
 | [A calendar that kept navigating behind the user's back](#a-calendar-that-kept-navigating-behind-the-users-back) | Changing how a page becomes visible invalidates 'is X visible' assumptions in unrelated code. | 0.5.0 |
 | [The date field that either lost your edit, or wouldn't let you finish typing it](#the-date-field-that-either-lost-your-edit-or-wouldnt-let-you-finish-typing-it) | Reusing Save's validation in silent autosave turns a helpful warning into an interruption. | 0.28.38 |
 | [The autosave that could interrupt you over a note that was already gone](#the-autosave-that-could-interrupt-you-over-a-note-that-was-already-gone) | A guard added to one path doesn't cover other routes into the same code. | 0.28.38 |
+| [The autosave that asked questions](#the-autosave-that-asked-questions) | A background timer must never ask the user anything; dialogs happen at gestures. | 0.66.102 |
 | [The username cap that took three tries](#the-username-cap-that-took-three-tries) | Never trust one validation mechanism against fast input — layer cheap redundant checks. | 0.28.38 |
 | [The focus fix that broke the thing it wasn't touching](#the-focus-fix-that-broke-the-thing-it-wasnt-touching) | A fix scoped to the reported widgets can break already-working behaviour; re-test the working case. | 0.28.38 |
 | [The fast-typing fix that took three tries to land safely](#the-fast-typing-fix-that-took-three-tries-to-land-safely) | Decide from what the widget contains, not event internals; boring-safe beats precise-dangerous. | 0.31.39 |
@@ -453,6 +454,58 @@ with it; and a scrollregion is a claim, not a fact — refresh it from
 **Fix:** Added the same existing guard to the timer-driven path.
 
 **Takeaway:** The same protective check is sometimes needed in more than one place that leads to the same outcome — a fix applied to one path doesn't automatically cover another path that ends up calling the same risky code. Worth asking "is there another way to reach this same code?" whenever adding a guard like this one.
+
+### The autosave that asked questions
+
+*([0.66.102](../CHANGELOG.md#066102--2026-09-07) · 2026-09-07)*
+
+**Symptom:** Found by an adversarial review agent probing the delete fix's
+neighbourhood, not from a field report. Editing one day of a repeating
+series, every pause in typing popped the modal "Save: this occurrence or
+the whole series?" — the background autosave was asking it. Worse:
+pressing Ctrl+S while a debounced autosave was pending stacked a second,
+pixel-identical prompt exactly over the first. Answering the top one
+released the only input grab Tk has (local grabs don't stack), leaving
+the bottom save frozen mid-function — a ghost that, if answered later
+after switching notes, wrote the *other* note's colour, attachments and
+checklist into the series.
+
+**Root cause:** `save_current_note` opens the occurrence-scope prompt
+with no regard for `auto` — while the two warning guards beside it
+(invalid date, repeat-without-a-date) are both gated `if not auto:`,
+with comments explaining exactly why a background save must not
+interrupt. The scope prompt and the "Empty note" warning simply never
+got the same treatment. Underneath, the dialog helper's modality is a
+single non-stacking local grab: a second `grab_set` steals it, and the
+first dialog's `grab_release` never gives it back.
+
+**Fix:** The invariant is now *autosave is mute*. The timer path
+(`_autosave_now`) defers an occurrence save instead of asking — the
+edits stay in the editor, and the next explicit gesture (Save, a note
+switch, closing the app) asks then and saves. Answering saves where the
+user chose; cancelling keeps the edit only as long as the view stays —
+cancelling on a switch or at close still discards it, as those paths
+always have. The "Empty note" warning joined its two neighbours behind
+`if not auto:`. With no timer able to ask a question or raise a warning
+(the one deliberate exception stays: a failed disk *write* still
+surfaces its error, because silent data loss is worse than an
+interruption), the stacked-prompt ghost has no way to form. Making the
+dialog helper itself stack-safe (returning the grab to the dialog
+underneath) is tracked separately as hardening.
+
+The adversarial review of the fix itself then caught two gestures that
+broke the new promise: Ctrl+N and the calendar's "Add note for this
+day" cleared the editor without flushing at all — a pre-existing
+half-second hole that the deferral would have widened into losing a
+whole session. Both flush first now, and the sweep confirmed every
+other route into an empty editor already flushed, asked, or acted on a
+note that no longer existed.
+
+**Takeaway:** a background timer must never ask the user anything — a
+dialog is a conversation, and conversations happen at gestures. And when
+one guard in a function carries an `if not auto:` with a good comment,
+every dialog below it in the same function deserves the same audit; the
+two that lacked it were the two that bit.
 
 ### The username cap that took three tries
 

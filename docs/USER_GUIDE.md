@@ -67,6 +67,12 @@ always save immediately when you switch to a different note. Closing the app wor
 anything still unsaved is saved on the way out, silently — no "unsaved changes" question, because
 there is nothing to lose.
 
+The one exception is editing a single day of a repeating note (opened from the calendar): saving
+that needs an answer — "this occurrence or the whole series?" — and the app never asks questions
+on its own while you type. Your edits wait in the editor, and the question comes when *you* act:
+pressing Save, switching notes, or closing the app. Answer it and the edit is saved where you
+chose; cancel it and the edit stays only as long as you stay on that view.
+
 The writing area starts at twelve lines. **Expand**, underneath it, makes it roughly twice as tall
 for a long note, and **Collapse** puts it back — the note itself is unaffected either way, only
 how much of it you can see at once. The buttons at the bottom of the editor do not go out of

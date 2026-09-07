@@ -45,7 +45,7 @@ except ImportError:
 # Added/Fixed CHANGELOG.md entries, not per-release counts). The running
 # app records this into settings, so the next time a newer build opens
 # over older data it can tell the user what changed version-wise.
-APP_VERSION = "0.66.100"
+APP_VERSION = "0.66.102"
 
 
 def parse_version(v):
@@ -696,6 +696,17 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self.update_word_count()
         except Exception:
             pass
+        # An occurrence view can't be saved without asking "this occurrence
+        # or the whole series?", and a silent background timer must never
+        # open a dialog — every pause in typing used to raise the question,
+        # and one such prompt stacked on a manual save's own produced a
+        # frozen "ghost" save (see ISSUES_LOG). Leave the edits in the
+        # editor; the next explicit gesture — Save, a note switch, closing —
+        # asks exactly once and saves then.
+        if self.selected_note_id is not None and self.current_occurrence_date:
+            note = self.find_note(self.selected_note_id)
+            if note is not None and is_recurring(note):
+                return
         try:
             st = self.capture_editor_state()
         except Exception:
@@ -11718,6 +11729,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         """Ctrl+N: a fresh note. Switches to the Notes tab first, since the
         editor lives there and the shortcut can fire from the Calendar."""
         self.notebook.select(self.TAB_NOTES)
+        # Flush before clearing, like every other route into an empty
+        # editor — without it the shortcut silently discarded whatever
+        # the debounce hadn't caught yet (and a deferred occurrence
+        # session in full).
+        self._flush_autosave()
         self.new_note()
         return "break"
 
@@ -12821,7 +12837,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         has_attachments = bool(self.current_attachments)
         has_checklist_items = bool(self._get_checklist())
         if not title and not body and not has_attachments and not has_checklist_items:
-            self.show_warning("Empty note", "Write something before saving!")
+            # Same contract as the invalid-date guard above: a background
+            # autosave must never interrupt with a dialog — skip quietly
+            # and leave the warning to the explicit Save button.
+            if not auto:
+                self.show_warning("Empty note", "Write something before saving!")
             return
 
         recurrence = self.read_recurrence_from_ui()
@@ -13180,7 +13200,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         ever 'protect' the last half-second of typing (anything older was
         already autosaved), so it read as the app doubting its own
         autosave. Whatever is still unsaved is saved, silently, and the
-        window closes."""
+        window closes. One exception is no longer silent: a dirty
+        occurrence view (whose background autosave defers rather than
+        ask -- see _autosave_now) raises its occurrence-scope question
+        here, at the gesture; cancelling it discards that edit."""
         self._flush_autosave()
         self._sync_active_tab()
         for i in range(len(self.open_tabs)):
