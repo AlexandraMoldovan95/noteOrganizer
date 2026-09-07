@@ -12,6 +12,7 @@ How the numbers themselves are counted is the
 
 | Version | Date | In one line |
 |---|---|---|
+| [0.66.105](#066105--2026-09-07) | 2026-09-07 | BackSpace and Delete treat an emoji as one character in every text field. |
 | [0.66.104](#066104--2026-09-07) | 2026-09-07 | Every data file saves atomically; an unreadable one is preserved and announced, never silently emptied. |
 | [0.66.102](#066102--2026-09-07) | 2026-09-07 | Autosave goes mute — no background dialog, and every editor-clearing gesture saves first. |
 | [0.66.100](#066100--2026-09-05) | 2026-09-05 | A cancelled right-click delete can no longer hand the autosave a wrong target. |
@@ -99,6 +100,20 @@ How the numbers themselves are counted is the
   The Back to Calendar button is the way back — and a trip that stops making sense ends
   cleanly: deleting a note or restoring a tab clears any pending return, so a later,
   unrelated Save can never teleport you onto a stale calendar day.
+
+## [0.66.105] — 2026-09-07
+
+*Highlights: BackSpace and Delete treat an emoji as one character in every text field.*
+
+### Fixed
+- **Deleting half an emoji is no longer possible.** Tk's Entry widget counts text in
+  UTF-16 units and its stock BackSpace/Delete removed exactly one — half an astral emoji.
+  The torn remnant rendered as a box, and the save's surrogate mend then faithfully turned
+  its bytes into question marks after a restart (field-reported: an emoji in the title →
+  box → three question marks). All nine free-text fields (the title, both search boxes,
+  checklist items, category and template names, the username) now delete the whole
+  character, and behave stock everywhere else; the note body, a Text widget, never had
+  the problem.
 
 ## [0.66.104] — 2026-09-07
 

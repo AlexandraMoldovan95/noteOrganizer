@@ -45,7 +45,7 @@ except ImportError:
 # Added/Fixed CHANGELOG.md entries, not per-release counts). The running
 # app records this into settings, so the next time a newer build opens
 # over older data it can tell the user what changed version-wise.
-APP_VERSION = "0.66.104"
+APP_VERSION = "0.66.105"
 
 
 def parse_version(v):
@@ -3153,6 +3153,68 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         flush re-cut at the drifted position, multiplying the damage.
         """
         return cls._tk_units(line[:char_col])
+
+    @staticmethod
+    def _astral_span_at(s, iu, before):
+        """The character whose UTF-16 span contains unit index *iu*
+        (``before=False``), or ends at / straddles it (``before=True``).
+
+        Returns ``(start_unit, unit_width)``, or ``(None, None)`` past
+        either end of the string.
+        """
+        u = 0
+        for ch in s:
+            w = 2 if ord(ch) > 0xFFFF else 1
+            if (before and u < iu <= u + w) or (not before and u <= iu < u + w):
+                return u, w
+            u += w
+        return None, None
+
+    def _entry_backspace_astral(self, event):
+        """BackSpace in a tk.Entry deletes exactly one UTF-16 unit — half
+        an astral emoji. The torn remnant renders as a box, and the save's
+        surrogate mend then faithfully turns its bytes into replacement
+        characters (field report: emoji in the title -> box -> question
+        marks after a restart). Delete the whole character instead; stand
+        down (return None) everywhere else so stock behavior is untouched.
+        The body is a tk.Text, which deletes whole characters on its own —
+        only the Entry family needs this."""
+        w = event.widget
+        try:
+            if w.select_present():
+                return None  # Tk deletes the whole selection; no tearing
+            s = w.get()
+            iu = w.index("insert")
+        except tk.TclError:
+            return None
+        start, width = self._astral_span_at(s, iu, before=True)
+        if width == 2:
+            w.delete(start, start + width)
+            return "break"
+        return None
+
+    def _entry_delete_astral(self, event):
+        """The Delete-key twin of _entry_backspace_astral."""
+        w = event.widget
+        try:
+            if w.select_present():
+                return None
+            s = w.get()
+            iu = w.index("insert")
+        except tk.TclError:
+            return None
+        start, width = self._astral_span_at(s, iu, before=False)
+        if width == 2:
+            w.delete(start, start + width)
+            return "break"
+        return None
+
+    def _guard_entry_astral(self, entry):
+        """Arm a free-text tk.Entry against tearing astral characters —
+        bound on every Entry that accepts arbitrary text (title, searches,
+        checklist items, category and template names, the username)."""
+        entry.bind("<BackSpace>", self._entry_backspace_astral)
+        entry.bind("<Delete>", self._entry_delete_astral)
 
     def _restore_editor_view(self, at):
         try:
@@ -7917,6 +7979,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         entry = tk.Entry(add_row, textvariable=self.checklist_add_var, relief="flat",
                          font=("Segoe UI", 10), bg=self.colors["sidebar"],
                          fg=self.colors["text"], insertbackground=self.colors["text"])
+        self._guard_entry_astral(entry)
         entry.pack(side="left", fill="x", expand=True, ipady=4)
         entry.bind("<Return>", lambda e: self._add_checklist_item())
         self._add_paste_menu(entry)
@@ -8214,6 +8277,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         entry = tk.Entry(frame, textvariable=var, relief="flat", font=("Segoe UI", 10),
                          bg=self.colors["sidebar"], fg=self.colors["text"],
                          insertbackground=self.colors["text"], width=18)
+        self._guard_entry_astral(entry)
         entry.pack(side="left", ipady=3, padx=(0, 6))
         entry.select_range(0, "end")
         self._add_paste_menu(entry)
@@ -8904,6 +8968,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             insertbackground=self.colors["text"], relief="flat", font=("Segoe UI", 11)
         )
         self.track_theme(search_entry, bg="card", fg="text")
+        self._guard_entry_astral(search_entry)
         search_entry.pack(fill="x", padx=15, pady=(0, 10), ipady=6)
         self.add_placeholder(search_entry, "Search notes...")
 
@@ -9230,6 +9295,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.title_entry.bind("<KeyRelease>", self._schedule_autosave)
         self.title_entry.bind("<KeyRelease>", self._refresh_title_count, add="+")
         self.title_entry.bind("<<Paste>>", self._on_title_paste)
+        self._guard_entry_astral(self.title_entry)
 
         self.category_var = tk.StringVar(value="General")
         # Keep the button's dot/label in sync whenever the category changes,
@@ -11956,6 +12022,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         entry.pack(side="left", padx=(6, 4), pady=4, ipady=2)
         self._find_entry = entry
         self._add_paste_menu(entry)
+        self._guard_entry_astral(entry)
         self._find_var.trace_add("write", lambda *a: self._find_on_query_change())
         entry.bind("<Return>", lambda e: (self._find_nav(1), "break")[1])
         entry.bind("<Shift-Return>", lambda e: (self._find_nav(-1), "break")[1])
