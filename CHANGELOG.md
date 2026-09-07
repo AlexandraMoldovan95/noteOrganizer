@@ -46,6 +46,32 @@ How the numbers themselves are counted is the
 
 ## [Unreleased]
 
+### Added
+- **The editor names the day you're editing.** Opening one day of a repeating note from
+  the calendar now shows a line above the title — "📅 Editing this day of the series:
+  Wednesday, 15 July 2026" — because the date field only ever shows the series' start
+  date, and it is easy to forget which day you opened (field request).
+
+### Fixed
+- **The right-click edit routes keep the "Back to Calendar" button.** Opening a note
+  through the calendar's right-click menu (Edit only this occurrence, Edit whole series,
+  Open/Edit, Make this repeat) silently skipped the way-back memory that the day panel's
+  own Edit button always kept — field-reported as the button having vanished. All calendar
+  routes remember the way back now.
+- **"Back to Calendar" saves before it leaves.** Returning with unsaved occurrence edits
+  used to render the day panel from the store — the old content, looking exactly like the
+  edit had been lost. The button now saves first, asking the occurrence question as part
+  of the click, like every other gesture that leaves the editor.
+
+### Changed
+- **A recurring note's calendar menu drops the redundant "Open / Edit".** The two explicit
+  entries — only this occurrence, or the whole series — are the entire choice; a generic
+  third option beside them was noise (field feedback).
+- **Save returns you to the calendar only on the quick-add flow.** When editing an
+  existing note opened from a calendar day, Save now stays in the editor: with occurrence
+  saves riding on explicit gestures, the old always-return yanked you out on every save.
+  The Back to Calendar button is the way back.
+
 ## [0.66.104] — 2026-09-07
 
 *Highlights: every data file saves atomically with surrogates mended, and an unreadable file is preserved and announced instead of silently emptied.*

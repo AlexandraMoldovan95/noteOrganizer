@@ -9190,6 +9190,16 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         )
         self.track_theme(self.calendar_return_btn, bg="bg", fg="accent")
 
+        # Shown only while the editor holds one DAY of a repeating series:
+        # the date field shows the series' start date, so without this
+        # line the user has to remember which day they opened (field
+        # request). Packed/unpacked whole by _update_occurrence_banner().
+        self.occurrence_banner = tk.Label(
+            self.editor, text="", font=("Segoe UI", 9, "bold"),
+            anchor="center"
+        )
+        self.track_theme(self.occurrence_banner, bg="bg", fg="accent")
+
         top_row = tk.Frame(self.editor)
         self.track_theme(top_row, bg="bg")
         top_row.pack(fill="x", padx=30, pady=(25, 5))
@@ -10044,6 +10054,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
     def _return_to_calendar(self):
         """Jump back to the exact month/day the user was viewing before they
         started creating a note from the calendar."""
+        # Save first — leaving a dirty occurrence behind rendered the day
+        # panel from the store, which still held the OLD content: the
+        # edit looked lost. The scope question, if one is pending, rides
+        # this click like every other explicit gesture.
+        self._flush_autosave()
         info = getattr(self, "_pending_calendar_return", None)
         self._pending_calendar_return = None
         if hasattr(self, "calendar_return_btn"):
@@ -10068,6 +10083,26 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                                               anchor="w", before=self.editor_top_row)
         else:
             self.calendar_return_btn.pack_forget()
+
+    def _update_occurrence_banner(self):
+        """Show which day of a repeating series the editor holds, or hide
+        the line entirely for plain notes and series views. Called wherever
+        current_occurrence_date changes (load, new, tab restore)."""
+        if not hasattr(self, "occurrence_banner") or not hasattr(self, "editor_top_row"):
+            return
+        occ = getattr(self, "current_occurrence_date", None)
+        if occ:
+            try:
+                pretty = datetime.strptime(occ, "%Y-%m-%d").strftime("%A, %d %B %Y")
+            except ValueError:
+                pretty = occ
+            self.occurrence_banner.config(
+                text=f"📅 Editing this day of the series: {pretty}")
+            if not self.occurrence_banner.winfo_ismapped():
+                self.occurrence_banner.pack(fill="x", padx=30, pady=(6, 0),
+                                            before=self.editor_top_row)
+        else:
+            self.occurrence_banner.pack_forget()
 
 
 
@@ -11456,6 +11491,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._reset_text_undo()
         self._update_restore_button()
         self._find_on_context_switch()
+        self._update_occurrence_banner()
+
     def editor_state_matches_saved(self, st):
         """True if the captured state equals what's on disk for its note — i.e.
         there are no unsaved changes. A brand-new note (no id) counts as unsaved
@@ -12284,6 +12321,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._reset_text_undo()
         self._update_restore_button()
         self._find_on_context_switch()
+        self._update_occurrence_banner()
 
     def load_note(self, note, occurrence_date=None):
         """Open a note. If occurrence_date is given, the note is being opened
@@ -12361,6 +12399,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._reset_text_undo()
         self._update_restore_button()
         self._find_on_context_switch()
+        self._update_occurrence_banner()
 
     # ---------- Right-click context menu ----------
     def duplicate_note(self, note):
@@ -12414,10 +12453,15 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             relief="flat", bd=0, font=("Segoe UI", 9)
         )
 
-        menu.add_command(
-            label="✏  Open / Edit",
-            command=lambda: self._ctx_open(note, occurrence_date)
-        )
+        # On a calendar day, a recurring note gets the two explicit edit
+        # scopes below instead — a generic "Open / Edit" beside them was
+        # pure redundancy (field feedback).
+        if not (occurrence_date is not None and is_recurring(note)):
+            menu.add_command(
+                label="✏  Open / Edit",
+                command=lambda: self._ctx_open(note, occurrence_date,
+                                               return_day=occurrence_date)
+            )
         pin_label = "📌  Unpin from top" if note.get("pinned") else "📌  Pin to top"
         menu.add_command(label=pin_label, command=lambda: self.toggle_pin(note))
 
@@ -12445,18 +12489,21 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 menu.add_separator()
                 menu.add_command(
                     label="✏  Edit only this occurrence",
-                    command=lambda: self._ctx_open(note, occurrence_date)
+                    command=lambda: self._ctx_open(note, occurrence_date,
+                                                   return_day=occurrence_date)
                 )
                 menu.add_command(
                     label="✏  Edit whole series",
-                    command=lambda: self._ctx_open(note, None)
+                    command=lambda: self._ctx_open(note, None,
+                                                   return_day=occurrence_date)
                 )
             else:
                 # A plain dated note: offer to turn it into a repeating series.
                 menu.add_separator()
                 menu.add_command(
                     label="🔁  Make this repeat…",
-                    command=lambda: self._ctx_make_recurring(note)
+                    command=lambda: self._ctx_make_recurring(
+                        note, return_day=occurrence_date)
                 )
 
         menu.add_separator()
@@ -12487,16 +12534,36 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.refresh_note_list()
         self.set_status("Pinned to top" if real["pinned"] else "Unpinned")
 
-    def _ctx_open(self, note, occurrence_date):
-        """Open a note in the editor tab from the context menu."""
+    def _ctx_open(self, note, occurrence_date, return_day=None):
+        """Open a note in the editor tab from the context menu.
+
+        `return_day` is set when the menu was raised on a calendar day:
+        the editor then remembers the way back, exactly like the day
+        panel's own Edit button — the right-click routes silently losing
+        the "Back to Calendar" button was a field report. Origin 'edit'
+        keeps an explicit Save from yanking the user out of the editor.
+        """
         self.notebook.select(self.TAB_NOTES)
         self.open_note_in_tab(note, occurrence_date=occurrence_date)
+        if return_day is not None:
+            self._pending_calendar_return = {
+                "year": self.cal_year, "month": self.cal_month,
+                "date_str": return_day, "origin": "edit",
+            }
+            self._update_calendar_return_button()
 
-    def _ctx_make_recurring(self, note):
+    def _ctx_make_recurring(self, note, return_day=None):
         """Open a plain dated note in the editor and focus the Repeat control so
         the user can turn it into a recurring series."""
         self.notebook.select(self.TAB_NOTES)
         self.open_note_in_tab(note)
+        if return_day is not None:
+            # Raised on a calendar day — same way-back memory as _ctx_open.
+            self._pending_calendar_return = {
+                "year": self.cal_year, "month": self.cal_month,
+                "date_str": return_day, "origin": "edit",
+            }
+            self._update_calendar_return_button()
         # Nudge focus toward the recurrence dropdown so it's obvious what to do.
         try:
             self.rec_freq_menu.focus_set()
@@ -13021,9 +13088,14 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # If the calendar day panel is showing, reflect the edit there too.
         if getattr(self, "_day_panel_mode", "empty") != "empty":
             self.refresh_day_panel()
-        # Only an explicit Save click sends you back — autosave alone shouldn't
-        # yank the calendar into view mid-typing after just a short pause.
-        if not auto and getattr(self, "_pending_calendar_return", None):
+        # Only an explicit Save click sends you back, and only on the
+        # quick add-a-note-for-a-day flow — when the user opened an
+        # EXISTING note from the calendar, Save must not yank them out
+        # of the editor mid-session (field feedback: with occurrence
+        # saves now riding on explicit gestures, the yank fired on every
+        # one). The Back to Calendar button is the way back there.
+        _pending = getattr(self, "_pending_calendar_return", None)
+        if not auto and _pending and _pending.get("origin") == "add":
             self._return_to_calendar()
 
     # ---------- Trash / recently deleted ----------

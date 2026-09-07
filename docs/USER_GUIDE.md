@@ -422,6 +422,14 @@ line of small flags saying what else it carries (▦ a table, ☑ a checklist, �
 note-list cards, the preview does not draw the table or spell out the checklist and comments;
 those show when you open the note in the editor (**✏ Open in editor**).
 
+Opening a note from the calendar — the panel's Edit button or any right-click edit entry —
+remembers where you came from: a **← Back to Calendar** link appears at the top of the editor and
+returns you to that exact month and day, saving your edits on the way (for one day of a repeating
+note, it asks the usual "this occurrence or the whole series?" first). While you're editing one
+day of a repeating note, a line above the title names that day — the date field always shows the
+series' start date, so this is what tells you *which* day you opened. Saving stays in the editor;
+only the quick "Add note for this day" flow returns you to the calendar on Save.
+
 ![Calendar view](screenshots/calendar-view.png)
 
 You can also paint a specific calendar day a custom colour (right-click it), independent of any

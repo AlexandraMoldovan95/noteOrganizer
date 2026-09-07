@@ -775,7 +775,8 @@ class CalendarViewMixin:
         open_note_in_tab clears any pending return first (it's meant to, for
         the normal case of switching between notes), so we set it again right
         after, once that's done."""
-        remembered = {"year": self.cal_year, "month": self.cal_month, "date_str": date_str}
+        remembered = {"year": self.cal_year, "month": self.cal_month,
+                      "date_str": date_str, "origin": "edit"}
         self.notebook.select(self.TAB_NOTES)
         self.open_note_in_tab(base_note, occurrence_date=date_str)
         self._pending_calendar_return = remembered
@@ -790,7 +791,8 @@ class CalendarViewMixin:
         # editor — this path once discarded pending edits silently.
         self._flush_autosave()
         self._pending_calendar_return = {
-            "year": self.cal_year, "month": self.cal_month, "date_str": date_str,
+            "year": self.cal_year, "month": self.cal_month,
+            "date_str": date_str, "origin": "add",
         }
         self.notebook.select(self.TAB_NOTES)
         self.new_note()

@@ -545,6 +545,113 @@ check('the neighbour note survives the confirmed delete', app.find_note(45) is n
 del app.ask_occurrence_scope
 
 # ============================================================
+# 6d. CALENDAR OCCURRENCE UX: WAY BACK, DAY BANNER, MENU, RETURN RULES
+# ============================================================
+# Field feedback, four pieces: the right-click edit routes lost the
+# "Back to Calendar" button (only the panel's Edit button kept it); the
+# editor showed only the series' start date, never WHICH day you were
+# editing; the calendar menu offered a generic Open/Edit beside the two
+# explicit edit scopes; and with occurrence saves riding on explicit
+# gestures, Save yanked the user back to the calendar on every one.
+import types as _types_q7
+
+app.notes = [
+    {'id': 60, 'title': 'SeriesUX', 'body': 'series body', 'category': 'General',
+     'date': '2026-07-01', 'recurrence': {'freq': 'daily'},
+     'updated': '2026-01-01 00:00', 'created': '2026-01-01 00:00',
+     'checklist': [], 'attachments': [], 'exceptions': [], 'overrides': {}},
+    {'id': 61, 'title': 'PlainDated', 'body': 'x', 'category': 'General',
+     'date': '2026-07-15', 'updated': '2026-01-01 00:00',
+     'created': '2026-01-01 00:00', 'checklist': [], 'attachments': []},
+]
+app.save_notes()
+app.refresh_note_list(); app.render_calendar(); app.update()
+
+# The right-click edit routes remember the way back now.
+app._ctx_open(app.find_note(60), '2026-07-15', return_day='2026-07-15')
+app.update()
+check('ctx-open from a calendar day sets the way back (origin edit)',
+      (app._pending_calendar_return or {}).get('date_str') == '2026-07-15'
+      and (app._pending_calendar_return or {}).get('origin') == 'edit')
+check('the Back to Calendar button is mapped on the ctx route',
+      bool(app.calendar_return_btn.winfo_ismapped()))
+check('the banner names the day being edited',
+      bool(app.occurrence_banner.winfo_ismapped())
+      and '15 July 2026' in app.occurrence_banner.cget('text'))
+
+app.load_note(app.find_note(61)); app.update()
+check('the banner hides on a plain note',
+      not app.occurrence_banner.winfo_ismapped())
+app.load_note(app.find_note(60)); app.update()
+check('the banner hides on the series view of the same note',
+      not app.occurrence_banner.winfo_ismapped())
+
+# An explicit Save on an EDIT-origin visit stays in the editor...
+app._ctx_open(app.find_note(60), '2026-07-15', return_day='2026-07-15')
+app.update()
+app.ask_occurrence_scope = lambda *a, **k: 'occurrence'
+app.body_text.insert('end', ' ux-edit')
+app.save_current_note(auto=False); app.update()
+check('an explicit Save on an edit-origin visit stays in the editor',
+      app.notebook.index(app.notebook.select()) == app.TAB_NOTES
+      and bool(app._pending_calendar_return))
+del app.ask_occurrence_scope
+
+# ...while the quick add-a-note flow still returns to the calendar.
+app._add_note_for_date('2026-08-20'); app.update()
+app.body_text.insert('1.0', 'quick add body')
+app.save_current_note(auto=False); app.update()
+check('an explicit Save on an add-origin visit returns to the calendar',
+      app.notebook.index(app.notebook.select()) == app.TAB_CALENDAR
+      and not app._pending_calendar_return)
+app.close_day_panel(); app.update()
+
+# Back to Calendar saves the pending occurrence edit, asking once.
+app._open_note_from_calendar(app.find_note(60), '2026-07-16'); app.update()
+scope_ux = []
+app.ask_occurrence_scope = lambda *a, **k: (scope_ux.append(1), 'occurrence')[1]
+app.body_text.insert('end', ' flushed-on-return')
+app._return_to_calendar(); app.update()
+check('Back to Calendar saves the pending edit, asking exactly once',
+      len(scope_ux) == 1
+      and 'flushed-on-return'
+      in app.find_note(60)['overrides'].get('2026-07-16', {}).get('body', ''))
+# Settle any still-deferred edit while the mock is armed — under the
+# no-flush mutant the editor stays dirty here, and a later section's
+# flush would otherwise raise the REAL scope dialog and hang the run.
+app.open_blank_tab(); app.update()
+del app.ask_occurrence_scope
+app.close_day_panel(); app.update()
+
+# The calendar menu drops the generic Open/Edit for a recurring note —
+# menu labels are captured by patching tk.Menu, popup suppressed.
+_labels_q7 = []
+_orig_addc = tk.Menu.add_command
+_orig_casc = tk.Menu.add_cascade
+_orig_pop = tk.Menu.tk_popup
+tk.Menu.add_command = lambda self, **kw: _labels_q7.append(kw.get('label', ''))
+tk.Menu.add_cascade = lambda self, **kw: _labels_q7.append(kw.get('label', ''))
+tk.Menu.tk_popup = lambda self, *a, **k: None
+try:
+    _ev_q7 = _types_q7.SimpleNamespace(x_root=100, y_root=100)
+    app.show_note_context_menu(_ev_q7, app.find_note(60),
+                               occurrence_date='2026-07-15')
+    _rec_labels = list(_labels_q7); _labels_q7.clear()
+    app.show_note_context_menu(_ev_q7, app.find_note(61),
+                               occurrence_date='2026-07-15')
+    _plain_labels = list(_labels_q7)
+finally:
+    tk.Menu.add_command = _orig_addc
+    tk.Menu.add_cascade = _orig_casc
+    tk.Menu.tk_popup = _orig_pop
+check('the calendar menu drops generic Open/Edit for a recurring note',
+      not any('Open / Edit' in l for l in _rec_labels)
+      and any('only this occurrence' in l for l in _rec_labels)
+      and any('whole series' in l for l in _rec_labels))
+check('a plain dated note keeps Open/Edit in the calendar menu',
+      any('Open / Edit' in l for l in _plain_labels))
+
+# ============================================================
 # 7. ATTACHMENT-ONLY NOTE AUTOSAVE
 # ============================================================
 tmp_file = os.path.join(tempfile.gettempdir(), 'qa7_attach_only.txt')
