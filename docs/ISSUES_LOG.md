@@ -51,6 +51,7 @@ day-to-day tracking.
 | [The title box that took three and a half seconds a keystroke](#the-title-box-that-took-three-and-a-half-seconds-a-keystroke) | Measure to isolate: the app was fine, one widget was quadratic — cap its input. | 0.36.55 |
 | [The dropdown that opened on the wrong monitor](#the-dropdown-that-opened-on-the-wrong-monitor) | Position popups against the app window's own bounds, not the full virtual desktop. | 0.2.0 |
 | [The emoji that multiplied into squares](#the-emoji-that-multiplied-into-squares) | An off-by-one appearing only after an emoji is a units bug; audit every boundary. | 0.39.63 |
+| [The backspace that ate half an emoji](#the-backspace-that-ate-half-an-emoji) | Tk's Entry deletes UTF-16 units, not characters — guard every free-text Entry, not just the one reported. | 0.66.105 |
 | [The copy that took the row above](#the-copy-that-took-the-row-above) | Three failures in different costumes shared one cause — follow the data, not the behaviour. | 0.39.63 |
 | [The version that updated itself](#the-version-that-updated-itself) | When one word names two different units, every conversion site is a latent off-by-N. | 0.55.81 |
 | [Tests that always passed, no matter what](#tests-that-always-passed-no-matter-what) | Failure must change a test's exit code, not just its printed output. | 0.5.0 |
@@ -911,6 +912,41 @@ function reproduced the user's exact "two in, one out" report, which is
 what confirmed the mechanism rather than the symptom had been fixed.
 
 *Sister story: ["The version that updated itself"](#the-version-that-updated-itself) — the same UTF-16-vs-characters unit mismatch, surfacing as silent span drift instead of squares.*
+
+### The backspace that ate half an emoji
+
+*([0.66.105](../CHANGELOG.md#066105--2026-09-07) · 2026-09-07)*
+
+**Symptom:** Field-reported, with the whole life cycle observed: an
+emoji in a note's title, one press of Backspace, and the emoji became a
+box; saved and reopened, the box became **three** question marks.
+
+**Root cause:** the third member of the UTF-16-units family (see the two
+sister stories above). Tk's Entry widget stores text in UTF-16 units and
+its stock Backspace and Delete remove exactly one — half an astral
+emoji. Internally the emoji is six CESU-8 bytes; deleting one unit
+leaves three bytes no decoder can read, which the Tk→Python bridge hands
+over as three escape characters (the box), and the save's surrogate mend
+then faithfully converts each into a replacement character — the three
+question marks, one per orphaned byte. The note body never had the
+problem: a Text widget deletes whole characters on its own. Only the
+Entry family tears.
+
+**Fix:** a shared pair of handlers walks the entry's text in UTF-16
+units (the `_tk_units` arithmetic the emoji picker already learned) and,
+when the character beside the caret is astral, deletes both units;
+everywhere else they stand down and stock behavior is untouched. Bound
+on all nine free-text entries — title, both search boxes, checklist
+items (editor and template), category and template names, the
+username — not just the reported one. Mutation-tested: unbinding the
+title's guard fails the Backspace and Delete checks while the search
+box's own binding stays green.
+
+**Takeaway:** when a widget family shares a defect, the report names one
+member but the fix belongs to the family — and this family (UTF-16
+units vs. characters) has now bitten three times in three costumes:
+caret drift, span drift, and torn deletion. Any new code that indexes
+into a Tk Entry should reach for `_tk_units` first.
 
 ### The copy that took the row above
 

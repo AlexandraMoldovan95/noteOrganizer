@@ -46,6 +46,16 @@ How the numbers themselves are counted is the
 
 ## [Unreleased]
 
+### Fixed
+- **Deleting half an emoji is no longer possible.** Tk's Entry widget counts text in
+  UTF-16 units and its stock BackSpace/Delete removed exactly one — half an astral emoji.
+  The torn remnant rendered as a box, and the save's surrogate mend then faithfully turned
+  its bytes into question marks after a restart (field-reported: an emoji in the title →
+  box → three question marks). All nine free-text fields (the title, both search boxes,
+  checklist items, category and template names, the username) now delete the whole
+  character, and behave stock everywhere else; the note body, a Text widget, never had
+  the problem.
+
 ## [0.66.104] — 2026-09-07
 
 *Highlights: every data file saves atomically with surrogates mended, and an unreadable file is preserved and announced instead of silently emptied.*
