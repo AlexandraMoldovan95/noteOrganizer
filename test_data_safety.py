@@ -304,8 +304,14 @@ check('APP_DIR is not inside the noteorganizer package',
 #     looks like on screen.
 from noteorganizer.core import storage as _storage
 
+# Restore rule for every configure() section below: capture the previous
+# APP_DIR and configure() back to it in the finally. Hand-restoring a
+# subset of the path globals (the old way) left the OTHER paths pointing
+# into the deleted temp dir — the same "a list of fields exempts the
+# next field" trap the Issues Log tells about, in path form; every
+# section appended after the leak inherited ghost paths.
 _notes_dir = tempfile.mkdtemp()
-_prev_paths = (NO_paths.DATA_FILE, NO_paths.SETTINGS_FILE)
+_prev_app_dir = NO_paths.APP_DIR
 try:
     NO_paths.configure(_notes_dir)
     with open(NO_paths.SETTINGS_FILE, 'w', encoding='utf-8') as f:
@@ -318,7 +324,9 @@ try:
     check('load_notes fills in missing fields via normalize_note',
           'attachments' in _loaded[0] and 'checklist' in _loaded[0])
     check('load_notes reports no backup when nothing special happened',
-          _report == {'version_backup_path': None, 'cleanup_report': None})
+          # All-falsy rather than an exact dict: an exact shape breaks the
+          # moment the report gains a key, without testing anything more.
+          not any(_report.values()))
 
     _loaded.append({'id': 2, 'title': 'Added'})
     _ok, _exc = _storage.save_notes(_loaded)
@@ -346,7 +354,7 @@ try:
     check('save_notes hands back the reason it failed', isinstance(_exc2, OSError))
 finally:
     shutil.rmtree(_notes_dir, ignore_errors=True)
-    NO_paths.DATA_FILE, NO_paths.SETTINGS_FILE = _prev_paths
+    NO_paths.configure(_prev_app_dir)
 
 # ---- the core layer stays free of the interface ----
 #
@@ -378,7 +386,7 @@ if _offenders:
 # while it sat in the trash would otherwise come back filed under something
 # that no longer exists.
 _trash_dir = tempfile.mkdtemp()
-_prev = (NO_paths.DATA_FILE, NO_paths.SETTINGS_FILE, NO_paths.TRASH_FILE)
+_prev_app_dir = NO_paths.APP_DIR
 try:
     NO_paths.configure(_trash_dir)
     with open(NO_paths.SETTINGS_FILE, 'w', encoding='utf-8') as f:
@@ -417,7 +425,7 @@ try:
           'deleted_at' not in _notes[-1])
 finally:
     shutil.rmtree(_trash_dir, ignore_errors=True)
-    NO_paths.DATA_FILE, NO_paths.SETTINGS_FILE, NO_paths.TRASH_FILE = _prev
+    NO_paths.configure(_prev_app_dir)
 
 # ---- core/model note lookups ----
 #
@@ -468,7 +476,7 @@ check('renaming leaves unrelated notes alone', _ln[2]['category'] == 'Home')
 # file, so writing the whole file from one caller's view of it would drop
 # the others. The check below is exactly that property.
 _set_dir = tempfile.mkdtemp()
-_set_prev = (NO_paths.SETTINGS_FILE,)
+_prev_app_dir = NO_paths.APP_DIR
 try:
     NO_paths.configure(_set_dir)
     with open(NO_paths.SETTINGS_FILE, 'w', encoding='utf-8') as f:
@@ -489,7 +497,7 @@ try:
           _storage.get_setting('username', '', expect=str) == '')
 finally:
     shutil.rmtree(_set_dir, ignore_errors=True)
-    NO_paths.SETTINGS_FILE, = _set_prev
+    NO_paths.configure(_prev_app_dir)
 
 # ---- core colour and tag-name helpers ----
 #
@@ -591,6 +599,210 @@ check("purge permanently deletes the expired entry's attachment file",
 check("while the kept entry's file is untouched",
       os.path.exists(_new_att))
 os.remove(_new_att)
+
+# ---- The atomic-write family: every data file saves the safe way ----
+# trash/templates/settings once wrote with a bare open('w'): an emoji
+# with a lone surrogate raised UnicodeEncodeError mid-dump and left the
+# file truncated, and a crash mid-write truncated it too. They all
+# route through _write_json_atomic now — proven here by the two
+# failure modes that used to bite, plus the corrupt-load preserve.
+
+_astral = "note \U0001F600 with a lone \ud83d surrogate half"
+
+
+def _no_raise(fn):
+    """True if the call completed. The naive writers this section guards
+    against RAISED mid-dump (that was half the bug) — a mutant bringing
+    them back must turn into FAIL lines, not a crashed suite."""
+    try:
+        fn()
+        return True
+    except Exception:
+        return False
+
+
+def _read_json(path):
+    try:
+        with open(path, encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return None  # unreadable/truncated -> the check comparing it fails
+
+
+_okT = _no_raise(lambda: _storage.save_trash(
+    [{"id": 1, "title": _astral, "deleted_at": "2026-01-01 00:00:00"}]))
+_trS = _read_json(_paths.TRASH_FILE)
+check("save_trash survives astral + lone-surrogate text as valid JSON",
+      _okT and isinstance(_trS, list) and len(_trS) == 1
+      and "\U0001F600" in _trS[0]["title"])
+
+_okP = _no_raise(lambda: _storage.save_templates(
+    [{"name": _astral, "title": "", "body": ""}]))
+_tpS = _read_json(_paths.TEMPLATES_FILE)
+check("save_templates survives astral + lone-surrogate text",
+      _okP and isinstance(_tpS, list) and len(_tpS) == 1
+      and "\U0001F600" in _tpS[0]["name"])
+
+_setS = _storage.load_settings()
+_setS["username"] = _astral
+_okS = _no_raise(lambda: _storage.save_settings(_setS))
+check("save_settings survives astral + lone-surrogate text",
+      _okS and "\U0001F600" in _storage.load_settings().get("username", ""))
+
+# A dump that fails midway must neither raise nor leave a damaged file.
+_storage.save_trash([{"id": 2, "title": "survivor"}])
+with open(_paths.TRASH_FILE, encoding="utf-8") as _f:
+    _beforeT = _f.read()
+_okF = _no_raise(lambda: _storage.save_trash(
+    [{"id": 3, "bad": {1, 2}}]))  # a set: json.dump raises mid-write
+with open(_paths.TRASH_FILE, encoding="utf-8") as _f:
+    _afterT = _f.read()
+check("a failed trash write neither raises nor touches the previous file",
+      _okF and _beforeT == _afterT)
+check("and leaves no .tmp litter behind",
+      not os.path.exists(_paths.TRASH_FILE + ".tmp"))
+
+# ---- Corrupt loads preserve the original bytes before falling back ----
+with open(_paths.TRASH_FILE, "w", encoding="utf-8") as _f:
+    _f.write('{"broken": [')
+_trC = _storage.load_trash()
+_corrT = [p for p in os.listdir(_paths.APP_DIR)
+          if p.startswith("trash_corrupt_")]
+check("corrupt trash.json -> empty list plus a preserved copy",
+      _trC == [] and len(_corrT) >= 1)
+check("the preserved trash copy holds the original bytes",
+      bool(_corrT) and open(os.path.join(_paths.APP_DIR, _corrT[0]),
+                            encoding="utf-8").read() == '{"broken": [')
+
+with open(_paths.DATA_FILE, "w", encoding="utf-8") as _f:
+    _f.write("not json at all")
+_notesC, _reportC = _storage.load_notes(None)
+_corrN = [os.path.join(_paths.APP_DIR, p) for p in os.listdir(_paths.APP_DIR)
+          if p.startswith("notes_data_corrupt_")]
+check("corrupt notes_data.json -> empty list, flag set, copy preserved",
+      _notesC == [] and _reportC["notes_file_corrupt"]
+      and _reportC["corrupt_backup_path"] in _corrN)
+check("the preserved notes copy holds the original bytes",
+      bool(_reportC["corrupt_backup_path"])
+      and os.path.isfile(_reportC["corrupt_backup_path"])
+      and open(_reportC["corrupt_backup_path"], encoding="utf-8").read()
+      == "not json at all")
+
+# A wrong-shape file (valid JSON, but not a list) counts as corrupt too —
+# it would be silently emptied just the same.
+with open(_paths.DATA_FILE, "w", encoding="utf-8") as _f:
+    _f.write('{"i am": "a dict"}')
+_notesW, _reportW = _storage.load_notes(None)
+check("a wrong-shape notes file is treated as corrupt, not silently emptied",
+      _notesW == [] and _reportW["notes_file_corrupt"])
+
+# A list whose entries are ALL junk is the same loss in another costume —
+# the outer bracket being right must not let it slip past the net.
+with open(_paths.DATA_FILE, "w", encoding="utf-8") as _f:
+    _f.write('["x", 3, null]')
+_notesJ, _reportJ = _storage.load_notes(None)
+check("an all-junk list notes file is treated as corrupt too",
+      _notesJ == [] and _reportJ["notes_file_corrupt"]
+      and bool(_reportJ["corrupt_backup_path"]))
+
+with open(_paths.TEMPLATES_FILE, "w", encoding="utf-8") as _f:
+    _f.write('["junk"]')
+_tpJ = _storage.load_templates()
+check("an all-junk templates file is preserved before falling back",
+      _tpJ == [] and any(p.startswith("templates_corrupt_")
+                         for p in os.listdir(_paths.APP_DIR)))
+
+# On a corrupt launch the one-time cleanup must NOT rewrite the notes
+# file — when even the preserve failed, that rewrite would destroy the
+# last copy of the user's bytes while the startup notice still points
+# at them.
+_setC = _storage.load_settings()
+_had_cleanup = _setC.pop("cleanup_done", None)
+_storage.save_settings(_setC)
+with open(_paths.DATA_FILE, "w", encoding="utf-8") as _f:
+    _f.write("still not json")
+_notesG, _reportG = _storage.load_notes(None)
+with open(_paths.DATA_FILE, encoding="utf-8") as _f:
+    _stillG = _f.read()
+check("the one-time cleanup is gated off on a corrupt launch",
+      _reportG["notes_file_corrupt"] and _stillG == "still not json")
+_setC["cleanup_done"] = True if _had_cleanup is None else _had_cleanup
+_storage.save_settings(_setC)
+
+# The cleanup rewrite itself must write the safe way: a lone-surrogate
+# escape in stored JSON parses into an unencodable string, and a naive
+# rewrite would raise (and truncate) where the atomic one mends and
+# completes.
+_setK = _storage.load_settings()
+_had_cleanup2 = _setK.pop("cleanup_done", None)
+_storage.save_settings(_setK)
+with open(_paths.DATA_FILE, "w", encoding="utf-8") as _f:
+    _f.write('[{"id": 1, "title": "lone \\ud83d half"}]')
+_okK = _no_raise(lambda: _storage.load_notes(None))
+_dataK = _read_json(_paths.DATA_FILE)
+check("the cleanup rewrite mends surrogates and completes atomically",
+      _okK and isinstance(_dataK, list) and len(_dataK) == 1)
+_setK = _storage.load_settings()
+_setK["cleanup_done"] = True
+_storage.save_settings(_setK)
+
+# The two loaders without a corrupt fixture yet: settings (unparsable)
+# and trash (wrong shape). Content-matched rather than counted, so a
+# same-second timestamp collision cannot fake a pass or a fail.
+with open(_paths.SETTINGS_FILE, "w", encoding="utf-8") as _f:
+    _f.write("{broken settings")
+_setP = _storage.load_settings()
+check("corrupt settings.json -> empty dict plus a preserved copy",
+      _setP == {} and any(
+          open(os.path.join(_paths.APP_DIR, p), encoding="utf-8").read()
+          == "{broken settings"
+          for p in os.listdir(_paths.APP_DIR)
+          if p.startswith("settings_corrupt_")))
+_storage.save_settings({"cleanup_done": True})  # heal for what follows
+
+with open(_paths.TRASH_FILE, "w", encoding="utf-8") as _f:
+    _f.write('{"wrong": "shape"}')
+_trW = _storage.load_trash()
+check("a wrong-shape trash.json is preserved before falling back",
+      _trW == [] and any(
+          open(os.path.join(_paths.APP_DIR, p), encoding="utf-8").read()
+          == '{"wrong": "shape"}'
+          for p in os.listdir(_paths.APP_DIR)
+          if p.startswith("trash_corrupt_")))
+
+# ---- The reclaim migration preserves a corrupt settings.json ----
+# run_migrations used to clobber an unreadable settings file with the
+# %APPDATA% copy, no trace kept — and its marker write was the last
+# naive (non-atomic) data-file writer in the codebase.
+_mig_app = tempfile.mkdtemp()
+_mig_appdata = tempfile.mkdtemp()
+_real_gad_mig = NO_paths.get_appdata_dir
+try:
+    NO_paths.get_appdata_dir = lambda: _mig_appdata
+    with open(os.path.join(_mig_appdata, "notes_data.json"), "w", encoding="utf-8") as _f:
+        json.dump([{"id": 1, "title": "AppData note"}], _f)
+    with open(os.path.join(_mig_appdata, "settings.json"), "w", encoding="utf-8") as _f:
+        json.dump({"theme": "dark"}, _f)
+    with open(os.path.join(_mig_app, "settings.json"), "w", encoding="utf-8") as _f:
+        _f.write("{corrupt settings")
+
+    _mig_msg = NO.run_migrations(_mig_app)
+    _mig_kept = [p for p in os.listdir(_mig_app)
+                 if p.startswith("settings_corrupt_")]
+    check("the reclaim migration preserves an unreadable settings.json first",
+          _mig_msg is not None and len(_mig_kept) == 1)
+    check("the preserved settings copy holds the original bytes",
+          bool(_mig_kept)
+          and open(os.path.join(_mig_app, _mig_kept[0]),
+                   encoding="utf-8").read() == "{corrupt settings")
+    with open(os.path.join(_mig_app, "settings.json"), encoding="utf-8") as _f:
+        _mig_set = json.load(_f)
+    check("the reclaim marker still lands in a valid settings file",
+          _mig_set.get("reclaimed_from_appdata") is True)
+finally:
+    NO_paths.get_appdata_dir = _real_gad_mig
+    shutil.rmtree(_mig_app, ignore_errors=True)
+    shutil.rmtree(_mig_appdata, ignore_errors=True)
 
 print()
 print(f"FAILURES: {fails if fails else 'none'}")

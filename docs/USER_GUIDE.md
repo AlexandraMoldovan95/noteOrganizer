@@ -488,6 +488,15 @@ identical to what you already have before anything is added.
 
 ![Import backup](screenshots/import-backup.png)
 
+### If the data file itself ever breaks
+
+A bad shutdown or a disk problem can leave `notes_data.json` unreadable. The app never papers
+over that: it preserves the unreadable file beside the original (named
+`notes_data_corrupt_<date>.json`, kept forever), starts with an empty list, and tells you at
+startup exactly what happened and where the preserved copy sits — so you can restore your most
+recent backup while the broken file stays available for repair. The same quiet preserve-aside
+protects the trash, templates and settings files.
+
 ---
 
 ## Settings

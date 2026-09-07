@@ -45,7 +45,7 @@ except ImportError:
 # Added/Fixed CHANGELOG.md entries, not per-release counts). The running
 # app records this into settings, so the next time a newer build opens
 # over older data it can tell the user what changed version-wise.
-APP_VERSION = "0.66.102"
+APP_VERSION = "0.66.104"
 
 
 def parse_version(v):
@@ -493,6 +493,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
         self._cleanup_report = None  # filled in by load_notes if cleanup ran
         self._version_backup_path = None  # filled in by load_notes on a version upgrade
+        self._corrupt_notes_report = None  # (flag, preserved-copy path) if the notes file was unreadable
         self.notes = self.load_notes()
         self.selected_note_id = None
 
@@ -918,6 +919,29 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             return
         lines = []
 
+        if self._corrupt_notes_report is not None:
+            msg = (
+                "⚠ Your notes file could not be read this time, so the app "
+                "started with an empty list. Your notes did NOT delete "
+                "themselves — the file on disk was unreadable (a bad "
+                "shutdown or disk problem can do this)."
+            )
+            if self._corrupt_notes_report:
+                msg += (
+                    "\n\nThe unreadable file was preserved, untouched, at:\n"
+                    f"{self._corrupt_notes_report}\n\n"
+                    "It may be repairable — keep it safe and restore from "
+                    "your most recent backup (Settings → Backup), or ask "
+                    "for help with the preserved file."
+                )
+            else:
+                msg += (
+                    "\n\nPreserving a copy of it also failed, so do not "
+                    "save over it: close the app and back up "
+                    "notes_data.json from the data folder first."
+                )
+            lines.append(msg)
+
         if VERSION_CHANGE:
             direction, old, new = VERSION_CHANGE
             if direction == "up":
@@ -992,6 +1016,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self._version_backup_path = report["version_backup_path"]
         if report["cleanup_report"]:
             self._cleanup_report = report["cleanup_report"]
+        if report.get("notes_file_corrupt"):
+            self._corrupt_notes_report = report.get("corrupt_backup_path")
+            # Sentinel distinct from "nothing happened": the file WAS
+            # unreadable even if copying it aside also failed.
+            if self._corrupt_notes_report is None:
+                self._corrupt_notes_report = ""
         return notes
 
     def save_notes(self):

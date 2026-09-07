@@ -20,6 +20,7 @@ day-to-day tracking.
 | [The cleanup that deleted the real notebook](#the-cleanup-that-deleted-the-real-notebook) | Copy-then-delete-the-original must never touch a permanent store; cleanups name their exemptions explicitly. | 0.30.39 |
 | [The safety test that needed its own safety](#the-safety-test-that-needed-its-own-safety) | Safety rules must be categorical, not filename lists; dangerous tests carry their own refusal. | 0.39.63 |
 | [The delete that kept aiming at the wrong note](#the-delete-that-kept-aiming-at-the-wrong-note) | An operation aimed by mutating shared state lies on every cancel path — pass the target as a parameter. | 0.66.100 |
+| [The guards that never reached the siblings](#the-guards-that-never-reached-the-siblings) | A safety lesson learned in one function must be swept to its siblings the same day. | 0.66.104 |
 | [The template editor that "did nothing" when clicked](#the-template-editor-that-did-nothing-when-clicked) | 'Nothing happens' in a --windowed build is a real bug report — the exception was invisible. | 0.3.0 |
 | [The panel that lost its content depending on how you got there](#the-panel-that-lost-its-content-depending-on-how-you-got-there) | Recalculate layout on Tk's `<Map>` event, not after a guessed delay. | 0.3.0 |
 | [The scroll that stopped twice, for two different reasons](#the-scroll-that-stopped-twice-for-two-different-reasons) | Same symptom, unrelated causes — check neighbouring areas instead of assuming one fix covers all. | 0.28.38 |
@@ -214,6 +215,48 @@ leaves a lie behind on every path that doesn't finish the job — and
 cancel paths never finish the job. Pass the target explicitly instead of
 steering shared state, and when a comment says "restoring isn't needed",
 ask on which branch that's actually true.
+
+### The guards that never reached the siblings
+
+*([0.66.104](../CHANGELOG.md#066104--2026-09-07) · 2026-09-07)*
+
+**Symptom:** Found by the general code audit (the core-data agent), not
+from the field. `save_notes` carried three hard-won guards — surrogate
+mending, an atomic tmp-then-replace write, and a broad except clause —
+each with a comment naming the real loss that taught it. Its siblings
+`save_trash`, `save_templates` and `save_settings`, written to the same
+shape for the same kind of file, had none of them: an emoji in a deleted
+note could truncate trash.json mid-write. And on the reading side,
+`load_notes` quietly turned an unreadable notes file into an empty
+list — with the very next save overwriting the corrupt file, converting
+a recoverable corruption into a permanent, unexplained loss.
+
+**Root cause:** each guard was added where a bug first bit, and only
+there. Nothing ever swept the lesson across the family of functions
+doing the same job — so the protections mapped where failures had
+already happened, not where they could happen next.
+
+**Fix:** one shared atomic writer (`_write_json_atomic`) that every data
+file saves through, and one preserve-aside helper (`_preserve_corrupt`)
+that every loader calls before falling back to an empty default — the
+unreadable original is copied to `*_corrupt_<timestamp>.json`, exempt
+from every cleanup, and for the notebook the startup notice tells the
+user what happened and where the preserved copy sits. The adversarial
+review of the fix then swept its own leftovers: a list-shaped file of
+pure junk that slipped past the corrupt-detection net, the one-time
+cleanup rewrite racing to overwrite the corrupt bytes the notice still
+pointed at, and the reclaim migration's settings write — the last naive
+writer standing, which could also clobber a corrupt settings file with
+no trace. While landing the
+checks, the same list-the-fields trap surfaced once more in the test
+suite itself: sections restored a hand-picked subset of the path globals
+they had reconfigured, leaving every later section on ghost paths into
+deleted temp dirs — the restore is a full `configure(previous_dir)` now.
+
+**Takeaway:** a safety lesson learned in one function must be swept
+across its siblings the same day it is learned. A guard that exists only
+where the bug first bit is a map of where it will bite next — and the
+sweep is cheap exactly because the lesson is already understood.
 
 ## Tk & platform gotchas
 

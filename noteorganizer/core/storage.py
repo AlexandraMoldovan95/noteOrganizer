@@ -26,12 +26,14 @@ THE PATTERN EVERY LOADER FOLLOWS
 --------------------------------
 Each ``load_*`` function returns something usable whatever it finds: a
 missing file, an unreadable file, or valid JSON of entirely the wrong
-shape all produce an empty default rather than an exception. The app is
-meant to keep running with an empty notebook, not refuse to start because
-one file got damaged.
+shape all produce an empty default rather than an exception — after
+preserving the unreadable file's bytes aside, so falling back to empty
+can never destroy them. The app is meant to keep running with an empty
+notebook, not refuse to start because one file got damaged.
 
-``save_settings`` is read-modify-write rather than a blind overwrite, so
-two features updating different keys cannot clobber each other.
+``save_setting`` (singular) is read-modify-write rather than a blind
+overwrite, so two features updating different keys cannot clobber each
+other; every writer funnels through one atomic tmp-then-replace helper.
 
 :func:`backup_notes_file` gives destructive operations something to fall
 back on, and returns ``None`` on failure so callers can decide whether to
@@ -78,16 +80,16 @@ def load_settings():
                 return data
         except (json.JSONDecodeError, IOError, OSError):
             pass
+        # Reached only when the file exists but held nothing usable —
+        # keep its bytes before the next save replaces them.
+        _preserve_corrupt(paths.SETTINGS_FILE)
     return {}
 
 
 def save_settings(settings):
-    settings = mend_surrogates(settings)
-    try:
-        with open(paths.SETTINGS_FILE, "w", encoding="utf-8") as f:
-            json.dump(settings, f, indent=2)
-    except (IOError, OSError):
-        pass
+    """Write settings, best-effort but atomically — a failed write leaves
+    the previous file intact (see _write_json_atomic)."""
+    _write_json_atomic(paths.SETTINGS_FILE, settings)
 
 
 
@@ -127,23 +129,29 @@ def load_templates():
             with open(paths.TEMPLATES_FILE, "r", encoding="utf-8") as f:
                 data = json.load(f)
             if isinstance(data, list):
-                return [normalize_template(t) for t in data if isinstance(t, dict)]
+                kept = [normalize_template(t) for t in data if isinstance(t, dict)]
+                if data and not kept:
+                    # List-shaped but all junk: same as unreadable —
+                    # keep the bytes before a save replaces them.
+                    _preserve_corrupt(paths.TEMPLATES_FILE)
+                return kept
         except (json.JSONDecodeError, IOError, OSError):
             pass
+        # Reached only when the file exists but held nothing usable —
+        # keep its bytes before the next save replaces them.
+        _preserve_corrupt(paths.TEMPLATES_FILE)
     return []
 
 
 def save_templates(templates):
-    try:
-        with open(paths.TEMPLATES_FILE, "w", encoding="utf-8") as f:
-            json.dump(templates, f, indent=2, ensure_ascii=False)
-    except (IOError, OSError):
-        pass
+    """Write the templates list, best-effort but atomically — a failed
+    write leaves the previous file intact (see _write_json_atomic)."""
+    _write_json_atomic(paths.TEMPLATES_FILE, templates)
 
 
 def load_trash():
     """Read the trashed notes list. Malformed/missing -> empty list, never
-    crashes."""
+    crashes; a malformed file is preserved aside first."""
     if os.path.exists(paths.TRASH_FILE):
         try:
             with open(paths.TRASH_FILE, "r", encoding="utf-8") as f:
@@ -152,16 +160,16 @@ def load_trash():
                 return data
         except (json.JSONDecodeError, IOError, OSError):
             pass
+        # Reached only when the file exists but held nothing usable —
+        # keep its bytes before the next save replaces them.
+        _preserve_corrupt(paths.TRASH_FILE)
     return []
 
 
 def save_trash(trash):
-    """Write the trashed notes list, best-effort."""
-    try:
-        with open(paths.TRASH_FILE, "w", encoding="utf-8") as f:
-            json.dump(trash, f, indent=2, ensure_ascii=False)
-    except (IOError, OSError):
-        pass
+    """Write the trashed notes list, best-effort but atomically — a failed
+    write leaves the previous file intact (see _write_json_atomic)."""
+    _write_json_atomic(paths.TRASH_FILE, trash)
 
 
 def _delete_attachment_files(notes_or_entries):
@@ -224,6 +232,11 @@ from noteorganizer.core.duplicates import (
 )
 
 
+# One implementation, shared with the pre-configure migration code in
+# paths.py (which cannot import this module back without a cycle).
+_preserve_corrupt = paths.preserve_corrupt_file
+
+
 def backup_notes_file():
     """Snapshot the notes file before touching it. Cleanup should never be
     the reason something is lost."""
@@ -273,8 +286,15 @@ def load_notes(version_change=None):
         * ``version_backup_path`` -- set only if an upgrade backup was taken.
         * ``cleanup_report`` -- ``(stats, backup_path)`` only if the one-time
           cleanup ran on this launch.
+        * ``notes_file_corrupt`` -- True only if the notes file existed but
+          held nothing usable. The caller must tell the user: starting
+          with an empty list must never look like the notes vanished on
+          their own.
+        * ``corrupt_backup_path`` -- where the unreadable original was
+          copied aside, or None if even that copy failed (the boolean
+          above still says the file was unreadable).
 
-        Both are None the rest of the time, which is almost always.
+        All are None/False the rest of the time, which is almost always.
     """
     # Imported here rather than at the top of the file because there is a
     # real cycle: storage -> model -> categories -> storage. At module level
@@ -283,7 +303,8 @@ def load_notes(version_change=None):
     # every module is built, so it resolves cleanly.
     from .model import normalize_note, clean_notes
 
-    report = {"version_backup_path": None, "cleanup_report": None}
+    report = {"version_backup_path": None, "cleanup_report": None,
+              "notes_file_corrupt": False, "corrupt_backup_path": None}
     raw = []
     if os.path.exists(paths.DATA_FILE):
         # A newer app version is about to run against data last saved by
@@ -298,7 +319,16 @@ def load_notes(version_change=None):
         try:
             with open(paths.DATA_FILE, "r", encoding="utf-8") as f:
                 raw = json.load(f)
-        except (json.JSONDecodeError, IOError):
+        except (json.JSONDecodeError, IOError, OSError):
+            raw = None
+        if not isinstance(raw, list):
+            # The file exists but held nothing usable — unparsable, or a
+            # JSON value of the wrong shape. Keep its bytes before the
+            # empty list below can be saved over them (that overwrite
+            # used to be the moment a corrupt notebook became a
+            # permanent loss), and flag it so the caller TELLS the user.
+            report["notes_file_corrupt"] = True
+            report["corrupt_backup_path"] = _preserve_corrupt(paths.DATA_FILE)
             raw = []
     if not isinstance(raw, list):
         raw = []
@@ -306,18 +336,26 @@ def load_notes(version_change=None):
     # Every note gets the full set of fields, so no later code has to
     # guess whether an old note has 'comments' or 'attachments'.
     notes = [normalize_note(n) for n in raw if isinstance(n, dict)]
+    if raw and not notes and not report["notes_file_corrupt"]:
+        # A list-shaped file whose entries are all junk is the same loss
+        # in a different costume — every note gone, nothing usable kept.
+        # It must not slip past the preserve-and-announce net just
+        # because the outermost bracket happened to be the right one.
+        report["notes_file_corrupt"] = True
+        report["corrupt_backup_path"] = _preserve_corrupt(paths.DATA_FILE)
 
     settings = load_settings()
-    if not settings.get("cleanup_done"):
+    # The one-time cleanup would rewrite the notes file — on a launch
+    # that just declared the file unreadable, that rewrite could destroy
+    # the corrupt bytes at the very moment the startup notice tells the
+    # user they are still on disk. There is nothing to clean in an empty
+    # list anyway; the cleanup simply waits for the next healthy launch.
+    if not settings.get("cleanup_done") and not report["notes_file_corrupt"]:
         backup_path = backup_notes_file()
         notes, stats = clean_notes(notes)
         report["cleanup_report"] = (stats, backup_path)
 
-        try:
-            with open(paths.DATA_FILE, "w", encoding="utf-8") as f:
-                json.dump(notes, f, indent=2, ensure_ascii=False)
-        except (IOError, OSError):
-            pass
+        _write_json_atomic(paths.DATA_FILE, notes)
 
         settings["cleanup_done"] = True
         save_settings(settings)
@@ -350,6 +388,40 @@ def mend_surrogates(value):
     return value
 
 
+def _write_json_atomic(path, value):
+    """Write a JSON data file the one safe way: mend surrogates, dump to a
+    sibling ``.tmp``, then atomically replace the real file. A crash
+    mid-write leaves the old file whole, and an unencodable value fails
+    cleanly instead of leaving a truncated file behind. Every data file
+    the app owns saves through here — notes_data.json learned each of
+    these guards from a real loss, and its siblings (trash, templates,
+    settings) once lacked all of them, so an emoji in a deleted note
+    could corrupt trash.json outright.
+
+    Returns:
+        ``(True, None)`` on success, or ``(False, exception)``.
+    """
+    tmp_path = path + ".tmp"
+    try:
+        with open(tmp_path, "w", encoding="utf-8") as f:
+            json.dump(mend_surrogates(value), f, indent=2,
+                      ensure_ascii=False)
+        # Atomic replace: a crash mid-write can't corrupt the real file,
+        # it either fully updates or stays as it was.
+        os.replace(tmp_path, path)
+        return True, None
+    # ValueError covers UnicodeEncodeError, TypeError the unserializable:
+    # the old clause caught only I/O, so an emoji typed into a note flew
+    # straight past it, autosave crash-logged sixteen times in a row, and
+    # every edit after the first emoji lived only in the running app.
+    except (IOError, OSError, ValueError, TypeError) as exc:
+        try:
+            os.remove(tmp_path)
+        except OSError:
+            pass
+        return False, exc
+
+
 def save_notes(notes):
     """Write notes to disk.
 
@@ -362,25 +434,7 @@ def save_notes(notes):
     Returns:
         ``(True, None)`` on success, or ``(False, exception)``.
     """
-    try:
-        tmp_path = paths.DATA_FILE + ".tmp"
-        with open(tmp_path, "w", encoding="utf-8") as f:
-            json.dump(mend_surrogates(notes), f, indent=2,
-                      ensure_ascii=False)
-        # Atomic replace: a crash mid-write can't corrupt the real file,
-        # it either fully updates or stays as it was.
-        os.replace(tmp_path, paths.DATA_FILE)
-        return True, None
-    # ValueError covers UnicodeEncodeError, TypeError the unserializable:
-    # the old clause caught only I/O, so an emoji typed into a note flew
-    # straight past it, autosave crash-logged sixteen times in a row, and
-    # every edit after the first emoji lived only in the running app.
-    except (IOError, OSError, ValueError, TypeError) as exc:
-        try:
-            os.remove(tmp_path)
-        except OSError:
-            pass
-        return False, exc
+    return _write_json_atomic(paths.DATA_FILE, notes)
 
 
 # ---- Trash operations ----

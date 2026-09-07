@@ -251,6 +251,53 @@ else:
     print('SKIP multi-script widget routes (non-Windows display stack; '
           'asserted in full on the Windows CI job)')
 
+# ============================================================
+# CORRUPT NOTES FILE AT STARTUP: LOUD, PRESERVED, NEVER SILENT
+# ============================================================
+# A notes_data.json that fails to parse used to become an empty notebook
+# with no trace — and the next save overwrote the corrupt file, turning
+# recoverable corruption into permanent loss. The loader now preserves
+# the unreadable original aside and the startup notice says so plainly.
+import glob as _glob5, time as _time5
+with open('notes_data.json', 'w', encoding='utf-8') as _f5:
+    _f5.write('this is not json')
+_msgs5 = []
+app5c = NO.NoteOrganizer(); app5c._poll_active_dirty = lambda: None
+app5c.show_info = lambda t, m: _msgs5.append((t, m))
+_t05 = _time5.time()
+while not _msgs5 and _time5.time() - _t05 < 3:
+    app5c.update(); _time5.sleep(0.05)
+_corr5 = _glob5.glob('notes_data_corrupt_*.json')
+check('corrupt notes file at startup surfaces a message', bool(_msgs5))
+check('the message says the file was unreadable and preserved where',
+      bool(_msgs5) and 'could not be read' in _msgs5[0][1]
+      and 'notes_data_corrupt_' in _msgs5[0][1])
+check('the unreadable original was preserved bit for bit',
+      bool(_corr5)
+      and open(_corr5[0], encoding='utf-8').read() == 'this is not json')
+check('the app starts with an empty list, not a crash', app5c.notes == [])
+app5c.destroy()
+
+# When even the preserve fails, the notice must still appear and carry
+# the do-not-save warning — the corrupt flag travels separately from
+# the copy's path, precisely so this branch cannot go silent.
+from noteorganizer.core import storage as _st5
+_real_pres5 = _st5._preserve_corrupt
+_st5._preserve_corrupt = lambda p: None
+with open('notes_data.json', 'w', encoding='utf-8') as _f5:
+    _f5.write('also not json')
+_msgs5b = []
+app5d = NO.NoteOrganizer(); app5d._poll_active_dirty = lambda: None
+app5d.show_info = lambda t, m: _msgs5b.append((t, m))
+_t05b = _time5.time()
+while not _msgs5b and _time5.time() - _t05b < 3:
+    app5d.update(); _time5.sleep(0.05)
+_st5._preserve_corrupt = _real_pres5
+check('a failed preserve is announced with the do-not-save warning',
+      bool(_msgs5b)
+      and 'Preserving a copy of it also failed' in _msgs5b[0][1])
+app5d.destroy()
+
 print()
 print(f"=== QA5 FAILURES: {fails if fails else 'NONE'} ===")
 
