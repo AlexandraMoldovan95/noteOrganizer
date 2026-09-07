@@ -483,6 +483,7 @@ class SettingsPageMixin:
                              fg=self.colors["text"], insertbackground=self.colors["text"])
         new_entry.pack(side="left", fill="x", expand=True, ipady=4, padx=(0, 6))
         self._add_paste_menu(new_entry)
+        self._guard_entry_astral(new_entry)
 
         def add_new():
             name = new_name_var.get().strip()
@@ -724,6 +725,7 @@ class SettingsPageMixin:
                              insertbackground=self.colors["text"], width=40)
                 e.pack(fill="x", ipady=3)
                 self._add_paste_menu(e)
+                self._guard_entry_astral(e)
                 return var
             else:
                 t = tk.Text(frame, height=height, width=40, relief="flat",
@@ -945,6 +947,7 @@ class SettingsPageMixin:
                             fg=self.colors["text"], insertbackground=self.colors["text"])
         cl_entry.pack(side="left", fill="x", expand=True, ipady=3)
         self._add_paste_menu(cl_entry)
+        self._guard_entry_astral(cl_entry)
 
         def add_tpl_item():
             text = cl_add_var.get().strip()
@@ -2488,6 +2491,7 @@ class SettingsPageMixin:
         )
         name_entry.pack(side="left", fill="x", expand=True, padx=(12, 6), pady=9)
         self._add_paste_menu(name_entry)
+        self._guard_entry_astral(name_entry)
 
         # How much room is left, in the field itself, rather than only in the
         # description above it.

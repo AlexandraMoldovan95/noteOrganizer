@@ -6284,6 +6284,80 @@ check('closing asks no unsaved-notes question', not _askedC)
 check('closing saved the unflushed note on its way out',
       any(n.get('title') == 'CloseSilent' for n in _notesC))
 
+# ============================================================
+# ASTRAL EMOJI SURVIVE BACKSPACE/DELETE IN THE ENTRY FAMILY
+# ============================================================
+# Tk Entry counts UTF-16 units and its stock BackSpace/Delete remove
+# exactly one — half an astral emoji. The torn remnant rendered as a
+# box, and the save's surrogate mend turned its bytes into question
+# marks after a restart (field report). The guarded entries delete the
+# whole character; everything else about them stays stock.
+_eapp = NO.NoteOrganizer(); _eapp._poll_active_dirty = lambda: None
+_eapp.show_info = lambda *a, **k: True
+_eapp.geometry('1100x850'); _eapp.update()
+
+
+def _torn(s):
+    return any(0xD800 <= ord(c) <= 0xDFFF for c in s)
+
+
+_eapp.title_entry.delete(0, 'end')
+_eapp.title_entry.insert(0, 'hi \U0001F600')
+_eapp.title_entry.icursor('end')
+_eapp.title_entry.focus_force(); _eapp.update()
+_eapp.title_entry.event_generate('<BackSpace>'); _eapp.update()
+_t1 = _eapp.title_entry.get()
+check('BackSpace after a title emoji removes the whole character',
+      _t1 == 'hi ' and not _torn(_t1))
+
+_eapp.title_entry.delete(0, 'end')
+_eapp.title_entry.insert(0, '\U0001F600 hi')
+_eapp.title_entry.icursor(0)
+_eapp.update()
+_eapp.title_entry.event_generate('<Delete>'); _eapp.update()
+_t2 = _eapp.title_entry.get()
+check('Delete before a title emoji removes the whole character',
+      _t2 == ' hi' and not _torn(_t2))
+
+_eapp.title_entry.delete(0, 'end')
+_eapp.title_entry.insert(0, 'abc')
+_eapp.title_entry.icursor('end')
+_eapp.update()
+_eapp.title_entry.event_generate('<BackSpace>'); _eapp.update()
+check('plain characters still delete one at a time',
+      _eapp.title_entry.get() == 'ab')
+
+_eapp.title_entry.delete(0, 'end')
+_eapp.title_entry.insert(0, 'x\U0001F600y')
+_eapp.title_entry.selection_range(0, 'end')
+_eapp.update()
+_eapp.title_entry.event_generate('<BackSpace>'); _eapp.update()
+check('selection deletion is left to stock Tk and clears whole',
+      _eapp.title_entry.get() == '')
+
+# Breadth: the same guard arms the sidebar search box (one more member
+# of the free-text Entry family; all nine bind the same handlers).
+_eapp.search_var.set('')
+_se = None
+def _find_search(w):
+    global _se
+    for c in w.winfo_children():
+        if isinstance(c, NO.tk.Entry) and str(c.cget('textvariable')) == str(_eapp.search_var):
+            _se = c
+        _find_search(c)
+_find_search(_eapp.sidebar)
+if _se is None:
+    check('the sidebar search entry was found for the astral check', False)
+else:
+    _se.delete(0, 'end')
+    _se.insert(0, '\U0001F600')
+    _se.icursor('end')
+    _se.focus_force(); _eapp.update()
+    _se.event_generate('<BackSpace>'); _eapp.update()
+    check('the search box deletes a whole emoji too',
+          _se.get() == '' and not _torn(_se.get()))
+_eapp.destroy()
+
 print()
 print(f"=== QA1 FAILURES: {fails if fails else 'NONE'} ===")
 
