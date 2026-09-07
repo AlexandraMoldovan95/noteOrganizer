@@ -74,6 +74,11 @@ How the numbers themselves are counted is the
   Open/Edit, Make this repeat) silently skipped the way-back memory that the day panel's
   own Edit button always kept — field-reported as the button having vanished. All calendar
   routes remember the way back now.
+- **A dropdown's button now closes its open list.** Clicking the sort/filter/category
+  button while its list was open blinked it — the shared click-outside dismiss closed the
+  list and the button's handler reopened it in the same breath — so the only way to close
+  it was clicking somewhere else (field report). The second click is a real toggle now,
+  in the nested template-editor variant too.
 - **"Back to Calendar" saves before it leaves.** Returning with unsaved occurrence edits
   used to render the day panel from the store — the old content, looking exactly like the
   edit had been lost. The button now saves first, asking the occurrence question as part

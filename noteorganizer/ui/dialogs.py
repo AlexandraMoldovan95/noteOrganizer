@@ -231,20 +231,36 @@ class DialogsMixin:
             if nested:
                 # Close only THIS dropdown's own previous popup, if any —
                 # never touch self._mini_popup, which belongs to whatever
-                # popup this dropdown is living inside.
+                # popup this dropdown is living inside. Closing an ALIVE
+                # one is the whole gesture: the button click toggles.
                 existing = getattr(btn, "_nested_popup", None)
                 if existing is not None:
+                    btn._nested_popup = None
+                    was_open = False
                     try:
-                        if existing.winfo_exists():
-                            existing.destroy()
+                        was_open = bool(existing.winfo_exists())
+                        existing.destroy()
                     except tk.TclError:
                         pass
+                    if was_open:
+                        return
                 pop = tk.Toplevel(self)
                 btn._nested_popup = pop
             else:
+                # Clicking the button while its OWN list is open closes
+                # it and stops. Without this, the shared dismiss below
+                # closed the list and the reopen brought it straight
+                # back — a blink instead of a toggle (field report:
+                # the only way to close it was clicking elsewhere).
+                if (getattr(btn, "_dd_popup", None) is not None
+                        and self._mini_popup is btn._dd_popup):
+                    self._dismiss_mini_popup()
+                    btn._dd_popup = None
+                    return
                 self._dismiss_mini_popup()
                 pop = tk.Toplevel(self)
                 self._mini_popup = pop
+                btn._dd_popup = pop
             pop.wm_overrideredirect(True)
             pop.configure(bg=self.colors["accent"])
             frame = tk.Frame(pop, bg=self.colors["card"], padx=4, pady=4)

@@ -595,6 +595,43 @@ app.update()
 check('Jump-to-month popup stays open after opening the month dropdown',
       jump_popup.winfo_exists())
 
+# ============================================================
+# DROPDOWN BUTTON TOGGLES: SECOND CLICK CLOSES, NO BLINK
+# ============================================================
+# Field report: clicking the open filter dropdown's own button blinked
+# the list (the shared dismiss closed it and the reopen brought it
+# straight back); the only way to close it was clicking elsewhere. The
+# button is a real toggle now — in the normal AND the nested variant.
+app._dismiss_mini_popup(); app.update()
+# Earlier sections destroy popups directly (bypassing _dismiss), which
+# leaves their click-outside handlers accumulated on the toplevel — and
+# a stale one dismisses OUR fresh popup on the very same synthetic
+# click. Clear the tag: each open re-installs its own handler anyway.
+app.unbind('<Button-1>')
+app.notebook.select(app.TAB_NOTES); app.update()
+app.filter_menu.event_generate('<Button-1>'); app.update()
+check('first click opens the filter list',
+      app._mini_popup is not None and app._mini_popup.winfo_exists())
+app.filter_menu.event_generate('<Button-1>'); app.update()
+check('second click on the button closes it, no reopen blink',
+      app._mini_popup is None)
+app.filter_menu.event_generate('<Button-1>'); app.update()
+check('a third click opens it again', app._mini_popup is not None)
+app._dismiss_mini_popup(); app.update()
+
+_var9t = tk.StringVar(value='x')
+_dd9 = app._build_themed_dropdown(app, _var9t, ['x', 'y'],
+                                  on_change=lambda v: None, nested=True)
+_dd9.pack(); app.update()
+_dd9.event_generate('<Button-1>'); app.update()
+_p9t = getattr(_dd9, '_nested_popup', None)
+check('nested variant: first click opens its own popup',
+      _p9t is not None and _p9t.winfo_exists())
+_dd9.event_generate('<Button-1>'); app.update()
+check('nested variant: second click closes it too',
+      getattr(_dd9, '_nested_popup', None) is None)
+_dd9.destroy(); app.update()
+
 print()
 print(f"=== QA9 FAILURES: {fails if fails else 'NONE'} ===")
 
