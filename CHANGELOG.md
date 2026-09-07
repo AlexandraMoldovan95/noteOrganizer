@@ -62,10 +62,11 @@ How the numbers themselves are counted is the
 - **The sidebar filter and sort know calendar notes.** The filter dropdown offers
   🔁 Repeating and 📅 Dated alongside the categories — one judgment shared with bulk
   select-all, so the list and "select all visible" can never disagree about what is
-  visible — and the sort dropdown gains **Calendar first**: repeating series on top (A–Z),
-  then dated one-offs (soonest first), then everything else, so the notes that live on
-  the calendar read as their own block. The filter button also stopped truncating its
-  selected value (it read "🔁 R…" — caught in a screenshot).
+  visible — and the sort dropdown gains **Calendar: soonest**, ranking by the note's NEXT
+  relevant date from today: a repeating series by its next occurrence (not its start
+  date), upcoming dates before past ones, the freshest past date leading that group,
+  undated notes last — a mini-agenda in the sidebar. The filter button also stopped
+  truncating its selected value (it read "🔁 R…" — caught in a screenshot).
 
 ### Fixed
 - **The right-click edit routes keep the "Back to Calendar" button.** Opening a note
@@ -80,6 +81,10 @@ How the numbers themselves are counted is the
   question keeps you in the editor with the way back intact, instead of navigating anyway.
 
 ### Changed
+- **"Date (soonest)" is now "Calendar: oldest", the name it always deserved.** The old
+  sort was plain chronology by the note's own date — past dates first, a repeating series
+  by its start date — which "soonest" never quite promised. Same behaviour, honest name:
+  the archive walk. Its promise-keeping sibling is the new "Calendar: soonest" above.
 - **A recurring note's calendar menu drops the redundant "Open / Edit".** The two explicit
   entries — only this occurrence, or the whole series — are the entire choice; a generic
   third option beside them was noise (field feedback).

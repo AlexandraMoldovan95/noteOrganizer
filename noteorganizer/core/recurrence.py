@@ -84,6 +84,7 @@ __all__ = [
     "normalize_recurrence",
     "is_recurring",
     "expand_occurrences",
+    "next_occurrence_on_or_after",
     "effective_note",
     "describe_recurrence",
 ]
@@ -363,6 +364,27 @@ def expand_occurrences(note, range_start, range_end):
             year_index += 1
 
     return [format_date(d) for d in sorted(results) if format_date(d) not in exceptions]
+
+
+def next_occurrence_on_or_after(note, date_str):
+    """The first date this note lands on, on or after *date_str* — or None
+    when the series never reaches that far (it ended, or the rule is
+    empty). 'YYYY-MM-DD' in, 'YYYY-MM-DD' out.
+
+    Probes expand_occurrences over growing windows (a month, a year, a
+    decade) rather than expanding the whole rule once: the common
+    daily/weekly series answers from the first small window, which keeps
+    this cheap enough for a sort key computed on every list refresh.
+    """
+    start = parse_date(date_str)
+    if start is None or not is_recurring(note):
+        return None
+    for window_days in (31, 366, 3660):
+        hits = expand_occurrences(
+            note, start, start + timedelta(days=window_days))
+        if hits:
+            return hits[0]
+    return None
 
 
 def effective_note(note, occurrence_date):

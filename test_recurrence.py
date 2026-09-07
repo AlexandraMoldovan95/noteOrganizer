@@ -82,6 +82,28 @@ elapsed = (time.perf_counter()-t0)*1000
 check(f'36-year-old yearly recurrence still finds July 2026 occurrence ({elapsed:.2f}ms)',
       d_stress==['2026-07-04'])
 
+# ---- next_occurrence_on_or_after: the "Calendar: soonest" sort key ----
+from noteorganizer.core.recurrence import next_occurrence_on_or_after as _nxt
+
+n_wk = {'id': 200, 'date': '2026-01-05', 'recurrence': {'freq': 'weekly'}}
+check('weekly series: next occurrence lands on the right weekday',
+      _nxt(n_wk, '2026-07-01') == '2026-07-06')  # Jan 5 is a Monday
+check('a date ON an occurrence returns that same day',
+      _nxt(n_wk, '2026-07-06') == '2026-07-06')
+n_day = {'id': 201, 'date': '2026-01-01', 'recurrence': {'freq': 'daily'}}
+check('daily series: next occurrence is the asked day itself',
+      _nxt(n_day, '2026-07-15') == '2026-07-15')
+n_end = {'id': 202, 'date': '2026-01-01',
+         'recurrence': {'freq': 'daily', 'end': '2026-02-01'}}
+check('an ended series has no next occurrence', _nxt(n_end, '2026-07-01') is None)
+check('a non-recurring note has no next occurrence',
+      _nxt({'id': 203, 'date': '2026-07-01'}, '2026-06-01') is None)
+n_far = {'id': 204, 'date': '2026-01-01',
+         'recurrence': {'freq': 'yearly'}}
+check('a far-future occurrence is still found past the small windows',
+      _nxt(n_far, '2026-01-02') == '2027-01-01')
+check('garbage date in -> None out', _nxt(n_wk, 'not a date') is None)
+
 print()
 print(f"FAILURES: {fails if fails else 'none'}")
 

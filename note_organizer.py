@@ -345,6 +345,7 @@ from noteorganizer.core.recurrence import (
     normalize_recurrence,
     is_recurring,
     expand_occurrences,
+    next_occurrence_on_or_after,
     effective_note,
     describe_recurrence,
 )
@@ -8918,8 +8919,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             "Title A–Z",
             "Title Z–A",
             "Category",
-            "Date (soonest)",
-            "Calendar first",
+            "Calendar: soonest",
+            "Calendar: oldest",
         ]
         self.sort_var = tk.StringVar(value=self.SORT_OPTIONS[0])
         # width_chars=18: the default (14) renders "Recently updated" at
@@ -10998,25 +10999,41 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         elif choice == "Category":
             notes.sort(key=lambda n: (_s(n, "category"), _s(n, "updated")),
                        reverse=False)
-        elif choice == "Date (soonest)":
+        elif choice == "Calendar: soonest":
+            # "Soonest" keeps its promise now: the note's NEXT relevant
+            # date, counted from today. A repeating series ranks by its
+            # next occurrence (not its start date), upcoming dates come
+            # before past ones, the freshest past date leads that group,
+            # and undated notes sink to the bottom.
+            today = datetime.now().strftime("%Y-%m-%d")
+
+            def _inv(d):
+                # Lexicographic inversion, so an ascending sort reads the
+                # past newest-first without a second sorting pass.
+                return "".join(chr(0x10FFFF - ord(c)) for c in d)
+
+            def soonest_key(n):
+                if is_recurring(n):
+                    nxt = next_occurrence_on_or_after(n, today)
+                    if nxt:
+                        return (0, nxt)
+                    # The series already ended: rank it with the past by
+                    # its start date (its last occurrence would cost a
+                    # full expansion here, for a rare case).
+                    d = _s(n, "date")
+                    return (1, _inv(d)) if parse_date(d) else (2, "")
+                d = _s(n, "date")
+                if not parse_date(d):
+                    return (2, "")
+                return (0, d) if d >= today else (1, _inv(d))
+            notes.sort(key=soonest_key)
+        elif choice == "Calendar: oldest":
+            # Plain chronology by the note's own date — the archive walk.
             def date_key(n):
                 d = _s(n, "date")
                 has = bool(parse_date(d))
                 return (not has, d if has else "", )
             notes.sort(key=date_key)
-        elif choice == "Calendar first":
-            # The calendar dwellers on top: repeating series first (A–Z),
-            # then one-off dated notes (soonest first), then everything
-            # else (most recently updated first) — so the notes that live
-            # on the calendar read as their own block (field request).
-            def calendar_key(n):
-                if is_recurring(n):
-                    return (0, _s(n, "title").lower())
-                if parse_date(_s(n, "date")):
-                    return (1, _s(n, "date"))
-                return (2, "")
-            notes.sort(key=lambda n: _s(n, "updated"), reverse=True)
-            notes.sort(key=calendar_key)
 
         # Pinned notes always float to the top, keeping their relative order
         # from the chosen sort. Python's sort is stable, so this preserves it.

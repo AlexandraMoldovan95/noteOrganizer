@@ -193,7 +193,7 @@ for opt, expected in [
     ('Title A–Z',        ['Apple', 'Banana', 'Cherry']),
     ('Title Z–A',        ['Cherry', 'Banana', 'Apple']),
     ('Category',         ['Cherry', 'Banana', 'Apple']),   # Alpha, General, Zeta
-    ('Date (soonest)',   ['Apple', 'Cherry', 'Banana']),   # 01-05, 02-20, 03-10
+    ('Calendar: oldest', ['Apple', 'Cherry', 'Banana']),   # 01-05, 02-20, 03-10
 ]:
     try:
         app.sort_var.set(opt)

@@ -846,22 +846,54 @@ check('the Dated filter shows only dated non-repeating notes',
 app.filter_var.set('All')
 app.refresh_note_list(); app.update()
 
-# The Calendar-first sort stacks the calendar dwellers on top:
-# repeating series, then dated one-offs, then everything else.
-# The starting order is made ADVERSE first (plain newest, series
-# oldest, list reversed) — with the fixture's natural order equal to
-# the expected one, a disabled sort branch passed this check unsorted.
-app.notes.sort(key=lambda n: n['id'], reverse=True)
-for _n, _ts in zip(app.notes, ['2026-03-01 00:00', '2026-02-01 00:00',
-                               '2026-01-01 00:00']):
-    _n['updated'] = _ts
+# "Calendar: soonest" ranks by the note's NEXT relevant date from today
+# (a series by its next occurrence, upcoming before past, freshest past
+# first, undated last). Dates are built RELATIVE TO TODAY — soonest's
+# whole point is today-anchored — and the starting order is adverse
+# (a fixture whose natural order equals the expected one once let a
+# disabled sort branch pass unsorted).
+import datetime as _dt_q7
+_today = _dt_q7.date.today()
+def _d(offset):
+    return (_today + _dt_q7.timedelta(days=offset)).strftime('%Y-%m-%d')
+app.notes = [
+    {'id': 74, 'title': 'SoonE', 'body': 'x', 'category': 'General',
+     'updated': '2026-05-01 00:00', 'created': '2026-01-01 00:00',
+     'checklist': [], 'attachments': []},
+    {'id': 73, 'title': 'SoonC', 'body': 'x', 'category': 'General',
+     'date': _d(-10), 'updated': '2026-04-01 00:00',
+     'created': '2026-01-01 00:00', 'checklist': [], 'attachments': []},
+    {'id': 72, 'title': 'SoonD', 'body': 'x', 'category': 'General',
+     'date': _d(-2), 'updated': '2026-03-01 00:00',
+     'created': '2026-01-01 00:00', 'checklist': [], 'attachments': []},
+    {'id': 71, 'title': 'SoonA', 'body': 'x', 'category': 'General',
+     'date': _d(1), 'updated': '2026-02-01 00:00',
+     'created': '2026-01-01 00:00', 'checklist': [], 'attachments': []},
+    {'id': 70, 'title': 'SoonB', 'body': 'x', 'category': 'General',
+     'date': _d(-9), 'recurrence': {'freq': 'weekly'},
+     'updated': '2026-01-01 00:00', 'created': '2026-01-01 00:00',
+     'checklist': [], 'attachments': [], 'exceptions': [], 'overrides': {}},
+]
 app.save_notes()
-app.sort_var.set('Calendar first')
+app.sort_var.set('Calendar: soonest')
+app.refresh_note_list(); app.update()
+_names_q7 = ('SoonA', 'SoonB', 'SoonC', 'SoonD', 'SoonE')
+_ordered = [n for t in find_all_labels(app.list_frame)
+            for n in _names_q7 if n in t]
+# Weekly since 9 days ago -> occurrences at -9, -2, +5: the NEXT one
+# (+5) sits AFTER A's date (+1) on purpose — ranked by start date
+# instead (the dishonesty this sort replaces), B would wrongly lead.
+check('Calendar-soonest ranks by the next relevant date from today',
+      _ordered == ['SoonA', 'SoonB', 'SoonD', 'SoonC', 'SoonE'])
+
+app.sort_var.set('Calendar: oldest')
 app.refresh_note_list(); app.update()
 _ordered = [n for t in find_all_labels(app.list_frame)
-            for n in ('SeriesVis', 'DatedVis', 'PlainVis') if n in t]
-check('Calendar-first sorting stacks the calendar dwellers on top',
-      _ordered == ['SeriesVis', 'DatedVis', 'PlainVis'])
+            for n in _names_q7 if n in t]
+# Plain chronology by the note's own date: C(-10), B(start -9), D(-2),
+# A(+1), undated E at the bottom.
+check('Calendar-oldest walks the archive chronologically',
+      _ordered == ['SoonC', 'SoonB', 'SoonD', 'SoonA', 'SoonE'])
 app.sort_var.set('Recently updated')
 app.refresh_note_list(); app.update()
 
