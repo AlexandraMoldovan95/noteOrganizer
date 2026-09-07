@@ -44,6 +44,16 @@ How the numbers themselves are counted is the
 
 ## [Unreleased]
 
+### Testing
+- **The delete routes' guard rails close their review gaps.** A three-agent post-merge
+  review of the 0.66.100 fix confirmed it whole (no selection borrow remains on any
+  route) but found four holes in the new checks themselves: the calendar wrapper carried
+  no selection assertions, the store re-anchor had no proof, the editor Delete button's
+  confirmed path had no assertion anywhere in the suite, and a scope-prompt mock was
+  being "restored" as another mock. qa7 section 6c now drives the wrapper through both
+  cancel prompts, proves a stale copy still mutates the store, and pins the confirmed
+  editor delete end to end; the mock-hygiene rule joined the qa house rules.
+
 ## [0.66.100] — 2026-09-05
 
 *Highlights: a cancelled right-click delete can no longer hand the autosave a wrong target.*

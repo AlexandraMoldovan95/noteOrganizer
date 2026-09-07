@@ -151,3 +151,10 @@ A new surface joins this list the moment it ships.
   wrong — fix the strategy, sweep the suite for every sibling using
   the same strategy, and record the lesson here. After the fix, the
   check may fail only when the promised behaviour is actually broken.
+- **A mocked method is un-mocked with `del app.<name>`**, which
+  un-shadows the real bound method — never by re-assigning a value
+  saved earlier, unless that value is the script's own top-of-file
+  baseline mock. A saved "original" can itself be an earlier section's
+  leaked mock: qa7 once saved-and-restored an always-`'occurrence'`
+  scope prompt this way, and the leak silently shadowed the real
+  method for the rest of the run.
