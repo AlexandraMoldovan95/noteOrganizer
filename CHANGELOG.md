@@ -12,6 +12,7 @@ How the numbers themselves are counted is the
 
 | Version | Date | In one line |
 |---|---|---|
+| [0.66.102](#066102--2026-09-07) | 2026-09-07 | Autosave goes mute — no background dialog, and every editor-clearing gesture saves first. |
 | [0.66.100](#066100--2026-09-05) | 2026-09-05 | A cancelled right-click delete can no longer hand the autosave a wrong target. |
 | [0.66.99](#06699--2026-09-05) | 2026-09-05 | A note shared from the editor arrives whole — checklist, formatting and paragraphs included. |
 | [0.66.98](#06698--2026-09-05) | 2026-09-05 | The app speaks English everywhere; a shared note keeps its checklist; any-script input proven. |
@@ -43,6 +44,28 @@ How the numbers themselves are counted is the
 ---
 
 ## [Unreleased]
+
+## [0.66.102] — 2026-09-07
+
+*Highlights: autosave is mute now — a background timer never opens a dialog, and every gesture that clears the editor saves first.*
+
+### Fixed
+- **Background autosave can no longer interrupt with a dialog.** Editing one day of a
+  repeating series, every pause in typing popped the "occurrence or whole series?"
+  question from the autosave timer — and one such prompt, stacked under a manual save's
+  own, could freeze into a "ghost" save that later mixed another note's colour,
+  attachments and checklist into the series. The timer now defers that save to the next
+  explicit gesture (Save, a note switch, closing), which asks then — as part of your own
+  action; the "Empty note" warning joined the other autosave guards behind the same rule,
+  so a comments-only draft no longer warns except from the explicit Save button. Found by
+  an adversarial review agent probing the delete fix's neighbourhood, pinned by
+  mute-timer checks in qa8.
+- **Ctrl+N and the calendar's "Add note for this day" no longer discard unsaved edits.**
+  Both gestures cleared the editor without the flush every other route performs, silently
+  dropping whatever the half-second autosave debounce hadn't caught yet — and they would
+  have dropped a whole deferred occurrence session under the fix above. They flush first
+  now, asking the occurrence question when one is pending. Found by the adversarial
+  review of this very change, pinned in qa8.
 
 ### Testing
 - **The delete routes' guard rails close their review gaps.** A three-agent post-merge

@@ -117,7 +117,11 @@ A new surface joins this list the moment it ships.
   guards, watch it fail, then trust it. Old checks go stale silently —
   see the [Issues Log](../docs/ISSUES_LOG.md), "The teeth that had gone
   dull"; the fixes documented there are a ready-made mutant catalogue
-  for periodic audits.
+  for periodic audits. And a mutant run's verdict counts **only if the
+  suite ran to completion** — check for the script's FAILURES footer,
+  never just grep for FAIL lines: a mutant that crashes the import
+  prints no failures at all, and reads as "survived nothing" when it
+  really ran nothing (this exact false-clean happened here once).
 - Windows-specific pixel checks assert on `sys.platform == 'win32'`
   only (fonts differ on Xvfb), and the Windows CI job is what makes
   them bite remotely — never delete the assertion, aim it.
