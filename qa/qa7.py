@@ -167,6 +167,11 @@ check('recurring note delete via calendar asks for scope', scope_asked['called']
 check('only that occurrence removed, series intact', '2026-07-08' in app.notes[0].get('exceptions', []))
 
 app.close_day_panel(); app.update()
+# Un-shadow the real scope prompt: leaving this section's always-'occurrence'
+# mock in place once leaked it into every later section (a save/restore
+# further down dutifully "restored" this mock, believing it was the real
+# method). Deleting the instance attribute brings the class method back.
+del app.ask_occurrence_scope
 
 # ---- CALENDAR PREVIEW IS A QUICK LOOK: text + chips, not the editor ----
 # A note with a table drew raw pipe soup in the day preview, and its
@@ -466,7 +471,6 @@ app.notes = app.notes + [
 ]
 app.save_notes()
 app.refresh_note_list(); app.update()
-_orig_scope_q7 = app.ask_occurrence_scope
 app.ask_occurrence_scope = lambda *a, **k: None  # user cancels the scope prompt
 app._context_delete_note(app.find_note(48), '2026-07-09')
 app.update()
@@ -476,8 +480,69 @@ check('cancelled scope prompt leaves the series untouched',
       app.find_note(48).get('exceptions') == [])
 check('cancelled scope prompt leaves the occurrence date alone',
       app.current_occurrence_date is None)
-app.ask_occurrence_scope = _orig_scope_q7
+
+# ============================================================
+# 6c. THE CALENDAR WRAPPER, THE RE-ANCHOR, AND THE POSITIVE DELETE
+# ============================================================
+# Three gaps a post-merge review found in 6b's coverage: the calendar
+# wrapper (_delete_note_from_calendar) carried no selection assertions,
+# so a hijack reintroduced in THAT frame would pass the whole suite;
+# nothing proved _delete_note's find_note re-anchor (mutations must
+# land in the store even when a caller hands over a copy); and no check
+# anywhere asserted the editor Delete button's own confirmed delete.
+
+# The wrapper, scope-cancel: same contract as 6b, one frame higher.
+recur_before = _copy_q7.deepcopy(app.find_note(48))
+app.ask_occurrence_scope = lambda *a, **k: None
+app._delete_note_from_calendar(app.find_note(48), '2026-07-09')
+app.update()
+check('wrapper scope-cancel keeps the selection on the open note',
+      app.selected_note_id == 45)
+check('wrapper scope-cancel leaves the occurrence date alone',
+      app.current_occurrence_date is None)
+app.title_entry.insert(tk.END, ' wrap-cancel')
+app._autosave_now()
+app.update()
+check('autosave after a wrapper cancel lands in the OPEN note',
+      'wrap-cancel' in app.find_note(45)['title'])
+
+# The wrapper, whole-series confirm-cancel.
+app.ask_occurrence_scope = lambda *a, **k: 'series'
+app.ask_yes_no = lambda *a, **k: False
+app._delete_note_from_calendar(app.find_note(48), '2026-07-09')
+app.update()
+check('wrapper series-confirm-cancel keeps the selection on the open note',
+      app.selected_note_id == 45)
+check('the recurring note survives both wrapper cancels bit for bit',
+      app.find_note(48) == recur_before)
+
+# The re-anchor: a caller handing over a COPY must still mutate the store.
+app.ask_occurrence_scope = lambda *a, **k: 'occurrence'
+stale_copy = _copy_q7.deepcopy(app.find_note(48))
+app._delete_note(stale_copy, '2026-07-10')
+app.update()
+check('occurrence delete via a stale copy still lands in the store',
+      '2026-07-10' in app.find_note(48).get('exceptions', []))
+check("deleting another note's occurrence leaves the editor alone",
+      app.selected_note_id == 45)
+
+# The editor Delete button's own route, confirmed for real.
 app.ask_yes_no = lambda *a, **k: True
+app.open_note_in_tab(app.find_note(46))
+app.update()
+trash_before2 = len(app.trash)
+app.delete_current_note()
+app.update()
+check('editor-route confirmed delete removes the note', app.find_note(46) is None)
+check('editor-route confirmed delete lands in trash',
+      len(app.trash) == trash_before2 + 1 and any(t.get('id') == 46 for t in app.trash))
+check('editor resets to a fresh note after deleting the open note',
+      app.selected_note_id is None)
+check('the neighbour note survives the confirmed delete', app.find_note(45) is not None)
+
+# Mock hygiene: un-shadow the real scope prompt rather than "restoring" a
+# saved value that could itself be an earlier section's leaked mock.
+del app.ask_occurrence_scope
 
 # ============================================================
 # 7. ATTACHMENT-ONLY NOTE AUTOSAVE
