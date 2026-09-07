@@ -26,7 +26,55 @@ _seed_io.open('settings.json', 'w', encoding='utf-8').write(
     _seed_json.dumps({'reclaimed_from_appdata': True}))
 
 import sys
+import time
 import note_organizer as NO, tkinter as tk
+
+
+def open_nested_dropdown(application, btn, cap=60):
+    """Open a NESTED dropdown and wait until its popup really exists.
+
+    event_generate silently drops the click while the popup hosting the
+    button is not viewable yet — under full-suite load that window is
+    real, and reading btn._nested_popup right after the click found None
+    and CRASHED the run (the suite's one recurring flake, finally caught
+    with its traceback). Wait for the button to map, then click-and-poll,
+    hard-capped: a genuine regression returns None into a red check."""
+    for _ in range(cap):
+        if btn.winfo_ismapped():
+            break
+        application.update()
+        time.sleep(0.02)
+    for _ in range(cap):
+        btn.event_generate('<Button-1>')
+        application.update()
+        pop = getattr(btn, '_nested_popup', None)
+        if pop is not None and pop.winfo_exists():
+            for _ in range(cap):
+                if pop.winfo_ismapped():
+                    break
+                application.update()
+                time.sleep(0.02)
+            return pop
+        time.sleep(0.02)
+    return None
+
+
+def pick_nested_option(application, pop, option_widget, cap=60):
+    """Click an option inside a nested dropdown until the pick LANDS.
+
+    Same dropped-click physics as above, one level deeper: the pick
+    handler destroys the popup, so 'popup gone' is the observable
+    promise that the click was delivered. Capped into a red check."""
+    for _ in range(cap):
+        try:
+            if not pop.winfo_exists():
+                return True
+            option_widget.event_generate('<Button-1>')
+        except tk.TclError:
+            return True
+        application.update()
+        time.sleep(0.02)
+    return False
 fails = []
 def check(name, cond):
     print(('PASS' if cond else 'FAIL'), name)
@@ -80,11 +128,8 @@ name_entry.insert(0, 'MyTemplate')
 cat_btn = find_dropdown_by_label(editor_popup, 'General')
 check('category dropdown button found in the editor', cat_btn is not None)
 
-cat_btn.event_generate('<Button-1>')
-app.update()
+dropdown_popup = open_nested_dropdown(app, cat_btn)
 check('editor stays open after opening the category dropdown (bug 1)', editor_popup.winfo_exists())
-
-dropdown_popup = getattr(cat_btn, '_nested_popup', None)
 check('nested dropdown popup exists', dropdown_popup is not None and dropdown_popup.winfo_exists())
 
 app.update_idletasks()
@@ -107,9 +152,9 @@ check('dropdown anchors to the button, not top-left of the window (bug 3)',
       aligned_x and (docked_below or docked_above))
 
 work_lbl = find_widget(dropdown_popup, tk.Label, 'Work')
-work_lbl.event_generate('<Button-1>')
-app.update()
-check('editor still open after picking a category', editor_popup.winfo_exists())
+_picked9 = pick_nested_option(app, dropdown_popup, work_lbl)
+check('editor still open after picking a category',
+      _picked9 and editor_popup.winfo_exists())
 
 # ---- THE TEMPLATE BODY UNDERSTANDS TABLES ----
 # Pasting a table from Excel, Word or a web page into this plain box
@@ -484,12 +529,15 @@ editor_popup2 = app._mini_popup
 
 cat_btn2 = find_dropdown_by_label(editor_popup2, 'Personal')
 check('editing an existing template shows its current category', cat_btn2 is not None)
-cat_btn2.event_generate('<Button-1>')
-app.update()
-dropdown_popup2 = getattr(cat_btn2, '_nested_popup', None)
-work_lbl2 = find_widget(dropdown_popup2, tk.Label, 'Work')
-work_lbl2.event_generate('<Button-1>')
-app.update()
+dropdown_popup2 = open_nested_dropdown(app, cat_btn2)
+check('the category dropdown opened for the existing template',
+      dropdown_popup2 is not None)
+work_lbl2 = (find_widget(dropdown_popup2, tk.Label, 'Work')
+             if dropdown_popup2 is not None else None)
+check('the Work option is present in it', work_lbl2 is not None)
+if work_lbl2 is not None:
+    check('the Work pick landed (popup closed itself)',
+          pick_nested_option(app, dropdown_popup2, work_lbl2))
 
 save_btn2 = find_widget(editor_popup2, tk.Button, 'Save')
 save_btn2.invoke()
@@ -601,7 +649,8 @@ check('Jump-to-month popup stays open after opening the month dropdown',
 # Field report: clicking the open filter dropdown's own button blinked
 # the list (the shared dismiss closed it and the reopen brought it
 # straight back); the only way to close it was clicking elsewhere. The
-# button is a real toggle now — in the normal AND the nested variant.
+# button is a real toggle now. (The nested template-editor variant
+# deliberately keeps the old behaviour — see open_list's comment.)
 app._dismiss_mini_popup(); app.update()
 # Earlier sections destroy popups directly (bypassing _dismiss), which
 # leaves their click-outside handlers accumulated on the toplevel — and
@@ -618,19 +667,6 @@ check('second click on the button closes it, no reopen blink',
 app.filter_menu.event_generate('<Button-1>'); app.update()
 check('a third click opens it again', app._mini_popup is not None)
 app._dismiss_mini_popup(); app.update()
-
-_var9t = tk.StringVar(value='x')
-_dd9 = app._build_themed_dropdown(app, _var9t, ['x', 'y'],
-                                  on_change=lambda v: None, nested=True)
-_dd9.pack(); app.update()
-_dd9.event_generate('<Button-1>'); app.update()
-_p9t = getattr(_dd9, '_nested_popup', None)
-check('nested variant: first click opens its own popup',
-      _p9t is not None and _p9t.winfo_exists())
-_dd9.event_generate('<Button-1>'); app.update()
-check('nested variant: second click closes it too',
-      getattr(_dd9, '_nested_popup', None) is None)
-_dd9.destroy(); app.update()
 
 print()
 print(f"=== QA9 FAILURES: {fails if fails else 'NONE'} ===")

@@ -54,6 +54,23 @@ def take_focus(widget, attempts=60):
     return False
 
 
+def focus_settles_on(widget, attempts=60):
+    """The assert-only twin of take_focus: wait (WITHOUT forcing) until
+    the app's own action has landed the focus on `widget`. Asserting
+    focus_get() directly reads the old focus now and then under load —
+    the same asynchrony take_focus documents, on the reading side."""
+    for _ in range(attempts):
+        try:
+            if app.focus_get() is widget:
+                return True
+        except (KeyError, tk.TclError):
+            pass
+        app.update()
+        app.update_idletasks()
+        time.sleep(0.01)
+    return False
+
+
 def settled(read, hold=0.5, cap=8.0):
     """Wait until read() holds ONE value for `hold` seconds straight,
     capped, and return it. The settled-BASELINE twin of the
@@ -2263,7 +2280,7 @@ check('a grid is rendered over the new table', _made is not None)
 check('the one floating editor opens on the first cell',
       app._cell_editor is not None
       and (app._cell_editor['r'], app._cell_editor['c']) == (0, 0)
-      and app.focus_get() is app._cell_editor['entry'])
+      and focus_settles_on(app._cell_editor['entry']))
 
 # Filling in through the editor: type, step, repeat -- the words land in
 # the note's own text, cell by cell.
@@ -3394,7 +3411,7 @@ check('the press closes the open editor and keeps the drag selection',
       app._cell_editor is None
       and app._grid_sel is not None
       and app._grid_sel['box'] == (1, 0, 2, 0)
-      and app.focus_get() is app.body_text)
+      and focus_settles_on(app.body_text))
 app.body_text.event_generate('<Control-c>')
 app.update()
 check(f'Ctrl+C copies the selected cells, not the entry '
@@ -6051,7 +6068,7 @@ check('Ctrl+F opens the in-window find bar (a placed Frame, not a Toplevel)',
       and app._find_bar.winfo_manager() == 'place'
       and isinstance(app._find_bar, tk.Frame))
 check('Ctrl+F puts the focus in the find entry',
-      app.focus_get() is app._find_entry)
+      focus_settles_on(app._find_entry))
 app._close_find()
 app.update()
 check('the X (close) hides the bar and drops the find tags',

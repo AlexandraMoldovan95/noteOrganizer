@@ -12,6 +12,7 @@ How the numbers themselves are counted is the
 
 | Version | Date | In one line |
 |---|---|---|
+| [0.69.108](#069108--2026-09-07) | 2026-09-07 | The occurrence world becomes visible: banners, ✎ marks, per-day reset, calendar filters and sorts, the way back on every route. |
 | [0.66.105](#066105--2026-09-07) | 2026-09-07 | BackSpace and Delete treat an emoji as one character in every text field. |
 | [0.66.104](#066104--2026-09-07) | 2026-09-07 | Every data file saves atomically; an unreadable one is preserved and announced, never silently emptied. |
 | [0.66.102](#066102--2026-09-07) | 2026-09-07 | Autosave goes mute — no background dialog, and every editor-clearing gesture saves first. |
@@ -47,6 +48,10 @@ How the numbers themselves are counted is the
 
 ## [Unreleased]
 
+## [0.69.108] — 2026-09-07
+
+*Highlights: the calendar's occurrence world becomes visible and navigable — the editor names what it holds, edited days are marked and resettable, and every calendar route keeps the way back.*
+
 ### Added
 - **The editor says what kind of note it holds.** Opening one day of a repeating note from
   the calendar shows a line above the title — "📅 Editing this day of the series:
@@ -78,8 +83,7 @@ How the numbers themselves are counted is the
 - **A dropdown's button now closes its open list.** Clicking the sort/filter/category
   button while its list was open blinked it — the shared click-outside dismiss closed the
   list and the button's handler reopened it in the same breath — so the only way to close
-  it was clicking somewhere else (field report). The second click is a real toggle now,
-  in the nested template-editor variant too.
+  it was clicking somewhere else (field report). The second click is a real toggle now.
 - **"Back to Calendar" saves before it leaves.** Returning with unsaved occurrence edits
   used to render the day panel from the store — the old content, looking exactly like the
   edit had been lost. The button now saves first, asking the occurrence question as part

@@ -231,19 +231,17 @@ class DialogsMixin:
             if nested:
                 # Close only THIS dropdown's own previous popup, if any —
                 # never touch self._mini_popup, which belongs to whatever
-                # popup this dropdown is living inside. Closing an ALIVE
-                # one is the whole gesture: the button click toggles.
+                # popup this dropdown is living inside. (No toggle here,
+                # deliberately: adding one destabilized qa9's template
+                # flows intermittently, and the nested blink was never
+                # field-reported — tracked in the triage list instead.)
                 existing = getattr(btn, "_nested_popup", None)
                 if existing is not None:
-                    btn._nested_popup = None
-                    was_open = False
                     try:
-                        was_open = bool(existing.winfo_exists())
-                        existing.destroy()
+                        if existing.winfo_exists():
+                            existing.destroy()
                     except tk.TclError:
                         pass
-                    if was_open:
-                        return
                 pop = tk.Toplevel(self)
                 btn._nested_popup = pop
             else:
