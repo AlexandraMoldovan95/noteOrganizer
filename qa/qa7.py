@@ -846,6 +846,25 @@ check('the Dated filter shows only dated non-repeating notes',
 app.filter_var.set('All')
 app.refresh_note_list(); app.update()
 
+# The Calendar-first sort stacks the calendar dwellers on top:
+# repeating series, then dated one-offs, then everything else.
+# The starting order is made ADVERSE first (plain newest, series
+# oldest, list reversed) — with the fixture's natural order equal to
+# the expected one, a disabled sort branch passed this check unsorted.
+app.notes.sort(key=lambda n: n['id'], reverse=True)
+for _n, _ts in zip(app.notes, ['2026-03-01 00:00', '2026-02-01 00:00',
+                               '2026-01-01 00:00']):
+    _n['updated'] = _ts
+app.save_notes()
+app.sort_var.set('Calendar first')
+app.refresh_note_list(); app.update()
+_ordered = [n for t in find_all_labels(app.list_frame)
+            for n in ('SeriesVis', 'DatedVis', 'PlainVis') if n in t]
+check('Calendar-first sorting stacks the calendar dwellers on top',
+      _ordered == ['SeriesVis', 'DatedVis', 'PlainVis'])
+app.sort_var.set('Recently updated')
+app.refresh_note_list(); app.update()
+
 # ============================================================
 # 7. ATTACHMENT-ONLY NOTE AUTOSAVE
 # ============================================================

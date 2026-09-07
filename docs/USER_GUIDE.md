@@ -419,7 +419,8 @@ right-click it in the calendar and choose **↺ Reset this day to the series con
 The small symbols on a repeating note's card in the list mean: `✎N` — N days edited separately,
 `✕N` — N occurrences deleted individually. The sidebar's filter dropdown also offers
 **🔁 Repeating** and **📅 Dated** alongside your categories, to see just the notes that live on
-the calendar.
+the calendar — and the sort dropdown's **Calendar first** stacks them on top instead: repeating
+series first, then dated notes (soonest first), then everything else.
 
 ---
 

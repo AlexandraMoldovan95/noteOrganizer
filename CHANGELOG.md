@@ -59,9 +59,13 @@ How the numbers themselves are counted is the
   "✎ edited for this day" chip in the preview — and its right-click menu gains
   "↺ Reset this day to the series content", the way back that never existed: dropping the
   day's separate edits (with a confirmation) so it follows the series again.
-- **The sidebar filter knows calendar notes.** The filter dropdown offers 🔁 Repeating and
-  📅 Dated alongside the categories — one judgment shared with bulk select-all, so the
-  list and "select all visible" can never disagree about what is visible.
+- **The sidebar filter and sort know calendar notes.** The filter dropdown offers
+  🔁 Repeating and 📅 Dated alongside the categories — one judgment shared with bulk
+  select-all, so the list and "select all visible" can never disagree about what is
+  visible — and the sort dropdown gains **Calendar first**: repeating series on top (A–Z),
+  then dated one-offs (soonest first), then everything else, so the notes that live on
+  the calendar read as their own block. The filter button also stopped truncating its
+  selected value (it read "🔁 R…" — caught in a screenshot).
 
 ### Fixed
 - **The right-click edit routes keep the "Back to Calendar" button.** Opening a note

@@ -8919,6 +8919,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             "Title Z–A",
             "Category",
             "Date (soonest)",
+            "Calendar first",
         ]
         self.sort_var = tk.StringVar(value=self.SORT_OPTIONS[0])
         # width_chars=18: the default (14) renders "Recently updated" at
@@ -8929,7 +8930,6 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         sort_menu = self._build_themed_dropdown(
             filter_row, self.sort_var, self.SORT_OPTIONS,
             on_change=lambda v: self.refresh_note_list(), width_chars=18)
-        sort_menu.pack(side="left", fill="x", expand=True, padx=(0, 4))
 
         self.filter_var = tk.StringVar(value="All")
         self.filter_menu = self._build_themed_dropdown(
@@ -8937,8 +8937,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             lambda: (["All", self.FILTER_REPEATING, self.FILTER_DATED]
                      + list(CATEGORY_COLORS.keys())),
             on_change=lambda v: self.refresh_note_list(),
-            dot_color_fn=lambda v: CATEGORY_COLORS.get(v), width_chars=9)
-        self.filter_menu.pack(side="left")
+            dot_color_fn=lambda v: CATEGORY_COLORS.get(v), width_chars=13)
+        # Packed FIRST so pack honours its width — packed last on a full
+        # row, the button was squeezed to a bare "🔁 R…" (seen in a
+        # screenshot, not guessed). The sort button flexes instead.
+        self.filter_menu.pack(side="right")
+        sort_menu.pack(side="left", fill="x", expand=True, padx=(0, 4))
 
         # Group by category — an independent toggle. When on, notes are
         # clustered under collapsible category headers instead of one flat
@@ -11000,6 +11004,19 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 has = bool(parse_date(d))
                 return (not has, d if has else "", )
             notes.sort(key=date_key)
+        elif choice == "Calendar first":
+            # The calendar dwellers on top: repeating series first (A–Z),
+            # then one-off dated notes (soonest first), then everything
+            # else (most recently updated first) — so the notes that live
+            # on the calendar read as their own block (field request).
+            def calendar_key(n):
+                if is_recurring(n):
+                    return (0, _s(n, "title").lower())
+                if parse_date(_s(n, "date")):
+                    return (1, _s(n, "date"))
+                return (2, "")
+            notes.sort(key=lambda n: _s(n, "updated"), reverse=True)
+            notes.sort(key=calendar_key)
 
         # Pinned notes always float to the top, keeping their relative order
         # from the chosen sort. Python's sort is stable, so this preserves it.
