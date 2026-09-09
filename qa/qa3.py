@@ -181,6 +181,24 @@ check('decode tolerates non-dict note entries without crashing',
       _mixed is not None and len(_mixed) == 4 and _mixed[:3] == [{}, {}, {}]
       and _mixed[3].get('title') == 'Real')
 
+# Sharing a note that holds a lone UTF-16 surrogate (Tk hands an astral
+# emoji over unpaired; mend used to run only on disk-save) must not
+# crash encode's utf-8 step (audit Z05-F02).
+_emoji_note = {'title': 'plan \U0001F600', 'body': 'lone \ud83d half',
+               'category': 'General'}
+_enc_ok = True
+try:
+    _emoji_code = NO.encode_share_code(_emoji_note)
+    _emoji_back = NO.decode_share_code(_emoji_code)[0]
+except Exception:
+    _enc_ok = False
+    _emoji_back = {}
+check('sharing a note with an astral/lone-surrogate emoji does not crash',
+      _enc_ok and '\U0001F600' in _emoji_back.get('title', ''))
+check('and the encoded code carries no lone surrogate',
+      _enc_ok and not any(0xD800 <= ord(c) <= 0xDFFF
+                          for c in _emoji_back.get('body', '')))
+
 # The checklist travels too: a shared note used to arrive without it --
 # the one piece of content a code silently dropped.
 _ck_note = {'title': 'C', 'body': 'b', 'formatting': [],

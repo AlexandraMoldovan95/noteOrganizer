@@ -46,6 +46,8 @@ import json
 import os
 import zlib
 
+from .storage import mend_surrogates
+
 # ---- Share codes (move notes between devices as copy-paste text) ----
 #
 # A share code is: a small JSON payload -> zlib-compressed -> Base64 text,
@@ -83,6 +85,11 @@ def encode_share_code(notes):
     if isinstance(notes, dict):
         notes = [notes]
     payload = {"v": 1, "notes": [_shareable_view(n) for n in notes]}
+    # In-memory notes can hold lone UTF-16 surrogates: Tk hands an astral
+    # emoji over as a surrogate pair, and mend_surrogates only ran when
+    # SAVING to disk — so sharing a note with a just-typed emoji hit the
+    # .encode("utf-8") below and crashed. Mend at this boundary too.
+    payload = mend_surrogates(payload)
     raw = json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
     compressed = zlib.compress(raw, level=9)
     b64 = base64.urlsafe_b64encode(compressed).decode("ascii")
