@@ -624,21 +624,37 @@ check("a legit attachment filename is still deleted",
 check("_attachment_path_within rejects traversal, accepts a bare name",
       _storage._attachment_path_within(_rel) is None
       and _storage._attachment_path_within("legit_att.bin") is not None)
-# The guard must RETURN None, never RAISE, on the values only a crafted
-# stored_as produces — a cross-drive/UNC path (commonpath raises
-# ValueError) or an embedded NUL (os.remove raises ValueError, which
-# the sink's except OSError would miss). An uncaught raise here crashes
-# the startup trash purge -> app unlaunchable.
-_no_raise_all = True
+# The guard's invariant, stated platform-independently: on any crafted
+# stored_as it must NEVER raise, and must NEVER return a path OUTSIDE
+# the attachments folder. It MAY return a valid contained path for a
+# value that doesn't actually escape on this OS (e.g. "C:\x" is a
+# drive path on Windows but a plain filename on Linux) — that's correct,
+# not a leak. Asserting a fixed None result here was the bug: it made
+# the check platform-dependent and it failed on Linux CI.
+_base_real = os.path.realpath(_paths.ATTACHMENTS_DIR)
+_guard_ok = True
 for _bad in ("C:\\Windows\\System32\\x", "\\\\server\\share\\x",
-             "Z:relative", "x\x00y", "..", "."):
+             "Z:relative", "x\x00y", "..", ".", "../../out",
+             _rel):  # _rel genuinely escapes on every platform
     try:
-        if _storage._attachment_path_within(_bad) is not None:
-            _no_raise_all = False  # any of these resolving to a path is a leak
+        _r = _storage._attachment_path_within(_bad)
     except Exception:
-        _no_raise_all = False
-check("the path guard returns None (never raises) on crafted stored_as",
-      _no_raise_all)
+        _guard_ok = False  # a raise is the launch-blocker we're guarding against
+        continue
+    if _r is not None:
+        # returned a path -> it must be inside the attachments folder
+        try:
+            if os.path.commonpath([_base_real, _r]) != _base_real:
+                _guard_ok = False
+        except ValueError:
+            _guard_ok = False
+# And the values that escape on EVERY platform must resolve to None.
+if _storage._attachment_path_within(_rel) is not None:
+    _guard_ok = False
+if _storage._attachment_path_within("../../out") is not None:
+    _guard_ok = False
+check("the path guard never raises and never returns a path outside the folder",
+      _guard_ok)
 # And normalize_note flattens a smuggled path to a bare filename at the
 # data choke point, closing traversal for every channel (share + zip +
 # hand-edit), not only the sinks.
