@@ -74,13 +74,22 @@ class DialogsMixin:
             except tk.TclError:
                 continue
 
-    def _themed_dialog(self, title, message, kind="info", buttons=None):
+    def _themed_dialog(self, title, message, kind="info", buttons=None,
+                       default=None):
         """A modal, in-theme replacement for tkinter's messagebox. Renders as an
         overlay INSIDE the app window (not a separate OS window), so it can't be
         dragged off-screen and moves/minimizes with the app. Blocks until the
-        user picks a button, then returns that button's value."""
+        user picks a button, then returns that button's value.
+
+        `default` is the LABEL (case-insensitive) of the button that should
+        take keyboard focus, i.e. the one Enter triggers. Without it the
+        last (primary) button is focused — which is wrong for a
+        destructive confirm, where Enter would fire "Yes": pass
+        default="No" so a reflexive Enter is safe. Escape still returns
+        the first button's value (the safe/cancel choice) regardless."""
         if buttons is None:
             buttons = [("OK", True)]
+        focus_index = self._dialog_focus_index(buttons, default)
 
         # The overlay lives INSIDE the main window, and a -topmost
         # popup floats above that -- so a question ABOUT the popup (save
@@ -141,7 +150,7 @@ class DialogsMixin:
                 bg=btn_color, fg=fg_color,
                 activebackground=btn_color, activeforeground=fg_color)
             b.pack(side="right", padx=(8, 0), ipadx=12, ipady=4)
-            if is_primary:
+            if i == focus_index:
                 b.focus_set()
 
         # Escape = the "safe" (first) value, usually cancel/no.
@@ -175,26 +184,57 @@ class DialogsMixin:
             self._popups_step_forward(stepped_back)
         return result["value"]
 
+    @staticmethod
+    def _dialog_focus_index(buttons, default):
+        """Which button gets keyboard focus (i.e. which one Enter fires).
+        Named by `default` (a button LABEL, case-insensitive); otherwise
+        the primary (last) button. A `default` that matches no label
+        falls back to the primary rather than leaving nothing focused —
+        so a typo can never silently un-focus the whole dialog."""
+        if default:
+            for i, spec in enumerate(buttons):
+                if str(spec[0]).lower() == str(default).lower():
+                    return i
+        return len(buttons) - 1
+
+    @staticmethod
+    def _kind_from_kw(kw, fallback):
+        """Callers use messagebox's vocabulary: an `icon=` naming the glyph
+        ("warning"/"error"/"question"/"info"). Those names ARE our `kind`
+        keys, so honour `icon=` (and an explicit `kind=`) instead of
+        silently dropping it and always drawing the fallback glyph."""
+        return kw.get("kind") or kw.get("icon") or fallback
+
     def show_info(self, title, message, **kw):
-        return self._themed_dialog(title, message, kind=kw.get("kind", "info"),
+        return self._themed_dialog(title, message,
+                                   kind=self._kind_from_kw(kw, "info"),
                                    buttons=[("OK", True)])
 
     def show_warning(self, title, message, **kw):
-        return self._themed_dialog(title, message, kind="warning",
+        return self._themed_dialog(title, message,
+                                   kind=self._kind_from_kw(kw, "warning"),
                                    buttons=[("OK", True)])
 
     def show_error(self, title, message, **kw):
-        return self._themed_dialog(title, message, kind="error",
+        return self._themed_dialog(title, message,
+                                   kind=self._kind_from_kw(kw, "error"),
                                    buttons=[("OK", True)])
 
     def ask_yes_no(self, title, message, **kw):
-        return self._themed_dialog(title, message, kind=kw.get("kind", "question"),
-                                   buttons=[("No", False), ("Yes", True)])
+        # `default=` (messagebox's word) names which button keyboard focus
+        # lands on — pass default="no" on a destructive confirm so a
+        # reflexive Enter doesn't fire "Yes".
+        return self._themed_dialog(title, message,
+                                   kind=self._kind_from_kw(kw, "question"),
+                                   buttons=[("No", False), ("Yes", True)],
+                                   default=kw.get("default"))
 
     def ask_yes_no_cancel(self, title, message, **kw):
         # Returns True (yes), False (no), or None (cancel) — matches messagebox.
-        return self._themed_dialog(title, message, kind=kw.get("kind", "question"),
-                                   buttons=[("Cancel", None), ("No", False), ("Yes", True)])
+        return self._themed_dialog(title, message,
+                                   kind=self._kind_from_kw(kw, "question"),
+                                   buttons=[("Cancel", None), ("No", False), ("Yes", True)],
+                                   default=kw.get("default"))
 
     def _build_themed_dropdown(self, parent, var, options, on_change,
                                dot_color_fn=None, width_chars=14, nested=False):

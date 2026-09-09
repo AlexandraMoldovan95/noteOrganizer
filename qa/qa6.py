@@ -715,6 +715,77 @@ check('dialog renders as an in-window overlay, not a separate Toplevel',
 check('dialog is positioned within the app window bounds',
       choice_holder.get('within_bounds', False))
 
+# ---- DIALOG: icon= and default= are honoured (audit Z07-F05) ----
+# A destructive confirm (template-replace, delete-forever, empty-trash,
+# open-risky-file) passed icon="warning", default="no" — but ask_yes_no
+# dropped both kwargs, so the dialog drew the ❓ glyph and focused "Yes".
+# A reflexive Enter then fired the dangerous action. Lock the two pure
+# decision helpers (deterministic) AND the end-to-end wiring.
+check('dialog focus index: default names the button, case-insensitive',
+      app._dialog_focus_index([("No", False), ("Yes", True)], "no") == 0
+      and app._dialog_focus_index([("No", False), ("Yes", True)], "YES") == 1)
+check('dialog focus index: no default -> primary (last) button',
+      app._dialog_focus_index([("No", False), ("Yes", True)], None) == 1)
+check('dialog focus index: unknown default falls back to primary, never unfocused',
+      app._dialog_focus_index([("No", False), ("Yes", True)], "maybe") == 1)
+check('dialog kind: icon= is honoured, not dropped for the fallback glyph',
+      app._kind_from_kw({"icon": "warning"}, "question") == "warning"
+      and app._kind_from_kw({}, "question") == "question")
+
+def _find_label_with(w, needle):
+    if isinstance(w, tk.Label) and needle in str(w.cget('text')):
+        return w
+    for c in w.winfo_children():
+        r = _find_label_with(c, needle)
+        if r:
+            return r
+    return None
+
+# Record which button the dialog CALLS focus_set on, rather than reading
+# keyboard focus back with focus_get() — under a full-suite run focus
+# lands asynchronously and a focus_get() read flakes (a documented class,
+# qa/README). The call is synchronous and deterministic. A 3-button
+# ask_yes_no_cancel with default="no" focuses the MIDDLE button, so this
+# one case fails if the code focuses the primary (Yes), the first
+# (Cancel), or any hard-coded position.
+_warn_probe = {}
+_focus_calls = []
+_orig_focus_set = tk.Misc.focus_set
+def _rec_focus_set(self):
+    _focus_calls.append(self)
+    return _orig_focus_set(self)
+
+def _capture_warn(var):
+    app.update()
+    for frame in app.place_slaves():
+        if find_btn_qa6(frame, "No"):
+            head = _find_label_with(frame, "Danger check")
+            # ⚠ is the base warning sign; the dropped-icon fallback is ❓.
+            _warn_probe['glyph_ok'] = head is not None and "⚠" in str(head.cget('text'))
+            focused = [w for w in _focus_calls if isinstance(w, tk.Button)
+                       and str(w.cget('text')) in ("Cancel", "No", "Yes")]
+            _warn_probe['no_focused'] = (
+                bool(focused)
+                and all(str(w.cget('text')) == "No" for w in focused))
+            return
+
+_saved_wv = app.wait_variable
+app.wait_variable = _capture_warn
+tk.Misc.focus_set = _rec_focus_set
+try:
+    # ask_yes_no(_cancel) is monkeypatched to a lambda elsewhere in this
+    # file, so reach the REAL wrapper via the class to genuinely exercise
+    # its icon=/default= forwarding (that is the fix under test).
+    app.__class__.ask_yes_no_cancel(app, "Danger check", "Replace everything?",
+                                    icon="warning", default="no")
+finally:
+    tk.Misc.focus_set = _orig_focus_set
+    app.wait_variable = _saved_wv
+check('warning confirm draws the warning glyph, not the question glyph',
+      _warn_probe.get('glyph_ok', False))
+check('default="no" focuses the No button, not the primary/first (Enter is safe)',
+      _warn_probe.get('no_focused', False))
+
 # ---- SETTINGS: "Back to Notes" stays fixed while scrolling (regression) ----
 # It used to be just another row inside the scrollable page, so it
 # scrolled away like any other content instead of staying visible.
