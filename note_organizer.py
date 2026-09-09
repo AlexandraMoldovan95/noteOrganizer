@@ -226,6 +226,7 @@ from noteorganizer.core.storage import (
     load_trash,
     save_trash,
     _delete_attachment_files,
+    copy_attachment_file,
     purge_expired_trash,
     backup_notes_file,
     # Aliased because the methods that call them are also called load_notes
@@ -12639,6 +12640,16 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # A duplicate is its own note; don't carry occurrence-specific edits that
         # only made sense relative to the original's timeline.
         clone = normalize_note(clone)
+        # Give the copy its OWN attachment files. The deep-copy above shared
+        # the original's stored_as names — i.e. the same files on disk — so
+        # permanently deleting either note later removed the file the other
+        # still pointed at (silent attachment loss). A failed/absent copy
+        # keeps the old reference, no worse than before.
+        new_atts = []
+        for att in clone.get("attachments", []):
+            fresh = copy_attachment_file(att.get("stored_as", "")) if isinstance(att, dict) else None
+            new_atts.append(dict(att, stored_as=fresh) if fresh else att)
+        clone["attachments"] = new_atts
         self.notes.append(clone)
         self.save_notes()
         self.refresh_note_list()

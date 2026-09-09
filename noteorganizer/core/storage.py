@@ -203,6 +203,34 @@ def _attachment_path_within(stored_as):
     return candidate
 
 
+def copy_attachment_file(stored_as):
+    """Copy an existing attachment to a fresh, unique on-disk name and
+    return that name — so a duplicated note gets its OWN physical files
+    instead of sharing the original's. A plain deep-copy of a note keeps
+    the same stored_as values, i.e. the same files; permanently deleting
+    either note then removed the file the other still referenced —
+    silent attachment loss (audit finding). Returns None if the source
+    is missing or the copy fails, and the caller keeps the old reference
+    (no worse than before)."""
+    src = _attachment_path_within(stored_as)
+    if src is None or not os.path.isfile(src):
+        return None
+    base = os.path.basename(str(stored_as).replace("\\", "/"))
+    stamp = datetime.now().strftime("%Y%m%d%H%M%S%f")
+    new_name = f"{stamp}_{base}"
+    dest = os.path.join(paths.ATTACHMENTS_DIR, new_name)
+    n = 1
+    while os.path.exists(dest):
+        new_name = f"{stamp}_{n}_{base}"
+        dest = os.path.join(paths.ATTACHMENTS_DIR, new_name)
+        n += 1
+    try:
+        shutil.copy2(src, dest)
+        return new_name
+    except (IOError, OSError):
+        return None
+
+
 def _delete_attachment_files(notes_or_entries):
     """Permanently remove the on-disk files for every attachment referenced by
     the given notes/trash-entries. Each attachment gets a unique timestamped
