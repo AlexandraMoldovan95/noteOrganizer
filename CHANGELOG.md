@@ -69,6 +69,14 @@ How the numbers themselves are counted is the
   selected today simply wears both (field request).
 
 ### Fixed
+- **A delete inside History disappears on the spot.** Deleting an entry from the History
+  list left it on screen until you went out to the grid and back — the delete redrew the
+  grid and day panel but not the History view, a third view of the same data. It now
+  refreshes wherever a calendar change is signalled (field report).
+- **The calendar always opens on its grid, not on stale History.** Leaving the Calendar
+  tab and returning showed whatever History state you left two switches ago; the grid is
+  the tab's home and History a view of it, so switching tabs resets to the grid (field
+  report).
 - **Answering "this occurrence only" now actually takes you back.** A just-saved
   occurrence still read as having unsaved changes — the dirty check compared the series'
   own formatting and checklist against the edited day, and an override's body differs
@@ -83,6 +91,9 @@ How the numbers themselves are counted is the
   "September 2026" as one centered cluster, and Today + History moved to the far right
   with History outermost — navigation lives with the title, the register lives at the
   edge (field feedback).
+- **History is one labelled toggle, not two buttons.** The single header button reads
+  "📋 History" on the grid and "📅 Calendar" while the register is open, each saying where
+  the click takes you; the separate in-view "← Calendar" button is gone (field feedback).
 
 ## [0.69.108] — 2026-09-07
 

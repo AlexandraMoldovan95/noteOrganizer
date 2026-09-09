@@ -87,8 +87,13 @@ class CalendarViewMixin:
         # Far right, out of the navigation's way: History outermost, with
         # Today beside it (field feedback: the arrows belong to the title,
         # the register belongs to the edge).
-        nav_button(header, "📋 History", self._toggle_calendar_history,
-                   "right", width=10, font_size=9)
+        # One toggle, whose label says where the click takes you:
+        # "📋 History" on the grid, "📅 Calendar" on the register. It
+        # replaces the old in-view "← Calendar" button, so there is a
+        # single, unambiguous switch (field feedback).
+        self._history_toggle_btn = nav_button(
+            header, "📋 History", self._toggle_calendar_history,
+            "right", width=11, font_size=9)
         nav_button(header, "Today", self.go_to_today, "right",
                    width=7, font_size=9)
 
@@ -474,6 +479,14 @@ class CalendarViewMixin:
         # Fresh cells also mean the selected-day border was torn down with
         # the old ones — re-mark the open day, if its month is on screen.
         self._update_selected_day_outline()
+        # render_calendar is the single signal "calendar data changed,
+        # redraw" — every mutation (delete, restore, save, duplicate)
+        # calls it. When the History register is the visible view, it is
+        # a THIRD view of the same data and must refresh here too, or a
+        # delete only showed after a trip out to the grid and back
+        # (field report).
+        if getattr(self, "_history_visible", False):
+            self._render_calendar_history()
 
     def maybe_show_reminder(self):
         """Show a subtle 'you have notes today' bar — but only once per calendar
@@ -884,6 +897,8 @@ class CalendarViewMixin:
         self._history_visible = True
         self.history_frame.pack(side="top", fill="both", expand=True,
                                 padx=30, pady=(0, 10))
+        if hasattr(self, "_history_toggle_btn"):
+            self._history_toggle_btn.configure(text="📅 Calendar")
         self._render_calendar_history()
 
     def _hide_calendar_history(self):
@@ -891,6 +906,8 @@ class CalendarViewMixin:
         self.history_frame.pack_forget()
         self.cal_grid_frame.pack(side="top", fill="both", expand=True,
                                  padx=30, pady=(0, 10))
+        if hasattr(self, "_history_toggle_btn"):
+            self._history_toggle_btn.configure(text="📋 History")
         self.render_calendar()
 
     def _build_history_ui(self):
@@ -901,12 +918,8 @@ class CalendarViewMixin:
         self.track_theme(head, bg="bg")
         head.pack(fill="x", pady=(4, 8))
 
-        back = tk.Button(head, text="← Calendar",
-                         command=self._hide_calendar_history, relief="flat",
-                         cursor="hand2", font=("Segoe UI", 9, "bold"))
-        self.track_theme(back, bg="card", fg="text")
-        back.pack(side="left", ipadx=8, ipady=2)
-
+        # No in-view back button: the header toggle (now labelled
+        # "📅 Calendar" while this view is open) is the single way back.
         self._history_search_var = tk.StringVar()
         search = tk.Entry(head, textvariable=self._history_search_var,
                           relief="flat", font=("Segoe UI", 10),

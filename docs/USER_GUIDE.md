@@ -454,7 +454,10 @@ glance always shows where you are. Today keeps its own permanent accent bar at t
 cell, whichever day you're looking at.
 
 **📋 History**, at the far right of the calendar's header, is the register of everything that
-ever lived on the calendar: dated notes at their date, and each repeating note as a group. A
+ever lived on the calendar: dated notes at their date, and each repeating note as a group. The
+button is a toggle — it reads "📋 History" on the calendar and "📅 Calendar" while the register
+is open, so it always says where it will take you; switching tabs and coming back returns you to
+the calendar grid. A
 short series ("10 times", or one that ends soon) opens to **all** its days, with ✎ marking the
 ones edited separately; an endless one lists just its ✎ days (every other day shows the series
 content — a note in the group says so), and a series with nothing to unfold shows a → and takes

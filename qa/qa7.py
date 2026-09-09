@@ -1015,6 +1015,56 @@ app._hide_calendar_history(); app.update()
 check('leaving History restores the grid',
       app.cal_grid_frame.winfo_ismapped() and not app._history_visible)
 
+# ---- The header toggle's label flips (no separate back button) ----
+check('the toggle reads History on the grid',
+      '📋 History' in str(app._history_toggle_btn.cget('text')))
+app._toggle_calendar_history(); app.update()
+check('the toggle reads Calendar while History is open',
+      app._history_visible
+      and '📅 Calendar' in str(app._history_toggle_btn.cget('text')))
+check('there is no separate in-view back button any more',
+      find_widget(app.history_frame, tk.Button, '← Calendar') is None)
+app._toggle_calendar_history(); app.update()
+check('toggling again returns to the grid and restores the label',
+      not app._history_visible
+      and '📋 History' in str(app._history_toggle_btn.cget('text')))
+
+# ---- A delete from History shows immediately (field report: it only
+# appeared after a trip out to the grid and back). render_calendar is
+# the single mutation signal, so History refreshes there too.
+app.notes = [
+    {'id': 93, 'title': 'DelDated', 'body': 'x', 'category': 'General',
+     'date': '2026-07-15', 'updated': '2026-01-01 00:00',
+     'created': '2026-01-01 00:00', 'checklist': [], 'attachments': []},
+    {'id': 94, 'title': 'KeepDated', 'body': 'x', 'category': 'General',
+     'date': '2026-07-16', 'updated': '2026-01-01 00:00',
+     'created': '2026-01-01 00:00', 'checklist': [], 'attachments': []},
+]
+app.save_notes()
+app._toggle_calendar_history(); app.update()
+check('both dated notes show in History first',
+      any('DelDated' in t for t in find_all_labels(app._history_rows))
+      and any('KeepDated' in t for t in find_all_labels(app._history_rows)))
+app.ask_yes_no = lambda *a, **k: True
+app._delete_note_from_calendar(app.find_note(93), '2026-07-15'); app.update()
+check('deleting from History drops the row on the spot, still in History',
+      app._history_visible
+      and not any('DelDated' in t for t in find_all_labels(app._history_rows))
+      and any('KeepDated' in t for t in find_all_labels(app._history_rows)))
+
+# ---- History resets to the grid across a tab round-trip ----
+app.notebook.select(app.TAB_NOTES); app.update()
+app.notebook.select(app.TAB_CALENDAR); app.update()
+check('returning to the Calendar tab shows the grid, not stale History',
+      not app._history_visible and app.cal_grid_frame.winfo_ismapped())
+# Hygiene: force a known grid state so a mutant that breaks the reset
+# above (leaving History open) can't corrupt the later 6f blocks —
+# they'd toggle into the wrong state and crash before the footer. The
+# check already recorded its verdict; this only lets the suite finish.
+if app._history_visible:
+    app._hide_calendar_history()
+app.update()
+
 # ---- The selected-day outline (field request: the open day must jump
 # out) — set on open, torn down on close, surviving a grid re-render,
 # and never touching today's own accent top bar.

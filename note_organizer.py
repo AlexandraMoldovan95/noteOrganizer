@@ -8893,6 +8893,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             except tk.TclError:
                 return
             self._catch_up_deferred_refresh()
+            # The Calendar tab's home is the month grid; History is only a
+            # view of it. Leaving the tab (or returning to it) resets to
+            # the grid, so the calendar never reopens showing History
+            # from a session two tab-switches ago (field report).
+            if getattr(self, "_history_visible", False):
+                self._hide_calendar_history()
             # Defensive: some platforms move keyboard focus to whatever Entry
             # happens to sit first in the newly-shown tab (e.g. the search box)
             # when the previously-focused widget is hidden by the tab switch.
