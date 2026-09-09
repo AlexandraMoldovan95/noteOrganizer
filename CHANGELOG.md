@@ -12,6 +12,7 @@ How the numbers themselves are counted is the
 
 | Version | Date | In one line |
 |---|---|---|
+| [0.71.116](#071116--2026-09-09) | 2026-09-09 | Undo is whole on lists and tables — one Ctrl+Z never empties a note, dissolves a table, or half-undoes a checkbox. |
 | [0.71.113](#071113--2026-09-09) | 2026-09-09 | Import hardening — a hostile share code can't delete outside files, and a corrupt repeat interval can't crash the app on launch. |
 | [0.71.111](#071111--2026-09-09) | 2026-09-09 | A searchable calendar History register, a frame on the open day, and field-smoothed occurrence/History navigation. |
 | [0.69.108](#069108--2026-09-07) | 2026-09-07 | The occurrence world becomes visible: banners, ✎ marks, per-day reset, calendar filters and sorts, the way back on every route. |
@@ -49,6 +50,25 @@ How the numbers themselves are counted is the
 ---
 
 ## [Unreleased]
+
+## [0.71.116] — 2026-09-09
+
+*Highlights: undo on lists and tables is whole again — one Ctrl+Z never empties a note or dissolves a table.*
+
+### Fixed
+- **Undo on a list no longer wipes the note.** Turning a list on or off, or changing its
+  indent, rewrites the whole note body to renumber it (delete everything, reinsert). That
+  rewrite wasn't a single undo step, so one Ctrl+Z could take back the reinsert but not the
+  delete — leaving the note showing empty. The rewrite is now one undo unit, on every path
+  that triggers it. From the code audit.
+- **Editing a list above a table no longer dissolves the table.** The same whole-body
+  renumber tore out the drawn table (its cells reverted to raw `| pipe | rows |`) because
+  it never redrew the grid afterward. It now redraws any table the body still holds. From
+  the code audit.
+- **Checkbox and table-grow actions undo in one step.** Toggling a table checkbox, or
+  copying a row/column to the end, was a burst of small edits that Ctrl+Z took back
+  half-done. Each is now a single undo unit, like every other table operation. From the
+  code audit.
 
 ## [0.71.113] — 2026-09-09
 
