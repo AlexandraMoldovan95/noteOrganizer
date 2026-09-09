@@ -161,7 +161,15 @@ def decode_share_code(code):
             f"{MAX_SHARED_NOTES}-note limit for a single code. Ask the sender to "
             "split it into smaller codes, or to use Export (ZIP) instead."
         )
-    return notes
+    # Project each note through the SAME shareable slice encode produces,
+    # so a hand-crafted code can carry only the fields a real one would.
+    # A genuine code never includes attachments (they aren't in
+    # SHAREABLE_FIELDS); dropping them here means an imported note can't
+    # smuggle in an attachment reference whose stored_as points a later
+    # delete at a file outside the attachments folder. normalize_note
+    # already whitelists on top of this — this is the boundary that
+    # makes the two ends symmetric.
+    return [_shareable_view(n) if isinstance(n, dict) else {} for n in notes]
 
 
 def _safe_extract_zip(zf, dest_dir):

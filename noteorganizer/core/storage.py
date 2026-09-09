@@ -172,6 +172,23 @@ def save_trash(trash):
     _write_json_atomic(paths.TRASH_FILE, trash)
 
 
+def _attachment_path_within(stored_as):
+    """Resolve *stored_as* to a path INSIDE the attachments folder, or
+    None if it would escape it. `stored_as` is meant to be a bare
+    timestamped filename (see add_attachment); a value carrying path
+    separators or ``..`` — only possible from hand-crafted/imported
+    data — must never resolve a delete to a file elsewhere on disk."""
+    if not isinstance(stored_as, str) or not stored_as:
+        return None
+    base = os.path.realpath(paths.ATTACHMENTS_DIR)
+    candidate = os.path.realpath(os.path.join(base, stored_as))
+    if candidate == base:
+        return None  # the folder itself, not a file in it
+    if os.path.commonpath([base, candidate]) != base:
+        return None  # escaped the attachments folder
+    return candidate
+
+
 def _delete_attachment_files(notes_or_entries):
     """Permanently remove the on-disk files for every attachment referenced by
     the given notes/trash-entries. Each attachment gets a unique timestamped
@@ -189,7 +206,14 @@ def _delete_attachment_files(notes_or_entries):
             stored_as = att.get("stored_as")
             if not stored_as:
                 continue
-            path = os.path.join(paths.ATTACHMENTS_DIR, stored_as)
+            path = _attachment_path_within(stored_as)
+            if path is None:
+                # stored_as escaped the attachments folder (e.g. a
+                # "../../file" smuggled in via a crafted share code) —
+                # refuse to delete anything outside it. The same
+                # path-traversal guard the zip import already applies,
+                # now on the delete side too.
+                continue
             try:
                 if os.path.isfile(path):
                     os.remove(path)

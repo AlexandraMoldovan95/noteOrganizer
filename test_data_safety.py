@@ -600,6 +600,36 @@ check("while the kept entry's file is untouched",
       os.path.exists(_new_att))
 os.remove(_new_att)
 
+# ---- Attachment deletion can't escape the attachments folder ----
+# A crafted share code (or hand-edited data) could carry an attachment
+# whose stored_as is "../../file" — permanent deletion used to join it
+# onto ATTACHMENTS_DIR and remove whatever it pointed at. The path
+# guard keeps every delete inside the folder; a legit filename still
+# deletes.
+_outside = os.path.join(os.path.dirname(_paths.ATTACHMENTS_DIR),
+                        "precious_outsider.txt")
+with open(_outside, "w") as _f:
+    _f.write("do not delete me")
+_inside = os.path.join(_paths.ATTACHMENTS_DIR, "legit_att.bin")
+with open(_inside, "w") as _f:
+    _f.write("x")
+_rel = os.path.relpath(_outside, _paths.ATTACHMENTS_DIR)  # e.g. "..\precious..."
+_storage._delete_attachment_files([
+    {"attachments": [{"stored_as": _rel},
+                     {"stored_as": "legit_att.bin"}]}])
+check("a traversal stored_as cannot delete a file outside attachments/",
+      os.path.exists(_outside))
+check("a legit attachment filename is still deleted",
+      not os.path.exists(_inside))
+check("_attachment_path_within rejects traversal, accepts a bare name",
+      _storage._attachment_path_within(_rel) is None
+      and _storage._attachment_path_within("legit_att.bin") is not None)
+# Defensive: under a mutant that breaks the guard the outsider is gone,
+# and a bare remove would crash the run before its footer. The checks
+# already recorded their verdicts; this only lets the suite finish.
+if os.path.exists(_outside):
+    os.remove(_outside)
+
 # ---- The atomic-write family: every data file saves the safe way ----
 # trash/templates/settings once wrote with a bare open('w'): an emoji
 # with a lone surrogate raised UnicodeEncodeError mid-dump and left the

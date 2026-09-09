@@ -21,7 +21,8 @@ day-to-day tracking.
 | [The safety test that needed its own safety](#the-safety-test-that-needed-its-own-safety) | Safety rules must be categorical, not filename lists; dangerous tests carry their own refusal. | 0.39.63 |
 | [The delete that kept aiming at the wrong note](#the-delete-that-kept-aiming-at-the-wrong-note) | An operation aimed by mutating shared state lies on every cancel path — pass the target as a parameter. | 0.66.100 |
 | [The guards that never reached the siblings](#the-guards-that-never-reached-the-siblings) | A safety lesson learned in one function must be swept to its siblings the same day. | 0.66.104 |
-| [The repeat interval with no ceiling](#the-repeat-interval-with-no-ceiling) | Clamp untrusted values on both sides at the choke point — valid means valid for every consumer. | 0.71.112 |
+| [The share code that could delete your files](#the-share-code-that-could-delete-your-files) | Validate filesystem-bound values where they enter AND where they act; encode/decode must project the same fields. | 0.71.113 |
+| [The repeat interval with no ceiling](#the-repeat-interval-with-no-ceiling) | Clamp untrusted values on both sides at the choke point — valid means valid for every consumer. | 0.71.113 |
 | [The template editor that "did nothing" when clicked](#the-template-editor-that-did-nothing-when-clicked) | 'Nothing happens' in a --windowed build is a real bug report — the exception was invisible. | 0.3.0 |
 | [The panel that lost its content depending on how you got there](#the-panel-that-lost-its-content-depending-on-how-you-got-there) | Recalculate layout on Tk's `<Map>` event, not after a guessed delay. | 0.3.0 |
 | [The scroll that stopped twice, for two different reasons](#the-scroll-that-stopped-twice-for-two-different-reasons) | Same symptom, unrelated causes — check neighbouring areas instead of assuming one fix covers all. | 0.28.38 |
@@ -260,9 +261,45 @@ across its siblings the same day it is learned. A guard that exists only
 where the bug first bit is a map of where it will bite next — and the
 sweep is cheap exactly because the lesson is already understood.
 
+### The share code that could delete your files
+
+*([0.71.113](../CHANGELOG.md#071113--2026-09-09) · 2026-09-09)*
+
+**Symptom:** Found by the code audit. A genuine share code never
+contains attachments — they aren't in `SHAREABLE_FIELDS`, so
+`encode_share_code` strips them. But `decode_share_code` handed back
+the raw JSON unfiltered, so a *hand-crafted* code could include an
+`attachments` entry with a `stored_as` of `../../<some real file>`.
+Importing that note and later deleting it forever (or letting the trash
+auto-purge) ran `_delete_attachment_files`, which did
+`os.path.join(ATTACHMENTS_DIR, stored_as)` and `os.remove` — deleting a
+file well outside the attachments folder.
+
+**Root cause:** two halves of the same "trust the boundary" gap. Encode
+projected notes through the shareable slice; decode did not, so the two
+ends weren't symmetric. And the deletion path assumed `stored_as` was
+always the bare timestamped filename the app itself writes — true for
+every file the app creates, never verified for one that arrived from
+outside.
+
+**Fix:** decode now projects each note through the same
+`_shareable_view` encode uses, so an imported note can carry only the
+fields a real code would (no attachments, no arbitrary keys) —
+`normalize_note` still whitelists on top, making the boundary symmetric
+at both layers. And `_delete_attachment_files` resolves each
+`stored_as` through `_attachment_path_within`, which rejects anything
+landing outside the attachments folder — the same path-traversal guard
+the zip import already applies, now on the delete side too.
+
+**Takeaway:** a value that will be fed to a filesystem operation must be
+validated where it *enters* (the import boundary) AND where it *acts*
+(the delete), not trusted because the app's own code always produces a
+safe form. Encode and decode of the same format must project the same
+fields, or the asymmetry is the hole.
+
 ### The repeat interval with no ceiling
 
-*([0.71.112](../CHANGELOG.md#071112--2026-09-09) · 2026-09-09)*
+*([0.71.113](../CHANGELOG.md#071113--2026-09-09) · 2026-09-09)*
 
 **Symptom:** Found by the code audit, then reproduced. A recurrence
 rule with an enormous interval — `{"freq": "daily", "interval": 1e10}`

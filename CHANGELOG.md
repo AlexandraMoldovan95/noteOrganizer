@@ -50,6 +50,13 @@ How the numbers themselves are counted is the
 ## [Unreleased]
 
 ### Fixed
+- **An imported share code can no longer delete files outside the app.** A genuine share
+  code never carries attachments, but a hand-crafted one could — with a `stored_as` like
+  `../../something` — and deleting that imported note forever joined the path onto the
+  attachments folder and removed whatever it pointed at. Two guards close it: decoding a
+  share code now keeps only the fields a real code carries (dropping attachments and any
+  other smuggled keys), and permanent deletion refuses any attachment path that resolves
+  outside the attachments folder. From the code audit's high-severity findings.
 - **A corrupt repeat interval can no longer crash the app on launch.** A recurrence rule
   whose interval was enormous — from a hand-edited `notes_data.json` or a crafted share
   code — overflowed the date maths and, because the calendar draws itself at startup,
