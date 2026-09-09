@@ -45,6 +45,7 @@ day-to-day tracking.
 | [The centring that would not save itself](#the-centring-that-would-not-save-itself) | A comparison that lists fields silently exempts whatever field is added next. | 0.39.63 |
 | [The accepted cost that nobody had accepted](#the-accepted-cost-that-nobody-had-accepted) | When a docstring says 'accepted cost', check who pays it, and for what. | 0.64.95 |
 | [The undo that stopped halfway](#the-undo-that-stopped-halfway) | Burst edits owe undo a boundary, redraws owe it silence; probe what Tk records. | 0.64.95 |
+| [The undo that stopped halfway, the sequel](#the-undo-that-stopped-halfway-the-sequel-lists-and-the-grid-trio) | When a fix has a sibling family, audit which siblings were missed; a "drawn?" check reads real windows, not a stale dict. | 0.71.113 |
 | [The Trash panel that took two seconds to open](#the-trash-panel-that-took-two-seconds-to-open) | Don't build and wire every row up front; render a page, reveal more on demand. | 0.4.0 |
 | [The slowdown that only showed up after a long session](#the-slowdown-that-only-showed-up-after-a-long-session) | 'Slow after a while, fine at first' means unbounded growth; reproduce with a loop. | 0.4.0 |
 | [Export/import freezing the app](#exportimport-freezing-the-app) | Do file I/O on a worker thread; only the main thread touches Tkinter widgets. | 0.4.0 |
@@ -863,6 +864,51 @@ that writes text in bursts owes the undo stack a boundary, everything
 that redraws owes it silence, and the probe that settles what Tk
 actually records costs one minute — cheaper than the theory it
 replaces.
+
+### The undo that stopped halfway, the sequel: lists and the grid trio
+
+*([0.71.113](../CHANGELOG.md#071113--2026-09-09) · 2026-09-09)*
+
+**Symptom:** found by the code audit — the same class as the story
+above, in the corners it hadn't reached. Turn three lines into a
+numbered list, press Ctrl+Z once: the note shows EMPTY. Press Enter in
+a list sitting above a table: the table dissolves into raw `| pipe |`
+rows. Toggle a table checkbox, Ctrl+Z: the toggle comes back half-done.
+
+**Root cause:** the list operations renumber by rewriting the WHOLE
+body — `delete("1.0","end-1c")` then reinsert — and that rewrite wasn't
+bracketed as one undo unit, so a single Ctrl+Z undid the reinsert but
+not the delete and the note was left empty. The same rewrite tore out
+any drawn table's embedded windows and never redrew them. And three
+structural grid ops — the checkbox `_grid_set_marker`, `_grid_append_cols`,
+`_grid_append_rows` — were the only ones in their family missing the
+`@_undo_atom` decorator every sibling carried.
+
+**Fix, matched to each hole.** The whole-body rewrite in
+`_renumber_lists` is now bracketed as one undo unit — placed *after* its
+no-change early return, so a keystroke that doesn't renumber emits no
+separator and normal typing undo is untouched, and re-entrant so a
+wrapped list op stays one unit. When the rewritten body still holds a
+table, it redraws the grids (skipped when there's none, keeping the
+plain-list path keystroke-cheap). The three grid ops got the decorator
+their siblings already had. The button ops (`_toggle_list`,
+`_change_paragraph_indent`) are wrapped too, so their marker/indent
+edits plus the renumber are one unit; the key handlers are deliberately
+NOT wrapped (a decorator on every Backspace would split normal
+delete-to-undo grouping — the renumber's own atom is what protects
+their editing branches).
+
+**A check that tested the wrong thing.** The first cut of the
+table-survival check asserted `len(_table_grids) == 1`, and the mutant
+that removed the redraw SURVIVED it: the whole-body delete tears the
+embedded windows out of the widget but leaves a stale entry in the
+`_table_grids` dict. The check now asserts on `body_text.window_names()`
+— the real embedded windows — which is what "actually drawn" means.
+
+**Takeaway:** when a fix has a sibling family (here `@_undo_atom`), the
+audit is "which siblings were missed", not "does the reported one work".
+And a check for "is it drawn" must read the widget's real embedded
+windows, never a bookkeeping dict that a teardown can leave stale.
 
 ## Theming & performance
 

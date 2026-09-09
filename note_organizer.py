@@ -45,7 +45,7 @@ except ImportError:
 # Added/Fixed CHANGELOG.md entries, not per-release counts). The running
 # app records this into settings, so the next time a newer build opens
 # over older data it can tell the user what changed version-wise.
-APP_VERSION = "0.71.113"
+APP_VERSION = "0.71.116"
 
 
 def parse_version(v):
@@ -3643,6 +3643,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._grid_replace_block(first, nrows, rows, aligns, sep_cols)
         self._grid_after_op(first)
 
+    @_undo_atom
     def _grid_set_marker(self, info, r, c, marker):
         context = self._grid_op_context(info)
         if not context:
@@ -3773,6 +3774,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 sep_cols[c]["hidden"] = True
         self._grid_column_mechanics(info, mutate)
 
+    @_undo_atom
     def _grid_append_cols(self, info, c0, c1):
         """The selected columns joined again to the table's right edge --
         text and all, exactly as written, empty cells staying empty."""
@@ -3802,6 +3804,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._grid_replace_block(first, nrows, rows, aligns, sep_cols)
         self._grid_after_op(first)
 
+    @_undo_atom
     def _grid_append_rows(self, info, r0, r1):
         """The selected rows joined again to the table's bottom edge --
         the vertical twin of copying columns to the end. A merge
@@ -5790,6 +5793,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 self._paragraph_tag(self.body_text, kind, indent),
                 f"{line_no}.0", f"{line_no}.end")
 
+    @_undo_atom
     def _change_paragraph_indent(self, delta):
         """Push the selected lines one step deeper, or pull them back out.
 
@@ -6023,6 +6027,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             first = last = int(self.body_text.index("insert").split(".")[0])
         return first, last
 
+    @_undo_atom
     def _toggle_list(self, kind):
         """Turn the selected lines into a list, or back into plain lines.
 
@@ -6100,16 +6105,36 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         new_body, shifts = renumber(body, paragraphs)
         if new_body == body:
             return
-        spans = shift_spans(self._extract_formatting(self.body_text), shifts)
-        insert_at = self.body_text.index("insert")
-        self.body_text.delete("1.0", "end-1c")
-        self.body_text.insert("1.0", new_body)
-        self._apply_formatting(self.body_text, spans)
-        self._apply_paragraphs(self.body_text, paragraphs)
+        # The rewrite below is delete-everything + reinsert. Left as two
+        # recorded edits, one Ctrl+Z undid the reinsert but not the
+        # delete and the note showed EMPTY; bracket it as ONE undo unit.
+        # The bracket sits AFTER the no-change early return, so a keystroke
+        # that doesn't renumber emits no separator — normal typing undo is
+        # untouched. Re-entrant, so when a wrapped list op called this the
+        # whole op stays one unit.
+        self._undo_atom_begin()
         try:
-            self.body_text.mark_set("insert", insert_at)
-        except tk.TclError:
-            pass
+            spans = shift_spans(self._extract_formatting(self.body_text), shifts)
+            insert_at = self.body_text.index("insert")
+            self.body_text.delete("1.0", "end-1c")
+            self.body_text.insert("1.0", new_body)
+            self._apply_formatting(self.body_text, spans)
+            self._apply_paragraphs(self.body_text, paragraphs)
+            # The whole-body delete also tore out any drawn table grids
+            # (their embedded window characters). If the body still holds
+            # a table, redraw it or it dissolves into raw pipe rows — the
+            # exact "Enter in a list dissolves my table" field failure.
+            # Skipped when there's no table, so a plain list keeps its
+            # keystroke-cheap path. _render_table_grids is undo-hidden, so
+            # this adds no undo noise inside the atom.
+            if core_tables.find_blocks(new_body):
+                self._render_table_grids()
+            try:
+                self.body_text.mark_set("insert", insert_at)
+            except tk.TclError:
+                pass
+        finally:
+            self._undo_atom_end()
 
     def _on_body_return(self, event):
         """Enter inside a list continues it, or ends it on an empty item.

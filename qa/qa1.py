@@ -5948,6 +5948,89 @@ check('one undo removes the whole inserted table, drawing included',
       and 'text sus' in _txtU3)
 set_body('')
 
+# ---- UNDO x LISTS/GRID: one operation = one Ctrl+Z, never an empty note ----
+# The list ops rewrite the WHOLE body (delete all + reinsert to renumber);
+# unbracketed, one Ctrl+Z undid the reinsert but not the delete and the
+# note showed EMPTY (audit Z09-F01). And a numbered list ABOVE a table:
+# the whole-body rewrite tore out the drawn grid and never redrew it, so
+# the table dissolved into raw pipe rows (Z09-F00). And the grid trio
+# (checkbox toggle, append rows/cols) lacked the undo unit (Z08-F01).
+
+# Toggling a list on is ONE undo unit, and undo restores the text — not "".
+set_body('alpha' + chr(10) + 'beta' + chr(10) + 'gamma')
+app.update()
+app.body_text.edit_reset()
+app.body_text.tag_add('sel', '1.0', 'end-1c')
+app._toggle_list('number')
+app.update()
+_listed = app.body_text.get('1.0', 'end-1c')
+app._body_undo_redo('undo')
+app.update()
+_after = app.body_text.get('1.0', 'end-1c')
+check('toggling a numbered list on is one Ctrl+Z, and undo is not empty',
+      _listed.startswith('1. alpha') and _after == 'alpha' + chr(10)
+      + 'beta' + chr(10) + 'gamma')
+
+# Enter that ACTUALLY renumbers (a new item mid-list shifts the numbers
+# below) rewrites the whole body — the path that tore the table out.
+# Caret at end of item 1: the new item is 2, the old 2 becomes 3, so
+# renumber genuinely rewrites (its no-change early-return does NOT fire).
+set_body('1. one' + chr(10) + '2. two' + chr(10) + '| A | B |'
+         + chr(10) + '| --- | --- |' + chr(10) + '| x | y |')
+app._render_table_grids()
+app.update()
+app.body_text.edit_reset()
+app.body_text.mark_set('insert', '1.end')
+if take_focus(app.body_text):
+    app._on_body_return(None)
+    app.update()
+    import time as _t1u
+    _t1u.sleep(0.2)
+    app.update()
+_body_after = app.body_text.get('1.0', 'end-1c')
+# Assert on the REAL embedded windows, not the _table_grids dict: the
+# whole-body delete tears the windows out of the widget while the dict
+# can keep a stale entry, so window_names() is what proves the grid is
+# actually drawn (the dict count fooled the first cut of this check).
+check('Enter that renumbers a list above a table keeps the table drawn',
+      len(app.body_text.window_names()) == 1
+      and len(core_tables.find_blocks(_body_after)) == 1)
+
+# The whole-body renumber rewrite (delete-all + reinsert) on the key
+# path is ONE undo unit: one Ctrl+Z after such an Enter must never leave
+# the note EMPTY (the audit's Z09-F01 catastrophe). _on_body_return is
+# not itself wrapped, so this exercises _renumber_lists' own atom.
+set_body('1. one' + chr(10) + '2. two')
+app.update()
+app.body_text.edit_reset()
+app.body_text.mark_set('insert', '1.end')
+if take_focus(app.body_text):
+    app._on_body_return(None)
+    app.update()
+app._body_undo_redo('undo')
+app.update()
+check('one Ctrl+Z after a renumbering Enter never empties the note',
+      app.body_text.get('1.0', 'end-1c').strip() != '')
+
+# The checkbox grid op is one undo unit: toggling a cell's checkbox and a
+# single undo restores the prior marker, drawing intact.
+set_body('| task | done |' + chr(10) + '| --- | --- |' + chr(10)
+         + '| a | [ ] |')
+app._render_table_grids()
+app.update()
+app.body_text.edit_reset()
+_gi = app._grid_at_line(1)
+app._grid_set_marker(_gi, 1, 1, '[x]')
+app.update()
+_checked = app.body_text.get('1.0', 'end-1c')
+app._body_undo_redo('undo')
+app.update()
+_unchecked = app.body_text.get('1.0', 'end-1c')
+check('a checkbox toggle is one Ctrl+Z that restores the prior state',
+      '[x]' in _checked and '[x]' not in _unchecked
+      and len(app._table_grids) == 1)
+set_body('')
+
 # ---- OLD TEETH, SHARPENED (the 2026-08-31 audit) ----
 # 1. The 0.32.x editor guard (short content stays at the top) was pinned
 # by nothing: removed, everything stayed green. winfo_height is stubbed
