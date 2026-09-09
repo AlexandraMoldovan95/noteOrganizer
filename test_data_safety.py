@@ -671,6 +671,32 @@ check("normalize_note reduces every attachment stored_as to a bare name",
 if os.path.exists(_outside):
     os.remove(_outside)
 
+# ---- Duplicating a note gives the copy its OWN attachment files ----
+# A plain deep-copy shared the original's stored_as (same files on disk);
+# permanently deleting either note then removed the file the other still
+# referenced -- silent attachment loss (audit Z01-F04). copy_attachment_file
+# hands the copy fresh files.
+os.makedirs(_paths.ATTACHMENTS_DIR, exist_ok=True)
+_dup_src = os.path.join(_paths.ATTACHMENTS_DIR, "20260101_shared.bin")
+with open(_dup_src, "w") as _f:
+    _f.write("shared bytes")
+_fresh = _storage.copy_attachment_file("20260101_shared.bin")
+check("copy_attachment_file returns a NEW distinct name",
+      _fresh is not None and _fresh != "20260101_shared.bin"
+      and os.path.isfile(os.path.join(_paths.ATTACHMENTS_DIR, _fresh)))
+# Deleting the copy's file leaves the original's file intact.
+_storage._delete_attachment_files([{"attachments": [{"stored_as": _fresh}]}])
+check("deleting the copy's attachment file leaves the original's intact",
+      os.path.isfile(_dup_src)
+      and not os.path.isfile(os.path.join(_paths.ATTACHMENTS_DIR, _fresh)))
+# A missing source yields None (caller keeps the old ref, no crash).
+check("copy_attachment_file returns None for a missing source",
+      _storage.copy_attachment_file("does_not_exist.bin") is None)
+# Defensive: a mutant sharing the file deletes _dup_src above, so a bare
+# remove would crash the run before its footer. Verdicts already recorded.
+if os.path.exists(_dup_src):
+    os.remove(_dup_src)
+
 # ---- The atomic-write family: every data file saves the safe way ----
 # trash/templates/settings once wrote with a bare open('w'): an emoji
 # with a lone surrogate raised UnicodeEncodeError mid-dump and left the

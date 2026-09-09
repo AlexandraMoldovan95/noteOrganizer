@@ -23,6 +23,9 @@ day-to-day tracking.
 | [The guards that never reached the siblings](#the-guards-that-never-reached-the-siblings) | A safety lesson learned in one function must be swept to its siblings the same day. | 0.66.104 |
 | [The share code that could delete your files](#the-share-code-that-could-delete-your-files) | Validate filesystem-bound values where they enter AND where they act; encode/decode must project the same fields. | 0.71.113 |
 | [The repeat interval with no ceiling](#the-repeat-interval-with-no-ceiling) | Clamp untrusted values on both sides at the choke point — valid means valid for every consumer. | 0.71.113 |
+| [The duplicate that wasn't a copy](#the-duplicate-that-wasnt-a-copy) | A "copy" that shares its source's files isn't one — the class is every route that clones a note, not the route reported. | 0.71.119 |
+| [The mend that only ran on the way to disk](#the-mend-that-only-ran-on-the-way-to-disk) | A repair at one serialization boundary is a todo list for the others; and UnicodeEncodeError is a ValueError, not an OSError. | 0.71.119 |
+| [The safety request the dialog never read](#the-safety-request-the-dialog-never-read) | A `**kw` wrapper that forwards a subset silently swallows the rest — callers' safety asks can be dead code for months. | 0.71.119 |
 | [The template editor that "did nothing" when clicked](#the-template-editor-that-did-nothing-when-clicked) | 'Nothing happens' in a --windowed build is a real bug report — the exception was invisible. | 0.3.0 |
 | [The panel that lost its content depending on how you got there](#the-panel-that-lost-its-content-depending-on-how-you-got-there) | Recalculate layout on Tk's `<Map>` event, not after a guessed delay. | 0.3.0 |
 | [The scroll that stopped twice, for two different reasons](#the-scroll-that-stopped-twice-for-two-different-reasons) | Same symptom, unrelated causes — check neighbouring areas instead of assuming one fix covers all. | 0.28.38 |
@@ -352,6 +355,114 @@ sides at the normalization choke point — "coerce to valid" has to mean
 valid for every consumer downstream, not just non-negative. And the
 calendar rendering at startup makes any calendar-data crash a
 launch-blocker, which raises the stakes of every such value.
+
+### The duplicate that wasn't a copy
+
+*([0.71.119](../CHANGELOG.md#071119--2026-09-09) · 2026-09-09)*
+
+**Symptom:** Found by the code audit. Duplicate a note that has an
+attachment, then delete either note forever — the survivor's attachment
+is gone too. The "copy" had copied the note's *reference* to the file,
+not the file.
+
+**Root cause:** `duplicate_note` deep-copied the note dict, and a deep
+copy of a filename is the same filename: both notes' `stored_as` pointed
+at one physical file in `attachments/`, while delete-forever removes
+each of a note's files unconditionally. The adversarial review then
+swept the class and found the same aliasing on two more routes. The
+Settings duplicate clean-up merged a removed note's attachments into the
+survivor **by reference** — and since the removed twin goes to the
+Trash, whose retention purge deletes its files, the purge was
+*guaranteed* to destroy the very file the merge existed to preserve.
+And re-importing an overlapping backup skipped copying files whose names
+already existed, handing an imported note a file an existing note owned.
+
+**Fix:** one helper, `copy_attachment_file` in `core/storage.py` —
+resolve the source through the same containment guard the delete side
+uses, copy to a fresh timestamped name, return the new name or `None` —
+called on all three routes. The import route keeps a "claimed" set
+(files owned by kept notes, plus first claimants within the import
+itself) so only real collisions pay for a copy. qa4 checks pin the
+duplicate and merge routes with mutants: the survivor's merged file now
+outlives the trashed twin's purge.
+
+**Takeaway:** a "copy" that shares its source's resources isn't a copy,
+and the resource here — a file on disk — is invisible in the dict the
+code copies. When one route is caught aliasing, the class is "every
+route that clones a note" (duplicate, merge, import), not the route in
+the report.
+
+### The mend that only ran on the way to disk
+
+*([0.71.119](../CHANGELOG.md#071119--2026-09-09) · 2026-09-09)*
+
+**Symptom:** Found by the code audit. Type an emoji into a note and
+immediately share it — crash. Export it to a file, single or bulk —
+crash. Save the note first, and both work.
+
+**Root cause:** Tk hands an astral emoji over as a UTF-16 surrogate
+pair, which Python strings carry happily but `.encode("utf-8")`
+refuses. `mend_surrogates` existed for exactly this — but only the
+disk writer called it, so the in-memory notebook keeps its surrogates
+for the whole session, and every *other* path that encodes live note
+content inherited a crash: `encode_share_code`, and both file exports
+through `_note_export_content`. The export guards made it worse:
+`except (IOError, OSError)` reads like "any failure writing the file",
+but `UnicodeEncodeError` is a `ValueError` — it sailed past the guard,
+and on the bulk path aborted the whole loop.
+
+**Fix:** mend at each boundary's choke point — `encode_share_code`
+before its encode, `_note_export_content` before returning (one line
+covering both the single and bulk callers). The emoji arrives whole
+rather than the export failing politely. qa1 and qa3 checks with
+mutants pin both boundaries.
+
+**Takeaway:** a repair applied where one boundary serializes is a todo
+list for every other boundary that serializes the same data — sweep
+them the day the first lands (the lesson of
+[The guards that never reached the siblings](#the-guards-that-never-reached-the-siblings),
+on a new class). And know the exception hierarchy of what you guard:
+`UnicodeEncodeError` is not an `OSError`, so the "file write failed"
+handler never saw it.
+
+### The safety request the dialog never read
+
+*([0.71.119](../CHANGELOG.md#071119--2026-09-09) · 2026-09-09)*
+
+**Symptom:** Found by the code audit. The template-replace confirm —
+"Any unsaved changes here will be lost. Continue?" — showed a neutral
+❓ and opened with keyboard focus on **Yes**, so Enter, the reflex that
+closes most dialogs, replaced the note. The call site read
+`icon="warning", default="no"`: the caller had asked for both
+protections, long ago.
+
+**Root cause:** the dialog wrappers accept `**kw` and forwarded only
+`kind`. `icon=` and `default=` — messagebox's own vocabulary, used by
+ten call sites — were silently swallowed, and `_themed_dialog` always
+focused the last (primary) button. Nothing failed, nothing warned: the
+safety requests were dead code that *looked* like protection in every
+review since.
+
+**Fix:** honour both across the wrapper family — `_kind_from_kw` maps
+`icon=`/`kind=` to the glyph, and a new `default=` names the button
+that takes focus (`_dialog_focus_index`, pure; a typo falls back to the
+primary rather than leaving nothing focused). Then the sweep: every
+irreversible confirm — replace-with-template, delete an attachment or
+template forever, overwrite a template by name, empty the trash, reset
+an edited calendar day, restore a previous version, open a risky file —
+now passes `icon="warning", default="no"`. Recoverable move-to-trash
+confirms deliberately keep Enter as "proceed": irreversibility is the
+criterion. qa6 pins the mechanism by recording the `focus_set` *call*
+on a 3-button dialog (the target is the middle button, so any
+hard-coded position fails) instead of reading focus back
+asynchronously.
+
+**Takeaway:** a `**kw` wrapper that forwards a subset silently swallows
+the rest, and the silence is the trap — call sites then document
+protections that don't exist. The fix is the wrapper (make the
+vocabulary real), then a sweep that classifies every caller against an
+explicit criterion — here "is it irreversible?" — so the next reader
+knows which confirms are safe by choice, not by omission.
 
 ## Tk & platform gotchas
 

@@ -5256,6 +5256,24 @@ check('the suggested filename is scrubbed of forbidden characters',
 check('each single export offers to open the file',
       len([t for t in _openAsksX if 'Open it now' in t]) == 2)
 
+# ---- EXPORT x EMOJI: a just-typed emoji must not crash the export ----
+# Tk hands an astral emoji over as a UTF-16 surrogate pair, and the export
+# writes utf-8. Unmended, f.write raised UnicodeEncodeError — a ValueError
+# the callers' (IOError, OSError) guards never caught, so the export
+# crashed (audit Z05-F02's export sibling). _note_export_content mends at
+# the shared choke point: the content must be utf-8-encodable with the
+# emoji arriving whole.
+_emoji_note = NO.normalize_note({
+    'id': 8802, 'title': 'Emoji', 'body': 'x' + chr(0xD83D) + chr(0xDE00),
+    'category': 'General'})
+try:
+    _emo_content = app._note_export_content(_emoji_note, 'txt', 'Emoji')
+    _emo_content.encode('utf-8')
+    _emo_ok = '\U0001F600' in _emo_content
+except Exception:
+    _emo_ok = False
+check('export content mends a just-typed emoji instead of crashing', _emo_ok)
+
 # ---- BULK EXPORT ----
 # Two notes with the SAME title -> the second gets the " (2)" suffix.
 _exp_note2 = NO.normalize_note({

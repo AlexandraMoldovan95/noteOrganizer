@@ -12,6 +12,7 @@ How the numbers themselves are counted is the
 
 | Version | Date | In one line |
 |---|---|---|
+| [0.71.119](#071119--2026-09-09) | 2026-09-09 | Three audit-found user-facing safety fixes — every route that copies a note gives the copy its own attachment files, a fresh emoji no longer crashes sharing or export, and destructive confirms warn clearly instead of pre-selecting Yes. |
 | [0.71.116](#071116--2026-09-09) | 2026-09-09 | Undo is whole on lists and tables — one Ctrl+Z never empties a note, dissolves a table, or half-undoes a checkbox. |
 | [0.71.113](#071113--2026-09-09) | 2026-09-09 | Import hardening — a hostile share code can't delete outside files, and a corrupt repeat interval can't crash the app on launch. |
 | [0.71.111](#071111--2026-09-09) | 2026-09-09 | A searchable calendar History register, a frame on the open day, and field-smoothed occurrence/History navigation. |
@@ -50,6 +51,36 @@ How the numbers themselves are counted is the
 ---
 
 ## [Unreleased]
+
+## [0.71.119] — 2026-09-09
+
+*Highlights: three audit-found user-facing safety fixes — every route that copies a note gives the copy its own attachment files, a just-typed emoji no longer crashes sharing or export, and destructive confirmations warn clearly instead of pre-selecting "Yes".*
+
+### Fixed
+- **A copy of a note now gets its own attachment files, on every route that copies.** A
+  duplicate pointed at the *same* files on disk as the original, so deleting either note —
+  or removing an attachment from one of them — deleted the shared file out from under the
+  other. The same aliasing hid in two more places the adversarial review swept up: the
+  Settings duplicate clean-up merged a removed note's attachment into the survivor by
+  reference, so the trashed twin's automatic purge later destroyed the very file the merge
+  existed to preserve; and re-importing an overlapping backup could hand an imported note a
+  file an existing note already owned. All three routes now give the copy its own fresh
+  file. From the code audit.
+- **A just-typed emoji no longer crashes sharing or exporting a note.** An emoji typed into
+  a note is held internally as a UTF-16 surrogate pair, and the repair for those only ran
+  when *saving to disk* — so building a share code for an unsaved emoji raised an encoding
+  error, and exporting such a note to a file (single or bulk) crashed the export the same
+  way. Both boundaries now repair surrogates before encoding, so the emoji arrives whole.
+  From the code audit.
+- **Destructive confirmations warn clearly and no longer pre-select "Yes".** Confirm
+  dialogs could ask for a warning icon and for "No" to be the pre-selected button — but
+  both requests were silently ignored, so the dialog showed the neutral question mark and
+  put keyboard focus on "Yes", where a reflexive Enter fired the dangerous action. Both are
+  honoured now, and every irreversible confirm uses them: replacing the editor with a
+  template, deleting an attachment or a template forever, overwriting a template by name,
+  emptying the trash, resetting an edited calendar day, restoring a previous version, and
+  opening a risky file. Escape still chooses the safe option; recoverable move-to-trash
+  confirms deliberately keep Enter as "proceed". From the code audit.
 
 ## [0.71.116] — 2026-09-09
 

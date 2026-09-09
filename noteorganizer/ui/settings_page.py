@@ -51,6 +51,7 @@ from ..core.storage import (
     TRASH_RETENTION_DAYS,
     trash_retention_days,
     _delete_attachment_files,
+    copy_attachment_file,
     get_setting,
     save_setting,
     load_settings,
@@ -571,7 +572,7 @@ class SettingsPageMixin:
                     "Delete template",
                     f"Delete the template “{name}” for good?\n\n"
                     "Templates don't go to the Trash — this can't be undone.",
-                    parent=parent):
+                    parent=parent, icon="warning", default="no"):
                 self.templates = [t for t in self.templates if t is not tpl]
                 save_templates(self.templates)
                 redraw()
@@ -1010,7 +1011,7 @@ class SettingsPageMixin:
                         f"You already have a template named “{taken_name}”.\n\n"
                         "Replace the old template with this one?\n"
                         "Choose No to give this one another name.",
-                        parent=pop):
+                        parent=pop, icon="warning", default="no"):
                     return
                 self.templates = [t for t in self.templates
                                   if t not in others]
@@ -2350,7 +2351,8 @@ class SettingsPageMixin:
 
         if count == 0:
             if not self.ask_yes_no("Delete category",
-                                       f"Delete “{name}”? It has no notes."):
+                                       f"Delete “{name}”? It has no notes.",
+                                       icon="warning", default="no"):
                 return
             CATEGORY_COLORS.pop(name, None)
             persist_categories()
@@ -2429,14 +2431,26 @@ class SettingsPageMixin:
             survivors = [n for n in group if n not in remove]
             if survivors:
                 # Merge removed notes' attachments into the first survivor.
+                # The removed note keeps its own references and goes to the
+                # trash, whose later purge deletes its files — so the
+                # survivor must get its OWN copy of each merged file, not a
+                # reference to the same one on disk (otherwise the one
+                # attachment the merge exists to preserve is exactly what
+                # the purge destroys). Same fix as duplicate_note.
                 kept = survivors[0]
                 merged_attach = list(kept.get("attachments", []))
                 seen_attach = {a.get("stored_as") for a in merged_attach}
                 for note in remove:
                     for a in note.get("attachments", []):
-                        if a.get("stored_as") not in seen_attach:
-                            merged_attach.append(a)
-                            seen_attach.add(a.get("stored_as"))
+                        if a.get("stored_as") in seen_attach:
+                            continue
+                        seen_attach.add(a.get("stored_as"))
+                        new_name = copy_attachment_file(a.get("stored_as"))
+                        if new_name:
+                            merged_attach.append(dict(a, stored_as=new_name))
+                        # If the copy can't be made, skip it rather than
+                        # alias a file the purge will delete out from under
+                        # the survivor.
                 kept["attachments"] = merged_attach
             to_trash.extend(remove)
 

@@ -134,6 +134,77 @@ def pin_dup():
     app.toggle_pin(n)
 safe('pin + duplicate note', pin_dup)
 
+# ---- ATTACHMENTS: copies of a note get their OWN files (audit Z01-F04) ----
+# duplicate_note AND the Settings "clean up duplicates" merge both used to
+# point the copy/survivor at the SAME file on disk as the source. Deleting
+# one note then deleted the file out from under the other — for cleanup,
+# the auto-purge of the trashed twin is guaranteed to destroy the very file
+# the merge exists to preserve. Each copy must own its files.
+import os as _os4
+from noteorganizer.core import paths as _paths4
+from noteorganizer.core import storage as _storage4
+_os4.makedirs(_paths4.ATTACHMENTS_DIR, exist_ok=True)
+
+def _mk_att4(name, text="payload"):
+    p = _os4.path.join(_paths4.ATTACHMENTS_DIR, name)
+    with open(p, "w", encoding="utf-8") as f:
+        f.write(text)
+    return p
+
+# -- duplicate_note (the wiring seam no test covered) --
+_dup_src = "20260101000000000001_dup.txt"
+_dup_src_path = _mk_att4(_dup_src)
+app.notes = [{'id': 1, 'title': 'Owns file', 'body': 'x', 'category': 'General',
+              'updated': '2026-01-01 00:00', 'created': '2026-01-01 00:00',
+              'checklist': [], 'attachments': [{'filename': 'dup.txt', 'stored_as': _dup_src}]}]
+app.save_notes()
+_clone4 = app.duplicate_note(app.notes[0])
+app.update()
+_clone_name4 = (_clone4.get('attachments') or [{}])[0].get('stored_as')
+check('duplicate_note: the copy gets a DIFFERENT attachment filename',
+      bool(_clone_name4) and _clone_name4 != _dup_src)
+check('duplicate_note: the copy has its own file on disk',
+      bool(_clone_name4)
+      and _os4.path.isfile(_os4.path.join(_paths4.ATTACHMENTS_DIR, _clone_name4)))
+_storage4._delete_attachment_files([_clone4])
+check('duplicate_note: deleting the copy leaves the original file intact',
+      _os4.path.isfile(_dup_src_path))
+
+# -- Settings "clean up duplicates" merge (GAP found by the Fix-1 reviewer) --
+_merge_src = "20260101000000000002_merge.txt"
+_merge_src_path = _mk_att4(_merge_src)
+_kept4 = {'id': 10, 'title': 'Dup', 'body': 'same', 'category': 'General',
+          'updated': '2026-01-01 00:00', 'created': '2026-01-01 00:00',
+          'checklist': [], 'attachments': []}
+_removed4 = {'id': 11, 'title': 'Dup', 'body': 'same', 'category': 'General',
+             'updated': '2026-01-01 00:00', 'created': '2026-01-01 00:00',
+             'checklist': [], 'attachments': [{'filename': 'merge.txt', 'stored_as': _merge_src}]}
+app.notes = [_kept4, _removed4]
+app.trash = []
+_group4 = [_kept4, _removed4]
+class _V4:
+    def __init__(self, v): self._v = v
+    def get(self): return self._v
+_orig_ask4 = app.ask_yes_no
+app.ask_yes_no = lambda *a, **k: True
+try:
+    app._cleanup_selected_duplicates(
+        [(_V4(False), _kept4, _group4), (_V4(True), _removed4, _group4)],
+        None, refresh=lambda: None, announce=False)
+finally:
+    app.ask_yes_no = _orig_ask4
+app.update()
+_merged4 = [a.get('stored_as') for a in _kept4.get('attachments', [])]
+check('cleanup-duplicates: survivor gets the merged file under its OWN name',
+      len(_merged4) == 1 and _merged4[0] != _merge_src
+      and _os4.path.isfile(_os4.path.join(_paths4.ATTACHMENTS_DIR, _merged4[0])))
+# The trashed twin still points at the original file; its later purge must
+# not delete the survivor's copy.
+_storage4._delete_attachment_files([_removed4])
+check('cleanup-duplicates: purging the trashed twin leaves the survivor file intact',
+      len(_merged4) == 1
+      and _os4.path.isfile(_os4.path.join(_paths4.ATTACHMENTS_DIR, _merged4[0])))
+
 # ---- PERFORMANCE: note list with larger count ----
 app.notes = [{'id':i,'title':f'Perf{i}','body':'x'*30,'category':'General',
              'updated':'2026-01-01 00:00','created':'2026-01-01 00:00',

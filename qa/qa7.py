@@ -320,8 +320,22 @@ app.update()
 app._bulk_change_category()
 app.update()
 work_lbl = find_widget(app._mini_popup, tk.Label, 'Work')
-work_lbl.event_generate('<Button-1>')
-app.update()
+# The category list is a popup: a click generated before Tk has MAPPED it
+# is silently dropped (the documented dropped-click class — qa/README).
+# Re-generate until the promised state (the category change itself)
+# lands, capped into a red check; the pick handler closes the popup, so
+# a landed click also stops the re-clicking on its own.
+import time as _t7
+for _ in range(60):
+    if app.find_note(20)['category'] == 'Work':
+        break
+    try:
+        if work_lbl.winfo_exists():
+            work_lbl.event_generate('<Button-1>')
+    except tk.TclError:
+        pass
+    app.update()
+    _t7.sleep(0.02)
 check('bulk category change applied', app.find_note(20)['category'] == 'Work')
 
 # ============================================================

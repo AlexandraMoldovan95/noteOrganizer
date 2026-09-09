@@ -45,7 +45,7 @@ except ImportError:
 # Added/Fixed CHANGELOG.md entries, not per-release counts). The running
 # app records this into settings, so the next time a newer build opens
 # over older data it can tell the user what changed version-wise.
-APP_VERSION = "0.71.116"
+APP_VERSION = "0.71.119"
 
 
 def parse_version(v):
@@ -226,6 +226,7 @@ from noteorganizer.core.storage import (
     load_trash,
     save_trash,
     _delete_attachment_files,
+    copy_attachment_file,
     purge_expired_trash,
     backup_notes_file,
     # Aliased because the methods that call them are also called load_notes
@@ -7570,7 +7571,14 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             if comments:
                 content += "\n\nComments:\n" + comments
             content += "\n"
-        return content
+        # A just-typed astral emoji is a lone UTF-16 surrogate in memory
+        # (Tk hands it over that way), and the callers write this straight
+        # to a utf-8 file — which raises UnicodeEncodeError, a ValueError
+        # NOT caught by their (IOError, OSError) guards, crashing the
+        # export. Mending here (the shared choke point) keeps the emoji and
+        # covers both the single-note and bulk paths, matching the mend the
+        # share-code and disk-write boundaries already do.
+        return mend_surrogates(content)
 
     def share_current_note_as_code(self):
         """Generate a share code for the note currently open and show it inline
@@ -7847,9 +7855,31 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             if choice == "skip":
                 to_import = fresh
 
+        # Files already spoken for — by a note we're keeping (re-importing
+        # your own backup lands here) or by an earlier note in this same
+        # import. An imported note that references one of these would share
+        # the physical file, so deleting either note would delete the
+        # other's file. Give the import its own copy instead. Same fix as
+        # duplicate_note; the copy source is the file the copy-loop above
+        # already placed in the attachments folder.
+        claimed = {a.get("stored_as")
+                   for n in self.notes
+                   for a in (n.get("attachments") or [])
+                   if isinstance(a, dict)}
         next_id = max([n["id"] for n in self.notes], default=0) + 1
         for note in to_import:
             note = normalize_note(note)
+            for a in note.get("attachments", []):
+                if not isinstance(a, dict):
+                    continue
+                name = a.get("stored_as")
+                if name in claimed:
+                    new_name = copy_attachment_file(name)
+                    if new_name:
+                        a["stored_as"] = new_name
+                        claimed.add(new_name)
+                elif name:
+                    claimed.add(name)
             note["id"] = next_id
             next_id += 1
             self.notes.append(note)
@@ -12639,6 +12669,16 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # A duplicate is its own note; don't carry occurrence-specific edits that
         # only made sense relative to the original's timeline.
         clone = normalize_note(clone)
+        # Give the copy its OWN attachment files. The deep-copy above shared
+        # the original's stored_as names — i.e. the same files on disk — so
+        # permanently deleting either note later removed the file the other
+        # still pointed at (silent attachment loss). A failed/absent copy
+        # keeps the old reference, no worse than before.
+        new_atts = []
+        for att in clone.get("attachments", []):
+            fresh = copy_attachment_file(att.get("stored_as", "")) if isinstance(att, dict) else None
+            new_atts.append(dict(att, stored_as=fresh) if fresh else att)
+        clone["attachments"] = new_atts
         self.notes.append(clone)
         self.save_notes()
         self.refresh_note_list()
@@ -12806,7 +12846,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if not self.ask_yes_no(
                 "Reset this day",
                 f"Return {occurrence_date} to the series content?\n\n"
-                "The separate edits made for this day will be discarded."):
+                "The separate edits made for this day will be discarded.",
+                icon="warning", default="no"):
             return
         note["overrides"].pop(occurrence_date, None)
         note["updated"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -12998,7 +13039,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                         "Template name taken",
                         f"You already have a template named “{name}”.\n\n"
                         "Replace the old template with this one?\n"
-                        "Choose No to give this one another name."):
+                        "Choose No to give this one another name.",
+                        icon="warning", default="no"):
                     return False  # keep the box open for a new name
             tpl = normalize_template({
                 "name": name,
@@ -13130,7 +13172,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             "Restore previous version",
             "Bring back the earlier version of this note's text? "
             "The current text will be replaced.",
-            icon="question"
+            icon="warning", default="no"
         ):
             return
         # Put the previous content back into the editor and save it. Clear
