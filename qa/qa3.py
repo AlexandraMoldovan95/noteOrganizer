@@ -147,6 +147,40 @@ check('and an old code without paragraphs still decodes',
       'paragraphs' not in NO.decode_share_code(NO.encode_share_code([
           {'title': 'v', 'body': 'x', 'formatting': []}]))[0])
 
+# ---- Untrusted-import hardening: decode filters to the shareable slice.
+# A HAND-CRAFTED code can put anything in the JSON; decode must hand back
+# only the fields a genuine code carries — never attachments (which a
+# real code never has and whose stored_as could aim a later delete
+# outside the attachments folder), never arbitrary keys.
+import json as _json3, base64 as _b643, zlib as _zlib3
+def _craft_code_list(notes_list):
+    raw = _zlib3.compress(_json3.dumps({'v': 1, 'notes': notes_list}).encode())
+    return NO.SHARE_CODE_PREFIX + _b643.urlsafe_b64encode(raw).decode()
+def _craft_code(note_dict):
+    return _craft_code_list([note_dict])
+_evil = NO.decode_share_code(_craft_code({
+    'title': 'Evil', 'body': 'b', 'category': 'General',
+    'attachments': [{'stored_as': '../../secret.txt'}],
+    'id': 999, 'pinned': True, 'bogus': 42}))[0]
+check('decode drops attachments smuggled into a crafted code',
+      'attachments' not in _evil)
+check('decode drops arbitrary non-shareable keys (id, pinned, bogus)',
+      not ({'id', 'pinned', 'bogus'} & set(_evil.keys())))
+check('decode keeps the genuine shareable fields',
+      _evil.get('title') == 'Evil' and _evil.get('body') == 'b')
+# A crafted code can also put non-dict entries in the notes list; decode
+# must survive them (the `else {}` branch), not throw on the projection.
+# Guarded so a mutant that drops the branch fails HARD here (the raise
+# is the bug's face) instead of crashing the run before its footer.
+try:
+    _mixed = NO.decode_share_code(_craft_code_list([
+        42, None, 'a string', {'title': 'Real', 'body': 'b'}]))
+except Exception:
+    _mixed = None
+check('decode tolerates non-dict note entries without crashing',
+      _mixed is not None and len(_mixed) == 4 and _mixed[:3] == [{}, {}, {}]
+      and _mixed[3].get('title') == 'Real')
+
 # The checklist travels too: a shared note used to arrive without it --
 # the one piece of content a code silently dropped.
 _ck_note = {'title': 'C', 'body': 'b', 'formatting': [],

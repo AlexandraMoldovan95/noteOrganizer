@@ -600,6 +600,77 @@ check("while the kept entry's file is untouched",
       os.path.exists(_new_att))
 os.remove(_new_att)
 
+# ---- Attachment deletion can't escape the attachments folder ----
+# A crafted share code (or hand-edited data) could carry an attachment
+# whose stored_as is "../../file" — permanent deletion used to join it
+# onto ATTACHMENTS_DIR and remove whatever it pointed at. The path
+# guard keeps every delete inside the folder; a legit filename still
+# deletes.
+_outside = os.path.join(os.path.dirname(_paths.ATTACHMENTS_DIR),
+                        "precious_outsider.txt")
+with open(_outside, "w") as _f:
+    _f.write("do not delete me")
+_inside = os.path.join(_paths.ATTACHMENTS_DIR, "legit_att.bin")
+with open(_inside, "w") as _f:
+    _f.write("x")
+_rel = os.path.relpath(_outside, _paths.ATTACHMENTS_DIR)  # e.g. "..\precious..."
+_storage._delete_attachment_files([
+    {"attachments": [{"stored_as": _rel},
+                     {"stored_as": "legit_att.bin"}]}])
+check("a traversal stored_as cannot delete a file outside attachments/",
+      os.path.exists(_outside))
+check("a legit attachment filename is still deleted",
+      not os.path.exists(_inside))
+check("_attachment_path_within rejects traversal, accepts a bare name",
+      _storage._attachment_path_within(_rel) is None
+      and _storage._attachment_path_within("legit_att.bin") is not None)
+# The guard's invariant, stated platform-independently: on any crafted
+# stored_as it must NEVER raise, and must NEVER return a path OUTSIDE
+# the attachments folder. It MAY return a valid contained path for a
+# value that doesn't actually escape on this OS (e.g. "C:\x" is a
+# drive path on Windows but a plain filename on Linux) — that's correct,
+# not a leak. Asserting a fixed None result here was the bug: it made
+# the check platform-dependent and it failed on Linux CI.
+_base_real = os.path.realpath(_paths.ATTACHMENTS_DIR)
+_guard_ok = True
+for _bad in ("C:\\Windows\\System32\\x", "\\\\server\\share\\x",
+             "Z:relative", "x\x00y", "..", ".", "../../out",
+             _rel):  # _rel genuinely escapes on every platform
+    try:
+        _r = _storage._attachment_path_within(_bad)
+    except Exception:
+        _guard_ok = False  # a raise is the launch-blocker we're guarding against
+        continue
+    if _r is not None:
+        # returned a path -> it must be inside the attachments folder
+        try:
+            if os.path.commonpath([_base_real, _r]) != _base_real:
+                _guard_ok = False
+        except ValueError:
+            _guard_ok = False
+# And the values that escape on EVERY platform must resolve to None.
+if _storage._attachment_path_within(_rel) is not None:
+    _guard_ok = False
+if _storage._attachment_path_within("../../out") is not None:
+    _guard_ok = False
+check("the path guard never raises and never returns a path outside the folder",
+      _guard_ok)
+# And normalize_note flattens a smuggled path to a bare filename at the
+# data choke point, closing traversal for every channel (share + zip +
+# hand-edit), not only the sinks.
+from noteorganizer.core.model import normalize_note as _nn_att
+_flat = _nn_att({"id": 1, "title": "x", "attachments": [
+    {"filename": "doc.pdf", "stored_as": "../../evil.exe"},
+    {"filename": "y", "stored_as": "C:\\Windows\\z"},
+    "not-a-dict"]})
+check("normalize_note reduces every attachment stored_as to a bare name",
+      [a["stored_as"] for a in _flat["attachments"]] == ["evil.exe", "z"])
+# Defensive: under a mutant that breaks the guard the outsider is gone,
+# and a bare remove would crash the run before its footer. The checks
+# already recorded their verdicts; this only lets the suite finish.
+if os.path.exists(_outside):
+    os.remove(_outside)
+
 # ---- The atomic-write family: every data file saves the safe way ----
 # trash/templates/settings once wrote with a bare open('w'): an emoji
 # with a lone surrogate raised UnicodeEncodeError mid-dump and left the

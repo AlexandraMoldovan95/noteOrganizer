@@ -298,6 +298,39 @@ check('a failed preserve is announced with the do-not-save warning',
       and 'Preserving a copy of it also failed' in _msgs5b[0][1])
 app5d.destroy()
 
+# ============================================================
+# A POISONED RECURRENCE INTERVAL CANNOT MAKE THE APP UNLAUNCHABLE
+# ============================================================
+# A hand-edited notes_data.json (or a crafted share code) carrying an
+# enormous interval used to overflow timedelta in expand_occurrences —
+# and the calendar renders at startup, so the whole app crashed on
+# launch. The normalize_recurrence clamp closes it at the choke point;
+# here the app is built AND its calendar rendered against such a file.
+import json as _json5e
+with open('notes_data.json', 'w', encoding='utf-8') as _f5e:
+    _json5e.dump([{'id': 1, 'title': 'Poison', 'body': 'x',
+                   'category': 'General', 'date': '2026-01-01',
+                   'recurrence': {'freq': 'daily', 'interval': 10 ** 10},
+                   'updated': '2026-01-01 00:00', 'created': '2026-01-01 00:00',
+                   'checklist': [], 'attachments': [],
+                   'exceptions': [], 'overrides': {}}], _f5e)
+_launched = True
+try:
+    app5e = NO.NoteOrganizer(); app5e._poll_active_dirty = lambda: None
+    app5e.show_info = lambda *a, **k: True
+    app5e.cal_year, app5e.cal_month = 2026, 9
+    app5e.render_calendar()
+    app5e.update()
+except Exception:
+    _launched = False
+check('the app launches and renders the calendar despite a poisoned interval',
+      _launched)
+if _launched:
+    check('the poisoned interval was clamped on load',
+          app5e.notes and app5e.notes[0]['recurrence']['interval']
+          == NO.normalize_recurrence({'freq': 'daily', 'interval': 10 ** 10})['interval'])
+    app5e.destroy()
+
 print()
 print(f"=== QA5 FAILURES: {fails if fails else 'NONE'} ===")
 

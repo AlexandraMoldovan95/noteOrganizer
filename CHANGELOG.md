@@ -12,6 +12,7 @@ How the numbers themselves are counted is the
 
 | Version | Date | In one line |
 |---|---|---|
+| [0.71.113](#071113--2026-09-09) | 2026-09-09 | Import hardening — a hostile share code can't delete outside files, and a corrupt repeat interval can't crash the app on launch. |
 | [0.71.111](#071111--2026-09-09) | 2026-09-09 | A searchable calendar History register, a frame on the open day, and field-smoothed occurrence/History navigation. |
 | [0.69.108](#069108--2026-09-07) | 2026-09-07 | The occurrence world becomes visible: banners, ✎ marks, per-day reset, calendar filters and sorts, the way back on every route. |
 | [0.66.105](#066105--2026-09-07) | 2026-09-07 | BackSpace and Delete treat an emoji as one character in every text field. |
@@ -48,6 +49,31 @@ How the numbers themselves are counted is the
 ---
 
 ## [Unreleased]
+
+## [0.71.113] — 2026-09-09
+
+*Highlights: two audit-found hardening fixes — a hostile share code can't delete files outside the app, and a corrupt repeat interval can't crash it on launch.*
+
+### Fixed
+- **A crafted import can no longer reach files outside the app.** A genuine share code
+  never carries attachments, but a hand-crafted code — or a backup `.zip` — could include
+  one whose `stored_as` was a path like `../../something` or `C:\…`, and the app then
+  acted on it: deleting that note forever removed the pointed-at file, and opening the
+  attachment could launch — even execute — a file outside its folder (with the "unsafe
+  file" warning fooled by a benign-looking display name). Closed on every side: decoding
+  a share code keeps only the fields a real one carries, `normalize_note` reduces every
+  attachment name to a bare filename at the data choke point (covering the `.zip` route
+  too), and both the delete and the open paths now resolve through a guard that refuses
+  anything outside the attachments folder and keys the safety warning off the real file.
+  From the code audit's high-severity findings, completed under an adversarial security
+  review.
+- **A corrupt repeat interval can no longer crash the app on launch.** A recurrence rule
+  whose interval was enormous — from a hand-edited `notes_data.json` or a crafted share
+  code — overflowed the date maths and, because the calendar draws itself at startup,
+  could stop the app from opening at all. The interval is now clamped to a sane maximum
+  (every 1000 days/weeks/months/years — far beyond any real use) at the single point every
+  route passes through, so no source of data can bring the app down this way. From the
+  code audit's high-severity findings.
 
 ## [0.71.111] — 2026-09-09
 

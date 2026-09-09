@@ -34,6 +34,7 @@ carrying the most actual content - rather than picking arbitrarily.
 load, and reports what it did so the app can tell the user.
 """
 
+import os
 import re
 from datetime import datetime
 
@@ -185,6 +186,24 @@ def normalize_note(note):
                 text = ""
             checklist.append({"text": text, "done": bool(item.get("done"))})
     clean["checklist"] = checklist
+
+    # Attachments: keep each item's stored_as to a bare filename. The app
+    # only ever writes bare timestamped names (see add_attachment), so
+    # this is a no-op for genuine data — but it flattens any path a
+    # crafted share code or hand-edited/imported file tried to smuggle
+    # ("../../x", "C:\\...", a UNC root), closing path traversal at the
+    # data choke point for EVERY channel, on top of the guards at the
+    # delete and open sinks. See ISSUES_LOG.
+    attachments = []
+    for att in clean.get("attachments", []):
+        if not isinstance(att, dict):
+            continue
+        item = dict(att)
+        stored = item.get("stored_as")
+        if isinstance(stored, str) and stored:
+            item["stored_as"] = os.path.basename(stored.replace("\\", "/"))
+        attachments.append(item)
+    clean["attachments"] = attachments
 
     clean["formatting"] = normalize_formatting(clean.get("formatting"))
 

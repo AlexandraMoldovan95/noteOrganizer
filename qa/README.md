@@ -156,6 +156,16 @@ A new surface joins this list the moment it ships.
   wrong — fix the strategy, sweep the suite for every sibling using
   the same strategy, and record the lesson here. After the fix, the
   check may fail only when the promised behaviour is actually broken.
+- **A path-based check asserts the invariant, not a fixed result** —
+  the suite runs on Windows AND Linux, and the same string is a
+  different path on each: `"C:\\x"` is a drive path on Windows but a
+  plain (contained) filename on Linux, `\` separates only on Windows.
+  A guard check must assert what's true on both — "never raises, and
+  never returns a path outside the folder" — not "returns None for this
+  specific input", which passed on Windows and went red on Linux CI.
+  Use a value that escapes on every platform (a forward-slash
+  `../../x`, or `os.path.relpath` to a sibling) when you need a
+  guaranteed-None case.
 - **Focus is asynchronous both ways** — granting AND clearing. A check
   about where the app put the focus polls for the promised holder
   (qa1's `focus_settles_on`, the assert-only twin of `take_focus` —
