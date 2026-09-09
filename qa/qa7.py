@@ -596,6 +596,14 @@ app.save_current_note(auto=False); app.update()
 check('an explicit Save on an edit-origin visit stays in the editor',
       app.notebook.index(app.notebook.select()) == app.TAB_NOTES
       and bool(app._pending_calendar_return))
+# The mechanism behind the re-asking bug, pinned directly: an occurrence
+# compares only its overridable fields, so a just-saved one reads CLEAN.
+# (With the old base-note formatting compare it read dirty forever, and
+# every later flush re-raised the scope prompt — this sentinel sits
+# inside the mocked block, so it names the failure before any unmocked
+# flush can hang the run.)
+check('a just-saved occurrence reads as clean, not dirty forever',
+      app.editor_state_matches_saved(app.capture_editor_state()))
 del app.ask_occurrence_scope
 
 # ...while the quick add-a-note flow still returns to the calendar.
@@ -617,6 +625,18 @@ check('Back to Calendar saves the pending edit, asking exactly once',
       len(scope_ux) == 1
       and 'flushed-on-return'
       in app.find_note(60)['overrides'].get('2026-07-16', {}).get('body', ''))
+# The half the field found missing: answering the question must also
+# NAVIGATE. A just-saved occurrence used to still read as dirty (the
+# base note's formatting never matches an override body), so the
+# cancel guard blocked the trip and every further click re-asked.
+check('answering the question actually lands on the calendar',
+      app.notebook.index(app.notebook.select()) == app.TAB_CALENDAR
+      and app._day_panel_mode != 'empty')
+app._open_note_from_calendar(app.find_note(60), '2026-07-16'); app.update()
+app._return_to_calendar(); app.update()
+check('a clean occurrence returns without asking again',
+      len(scope_ux) == 1
+      and app.notebook.index(app.notebook.select()) == app.TAB_CALENDAR)
 # Settle any still-deferred edit while the mock is armed — under the
 # no-flush mutant the editor stays dirty here, and a later section's
 # flush would otherwise raise the REAL scope dialog and hang the run.

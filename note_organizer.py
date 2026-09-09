@@ -11676,7 +11676,25 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
         # Compare against the effective (occurrence-aware) content.
         occ = st.get("occurrence_date")
-        shown = effective_note(note, occ) if occ else note
+        if occ and is_recurring(note):
+            # An occurrence override carries ONLY the overridable fields
+            # (title/body/comments/category/color) — it is plain text by
+            # design, never its own formatting, paragraphs, checklist,
+            # attachments, date or recurrence: those stay the series'.
+            # Comparing the series-owned fields here made a just-saved
+            # occurrence read as dirty FOREVER (its body differs from
+            # the base's, so the base formatting spans never matched) —
+            # which made Back to Calendar's cancel guard believe the
+            # scope prompt was cancelled and refuse to navigate, asking
+            # again on every click (field report).
+            shown = effective_note(note, occ)
+            return (st["title"].strip() == shown["title"].strip()
+                    and st["body"].strip() == shown["body"].strip()
+                    and st["comments"].strip()
+                    == shown.get("comments", "").strip()
+                    and st["category"] == shown["category"]
+                    and st["color"] == shown.get("color", ""))
+        shown = note
         if (st["title"].strip() != shown["title"].strip()
                 or st["body"].strip() != shown["body"].strip()
                 or st.get("formatting", []) != note.get("formatting", [])

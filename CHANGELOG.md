@@ -68,6 +68,16 @@ How the numbers themselves are counted is the
   accent top bar is a separate, permanent mark: browsing other days never dims it, and a
   selected today simply wears both (field request).
 
+### Fixed
+- **Answering "this occurrence only" now actually takes you back.** A just-saved
+  occurrence still read as having unsaved changes — the dirty check compared the series'
+  own formatting and checklist against the edited day, and an override's body differs
+  from the base's by definition, so the comparison could never match. Back to Calendar's
+  cancel guard took that eternal "dirty" for a cancelled prompt and refused to navigate,
+  re-asking the same question on every click (field report); the same mechanism also
+  double-asked at app close. An occurrence now compares exactly the fields an override
+  can carry — title, body, comments, category, colour — and a saved day reads clean.
+
 ### Changed
 - **The calendar header regrouped around its title.** The month/year arrows now hug
   "September 2026" as one centered cluster, and Today + History moved to the far right
