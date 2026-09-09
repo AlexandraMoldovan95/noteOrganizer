@@ -75,36 +75,46 @@ class CalendarViewMixin:
         self.track_theme(header, bg="bg")
         header.pack(fill="x", padx=30, pady=(25, 10))
 
-        def nav_button(text, command, side, width=3, font_size=12):
+        def nav_button(parent, text, command, side, width=3, font_size=12):
             btn = tk.Button(
-                header, text=text, command=command, relief="flat",
+                parent, text=text, command=command, relief="flat",
                 font=("Segoe UI", font_size, "bold"), cursor="hand2", width=width
             )
             self.track_theme(btn, bg="card", fg="text")
             btn.pack(side=side, padx=2)
             return btn
 
-        # ◀◀ / ▶▶ move a whole year, ◀ / ▶ move a month.
-        nav_button("◀◀", lambda: self.shift_calendar(years=-1), "left")
-        nav_button("◀", lambda: self.shift_calendar(months=-1), "left")
+        # Far right, out of the navigation's way: History outermost, with
+        # Today beside it (field feedback: the arrows belong to the title,
+        # the register belongs to the edge).
+        nav_button(header, "📋 History", self._toggle_calendar_history,
+                   "right", width=10, font_size=9)
+        nav_button(header, "Today", self.go_to_today, "right",
+                   width=7, font_size=9)
 
-        nav_button("▶▶", lambda: self.shift_calendar(years=1), "right")
-        nav_button("▶", lambda: self.shift_calendar(months=1), "right")
-        nav_button("Today", self.go_to_today, "right", width=7, font_size=9)
-        # The History register: every day that carries real content —
-        # dated notes plus a series' separately-edited days — searchable
-        # and filterable by year, in place of the month grid.
-        nav_button("📋 History", self._toggle_calendar_history, "right",
-                   width=10, font_size=9)
+        # The month title with its arrows hugging it, centered as one
+        # cluster: ◀◀ / ▶▶ move a whole year, ◀ / ▶ move a month.
+        center = tk.Frame(header)
+        self.track_theme(center, bg="bg")
+        center.pack(side="left", fill="x", expand=True)
+        cluster = tk.Frame(center)
+        self.track_theme(cluster, bg="bg")
+        cluster.pack(anchor="center")
+
+        nav_button(cluster, "◀◀", lambda: self.shift_calendar(years=-1), "left")
+        nav_button(cluster, "◀", lambda: self.shift_calendar(months=-1), "left")
 
         # The title doubles as a jump target for anything far away.
         self.cal_month_lbl = tk.Button(
-            header, text="", command=self.open_month_jump, relief="flat",
+            cluster, text="", command=self.open_month_jump, relief="flat",
             font=("Segoe UI", 16, "bold"), cursor="hand2", borderwidth=0
         )
         self.track_theme(self.cal_month_lbl, bg="bg", fg="text",
                          activebackground="bg", activeforeground="accent")
-        self.cal_month_lbl.pack(side="left", expand=True)
+        self.cal_month_lbl.pack(side="left", padx=10)
+
+        nav_button(cluster, "▶", lambda: self.shift_calendar(months=1), "left")
+        nav_button(cluster, "▶▶", lambda: self.shift_calendar(years=1), "left")
 
         # Everything below the header lives in a scrollable area, so when the
         # window is short (grid + open day panel taller than the viewport) the
@@ -461,6 +471,9 @@ class CalendarViewMixin:
         # cursor is over the scrollbar, not over the day cells.
         if hasattr(self, "cal_scroll_canvas"):
             self._bind_mousewheel_recursive(self.cal_grid_frame, self.cal_scroll_canvas)
+        # Fresh cells also mean the selected-day border was torn down with
+        # the old ones — re-mark the open day, if its month is on screen.
+        self._update_selected_day_outline()
 
     def maybe_show_reminder(self):
         """Show a subtle 'you have notes today' bar — but only once per calendar
@@ -836,6 +849,25 @@ class CalendarViewMixin:
 
     # ---------- Calendar History (the register of days with content) ----------
 
+    def _update_selected_day_outline(self):
+        """A thin accent border around the day whose panel is open — the
+        'you are here' mark (field request: the open day must jump out,
+        including when History lands you on it). Today's own accent top
+        bar is a separate device and never changes; a selected today
+        simply wears both."""
+        selected = (self.selected_day
+                    if getattr(self, "_day_panel_mode", "empty") != "empty"
+                    else None)
+        for d, cell in (getattr(self, "_cal_cell_widgets", None) or {}).items():
+            try:
+                if d == selected:
+                    cell.configure(highlightthickness=2,
+                                   highlightbackground=self.colors["accent"])
+                else:
+                    cell.configure(highlightthickness=0)
+            except tk.TclError:
+                pass
+
     def _toggle_calendar_history(self):
         """Swap the month grid (and day panel) for the History register,
         or bring the grid back."""
@@ -985,26 +1017,46 @@ class CalendarViewMixin:
                     context_cmd=lambda e, n=note, d=entry["date"]:
                         self.show_note_context_menu(e, n, occurrence_date=d))
             else:
-                expanded = (entry["auto_expand"]
-                            or entry["note_id"] in self._history_expanded)
-                n_kids = len(entry["children"])
-                suffix = (f" · {n_kids} edited day{'s' if n_kids != 1 else ''} (✎)"
-                          if n_kids else "")
+                expandable = bool(entry["children"])
+                expanded = expandable and (
+                    entry["auto_expand"]
+                    or entry["note_id"] in self._history_expanded)
+                if entry["children_kind"] == "occurrences":
+                    suffix = f" · {entry['n_occurrences']} occurrences"
+                    if entry["n_edited"]:
+                        suffix += f" · {entry['n_edited']} edited (✎)"
+                else:
+                    n_kids = entry["n_edited"]
+                    suffix = (f" · {n_kids} edited day"
+                              f"{'s' if n_kids != 1 else ''} (✎)"
+                              if n_kids else "")
+                if expandable:
+                    glyph = "▾" if expanded else "▸"
+                    row_cmd = (lambda i=entry["note_id"]:
+                               self._history_toggle_group(i))
+                else:
+                    # Nothing to unfold — the row itself jumps to the
+                    # series' next day on the calendar (an arrow opening
+                    # an empty group was the confusing thing it replaces).
+                    glyph = "→"
+                    row_cmd = (lambda n=note, d=entry.get("jump_date", ""):
+                               self._history_open_day(n, d) if d else None)
                 one_row(
                     self._history_rows,
-                    f"{'▾' if expanded else '▸'} 🔁 "
-                    f"{entry['title'] or '(untitled)'} · "
+                    f"{glyph} 🔁 {entry['title'] or '(untitled)'} · "
                     f"{entry['freq_label']}{suffix}",
                     self.colors["accent"],
-                    lambda i=entry["note_id"]: self._history_toggle_group(i),
+                    row_cmd,
                     context_cmd=lambda e, n=note:
                         self.show_note_context_menu(e, n),
                     bold=True)
                 if expanded:
                     for child in entry["children"]:
+                        mark = "✎" if child.get("edited") else "•"
                         one_row(
                             self._history_rows,
-                            f"✎ {child['date']}   {child['title'] or '(untitled)'}",
+                            f"{mark} {child['date']}   "
+                            f"{child['title'] or '(untitled)'}",
                             self.colors["text"],
                             lambda n=note, d=child["date"]:
                                 self._history_open_day(n, d),
@@ -1012,6 +1064,14 @@ class CalendarViewMixin:
                                 self.show_note_context_menu(
                                     e, n, occurrence_date=d),
                             indent=26)
+                    if entry["children_kind"] == "edited":
+                        info = tk.Label(
+                            self._history_rows,
+                            text=("    …every other day of this series shows "
+                                  "the series content"),
+                            font=("Segoe UI", 8), anchor="w",
+                            bg=self.colors["bg"], fg=self.colors["subtext"])
+                        info.pack(fill="x", padx=(26, 0))
 
         if len(entries) > self._history_shown:
             more = tk.Button(

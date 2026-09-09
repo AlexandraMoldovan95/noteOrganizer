@@ -994,6 +994,84 @@ check('Show more brings the rest', _bulk_shown == 60)
 app._hide_calendar_history(); app.update()
 check('leaving History restores the grid',
       app.cal_grid_frame.winfo_ismapped() and not app._history_visible)
+
+# ---- The selected-day outline (field request: the open day must jump
+# out) — set on open, torn down on close, surviving a grid re-render,
+# and never touching today's own accent top bar.
+app.notes = [{'id': 90, 'title': 'OutlineNote', 'body': 'x',
+              'category': 'General', 'date': '2026-07-15',
+              'updated': '2026-01-01 00:00', 'created': '2026-01-01 00:00',
+              'checklist': [], 'attachments': []}]
+app.save_notes()
+app.cal_year, app.cal_month = 2026, 7
+app.render_calendar(); app.update()
+app.open_day_popup('2026-07-15'); app.update()
+_cell = app._cal_cell_widgets.get('2026-07-15')
+check('opening a day draws the accent outline on its cell',
+      _cell is not None and int(str(_cell.cget('highlightthickness'))) == 2
+      and str(_cell.cget('highlightbackground')) == app.colors['accent'])
+_other = app._cal_cell_widgets.get('2026-07-10')
+check('the other days carry no outline',
+      _other is not None
+      and int(str(_other.cget('highlightthickness'))) == 0)
+app.render_calendar(); app.update()
+_cell = app._cal_cell_widgets.get('2026-07-15')
+check('the outline survives a grid re-render',
+      int(str(_cell.cget('highlightthickness'))) == 2)
+app.close_day_panel(); app.update()
+_cell = app._cal_cell_widgets.get('2026-07-15')
+check('closing the panel clears the outline',
+      int(str(_cell.cget('highlightthickness'))) == 0)
+
+# ---- The bounded-series hybrid in History (field confusion: a "10
+# times" group opened to nothing) — a small bounded series lists ALL
+# its occurrences, ✎ only on edited ones; a childless live series has
+# no arrow and jumps straight to its day.
+app.notes = [
+    {'id': 91, 'title': 'Bounded3', 'body': 'x', 'category': 'General',
+     'date': '2026-06-01', 'recurrence': {'freq': 'monthly', 'count': 3},
+     'updated': '2026-01-01 00:00', 'created': '2026-01-01 00:00',
+     'checklist': [], 'attachments': [], 'exceptions': [],
+     'overrides': {'2026-07-01': {'title': 'MidRun', 'body': 'edited',
+                                  'comments': '', 'category': 'General',
+                                  'color': ''}}},
+    {'id': 92, 'title': 'LonelyLive', 'body': 'x', 'category': 'General',
+     'date': '2026-05-01', 'recurrence': {'freq': 'weekly'},
+     'updated': '2026-01-01 00:00', 'created': '2026-01-01 00:00',
+     'checklist': [], 'attachments': [], 'exceptions': [], 'overrides': {}},
+]
+app.save_notes()
+app._toggle_calendar_history(); app.update()
+_hl = find_all_labels(app._history_rows)
+check('a bounded series announces its occurrence count',
+      any('Bounded3' in t and '3 occurrences' in t and '1 edited (✎)' in t
+          for t in _hl))
+check('a childless live series wears the jump arrow, not a dropdown one',
+      any('LonelyLive' in t and t.startswith('→') for t in _hl))
+app._history_toggle_group(91); app.update()
+_hl = find_all_labels(app._history_rows)
+check('expanding the bounded group lists all three days, ✎ only where edited',
+      any(t.startswith('✎ 2026-07-01') and 'MidRun' in t for t in _hl)
+      and any(t.startswith('• 2026-08-01') for t in _hl)
+      and any(t.startswith('• 2026-06-01') for t in _hl))
+_lonely_lbl = next(w for w in app._history_rows.winfo_children()
+                   if isinstance(w, tk.Frame)
+                   and any('LonelyLive' in str(c.cget('text'))
+                           for c in w.winfo_children()
+                           if isinstance(c, tk.Label)))
+_lonely_lbl.event_generate('<Button-1>'); app.update()
+check('clicking the childless series lands on its day in the calendar',
+      not app._history_visible and app._day_panel_mode == 'note'
+      and app.selected_day is not None)
+app.close_day_panel(); app.update()
+
+# ---- Header layout: History sits at the far right, arrows hug the title.
+app.update_idletasks()
+_hist_btn = find_widget(app.notebook, tk.Button, '📋 History')
+_today_btn = find_widget(app.notebook, tk.Button, 'Today')
+check('the History button sits at the far right of the header',
+      _hist_btn is not None and _today_btn is not None
+      and _hist_btn.winfo_rootx() > _today_btn.winfo_rootx())
 app.notebook.select(app.TAB_NOTES); app.update()
 
 # ============================================================

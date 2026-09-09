@@ -436,47 +436,101 @@ def history_entries(notes, query="", year_bucket="All", today=None):
         title = note.get("title") or ""
         if is_recurring(note):
             exceptions = set(note.get("exceptions") or [])
-            children = []
-            any_child_match = False
-            for day, override in sorted(
-                    (note.get("overrides") or {}).items(), reverse=True):
-                if day in exceptions or parse_date(day) is None:
-                    # A deleted day's override is normally popped with the
-                    # exception; a stray one must not resurface here.
-                    continue
-                if not bucket_ok(day):
-                    continue
-                if not isinstance(override, dict):
-                    override = {}
-                child_match = _history_match(
-                    query, override.get("title"), override.get("body"),
-                    override.get("comments"))
-                base_match = _history_match(
-                    query, title, note.get("body"), note.get("comments"))
-                if not (child_match or base_match):
-                    continue
-                if query and child_match:
-                    any_child_match = True
-                children.append({
-                    "date": day,
-                    "title": (override.get("title") or title),
-                })
+            overrides = note.get("overrides") or {}
             base_matches = _history_match(
                 query, title, note.get("body"), note.get("comments"))
+
+            # A BOUNDED, small series lists ALL its occurrences — the
+            # field expectation: a "10 times" group opens to its 10 days.
+            # An unbounded rule would drown the register in identical
+            # rows, so it lists only the separately-edited days instead.
+            rec = normalize_recurrence(note.get("recurrence"))
+            anchor = parse_date(note.get("date") or "")
+            occ_days = None
+            if anchor is not None:
+                if 0 < rec["count"] <= 50:
+                    occ_days = expand_occurrences(
+                        note, anchor, anchor + timedelta(days=36600))
+                elif rec["end"]:
+                    end_d = parse_date(rec["end"])
+                    if end_d is not None:
+                        got = expand_occurrences(note, anchor, end_d)
+                        if len(got) <= 50:
+                            occ_days = got
+
+            children = []
+            any_child_match = False
+            if occ_days is not None:
+                children_kind = "occurrences"
+                for day in sorted(occ_days, reverse=True):
+                    if not bucket_ok(day):
+                        continue
+                    override = overrides.get(day)
+                    edited = isinstance(override, dict)
+                    ov = override if edited else {}
+                    child_match = edited and _history_match(
+                        query, ov.get("title"), ov.get("body"),
+                        ov.get("comments"))
+                    if not (child_match or base_matches):
+                        continue
+                    if query and child_match:
+                        any_child_match = True
+                    children.append({
+                        "date": day,
+                        "title": (ov.get("title") or title),
+                        "edited": edited,
+                    })
+            else:
+                children_kind = "edited"
+                for day, override in sorted(overrides.items(), reverse=True):
+                    if day in exceptions or parse_date(day) is None:
+                        # A deleted day's override is normally popped with
+                        # the exception; a stray one must not resurface.
+                        continue
+                    if not bucket_ok(day):
+                        continue
+                    if not isinstance(override, dict):
+                        override = {}
+                    child_match = _history_match(
+                        query, override.get("title"), override.get("body"),
+                        override.get("comments"))
+                    if not (child_match or base_matches):
+                        continue
+                    if query and child_match:
+                        any_child_match = True
+                    children.append({
+                        "date": day,
+                        "title": (override.get("title") or title),
+                        "edited": True,
+                    })
+
             base_in_bucket = bucket_ok(note.get("date") or "")
             if children or (base_matches and (base_in_bucket
                                               or year_bucket == "All")):
                 sort_date = (children[0]["date"] if children
                              else (note.get("date") or ""))
-                entries.append({
+                entry = {
                     "kind": "series",
                     "note_id": note.get("id"),
                     "title": title,
                     "freq_label": describe_recurrence(note),
                     "children": children,
+                    "children_kind": children_kind,
+                    "n_occurrences": (len(occ_days) if occ_days is not None
+                                      else None),
+                    "n_edited": sum(1 for c in children if c["edited"]),
                     "auto_expand": any_child_match,
                     "_sort": sort_date,
-                })
+                }
+                if not children:
+                    # Nothing to unfold: the row itself becomes the door —
+                    # it jumps to the series' next (or first) day on the
+                    # calendar instead of opening an empty group.
+                    entry["jump_date"] = (
+                        next_occurrence_on_or_after(
+                            note, format_date(today))
+                        or note.get("date") or "")
+                entries.append(entry)
         else:
             d = note.get("date") or ""
             if parse_date(d) is None:

@@ -10085,6 +10085,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.selected_day = date_str
         self._show_day_panel()
         self.show_day_list()
+        self._update_selected_day_outline()
 
     def _show_day_panel(self):
         """Make the panel visible below the grid. Deliberately does NOT
@@ -10099,6 +10100,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.selected_day = None
         self._day_panel_mode = "empty"
         self.day_panel.pack_forget()
+        self._update_selected_day_outline()
 
 
 

@@ -433,6 +433,7 @@
   "_update_occurrence_banner": "(self)",
   "_update_open_highlight": "(self)",
   "_update_restore_button": "(self)",
+  "_update_selected_day_outline": "(self)",
   "_wheel_pixels": "(self, delta)",
   "_write_cell": "(self, info, r, c, value)",
   "add_attachment": "(self)",

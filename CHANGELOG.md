@@ -56,8 +56,23 @@ How the numbers themselves are counted is the
   inside each day's own edited content — and auto-opens the group that matched; year chips
   (All / This year / Last year / 2 years ago / Older) cut through the archive, and
   clicking a row lands back on that day's calendar preview, right-click carrying the
-  usual day menu. Built for the long run: the list grows with what you write, never with
-  the passage of time — a decade of a daily series stays one group plus its edited days.
+  usual day menu. A bounded, small series ("10 times", or ending soon) opens to ALL its
+  occurrences — ✎ only on the edited ones — while an unbounded rule lists just its edited
+  days with a line saying so, and a series with nothing to unfold wears a → instead of an
+  arrow and jumps straight to its day (field feedback: a "10 times" group opening to
+  nothing read as broken). Built for the long run: the list grows with what you write,
+  never with the passage of time.
+- **The open day wears a frame.** Clicking any calendar day (or landing on one from
+  History) draws a thin accent border around its cell for as long as its panel is open —
+  the "you are here" the eye was missing — and it survives month re-renders. Today's own
+  accent top bar is a separate, permanent mark: browsing other days never dims it, and a
+  selected today simply wears both (field request).
+
+### Changed
+- **The calendar header regrouped around its title.** The month/year arrows now hug
+  "September 2026" as one centered cluster, and Today + History moved to the far right
+  with History outermost — navigation lives with the title, the register lives at the
+  edge (field feedback).
 
 ## [0.69.108] — 2026-09-07
 

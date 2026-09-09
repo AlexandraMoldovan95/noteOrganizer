@@ -127,11 +127,38 @@ _h_notes = [
     {'id': 4, 'title': 'Lonely series', 'body': 'no edited days',
      'comments': '', 'date': '2026-05-01', 'recurrence': {'freq': 'weekly'}},
     {'id': 5, 'title': 'No date note', 'body': 'off-calendar', 'comments': ''},
+    {'id': 6, 'title': 'Bounded3', 'body': 'x', 'comments': '',
+     'date': '2026-06-01', 'recurrence': {'freq': 'monthly', 'count': 3},
+     'overrides': {'2026-07-01': {'title': 'MidRun', 'body': 'edited',
+                                  'comments': '', 'category': 'General',
+                                  'color': ''}}},
+    {'id': 7, 'title': 'BigCount', 'body': 'x', 'comments': '',
+     'date': '2026-04-01', 'recurrence': {'freq': 'daily', 'count': 100}},
 ]
 
 _all = _hist(_h_notes, today=_H_TODAY)
 check('history lists dated notes, series, and skips undated ones',
-      [e['note_id'] for e in _all] == [3, 1, 4, 2])
+      [e['note_id'] for e in _all] == [3, 6, 1, 4, 7, 2])
+
+# The bounded-and-small hybrid: a "3 times" series opens to its 3 days.
+_s6 = next(e for e in _all if e['note_id'] == 6)
+check('a bounded small series lists ALL its occurrences, newest first',
+      _s6['children_kind'] == 'occurrences'
+      and [c['date'] for c in _s6['children']]
+      == ['2026-08-01', '2026-07-01', '2026-06-01']
+      and _s6['n_occurrences'] == 3)
+check('occurrence children carry honest edited flags',
+      [c['edited'] for c in _s6['children']] == [False, True, False]
+      and _s6['n_edited'] == 1
+      and _s6['children'][1]['title'] == 'MidRun')
+_s7 = next(e for e in _all if e['note_id'] == 7)
+check('a big count falls back to edited-days-only',
+      _s7['children_kind'] == 'edited' and _s7['children'] == [])
+check('a childless ENDED series jumps to its start date',
+      _s7['jump_date'] == '2026-04-01')
+_s4 = next(e for e in _all if e['note_id'] == 4)
+check('a childless LIVE series jumps to its next occurrence',
+      _s4['jump_date'] == '2026-09-11')
 _s3 = next(e for e in _all if e['note_id'] == 3)
 check('a series child exists per edited day, newest first, exceptions skipped',
       [c['date'] for c in _s3['children']] == ['2026-08-15', '2025-12-01'])
