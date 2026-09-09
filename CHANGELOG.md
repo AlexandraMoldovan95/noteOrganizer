@@ -12,6 +12,7 @@ How the numbers themselves are counted is the
 
 | Version | Date | In one line |
 |---|---|---|
+| [0.71.111](#071111--2026-09-09) | 2026-09-09 | A searchable calendar History register, a frame on the open day, and field-smoothed occurrence/History navigation. |
 | [0.69.108](#069108--2026-09-07) | 2026-09-07 | The occurrence world becomes visible: banners, ✎ marks, per-day reset, calendar filters and sorts, the way back on every route. |
 | [0.66.105](#066105--2026-09-07) | 2026-09-07 | BackSpace and Delete treat an emoji as one character in every text field. |
 | [0.66.104](#066104--2026-09-07) | 2026-09-07 | Every data file saves atomically; an unreadable one is preserved and announced, never silently emptied. |
@@ -47,6 +48,10 @@ How the numbers themselves are counted is the
 ---
 
 ## [Unreleased]
+
+## [0.71.111] — 2026-09-09
+
+*Highlights: the calendar gains a searchable History register and the open day wears a frame; occurrence editing and History navigation get their field-reported rough edges smoothed.*
 
 ### Added
 - **📋 History — the calendar's own register.** A History button on the Calendar tab swaps
