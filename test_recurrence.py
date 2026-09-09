@@ -101,6 +101,14 @@ except Exception:
     _crash2 = True
 check('next_occurrence_on_or_after survives a poisoned interval too', not _crash2)
 
+# count clamped both ways too (no asymmetry left in this validator): a
+# huge count can't exceed what a rule could ever generate.
+from noteorganizer.core.recurrence import MAX_OCCURRENCES as _MAXO
+check('a huge count is clamped to MAX_OCCURRENCES',
+      NO.normalize_recurrence({'freq':'daily','count':10**9})['count'] == _MAXO)
+check('a legit small count is preserved',
+      NO.normalize_recurrence({'freq':'daily','count':5})['count'] == 5)
+
 # 36-year stress (performance + correctness at scale)
 n_stress = {'id':99,'date':'1990-07-04','recurrence':{'freq':'yearly'}}
 t0 = time.perf_counter()

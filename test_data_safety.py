@@ -624,6 +624,31 @@ check("a legit attachment filename is still deleted",
 check("_attachment_path_within rejects traversal, accepts a bare name",
       _storage._attachment_path_within(_rel) is None
       and _storage._attachment_path_within("legit_att.bin") is not None)
+# The guard must RETURN None, never RAISE, on the values only a crafted
+# stored_as produces — a cross-drive/UNC path (commonpath raises
+# ValueError) or an embedded NUL (os.remove raises ValueError, which
+# the sink's except OSError would miss). An uncaught raise here crashes
+# the startup trash purge -> app unlaunchable.
+_no_raise_all = True
+for _bad in ("C:\\Windows\\System32\\x", "\\\\server\\share\\x",
+             "Z:relative", "x\x00y", "..", "."):
+    try:
+        if _storage._attachment_path_within(_bad) is not None:
+            _no_raise_all = False  # any of these resolving to a path is a leak
+    except Exception:
+        _no_raise_all = False
+check("the path guard returns None (never raises) on crafted stored_as",
+      _no_raise_all)
+# And normalize_note flattens a smuggled path to a bare filename at the
+# data choke point, closing traversal for every channel (share + zip +
+# hand-edit), not only the sinks.
+from noteorganizer.core.model import normalize_note as _nn_att
+_flat = _nn_att({"id": 1, "title": "x", "attachments": [
+    {"filename": "doc.pdf", "stored_as": "../../evil.exe"},
+    {"filename": "y", "stored_as": "C:\\Windows\\z"},
+    "not-a-dict"]})
+check("normalize_note reduces every attachment stored_as to a bare name",
+      [a["stored_as"] for a in _flat["attachments"]] == ["evil.exe", "z"])
 # Defensive: under a mutant that breaks the guard the outsider is gone,
 # and a bare remove would crash the run before its footer. The checks
 # already recorded their verdicts; this only lets the suite finish.

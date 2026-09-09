@@ -36,7 +36,7 @@ from datetime import datetime
 from PIL import Image, ImageTk
 
 from ..core import paths
-from ..core.storage import _delete_attachment_files
+from ..core.storage import _attachment_path_within, _delete_attachment_files
 
 
 class AttachmentsMixin:
@@ -76,13 +76,23 @@ class AttachmentsMixin:
     def open_attachment(self, index):
         if 0 <= index < len(self.current_attachments):
             attachment = self.current_attachments[index]
-            path = os.path.join(paths.ATTACHMENTS_DIR, attachment["stored_as"])
-            if not os.path.exists(path):
+            # Resolve through the same containment guard the delete side
+            # uses: a crafted stored_as ("../../x", "C:\\...", UNC) must
+            # never let os.startfile open — and possibly EXECUTE — a file
+            # outside the attachments folder. None => refuse.
+            stored_as = attachment.get("stored_as")
+            path = _attachment_path_within(stored_as) if stored_as else None
+            if path is None or not os.path.isfile(path):
                 self.show_warning("File missing", "This attached file can't be found on disk.")
                 return
 
-            original_name = attachment.get("filename", attachment["stored_as"])
-            ext = os.path.splitext(original_name)[1].lower()
+            original_name = attachment.get("filename", stored_as)
+            # The safety decision keys off the REAL on-disk file's
+            # extension (stored_as preserves the original extension — see
+            # add_attachment), NOT the display filename a crafted note
+            # controls separately, so a ".exe" masquerading as "doc.pdf"
+            # can't skip the warning.
+            ext = os.path.splitext(stored_as)[1].lower()
 
             # Pillow decodes all of these — shown large, right in the app,
             # instead of handing off to whatever image viewer Windows has

@@ -180,12 +180,26 @@ def _attachment_path_within(stored_as):
     data — must never resolve a delete to a file elsewhere on disk."""
     if not isinstance(stored_as, str) or not stored_as:
         return None
-    base = os.path.realpath(paths.ATTACHMENTS_DIR)
-    candidate = os.path.realpath(os.path.join(base, stored_as))
-    if candidate == base:
-        return None  # the folder itself, not a file in it
-    if os.path.commonpath([base, candidate]) != base:
-        return None  # escaped the attachments folder
+    if "\x00" in stored_as:
+        # A NUL doesn't always make realpath raise (platform-dependent),
+        # but a later os.remove/os.startfile on it raises ValueError,
+        # which the sinks' `except OSError` would NOT catch — reject it
+        # outright rather than let that escape.
+        return None
+    try:
+        base = os.path.realpath(paths.ATTACHMENTS_DIR)
+        candidate = os.path.realpath(os.path.join(base, stored_as))
+        if candidate == base:
+            return None  # the folder itself, not a file in it
+        if os.path.commonpath([base, candidate]) != base:
+            return None  # escaped the attachments folder
+    except (ValueError, OSError):
+        # commonpath raises ValueError across drives / UNC roots, and
+        # realpath raises on an embedded NUL — all only reachable from a
+        # crafted stored_as. "Can't resolve safely" means refuse, never
+        # let the exception escape and crash the delete loop (which runs
+        # unguarded at startup purge).
+        return None
     return candidate
 
 

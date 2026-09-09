@@ -153,9 +153,11 @@ check('and an old code without paragraphs still decodes',
 # real code never has and whose stored_as could aim a later delete
 # outside the attachments folder), never arbitrary keys.
 import json as _json3, base64 as _b643, zlib as _zlib3
-def _craft_code(note_dict):
-    raw = _zlib3.compress(_json3.dumps({'v': 1, 'notes': [note_dict]}).encode())
+def _craft_code_list(notes_list):
+    raw = _zlib3.compress(_json3.dumps({'v': 1, 'notes': notes_list}).encode())
     return NO.SHARE_CODE_PREFIX + _b643.urlsafe_b64encode(raw).decode()
+def _craft_code(note_dict):
+    return _craft_code_list([note_dict])
 _evil = NO.decode_share_code(_craft_code({
     'title': 'Evil', 'body': 'b', 'category': 'General',
     'attachments': [{'stored_as': '../../secret.txt'}],
@@ -166,6 +168,18 @@ check('decode drops arbitrary non-shareable keys (id, pinned, bogus)',
       not ({'id', 'pinned', 'bogus'} & set(_evil.keys())))
 check('decode keeps the genuine shareable fields',
       _evil.get('title') == 'Evil' and _evil.get('body') == 'b')
+# A crafted code can also put non-dict entries in the notes list; decode
+# must survive them (the `else {}` branch), not throw on the projection.
+# Guarded so a mutant that drops the branch fails HARD here (the raise
+# is the bug's face) instead of crashing the run before its footer.
+try:
+    _mixed = NO.decode_share_code(_craft_code_list([
+        42, None, 'a string', {'title': 'Real', 'body': 'b'}]))
+except Exception:
+    _mixed = None
+check('decode tolerates non-dict note entries without crashing',
+      _mixed is not None and len(_mixed) == 4 and _mixed[:3] == [{}, {}, {}]
+      and _mixed[3].get('title') == 'Real')
 
 # The checklist travels too: a shared note used to arrive without it --
 # the one piece of content a code silently dropped.

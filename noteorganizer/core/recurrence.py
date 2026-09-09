@@ -198,7 +198,11 @@ def normalize_recurrence(rec):
     out["end"] = end.strip() if isinstance(end, str) and parse_date(end) else ""
 
     try:
-        out["count"] = max(0, int(rec.get("count", 0)))
+        # Clamped above at MAX_OCCURRENCES too (0 = unlimited): a rule can
+        # never produce more occurrences than that anyway, so a crafted
+        # huge count is meaningless — same both-sides discipline as the
+        # interval clamp, no asymmetry left in this validator.
+        out["count"] = max(0, min(int(rec.get("count", 0)), MAX_OCCURRENCES))
     except (TypeError, ValueError):
         out["count"] = 0
 

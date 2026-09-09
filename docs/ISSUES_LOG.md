@@ -291,11 +291,31 @@ at both layers. And `_delete_attachment_files` resolves each
 landing outside the attachments folder — the same path-traversal guard
 the zip import already applies, now on the delete side too.
 
+**Fix, completed under adversarial review.** The pre-merge attacker
+found the first cut guarded only some of the surface, and closed the
+rest in the same branch: the containment guard itself *raised*
+(`os.path.commonpath` across drives/UNC, `realpath`/`os.remove` on an
+embedded NUL) instead of returning None, and those raises escaped the
+delete loop that runs unguarded at startup purge — so a crafted
+*expired* trash entry could make the app fail to launch every time;
+the guard now returns None on `(ValueError, OSError)` and on a NUL. The
+open/preview sink (`os.startfile`) joined `stored_as` raw with no guard
+at all, and keyed its "unsafe file" warning off the display filename a
+crafted note controls separately — so a `.exe` labelled `doc.pdf` could
+be executed on a click; `open_attachment` now resolves through the same
+guard and keys the warning off the real on-disk extension. And the
+share-code filter was one channel only — zip import merges attachments
+verbatim — so the traversal is now also flattened at the data choke
+point: `normalize_note` reduces every `stored_as` to a bare filename,
+a no-op for genuine data.
+
 **Takeaway:** a value that will be fed to a filesystem operation must be
-validated where it *enters* (the import boundary) AND where it *acts*
-(the delete), not trusted because the app's own code always produces a
-safe form. Encode and decode of the same format must project the same
-fields, or the asymmetry is the hole.
+validated where it *enters* (the import boundary AND the data
+normaliser) AND at every place it *acts* (delete, open, preview) — not
+trusted because the app's own code always produces a safe form. A guard
+that can *raise* is not a guard; on an unguarded startup path a raise is
+a launch-blocker. And a safety warning must key off the real artifact,
+never a display label the attacker sets independently.
 
 ### The repeat interval with no ceiling
 
