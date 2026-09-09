@@ -12,6 +12,7 @@ How the numbers themselves are counted is the
 
 | Version | Date | In one line |
 |---|---|---|
+| [0.71.113](#071113--2026-09-09) | 2026-09-09 | Import hardening — a hostile share code can't delete outside files, and a corrupt repeat interval can't crash the app on launch. |
 | [0.71.111](#071111--2026-09-09) | 2026-09-09 | A searchable calendar History register, a frame on the open day, and field-smoothed occurrence/History navigation. |
 | [0.69.108](#069108--2026-09-07) | 2026-09-07 | The occurrence world becomes visible: banners, ✎ marks, per-day reset, calendar filters and sorts, the way back on every route. |
 | [0.66.105](#066105--2026-09-07) | 2026-09-07 | BackSpace and Delete treat an emoji as one character in every text field. |
@@ -48,6 +49,10 @@ How the numbers themselves are counted is the
 ---
 
 ## [Unreleased]
+
+## [0.71.113] — 2026-09-09
+
+*Highlights: two audit-found hardening fixes — a hostile share code can't delete files outside the app, and a corrupt repeat interval can't crash it on launch.*
 
 ### Fixed
 - **An imported share code can no longer delete files outside the app.** A genuine share
