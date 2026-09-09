@@ -79,6 +79,7 @@ __all__ = [
     "RECURRENCE_DEFAULTS",
     "OVERRIDABLE_FIELDS",
     "MAX_OCCURRENCES",
+    "MAX_RECURRENCE_INTERVAL",
     "parse_date",
     "format_date",
     "normalize_recurrence",
@@ -115,6 +116,15 @@ OVERRIDABLE_FIELDS = ["title", "body", "comments", "category", "color"]
 
 # Safety valve: no rule may ever generate more than this in one expansion.
 MAX_OCCURRENCES = 5000
+
+# Upper bound on a rule's interval ("every N days/weeks/months/years").
+# 1000 is already beyond any real use — every 1000 years — while staying
+# far below the point where timedelta(days=interval) overflows (its
+# ceiling is 999,999,999 days). Without this cap, a hostile share code
+# or a hand-edited notes_data.json carrying interval=1e10 crashed
+# expand_occurrences with OverflowError — and since the calendar renders
+# at startup, that could make the app unlaunchable (see ISSUES_LOG).
+MAX_RECURRENCE_INTERVAL = 1000
 
 
 def parse_date(value):
@@ -162,7 +172,13 @@ def normalize_recurrence(rec):
     out["freq"] = freq if freq in ("daily", "weekly", "monthly", "yearly") else ""
 
     try:
-        out["interval"] = max(1, int(rec.get("interval", 1)))
+        # Clamped BOTH ways: below at 1 (a zero/negative interval would
+        # loop or divide by zero downstream), above at
+        # MAX_RECURRENCE_INTERVAL (an unbounded value overflowed
+        # timedelta and crashed the calendar — the choke point that
+        # protects every route: load, share/zip import, hand-edit, UI).
+        out["interval"] = max(1, min(int(rec.get("interval", 1)),
+                                     MAX_RECURRENCE_INTERVAL))
     except (TypeError, ValueError):
         out["interval"] = 1
 

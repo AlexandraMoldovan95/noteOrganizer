@@ -74,6 +74,33 @@ check('normalize_recurrence handles None', NO.normalize_recurrence(None)['freq']
 check('normalize_recurrence handles garbage dict', NO.normalize_recurrence({'freq':'bogus'})['freq']=='')
 check('normalize_recurrence clamps negative interval to 1', NO.normalize_recurrence({'freq':'daily','interval':-5})['interval']==1)
 
+# ---- interval upper clamp: a hostile/huge interval can't crash the app ----
+from noteorganizer.core.recurrence import MAX_RECURRENCE_INTERVAL as _MAXI
+from noteorganizer.core.model import normalize_note as _nn
+check('normalize_recurrence clamps a huge interval to the cap',
+      NO.normalize_recurrence({'freq':'daily','interval':10**10})['interval'] == _MAXI)
+check('a legit small interval is preserved',
+      NO.normalize_recurrence({'freq':'daily','interval':3})['interval'] == 3)
+check('an interval exactly at the cap is kept',
+      NO.normalize_recurrence({'freq':'daily','interval':_MAXI})['interval'] == _MAXI)
+_poison = {'id':300,'title':'x','date':'2026-01-01',
+           'recurrence':{'freq':'daily','interval':10**10}}
+check('the clamp reaches through normalize_note (the import route)',
+      _nn(_poison)['recurrence']['interval'] == _MAXI)
+_crash = False
+try:
+    NO.expand_occurrences(_poison, date(2026,9,1), date(2026,9,30))
+except Exception:
+    _crash = True
+check('expand_occurrences no longer overflows on a poisoned interval', not _crash)
+_crash2 = False
+try:
+    from noteorganizer.core.recurrence import next_occurrence_on_or_after as _noa
+    _noa(_poison, '2026-09-01')
+except Exception:
+    _crash2 = True
+check('next_occurrence_on_or_after survives a poisoned interval too', not _crash2)
+
 # 36-year stress (performance + correctness at scale)
 n_stress = {'id':99,'date':'1990-07-04','recurrence':{'freq':'yearly'}}
 t0 = time.perf_counter()

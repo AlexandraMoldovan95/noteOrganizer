@@ -49,6 +49,15 @@ How the numbers themselves are counted is the
 
 ## [Unreleased]
 
+### Fixed
+- **A corrupt repeat interval can no longer crash the app on launch.** A recurrence rule
+  whose interval was enormous — from a hand-edited `notes_data.json` or a crafted share
+  code — overflowed the date maths and, because the calendar draws itself at startup,
+  could stop the app from opening at all. The interval is now clamped to a sane maximum
+  (every 1000 days/weeks/months/years — far beyond any real use) at the single point every
+  route passes through, so no source of data can bring the app down this way. From the
+  code audit's high-severity findings.
+
 ## [0.71.111] — 2026-09-09
 
 *Highlights: the calendar gains a searchable History register and the open day wears a frame; occurrence editing and History navigation get their field-reported rough edges smoothed.*

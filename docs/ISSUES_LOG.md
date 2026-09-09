@@ -21,6 +21,7 @@ day-to-day tracking.
 | [The safety test that needed its own safety](#the-safety-test-that-needed-its-own-safety) | Safety rules must be categorical, not filename lists; dangerous tests carry their own refusal. | 0.39.63 |
 | [The delete that kept aiming at the wrong note](#the-delete-that-kept-aiming-at-the-wrong-note) | An operation aimed by mutating shared state lies on every cancel path — pass the target as a parameter. | 0.66.100 |
 | [The guards that never reached the siblings](#the-guards-that-never-reached-the-siblings) | A safety lesson learned in one function must be swept to its siblings the same day. | 0.66.104 |
+| [The repeat interval with no ceiling](#the-repeat-interval-with-no-ceiling) | Clamp untrusted values on both sides at the choke point — valid means valid for every consumer. | 0.71.112 |
 | [The template editor that "did nothing" when clicked](#the-template-editor-that-did-nothing-when-clicked) | 'Nothing happens' in a --windowed build is a real bug report — the exception was invisible. | 0.3.0 |
 | [The panel that lost its content depending on how you got there](#the-panel-that-lost-its-content-depending-on-how-you-got-there) | Recalculate layout on Tk's `<Map>` event, not after a guessed delay. | 0.3.0 |
 | [The scroll that stopped twice, for two different reasons](#the-scroll-that-stopped-twice-for-two-different-reasons) | Same symptom, unrelated causes — check neighbouring areas instead of assuming one fix covers all. | 0.28.38 |
@@ -258,6 +259,41 @@ deleted temp dirs — the restore is a full `configure(previous_dir)` now.
 across its siblings the same day it is learned. A guard that exists only
 where the bug first bit is a map of where it will bite next — and the
 sweep is cheap exactly because the lesson is already understood.
+
+### The repeat interval with no ceiling
+
+*([0.71.112](../CHANGELOG.md#071112--2026-09-09) · 2026-09-09)*
+
+**Symptom:** Found by the code audit, then reproduced. A recurrence
+rule with an enormous interval — `{"freq": "daily", "interval": 1e10}`
+— crashed `expand_occurrences` with `OverflowError: Python int too
+large to convert to C int`, because `timedelta(days=interval)` has a
+hard ceiling of 999,999,999 days. And the calendar renders at startup,
+so such a value sitting in `notes_data.json` could stop the app from
+opening at all.
+
+**Root cause:** `normalize_recurrence` clamped the interval from below
+(`max(1, int(...))`, so zero or negative degraded to 1) but never from
+above. A value from a hand-edited notebook, or a crafted share code
+(share import runs through `normalize_note`, but the clamp that would
+have caught it wasn't there), sailed through untouched. Recurrence is
+in `SHAREABLE_FIELDS`, so the poison had a delivery route as well as a
+hand-edit one.
+
+**Fix:** one upper clamp, `MAX_RECURRENCE_INTERVAL = 1000`, in
+`normalize_recurrence` — the single choke point both `normalize_note`
+(every load and import) and `expand_occurrences` (every draw) pass
+through, so one line closes every route. 1000 is beyond any real use
+(every 1000 years) and orders of magnitude below the overflow point.
+A qa5 check now builds the app and renders its calendar against a
+poisoned `notes_data.json` to prove it launches.
+
+**Takeaway:** a value that flows from untrusted data into a library
+call with its own limits (here `timedelta`) needs clamping on BOTH
+sides at the normalization choke point — "coerce to valid" has to mean
+valid for every consumer downstream, not just non-negative. And the
+calendar rendering at startup makes any calendar-data crash a
+launch-blocker, which raises the stakes of every such value.
 
 ## Tk & platform gotchas
 
