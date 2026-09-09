@@ -104,6 +104,62 @@ check('a far-future occurrence is still found past the small windows',
       _nxt(n_far, '2026-01-02') == '2027-01-01')
 check('garbage date in -> None out', _nxt(n_wk, 'not a date') is None)
 
+# ---- history_entries: the Calendar History builder ----
+from noteorganizer.core.recurrence import history_entries as _hist
+
+_H_TODAY = date(2026, 9, 9)
+_h_notes = [
+    {'id': 1, 'title': 'Meeting X', 'body': 'plan Q4', 'comments': '',
+     'date': '2026-07-20'},
+    {'id': 2, 'title': 'Old dated', 'body': 'x', 'comments': '',
+     'date': '2023-03-05'},
+    {'id': 3, 'title': 'Daily sync', 'body': 'agenda', 'comments': '',
+     'date': '2026-01-01', 'recurrence': {'freq': 'daily'},
+     'exceptions': ['2026-02-02'],
+     'overrides': {
+         '2026-08-15': {'title': '', 'body': 'discutat bugetul',
+                        'comments': '', 'category': 'General', 'color': ''},
+         '2025-12-01': {'title': 'Year-end sync', 'body': 'retro',
+                        'comments': '', 'category': 'General', 'color': ''},
+         '2026-02-02': {'title': 'stray', 'body': 'on an excepted day',
+                        'comments': '', 'category': 'General', 'color': ''},
+     }},
+    {'id': 4, 'title': 'Lonely series', 'body': 'no edited days',
+     'comments': '', 'date': '2026-05-01', 'recurrence': {'freq': 'weekly'}},
+    {'id': 5, 'title': 'No date note', 'body': 'off-calendar', 'comments': ''},
+]
+
+_all = _hist(_h_notes, today=_H_TODAY)
+check('history lists dated notes, series, and skips undated ones',
+      [e['note_id'] for e in _all] == [3, 1, 4, 2])
+_s3 = next(e for e in _all if e['note_id'] == 3)
+check('a series child exists per edited day, newest first, exceptions skipped',
+      [c['date'] for c in _s3['children']] == ['2026-08-15', '2025-12-01'])
+check("a child with no override title borrows the series'",
+      _s3['children'][0]['title'] == 'Daily sync'
+      and _s3['children'][1]['title'] == 'Year-end sync')
+check('a series with no edited days still gets a row',
+      any(e['note_id'] == 4 and e['kind'] == 'series' for e in _all))
+
+_q = _hist(_h_notes, query='bugetul', today=_H_TODAY)
+check('search reaches into a day\'s own override content',
+      [e['note_id'] for e in _q] == [3]
+      and [c['date'] for c in _q[0]['children']] == ['2026-08-15']
+      and _q[0]['auto_expand'] is True)
+_q2 = _hist(_h_notes, query='agenda', today=_H_TODAY)
+check('a base-only match keeps the group collapsed (no auto-expand)',
+      [e['note_id'] for e in _q2] == [3] and _q2[0]['auto_expand'] is False)
+
+_y = _hist(_h_notes, year_bucket='Last year', today=_H_TODAY)
+check('the year filter keeps only that year\'s activity',
+      [e['note_id'] for e in _y] == [3]
+      and [c['date'] for c in _y[0]['children']] == ['2025-12-01'])
+_o = _hist(_h_notes, year_bucket='Older', today=_H_TODAY)
+check('"Older" catches everything before two years ago',
+      [e['note_id'] for e in _o] == [2])
+check('"2 years ago" is its own bucket, not part of Older',
+      _hist(_h_notes, year_bucket='2 years ago', today=_H_TODAY) == [])
+
 print()
 print(f"FAILURES: {fails if fails else 'none'}")
 

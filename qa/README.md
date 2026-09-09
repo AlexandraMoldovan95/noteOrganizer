@@ -97,7 +97,8 @@ A new surface joins this list the moment it ships.
 - **Organization:** sidebar search · sort modes · categories · grouping ·
   pinning · multi-select & bulk bar · note list rendering & scroll guards
 - **Time:** date field · recurrence · calendar (view, day colours,
-  preview)
+  preview) · calendar History register (search incl. override content,
+  year chips, collapsible series groups, pagination)
 - **In/out:** clipboard in (rich, plain, TSV) · clipboard out (HTML,
   TSV) · share codes · single-note export (HTML, TXT) · backup `.zip`
   export/import · background threading

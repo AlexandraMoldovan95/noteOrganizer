@@ -8561,6 +8561,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if hasattr(self, "body_text"):
             self._retint_find_tags(self.body_text)
         self._find_reflash()
+        # (The History register's rebuilt rows need no hook here: the
+        # straggler pass above recolors them — qa7's theme-while-open
+        # check guards that promise regardless of mechanism.)
 
     def _calendar_is_showing(self):
         """True only if the Calendar tab is the one currently selected AND

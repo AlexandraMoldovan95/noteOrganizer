@@ -898,6 +898,105 @@ app.sort_var.set('Recently updated')
 app.refresh_note_list(); app.update()
 
 # ============================================================
+# 6f. CALENDAR HISTORY: THE REGISTER OF DAYS WITH CONTENT
+# ============================================================
+# The History view lists dated notes plus each series' separately
+# edited days (grouped, collapsible), searchable — including inside a
+# day's own override content — and filterable by year. Rows land back
+# on the day panel; the grid returns untouched.
+app.notes = [
+    {'id': 80, 'title': 'HistSeries', 'body': 'agenda', 'category': 'General',
+     'date': '2026-01-05', 'recurrence': {'freq': 'weekly'},
+     'updated': '2026-01-01 00:00', 'created': '2026-01-01 00:00',
+     'checklist': [], 'attachments': [], 'exceptions': [],
+     'overrides': {
+         '2026-08-17': {'title': '', 'body': 'discutat bugetul',
+                        'comments': '', 'category': 'General', 'color': ''},
+         '2026-06-15': {'title': 'HistSpecial', 'body': 'plan',
+                        'comments': '', 'category': 'General', 'color': ''}}},
+    {'id': 81, 'title': 'HistDated', 'body': 'x', 'category': 'General',
+     'date': '2026-09-20', 'updated': '2026-01-01 00:00',
+     'created': '2026-01-01 00:00', 'checklist': [], 'attachments': []},
+    {'id': 82, 'title': 'HistLastYear', 'body': 'x', 'category': 'General',
+     'date': '2025-11-10', 'updated': '2026-01-01 00:00',
+     'created': '2026-01-01 00:00', 'checklist': [], 'attachments': []},
+]
+app.save_notes()
+app.notebook.select(app.TAB_CALENDAR); app.update()
+app.render_calendar(); app.update()
+
+app._toggle_calendar_history(); app.update()
+_hl = find_all_labels(app._history_rows)
+check('History opens over the grid and lists the calendar dwellers',
+      app._history_visible and not app.cal_grid_frame.winfo_ismapped()
+      and any('HistDated' in t for t in _hl)
+      and any('HistSeries' in t for t in _hl)
+      and any('HistLastYear' in t for t in _hl))
+check('a series group starts collapsed (no ✎ children yet)',
+      not any('2026-08-17' in t for t in _hl))
+
+app._history_toggle_group(80); app.update()
+_hl = find_all_labels(app._history_rows)
+check('expanding the group reveals its edited days, newest first',
+      any('2026-08-17' in t for t in _hl)
+      and any('2026-06-15' in t and 'HistSpecial' in t for t in _hl))
+app._history_toggle_group(80); app.update()
+
+# Search reaches into a day's own override content and auto-expands.
+app._history_search_var.set('bugetul')
+app.update(); import time as _t7; _t7.sleep(0.4); app.update()
+_hl = find_all_labels(app._history_rows)
+check('search finds override content and auto-expands its group',
+      any('2026-08-17' in t for t in _hl)
+      and not any('HistDated' in t for t in _hl))
+app._history_search_var.set('')
+app.update(); _t7.sleep(0.4); app.update()
+
+# Year chips filter by the year of the activity.
+app._history_set_bucket('Last year'); app.update()
+_hl = find_all_labels(app._history_rows)
+check('the Last-year chip keeps only that year',
+      any('HistLastYear' in t for t in _hl)
+      and not any('HistDated' in t for t in _hl))
+app._history_set_bucket('All'); app.update()
+
+# Theme switch while open: rows re-render in the new palette.
+app.set_theme('light'); app.update()
+_row_bgs = [w.cget('bg') for w in app._history_rows.winfo_children()
+            if isinstance(w, tk.Frame)]
+check('a theme switch recolors the open History rows',
+      app._history_visible and _row_bgs
+      and all(bg == app.colors['card'] for bg in _row_bgs))
+app.set_theme('dark'); app.update()
+
+# A row click lands on the day panel, grid restored, right month.
+app._history_open_day(app.find_note(80), '2026-06-15'); app.update()
+check('a row click returns the grid on the right month with the preview',
+      not app._history_visible and app.cal_grid_frame.winfo_ismapped()
+      and (app.cal_year, app.cal_month) == (2026, 6)
+      and app._day_panel_mode == 'note')
+app.close_day_panel(); app.update()
+
+# Pagination: many dated notes render 50 + Show more.
+app.notes = [{'id': 100 + i, 'title': f'Bulk{i}', 'body': 'x',
+              'category': 'General', 'date': f'2026-03-{(i % 28) + 1:02d}',
+              'updated': '2026-01-01 00:00', 'created': '2026-01-01 00:00',
+              'checklist': [], 'attachments': []} for i in range(60)]
+app.save_notes()
+app._toggle_calendar_history(); app.update()
+_bulk_shown = sum(1 for t in find_all_labels(app._history_rows) if 'Bulk' in t)
+_more_btn = find_widget(app._history_rows, tk.Button, 'Show more')
+check('long listings render a page plus Show more',
+      _bulk_shown == 50 and _more_btn is not None)
+_more_btn.invoke(); app.update()
+_bulk_shown = sum(1 for t in find_all_labels(app._history_rows) if 'Bulk' in t)
+check('Show more brings the rest', _bulk_shown == 60)
+app._hide_calendar_history(); app.update()
+check('leaving History restores the grid',
+      app.cal_grid_frame.winfo_ismapped() and not app._history_visible)
+app.notebook.select(app.TAB_NOTES); app.update()
+
+# ============================================================
 # 7. ATTACHMENT-ONLY NOTE AUTOSAVE
 # ============================================================
 tmp_file = os.path.join(tempfile.gettempdir(), 'qa7_attach_only.txt')

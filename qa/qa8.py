@@ -372,8 +372,17 @@ app13.update()
 check('calendar add-note asks and saves the deferred edit before clearing',
       len(scope_calls) == 4
       and 'cal-add-pending' in app13.notes[0]['overrides']['2026-07-11']['body'])
-check('calendar add-note prefills the chosen date on a fresh editor',
-      app13.selected_note_id is None and app13.date_entry.get() == '2026-08-15')
+_ca_ok = False
+for _ in range(60):  # settle: a late timer tick may still be landing
+    if (app13.selected_note_id is None
+            and app13.date_entry.get() == '2026-08-15'):
+        _ca_ok = True
+        break
+    app13.update()
+    time.sleep(0.02)
+check('calendar add-note prefills the chosen date on a fresh editor '
+      f'(id={app13.selected_note_id!r}, date={app13.date_entry.get()!r})',
+      _ca_ok)
 
 # A comments-only note: no "Empty note" warning from the timer, and no
 # junk note saved either — the explicit Save still warns.

@@ -48,6 +48,17 @@ How the numbers themselves are counted is the
 
 ## [Unreleased]
 
+### Added
+- **📋 History — the calendar's own register.** A History button on the Calendar tab swaps
+  the month grid for a list of every day that carries real content: dated notes at their
+  date, and each repeating series as a collapsible group of its separately-edited days
+  (✎), newest first and paginated. Its search bar looks where the sidebar's cannot —
+  inside each day's own edited content — and auto-opens the group that matched; year chips
+  (All / This year / Last year / 2 years ago / Older) cut through the archive, and
+  clicking a row lands back on that day's calendar preview, right-click carrying the
+  usual day menu. Built for the long run: the list grows with what you write, never with
+  the passage of time — a decade of a daily series stays one group plus its edited days.
+
 ## [0.69.108] — 2026-09-07
 
 *Highlights: the calendar's occurrence world becomes visible and navigable — the editor names what it holds, edited days are marked and resettable, and every calendar route keeps the way back.*

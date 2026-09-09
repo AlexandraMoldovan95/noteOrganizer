@@ -449,6 +449,15 @@ only the quick "Add note for this day" flow returns you to the calendar on Save.
 
 ![Calendar view](screenshots/calendar-view.png)
 
+**📋 History**, in the calendar's header, is the register of everything that ever lived on the
+calendar: dated notes at their date, and each repeating note as a small group you can open to see
+its separately-edited days (✎). It has its own search — one that also looks *inside* what you
+wrote on those individual days, which the sidebar search cannot see — and year buttons
+(This year / Last year / 2 years ago / Older) for digging through the archive. Click any entry
+and you land back on that exact day's preview; right-click gives the usual day menu, including
+"Reset this day". Handy when you know a meeting happened *sometime* and only remember a word of
+what was discussed.
+
 You can also paint a specific calendar day a custom colour (right-click it), independent of any
 note's own colour — useful for marking something about the day itself, like a holiday or deadline.
 

@@ -51,7 +51,9 @@ from ..core.recurrence import (
     describe_recurrence,
     effective_note,
     expand_occurrences,
+    history_entries,
     is_recurring,
+    parse_date,
 )
 from ..core.storage import (
     load_settings,
@@ -89,6 +91,11 @@ class CalendarViewMixin:
         nav_button("▶▶", lambda: self.shift_calendar(years=1), "right")
         nav_button("▶", lambda: self.shift_calendar(months=1), "right")
         nav_button("Today", self.go_to_today, "right", width=7, font_size=9)
+        # The History register: every day that carries real content —
+        # dated notes plus a series' separately-edited days — searchable
+        # and filterable by year, in place of the month grid.
+        nav_button("📋 History", self._toggle_calendar_history, "right",
+                   width=10, font_size=9)
 
         # The title doubles as a jump target for anything far away.
         self.cal_month_lbl = tk.Button(
@@ -134,6 +141,19 @@ class CalendarViewMixin:
         self.selected_day = None          # "YYYY-MM-DD" currently shown
         self._day_panel_mode = "empty"    # empty | list | note
 
+        # History view state. The frame itself is persistent (built once,
+        # track_theme); its ROWS are rebuilt on every render and colour
+        # themselves with plain .configure — the two theming patterns,
+        # each on the right side of the persistent/rebuilt line.
+        self.history_frame = tk.Frame(self.cal_scroll_inner)
+        self.track_theme(self.history_frame, bg="bg")
+        self._history_visible = False
+        self._history_built = False
+        self._history_bucket = "All"
+        self._history_expanded = set()   # note ids the user opened
+        self._history_shown = 50         # top-level rows rendered so far
+        self._history_search_job = None
+
         # Grid gets a comfortable minimum height so cells never shrink to
         # unusable slivers; if the window is smaller, the scrollbar kicks in.
         self.cal_grid_frame = tk.Frame(self.cal_scroll_inner, height=520)
@@ -151,6 +171,8 @@ class CalendarViewMixin:
                 return
             if not self._is_calendar_visible():
                 return  # only when the Calendar tab is actually showing
+            if getattr(self, "_history_visible", False):
+                return  # the grid is hidden behind History; nothing to redraw
             size = self._cal_note_font_size()
             if size != self._cal_last_font_size:
                 self._cal_last_font_size = size
@@ -806,7 +828,226 @@ class CalendarViewMixin:
             "year": self.cal_year, "month": self.cal_month,
             "date_str": date_str, "origin": "add",
         }
+        self.date_entry.delete(0, "end")
+        self.date_entry.insert(0, date_str)
+        self.date_entry.config(fg=self.colors["text"])
+        self.title_entry.focus()
         self._update_calendar_return_button()
+
+    # ---------- Calendar History (the register of days with content) ----------
+
+    def _toggle_calendar_history(self):
+        """Swap the month grid (and day panel) for the History register,
+        or bring the grid back."""
+        if getattr(self, "_history_visible", False):
+            self._hide_calendar_history()
+        else:
+            self._show_calendar_history()
+
+    def _show_calendar_history(self):
+        if not self._history_built:
+            self._build_history_ui()
+        self.close_day_panel()
+        self.cal_grid_frame.pack_forget()
+        self._history_visible = True
+        self.history_frame.pack(side="top", fill="both", expand=True,
+                                padx=30, pady=(0, 10))
+        self._render_calendar_history()
+
+    def _hide_calendar_history(self):
+        self._history_visible = False
+        self.history_frame.pack_forget()
+        self.cal_grid_frame.pack(side="top", fill="both", expand=True,
+                                 padx=30, pady=(0, 10))
+        self.render_calendar()
+
+    def _build_history_ui(self):
+        """The persistent half of the view: header, search, year chips,
+        rows host. Built once; everything here goes through track_theme."""
+        self._history_built = True
+        head = tk.Frame(self.history_frame)
+        self.track_theme(head, bg="bg")
+        head.pack(fill="x", pady=(4, 8))
+
+        back = tk.Button(head, text="← Calendar",
+                         command=self._hide_calendar_history, relief="flat",
+                         cursor="hand2", font=("Segoe UI", 9, "bold"))
+        self.track_theme(back, bg="card", fg="text")
+        back.pack(side="left", ipadx=8, ipady=2)
+
+        self._history_search_var = tk.StringVar()
+        search = tk.Entry(head, textvariable=self._history_search_var,
+                          relief="flat", font=("Segoe UI", 10),
+                          insertbackground=self.colors["text"])
+        self.track_theme(search, bg="card", fg="text",
+                         insertbackground="text")
+        search.pack(side="left", fill="x", expand=True, padx=10, ipady=4)
+        self.add_placeholder(search, "Search all calendar entries...")
+        self._add_paste_menu(search)
+        self._guard_entry_astral(search)
+        self._history_search_var.trace_add(
+            "write", lambda *a: self._history_search_changed())
+
+        chips = tk.Frame(self.history_frame)
+        self.track_theme(chips, bg="bg")
+        chips.pack(fill="x", pady=(0, 8))
+        self._history_chip_btns = {}
+        for bucket in ("All", "This year", "Last year", "2 years ago",
+                       "Older"):
+            b = tk.Button(chips, text=bucket, relief="flat", cursor="hand2",
+                          font=("Segoe UI", 8, "bold"),
+                          command=lambda v=bucket: self._history_set_bucket(v))
+            b.pack(side="left", padx=(0, 6), ipadx=8, ipady=2)
+            self._history_chip_btns[bucket] = b
+
+        self._history_rows = tk.Frame(self.history_frame)
+        self.track_theme(self._history_rows, bg="bg")
+        self._history_rows.pack(fill="both", expand=True)
+
+    def _history_set_bucket(self, bucket):
+        self._history_bucket = bucket
+        self._history_shown = 50
+        self._render_calendar_history()
+
+    def _history_search_changed(self):
+        """Debounced re-render — one render per pause, not per keystroke."""
+        if self._history_search_job is not None:
+            try:
+                self.after_cancel(self._history_search_job)
+            except (tk.TclError, ValueError):
+                pass
+        self._history_shown = 50
+        self._history_search_job = self.after(
+            300, self._render_calendar_history)
+
+    def _history_query(self):
+        q = self._history_search_var.get()
+        return "" if q == "Search all calendar entries..." else q.strip()
+
+    def _render_calendar_history(self):
+        """The rebuilt half: rows re-created per render, coloured with
+        plain .configure so they always wear the CURRENT theme."""
+        self._history_search_job = None
+        if not (self._history_visible and self._history_built):
+            return
+        for w in self._history_rows.winfo_children():
+            w.destroy()
+
+        # Active-chip styling rides every render (including theme ones).
+        for bucket, b in self._history_chip_btns.items():
+            active = (bucket == self._history_bucket)
+            b.configure(
+                bg=self.colors["accent"] if active else self.colors["card"],
+                fg="white" if active else self.colors["text"],
+                activebackground=self.colors["accent"],
+                activeforeground="white")
+
+        query = self._history_query()
+        entries = history_entries(self.notes, query=query,
+                                  year_bucket=self._history_bucket)
+
+        if not entries:
+            lbl = tk.Label(self._history_rows,
+                           text=("No calendar entries match." if query or
+                                 self._history_bucket != "All" else
+                                 "Nothing on the calendar yet — give a note "
+                                 "a date, or make one repeat."),
+                           font=("Segoe UI", 10), bg=self.colors["bg"],
+                           fg=self.colors["subtext"])
+            lbl.pack(pady=20)
+            return
+
+        def one_row(parent, text, fg, command, context_cmd=None, indent=0,
+                    bold=False):
+            row = tk.Frame(parent, bg=self.colors["card"], cursor="hand2")
+            row.pack(fill="x", pady=1, padx=(indent, 0))
+            lbl = tk.Label(row, text=text, anchor="w",
+                           font=("Segoe UI", 9, "bold" if bold else "normal"),
+                           bg=self.colors["card"], fg=fg)
+            lbl.pack(side="left", fill="x", expand=True, padx=10, ipady=4)
+            for w in (row, lbl):
+                w.bind("<Button-1>", lambda e: command())
+                if context_cmd is not None:
+                    w.bind("<Button-3>", context_cmd)
+            return row
+
+        shown = entries[:self._history_shown]
+        for entry in shown:
+            note = self.find_note(entry["note_id"])
+            if note is None:
+                continue
+            if entry["kind"] == "note":
+                one_row(
+                    self._history_rows,
+                    f"📅 {entry['date']}   {entry['title'] or '(untitled)'}",
+                    self.colors["text"],
+                    lambda n=note, d=entry["date"]: self._history_open_day(n, d),
+                    context_cmd=lambda e, n=note, d=entry["date"]:
+                        self.show_note_context_menu(e, n, occurrence_date=d))
+            else:
+                expanded = (entry["auto_expand"]
+                            or entry["note_id"] in self._history_expanded)
+                n_kids = len(entry["children"])
+                suffix = (f" · {n_kids} edited day{'s' if n_kids != 1 else ''} (✎)"
+                          if n_kids else "")
+                one_row(
+                    self._history_rows,
+                    f"{'▾' if expanded else '▸'} 🔁 "
+                    f"{entry['title'] or '(untitled)'} · "
+                    f"{entry['freq_label']}{suffix}",
+                    self.colors["accent"],
+                    lambda i=entry["note_id"]: self._history_toggle_group(i),
+                    context_cmd=lambda e, n=note:
+                        self.show_note_context_menu(e, n),
+                    bold=True)
+                if expanded:
+                    for child in entry["children"]:
+                        one_row(
+                            self._history_rows,
+                            f"✎ {child['date']}   {child['title'] or '(untitled)'}",
+                            self.colors["text"],
+                            lambda n=note, d=child["date"]:
+                                self._history_open_day(n, d),
+                            context_cmd=lambda e, n=note, d=child["date"]:
+                                self.show_note_context_menu(
+                                    e, n, occurrence_date=d),
+                            indent=26)
+
+        if len(entries) > self._history_shown:
+            more = tk.Button(
+                self._history_rows,
+                text=f"Show more ({len(entries) - self._history_shown} left)",
+                relief="flat", cursor="hand2", font=("Segoe UI", 9, "bold"),
+                bg=self.colors["card"], fg=self.colors["accent"],
+                activebackground=self.colors["sidebar"],
+                activeforeground=self.colors["accent"],
+                command=self._history_show_more)
+            more.pack(fill="x", pady=(6, 2))
+
+        self._bind_mousewheel_recursive(self._history_rows,
+                                        self.cal_scroll_canvas)
+
+    def _history_toggle_group(self, note_id):
+        if note_id in self._history_expanded:
+            self._history_expanded.discard(note_id)
+        else:
+            self._history_expanded.add(note_id)
+        self._render_calendar_history()
+
+    def _history_show_more(self):
+        self._history_shown += 50
+        self._render_calendar_history()
+
+    def _history_open_day(self, note, date_str):
+        """Back to the grid, on that exact month, with the day panel
+        showing this note's preview — the chosen landing for a row click."""
+        d = parse_date(date_str)
+        self._hide_calendar_history()
+        if d is not None:
+            self.cal_year, self.cal_month = d.year, d.month
+            self.render_calendar()
+        self.open_day_popup(date_str)
+        self.show_day_note(note, date_str)
         self.date_entry.delete(0, "end")
         self.date_entry.insert(0, date_str)
         self.date_entry.config(fg=self.colors["text"])

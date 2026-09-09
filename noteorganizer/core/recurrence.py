@@ -85,6 +85,7 @@ __all__ = [
     "is_recurring",
     "expand_occurrences",
     "next_occurrence_on_or_after",
+    "history_entries",
     "effective_note",
     "describe_recurrence",
 ]
@@ -364,6 +365,139 @@ def expand_occurrences(note, range_start, range_end):
             year_index += 1
 
     return [format_date(d) for d in sorted(results) if format_date(d) not in exceptions]
+
+
+def _history_bucket_of(date_str, today):
+    """Which year-filter bucket a date belongs to, relative to *today*."""
+    d = parse_date(date_str)
+    if d is None:
+        return None
+    if d.year == today.year:
+        return "This year"
+    if d.year == today.year - 1:
+        return "Last year"
+    if d.year == today.year - 2:
+        return "2 years ago"
+    return "Older"
+
+
+def _history_match(query, *texts):
+    """Case-insensitive substring match across any of *texts* — the same
+    plain judgment the sidebar search uses, so the two can't disagree
+    about what 'contains' means (and any script matches, diacritics or
+    not, exactly as typed)."""
+    if not query:
+        return True
+    q = query.lower()
+    return any(q in (t or "").lower() for t in texts)
+
+
+def history_entries(notes, query="", year_bucket="All", today=None):
+    """Build the Calendar History listing: the days that carry real
+    content, newest first — not every occurrence a rule generates.
+
+    An entry is one of:
+      * a dated one-off note, at its own date;
+      * a repeating series, as a collapsible group whose children are
+        the days edited with "only this occurrence" (their content is
+        the override — the only days that stopped tracking the series);
+        a series with no such days still gets a row, so it can be found.
+
+    The volume therefore grows with what the user has written, never
+    with the passage of time — a decade of a daily series is still one
+    group plus its handful of edited days.
+
+    Args:
+        notes: the live notes list (read-only here).
+        query: substring filter over title/body/comments — and, for a
+            series' children, over that day's OWN override content,
+            which the sidebar search cannot see. A child match sets
+            ``auto_expand`` on its group.
+        year_bucket: "All", "This year", "Last year", "2 years ago" or
+            "Older".
+        today: injectable date for tests; defaults to the real today.
+
+    Returns:
+        A list of dicts, newest activity first. A dated note:
+        ``{"kind": "note", "note_id", "date", "title"}``. A series:
+        ``{"kind": "series", "note_id", "title", "freq_label",
+        "children": [{"date", "title"} newest-first], "auto_expand"}``.
+    """
+    if today is None:
+        today = date_cls.today()
+
+    def bucket_ok(d):
+        return year_bucket == "All" or _history_bucket_of(d, today) == year_bucket
+
+    entries = []
+    for note in notes:
+        if not isinstance(note, dict):
+            continue
+        title = note.get("title") or ""
+        if is_recurring(note):
+            exceptions = set(note.get("exceptions") or [])
+            children = []
+            any_child_match = False
+            for day, override in sorted(
+                    (note.get("overrides") or {}).items(), reverse=True):
+                if day in exceptions or parse_date(day) is None:
+                    # A deleted day's override is normally popped with the
+                    # exception; a stray one must not resurface here.
+                    continue
+                if not bucket_ok(day):
+                    continue
+                if not isinstance(override, dict):
+                    override = {}
+                child_match = _history_match(
+                    query, override.get("title"), override.get("body"),
+                    override.get("comments"))
+                base_match = _history_match(
+                    query, title, note.get("body"), note.get("comments"))
+                if not (child_match or base_match):
+                    continue
+                if query and child_match:
+                    any_child_match = True
+                children.append({
+                    "date": day,
+                    "title": (override.get("title") or title),
+                })
+            base_matches = _history_match(
+                query, title, note.get("body"), note.get("comments"))
+            base_in_bucket = bucket_ok(note.get("date") or "")
+            if children or (base_matches and (base_in_bucket
+                                              or year_bucket == "All")):
+                sort_date = (children[0]["date"] if children
+                             else (note.get("date") or ""))
+                entries.append({
+                    "kind": "series",
+                    "note_id": note.get("id"),
+                    "title": title,
+                    "freq_label": describe_recurrence(note),
+                    "children": children,
+                    "auto_expand": any_child_match,
+                    "_sort": sort_date,
+                })
+        else:
+            d = note.get("date") or ""
+            if parse_date(d) is None:
+                continue  # plain undated notes don't live on the calendar
+            if not bucket_ok(d):
+                continue
+            if not _history_match(query, title, note.get("body"),
+                                  note.get("comments")):
+                continue
+            entries.append({
+                "kind": "note",
+                "note_id": note.get("id"),
+                "date": d,
+                "title": title,
+                "_sort": d,
+            })
+
+    entries.sort(key=lambda e: e["_sort"], reverse=True)
+    for e in entries:
+        e.pop("_sort", None)
+    return entries
 
 
 def next_occurrence_on_or_after(note, date_str):
