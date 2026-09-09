@@ -6059,8 +6059,16 @@ _FLB = core_tables.LINE_BREAK
 app.new_note()
 app.notebook.select(app.TAB_CALENDAR)
 app.update()
-app.event_generate('<Control-f>')
-app.update()
+# Generate-and-poll: a synthetic key event on the toplevel can be
+# DROPPED under full-suite load (the same physics as qa9's dropped
+# clicks on unmapped popups) — retry until the promise lands, capped
+# so a genuinely broken binding still fails red.
+for _ in range(60):
+    app.event_generate('<Control-f>')
+    app.update()
+    if app.notebook.index('current') == app.TAB_NOTES:
+        break
+    time.sleep(0.02)
 check('Ctrl+F switches back to the Notes tab',
       app.notebook.index('current') == app.TAB_NOTES)
 check('Ctrl+F opens the in-window find bar (a placed Frame, not a Toplevel)',

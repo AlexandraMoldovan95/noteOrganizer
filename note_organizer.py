@@ -45,7 +45,7 @@ except ImportError:
 # Added/Fixed CHANGELOG.md entries, not per-release counts). The running
 # app records this into settings, so the next time a newer build opens
 # over older data it can tell the user what changed version-wise.
-APP_VERSION = "0.69.108"
+APP_VERSION = "0.71.111"
 
 
 def parse_version(v):
@@ -8561,6 +8561,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if hasattr(self, "body_text"):
             self._retint_find_tags(self.body_text)
         self._find_reflash()
+        # (The History register's rebuilt rows need no hook here: the
+        # straggler pass above recolors them — qa7's theme-while-open
+        # check guards that promise regardless of mechanism.)
 
     def _calendar_is_showing(self):
         """True only if the Calendar tab is the one currently selected AND
@@ -8890,6 +8893,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             except tk.TclError:
                 return
             self._catch_up_deferred_refresh()
+            # The Calendar tab's home is the month grid; History is only a
+            # view of it. Leaving the tab (or returning to it) resets to
+            # the grid, so the calendar never reopens showing History
+            # from a session two tab-switches ago (field report).
+            if getattr(self, "_history_visible", False):
+                self._hide_calendar_history()
             # Defensive: some platforms move keyboard focus to whatever Entry
             # happens to sit first in the newly-shown tab (e.g. the search box)
             # when the previously-focused widget is hidden by the tab switch.
@@ -10082,6 +10091,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.selected_day = date_str
         self._show_day_panel()
         self.show_day_list()
+        self._update_selected_day_outline()
 
     def _show_day_panel(self):
         """Make the panel visible below the grid. Deliberately does NOT
@@ -10096,6 +10106,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.selected_day = None
         self._day_panel_mode = "empty"
         self.day_panel.pack_forget()
+        self._update_selected_day_outline()
 
 
 
@@ -11671,7 +11682,25 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
         # Compare against the effective (occurrence-aware) content.
         occ = st.get("occurrence_date")
-        shown = effective_note(note, occ) if occ else note
+        if occ and is_recurring(note):
+            # An occurrence override carries ONLY the overridable fields
+            # (title/body/comments/category/color) — it is plain text by
+            # design, never its own formatting, paragraphs, checklist,
+            # attachments, date or recurrence: those stay the series'.
+            # Comparing the series-owned fields here made a just-saved
+            # occurrence read as dirty FOREVER (its body differs from
+            # the base's, so the base formatting spans never matched) —
+            # which made Back to Calendar's cancel guard believe the
+            # scope prompt was cancelled and refuse to navigate, asking
+            # again on every click (field report).
+            shown = effective_note(note, occ)
+            return (st["title"].strip() == shown["title"].strip()
+                    and st["body"].strip() == shown["body"].strip()
+                    and st["comments"].strip()
+                    == shown.get("comments", "").strip()
+                    and st["category"] == shown["category"]
+                    and st["color"] == shown.get("color", ""))
+        shown = note
         if (st["title"].strip() != shown["title"].strip()
                 or st["body"].strip() != shown["body"].strip()
                 or st.get("formatting", []) != note.get("formatting", [])

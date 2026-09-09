@@ -596,6 +596,14 @@ app.save_current_note(auto=False); app.update()
 check('an explicit Save on an edit-origin visit stays in the editor',
       app.notebook.index(app.notebook.select()) == app.TAB_NOTES
       and bool(app._pending_calendar_return))
+# The mechanism behind the re-asking bug, pinned directly: an occurrence
+# compares only its overridable fields, so a just-saved one reads CLEAN.
+# (With the old base-note formatting compare it read dirty forever, and
+# every later flush re-raised the scope prompt — this sentinel sits
+# inside the mocked block, so it names the failure before any unmocked
+# flush can hang the run.)
+check('a just-saved occurrence reads as clean, not dirty forever',
+      app.editor_state_matches_saved(app.capture_editor_state()))
 del app.ask_occurrence_scope
 
 # ...while the quick add-a-note flow still returns to the calendar.
@@ -617,6 +625,18 @@ check('Back to Calendar saves the pending edit, asking exactly once',
       len(scope_ux) == 1
       and 'flushed-on-return'
       in app.find_note(60)['overrides'].get('2026-07-16', {}).get('body', ''))
+# The half the field found missing: answering the question must also
+# NAVIGATE. A just-saved occurrence used to still read as dirty (the
+# base note's formatting never matches an override body), so the
+# cancel guard blocked the trip and every further click re-asked.
+check('answering the question actually lands on the calendar',
+      app.notebook.index(app.notebook.select()) == app.TAB_CALENDAR
+      and app._day_panel_mode != 'empty')
+app._open_note_from_calendar(app.find_note(60), '2026-07-16'); app.update()
+app._return_to_calendar(); app.update()
+check('a clean occurrence returns without asking again',
+      len(scope_ux) == 1
+      and app.notebook.index(app.notebook.select()) == app.TAB_CALENDAR)
 # Settle any still-deferred edit while the mock is armed — under the
 # no-flush mutant the editor stays dirty here, and a later section's
 # flush would otherwise raise the REAL scope dialog and hang the run.
@@ -896,6 +916,233 @@ check('Calendar-oldest walks the archive chronologically',
       _ordered == ['SoonC', 'SoonB', 'SoonD', 'SoonA', 'SoonE'])
 app.sort_var.set('Recently updated')
 app.refresh_note_list(); app.update()
+
+# ============================================================
+# 6f. CALENDAR HISTORY: THE REGISTER OF DAYS WITH CONTENT
+# ============================================================
+# The History view lists dated notes plus each series' separately
+# edited days (grouped, collapsible), searchable — including inside a
+# day's own override content — and filterable by year. Rows land back
+# on the day panel; the grid returns untouched.
+app.notes = [
+    {'id': 80, 'title': 'HistSeries', 'body': 'agenda', 'category': 'General',
+     'date': '2026-01-05', 'recurrence': {'freq': 'weekly'},
+     'updated': '2026-01-01 00:00', 'created': '2026-01-01 00:00',
+     'checklist': [], 'attachments': [], 'exceptions': [],
+     'overrides': {
+         '2026-08-17': {'title': '', 'body': 'discutat bugetul',
+                        'comments': '', 'category': 'General', 'color': ''},
+         '2026-06-15': {'title': 'HistSpecial', 'body': 'plan',
+                        'comments': '', 'category': 'General', 'color': ''}}},
+    {'id': 81, 'title': 'HistDated', 'body': 'x', 'category': 'General',
+     'date': '2026-09-20', 'updated': '2026-01-01 00:00',
+     'created': '2026-01-01 00:00', 'checklist': [], 'attachments': []},
+    {'id': 82, 'title': 'HistLastYear', 'body': 'x', 'category': 'General',
+     'date': '2025-11-10', 'updated': '2026-01-01 00:00',
+     'created': '2026-01-01 00:00', 'checklist': [], 'attachments': []},
+]
+app.save_notes()
+app.notebook.select(app.TAB_CALENDAR); app.update()
+app.render_calendar(); app.update()
+
+app._toggle_calendar_history(); app.update()
+_hl = find_all_labels(app._history_rows)
+check('History opens over the grid and lists the calendar dwellers',
+      app._history_visible and not app.cal_grid_frame.winfo_ismapped()
+      and any('HistDated' in t for t in _hl)
+      and any('HistSeries' in t for t in _hl)
+      and any('HistLastYear' in t for t in _hl))
+check('a series group starts collapsed (no ✎ children yet)',
+      not any('2026-08-17' in t for t in _hl))
+
+app._history_toggle_group(80); app.update()
+_hl = find_all_labels(app._history_rows)
+check('expanding the group reveals its edited days, newest first',
+      any('2026-08-17' in t for t in _hl)
+      and any('2026-06-15' in t and 'HistSpecial' in t for t in _hl))
+app._history_toggle_group(80); app.update()
+
+# Search reaches into a day's own override content and auto-expands.
+app._history_search_var.set('bugetul')
+app.update(); import time as _t7; _t7.sleep(0.4); app.update()
+_hl = find_all_labels(app._history_rows)
+check('search finds override content and auto-expands its group',
+      any('2026-08-17' in t for t in _hl)
+      and not any('HistDated' in t for t in _hl))
+app._history_search_var.set('')
+app.update(); _t7.sleep(0.4); app.update()
+
+# Year chips filter by the year of the activity.
+app._history_set_bucket('Last year'); app.update()
+_hl = find_all_labels(app._history_rows)
+check('the Last-year chip keeps only that year',
+      any('HistLastYear' in t for t in _hl)
+      and not any('HistDated' in t for t in _hl))
+app._history_set_bucket('All'); app.update()
+
+# Theme switch while open: rows re-render in the new palette.
+app.set_theme('light'); app.update()
+_row_bgs = [w.cget('bg') for w in app._history_rows.winfo_children()
+            if isinstance(w, tk.Frame)]
+check('a theme switch recolors the open History rows',
+      app._history_visible and _row_bgs
+      and all(bg == app.colors['card'] for bg in _row_bgs))
+app.set_theme('dark'); app.update()
+
+# A row click lands on the day panel, grid restored, right month.
+app._history_open_day(app.find_note(80), '2026-06-15'); app.update()
+check('a row click returns the grid on the right month with the preview',
+      not app._history_visible and app.cal_grid_frame.winfo_ismapped()
+      and (app.cal_year, app.cal_month) == (2026, 6)
+      and app._day_panel_mode == 'note')
+app.close_day_panel(); app.update()
+
+# Pagination: many dated notes render 50 + Show more.
+app.notes = [{'id': 100 + i, 'title': f'Bulk{i}', 'body': 'x',
+              'category': 'General', 'date': f'2026-03-{(i % 28) + 1:02d}',
+              'updated': '2026-01-01 00:00', 'created': '2026-01-01 00:00',
+              'checklist': [], 'attachments': []} for i in range(60)]
+app.save_notes()
+app._toggle_calendar_history(); app.update()
+_bulk_shown = sum(1 for t in find_all_labels(app._history_rows) if 'Bulk' in t)
+_more_btn = find_widget(app._history_rows, tk.Button, 'Show more')
+check('long listings render a page plus Show more',
+      _bulk_shown == 50 and _more_btn is not None)
+_more_btn.invoke(); app.update()
+_bulk_shown = sum(1 for t in find_all_labels(app._history_rows) if 'Bulk' in t)
+check('Show more brings the rest', _bulk_shown == 60)
+app._hide_calendar_history(); app.update()
+check('leaving History restores the grid',
+      app.cal_grid_frame.winfo_ismapped() and not app._history_visible)
+
+# ---- The header toggle's label flips (no separate back button) ----
+check('the toggle reads History on the grid',
+      '📋 History' in str(app._history_toggle_btn.cget('text')))
+app._toggle_calendar_history(); app.update()
+check('the toggle reads Calendar while History is open',
+      app._history_visible
+      and '📅 Calendar' in str(app._history_toggle_btn.cget('text')))
+check('there is no separate in-view back button any more',
+      find_widget(app.history_frame, tk.Button, '← Calendar') is None)
+app._toggle_calendar_history(); app.update()
+check('toggling again returns to the grid and restores the label',
+      not app._history_visible
+      and '📋 History' in str(app._history_toggle_btn.cget('text')))
+
+# ---- A delete from History shows immediately (field report: it only
+# appeared after a trip out to the grid and back). render_calendar is
+# the single mutation signal, so History refreshes there too.
+app.notes = [
+    {'id': 93, 'title': 'DelDated', 'body': 'x', 'category': 'General',
+     'date': '2026-07-15', 'updated': '2026-01-01 00:00',
+     'created': '2026-01-01 00:00', 'checklist': [], 'attachments': []},
+    {'id': 94, 'title': 'KeepDated', 'body': 'x', 'category': 'General',
+     'date': '2026-07-16', 'updated': '2026-01-01 00:00',
+     'created': '2026-01-01 00:00', 'checklist': [], 'attachments': []},
+]
+app.save_notes()
+app._toggle_calendar_history(); app.update()
+check('both dated notes show in History first',
+      any('DelDated' in t for t in find_all_labels(app._history_rows))
+      and any('KeepDated' in t for t in find_all_labels(app._history_rows)))
+app.ask_yes_no = lambda *a, **k: True
+app._delete_note_from_calendar(app.find_note(93), '2026-07-15'); app.update()
+check('deleting from History drops the row on the spot, still in History',
+      app._history_visible
+      and not any('DelDated' in t for t in find_all_labels(app._history_rows))
+      and any('KeepDated' in t for t in find_all_labels(app._history_rows)))
+
+# ---- History resets to the grid across a tab round-trip ----
+app.notebook.select(app.TAB_NOTES); app.update()
+app.notebook.select(app.TAB_CALENDAR); app.update()
+check('returning to the Calendar tab shows the grid, not stale History',
+      not app._history_visible and app.cal_grid_frame.winfo_ismapped())
+# Hygiene: force a known grid state so a mutant that breaks the reset
+# above (leaving History open) can't corrupt the later 6f blocks —
+# they'd toggle into the wrong state and crash before the footer. The
+# check already recorded its verdict; this only lets the suite finish.
+if app._history_visible:
+    app._hide_calendar_history()
+app.update()
+
+# ---- The selected-day outline (field request: the open day must jump
+# out) — set on open, torn down on close, surviving a grid re-render,
+# and never touching today's own accent top bar.
+app.notes = [{'id': 90, 'title': 'OutlineNote', 'body': 'x',
+              'category': 'General', 'date': '2026-07-15',
+              'updated': '2026-01-01 00:00', 'created': '2026-01-01 00:00',
+              'checklist': [], 'attachments': []}]
+app.save_notes()
+app.cal_year, app.cal_month = 2026, 7
+app.render_calendar(); app.update()
+app.open_day_popup('2026-07-15'); app.update()
+_cell = app._cal_cell_widgets.get('2026-07-15')
+check('opening a day draws the accent outline on its cell',
+      _cell is not None and int(str(_cell.cget('highlightthickness'))) == 2
+      and str(_cell.cget('highlightbackground')) == app.colors['accent'])
+_other = app._cal_cell_widgets.get('2026-07-10')
+check('the other days carry no outline',
+      _other is not None
+      and int(str(_other.cget('highlightthickness'))) == 0)
+app.render_calendar(); app.update()
+_cell = app._cal_cell_widgets.get('2026-07-15')
+check('the outline survives a grid re-render',
+      int(str(_cell.cget('highlightthickness'))) == 2)
+app.close_day_panel(); app.update()
+_cell = app._cal_cell_widgets.get('2026-07-15')
+check('closing the panel clears the outline',
+      int(str(_cell.cget('highlightthickness'))) == 0)
+
+# ---- The bounded-series hybrid in History (field confusion: a "10
+# times" group opened to nothing) — a small bounded series lists ALL
+# its occurrences, ✎ only on edited ones; a childless live series has
+# no arrow and jumps straight to its day.
+app.notes = [
+    {'id': 91, 'title': 'Bounded3', 'body': 'x', 'category': 'General',
+     'date': '2026-06-01', 'recurrence': {'freq': 'monthly', 'count': 3},
+     'updated': '2026-01-01 00:00', 'created': '2026-01-01 00:00',
+     'checklist': [], 'attachments': [], 'exceptions': [],
+     'overrides': {'2026-07-01': {'title': 'MidRun', 'body': 'edited',
+                                  'comments': '', 'category': 'General',
+                                  'color': ''}}},
+    {'id': 92, 'title': 'LonelyLive', 'body': 'x', 'category': 'General',
+     'date': '2026-05-01', 'recurrence': {'freq': 'weekly'},
+     'updated': '2026-01-01 00:00', 'created': '2026-01-01 00:00',
+     'checklist': [], 'attachments': [], 'exceptions': [], 'overrides': {}},
+]
+app.save_notes()
+app._toggle_calendar_history(); app.update()
+_hl = find_all_labels(app._history_rows)
+check('a bounded series announces its occurrence count',
+      any('Bounded3' in t and '3 occurrences' in t and '1 edited (✎)' in t
+          for t in _hl))
+check('a childless live series wears the jump arrow, not a dropdown one',
+      any('LonelyLive' in t and t.startswith('→') for t in _hl))
+app._history_toggle_group(91); app.update()
+_hl = find_all_labels(app._history_rows)
+check('expanding the bounded group lists all three days, ✎ only where edited',
+      any(t.startswith('✎ 2026-07-01') and 'MidRun' in t for t in _hl)
+      and any(t.startswith('• 2026-08-01') for t in _hl)
+      and any(t.startswith('• 2026-06-01') for t in _hl))
+_lonely_lbl = next(w for w in app._history_rows.winfo_children()
+                   if isinstance(w, tk.Frame)
+                   and any('LonelyLive' in str(c.cget('text'))
+                           for c in w.winfo_children()
+                           if isinstance(c, tk.Label)))
+_lonely_lbl.event_generate('<Button-1>'); app.update()
+check('clicking the childless series lands on its day in the calendar',
+      not app._history_visible and app._day_panel_mode == 'note'
+      and app.selected_day is not None)
+app.close_day_panel(); app.update()
+
+# ---- Header layout: History sits at the far right, arrows hug the title.
+app.update_idletasks()
+_hist_btn = find_widget(app.notebook, tk.Button, '📋 History')
+_today_btn = find_widget(app.notebook, tk.Button, 'Today')
+check('the History button sits at the far right of the header',
+      _hist_btn is not None and _today_btn is not None
+      and _hist_btn.winfo_rootx() > _today_btn.winfo_rootx())
+app.notebook.select(app.TAB_NOTES); app.update()
 
 # ============================================================
 # 7. ATTACHMENT-ONLY NOTE AUTOSAVE

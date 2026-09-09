@@ -12,6 +12,7 @@ How the numbers themselves are counted is the
 
 | Version | Date | In one line |
 |---|---|---|
+| [0.71.111](#071111--2026-09-09) | 2026-09-09 | A searchable calendar History register, a frame on the open day, and field-smoothed occurrence/History navigation. |
 | [0.69.108](#069108--2026-09-07) | 2026-09-07 | The occurrence world becomes visible: banners, ✎ marks, per-day reset, calendar filters and sorts, the way back on every route. |
 | [0.66.105](#066105--2026-09-07) | 2026-09-07 | BackSpace and Delete treat an emoji as one character in every text field. |
 | [0.66.104](#066104--2026-09-07) | 2026-09-07 | Every data file saves atomically; an unreadable one is preserved and announced, never silently emptied. |
@@ -47,6 +48,57 @@ How the numbers themselves are counted is the
 ---
 
 ## [Unreleased]
+
+## [0.71.111] — 2026-09-09
+
+*Highlights: the calendar gains a searchable History register and the open day wears a frame; occurrence editing and History navigation get their field-reported rough edges smoothed.*
+
+### Added
+- **📋 History — the calendar's own register.** A History button on the Calendar tab swaps
+  the month grid for a list of every day that carries real content: dated notes at their
+  date, and each repeating series as a collapsible group of its separately-edited days
+  (✎), newest first and paginated. Its search bar looks where the sidebar's cannot —
+  inside each day's own edited content — and auto-opens the group that matched; year chips
+  (All / This year / Last year / 2 years ago / Older) cut through the archive, and
+  clicking a row lands back on that day's calendar preview, right-click carrying the
+  usual day menu. A bounded, small series ("10 times", or ending soon) opens to ALL its
+  occurrences — ✎ only on the edited ones — while an unbounded rule lists just its edited
+  days with a line saying so, and a series with nothing to unfold wears a → instead of an
+  arrow and jumps straight to its day (field feedback: a "10 times" group opening to
+  nothing read as broken). Built for the long run: the list grows with what you write,
+  never with the passage of time.
+- **The open day wears a frame.** Clicking any calendar day (or landing on one from
+  History) draws a thin accent border around its cell for as long as its panel is open —
+  the "you are here" the eye was missing — and it survives month re-renders. Today's own
+  accent top bar is a separate, permanent mark: browsing other days never dims it, and a
+  selected today simply wears both (field request).
+
+### Fixed
+- **A delete inside History disappears on the spot.** Deleting an entry from the History
+  list left it on screen until you went out to the grid and back — the delete redrew the
+  grid and day panel but not the History view, a third view of the same data. It now
+  refreshes wherever a calendar change is signalled (field report).
+- **The calendar always opens on its grid, not on stale History.** Leaving the Calendar
+  tab and returning showed whatever History state you left two switches ago; the grid is
+  the tab's home and History a view of it, so switching tabs resets to the grid (field
+  report).
+- **Answering "this occurrence only" now actually takes you back.** A just-saved
+  occurrence still read as having unsaved changes — the dirty check compared the series'
+  own formatting and checklist against the edited day, and an override's body differs
+  from the base's by definition, so the comparison could never match. Back to Calendar's
+  cancel guard took that eternal "dirty" for a cancelled prompt and refused to navigate,
+  re-asking the same question on every click (field report); the same mechanism also
+  double-asked at app close. An occurrence now compares exactly the fields an override
+  can carry — title, body, comments, category, colour — and a saved day reads clean.
+
+### Changed
+- **The calendar header regrouped around its title.** The month/year arrows now hug
+  "September 2026" as one centered cluster, and Today + History moved to the far right
+  with History outermost — navigation lives with the title, the register lives at the
+  edge (field feedback).
+- **History is one labelled toggle, not two buttons.** The single header button reads
+  "📋 History" on the grid and "📅 Calendar" while the register is open, each saying where
+  the click takes you; the separate in-view "← Calendar" button is gone (field feedback).
 
 ## [0.69.108] — 2026-09-07
 
