@@ -901,6 +901,58 @@ finally:
     shutil.rmtree(_mig_app, ignore_errors=True)
     shutil.rmtree(_mig_appdata, ignore_errors=True)
 
+# ---- Silent write failures now leave a trace (audit Z01-F06/Z02-F03) ----
+# save_trash/save_templates/save_settings dropped _write_json_atomic's
+# verdict, so a failed write was invisible: no return, no log, no
+# callback — while save_notes had been explicitly reworked to report.
+# Each sibling now returns (ok, exc) the same way, and every failure
+# lands in crash_log.txt and reaches the on_write_failure callback.
+_wf_dir = tempfile.mkdtemp()
+_real_wf_trash = NO_paths.TRASH_FILE
+_real_wf_templates = NO_paths.TEMPLATES_FILE
+_real_wf_settings = NO_paths.SETTINGS_FILE
+_real_wf_appdir = NO_paths.APP_DIR
+_real_wf_cb = _storage.on_write_failure
+_wf_calls = []
+try:
+    NO_paths.APP_DIR = _wf_dir
+    _storage.on_write_failure = lambda path, exc: _wf_calls.append(str(path))
+
+    NO_paths.TRASH_FILE = os.path.join(_wf_dir, "trash.json")
+    NO_paths.TEMPLATES_FILE = os.path.join(_wf_dir, "templates.json")
+    NO_paths.SETTINGS_FILE = os.path.join(_wf_dir, "settings.json")
+    check("save_trash reports success the way save_notes does",
+          _storage.save_trash([]) == (True, None))
+    check("save_templates and save_settings report success too",
+          _storage.save_templates([]) == (True, None)
+          and _storage.save_settings({}) == (True, None))
+    check("a clean write fires no failure callback", _wf_calls == [])
+
+    NO_paths.TRASH_FILE = os.path.join(_wf_dir, "no_such_dir", "trash.json")
+    # Guarded unpack: under the dropped-return mutant this is None, and a
+    # bare unpack would crash the suite before its footer.
+    _wf_res = _storage.save_trash([])
+    _wf_ok, _wf_exc = _wf_res if isinstance(_wf_res, tuple) else (None, None)
+    check("a failed trash write returns the reason instead of silence",
+          _wf_ok is False and _wf_exc is not None)
+    _wf_log = os.path.join(_wf_dir, "crash_log.txt")
+    check("the failed write lands in crash_log.txt",
+          os.path.exists(_wf_log)
+          and "write failure" in open(_wf_log, encoding="utf-8").read())
+    check("the failed write reaches the on_write_failure callback",
+          len(_wf_calls) == 1 and "trash.json" in _wf_calls[0])
+    _storage.on_write_failure = lambda *a: (_ for _ in ()).throw(RuntimeError)
+    _wf_res2 = _storage.save_trash([])
+    check("a broken callback cannot take down the save path itself",
+          isinstance(_wf_res2, tuple) and _wf_res2[0] is False)
+finally:
+    NO_paths.TRASH_FILE = _real_wf_trash
+    NO_paths.TEMPLATES_FILE = _real_wf_templates
+    NO_paths.SETTINGS_FILE = _real_wf_settings
+    NO_paths.APP_DIR = _real_wf_appdir
+    _storage.on_write_failure = _real_wf_cb
+    shutil.rmtree(_wf_dir, ignore_errors=True)
+
 print()
 print(f"FAILURES: {fails if fails else 'none'}")
 

@@ -476,6 +476,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # ...and the heartbeat, because a popup holding the activation
         # receives neither event when the user switches away.
         self.after(300, self._popup_foreground_watch)
+        # Let core say "that write FAILED" to the screen: trash, templates
+        # and settings save through routes nobody checks the return of, and
+        # a failed write used to be completely invisible. core also logs
+        # every failure to crash_log.txt, callback or not.
+        from noteorganizer.core import storage as _core_storage
+        _core_storage.on_write_failure = self._on_data_write_failure
         self.geometry("900x600")
         self.minsize(500, 400)
 
@@ -13637,6 +13643,23 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
     def set_status(self, text):
         self.status_lbl.config(text=text)
+
+    def _on_data_write_failure(self, path, exc):
+        """core/storage's on_write_failure callback: a data-file write
+        failed and would otherwise be invisible. notes_data.json is
+        excluded — the save_notes wrapper already raises its own, louder
+        dialog for that one — so this covers the quiet siblings (trash,
+        templates, settings). Scheduled via after() so a failure surfacing
+        mid-operation can never interrupt or re-enter the code that saved."""
+        if os.path.basename(str(path)) == os.path.basename(DATA_FILE):
+            return
+        name = os.path.basename(str(path))
+        try:
+            self.after(0, lambda: self._show_toast(
+                f"Couldn't save {name} — details in crash_log.txt",
+                kind="error"))
+        except (tk.TclError, RuntimeError):
+            pass
 
     def _show_toast(self, text, kind="success"):
         """Briefly show a small floating banner near the top of the window —
