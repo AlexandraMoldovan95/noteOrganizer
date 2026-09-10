@@ -45,7 +45,7 @@ except ImportError:
 # Added/Fixed CHANGELOG.md entries, not per-release counts). The running
 # app records this into settings, so the next time a newer build opens
 # over older data it can tell the user what changed version-wise.
-APP_VERSION = "0.71.119"
+APP_VERSION = "0.71.125"
 
 
 def parse_version(v):
@@ -476,6 +476,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # ...and the heartbeat, because a popup holding the activation
         # receives neither event when the user switches away.
         self.after(300, self._popup_foreground_watch)
+        # Let core say "that write FAILED" to the screen: trash, templates
+        # and settings save through routes nobody checks the return of, and
+        # a failed write used to be completely invisible. core also logs
+        # every failure to crash_log.txt, callback or not.
+        from noteorganizer.core import storage as _core_storage
+        _core_storage.on_write_failure = self._on_data_write_failure
         self.geometry("900x600")
         self.minsize(500, 400)
 
@@ -1051,6 +1057,39 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         return False
 
     # ---------- Export / Import (moving your notebook between devices) ----------
+    def _start_io_worker(self, target):
+        """Start a background file-I/O worker and remember it, so closing
+        the app can wait for it instead of killing a write mid-file (a
+        daemon thread dies with the process, whatever it was writing)."""
+        t = threading.Thread(target=target, daemon=True)
+        self._io_workers = [w for w in getattr(self, "_io_workers", [])
+                            if w.is_alive()]
+        self._io_workers.append(t)
+        t.start()
+        return t
+
+    def _wait_for_io_workers(self, cap_s=30.0):
+        """Let an in-flight export/import worker finish before the process
+        goes away. Hard-capped: a genuinely hung worker must not make the
+        app refuse to close — the threads stay daemon for that reason, and
+        the export's tmp-then-replace protocol means even the capped-out
+        case can no longer destroy an existing backup."""
+        workers = [t for t in getattr(self, "_io_workers", [])
+                   if t.is_alive()]
+        if not workers:
+            return
+        try:
+            self.set_status("Finishing the file operation in progress…")
+            self.update_idletasks()
+        except tk.TclError:
+            pass
+        deadline = time.time() + cap_s
+        for t in workers:
+            remaining = deadline - time.time()
+            if remaining <= 0:
+                break
+            t.join(timeout=remaining)
+
     def export_data(self):
         """Bundle notes_data.json, settings.json, and every attached file
         into one .zip, so moving to another device is copying one file
@@ -1061,6 +1100,14 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         seconds. The main thread only ever touches Tkinter widgets from the
         polling callback below; the worker thread does file I/O and updates
         a plain shared dict, which is all it's allowed to touch."""
+        # One file operation at a time (audit Z05-F05): a second click on
+        # Export mid-run used to start a second worker onto the SAME .tmp,
+        # interleaving the two, and overwrote _export_state so the first
+        # worker's outcome was never reported.
+        if self._export_state is not None or self._import_state is not None:
+            self.set_status("An export or import is already running — "
+                            "let it finish first.")
+            return
         default_name = f"NotesBackup_{datetime.now().strftime('%Y-%m-%d')}.zip"
         save_path = filedialog.asksaveasfilename(
             title="Export your notes to a backup file",
@@ -1093,11 +1140,17 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
         def worker():
             state = self._export_state
+            # Write beside the target and move into place only when whole —
+            # the zip used to be opened ON the target, so a failure (or the
+            # app dying) mid-write destroyed the very backup being replaced.
+            # Same one-safe-way rule as _write_json_atomic.
+            tmp_path = save_path + ".tmp"
             try:
-                with zipfile.ZipFile(save_path, "w", zipfile.ZIP_DEFLATED) as zf:
+                with zipfile.ZipFile(tmp_path, "w", zipfile.ZIP_DEFLATED) as zf:
                     for i, (src, arcname) in enumerate(entries, start=1):
                         zf.write(src, arcname=arcname)
                         state["current"] = i
+                os.replace(tmp_path, save_path)
             except Exception as e:
                 # Deliberately broad: this runs in a background thread, where
                 # an uncaught exception of ANY kind kills the thread silently
@@ -1109,9 +1162,13 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 # OSError message is still preserved when that's the cause,
                 # just no longer the only kind of failure that's handled.
                 state["error"] = str(e)
+                try:
+                    os.remove(tmp_path)
+                except OSError:
+                    pass
             state["done"] = True
 
-        threading.Thread(target=worker, daemon=True).start()
+        self._start_io_worker(worker)
         self._poll_export_progress()
 
     def _poll_export_progress(self):
@@ -1171,6 +1228,14 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         adding them to every other text field that shares this same
         menu-building function."""
         menu = tk.Menu(text_widget, tearoff=0)
+        # Hover colour resolved at POST time, not build time: these menus
+        # hang off both long-lived fields (body, title, search…) and
+        # transient ones, so track_theme would leak entries for the
+        # transient ones while a build-time capture froze the long-lived
+        # ones on the old accent. postcommand runs on every open — live
+        # palette, zero tracking.
+        menu.configure(postcommand=lambda m=menu: m.configure(
+            activebackground=self.colors["accent"], activeforeground="white"))
         menu.configure(bg=self.colors["card"], fg=self.colors["text"],
                        activebackground=self.colors["accent"], activeforeground="white",
                        relief="flat", bd=0, font=("Segoe UI", 9))
@@ -1476,8 +1541,17 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
         Read from a mark rather than remembered as a number: text edited
         above the table moves it, and a mark moves with it.
+
+        Liveness first: a full-range delete (New note, typing over a
+        Ctrl+A selection) destroys the embedded windows WITHOUT a
+        teardown, and Tk marks survive that delete — collapsed to 1.0.
+        Answering for such a dead grid made _caret_out_of_hidden walk the
+        caret of a fresh note to its end on the next keystroke, and
+        shifted line-1 column math by a phantom window character.
         """
         try:
+            if not info["frame"].winfo_exists():
+                return None
             return int(self.body_text.index(info["mark"]).split(".")[0])
         except (tk.TclError, KeyError, ValueError):
             return None
@@ -3156,6 +3230,21 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         return cls._tk_units(line[:char_col])
 
     @staticmethod
+    def _py_col(line, tk_col):
+        """A Tk Text column into *line*, as a Python character offset —
+        the inverse of _tk_col. A unit index landing inside an astral
+        pair resolves past that character (never mid-character), and
+        anything beyond the line clamps to its length. Without this, a
+        Tk column read from an index was used to slice Python strings
+        directly, drifting one place per emoji to its left."""
+        u = 0
+        for i, ch in enumerate(line):
+            if u >= tk_col:
+                return i
+            u += 2 if ord(ch) > 0xFFFF else 1
+        return len(line)
+
+    @staticmethod
     def _astral_span_at(s, iu, before):
         """The character whose UTF-16 span contains unit index *iu*
         (``before=False``), or ends at / straddles it (``before=True``).
@@ -3986,6 +4075,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             return
         nrows = info["nrows"]
         self._commit_cell_editor()
+        # Capture BEFORE teardown+delete, like every other grid op: the
+        # deletion shifts body_text's scroll on the spot, and without this
+        # snapshot the render below faithfully pins the already-jumped
+        # view — deleting a table yanked the page.
+        self._grid_saved_view = self._capture_grid_views()
         self._teardown_table_grids()
         self.body_text.delete(f"{first}.0", f"{first + nrows - 1}.end +1c")
         self._resync_list_tags()
@@ -5824,6 +5918,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         bounds = core_tables.cell_bounds(line)
         if not bounds:
             return None
+        # `column` arrives as a Tk column (UTF-16 units); `bounds` are
+        # Python character offsets. Convert once so an emoji in an earlier
+        # cell can't shift which cell the caret is judged to be in.
+        column = self._py_col(line, column)
         for i, (start, end) in enumerate(bounds):
             # The cell owns everything up to the pipe that closes it, so a
             # caret sitting in the padding after a short cell counts as being
@@ -5846,10 +5944,16 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if not bounds or index >= len(bounds):
             return False
         start, end = bounds[index]
+        # bounds are Python character offsets; Tk indices count UTF-16
+        # units, so an emoji in an earlier cell used to land the caret —
+        # and the selection — one place short per emoji.
+        tk_start = self._tk_col(line, start)
+        tk_end = self._tk_col(line, end)
         self.body_text.tag_remove("sel", "1.0", "end")
-        self.body_text.mark_set("insert", f"{line_no}.{start}")
+        self.body_text.mark_set("insert", f"{line_no}.{tk_start}")
         if end > start:
-            self.body_text.tag_add("sel", f"{line_no}.{start}", f"{line_no}.{end}")
+            self.body_text.tag_add("sel", f"{line_no}.{tk_start}",
+                                   f"{line_no}.{tk_end}")
         self.body_text.see("insert")
         return True
 
@@ -6924,7 +7028,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         index = w.index(f"@{event.x},{event.y}")
         line, col = index.split(".")
         line_text = w.get(f"{line}.0", f"{line}.0 lineend")
-        col = min(int(col), len(line_text) - 1)
+        # The clicked column is a Tk column (UTF-16 units); the word walk
+        # below runs on Python characters, and the selection goes back to
+        # Tk. Convert in both directions, or an emoji earlier on the line
+        # shifts which word gets selected — and where the highlight lands.
+        col = min(self._py_col(line_text, int(col)), len(line_text) - 1)
         if col < 0:
             return "break"
         char_cls = self._char_class(line_text[col])
@@ -6937,8 +7045,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         while end < len(line_text) and self._char_class(line_text[end]) == char_cls:
             end += 1
         w.tag_remove("sel", "1.0", "end")
-        w.tag_add("sel", f"{line}.{start}", f"{line}.{end}")
-        w.mark_set("insert", f"{line}.{end}")
+        w.tag_add("sel", f"{line}.{self._tk_col(line_text, start)}",
+                  f"{line}.{self._tk_col(line_text, end)}")
+        w.mark_set("insert", f"{line}.{self._tk_col(line_text, end)}")
         return "break"
 
     def _select_line_no_newline(self, event):
@@ -7216,7 +7325,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.import_box = tk.Text(p, height=4, wrap="char", font=("Consolas", 8),
                                   relief="flat", bg=self.colors["card"], fg=self.colors["text"],
                                   insertbackground=self.colors["text"], padx=6, pady=6)
-        self.track_theme(self.import_box, bg="card", fg="text")
+        self.track_theme(self.import_box, bg="card", fg="text", insertbackground="text")
         self.import_box.pack(fill="x", padx=6)
         self._add_paste_menu(self.import_box)
         self.import_status = tk.Label(p, text="", font=("Segoe UI", 7), anchor="w",
@@ -7510,10 +7619,18 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if not path:
             return
         content = self._note_export_content(note, fmt, title)
+        # tmp-then-replace, like the backup zip: re-exporting over an
+        # existing file plus a mid-write failure used to destroy it.
+        tmp_path = path + ".tmp"
         try:
-            with open(path, "w", encoding="utf-8") as f:
+            with open(tmp_path, "w", encoding="utf-8") as f:
                 f.write(content)
+            os.replace(tmp_path, path)
         except (IOError, OSError) as exc:
+            try:
+                os.remove(tmp_path)
+            except OSError:
+                pass
             self.show_error("Export failed",
                             f"Couldn't write the file:\n{exc}")
             return
@@ -7706,6 +7823,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         The slow parts (extracting the zip, copying attachments back) run on
         a background thread, same as export — for a backup with a lot of
         attachments this used to visibly freeze the app while it worked."""
+        # Same one-at-a-time guard as export_data (audit Z05-F05).
+        if self._export_state is not None or self._import_state is not None:
+            self.set_status("An export or import is already running — "
+                            "let it finish first.")
+            return
         zip_path = filedialog.askopenfilename(
             title="Choose a notes backup (.zip) to import",
             filetypes=[("Zip files", "*.zip")]
@@ -7768,10 +7890,22 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     for i, filename in enumerate(files, start=1):
                         dest = os.path.join(ATTACHMENTS_DIR, filename)
                         if not os.path.exists(dest):
+                            # Copy beside, replace whole: the process dying
+                            # mid-copy used to leave a TRUNCATED attachment
+                            # here — and this very exists-guard then made
+                            # every re-import skip it, turning transient
+                            # damage permanent.
+                            part = dest + ".part"
                             try:
-                                shutil.copy2(os.path.join(imported_attachments_dir, filename), dest)
+                                shutil.copy2(
+                                    os.path.join(imported_attachments_dir, filename), part)
+                                os.replace(part, dest)
                             except (IOError, OSError):
-                                pass  # non-critical — the note metadata still gets imported
+                                try:
+                                    os.remove(part)
+                                except OSError:
+                                    pass
+                                # non-critical — the note metadata still gets imported
                         state["current"] = i
             except Exception as e:
                 # Last-resort catch-all, outside every specific handler above.
@@ -7785,7 +7919,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 state["error"] = f"Import failed unexpectedly:\n{e}"
             state["done"] = True
 
-        threading.Thread(target=worker, daemon=True).start()
+        self._start_io_worker(worker)
         self._poll_import_progress()
 
     def _poll_import_progress(self):
@@ -8039,6 +8173,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         entry.bind("<Return>", lambda e: self._add_checklist_item())
         self._add_paste_menu(entry)
         self.checklist_add_entry = entry
+        # Long-lived: without tracking, the caret (insertbackground) froze
+        # on the build-time palette — invisible after a dark<->light switch.
+        self.track_theme(entry, bg="sidebar", fg="text",
+                         insertbackground="text")
         tk.Button(add_row, text="＋ Add", command=self._add_checklist_item,
                   bg=self.colors["accent"], fg="white", relief="flat",
                   font=("Segoe UI", 9, "bold"), cursor="hand2"
@@ -8610,6 +8748,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # the straggler pass and left showing the wrong colour. Running last
         # makes the note's own data authoritative. See _recolor_note_cards.
         self._recolor_note_cards()
+        # Checklist rows rebuild per note load, so they are deliberately
+        # untracked — but the straggler net repaints only bg/fg, leaving a
+        # switched theme's checkbox wells (selectcolor) on the old palette
+        # while the note stays open. Same treatment as the note cards.
+        self._recolor_checklist_boxes()
         # The find highlights are blended from the palette, so re-tint them
         # for the new theme; then re-draw the current cell flash, which the
         # grid rebuild above tore off the canvas (a no-op if find is closed).
@@ -8619,6 +8762,30 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # (The History register's rebuilt rows need no hook here: the
         # straggler pass above recolors them — qa7's theme-while-open
         # check guards that promise regardless of mechanism.)
+
+    def _recolor_checklist_boxes(self):
+        """Repaint the live checklist rows' Checkbutton wells for the
+        current palette. The rows rebuild on every note load, so tracking
+        them would leak (the note-card lesson); the straggler net covers
+        their bg/fg but not selectcolor/activebackground."""
+        frame = getattr(self, "checklist_items_frame", None)
+        if frame is None:
+            return
+
+        def walk(w):
+            for c in w.winfo_children():
+                if isinstance(c, tk.Checkbutton):
+                    try:
+                        c.configure(selectcolor=self.colors["sidebar"],
+                                    activebackground=self.colors["card"])
+                    except tk.TclError:
+                        pass
+                walk(c)
+
+        try:
+            walk(frame)
+        except tk.TclError:
+            pass
 
     def _calendar_is_showing(self):
         """True only if the Calendar tab is the one currently selected AND
@@ -8898,6 +9065,13 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             export_inner, text="Exporting…", font=("Segoe UI", 9, "bold"),
             bg=self.colors["card"], fg=self.colors["text"])
         self.export_progress_lbl.pack(anchor="w")
+        # Long-lived and shown on demand: untracked, a theme switched
+        # before the next export left the bar's frame painted in the old
+        # palette (audit Z07-F03's class — track every colour option).
+        self.track_theme(self.export_progress_frame, bg="card",
+                         highlightbackground="accent")
+        self.track_theme(export_inner, bg="card")
+        self.track_theme(self.export_progress_lbl, bg="card", fg="text")
         self.export_progress_bar = ttk.Progressbar(
             export_inner, orient="horizontal", length=240, mode="determinate")
         self.export_progress_bar.pack(pady=(6, 0))
@@ -9031,7 +9205,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self.sidebar, textvariable=self.search_var,
             insertbackground=self.colors["text"], relief="flat", font=("Segoe UI", 11)
         )
-        self.track_theme(search_entry, bg="card", fg="text")
+        self.track_theme(search_entry, bg="card", fg="text", insertbackground="text")
         self._guard_entry_astral(search_entry)
         search_entry.pack(fill="x", padx=15, pady=(0, 10), ipady=6)
         self.add_placeholder(search_entry, "Search notes...")
@@ -9346,7 +9520,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             validate="key",
             validatecommand=(self.register(self._title_within_limit), "%P")
         )
-        self.track_theme(self.title_entry, bg="bg", fg="text")
+        self.track_theme(self.title_entry, bg="bg", fg="text", insertbackground="text")
         self.title_entry.pack(side="left", fill="x", expand=True)
         self.add_placeholder(self.title_entry, "Note title...")
         self._add_paste_menu(self.title_entry)
@@ -9387,7 +9561,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._cat_caret = tk.Label(self.category_menu, text=" ▾", bg=self.colors["sidebar"],
                                    fg=self.colors["subtext"], font=("Segoe UI", 9))
         self._cat_caret.pack(side="left", padx=(4, 10))
-        self.track_theme(self.category_menu, bg="sidebar")
+        self.track_theme(self.category_menu, bg="sidebar",
+                         highlightbackground="card")
         self.track_theme(self._cat_btn_lbl, bg="sidebar", fg="text")
         self.track_theme(self._cat_caret, bg="sidebar", fg="subtext")
         for w in (self.category_menu, self._cat_dot, self._cat_btn_lbl, self._cat_caret):
@@ -9410,7 +9585,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             meta_row, insertbackground=self.colors["text"],
             relief="flat", font=("Segoe UI", 10), width=11
         )
-        self.track_theme(self.date_entry, bg="card", fg="text")
+        self.track_theme(self.date_entry, bg="card", fg="text", insertbackground="text")
         self.date_entry.pack(side="left", padx=(6, 4), ipady=3)
         self.add_placeholder(self.date_entry, "YYYY-MM-DD")
         # Typing a date directly (as opposed to using the picker popup, which
@@ -9704,7 +9879,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             yscrollcommand=body_sb.set, undo=True, autoseparators=True, maxundo=-1
         )
         body_sb.config(command=self._body_scrollbar_moved)
-        self.track_theme(self.body_text, bg="card", fg="text")
+        self.track_theme(self.body_text, bg="card", fg="text", insertbackground="text")
         body_sb.pack(side="right", fill="y")
         self.body_text.pack(side="left", fill="both", expand=True)
         self._setup_body_formatting_tags(self.body_text)
@@ -9888,7 +10063,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             yscrollcommand=comments_sb.set, undo=True, autoseparators=True, maxundo=-1
         )
         comments_sb.config(command=self.comments_text.yview)
-        self.track_theme(self.comments_text, bg="card", fg="text")
+        self.track_theme(self.comments_text, bg="card", fg="text", insertbackground="text")
         comments_sb.pack(side="right", fill="y")
         self.comments_text.pack(side="left", fill="both", expand=True)
         self._bind_text_wheel(self.comments_text)
@@ -10502,7 +10677,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             relief="flat", font=("Segoe UI", 9), justify="center",
             insertbackground=self.colors["text"]
         )
-        self.track_theme(interval_entry, bg="card", fg="text")
+        self.track_theme(interval_entry, bg="card", fg="text", insertbackground="text")
         interval_entry.pack(side="left", padx=6, ipady=2)
         self.rec_interval_var.trace_add("write", lambda *a: self.update_recurrence_summary())
 
@@ -10541,7 +10716,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self.rec_monthday_row, textvariable=self.rec_monthdays_var, width=14,
             relief="flat", font=("Segoe UI", 9), insertbackground=self.colors["text"]
         )
-        self.track_theme(monthdays_entry, bg="card", fg="text")
+        self.track_theme(monthdays_entry, bg="card", fg="text", insertbackground="text")
         monthdays_entry.pack(side="left", ipady=2)
         self.rec_monthdays_var.trace_add("write", lambda *a: self.update_recurrence_summary())
 
@@ -10585,7 +10760,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 command=self.on_end_mode_changed,
                 selectcolor=self.colors["card"]
             )
-            self.track_theme(rb, bg="bg", fg="text", activebackground="bg", activeforeground="text")
+            self.track_theme(rb, bg="bg", fg="text", activebackground="bg", activeforeground="text", selectcolor="card")
             rb.pack(side="left", padx=2)
             return rb
 
@@ -10599,7 +10774,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             end_row, textvariable=self.rec_end_date_var, width=11,
             relief="flat", font=("Segoe UI", 9), insertbackground=self.colors["text"]
         )
-        self.track_theme(self.rec_end_date_entry, bg="card", fg="text")
+        self.track_theme(self.rec_end_date_entry, bg="card", fg="text", insertbackground="text")
         self.rec_end_date_entry.pack(side="left", padx=(4, 2), ipady=2)
         self.rec_end_date_var.trace_add("write", lambda *a: self.update_recurrence_summary())
 
@@ -10619,7 +10794,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             relief="flat", font=("Segoe UI", 9), justify="center",
             insertbackground=self.colors["text"]
         )
-        self.track_theme(self.rec_count_entry, bg="card", fg="text")
+        self.track_theme(self.rec_count_entry, bg="card", fg="text", insertbackground="text")
         self.rec_count_entry.pack(side="left", padx=(4, 2), ipady=2)
         self.rec_count_var.trace_add("write", lambda *a: self.update_recurrence_summary())
 
@@ -12018,8 +12193,15 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                          cursor="hand2")
             x.pack(side="left", padx=(0, 8))
             x.bind("<Button-1>", lambda e, idx=i: self.close_tab(idx))
-            x.bind("<Enter>", lambda e, w=x: w.configure(fg="#ff5c7c"))
-            x.bind("<Leave>", lambda e, w=x, c=fg: w.configure(fg=c))
+            # Palette KEYS, resolved at event time: the old closures froze
+            # the build-time hexes, so after a theme switch a hovered ✕
+            # repainted itself in the previous theme's colours (and the
+            # hover red was hardcoded to dark's danger on every theme).
+            x.bind("<Enter>",
+                   lambda e, w=x: w.configure(fg=self.colors["danger"]))
+            x.bind("<Leave>",
+                   lambda e, w=x, k=("accent" if active else "subtext"):
+                   w.configure(fg=self.colors[k]))
 
     def _bind_global_shortcuts(self):
         """App-wide keyboard shortcuts, bound with bind_all so they fire
@@ -12261,24 +12443,51 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         needle = query.lower() if nocase else query
         matches = []
         b = self.body_text
-        # Prose: body_text.search skips elided (table) text by default.
+        # Prose. An astral char in the pattern SEGFAULTS Tcl's -nocase
+        # text search outright (Linux Tk 8.6; reproduced in a bare Text,
+        # needle "😀ok"), so a query holding one never reaches Tcl at
+        # all: scan the same prose in Python and convert offsets with
+        # _tk_col — the same units boundary as everywhere else. The
+        # hide-tag skip below drops the elided table text Python can see
+        # but Tk's own search would have skipped.
+        astral_query = any(ord(ch) > 0xFFFF for ch in query)
+        if astral_query:
+            for li, line in enumerate(
+                    b.get("1.0", "end-1c").split("\n"), start=1):
+                hay = line.lower() if nocase else line
+                at = hay.find(needle)
+                while at != -1 and len(matches) < self.FIND_MATCH_CAP:
+                    pos = f"{li}.{self._tk_col(line, at)}"
+                    end = f"{li}.{self._tk_col(line, at + len(query))}"
+                    if not b.tag_nextrange(self.TABLE_HIDE_TAG, pos, end):
+                        matches.append({"kind": "prose", "start": pos,
+                                        "end": end, "line": li,
+                                        "col": int(pos.split(".")[1])})
+                    at = hay.find(needle, at + 1)
+                if len(matches) >= self.FIND_MATCH_CAP:
+                    break
         countv = tk.IntVar()
         start = "1.0"
-        while len(matches) < self.FIND_MATCH_CAP:
+        while not astral_query and len(matches) < self.FIND_MATCH_CAP:
             pos = b.search(query, start, stopindex="end", nocase=nocase,
                            count=countv)
             if not pos:
                 break
-            n = countv.get() or len(query)
-            end = f"{pos}+{n}c"
+            n = countv.get() or self._tk_units(query)
+            line = int(pos.split(".")[0])
+            col = int(pos.split(".")[1])
+            # `n` is UTF-16 units (what search -count returns, and what
+            # index COLUMNS count) while "+Nc" arithmetic counts
+            # CHARACTERS — so a matched astral emoji widened the range by
+            # one character apiece and the highlight swallowed whatever
+            # followed the match. Stay in units on both sides.
+            end = f"{line}.{col + n}"
             start = f"{pos}+1c"
             # Drop a hit that spans an elided table (search concatenates the
             # prose on either side): it would tag hidden cells and double a
             # cell hit.
             if b.tag_nextrange(self.TABLE_HIDE_TAG, pos, end):
                 continue
-            line = int(pos.split(".")[0])
-            col = int(pos.split(".")[1])
             matches.append({"kind": "prose", "start": pos, "end": end,
                             "line": line, "col": col})
         # Table cells: read the plain text, walk each block's DATA rows.
@@ -13191,12 +13400,17 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.body_text.insert("1.0", prev.get("body", ""))
         self._apply_formatting(self.body_text, prev.get("formatting", []))
         self._apply_paragraphs(self.body_text, prev.get("paragraphs", []))
+        # Mirror restore_editor_state's tail: this was the one body-loader
+        # that skipped the redraw, so a restored table came back as raw
+        # pipe rows and the word count kept describing the replaced text.
+        self._render_table_grids()
         self._refresh_format_buttons()
         self.comments_text.delete("1.0", "end")
         self.comments_text.insert("1.0", prev.get("comments", ""))
         # Clear the backup so the button hides after a successful restore.
         note.pop("_prev", None)
         self.save_current_note()
+        self.update_word_count()
         self._update_restore_button()
         self.set_status("Restored the previous version")
 
@@ -13623,10 +13837,31 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 # Closing must not get stuck behind a broken tab; the
                 # autosaves along the way have the rest.
                 continue
+        # A backup export/import may still be writing on its worker thread;
+        # destroy() would kill it mid-file. Wait (capped) for it to finish.
+        self._wait_for_io_workers()
         self.destroy()
 
     def set_status(self, text):
         self.status_lbl.config(text=text)
+
+    def _on_data_write_failure(self, path, exc):
+        """core/storage's on_write_failure callback: a data-file write
+        failed and would otherwise be invisible. notes_data.json is NOT
+        excluded: most of its saves go through the save_notes wrapper and
+        raise a louder dialog too (the toast then shows briefly behind
+        it — redundant, harmless), but the one-time cleanup rewrite in
+        core writes DATA_FILE directly, and excluding it here made that
+        failure fully invisible. Scheduled via after() so a failure
+        surfacing mid-operation can never interrupt or re-enter the code
+        that saved."""
+        name = os.path.basename(str(path))
+        try:
+            self.after(0, lambda: self._show_toast(
+                f"Couldn't save {name} — details in crash_log.txt",
+                kind="error"))
+        except (tk.TclError, RuntimeError):
+            pass
 
     def _show_toast(self, text, kind="success"):
         """Briefly show a small floating banner near the top of the window —

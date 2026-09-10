@@ -155,7 +155,8 @@ class CalculatorPanelMixin:
             sec, text="⬇ Insert into note", command=self._calc_insert_into_note,
             relief="flat", cursor="hand2", font=("Segoe UI", 9, "bold"),
             state="disabled", disabledforeground=self.colors["subtext"])
-        self.track_theme(self.calculator_insert_btn, bg="sidebar", fg="text")
+        self.track_theme(self.calculator_insert_btn, bg="sidebar", fg="text",
+                         disabledforeground="subtext")
         self.calculator_insert_btn.pack(fill="x", padx=10, pady=(2, 8), ipady=4)
 
         # --- History: this session's past calculations, newest first.

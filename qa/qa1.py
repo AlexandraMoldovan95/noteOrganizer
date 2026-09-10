@@ -2475,6 +2475,162 @@ app.update()
 check('and deleting the table removes it outright',
       app._grid_at_line(1) is None and core_tables.find_blocks(body()) == [])
 
+# ---- GRID DELETE captures the view BEFORE teardown (audit Z08-F02) ----
+# Every other grid op snapshots _grid_saved_view before tearing down so
+# the rebuild pins the view the user had; table delete was the one op
+# that didn't, and deleting a table yanked the page. The restore itself
+# rides after_idle (async), so assert the synchronous decision instead:
+# when the delete's render runs, the snapshot must already be there.
+set_body('| A | B |\n| C | D |')
+app._render_table_grids()
+app.update()
+_delcap = {}
+_del_order = []
+_orig_render_del = app._render_table_grids
+_orig_teardown_del = app._teardown_table_grids
+def _spy_render_del():
+    _delcap['had_saved_view'] = getattr(app, '_grid_saved_view', None) is not None
+    return _orig_render_del()
+def _spy_capture_del():
+    _del_order.append('capture')
+    return _orig_capture_del()
+_orig_capture_del = app._capture_grid_views
+def _spy_teardown_del():
+    _del_order.append('teardown')
+    return _orig_teardown_del()
+app._render_table_grids = _spy_render_del
+app._capture_grid_views = _spy_capture_del
+app._teardown_table_grids = _spy_teardown_del
+try:
+    _t = app._grid_at_line(1)
+    app._grid_delete_table(_t)
+finally:
+    app._render_table_grids = _orig_render_del
+    app._capture_grid_views = _orig_capture_del
+    app._teardown_table_grids = _orig_teardown_del
+app.update()
+check('table delete captures the view before teardown (no scroll jump)',
+      _delcap.get('had_saved_view', False))
+# Ordering, not just presence: a capture MOVED AFTER the teardown+delete
+# would still satisfy the spy above while pinning the already-jumped view
+# — the exact bug. The promise is capture-first.
+check('and that capture happens BEFORE the teardown',
+      'capture' in _del_order and 'teardown' in _del_order
+      and _del_order.index('capture') < _del_order.index('teardown'))
+check('and that delete still removes the table outright',
+      core_tables.find_blocks(body()) == [])
+
+# ---- RESTORE PREVIOUS VERSION redraws what it restores (audit Z09-F07) ----
+# It was the one body-loader that skipped the redraw tail: a restored
+# table came back as raw pipe rows, and the word count kept describing
+# the text that was just replaced.
+# The previous block's _grid_delete_table scheduled an autosave whose
+# timer calls update_word_count() on its own ~500ms later — under
+# full-suite load that made the word-count mutant pass by accident.
+# Cancel it so the label below can only come from the restore itself.
+if getattr(app, '_autosave_job', None):
+    try:
+        app.after_cancel(app._autosave_job)
+    except Exception:
+        pass
+    app._autosave_job = None
+app.new_note()
+app.title_entry.delete(0, 'end')
+app.title_entry.insert(0, 'RestoreGrid')
+app.title_entry.config(fg='black')
+app.body_text.insert('1.0', 'one two three four five six')
+app.save_current_note(auto=False)
+app.update_word_count()
+app.update()
+_rp_note = app.find_note(app.selected_note_id)
+_rp_note['_prev'] = {'title': 'RestoreGrid', 'body': '| P | Q |\n| R | S |',
+                     'formatting': [], 'paragraphs': [], 'comments': ''}
+_orig_ask_rp = app.ask_yes_no
+app.ask_yes_no = lambda *a, **k: True
+try:
+    app.restore_previous_version()
+finally:
+    app.ask_yes_no = _orig_ask_rp
+app.update()
+check('restore previous version draws the restored table as a grid',
+      len(app.body_text.window_names()) >= 1
+      and core_tables.find_blocks(body()) != [])
+check('and the word count describes the restored text, not the replaced one',
+      '4 words' in str(app.word_count_lbl.cget('text')))
+
+# ---- ASTRAL EMOJI vs Tk INDEXES (audit Z09-F05/F06) ----
+# Tk Text columns count UTF-16 units; Python strings count characters.
+# The double-click word-select and the table cell navigation mixed the
+# two, so an emoji earlier on the line shifted every offset after it.
+check('the Tk<->Python column converters round-trip across an emoji',
+      app._py_col('\U0001F600ab', 2) == 1
+      and app._py_col('\U0001F600ab', 3) == 2
+      and app._py_col('\U0001F600ab', 99) == 3
+      and app._tk_col('\U0001F600ab', 1) == 2)
+
+_C4 = core_tables.CELL
+_E4 = '\U0001F600'
+set_body(f'{_C4} {_E4}{_E4}{_E4}{_E4} {_C4} b {_C4} c {_C4}')
+_row4 = app.body_text.get('1.0', '1.end')
+_b_tk = app._tk_col(_row4, _row4.index('b'))
+_hit4 = app._cell_at(1, _b_tk)
+check('the caret is judged into the RIGHT cell across emoji',
+      _hit4 is not None and _hit4[0] == 1)
+check('tabbing lands the caret and selection on the cell text itself',
+      app._move_to_cell(1, 1)
+      and app.body_text.get('sel.first', 'sel.last') == 'b')
+
+set_body(f'{_E4}{_E4} hello world')
+app.body_text.see('1.0'); app.update()
+# Aim at the LAST letter of "hello": the two emoji drift a raw Tk column
+# two characters to the right, which from here crosses into "world" — a
+# click near the word's start drifts within the same word and hides the
+# bug from the check.
+_bb4 = app.body_text.bbox(f"1.{app._tk_col(f'{_E4}{_E4} hello world', 7)}")
+if not _bb4:
+    check('double-click target is on screen', False)
+else:
+    class _Ev4:
+        pass
+    _ev4 = _Ev4(); _ev4.widget = app.body_text
+    _ev4.x = _bb4[0] + 1; _ev4.y = _bb4[1] + 1
+    app._select_word_at_click(_ev4)
+    check('double-click selects the whole word after an emoji',
+          app.body_text.get('sel.first', 'sel.last') == 'hello')
+
+# ---- A DEAD GRID answers no queries (new_note staleness) ----
+# A full-range delete (New note, typing over Ctrl+A) destroys the
+# embedded windows WITHOUT a teardown; Tk marks survive it, collapsed
+# to 1.0. _grid_first_line answering for that dead grid made
+# _caret_out_of_hidden walk a fresh note's caret to its END on the
+# next keystroke, and shifted line-1 column math by a phantom window.
+set_body('| A | B |\n| C | D |')
+app._render_table_grids()
+app.update()
+app.body_text.delete('1.0', 'end')  # the bare delete new_note performs
+app.update()
+check('a grid whose windows died answers None, not line 1',
+      app._grid_at_line(1) is None and app._col_base(1) == 0)
+app.body_text.insert('1.0', 'hello\nworld')
+app.body_text.mark_set('insert', '1.0')
+app._caret_out_of_hidden()
+app.update()
+check('the caret guard leaves a fresh note alone after a table note',
+      app.body_text.index('insert').split('.')[0] == '1')
+
+# ---- FIND-IN-NOTE match width across an emoji ----
+# search -count returns UTF-16 units while "+Nc" counts characters, so
+# a matched astral emoji widened the highlight by one character apiece.
+set_body('vezi \U0001F600ok maybe')
+app._open_find()  # the scan model lives on the find bar's variables
+app.update()
+_fm = app._find_scan_model('\U0001F600ok')
+app._close_find()
+app.update()
+check('a found emoji match covers exactly the match, no extra character',
+      len(_fm) == 1
+      and app.body_text.get(_fm[0]['start'], _fm[0]['end']) == '\U0001F600ok')
+
 # The window line itself is off-limits: the caret walks to the line under
 # the table, so writing continues from the start of a real row.
 set_body('')

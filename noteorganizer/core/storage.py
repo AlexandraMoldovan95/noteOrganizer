@@ -87,9 +87,13 @@ def load_settings():
 
 
 def save_settings(settings):
-    """Write settings, best-effort but atomically — a failed write leaves
-    the previous file intact (see _write_json_atomic)."""
-    _write_json_atomic(paths.SETTINGS_FILE, settings)
+    """Write settings atomically — a failed write leaves the previous file
+    intact (see _write_json_atomic), lands in crash_log.txt and reaches
+    the registered on_write_failure callback.
+
+    Returns:
+        ``(True, None)`` on success, or ``(False, exception)``."""
+    return _write_json_atomic(paths.SETTINGS_FILE, settings)
 
 
 
@@ -144,9 +148,13 @@ def load_templates():
 
 
 def save_templates(templates):
-    """Write the templates list, best-effort but atomically — a failed
-    write leaves the previous file intact (see _write_json_atomic)."""
-    _write_json_atomic(paths.TEMPLATES_FILE, templates)
+    """Write the templates list atomically — a failed write leaves the
+    previous file intact (see _write_json_atomic), lands in crash_log.txt
+    and reaches the registered on_write_failure callback.
+
+    Returns:
+        ``(True, None)`` on success, or ``(False, exception)``."""
+    return _write_json_atomic(paths.TEMPLATES_FILE, templates)
 
 
 def load_trash():
@@ -167,9 +175,13 @@ def load_trash():
 
 
 def save_trash(trash):
-    """Write the trashed notes list, best-effort but atomically — a failed
-    write leaves the previous file intact (see _write_json_atomic)."""
-    _write_json_atomic(paths.TRASH_FILE, trash)
+    """Write the trashed notes list atomically — a failed write leaves the
+    previous file intact (see _write_json_atomic), lands in crash_log.txt
+    and reaches the registered on_write_failure callback.
+
+    Returns:
+        ``(True, None)`` on success, or ``(False, exception)``."""
+    return _write_json_atomic(paths.TRASH_FILE, trash)
 
 
 def _attachment_path_within(stored_as):
@@ -454,6 +466,34 @@ def mend_surrogates(value):
     return value
 
 
+# The UI registers a callback here at startup — core never imports
+# tkinter, so this attribute is the one channel core has to say "that
+# write FAILED" to whatever is drawing the window. Independently of the
+# callback, every failed data-file write is appended to crash_log.txt
+# (the same file the crash handlers use), so a failure on a route nobody
+# checks still leaves a trace to diagnose.
+on_write_failure = None
+
+
+def _report_write_failure(path, exc):
+    try:
+        with open(os.path.join(paths.APP_DIR, "crash_log.txt"), "a",
+                  encoding="utf-8") as f:
+            f.write("\n--- %s (write failure) ---\n%s\n%r\n"
+                    % (datetime.now().isoformat(), path, exc))
+    except (IOError, OSError):
+        pass
+    cb = on_write_failure
+    if cb is not None:
+        try:
+            cb(path, exc)
+        except Exception:
+            # The reporter must never take down the save path it reports
+            # on — a broken callback would turn "write failed" into a
+            # crash loop. The failure itself is already in the log above.
+            pass
+
+
 def _write_json_atomic(path, value):
     """Write a JSON data file the one safe way: mend surrogates, dump to a
     sibling ``.tmp``, then atomically replace the real file. A crash
@@ -485,6 +525,7 @@ def _write_json_atomic(path, value):
             os.remove(tmp_path)
         except OSError:
             pass
+        _report_write_failure(path, exc)
         return False, exc
 
 

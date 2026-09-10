@@ -1654,6 +1654,11 @@ class SettingsPageMixin:
             activebackground=self.colors["card"],
             activeforeground=self.colors["text"],
             command=self.hide_settings_page)
+        # Long-lived and pressed often: the press colours froze on the
+        # build-time palette (the same active* pair the danger big-button
+        # fix tracked, one screen away).
+        self.track_theme(back_lbl, bg="sidebar", fg="subtext",
+                         activebackground="card", activeforeground="text")
         back_lbl.pack(side="left", fill="x", expand=True)
         for w in (back_row, back_ico):
             w.bind("<Button-1>", lambda _e: self.hide_settings_page())
@@ -2048,8 +2053,39 @@ class SettingsPageMixin:
                       font=("Segoe UI", 9, "bold"), cursor="hand2",
                       fg=fg, bg=bg, activeforeground=fg, activebackground=hover,
                       highlightbackground=border, padx=14, pady=6)
-        b.bind("<Enter>", lambda _e: b.configure(bg=hover))
-        b.bind("<Leave>", lambda _e: b.configure(bg=bg))
+        # These buttons live on the eager, built-once Settings panels, so
+        # the palette-KEYED options must be tracked too (bg and the normal
+        # kind's derived ring are the straggler net's job). The derived
+        # activebackground is refreshed live in the hover binds below.
+        if kind == "danger":
+            self.track_theme(b, fg="danger", activeforeground="danger",
+                             highlightbackground="danger")
+        elif kind == "primary":
+            self.track_theme(b, highlightbackground="accent")
+        else:
+            self.track_theme(b, fg="text", activeforeground="text")
+
+        # Hover from the LIVE palette, not the build-time capture — a
+        # button that outlives a theme switch otherwise hovers in the old
+        # theme's colours (audit Z07-F04, same class as the big buttons).
+        def _tb_rest():
+            if kind == "danger":
+                return self._surface()
+            if kind == "primary":
+                return self.colors["accent"]
+            return self._surface("inset")
+
+        def _tb_hover():
+            if kind == "danger":
+                return self._blend(self._surface(), self.colors["danger"], 0.14)
+            if kind == "primary":
+                return self.colors["accent_hover"]
+            return self._blend(self._surface("inset"), self.colors["text"], 0.08)
+
+        b.bind("<Enter>", lambda _e: b.configure(bg=_tb_hover(),
+                                                 activebackground=_tb_hover()))
+        b.bind("<Leave>", lambda _e: b.configure(bg=_tb_rest(),
+                                                 activebackground=_tb_hover()))
         return b
 
     ROW_ICON_SIZE = 15
@@ -2258,9 +2294,10 @@ class SettingsPageMixin:
                           highlightbackground=self.colors["danger"],
                           activeforeground=self.colors["danger"],
                           activebackground=self.colors["card"])
-            self.track_theme(b, bg="card", fg="danger")
-            hover_bg = self._blend(self.colors["card"], self.colors["danger"], 0.14)
-            rest_bg = self.colors["card"]
+            self.track_theme(b, bg="card", fg="danger",
+                             highlightbackground="danger",
+                             activebackground="card",
+                             activeforeground="danger")
         else:
             bg = "accent" if kind == "accent" else "sidebar"
             b = tk.Button(parent_frame, text=text, command=command, relief="flat",
@@ -2269,13 +2306,24 @@ class SettingsPageMixin:
             self.track_theme(b, bg=bg)
             if kind == "accent":
                 b.configure(fg="white")
-            rest_bg = self.colors[bg]
-            hover_bg = (self.colors["accent_hover"] if kind == "accent"
-                        else self.colors["card"])
 
-        # Same hover convention as the rest of the app.
-        b.bind("<Enter>", lambda _e, w=b, c=hover_bg: w.configure(bg=c))
-        b.bind("<Leave>", lambda _e, w=b, c=rest_bg: w.configure(bg=c))
+        # Same hover convention as the rest of the app — but the colours
+        # are computed at EVENT time from the live palette. The old
+        # closures captured them at build, so a tracked button hovered in
+        # whatever theme it was built under (audit Z07-F04).
+        def _rest_bg():
+            if kind == "danger":
+                return self.colors["card"]
+            return self.colors["accent" if kind == "accent" else "sidebar"]
+
+        def _hover_bg():
+            if kind == "danger":
+                return self._blend(self.colors["card"], self.colors["danger"], 0.14)
+            return (self.colors["accent_hover"] if kind == "accent"
+                    else self.colors["card"])
+
+        b.bind("<Enter>", lambda _e: b.configure(bg=_hover_bg()))
+        b.bind("<Leave>", lambda _e: b.configure(bg=_rest_bg()))
         return b
 
     def _build_category_row(self, parent, name, redraw):

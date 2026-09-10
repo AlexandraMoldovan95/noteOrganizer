@@ -263,7 +263,10 @@ class DialogsMixin:
         caret = tk.Label(btn, text="▾", bg=self.colors["sidebar"],
                          fg=self.colors["subtext"], font=("Segoe UI", 7))
         caret.pack(side="left", padx=(0, 6))
-        self.track_theme(btn, bg="sidebar")
+        # The border too, not just the fill (the 0.66.97 lesson: track
+        # EVERY colour option a long-lived widget sets, or a theme switch
+        # leaves that one frozen on the build-time palette).
+        self.track_theme(btn, bg="sidebar", highlightbackground="card")
         self.track_theme(lbl, bg="sidebar", fg="text")
         self.track_theme(caret, bg="sidebar", fg="subtext")
 

@@ -205,6 +205,113 @@ check('cleanup-duplicates: purging the trashed twin leaves the survivor file int
       len(_merged4) == 1
       and _os4.path.isfile(_os4.path.join(_paths4.ATTACHMENTS_DIR, _merged4[0])))
 
+# ---- THEME: long-lived borders and hover follow a switch (Z07-F03/F04) ----
+# The 0.66.97 lesson, reaching the instances it missed: a long-lived
+# widget must track EVERY colour option it sets (the dropdown/category
+# borders and the export progress frame stayed on the build-time
+# palette), and hover colours must be computed at event time (a tracked
+# settings button hovered in whatever theme it was built under).
+app.set_theme('dark'); app.update()
+_probe_btn = app._settings_big_button(app, 'ThemeProbe', lambda: None,
+                                      kind='danger')
+_probe_btn.pack(); app.update()
+_probe_dd = app._build_themed_dropdown(app, tk.StringVar(value='x'),
+                                       ['x', 'y'], lambda v: None)
+_probe_dd.pack(); app.update()
+# Assert under BOTH themes: the app itself was built under the default
+# palette, so a widget frozen at build time still matches ONE theme by
+# coincidence — it cannot match both.
+def _borders_ok():
+    return (str(app.category_menu.cget('highlightbackground')) == app.colors['card'],
+            str(_probe_dd.cget('highlightbackground')) == app.colors['card'],
+            str(app.export_progress_frame.cget('highlightbackground')) == app.colors['accent']
+            and str(app.export_progress_frame.cget('bg')) == app.colors['card'])
+_dark_ok = _borders_ok()
+app.set_theme('light'); app.update()
+_light_ok = _borders_ok()
+check('the category button border follows the theme switch',
+      _dark_ok[0] and _light_ok[0])
+check('a themed dropdown border follows too',
+      _dark_ok[1] and _light_ok[1])
+# Behaviour AND mechanism: _recolor_stragglers (the safety net) remaps
+# stray bg/fg on every switch, and the stock dark/light accents are the
+# same hex — so on these two themes the net masks a missing tracking
+# entry. The net is the fallback, not the mechanism; assert the frame is
+# genuinely registered, the way the rest of the long-lived family is.
+check('the export progress frame follows (it was never tracked at all)',
+      _dark_ok[2] and _light_ok[2]
+      and any(w is app.export_progress_frame for w, _m in app.themed_widgets))
+_probe_btn.event_generate('<Enter>'); app.update()
+check('a settings button hovers in the CURRENT palette, not the build-time one',
+      str(_probe_btn.cget('bg'))
+      == app._blend(app.colors['card'], app.colors['danger'], 0.14))
+_probe_btn.event_generate('<Leave>'); app.update()
+check('and rests back on the current card colour',
+      str(_probe_btn.cget('bg')) == app.colors['card'])
+# The other button factory has the same hover mechanism — build under
+# light, switch to dark, hover must paint dark's palette.
+_probe_txt = app._text_button(app, 'TxtProbe', lambda: None, kind='primary')
+_probe_txt.pack(); app.update()
+app.set_theme('dark'); app.update()
+_probe_txt.event_generate('<Enter>'); app.update()
+check('a text button hovers in the current palette too',
+      str(_probe_txt.cget('bg')) == app.colors['accent_hover'])
+# Mechanism assert: the stock dark/light accents share a hex, so a
+# frozen ring matches the palette by coincidence (the export-frame
+# lesson, same file, a few checks up).
+check('and its ring is tracked, not frozen at build',
+      str(_probe_txt.cget('highlightbackground')) == app.colors['accent']
+      and any(w is _probe_txt and m.get('highlightbackground') == 'accent'
+              for w, m in app.themed_widgets))
+_probe_btn.destroy(); _probe_dd.destroy(); _probe_txt.destroy(); app.update()
+
+# ---- THEME sweep round 2: caret, checkbox wells, press colours ----
+# The adversarial review widened the class: every long-lived text field's
+# caret (insertbackground) was frozen at build — invisible after a
+# dark<->light switch, the main editor included; the recurrence radios'
+# selectcolor and the checklist rows' wells stayed on the old palette;
+# Back to Notes pressed in the old theme's colours.
+app.checklist_add_var.set('bifa')
+app._add_checklist_item()
+app.update()
+def _caret_ok():
+    return (str(app.body_text.cget('insertbackground')) == app.colors['text']
+            and str(app.title_entry.cget('insertbackground')) == app.colors['text']
+            and str(app.comments_text.cget('insertbackground')) == app.colors['text'])
+def _wells_ok():
+    hits = []
+    def walk(w):
+        for c in w.winfo_children():
+            if isinstance(c, tk.Checkbutton):
+                hits.append(str(c.cget('selectcolor')) == app.colors['sidebar'])
+            walk(c)
+    walk(app.checklist_items_frame)
+    return bool(hits) and all(hits)
+def _find_btn_text(root, txt):
+    for c in root.winfo_children():
+        if isinstance(c, tk.Button) and str(c.cget('text')) == txt:
+            return c
+        r = _find_btn_text(c, txt)
+        if r:
+            return r
+    return None
+_dark2 = (_caret_ok(), _wells_ok())
+app.set_theme('light'); app.update()
+_light2 = (_caret_ok(), _wells_ok())
+check('the caret follows the theme in body, title and comments',
+      _dark2[0] and _light2[0])
+check('checklist checkbox wells repaint on a theme switch',
+      _dark2[1] and _light2[1])
+check('recurrence radios track their selectcolor well',
+      any(isinstance(w, tk.Radiobutton) and m.get('selectcolor') == 'card'
+          for w, m in app.themed_widgets))
+_back2 = _find_btn_text(app.settings_page, 'Back to Notes') \
+    if hasattr(app, 'settings_page') else None
+check('Back to Notes presses in the live palette',
+      _back2 is not None
+      and str(_back2.cget('activebackground')) == app.colors['card']
+      and str(_back2.cget('activeforeground')) == app.colors['text'])
+
 # ---- PERFORMANCE: note list with larger count ----
 app.notes = [{'id':i,'title':f'Perf{i}','body':'x'*30,'category':'General',
              'updated':'2026-01-01 00:00','created':'2026-01-01 00:00',
