@@ -66,10 +66,18 @@ uncovered regions. This baseline is a WINDOWS measurement; the Linux CI
 leg executes different lines (Xvfb branches, POSIX paths) and gets
 merged in when the coverage-lift cycle lands.
 
-**Total after lift #1 (2026-09-10): 84.9%** (from the 81.5% baseline —
-+3.4 points, all mutation-backed). `calendar_view` hit its target
-(65.5% → 86.5%); `sharing` reached 93.6%. The remaining road to ~90%
-runs through the hub and settings flows still listed below. By layer, with the targets the
+**Totals after lift #2 (2026-09-10): Windows 86.0%, Linux 85.6%**
+(from the 81.5% baseline; the two platforms execute different lines —
+win32 branches on one, Xvfb/POSIX on the other — so both are reported
+rather than blended). The journey: 81.5 → 84.9 (lift #1) → 86.0, every
+point mutation-backed. `calendar_view` 88.4%, `sharing` 93.6%,
+settings 84.7%, hub 85.3%.
+
+What separates 86% from the ~90% aspiration is now DOMINATED by the
+ACCEPT categories below — the last cheap coverable flows went into
+lift #2. The honest restatement of the target: **everything that is
+not a written ACCEPT gets covered**; the next lift runs after the
+improvements tour reshapes what exists (per the working agreement). By layer, with the targets the
 coverage-lift cycle aims at:
 
 | Layer | Baseline | Target |
@@ -96,8 +104,19 @@ when nothing else can.
 | ~~C12~~ | **RE-SCOPED (finding):** the multi-tab machinery is unreachable — nothing ever creates a second tab (`open_note_in_tab`/`open_blank_tab` both reset the list to one entry; no append exists), so `close_tab`'s neighbour-pick and unsaved-triage lines are dead code guarding impossible states. The REAL single-tab contract is asserted in qa7 (reset-to-one, flush-on-switch, single-close collapse). The dead machinery is a **product decision for the improvements tour**: build real multi-tabs someday, or simplify it out — until then its lines stay honestly uncovered rather than theater-covered | — |
 | ~~C13~~ | **DONE (lift #1):** keyboard nav, both tooltips (incl. the 10-title cap), day colours through the real palette, emoji marks with the 3-marker cap — 14 qa2 checks, 2 mutants. File: 65.5% → 86.5%, target met | — |
 | ~~C14~~ | **DONE (lift #1):** all five pickers driven through their real widgets (day-15 pick lands in the field, ▶ shifts the month, swatch colours the note, chip lands in the body, template fills the editor, size-cell inserts a drawn table) | — |
-| C15 | **HALF DONE (lift #1):** tick-all-but-first + the cleanup button drive the real panel (mutant-backed). STILL OPEN: the category add/rename/recolour row flows | Extend the qa6 categories drive in lift #2 |
-| C16 | **HALF DONE (lift #1):** every decode refusal branch asserted human-message-by-message (sharing 75.6% → 93.6%, cap-message mutant killed). STILL OPEN: `core/clipboard` fallback branches (72.2%) — platform-conditional, needs a mocked-Tk harness | Lift #2, or ACCEPT the platform half |
+| ~~C15~~ | **DONE (lift #2):** the category panel's add / recolour (targeted swatch fill) / rename (through the inline popup's Save) all drive the real rows; tick-all-but-first + cleanup from lift #1. Residual: the template-editor checklist toggle (~10 lines) | — |
+| ~~C16~~ | **CLOSED (lift #2):** sharing at 93.6%; the clipboard fallback half is a written ACCEPT — its branches select per-platform clipboard plumbing inside blanket guards, and a mocked-Tk harness would test the mock. The crash-relevant end (surrogates at the export boundary) is covered elsewhere | — |
+
+### ACCEPT — added at lift #2
+
+| Item | Reason |
+|---|---|
+| `_main` + the last-resort startup crash dialog (~19 lines) | Its whole point is running when nothing else can; a test would mock its own premise |
+| `paths._settings` migration branches (~28 lines) | Per-environment first-launch paths; the reachable migrations are covered in test_data_safety, the rest need machines we don't simulate |
+| `_on_wheel` / `_panel_or_page_wheel` platform branches | Wheel delta dialects (win32 vs X11) — each platform's CI leg executes its own half; the union covers both |
+| `refresh_tab_strip` / `close_tab` multi-tab remainder | Dead machinery guarding unreachable states (the C12 finding); covered the day multi-tabs become real or get simplified out |
+| `_maybe_close_cell_editor` focus-transfer branch | The asynchronous focus-handoff window the house rules tell checks to avoid; the synchronous commit path is covered directly |
+| `core/clipboard` per-platform fallbacks (72.2%) | See C16 |
 
 ## The standing rule
 

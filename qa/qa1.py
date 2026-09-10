@@ -6572,11 +6572,7 @@ check('find/switch: no stale find highlight survives the switch',
 app._close_find()
 app.update()
 
-# ---- THE PICKERS (coverage-lift C14) ----
-# The date, colour, emoji, template and table-size pickers were never
-# opened by any script — the date picker alone was a 64-line hole.
-# Each: open through the real entry point, choose through the real
-# widget, assert the choice LANDED where the user would see it.
+# ---- LIFT #2: cell styling, raw-row Tab, category dropdown, share panel ----
 
 def _walk_widgets(root, klass):
     out = []
@@ -6587,6 +6583,82 @@ def _walk_widgets(root, klass):
             walk(c)
     walk(root)
     return out
+
+
+# Bold/italic INSIDE the cell editor (_editor_apply_style's chars walk).
+set_body('| stilcel | b |\n| c | d |')
+app._render_table_grids(); app.update()
+_t2 = app._grid_at_line(1)
+app._open_cell_editor(_t2, 0, 0)
+_ed2 = app._cell_editor['entry']
+_ed2.tag_remove('sel', '1.0', 'end')  # open() pre-selects everything
+_ed2.tag_add('sel', '1.0', '1.4')
+app._editor_apply_style('bold')
+app.update()
+check('cell-editor bold tags exactly the selected characters',
+      any('bold' in _ed2.tag_names(f'1.{i}') for i in range(4))
+      and not any('bold' in t for t in _ed2.tag_names('1.5')))
+app._editor_apply_style('bold')
+app.update()
+check('a second toggle takes the bold off again',
+      not any('bold' in _ed2.tag_names(f'1.{i}') for i in range(4)))
+app._commit_cell_editor(); app.update()
+
+# Tab through a RAW (never-rendered) pipe row: the un-rendered branch of
+# _tab_in_table walks cell to cell without a grid.
+set_body('| unu | doi | trei |')
+app.body_text.mark_set('insert', '1.3')
+_moved = app._tab_in_table(1)
+app.update()
+check('Tab advances the caret to the next raw cell and selects it',
+      _moved and app.body_text.get('sel.first', 'sel.last') == 'doi')
+_moved = app._tab_in_table(-1)
+app.update()
+check('Shift-Tab walks back to the first cell',
+      _moved and app.body_text.get('sel.first', 'sel.last') == 'unu')
+
+# The editor's category dropdown: open it, pick a category by row.
+app.new_note(); app.update()
+NO.CATEGORY_COLORS.setdefault('Work', '#3b82f6')
+app._open_category_dropdown()
+app.update()
+_cat_pop = app._mini_popup
+_rows_cat = [l for l in _walk_widgets(_cat_pop, tk.Label)
+             if str(l.cget('text')) == 'Work']
+check('the category dropdown lists Work', len(_rows_cat) >= 1)
+_rows_cat[0].event_generate('<Button-1>')
+app.update()
+check('picking a row sets the editor category',
+      app.category_var.get() == 'Work')
+
+# The inline share panel: code box + the attachments warning.
+app.title_entry.delete(0, 'end'); app.title_entry.insert(0, 'DeShare')
+app.title_entry.config(fg='black')
+app.body_text.insert('1.0', 'ceva')
+app.save_current_note(auto=False); app.update()
+app.current_attachments = [{'filename': 'f.txt', 'stored_as': 'x_f.txt'}]
+app.share_current_note_as_code()
+app.update()
+_share_texts = [str(w.get('1.0', 'end-1c'))
+                for w in _walk_widgets(app.editor_code_area, tk.Text)]
+_share_lbls = [str(l.cget('text'))
+               for l in _walk_widgets(app.editor_code_area, tk.Label)]
+check('the inline share panel shows a real NOTE1 code',
+      any(t.startswith('NOTE1:') for t in _share_texts))
+check('and warns that attachments are not included',
+      any("Attachments aren't included" in t for t in _share_lbls))
+_decoded_share = NO.decode_share_code(
+    next(t for t in _share_texts if t.startswith('NOTE1:')))
+check('the shown code round-trips to the note',
+      _decoded_share and _decoded_share[0].get('title') == 'DeShare')
+app.current_attachments = []
+app.update()
+
+# ---- THE PICKERS (coverage-lift C14) ----
+# The date, colour, emoji, template and table-size pickers were never
+# opened by any script — the date picker alone was a 64-line hole.
+# Each: open through the real entry point, choose through the real
+# widget, assert the choice LANDED where the user would see it.
 
 # Date picker: pick day 15, the entry gets the date; ▶ shifts the month.
 app.new_note(); app.update()

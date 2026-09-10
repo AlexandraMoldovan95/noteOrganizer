@@ -1319,6 +1319,37 @@ check('tick-all-but-first plus cleanup keeps exactly one twin',
       and sum(1 for e in app.trash if e.get('title') == 'Geamana') == 2)
 _dpf.destroy(); app.update()
 
+# ---- Duplicates hover PREVIEW (coverage-lift #2) ----
+_pv_note = {'id': 900, 'title': 'PreviewNota', 'body': 'corp preview',
+            'category': 'General', 'updated': '2026-01-01 00:00',
+            'created': '2026-01-01 00:00', 'checklist': [],
+            'attachments': []}
+_pv_lbl = tk.Label(app, text='hover me')
+_pv_lbl.pack()
+app._attach_dup_preview(_pv_lbl, _pv_note)
+app.update()
+_pv_lbl.event_generate('<Enter>')
+app.update()
+_tips = [w for w in _pv_lbl.winfo_children()
+         if isinstance(w, tk.Toplevel)]
+def _tip_txts7(tops):
+    out = []
+    def walk(w):
+        for c in w.winfo_children():
+            if isinstance(c, tk.Label):
+                out.append(str(c.cget('text')))
+            walk(c)
+    for t in tops:
+        walk(t)
+    return out
+check('hovering a duplicate row shows its floating preview',
+      _tips and any('PreviewNota' in t for t in _tip_txts7(_tips)))
+_pv_lbl.event_generate('<Leave>')
+app.update()
+check('leaving the row hides the preview',
+      not any(w.winfo_exists() for w in _tips))
+_pv_lbl.destroy(); app.update()
+
 print()
 print(f"=== QA7 FAILURES: {fails if fails else 'NONE'} ===")
 
