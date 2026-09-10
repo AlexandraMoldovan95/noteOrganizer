@@ -2598,6 +2598,20 @@ else:
     check('double-click selects the whole word after an emoji',
           app.body_text.get('sel.first', 'sel.last') == 'hello')
 
+# ---- A skinny pasted separator no longer clips the drawing (Z08-F03) ----
+# Markdown from the wild writes "---" regardless of content; the dash
+# count used to be the display width EXACTLY, so the drawn column
+# clipped its own text. It is a floor now, never a ceiling.
+set_body('| verylongheaderword | b |\n| --- | --- |\n| x | y |')
+app._render_table_grids()
+app.update()
+_sep_t = app._grid_at_line(1)
+_hdr_font, _cell_font = app._grid_fonts()
+check('a --- separator column still fits its widest content',
+      _sep_t is not None
+      and _sep_t['cells'][(0, 0)]['w']
+      >= _hdr_font.measure('verylongheaderword'))
+
 # ---- A DEAD GRID answers no queries (new_note staleness) ----
 # A full-range delete (New note, typing over Ctrl+A) destroys the
 # embedded windows WITHOUT a teardown; Tk marks survive it, collapsed
@@ -3274,7 +3288,11 @@ check(f'insert-column keeps the separator a separator ({_sepS!r})',
       core_tables.is_separator_row(_sepS)
       and len(_colsS) == _tS['ncols'])
 check('the inserted column is default and its neighbour keeps its width',
-      _colsS[1]['width'] <= 8 and _colsS[2]['width'] == 15)
+      # A default (minimum) separator now parses as "no width opinion"
+      # (None) — the point stands either way: nothing stolen from the
+      # neighbour, which must still read exactly 15.
+      (_colsS[1]['width'] is None or _colsS[1]['width'] <= 8)
+      and _colsS[2]['width'] == 15)
 
 # Export never carries the mechanics row.
 _htmlS = NO.note_to_html(body())

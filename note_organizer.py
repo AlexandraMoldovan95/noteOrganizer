@@ -2854,7 +2854,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 continue
             if column and column.get("width"):
                 # The dash count is the display width, exactly -- narrower
-                # than the content clips the drawing, never the text.
+                # than the content clips to an ellipsis, deliberately (a
+                # hand-narrowed column). Pasted markdown's conventional
+                # "---" never reaches here: parse_separator reads a
+                # minimum-width separator as "no width opinion".
                 col_w[c] = char_px * column["width"] + 2 * pad_x
                 continue
             for r, row in enumerate(rows):
