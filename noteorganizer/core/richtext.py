@@ -55,6 +55,11 @@ MAX_PASTE_CHARS = 100_000
 MAX_PASTE_SPANS = 2_000
 
 # Tags that mean "a new line starts here".
+# Tags HTML defines as having no end tag. Style spans must never open on
+# one — with no close coming, they'd bleed to the end of the document.
+_VOID_TAGS = {"br", "hr", "img", "input", "area", "base", "col", "embed",
+              "source", "track", "wbr", "meta", "link"}
+
 _BLOCK_TAGS = {"p", "div", "br", "tr", "h1", "h2", "h3", "h4", "h5", "h6",
                "blockquote", "pre", "section", "article"}
 
@@ -280,28 +285,63 @@ class _Reader(HTMLParser):
             self._add(tables.CELL + lead)
         elif tag in _BLOCK_TAGS:
             if self.cell_depth:
-                # Whatever the block meant, inside a cell it can only be a
-                # gap between words.
-                self._add(" ")
+                # A <br> inside a cell is the cell's own line break — the
+                # export writes exactly that marker back out, and
+                # flattening it to a space silently lost the break on
+                # every round-trip. Any OTHER block inside a cell can
+                # only be a gap between words.
+                self._add(tables.LINE_BREAK if tag == "br" else " ")
             else:
                 self._newline()
 
+        if tag in _VOID_TAGS:
+            # A void tag never gets an end tag, so any style span it
+            # opened could only close at end-of-document — the exact
+            # bleed this registry exists to stop. A styled <br>/<img>
+            # simply has its inline style ignored.
+            return
         style = _css(attrs.get("style"))
+        opened = []
         for prop, name in (("color", "text_color"),
                            ("background", "highlight"),
                            ("background-color", "highlight")):
             hex_value = _as_hex(style.get(prop))
             if hex_value and _is_meaningful(hex_value, name):
                 self._open.append((name, hex_value, self.length))
+                opened.append(name)
         if style.get("font-weight") in ("bold", "700", "800", "900"):
             self._open.append(("bold", None, self.length))
+            opened.append("bold")
         if style.get("font-style") == "italic":
             self._open.append(("italic", None, self.length))
+            opened.append("italic")
+        if opened:
+            # Remember exactly which style spans THIS tag opened, so its
+            # end tag can close them all. Inline styles on <p>/<div>/<li>
+            # and the cell tags used to never close (the style bled to
+            # the end of the document), and a span opening two styles
+            # closed only the first.
+            reg = getattr(self, "_style_opens", None)
+            if reg is None:
+                reg = self._style_opens = {}
+            reg.setdefault(tag, []).append(opened)
         align = style.get("text-align")
         if align in ("center", "right"):
             self.paragraphs.append({"line": self._line, "align": align})
 
     def handle_endtag(self, tag):
+        # Close the style spans this tag's start opened FIRST, before any
+        # structural output below — a </p> adds its newline before
+        # anything else, and closing after it swept that newline into
+        # the span. Keyed by tag name rather than a strict stack, so
+        # HTML soup with a stray unclosed element degrades to closing at
+        # the next same-named end tag instead of desynchronising.
+        reg = getattr(self, "_style_opens", None)
+        if reg:
+            lst = reg.get(tag)
+            if lst:
+                for name in reversed(lst.pop()):
+                    self._close(name)
         if tag in _STYLE_TAGS:
             self._close(_STYLE_TAGS[tag])
         if tag in ("ul", "ol"):
@@ -349,11 +389,6 @@ class _Reader(HTMLParser):
         elif tag in _BLOCK_TAGS:
             if not self.cell_depth:
                 self._newline()
-        elif tag in ("span", "font"):
-            for name in ("text_color", "highlight", "bold", "italic"):
-                if any(o[0] == name for o in self._open):
-                    self._close(name)
-                    break
 
     def handle_data(self, data):
         # Markup is indented for humans; a note should not inherit that.

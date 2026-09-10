@@ -331,7 +331,14 @@ def parse_separator(line):
         align = (ALIGN_CENTER if left and right
                  else ALIGN_RIGHT if right
                  else ALIGN_LEFT if left else None)
-        columns.append({"width": len(cell), "align": align, "hidden": False})
+        # A minimum-width separator (bare "---", or ":-:" and friends —
+        # anything three characters or fewer) is markdown's conventional
+        # spelling, not an authored size: the wild writes it regardless
+        # of content, and honouring it exactly clipped the drawn column
+        # under its own text. A hand-dragged width is always wider. The
+        # alignment colons still count; only the width opinion is waived.
+        width = len(cell) if len(cell) > 3 else None
+        columns.append({"width": width, "align": align, "hidden": False})
     return columns
 
 

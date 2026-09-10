@@ -54,13 +54,15 @@ def _run_gate(label, args):
 
 
 def main():
-    core = [os.path.join("noteorganizer", "core", f)
-            for f in sorted(os.listdir(os.path.join(ROOT, "noteorganizer",
-                                                    "core")))
-            if f.endswith(".py")]
+    scanned = []
+    for layer in ("core", "ui"):
+        scanned += [os.path.join("noteorganizer", layer, f)
+                    for f in sorted(os.listdir(
+                        os.path.join(ROOT, "noteorganizer", layer)))
+                    if f.endswith(".py")]
     _run_gate("names resolve",
               [os.path.join("tools", "check_undefined_names.py"),
-               "note_organizer.py"] + core)
+               "note_organizer.py"] + scanned)
     _run_gate("class surface unchanged",
               [os.path.join("tools", "check_class_api.py")])
 

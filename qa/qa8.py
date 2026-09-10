@@ -401,6 +401,58 @@ check('the explicit Save still warns about the empty note', warned13 == ['Empty 
 del app13.ask_occurrence_scope
 del app13.show_warning
 
+# ---- A swallowed autosave exception leaves a TRACE (audit Z02-F04) ----
+# The spine's guards used to be bare `pass` — a persistent bug there
+# silently stopped autosave with nothing in any log.
+_swl_path = os.path.join(NO.APP_DIR, 'crash_log.txt')
+_swl_before = (open(_swl_path, encoding='utf-8').read()
+               if os.path.exists(_swl_path) else '')
+_real_uwc13 = app13.update_word_count
+app13.update_word_count = lambda *a, **k: (_ for _ in ()).throw(
+    RuntimeError('autosave probe'))
+try:
+    app13._schedule_autosave()
+finally:
+    app13.update_word_count = _real_uwc13
+_swl_after = (open(_swl_path, encoding='utf-8').read()
+              if os.path.exists(_swl_path) else '')
+_swl_new = _swl_after[len(_swl_before):]
+check('a swallowed autosave exception lands in crash_log.txt',
+      '(swallowed: autosave' in _swl_new and 'autosave probe' in _swl_new)
+check('and the schedule itself survived it',
+      getattr(app13, '_autosave_job', None) is not None)
+if getattr(app13, '_autosave_job', None):
+    app13.after_cancel(app13._autosave_job)
+    app13._autosave_job = None
+# Bounded growth: the SAME spot logs once per session, not per keystroke.
+_swl_mid = open(_swl_path, encoding='utf-8').read()
+app13.update_word_count = lambda *a, **k: (_ for _ in ()).throw(
+    RuntimeError('again'))
+try:
+    app13._schedule_autosave()
+finally:
+    app13.update_word_count = _real_uwc13
+check('the same spot logs only once per session (bounded growth)',
+      open(_swl_path, encoding='utf-8').read() == _swl_mid)
+if getattr(app13, '_autosave_job', None):
+    app13.after_cancel(app13._autosave_job)
+    app13._autosave_job = None
+# The audit's WORST silent spot: a save failing at flush time
+# (note-switch/close) — that trace must exist too.
+app13.new_note()
+app13.body_text.insert('1.0', 'ceva de salvat')
+_real_save13 = app13.save_current_note
+app13.save_current_note = lambda *a, **k: (_ for _ in ()).throw(
+    RuntimeError('flush save probe'))
+try:
+    app13._flush_autosave()
+finally:
+    app13.save_current_note = _real_save13
+_swl_end = open(_swl_path, encoding='utf-8').read()
+check('a flush-time save failure leaves a trace',
+      '(swallowed: flush: save_current_note' in _swl_end
+      and 'flush save probe' in _swl_end)
+
 print()
 print(f"=== QA8 FAILURES: {fails if fails else 'NONE'} ===")
 

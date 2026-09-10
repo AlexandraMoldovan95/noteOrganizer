@@ -130,7 +130,13 @@ def _tokenize_calc_expression(expr):
                 if expr[j] == ".":
                     seen_dot = True
                 j += 1
-            tokens.append(float(expr[i:j]))
+            # The walk admits a bare "." (one dot, zero digits), which
+            # float() rejects with a ValueError that used to escape the
+            # CalcError contract and reach the caller raw.
+            try:
+                tokens.append(float(expr[i:j]))
+            except ValueError:
+                raise CalcError(f"not a number: {expr[i:j]!r}")
             i = j
             continue
         raise CalcError(f"unexpected character {ch!r}")
@@ -282,6 +288,10 @@ def evaluate_calculator_expression(expr):
         result = parse_expression()
         if pos[0] != len(tokens):
             return None  # leftover tokens, e.g. a stray closing bracket
+        if not math.isfinite(result):
+            # 9e307+9e307 overflows float to inf without raising anything;
+            # a calculator display has no honest way to show inf/nan.
+            return None
         return result
     except CalcError:
         return None

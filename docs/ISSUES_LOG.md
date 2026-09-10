@@ -51,6 +51,7 @@ day-to-day tracking.
 | [The undo that stopped halfway, the sequel](#the-undo-that-stopped-halfway-the-sequel-lists-and-the-grid-trio) | When a fix has a sibling family, audit which siblings were missed; a "drawn?" check reads real windows, not a stale dict. | 0.71.113 |
 | [The table that outlived its own deletion](#the-table-that-outlived-its-own-deletion) | A cached handle to a drawn thing must prove the drawing still exists — Tk marks survive the delete that killed the widgets. | 0.71.125 |
 | [The safety net that hid the missing mechanism](#the-safety-net-that-hid-the-missing-mechanism) | When a fallback masks the primary mechanism, assert the mechanism — a behaviour check green under two themes proved nothing. | 0.71.125 |
+| [The clipping that turned out to be a feature](#the-clipping-that-turned-out-to-be-a-feature) | Before fixing "wrong" behaviour, find who relies on it; the fix moved from render to parse once the ellipsis check spoke up. | 0.71.134 |
 | [The Trash panel that took two seconds to open](#the-trash-panel-that-took-two-seconds-to-open) | Don't build and wire every row up front; render a page, reveal more on demand. | 0.4.0 |
 | [The slowdown that only showed up after a long session](#the-slowdown-that-only-showed-up-after-a-long-session) | 'Slow after a while, fine at first' means unbounded growth; reproduce with a loop. | 0.4.0 |
 | [Export/import freezing the app](#exportimport-freezing-the-app) | Do file I/O on a worker thread; only the main thread touches Tkinter widgets. | 0.4.0 |
@@ -1052,6 +1053,38 @@ takes the same path) instead of patching `new_note` alone.
 still exists before answering questions about it. Tk's marks are
 deliberately durable — they outlive the widgets they were planted for,
 and durable state plus dead widgets is a haunting.
+
+### The clipping that turned out to be a feature
+
+**The report.** The audit flagged that a table pasted from ordinary
+markdown drew its columns clipped: the conventional `---` separator's
+dash count was honoured as the exact display width, and three dashes is
+narrower than almost any content.
+
+**The first fix, and the check that stopped it.** The obvious repair —
+treat the separator width as a floor at render time, never a ceiling —
+went in, and a pre-existing qa check went red: *"a too-narrow column
+draws an ellipsis and keeps its text."* Clipping was not a bug. It was
+the deliberate behaviour behind hand-narrowed columns: drag a column
+edge left and the drawing clips to an ellipsis while the text
+underneath stays whole. The same mechanism, a defect on one route and
+a shipped feature on the other.
+
+**The real fix.** The two routes differ at the *meaning* of the width,
+so the fix moved to where meaning is read: `parse_separator` treats a
+minimum-width cell (three characters or fewer — bare `---`, `:-:` and
+friends) as markdown convention carrying no width opinion, while any
+wider, hand-authored width stays exact. The adversarial review then
+falsified the premise "authored is always wider" — the drag could
+write width 2, which round-tripped through a three-dash cell straight
+back into "no opinion" — so authored widths now floor at 4, the
+narrowest that survives its own spelling.
+
+**Takeaway:** before fixing behaviour that looks wrong, find who
+relies on it — the qa suite is the census of deliberate behaviour, and
+a red pre-existing check on a "fix" is it speaking up. And when one
+byte pattern serves two meanings, disambiguate where it is parsed, not
+where it is drawn.
 
 ## Theming & performance
 

@@ -12,6 +12,7 @@ How the numbers themselves are counted is the
 
 | Version | Date | In one line |
 |---|---|---|
+| [0.71.134](#071134--2026-09-10) | 2026-09-10 | Nine audit small classes closed — the calculator, bleeding paste styles, honest Select-all, nested Escape, pasted tables, whole backups, autosave traces and a theming leak. |
 | [0.71.125](#071125--2026-09-10) | 2026-09-10 | Six audit medium classes swept whole — visible carets and honest saves, atomic exports that closing waits for, tables that redraw and hold the view, emoji-proof clicks and finds. |
 | [0.71.119](#071119--2026-09-09) | 2026-09-09 | Three audit-found user-facing safety fixes — every route that copies a note gives the copy its own attachment files, a fresh emoji no longer crashes sharing or export, and destructive confirms warn clearly instead of pre-selecting Yes. |
 | [0.71.116](#071116--2026-09-09) | 2026-09-09 | Undo is whole on lists and tables — one Ctrl+Z never empties a note, dissolves a table, or half-undoes a checkbox. |
@@ -52,6 +53,50 @@ How the numbers themselves are counted is the
 ---
 
 ## [Unreleased]
+
+## [0.71.134] — 2026-09-10
+
+*Highlights: the audit's small-findings tier, closed whole — nine classes from the calculator to the backup, each widened to its real edges by an adversarial review before merge.*
+
+### Fixed
+- **The calculator answers every impossible expression the same way.** A lone "." raised
+  a raw error past the calculator's own error contract, and a 400-digit number (or any
+  arithmetic reaching infinity) displayed `inf`. Both return the usual quiet "nothing"
+  now. From the code audit.
+- **A pasted style ends where its tag ends.** HTML pasted with an inline colour on a
+  paragraph, list item or table cell bled that style to the end of the document, and a
+  span carrying two styles closed only the first. Every start tag now remembers exactly
+  which styles it opened and its end tag closes them all — and a styled `<br>`/`<img>`
+  (which never gets an end tag) opens none at all. From the code audit, widened by
+  adversarial review.
+- **A cell's line breaks survive export → import.** A `<br>` inside a table cell was
+  flattened to a space on import while export wrote exactly that `<br>` — every
+  round-trip lost the breaks. From the code audit.
+- **"Select all" selects exactly what you see.** The note list strips table plumbing
+  from bodies before matching the search, but Select-all-visible matched the raw body —
+  quietly selecting notes the filter had hidden, which bulk actions then hit. One shared
+  predicate now defines "visible" for both. From the code audit.
+- **Escape in a nested dropdown closes the list, not the editor.** Backing out of the
+  category picker inside the template editor tore down the whole editor. From the code
+  audit.
+- **A pasted table draws its columns full width.** Markdown's conventional `---`
+  separator was honoured as an exact display width, clipping the drawn column under its
+  own text. A minimum-width separator now means "no width opinion" — while a
+  hand-narrowed column keeps its deliberate ellipsis, and the narrowest drag now
+  round-trips as authored. From the code audit, widened by adversarial review.
+- **A backup carries the whole notebook.** Templates and the trash were silently left
+  out of the export and never read on import — moving devices lost both. They ride
+  along now and merge additively, normalized, deduped, and with imported trash
+  attachments given their own files so no purge can reach across. From the code audit,
+  widened by adversarial review.
+- **A silent save failure leaves a trace.** The autosave spine's guards — including the
+  save at note-switch and close, the quietest spot of all — swallowed exceptions with no
+  message and no log; a persistent bug there stopped saving invisibly. Every such guard
+  now records one trace per spot per session in `crash_log.txt`. From the code audit,
+  widened by adversarial review.
+- **The theme registry lets its dead go.** Revisiting Settings re-registered its widgets
+  on every visit and the registry kept the destroyed ones forever — unbounded growth,
+  paid for on every theme switch. It prunes first now. From the code audit.
 
 ## [0.71.125] — 2026-09-10
 

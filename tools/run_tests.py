@@ -61,9 +61,14 @@ QA = [f"qa{i}.py" for i in range(1, 10)]
 # it compares against lives in tools/ and is not part of the payload copied
 # into scratch.
 STATIC = [
+    # ROOT-anchored globs: the old relative pattern resolved against the
+    # INVOKER's cwd, so run from anywhere but the repo root this gate
+    # silently checked fewer files. And ui/*.py is scanned too — ~5200
+    # lines of mixins used to be outside the gate in all three homes.
     ("names resolve", [sys.executable, os.path.join("tools", "check_undefined_names.py"),
-                       "note_organizer.py"] + sorted(
-        glob.glob(os.path.join("noteorganizer", "core", "*.py")))),
+                       "note_organizer.py"]
+     + sorted(glob.glob(os.path.join(ROOT, "noteorganizer", "core", "*.py")))
+     + sorted(glob.glob(os.path.join(ROOT, "noteorganizer", "ui", "*.py")))),
     ("class surface unchanged", [sys.executable,
                                  os.path.join("tools", "check_class_api.py")]),
 ]

@@ -527,6 +527,36 @@ check("printing keeps background colours (PDF road)",
 check("a wide table wraps instead of running off the page",
       "max-width: 100%" in _doc2 and "overflow-wrap" in _doc2)
 
+# ---- Inline styles CLOSE with their tag (audit Z04-F00/F01) ----
+# A colour on <p>/<div>/<li>/<td> used to bleed to the end of the
+# document (block and cell end tags never closed style spans), and a
+# span opening two styles closed only the first.
+_t, _s, _p = html_to_note('<p style="color:#ff0000">rosu</p><p>negru</p>')
+_reds = [s for s in _s if s["style"] == "text_color"]
+check("a coloured paragraph's colour stops at its own end tag",
+      len(_reds) == 1 and _t[_reds[0]["start"]:_reds[0]["end"]] == "rosu"
+      and "negru" not in _t[_reds[0]["start"]:_reds[0]["end"]])
+
+# A pale yellow: the highlight-legibility filter (deliberate) rejects
+# saturated-dark fills like pure green, and would hide this bug.
+_t, _s, _p = html_to_note(
+    '<span style="color:#ff0000;background:#ffff99">x</span>y')
+_cov = {(s["style"], _t[s["start"]:s["end"]]) for s in _s
+        if s["style"] in ("text_color", "highlight")}
+check("a span opening two styles closes BOTH at its end tag",
+      _cov == {("text_color", "x"), ("highlight", "x")})
+
+_t, _s, _p = html_to_note('a<br style="color:#ff0000">bcd<p>efg</p>')
+check("a styled VOID tag opens no span at all (no end tag ever comes)",
+      not any(s["style"] == "text_color" for s in _s))
+
+# ---- A <br> inside a cell survives the round-trip (audit Z04-F02) ----
+from noteorganizer.core import tables as _tbl
+_t, _s, _p = html_to_note("<table><tr><td>a<br>b</td></tr></table>")
+check("a cell's line break arrives as the cell break marker, not a space",
+      _tbl.LINE_BREAK in _t and "a" + _tbl.LINE_BREAK + "b"
+      in _t.replace(" ", ""))
+
 print()
 print(f"FAILURES: {fails if fails else 'none'}")
 

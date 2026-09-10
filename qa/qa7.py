@@ -279,6 +279,33 @@ app._bulk_select_all()
 app.update()
 check('Select all picks up every visible note', app.selected_note_ids == {10, 11})
 
+# ---- Select all agrees with the FILTER about "visible" (audit Z03-F01) ----
+# The list strips table plumbing from bodies before matching the search
+# ("---" no longer matches every table note); Select all used to match
+# the RAW body, so it quietly selected notes the filter had hidden — and
+# bulk trash then hit invisible notes. One shared predicate now.
+from noteorganizer.core import tables as _tbl7
+app.notes.append({'id': 77, 'title': 'TableOnly', 'body': f'{_tbl7.CELL} alfa {_tbl7.CELL} beta {_tbl7.CELL}',
+                  'category': 'General', 'updated': '2026-01-01 00:00',
+                  'created': '2026-01-01 00:00', 'checklist': [], 'attachments': []})
+app.search_var.set(_tbl7.CELL)
+app.refresh_note_list(); app.update()
+_visible_cards = len(app._note_card_widgets)
+app._bulk_select_all()
+check('searching table plumbing shows nothing and selects nothing',
+      _visible_cards == 0 and app.selected_note_ids == set())
+app.search_var.set('alfa')
+app.refresh_note_list(); app.update()
+app._bulk_select_all()
+check('searching cell CONTENT shows and selects exactly that note',
+      app.selected_note_ids == {77})
+app.search_var.set(''); app.refresh_note_list(); app.update()
+app.notes = [n for n in app.notes if n['id'] != 77]
+app.refresh_note_list(); app.update()
+# Leave the selection exactly as the pre-existing bulk-trash block below
+# expects it: everything visible ({10, 11}) selected again.
+app._bulk_select_all(); app.update()
+
 # bulk trash, with attachment mention
 app.trash = []  # earlier sections (calendar delete tests) left entries here
 captured = {}

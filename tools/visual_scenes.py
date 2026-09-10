@@ -329,13 +329,18 @@ def main():
     with open(os.path.join(OUT, 'log.json'), 'w', encoding='utf-8') as f:
         json.dump(log, f, indent=1, ensure_ascii=False)
     errs = len(log['tk_errors'])
+    # A scene that raised is recorded with an 'error' key — and used to
+    # be invisible to the exit code, so a failed scene still exited 0
+    # and CI stayed green over it.
+    scene_errs = sum(1 for entry in log['scenes'] + log['bursts']
+                     if 'error' in entry)
     print(f"done: {len(log['scenes'])} scenes, {len(log['bursts'])} bursts, "
-          f'{errs} tk errors -> shots/log.json')
+          f'{errs} tk errors, {scene_errs} scene errors -> shots/log.json')
     try:
         app.destroy()
     except Exception:
         pass
-    sys.exit(1 if errs else 0)
+    sys.exit(1 if errs or scene_errs else 0)
 
 
 if __name__ == '__main__':

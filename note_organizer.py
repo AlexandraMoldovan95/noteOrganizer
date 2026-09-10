@@ -45,7 +45,7 @@ except ImportError:
 # Added/Fixed CHANGELOG.md entries, not per-release counts). The running
 # app records this into settings, so the next time a newer build opens
 # over older data it can tell the user what changed version-wise.
-APP_VERSION = "0.71.125"
+APP_VERSION = "0.71.134"
 
 
 def parse_version(v):
@@ -676,13 +676,41 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             try:
                 self.update_word_count()
             except Exception:
-                pass
+                self._log_swallowed("autosave: schedule-time word count")
         if getattr(self, "_autosave_job", None) is not None:
             try:
                 self.after_cancel(self._autosave_job)
             except (tk.TclError, ValueError):
                 pass
         self._autosave_job = self.after(500, self._autosave_now)
+
+    def _log_swallowed(self, where):
+        """A guarded spot chose to carry on — leave the trace the bare
+        `pass` never did (audit Z02-F04: a persistent bug in the autosave
+        spine could stop saving in complete silence). Same file as every
+        other crash record; deliberately no toast — a background path can
+        hit its guard on every keystroke. Logged ONCE per spot per
+        session for the same reason: a persistent bug would otherwise
+        append a traceback per keystroke, growing the log without bound
+        and putting file I/O on the typing path."""
+        seen = getattr(self, "_swallowed_seen", None)
+        if seen is None:
+            seen = self._swallowed_seen = set()
+        if where in seen:
+            return
+        seen.add(where)
+        try:
+            import traceback
+            # errors="replace": a traceback quoting editor text can carry
+            # lone surrogates (a known-real class here), and the trace
+            # writer must never raise over its own payload.
+            with open(os.path.join(APP_DIR, "crash_log.txt"), "a",
+                      encoding="utf-8", errors="replace") as f:
+                f.write(f"\n--- {datetime.now().isoformat()} "
+                        f"(swallowed: {where}) ---\n"
+                        f"{traceback.format_exc()}\n")
+        except (IOError, OSError, NameError):
+            pass
 
     def _autosave_now(self):
         """Run an auto-save if the current editor content is worth saving and
@@ -704,7 +732,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         try:
             self.update_word_count()
         except Exception:
-            pass
+            self._log_swallowed("autosave: catch-up word count")
         # An occurrence view can't be saved without asking "this occurrence
         # or the whole series?", and a silent background timer must never
         # open a dialog — every pause in typing used to raise the question,
@@ -719,6 +747,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         try:
             st = self.capture_editor_state()
         except Exception:
+            self._log_swallowed("autosave: capture_editor_state")
             return
         # Never auto-save a completely empty note — that would spawn junk notes
         # every time the user clicks "New Note". Attachments and checklist
@@ -734,7 +763,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             if self.editor_state_matches_saved(st):
                 return
         except Exception:
-            pass
+            self._log_swallowed("autosave: editor_state_matches_saved")
         # Reuse the normal save path, but mark it as automatic so the status
         # message is gentle rather than a loud "Saved!".
         self.save_current_note(auto=True)
@@ -1125,6 +1154,13 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             entries.append((DATA_FILE, "notes_data.json"))
         if os.path.exists(SETTINGS_FILE):
             entries.append((SETTINGS_FILE, "settings.json"))
+        # A backup is only a backup if it carries the WHOLE notebook:
+        # templates and the trash used to be silently left out, and moving
+        # to another device lost them.
+        if os.path.exists(TEMPLATES_FILE):
+            entries.append((TEMPLATES_FILE, "templates.json"))
+        if os.path.exists(TRASH_FILE):
+            entries.append((TRASH_FILE, "trash.json"))
         if os.path.isdir(ATTACHMENTS_DIR):
             for filename in os.listdir(ATTACHMENTS_DIR):
                 full_path = os.path.join(ATTACHMENTS_DIR, filename)
@@ -2854,7 +2890,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 continue
             if column and column.get("width"):
                 # The dash count is the display width, exactly -- narrower
-                # than the content clips the drawing, never the text.
+                # than the content clips to an ellipsis, deliberately (a
+                # hand-narrowed column). Pasted markdown's conventional
+                # "---" never reaches here: parse_separator reads a
+                # minimum-width separator as "no width opinion".
                 col_w[c] = char_px * column["width"] + 2 * pad_x
                 continue
             for r, row in enumerate(rows):
@@ -3823,7 +3862,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
     def _grid_set_col_width(self, info, c, width):
         def mutate(sep_cols, rows, aligns):
             if c < len(sep_cols):
-                sep_cols[c]["width"] = max(1, int(width))
+                # Floor 4, not 1: parse_separator reads a <=3-char cell as
+                # markdown's conventional "no width opinion", so an
+                # authored 2-3 wrote "---" and came straight back as
+                # unclamped — the narrowest a hand-set column can be is
+                # the narrowest width that still round-trips as authored.
+                sep_cols[c]["width"] = max(4, int(width))
                 sep_cols[c]["hidden"] = False
         self._grid_column_mechanics(info, mutate)
 
@@ -7879,6 +7923,20 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     state["done"] = True
                     return
                 state["imported_notes"] = imported_notes
+                # Templates and trash ride along when the backup has them
+                # (older backups don't — both stay optional, and a bad
+                # file skips quietly: the notes are the payload).
+                for extra, key in (("templates.json", "imported_templates"),
+                                   ("trash.json", "imported_trash")):
+                    extra_path = os.path.join(temp_dir, extra)
+                    if os.path.exists(extra_path):
+                        try:
+                            with open(extra_path, "r", encoding="utf-8") as f:
+                                loaded = json.load(f)
+                            if isinstance(loaded, list):
+                                state[key] = loaded
+                        except (json.JSONDecodeError, IOError, OSError):
+                            pass
 
                 # Copy any attached files from the backup into our attachments
                 # folder — the slowest part for a backup with a lot of them.
@@ -7996,8 +8054,13 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # other's file. Give the import its own copy instead. Same fix as
         # duplicate_note; the copy source is the file the copy-loop above
         # already placed in the attachments folder.
+        # The trash's files count as claimed too: re-importing your own
+        # backup used to append a twin trash entry sharing the original's
+        # physical file, and delete-forever on either destroyed the
+        # other's attachment.
         claimed = {a.get("stored_as")
-                   for n in self.notes
+                   for n in (self.notes + self.trash)
+                   if isinstance(n, dict)
                    for a in (n.get("attachments") or [])
                    if isinstance(a, dict)}
         next_id = max([n["id"] for n in self.notes], default=0) + 1
@@ -8018,13 +8081,79 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             next_id += 1
             self.notes.append(note)
 
+        # Templates and trash from the backup merge ADDITIVELY — nothing
+        # local is replaced or removed (Z05-F07: both used to be left out
+        # of the backup entirely, lost on every device move).
+        added_templates = 0
+        for tpl in (state.get("imported_templates") or []):
+            if not isinstance(tpl, dict):
+                continue
+            tpl = normalize_template(tpl)
+            if tpl.get("name") and not any(
+                    t.get("name") == tpl.get("name") for t in self.templates):
+                self.templates.append(tpl)
+                added_templates += 1
+        if added_templates:
+            save_templates(self.templates)
+        added_trash = 0
+        existing_trash_keys = {_dup_key(normalize_note(e))
+                               for e in self.trash if isinstance(e, dict)}
+        for entry in (state.get("imported_trash") or []):
+            if not isinstance(entry, dict):
+                continue
+            raw_deleted = entry.get("deleted_at")
+            # Whitelist through normalize_note like every other imported
+            # dict: a foreign trash.json carrying deleted_at=5 used to
+            # reach the Trash panel raw and crash its sort. deleted_at is
+            # re-attached afterwards (normalize drops it), as a str only.
+            entry = normalize_note(entry)
+            entry["deleted_at"] = (raw_deleted
+                                   if isinstance(raw_deleted, str) else "")
+            key = _dup_key(entry)
+            if key in existing_trash_keys:
+                # Re-importing your own backup must not double the trash.
+                continue
+            existing_trash_keys.add(key)
+            # Same claimed-file discipline as the notes above: a trashed
+            # entry pointing at a file an ACTIVE note owns would, on its
+            # later purge, delete that file out from under the note.
+            atts = []
+            for a in (entry.get("attachments") or []):
+                if not isinstance(a, dict):
+                    continue
+                a = dict(a)
+                name = a.get("stored_as")
+                if name in claimed:
+                    new_name = copy_attachment_file(name)
+                    if new_name:
+                        a["stored_as"] = new_name
+                        claimed.add(new_name)
+                elif name:
+                    claimed.add(name)
+                atts.append(a)
+            entry["attachments"] = atts
+            self.trash.append(entry)
+            added_trash += 1
+        if added_trash:
+            save_trash(self.trash)
+
         self.save_notes()
         self.refresh_note_list()
         self.render_calendar()
         shutil.rmtree(temp_dir, ignore_errors=True)
 
         skipped_note = f" ({dupe_count} duplicate(s) skipped)" if dupe_count and to_import is not valid_notes else ""
-        self.show_info("Import complete", f"Added {len(to_import)} note(s) from the backup.{skipped_note}")
+        extras_note = ""
+        if added_templates or added_trash:
+            parts = []
+            if added_templates:
+                parts.append(f"{added_templates} template(s)")
+            if added_trash:
+                parts.append(f"{added_trash} trashed note(s)")
+            extras_note = " Also restored " + " and ".join(parts) + "."
+        self.show_info("Import complete",
+                       f"Added {len(to_import)} note(s) from the backup."
+                       f"{skipped_note}{extras_note}")
 
     # ---------- Theme helpers ----------
     def get_note_color(self, note):
@@ -8641,6 +8770,13 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
 
 
+    @staticmethod
+    def _widget_alive(widget):
+        try:
+            return bool(widget.winfo_exists())
+        except tk.TclError:
+            return False
+
     def track_theme(self, widget, **option_map):
         self.themed_widgets.append((widget, option_map))
         widget.configure(**{opt: self.colors[key] for opt, key in option_map.items()})
@@ -8678,6 +8814,14 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
     def apply_theme(self):
         self.configure(bg=self.colors["bg"])
+        # Prune dead entries first: the rebuilt Settings panels re-track
+        # their dropdowns and buttons on every visit, and the registry
+        # kept the destroyed ones forever — the note-card leak class, at
+        # the registry level (each dead entry cost a caught TclError on
+        # every switch, growing without bound).
+        self.themed_widgets = [
+            (w, m) for w, m in self.themed_widgets
+            if self._widget_alive(w)]
         for widget, option_map in self.themed_widgets:
             try:
                 widget.configure(**{opt: self.colors[key] for opt, key in option_map.items()})
@@ -11184,28 +11328,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if query == "search notes...":
             query = ""
 
-        # Search matches title, body, and comments. Coerce every field to a
-        # string first — a note with a missing/None field (from older or
-        # slightly corrupt data) would otherwise crash the whole list render
-        # and show nothing.
-        def _txt(value):
-            return value.lower() if isinstance(value, str) else ""
-
-        def _body_txt(value):
-            # A body is searched by what the user wrote, not by table
-            # plumbing: searching "---" or "br" used to match every note
-            # holding a table. Only bodies that actually contain a pipe
-            # pay for the stripping.
-            if isinstance(value, str) and core_tables.CELL in value:
-                return core_tables.content_text(value).lower()
-            return _txt(value)
-
-        filtered = [
-            n for n in self.notes
-            if query in _txt(n.get("title"))
-            or query in _body_txt(n.get("body"))
-            or query in _txt(n.get("comments"))
-        ]
+        filtered = [n for n in self.notes
+                    if self._query_matches_note(query, n)]
 
         # Category/type filter (from the dropdown). "All" shows everything.
         chosen_category = getattr(self, "filter_var", None)
@@ -11612,6 +11736,28 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         n = len(self.selected_note_ids)
         self.bulk_selected_lbl.config(text=f"{n} selected")
 
+    @staticmethod
+    def _query_matches_note(query, note):
+        """The ONE definition of "this note matches the sidebar search".
+        The list render and Select-all-visible each carried a hand-rolled
+        copy, and the copies drifted: the list stripped table plumbing
+        from bodies (searching "---" no longer matches every table note)
+        while Select all matched the raw body — so "Select all visible"
+        quietly selected notes the filter had hidden, and bulk actions
+        hit them. Every field is coerced to a string first, so a
+        missing/None field from older data can't crash the render."""
+        def _txt(value):
+            return value.lower() if isinstance(value, str) else ""
+
+        body = note.get("body")
+        if isinstance(body, str) and core_tables.CELL in body:
+            body_txt = core_tables.content_text(body).lower()
+        else:
+            body_txt = _txt(body)
+        return (query in _txt(note.get("title"))
+                or query in body_txt
+                or query in _txt(note.get("comments")))
+
     def _bulk_select_all(self):
         """Selects every note currently visible in the list (respecting
         whatever search/category filter is active) — not necessarily every
@@ -11620,14 +11766,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if query == "search notes...":
             query = ""
 
-        def _txt(value):
-            return value.lower() if isinstance(value, str) else ""
-
-        visible = [
-            n for n in self.notes
-            if query in _txt(n.get("title")) or query in _txt(n.get("body"))
-            or query in _txt(n.get("comments"))
-        ]
+        visible = [n for n in self.notes
+                   if self._query_matches_note(query, n)]
         chosen_category = getattr(self, "filter_var", None)
         if chosen_category is not None and self.filter_var.get() != "All":
             visible = [n for n in visible
@@ -12085,6 +12225,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         try:
             st = self.capture_editor_state()
         except Exception:
+            self._log_swallowed("flush: capture_editor_state")
             return
         if not (st.get("title", "").strip() or st.get("body", "").strip()
                 or st.get("comments", "").strip()
@@ -12094,7 +12235,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             if not self.editor_state_matches_saved(st):
                 self.save_current_note(auto=True)
         except Exception:
-            pass
+            # THE silent spot the audit named: a save failing here, at
+            # note-switch or close, is exactly "stopped saving in
+            # complete silence" — leave the trace.
+            self._log_swallowed("flush: save_current_note")
 
     def switch_to_tab(self, index):
         if index == self.active_tab_index:
@@ -13836,6 +13980,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             except Exception:
                 # Closing must not get stuck behind a broken tab; the
                 # autosaves along the way have the rest.
+                self._log_swallowed("close: per-tab final save")
                 continue
         # A backup export/import may still be writing on its worker thread;
         # destroy() would kill it mid-file. Wait (capped) for it to finish.

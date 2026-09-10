@@ -312,6 +312,17 @@ check('Back to Notes presses in the live palette',
       and str(_back2.cget('activebackground')) == app.colors['card']
       and str(_back2.cget('activeforeground')) == app.colors['text'])
 
+# ---- THEME registry prunes its dead (the revisit leak) ----
+# Rebuilt Settings panels re-track their widgets on every visit; the
+# registry kept the destroyed entries forever, growing without bound.
+_dead_probe = tk.Label(app, text='soon gone')
+app.track_theme(_dead_probe, bg='card')
+_dead_probe.destroy()
+app.toggle_theme(); app.update()
+check('a theme switch prunes destroyed widgets from the registry',
+      not any(w is _dead_probe for w, _m in app.themed_widgets))
+app.toggle_theme(); app.update()
+
 # ---- PERFORMANCE: note list with larger count ----
 app.notes = [{'id':i,'title':f'Perf{i}','body':'x'*30,'category':'General',
              'updated':'2026-01-01 00:00','created':'2026-01-01 00:00',
