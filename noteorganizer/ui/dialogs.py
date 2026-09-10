@@ -459,7 +459,12 @@ class DialogsMixin:
         # Live-track the app window while this popup is open (move + resize).
         # Cleaned up in _dismiss_mini_popup so it doesn't linger once closed.
         self._mini_popup_configure_bind = self.bind("<Configure>", throttled_reposition, add="+")
-        pop.bind("<Escape>", lambda e: self._dismiss_mini_popup())
+        # Never clobber a popup's OWN Escape: a nested dropdown binds
+        # Escape→close-just-this-list before being placed, and replacing
+        # that here made Escape tear down the HOST editor the list sits
+        # inside instead of the list itself.
+        if not pop.bind("<Escape>"):
+            pop.bind("<Escape>", lambda e: self._dismiss_mini_popup())
         if enable_click_outside:
             self._mini_popup_click_bind = self.bind(
                 "<Button-1>", self._maybe_dismiss_mini_popup, add="+")

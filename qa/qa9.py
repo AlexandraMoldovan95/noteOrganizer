@@ -132,6 +132,38 @@ dropdown_popup = open_nested_dropdown(app, cat_btn)
 check('editor stays open after opening the category dropdown (bug 1)', editor_popup.winfo_exists())
 check('nested dropdown popup exists', dropdown_popup is not None and dropdown_popup.winfo_exists())
 
+# ---- Escape in a NESTED dropdown closes just the list (audit Z07-F01) ----
+# The placement helper used to rebind <Escape> to the shared
+# dismiss-mini-popup, clobbering the nested list's own bind — Escape
+# then tore down the template EDITOR the list sits inside.
+if dropdown_popup is not None:
+    dropdown_popup.focus_force(); app.update()
+    dropdown_popup.event_generate('<Escape>')
+    for _ in range(60):
+        app.update()
+        if not dropdown_popup.winfo_exists():
+            break
+        time.sleep(0.02)
+    check('Escape closes the nested list itself',
+          not dropdown_popup.winfo_exists())
+    check('and the editor underneath SURVIVES it',
+          editor_popup.winfo_exists() and app._mini_popup is editor_popup)
+    if not editor_popup.winfo_exists():
+        # Mutant world (Escape tore the editor down): rebuild it so the
+        # rest of the suite still runs and the verdict reaches the
+        # footer instead of crashing on dead widgets.
+        app._edit_template(None, redraw=lambda: None)
+        app.update()
+        editor_popup = app._mini_popup
+        name_entry = find_widget(editor_popup, tk.Entry)
+        name_entry.delete(0, 'end')
+        name_entry.insert(0, 'MyTemplate')
+        cat_btn = find_dropdown_by_label(editor_popup, 'General')
+    # Reopen for the docking checks below, which expect an open list.
+    dropdown_popup = open_nested_dropdown(app, cat_btn)
+    check('the dropdown reopens after the Escape round',
+          dropdown_popup is not None and dropdown_popup.winfo_exists())
+
 app.update_idletasks()
 btn_x, btn_y = cat_btn.winfo_rootx(), cat_btn.winfo_rooty()
 btn_h = cat_btn.winfo_height()
