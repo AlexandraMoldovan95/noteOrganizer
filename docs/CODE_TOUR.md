@@ -55,7 +55,7 @@ py note_organizer.py
 
 `note_organizer.py` is still the front door. The pure logic has moved into
 the `noteorganizer/` package next to it and is imported back in; the entry
-file itself stays large (~13,250 lines) because it is the UI hub the pieces
+file itself stays large (~14,100 lines) because it is the UI hub the pieces
 hang off, not a junk drawer of stray logic.
 
 To run every test — units + qa1–qa9 — safely in a scratch copy:
@@ -373,7 +373,7 @@ Two are handled explicitly, because dates are full of them:
 
 ### Where it's tested
 
-`test_recurrence.py` — 18 checks, no GUI. Read it alongside the module: it
+`test_recurrence.py` — 47 checks, no GUI. Read it alongside the module: it
 covers the clamp/skip policies, count and end-date limits, exceptions, and
 the performance case above.
 
@@ -624,9 +624,14 @@ export like everything else, and `richtext.py` turns them into
 mechanics, not data: the dash count is the column's display width (a
 hand-dragged resize is remembered as more or fewer dashes), the colons
 are its alignment, and `~` is a hidden column. `parse_separator()` reads
-those into plain dicts, `make_separator()` writes them back exactly —
-the width is honoured to the dash, so regenerating the row never forgets
-a resize — and `separator_index()` only accepts it in a block's first
+those into plain dicts — with one deliberate waiver since 0.71.134: a
+minimum-width cell (three characters or fewer, the `---` every markdown
+serializer writes regardless of content) carries no width opinion and
+parses as `width=None`, so pasted tables size to their content while a
+hand-authored width (always 4+, the setter floors it there) stays
+exact. `make_separator()` writes authored widths back to the dash, so
+regenerating the row never forgets a resize —
+and `separator_index()` only accepts it in a block's first
 two rows, where Markdown puts it; a dashed line further down is far more
 likely to be content. `align()` treats the separator as mechanics too:
 its dashes are never measured as content, but a column hand-widened past
@@ -894,7 +899,7 @@ file, unreadable file, or valid JSON of entirely the wrong shape all give
 an empty default rather than an exception. The app is meant to keep running
 with an empty notebook, not refuse to start because one file got damaged.
 
-`save_settings` is read-modify-write rather than a blind overwrite, so two
+`save_setting` (singular) is read-modify-write rather than a blind overwrite, so two
 features updating different keys can't clobber each other.
 
 ---

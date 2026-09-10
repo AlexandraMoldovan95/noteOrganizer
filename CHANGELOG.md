@@ -83,7 +83,7 @@ How the numbers themselves are counted is the
   separator was honoured as an exact display width, clipping the drawn column under its
   own text. A minimum-width separator now means "no width opinion" — while a
   hand-narrowed column keeps its deliberate ellipsis, and the narrowest drag now
-  round-trips as authored. From the code audit, widened by adversarial review.
+  round-trips as authored. From the code audit, widened by adversarial review. ([the full story](docs/ISSUES_LOG.md#the-clipping-that-turned-out-to-be-a-feature))
 - **A backup carries the whole notebook.** Templates and the trash were silently left
   out of the export and never read on import — moving devices lost both. They ride
   along now and merge additively, normalized, deduped, and with imported trash
@@ -109,7 +109,7 @@ How the numbers themselves are counted is the
   The review then proved the wider class live: after opening a table note, "New note"
   left a dead table's bookmark behind, and the caret guard walked the fresh note's caret
   to its end on the next keystroke. A grid whose drawing is gone now answers no queries
-  at all. From the code audit, widened by adversarial review.
+  at all. From the code audit, widened by adversarial review. ([the full story](docs/ISSUES_LOG.md#the-table-that-outlived-its-own-deletion))
 - **Deleting a table no longer yanks the page.** Table delete was the one grid operation
   that never snapshotted the view before tearing down, so the redraw faithfully pinned
   the already-jumped scroll position. It now captures first, like its siblings. From the
@@ -131,7 +131,7 @@ How the numbers themselves are counted is the
   field, the main editor included); dropdown and category borders, the export progress
   bar, recurrence radio wells, checklist checkboxes, press colours on Back to Notes and
   the right-click menus, and the settings buttons' hover all kept the old palette in one
-  corner or another. All follow the live theme now. From the code audit, widened by
+  corner or another. All follow the live theme now. From the code audit, widened by ([the full story](docs/ISSUES_LOG.md#the-safety-net-that-hid-the-missing-mechanism))
   adversarial review.
 - **An emoji earlier on the line no longer shifts what you click, tab to, or find.** Tk
   counts an emoji as two index steps while Python counts one, and three places mixed the
@@ -153,13 +153,13 @@ How the numbers themselves are counted is the
   reference, so the trashed twin's automatic purge later destroyed the very file the merge
   existed to preserve; and re-importing an overlapping backup could hand an imported note a
   file an existing note already owned. All three routes now give the copy its own fresh
-  file. From the code audit.
+  file. From the code audit. ([the full story](docs/ISSUES_LOG.md#the-duplicate-that-wasnt-a-copy))
 - **A just-typed emoji no longer crashes sharing or exporting a note.** An emoji typed into
   a note is held internally as a UTF-16 surrogate pair, and the repair for those only ran
   when *saving to disk* — so building a share code for an unsaved emoji raised an encoding
   error, and exporting such a note to a file (single or bulk) crashed the export the same
   way. Both boundaries now repair surrogates before encoding, so the emoji arrives whole.
-  From the code audit.
+  From the code audit. ([the full story](docs/ISSUES_LOG.md#the-mend-that-only-ran-on-the-way-to-disk))
 - **Destructive confirmations warn clearly and no longer pre-select "Yes".** Confirm
   dialogs could ask for a warning icon and for "No" to be the pre-selected button — but
   both requests were silently ignored, so the dialog showed the neutral question mark and
@@ -168,7 +168,7 @@ How the numbers themselves are counted is the
   template, deleting an attachment or a template forever, overwriting a template by name,
   emptying the trash, resetting an edited calendar day, restoring a previous version, and
   opening a risky file. Escape still chooses the safe option; recoverable move-to-trash
-  confirms deliberately keep Enter as "proceed". From the code audit.
+  confirms deliberately keep Enter as "proceed". From the code audit. ([the full story](docs/ISSUES_LOG.md#the-safety-request-the-dialog-never-read))
 
 ## [0.71.116] — 2026-09-09
 
@@ -179,7 +179,7 @@ How the numbers themselves are counted is the
   indent, rewrites the whole note body to renumber it (delete everything, reinsert). That
   rewrite wasn't a single undo step, so one Ctrl+Z could take back the reinsert but not the
   delete — leaving the note showing empty. The rewrite is now one undo unit, on every path
-  that triggers it. From the code audit.
+  that triggers it. From the code audit. ([the full story](docs/ISSUES_LOG.md#the-undo-that-stopped-halfway-the-sequel-lists-and-the-grid-trio))
 - **Editing a list above a table no longer dissolves the table.** The same whole-body
   renumber tore out the drawn table (its cells reverted to raw `| pipe | rows |`) because
   it never redrew the grid afterward. It now redraws any table the body still holds. From
@@ -205,14 +205,14 @@ How the numbers themselves are counted is the
   too), and both the delete and the open paths now resolve through a guard that refuses
   anything outside the attachments folder and keys the safety warning off the real file.
   From the code audit's high-severity findings, completed under an adversarial security
-  review.
+  review. ([the full story](docs/ISSUES_LOG.md#the-share-code-that-could-delete-your-files))
 - **A corrupt repeat interval can no longer crash the app on launch.** A recurrence rule
   whose interval was enormous — from a hand-edited `notes_data.json` or a crafted share
   code — overflowed the date maths and, because the calendar draws itself at startup,
   could stop the app from opening at all. The interval is now clamped to a sane maximum
   (every 1000 days/weeks/months/years — far beyond any real use) at the single point every
   route passes through, so no source of data can bring the app down this way. From the
-  code audit's high-severity findings.
+  code audit's high-severity findings. ([the full story](docs/ISSUES_LOG.md#the-repeat-interval-with-no-ceiling))
 
 ## [0.71.111] — 2026-09-09
 

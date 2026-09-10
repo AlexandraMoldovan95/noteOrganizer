@@ -2,15 +2,15 @@
 
 A fast, fully offline desktop notes app built with Python and Tkinter — no cloud, no accounts, and a single third-party dependency (Pillow, for image previews). Every note, attachment, and setting lives in a folder on your own machine.
 
-Built as a solo/pair project (developer + AI pairing partner) across 27 versioned releases, with a strong focus on real-world polish: a custom themed UI (no OS-native popups anywhere), a recurring-events engine, background-threaded import/export, and a defensive data layer that keeps the app usable even when things go wrong.
+Built as a solo/pair project (developer + AI pairing partner) across 40 versioned releases, with a strong focus on real-world polish: a custom themed UI (no OS-native popups anywhere), a recurring-events engine, background-threaded import/export, and a defensive data layer that keeps the app usable even when things go wrong.
 
 ![The main window: a note with a table, the formatting toolbar, and the notes sidebar](docs/screenshots/main-window.png)
 *More screenshots throughout the [User Guide](docs/USER_GUIDE.md).*
 
 ## Project highlights
 
-- **Ships as a real Windows app** — a PyInstaller one-folder build, released and field-tested across 27 versions: five early milestones plus 22 numbered bumps (the [Changelog](CHANGELOG.md) tells the story; the [version ledger](docs/ROADMAP.md#version-ledger) accounts for every number).
-- **~870 GUI checks on every push** — a nine-script headless suite driving the real app, plus six standalone unit suites, run in CI on both Windows and Linux.
+- **Ships as a real Windows app** — a PyInstaller one-folder build, released across 40 versions — five early milestones plus 35 numbered bumps — and field-tested against a written test plan along the way (the [Changelog](CHANGELOG.md) tells the story; the [version ledger](docs/ROADMAP.md#version-ledger) accounts for every number).
+- **~1,540 automated checks on every push** — a nine-script headless GUI suite (~1,070 checks) driving the real app plus six unit suites, run in CI on both Windows and Linux.
 - **Fully offline by design** — plain local JSON files, no accounts, no network calls, one dependency.
 - **A hand-built themed UI** — every dialog, dropdown and picker is custom-drawn; 8 themes, switchable live.
 - **Everything is plain text underneath** — tables drawn as real grids, checkboxes, rich text and lists are all stored as readable Markdown-style text, so notes survive export, sharing and backup intact.
@@ -43,7 +43,7 @@ Built as a solo/pair project (developer + AI pairing partner) across 27 versione
 
 - Daily / weekly / monthly / yearly repeats with custom intervals — specific weekdays, or month-days with a *clamp/skip* choice for "the 31st"
 - End after N occurrences, by a date, or never; edit or delete "just this one" vs "this and all future"
-- A full calendar view with month navigation, jump-to-date and per-day colouring
+- A full calendar view with month navigation, jump-to-date and per-day colouring — plus a searchable **History** register of every dated note and each series' edited days
 
 *Full walkthrough: [User Guide → Recurring notes](docs/USER_GUIDE.md#recurring-notes)*
 
@@ -57,15 +57,15 @@ Built as a solo/pair project (developer + AI pairing partner) across 27 versione
 
 ### Data safety, sharing & backup
 
-- Soft-delete to a Trash with a retention window you choose (7–90 days); a corrupt or half-missing note degrades to safe defaults instead of crashing the app
+- Soft-delete to a Trash (Settings → Recently deleted) with a retention window you choose (7–90 days); a corrupt or half-missing note degrades to safe defaults instead of crashing the app
 - Share one or many notes as a compact copy-pasteable text code; export a note or a selection as formatted HTML (opens in any browser or Word) or plain text
-- Full backup as a single `.zip` on a background thread with live progress; import checks for duplicates before merging instead of silently doubling notes
+- Full backup as a single `.zip` — notes, settings, attachments, templates and the Trash together — written atomically on a background thread with live progress; import checks for duplicates before merging instead of silently doubling notes
 
 *Full walkthrough: [User Guide → Sharing & backup](docs/USER_GUIDE.md#sharing--backup)*
 
 ### Interface
 
-- A fully custom themed UI — nothing ever falls back to an OS-native white popup; 8 themes with a one-press ☀/🌙 flip in the editor
+- A fully custom themed UI — nothing ever falls back to an OS-native dialog; 8 themes with a one-press ☀/🌙 flip in the editor
 - Single-editor design, like a browser with one tab: switching notes always autosaves the previous one first
 - App-wide shortcuts — **Ctrl+N** new note, **Ctrl+S** save, **Ctrl+F** find in note — with every bound combo listed under Settings → Keyboard shortcuts
 
@@ -80,7 +80,7 @@ Built as a solo/pair project (developer + AI pairing partner) across 27 versione
 ## Tech notes
 
 - **Pure Python + Tkinter, with one dependency.** No GUI framework beyond the standard library; [Pillow](https://pypi.org/project/Pillow/) is the one exception, used to decode and scale image attachments (including composing animated GIF frames, which plain Tkinter doesn't do).
-- **Custom widget system throughout.** Every dropdown, palette and confirmation is a hand-positioned `Toplevel` popup, anchored and multi-monitor-safe, rather than `tkinter.messagebox` / `ttk.Combobox` defaults.
+- **Custom widget system throughout.** Every dropdown and palette is a hand-positioned `Toplevel` popup, anchored and multi-monitor-safe; every confirmation is an in-window overlay dialog that warns before anything irreversible and pre-selects the safe answer — nothing uses `tkinter.messagebox` / `ttk.Combobox` defaults.
 - **Background threading for I/O.** Export and import run on a worker thread; the main thread only ever touches Tkinter widgets from a polling callback, keeping the UI responsive.
 - **A defensive data layer.** `normalize_note()` coerces any note — however old, however malformed — into a known-good shape before it reaches the UI, so one corrupted entry can't take down the app.
 
@@ -165,7 +165,9 @@ noteOrganizer/
 │   ├── check_undefined_names.py  # names used but never imported (moving code breaks these)
 │   ├── check_class_api.py        # the app class must keep exactly the same methods
 │   ├── pre_push_check.py         # the static gates, runnable locally in seconds
-│   └── run_tests.py              # the whole suite, safely, from a scratch copy
+│   ├── run_tests.py              # the whole suite, safely, from a scratch copy
+│   ├── visual_scenes.py          # screenshot harness for eyeballing rendered scenes
+│   └── linux-ci/                 # one Docker command reproduces the Ubuntu CI leg
 ├── test_*.py                 # six standalone unit suites: recurrence, data safety,
 │                             #   calculator, tables, rich text, entry-module identity
 ├── docs/
@@ -187,8 +189,8 @@ noteOrganizer/
 ## Testing
 
 Every push and Pull Request runs the whole suite on GitHub Actions, on
-**both Windows and Linux**: about 870 checks across the nine-script
-headless GUI suite, plus the six unit suites. [qa/README](qa/README.md)
+**both Windows and Linux**: about 1,540 checks — ~1,070 across the
+nine-script headless GUI suite, plus the six unit suites. [qa/README](qa/README.md)
 maps which script guards which surface and carries the house rules new
 checks follow; the [Issues Log](docs/ISSUES_LOG.md) tells how some of
 those rules were earned. Check the **Actions** tab for the latest run.

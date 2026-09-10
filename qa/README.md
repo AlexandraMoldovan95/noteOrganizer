@@ -1,6 +1,7 @@
 # The qa suite — read me before touching a guarded surface
 
-Nine scripts, ~870 checks, all driving the real app headlessly (Xvfb on
+Nine scripts, ~1,070 checks (the six unit suites beside them bring the
+whole run to ~1,540), all driving the real app headlessly (Xvfb on
 Linux CI, real Windows Tk on the Windows CI job and every dev machine).
 The manual half of the QA story sits beside them:
 `NoteOrganizer_TestPlan.xlsx`, the structured test plan for scenarios
@@ -16,7 +17,7 @@ easier to eyeball than to automate.
 | `qa4` | theming, stress tests, leak regression |
 | `qa5` | corrupt data, edge cases |
 | `qa6` | grouping, settings, attachments, multi-feature combinations |
-| `qa7` | calendar delete, multi-select, image preview, autosave & memory fixes |
+| `qa7` | calendar delete, the calendar History register, multi-select, image preview, autosave & memory fixes |
 | `qa8` | search debounce, background-timer robustness |
 | `qa9` | the nested-dropdown-inside-popup fix |
 
@@ -166,6 +167,41 @@ A new surface joins this list the moment it ships.
   Use a value that escapes on every platform (a forward-slash
   `../../x`, or `os.path.relpath` to a sibling) when you need a
   guaranteed-None case.
+- **Where a safety net masks the mechanism, assert the mechanism.** A
+  fallback that repairs the symptom makes behaviour checks lie: the
+  theming straggler pass repainted an UNTRACKED frame's fill, and the
+  stock dark/light themes share an accent hex, so a both-themes
+  behaviour check stayed green with the tracking deleted. Such a check
+  asserts the registration itself (membership in `themed_widgets`)
+  alongside the behaviour — and distrust any palette pair sharing a
+  hex: it can vouch for nothing. The full story:
+  ["The safety net that hid the missing mechanism"](../docs/ISSUES_LOG.md#the-safety-net-that-hid-the-missing-mechanism).
+- **Prefer recording the synchronous call over reading asynchronous
+  state back.** Polling (below) tames async reads, but when the
+  promise IS the decision — which button got `focus_set`, whether the
+  view snapshot existed when render ran, in what ORDER capture and
+  teardown happened — wrap the method, record the call, assert the
+  record. Deterministic under any load, and it can pin ordering, which
+  no amount of polling the end state can (qa6's dialog-focus recorder,
+  qa1's capture-before-teardown spy).
+- **A stale artifact in the system temp dir can green a check.** The
+  OS temp outlives runs: a zip left by a PREVIOUS run satisfied
+  "export produced a file" with the export's move-into-place step
+  deleted. Delete (or uniquely name) every temp-path artifact BEFORE
+  the action that is supposed to create it.
+- **Never hand Tcl's text search an astral needle.** `search` with
+  `-nocase` and a non-BMP character (any emoji) SEGFAULTS Linux Tk 8.6
+  outright — no FAIL line, no footer, a dead process whose buffered
+  stdout also lies about where it died (see below). The app
+  pre-screens: astral queries scan in Python and convert offsets with
+  `_tk_col`. A check that needs to find emoji goes through the app's
+  find model, never through a raw `text.search()` call.
+- **A crashed run's last printed PASS is not where it died.** Piped
+  stdout is block-buffered on Linux, so a segfault throws away up to a
+  buffer's worth of already-printed lines — the CI log's last PASS
+  once pointed ~200 checks before the real crash site. Bisect crashes
+  on the Docker mirror with `-e PYTHONUNBUFFERED=1`; trust exit codes
+  and the FAILURES footer, never the visible tail of a dead process.
 - **Focus is asynchronous both ways** — granting AND clearing. A check
   about where the app put the focus polls for the promised holder
   (qa1's `focus_settles_on`, the assert-only twin of `take_focus` —
