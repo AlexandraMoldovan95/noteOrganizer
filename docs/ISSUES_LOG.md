@@ -49,6 +49,8 @@ day-to-day tracking.
 | [The accepted cost that nobody had accepted](#the-accepted-cost-that-nobody-had-accepted) | When a docstring says 'accepted cost', check who pays it, and for what. | 0.64.95 |
 | [The undo that stopped halfway](#the-undo-that-stopped-halfway) | Burst edits owe undo a boundary, redraws owe it silence; probe what Tk records. | 0.64.95 |
 | [The undo that stopped halfway, the sequel](#the-undo-that-stopped-halfway-the-sequel-lists-and-the-grid-trio) | When a fix has a sibling family, audit which siblings were missed; a "drawn?" check reads real windows, not a stale dict. | 0.71.113 |
+| [The table that outlived its own deletion](#the-table-that-outlived-its-own-deletion) | A cached handle to a drawn thing must prove the drawing still exists — Tk marks survive the delete that killed the widgets. | 0.71.125 |
+| [The safety net that hid the missing mechanism](#the-safety-net-that-hid-the-missing-mechanism) | When a fallback masks the primary mechanism, assert the mechanism — a behaviour check green under two themes proved nothing. | 0.71.125 |
 | [The Trash panel that took two seconds to open](#the-trash-panel-that-took-two-seconds-to-open) | Don't build and wire every row up front; render a page, reveal more on demand. | 0.4.0 |
 | [The slowdown that only showed up after a long session](#the-slowdown-that-only-showed-up-after-a-long-session) | 'Slow after a while, fine at first' means unbounded growth; reproduce with a loop. | 0.4.0 |
 | [Export/import freezing the app](#exportimport-freezing-the-app) | Do file I/O on a worker thread; only the main thread touches Tkinter widgets. | 0.4.0 |
@@ -1021,6 +1023,36 @@ audit is "which siblings were missed", not "does the reported one work".
 And a check for "is it drawn" must read the widget's real embedded
 windows, never a bookkeeping dict that a teardown can leave stale.
 
+### The table that outlived its own deletion
+
+**The report.** An adversarial review of the 0.71.125 grid fixes went
+looking for other body-loaders that skipped the redraw tail — and found
+something worse than a missing redraw. Open a note with a drawn table,
+click New note, type two lines, click back into line 1: the next
+keystroke threw the caret to the end of the note and the character
+landed there.
+
+**The mechanism.** "New note" clears the editor with a bare
+`delete("1.0","end")`. That destroys the table's embedded window
+characters — but the grid bookkeeping lives on: Tk *marks* survive a
+full-range delete, collapsed to `1.0`. `_grid_first_line` read only the
+mark, so the dead table answered "I start on line 1" in a note that had
+no table at all. Every consumer believed it: the caret guard "escaped"
+the phantom hidden rows by walking to the end, and line-1 column math
+budgeted for a window character that wasn't there. The qa suite's own
+`set_body` helper tears grids down before deleting — the tests knew a
+bare delete was unsafe; the app's `new_note` didn't.
+
+**Fix:** liveness at the root. `_grid_first_line` refuses to answer for
+a grid whose frame no longer exists, which covers every route that can
+destroy the windows without a teardown (typing over a Ctrl+A selection
+takes the same path) instead of patching `new_note` alone.
+
+**Takeaway:** a cached handle to a drawn thing must prove the drawing
+still exists before answering questions about it. Tk's marks are
+deliberately durable — they outlive the widgets they were planted for,
+and durable state plus dead widgets is a haunting.
+
 ## Theming & performance
 
 *Keeping a hand-themed UI consistent, and fast enough for weak machines.*
@@ -1401,3 +1433,33 @@ the code years later while staying green the whole time. Reintroducing
 the original bug is the cheapest possible proof either way — and the
 fixes this log documents are a ready-made mutant catalogue. Audit a
 few, every so often; green should have to earn itself.
+
+### The safety net that hid the missing mechanism
+
+**The report.** While proving the 0.71.125 theming mutants, one refused
+to die. The export progress frame had never been theme-tracked; the fix
+tracked it; the mutant deleted the tracking — and the qa check asserting
+"the frame's colours follow a switch, under BOTH themes" stayed green
+with the tracking gone.
+
+**The mechanism.** Two accidents stacked. `apply_theme` ends with
+`_recolor_stragglers`, a safety net that walks the whole widget tree
+remapping any bg/fg still painted in another theme's palette — so the
+untracked frame's fill followed anyway. And the frame's border was the
+accent colour, which happens to be the same hex in the stock dark and
+light themes — so the one option the net does NOT cover matched "the
+right colour" by coincidence, in both themes the check used. The net is
+designed as a fallback for exactly such misses; it did its job so well
+it made the missing primary mechanism untestable through behaviour
+alone.
+
+**Fix:** the check asserts the mechanism alongside the behaviour — the
+frame must actually be registered in `themed_widgets`. Same move as the
+dialog-focus checks that record the `focus_set` call instead of reading
+asynchronous focus back: when the observable outcome is reachable by
+more than one route, pin the route the promise is about.
+
+**Takeaway:** a fallback that masks the primary mechanism makes
+behaviour checks lie — they go green when the belt is gone and only the
+braces remain. Assert the mechanism where a net exists, and distrust
+any palette pair that shares a hex: it can vouch for nothing.

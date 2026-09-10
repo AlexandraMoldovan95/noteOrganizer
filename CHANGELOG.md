@@ -12,6 +12,7 @@ How the numbers themselves are counted is the
 
 | Version | Date | In one line |
 |---|---|---|
+| [0.71.125](#071125--2026-09-10) | 2026-09-10 | Six audit medium classes swept whole — visible carets and honest saves, atomic exports that closing waits for, tables that redraw and hold the view, emoji-proof clicks and finds. |
 | [0.71.119](#071119--2026-09-09) | 2026-09-09 | Three audit-found user-facing safety fixes — every route that copies a note gives the copy its own attachment files, a fresh emoji no longer crashes sharing or export, and destructive confirms warn clearly instead of pre-selecting Yes. |
 | [0.71.116](#071116--2026-09-09) | 2026-09-09 | Undo is whole on lists and tables — one Ctrl+Z never empties a note, dissolves a table, or half-undoes a checkbox. |
 | [0.71.113](#071113--2026-09-09) | 2026-09-09 | Import hardening — a hostile share code can't delete outside files, and a corrupt repeat interval can't crash the app on launch. |
@@ -51,6 +52,48 @@ How the numbers themselves are counted is the
 ---
 
 ## [Unreleased]
+
+## [0.71.125] — 2026-09-10
+
+*Highlights: six audit-found medium classes, each fixed and then widened to every sibling an adversarial review could find — the caret stays visible across theme switches, a failed save is never silent, backups export atomically and closing waits for them, restored tables draw themselves, and emoji stop shifting clicks, cells and find highlights.*
+
+### Fixed
+- **Restoring a previous version draws what it restores — and a dead table can't haunt a
+  fresh note.** Restore was the one body-loader that skipped the redraw, so a restored
+  table came back as raw pipe rows and the word count kept describing the replaced text.
+  The review then proved the wider class live: after opening a table note, "New note"
+  left a dead table's bookmark behind, and the caret guard walked the fresh note's caret
+  to its end on the next keystroke. A grid whose drawing is gone now answers no queries
+  at all. From the code audit, widened by adversarial review.
+- **Deleting a table no longer yanks the page.** Table delete was the one grid operation
+  that never snapshotted the view before tearing down, so the redraw faithfully pinned
+  the already-jumped scroll position. It now captures first, like its siblings. From the
+  code audit.
+- **A failed save of the trash, templates or settings is no longer silent.** Those three
+  writers dropped the verdict their own writing routine returned — no message, no log,
+  nothing. Every failed data-file write now lands in `crash_log.txt` and shows an error
+  toast naming the file, whatever route it failed on. From the code audit.
+- **A backup export can't destroy the old backup, and closing the app waits for it.**
+  The export wrote its zip straight onto the file being replaced, so a mid-write failure
+  — or closing the app, which killed the background writer mid-file — destroyed the very
+  backup being refreshed. Exports (the single-note file export too) now write beside the
+  target and move into place only when whole; closing waits for an in-flight
+  export/import; a second Export can't start over a running one; and an imported
+  attachment can no longer be left half-copied and then skipped forever. From the code
+  audit, widened by adversarial review.
+- **Theme switches now reach the colours they used to miss.** The caret went invisible
+  after a dark↔light switch (its colour was frozen at build time in every long-lived
+  field, the main editor included); dropdown and category borders, the export progress
+  bar, recurrence radio wells, checklist checkboxes, press colours on Back to Notes and
+  the right-click menus, and the settings buttons' hover all kept the old palette in one
+  corner or another. All follow the live theme now. From the code audit, widened by
+  adversarial review.
+- **An emoji earlier on the line no longer shifts what you click, tab to, or find.** Tk
+  counts an emoji as two index steps while Python counts one, and three places mixed the
+  two: double-click selected the wrong word, tabbing into a table cell landed the caret
+  and selection one place short per emoji, and find-in-note's highlight swallowed the
+  character after a matched emoji. One conversion helper now translates at every
+  boundary. From the code audit, widened by adversarial review.
 
 ## [0.71.119] — 2026-09-09
 
