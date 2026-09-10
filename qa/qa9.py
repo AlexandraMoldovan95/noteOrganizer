@@ -146,6 +146,10 @@ if dropdown_popup is not None:
         time.sleep(0.02)
     check('Escape closes the nested list itself',
           not dropdown_popup.winfo_exists())
+    # The popup we focus_force'd is gone — under full-suite load the
+    # focus is then NOWHERE and later generated clicks go astray (the
+    # documented dropped-click class). Hand it back before moving on.
+    app.focus_force(); app.update()
     check('and the editor underneath SURVIVES it',
           editor_popup.winfo_exists() and app._mini_popup is editor_popup)
     if not editor_popup.winfo_exists():
