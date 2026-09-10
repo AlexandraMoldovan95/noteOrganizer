@@ -1100,6 +1100,14 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         seconds. The main thread only ever touches Tkinter widgets from the
         polling callback below; the worker thread does file I/O and updates
         a plain shared dict, which is all it's allowed to touch."""
+        # One file operation at a time (audit Z05-F05): a second click on
+        # Export mid-run used to start a second worker onto the SAME .tmp,
+        # interleaving the two, and overwrote _export_state so the first
+        # worker's outcome was never reported.
+        if self._export_state is not None or self._import_state is not None:
+            self.set_status("An export or import is already running — "
+                            "let it finish first.")
+            return
         default_name = f"NotesBackup_{datetime.now().strftime('%Y-%m-%d')}.zip"
         save_path = filedialog.asksaveasfilename(
             title="Export your notes to a backup file",
@@ -7594,10 +7602,18 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if not path:
             return
         content = self._note_export_content(note, fmt, title)
+        # tmp-then-replace, like the backup zip: re-exporting over an
+        # existing file plus a mid-write failure used to destroy it.
+        tmp_path = path + ".tmp"
         try:
-            with open(path, "w", encoding="utf-8") as f:
+            with open(tmp_path, "w", encoding="utf-8") as f:
                 f.write(content)
+            os.replace(tmp_path, path)
         except (IOError, OSError) as exc:
+            try:
+                os.remove(tmp_path)
+            except OSError:
+                pass
             self.show_error("Export failed",
                             f"Couldn't write the file:\n{exc}")
             return
@@ -7790,6 +7806,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         The slow parts (extracting the zip, copying attachments back) run on
         a background thread, same as export — for a backup with a lot of
         attachments this used to visibly freeze the app while it worked."""
+        # Same one-at-a-time guard as export_data (audit Z05-F05).
+        if self._export_state is not None or self._import_state is not None:
+            self.set_status("An export or import is already running — "
+                            "let it finish first.")
+            return
         zip_path = filedialog.askopenfilename(
             title="Choose a notes backup (.zip) to import",
             filetypes=[("Zip files", "*.zip")]
@@ -7852,10 +7873,22 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     for i, filename in enumerate(files, start=1):
                         dest = os.path.join(ATTACHMENTS_DIR, filename)
                         if not os.path.exists(dest):
+                            # Copy beside, replace whole: the process dying
+                            # mid-copy used to leave a TRUNCATED attachment
+                            # here — and this very exists-guard then made
+                            # every re-import skip it, turning transient
+                            # damage permanent.
+                            part = dest + ".part"
                             try:
-                                shutil.copy2(os.path.join(imported_attachments_dir, filename), dest)
+                                shutil.copy2(
+                                    os.path.join(imported_attachments_dir, filename), part)
+                                os.replace(part, dest)
                             except (IOError, OSError):
-                                pass  # non-critical — the note metadata still gets imported
+                                try:
+                                    os.remove(part)
+                                except OSError:
+                                    pass
+                                # non-critical — the note metadata still gets imported
                         state["current"] = i
             except Exception as e:
                 # Last-resort catch-all, outside every specific handler above.
@@ -13730,13 +13763,14 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
     def _on_data_write_failure(self, path, exc):
         """core/storage's on_write_failure callback: a data-file write
-        failed and would otherwise be invisible. notes_data.json is
-        excluded — the save_notes wrapper already raises its own, louder
-        dialog for that one — so this covers the quiet siblings (trash,
-        templates, settings). Scheduled via after() so a failure surfacing
-        mid-operation can never interrupt or re-enter the code that saved."""
-        if os.path.basename(str(path)) == os.path.basename(DATA_FILE):
-            return
+        failed and would otherwise be invisible. notes_data.json is NOT
+        excluded: most of its saves go through the save_notes wrapper and
+        raise a louder dialog too (the toast then shows briefly behind
+        it — redundant, harmless), but the one-time cleanup rewrite in
+        core writes DATA_FILE directly, and excluding it here made that
+        failure fully invisible. Scheduled via after() so a failure
+        surfacing mid-operation can never interrupt or re-enter the code
+        that saved."""
         name = os.path.basename(str(path))
         try:
             self.after(0, lambda: self._show_toast(

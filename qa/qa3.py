@@ -436,30 +436,86 @@ check('and leaves no .tmp litter behind',
 if os.path.exists(_atomic_zip):
     os.remove(_atomic_zip)
 
+# The single-note export is the same class (it wrote straight onto the
+# chosen file): a write failure must leave the existing file intact.
+_se_path = os.path.join(tempfile.gettempdir(), 'qa3_single.txt')
+with open(_se_path, 'w', encoding='utf-8') as f:
+    f.write('OLD-NOTE')
+_builtin_open = open
+def _fail_write_open(p, mode='r', *a, **k):
+    if isinstance(p, str) and p.startswith(_se_path) and 'w' in str(mode):
+        # Open for real first — a genuine 'w' open TRUNCATES the target
+        # before any write, which is exactly the damage the tmp protocol
+        # exists to keep away from the user's file. A fake handle that
+        # never touched the disk let the direct-write mutant survive.
+        _fh = _builtin_open(p, mode, *a, **k)
+        class _FW:
+            def __enter__(s): return s
+            def __exit__(s, *e):
+                _fh.close()
+                return False
+            def write(s, d): raise IOError('disk exploded (test)')
+        return _FW()
+    return _builtin_open(p, mode, *a, **k)
+fd.asksaveasfilename = lambda **k: _se_path
+NO.open = _fail_write_open
+try:
+    app.export_note_as_file(app.notes[0], 'txt')
+finally:
+    del NO.open
+check('a failed single-note export leaves the existing file intact',
+      open(_se_path, encoding='utf-8').read() == 'OLD-NOTE'
+      and not os.path.exists(_se_path + '.tmp'))
+os.remove(_se_path)
+app.show_error = NO.NoteOrganizer.show_error.__get__(app)  # restore the real one
+
 # ---- CLOSE waits for an in-flight worker (audit Z05-F01) ----
 # destroy() used to kill a daemon export/import thread mid-file. The app
 # now remembers its I/O workers and on_app_close waits (capped) for them.
+# Both checks use the DEFAULT cap on purpose: passing an explicit cap
+# here let a mutant gut the default (cap_s=0) — "closing waits" fully
+# broken — while the checks stayed green.
 _slow_done = {'flag': False}
 def _slow_worker():
     time.sleep(0.6)
     _slow_done['flag'] = True
 app._start_io_worker(_slow_worker)
-app._wait_for_io_workers(cap_s=5)
+app._wait_for_io_workers()
 check('the close-time wait lets an in-flight I/O worker finish',
       _slow_done['flag'])
 
-_close_calls = []
-_real_wait_io = app._wait_for_io_workers
+# End-to-end: the REAL on_app_close (destroy stubbed) must let a live
+# worker finish — this also fails if the call site shrinks the cap.
+_slow_done2 = {'flag': False}
+def _slow_worker2():
+    time.sleep(0.6)
+    _slow_done2['flag'] = True
 _real_destroy3 = app.destroy
-app._wait_for_io_workers = lambda *a, **k: _close_calls.append(1)
 app.destroy = lambda: None
 try:
+    app._start_io_worker(_slow_worker2)
     app.on_app_close()
 finally:
-    app._wait_for_io_workers = _real_wait_io
     app.destroy = _real_destroy3
-check('on_app_close routes through the worker wait before destroy',
-      len(_close_calls) == 1)
+check('on_app_close itself waits for an in-flight worker before destroy',
+      _slow_done2['flag'])
+
+# ---- The write-failure callback reaches the SCREEN (audit Z01-F06) ----
+# The core half (return + crash log + callback) lives in
+# test_data_safety; this is the UI half: the app registers the callback
+# at startup and a failure shows the error toast naming the file.
+from noteorganizer.core import storage as _st3
+check('the app registers core storage\'s write-failure callback',
+      _st3.on_write_failure is not None)
+if _st3.on_write_failure is not None:
+    _st3.on_write_failure(os.path.join('x', 'trash.json'), OSError('disk full'))
+    t0 = time.time()
+    while time.time() - t0 < 2:
+        app.update()
+        if 'trash.json' in str(app.toast_lbl.cget('text')):
+            break
+    check('a failed write shows the toast naming the file',
+          'trash.json' in str(app.toast_lbl.cget('text')))
 
 print()
 print(f"=== QA3 FAILURES: {fails if fails else 'NONE'} ===")
