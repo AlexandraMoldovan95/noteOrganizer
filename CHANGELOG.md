@@ -55,6 +55,81 @@ How the numbers themselves are counted is the
 
 ## [Unreleased]
 
+*Highlights: the product review's Tier 0 — the eight ways the app could lose, mangle or
+refuse your work, closed together, plus the maintenance report that greeted every new
+install.*
+
+### Fixed
+- **A checklist-only note is a real note — and stays one.** The startup clean-up judged a
+  note empty by its title, body, comments and attachments alone, so a note whose content
+  was its checklist (or its repeat rule, or its date) was deleted on the next launch —
+  not moved to the Trash, simply gone — while the editor had been perfectly happy to
+  create it. The same blind spot ran through duplicate detection: two notes alike in
+  title and body but carrying different checklists collapsed into one. Both now judge a
+  note by everything a note can actually hold. From the product review.
+- **One notebook, one window.** Nothing stopped a second copy of the app opening on the
+  same notes — a taskbar pin or a double-clicked shortcut was enough. Both copies loaded
+  the whole notebook into memory and every save rewrote the file whole, so whichever
+  window autosaved last silently erased everything the other had written. A second launch
+  now says the notebook is already open and steps aside. The guard is an operating-system
+  file lock, which Windows releases however the app exits, so a crash can never lock you
+  out of your own notes. From the product review.
+- **Importing your own backup brings your categories back.** Categories live in
+  `settings.json`, which the backup zip has always carried — but the import never read it
+  back. Every note filed under a category the notebook no longer knew was quietly re-filed
+  to General, under an "Import complete" message. The import now restores the categories
+  first, adding to what's already there rather than replacing it, and names the ones it
+  brought back. From the product review.
+- **A note body keeps the shape you gave it.** Every save trimmed the body's leading and
+  trailing whitespace, so an indented first line lost its indent and trailing blank lines
+  vanished — a pasted code block or a quoted email came back reshaped. Worse, the styling
+  spans were measured against the *untrimmed* text, so a trim could leave every colour,
+  bold and paragraph mark sitting a character or two off. The body is now saved exactly as
+  typed. From the product review.
+- **A saved note can be emptied.** Clearing a note's title and body did nothing: the
+  autosave read "empty" as "nothing to save", the old text stayed on disk and returned the
+  moment you came back, and Ctrl+S answered "Write something before saving!". Emptying a
+  note that already exists is now an ordinary edit; the refusal stays only where it
+  belongs, on a brand-new note that has never held anything. From the product review.
+- **"Restore previous" survives a restart.** The rescue copy really was written to disk,
+  but it wasn't part of a note's known shape, so the next launch dropped it — while the
+  button offering it stayed on screen looking permanent. It is now kept with the note.
+  From the product review.
+- **A pasted share code can't brick the app.** Checklists travelled inside share codes
+  with no size limit anywhere: a 60 KB code carrying twenty thousand items passed every
+  guard, was saved, and then killed the app while drawing it — and killed it again on
+  every launch after, with no way back in. Checklists are now capped at 1000 items at the
+  point where every note is normalised, so an oversized one is trimmed on arrival instead
+  of taking the app down. From the product review.
+- **The warn-before-opening list knows today's dangerous files.** It covered the classic
+  executables and missed nearly every vehicle actually used to deliver code now — `.lnk`,
+  `.url`, `.iso`, `.img`, `.chm`, `.scf`, `.inf`, `.appref-ms`, `.settingcontent-ms`,
+  `.msix`, `.library-ms`, `.search-ms` among them. A shortcut file arriving inside an
+  imported backup opened through the system with no question at all, running whatever
+  command line it carried. All of them now warn first, with "No" pre-selected. From the
+  product review.
+- **A fresh install no longer opens with a maintenance report.** The one-time clean-up
+  runs whenever the settings file lacks its marker — which on a first launch is always —
+  and it announced itself either way, so the literal first screen of the product was a
+  blocking modal reading "Cleanup pass (runs once): … 0 note(s) remain, IDs renumbered
+  1–0": internal vocabulary, about nothing, over an empty notebook. It now speaks only
+  when it actually removed something. From the product review.
+
+### Testing
+- Regression checks for all nine, with a mutant killed for each: the empty/duplicate
+  rules and the checklist cap in `test_data_safety.py`, the single-instance lock driven
+  through a real second process, the category round-trip in qa3, the shortcut
+  confirmation in qa7, the first-run silence in qa5, and the body-shape contract in qa1.
+- **The qa suite's generated clicks can no longer vanish.** Tk discards a `<Button-1>`
+  aimed at a widget with no native window yet, in complete silence — and the app hides
+  its popups whenever another program holds the Windows foreground, which a test process
+  never owns. Every popup click in the suite was therefore racing a 300 ms heartbeat;
+  qa2's marker-cap check had been answering by luck for weeks (measured mid-run, not one
+  of its five clicks had ever been delivered). All 26 generated clicks across qa1, qa2,
+  qa6, qa7 and qa9 now go through `qa/_qa_support.py`, which creates the window before
+  aiming an event at it, and popup visibility no longer depends on the OS foreground.
+  The house rule is in `qa/README.md`.
+
 ## [0.71.135] — 2026-09-10
 
 *Highlights: the destructive-gesture sweep — every way to delete or overwrite data now has a written verdict, and the one gap it found is closed.*
