@@ -401,6 +401,30 @@ check('the explicit Save still warns about the empty note', warned13 == ['Empty 
 del app13.ask_occurrence_scope
 del app13.show_warning
 
+# ---- A swallowed autosave exception leaves a TRACE (audit Z02-F04) ----
+# The spine's guards used to be bare `pass` — a persistent bug there
+# silently stopped autosave with nothing in any log.
+_swl_path = os.path.join(NO.APP_DIR, 'crash_log.txt')
+_swl_before = (open(_swl_path, encoding='utf-8').read()
+               if os.path.exists(_swl_path) else '')
+_real_uwc13 = app13.update_word_count
+app13.update_word_count = lambda *a, **k: (_ for _ in ()).throw(
+    RuntimeError('autosave probe'))
+try:
+    app13._schedule_autosave()
+finally:
+    app13.update_word_count = _real_uwc13
+_swl_after = (open(_swl_path, encoding='utf-8').read()
+              if os.path.exists(_swl_path) else '')
+_swl_new = _swl_after[len(_swl_before):]
+check('a swallowed autosave exception lands in crash_log.txt',
+      '(swallowed: autosave' in _swl_new and 'autosave probe' in _swl_new)
+check('and the schedule itself survived it',
+      getattr(app13, '_autosave_job', None) is not None)
+if getattr(app13, '_autosave_job', None):
+    app13.after_cancel(app13._autosave_job)
+    app13._autosave_job = None
+
 print()
 print(f"=== QA8 FAILURES: {fails if fails else 'NONE'} ===")
 

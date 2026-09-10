@@ -676,13 +676,29 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             try:
                 self.update_word_count()
             except Exception:
-                pass
+                self._log_swallowed("autosave: schedule-time word count")
         if getattr(self, "_autosave_job", None) is not None:
             try:
                 self.after_cancel(self._autosave_job)
             except (tk.TclError, ValueError):
                 pass
         self._autosave_job = self.after(500, self._autosave_now)
+
+    def _log_swallowed(self, where):
+        """A guarded spot chose to carry on — leave the trace the bare
+        `pass` never did (audit Z02-F04: a persistent bug in the autosave
+        spine could stop saving in complete silence). Same file as every
+        other crash record; deliberately no toast — a background path can
+        hit its guard on every keystroke."""
+        try:
+            import traceback
+            with open(os.path.join(APP_DIR, "crash_log.txt"), "a",
+                      encoding="utf-8") as f:
+                f.write(f"\n--- {datetime.now().isoformat()} "
+                        f"(swallowed: {where}) ---\n"
+                        f"{traceback.format_exc()}\n")
+        except (IOError, OSError):
+            pass
 
     def _autosave_now(self):
         """Run an auto-save if the current editor content is worth saving and
@@ -704,7 +720,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         try:
             self.update_word_count()
         except Exception:
-            pass
+            self._log_swallowed("autosave: catch-up word count")
         # An occurrence view can't be saved without asking "this occurrence
         # or the whole series?", and a silent background timer must never
         # open a dialog — every pause in typing used to raise the question,
@@ -719,6 +735,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         try:
             st = self.capture_editor_state()
         except Exception:
+            self._log_swallowed("autosave: capture_editor_state")
             return
         # Never auto-save a completely empty note — that would spawn junk notes
         # every time the user clicks "New Note". Attachments and checklist
@@ -734,7 +751,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             if self.editor_state_matches_saved(st):
                 return
         except Exception:
-            pass
+            self._log_swallowed("autosave: editor_state_matches_saved")
         # Reuse the normal save path, but mark it as automatic so the status
         # message is gentle rather than a loud "Saved!".
         self.save_current_note(auto=True)
