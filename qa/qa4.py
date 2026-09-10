@@ -205,6 +205,59 @@ check('cleanup-duplicates: purging the trashed twin leaves the survivor file int
       len(_merged4) == 1
       and _os4.path.isfile(_os4.path.join(_paths4.ATTACHMENTS_DIR, _merged4[0])))
 
+# ---- THEME: long-lived borders and hover follow a switch (Z07-F03/F04) ----
+# The 0.66.97 lesson, reaching the instances it missed: a long-lived
+# widget must track EVERY colour option it sets (the dropdown/category
+# borders and the export progress frame stayed on the build-time
+# palette), and hover colours must be computed at event time (a tracked
+# settings button hovered in whatever theme it was built under).
+app.set_theme('dark'); app.update()
+_probe_btn = app._settings_big_button(app, 'ThemeProbe', lambda: None,
+                                      kind='danger')
+_probe_btn.pack(); app.update()
+_probe_dd = app._build_themed_dropdown(app, tk.StringVar(value='x'),
+                                       ['x', 'y'], lambda v: None)
+_probe_dd.pack(); app.update()
+# Assert under BOTH themes: the app itself was built under the default
+# palette, so a widget frozen at build time still matches ONE theme by
+# coincidence — it cannot match both.
+def _borders_ok():
+    return (str(app.category_menu.cget('highlightbackground')) == app.colors['card'],
+            str(_probe_dd.cget('highlightbackground')) == app.colors['card'],
+            str(app.export_progress_frame.cget('highlightbackground')) == app.colors['accent']
+            and str(app.export_progress_frame.cget('bg')) == app.colors['card'])
+_dark_ok = _borders_ok()
+app.set_theme('light'); app.update()
+_light_ok = _borders_ok()
+check('the category button border follows the theme switch',
+      _dark_ok[0] and _light_ok[0])
+check('a themed dropdown border follows too',
+      _dark_ok[1] and _light_ok[1])
+# Behaviour AND mechanism: _recolor_stragglers (the safety net) remaps
+# stray bg/fg on every switch, and the stock dark/light accents are the
+# same hex — so on these two themes the net masks a missing tracking
+# entry. The net is the fallback, not the mechanism; assert the frame is
+# genuinely registered, the way the rest of the long-lived family is.
+check('the export progress frame follows (it was never tracked at all)',
+      _dark_ok[2] and _light_ok[2]
+      and any(w is app.export_progress_frame for w, _m in app.themed_widgets))
+_probe_btn.event_generate('<Enter>'); app.update()
+check('a settings button hovers in the CURRENT palette, not the build-time one',
+      str(_probe_btn.cget('bg'))
+      == app._blend(app.colors['card'], app.colors['danger'], 0.14))
+_probe_btn.event_generate('<Leave>'); app.update()
+check('and rests back on the current card colour',
+      str(_probe_btn.cget('bg')) == app.colors['card'])
+# The other button factory has the same hover mechanism — build under
+# light, switch to dark, hover must paint dark's palette.
+_probe_txt = app._text_button(app, 'TxtProbe', lambda: None, kind='primary')
+_probe_txt.pack(); app.update()
+app.set_theme('dark'); app.update()
+_probe_txt.event_generate('<Enter>'); app.update()
+check('a text button hovers in the current palette too',
+      str(_probe_txt.cget('bg')) == app.colors['accent_hover'])
+_probe_btn.destroy(); _probe_dd.destroy(); _probe_txt.destroy(); app.update()
+
 # ---- PERFORMANCE: note list with larger count ----
 app.notes = [{'id':i,'title':f'Perf{i}','body':'x'*30,'category':'General',
              'updated':'2026-01-01 00:00','created':'2026-01-01 00:00',

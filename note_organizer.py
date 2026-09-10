@@ -8952,6 +8952,13 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             export_inner, text="Exporting…", font=("Segoe UI", 9, "bold"),
             bg=self.colors["card"], fg=self.colors["text"])
         self.export_progress_lbl.pack(anchor="w")
+        # Long-lived and shown on demand: untracked, a theme switched
+        # before the next export left the bar's frame painted in the old
+        # palette (audit Z07-F03's class — track every colour option).
+        self.track_theme(self.export_progress_frame, bg="card",
+                         highlightbackground="accent")
+        self.track_theme(export_inner, bg="card")
+        self.track_theme(self.export_progress_lbl, bg="card", fg="text")
         self.export_progress_bar = ttk.Progressbar(
             export_inner, orient="horizontal", length=240, mode="determinate")
         self.export_progress_bar.pack(pady=(6, 0))
@@ -9441,7 +9448,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._cat_caret = tk.Label(self.category_menu, text=" ▾", bg=self.colors["sidebar"],
                                    fg=self.colors["subtext"], font=("Segoe UI", 9))
         self._cat_caret.pack(side="left", padx=(4, 10))
-        self.track_theme(self.category_menu, bg="sidebar")
+        self.track_theme(self.category_menu, bg="sidebar",
+                         highlightbackground="card")
         self.track_theme(self._cat_btn_lbl, bg="sidebar", fg="text")
         self.track_theme(self._cat_caret, bg="sidebar", fg="subtext")
         for w in (self.category_menu, self._cat_dot, self._cat_btn_lbl, self._cat_caret):
