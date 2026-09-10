@@ -1239,6 +1239,86 @@ new_id = app.selected_note_id
 saved_settings2 = NO.load_settings()
 check('creating a new note also updates the remembered id', saved_settings2.get('last_open_note_id') == new_id)
 
+# ---- The SINGLE-TAB contract (coverage-lift C12, re-scoped) ----
+# The lift queue sent us at close_tab's 28 uncovered lines — and found
+# they are unreachable: nothing in the app ever creates a second tab
+# (open_note_in_tab and open_blank_tab both RESET open_tabs to one
+# entry; no append exists anywhere). Writing tests that fabricate
+# multi-tab states would be theater on impossible states. What IS real
+# gets asserted; the dead machinery goes to the ledger as a product
+# decision (build real tabs someday, or simplify it out).
+app.notes = []
+for i in range(3):
+    app.notes.append({'id': 700 + i, 'title': f'Tab{i}', 'body': f'corp {i}',
+                      'category': 'General', 'updated': '2026-01-01 00:00',
+                      'created': '2026-01-01 00:00', 'checklist': [],
+                      'attachments': []})
+app.save_notes()
+for n in app.notes:
+    app.open_note_in_tab(n)
+app.update()
+check('opening three notes keeps the single-tab contract (one entry)',
+      len(app.open_tabs) == 1 and app.active_tab_index == 0
+      and app.title_entry.get() == 'Tab2')
+check('the tab strip stays hidden at one tab',
+      not app.tab_strip.winfo_ismapped())
+# Switching notes flushes the previous one first — edit, switch, check disk.
+app.body_text.insert('end', ' FLUSHED')
+app.open_note_in_tab(app.notes[0])
+app.update()
+check('switching notes flushes the edit to the note it came from',
+      'FLUSHED' in app.notes[2]['body'] and app.title_entry.get() == 'Tab0')
+# The one reachable close: force-closing the single tab collapses clean.
+app.close_tab(0, force=True)
+app.update()
+check('closing the single tab leaves a blank editor and no strip',
+      app.open_tabs == [] and app.active_tab_index is None
+      and not app.tab_strip.winfo_ismapped())
+
+# ---- DUPLICATES PANEL shortcuts (coverage-lift C15, targeted) ----
+# The panel's "Tick all but first" and its cleanup button had never
+# been driven through the real widgets.
+app.notes = []
+for i in range(3):
+    app.notes.append({'id': 800 + i, 'title': 'Geamana', 'body': 'idem',
+                      'category': 'General', 'updated': '2026-01-01 00:00',
+                      'created': '2026-01-01 00:00', 'checklist': [],
+                      'attachments': []})
+app.save_notes()
+app.trash = []
+_dpf = tk.Frame(app)
+app._build_settings_duplicates_panel(_dpf)
+app.update()
+def _find_btns7(root, txt):
+    out = []
+    def walk(w):
+        for c in w.winfo_children():
+            if isinstance(c, tk.Button) and txt in str(c.cget('text')):
+                out.append(c)
+            walk(c)
+    walk(root)
+    return out
+_tick = _find_btns7(_dpf, 'Tick all but first')
+check('the duplicates panel finds the triplet and offers the shortcut',
+      len(_tick) == 1)
+_tick[0].invoke()
+app.update()
+_clean = _find_btns7(_dpf, 'Move ticked')
+_orig_ask7c = app.ask_yes_no
+app.ask_yes_no = lambda *a, **k: True
+app._reopen_dup_panel = lambda: None
+try:
+    if _clean:
+        _clean[0].invoke()
+        app.update()
+finally:
+    app.ask_yes_no = _orig_ask7c
+    del app._reopen_dup_panel
+check('tick-all-but-first plus cleanup keeps exactly one twin',
+      sum(1 for n in app.notes if n.get('title') == 'Geamana') == 1
+      and sum(1 for e in app.trash if e.get('title') == 'Geamana') == 2)
+_dpf.destroy(); app.update()
+
 print()
 print(f"=== QA7 FAILURES: {fails if fails else 'NONE'} ===")
 

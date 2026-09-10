@@ -608,6 +608,47 @@ check('an imported trash attachment never shares a LOCAL TRASH file',
           NO.ATTACHMENTS_DIR, _ft['attachments'][0]['stored_as'])))
 os.remove(_cz)
 
+# ---- SHARE-CODE decode: every refusal branch (coverage-lift C16) ----
+# Each malformed-input class must raise ValueError with a HUMAN message
+# (the UI shows it verbatim) — never a raw exception, never success.
+from noteorganizer.core import sharing as _sh
+_bad_inputs = [
+    ('not a string', 12345),
+    ('empty after whitespace', '  \n  '),
+    ('absurd length', 'NOTE1:' + 'A' * (_sh.MAX_SHARE_CODE_CHARS + 1)),
+    ('wrong prefix', 'XYZ:abcdef'),
+    ('broken base64', 'NOTE1:@@@not-base64@@@'),
+    ('valid b64, broken zlib', 'NOTE1:' + __import__('base64').urlsafe_b64encode(b'not zlib data').decode()),
+    ('valid zlib, broken json', 'NOTE1:' + __import__('base64').urlsafe_b64encode(__import__('zlib').compress(b'{broken')).decode()),
+    ('json but no notes key', 'NOTE1:' + __import__('base64').urlsafe_b64encode(__import__('zlib').compress(b'{"v":1}')).decode()),
+    ('newer version', 'NOTE1:' + __import__('base64').urlsafe_b64encode(__import__('zlib').compress(b'{"v":9,"notes":[{}]}')).decode()),
+    ('empty notes list', 'NOTE1:' + __import__('base64').urlsafe_b64encode(__import__('zlib').compress(b'{"v":1,"notes":[]}')).decode()),
+]
+_all_refused = True
+for _why, _code in _bad_inputs:
+    try:
+        _sh.decode_share_code(_code)
+        _all_refused = False
+        print('    (decode ACCEPTED the %s case!)' % _why)
+    except ValueError as e:
+        if not str(e).strip():
+            _all_refused = False
+            print('    (%s: empty message)' % _why)
+    except Exception as e:
+        _all_refused = False
+        print('    (%s: raw %s escaped)' % (_why, type(e).__name__))
+check('every malformed share code is refused with a human ValueError',
+      _all_refused)
+_over = {'v': 1, 'notes': [{'title': 'x'}] * (_sh.MAX_SHARED_NOTES + 1)}
+_over_code = 'NOTE1:' + __import__('base64').urlsafe_b64encode(
+    __import__('zlib').compress(__import__('json').dumps(_over).encode())).decode()
+try:
+    _sh.decode_share_code(_over_code)
+    _cap_ok = False
+except ValueError as e:
+    _cap_ok = str(_sh.MAX_SHARED_NOTES) in str(e)
+check('a code over the note cap names the cap in its refusal', _cap_ok)
+
 print()
 print(f"=== QA3 FAILURES: {fails if fails else 'NONE'} ===")
 

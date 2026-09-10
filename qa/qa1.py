@@ -6572,6 +6572,134 @@ check('find/switch: no stale find highlight survives the switch',
 app._close_find()
 app.update()
 
+# ---- THE PICKERS (coverage-lift C14) ----
+# The date, colour, emoji, template and table-size pickers were never
+# opened by any script — the date picker alone was a 64-line hole.
+# Each: open through the real entry point, choose through the real
+# widget, assert the choice LANDED where the user would see it.
+
+def _walk_widgets(root, klass):
+    out = []
+    def walk(w):
+        for c in w.winfo_children():
+            if isinstance(c, klass):
+                out.append(c)
+            walk(c)
+    walk(root)
+    return out
+
+# Date picker: pick day 15, the entry gets the date; ▶ shifts the month.
+app.new_note(); app.update()
+app.open_date_picker()
+app.update()
+_dp = app._mini_popup
+_day_btns = [b for b in _walk_widgets(_dp, tk.Button)
+             if str(b.cget('text')).strip() == '15']
+check('the date picker opens with a clickable day grid',
+      _dp is not None and len(_day_btns) == 1)
+_next = [b for b in _walk_widgets(_dp, tk.Button)
+         if str(b.cget('text')) == '▶']
+_month_lbls = [l for l in _walk_widgets(_dp, tk.Label)
+               if any(m in str(l.cget('text')) for m in
+                      ('Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul',
+                       'Aug', 'Sep', 'Oct', 'Nov', 'Dec'))]
+_before_month = str(_month_lbls[0].cget('text')) if _month_lbls else ''
+if _next:
+    _next[0].invoke(); app.update()
+check('the ▶ arrow moves the picker one month',
+      _month_lbls and str(_month_lbls[0].cget('text')) != _before_month)
+_day_btns = [b for b in _walk_widgets(_dp, tk.Button)
+             if str(b.cget('text')).strip() == '15']
+_day_btns[0].invoke()
+app.update()
+check('picking a day writes the date into the date field',
+      app.date_entry.get().endswith('-15')
+      and app._mini_popup is not _dp)
+
+# Note colour picker: a canvas swatch click colours the open note.
+app.title_entry.delete(0, 'end'); app.title_entry.insert(0, 'Colorata')
+app.title_entry.config(fg='black')
+app.save_current_note(auto=False); app.update()
+app.open_color_picker()
+app.update()
+# The NOTE palette is Buttons wearing their colour as bg (the day
+# palette uses drawn canvases — different builder, same idea).
+_swatches = [b for b in _walk_widgets(app._mini_popup, tk.Button)
+             if str(b.cget('bg')).startswith('#')]
+check('the note colour palette offers swatches', len(_swatches) >= 5)
+_pick_col = str(_swatches[1].cget('bg'))
+_swatches[1].invoke()
+app.update()
+app.save_current_note(auto=False)
+app.update()
+_colored = app.find_note(app.selected_note_id)
+check('a swatch click colours the note itself',
+      app.current_note_color == _pick_col
+      and _colored.get('color') == _pick_col)
+
+# Emoji picker: the first chip lands in the body at the caret.
+set_body('')
+app._show_emoji_picker(app.body_text)
+app.update()
+_chips = [l for l in _walk_widgets(app._mini_popup, tk.Label)
+          if str(l.cget('cursor')) == 'hand2'
+          and len(str(l.cget('text'))) <= 3
+          and str(l.cget('text')).strip()]
+check('the emoji picker offers chips', len(_chips) >= 8)
+_first_emoji = str(_chips[0].cget('text')).strip()
+_chips[0].event_generate('<Button-1>')
+app.update()
+check('a chip click inserts that emoji into the body',
+      _first_emoji in app.body_text.get('1.0', 'end-1c'))
+app._dismiss_mini_popup(); app.update()
+
+# Template picker: choosing the seeded template fills the editor.
+app.templates.append(NO.normalize_template(
+    {'name': 'PickerTpl', 'title': 'Din sablon', 'body': 'corp de sablon'}))
+NO.save_templates(app.templates)
+app.new_note(); app.update()
+app.show_template_picker()
+app.update()
+_tpl_btns = [w for w in
+             _walk_widgets(app._mini_popup, (tk.Button, tk.Label))
+             if 'PickerTpl' in str(w.cget('text'))]
+check('the template picker lists the template', len(_tpl_btns) >= 1)
+_w = _tpl_btns[0]
+if isinstance(_w, tk.Button):
+    _w.invoke()
+else:
+    _w.event_generate('<Button-1>')
+app.update()
+check('choosing it fills the editor from the template',
+      app.title_entry.get() == 'Din sablon'
+      and app.body_text.get('1.0', 'end-1c').startswith('corp de sablon'))
+
+# Table-size popup: clicking a size cell inserts a real drawn table.
+set_body('')
+app._open_table_size_popup()
+app.update()
+_size_pop = [w for w in app.winfo_children()
+             if isinstance(w, tk.Toplevel) and w.winfo_exists()]
+check('the insert-table popup opens', bool(_size_pop))
+_cells14 = []
+for topl in _size_pop:
+    _cells14 += [c for c in _walk_widgets(topl, (tk.Frame, tk.Label))
+                 if str(c.cget('cursor')) == 'hand2']
+picked = False
+for c in _cells14:
+    c.event_generate('<Enter>')
+    c.event_generate('<Button-1>')
+    app.update()
+    if core_tables.find_blocks(body()):
+        picked = True
+        break
+check('clicking a size cell inserts a drawn table',
+      picked and len(app.body_text.window_names()) >= 1)
+for topl in _size_pop:
+    if topl.winfo_exists():
+        topl.destroy()
+app.update()
+
 # ---- CLOSING SAVES SILENTLY (dead last: it destroys the app) ----
 # The quit-time "Unsaved notes" ask could only ever cover the last
 # half-second of typing; the app now trusts its own autosave and closes
