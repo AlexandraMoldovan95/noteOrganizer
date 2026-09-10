@@ -1220,6 +1220,110 @@ check('Yes deletes it for good', len(app.templates) == 0)
 app.ask_yes_no = _origAskQW
 _holdQW.destroy()
 
+# ---- CATEGORY panel flows (coverage-lift #2) ----
+# add / recolour / rename had never been driven through the real rows.
+_CC6 = NO.CATEGORY_COLORS
+_catf = tk.Frame(app)
+app._build_settings_categories_panel(_catf)
+app.update()
+def _entries6(root):
+    out = []
+    def walk(w):
+        for c in w.winfo_children():
+            if isinstance(c, tk.Entry):
+                out.append(c)
+            walk(c)
+    walk(root)
+    return out
+def _btn6(root, txt):
+    hit = []
+    def walk(w):
+        for c in w.winfo_children():
+            if isinstance(c, tk.Button) and txt in str(c.cget('text')):
+                hit.append(c)
+            walk(c)
+    walk(root)
+    return hit[0] if hit else None
+_new_entry = _entries6(_catf)[-1]
+_new_entry.insert(0, 'Proiecte')
+_btn6(_catf, '+ Add').invoke()
+app.update()
+check('adding a category through the panel lands in the palette map',
+      'Proiecte' in _CC6
+      and 'Proiecte' in NO.get_setting('categories', {}))
+
+# The row rebuilt on redraw — find Proiecte's swatch and recolour it.
+def _row_of6(root, name):
+    def walk(w):
+        for c in w.winfo_children():
+            if isinstance(c, tk.Label) and str(c.cget('text')).startswith(name):
+                return c.master
+            r = walk(c)
+            if r is not None:
+                return r
+        return None
+    return walk(root)
+_prow = _row_of6(_catf, 'Proiecte')
+check('the new category has its own row', _prow is not None)
+_old_col = _CC6['Proiecte']
+_swatch6 = next(c for c in _prow.winfo_children()
+                if isinstance(c, tk.Frame)
+                and str(c.cget('cursor')) == 'hand2')
+_swatch6.event_generate('<Button-1>')
+app.update()
+_pal6 = [c for c in app._mini_popup.winfo_children()] if app._mini_popup else []
+def _canvases6(root):
+    out = []
+    def walk(w):
+        for c in w.winfo_children():
+            if isinstance(c, tk.Canvas) and str(c.cget('cursor')) == 'hand2':
+                out.append(c)
+            walk(c)
+    walk(root)
+    return out
+_sw6 = _canvases6(app._mini_popup)
+# The colour is a DRAWN item on each swatch canvas; pick one whose fill
+# genuinely differs from the current colour (one click closes the
+# palette, so there is no second chance).
+def _fill6(c):
+    items = c.find_all()
+    return str(c.itemcget(items[0], 'fill')) if items else ''
+_target6 = next(c for c in _sw6 if _fill6(c).startswith('#')
+                and _fill6(c) != _old_col)
+_want6 = _fill6(_target6)
+_target6.event_generate('<Button-1>')
+app.update()
+check('recolouring through the swatch palette stores the clicked colour',
+      _CC6.get('Proiecte') == _want6
+      and NO.get_setting('categories', {}).get('Proiecte') == _want6)
+
+# Rename through the pencil's inline editor.
+_prow = _row_of6(_catf, 'Proiecte')
+# children order = creation order: the pencil canvas is created before
+# the trash one, so [0] is rename (touring them would hit trash's
+# delete). The inline editor's <Return> needs REAL focus first, or the
+# generated key is dropped (the documented class).
+_pencil6 = [c for c in _prow.winfo_children() if isinstance(c, tk.Canvas)][0]
+_pencil6.event_generate('<Button-1>')
+app.update()
+# The inline editor is a mini-POPUP (entry + Save button), not a row
+# child — drive it through its own Save button, no focus needed.
+_renamed = False
+_ipop = app._mini_popup
+if _ipop is not None and _ipop.winfo_exists():
+    _ientry = _entries6(_ipop)[0]
+    _ientry.delete(0, 'end')
+    _ientry.insert(0, 'ProiecteX')
+    _btn6(_ipop, 'Save').invoke()
+    app.update()
+    _renamed = 'ProiecteX' in _CC6 and 'Proiecte' not in _CC6
+check('renaming through the inline editor moves the category',
+      _renamed and 'ProiecteX' in NO.get_setting('categories', {}))
+for _nm in ('Proiecte', 'ProiecteX'):
+    _CC6.pop(_nm, None)
+NO.persist_categories()
+_catf.destroy(); app.update()
+
 print()
 print(f"=== QA6 FAILURES: {fails if fails else 'NONE'} ===")
 
