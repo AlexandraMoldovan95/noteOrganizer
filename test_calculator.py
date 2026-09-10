@@ -89,6 +89,22 @@ check('unbalanced open paren returns None', ev('(5+3') == None)
 check('stray close paren returns None', ev('5+3)') == None)
 check('invalid characters return None', ev('abc') == None)
 check('not a string returns None', ev(None) == None)
+# A bare '.' passes the digit walk but float('.') raises ValueError,
+# which used to escape the CalcError contract and reach the caller raw
+# (audit Z00-F01). Guarded call so the mutant crashes the CHECK red, not
+# the suite before its footer.
+def _ev_guarded(expr):
+    try:
+        return ev(expr)
+    except Exception:
+        return 'RAISED'
+check('a lone dot returns None instead of raising', _ev_guarded('.') == None)
+check('an operator then a dot returns None too', _ev_guarded('5+.') == None)
+# A 400-digit literal overflows float to inf without raising anything;
+# a calculator display has no honest way to show inf (audit Z00-F02).
+check('an overflowing result returns None, not inf', ev('9' * 400) == None)
+check('inf cannot sneak in through arithmetic either',
+      ev('9' * 350 + '×' + '9' * 350) == None)
 
 # ---- format_calculator_result: clean display formatting ----
 check('whole number displays without decimal', fmt(4.0) == '4')
