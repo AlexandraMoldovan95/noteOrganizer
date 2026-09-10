@@ -49,6 +49,12 @@ from .recurrence import (
 
 # ---- Note schema + one-time cleanup ----
 
+# The most checklist items one note may carry. Rendering is one Frame +
+# Checkbutton + Label + IntVar per item, so an unbounded list is a way to
+# kill the app with a pasted share code (see normalize_note).
+MAX_CHECKLIST_ITEMS = 1000
+
+
 NOTE_DEFAULTS = {
     "title": "",
     "body": "",
@@ -127,7 +133,33 @@ def normalize_note(note):
     were saved before 'comments', 'date', 'color' and 'attachments' existed,
     and code that reads note['title'] directly crashes on those."""
     clean = {}
-    clean["id"] = note.get("id", 0)
+    # The id is the one field that was never coerced: a string, list or
+    # None id survived load intact and then broke every
+    # max([n["id"] ...]) + 1 in the app — new note, duplicate, import,
+    # restore from trash — with a TypeError.
+    raw_id = note.get("id", 0)
+    if isinstance(raw_id, bool) or not isinstance(raw_id, int):
+        try:
+            raw_id = int(str(raw_id).strip())
+        except (TypeError, ValueError):
+            raw_id = 0
+    clean["id"] = raw_id
+    # The rescue copy a drastic shrink leaves behind ("↩ Restore
+    # previous"). It is not in NOTE_DEFAULTS because it is not part of a
+    # note's own shape — but dropping it here meant the button promised
+    # something the next launch had already thrown away, even though the
+    # text really was on disk. Carried through, shallowly validated.
+    prev = note.get("_prev")
+    if isinstance(prev, dict):
+        clean["_prev"] = {
+            "title": prev.get("title") if isinstance(prev.get("title"), str) else "",
+            "body": prev.get("body") if isinstance(prev.get("body"), str) else "",
+            "comments": prev.get("comments") if isinstance(prev.get("comments"), str) else "",
+            "formatting": normalize_formatting(
+                prev.get("formatting") if isinstance(prev.get("formatting"), list) else []),
+            "paragraphs": normalize_paragraphs(
+                prev.get("paragraphs") if isinstance(prev.get("paragraphs"), list) else []),
+        }
     for key, default in NOTE_DEFAULTS.items():
         value = note.get(key, default)
         if isinstance(default, str) and not isinstance(value, str):
@@ -177,7 +209,15 @@ def normalize_note(note):
     # around indefinitely once re-saved.
     clean.pop("tags", None)
 
-    # Checklist: coerce each item to {"text": str, "done": bool}, dropping junk.
+    # Checklist: coerce each item to {"text": str, "done": bool}, dropping
+    # junk — and cap the count. Every item becomes a Frame, a Checkbutton,
+    # a Label and an IntVar when the note is drawn, and nothing upstream
+    # limited how many could arrive: a hand-crafted share code carrying
+    # 20,000 items is only 60 KB of pasteable text, passes every guard the
+    # decoder has, and kills the process on render — permanently, because
+    # the note is saved first and re-rendered on the next launch. The cap
+    # is far above any real list, and lives here because this is the one
+    # choke point every route passes through.
     checklist = []
     for item in clean.get("checklist", []):
         if isinstance(item, dict):
@@ -185,6 +225,8 @@ def normalize_note(note):
             if not isinstance(text, str):
                 text = ""
             checklist.append({"text": text, "done": bool(item.get("done"))})
+        if len(checklist) >= MAX_CHECKLIST_ITEMS:
+            break
     clean["checklist"] = checklist
 
     # Attachments: keep each item's stored_as to a bare filename. The app
@@ -247,16 +289,60 @@ def note_richness(note):
 
 
 def note_is_empty(note):
-    """A note with no title, no body, no comments and no attachments is a
-    stray '+ New Note' click, not real content."""
+    """A note with no content at all is a stray '+ New Note' click.
+
+    "Content" must mean exactly what the editor means by it, or the
+    one-time cleanup deletes notes the app itself let you create: a
+    checklist counts (``save_current_note`` and ``_autosave_now`` both
+    treat a checklist as real content and will happily save a note that
+    is nothing else), and so does a recurrence rule — a repeating
+    reminder whose whole point is its schedule has no body to speak of.
+    Leaving the checklist out of this test cost a real user their
+    untitled shopping list; the product review found it.
+    """
     def _s(v):
         return v.strip() if isinstance(v, str) else ""
+    recurrence = note.get("recurrence")
+    repeats = isinstance(recurrence, dict) and recurrence.get("freq")
+    checklist = note.get("checklist")
     return not (
         _s(note.get("title"))
         or _s(note.get("body"))
         or _s(note.get("comments"))
         or note.get("attachments")
+        or (isinstance(checklist, list) and checklist)
+        or repeats
+        or _s(note.get("date"))
     )
+
+
+def _checklist_signature(checklist):
+    """A checklist as a hashable tuple, for the duplicate test."""
+    if not isinstance(checklist, list):
+        return ()
+    out = []
+    for item in checklist:
+        if isinstance(item, dict):
+            text = item.get("text")
+            out.append(((text.strip() if isinstance(text, str) else ""),
+                        bool(item.get("done"))))
+    return tuple(out)
+
+
+def _attachment_signature(attachments):
+    if not isinstance(attachments, list):
+        return ()
+    return tuple(sorted(
+        str(a.get("stored_as") or "") for a in attachments
+        if isinstance(a, dict)))
+
+
+def _recurrence_signature(recurrence):
+    if not isinstance(recurrence, dict):
+        return ()
+    return tuple(sorted(
+        (k, str(v)) for k, v in recurrence.items() if k != "freq"
+    )) + (str(recurrence.get("freq") or ""),)
 
 
 def clean_notes(notes):
@@ -272,12 +358,21 @@ def clean_notes(notes):
     best_by_signature = {}
     order = []
     for note in kept:
+        # Every field that makes two notes genuinely different belongs in
+        # here. The checklist did not, so a note and its copy that
+        # differed ONLY in what was ticked collapsed into one and the
+        # other was deleted outright — the same blind spot as
+        # note_is_empty above. Checklists and attachments are compared by
+        # a stable, hashable projection of their content.
         signature = (
             note["title"].strip(),
             note["body"].strip(),
             note["comments"].strip(),
             note["category"],
             note["date"],
+            _checklist_signature(note.get("checklist")),
+            _attachment_signature(note.get("attachments")),
+            _recurrence_signature(note.get("recurrence")),
         )
         existing = best_by_signature.get(signature)
         if existing is None:

@@ -67,6 +67,7 @@ def parse_version(v):
 # them, unchanged for now. Re-exported so callers and the QA scripts are
 # unaffected.
 from noteorganizer.core import paths as _core_paths
+from noteorganizer.core import single_instance
 from noteorganizer.core.paths import (
     get_appdata_dir,
     _is_writable,
@@ -326,6 +327,7 @@ from noteorganizer.core.model import (
     note_is_empty,
     reading_time,
     clean_notes,
+    MAX_CHECKLIST_ITEMS,
 )
 
 
@@ -1020,7 +1022,13 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 "There is now exactly one notebook on disk."
             )
 
-        if self._cleanup_report:
+        # Only speak if the pass actually DID something. On a fresh
+        # install it runs against an empty notebook and used to announce
+        # itself anyway — the literal first screen of the product was a
+        # blocking modal reading "0 note(s) remain, IDs renumbered 1–0".
+        if self._cleanup_report and (
+                self._cleanup_report[0].get("empty_removed")
+                or self._cleanup_report[0].get("duplicates_removed")):
             stats, backup_path = self._cleanup_report
             summary = (
                 f"Cleanup pass (runs once):\n"
@@ -5842,30 +5850,6 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         else:
             btn.configure(fg=fg)
 
-    def _extract_paragraphs_for_stripped_body(self, text_widget, stripped_body):
-        """Like _extract_paragraphs, but adjusted for save_current_note()'s
-        leading/trailing .strip() on the saved body.
-
-        Blocks are stored per line, so any leading blank lines that strip()
-        removes would leave every entry pointing one line too far down, and
-        the note would come back with the indent on the wrong line. Exactly
-        the problem _extract_formatting_for_stripped_body solves for spans.
-        """
-        raw = text_widget.get("1.0", "end-1c")
-        dropped = raw[:len(raw) - len(raw.lstrip())].count("\n")
-        limit = len(stripped_body.split("\n"))
-        shifted = []
-        for paragraph in self._extract_paragraphs(text_widget):
-            line = paragraph["line"] - dropped
-            if 0 <= line < limit:
-                # Copy the whole entry rather than rebuilding it field by
-                # field, so a property added later cannot be silently lost
-                # here while every other path keeps it.
-                moved = dict(paragraph)
-                moved["line"] = line
-                shifted.append(moved)
-        return shifted
-
     def _apply_paragraphs(self, text_widget, paragraphs,
                           scrub_table_align=False):
         """Re-apply saved list lines as live tags, for loading.
@@ -6618,26 +6602,6 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # paragraph reads back in pieces and would be written to the note
         # that way, then split again on the next save.
         return merge_spans(spans)
-
-    def _extract_formatting_for_stripped_body(self, text_widget, stripped_body):
-        """Like _extract_formatting, but adjusted for save_current_note()'s
-        leading/trailing .strip() on the saved body text. Span offsets are
-        computed against the widget's raw (unstripped) content — saving them
-        as-is against a stripped body would silently shift every span onto
-        the wrong characters whenever the note has leading whitespace."""
-        raw = text_widget.get("1.0", "end-1c")
-        lead = len(raw) - len(raw.lstrip())
-        limit = len(stripped_body)
-        spans = []
-        for span in self._extract_formatting(text_widget):
-            start = max(0, span["start"] - lead)
-            end = min(limit, span["end"] - lead)
-            if end > start:
-                shifted = {"start": start, "end": end, "style": span["style"]}
-                if "value" in span:
-                    shifted["value"] = span["value"]
-                spans.append(shifted)
-        return spans
 
     def _apply_formatting(self, text_widget, spans):
         """Re-apply a saved span list as live Tkinter tags, for loading."""
@@ -7937,6 +7901,23 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                                 state[key] = loaded
                         except (json.JSONDecodeError, IOError, OSError):
                             pass
+                # The backup's settings.json has always been IN the zip and
+                # was never read back, so every imported note whose category
+                # did not exist on this device was silently re-filed under
+                # "General" by normalize_note -- the whole filing system of
+                # a restored notebook, gone, with "Import complete" as the
+                # only feedback. Only the categories are taken; the rest of
+                # the file is this device's own business.
+                settings_path = os.path.join(temp_dir, "settings.json")
+                if os.path.exists(settings_path):
+                    try:
+                        with open(settings_path, "r", encoding="utf-8") as f:
+                            loaded = json.load(f)
+                        cats = loaded.get("categories") if isinstance(loaded, dict) else None
+                        if isinstance(cats, dict):
+                            state["imported_categories"] = cats
+                    except (json.JSONDecodeError, IOError, OSError, AttributeError):
+                        pass
 
                 # Copy any attached files from the backup into our attachments
                 # folder — the slowest part for a backup with a lot of them.
@@ -8047,6 +8028,21 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             if choice == "skip":
                 to_import = fresh
 
+        # Bring the backup's categories in FIRST: normalize_note checks
+        # each note's category against this map, so anything merged after
+        # the notes are normalized is already too late. Additive - a name
+        # this device already uses keeps its own colour.
+        added_categories = 0
+        for name, color in (state.get("imported_categories") or {}).items():
+            if (isinstance(name, str) and name.strip()
+                    and isinstance(color, str) and color.startswith("#")
+                    and name.strip() not in CATEGORY_COLORS):
+                CATEGORY_COLORS[name.strip()] = color
+                added_categories += 1
+        if added_categories:
+            persist_categories()
+            self.refresh_category_widgets()
+
         # Files already spoken for — by a note we're keeping (re-importing
         # your own backup lands here) or by an earlier note in this same
         # import. An imported note that references one of these would share
@@ -8144,12 +8140,14 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
         skipped_note = f" ({dupe_count} duplicate(s) skipped)" if dupe_count and to_import is not valid_notes else ""
         extras_note = ""
-        if added_templates or added_trash:
-            parts = []
-            if added_templates:
-                parts.append(f"{added_templates} template(s)")
-            if added_trash:
-                parts.append(f"{added_trash} trashed note(s)")
+        parts = []
+        if added_categories:
+            parts.append(f"{added_categories} category/categories")
+        if added_templates:
+            parts.append(f"{added_templates} template(s)")
+        if added_trash:
+            parts.append(f"{added_trash} trashed note(s)")
+        if parts:
             extras_note = " Also restored " + " and ".join(parts) + "."
         self.show_info("Import complete",
                        f"Added {len(to_import)} note(s) from the backup."
@@ -10601,9 +10599,20 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
     # File extensions Windows will execute (or run scripts from) rather than
     # just open in a viewer. Opening one runs code, so we warn first.
     DANGEROUS_EXTENSIONS = {
+        # The classics: files Windows executes outright.
         ".exe", ".bat", ".cmd", ".com", ".scr", ".pif", ".msi", ".msp",
         ".ps1", ".vbs", ".vbe", ".js", ".jse", ".wsf", ".wsh", ".hta",
         ".cpl", ".jar", ".reg", ".ps2", ".msc", ".gadget",
+        # And the ones actually used to deliver code today, which this
+        # list missed: a .lnk carries an arbitrary command line behind an
+        # innocent name and icon, .iso/.img mount on double-click, and
+        # the rest each hand a path or a command straight to Windows.
+        # An attachment arriving inside an imported backup reaches
+        # os.startfile through exactly this gate.
+        ".lnk", ".url", ".scf", ".iso", ".img", ".vhd", ".vhdx",
+        ".chm", ".inf", ".sct", ".appref-ms", ".settingcontent-ms",
+        ".msix", ".appx", ".appinstaller", ".library-ms", ".search-ms",
+        ".application", ".diagcab", ".ws", ".vb", ".mht", ".mhtml",
     }
 
 
@@ -13562,9 +13571,19 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         title = self.title_entry.get().strip()
         if title == "Note title...":
             title = ""
-        body = self.body_text.get("1.0", "end").strip()
-        formatting = self._extract_formatting_for_stripped_body(self.body_text, body)
-        paragraphs = self._extract_paragraphs_for_stripped_body(self.body_text, body)
+        # "end" always includes the newline Tk keeps at the end of a Text,
+        # so exactly that one character comes off — and nothing else. The
+        # old .strip() also ate the user's own leading indentation on the
+        # first line and every trailing blank line, silently, on every
+        # single save: a pasted code block or quoted email lost its shape
+        # the next time the note loaded.
+        body = self.body_text.get("1.0", "end-1c")
+        # No remapping any more: `body` IS the widget's content, so span
+        # offsets and paragraph line numbers already line up. The two
+        # _for_stripped_body adapters existed only to undo the .strip()
+        # above, and went with it.
+        formatting = self._extract_formatting(self.body_text)
+        paragraphs = self._extract_paragraphs(self.body_text)
         comments = self.comments_text.get("1.0", "end").strip()
         category = self.category_var.get()
 
@@ -13589,13 +13608,24 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
         has_attachments = bool(self.current_attachments)
         has_checklist_items = bool(self._get_checklist())
-        if not title and not body and not has_attachments and not has_checklist_items:
-            # Same contract as the invalid-date guard above: a background
-            # autosave must never interrupt with a dialog — skip quietly
-            # and leave the warning to the explicit Save button.
-            if not auto:
-                self.show_warning("Empty note", "Write something before saving!")
-            return
+        if (not title and not body.strip() and not has_attachments
+                and not has_checklist_items):
+            # The guard exists to stop a stray "+ New Note" click becoming
+            # a junk note — so it applies to a note that was never saved.
+            # Applied to one that EXISTS, it refused to record a deliberate
+            # emptying: clear an untitled note, switch away, come back, and
+            # the old text was still on disk and reappeared, while Ctrl+S
+            # answered "Write something before saving!". Deleting your own
+            # text is a legitimate edit; it saves like any other.
+            already_saved = (self.selected_note_id is not None
+                             and self.find_note(self.selected_note_id) is not None)
+            if not already_saved:
+                # Same contract as the invalid-date guard above: a
+                # background autosave must never interrupt with a dialog —
+                # skip quietly and leave the warning to the Save button.
+                if not auto:
+                    self.show_warning("Empty note", "Write something before saving!")
+                return
 
         recurrence = self.read_recurrence_from_ui()
         if recurrence["freq"] and not date_value:
@@ -14054,6 +14084,26 @@ def _main():
     # problem for a worse one.
     try:
         initialise()
+        # One notebook, one app. Two windows on the same data directory
+        # each hold their own copy of the whole notebook and each save
+        # rewrites the file wholesale, so the second one to autosave
+        # silently deletes everything the first wrote. The lock is taken
+        # here rather than in __init__ so the qa scripts, which build
+        # several app objects inside one process, are unaffected.
+        if not single_instance.acquire():
+            import tkinter.messagebox as _mb
+            root = tk.Tk()
+            root.withdraw()
+            _mb.showinfo(
+                "Note Organizer is already open",
+                "Note Organizer is already running on this notebook.\n\n"
+                "Only one window can be open at a time: two would each keep "
+                "their own copy of your notes, and whichever saved last "
+                "would overwrite the other's work.\n\n"
+                "Switch to the window that is already open — look for it in "
+                "the taskbar.")
+            root.destroy()
+            return
         app = NoteOrganizer()
         app.protocol("WM_DELETE_WINDOW", app.on_app_close)
         app.mainloop()
