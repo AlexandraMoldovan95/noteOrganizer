@@ -62,6 +62,14 @@ def current_api():
         if klass.__module__.startswith("tkinter") or klass is object:
             continue
         for name, value in vars(klass).items():
+            # classmethods, staticmethods and properties are descriptor
+            # objects, not callables — the plain callable() test made
+            # them invisible to both the baseline and the duplicate
+            # detector (a mixin shadowing a classmethod went uncaught).
+            if isinstance(value, (staticmethod, classmethod)):
+                value = value.__func__
+            elif isinstance(value, property):
+                value = value.fget
             if not callable(value):
                 continue
             if name in own:

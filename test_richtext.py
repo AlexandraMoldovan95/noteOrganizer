@@ -546,6 +546,10 @@ _cov = {(s["style"], _t[s["start"]:s["end"]]) for s in _s
 check("a span opening two styles closes BOTH at its end tag",
       _cov == {("text_color", "x"), ("highlight", "x")})
 
+_t, _s, _p = html_to_note('a<br style="color:#ff0000">bcd<p>efg</p>')
+check("a styled VOID tag opens no span at all (no end tag ever comes)",
+      not any(s["style"] == "text_color" for s in _s))
+
 # ---- A <br> inside a cell survives the round-trip (audit Z04-F02) ----
 from noteorganizer.core import tables as _tbl
 _t, _s, _p = html_to_note("<table><tr><td>a<br>b</td></tr></table>")

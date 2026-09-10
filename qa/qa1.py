@@ -2611,6 +2611,15 @@ check('a --- separator column still fits its widest content',
       _sep_t is not None
       and _sep_t['cells'][(0, 0)]['w']
       >= _hdr_font.measure('verylongheaderword'))
+# ...and the narrowest hand-set width still ROUND-TRIPS as authored: an
+# authored 2 used to write "---", which parses back as "no opinion", so
+# a fully-left drag snapped the column back to content width.
+app._grid_set_col_width(_sep_t, 0, 2)
+app.update()
+_sep_row = app.body_text.get('2.0', '2.end')
+_sep_cols_n = core_tables.parse_separator(_sep_row)
+check('the narrowest drag survives the separator round-trip',
+      _sep_cols_n and _sep_cols_n[0]['width'] == 4)
 
 # ---- A DEAD GRID answers no queries (new_note staleness) ----
 # A full-range delete (New note, typing over Ctrl+A) destroys the

@@ -554,7 +554,59 @@ check('the template comes back from the backup',
       any(t.get('name') == 'RoundTripTpl' for t in app.templates))
 check('the trashed note comes back from the backup',
       any(e.get('title') == 'TrashedRT' for e in app.trash))
+# Re-importing the SAME backup must not double the trash.
+_trash_count_rt = len(app.trash)
+fd.askopenfilename = lambda **k: _rt_zip
+app.import_data()
+t0 = time.time()
+while app._import_state is not None and time.time() - t0 < 8:
+    app.update()
+check('re-importing the same backup does not double the trash',
+      len(app.trash) == _trash_count_rt)
 os.remove(_rt_zip)
+
+# A CRAFTED backup: trash.json with a non-string deleted_at and an
+# attachment pointing at a file an ACTIVE note owns. The entry must
+# arrive normalized (the Trash panel's sort crashed on deleted_at=5)
+# and with its OWN copy of the file (delete-forever on the import must
+# never destroy the active note's attachment).
+os.makedirs(NO.ATTACHMENTS_DIR, exist_ok=True)
+_own_att = '20260202020202020202_own.txt'
+with open(os.path.join(NO.ATTACHMENTS_DIR, _own_att), 'w') as f:
+    f.write('mine')
+# The file's owner is a LOCAL TRASH entry — the exact hole the review
+# found: claimed was built from active notes only, so an imported twin
+# shared a trashed note's file and delete-forever on either destroyed
+# the other's attachment.
+app.trash.append({'id': 951, 'title': 'TrashOwner', 'body': 'to',
+                  'category': 'General',
+                  'deleted_at': '2026-01-02 00:00:00',
+                  'attachments': [{'filename': 'own.txt',
+                                   'stored_as': _own_att}]})
+NO.save_trash(app.trash)
+_cz = os.path.join(tempfile.gettempdir(), 'qa3_crafted_trash.zip')
+with zipfile.ZipFile(_cz, 'w') as zf:
+    zf.writestr('notes_data.json', '[]')
+    zf.writestr('trash.json', json.dumps([
+        {'id': 1, 'title': 'ForeignTrash', 'body': 'ft',
+         'category': 'General', 'deleted_at': 5,
+         'attachments': [{'filename': 'own.txt',
+                          'stored_as': _own_att}]}]))
+    zf.writestr('attachments/' + _own_att, 'mine')
+fd.askopenfilename = lambda **k: _cz
+app.import_data()
+t0 = time.time()
+while app._import_state is not None and time.time() - t0 < 8:
+    app.update()
+_ft = next((e for e in app.trash if e.get('title') == 'ForeignTrash'), None)
+check('a foreign trash entry arrives normalized (deleted_at is a str)',
+      _ft is not None and isinstance(_ft.get('deleted_at'), str))
+check('an imported trash attachment never shares a LOCAL TRASH file',
+      _ft is not None and _ft.get('attachments')
+      and _ft['attachments'][0]['stored_as'] != _own_att
+      and os.path.isfile(os.path.join(
+          NO.ATTACHMENTS_DIR, _ft['attachments'][0]['stored_as'])))
+os.remove(_cz)
 
 print()
 print(f"=== QA3 FAILURES: {fails if fails else 'NONE'} ===")

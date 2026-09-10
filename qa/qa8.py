@@ -424,6 +424,34 @@ check('and the schedule itself survived it',
 if getattr(app13, '_autosave_job', None):
     app13.after_cancel(app13._autosave_job)
     app13._autosave_job = None
+# Bounded growth: the SAME spot logs once per session, not per keystroke.
+_swl_mid = open(_swl_path, encoding='utf-8').read()
+app13.update_word_count = lambda *a, **k: (_ for _ in ()).throw(
+    RuntimeError('again'))
+try:
+    app13._schedule_autosave()
+finally:
+    app13.update_word_count = _real_uwc13
+check('the same spot logs only once per session (bounded growth)',
+      open(_swl_path, encoding='utf-8').read() == _swl_mid)
+if getattr(app13, '_autosave_job', None):
+    app13.after_cancel(app13._autosave_job)
+    app13._autosave_job = None
+# The audit's WORST silent spot: a save failing at flush time
+# (note-switch/close) — that trace must exist too.
+app13.new_note()
+app13.body_text.insert('1.0', 'ceva de salvat')
+_real_save13 = app13.save_current_note
+app13.save_current_note = lambda *a, **k: (_ for _ in ()).throw(
+    RuntimeError('flush save probe'))
+try:
+    app13._flush_autosave()
+finally:
+    app13.save_current_note = _real_save13
+_swl_end = open(_swl_path, encoding='utf-8').read()
+check('a flush-time save failure leaves a trace',
+      '(swallowed: flush: save_current_note' in _swl_end
+      and 'flush save probe' in _swl_end)
 
 print()
 print(f"=== QA8 FAILURES: {fails if fails else 'NONE'} ===")

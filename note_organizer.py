@@ -689,15 +689,27 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         `pass` never did (audit Z02-F04: a persistent bug in the autosave
         spine could stop saving in complete silence). Same file as every
         other crash record; deliberately no toast — a background path can
-        hit its guard on every keystroke."""
+        hit its guard on every keystroke. Logged ONCE per spot per
+        session for the same reason: a persistent bug would otherwise
+        append a traceback per keystroke, growing the log without bound
+        and putting file I/O on the typing path."""
+        seen = getattr(self, "_swallowed_seen", None)
+        if seen is None:
+            seen = self._swallowed_seen = set()
+        if where in seen:
+            return
+        seen.add(where)
         try:
             import traceback
+            # errors="replace": a traceback quoting editor text can carry
+            # lone surrogates (a known-real class here), and the trace
+            # writer must never raise over its own payload.
             with open(os.path.join(APP_DIR, "crash_log.txt"), "a",
-                      encoding="utf-8") as f:
+                      encoding="utf-8", errors="replace") as f:
                 f.write(f"\n--- {datetime.now().isoformat()} "
                         f"(swallowed: {where}) ---\n"
                         f"{traceback.format_exc()}\n")
-        except (IOError, OSError):
+        except (IOError, OSError, NameError):
             pass
 
     def _autosave_now(self):
@@ -3850,7 +3862,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
     def _grid_set_col_width(self, info, c, width):
         def mutate(sep_cols, rows, aligns):
             if c < len(sep_cols):
-                sep_cols[c]["width"] = max(1, int(width))
+                # Floor 4, not 1: parse_separator reads a <=3-char cell as
+                # markdown's conventional "no width opinion", so an
+                # authored 2-3 wrote "---" and came straight back as
+                # unclamped — the narrowest a hand-set column can be is
+                # the narrowest width that still round-trips as authored.
+                sep_cols[c]["width"] = max(4, int(width))
                 sep_cols[c]["hidden"] = False
         self._grid_column_mechanics(info, mutate)
 
@@ -8037,8 +8054,13 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # other's file. Give the import its own copy instead. Same fix as
         # duplicate_note; the copy source is the file the copy-loop above
         # already placed in the attachments folder.
+        # The trash's files count as claimed too: re-importing your own
+        # backup used to append a twin trash entry sharing the original's
+        # physical file, and delete-forever on either destroyed the
+        # other's attachment.
         claimed = {a.get("stored_as")
-                   for n in self.notes
+                   for n in (self.notes + self.trash)
+                   if isinstance(n, dict)
                    for a in (n.get("attachments") or [])
                    if isinstance(a, dict)}
         next_id = max([n["id"] for n in self.notes], default=0) + 1
@@ -8074,10 +8096,24 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if added_templates:
             save_templates(self.templates)
         added_trash = 0
+        existing_trash_keys = {_dup_key(normalize_note(e))
+                               for e in self.trash if isinstance(e, dict)}
         for entry in (state.get("imported_trash") or []):
             if not isinstance(entry, dict):
                 continue
-            entry = dict(entry)
+            raw_deleted = entry.get("deleted_at")
+            # Whitelist through normalize_note like every other imported
+            # dict: a foreign trash.json carrying deleted_at=5 used to
+            # reach the Trash panel raw and crash its sort. deleted_at is
+            # re-attached afterwards (normalize drops it), as a str only.
+            entry = normalize_note(entry)
+            entry["deleted_at"] = (raw_deleted
+                                   if isinstance(raw_deleted, str) else "")
+            key = _dup_key(entry)
+            if key in existing_trash_keys:
+                # Re-importing your own backup must not double the trash.
+                continue
+            existing_trash_keys.add(key)
             # Same claimed-file discipline as the notes above: a trashed
             # entry pointing at a file an ACTIVE note owns would, on its
             # later purge, delete that file out from under the note.
@@ -12189,6 +12225,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         try:
             st = self.capture_editor_state()
         except Exception:
+            self._log_swallowed("flush: capture_editor_state")
             return
         if not (st.get("title", "").strip() or st.get("body", "").strip()
                 or st.get("comments", "").strip()
@@ -12198,7 +12235,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             if not self.editor_state_matches_saved(st):
                 self.save_current_note(auto=True)
         except Exception:
-            pass
+            # THE silent spot the audit named: a save failing here, at
+            # note-switch or close, is exactly "stopped saving in
+            # complete silence" — leave the trace.
+            self._log_swallowed("flush: save_current_note")
 
     def switch_to_tab(self, index):
         if index == self.active_tab_index:
@@ -13940,6 +13980,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             except Exception:
                 # Closing must not get stuck behind a broken tab; the
                 # autosaves along the way have the rest.
+                self._log_swallowed("close: per-tab final save")
                 continue
         # A backup export/import may still be writing on its worker thread;
         # destroy() would kill it mid-file. Wait (capped) for it to finish.

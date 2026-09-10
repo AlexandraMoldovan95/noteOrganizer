@@ -55,6 +55,11 @@ MAX_PASTE_CHARS = 100_000
 MAX_PASTE_SPANS = 2_000
 
 # Tags that mean "a new line starts here".
+# Tags HTML defines as having no end tag. Style spans must never open on
+# one — with no close coming, they'd bleed to the end of the document.
+_VOID_TAGS = {"br", "hr", "img", "input", "area", "base", "col", "embed",
+              "source", "track", "wbr", "meta", "link"}
+
 _BLOCK_TAGS = {"p", "div", "br", "tr", "h1", "h2", "h3", "h4", "h5", "h6",
                "blockquote", "pre", "section", "article"}
 
@@ -289,6 +294,12 @@ class _Reader(HTMLParser):
             else:
                 self._newline()
 
+        if tag in _VOID_TAGS:
+            # A void tag never gets an end tag, so any style span it
+            # opened could only close at end-of-document — the exact
+            # bleed this registry exists to stop. A styled <br>/<img>
+            # simply has its inline style ignored.
+            return
         style = _css(attrs.get("style"))
         opened = []
         for prop, name in (("color", "text_color"),
