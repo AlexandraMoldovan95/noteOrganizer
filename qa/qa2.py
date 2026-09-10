@@ -112,6 +112,165 @@ try:
 except Exception as e:
     check(f'duplicate detection survives None fields ({e})', False)
 
+# ---- CALENDAR INTERACTIVITY (coverage-lift C13) ----
+# The keyboard navigation, hover tooltips and day color/emoji markers
+# were never driven by any script — 65.5% file coverage, the suite's
+# worst. Real assertions, not execution theater.
+
+class _Ev2:
+    pass
+
+app.notebook.select(app.TAB_CALENDAR)
+app.update()
+_y0, _m0 = app.cal_year, app.cal_month
+_ev = _Ev2(); _ev.widget = None
+_r = app._calendar_key(_ev, months=1)
+check('PgDn-style key moves the calendar one month and eats the key',
+      (app.cal_year * 12 + app.cal_month) == (_y0 * 12 + _m0 + 1)
+      and _r == 'break')
+_ev_typing = _Ev2(); _ev_typing.widget = app.body_text
+_r2 = app._calendar_key(_ev_typing, months=1)
+check('the same key while typing does NOT hijack the calendar',
+      (app.cal_year * 12 + app.cal_month) == (_y0 * 12 + _m0 + 1)
+      and _r2 is None)
+app._calendar_key(_ev, today=True)
+from datetime import date as _date2
+check('the Today key lands on the current month',
+      (app.cal_year, app.cal_month) == (_date2.today().year,
+                                        _date2.today().month))
+
+def _tip_labels():
+    tip = getattr(app, '_day_tooltip', None)
+    if tip is None or not tip.winfo_exists():
+        return None
+    out = []
+    def walk(w):
+        for c in w.winfo_children():
+            if isinstance(c, tk.Label):
+                out.append(str(c.cget('text')))
+            walk(c)
+    walk(tip)
+    return out
+
+_D13 = '2026-08-14'
+app.notes = [{'id': 300 + i, 'title': f'ZiNota{i}', 'body': 'b',
+              'category': 'General', 'date': _D13,
+              'updated': '2026-01-01 00:00', 'created': '2026-01-01 00:00',
+              'checklist': [], 'attachments': []} for i in range(2)]
+app.show_day_summary_tooltip(_D13)
+app.update()
+_lbls = _tip_labels()
+check('the day tooltip lists both titles under a 2-note header',
+      _lbls is not None and any('2 note(s)' in t for t in _lbls)
+      and any('ZiNota0' in t for t in _lbls)
+      and any('ZiNota1' in t for t in _lbls))
+app.hide_day_tooltip()
+app.update()
+check('hide_day_tooltip destroys it', _tip_labels() is None)
+
+app.notes = [{'id': 400 + i, 'title': f'Multa{i}', 'body': 'b',
+              'category': 'General', 'date': _D13,
+              'updated': '2026-01-01 00:00', 'created': '2026-01-01 00:00',
+              'checklist': [], 'attachments': []} for i in range(12)]
+app.show_day_summary_tooltip(_D13)
+app.update()
+_lbls = _tip_labels()
+check('twelve notes cap at ten titles plus a "+2 more" line',
+      _lbls is not None and any('+2 more' in t for t in _lbls)
+      and sum(1 for t in _lbls if t.startswith('Multa')) == 10)
+app.hide_day_tooltip(); app.update()
+
+_rich = {'id': 500, 'title': 'Hover', 'body': 'corp de text',
+         'category': 'General', 'date': _D13, 'comments': 'un comentariu',
+         'updated': '2026-01-01 00:00', 'created': '2026-01-01 00:00',
+         'checklist': [{'text': 'a', 'done': True},
+                       {'text': 'b', 'done': False}],
+         'attachments': [{'filename': 'f.txt', 'stored_as': 'x_f.txt'}],
+         'recurrence': {'freq': 'daily', 'interval': 1}}
+app.notes = [_rich]
+app.show_note_hover_preview(_rich, _D13)
+app.update()
+_lbls = _tip_labels()
+check('the note hover preview carries title, body, and the icon row',
+      _lbls is not None
+      and any('Hover' in t for t in _lbls)
+      and any('corp de text' in t for t in _lbls)
+      and any('\U0001F4AC' in t and '\U0001F4CE' in t and '1/2' in t
+              for t in _lbls))
+check('a repeating note is flagged in its preview title',
+      any('\U0001F501' in t for t in _lbls))
+app.hide_day_tooltip(); app.update()
+
+# Day COLOUR through the real palette popup: open, click a swatch,
+# assert the colour lands, persists, and the reset path clears it.
+def _find_swatches(root):
+    out = []
+    def walk(w):
+        for c in w.winfo_children():
+            bg = str(c.cget('bg')) if 'bg' in c.keys() else ''
+            if isinstance(c, (tk.Frame, tk.Label)) and bg.startswith('#') \
+                    and str(c.cget('cursor')) == 'hand2':
+                out.append(c)
+            walk(c)
+    walk(root)
+    return out
+
+app._color_day(_D13)
+app.update()
+_pal = app._mini_popup
+check('the day colour palette opens as the app mini-popup',
+      _pal is not None and _pal.winfo_exists())
+# The swatches are little CANVASES (the colour is a drawn item, not a
+# widget bg) — find them by class + cursor.
+def _find_canvases(root):
+    out = []
+    def walk(w):
+        for c in w.winfo_children():
+            if isinstance(c, tk.Canvas) and str(c.cget('cursor')) == 'hand2':
+                out.append(c)
+            walk(c)
+    walk(root)
+    return out
+_sw = _find_canvases(_pal)
+check('the palette offers clickable swatches', len(_sw) >= 5)
+if _sw:
+    _sw[0].event_generate('<Button-1>')
+    app.update()
+    _picked = app.day_colors.get(_D13)
+    check('clicking a swatch colours the day and persists it',
+          isinstance(_picked, str) and _picked.startswith('#')
+          and NO.get_setting('day_colors', {}).get(_D13) == _picked)
+app._clear_day_color(_D13)
+check('clearing the day colour removes it from disk too',
+      _D13 not in NO.get_setting('day_colors', {}))
+
+# Day EMOJI markers: toggle two, hit the 3-marker cap, Save persists.
+app._mark_day_emoji(_D13)
+app.update()
+_emopop = app._mini_popup
+_chips = [c for c in _find_swatches(_emopop)
+          if isinstance(c, tk.Label) and str(c.cget('text')).strip()]
+check('the emoji marker popup offers its chips', len(_chips) >= 6)
+for chip in _chips[:5]:
+    chip.event_generate('<Button-1>')
+    app.update()
+_save_btn = None
+def _find_btn2(w, txt):
+    global _save_btn
+    for c in w.winfo_children():
+        if isinstance(c, tk.Button) and txt in str(c.cget('text')):
+            _save_btn = c
+        _find_btn2(c, txt)
+_find_btn2(_emopop, 'Save')
+_save_btn.invoke()
+app.update()
+_saved_marks = app.day_emoji.get(_D13, [])
+check('clicking five chips saves exactly the 3-marker cap',
+      len(_saved_marks) == 3
+      and NO.get_setting('day_emoji', {}).get(_D13) == _saved_marks)
+app.day_emoji.pop(_D13, None)
+app._persist_day_emoji()
+
 print()
 print(f"=== QA2 FAILURES: {fails if fails else 'NONE'} ===")
 
