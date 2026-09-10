@@ -2529,6 +2529,46 @@ check('restore previous version draws the restored table as a grid',
 check('and the word count describes the restored text, not the replaced one',
       '4 words' in str(app.word_count_lbl.cget('text')))
 
+# ---- ASTRAL EMOJI vs Tk INDEXES (audit Z09-F05/F06) ----
+# Tk Text columns count UTF-16 units; Python strings count characters.
+# The double-click word-select and the table cell navigation mixed the
+# two, so an emoji earlier on the line shifted every offset after it.
+check('the Tk<->Python column converters round-trip across an emoji',
+      app._py_col('\U0001F600ab', 2) == 1
+      and app._py_col('\U0001F600ab', 3) == 2
+      and app._py_col('\U0001F600ab', 99) == 3
+      and app._tk_col('\U0001F600ab', 1) == 2)
+
+_C4 = core_tables.CELL
+_E4 = '\U0001F600'
+set_body(f'{_C4} {_E4}{_E4}{_E4}{_E4} {_C4} b {_C4} c {_C4}')
+_row4 = app.body_text.get('1.0', '1.end')
+_b_tk = app._tk_col(_row4, _row4.index('b'))
+_hit4 = app._cell_at(1, _b_tk)
+check('the caret is judged into the RIGHT cell across emoji',
+      _hit4 is not None and _hit4[0] == 1)
+check('tabbing lands the caret and selection on the cell text itself',
+      app._move_to_cell(1, 1)
+      and app.body_text.get('sel.first', 'sel.last') == 'b')
+
+set_body(f'{_E4}{_E4} hello world')
+app.body_text.see('1.0'); app.update()
+# Aim at the LAST letter of "hello": the two emoji drift a raw Tk column
+# two characters to the right, which from here crosses into "world" — a
+# click near the word's start drifts within the same word and hides the
+# bug from the check.
+_bb4 = app.body_text.bbox(f"1.{app._tk_col(f'{_E4}{_E4} hello world', 7)}")
+if not _bb4:
+    check('double-click target is on screen', False)
+else:
+    class _Ev4:
+        pass
+    _ev4 = _Ev4(); _ev4.widget = app.body_text
+    _ev4.x = _bb4[0] + 1; _ev4.y = _bb4[1] + 1
+    app._select_word_at_click(_ev4)
+    check('double-click selects the whole word after an emoji',
+          app.body_text.get('sel.first', 'sel.last') == 'hello')
+
 # The window line itself is off-limits: the caret walks to the line under
 # the table, so writing continues from the start of a real row.
 set_body('')

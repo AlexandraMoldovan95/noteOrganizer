@@ -3205,6 +3205,21 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         return cls._tk_units(line[:char_col])
 
     @staticmethod
+    def _py_col(line, tk_col):
+        """A Tk Text column into *line*, as a Python character offset —
+        the inverse of _tk_col. A unit index landing inside an astral
+        pair resolves past that character (never mid-character), and
+        anything beyond the line clamps to its length. Without this, a
+        Tk column read from an index was used to slice Python strings
+        directly, drifting one place per emoji to its left."""
+        u = 0
+        for i, ch in enumerate(line):
+            if u >= tk_col:
+                return i
+            u += 2 if ord(ch) > 0xFFFF else 1
+        return len(line)
+
+    @staticmethod
     def _astral_span_at(s, iu, before):
         """The character whose UTF-16 span contains unit index *iu*
         (``before=False``), or ends at / straddles it (``before=True``).
@@ -5878,6 +5893,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         bounds = core_tables.cell_bounds(line)
         if not bounds:
             return None
+        # `column` arrives as a Tk column (UTF-16 units); `bounds` are
+        # Python character offsets. Convert once so an emoji in an earlier
+        # cell can't shift which cell the caret is judged to be in.
+        column = self._py_col(line, column)
         for i, (start, end) in enumerate(bounds):
             # The cell owns everything up to the pipe that closes it, so a
             # caret sitting in the padding after a short cell counts as being
@@ -5900,10 +5919,16 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if not bounds or index >= len(bounds):
             return False
         start, end = bounds[index]
+        # bounds are Python character offsets; Tk indices count UTF-16
+        # units, so an emoji in an earlier cell used to land the caret —
+        # and the selection — one place short per emoji.
+        tk_start = self._tk_col(line, start)
+        tk_end = self._tk_col(line, end)
         self.body_text.tag_remove("sel", "1.0", "end")
-        self.body_text.mark_set("insert", f"{line_no}.{start}")
+        self.body_text.mark_set("insert", f"{line_no}.{tk_start}")
         if end > start:
-            self.body_text.tag_add("sel", f"{line_no}.{start}", f"{line_no}.{end}")
+            self.body_text.tag_add("sel", f"{line_no}.{tk_start}",
+                                   f"{line_no}.{tk_end}")
         self.body_text.see("insert")
         return True
 
@@ -6978,7 +7003,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         index = w.index(f"@{event.x},{event.y}")
         line, col = index.split(".")
         line_text = w.get(f"{line}.0", f"{line}.0 lineend")
-        col = min(int(col), len(line_text) - 1)
+        # The clicked column is a Tk column (UTF-16 units); the word walk
+        # below runs on Python characters, and the selection goes back to
+        # Tk. Convert in both directions, or an emoji earlier on the line
+        # shifts which word gets selected — and where the highlight lands.
+        col = min(self._py_col(line_text, int(col)), len(line_text) - 1)
         if col < 0:
             return "break"
         char_cls = self._char_class(line_text[col])
@@ -6991,8 +7020,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         while end < len(line_text) and self._char_class(line_text[end]) == char_cls:
             end += 1
         w.tag_remove("sel", "1.0", "end")
-        w.tag_add("sel", f"{line}.{start}", f"{line}.{end}")
-        w.mark_set("insert", f"{line}.{end}")
+        w.tag_add("sel", f"{line}.{self._tk_col(line_text, start)}",
+                  f"{line}.{self._tk_col(line_text, end)}")
+        w.mark_set("insert", f"{line}.{self._tk_col(line_text, end)}")
         return "break"
 
     def _select_line_no_newline(self, event):
