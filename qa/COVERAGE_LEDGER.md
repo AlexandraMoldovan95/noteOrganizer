@@ -20,7 +20,7 @@ individually listed here.
 
 | # | Item (from whose confession) | How it gets covered |
 |---|---|---|
-| C1 | Destructive actions that BYPASS the confirm dialogs entirely were never swept (0.71.119 dialog verifier) — the attachment ✕ was found exactly there, by accident, later | A dedicated sweep: enumerate every user gesture that deletes/overwrites data, assert each either confirms or is trash-recoverable; ships with the attachment-✕ fix cycle |
+| ~~C1~~ | **DONE (this cycle):** the destructive-gesture sweep ran — every delete/overwrite gesture now has a verdict: confirmed (attachments ✕ FIXED with warning+No; templates, trash, reset-day, replace flows already were), trash-recoverable (note deletes, bulk, duplicate cleanup), undo-atomic (all grid/body edits), auto-purge by design (retention), or ACCEPT with reason (the checklist item ✕ — editing-granularity: content visible at click, trivially recreatable, a per-item confirm would break flow; `clear date` — a re-enterable field, not data) | — |
 | C2 | Arrow-key caret movement over an astral emoji (can ←/→ park the insert mark mid-pair?) — probe was inconclusive (0.71.125 grid/emoji verifier) | A focused probe on both CI platforms; if mid-pair parking is real, the caret guard family gets a sibling |
 | C3 | The commit-then-capture edge in `_grid_delete_table` (an open cell editor's commit re-render may pre-empt the delete's view snapshot) — declared only in conversation | Add to ROADMAP Known limitations now (it has no in-repo home, unlike its siblings); pixel test only if the flicker investigation (already queued) reaches it |
 | C4 | `selectbackground`/`selectforeground`/`highlightcolor` were outside the theming option sweep (0.71.125 theming verifier) | One grep-sweep pass with the same long-lived-vs-rebuilt triage as 0.71.125; qa4 check per genuine miss |
@@ -30,6 +30,7 @@ individually listed here.
 | C8 | The qa seam-map per-cell accuracy was not re-verified after three audit rounds (technical-docs auditor) | Regenerate the seam table at the next feature's interaction pass, per qa/README's own instruction |
 | C9 | CLAUDE.md still carries the stale ~13,250 line count (docs auditor, drive-by) | One-line fix at the next CLAUDE.md touch |
 | C10 | Ctrl+A-overtype gesture never executed as a gesture (mechanism proven, gesture untried) | Cheap qa1 addition next time that file is open: type over a select-all that includes a table, assert caret sanity |
+| C11b | An unidentified qa1 check failed once under full-suite load (2026-09-10, 1-of-4 runs) and its NAME was lost — the verifying run was not captured to a file | Standing rule now: every verification full-run tees to a file, so a first red always keeps its name; the flake hunt starts the next time it shows itself |
 | C11 | Old CHANGELOG sections' prose and internal links (below line ~824) unreviewed (docs auditor) | Fold into the next editorial pass with the anchor-checker script extended to prose links |
 
 ## ELSEWHERE — the confession was true for that agent, covered by another hand

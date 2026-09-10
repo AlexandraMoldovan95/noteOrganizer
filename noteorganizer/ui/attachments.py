@@ -67,11 +67,25 @@ class AttachmentsMixin:
             self._schedule_autosave()
 
     def remove_attachment(self, index):
-        if 0 <= index < len(self.current_attachments):
-            removed = self.current_attachments.pop(index)
-            _delete_attachment_files([{"attachments": [removed]}])
-            self.refresh_attachments_list()
-            self._schedule_autosave()
+        if not (0 <= index < len(self.current_attachments)):
+            return
+        target = self.current_attachments[index]
+        # This deletes the STORED FILE, permanently — the one destructive
+        # gesture the audit's confirm sweep missed (it bypassed the
+        # dialogs entirely, so no sweep of ask_yes_no callers could see
+        # it). Same contract as every irreversible confirm: warning
+        # glyph, No pre-selected, Escape backs out.
+        if not self.ask_yes_no(
+                "Remove attachment",
+                f"Remove “{target.get('filename', 'this file')}” from the "
+                "note?\n\nThe stored copy is deleted with it — this can't "
+                "be undone.",
+                icon="warning", default="no"):
+            return
+        removed = self.current_attachments.pop(index)
+        _delete_attachment_files([{"attachments": [removed]}])
+        self.refresh_attachments_list()
+        self._schedule_autosave()
 
     def open_attachment(self, index):
         if 0 <= index < len(self.current_attachments):
