@@ -218,6 +218,31 @@ A new surface joins this list the moment it ships.
   focus being cleared polls for it leaving (qa6's `_focus_leaves`).
   A bare `focus_get() is widget` assert reads the old focus now and
   then, even in solo runs — that flake blocked a release cut once.
+- **Never generate a click on a widget that has no native window.** Tk
+  silently DISCARDS a `<Button-1>` aimed at one — no error, no return
+  value, the binding just never runs and every assertion after it is
+  about state nothing was asked to change. A widget gets that window
+  when it is first mapped, so a freshly built popup, or one the app has
+  hidden, is precisely the case that swallows the click. And popups
+  *do* get hidden here: they are `-topmost` by design, so a heartbeat
+  withdraws them whenever another program holds the Windows foreground
+  — which a test process never owns, the terminal that launched it
+  does. `chip.event_generate('<Button-1>')` was therefore asking "did
+  the 300 ms watch tick land before my click?", and qa2's 3-marker cap
+  check answered by luck for weeks: measured mid-run, all five chips
+  still read `highlightthickness=0`, not one click delivered. Go
+  through [`_qa_support.py`](_qa_support.py): `_qa_pin(NO)` once at the
+  top makes popup visibility independent of the OS foreground (qa1
+  still covers the real hide/restore by driving `_popup_watch_step()`
+  with both answers stubbed), and `_qa_click(w)` asks `winfo_id()`
+  first, which *creates* the window rather than waiting for one. Do
+  not gate on `winfo_ismapped()`/`winfo_viewable()`: both read 0 for a
+  widget scrolled out of a canvas and for a withdrawn-but-once-mapped
+  popup, and both of those receive events perfectly well — gating on
+  them refused qa6's category swatch, which simply sits below the fold
+  of a scrolling panel. Delivery is what the helper guarantees;
+  whether a human could have reached the widget where it sits is a
+  separate question a check asserts for itself.
 - **A mocked method is un-mocked with `del app.<name>`**, which
   un-shadows the real bound method — never by re-assigning a value
   saved earlier, unless that value is the script's own top-of-file

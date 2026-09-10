@@ -27,6 +27,12 @@ _seed_io.open('settings.json', 'w', encoding='utf-8').write(
 
 import sys
 import note_organizer as NO, tkinter as tk, time
+# A generated click is DISCARDED in silence when its widget is not
+# viewable, and the app hides popups whenever another program holds the
+# Windows foreground -- which a test process never owns. See
+# qa/_qa_support.py; _qa_click refuses to click into the void.
+from _qa_support import click as _qa_click, pin_popup_visibility as _qa_pin
+_qa_pin(NO)
 fails=[]
 def check(name, cond):
     print(('PASS' if cond else 'FAIL'), name)

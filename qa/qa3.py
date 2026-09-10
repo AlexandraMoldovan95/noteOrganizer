@@ -27,6 +27,12 @@ _seed_io.open('settings.json', 'w', encoding='utf-8').write(
 
 import sys
 import note_organizer as NO, tkinter as tk, tkinter.filedialog as fd, os, tempfile, time, zipfile, json
+# A generated click is DISCARDED in silence when its widget is not
+# viewable, and the app hides popups whenever another program holds the
+# Windows foreground -- which a test process never owns. See
+# qa/_qa_support.py; _qa_click refuses to click into the void.
+from _qa_support import click as _qa_click, pin_popup_visibility as _qa_pin
+_qa_pin(NO)
 fails=[]
 def check(name, cond):
     print(('PASS' if cond else 'FAIL'), name)
@@ -648,6 +654,49 @@ try:
 except ValueError as e:
     _cap_ok = str(_sh.MAX_SHARED_NOTES) in str(e)
 check('a code over the note cap names the cap in its refusal', _cap_ok)
+
+# ---- A restored backup keeps its categories (product review T0-3) ----
+# settings.json - where the categories live - was always written INTO the
+# zip and never read back out, so on a new machine every imported note
+# whose category did not exist yet was silently re-filed under "General"
+# by normalize_note. The whole filing system of a restored notebook, gone.
+NO.CATEGORY_COLORS['Proiecte Mari'] = '#ff8800'
+NO.persist_categories()
+app.notes = [{'id': 1, 'title': 'Planul', 'body': 'x',
+              'category': 'Proiecte Mari', 'updated': '2026-01-01 00:00',
+              'created': '2026-01-01 00:00', 'checklist': [],
+              'attachments': []}]
+app.save_notes()
+_catzip = os.path.join(tempfile.gettempdir(), 'qa3_categories.zip')
+if os.path.exists(_catzip):
+    os.remove(_catzip)
+fd.asksaveasfilename = lambda **k: _catzip
+app.export_data()
+t0 = time.time()
+while app._export_state is not None and time.time() - t0 < 5:
+    app.update()
+check('the backup zip carries settings.json', os.path.exists(_catzip))
+
+# Now become a device that has never heard of that category.
+del NO.CATEGORY_COLORS['Proiecte Mari']
+NO.persist_categories()
+app.notes = []
+app.save_notes()
+app.ask_yes_no = lambda *a, **k: True
+app._themed_dialog = lambda *a, **k: 'all'
+fd.askopenfilename = lambda **k: _catzip
+app.import_data()
+t0 = time.time()
+while app._import_state is not None and time.time() - t0 < 8:
+    app.update()
+check('importing the backup brings the category back',
+      'Proiecte Mari' in NO.CATEGORY_COLORS
+      and NO.get_setting('categories', {}).get('Proiecte Mari') == '#ff8800')
+check('and the note keeps its filing instead of falling to General',
+      any(n.get('category') == 'Proiecte Mari' for n in app.notes))
+os.remove(_catzip)
+NO.CATEGORY_COLORS.pop('Proiecte Mari', None)
+NO.persist_categories()
 
 print()
 print(f"=== QA3 FAILURES: {fails if fails else 'NONE'} ===")

@@ -953,6 +953,139 @@ finally:
     _storage.on_write_failure = _real_wf_cb
     shutil.rmtree(_wf_dir, ignore_errors=True)
 
+# ---- The one-time cleanup must not delete real notes (product review T0-1) ----
+# note_is_empty decides what the cleanup DESTROYS, so it has to mean the
+# same thing by "content" as the editor does. It counted title/body/
+# comments/attachments only, while save_current_note happily saves a note
+# that is nothing but a checklist -- so the app created notes its own
+# cleanup then deleted, with no Trash and no undo.
+_model = NO
+check("a checklist-only note is not 'empty'",
+      not _model.note_is_empty({"title": "", "body": "", "comments": "",
+                                "attachments": [],
+                                "checklist": [{"text": "milk", "done": False}]}))
+check("a repeating note with no text is not 'empty' either",
+      not _model.note_is_empty({"title": "", "body": "", "comments": "",
+                                "attachments": [], "checklist": [],
+                                "recurrence": {"freq": "weekly"}}))
+check("a dated note with no text is not 'empty' either",
+      not _model.note_is_empty({"title": "", "body": "", "comments": "",
+                                "attachments": [], "checklist": [],
+                                "date": "2026-07-01"}))
+check("a genuinely blank note still is",
+      _model.note_is_empty({"title": "  ", "body": "", "comments": "",
+                            "attachments": [], "checklist": []}))
+
+# ...and two notes that differ only in what is TICKED are two notes.
+_dup_a = _model.normalize_note({"id": 1, "title": "Groceries", "body": "",
+                                "checklist": [{"text": "milk", "done": True}]})
+_dup_b = _model.normalize_note({"id": 2, "title": "Groceries", "body": "",
+                                "checklist": [{"text": "milk", "done": False}]})
+_cleaned, _stats = _model.clean_notes([_dup_a, _dup_b])
+check("notes differing only by their checklist are not merged away",
+      len(_cleaned) == 2 and _stats["duplicates_removed"] == 0)
+_same_a = _model.normalize_note({"id": 1, "title": "Same", "body": "x"})
+_same_b = _model.normalize_note({"id": 2, "title": "Same", "body": "x"})
+check("genuinely identical notes still collapse",
+      len(_model.clean_notes([_same_a, _same_b])[0]) == 1)
+
+# ---- A pasted share code cannot make a note that kills the app (T0-7) ----
+# Every checklist item becomes four widgets at render time and nothing
+# capped the count: 20,000 items is a 60KB code that passes every decoder
+# guard, and the app never starts again once the note is saved.
+_bomb = _model.normalize_note(
+    {"id": 1, "title": "bomb",
+     "checklist": [{"text": "x", "done": False}] * 20000})
+check("normalize_note caps the checklist at the data choke point",
+      len(_bomb["checklist"]) == _model.MAX_CHECKLIST_ITEMS)
+check("and the cap is far above any real list",
+      _model.MAX_CHECKLIST_ITEMS >= 500)
+
+# ---- The rescue copy survives a restart (T0-6) ----
+# _prev is written to disk by the save that shrank the note, but was not
+# in the schema -- so the next launch discarded it while the button still
+# offered to restore from it.
+_with_prev = _model.normalize_note(
+    {"id": 1, "title": "t", "body": "short",
+     "_prev": {"title": "t", "body": "the long original text",
+               "comments": "", "formatting": [], "paragraphs": []}})
+check("normalize_note carries the restore-previous copy through",
+      _with_prev.get("_prev", {}).get("body") == "the long original text")
+check("a junk _prev is dropped rather than trusted",
+      "_prev" not in _model.normalize_note({"id": 1, "_prev": "nonsense"}))
+
+# ---- One malformed id cannot break every "new note" forever ----
+# id was the single field normalize_note passed through untouched, so a
+# hand-edited or foreign notes_data.json broke max([n["id"]...]) + 1 on
+# every route that makes a note.
+check("a string id is coerced to an int",
+      _model.normalize_note({"id": "7"})["id"] == 7)
+check("an unusable id falls back to 0 instead of poisoning the list",
+      _model.normalize_note({"id": ["nope"]})["id"] == 0
+      and _model.normalize_note({"id": None})["id"] == 0)
+_mixed = [_model.normalize_note({"id": "3", "title": "a"}),
+          _model.normalize_note({"id": 5, "title": "b"})]
+check("so the next-id arithmetic still works on a repaired list",
+      max(n["id"] for n in _mixed) + 1 == 6)
+
+# ---- One notebook, one app (product review T0-2) ----
+# Two windows on the same data directory each hold their own copy of the
+# whole notebook, and every save rewrites the file wholesale -- so the
+# second one to autosave silently deletes everything the first wrote.
+# The guard is an OS file lock, which the kernel releases however the
+# process dies, so a crash can never lock a user out of their own notes.
+import subprocess as _sp
+from noteorganizer.core import single_instance as _si
+
+_lock_dir = tempfile.mkdtemp()
+_lock_path = os.path.join(_lock_dir, "notebook.lock")
+_PROBE = (
+    "import sys; sys.path.insert(0, %r);"
+    "from noteorganizer.core import single_instance as si;"
+    "print('GOT' if si.acquire(%r) else 'BLOCKED')"
+    % (os.path.dirname(os.path.abspath(__file__)), _lock_path))
+
+
+def _other_process_can_take_it():
+    out = _sp.run([sys.executable, "-c", _PROBE], capture_output=True,
+                  text=True, cwd=_lock_dir)
+    return "GOT" in out.stdout
+
+
+try:
+    check("a second process is refused while the first holds the notebook",
+          _si.acquire(_lock_path) is True
+          and _other_process_can_take_it() is False)
+    check("the holder knows it holds it", _si.held() is True)
+    check("taking it twice in one process is fine (qa builds several apps)",
+          _si.acquire(_lock_path) is True)
+    # Guarded: a release that leaves the handle behind blows up on the
+    # SECOND release (seek on a closed file), and a mutant must fail a
+    # check rather than take the suite down before its footer.
+    try:
+        _si.release()
+        _released_cleanly = True
+    except Exception:
+        _released_cleanly = False
+    check("releasing hands it straight over -- no stale lock to strand anyone",
+          _released_cleanly and _other_process_can_take_it() is True)
+    check("and the holder knows it let go",
+          _released_cleanly and _si.held() is False)
+    # A lock that cannot be created must never stop the app from starting:
+    # refusing to open because a LOCK failed is worse than what it guards.
+    check("an uncreatable lock file reports success rather than blocking",
+          _si.acquire(os.path.join(_lock_dir, "no_such_dir", "x.lock")) is True)
+    try:
+        _si.release()
+    except Exception:
+        pass
+finally:
+    try:
+        _si.release()
+    except Exception:
+        pass
+    shutil.rmtree(_lock_dir, ignore_errors=True)
+
 print()
 print(f"FAILURES: {fails if fails else 'none'}")
 

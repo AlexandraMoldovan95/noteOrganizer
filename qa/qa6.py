@@ -28,6 +28,12 @@ _seed_io.open('settings.json', 'w', encoding='utf-8').write(
 import sys
 import time
 import note_organizer as NO, tkinter as tk, tkinter.filedialog as fd, os, tempfile
+# A generated click is DISCARDED in silence when its widget is not
+# viewable, and the app hides popups whenever another program holds the
+# Windows foreground -- which a test process never owns. See
+# qa/_qa_support.py; _qa_click refuses to click into the void.
+from _qa_support import click as _qa_click, pin_popup_visibility as _qa_pin
+_qa_pin(NO)
 fails=[]
 def check(name, cond):
     print(('PASS' if cond else 'FAIL'), name)
@@ -227,7 +233,7 @@ _section_labels = {k: l for k, l, _b, _e in app.SETTINGS_SECTIONS}
 name_title = find_widget(app.settings_name_panel, tk.Label, _section_labels['name'])
 check('the section title label was found', name_title is not None)
 check('the shown section\'s title is actually visible', name_title.winfo_ismapped())
-name_title.event_generate('<Button-1>')
+_qa_click(name_title)
 app.update()
 check('clicking a section title elsewhere in Settings clears the field\'s focus',
       _focus_leaves(name_entry))
@@ -242,7 +248,7 @@ app.update()
 check('username entry has focus before leaving Settings',
       _focus_settles_on(name_entry))
 back_btn = find_widget(app.settings_page, tk.Button, 'Back to Notes')
-back_btn.event_generate('<Button-1>')
+_qa_click(back_btn)
 back_btn.event_generate('<ButtonRelease-1>')
 app.update()
 check('clicking "Back to Notes" directly clears the field\'s focus',
@@ -350,7 +356,7 @@ grid_frame = find_all(app.stats_frame, tk.Frame)[0]
 chip = grid_frame.winfo_children()[0]
 check('statistics chip has no hand cursor (not clickable-looking)',
       str(chip.cget('cursor')) != 'hand2')
-chip.event_generate('<Button-1>')
+_qa_click(chip)
 chip.event_generate('<ButtonRelease-1>')
 app.update()
 check('clicking a statistics chip does not change tabs',
@@ -521,7 +527,7 @@ check('template count updates live after saving a new template, no navigation aw
 # emoji label, so find them by the kind each widget records.
 delete_btn = next(c for c in find_all2(app.settings_templates_panel, tk.Canvas)
                   if getattr(c, '_icon_kind', None) == 'trash')
-delete_btn.event_generate('<Button-1>')
+_qa_click(delete_btn)
 app.update()
 check('template count updates live after deleting a template, no navigation away',
       stats_pairs().get('Templates') == 0)
@@ -1108,7 +1114,7 @@ def _find_dd_qw(w):
 
 
 _find_dd_qw(app.settings_trash_panel)
-_ddQW[0].event_generate('<Button-1>')
+_qa_click(_ddQW[0])
 app.update()
 _optQW = []
 
@@ -1121,7 +1127,7 @@ def _find_opt_qw(w):
 
 
 _find_opt_qw(app._mini_popup)
-_optQW[0].event_generate('<Button-1>')
+_qa_click(_optQW[0])
 app.update()
 check('picking 60 days in the dropdown saves the setting',
       NO.get_setting('trash_retention_days') == 60)
@@ -1207,14 +1213,14 @@ def _find_trash_qw(w):
 
 
 _find_trash_qw(_frameQW)
-_trashBtnQW[0].event_generate('<Button-1>')
+_qa_click(_trashBtnQW[0])
 app.update()
 check('the delete ask says templates skip the Trash',
       "don't go to the Trash" in str(_askedQW.get('msg', ''))
       and "can't be undone" in str(_askedQW.get('msg', '')))
 check('No keeps the template', len(app.templates) == 1)
 _ansQW['v'] = True
-_trashBtnQW[0].event_generate('<Button-1>')
+_qa_click(_trashBtnQW[0])
 app.update()
 check('Yes deletes it for good', len(app.templates) == 0)
 app.ask_yes_no = _origAskQW
@@ -1269,7 +1275,7 @@ _old_col = _CC6['Proiecte']
 _swatch6 = next(c for c in _prow.winfo_children()
                 if isinstance(c, tk.Frame)
                 and str(c.cget('cursor')) == 'hand2')
-_swatch6.event_generate('<Button-1>')
+_qa_click(_swatch6)
 app.update()
 _pal6 = [c for c in app._mini_popup.winfo_children()] if app._mini_popup else []
 def _canvases6(root):
@@ -1291,7 +1297,7 @@ def _fill6(c):
 _target6 = next(c for c in _sw6 if _fill6(c).startswith('#')
                 and _fill6(c) != _old_col)
 _want6 = _fill6(_target6)
-_target6.event_generate('<Button-1>')
+_qa_click(_target6)
 app.update()
 check('recolouring through the swatch palette stores the clicked colour',
       _CC6.get('Proiecte') == _want6
@@ -1304,7 +1310,7 @@ _prow = _row_of6(_catf, 'Proiecte')
 # delete). The inline editor's <Return> needs REAL focus first, or the
 # generated key is dropped (the documented class).
 _pencil6 = [c for c in _prow.winfo_children() if isinstance(c, tk.Canvas)][0]
-_pencil6.event_generate('<Button-1>')
+_qa_click(_pencil6)
 app.update()
 # The inline editor is a mini-POPUP (entry + Save button), not a row
 # child — drive it through its own Save button, no focus needed.

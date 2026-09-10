@@ -27,6 +27,12 @@ _seed_io.open('settings.json', 'w', encoding='utf-8').write(
 
 import sys
 import note_organizer as NO, tkinter as tk
+# A generated click is DISCARDED in silence when its widget is not
+# viewable, and the app hides popups whenever another program holds the
+# Windows foreground -- which a test process never owns. See
+# qa/_qa_support.py; _qa_click refuses to click into the void.
+from _qa_support import click as _qa_click, pin_popup_visibility as _qa_pin
+_qa_pin(NO)
 fails=[]
 def check(name, cond):
     print(('PASS' if cond else 'FAIL'), name)
@@ -330,6 +336,34 @@ if _launched:
           app5e.notes and app5e.notes[0]['recurrence']['interval']
           == NO.normalize_recurrence({'freq': 'daily', 'interval': 10 ** 10})['interval'])
     app5e.destroy()
+
+# ---- The setup notice only speaks when it did something (T2-1) ----
+# The one-time cleanup runs whenever settings.json lacks its flag, which
+# on a fresh install is always -- and it announced itself regardless. The
+# literal first screen of the product was a blocking modal reading
+# "Cleanup pass (runs once): ... 0 note(s) remain, IDs renumbered 1-0":
+# internal maintenance vocabulary, about nothing, over an empty notebook.
+app5f = NO.NoteOrganizer()
+app5f._poll_active_dirty = lambda: None
+app5f.update()
+_notices = []
+app5f.show_info = lambda title, msg, **k: (_notices.append((title, msg)), True)[1]
+
+app5f._version_backup_path = None
+app5f._corrupt_notes_report = None
+app5f._cleanup_report = ({'before': 0, 'empty_removed': 0,
+                          'duplicates_removed': 0, 'after': 0}, None)
+app5f.announce_startup_changes()
+app5f.update()
+check('a cleanup that changed nothing says nothing', _notices == [])
+
+app5f._cleanup_report = ({'before': 5, 'empty_removed': 1,
+                          'duplicates_removed': 2, 'after': 2}, None)
+app5f.announce_startup_changes()
+app5f.update()
+check('a cleanup that DID something still reports it',
+      len(_notices) == 1 and 'Removed 1 empty note(s)' in _notices[0][1])
+app5f.destroy()
 
 print()
 print(f"=== QA5 FAILURES: {fails if fails else 'NONE'} ===")

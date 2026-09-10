@@ -27,6 +27,12 @@ _seed_io.open('settings.json', 'w', encoding='utf-8').write(
 
 import sys
 import note_organizer as NO, tkinter as tk
+# A generated click is DISCARDED in silence when its widget is not
+# viewable, and the app hides popups whenever another program holds the
+# Windows foreground -- which a test process never owns. See
+# qa/_qa_support.py; _qa_click refuses to click into the void.
+from _qa_support import click as _qa_click, pin_popup_visibility as _qa_pin
+_qa_pin(NO)
 from datetime import date
 fails=[]
 def check(name, cond):
@@ -234,7 +240,7 @@ def _find_canvases(root):
 _sw = _find_canvases(_pal)
 check('the palette offers clickable swatches', len(_sw) >= 5)
 if _sw:
-    _sw[0].event_generate('<Button-1>')
+    _qa_click(_sw[0])
     app.update()
     _picked = app.day_colors.get(_D13)
     check('clicking a swatch colours the day and persists it',
@@ -252,7 +258,7 @@ _chips = [c for c in _find_swatches(_emopop)
           if isinstance(c, tk.Label) and str(c.cget('text')).strip()]
 check('the emoji marker popup offers its chips', len(_chips) >= 6)
 for chip in _chips[:5]:
-    chip.event_generate('<Button-1>')
+    _qa_click(chip)
     app.update()
 _save_btn = None
 def _find_btn2(w, txt):

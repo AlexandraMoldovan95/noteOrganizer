@@ -28,6 +28,12 @@ _seed_io.open('settings.json', 'w', encoding='utf-8').write(
 import sys
 import time
 import note_organizer as NO, tkinter as tk, json, os, re
+# A generated click is DISCARDED in silence when its widget is not
+# viewable, and the app hides popups whenever another program holds the
+# Windows foreground -- which a test process never owns. See
+# qa/_qa_support.py; _qa_click refuses to click into the void.
+from _qa_support import click as _qa_click, pin_popup_visibility as _qa_pin
+_qa_pin(NO)
 from noteorganizer.core import tables as core_tables
 fails=[]
 def check(name, cond):
@@ -481,7 +487,7 @@ check('history shows one entry per past calculation', len(history_labels) == 5)
 # whatever's already in the body from earlier insertions in this test.
 target_entry = next(w for w in history_labels if str(w.cget('text')) == '7×8=56')
 body_before_history_click = app.body_text.get('1.0', 'end')
-target_entry.event_generate('<Button-1>')
+_qa_click(target_entry)
 app.update()
 body_after_history_click = app.body_text.get('1.0', 'end')
 check('clicking a history entry inserts that exact formula into the note',
@@ -1011,8 +1017,13 @@ check('adding an item to an existing note updates the list lines it saves',
                                        {'line': 1, 'kind': 'bullet'},
                                        {'line': 2, 'kind': 'bullet'}])
 
-# save_current_note() strips the body, so leading blank lines shift every
-# line up. Without compensating, the reopened note indents the wrong ones.
+# Saving stores the body EXACTLY as typed - blank lines and leading
+# indentation included. It used to .strip() it, which silently deleted the
+# user's own first-line indentation and every trailing blank line on each
+# save (a pasted code block lost its shape), and needed two adapter methods
+# to shift every span and list line back into place. The adapters went with
+# the strip; this check now guards the promise that replaced them: what is
+# on screen is what lands on disk, line for line.
 app.new_note()
 app.title_entry.insert(0, 'LeadingBlanks')
 set_body('\n\nmilk\neggs')
@@ -1023,10 +1034,30 @@ clear_selection()
 app.save_current_note(auto=False)
 app.update()
 blank_note = app.find_note(app.selected_note_id)
-check('leading blank lines that saving strips also shift the list lines up',
-      blank_note['body'] == '• milk\n• eggs'
-      and blank_note.get('paragraphs') == [{'line': 0, 'kind': 'bullet'},
-                                       {'line': 1, 'kind': 'bullet'}])
+check('blank lines survive the save, and list lines stay where the user put them',
+      blank_note['body'] == '\n\n\u2022 milk\n\u2022 eggs'
+      and blank_note.get('paragraphs') == [{'line': 2, 'kind': 'bullet'},
+                                           {'line': 3, 'kind': 'bullet'}])
+
+# Indentation and trailing blank lines are the user's characters too.
+app.new_note()
+app.title_entry.insert(0, 'Indented')
+set_body('    def f():\n        return 1\n\n')
+app.save_current_note(auto=False)
+app.update()
+_ind = app.find_note(app.selected_note_id)
+check('leading indentation and trailing blank lines survive a save',
+      _ind['body'] == '    def f():\n        return 1\n\n')
+
+# ...but a body of nothing but whitespace is still "empty": storing the raw
+# text must not turn a stray New Note click into a saved note.
+app.new_note()
+set_body('   \n\n  ')
+_before_ws = len(app.notes)
+app.save_current_note(auto=True)
+app.update()
+check('a whitespace-only new note is still refused',
+      len(app.notes) == _before_ws)
 
 check('normalize_note drops list lines pointing past the end of the body',
       NO.normalize_note({'body': 'one\ntwo',
@@ -1035,6 +1066,17 @@ check('normalize_note drops list lines pointing past the end of the body',
       == [{'line': 0, 'kind': 'bullet'}])
 
 # ---- Templates carry lists too ----
+# Set the editor up explicitly instead of inheriting whatever the block
+# above happened to leave in it: these two checks silently became about
+# an empty editor the moment a neighbour's last action changed.
+app.new_note()
+app.title_entry.insert(0, 'ListTemplateSource')
+set_body('milk\neggs')
+app.body_text.tag_add('sel', '1.0', '2.end')
+app.update()
+app._list_buttons['bullet'].invoke()
+clear_selection()
+app.update()
 st_for_list_tpl = app.capture_editor_state()
 list_tpl = NO.normalize_template({
     'name': 'ListTemplate',
@@ -6626,7 +6668,7 @@ _cat_pop = app._mini_popup
 _rows_cat = [l for l in _walk_widgets(_cat_pop, tk.Label)
              if str(l.cget('text')) == 'Work']
 check('the category dropdown lists Work', len(_rows_cat) >= 1)
-_rows_cat[0].event_generate('<Button-1>')
+_qa_click(_rows_cat[0])
 app.update()
 check('picking a row sets the editor category',
       app.category_var.get() == 'Work')
@@ -6719,7 +6761,7 @@ _chips = [l for l in _walk_widgets(app._mini_popup, tk.Label)
           and str(l.cget('text')).strip()]
 check('the emoji picker offers chips', len(_chips) >= 8)
 _first_emoji = str(_chips[0].cget('text')).strip()
-_chips[0].event_generate('<Button-1>')
+_qa_click(_chips[0])
 app.update()
 check('a chip click inserts that emoji into the body',
       _first_emoji in app.body_text.get('1.0', 'end-1c'))
@@ -6740,7 +6782,7 @@ _w = _tpl_btns[0]
 if isinstance(_w, tk.Button):
     _w.invoke()
 else:
-    _w.event_generate('<Button-1>')
+    _qa_click(_w)
 app.update()
 check('choosing it fills the editor from the template',
       app.title_entry.get() == 'Din sablon'
@@ -6760,7 +6802,7 @@ for topl in _size_pop:
 picked = False
 for c in _cells14:
     c.event_generate('<Enter>')
-    c.event_generate('<Button-1>')
+    _qa_click(c)
     app.update()
     if core_tables.find_blocks(body()):
         picked = True

@@ -27,6 +27,12 @@ _seed_io.open('settings.json', 'w', encoding='utf-8').write(
 
 import sys
 import note_organizer as NO, tkinter as tk, tkinter.filedialog as fd, os, tempfile, base64, zlib, struct
+# A generated click is DISCARDED in silence when its widget is not
+# viewable, and the app hides popups whenever another program holds the
+# Windows foreground -- which a test process never owns. See
+# qa/_qa_support.py; _qa_click refuses to click into the void.
+from _qa_support import click as _qa_click, pin_popup_visibility as _qa_pin
+_qa_pin(NO)
 fails = []
 def check(name, cond):
     print(('PASS' if cond else 'FAIL'), name)
@@ -358,7 +364,7 @@ for _ in range(60):
         break
     try:
         if work_lbl.winfo_exists():
-            work_lbl.event_generate('<Button-1>')
+            _qa_click(work_lbl)
     except tk.TclError:
         pass
     app.update()
@@ -418,6 +424,47 @@ app.refresh_attachments_list(); app.update()
 app.open_attachment(0)
 app.update()
 check('corrupt image file handled gracefully, no crash', app._mini_popup is None)
+
+# ---- A shortcut file is dangerous too (product review T0-8) ----
+# The warn-before-opening list covered the 1990s executables and missed
+# every vehicle actually used to deliver code today. A .lnk carries an
+# arbitrary command line behind an innocent name and icon, and one
+# arriving inside an imported backup reached os.startfile through this
+# gate with no question asked at all.
+for _dangerous in ('.lnk', '.url', '.iso', '.scf', '.appref-ms'):
+    check('%s counts as dangerous' % _dangerous,
+          _dangerous in app.DANGEROUS_EXTENSIONS)
+
+with open(os.path.join(NO.ATTACHMENTS_DIR, 'invoice.lnk'), 'wb') as f:
+    f.write(b'shortcut')
+app.current_attachments = [{'filename': 'invoice.lnk',
+                            'stored_as': 'invoice.lnk'}]
+app.refresh_attachments_list(); app.update()
+_opened = []
+_real_startfile = NO.os.startfile if hasattr(NO.os, 'startfile') else None
+NO.os.startfile = lambda p, *a, **k: _opened.append(p)
+_asked = []
+_real_ask_lnk = app.ask_yes_no
+app.ask_yes_no = lambda t, m, **k: (_asked.append((t, k)), False)[1]
+try:
+    app.open_attachment(0)
+    app.update()
+finally:
+    app.ask_yes_no = _real_ask_lnk
+check('opening a .lnk asks first, with the warning glyph',
+      len(_asked) == 1 and _asked[0][1].get('icon') == 'warning'
+      and _asked[0][1].get('default') == 'no')
+check('and answering No does not launch it',
+      _opened == [])
+app.ask_yes_no = lambda *a, **k: True
+try:
+    app.open_attachment(0)
+    app.update()
+finally:
+    app.ask_yes_no = _real_ask_lnk
+    if _real_startfile is not None:
+        NO.os.startfile = _real_startfile
+check('answering Yes is what actually opens it', len(_opened) == 1)
 
 # non-previewable file still gets the "opens externally" hint
 app.current_attachments = [{'filename': 'doc.pdf', 'stored_as': 'doc.pdf'}]
@@ -1170,7 +1217,7 @@ _lonely_lbl = next(w for w in app._history_rows.winfo_children()
                    and any('LonelyLive' in str(c.cget('text'))
                            for c in w.winfo_children()
                            if isinstance(c, tk.Label)))
-_lonely_lbl.event_generate('<Button-1>'); app.update()
+_qa_click(_lonely_lbl); app.update()
 check('clicking the childless series lands on its day in the calendar',
       not app._history_visible and app._day_panel_mode == 'note'
       and app.selected_day is not None)
