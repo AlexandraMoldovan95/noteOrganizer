@@ -584,8 +584,30 @@ app.load_note(saved_note)
 app.update()
 check('attachment survives switching away and back', len(app.current_attachments) == 1)
 
-app.remove_attachment(0)
-app.update()
+# ---- Removing an attachment CONFIRMS first (the no-confirm sweep) ----
+# The ✕ deleted the stored file permanently with no question at all —
+# the one destructive gesture outside the dialog system, found by the
+# docs auditor by accident and closed by the C1 sweep. Answering No
+# must leave both the list entry and the file untouched.
+_orig_ask_att = app.ask_yes_no
+app.ask_yes_no = lambda *a, **k: False
+try:
+    app.remove_attachment(0)
+    app.update()
+finally:
+    app.ask_yes_no = _orig_ask_att
+check('answering No keeps the attachment in the list',
+      len(app.current_attachments) == 1)
+check('and keeps the stored file on disk', os.path.isfile(stored_path))
+_att_ask = {}
+app.ask_yes_no = lambda t, m, **kw: (_att_ask.update(kw), True)[1]
+try:
+    app.remove_attachment(0)
+    app.update()
+finally:
+    app.ask_yes_no = _orig_ask_att
+check('the confirm asks with the warning glyph and No pre-selected',
+      _att_ask.get('icon') == 'warning' and _att_ask.get('default') == 'no')
 check('remove_attachment clears the list', len(app.current_attachments) == 0)
 check('remove_attachment deletes the file from disk', not os.path.isfile(stored_path))
 

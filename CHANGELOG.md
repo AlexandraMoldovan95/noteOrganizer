@@ -12,6 +12,7 @@ How the numbers themselves are counted is the
 
 | Version | Date | In one line |
 |---|---|---|
+| [0.71.135](#071135--2026-09-10) | 2026-09-10 | Removing an attachment asks first — the one permanent delete that skipped every confirmation, closed by the destructive-gesture sweep. |
 | [0.71.134](#071134--2026-09-10) | 2026-09-10 | Nine audit small classes closed — the calculator, bleeding paste styles, honest Select-all, nested Escape, pasted tables, whole backups, autosave traces and a theming leak. |
 | [0.71.125](#071125--2026-09-10) | 2026-09-10 | Six audit medium classes swept whole — visible carets and honest saves, atomic exports that closing waits for, tables that redraw and hold the view, emoji-proof clicks and finds. |
 | [0.71.119](#071119--2026-09-09) | 2026-09-09 | Three audit-found user-facing safety fixes — every route that copies a note gives the copy its own attachment files, a fresh emoji no longer crashes sharing or export, and destructive confirms warn clearly instead of pre-selecting Yes. |
@@ -53,6 +54,20 @@ How the numbers themselves are counted is the
 ---
 
 ## [Unreleased]
+
+## [0.71.135] — 2026-09-10
+
+*Highlights: the destructive-gesture sweep — every way to delete or overwrite data now has a written verdict, and the one gap it found is closed.*
+
+### Fixed
+- **Removing an attachment asks first.** The ✕ next to an attached file deleted the
+  stored copy from disk permanently, with no question at all — the one destructive
+  gesture living entirely outside the dialog system, which is exactly why every earlier
+  confirmation sweep missed it. It now confirms like its siblings: warning glyph, "No"
+  pre-selected, Escape backs out. The full sweep that found it — every delete/overwrite
+  gesture in the app, each with a verdict (confirms, trash-recoverable, undoable, or
+  accepted with a reason) — is recorded in `qa/COVERAGE_LEDGER.md`. From the coverage
+  programme's first cycle.
 
 ## [0.71.134] — 2026-09-10
 
