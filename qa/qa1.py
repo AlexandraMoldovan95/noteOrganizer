@@ -2475,6 +2475,60 @@ app.update()
 check('and deleting the table removes it outright',
       app._grid_at_line(1) is None and core_tables.find_blocks(body()) == [])
 
+# ---- GRID DELETE captures the view BEFORE teardown (audit Z08-F02) ----
+# Every other grid op snapshots _grid_saved_view before tearing down so
+# the rebuild pins the view the user had; table delete was the one op
+# that didn't, and deleting a table yanked the page. The restore itself
+# rides after_idle (async), so assert the synchronous decision instead:
+# when the delete's render runs, the snapshot must already be there.
+set_body('| A | B |\n| C | D |')
+app._render_table_grids()
+app.update()
+_delcap = {}
+_orig_render_del = app._render_table_grids
+def _spy_render_del():
+    _delcap['had_saved_view'] = getattr(app, '_grid_saved_view', None) is not None
+    return _orig_render_del()
+app._render_table_grids = _spy_render_del
+try:
+    _t = app._grid_at_line(1)
+    app._grid_delete_table(_t)
+finally:
+    app._render_table_grids = _orig_render_del
+app.update()
+check('table delete captures the view before teardown (no scroll jump)',
+      _delcap.get('had_saved_view', False))
+check('and that delete still removes the table outright',
+      core_tables.find_blocks(body()) == [])
+
+# ---- RESTORE PREVIOUS VERSION redraws what it restores (audit Z09-F07) ----
+# It was the one body-loader that skipped the redraw tail: a restored
+# table came back as raw pipe rows, and the word count kept describing
+# the text that was just replaced.
+app.new_note()
+app.title_entry.delete(0, 'end')
+app.title_entry.insert(0, 'RestoreGrid')
+app.title_entry.config(fg='black')
+app.body_text.insert('1.0', 'one two three four five six')
+app.save_current_note(auto=False)
+app.update_word_count()
+app.update()
+_rp_note = app.find_note(app.selected_note_id)
+_rp_note['_prev'] = {'title': 'RestoreGrid', 'body': '| P | Q |\n| R | S |',
+                     'formatting': [], 'paragraphs': [], 'comments': ''}
+_orig_ask_rp = app.ask_yes_no
+app.ask_yes_no = lambda *a, **k: True
+try:
+    app.restore_previous_version()
+finally:
+    app.ask_yes_no = _orig_ask_rp
+app.update()
+check('restore previous version draws the restored table as a grid',
+      len(app.body_text.window_names()) >= 1
+      and core_tables.find_blocks(body()) != [])
+check('and the word count describes the restored text, not the replaced one',
+      '4 words' in str(app.word_count_lbl.cget('text')))
+
 # The window line itself is off-limits: the caret walks to the line under
 # the table, so writing continues from the start of a real row.
 set_body('')

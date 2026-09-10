@@ -3986,6 +3986,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             return
         nrows = info["nrows"]
         self._commit_cell_editor()
+        # Capture BEFORE teardown+delete, like every other grid op: the
+        # deletion shifts body_text's scroll on the spot, and without this
+        # snapshot the render below faithfully pins the already-jumped
+        # view — deleting a table yanked the page.
+        self._grid_saved_view = self._capture_grid_views()
         self._teardown_table_grids()
         self.body_text.delete(f"{first}.0", f"{first + nrows - 1}.end +1c")
         self._resync_list_tags()
@@ -13191,12 +13196,17 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.body_text.insert("1.0", prev.get("body", ""))
         self._apply_formatting(self.body_text, prev.get("formatting", []))
         self._apply_paragraphs(self.body_text, prev.get("paragraphs", []))
+        # Mirror restore_editor_state's tail: this was the one body-loader
+        # that skipped the redraw, so a restored table came back as raw
+        # pipe rows and the word count kept describing the replaced text.
+        self._render_table_grids()
         self._refresh_format_buttons()
         self.comments_text.delete("1.0", "end")
         self.comments_text.insert("1.0", prev.get("comments", ""))
         # Clear the backup so the button hides after a successful restore.
         note.pop("_prev", None)
         self.save_current_note()
+        self.update_word_count()
         self._update_restore_button()
         self.set_status("Restored the previous version")
 
