@@ -56,17 +56,27 @@ def current_api():
     # Walk the class's own MRO entries but stop before tkinter's, so mixins
     # added by the split are included while Tk internals are not.
     own = {}
+    owners = {}
+    duplicates = []
     for klass in cls.__mro__:
         if klass.__module__.startswith("tkinter") or klass is object:
             continue
         for name, value in vars(klass).items():
-            if name in own or not callable(value):
+            if not callable(value):
                 continue
+            if name in own:
+                # The exact failure this tool exists to catch, which the
+                # old skip made invisible: the same method defined in
+                # two of OUR classes. Only the MRO winner ever runs; the
+                # loser is silent dead code or a silent behaviour swap.
+                duplicates.append((name, owners[name], klass.__name__))
+                continue
+            owners[name] = klass.__name__
             try:
                 own[name] = str(inspect.signature(value))
             except (TypeError, ValueError):
                 own[name] = "(<unavailable>)"
-    return dict(sorted(own.items()))
+    return dict(sorted(own.items())), sorted(duplicates)
 
 
 def load_baseline():
@@ -76,7 +86,14 @@ def load_baseline():
 
 
 def main(argv):
-    api = current_api()
+    api, duplicates = current_api()
+
+    if duplicates:
+        print(f"DUPLICATE METHODS ({len(duplicates)}) — defined in two "
+              f"classes; only the MRO winner runs:")
+        for name, winner, loser in duplicates:
+            print(f"    {name}: {winner} shadows {loser}")
+        return 1
 
     if "--update" in argv:
         BASELINE.write_text(json.dumps(api, indent=2) + "\n", encoding="utf-8")
