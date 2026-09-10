@@ -1228,6 +1228,14 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         adding them to every other text field that shares this same
         menu-building function."""
         menu = tk.Menu(text_widget, tearoff=0)
+        # Hover colour resolved at POST time, not build time: these menus
+        # hang off both long-lived fields (body, title, search…) and
+        # transient ones, so track_theme would leak entries for the
+        # transient ones while a build-time capture froze the long-lived
+        # ones on the old accent. postcommand runs on every open — live
+        # palette, zero tracking.
+        menu.configure(postcommand=lambda m=menu: m.configure(
+            activebackground=self.colors["accent"], activeforeground="white"))
         menu.configure(bg=self.colors["card"], fg=self.colors["text"],
                        activebackground=self.colors["accent"], activeforeground="white",
                        relief="flat", bd=0, font=("Segoe UI", 9))
@@ -1533,8 +1541,17 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
         Read from a mark rather than remembered as a number: text edited
         above the table moves it, and a mark moves with it.
+
+        Liveness first: a full-range delete (New note, typing over a
+        Ctrl+A selection) destroys the embedded windows WITHOUT a
+        teardown, and Tk marks survive that delete — collapsed to 1.0.
+        Answering for such a dead grid made _caret_out_of_hidden walk the
+        caret of a fresh note to its end on the next keystroke, and
+        shifted line-1 column math by a phantom window character.
         """
         try:
+            if not info["frame"].winfo_exists():
+                return None
             return int(self.body_text.index(info["mark"]).split(".")[0])
         except (tk.TclError, KeyError, ValueError):
             return None
@@ -7308,7 +7325,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.import_box = tk.Text(p, height=4, wrap="char", font=("Consolas", 8),
                                   relief="flat", bg=self.colors["card"], fg=self.colors["text"],
                                   insertbackground=self.colors["text"], padx=6, pady=6)
-        self.track_theme(self.import_box, bg="card", fg="text")
+        self.track_theme(self.import_box, bg="card", fg="text", insertbackground="text")
         self.import_box.pack(fill="x", padx=6)
         self._add_paste_menu(self.import_box)
         self.import_status = tk.Label(p, text="", font=("Segoe UI", 7), anchor="w",
@@ -8156,6 +8173,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         entry.bind("<Return>", lambda e: self._add_checklist_item())
         self._add_paste_menu(entry)
         self.checklist_add_entry = entry
+        # Long-lived: without tracking, the caret (insertbackground) froze
+        # on the build-time palette — invisible after a dark<->light switch.
+        self.track_theme(entry, bg="sidebar", fg="text",
+                         insertbackground="text")
         tk.Button(add_row, text="＋ Add", command=self._add_checklist_item,
                   bg=self.colors["accent"], fg="white", relief="flat",
                   font=("Segoe UI", 9, "bold"), cursor="hand2"
@@ -8727,6 +8748,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # the straggler pass and left showing the wrong colour. Running last
         # makes the note's own data authoritative. See _recolor_note_cards.
         self._recolor_note_cards()
+        # Checklist rows rebuild per note load, so they are deliberately
+        # untracked — but the straggler net repaints only bg/fg, leaving a
+        # switched theme's checkbox wells (selectcolor) on the old palette
+        # while the note stays open. Same treatment as the note cards.
+        self._recolor_checklist_boxes()
         # The find highlights are blended from the palette, so re-tint them
         # for the new theme; then re-draw the current cell flash, which the
         # grid rebuild above tore off the canvas (a no-op if find is closed).
@@ -8736,6 +8762,30 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # (The History register's rebuilt rows need no hook here: the
         # straggler pass above recolors them — qa7's theme-while-open
         # check guards that promise regardless of mechanism.)
+
+    def _recolor_checklist_boxes(self):
+        """Repaint the live checklist rows' Checkbutton wells for the
+        current palette. The rows rebuild on every note load, so tracking
+        them would leak (the note-card lesson); the straggler net covers
+        their bg/fg but not selectcolor/activebackground."""
+        frame = getattr(self, "checklist_items_frame", None)
+        if frame is None:
+            return
+
+        def walk(w):
+            for c in w.winfo_children():
+                if isinstance(c, tk.Checkbutton):
+                    try:
+                        c.configure(selectcolor=self.colors["sidebar"],
+                                    activebackground=self.colors["card"])
+                    except tk.TclError:
+                        pass
+                walk(c)
+
+        try:
+            walk(frame)
+        except tk.TclError:
+            pass
 
     def _calendar_is_showing(self):
         """True only if the Calendar tab is the one currently selected AND
@@ -9155,7 +9205,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self.sidebar, textvariable=self.search_var,
             insertbackground=self.colors["text"], relief="flat", font=("Segoe UI", 11)
         )
-        self.track_theme(search_entry, bg="card", fg="text")
+        self.track_theme(search_entry, bg="card", fg="text", insertbackground="text")
         self._guard_entry_astral(search_entry)
         search_entry.pack(fill="x", padx=15, pady=(0, 10), ipady=6)
         self.add_placeholder(search_entry, "Search notes...")
@@ -9470,7 +9520,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             validate="key",
             validatecommand=(self.register(self._title_within_limit), "%P")
         )
-        self.track_theme(self.title_entry, bg="bg", fg="text")
+        self.track_theme(self.title_entry, bg="bg", fg="text", insertbackground="text")
         self.title_entry.pack(side="left", fill="x", expand=True)
         self.add_placeholder(self.title_entry, "Note title...")
         self._add_paste_menu(self.title_entry)
@@ -9535,7 +9585,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             meta_row, insertbackground=self.colors["text"],
             relief="flat", font=("Segoe UI", 10), width=11
         )
-        self.track_theme(self.date_entry, bg="card", fg="text")
+        self.track_theme(self.date_entry, bg="card", fg="text", insertbackground="text")
         self.date_entry.pack(side="left", padx=(6, 4), ipady=3)
         self.add_placeholder(self.date_entry, "YYYY-MM-DD")
         # Typing a date directly (as opposed to using the picker popup, which
@@ -9829,7 +9879,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             yscrollcommand=body_sb.set, undo=True, autoseparators=True, maxundo=-1
         )
         body_sb.config(command=self._body_scrollbar_moved)
-        self.track_theme(self.body_text, bg="card", fg="text")
+        self.track_theme(self.body_text, bg="card", fg="text", insertbackground="text")
         body_sb.pack(side="right", fill="y")
         self.body_text.pack(side="left", fill="both", expand=True)
         self._setup_body_formatting_tags(self.body_text)
@@ -10013,7 +10063,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             yscrollcommand=comments_sb.set, undo=True, autoseparators=True, maxundo=-1
         )
         comments_sb.config(command=self.comments_text.yview)
-        self.track_theme(self.comments_text, bg="card", fg="text")
+        self.track_theme(self.comments_text, bg="card", fg="text", insertbackground="text")
         comments_sb.pack(side="right", fill="y")
         self.comments_text.pack(side="left", fill="both", expand=True)
         self._bind_text_wheel(self.comments_text)
@@ -10627,7 +10677,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             relief="flat", font=("Segoe UI", 9), justify="center",
             insertbackground=self.colors["text"]
         )
-        self.track_theme(interval_entry, bg="card", fg="text")
+        self.track_theme(interval_entry, bg="card", fg="text", insertbackground="text")
         interval_entry.pack(side="left", padx=6, ipady=2)
         self.rec_interval_var.trace_add("write", lambda *a: self.update_recurrence_summary())
 
@@ -10666,7 +10716,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self.rec_monthday_row, textvariable=self.rec_monthdays_var, width=14,
             relief="flat", font=("Segoe UI", 9), insertbackground=self.colors["text"]
         )
-        self.track_theme(monthdays_entry, bg="card", fg="text")
+        self.track_theme(monthdays_entry, bg="card", fg="text", insertbackground="text")
         monthdays_entry.pack(side="left", ipady=2)
         self.rec_monthdays_var.trace_add("write", lambda *a: self.update_recurrence_summary())
 
@@ -10710,7 +10760,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 command=self.on_end_mode_changed,
                 selectcolor=self.colors["card"]
             )
-            self.track_theme(rb, bg="bg", fg="text", activebackground="bg", activeforeground="text")
+            self.track_theme(rb, bg="bg", fg="text", activebackground="bg", activeforeground="text", selectcolor="card")
             rb.pack(side="left", padx=2)
             return rb
 
@@ -10724,7 +10774,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             end_row, textvariable=self.rec_end_date_var, width=11,
             relief="flat", font=("Segoe UI", 9), insertbackground=self.colors["text"]
         )
-        self.track_theme(self.rec_end_date_entry, bg="card", fg="text")
+        self.track_theme(self.rec_end_date_entry, bg="card", fg="text", insertbackground="text")
         self.rec_end_date_entry.pack(side="left", padx=(4, 2), ipady=2)
         self.rec_end_date_var.trace_add("write", lambda *a: self.update_recurrence_summary())
 
@@ -10744,7 +10794,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             relief="flat", font=("Segoe UI", 9), justify="center",
             insertbackground=self.colors["text"]
         )
-        self.track_theme(self.rec_count_entry, bg="card", fg="text")
+        self.track_theme(self.rec_count_entry, bg="card", fg="text", insertbackground="text")
         self.rec_count_entry.pack(side="left", padx=(4, 2), ipady=2)
         self.rec_count_var.trace_add("write", lambda *a: self.update_recurrence_summary())
 
@@ -12143,8 +12193,15 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                          cursor="hand2")
             x.pack(side="left", padx=(0, 8))
             x.bind("<Button-1>", lambda e, idx=i: self.close_tab(idx))
-            x.bind("<Enter>", lambda e, w=x: w.configure(fg="#ff5c7c"))
-            x.bind("<Leave>", lambda e, w=x, c=fg: w.configure(fg=c))
+            # Palette KEYS, resolved at event time: the old closures froze
+            # the build-time hexes, so after a theme switch a hovered ✕
+            # repainted itself in the previous theme's colours (and the
+            # hover red was hardcoded to dark's danger on every theme).
+            x.bind("<Enter>",
+                   lambda e, w=x: w.configure(fg=self.colors["danger"]))
+            x.bind("<Leave>",
+                   lambda e, w=x, k=("accent" if active else "subtext"):
+                   w.configure(fg=self.colors[k]))
 
     def _bind_global_shortcuts(self):
         """App-wide keyboard shortcuts, bound with bind_all so they fire
@@ -12394,16 +12451,21 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                            count=countv)
             if not pos:
                 break
-            n = countv.get() or len(query)
-            end = f"{pos}+{n}c"
+            n = countv.get() or self._tk_units(query)
+            line = int(pos.split(".")[0])
+            col = int(pos.split(".")[1])
+            # `n` is UTF-16 units (what search -count returns, and what
+            # index COLUMNS count) while "+Nc" arithmetic counts
+            # CHARACTERS — so a matched astral emoji widened the range by
+            # one character apiece and the highlight swallowed whatever
+            # followed the match. Stay in units on both sides.
+            end = f"{line}.{col + n}"
             start = f"{pos}+1c"
             # Drop a hit that spans an elided table (search concatenates the
             # prose on either side): it would tag hidden cells and double a
             # cell hit.
             if b.tag_nextrange(self.TABLE_HIDE_TAG, pos, end):
                 continue
-            line = int(pos.split(".")[0])
-            col = int(pos.split(".")[1])
             matches.append({"kind": "prose", "start": pos, "end": end,
                             "line": line, "col": col})
         # Table cells: read the plain text, walk each block's DATA rows.

@@ -326,6 +326,7 @@
   "_reapply_grid_view_restore": "(self)",
   "_reapply_list_restore": "(self)",
   "_reassert_line_alignment": "(self, _event=None)",
+  "_recolor_checklist_boxes": "(self)",
   "_recolor_existing_combo_popups": "(self)",
   "_recolor_note_cards": "(self)",
   "_recolor_settings_nav_icons": "(self)",

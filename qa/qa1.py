@@ -2485,19 +2485,38 @@ set_body('| A | B |\n| C | D |')
 app._render_table_grids()
 app.update()
 _delcap = {}
+_del_order = []
 _orig_render_del = app._render_table_grids
+_orig_teardown_del = app._teardown_table_grids
 def _spy_render_del():
     _delcap['had_saved_view'] = getattr(app, '_grid_saved_view', None) is not None
     return _orig_render_del()
+def _spy_capture_del():
+    _del_order.append('capture')
+    return _orig_capture_del()
+_orig_capture_del = app._capture_grid_views
+def _spy_teardown_del():
+    _del_order.append('teardown')
+    return _orig_teardown_del()
 app._render_table_grids = _spy_render_del
+app._capture_grid_views = _spy_capture_del
+app._teardown_table_grids = _spy_teardown_del
 try:
     _t = app._grid_at_line(1)
     app._grid_delete_table(_t)
 finally:
     app._render_table_grids = _orig_render_del
+    app._capture_grid_views = _orig_capture_del
+    app._teardown_table_grids = _orig_teardown_del
 app.update()
 check('table delete captures the view before teardown (no scroll jump)',
       _delcap.get('had_saved_view', False))
+# Ordering, not just presence: a capture MOVED AFTER the teardown+delete
+# would still satisfy the spy above while pinning the already-jumped view
+# — the exact bug. The promise is capture-first.
+check('and that capture happens BEFORE the teardown',
+      'capture' in _del_order and 'teardown' in _del_order
+      and _del_order.index('capture') < _del_order.index('teardown'))
 check('and that delete still removes the table outright',
       core_tables.find_blocks(body()) == [])
 
@@ -2505,6 +2524,16 @@ check('and that delete still removes the table outright',
 # It was the one body-loader that skipped the redraw tail: a restored
 # table came back as raw pipe rows, and the word count kept describing
 # the text that was just replaced.
+# The previous block's _grid_delete_table scheduled an autosave whose
+# timer calls update_word_count() on its own ~500ms later — under
+# full-suite load that made the word-count mutant pass by accident.
+# Cancel it so the label below can only come from the restore itself.
+if getattr(app, '_autosave_job', None):
+    try:
+        app.after_cancel(app._autosave_job)
+    except Exception:
+        pass
+    app._autosave_job = None
 app.new_note()
 app.title_entry.delete(0, 'end')
 app.title_entry.insert(0, 'RestoreGrid')
@@ -2568,6 +2597,39 @@ else:
     app._select_word_at_click(_ev4)
     check('double-click selects the whole word after an emoji',
           app.body_text.get('sel.first', 'sel.last') == 'hello')
+
+# ---- A DEAD GRID answers no queries (new_note staleness) ----
+# A full-range delete (New note, typing over Ctrl+A) destroys the
+# embedded windows WITHOUT a teardown; Tk marks survive it, collapsed
+# to 1.0. _grid_first_line answering for that dead grid made
+# _caret_out_of_hidden walk a fresh note's caret to its END on the
+# next keystroke, and shifted line-1 column math by a phantom window.
+set_body('| A | B |\n| C | D |')
+app._render_table_grids()
+app.update()
+app.body_text.delete('1.0', 'end')  # the bare delete new_note performs
+app.update()
+check('a grid whose windows died answers None, not line 1',
+      app._grid_at_line(1) is None and app._col_base(1) == 0)
+app.body_text.insert('1.0', 'hello\nworld')
+app.body_text.mark_set('insert', '1.0')
+app._caret_out_of_hidden()
+app.update()
+check('the caret guard leaves a fresh note alone after a table note',
+      app.body_text.index('insert').split('.')[0] == '1')
+
+# ---- FIND-IN-NOTE match width across an emoji ----
+# search -count returns UTF-16 units while "+Nc" counts characters, so
+# a matched astral emoji widened the highlight by one character apiece.
+set_body('vezi \U0001F600ok maybe')
+app._open_find()  # the scan model lives on the find bar's variables
+app.update()
+_fm = app._find_scan_model('\U0001F600ok')
+app._close_find()
+app.update()
+check('a found emoji match covers exactly the match, no extra character',
+      len(_fm) == 1
+      and app.body_text.get(_fm[0]['start'], _fm[0]['end']) == '\U0001F600ok')
 
 # The window line itself is off-limits: the caret walks to the line under
 # the table, so writing continues from the start of a real row.

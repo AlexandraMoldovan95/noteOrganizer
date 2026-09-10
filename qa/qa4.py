@@ -256,7 +256,61 @@ app.set_theme('dark'); app.update()
 _probe_txt.event_generate('<Enter>'); app.update()
 check('a text button hovers in the current palette too',
       str(_probe_txt.cget('bg')) == app.colors['accent_hover'])
+# Mechanism assert: the stock dark/light accents share a hex, so a
+# frozen ring matches the palette by coincidence (the export-frame
+# lesson, same file, a few checks up).
+check('and its ring is tracked, not frozen at build',
+      str(_probe_txt.cget('highlightbackground')) == app.colors['accent']
+      and any(w is _probe_txt and m.get('highlightbackground') == 'accent'
+              for w, m in app.themed_widgets))
 _probe_btn.destroy(); _probe_dd.destroy(); _probe_txt.destroy(); app.update()
+
+# ---- THEME sweep round 2: caret, checkbox wells, press colours ----
+# The adversarial review widened the class: every long-lived text field's
+# caret (insertbackground) was frozen at build — invisible after a
+# dark<->light switch, the main editor included; the recurrence radios'
+# selectcolor and the checklist rows' wells stayed on the old palette;
+# Back to Notes pressed in the old theme's colours.
+app.checklist_add_var.set('bifa')
+app._add_checklist_item()
+app.update()
+def _caret_ok():
+    return (str(app.body_text.cget('insertbackground')) == app.colors['text']
+            and str(app.title_entry.cget('insertbackground')) == app.colors['text']
+            and str(app.comments_text.cget('insertbackground')) == app.colors['text'])
+def _wells_ok():
+    hits = []
+    def walk(w):
+        for c in w.winfo_children():
+            if isinstance(c, tk.Checkbutton):
+                hits.append(str(c.cget('selectcolor')) == app.colors['sidebar'])
+            walk(c)
+    walk(app.checklist_items_frame)
+    return bool(hits) and all(hits)
+def _find_btn_text(root, txt):
+    for c in root.winfo_children():
+        if isinstance(c, tk.Button) and str(c.cget('text')) == txt:
+            return c
+        r = _find_btn_text(c, txt)
+        if r:
+            return r
+    return None
+_dark2 = (_caret_ok(), _wells_ok())
+app.set_theme('light'); app.update()
+_light2 = (_caret_ok(), _wells_ok())
+check('the caret follows the theme in body, title and comments',
+      _dark2[0] and _light2[0])
+check('checklist checkbox wells repaint on a theme switch',
+      _dark2[1] and _light2[1])
+check('recurrence radios track their selectcolor well',
+      any(isinstance(w, tk.Radiobutton) and m.get('selectcolor') == 'card'
+          for w, m in app.themed_widgets))
+_back2 = _find_btn_text(app.settings_page, 'Back to Notes') \
+    if hasattr(app, 'settings_page') else None
+check('Back to Notes presses in the live palette',
+      _back2 is not None
+      and str(_back2.cget('activebackground')) == app.colors['card']
+      and str(_back2.cget('activeforeground')) == app.colors['text'])
 
 # ---- PERFORMANCE: note list with larger count ----
 app.notes = [{'id':i,'title':f'Perf{i}','body':'x'*30,'category':'General',

@@ -1654,6 +1654,11 @@ class SettingsPageMixin:
             activebackground=self.colors["card"],
             activeforeground=self.colors["text"],
             command=self.hide_settings_page)
+        # Long-lived and pressed often: the press colours froze on the
+        # build-time palette (the same active* pair the danger big-button
+        # fix tracked, one screen away).
+        self.track_theme(back_lbl, bg="sidebar", fg="subtext",
+                         activebackground="card", activeforeground="text")
         back_lbl.pack(side="left", fill="x", expand=True)
         for w in (back_row, back_ico):
             w.bind("<Button-1>", lambda _e: self.hide_settings_page())
@@ -2048,6 +2053,17 @@ class SettingsPageMixin:
                       font=("Segoe UI", 9, "bold"), cursor="hand2",
                       fg=fg, bg=bg, activeforeground=fg, activebackground=hover,
                       highlightbackground=border, padx=14, pady=6)
+        # These buttons live on the eager, built-once Settings panels, so
+        # the palette-KEYED options must be tracked too (bg and the normal
+        # kind's derived ring are the straggler net's job). The derived
+        # activebackground is refreshed live in the hover binds below.
+        if kind == "danger":
+            self.track_theme(b, fg="danger", activeforeground="danger",
+                             highlightbackground="danger")
+        elif kind == "primary":
+            self.track_theme(b, highlightbackground="accent")
+        else:
+            self.track_theme(b, fg="text", activeforeground="text")
 
         # Hover from the LIVE palette, not the build-time capture — a
         # button that outlives a theme switch otherwise hovers in the old
@@ -2066,8 +2082,10 @@ class SettingsPageMixin:
                 return self.colors["accent_hover"]
             return self._blend(self._surface("inset"), self.colors["text"], 0.08)
 
-        b.bind("<Enter>", lambda _e: b.configure(bg=_tb_hover()))
-        b.bind("<Leave>", lambda _e: b.configure(bg=_tb_rest()))
+        b.bind("<Enter>", lambda _e: b.configure(bg=_tb_hover(),
+                                                 activebackground=_tb_hover()))
+        b.bind("<Leave>", lambda _e: b.configure(bg=_tb_rest(),
+                                                 activebackground=_tb_hover()))
         return b
 
     ROW_ICON_SIZE = 15
