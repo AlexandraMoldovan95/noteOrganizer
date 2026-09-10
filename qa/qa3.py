@@ -365,6 +365,11 @@ for i in range(15):
     with open(os.path.join(NO.ATTACHMENTS_DIR, f'qa3_att{i}.bin'), 'wb') as f:
         f.write(b'x'*200000)  # enough real work that the progress bar is observable
 zip_path = os.path.join(tempfile.gettempdir(), 'qa3_export.zip')
+# The system temp dir outlives runs: a zip left by a PREVIOUS qa3 run
+# made "export produced a real zip file" pass even when this export
+# never moved its file into place. Fresh target, every time.
+if os.path.exists(zip_path):
+    os.remove(zip_path)
 fd.asksaveasfilename = lambda **k: zip_path
 app.export_data()
 app.update()
@@ -402,6 +407,59 @@ app.update()
 check('threaded zip import completes', app._import_state is None)
 check('zip import with skip adds only the fresh note',
       len(app.notes)==before2+1 and any(n['title']=='BrandNewImport' for n in app.notes))
+
+# ---- EXPORT is atomic: a failed export never destroys the old backup ----
+# (audit Z05-F00) The zip used to be opened ON the target, so a mid-write
+# failure — or the app dying — truncated the very backup being replaced.
+# Now it writes save_path+".tmp" and moves it into place only when whole.
+app.show_error = lambda *a, **k: True  # the failed export reports; don't block
+_atomic_zip = os.path.join(tempfile.gettempdir(), 'qa3_atomic.zip')
+with open(_atomic_zip, 'wb') as f:
+    f.write(b'OLD-BACKUP-BYTES')
+class _FailingZip(zipfile.ZipFile):
+    def write(self, *a, **k):
+        raise IOError('disk exploded (test)')
+_real_zipfile_cls = NO.zipfile.ZipFile
+NO.zipfile.ZipFile = _FailingZip
+fd.asksaveasfilename = lambda **k: _atomic_zip
+try:
+    app.export_data()
+    t0 = time.time()
+    while app._export_state is not None and time.time() - t0 < 5:
+        app.update()
+finally:
+    NO.zipfile.ZipFile = _real_zipfile_cls
+check('a failed export leaves the existing backup byte-identical',
+      open(_atomic_zip, 'rb').read() == b'OLD-BACKUP-BYTES')
+check('and leaves no .tmp litter behind',
+      not os.path.exists(_atomic_zip + '.tmp'))
+if os.path.exists(_atomic_zip):
+    os.remove(_atomic_zip)
+
+# ---- CLOSE waits for an in-flight worker (audit Z05-F01) ----
+# destroy() used to kill a daemon export/import thread mid-file. The app
+# now remembers its I/O workers and on_app_close waits (capped) for them.
+_slow_done = {'flag': False}
+def _slow_worker():
+    time.sleep(0.6)
+    _slow_done['flag'] = True
+app._start_io_worker(_slow_worker)
+app._wait_for_io_workers(cap_s=5)
+check('the close-time wait lets an in-flight I/O worker finish',
+      _slow_done['flag'])
+
+_close_calls = []
+_real_wait_io = app._wait_for_io_workers
+_real_destroy3 = app.destroy
+app._wait_for_io_workers = lambda *a, **k: _close_calls.append(1)
+app.destroy = lambda: None
+try:
+    app.on_app_close()
+finally:
+    app._wait_for_io_workers = _real_wait_io
+    app.destroy = _real_destroy3
+check('on_app_close routes through the worker wait before destroy',
+      len(_close_calls) == 1)
 
 print()
 print(f"=== QA3 FAILURES: {fails if fails else 'NONE'} ===")

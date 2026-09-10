@@ -1057,6 +1057,39 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         return False
 
     # ---------- Export / Import (moving your notebook between devices) ----------
+    def _start_io_worker(self, target):
+        """Start a background file-I/O worker and remember it, so closing
+        the app can wait for it instead of killing a write mid-file (a
+        daemon thread dies with the process, whatever it was writing)."""
+        t = threading.Thread(target=target, daemon=True)
+        self._io_workers = [w for w in getattr(self, "_io_workers", [])
+                            if w.is_alive()]
+        self._io_workers.append(t)
+        t.start()
+        return t
+
+    def _wait_for_io_workers(self, cap_s=30.0):
+        """Let an in-flight export/import worker finish before the process
+        goes away. Hard-capped: a genuinely hung worker must not make the
+        app refuse to close — the threads stay daemon for that reason, and
+        the export's tmp-then-replace protocol means even the capped-out
+        case can no longer destroy an existing backup."""
+        workers = [t for t in getattr(self, "_io_workers", [])
+                   if t.is_alive()]
+        if not workers:
+            return
+        try:
+            self.set_status("Finishing the file operation in progress…")
+            self.update_idletasks()
+        except tk.TclError:
+            pass
+        deadline = time.time() + cap_s
+        for t in workers:
+            remaining = deadline - time.time()
+            if remaining <= 0:
+                break
+            t.join(timeout=remaining)
+
     def export_data(self):
         """Bundle notes_data.json, settings.json, and every attached file
         into one .zip, so moving to another device is copying one file
@@ -1099,11 +1132,17 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
         def worker():
             state = self._export_state
+            # Write beside the target and move into place only when whole —
+            # the zip used to be opened ON the target, so a failure (or the
+            # app dying) mid-write destroyed the very backup being replaced.
+            # Same one-safe-way rule as _write_json_atomic.
+            tmp_path = save_path + ".tmp"
             try:
-                with zipfile.ZipFile(save_path, "w", zipfile.ZIP_DEFLATED) as zf:
+                with zipfile.ZipFile(tmp_path, "w", zipfile.ZIP_DEFLATED) as zf:
                     for i, (src, arcname) in enumerate(entries, start=1):
                         zf.write(src, arcname=arcname)
                         state["current"] = i
+                os.replace(tmp_path, save_path)
             except Exception as e:
                 # Deliberately broad: this runs in a background thread, where
                 # an uncaught exception of ANY kind kills the thread silently
@@ -1115,9 +1154,13 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 # OSError message is still preserved when that's the cause,
                 # just no longer the only kind of failure that's handled.
                 state["error"] = str(e)
+                try:
+                    os.remove(tmp_path)
+                except OSError:
+                    pass
             state["done"] = True
 
-        threading.Thread(target=worker, daemon=True).start()
+        self._start_io_worker(worker)
         self._poll_export_progress()
 
     def _poll_export_progress(self):
@@ -7796,7 +7839,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 state["error"] = f"Import failed unexpectedly:\n{e}"
             state["done"] = True
 
-        threading.Thread(target=worker, daemon=True).start()
+        self._start_io_worker(worker)
         self._poll_import_progress()
 
     def _poll_import_progress(self):
@@ -13639,6 +13682,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 # Closing must not get stuck behind a broken tab; the
                 # autosaves along the way have the rest.
                 continue
+        # A backup export/import may still be writing on its worker thread;
+        # destroy() would kill it mid-file. Wait (capped) for it to finish.
+        self._wait_for_io_workers()
         self.destroy()
 
     def set_status(self, text):
