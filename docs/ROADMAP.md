@@ -10,6 +10,10 @@ list for a project developed in spare time by a small team of two.
 - [Versioning](#versioning)
 - [Known limitations](#known-limitations)
 
+The outside view of the app — what a hostile product review found and what is
+being done about it — lives in its own register:
+[`docs/PRODUCT_FINDINGS.md`](PRODUCT_FINDINGS.md).
+
 ## Under consideration
 
 Genuinely open ideas, roughly ordered by how soon they're likely to happen.
@@ -113,6 +117,20 @@ Three more features were tried and deliberately taken out again — the decision
 Work that reached `main`, kept here as a decision record — the questions each piece settled, so
 they aren't reopened from scratch. The feature-by-feature detail lives in
 [CHANGELOG.md](../CHANGELOG.md).
+
+### The product review (2026-09-10)
+
+After the code audit closed, two waves of parallel reviewers asked the other
+question — not "is this correct?" but "would you use it, and would you be
+embarrassed if people saw it?" — with every finding verified against the code, the
+hostile wave putting each to three refute-by-default verifiers, and a harshness
+audit on top asking whether the surviving list was still too soft (it was; the
+worst findings came from that pass). The full register, including what held up
+under attack and what verification refuted, is
+[`docs/PRODUCT_FINDINGS.md`](PRODUCT_FINDINGS.md). The headline: the app's
+correctness held, but several routes edit or delete the user's data with no
+message, no Trash and no undo, and the note-list rebuild makes every pause in
+typing freeze the window.
 
 ### The code-audit programme (2026-09)
 
