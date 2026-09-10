@@ -7,6 +7,14 @@ The manual half of the QA story sits beside them:
 `NoteOrganizer_TestPlan.xlsx`, the structured test plan for scenarios
 easier to eyeball than to automate.
 
+What all of it actually executes is measured: `py tools/run_coverage.py`
+prints the line-coverage total, the per-file table and the largest
+never-executed regions. The current baseline (81.5%), the per-layer
+targets, and the ledger where every agent report's "NOT COVERED"
+confession receives an explicit verdict live in
+[`COVERAGE_LEDGER.md`](COVERAGE_LEDGER.md) — a confession may land
+there, never scroll past.
+
 ## What each script owns
 
 | Script | Primary ground |
