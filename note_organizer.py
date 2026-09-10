@@ -1125,6 +1125,13 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             entries.append((DATA_FILE, "notes_data.json"))
         if os.path.exists(SETTINGS_FILE):
             entries.append((SETTINGS_FILE, "settings.json"))
+        # A backup is only a backup if it carries the WHOLE notebook:
+        # templates and the trash used to be silently left out, and moving
+        # to another device lost them.
+        if os.path.exists(TEMPLATES_FILE):
+            entries.append((TEMPLATES_FILE, "templates.json"))
+        if os.path.exists(TRASH_FILE):
+            entries.append((TRASH_FILE, "trash.json"))
         if os.path.isdir(ATTACHMENTS_DIR):
             for filename in os.listdir(ATTACHMENTS_DIR):
                 full_path = os.path.join(ATTACHMENTS_DIR, filename)
@@ -7882,6 +7889,20 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     state["done"] = True
                     return
                 state["imported_notes"] = imported_notes
+                # Templates and trash ride along when the backup has them
+                # (older backups don't — both stay optional, and a bad
+                # file skips quietly: the notes are the payload).
+                for extra, key in (("templates.json", "imported_templates"),
+                                   ("trash.json", "imported_trash")):
+                    extra_path = os.path.join(temp_dir, extra)
+                    if os.path.exists(extra_path):
+                        try:
+                            with open(extra_path, "r", encoding="utf-8") as f:
+                                loaded = json.load(f)
+                            if isinstance(loaded, list):
+                                state[key] = loaded
+                        except (json.JSONDecodeError, IOError, OSError):
+                            pass
 
                 # Copy any attached files from the backup into our attachments
                 # folder — the slowest part for a backup with a lot of them.
@@ -8021,13 +8042,65 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             next_id += 1
             self.notes.append(note)
 
+        # Templates and trash from the backup merge ADDITIVELY — nothing
+        # local is replaced or removed (Z05-F07: both used to be left out
+        # of the backup entirely, lost on every device move).
+        added_templates = 0
+        for tpl in (state.get("imported_templates") or []):
+            if not isinstance(tpl, dict):
+                continue
+            tpl = normalize_template(tpl)
+            if tpl.get("name") and not any(
+                    t.get("name") == tpl.get("name") for t in self.templates):
+                self.templates.append(tpl)
+                added_templates += 1
+        if added_templates:
+            save_templates(self.templates)
+        added_trash = 0
+        for entry in (state.get("imported_trash") or []):
+            if not isinstance(entry, dict):
+                continue
+            entry = dict(entry)
+            # Same claimed-file discipline as the notes above: a trashed
+            # entry pointing at a file an ACTIVE note owns would, on its
+            # later purge, delete that file out from under the note.
+            atts = []
+            for a in (entry.get("attachments") or []):
+                if not isinstance(a, dict):
+                    continue
+                a = dict(a)
+                name = a.get("stored_as")
+                if name in claimed:
+                    new_name = copy_attachment_file(name)
+                    if new_name:
+                        a["stored_as"] = new_name
+                        claimed.add(new_name)
+                elif name:
+                    claimed.add(name)
+                atts.append(a)
+            entry["attachments"] = atts
+            self.trash.append(entry)
+            added_trash += 1
+        if added_trash:
+            save_trash(self.trash)
+
         self.save_notes()
         self.refresh_note_list()
         self.render_calendar()
         shutil.rmtree(temp_dir, ignore_errors=True)
 
         skipped_note = f" ({dupe_count} duplicate(s) skipped)" if dupe_count and to_import is not valid_notes else ""
-        self.show_info("Import complete", f"Added {len(to_import)} note(s) from the backup.{skipped_note}")
+        extras_note = ""
+        if added_templates or added_trash:
+            parts = []
+            if added_templates:
+                parts.append(f"{added_templates} template(s)")
+            if added_trash:
+                parts.append(f"{added_trash} trashed note(s)")
+            extras_note = " Also restored " + " and ".join(parts) + "."
+        self.show_info("Import complete",
+                       f"Added {len(to_import)} note(s) from the backup."
+                       f"{skipped_note}{extras_note}")
 
     # ---------- Theme helpers ----------
     def get_note_color(self, note):

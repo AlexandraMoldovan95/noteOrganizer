@@ -517,6 +517,45 @@ if _st3.on_write_failure is not None:
     check('a failed write shows the toast naming the file',
           'trash.json' in str(app.toast_lbl.cget('text')))
 
+# ---- The backup carries the WHOLE notebook (audit Z05-F07) ----
+# templates.json and trash.json were silently left out of the export and
+# never read on import — moving devices lost both. Full round-trip:
+# export with a template and a trashed note, wipe them locally, import,
+# and both come back (additively — nothing local replaced).
+app.templates.append(NO.normalize_template(
+    {'name': 'RoundTripTpl', 'title': 'T', 'body': 'tpl body'}))
+NO.save_templates(app.templates)
+app.trash.append({'id': 900, 'title': 'TrashedRT', 'body': 'rt',
+                  'category': 'General', 'deleted_at': '2026-01-01 00:00:00',
+                  'attachments': []})
+NO.save_trash(app.trash)
+_rt_zip = os.path.join(tempfile.gettempdir(), 'qa3_fullrt.zip')
+if os.path.exists(_rt_zip):
+    os.remove(_rt_zip)
+fd.asksaveasfilename = lambda **k: _rt_zip
+app.export_data()
+t0 = time.time()
+while app._export_state is not None and time.time() - t0 < 5:
+    app.update()
+check('full-notebook export completes', os.path.exists(_rt_zip))
+# Wipe the two locally, then import the backup back.
+app.templates = [t for t in app.templates if t.get('name') != 'RoundTripTpl']
+NO.save_templates(app.templates)
+app.trash = [e for e in app.trash if e.get('title') != 'TrashedRT']
+NO.save_trash(app.trash)
+app.ask_yes_no = lambda *a, **k: True
+app._themed_dialog = lambda *a, **k: 'all'
+fd.askopenfilename = lambda **k: _rt_zip
+app.import_data()
+t0 = time.time()
+while app._import_state is not None and time.time() - t0 < 8:
+    app.update()
+check('the template comes back from the backup',
+      any(t.get('name') == 'RoundTripTpl' for t in app.templates))
+check('the trashed note comes back from the backup',
+      any(e.get('title') == 'TrashedRT' for e in app.trash))
+os.remove(_rt_zip)
+
 print()
 print(f"=== QA3 FAILURES: {fails if fails else 'NONE'} ===")
 
