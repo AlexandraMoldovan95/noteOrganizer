@@ -11184,28 +11184,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if query == "search notes...":
             query = ""
 
-        # Search matches title, body, and comments. Coerce every field to a
-        # string first — a note with a missing/None field (from older or
-        # slightly corrupt data) would otherwise crash the whole list render
-        # and show nothing.
-        def _txt(value):
-            return value.lower() if isinstance(value, str) else ""
-
-        def _body_txt(value):
-            # A body is searched by what the user wrote, not by table
-            # plumbing: searching "---" or "br" used to match every note
-            # holding a table. Only bodies that actually contain a pipe
-            # pay for the stripping.
-            if isinstance(value, str) and core_tables.CELL in value:
-                return core_tables.content_text(value).lower()
-            return _txt(value)
-
-        filtered = [
-            n for n in self.notes
-            if query in _txt(n.get("title"))
-            or query in _body_txt(n.get("body"))
-            or query in _txt(n.get("comments"))
-        ]
+        filtered = [n for n in self.notes
+                    if self._query_matches_note(query, n)]
 
         # Category/type filter (from the dropdown). "All" shows everything.
         chosen_category = getattr(self, "filter_var", None)
@@ -11612,6 +11592,28 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         n = len(self.selected_note_ids)
         self.bulk_selected_lbl.config(text=f"{n} selected")
 
+    @staticmethod
+    def _query_matches_note(query, note):
+        """The ONE definition of "this note matches the sidebar search".
+        The list render and Select-all-visible each carried a hand-rolled
+        copy, and the copies drifted: the list stripped table plumbing
+        from bodies (searching "---" no longer matches every table note)
+        while Select all matched the raw body — so "Select all visible"
+        quietly selected notes the filter had hidden, and bulk actions
+        hit them. Every field is coerced to a string first, so a
+        missing/None field from older data can't crash the render."""
+        def _txt(value):
+            return value.lower() if isinstance(value, str) else ""
+
+        body = note.get("body")
+        if isinstance(body, str) and core_tables.CELL in body:
+            body_txt = core_tables.content_text(body).lower()
+        else:
+            body_txt = _txt(body)
+        return (query in _txt(note.get("title"))
+                or query in body_txt
+                or query in _txt(note.get("comments")))
+
     def _bulk_select_all(self):
         """Selects every note currently visible in the list (respecting
         whatever search/category filter is active) — not necessarily every
@@ -11620,14 +11622,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if query == "search notes...":
             query = ""
 
-        def _txt(value):
-            return value.lower() if isinstance(value, str) else ""
-
-        visible = [
-            n for n in self.notes
-            if query in _txt(n.get("title")) or query in _txt(n.get("body"))
-            or query in _txt(n.get("comments"))
-        ]
+        visible = [n for n in self.notes
+                   if self._query_matches_note(query, n)]
         chosen_category = getattr(self, "filter_var", None)
         if chosen_category is not None and self.filter_var.get() != "All":
             visible = [n for n in visible
