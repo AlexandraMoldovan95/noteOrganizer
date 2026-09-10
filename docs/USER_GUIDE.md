@@ -31,6 +31,7 @@ every major feature.
   - [Export one note as a file](#export-one-note-as-a-file)
   - [Full backup: export](#full-backup-export)
   - [Full backup: import](#full-backup-import)
+  - [If the data file itself ever breaks](#if-the-data-file-itself-ever-breaks)
 - [Settings](#settings)
   - [Your name](#your-name)
   - [Statistics](#statistics)
@@ -63,7 +64,13 @@ whatever you were working on first, so there's no tab-juggling and no risk of lo
 ![Note editor](screenshots/note-editor.png)
 
 Notes save automatically a moment after you stop typing (look for the "Auto-saved" status), and
-always save immediately when you switch to a different note. Closing the app works the same way:
+always save immediately when you switch to a different note. There is a safety net under the
+autosave, too: if a note's text suddenly shrinks drastically (an accidental select-all-and-type,
+say), the app quietly keeps the earlier version and an **↩ Restore previous** button appears in
+the editor — one click (past a warning that pre-selects No) brings the old text back whole,
+tables redrawn and all.
+
+Closing the app works the same way:
 anything still unsaved is saved on the way out, silently — no "unsaved changes" question, because
 there is nothing to lose.
 
@@ -350,7 +357,8 @@ remembered.
 ### Organizing
 
 - **Pin** a note (right-click → Pin) to keep it at the top of the list regardless of sort order.
-- **Duplicate** a note to create an editable copy, titled "(copy)".
+- **Duplicate** a note to create an editable copy, titled "(copy)". The copy owns its own
+  copies of any attached files, so the two notes can be edited — or deleted — independently.
 - **Categories** act as folders — create, rename, recolour, or delete them from Settings →
   Categories. Deleting a category with notes in it asks where to move them first; nothing is ever
   silently lost.
@@ -362,8 +370,9 @@ remembered.
 Save any note as a reusable template (📋 **Save as template**), or build one from scratch in
 Settings → Templates. Starting a new note with **Use template** fills in the title, body,
 category, and checklist from the template — the template itself is never affected by what you do
-with the note afterward. Deleting a template is the one delete in the app that skips the Trash —
-it can't be undone, and the confirmation says so plainly.
+with the note afterward. Templates don't go to the Trash (Settings → Recently deleted) —
+deleting one can't be undone, and the confirmation warns you and pre-selects **No**, like every
+irreversible confirmation in the app.
 
 ![Templates panel](screenshots/templates-panel.png)
 
@@ -463,7 +472,7 @@ ones edited separately; an endless one lists just its ✎ days (every other day 
 content — a note in the group says so), and a series with nothing to unfold shows a → and takes
 you straight to its day on the calendar. It has its own search — one that also looks *inside* what you
 wrote on those individual days, which the sidebar search cannot see — and year buttons
-(This year / Last year / 2 years ago / Older) for digging through the archive. Click any entry
+(All / This year / Last year / 2 years ago / Older) for digging through the archive. Click any entry
 and you land back on that exact day's preview; right-click gives the usual day menu, including
 "Reset this day". Handy when you know a meeting happened *sometime* and only remember a word of
 what was discussed.
@@ -480,7 +489,7 @@ note's own colour — useful for marking something about the day itself, like a 
 ### Share a note as a code
 
 Open a note → Generate code. This generates a compact block of text representing that note's
-content, checklist included (attachments stay home — use Export for files) — paste it to someone
+content, checklist included (attachments stay home — the full backup is what carries files) — paste it to someone
 else, and they can import it with **Import code** in the sidebar. You can also select several notes at once and generate one code covering
 all of them.
 
@@ -509,7 +518,9 @@ right-placed) in the note keeps its place on the exported page. When you print t
 highlights and cell colours survive — the export tells the browser to keep them. After a save the
 app offers to open the file right away — the exported file itself is the honest preview of how the
 note lays out on a page, so adjusting the note and re-exporting is a quick loop. To export
-**several notes at once**, turn on ☑ Select above the list, tick the notes, and use **Export ▾**
+**several notes at once**, turn on ☑ Select above the list, tick the notes (or hit **Select
+all**, which selects exactly what the current search and filter show — never a note the list is
+hiding), and use **Export ▾**
 in the action bar: pick a format and a folder, and each note becomes its own file (same-titled
 notes get “(2)”, “(3)” — nothing ever overwrites). Attached files never travel with a single-note
 export — that's what the full backup below is for, and the app reminds you when the note has
@@ -517,18 +528,23 @@ attachments.
 
 ### Full backup: export
 
-Settings → Export notes creates a single `.zip` containing every note, your settings, and every
-attachment — the one file you need to move everything to another device. A line under the button
+Settings → Export notes creates a single `.zip` containing every note, your settings, every
+attachment, your templates and the Trash — the one file that moves *everything* to another
+device. A line under the button
 remembers when you last did this — worth a glance now and then, because that `.zip` is the only
 copy of your notes outside the app's data folder (see Getting started for where that lives). With a lot of attachments this can take a moment;
 a progress bar stays visible at the bottom of the window the whole time, and the app remains fully
-usable while it works.
+usable while it works. Two quiet guarantees ride along: a new export can never damage the
+previous backup file (the zip is written beside it and swapped in only when whole), and closing
+the app mid-export waits for the file to finish instead of cutting it off.
 
 ### Full backup: import
 
-Settings → Import notes brings a previously exported `.zip` back in — notes, settings, and
-attachments together. Just like importing a code, you'll be asked about any notes that look
-identical to what you already have before anything is added.
+Settings → Import notes brings a previously exported `.zip` back in — notes, settings,
+attachments, templates and the Trash together. Just like importing a code, you'll be asked
+about any notes that look identical to what you already have before anything is added; a
+template only comes in if you don't already have one by that name, and re-importing the same
+backup never doubles the Trash.
 
 ![Import backup](screenshots/import-backup.png)
 
@@ -540,6 +556,10 @@ over that: it preserves the unreadable file beside the original (named
 startup exactly what happened and where the preserved copy sits — so you can restore your most
 recent backup while the broken file stays available for repair. The same quiet preserve-aside
 protects the trash, templates and settings files.
+
+Failed *saves* speak up too: if a data file can't be written (a read-only folder, a full disk),
+an error message names the file instead of pretending the save worked, and a technical trace
+lands in `crash_log.txt` beside your data — worth attaching if you ever report a problem.
 
 ---
 

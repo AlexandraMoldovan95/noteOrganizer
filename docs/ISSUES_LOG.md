@@ -48,9 +48,8 @@ day-to-day tracking.
 | [The centring that would not save itself](#the-centring-that-would-not-save-itself) | A comparison that lists fields silently exempts whatever field is added next. | 0.39.63 |
 | [The accepted cost that nobody had accepted](#the-accepted-cost-that-nobody-had-accepted) | When a docstring says 'accepted cost', check who pays it, and for what. | 0.64.95 |
 | [The undo that stopped halfway](#the-undo-that-stopped-halfway) | Burst edits owe undo a boundary, redraws owe it silence; probe what Tk records. | 0.64.95 |
-| [The undo that stopped halfway, the sequel](#the-undo-that-stopped-halfway-the-sequel-lists-and-the-grid-trio) | When a fix has a sibling family, audit which siblings were missed; a "drawn?" check reads real windows, not a stale dict. | 0.71.113 |
+| [The undo that stopped halfway, the sequel](#the-undo-that-stopped-halfway-the-sequel-lists-and-the-grid-trio) | When a fix has a sibling family, audit which siblings were missed; a "drawn?" check reads real windows, not a stale dict. | 0.71.116 |
 | [The table that outlived its own deletion](#the-table-that-outlived-its-own-deletion) | A cached handle to a drawn thing must prove the drawing still exists — Tk marks survive the delete that killed the widgets. | 0.71.125 |
-| [The safety net that hid the missing mechanism](#the-safety-net-that-hid-the-missing-mechanism) | When a fallback masks the primary mechanism, assert the mechanism — a behaviour check green under two themes proved nothing. | 0.71.125 |
 | [The clipping that turned out to be a feature](#the-clipping-that-turned-out-to-be-a-feature) | Before fixing "wrong" behaviour, find who relies on it; the fix moved from render to parse once the ellipsis check spoke up. | 0.71.134 |
 | [The Trash panel that took two seconds to open](#the-trash-panel-that-took-two-seconds-to-open) | Don't build and wire every row up front; render a page, reveal more on demand. | 0.4.0 |
 | [The slowdown that only showed up after a long session](#the-slowdown-that-only-showed-up-after-a-long-session) | 'Slow after a while, fine at first' means unbounded growth; reproduce with a loop. | 0.4.0 |
@@ -61,6 +60,7 @@ day-to-day tracking.
 | [The dropdown that opened on the wrong monitor](#the-dropdown-that-opened-on-the-wrong-monitor) | Position popups against the app window's own bounds, not the full virtual desktop. | 0.2.0 |
 | [The emoji that multiplied into squares](#the-emoji-that-multiplied-into-squares) | An off-by-one appearing only after an emoji is a units bug; audit every boundary. | 0.39.63 |
 | [The backspace that ate half an emoji](#the-backspace-that-ate-half-an-emoji) | Tk's Entry deletes UTF-16 units, not characters — guard every free-text Entry, not just the one reported. | 0.66.105 |
+| [The search that killed the interpreter](#the-search-that-killed-the-interpreter) | Tcl's -nocase text search segfaults on an astral needle (Linux); and a dead process's buffered stdout lies about where it died. | 0.71.125 |
 | [The copy that took the row above](#the-copy-that-took-the-row-above) | Three failures in different costumes shared one cause — follow the data, not the behaviour. | 0.39.63 |
 | [The version that updated itself](#the-version-that-updated-itself) | When one word names two different units, every conversion site is a latent off-by-N. | 0.55.81 |
 | [Tests that always passed, no matter what](#tests-that-always-passed-no-matter-what) | Failure must change a test's exit code, not just its printed output. | 0.5.0 |
@@ -69,6 +69,7 @@ day-to-day tracking.
 | [The tests that borrowed the notebook](#the-tests-that-borrowed-the-notebook) | A clean directory isn't a clean world when the app imports data on first run. | 0.55.81 |
 | [The fix that was dead on arrival](#the-fix-that-was-dead-on-arrival) | A test calling the method proves the method; only the user's route proves the feature. | 0.55.81 |
 | [The teeth that had gone dull](#the-teeth-that-had-gone-dull) | Reintroduce the original bug occasionally — green must prove it can still go red. | 0.64.95 |
+| [The safety net that hid the missing mechanism](#the-safety-net-that-hid-the-missing-mechanism) | When a fallback masks the primary mechanism, assert the mechanism — a behaviour check green under two themes proved nothing. | 0.71.125 |
 
 ## Data safety & integrity
 
@@ -981,7 +982,7 @@ replaces.
 
 ### The undo that stopped halfway, the sequel: lists and the grid trio
 
-*([0.71.113](../CHANGELOG.md#071113--2026-09-09) · 2026-09-09)*
+*([0.71.116](../CHANGELOG.md#071116--2026-09-09) · 2026-09-09)*
 
 **Symptom:** found by the code audit — the same class as the story
 above, in the corners it hadn't reached. Turn three lines into a
@@ -1026,6 +1027,8 @@ windows, never a bookkeeping dict that a teardown can leave stale.
 
 ### The table that outlived its own deletion
 
+*([0.71.125](../CHANGELOG.md#071125--2026-09-10) · 2026-09-10)*
+
 **The report.** An adversarial review of the 0.71.125 grid fixes went
 looking for other body-loaders that skipped the redraw tail — and found
 something worse than a missing redraw. Open a note with a drawn table,
@@ -1055,6 +1058,8 @@ deliberately durable — they outlive the widgets they were planted for,
 and durable state plus dead widgets is a haunting.
 
 ### The clipping that turned out to be a feature
+
+*([0.71.134](../CHANGELOG.md#071134--2026-09-10) · 2026-09-10)*
 
 **The report.** The audit flagged that a table pasted from ordinary
 markdown drew its columns clipped: the conventional `---` separator's
@@ -1328,6 +1333,37 @@ behind its own symptom: the toast looked like noise, and only tracing
 
 *Sister story: ["The emoji that multiplied into squares"](#the-emoji-that-multiplied-into-squares) — the same unit mismatch, caught the first time it showed.*
 
+### The search that killed the interpreter
+
+*([0.71.125](../CHANGELOG.md#071125--2026-09-10) · 2026-09-10)*
+
+**Symptom:** the Linux CI leg died with `Segmentation fault (core
+dumped)` — no traceback, no FAILURES footer — right after a PASS line
+sitting in the middle of qa1's tables section.
+
+**Two mechanisms, stacked.** The PASS line was a lie of buffering, not
+a location: piped stdout is block-buffered on Linux, and a segfault
+throws away everything still in the buffer, so the log's last visible
+line pointed ~200 checks before the real crash site. Re-run on the
+Docker CI mirror with `PYTHONUNBUFFERED=1`, the true site surfaced: the
+new find-across-emoji check. A bare-Text probe then isolated the crash
+to one call — `text.search()` with `-nocase` and an astral character in
+the pattern kills this Tcl/Tk outright. The same search without
+`-nocase` is fine; so is the same emoji in the *text* being searched.
+
+**Fix:** the app never hands Tcl an astral needle. `_find_scan_model`
+pre-screens the query; anything holding a non-BMP character scans the
+prose in Python (case folded there, offsets converted with `_tk_col`,
+the same hide-tag skip dropping elided table text). The mutant routing
+astral queries back through Tcl reproduces the exact CI crash
+signature — the one mutant in this log whose "failure" is a dead
+interpreter rather than a red check.
+
+**Takeaway:** a native-code boundary can fail harder than any exception
+— budget for "the process just dies" when a check feeds user input to
+Tcl. And never bisect a crash from a piped log's tail: trust exit codes
+and the footer, re-run unbuffered for the location.
+
 ## Tests & CI discipline
 
 *Bugs in the safety net itself: checks that could not fail, suites that lied, and how they got teeth.*
@@ -1468,6 +1504,8 @@ fixes this log documents are a ready-made mutant catalogue. Audit a
 few, every so often; green should have to earn itself.
 
 ### The safety net that hid the missing mechanism
+
+*([0.71.125](../CHANGELOG.md#071125--2026-09-10) · 2026-09-10)*
 
 **The report.** While proving the 0.71.125 theming mutants, one refused
 to die. The export progress frame had never been theme-tracked; the fix

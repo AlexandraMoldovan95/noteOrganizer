@@ -66,11 +66,11 @@ circular — and reading it at call time is what the original code did anyway.
 ### `note_organizer.py` — entry point and UI hub
 
 `note_organizer.py` stays the entry point (`py note_organizer.py`) and re-exports the names
-that have moved, so existing callers — including the ~236 `note_organizer.<name>` references
+that have moved, so existing callers — including the ~270 `note_organizer.<name>` references
 across the QA scripts — keep working untouched. That's deliberate: it means each extraction is
 a pure move that leaves the whole test suite green, rather than a rewrite.
 
-What remains in the file is ~13,250 lines of genuinely shared surface. It grew again through
+What remains in the file is ~14,100 lines of genuinely shared surface. It grew again through
 the rich-text and tables work even as the pure logic behind those features went into `core/`.
 
 ### How it got here
@@ -110,6 +110,14 @@ Everything is local JSON — next to the script when run from source, per-user u
 
 There's no database — the note counts this app is built for don't need one, and plain JSON
 keeps the format simple to inspect, back up, and hand-edit if something ever goes wrong.
+
+Two promises sit on top of the files themselves. Every write is **atomic** — surrogates
+mended, dumped to a sibling `.tmp`, then `os.replace`d — so a crash mid-write leaves the old
+file whole, and an unreadable file is preserved aside and announced rather than silently
+emptied (0.66.104). And a **failed write is never silent** (0.71.125): every saver returns
+`(ok, exception)`, every failure lands in `crash_log.txt`, and core reaches the screen through
+the one channel it has without importing tkinter — the `storage.on_write_failure` callback the
+app registers at startup, which shows an error toast naming the file.
 
 ### Defensive normalization
 
@@ -154,6 +162,11 @@ rather than reinventing positioning.
 
 For yes/no/multi-choice prompts, `_themed_dialog()` renders an in-app overlay (not a real OS
 window) and blocks via `wait_variable` until a button is clicked, returning the chosen value.
+Since 0.71.119 it is also a safety contract: the messagebox-style wrappers honour `icon=` (the
+glyph) and `default=` (which button keyboard focus — and therefore Enter — lands on; Escape
+always returns the safe first option), and every irreversible confirm in the app passes
+`icon="warning", default="no"` so a reflexive Enter can never fire the destructive choice. New
+destructive confirms must do the same.
 
 ### Theme tracking — two different patterns, on purpose
 
@@ -165,13 +178,18 @@ For content that gets **destroyed and rebuilt** on every refresh — note cards,
 the attachments list, anything inside a Settings section panel — widgets are colored with plain
 `.configure(bg=self.colors[...])` calls instead. Since this content is always rebuilt fresh, it
 never needs live tracking; using `track_theme` here just means every rebuilt widget's tracking
-registration outlives the widget itself, since nothing ever prunes destroyed entries. That's an
-actual bug this codebase had for a while (see [CHANGELOG.md](../CHANGELOG.md) 0.4.0) — a
-growing, unbounded list of registrations for windows that no longer existed, which measurably
-slowed the app down over a long session.
+registration outlives the widget itself. That was an actual bug this codebase had for a while
+(see [CHANGELOG.md](../CHANGELOG.md) 0.4.0) — a growing, unbounded list of registrations for
+windows that no longer existed, which measurably slowed the app down. Since 0.71.134
+`apply_theme` prunes dead entries at every switch, so a stray registration now costs one switch
+rather than living forever — a safety net, not a licence: re-registering per rebuild is still
+churn the pattern never needs.
 
-**Rule of thumb: `track_theme` for widgets built once; direct `.configure()` for widgets inside
-anything with a `redraw()`/rebuild pattern.**
+**Rule of thumb: `track_theme` for widgets built once — and when you do, track EVERY colour
+option the widget sets (`insertbackground`, `selectcolor`, `highlightbackground`, the
+`active*` pair), not just `bg`/`fg`; a partial map leaves the missing option frozen on the
+build-time palette (the invisible-caret class of 0.71.125). Direct `.configure()` for widgets
+inside anything with a `redraw()`/rebuild pattern.**
 
 There's a third case, added in 0.32.49: content that is normally rebuilt on refresh but must
 **not** be rebuilt just because the palette changed. `apply_theme()` used to call
@@ -297,8 +315,13 @@ malformed spans, and for the same reason: guessing produces notes nobody asked f
 ### Colours that are computed, not looked up
 
 `apply_theme()` re-applies the palette to every widget registered with `track_theme`, and
-`_recolor_stragglers()` catches the rest by remapping any other theme's palette values onto the
-current theme's. That covers everything whose colour *is* a palette entry.
+`_recolor_stragglers()` catches strays by remapping any other theme's palette values onto the
+current theme's — but the net repaints **only `bg` and `fg`**. Every other colour option
+(`insertbackground`, `selectcolor`, `highlightbackground`, `activebackground`…) is invisible
+to it, which is why partial tracking froze the caret at its build-time colour, and why the
+net can quietly mask a missing registration when two themes share a hex — checks must assert
+the mechanism there, not the behaviour (see
+["The safety net that hid the missing mechanism"](ISSUES_LOG.md#the-safety-net-that-hid-the-missing-mechanism)).
 
 Settings does not work that way throughout. It derives two surfaces by blending: a well inside
 a card is `card` mixed toward `text`, and a hairline is `card` mixed toward `subtext`. Those
@@ -366,8 +389,11 @@ inside cells because they are simply words in the note. Share codes, backups, ex
 count carry tables with zero table-specific code. A table pasted from Excel or a web page
 becomes text and therefore a grid; a table copied out arrives in any Markdown-aware tool as a
 table. And the second row — `| :---: | --- |` — is not decoration: the dash count stores each
-column's hand-dragged width, the colons store its alignment, and a `~` marks a hidden column,
-so even *layout* survives every trip through plain text.
+column's hand-dragged width (with one reading nuance since 0.71.134: a minimum-width cell of
+three characters or fewer is markdown's conventional spelling, not an authored size, so it
+parses as "no width opinion" and the column sizes to its content — authored widths floor at 4
+so they always round-trip as authored), the colons store its alignment, and a `~` marks a
+hidden column, so even *layout* survives every trip through plain text.
 
 The `0.55.81` round extended the same storage idiom in three directions, none of which changed
 the note format:
@@ -447,12 +473,24 @@ This division is a hard rule, not a style preference — Tkinter isn't thread-sa
 widget access from the worker thread is a race condition waiting to surface as a rare,
 hard-to-reproduce crash.
 
+Three more rules joined the pattern in 0.71.125, and any future worker follows them too:
+workers start through `_start_io_worker` (tracked, so `on_app_close` waits — capped — via
+`_wait_for_io_workers` instead of destroying a daemon thread mid-file); anything that
+replaces an existing file the user cares about writes beside it and `os.replace`s into place
+only when whole (the backup zip and the single-note export both do); and only one
+export/import runs at a time — a second click is refused with a status line, not queued.
+
 ## Autosave
 
 Typing pauses trigger a debounced autosave; switching notes (or tabs) flushes any pending
 change immediately first, so nothing written is ever lost to a note switch. Autosave explicitly
 skips refreshing the note list while a popup is open (deferring the refresh until the popup
 closes) to avoid the sidebar visibly flickering underneath an open dropdown.
+
+The spine's guards are deliberately quiet (a background path must never interrupt typing), but
+never silent: every swallowed exception — including a save failing at note-switch or close —
+appends one trace per spot per session to `crash_log.txt` via `_log_swallowed` (0.71.134), so
+a persistent bug can no longer stop saving with nothing anywhere to diagnose.
 
 ## Testing
 
@@ -542,7 +580,7 @@ After dialogs, the calendar and attachments, nothing else clears the bar. The ed
 module hiding inside the class — moving any of the shared surface into a file would relocate
 the tangle rather than remove it.
 
-The entry file has grown well past that measurement since — ~13,250 lines now — but the growth
+The entry file has grown well past that measurement since — ~14,100 lines now — but the growth
 is the rich-text and tables UI, which is more of exactly this shared surface, not a new
 extractable module.
 

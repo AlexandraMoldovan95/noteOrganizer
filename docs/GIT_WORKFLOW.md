@@ -33,7 +33,9 @@ git push
 | `refactor:` | Code restructuring, no behavior change |
 | `chore:` | Housekeeping (deps, config, cleanup) |
 
-If a commit resolves a GitHub Issue, add `(Fixes #N)` at the end of the message — closes the issue automatically on push.
+If work resolves a GitHub Issue, put `Fixes #N` in the **PR description** (the 2026-09-05
+convention — one place, closed on merge); `(Fixes #N)` in a commit message also works but is
+not the house style.
 
 ---
 
@@ -78,8 +80,15 @@ Back in the terminal, bring `main` up to date locally and clean up the now-merge
 ```powershell
 git checkout main
 git pull
+git fetch --prune
 git branch -d feat/short-name
 ```
+
+(`git fetch --prune` drops the stale remote-tracking reference for the branch GitHub just
+deleted — without it, `git branch -a` keeps listing ghosts.)
+
+Before pushing a branch, the local Linux CI mirror can save a red remote run — one Docker
+command reproduces the Ubuntu leg; see [`qa/README.md`](../qa/README.md) for it.
 
 **Not happy with the result before committing?** Don't commit. Ask for an adjusted file, replace
 it again, rebuild again, repeat until it looks right — nothing is "saved" in Git until I actually

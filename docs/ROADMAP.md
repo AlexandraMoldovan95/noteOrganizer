@@ -14,6 +14,12 @@ list for a project developed in spare time by a small team of two.
 
 Genuinely open ideas, roughly ordered by how soon they're likely to happen.
 
+- **Follow-ups the audit programme scoped out** (see
+  [Known limitations](#known-limitations) for the full residuals list): fonts inside table
+  cells (the phase deliberately deferred in the 0.64.95 cycle); an end-to-end GUI check for
+  re-importing an overlapping backup; a pixel-level investigation of the post-push-down second
+  grid rebuild before any de-flicker fix is trusted.
+
 - **Small candidates from the 2026-08-31 idea pass** (put aside deliberately, in rough order of
   appeal; the keyboard-shortcuts candidate from that pass has since shipped — see
   [Global keyboard shortcuts](#global-keyboard-shortcuts)):
@@ -107,6 +113,21 @@ Three more features were tried and deliberately taken out again — the decision
 Work that reached `main`, kept here as a decision record — the questions each piece settled, so
 they aren't reopened from scratch. The feature-by-feature detail lives in
 [CHANGELOG.md](../CHANGELOG.md).
+
+### The code-audit programme (2026-09)
+
+A full multi-agent audit of the codebase (ten read-only subsystem auditors, then adversarial
+critics) produced 152 findings in early September; every one that warranted code shipped, in
+severity order, across five releases:
+[0.71.113](../CHANGELOG.md#071113--2026-09-09) (highs: import hardening),
+[0.71.116](../CHANGELOG.md#071116--2026-09-09) (undo atoms),
+[0.71.119](../CHANGELOG.md#071119--2026-09-09) (user-facing safety),
+[0.71.125](../CHANGELOG.md#071125--2026-09-10) (mediums) and
+[0.71.134](../CHANGELOG.md#071134--2026-09-10) (smalls + the tool gates). Each fix was
+mutation-tested and widened to its whole class by an adversarial review round before merge.
+What stayed open on purpose is recorded under
+[Known limitations](#known-limitations) ("Audit residuals"), and the investigation stories live
+in [ISSUES_LOG.md](ISSUES_LOG.md).
 
 ### Rich text formatting
 
@@ -260,9 +281,9 @@ counting notes record what counted, what didn't, and why. The features themselve
 | `0.71.111` | 2026-09-09 | 71 | 111 | Calendar History cycle: two counted `Added` (the 📋 History register — a searchable, year-filtered list of dated notes and each series' occurrences, built by the pure `history_entries` core helper; and the accent frame on the open day) and three counted `Fixed`, all field-reported against the History/occurrence work as it was built and refined in this same branch but each a distinct user-visible defect: a just-saved occurrence reading dirty forever (Back to Calendar refused to navigate), a History delete not refreshing until a trip to the grid, and the Calendar tab reopening on stale History. The header regroup and the single labelled History⇄Calendar toggle are `Changed`; the unit + qa checks and mutants are `Testing` — no bump from those. |
 | `0.71.113` | 2026-09-09 | 71 | 113 | Untrusted-import hardening cycle (two audit high-severity `Fixed`, both a distinct user-visible risk on the same "trust the boundary" class): a hand-crafted share code could smuggle an attachment whose `stored_as` aimed a later delete-forever at a file outside the attachments folder (decode now projects through the shareable slice, and `_delete_attachment_files` refuses paths escaping the folder); and an enormous recurrence interval overflowed `timedelta` in the calendar's startup render, so a corrupt/hostile value could make the app unlaunchable (`normalize_recurrence` clamps the interval at the choke point). Both predate this cycle, so both count. The unit/qa checks and mutants are `Testing` — no bump from those. |
 | `0.71.116` | 2026-09-09 | 71 | 116 | Undo-atom cycle: three counted `Fixed`, the same burst-edit-vs-undo class as 0.64.95 in the corners it hadn't reached — a list toggle/indent rewrites the whole body to renumber and, unbracketed, one Ctrl+Z left the note EMPTY; that same rewrite dissolved a drawn table above the list into raw pipe rows (never redrawn); and the grid trio (checkbox set-marker, append rows/cols) were the only structural ops missing the `@_undo_atom` decorator. All predate the cycle, so all count. The button ops' wrapping and the key-handler decision (deliberately NOT wrapped, to keep normal-typing undo grouping) are implementation detail; the qa1 checks and four mutants are `Testing` — no bump from those. |
-| `0.71.134` | 2026-09-10 | 71 | 134 | Audit smalls (Nivel-3) cycle: nine counted `Fixed`, one per class, each widened in-branch by an adversarial round (19 mutants + 2 empirical tool proofs). Calculator contract (lone dot + non-finite, Z00-F01/02); the style-span registry with void-tag exclusion (Z04-F00/01); cell `<br>` round-trip (Z04-F02); the shared visibility predicate (Z03-F01); the nested-Escape guard (Z07-F01); the separator width waiver with the authored-width floor of 4 (Z08-F03 — first attempt at render broke the deliberate ellipsis feature; the fix moved to parse); the whole-notebook backup with trash normalization/dedup and the trash-inclusive claimed set (Z05-F07); swallowed-exception traces across the whole autosave spine with a per-spot latch (Z02-F04); the themed_widgets prune. The Z06 tool gates (ROOT-anchored ui-inclusive file lists, scenes exit code, descriptor-aware duplicate detection) and the qa9 focus-handback are `Testing` — no bump. Declared residuals: omitted-close-tag HTML, the nested-popup bind bookkeeping, prune-on-switch-only, visual_scenes' burst half. |
-| `0.71.125` | 2026-09-10 | 71 | 125 | Audit mediums Nivel-2 cycle: six counted `Fixed`, one per audit class, each then widened in-branch by an adversarial review round (32 mutants across the branch). Restore-redraw + the dead-grid liveness guard (Z09-F07 widened); table-delete view capture (Z08-F02); silent trash/templates/settings writes surfaced at the `_write_json_atomic` choke point (Z01-F06/Z02-F03); atomic zip + single-note export, close-waits-for-workers, one-at-a-time guard, `.part` attachment copies (Z05-F00/F01, absorbing Z05-F05); the track-every-colour-option sweep — insertbackground family, selectcolor, press colours, event-time hovers (Z07-F03/F04); the Tk-UTF-16-vs-Python conversion boundary — `_py_col` + double-click, cell nav, find widths (Z09-F05/F06). All predate the cycle, so all count. Check-strategy repairs (stale zip artifact, masking straggler net, capture-ordering spies) and the new qa rows are `Testing` — no bump from those. Review-verified residuals recorded in the PR. |
 | `0.71.119` | 2026-09-09 | 71 | 119 | Audit user-facing-safety cycle: three counted `Fixed`, each a class swept whole after adversarial review widened the initial one-site fixes. Copy-a-note aliasing (a copy shared the original's attachment files, so deleting either erased the other's file) closed on all three routes — `duplicate_note`, the Settings duplicate clean-up merge (whose trashed twin's purge destroyed the merged file), and overlapping backup re-import — all via `copy_attachment_file`. Surrogate-mending at boundaries (a just-typed astral emoji crashed `.encode("utf-8")` because mending only ran on disk writes) closed at both remaining boundaries: `encode_share_code` and `_note_export_content` (single + bulk export, whose `(IOError, OSError)` guards never caught the `UnicodeEncodeError`). And the dialog wrappers' dropped `icon=`/`default=` (destructive confirms drew the neutral glyph and pre-focused "Yes") honoured now via `_kind_from_kw` and a `default=` focus target, applied across all ten irreversible confirms; recoverable move-to-trash confirms deliberately keep Enter="proceed". All predate the cycle, so all count. The pure decision helpers are implementation detail; the qa1/qa4/qa6/unit checks, six mutants, and the qa7 dropped-click de-flake are `Testing` — no bump from those. |
+| `0.71.125` | 2026-09-10 | 71 | 125 | Audit mediums Nivel-2 cycle: six counted `Fixed`, one per audit class, each then widened in-branch by an adversarial review round (32 mutants across the branch). Restore-redraw + the dead-grid liveness guard (Z09-F07 widened); table-delete view capture (Z08-F02); silent trash/templates/settings writes surfaced at the `_write_json_atomic` choke point (Z01-F06/Z02-F03); atomic zip + single-note export, close-waits-for-workers, one-at-a-time guard, `.part` attachment copies (Z05-F00/F01, absorbing Z05-F05); the track-every-colour-option sweep — insertbackground family, selectcolor, press colours, event-time hovers (Z07-F03/F04); the Tk-UTF-16-vs-Python conversion boundary — `_py_col` + double-click, cell nav, find widths (Z09-F05/F06). All predate the cycle, so all count. Check-strategy repairs (stale zip artifact, masking straggler net, capture-ordering spies) and the new qa rows are `Testing` — no bump from those. Review-verified residuals recorded under [Known limitations](#known-limitations). |
+| `0.71.134` | 2026-09-10 | 71 | 134 | Audit smalls (Nivel-3) cycle: nine counted `Fixed`, one per class, each widened in-branch by an adversarial round (19 mutants + 2 empirical tool proofs). Calculator contract (lone dot + non-finite, Z00-F01/02); the style-span registry with void-tag exclusion (Z04-F00/01); cell `<br>` round-trip (Z04-F02); the shared visibility predicate (Z03-F01); the nested-Escape guard (Z07-F01); the separator width waiver with the authored-width floor of 4 (Z08-F03 — first attempt at render broke the deliberate ellipsis feature; the fix moved to parse); the whole-notebook backup with trash normalization/dedup and the trash-inclusive claimed set (Z05-F07); swallowed-exception traces across the whole autosave spine with a per-spot latch (Z02-F04); the themed_widgets prune. The Z06 tool gates (ROOT-anchored ui-inclusive file lists, scenes exit code, descriptor-aware duplicate detection) and the qa9 focus-handback are `Testing` — no bump. Declared residuals: recorded under [Known limitations](#known-limitations). |
 
 ### At the real launch: 1.0.0 and after
 
@@ -306,3 +327,36 @@ plain-Tkinter limitation, not something this codebase controls (the switch itsel
 were tried and reverted — read
 ["The theme-switch flicker, and three ways not to fix it"](ISSUES_LOG.md#the-theme-switch-flicker-and-three-ways-not-to-fix-it)
 before attempting anything more.
+
+**Audit residuals (2026-09-10)** — the code-audit programme (see
+[Shipped & settled](#the-code-audit-programme-2026-09)) closed every finding that warranted code;
+what follows is what it deliberately left as recorded edges rather than fixes. None is an open
+bug being chased.
+
+- *Straggler-pass colour collisions* — `_recolor_stragglers` remaps any widget colour matching
+  another theme's palette hex, so a data-driven colour that happens to equal one (e.g. `#7c5cff`
+  as both the accent and a category colour) can be swapped on widgets outside the note cards
+  (which re-fix themselves afterwards, deliberately). Whitelisting data colours would be
+  architectural; the exposure is cosmetic and theme-pair-specific.
+- *A second full grid rebuild after a push-down* — a diagnostic-confidence finding about
+  `_align_table_on_leaving` re-rendering redundantly (a late echo/flicker); needs a pixel-level
+  investigation before any fix is trusted.
+- *Three "same note" definitions* — `clean_notes`, the migration's content signatures and the
+  duplicates panel each judge "same" slightly differently; consolidation is a refactor with its
+  own risks, and the drift is internal (no user-visible wrong answer known).
+- *Omitted-close-tag HTML* — pasted HTML that legally omits `</li>`/`</p>` still bleeds inline
+  styles to the end of the document; every real clipboard serializer closes its tags, which is
+  why this stays an edge note rather than a parser rewrite.
+- *Nested-dropdown bind bookkeeping* — opening a dropdown nested inside a popup overwrites the
+  host popup's stored Configure/click bind ids; the binds leak on a later dismiss. Harmless in
+  practice (rebound on the next open), recorded so the cleanup lands with any future popup work.
+- *Theme-registry pruning cadence* — dead tracked widgets are pruned at each theme switch; a
+  session that never switches themes still accumulates them (Python-side memory only).
+- *`visual_scenes` burst errors* — a failed burst propagates loudly (nonzero exit) but is not
+  counted in the tool's own scene-error tally; cosmetic asymmetry in a manual tool.
+- *Dialogs ignore `parent=`* — the confirm wrappers accept and discard a `parent=` kwarg; the
+  overlay always centres on the app window, so it never mattered, but a future caller could be
+  misled.
+- *Zip-import overlap has no end-to-end test* — the re-import-your-own-backup attachment remap
+  is unit-covered through its shared helper and review-verified end to end; a full GUI round-trip
+  check remains worth writing.
