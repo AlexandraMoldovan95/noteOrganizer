@@ -8734,6 +8734,13 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
 
 
+    @staticmethod
+    def _widget_alive(widget):
+        try:
+            return bool(widget.winfo_exists())
+        except tk.TclError:
+            return False
+
     def track_theme(self, widget, **option_map):
         self.themed_widgets.append((widget, option_map))
         widget.configure(**{opt: self.colors[key] for opt, key in option_map.items()})
@@ -8771,6 +8778,14 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
     def apply_theme(self):
         self.configure(bg=self.colors["bg"])
+        # Prune dead entries first: the rebuilt Settings panels re-track
+        # their dropdowns and buttons on every visit, and the registry
+        # kept the destroyed ones forever — the note-card leak class, at
+        # the registry level (each dead entry cost a caught TclError on
+        # every switch, growing without bound).
+        self.themed_widgets = [
+            (w, m) for w, m in self.themed_widgets
+            if self._widget_alive(w)]
         for widget, option_map in self.themed_widgets:
             try:
                 widget.configure(**{opt: self.colors[key] for opt, key in option_map.items()})
