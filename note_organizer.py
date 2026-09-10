@@ -12443,10 +12443,32 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         needle = query.lower() if nocase else query
         matches = []
         b = self.body_text
-        # Prose: body_text.search skips elided (table) text by default.
+        # Prose. An astral char in the pattern SEGFAULTS Tcl's -nocase
+        # text search outright (Linux Tk 8.6; reproduced in a bare Text,
+        # needle "😀ok"), so a query holding one never reaches Tcl at
+        # all: scan the same prose in Python and convert offsets with
+        # _tk_col — the same units boundary as everywhere else. The
+        # hide-tag skip below drops the elided table text Python can see
+        # but Tk's own search would have skipped.
+        astral_query = any(ord(ch) > 0xFFFF for ch in query)
+        if astral_query:
+            for li, line in enumerate(
+                    b.get("1.0", "end-1c").split("\n"), start=1):
+                hay = line.lower() if nocase else line
+                at = hay.find(needle)
+                while at != -1 and len(matches) < self.FIND_MATCH_CAP:
+                    pos = f"{li}.{self._tk_col(line, at)}"
+                    end = f"{li}.{self._tk_col(line, at + len(query))}"
+                    if not b.tag_nextrange(self.TABLE_HIDE_TAG, pos, end):
+                        matches.append({"kind": "prose", "start": pos,
+                                        "end": end, "line": li,
+                                        "col": int(pos.split(".")[1])})
+                    at = hay.find(needle, at + 1)
+                if len(matches) >= self.FIND_MATCH_CAP:
+                    break
         countv = tk.IntVar()
         start = "1.0"
-        while len(matches) < self.FIND_MATCH_CAP:
+        while not astral_query and len(matches) < self.FIND_MATCH_CAP:
             pos = b.search(query, start, stopindex="end", nocase=nocase,
                            count=countv)
             if not pos:
