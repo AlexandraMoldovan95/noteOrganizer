@@ -12,6 +12,7 @@ How the numbers themselves are counted is the
 
 | Version | Date | In one line |
 |---|---|---|
+| [0.71.158](#071158--2026-09-11) | 2026-09-11 | Three defects found by re-checking what the project had written down: the wrong note opening after a tidy-up, a heavily styled note that looked frozen, and a clipped label in the sidebar. |
 | [0.71.155](#071155--2026-09-11) | 2026-09-11 | Styling meets a per-line ceiling — the shape of a note's formatting, not just how much of it there is, can no longer keep the app from opening. |
 | [0.71.154](#071154--2026-09-11) | 2026-09-11 | The product review's Tier 0 closed whole — every way the app could lose, mangle or refuse your work, then closed again where three adversarial passes proved the class was wider than the finding. |
 | [0.71.135](#071135--2026-09-10) | 2026-09-10 | Removing an attachment asks first — the one permanent delete that skipped every confirmation, closed by the destructive-gesture sweep. |
@@ -56,6 +57,52 @@ How the numbers themselves are counted is the
 ---
 
 ## [Unreleased]
+
+## [0.71.158] — 2026-09-11
+
+*Highlights: none of these came from a bug report. They came from going back through the
+project's own records — a coverage ledger, a seam map, a set of screenshots — and checking
+whether what they claimed was still true. Three of them were not.*
+
+### Fixed
+
+- **The one-time tidy-up no longer opens the wrong note afterwards.** A notebook upgrading
+  from an older version gets one cleanup pass: empty notes are dropped, exact duplicates are
+  collapsed, and every note is renumbered from 1. The app also remembers which note you had
+  open — by its number — and that number was left pointing wherever it landed. With a single
+  empty note in front of it, the note you were reading moved from 2 to 1, the setting still
+  said 2, and the next launch opened the note AFTER the one you left. Where the number fell
+  off the end instead, the app opened nothing. It now follows the note rather than the
+  number, and a remembered note the cleanup removed opens nothing at all — which is honest,
+  and better than opening a stranger's.
+- **A heavily styled note opens instead of looking frozen.** Saving reads a note's styling
+  back out of the editor, and each styled piece's two ends were worked out by re-reading the
+  note from its start — three times over, on every open. A note carrying the most styling the
+  app allows spent 14 of its 15 seconds doing that, with nothing on screen to say so. The
+  reading is done in one pass now: the same 500 styled pieces cost 0.19 seconds instead of
+  14.3, and the window appears in about a second and a half. Ordinary notes were never slow
+  and are unchanged — a 40,000-character note carrying 300 styled pieces opened in 1.55
+  seconds before and still does.
+- **The sidebar's sort control shows its whole name again.** It read "Recently up" with no
+  arrow. The label had room; the row did not — it asked for more width than the sidebar has,
+  and the space was taken off the one control that flexes, right edge first. Both dropdowns
+  size themselves to what they are showing now, which is what lets that flex work. The old
+  fixed width could not have been right on both platforms anyway: the number that fits
+  Windows is 19 pixels over-full in the font the Linux build uses.
+
+### Testing
+
+- The documentation's own claims are checked now rather than trusted. A new link checker
+  walks every in-repo Markdown link — 425 of them — and runs before every push, because a
+  reworded heading breaks a link silently and a dead anchor just scrolls nowhere. It was
+  proved against deliberately broken links before it was believed.
+- The seam map that tells a sweep which test files guard which surface is generated from the
+  suite instead of maintained by hand. It had drifted: three whole surfaces were missing from
+  it, and several rows named fewer files than actually guard them.
+- The documentation's screenshots are staged in code, so a retake is a command. Three were
+  picturing controls that no longer exist and have been retaken.
+- Two coverage-ledger rows that claimed measurements nobody had taken are corrected; the
+  caret-over-emoji question they sat beside is answered on both platforms.
 
 ## [0.71.155] — 2026-09-11
 

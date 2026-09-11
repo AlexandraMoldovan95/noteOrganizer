@@ -162,11 +162,14 @@ noteOrganizer/
 │       ├── calendar_view.py     #   the Calendar tab
 │       └── attachments.py       #   the attachments section
 ├── tools/                    # refactor safety net, run by CI
-│   ├── check_undefined_names.py  # names used but never imported (moving code breaks these)
-│   ├── check_class_api.py        # the app class must keep exactly the same methods
-│   ├── pre_push_check.py         # the static gates, runnable locally in seconds
+│   ├── check_*.py                # four static gates: names that resolve, the app
+│   │                             #   class's surface, one definition per judgement,
+│   │                             #   and documentation links that go somewhere
+│   ├── pre_push_check.py         # all four, runnable locally in seconds
 │   ├── run_tests.py              # the whole suite, safely, from a scratch copy
 │   ├── visual_scenes.py          # screenshot harness for eyeballing rendered scenes
+│   ├── doc_screenshots.py        # retakes the documentation's own screenshots
+│   ├── regen_seam_map.py         # rebuilds qa/README's seam map from the suite
 │   └── linux-ci/                 # one Docker command reproduces the Ubuntu CI leg
 ├── test_*.py                 # six standalone unit suites: recurrence, data safety,
 │                             #   calculator, tables, rich text, entry-module identity

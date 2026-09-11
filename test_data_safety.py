@@ -1345,6 +1345,82 @@ _big_fmt = _nf([{"start": i, "end": i + 1, "style": "bold"}
                 for i in range(_MFS + 5000)])
 check("formatting spans meet their anti-bomb ceiling",
       len(_big_fmt) == _MFS)
+# ---- The cleanup renumbers IDs; the remembered note must follow ----
+# Coverage-ledger C17, which was recorded as a suspicion and turned out
+# to be real. The one-time cleanup renumbers every note from 1 and saves
+# settings in the same breath, so a last_open_note_id left alone stops
+# meaning the note it was written for. Two shapes, and the second is the
+# one that matters: the number can survive and point somewhere else.
+_c17_notes_path = _storage.paths.DATA_FILE
+_c17_settings_path = _storage.paths.SETTINGS_FILE
+_c17_saved = [p + ".c17bak" for p in (_c17_notes_path, _c17_settings_path)]
+for _src, _dst in zip((_c17_notes_path, _c17_settings_path), _c17_saved):
+    if os.path.exists(_src):
+        shutil.copy2(_src, _dst)
+
+
+def _c17_note(nid, title, body):
+    return {"id": nid, "title": title, "body": body, "category": "General",
+            "created": "2026-01-01 00:00", "updated": "2026-01-01 00:00"}
+
+
+def _c17_run(notes, remembered):
+    """Drive the one-time cleanup over this notebook, return what the app
+    would open next launch: (settings' id, that note's title or None)."""
+    open(_c17_notes_path, "w", encoding="utf-8").write(
+        json.dumps(notes))
+    open(_c17_settings_path, "w", encoding="utf-8").write(json.dumps(
+        {"reclaimed_from_appdata": True, "last_open_note_id": remembered}))
+    cleaned, _ = _storage.load_notes()
+    after = _storage.load_settings()
+    now = after.get("last_open_note_id")
+    match = next((n for n in cleaned if n["id"] == now), None)
+    return now, (match["title"] if match else None)
+
+
+# The severe shape: one empty note in front, so every ID shifts down by
+# one and the remembered number stays VALID -- pointing at the note that
+# used to sit after the one being read.
+_c17_id, _c17_title = _c17_run([
+    _c17_note(1, "", ""),
+    _c17_note(2, "The one they were reading", "real content"),
+    _c17_note(3, "A completely different note", "someone else's"),
+], remembered=2)
+check("the remembered note follows the note through an ID renumber, "
+      "not the number", _c17_title == "The one they were reading")
+
+# The mild shape: the remembered note is renumbered to something that no
+# longer exists. Opening nothing is correct; opening a stranger is not.
+_c17_id2, _c17_title2 = _c17_run([
+    _c17_note(1, "", ""),
+    _c17_note(2, "", ""),
+    _c17_note(3, "The one they were reading", "real content"),
+], remembered=3)
+check("...and it is found again even when its number vanished entirely",
+      _c17_title2 == "The one they were reading")
+
+# A remembered note the cleanup REMOVES has nothing to point at, and the
+# setting must say so rather than aim at whoever took its number.
+_c17_id3, _c17_title3 = _c17_run([
+    _c17_note(1, "", ""),
+    _c17_note(2, "A note that stays", "content"),
+], remembered=1)
+check("a remembered note that the cleanup removed leaves nothing behind, "
+      "not someone else's note", _c17_id3 is None and _c17_title3 is None)
+
+# A notebook with nothing to clean must not disturb the setting at all.
+_c17_id4, _c17_title4 = _c17_run([
+    _c17_note(1, "First", "content"),
+    _c17_note(2, "Second", "more content"),
+], remembered=2)
+check("and a notebook with nothing to clean leaves the remembered note "
+      "exactly where it was", _c17_id4 == 2 and _c17_title4 == "Second")
+
+for _src, _dst in zip(_c17_saved, (_c17_notes_path, _c17_settings_path)):
+    if os.path.exists(_src):
+        shutil.copy2(_src, _dst)
+        os.remove(_src)
+
 # ---- The styling bomb the SPAN ceiling waves through (per line) ----
 # MAX_FORMATTING_SPANS counts a whole note and sits at 10,000 on purpose,
 # so it is not the defence here: what stops Tk finishing a draw is how

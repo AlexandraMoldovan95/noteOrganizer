@@ -647,6 +647,67 @@ except Exception:
     no_sel_crash = True
 check('clicking a formatting button with no selection does not crash', not no_sel_crash)
 
+# ---- THE BATCH OFFSET READ MUST AGREE WITH THE SINGLE ONE ----
+# Coverage-ledger C14. `_char_offset` is `len(get("1.0", index))`: it
+# re-reads the note from its start for every index it is asked about.
+# That is fine for the four callers that ask once, and it was the whole
+# cost of opening a heavily styled note -- measured at 14.18s of a 15.5s
+# startup with 500 styled pieces on one line, because every piece has two
+# ends and the reader runs three times per open. `_char_offsets` answers
+# a whole set in one pass instead.
+#
+# Both still exist, so the fast one is checked directly against the slow
+# one it replaced. On its own widget, deliberately: the property needs no
+# app state, and this has to run BEFORE the first save below, because
+# _extract_formatting is used there — a broken offset read crashes qa1 at
+# that line with a traceback, and a traceback is not a named failure.
+#
+# The fixture holds the two shapes worth holding. Astral characters are
+# the real trap: Tk's own count("chars") counts UTF-16 units, so an emoji
+# is two — using it here once shifted every span one place right per
+# preceding emoji and re-saved the note on every launch. An embedded
+# window is not a trap between these two (measured: both skip it), but a
+# drawn table puts one in the middle of a note, so walking past one is
+# worth witnessing.
+_co_probe = NO.tk.Text(app)
+_co_probe.insert('1.0', '\U0001F600 first \U0001F680 second\n'
+                        'a plain second line\n'
+                        '\U0001F914 third with emoji again')
+_co_probe.mark_set('insert', '2.0')
+_co_probe.window_create('2.5', window=NO.tk.Label(_co_probe, text='x'))
+app.update()
+
+_co_indices = []
+for _co_line in (1, 2, 3):
+    for _co_col in (0, 1, 4, 7, 12):
+        _co_idx = _co_probe.index('%d.%d' % (_co_line, _co_col))
+        if _co_probe.compare(_co_idx, '<=', 'end-1c'):
+            _co_indices.append(_co_idx)
+_co_batch = app._char_offsets(_co_probe, _co_indices)
+# .get(), not [] : an implementation that answers fewer indices than it
+# was asked about must make this check RED, not raise inside it. The
+# first version used a subscript and a mutant that answered only the
+# first index took qa1 down with a KeyError instead.
+check('the batch offset read agrees with the single one it replaced',
+      all(_co_batch.get(str(_i)) == app._char_offset(_co_probe, _i)
+          for _i in _co_indices))
+check('...for every index it was given, not just the first',
+      len(_co_batch) == len({str(_i) for _i in _co_indices}))
+# Not vacuous: both traps must really be traps here, or the check above
+# would pass on implementations that differ in exactly the ways that have
+# gone wrong before.
+check('...and the emoji really do move the offsets, so agreeing meant '
+      'something',
+      int(_co_probe.count('1.0', _co_probe.index('1.7'), 'chars')[0])
+      != len(_co_probe.get('1.0', _co_probe.index('1.7'))))
+# The embedded window is NOT a divergence between the two — measured
+# here, `get` and `count("chars")` both skip it, and the comment on
+# _char_offset that said otherwise has been corrected. It stays in the
+# fixture because walking past one still has to work.
+check('...and the fixture really holds an embedded window for the batch '
+      'read to walk past', _co_probe.window_names() != ())
+_co_probe.destroy()
+
 # ---- Save/reload round trip through the real editor flow ----
 app.save_current_note(auto=False)
 app.update()
@@ -7064,6 +7125,84 @@ app.update()
 check('while pressing Save on the same editor does create the reminder',
       len(app.notes) == _jd_before + 1
       and app.notes[-1].get('date') == '2030-05-05')
+app.notes = []
+app.save_notes()
+app.open_blank_tab(); app.update()
+
+# ---- SELECT ALL, THEN TYPE, OVER A NOTE THAT HOLDS A TABLE ----
+# Coverage-ledger C10: the caret guard's MECHANISM around tables is
+# covered several times above, but this particular gesture had never been
+# executed -- and it is the one that replaces a table with a single
+# character in one stroke, which is the most violent thing a keystroke
+# can do to the body.
+#
+# Driven through the VIRTUAL event rather than a literal Ctrl+A on
+# purpose: Tk maps <<SelectAll>> to Ctrl+A on Windows and to Ctrl+/ on
+# X11, so a check written to the Windows keystroke would go red on the
+# Linux CI leg for a reason that has nothing to do with the app.
+app.new_note()
+app.update()
+app.body_text.insert('1.0', 'Above the table\n')
+app._insert_table(2, 2)
+app.update()
+app.body_text.insert('end-1c', '\nBelow the table')
+app.update()
+_sa_before = app.body_text.get('1.0', 'end-1c')
+check('the fixture really holds a table to type over',
+      any(core_tables.is_table_row(ln) for ln in _sa_before.split('\n'))
+      and len(getattr(app, '_table_grids', [])) >= 1)
+
+take_focus(app.body_text)
+app.body_text.event_generate('<<SelectAll>>')
+app.update()
+_sa_sel = app.body_text.tag_ranges('sel')
+# Tk's select-all runs to "end", which is one character past the last --
+# so the selected text is the body plus its trailing newline. Asserted as
+# a span rather than as string equality, because equality here was the
+# first version of this check and it went red for that reason alone.
+check('select-all really takes the whole note, table and all',
+      len(_sa_sel) == 2 and str(_sa_sel[0]) == '1.0'
+      and app.body_text.compare(str(_sa_sel[1]), '>=', 'end-1c')
+      and _sa_before in app.body_text.get(str(_sa_sel[0]), str(_sa_sel[1])))
+
+app.body_text.event_generate('<KeyPress>', keysym='x')
+app.update()
+_sa_after = app.body_text.get('1.0', 'end-1c')
+check('typing over it leaves what was typed, not a half-eaten table',
+      _sa_after.startswith('x'))
+check('...and not one table row survives',
+      not any(core_tables.is_table_row(ln) for ln in _sa_after.split('\n')))
+# The grids are real child widgets laid INTO the text as embedded
+# windows. Asked of the text widget, not of the app's own bookkeeping:
+# `_table_grids` still holds one dead entry here (its frame is already
+# destroyed, and the next render rebuilds the list), and asserting on
+# that list was this check's other first-version mistake -- it would have
+# reported a leak the user cannot see, while saying nothing about the one
+# they could.
+check('...and nothing is left drawn over the text where the table was',
+      app.body_text.window_names() == ())
+# Caret sanity, which is what the ledger row actually asked for: the
+# insert mark must still resolve, and inside the text that is left.
+_sa_insert = app.body_text.index('insert')
+check('...and the caret is still somewhere real in what remains',
+      app.body_text.compare(_sa_insert, '<=', 'end-1c')
+      and app.body_text.compare(_sa_insert, '>=', '1.0'))
+# It must also survive the round trip: a note whose table was typed over
+# is saved as plain text, and comes back as plain text.
+#
+# Asserted as an EQUALITY against the whole stored body, and only after
+# the save is proven to have happened. The first version of this check
+# asked "does the saved body contain no table row" of `app.notes[-1]`
+# with an autosave that never fired -- so it read an empty dict, found no
+# table in nothing, and passed. A mutant that stored a ghost table row
+# walked straight through it.
+_sa_before_save = len(app.notes)
+app.save_current_note(auto=False)
+app.update()
+check('...the overtyped note really was saved',
+      len(app.notes) == _sa_before_save + 1)
+check('...and what is stored is exactly what was typed — no table, no '
+      'leftover line', app.notes and app.notes[-1].get('body') == 'x')
 app.notes = []
 app.save_notes()
 app.open_blank_tab(); app.update()

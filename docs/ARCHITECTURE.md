@@ -128,6 +128,41 @@ exists) into safe defaults rather than letting a bad record propagate into the U
 something. This is what lets the app survive hand-edited or corrupted data files without
 special-casing every call site.
 
+### Ceilings live at the data door, not at the render
+
+Several fields of a note are lists a share code can inflate for free: a
+checklist, attachment records, styling spans. A 60 KB pasted code carrying
+twenty thousand checklist items was saved before it was ever drawn, and then
+killed the app on every launch after — the note was waiting, and drawing it
+was what failed. So each of those fields has a ceiling, and every ceiling sits
+in `normalize_note()` (and `normalize_template()`, which is the second door
+into the editor) rather than at the point the data is drawn.
+
+That placement is deliberate and was arrived at the hard way. The obvious
+alternative — let the data through and refuse to DRAW past a limit — passes its
+tests and is a silent data-loss bug: the editor reads a note's formatting back
+out of the text widget when it saves, so a note drawn without its tags would be
+saved without its spans. Trimming at the door keeps the round trip honest:
+what is kept is what is shown is what is saved.
+
+The styling ceilings also show why a ceiling has to bound *what the victim
+pays*, not the nearest countable thing. `MAX_FORMATTING_SPANS` caps how many
+spans a whole note may carry, and it is set high (10,000) on purpose, because a
+Word paste of a long styled document legitimately produces thousands and
+truncating those would be visible corruption. But Tk does not charge per span —
+it charges per tagged range landing on one LINE, and per range drawn in total.
+Two shapes reach the point where the editor never finishes drawing while using
+a fifth of that cap: every span crowded onto one line, and every span stretched
+to the end of the note so they all pile onto the last one. `MAX_SPANS_PER_LINE`
+and `MAX_LINE_RANGES` bound those two, and the numbers behind all three are in
+[`qa/COVERAGE_LEDGER.md`](../qa/COVERAGE_LEDGER.md) rather than guessed.
+
+An anti-bomb ceiling is not a performance promise, and the two should not be
+confused: what makes a heavily styled note open quickly is
+`_char_offsets` reading every span's offsets in one pass instead of re-reading
+the note once per range end — 14.2 s of a 15.5 s startup, measured, before that
+changed.
+
 ### Recurrence model
 
 A recurring note is stored once — the "base" note carries a `recurrence` rule (frequency,

@@ -51,25 +51,36 @@ the one you happen to be editing:
 
 | Surface | Guarded in |
 |---|---|
-| Bulk-action bar / selection mode | **qa1**, **qa7** |
-| Theming (apply/track/toggle) | **qa1**, qa4, and every rebuilt-widget check |
-| Autosave (debounce, guards, flush) | **qa1**, qa5, qa6, qa7, qa8 |
-| Editor page scroll/canvas | **qa1**, qa6 |
-| Note list (refresh, scroll guards, grouping) | **qa1**, qa4, qa5, qa6, qa7, qa8 |
-| Tables / drawn grids | **qa1** (heavily), qa2, qa3 |
-| Find in note (Ctrl+F) / find bar | **qa1** (crosses theming, tables, editor scroll) |
-| Templates | **qa1**, **qa6**, **qa9**, qa4 |
-| Settings panels | **qa6**, qa3, qa4, qa7 |
-| Calendar | **qa7**, qa1, qa2, qa4, qa5, qa9 |
-| Trash | **qa6**, **qa7**, qa1, qa3, qa4, qa5 |
-| Share codes | **qa3**, qa1, qa4 |
-| Export (files, backup) | **qa1**, qa3, qa8 |
-| Attachments | **qa7**, **qa6**, qa1, qa2, qa3, qa4, qa5, qa8 |
+| Bulk-action bar / selection mode | **qa7**, **qa1** |
+| Theming (apply/track/toggle) | **qa1**, **qa4**, qa6 |
+| Autosave (debounce, guards, flush) | **qa8**, **qa7**, **qa1**, qa5, qa2, qa6, qa3 |
+| Editor page scroll/canvas | **qa1**, **qa8**, qa6 |
+| Note list (refresh, scroll guards, grouping) | **qa7**, **qa1**, qa6, qa8, qa4, qa5 |
+| Tables / drawn grids | **qa1**, qa7, qa5, qa2, qa3 |
+| Find in note (Ctrl+F) / find bar | **qa1**, qa5 |
+| Templates | **qa9**, **qa1**, **qa6**, qa3, qa7, qa4 |
+| Settings panels | **qa6**, qa7, qa4, qa3 |
+| Calendar | **qa7**, qa2, qa5, qa1, qa8, qa9, qa4, qa6, qa3 |
+| Trash | **qa3**, **qa7**, qa6, qa1, qa4, qa5 |
+| Share codes | **qa3**, qa5, qa1 |
+| Export (files, backup) | **qa3**, **qa1**, qa6, qa8, qa4, qa5 |
+| Attachments | **qa7**, qa6, qa3, qa4, qa1, qa8, qa2, qa5 |
+| Recurrence / occurrences | **qa7**, **qa2**, qa8, qa5, qa3, qa4, qa1 |
+| Checklist | **qa1**, qa7, qa3, qa6, qa2, qa4, qa5, qa8, qa9 |
+| Formatting / rich text | **qa1**, qa3, qa2, qa9, qa7, qa6 |
 
-Bold = the heavy owner(s). Regenerate the table after big rounds — it
-was produced by grepping each surface's identifiers across `qa*.py`
-(e.g. `grep -c "bulk_" qa/qa*.py`), so refreshing it is one loop, not
-archaeology.
+Bold = the heavy owner(s): a file carrying at least a quarter of a
+surface's mentions, or leading the next one by more than double.
+
+**Regenerate it rather than editing it** — `py tools/regen_seam_map.py`
+prints the table above, plus the raw per-file counts it came from. The
+table used to be refreshed by hand and drifted through three audit
+rounds without anyone re-running it (coverage-ledger C8): three whole
+surfaces were missing — recurrence/occurrences, the checklist and rich
+text — and several rows named fewer files than actually guard them, so
+a sweep that trusted it would have skipped exactly the file that went
+red on CI last time. Counts are mentions, not checks; they say where a
+surface is *touched*, which is what a sweep needs.
 
 ## Running anything here
 
