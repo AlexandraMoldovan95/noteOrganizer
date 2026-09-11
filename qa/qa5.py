@@ -402,6 +402,19 @@ with open('notes_data.json', 'w', encoding='utf-8') as _f5g:
     _json5g.dump([{'id': 1, 'title': 'Colorata', 'body': 'x',
                    'category': 'General', 'color': '#zzzzzz',
                    'updated': '2026-01-01 00:00',
+                   'created': '2026-01-01 00:00'},
+                  # A per-day override carries 'color' exactly like the
+                  # base note does, and it reaches the SAME Tk configure
+                  # when the calendar draws that day -- the one colour
+                  # door the first sweep missed. The day's text edit must
+                  # survive; only the undrawable colour is dropped.
+                  {'id': 2, 'title': 'Serie', 'body': 'y',
+                   'category': 'General', 'date': '2026-04-01',
+                   'recurrence': {'freq': 'weekly', 'weekdays': [2]},
+                   'overrides': {'2026-04-08': {'title': 'ziua aia',
+                                                'color': '#nu-e-hex'},
+                                 '2026-04-15': {'color': '#00ff00'}},
+                   'updated': '2026-01-01 00:00',
                    'created': '2026-01-01 00:00'}], _f5g)
 # Guarded construction: under the unvalidated-load mutant the garbage
 # reaches render_calendar inside __init__ itself, and an unguarded
@@ -429,6 +442,11 @@ check('the garbage category colour never enters the palette map',
 check('the note survives with its undrawable colour blanked',
       _built5g and app5g.notes and app5g.notes[0]['color'] == ''
       and app5g.notes[0]['title'] == 'Colorata')
+_ovr5g = (app5g.find_note(2) or {}).get('overrides', {}) if _built5g else {}
+check('a per-day override loses only its undrawable colour',
+      _ovr5g.get('2026-04-08') == {'title': 'ziua aia'})
+check('...while a valid per-day colour is kept',
+      _ovr5g.get('2026-04-15') == {'color': '#00ff00'})
 # The calendar is where day colours are painted -- drive the render
 # over the exact month the garbage pointed at rather than assuming,
 # guarded for the same footer reason as the constructor.

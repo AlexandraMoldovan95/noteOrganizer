@@ -277,6 +277,78 @@ check('clicking five chips saves exactly the 3-marker cap',
 app.day_emoji.pop(_D13, None)
 app._persist_day_emoji()
 
+# ---- An edit to the SERIES, made while looking at one day ----
+# The occurrence branch of the dirty check compared only the five
+# overridable fields, so anything series-owned that the user changed
+# while viewing a single day -- a ticked checklist item above all -- was
+# invisible to every save gate: the editor asked for the save and the
+# comparator vetoed it, and the tick never reached disk.
+# It now compares the series-owned fields against the BASE note, which
+# is where load_note read them from in the first place. Formatting and
+# paragraphs stay out on purpose, and the second half of this block is
+# what proves that: an override is plain text, so comparing them made a
+# just-saved occurrence read as dirty FOREVER (field report, 0.71.111).
+_occ_series = NO.normalize_note({
+    'id': 4101, 'title': 'Sport', 'body': 'antrenament',
+    'category': 'General', 'date': '2026-07-01',
+    'recurrence': {'freq': 'weekly', 'weekdays': [2]},
+    'checklist': [{'text': 'incaltari', 'done': False},
+                  {'text': 'prosop', 'done': False}],
+    # The series carries a styling span ON PURPOSE. An override is plain
+    # text, so load_note only re-applies the base's spans when the shown
+    # body equals the base's -- which is exactly why formatting must stay
+    # OUT of the occurrence comparison. With no span in the fixture the
+    # two states are indistinguishable and the check cannot catch a
+    # regression that puts formatting back in.
+    'formatting': [{'start': 0, 'end': 4, 'style': 'bold'}],
+    'updated': '2026-01-01 00:00', 'created': '2026-01-01 00:00'})
+app.notes = [_occ_series]
+app.save_notes()
+app.update()
+_OCC = '2026-07-08'
+
+app.load_note(app.find_note(4101), occurrence_date=_OCC)
+app.update()
+check('an untouched occurrence opens clean',
+      app.editor_state_matches_saved(app.capture_editor_state()))
+app._working_checklist[0]['done'] = True
+app.update()
+check('ticking a checklist item there reads as an unsaved change',
+      not app.editor_state_matches_saved(app.capture_editor_state()))
+app.ask_occurrence_scope = lambda *a, **k: 'series'
+app._flush_autosave()
+app.update()
+check('...and the tick actually reaches the note',
+      app.find_note(4101)['checklist'][0]['done'] is True)
+
+# The half this must NOT undo: a saved occurrence stays clean.
+app.notes = [NO.normalize_note(dict(_occ_series, overrides={}))]
+app.save_notes()
+app.update()
+app.load_note(app.find_note(4101), occurrence_date=_OCC)
+app.update()
+app.body_text.delete('1.0', 'end')
+app.body_text.insert('1.0', 'doar ziua asta e altfel')
+app.ask_occurrence_scope = lambda *a, **k: 'occurrence'
+app.save_current_note(auto=False)
+app.update()
+check('saving just this day writes an override',
+      _OCC in (app.find_note(4101).get('overrides') or {}))
+app.load_note(app.find_note(4101), occurrence_date=_OCC)
+app.update()
+check('and re-opening that day reads CLEAN, not dirty forever',
+      app.editor_state_matches_saved(app.capture_editor_state()))
+# The precondition that gives the check above its teeth: the base note
+# really does hold a span the overridden view does not show, so a
+# comparison that included formatting WOULD read dirty.
+check('...with the base note genuinely holding a span the day does not',
+      app.find_note(4101).get('formatting')
+      and not app.capture_editor_state().get('formatting'))
+del app.ask_occurrence_scope
+app.notes = []
+app.save_notes()
+app.new_note(); app.update()
+
 print()
 print(f"=== QA2 FAILURES: {fails if fails else 'NONE'} ===")
 

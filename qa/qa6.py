@@ -1331,6 +1331,64 @@ for _nm in ('Proiecte', 'ProiecteX'):
 NO.persist_categories()
 _catf.destroy(); app.update()
 
+# ---- The attachment ceiling refuses; it does not eat files ----
+# MAX_ATTACHMENTS exists because a note carrying thousands of records is
+# a way to make the app unopenable. normalize_note enforces it by
+# TRUNCATING, which is right for a hostile share code and wrong for a
+# person adding their own files: they were copied to disk, listed in the
+# editor, and then silently dropped on the next load. The creation side
+# refuses instead, and says why.
+_cap6 = NO.MAX_ATTACHMENTS
+app.new_note(); app.update()
+app.current_attachments = [{'filename': 'f%d.txt' % i,
+                            'stored_as': 'f%d.txt' % i}
+                           for i in range(_cap6)]
+app.refresh_attachments_list(); app.update()
+_warned6 = []
+_real_warn6 = app.show_warning
+app.show_warning = lambda t, m, **k: _warned6.append((t, m))
+fd.askopenfilenames = lambda **k: (tmp_file,)
+try:
+    app.add_attachment()
+    app.update()
+finally:
+    app.show_warning = _real_warn6
+check('a full note refuses another file instead of losing it',
+      len(app.current_attachments) == _cap6 and len(_warned6) == 1)
+check('...and the message says how many a note can hold',
+      _warned6 and str(_cap6) in _warned6[0][1])
+
+# One short of the ceiling, a multi-file pick asks before taking only
+# what fits -- and answering No takes none of them.
+app.current_attachments = app.current_attachments[:_cap6 - 1]
+app.refresh_attachments_list(); app.update()
+_asked6 = []
+_real_ask6 = app.ask_yes_no
+app.ask_yes_no = lambda t, m, **k: (_asked6.append((t, k)), False)[1]
+fd.askopenfilenames = lambda **k: (tmp_file, tmp_file, tmp_file)
+try:
+    app.add_attachment()
+    app.update()
+finally:
+    app.ask_yes_no = _real_ask6
+check('picking more files than fit asks first, with No pre-selected',
+      len(_asked6) == 1 and _asked6[0][1].get('default') == 'no')
+check('...and answering No attaches none of them',
+      len(app.current_attachments) == _cap6 - 1)
+
+# Saying yes takes exactly the room that was left.
+app.ask_yes_no = lambda *a, **k: True
+try:
+    app.add_attachment()
+    app.update()
+finally:
+    app.ask_yes_no = _real_ask6
+check('answering Yes attaches exactly what fits, no more',
+      len(app.current_attachments) == _cap6)
+app.current_attachments = []
+app.refresh_attachments_list()
+app.new_note(); app.update()
+
 print()
 print(f"=== QA6 FAILURES: {fails if fails else 'NONE'} ===")
 

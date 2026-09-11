@@ -229,8 +229,28 @@ def normalize_note(note):
     # around to indent a line that no longer exists.
     clean["paragraphs"] = normalize_paragraphs(
         clean["paragraphs"], len(clean["body"].split("\n")))
+    # An override carries "color" like the base note does -- and like the
+    # base note's, it ends inside a Tk configure() when the day is drawn.
+    # isinstance(v, str) let "#nope" through, so a single per-day colour
+    # from a share code, a backup or a hand-edited file could raise
+    # during the startup calendar render: the same make-the-app-
+    # unopenable class the note's own colour was closed for, through the
+    # one door that fix did not cover. Dropping the bad value (rather
+    # than the whole override) keeps the day's text edit intact.
+    def _clean_override(patch):
+        out = {}
+        for k, v in patch.items():
+            if k not in OVERRIDABLE_FIELDS or not isinstance(v, str):
+                continue
+            if k == "color":
+                v = sanitize_color(v)
+                if not v:
+                    continue
+            out[k] = v
+        return out
+
     clean["overrides"] = {
-        d: {k: v for k, v in patch.items() if k in OVERRIDABLE_FIELDS and isinstance(v, str)}
+        d: _clean_override(patch)
         for d, patch in clean["overrides"].items()
         if isinstance(d, str) and parse_date(d) and isinstance(patch, dict)
     }
@@ -380,6 +400,22 @@ def note_is_empty(note):
     )
 
 
+def _stable(value):
+    """Any JSON-ish value as something hashable and comparable.
+
+    Defensive about shapes throughout, because the stale-copy purge feeds
+    content_signature raw dicts parsed straight off disk, before any
+    normalization has run: an exception raised while building a signature
+    would abort a startup."""
+    if isinstance(value, dict):
+        return tuple(sorted((str(k), _stable(v)) for k, v in value.items()))
+    if isinstance(value, (list, tuple)):
+        return tuple(_stable(v) for v in value)
+    if isinstance(value, (str, int, float, bool)) or value is None:
+        return value
+    return str(value)
+
+
 def _checklist_signature(checklist):
     """A checklist as a hashable tuple, for the duplicate test."""
     if not isinstance(checklist, list):
@@ -421,7 +457,7 @@ def _recurrence_signature(recurrence):
     )) + (str(normalized["freq"]),)
 
 
-def content_signature(note):
+def content_signature(note, strict=False):
     """THE identity of a note's content — one definition, every consumer.
 
     Two other modules ask "is this the same note?" with life-or-death
@@ -441,7 +477,7 @@ def content_signature(note):
     raw dicts parsed straight from disk, before any normalization."""
     def _text(value):
         return value.strip() if isinstance(value, str) else ""
-    return (
+    signature = (
         _text(note.get("title")),
         _text(note.get("body")),
         _text(note.get("comments")),
@@ -450,6 +486,28 @@ def content_signature(note):
         _checklist_signature(note.get("checklist")),
         _attachment_signature(note.get("attachments")),
         _recurrence_signature(note.get("recurrence")),
+    )
+    if not strict:
+        return signature
+    # The STRICT tail, for the one caller whose wrong answer is
+    # unrecoverable. Styling, layout, per-day edits and skipped dates are
+    # all real work a person did, and none of them show up above -- so a
+    # leftover notebook whose notes differ from the local ones ONLY in
+    # those was judged "already covered" and deleted outright, while the
+    # startup message said "nothing was deleted unless every note and
+    # attachment in it already existed".
+    #
+    # They stay out of the DEFAULT answer on purpose: the startup
+    # duplicate collapse is about two notes a person would call the same
+    # note, and a stray bold word does not make a duplicate into a
+    # different note. One definition, one explicit axis of strictness,
+    # both halves written down -- rather than two field lists drifting
+    # apart again.
+    return signature + (
+        _stable(note.get("formatting")),
+        _stable(note.get("paragraphs")),
+        _stable(note.get("overrides")),
+        _stable(note.get("exceptions")),
     )
 
 

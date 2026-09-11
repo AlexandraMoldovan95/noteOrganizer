@@ -46,6 +46,15 @@ from .themes import DEFAULT_CATEGORY_COLORS, PROTECTED_CATEGORY
 # CATEGORY_COLORS constant was, so the whole app reads from one place.
 CATEGORY_COLORS = dict(DEFAULT_CATEGORY_COLORS)
 
+# Ceilings, same class as the checklist and attachment ones: the category
+# map arrives from settings.json and from any imported backup, and the
+# sidebar builds a widget per entry with the name drawn in full. A
+# thousand categories, or one named with 100,000 characters, is a way to
+# make the app unopenable through a door that had no limit at all. Far
+# above any real notebook -- the point is a ceiling, not a budget.
+MAX_CATEGORIES = 200
+MAX_CATEGORY_NAME = 80
+
 
 def load_categories():
     """Read the user's categories from settings, falling back to defaults.
@@ -62,10 +71,10 @@ def load_categories():
         # raised TclError inside whatever render touched that category —
         # settings.json is hand-editable and travels inside backups, so
         # this is an untrusted door like any other.
-        for name, color in saved.items():
+        for name, color in list(saved.items())[:MAX_CATEGORIES]:
             color = sanitize_color(color)
             if isinstance(name, str) and name.strip() and color:
-                result[name.strip()] = color
+                result[name.strip()[:MAX_CATEGORY_NAME]] = color
     if not result:
         result = dict(DEFAULT_CATEGORY_COLORS)
     # General is mandatory and always first.

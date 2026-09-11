@@ -6825,6 +6825,57 @@ for topl in _size_pop:
         topl.destroy()
 app.update()
 
+# ---- "Save as template" asks a question that matches what it stores ----
+# The eighth hand-rolled emptiness gate: it enumerated title|body|comments
+# and refused a checklist-only note with "This note is empty" -- about a
+# note the app had just saved, and whose template WOULD have carried the
+# checklist (do_save stores it). Deliberately narrower than the shared
+# predicate, because a template carries nothing else: an attachment or a
+# repeat rule alone really would make an empty template.
+_tpl_before = len(app.templates)
+app.open_blank_tab(); app.update()
+app._working_checklist = [{'text': 'de cumparat', 'done': False}]
+app.update()
+_tpl_said = []
+_real_info_tpl = app.show_info
+app.show_info = lambda t, m, **k: (_tpl_said.append((t, m)), True)[1]
+_real_ask_tpl = app.ask_text if hasattr(app, 'ask_text') else None
+try:
+    app.save_current_as_template()
+    app.update()
+finally:
+    app.show_info = _real_info_tpl
+check('a checklist-only note is not called empty by Save-as-template',
+      not any('empty' in m.lower() for _t, m in _tpl_said))
+# The behaviour, not the wording: the mutated gate refuses with a message
+# that also lacks the word "empty", so the check above alone passed while
+# the bug was live. What matters is whether the editor was ALLOWED to
+# become a template at all.
+check('...and it is actually offered as one (the gate let it through)',
+      _tpl_said == [])
+
+# And the teeth stay: an editor holding ONLY an attachment really would
+# make an empty template, so that one is still refused -- with a message
+# that says what a template keeps.
+app.open_blank_tab(); app.update()
+app.current_attachments = [{'filename': 'x.pdf', 'stored_as': 'x.pdf'}]
+app.update()
+_tpl_said2 = []
+app.show_info = lambda t, m, **k: (_tpl_said2.append((t, m)), True)[1]
+try:
+    app.save_current_as_template()
+    app.update()
+finally:
+    app.show_info = _real_info_tpl
+check('an attachment-only editor is still refused as a template',
+      len(_tpl_said2) == 1)
+check('...and told what a template actually keeps',
+      _tpl_said2 and 'checklist' in _tpl_said2[0][1]
+      and 'this note is empty' not in _tpl_said2[0][1].lower())
+app.current_attachments = []
+app.templates = app.templates[:_tpl_before]
+app.open_blank_tab(); app.update()
+
 # ---- A note ending in a table is not permanently "unsaved" ----
 # The editor always draws a line under a trailing table (the caret needs
 # somewhere to live), so the body as SHOWN carries one newline the body
@@ -6875,8 +6926,47 @@ check('...and opens clean, with no silent rewrite behind the user',
 # The feature the reconciliation exists to serve: the caret CAN go below
 # the table. Assert the line is really there in the widget.
 _tq_lines = app.body_text.get('1.0', 'end-1c').split('\n')
+# Indexed defensively: with the caret line gone there may be no [-2] at
+# all, and an IndexError here would take the run down before its
+# FAILURES footer -- a mutant that crashes reads as "survived nothing".
 check('the editor still draws a line under the trailing table',
-      _tq_lines[-1] == '' and NO.is_table_row(_tq_lines[-2]))
+      len(_tq_lines) >= 2 and _tq_lines[-1] == ''
+      and NO.is_table_row(_tq_lines[-2]))
+
+# BEFORE any render, the widget genuinely lacks the caret line -- which
+# is the only moment the canonicalisation at the save and capture read
+# points does any work. Every case above runs after a render, where the
+# widget already holds it, so without these two the mechanism at those
+# points was asserted by nothing.
+app.open_blank_tab(); app.update()
+app.title_entry.delete(0, 'end'); app.title_entry.insert(0, 'Nerandat')
+app.body_text.delete('1.0', 'end')
+app.body_text.insert('1.0', 'intro\n' + _TBL_Q)   # no update(): no render
+check('the widget itself has no caret line yet (the precondition)',
+      app.body_text.get('1.0', 'end-1c') == 'intro\n' + _TBL_Q)
+check('capture canonicalises a body read before the render',
+      app.capture_editor_state()['body'] == 'intro\n' + _TBL_Q + '\n')
+app.save_current_note(auto=False)
+_pre_id = app.selected_note_id
+check('and the save stores the canonical form, not the short one',
+      app.find_note(_pre_id)['body'] == 'intro\n' + _TBL_Q + '\n')
+# The same, on the EXISTING-note branch -- which is where the save's own
+# canonicalisation actually earns its keep: a new note is built through
+# normalize_note (which canonicalises anyway), while an update writes
+# note['body'] straight onto the dict.
+app.body_text.delete('1.0', 'end')
+app.body_text.insert('1.0', 'alt intro\n' + _TBL_Q)   # again: no render
+check('an existing note also has the short body in the widget',
+      app.body_text.get('1.0', 'end-1c') == 'alt intro\n' + _TBL_Q)
+app.save_current_note(auto=False)
+check('...and updating it stores the canonical form too',
+      app.find_note(_pre_id)['body'] == 'alt intro\n' + _TBL_Q + '\n')
+app.notes = [n for n in app.notes if n.get('id') != _pre_id]
+app.save_notes()
+
+check('with_caret_line adds the line exactly once, and is idempotent',
+      NO.with_caret_line(_TBL_Q) == _TBL_Q + '\n'
+      and NO.with_caret_line(NO.with_caret_line(_TBL_Q)) == _TBL_Q + '\n')
 
 # And a body that does NOT end in a table is untouched by any of this.
 check('with_caret_line leaves every other body exactly alone',
@@ -6886,6 +6976,45 @@ check('with_caret_line leaves every other body exactly alone',
       and NO.with_caret_line(_TBL_Q + '\n') == _TBL_Q + '\n')
 for _nm in (_tq_id, 4242):
     app.notes = [n for n in app.notes if n.get('id') != _nm]
+app.save_notes()
+app.open_blank_tab(); app.update()
+
+# ---- Closing an abandoned "+ note for this day" leaves no junk ----
+# The calendar's add-note-for-a-day flow PREFILLS the date, so a day
+# clicked and then thought better of leaves an editor holding nothing
+# but a date. The junk-note guard counted the date as content on every
+# route -- including this close sweep, which saves with auto=True -- so
+# the abandoned click was persisted as a blank dated note. The date is
+# deliberate only when the user presses Save; the automatic routes agree
+# with _editor_state_has_content, which leaves it out.
+app.notes = []
+app.save_notes()
+app.open_blank_tab(); app.update()
+app.date_entry.delete(0, 'end')
+app.date_entry.insert(0, '2030-05-05')
+app.update()
+_jd_before = len(app.notes)
+# The timer and the flush both stop earlier than the guard under test:
+# their shared content gate already excludes the date, so neither ever
+# reaches save_current_note. The route that DOES is the window-close
+# sweep, which calls save_current_note(auto=True) for every tab that
+# reads dirty -- and a date-only editor reads dirty by design, so the
+# date must not count as content THERE.
+app._flush_autosave(); app._autosave_now(); app.update()
+check('neither the timer nor the flush touches an abandoned day-click',
+      len(app.notes) == _jd_before)
+app.save_current_note(auto=True)   # exactly what on_app_close does
+app.update()
+check('an abandoned day-click is not autosaved as a junk note',
+      len(app.notes) == _jd_before)
+# ...but pressing Save on it IS deliberate: a bare dated reminder is a
+# real thing a person can want, and the explicit gesture is what says so.
+app.save_current_note(auto=False)
+app.update()
+check('while pressing Save on the same editor does create the reminder',
+      len(app.notes) == _jd_before + 1
+      and app.notes[-1].get('date') == '2030-05-05')
+app.notes = []
 app.save_notes()
 app.open_blank_tab(); app.update()
 

@@ -36,6 +36,7 @@ from datetime import datetime
 from PIL import Image, ImageTk
 
 from ..core import paths
+from ..core.model import MAX_ATTACHMENTS
 from ..core.storage import _attachment_path_within, _delete_attachment_files
 
 
@@ -50,6 +51,29 @@ class AttachmentsMixin:
         filepaths = filedialog.askopenfilenames(title="Choose file(s) to attach")
         if not filepaths:
             return
+        # The ceiling exists because a note carrying thousands of
+        # attachment records is a way to make the app unopenable (see
+        # MAX_ATTACHMENTS) -- but normalize_note enforces it by
+        # TRUNCATING, which is right for a hostile share code and wrong
+        # for a person adding their own files: they would be copied to
+        # disk, shown in the list, and then silently dropped on the next
+        # load. Refuse here instead, and say so.
+        room = MAX_ATTACHMENTS - len(self.current_attachments)
+        if room <= 0:
+            self.show_warning(
+                "That's as many files as one note can hold",
+                f"A note can keep {MAX_ATTACHMENTS} attached files. Remove "
+                "one to add another, or split this into two notes.")
+            return
+        if len(filepaths) > room:
+            if not self.ask_yes_no(
+                    "More files than this note can hold",
+                    f"A note can keep {MAX_ATTACHMENTS} attached files, and "
+                    f"there is room for {room} more.\n\n"
+                    f"Attach the first {room} and leave the rest?",
+                    icon="warning", default="no"):
+                return
+            filepaths = filepaths[:room]
         added_any = False
         for src_path in filepaths:
             original_name = os.path.basename(src_path)

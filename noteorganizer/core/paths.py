@@ -387,8 +387,13 @@ def _content_signatures(notes):
     # closes that loop and crashes the whole package. The function-level
     # import runs long after every module is initialised.
     from .model import content_signature
+    # strict=True: this set gates an irreversible delete, so ANY content
+    # difference must keep the folder -- styling, layout, per-day edits
+    # and skipped dates included. The default (looser) answer belongs to
+    # the startup duplicate collapse, where a stray bold word does not
+    # make a duplicate into a different note.
     return {
-        content_signature(n) for n in notes if isinstance(n, dict)
+        content_signature(n, strict=True) for n in notes if isinstance(n, dict)
     }
 
 

@@ -769,6 +769,174 @@ os.remove(_ordzip)
 NO.CATEGORY_COLORS.pop('Ordine', None)
 NO.persist_categories()
 
+# ---- An oversized pasted note SAYS it was trimmed ----
+# The ceilings truncate silently by design (right for a hostile code,
+# wrong for a person), so the import announces it. The announcement was
+# dead code: it set a status that _open_imported_note_in_editor
+# overwrote one frame later with its own, and a ledger row recorded it
+# as shipped. It is passed down now, so the one status line that
+# survives carries it.
+_big_code = NO.encode_share_code({
+    'title': 'Prea mare', 'body': 'x', 'category': 'General',
+    'checklist': [{'text': 'item %d' % i, 'done': False}
+                  for i in range(NO.MAX_CHECKLIST_ITEMS + 50)]})
+app.toggle_import_panel(); app.update()
+app.import_box.delete('1.0', 'end')
+app.import_box.insert('1.0', _big_code)
+_trim_said = []
+_real_info_trim = app.show_info
+app.show_info = lambda t, m, **k: (_trim_said.append((t, m)), True)[1]
+try:
+    app._do_inline_import()
+    app.update()
+finally:
+    app.show_info = _real_info_trim
+check('an oversized pasted note is trimmed to the ceiling',
+      len(app.capture_editor_state().get('checklist', []))
+      == NO.MAX_CHECKLIST_ITEMS)
+# NOT the status bar: the autosave that follows an import overwrites it
+# with "Auto-saved ..." before anyone could read it (measured -- the
+# first version of this check caught exactly that).
+check('...and the user is TOLD, through a channel nothing overwrites',
+      len(_trim_said) == 1 and 'trimmed' in _trim_said[0][1].lower()
+      and str(NO.MAX_CHECKLIST_ITEMS) in _trim_said[0][1])
+app.new_note(); app.update()
+
+# ---- Cancelling an import cancels the categories too ----
+# The category merge has to happen BEFORE the duplicate scan (the scan
+# normalizes, and normalize re-files an unknown category to General) --
+# but it was also PERSISTED there, so answering "Cancel" at the
+# duplicate dialog still left a stranger's categories installed in the
+# sidebar and saved to disk, with no note to explain them. The merge is
+# provisional now: in memory for the scan, rolled back on cancel, written
+# only once the user has agreed.
+# The note stays in General on BOTH sides, so it is a genuine duplicate
+# and the dialog is guaranteed to appear. The category under test rides
+# along in the backup's palette WITHOUT being used by that note -- which
+# separates the two things cleanly: the dialog is about the note, the
+# rollback is about the category.
+NO.CATEGORY_COLORS['Straina'] = '#abcdef'
+NO.persist_categories()
+app.notes = [{'id': 1, 'title': 'Dubla', 'body': 'z', 'category': 'General',
+              'updated': '2026-01-01 00:00', 'created': '2026-01-01 00:00',
+              'checklist': [], 'attachments': []}]
+app.save_notes()
+_cxzip = os.path.join(tempfile.gettempdir(), 'qa3_cancel.zip')
+if os.path.exists(_cxzip):
+    os.remove(_cxzip)
+fd.asksaveasfilename = lambda **k: _cxzip
+app.export_data()
+t0 = time.time()
+while app._export_state is not None and time.time() - t0 < 5:
+    app.update()
+
+# A device that never heard of it, but DOES hold the identical note, so
+# the duplicate dialog is guaranteed to appear and can be cancelled.
+NO.CATEGORY_COLORS.pop('Straina', None)
+NO.persist_categories()
+app.notes = [{'id': 1, 'title': 'Dubla', 'body': 'z', 'category': 'General',
+              'updated': '2026-01-01 00:00', 'created': '2026-01-01 00:00',
+              'checklist': [], 'attachments': []}]
+app.save_notes()
+_before_cx = len(app.notes)
+app._themed_dialog = lambda *a, **k: 'cancel'
+fd.askopenfilename = lambda **k: _cxzip
+app.import_data()
+t0 = time.time()
+while app._import_state is not None and time.time() - t0 < 8:
+    app.update()
+check('cancelling an import adds no notes', len(app.notes) == _before_cx)
+check('and leaves no stranger category in the palette',
+      'Straina' not in NO.CATEGORY_COLORS)
+check('...nor on disk',
+      'Straina' not in NO.get_setting('categories', {}))
+
+# Agreeing installs it, which is what makes the check above meaningful.
+app._themed_dialog = lambda *a, **k: 'all'
+app.import_data()
+t0 = time.time()
+while app._import_state is not None and time.time() - t0 < 8:
+    app.update()
+check('while agreeing DOES install it (the cancel was the difference)',
+      'Straina' in NO.CATEGORY_COLORS
+      and NO.get_setting('categories', {}).get('Straina') == '#abcdef')
+os.remove(_cxzip)
+NO.CATEGORY_COLORS.pop('Straina', None)
+NO.persist_categories()
+app.notes = []
+app.save_notes()
+
+# ---- Share-as-code asks the SHARED content question ----
+# The seventh hand-rolled emptiness gate: it enumerated title|body and
+# refused a checklist-only or comments-only note with "Write something
+# before copying a code" -- about a note the app itself had just saved
+# as real content, and whose code would have carried it fine (checklist
+# and comments are both in SHAREABLE_FIELDS). It now asks the shared
+# predicate with `attachments` masked out, because that one field is
+# the only thing a code genuinely cannot carry.
+
+
+def _share_code_for(setup):
+    """Drive the real gesture and return the code it rendered, if any."""
+    app.open_blank_tab(); app.update()
+    for _w in app.editor_code_area.winfo_children():
+        _w.destroy()
+    setup()
+    app.update()
+    app.share_current_note_as_code()
+    app.update()
+    _found = []
+
+    def _walk(w):
+        for c in w.winfo_children():
+            if isinstance(c, tk.Text):
+                _txt = c.get('1.0', 'end-1c').strip()
+                if _txt:
+                    _found.append(_txt)
+            _walk(c)
+    _walk(app.editor_code_area)
+    return _found[0] if _found else None
+
+
+_sg_list = [{'text': 'lapte', 'done': False}, {'text': 'oua', 'done': True}]
+_sg_code = _share_code_for(
+    lambda: setattr(app, '_working_checklist', [dict(i) for i in _sg_list]))
+check('a checklist-only note can be shared as a code', _sg_code is not None)
+check('...and the code really carries the checklist',
+      _sg_code is not None
+      and NO.decode_share_code(_sg_code)[0].get('checklist') == _sg_list)
+
+_sg_code2 = _share_code_for(
+    lambda: app.comments_text.insert('1.0', 'doar un comentariu'))
+check('a comments-only note can be shared too',
+      _sg_code2 is not None
+      and NO.decode_share_code(_sg_code2)[0].get('comments')
+      == 'doar un comentariu')
+
+# The guard must keep its teeth: a truly empty editor still refuses, and
+# says what a code actually carries instead of "write something".
+_sg_status = []
+_real_status = app.set_status
+app.set_status = lambda m: (_sg_status.append(m), _real_status(m))[1]
+try:
+    _sg_empty = _share_code_for(lambda: None)
+finally:
+    app.set_status = _real_status
+check('a truly empty editor is still refused', _sg_empty is None)
+# The mask earns its keep here and nowhere else: attachments are the one
+# thing a code cannot carry, so an attachment-ONLY editor has nothing to
+# share even though the shared content test would call it content.
+_sg_att = _share_code_for(
+    lambda: setattr(app, 'current_attachments',
+                    [{'filename': 'x.pdf', 'stored_as': 'x.pdf'}]))
+app.current_attachments = []
+check('an attachment-only editor is refused: a code cannot carry files',
+      _sg_att is None)
+check('...with a message that names what a code carries',
+      any('checklist' in m for m in _sg_status)
+      and not any('Write something' in m for m in _sg_status))
+app.open_blank_tab(); app.update()
+
 print()
 print(f"=== QA3 FAILURES: {fails if fails else 'NONE'} ===")
 

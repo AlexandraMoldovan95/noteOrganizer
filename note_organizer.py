@@ -312,6 +312,8 @@ from noteorganizer.core.categories import (
     CATEGORY_COLORS,
     load_categories,
     persist_categories,
+    MAX_CATEGORIES,
+    MAX_CATEGORY_NAME,
 )
 from noteorganizer.core.model import (
     NOTE_DEFAULTS,
@@ -7438,10 +7440,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     return
             self.import_box.delete("1.0", "end")
             self.toggle_import_panel()
-            if oversized:
-                self.set_status("Note arrived oversized — trimmed to the "
-                                "app's checklist/attachment/styling limits")
-            self._open_imported_note_in_editor(incoming)
+            # Passed DOWN rather than set here: _open_imported_note_in_editor
+            # ends by setting its own status, so a set_status at this point
+            # was overwritten one frame later and the user never saw that
+            # their note had been trimmed. Dead code with a ledger row
+            # claiming it shipped.
+            self._open_imported_note_in_editor(incoming, trimmed=bool(oversized))
             return
         next_id = max([n["id"] for n in self.notes], default=0) + 1
         # Check each incoming note against what's already here — same
@@ -7754,8 +7758,21 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         """Generate a share code for the note currently open and show it inline
         in the editor (no pop-up), with a Copy button."""
         st = self.capture_editor_state()
-        if not (st["title"].strip() or st["body"].strip()):
-            self.set_status("Write something before copying a code.")
+        # The shared content test, minus the one field a code cannot
+        # carry. SHAREABLE_FIELDS covers everything _editor_state_has_content
+        # counts EXCEPT attachments (which travel separately, as the
+        # had_attachments note below), so masking that one field asks
+        # exactly the right question without writing a second list.
+        #
+        # The hand-rolled two-field version refused a checklist-only or
+        # comments-only note with "Write something before copying a
+        # code" -- about a note the app itself had just saved as real
+        # content, and whose code would have carried that content fine.
+        shareable = {k: v for k, v in st.items() if k != "attachments"}
+        if not self._editor_state_has_content(shareable):
+            self.set_status(
+                "Nothing to share yet — a code carries a note's title, "
+                "text, comments, checklist and repeat rule.")
             return
         # Built from SHAREABLE_FIELDS, never a hand-rolled list: this dict
         # once named seven fields by hand and silently dropped everything
@@ -7813,7 +7830,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                   fg="white", relief="flat", font=("Segoe UI", 10, "bold"), cursor="hand2"
                   ).pack(fill="x", pady=(2, 0), ipady=5)
 
-    def _open_imported_note_in_editor(self, shared_note):
+    def _open_imported_note_in_editor(self, shared_note, trimmed=False):
         """Load an imported single note into a fresh editor tab WITHOUT saving,
         so the user can review or edit it, then hit Save when ready. Crucially
         this stays a NEW note (no selected_note_id) so Save creates a fresh one."""
@@ -7866,7 +7883,26 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self._sync_checklist_open_state()
 
         self.update_word_count()
-        self.set_status("Imported from code — review, then Save to keep it")
+        self.set_status(
+            "Imported from code — trimmed to the app's size limits; review, "
+            "then Save to keep it" if trimmed
+            else "Imported from code — review, then Save to keep it")
+        if trimmed:
+            # The status bar is not enough for this one: it is a transient
+            # line, and the autosave that follows the import overwrites it
+            # with "Auto-saved ..." before anyone reads it (measured). A
+            # note arriving SHORTER than it was sent is a change to the
+            # user's data, so it gets the same channel the backup import
+            # uses to report what it did.
+            self.show_info(
+                "Part of this note was left out",
+                "The note in that code was larger than one note can hold, "
+                "so it arrived trimmed to the app's limits "
+                f"({MAX_CHECKLIST_ITEMS} checklist items, "
+                f"{MAX_ATTACHMENTS} files, "
+                f"{MAX_FORMATTING_SPANS} styled spans).\n\n"
+                "Nothing of yours was touched — this is only about what "
+                "arrived. Review it before saving.")
 
     def import_data(self):
         """Import a previously exported .zip. Notes are MERGED into your
@@ -8067,16 +8103,27 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # sanitize_color, because a backup's settings.json is as
         # untrusted as any other imported file and a garbage colour
         # reaches a Tk configure in whatever render touches it.
-        added_categories = 0
-        for name, color in (state.get("imported_categories") or {}).items():
+        # In MEMORY only, for now. The scan below needs them, but the user
+        # has not agreed to anything yet -- persisting here meant that
+        # answering "Cancel" at the duplicate dialog still left a
+        # stranger's categories installed in the sidebar, saved to disk,
+        # with no note to explain them. What is written is decided after
+        # the dialog; this list is what gets rolled back if it is not.
+        added_names = []
+        for name, color in list(
+                (state.get("imported_categories") or {}).items())[:MAX_CATEGORIES]:
             color = sanitize_color(color)
-            if (isinstance(name, str) and name.strip() and color
-                    and name.strip() not in CATEGORY_COLORS):
-                CATEGORY_COLORS[name.strip()] = color
-                added_categories += 1
-        if added_categories:
-            persist_categories()
-            self.refresh_category_widgets()
+            name = name.strip()[:MAX_CATEGORY_NAME] if isinstance(name, str) else ""
+            if name and color and name not in CATEGORY_COLORS:
+                CATEGORY_COLORS[name] = color
+                added_names.append(name)
+        added_categories = len(added_names)
+
+        def _undo_category_merge():
+            """Take back what was never agreed to."""
+            for _n in added_names:
+                CATEGORY_COLORS.pop(_n, None)
+            added_names.clear()
 
         existing_keys = {_dup_key(n) for n in self.notes}
         fresh = [n for n in valid_notes if _dup_key(normalize_note(n)) not in existing_keys]
@@ -8103,12 +8150,19 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     buttons=[("Cancel", "cancel"), ("Import anyway", "all")]
                 )
             if choice is None or choice == "cancel":
+                _undo_category_merge()
                 shutil.rmtree(temp_dir, ignore_errors=True)
                 return
             if choice == "skip":
                 to_import = fresh
 
-        # (Categories were merged above, BEFORE the duplicate scan.)
+        # Agreed to: only now does the category merge reach disk and the
+        # sidebar. (It happened in memory above, because the duplicate
+        # scan had to see it -- normalize_note re-files a note whose
+        # category is still unknown.)
+        if added_categories:
+            persist_categories()
+            self.refresh_category_widgets()
 
         # Calendar day colours and emoji markers ride the backup's
         # settings.json exactly like categories do, and used to be dropped
@@ -12214,12 +12268,34 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             # all ignored exactly the characters the save had just learned
             # to keep. Titles and comments are STORED stripped, so their
             # stripped comparison is the honest one.
-            return (st["title"].strip() == shown["title"].strip()
+            if not (st["title"].strip() == shown["title"].strip()
                     and st["body"] == shown["body"]
                     and st["comments"].strip()
                     == shown.get("comments", "").strip()
                     and st["category"] == shown["category"]
-                    and st["color"] == shown.get("color", ""))
+                    and st["color"] == shown.get("color", "")):
+                return False
+            # ...and the SERIES-owned fields against the BASE note, which
+            # is where the editor loaded them from: load_note reads
+            # checklist, attachments and date off `note`, never off
+            # `shown`, even in occurrence view. So they match on load (a
+            # clean occurrence stays clean) and an edit to one of them
+            # here is an edit to the series -- which has to be visible,
+            # or it is silently thrown away. Left out, a checklist item
+            # ticked while looking at one day was invisible to every save
+            # gate: the editor asked for the save and the comparator
+            # vetoed it, and the tick never reached disk.
+            #
+            # Formatting and paragraphs stay OUT, for the reason above:
+            # an override is plain text, so load_note only re-applies the
+            # base's spans when the shown body equals the base's, and
+            # comparing them made an overridden occurrence read as dirty
+            # forever.
+            return (st.get("checklist", []) == note.get("checklist", [])
+                    and st.get("attachments", []) == note.get("attachments", [])
+                    and st["date"] == note.get("date", "")
+                    and st["recurrence"]
+                    == normalize_recurrence(note.get("recurrence")))
         shown = note
         if (st["title"].strip() != shown["title"].strip()
                 or st["body"] != shown["body"]
@@ -13785,9 +13861,22 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # Read early so the emptiness test below can count a repeat rule as
         # content — a pure UI read, safe to hoist above the guard.
         recurrence = self.read_recurrence_from_ui()
+        # The date and the repeat rule count as content ONLY on an
+        # explicit Save. That is what "a bare dated reminder is
+        # deliberate" actually means, and the first version of this
+        # guard said it in a comment while the code counted them on
+        # every route -- including the window-close sweep, which saves
+        # with auto=True. The calendar's "+ note for this day" prefills
+        # the date, so a day clicked and then abandoned was persisted as
+        # a blank dated note the moment the app closed: a regression
+        # against main, introduced by widening this very guard.
+        # The automatic routes ask _editor_state_has_content, which
+        # excludes the date for the same reason; this keeps the two in
+        # step while leaving the deliberate gesture its meaning.
+        deliberate_only = (date_value or recurrence["freq"]) and not auto
         if (not title and not body.strip() and not comments
                 and not has_attachments and not has_checklist_items
-                and not date_value and not recurrence["freq"]):
+                and not deliberate_only):
             # The guard exists to stop a stray "+ New Note" click becoming
             # a junk note — so it applies to a note that was never saved.
             # Applied to one that EXISTS, it refused to record a deliberate

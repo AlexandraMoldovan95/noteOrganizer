@@ -70,12 +70,17 @@ RULES = [
     Rule(
         question="does the editor hold anything worth keeping?",
         owner="_editor_state_has_content",
-        # Three or more note content fields read off an editor-state dict
-        # and chained with or/and -- the shape every hand-rolled emptiness
-        # gate had.
+        # TWO or more note content fields read off an editor-state dict
+        # and chained with or/and. Two, not three -- and the reason is the
+        # whole point of this gate. Its first version demanded three
+        # names, and the live share-as-code guard enumerated exactly two,
+        # so the gate reported CLEAN over an instance of the very class it
+        # exists to pin. A net tuned to what it already found is blind to
+        # precisely the UNDER-inclusive guards that lose data, which is
+        # worse than no net, because the next reader trusts it.
         pattern=re.compile(
-            r"(?s)(?=.*[\"']title[\"'])(?=.*[\"']body[\"'])"
-            r"(?=.*[\"'](?:comments|checklist|attachments)[\"'])"
+            r"(?s)(?=.*[\"']title[\"'])"
+            r"(?=.*[\"'](?:body|comments|checklist|attachments)[\"'])"
             r"(?=.*\bst\b)(?=.*\bor\b)"),
         allowed={
             "_editor_state_has_content": "the single answer",

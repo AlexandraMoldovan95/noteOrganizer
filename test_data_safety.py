@@ -1171,7 +1171,7 @@ try:
     _ta = _legacy_file([dict(_base, title="UnTitlu")])
     _real_sig = _model_mod.content_signature
     try:
-        _model_mod.content_signature = lambda n: ("bent",)
+        _model_mod.content_signature = lambda n, strict=False: ("bent",)
         check("the purge consults model.content_signature, not a private copy",
               _paths_mod.is_redundant_copy(_ta, [dict(_base, title="AltTitlu")])
               is True)
@@ -1187,6 +1187,48 @@ finally:
             os.remove(_p)
         except OSError:
             pass
+
+# The purge asks a STRICTER question than the duplicate collapse, and
+# the difference is written down rather than drifting: styling, layout,
+# per-day edits and skipped dates are real work that does not show up in
+# the default signature, so a leftover notebook differing only in those
+# was judged "already covered" and deleted -- while the startup message
+# promised nothing was deleted unless it already existed locally.
+_fmt_a = dict(_base, title="Acelasi", body="text",
+              formatting=[{"start": 0, "end": 4, "style": "bold"}])
+_fmt_b = dict(_base, title="Acelasi", body="text")
+check("styling does NOT split a duplicate for the startup collapse",
+      _model_mod.content_signature(_fmt_a)
+      == _model_mod.content_signature(_fmt_b))
+check("but it DOES for the purge, whose wrong answer is unrecoverable",
+      _model_mod.content_signature(_fmt_a, strict=True)
+      != _model_mod.content_signature(_fmt_b, strict=True))
+for _field, _value in (("paragraphs", [{"line": 0, "kind": "bullet"}]),
+                       ("overrides", {"2026-01-01": {"title": "zi"}}),
+                       ("exceptions", ["2026-01-02"])):
+    check("the strict answer also sees %s" % _field,
+          _model_mod.content_signature(dict(_fmt_b, **{_field: _value}),
+                                       strict=True)
+          != _model_mod.content_signature(_fmt_b, strict=True))
+_lf_fmt = _legacy_file([_fmt_a])
+try:
+    check("a folder differing only in styling is NOT purged",
+          _paths_mod.is_redundant_copy(_lf_fmt, [_fmt_b]) is False)
+    check("...while a genuinely identical one still is",
+          _paths_mod.is_redundant_copy(_lf_fmt, [_fmt_a]) is True)
+finally:
+    try:
+        os.remove(_lf_fmt)
+    except OSError:
+        pass
+# Raw shapes off disk must never raise inside the signature: the purge
+# feeds it dicts parsed straight from a file, before any normalization,
+# and an exception there would abort a startup.
+check("the strict signature tolerates raw junk shapes",
+      _model_mod.content_signature(
+          {"formatting": {"a": [1, {"b": None}]}, "overrides": 7,
+           "exceptions": "nope", "paragraphs": object()},
+          strict=True) is not None)
 
 # Find-duplicates and the import scans share _dup_key; checklist and
 # recurrence joined its key (they are never merged, so a grouping there
@@ -1217,6 +1259,32 @@ _i2 = dict(_base, title="Idem (copy)",
            checklist=[{"text": "x", "done": True}])
 check("true duplicates still group, ' (copy)' suffix ignored",
       len(_fdg([_i1, _i2])) == 1)
+
+# ---- The category door has ceilings, like its siblings ----
+# The category map arrives from settings.json and from any imported
+# backup, and the sidebar builds a widget per entry with the name drawn
+# in full -- so it is the same unbounded-field class as the checklist and
+# the attachment list, through a door that had no limit at all.
+from noteorganizer.core import categories as _cats_mod
+from noteorganizer.core.storage import save_settings as _save_settings
+_cat_backup = dict(_cats_mod.CATEGORY_COLORS)
+_settings_backup = _storage.load_settings()
+try:
+    _save_settings(dict(_settings_backup, categories={
+        ("Cat%04d" % i): "#112233"
+        for i in range(_cats_mod.MAX_CATEGORIES + 150)}))
+    _loaded = _cats_mod.load_categories()
+    check("a settings file full of categories is capped on load",
+          len(_loaded) <= _cats_mod.MAX_CATEGORIES + 1)  # +1: General
+    _save_settings(dict(_settings_backup,
+                        categories={"N" * 5000: "#112233"}))
+    _loaded2 = _cats_mod.load_categories()
+    check("and an absurdly long category name is cut to a drawable size",
+          all(len(n) <= _cats_mod.MAX_CATEGORY_NAME for n in _loaded2))
+finally:
+    _save_settings(_settings_backup)
+    _cats_mod.CATEGORY_COLORS.clear()
+    _cats_mod.CATEGORY_COLORS.update(_cat_backup)
 
 # ---- Colours are validated where they enter (the T0-7 class, colour
 # door) ----
