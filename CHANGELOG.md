@@ -55,80 +55,130 @@ How the numbers themselves are counted is the
 
 ## [Unreleased]
 
-*Highlights: the product review's Tier 0 — the eight ways the app could lose, mangle or
-refuse your work, closed together, plus the maintenance report that greeted every new
-install.*
+*Highlights: the product review's Tier 0 — every way the app could lose, mangle or
+refuse your work — closed at the root of each class and then closed again where the
+adversarial review of the first round proved the class was wider than the finding.*
 
 ### Fixed
-- **A checklist-only note is a real note — and stays one.** The startup clean-up judged a
-  note empty by its title, body, comments and attachments alone, so a note whose content
-  was its checklist (or its repeat rule, or its date) was deleted on the next launch —
-  not moved to the Trash, simply gone — while the editor had been perfectly happy to
-  create it. The same blind spot ran through duplicate detection: two notes alike in
-  title and body but carrying different checklists collapsed into one. Both now judge a
-  note by everything a note can actually hold. From the product review.
-- **One notebook, one window.** Nothing stopped a second copy of the app opening on the
-  same notes — a taskbar pin or a double-clicked shortcut was enough. Both copies loaded
-  the whole notebook into memory and every save rewrote the file whole, so whichever
-  window autosaved last silently erased everything the other had written. A second launch
-  now says the notebook is already open and steps aside. The guard is an operating-system
-  file lock, which Windows releases however the app exits, so a crash can never lock you
-  out of your own notes. From the product review.
-- **Importing your own backup brings your categories back.** Categories live in
-  `settings.json`, which the backup zip has always carried — but the import never read it
-  back. Every note filed under a category the notebook no longer knew was quietly re-filed
-  to General, under an "Import complete" message. The import now restores the categories
-  first, adding to what's already there rather than replacing it, and names the ones it
-  brought back. From the product review.
-- **A note body keeps the shape you gave it.** Every save trimmed the body's leading and
-  trailing whitespace, so an indented first line lost its indent and trailing blank lines
-  vanished — a pasted code block or a quoted email came back reshaped. Worse, the styling
-  spans were measured against the *untrimmed* text, so a trim could leave every colour,
-  bold and paragraph mark sitting a character or two off. The body is now saved exactly as
-  typed. From the product review.
-- **A saved note can be emptied.** Clearing a note's title and body did nothing: the
-  autosave read "empty" as "nothing to save", the old text stayed on disk and returned the
-  moment you came back, and Ctrl+S answered "Write something before saving!". Emptying a
-  note that already exists is now an ordinary edit; the refusal stays only where it
-  belongs, on a brand-new note that has never held anything. From the product review.
-- **"Restore previous" survives a restart.** The rescue copy really was written to disk,
-  but it wasn't part of a note's known shape, so the next launch dropped it — while the
-  button offering it stayed on screen looking permanent. It is now kept with the note.
-  From the product review.
-- **A pasted share code can't brick the app.** Checklists travelled inside share codes
-  with no size limit anywhere: a 60 KB code carrying twenty thousand items passed every
-  guard, was saved, and then killed the app while drawing it — and killed it again on
-  every launch after, with no way back in. Checklists are now capped at 1000 items at the
-  point where every note is normalised, so an oversized one is trimmed on arrival instead
-  of taking the app down. From the product review.
-- **The warn-before-opening list knows today's dangerous files.** It covered the classic
-  executables and missed nearly every vehicle actually used to deliver code now — `.lnk`,
-  `.url`, `.iso`, `.img`, `.chm`, `.scf`, `.inf`, `.appref-ms`, `.settingcontent-ms`,
-  `.msix`, `.library-ms`, `.search-ms` among them. A shortcut file arriving inside an
-  imported backup opened through the system with no question at all, running whatever
-  command line it carried. All of them now warn first, with "No" pre-selected. From the
-  product review.
+- **A checklist-only note is a real note, to every part of the app that asks.** The
+  startup clean-up judged a note empty by its title, body, comments and attachments
+  alone, so a note whose content was its checklist (or repeat rule, or date) was deleted
+  on the next launch — not moved to the Trash, simply gone. The first fix widened that
+  one test; the adversarial review then found the same blind spot in three more places
+  that answer "is this the same note?": the stale-copy purge — which authorises an
+  irreversible delete of a leftover notebook folder on every launch — still judged by
+  the old five fields, and Find-duplicates plus all three import scans ignored
+  checklists and repeat rules entirely, though neither is merged when a duplicate is
+  cleaned up. There is now ONE content signature in the data core that every consumer
+  calls (with a check that fails the day anyone grows a private copy again); duplicate
+  matching counts the checklist and the repeat rule, and deliberately keeps ignoring
+  attachments, which the clean-up genuinely merges. From the product review, widened by
+  the adversarial review.
+- **One notebook, one window — and the lock can only ever refuse for the right
+  reason.** Nothing stopped a second copy of the app opening on the same notes; both
+  rewrote the file whole, so whichever autosaved last silently erased the other's work.
+  A second launch now says the notebook is already open and steps aside. The guard is an
+  OS file lock the kernel releases however the process dies, so a crash can never lock
+  you out — and only the errnos that mean "another process holds it" refuse: a folder
+  whose filesystem cannot do locks at all (network shares, exotic mounts) starts
+  normally, where the first version of the guard read every locking error as "already
+  open" and would have bricked the app on exactly those folders. From the product
+  review; the fail-open repair from the adversarial review.
+- **Importing your own backup brings your whole filing system back.** The backup zip has
+  always carried settings.json and the import never read it: categories flattened to
+  "General" under an "Import complete" message, and the calendar's day colours and emoji
+  markers vanished entirely. Both now restore — additively, never overwriting this
+  device's own — and the completion message names what came back. The categories merge
+  runs BEFORE the duplicate scan, because the scan re-files unknown categories to
+  General first, and a distinct note could read as a duplicate of a local General note
+  and be silently skipped. From the product review, the scan order and day decor from
+  the adversarial review.
+- **A note body keeps the shape you gave it — and the app can now SEE that it did.**
+  Every save trimmed leading/trailing whitespace, reshaping pasted code and quoted
+  email, and drifting every styling span measured against the untrimmed text. The save
+  now stores the body exactly as typed — and the change detector compares it exactly as
+  typed too: the first fix left the dirty check stripping both sides, so a
+  whitespace-only edit read as "no change" and the automatic saves threw away precisely
+  the characters the save had just learned to keep. From the product review, the
+  detector half from the adversarial review.
+- **A saved note can be emptied, on every route there is.** Clearing a note and
+  switching away brought the old text back: the app asked "is the editor empty?" in six
+  different hand-rolled places, and the first fix taught the answer to one of them — the
+  autosave and flush gatekeepers in FRONT of it still discarded the emptying, so the
+  finding's own scenario was unchanged. One shared content test now answers everywhere
+  (Save, Ctrl+S, the autosave timer, the note-switch flush, the back-to-calendar guard,
+  the template-replace question — which also learned that attachments and checklists
+  deserve the "replace?" question before a template wipes them). Comments count as
+  content on every route, closing a sibling hole where a comments-only note was
+  discarded with a false "Write something before saving!". The automatic routes still
+  refuse a date-only never-saved editor — the calendar prefills the date field, and an
+  abandoned day-click must not autosave itself into a junk note. From the product
+  review, swept whole by the adversarial review.
+- **"Restore previous" survives a restart — and an aborted save.** The rescue copy was
+  discarded by the next launch while the button offering it looked permanent; it is now
+  part of the note's known shape. And restoring no longer spends the copy up front: the
+  old order deleted it and then ran a save with several legitimate abort paths (a
+  half-typed date, a cancelled question), losing the copy and the restore in one
+  stroke. The copy is cleared only after the save provably landed. From the product
+  review, the ordering from the adversarial review.
+- **A pasted share code can't brick or hang the app — through any of its fields.**
+  Checklists had no size limit anywhere: a 60 KB code carrying twenty thousand items was
+  saved first and then killed the app on every launch after. Checklists are now capped
+  at 1000 items at the choke point every route passes through — templates included,
+  which the first cap missed — and the sibling fields met the same review: styling spans
+  gained an anti-bomb ceiling (generous enough that a long Word-paste's thousands of
+  legitimate spans are never touched), attachment records a ceiling of 200. When an
+  oversized note does arrive, the import says it was trimmed instead of losing 19,000
+  items in silence. From the product review, the siblings from the adversarial review,
+  the numbers from measurement.
+- **The warn-before-opening list knows today's dangerous files — and can't be fooled by
+  a trailing dot.** The list covered the classic executables and missed the vehicles
+  actually used to deliver code now (.lnk, .url, .iso, .img, .chm, .scf, .appref-ms,
+  .settingcontent-ms and more); a shortcut arriving inside an imported backup opened
+  with no question at all. All warn first now, with "No" pre-selected. And the check
+  can no longer be smuggled past: Windows strips trailing dots and spaces when opening a
+  path, so "invoice.lnk. " read as extension-less to the gate while the OS executed the
+  .lnk — stored names are normalised at the data choke point and the gate strips before
+  deciding, so the name it inspects and the file the OS opens can never disagree. From
+  the product review, the smuggle from the adversarial review.
+- **A colour the app can't draw can't keep it from opening.** Colour strings arrive from
+  every untrusted door — a share code, a backup's settings.json, a hand-edited file —
+  and end their journey in a Tk configure(), which crashes on garbage; because a note is
+  saved before it is first drawn, one bad value meant a crash on every launch after.
+  Every intake now validates: a note's own colour, imported category colours, and the
+  calendar's day colours, on load and on import alike. Found by the adversarial review
+  as the checklist-bomb class wearing a different field.
+- **A malformed attachment record can't corrupt the note next door.** One record without
+  a filename aborted the note-load halfway through its render, leaving the editor still
+  holding the PREVIOUS note's checklist — which the next save then wrote onto the note
+  you had tried to open. Records are normalised at the data choke point (names
+  guaranteed, nameless records dropped) and the render no longer trusts a field to
+  exist. Found by the adversarial review.
 - **A fresh install no longer opens with a maintenance report.** The one-time clean-up
-  runs whenever the settings file lacks its marker — which on a first launch is always —
-  and it announced itself either way, so the literal first screen of the product was a
-  blocking modal reading "Cleanup pass (runs once): … 0 note(s) remain, IDs renumbered
-  1–0": internal vocabulary, about nothing, over an empty notebook. It now speaks only
-  when it actually removed something. From the product review.
+  announced itself even when it had nothing to say, so the literal first screen of the
+  product was a blocking modal about "IDs renumbered 1–0" over an empty notebook. It now
+  speaks only when it actually removed something. From the product review.
 
 ### Testing
-- Regression checks for all nine, with a mutant killed for each: the empty/duplicate
-  rules and the checklist cap in `test_data_safety.py`, the single-instance lock driven
-  through a real second process, the category round-trip in qa3, the shortcut
-  confirmation in qa7, the first-run silence in qa5, and the body-shape contract in qa1.
-- **The qa suite's generated clicks can no longer vanish.** Tk discards a `<Button-1>`
-  aimed at a widget with no native window yet, in complete silence — and the app hides
-  its popups whenever another program holds the Windows foreground, which a test process
-  never owns. Every popup click in the suite was therefore racing a 300 ms heartbeat;
-  qa2's marker-cap check had been answering by luck for weeks (measured mid-run, not one
-  of its five clicks had ever been delivered). All 26 generated clicks across qa1, qa2,
-  qa6, qa7 and qa9 now go through `qa/_qa_support.py`, which creates the window before
-  aiming an event at it, and popup visibility no longer depends on the OS foreground.
-  The house rule is in `qa/README.md`.
+- Every fix above carries a regression check born red-under-mutation: the emptiness and
+  whitespace checks drive the real gestures (the autosave timer's callee, the
+  note-switch flush, Ctrl+S) rather than the writer those gestures guard; the
+  single-instance guard's wiring is witnessed end-to-end by a subprocess driver that
+  proves _main() consults the lock and honours both answers — deleting the guard used to
+  leave every suite green; and the shared content signature has a delegation check that
+  fails the day a consumer grows a private field list again.
+- **The dropped-event class is closed for every generated POINTER event, not just bare
+  clicks.** Tk silently discards any pointer event aimed at a widget with no native
+  window; the first sweep converted the 26 bare Button-1 calls and left 48 siblings
+  (coordinate clicks, releases, drags, wheel and hover events) on the raw pattern. All
+  go through one helper now, which also refuses KEY events loudly — those follow the
+  focus, not the window, and the six places that aimed keys without a settled focus got
+  the suite's focus discipline instead. One drag stays raw on purpose: its canvas is
+  deliberately dead, and the TclError from the corpse is the point.
+- The wave that found this round's work: 13 hostile reviewers, three refute-by-default
+  verifiers per material finding, and a completeness critic over the whole exchange —
+  33 findings survived, and the critic's audit of the wave itself (which findings were
+  wrongly refuted, what nobody ran) drove three of the fixes above.
 
 ## [0.71.135] — 2026-09-10
 
