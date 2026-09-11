@@ -90,6 +90,7 @@
   "_char_class": "(cls, ch)",
   "_char_is_emoji": "(ch)",
   "_char_offset": "(w, index)",
+  "_char_offsets": "(text_widget, indices)",
   "_cleanup_selected_duplicates": "(self, del_vars, dlg, refresh, announce=False)",
   "_clear_day_color": "(self, date_str)",
   "_clear_day_panel": "(self)",

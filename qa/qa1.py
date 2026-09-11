@@ -647,6 +647,67 @@ except Exception:
     no_sel_crash = True
 check('clicking a formatting button with no selection does not crash', not no_sel_crash)
 
+# ---- THE BATCH OFFSET READ MUST AGREE WITH THE SINGLE ONE ----
+# Coverage-ledger C14. `_char_offset` is `len(get("1.0", index))`: it
+# re-reads the note from its start for every index it is asked about.
+# That is fine for the four callers that ask once, and it was the whole
+# cost of opening a heavily styled note -- measured at 14.18s of a 15.5s
+# startup with 500 styled pieces on one line, because every piece has two
+# ends and the reader runs three times per open. `_char_offsets` answers
+# a whole set in one pass instead.
+#
+# Both still exist, so the fast one is checked directly against the slow
+# one it replaced. On its own widget, deliberately: the property needs no
+# app state, and this has to run BEFORE the first save below, because
+# _extract_formatting is used there — a broken offset read crashes qa1 at
+# that line with a traceback, and a traceback is not a named failure.
+#
+# The fixture holds the two shapes worth holding. Astral characters are
+# the real trap: Tk's own count("chars") counts UTF-16 units, so an emoji
+# is two — using it here once shifted every span one place right per
+# preceding emoji and re-saved the note on every launch. An embedded
+# window is not a trap between these two (measured: both skip it), but a
+# drawn table puts one in the middle of a note, so walking past one is
+# worth witnessing.
+_co_probe = NO.tk.Text(app)
+_co_probe.insert('1.0', '\U0001F600 first \U0001F680 second\n'
+                        'a plain second line\n'
+                        '\U0001F914 third with emoji again')
+_co_probe.mark_set('insert', '2.0')
+_co_probe.window_create('2.5', window=NO.tk.Label(_co_probe, text='x'))
+app.update()
+
+_co_indices = []
+for _co_line in (1, 2, 3):
+    for _co_col in (0, 1, 4, 7, 12):
+        _co_idx = _co_probe.index('%d.%d' % (_co_line, _co_col))
+        if _co_probe.compare(_co_idx, '<=', 'end-1c'):
+            _co_indices.append(_co_idx)
+_co_batch = app._char_offsets(_co_probe, _co_indices)
+# .get(), not [] : an implementation that answers fewer indices than it
+# was asked about must make this check RED, not raise inside it. The
+# first version used a subscript and a mutant that answered only the
+# first index took qa1 down with a KeyError instead.
+check('the batch offset read agrees with the single one it replaced',
+      all(_co_batch.get(str(_i)) == app._char_offset(_co_probe, _i)
+          for _i in _co_indices))
+check('...for every index it was given, not just the first',
+      len(_co_batch) == len({str(_i) for _i in _co_indices}))
+# Not vacuous: both traps must really be traps here, or the check above
+# would pass on implementations that differ in exactly the ways that have
+# gone wrong before.
+check('...and the emoji really do move the offsets, so agreeing meant '
+      'something',
+      int(_co_probe.count('1.0', _co_probe.index('1.7'), 'chars')[0])
+      != len(_co_probe.get('1.0', _co_probe.index('1.7'))))
+# The embedded window is NOT a divergence between the two — measured
+# here, `get` and `count("chars")` both skip it, and the comment on
+# _char_offset that said otherwise has been corrected. It stays in the
+# fixture because walking past one still has to work.
+check('...and the fixture really holds an embedded window for the batch '
+      'read to walk past', _co_probe.window_names() != ())
+_co_probe.destroy()
+
 # ---- Save/reload round trip through the real editor flow ----
 app.save_current_note(auto=False)
 app.update()

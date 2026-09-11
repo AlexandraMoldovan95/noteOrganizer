@@ -18,23 +18,6 @@ being done about it — lives in its own register:
 
 Genuinely open ideas, roughly ordered by how soon they're likely to happen.
 
-- **Read a note's formatting back in one pass** (measured, first target of any
-  performance round; the numbers are `qa/COVERAGE_LEDGER.md` rows C14 and C20). Saving
-  reads the formatting back out of the editor, and each styled piece's two endpoints are
-  turned into a character offset by re-reading the note from its start. The work is
-  therefore the note's length times the number of styled pieces, three times per open:
-  100 pieces on one line costs 0.06 s, 250 costs 1.49 s, and 500 — the anti-bomb ceiling
-  — costs 14.18 s, which is the whole difference between a window appearing in 1.5 s and
-  in 15.5 s. Notes people actually write never feel it (a 40,000-character note with 300
-  styled pieces opens in 1.55 s), because the cost needs them crowded onto one line; a
-  note crafted to sit at the ceiling does. The fix is to sort the endpoints and measure
-  only the gap from the previous one, so the pass costs the note's length once. Two
-  constraints are not negotiable: the exact `len(get())` character space must be kept
-  (Tk's `count("chars")` counts UTF-16 units and once shifted every span one place right
-  per preceding emoji, re-saving the note on every launch), and the ceiling must NOT be
-  lowered as a shortcut — 250 is exactly what bolding every word of a 250-word paragraph
-  produces, so that trades a wait for silent loss of someone's formatting.
-
 - **Follow-ups the audit programme scoped out** (see
   [Known limitations](#known-limitations) for the full residuals list): fonts inside table
   cells (the phase deliberately deferred in the 0.64.95 cycle); an end-to-end GUI check for

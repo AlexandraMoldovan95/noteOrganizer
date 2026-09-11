@@ -6461,8 +6461,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # right per preceding emoji. The phantom difference then re-saved
         # the note -- "Note updated" on every startup, no edit anywhere,
         # and the stored span walked one character further each launch.
-        # len(get()) also skips embedded window characters, which the
-        # drawn tables add and count() semantics differ on.
+        # Both len(get()) and count("chars") skip embedded window
+        # characters, which the drawn tables add — measured 2026-09-11,
+        # after this comment had claimed for a while that they differ.
+        # The astral difference above is the real one.
         return len(w.get("1.0", index))
 
 
@@ -6580,18 +6582,57 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             except tk.TclError:
                 pass
 
+    @staticmethod
+    def _char_offsets(text_widget, indices):
+        """The same answer :meth:`_char_offset` gives, for many indices at
+        once, paid ONCE for the whole widget instead of once per index.
+
+        _char_offset is ``len(get("1.0", index))`` -- it re-reads the note
+        from its start every time it is asked. That is fine for the four
+        callers that ask once, and it was the whole cost of opening a
+        heavily styled note: every styled piece has two ends, the reader
+        below runs three times per open, and 500 pieces on one line
+        measured 14.18 s of a 15.5 s startup.
+
+        The trick is that the offsets are wanted for a SET of indices.
+        Sorted, each one only needs the gap from the one before it, and
+        the gaps add up to the note read exactly once. The character space
+        is identical because it is the same ``len(get(...))`` -- Python
+        characters, embedded window characters skipped, astral characters
+        counted as one. That last part is not incidental: Tk's own
+        ``count("chars")`` counts UTF-16 units, and using it here once
+        shifted every span one place right per preceding emoji, re-saving
+        the note on every launch.
+        """
+        wanted = {str(index) for index in indices}
+        if not wanted:
+            return {}
+
+        def position(index):
+            line, _, column = index.partition(".")
+            return int(line), int(column)
+
+        offsets, previous, running = {}, "1.0", 0
+        for index in sorted(wanted, key=position):
+            running += len(text_widget.get(previous, index))
+            offsets[index] = running
+            previous = index
+        return offsets
+
     def _extract_formatting(self, text_widget):
         """Read the widget's current tags back out as a plain span list,
         for saving. Character offsets (not Tkinter's own line.col indices)
-        so they're stable plain data, independent of line wrapping."""
-        spans = []
+        so they're stable plain data, independent of line wrapping.
+
+        Every tag range is collected first and the offsets worked out in
+        one pass (see :meth:`_char_offsets`), because asking per range end
+        is what made opening a heavily styled note feel like a freeze.
+        """
+        plain, fonts, colors = [], [], []
         for style in KNOWN_FORMAT_STYLES:
             ranges = text_widget.tag_ranges(style)
             for i in range(0, len(ranges), 2):
-                start = self._char_offset(text_widget, ranges[i])
-                end = self._char_offset(text_widget, ranges[i + 1])
-                if end > start:
-                    spans.append({"start": start, "end": end, "style": style})
+                plain.append((style, ranges[i], ranges[i + 1]))
         # Composite font tags carry size and family. Weight and slant are
         # folded into them for rendering, but are read back from their own
         # bold/italic tags above -- taking them from here as well would save
@@ -6603,16 +6644,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             _is_bold, _is_italic, size, family = parsed
             ranges = text_widget.tag_ranges(tag_name)
             for i in range(0, len(ranges), 2):
-                start = self._char_offset(text_widget, ranges[i])
-                end = self._char_offset(text_widget, ranges[i + 1])
-                if end <= start:
-                    continue
-                if size is not None:
-                    spans.append({"start": start, "end": end,
-                                  "style": "font_size", "value": size})
-                if family is not None:
-                    spans.append({"start": start, "end": end,
-                                  "style": "font_family", "value": family})
+                fonts.append((size, family, ranges[i], ranges[i + 1]))
 
         for tag_name in text_widget.tag_names():
             for style in COLOR_FORMAT_STYLES:
@@ -6624,11 +6656,37 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     continue
                 ranges = text_widget.tag_ranges(tag_name)
                 for i in range(0, len(ranges), 2):
-                    start = self._char_offset(text_widget, ranges[i])
-                    end = self._char_offset(text_widget, ranges[i + 1])
-                    if end > start:
-                        spans.append({"start": start, "end": end, "style": style,
-                                      "value": hex_color})
+                    colors.append((style, hex_color, ranges[i], ranges[i + 1]))
+
+        offsets = self._char_offsets(text_widget, [
+            index
+            for group in (plain, fonts, colors)
+            for entry in group
+            for index in entry[-2:]
+        ])
+
+        # Built in the same order the three loops used to append in, so the
+        # list handed to merge_spans is byte-for-byte what it always was.
+        spans = []
+        for style, first, last in plain:
+            start, end = offsets[str(first)], offsets[str(last)]
+            if end > start:
+                spans.append({"start": start, "end": end, "style": style})
+        for size, family, first, last in fonts:
+            start, end = offsets[str(first)], offsets[str(last)]
+            if end <= start:
+                continue
+            if size is not None:
+                spans.append({"start": start, "end": end,
+                              "style": "font_size", "value": size})
+            if family is not None:
+                spans.append({"start": start, "end": end,
+                              "style": "font_family", "value": family})
+        for style, hex_color, first, last in colors:
+            start, end = offsets[str(first)], offsets[str(last)]
+            if end > start:
+                spans.append({"start": start, "end": end, "style": style,
+                              "value": hex_color})
         # Merged before returning: a composite font tag is split into one
         # range per bold/italic boundary inside it, so a single size across a
         # paragraph reads back in pieces and would be written to the note
