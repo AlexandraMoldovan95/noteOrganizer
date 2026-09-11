@@ -395,6 +395,12 @@ bug being chased.
 - *Dialogs ignore `parent=`* — the confirm wrappers accept and discard a `parent=` kwarg; the
   overlay always centres on the app window, so it never mattered, but a future caller could be
   misled.
+- *Commit-then-capture in `_grid_delete_table`* — deleting a table while one of its cell
+  editors is still open commits that editor first, and the commit's re-render can run before the
+  delete takes its view snapshot, so the restored scroll position is the one from before the
+  commit. Declared during the audit and recorded here because, unlike its siblings, it had no
+  home in the repo at all — it lived only in a conversation. Cosmetic, and it needs the same
+  pixel-level look as the push-down rebuild above before any fix is trusted.
 - *Zip-import overlap has no end-to-end test* — the re-import-your-own-backup attachment remap
   is unit-covered through its shared helper and review-verified end to end; a full GUI round-trip
   check remains worth writing.

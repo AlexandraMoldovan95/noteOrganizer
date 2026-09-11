@@ -7068,6 +7068,84 @@ app.notes = []
 app.save_notes()
 app.open_blank_tab(); app.update()
 
+# ---- SELECT ALL, THEN TYPE, OVER A NOTE THAT HOLDS A TABLE ----
+# Coverage-ledger C10: the caret guard's MECHANISM around tables is
+# covered several times above, but this particular gesture had never been
+# executed -- and it is the one that replaces a table with a single
+# character in one stroke, which is the most violent thing a keystroke
+# can do to the body.
+#
+# Driven through the VIRTUAL event rather than a literal Ctrl+A on
+# purpose: Tk maps <<SelectAll>> to Ctrl+A on Windows and to Ctrl+/ on
+# X11, so a check written to the Windows keystroke would go red on the
+# Linux CI leg for a reason that has nothing to do with the app.
+app.new_note()
+app.update()
+app.body_text.insert('1.0', 'Above the table\n')
+app._insert_table(2, 2)
+app.update()
+app.body_text.insert('end-1c', '\nBelow the table')
+app.update()
+_sa_before = app.body_text.get('1.0', 'end-1c')
+check('the fixture really holds a table to type over',
+      any(core_tables.is_table_row(ln) for ln in _sa_before.split('\n'))
+      and len(getattr(app, '_table_grids', [])) >= 1)
+
+take_focus(app.body_text)
+app.body_text.event_generate('<<SelectAll>>')
+app.update()
+_sa_sel = app.body_text.tag_ranges('sel')
+# Tk's select-all runs to "end", which is one character past the last --
+# so the selected text is the body plus its trailing newline. Asserted as
+# a span rather than as string equality, because equality here was the
+# first version of this check and it went red for that reason alone.
+check('select-all really takes the whole note, table and all',
+      len(_sa_sel) == 2 and str(_sa_sel[0]) == '1.0'
+      and app.body_text.compare(str(_sa_sel[1]), '>=', 'end-1c')
+      and _sa_before in app.body_text.get(str(_sa_sel[0]), str(_sa_sel[1])))
+
+app.body_text.event_generate('<KeyPress>', keysym='x')
+app.update()
+_sa_after = app.body_text.get('1.0', 'end-1c')
+check('typing over it leaves what was typed, not a half-eaten table',
+      _sa_after.startswith('x'))
+check('...and not one table row survives',
+      not any(core_tables.is_table_row(ln) for ln in _sa_after.split('\n')))
+# The grids are real child widgets laid INTO the text as embedded
+# windows. Asked of the text widget, not of the app's own bookkeeping:
+# `_table_grids` still holds one dead entry here (its frame is already
+# destroyed, and the next render rebuilds the list), and asserting on
+# that list was this check's other first-version mistake -- it would have
+# reported a leak the user cannot see, while saying nothing about the one
+# they could.
+check('...and nothing is left drawn over the text where the table was',
+      app.body_text.window_names() == ())
+# Caret sanity, which is what the ledger row actually asked for: the
+# insert mark must still resolve, and inside the text that is left.
+_sa_insert = app.body_text.index('insert')
+check('...and the caret is still somewhere real in what remains',
+      app.body_text.compare(_sa_insert, '<=', 'end-1c')
+      and app.body_text.compare(_sa_insert, '>=', '1.0'))
+# It must also survive the round trip: a note whose table was typed over
+# is saved as plain text, and comes back as plain text.
+#
+# Asserted as an EQUALITY against the whole stored body, and only after
+# the save is proven to have happened. The first version of this check
+# asked "does the saved body contain no table row" of `app.notes[-1]`
+# with an autosave that never fired -- so it read an empty dict, found no
+# table in nothing, and passed. A mutant that stored a ghost table row
+# walked straight through it.
+_sa_before_save = len(app.notes)
+app.save_current_note(auto=False)
+app.update()
+check('...the overtyped note really was saved',
+      len(app.notes) == _sa_before_save + 1)
+check('...and what is stored is exactly what was typed — no table, no '
+      'leftover line', app.notes and app.notes[-1].get('body') == 'x')
+app.notes = []
+app.save_notes()
+app.open_blank_tab(); app.update()
+
 # ---- CLOSING SAVES SILENTLY (dead last: it destroys the app) ----
 # The quit-time "Unsaved notes" ask could only ever cover the last
 # half-second of typing; the app now trusts its own autosave and closes

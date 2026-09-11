@@ -71,6 +71,11 @@ def main():
               [os.path.join("tools", "check_class_api.py")])
     _run_gate("one definition per judgement",
               [os.path.join("tools", "check_one_definition.py")])
+    # The docs cross-reference each other by anchor, and reworded headings
+    # break those links silently -- a dead anchor just scrolls nowhere.
+    # Cheap enough to run on every push rather than once a release.
+    _run_gate("documentation links resolve",
+              [os.path.join("tools", "check_doc_links.py")])
 
     print("== every tracked .py compiles", flush=True)
     listed = subprocess.run(["git", "ls-files", "*.py"], cwd=ROOT,
