@@ -104,6 +104,9 @@ def normalize_template(tpl):
     fields it fills in: title, body, comments, category."""
     if not isinstance(tpl, dict):
         tpl = {}
+    # Lazy, like this module's other model imports: model -> categories ->
+    # storage at import time, so a top-level import here closes the loop.
+    from .model import MAX_CHECKLIST_ITEMS
 
     def _s(key, default=""):
         v = tpl.get(key, default)
@@ -118,10 +121,20 @@ def normalize_template(tpl):
                                            len(_s("body").split("\n"))),
         "comments": _s("comments"),
         "category": _s("category") or "General",
+        # Capped like a note's checklist (same constant, same reason): a
+        # template is one more door the original widget bomb walked
+        # through — normalize_note's cap never sees a template, so an
+        # imported/hand-edited templates.json with 20,000 items still
+        # froze the app the moment the template was applied.
         "checklist": [
             {"text": it.get("text", "") if isinstance(it.get("text"), str) else "",
              "done": bool(it.get("done"))}
-            for it in (tpl.get("checklist") or [])
+            # isinstance first: the cap's slice raises on a dict-shaped
+            # value, and templates.json is hand-editable -- what used to
+            # degrade to an empty checklist would have crashed startup.
+            for it in (tpl.get("checklist")
+                       if isinstance(tpl.get("checklist"), list)
+                       else [])[:MAX_CHECKLIST_ITEMS]
             if isinstance(it, dict)
         ],
     }

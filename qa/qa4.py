@@ -27,6 +27,13 @@ _seed_io.open('settings.json', 'w', encoding='utf-8').write(
 
 import sys
 import note_organizer as NO, tkinter as tk, time
+# A generated click is DISCARDED in silence when its widget is not
+# viewable, and the app hides popups whenever another program holds the
+# Windows foreground -- which a test process never owns. See
+# qa/_qa_support.py; _qa_click refuses to click into the void.
+from _qa_support import (click as _qa_click, fire as _qa_fire,
+                         pin_popup_visibility as _qa_pin)
+_qa_pin(NO)
 fails=[]
 def check(name, cond):
     print(('PASS' if cond else 'FAIL'), name)
@@ -241,11 +248,11 @@ check('a themed dropdown border follows too',
 check('the export progress frame follows (it was never tracked at all)',
       _dark_ok[2] and _light_ok[2]
       and any(w is app.export_progress_frame for w, _m in app.themed_widgets))
-_probe_btn.event_generate('<Enter>'); app.update()
+_qa_fire(_probe_btn, '<Enter>'); app.update()
 check('a settings button hovers in the CURRENT palette, not the build-time one',
       str(_probe_btn.cget('bg'))
       == app._blend(app.colors['card'], app.colors['danger'], 0.14))
-_probe_btn.event_generate('<Leave>'); app.update()
+_qa_fire(_probe_btn, '<Leave>'); app.update()
 check('and rests back on the current card colour',
       str(_probe_btn.cget('bg')) == app.colors['card'])
 # The other button factory has the same hover mechanism — build under
@@ -253,7 +260,7 @@ check('and rests back on the current card colour',
 _probe_txt = app._text_button(app, 'TxtProbe', lambda: None, kind='primary')
 _probe_txt.pack(); app.update()
 app.set_theme('dark'); app.update()
-_probe_txt.event_generate('<Enter>'); app.update()
+_qa_fire(_probe_txt, '<Enter>'); app.update()
 check('a text button hovers in the current palette too',
       str(_probe_txt.cget('bg')) == app.colors['accent_hover'])
 # Mechanism assert: the stock dark/light accents share a hex, so a

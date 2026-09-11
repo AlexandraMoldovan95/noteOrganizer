@@ -27,6 +27,13 @@ _seed_io.open('settings.json', 'w', encoding='utf-8').write(
 
 import sys
 import note_organizer as NO, tkinter as tk, tkinter.filedialog as fd, os, tempfile, base64, zlib, struct
+# A generated click is DISCARDED in silence when its widget is not
+# viewable, and the app hides popups whenever another program holds the
+# Windows foreground -- which a test process never owns. See
+# qa/_qa_support.py; _qa_click refuses to click into the void.
+from _qa_support import (click as _qa_click, fire as _qa_fire,
+                         pin_popup_visibility as _qa_pin)
+_qa_pin(NO)
 fails = []
 def check(name, cond):
     print(('PASS' if cond else 'FAIL'), name)
@@ -358,7 +365,7 @@ for _ in range(60):
         break
     try:
         if work_lbl.winfo_exists():
-            work_lbl.event_generate('<Button-1>')
+            _qa_click(work_lbl)
     except tk.TclError:
         pass
     app.update()
@@ -418,6 +425,89 @@ app.refresh_attachments_list(); app.update()
 app.open_attachment(0)
 app.update()
 check('corrupt image file handled gracefully, no crash', app._mini_popup is None)
+
+# ---- A shortcut file is dangerous too (product review T0-8) ----
+# The warn-before-opening list covered the 1990s executables and missed
+# every vehicle actually used to deliver code today. A .lnk carries an
+# arbitrary command line behind an innocent name and icon, and one
+# arriving inside an imported backup reached os.startfile through this
+# gate with no question asked at all.
+for _dangerous in ('.lnk', '.url', '.iso', '.scf', '.appref-ms'):
+    check('%s counts as dangerous' % _dangerous,
+          _dangerous in app.DANGEROUS_EXTENSIONS)
+
+with open(os.path.join(NO.ATTACHMENTS_DIR, 'stored_invoice.lnk'), 'wb') as f:
+    f.write(b'shortcut')
+# filename and stored_as DIFFER on purpose: the display name says .pdf,
+# the on-disk file is the .lnk. Only a gate keyed off stored_as can pass
+# this pair -- with both set to .lnk (the first version of this fixture)
+# a gate reading the DISPLAY name would have passed identically, so the
+# checks could not tell the honest gate from the fooled one.
+app.current_attachments = [{'filename': 'invoice.pdf',
+                            'stored_as': 'stored_invoice.lnk'}]
+app.refresh_attachments_list(); app.update()
+_opened = []
+_real_startfile = NO.os.startfile if hasattr(NO.os, 'startfile') else None
+NO.os.startfile = lambda p, *a, **k: _opened.append(p)
+_asked = []
+_real_ask_lnk = app.ask_yes_no
+app.ask_yes_no = lambda t, m, **k: (_asked.append((t, k)), False)[1]
+try:
+    app.open_attachment(0)
+    app.update()
+finally:
+    app.ask_yes_no = _real_ask_lnk
+check('opening a .lnk asks first, with the warning glyph',
+      len(_asked) == 1 and _asked[0][1].get('icon') == 'warning'
+      and _asked[0][1].get('default') == 'no')
+check('and answering No does not launch it',
+      _opened == [])
+app.ask_yes_no = lambda *a, **k: True
+try:
+    app.open_attachment(0)
+    app.update()
+finally:
+    app.ask_yes_no = _real_ask_lnk
+    if _real_startfile is not None:
+        NO.os.startfile = _real_startfile
+check('answering Yes is what actually opens it', len(_opened) == 1)
+
+# ---- A trailing dot cannot smuggle it past the gate ----
+# Windows strips trailing dots/spaces when it OPENS a path, so
+# "evil.lnk. " names evil.lnk on disk while splitext sees no extension
+# at all: the gate said "safe" about a name the OS then executed.
+# normalize_note now stores clean names AND the gate rstrips before
+# deciding, so the smuggled spelling must ask exactly like the clean one.
+_dirty_note = NO.normalize_note(
+    {'title': 'smuggle', 'attachments': [{'filename': 'evil.pdf',
+                                          'stored_as': 'evil.lnk. '}]})
+check('normalize strips the trailing-dot disguise from stored names',
+      _dirty_note['attachments'][0]['stored_as'] == 'evil.lnk')
+# Created through the DIRTY spelling on purpose: Windows strips the
+# trailing dot+space at creation (landing on evil.lnk, exactly the
+# smuggle), while Linux keeps the literal name — either way the path the
+# gate resolves from stored_as exists on that platform.
+with open(os.path.join(NO.ATTACHMENTS_DIR, 'evil.lnk. '), 'wb') as f:
+    f.write(b'shortcut')
+# The gate itself must ALSO rstrip (a record that predates the normalize
+# rule can still carry the disguise), so feed it the dirty spelling raw.
+app.current_attachments = [{'filename': 'evil.pdf', 'stored_as': 'evil.lnk. '}]
+app.refresh_attachments_list(); app.update()
+_asked2 = []
+_opened2 = []
+_real_startfile2 = NO.os.startfile if hasattr(NO.os, 'startfile') else None
+NO.os.startfile = lambda p, *a, **k: _opened2.append(p)
+app.ask_yes_no = lambda t, m, **k: (_asked2.append((t, k)), False)[1]
+try:
+    app.open_attachment(0)
+    app.update()
+finally:
+    app.ask_yes_no = _real_ask_lnk
+    if _real_startfile2 is not None:
+        NO.os.startfile = _real_startfile2
+check('a trailing-dot .lnk still meets the warning, and No still blocks',
+      len(_asked2) == 1 and _asked2[0][1].get('default') == 'no'
+      and _opened2 == [])
 
 # non-previewable file still gets the "opens externally" hint
 app.current_attachments = [{'filename': 'doc.pdf', 'stored_as': 'doc.pdf'}]
@@ -800,8 +890,15 @@ app.write_recurrence_to_ui({})
 _scopeF = []
 app.ask_occurrence_scope = lambda *a, **k: (_scopeF.append(1), 'series')[1]
 app.save_current_note(auto=False); app.update()
+# The scope question is NOT asked any more, and that is the fix, not a
+# loss: an override carries five text fields, so "this day" has no
+# meaning for un-repeating -- the edit belongs to the series by
+# construction. What the check is really about, the day banner retiring,
+# is asserted exactly as before.
+check('un-repeating asks no scope question it could not act on',
+      _scopeF == [])
 check('un-repeating via a series save retires the day banner',
-      len(_scopeF) == 1 and app.current_occurrence_date is None
+      app.current_occurrence_date is None
       and not app.occurrence_banner.winfo_ismapped())
 del app.ask_occurrence_scope
 
@@ -1170,7 +1267,7 @@ _lonely_lbl = next(w for w in app._history_rows.winfo_children()
                    and any('LonelyLive' in str(c.cget('text'))
                            for c in w.winfo_children()
                            if isinstance(c, tk.Label)))
-_lonely_lbl.event_generate('<Button-1>'); app.update()
+_qa_click(_lonely_lbl); app.update()
 check('clicking the childless series lands on its day in the calendar',
       not app._history_visible and app._day_panel_mode == 'note'
       and app.selected_day is not None)
@@ -1328,7 +1425,7 @@ _pv_lbl = tk.Label(app, text='hover me')
 _pv_lbl.pack()
 app._attach_dup_preview(_pv_lbl, _pv_note)
 app.update()
-_pv_lbl.event_generate('<Enter>')
+_qa_fire(_pv_lbl, '<Enter>')
 app.update()
 _tips = [w for w in _pv_lbl.winfo_children()
          if isinstance(w, tk.Toplevel)]
@@ -1344,13 +1441,171 @@ def _tip_txts7(tops):
     return out
 check('hovering a duplicate row shows its floating preview',
       _tips and any('PreviewNota' in t for t in _tip_txts7(_tips)))
-_pv_lbl.event_generate('<Leave>')
+_qa_fire(_pv_lbl, '<Leave>')
 app.update()
 check('leaving the row hides the preview',
       not any(w.winfo_exists() for w in _tips))
 _pv_lbl.destroy(); app.update()
 
 print()
+# ---- Emptying a saved note survives every automatic route (T0-5 root) ----
+# The emptiness guard had SIX hand-rolled copies and the first fix
+# repaired one: the autosave and flush gatekeepers still refused an
+# emptied note before the fixed writer was ever reached, so the finding's
+# own scenario -- clear, switch away, come back -- reverted the emptying.
+# These drive the GESTURES (the timer's callee, the switch-away flush,
+# Ctrl+S), never save_current_note directly, precisely because the bug
+# lived in front of it.
+app.open_blank_tab(); app.update()
+app.title_entry.insert(0, 'DeGolit')
+app.body_text.insert('1.0', 'continut vechi')
+app.save_current_note(auto=False); app.update()
+_gid = app.selected_note_id
+app.title_entry.delete(0, 'end')
+app.body_text.delete('1.0', 'end')
+app._flush_autosave(); app.update()
+_gn = app.find_note(_gid)
+check('switch-away flush records the emptying of a saved note',
+      _gn is not None and _gn['title'] == '' and _gn['body'] == '')
+
+app.open_blank_tab(); app.update()
+app.title_entry.insert(0, 'DeGolit2')
+app.body_text.insert('1.0', 'alt continut')
+app.save_current_note(auto=False); app.update()
+_gid2 = app.selected_note_id
+app.title_entry.delete(0, 'end')
+app.body_text.delete('1.0', 'end')
+app._autosave_now(); app.update()
+_gn2 = app.find_note(_gid2)
+check('the autosave timer route records the emptying too',
+      _gn2 is not None and _gn2['title'] == '' and _gn2['body'] == '')
+
+app.open_blank_tab(); app.update()
+app.title_entry.insert(0, 'DeGolit3')
+app.body_text.insert('1.0', 'iar continut')
+app.save_current_note(auto=False); app.update()
+_gid3 = app.selected_note_id
+app.title_entry.delete(0, 'end')
+app.body_text.delete('1.0', 'end')
+app._shortcut_save_now(); app.update()
+_gn3 = app.find_note(_gid3)
+check('Ctrl+S records the emptying instead of silently refusing',
+      _gn3 is not None and _gn3['title'] == '' and _gn3['body'] == '')
+
+# The junk-note guard must HOLD where it should: an empty never-saved
+# editor saves nothing on any route...
+app.open_blank_tab(); app.update()
+_before = len(app.notes)
+app._flush_autosave(); app._autosave_now(); app._shortcut_save_now()
+app.update()
+check('an empty never-saved editor still saves nothing on any route',
+      len(app.notes) == _before)
+# ...and a date-only new editor stays junk-proof on the AUTOMATIC routes:
+# the calendar's new-note-for-a-day flow prefills the date, so counting
+# the date as content would autosave an abandoned day-click as a note.
+app.date_entry.delete(0, 'end'); app.date_entry.insert(0, '2030-05-05')
+app._flush_autosave(); app._autosave_now(); app.update()
+check('a date-only new editor is not autosaved as a junk note',
+      len(app.notes) == _before)
+
+# Comments are content now, on every route -- a comments-only note used
+# to be discarded in total silence with a false "Write something".
+app.open_blank_tab(); app.update()
+app.comments_text.insert('1.0', 'doar un comentariu')
+app._autosave_now(); app.update()
+check('a comments-only note is real content to the autosave',
+      len(app.notes) == _before + 1
+      and app.notes[-1]['comments'] == 'doar un comentariu')
+
+# ---- Whitespace edits reach the disk (T0-4, the half in FRONT of the
+# writer) ----
+# The save learned to keep leading/trailing whitespace, but the dirty
+# comparator stripped both sides, so a whitespace-only edit read as "no
+# change" and the automatic routes never wrote it: the fix's own promise,
+# defeated one frame upstream.
+app.open_blank_tab(); app.update()
+app.title_entry.insert(0, 'Spatii')
+app.body_text.insert('1.0', 'abc')
+app.save_current_note(auto=False); app.update()
+_wid = app.selected_note_id
+app.body_text.insert('end', '\n\n')
+_stW = app.capture_editor_state()
+check('a whitespace-only edit reads as dirty to the comparator',
+      not app.editor_state_matches_saved(_stW))
+app._flush_autosave(); app.update()
+_wn = app.find_note(_wid)
+check('and the flush writes it: trailing blank lines land on disk',
+      _wn is not None and _wn['body'] == 'abc\n\n')
+
+# ---- A template asks before wiping non-text content ----
+# The replace? question used to test only title/body/comments, so a
+# template applied over an attachments- or checklist-only note wiped
+# them with no question at all. The gate now shares the ONE content
+# test; this witnesses the call site, not just the helper.
+app.open_blank_tab(); app.update()
+app._working_checklist = [{'text': 'doar lista', 'done': False}]
+_askedT = []
+app.ask_yes_no = lambda t, m, **k: (_askedT.append(t), False)[1]
+try:
+    app._apply_template({'name': 'T', 'title': 'TT', 'body': 'BB'})
+    app.update()
+finally:
+    # Back to this file's TOP-OF-FILE baseline (line ~45), not del: the
+    # real class method would open real blocking dialogs for every later
+    # section -- restore_previous_version asks one, and the run hung
+    # there the first time this finally used del.
+    app.ask_yes_no = lambda *a, **k: True
+check('a checklist-only editor earns the replace? question from a template',
+      len(_askedT) == 1
+      and app._get_checklist() == [{'text': 'doar lista', 'done': False}])
+
+# ---- Emptying a SHORT note still leaves something to come back to ----
+# The rescue copy was gated on a drastic shrink (>40 characters removed),
+# written when an empty save could not happen at all. Once clearing a
+# saved note became a legitimate edit on every route, a short one slipped
+# under the threshold: written to disk blank, no rescue copy, nothing in
+# the Trash, and the note switch that persisted it reset the undo history
+# too. The case that most needs the net had none.
+app.open_blank_tab(); app.update()
+app.body_text.insert('1.0', 'milk, eggs, bread')
+app.save_current_note(auto=False); app.update()
+_sh_id = app.selected_note_id
+app.body_text.delete('1.0', 'end')
+app._flush_autosave(); app.update()
+_sh = app.find_note(_sh_id)
+check('emptying a short saved note really does persist', _sh['body'] == '')
+check('...and leaves a rescue copy, however few characters it was',
+      isinstance(_sh.get('_prev'), dict)
+      and _sh['_prev'].get('body') == 'milk, eggs, bread')
+
+# ---- Restore previous survives an aborted save (T0-6 hardening) ----
+# The old order popped the rescue copy FIRST and then called a save with
+# several legitimate abort paths -- an abort lost the copy and the
+# restore in one stroke, permanently now that _prev outlives restarts.
+app.open_blank_tab(); app.update()
+app.title_entry.insert(0, 'Prev')
+app.body_text.insert('1.0',
+                     'versiunea lunga originala care se va scurta drastic imediat')
+app.save_current_note(auto=False); app.update()
+_pid = app.selected_note_id
+app.body_text.delete('1.0', 'end'); app.body_text.insert('1.0', 'scurt')
+app.save_current_note(auto=False); app.update()
+_pn = app.find_note(_pid)
+check('a drastic shrink leaves the rescue copy behind',
+      _pn is not None and isinstance(_pn.get('_prev'), dict))
+# A half-typed date used to abort the save the restore rode on, losing
+# the copy and the restore together. The restore writes straight to the
+# note now, so a mid-edit date field cannot reach it at all -- which is
+# the stronger promise, and this pins it.
+app.date_entry.delete(0, 'end'); app.date_entry.insert(0, '2030-1')
+app.restore_previous_version(); app.update()
+_pn = app.find_note(_pid)
+check('a half-typed date cannot block the restore any more',
+      _pn is not None and _pn.get('_prev') is None
+      and 'originala' in _pn.get('body', ''))
+check('...and the button is gone, because the copy was spent',
+      not app.restore_prev_btn.winfo_ismapped())
+
 print(f"=== QA7 FAILURES: {fails if fails else 'NONE'} ===")
 
 sys.exit(1 if fails else 0)

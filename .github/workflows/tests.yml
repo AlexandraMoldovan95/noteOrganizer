@@ -98,6 +98,7 @@ jobs:
         run: |
           python tools/check_undefined_names.py note_organizer.py noteorganizer/core/*.py noteorganizer/ui/*.py
           python tools/check_class_api.py
+          python tools/check_one_definition.py
 
       - name: Recurrence engine tests
         run: python test_recurrence.py

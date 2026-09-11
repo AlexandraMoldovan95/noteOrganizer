@@ -8,7 +8,7 @@ This is a companion to [ARCHITECTURE.md](ARCHITECTURE.md), which is the
 short reference version for someone who already knows the codebase. Start
 here; go there when you want the summary.
 
-> **Scope:** the data and rules layer is fully extracted — all thirteen
+> **Scope:** the data and rules layer is fully extracted — all fourteen
 > `core/` modules below are covered here in depth. The user interface has
 > since been split too: five areas now live in `noteorganizer/ui/` as mixins
 > (calculator panel, Settings page, dialogs/popups, calendar, attachments),

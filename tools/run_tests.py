@@ -50,6 +50,9 @@ STANDALONE = ["test_recurrence.py", "test_calculator.py", "test_data_safety.py",
               "test_entry_module_identity.py", "test_richtext.py",
               "test_tables.py"]
 QA = [f"qa{i}.py" for i in range(1, 10)]
+# Every qa script imports this one; it must travel with them or the whole
+# suite dies at import. Kept out of QA itself so it is never *run* as a test.
+QA_SUPPORT = ["_qa_support.py"]
 
 # The two checks CI runs before any of the above. They were missing here, so a
 # green run of this script did not mean a green run on GitHub -- a signature
@@ -71,7 +74,25 @@ STATIC = [
      + sorted(glob.glob(os.path.join(ROOT, "noteorganizer", "ui", "*.py")))),
     ("class surface unchanged", [sys.executable,
                                  os.path.join("tools", "check_class_api.py")]),
+    # The third gate, added 2026-09-11: a question the app asks in
+    # several places, answered by a hand-rolled field list at each one,
+    # is how every review-caught omission in this project happened. This
+    # is the grep that would have caught them, run every time.
+    ("one definition per judgement",
+     [sys.executable, os.path.join("tools", "check_one_definition.py")]),
 ]
+
+
+# Every child runs in UTF-8, whatever the console it was launched from.
+#
+# The qa scripts print check names containing emoji and box glyphs, and a
+# default Windows console is cp1252: `print` then raises
+# UnicodeEncodeError mid-run and takes the script down. Three suites died
+# that way on a plain `py tools/run_tests.py`, which is the door CLAUDE.md
+# tells everyone to use -- and it is why an entire review wave declared it
+# had run no tests at all. The runner owns the child environment, so it
+# sets this rather than asking each caller to remember two env vars.
+CHILD_ENV = dict(os.environ, PYTHONUTF8="1", PYTHONIOENCODING="utf-8")
 
 
 def _present(names, folder=ROOT):
@@ -92,7 +113,7 @@ def build_scratch():
     for name in _present(STANDALONE):
         shutil.copy2(os.path.join(ROOT, name), scratch)
     qa_dir = os.path.join(ROOT, "qa")
-    for name in _present(QA, qa_dir):
+    for name in _present(QA + QA_SUPPORT, qa_dir):
         shutil.copy2(os.path.join(qa_dir, name), scratch)
     return scratch
 
@@ -112,7 +133,8 @@ def run_one(scratch, script):
     wipe_data(scratch)
     started = time.time()
     proc = subprocess.run([sys.executable, script], cwd=scratch,
-                          capture_output=True, text=True, timeout=600)
+                          capture_output=True, text=True, timeout=600,
+                          env=CHILD_ENV, encoding="utf-8", errors="replace")
     took = time.time() - started
     out = proc.stdout or ""
     # "FAIL " with the space, deliberately: a failing check prints
@@ -126,11 +148,22 @@ def run_one(scratch, script):
 def run_static(name, cmd):
     """Run one static check against the project itself. Read-only."""
     started = time.time()
-    proc = subprocess.run(cmd, cwd=ROOT, capture_output=True, text=True, timeout=600)
+    proc = subprocess.run(cmd, cwd=ROOT, capture_output=True, text=True,
+                          timeout=600, env=CHILD_ENV, encoding="utf-8",
+                          errors="replace")
     return proc.returncode, time.time() - started, (proc.stdout or "") + (proc.stderr or "")
 
 
 def main(argv):
+    # Same reason as CHILD_ENV, for THIS process: it echoes the children's
+    # failing check names, glyphs and all, and a cp1252 console would
+    # raise on the first one -- turning a readable report into a
+    # traceback.
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")
+        except (AttributeError, ValueError):
+            pass
     keep = "--keep" in argv
     wanted = [a for a in argv[1:] if not a.startswith("--")]
 

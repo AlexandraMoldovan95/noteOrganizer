@@ -26,6 +26,9 @@ day-to-day tracking.
 | [The duplicate that wasn't a copy](#the-duplicate-that-wasnt-a-copy) | A "copy" that shares its source's files isn't one — the class is every route that clones a note, not the route reported. | 0.71.119 |
 | [The mend that only ran on the way to disk](#the-mend-that-only-ran-on-the-way-to-disk) | A repair at one serialization boundary is a todo list for the others; and UnicodeEncodeError is a ValueError, not an OSError. | 0.71.119 |
 | [The safety request the dialog never read](#the-safety-request-the-dialog-never-read) | A `**kw` wrapper that forwards a subset silently swallows the rest — callers' safety asks can be dead code for months. | 0.71.119 |
+| [The note the editor let you make and the launcher deleted](#the-note-the-editor-let-you-make-and-the-launcher-deleted) | A predicate that enumerates a type's fields comes due silently the day someone adds one — and two that disagree is data loss waiting for its first user. | 0.71.154 |
+| [Two windows, one file, and the last one to autosave wins](#two-windows-one-file-and-the-last-one-to-autosave-wins) | Full-file rewrites turn concurrency into data loss; a guard over data must fail open where its own failure would be worse. | 0.71.154 |
+| [The trim that moved every colour](#the-trim-that-moved-every-colour) | When a transformation forces a second function to undo its effect, the transformation is the bug — and tidying what the user typed is a data change. | 0.71.154 |
 | [The template editor that "did nothing" when clicked](#the-template-editor-that-did-nothing-when-clicked) | 'Nothing happens' in a --windowed build is a real bug report — the exception was invisible. | 0.3.0 |
 | [The panel that lost its content depending on how you got there](#the-panel-that-lost-its-content-depending-on-how-you-got-there) | Recalculate layout on Tk's `<Map>` event, not after a guessed delay. | 0.3.0 |
 | [The scroll that stopped twice, for two different reasons](#the-scroll-that-stopped-twice-for-two-different-reasons) | Same symptom, unrelated causes — check neighbouring areas instead of assuming one fix covers all. | 0.28.38 |
@@ -35,6 +38,8 @@ day-to-day tracking.
 | [The bullet that had no bullet in it](#the-bullet-that-had-no-bullet-in-it) | Text inserted between same-tagged characters inherits the tag; content, not presentation tags, decides state. | 0.34.51 |
 | [The text box that was always eighty characters wide](#the-text-box-that-was-always-eighty-characters-wide) | When a check passes, ask what it would take to make it fail. | 0.38.59 |
 | [The list that lost its place, twice, for two silent reasons](#the-list-that-lost-its-place-twice-for-two-silent-reasons) | 'Hard to reproduce' means unmeasured timing; instrument what the widget experiences until it's deterministic. | 0.58.82 |
+| [The click that was never delivered](#the-click-that-was-never-delivered) | Tk discards a generated event aimed at a widget with no native window, in silence — and `winfo_ismapped`/`winfo_viewable` do not predict delivery. | 0.71.154 |
+| [The safety net that could not see the gap](#the-safety-net-that-could-not-see-the-gap) | A gate tuned to the instances it already found certifies the ones it cannot see — worse than no gate, because the next reader trusts it. | 0.71.154 |
 | [A calendar that kept navigating behind the user's back](#a-calendar-that-kept-navigating-behind-the-users-back) | Changing how a page becomes visible invalidates 'is X visible' assumptions in unrelated code. | 0.5.0 |
 | [The date field that either lost your edit, or wouldn't let you finish typing it](#the-date-field-that-either-lost-your-edit-or-wouldnt-let-you-finish-typing-it) | Reusing Save's validation in silent autosave turns a helpful warning into an interruption. | 0.28.38 |
 | [The autosave that could interrupt you over a note that was already gone](#the-autosave-that-could-interrupt-you-over-a-note-that-was-already-gone) | A guard added to one path doesn't cover other routes into the same code. | 0.28.38 |
@@ -468,6 +473,159 @@ vocabulary real), then a sweep that classifies every caller against an
 explicit criterion — here "is it irreversible?" — so the next reader
 knows which confirms are safe by choice, not by omission.
 
+### The note the editor let you make and the launcher deleted
+
+*([0.71.154](../CHANGELOG.md#071154--2026-09-11) · 2026-09-11)*
+
+**Symptom:** Found by the product review. Create a note with no title
+and no body but a checklist of three items. It saves, it appears in the
+list, it is yours. Restart the app and it is gone — not in the Trash,
+gone. Executed on a seeded notebook: five notes in, two notes out.
+
+**Root cause:** two field lists that never grew with the app. The
+startup clean-up asks `note_is_empty`, which judged by title, body,
+comments and attachments — checklists, repeat rules and dates all
+arrived later and were never added — while `_autosave_now` explicitly
+counts a checklist as real content. One part of the app was creating
+notes another part deleted as empty. The duplicate signature carried the
+same gap, `(title, body, comments, category, date)`, so two notes
+differing only in their checklists collapsed into one. And the clean-up
+re-arms whenever `settings.json` is unreadable, so this was never a
+once-ever risk.
+
+**Fix:** both judgements now cover everything a note can actually hold —
+and the adversarial review of the first fix found the class was wider
+still: the stale-copy purge (which authorises an IRREVERSIBLE delete of a
+leftover notebook folder, every launch) still judged by the old five
+fields, and Find-duplicates plus all three import scans ignored
+checklists and repeat rules though neither is merged on cleanup. There
+is now ONE `content_signature` in the data core; every consumer calls
+it, and a test bends the definition to prove each consumer follows —
+the check that fires the day someone grows a private field list again.
+The recurrence component signs by MEANING, not representation: a raw
+`{}` and a fully-defaulted no-repeat dict are the same rule, and
+signing them differently (the first draft did) split every raw-vs-
+normalized comparison.
+
+**Takeaway:** a predicate that enumerates a data type's fields is a debt
+that comes due in silence, on the day someone adds a field — the same
+shape as
+[The centring that would not save itself](#the-centring-that-would-not-save-itself).
+Two such predicates that disagree with each other are not an
+inconsistency; they are a data-loss bug waiting for its first user.
+
+### Two windows, one file, and the last one to autosave wins
+
+*([0.71.154](../CHANGELOG.md#071154--2026-09-11) · 2026-09-11)*
+
+**Symptom:** Found by the product review and reproduced by two
+independent verifiers with two real app processes. Open the app twice —
+a taskbar pin and a Start-menu entry is enough — write in both, and
+whichever window autosaves last silently erases everything the other
+wrote. No warning, nothing recoverable in the Trash.
+
+**Root cause:** nothing anywhere prevented a second instance: no lock,
+no PID file, no modification-time check, no reload. Each process loads
+the whole notebook into memory and every save rewrites the file whole,
+so the two copies diverge from the first keystroke and the file only
+ever holds the last writer's version of everything.
+
+**Fix:** a single-instance guard taken before the app window is built;
+a second launch says the notebook is already open and steps aside.
+Deliberately a file lock (`msvcrt.locking` on Windows, `fcntl.flock`
+elsewhere) rather than a PID file, because the kernel releases it
+however the process dies — a crash, or End task from the Task Manager,
+cannot leave a stale lock that keeps the owner out of their own notes.
+And when the lock file itself cannot be created, `acquire()` reports
+success: refusing to start because a *lock* failed would turn a
+cosmetic problem into "the app won't open".
+
+**Takeaway:** a full-file rewrite makes concurrency a data-loss bug
+rather than a merge problem — the moment two writers are possible, the
+last one wins everything. And a guard that protects data must fail open
+wherever its own failure would be worse than what it guards against —
+which the first version got wrong in the fine print: it read EVERY
+locking error as "already open", so a folder whose filesystem cannot do
+byte-range locks at all would have bricked the app. Only the
+someone-holds-it errnos refuse now. The review also proved the guard was
+implemented but UNWITNESSED: deleting it from `_main()` left every
+suite green, so a subprocess driver now walks the real launch path and
+asserts both answers — the tested-library-untested-call-site gap, on
+the one call site a user ever travels through.
+
+### The trim that moved every colour
+
+*([0.71.154](../CHANGELOG.md#071154--2026-09-11) · 2026-09-11)*
+
+**Symptom:** Found by the product review. A body typed with an indented
+first line and a couple of blank lines at the end came back reshaped
+after a save — a pasted code block or a quoted email lost its shape.
+Harder to see, and worse: in some notes a colour or a bold started a
+character or two away from where it had been.
+
+**Root cause:** the save read the body as
+`get("1.0", "end").strip()`. The trim removes the first line's
+indentation and every trailing blank line — already a silent edit of
+what the user typed. But the styling spans and paragraph marks are
+captured from the Text widget's own indices, which count the
+*untrimmed* text, so once the leading whitespace was gone every span
+described a different string than the one being stored. The codebase
+even carried the evidence: two adapters,
+`_extract_formatting_for_stripped_body` and
+`_extract_paragraphs_for_stripped_body`, whose entire job was to shift
+the spans back — a correction for a problem that existed only because
+of the trim.
+
+**Fix:** read `end-1c` and stop trimming. The body is stored exactly as
+the widget holds it, the spans are measured against that same text, and
+the two shifting adapters are deleted — the entry file came out of this
+fix two functions shorter. Emptiness is still judged on a trimmed copy,
+because that question really is about whitespace; what gets *stored*
+never is.
+
+**Takeaway:** when a transformation forces you to write a second
+function that undoes its effect on related data, the transformation is
+the bug, and the adapter is the symptom telling you so. And "tidying"
+content the user typed is a data change wearing cosmetic clothes.
+
+**The half the first fix missed:** the change DETECTOR still compared
+`.strip()`ed bodies, so a whitespace-only edit read as "no change" —
+the autosave, the flush and the dirty dot all ignored exactly the
+characters the save had just learned to keep, and nothing automatic
+ever wrote them. A promise kept by the writer means nothing if the gate
+in front of the writer cannot see the difference; the comparator now
+compares the body exactly as stored.
+
+### The safety net that could not see the gap
+
+*([0.71.154](../CHANGELOG.md#071154--2026-09-11) · 2026-09-11)*
+
+**Symptom:** A static gate was written specifically so that one class of
+omission — a question the app asks in several places, answered by a
+hand-rolled field list at each one — "cannot come back quietly". It
+reported the codebase clean. A review wave, running at the same time,
+found a live instance of exactly that class: the share-as-code guard,
+refusing a checklist-only note the app had just saved as real content.
+
+**Root cause:** the gate's pattern required THREE content-field names in
+the same window of lines, because the three instances that prompted it
+all had at least three. The share guard enumerated two. A net woven from
+the shape of what it had already caught was blind, by construction, to
+the *under-inclusive* guards — which are precisely the ones that lose
+data, since an over-inclusive guard merely asks an unnecessary question.
+
+**Fix:** the threshold is two, and the reason is written above the
+pattern rather than left implicit. With it widened, the gate found the
+share guard in its first second — the same defect a 9.9-million-token
+review wave had reported, for the cost of a grep.
+
+**Takeaway:** a detector built from the examples you already have will
+match the examples you already have. Ask what a WEAKER instance of the
+class would look like and make sure the pattern still catches it —
+before the clean report starts being used as evidence. And a gate that
+reports clean over a known-live instance is not merely incomplete: it
+actively certifies the gap, and the next reader believes it.
+
 ## Tk & platform gotchas
 
 *Where the toolkit's own behaviour was the bug: quiet defaults, platform differences, ordering rules.*
@@ -667,6 +825,65 @@ in stages, each stage fires its own Configure; an embedded window
 scrolled out of view stops being resized, taking its Configure events
 with it; and a scrollregion is a claim, not a fact — refresh it from
 `bbox` before trusting any fraction math built on it.
+
+### The click that was never delivered
+
+*([0.71.154](../CHANGELOG.md#071154--2026-09-11) · 2026-09-11)*
+
+**Symptom:** qa2's check "clicking five chips saves exactly the
+3-marker cap" failed three runs out of three on one machine and passed
+on another with identical code. Instrumented mid-run, every chip still
+read `highlightthickness=0`: not one of the five clicks had ever run its
+binding. The decisive experiment — today's check against the *previous*
+release's app code — failed too, which ruled out the regression it
+looked like and named it a flake in the check.
+
+**Root cause:** Tk discards a generated `<Button-1>` when the target
+widget has no native window yet, in complete silence — no error, no
+return value, the binding simply never runs and every assertion after it
+is about state nothing was asked to change. A widget gets that window
+when it is first mapped, and the app hides its popups whenever another
+program holds the Windows foreground (they are `-topmost` by design, so
+a heartbeat withdraws them rather than let them float over other
+people's windows). A test process never owns the foreground — the
+terminal that launched it does. So every popup click in the suite was
+really asking "did the 300 ms heartbeat tick before my click?".
+
+Both obvious predicates are wrong, which is what made the first fix
+attempt worse than the bug: measured directly, a widget scrolled out of
+a canvas and a popup that was mapped and then withdrawn each report
+`winfo_ismapped()` and `winfo_viewable()` as 0 **and receive events
+perfectly well**. Gating on them refused qa6's category swatch, which
+merely sits below the fold of a scrolling settings panel — on Windows
+and on Linux alike.
+
+**Fix:** ask for `winfo_id()` first. It is not a query: it calls Tk's
+`Tk_MakeWindowExist`, so the native window is created on the spot and
+the event has somewhere to land. Measured side by side, a never-mapped
+popup child receives the click after `winfo_id()` and drops it without.
+All 26 generated clicks across qa1, qa2, qa6, qa7 and qa9 go through one
+helper (`qa/_qa_support.py`), and popup visibility is pinned so it no
+longer depends on who owns the OS foreground — the app's real
+hide-and-restore behaviour keeps its own coverage in qa1, which drives
+the heartbeat directly with both answers stubbed.
+
+**The class was wider than the click:** Tk delivers EVERY generated
+pointer event — press, release, drag motion, wheel, hover — to the
+window named in the event, so all of them shared the failure; the first
+sweep converted the 26 bare clicks and left 48 siblings raw, which the
+completeness critic counted. All pointer events go through one door now
+(`fire()`, with `click()` as its shorthand), and that door refuses
+KEYBOARD events loudly: a generated key follows the FOCUS, wherever it
+was aimed, so the window repair would be a lie for it — key events keep
+the focus discipline instead, and the six sites that aimed keys off an
+unpolled focus_force got insist-loops the same day.
+
+**Takeaway:** an input event with no error path is a silent no-op, and a
+silent no-op inside a test is worse than a crash — it can produce a
+false green just as easily as a false red, on any check asserting that
+some click did *nothing*. Sibling of
+[The chip that looked clickable, and the fix that looked like it worked](#the-chip-that-looked-clickable-and-the-fix-that-looked-like-it-worked):
+the same widget-visibility machinery, met from the other direction.
 
 ## Editor & input interaction
 

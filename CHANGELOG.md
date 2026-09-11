@@ -12,6 +12,7 @@ How the numbers themselves are counted is the
 
 | Version | Date | In one line |
 |---|---|---|
+| [0.71.154](#071154--2026-09-11) | 2026-09-11 | The product review's Tier 0 closed whole — every way the app could lose, mangle or refuse your work, then closed again where three adversarial passes proved the class was wider than the finding. |
 | [0.71.135](#071135--2026-09-10) | 2026-09-10 | Removing an attachment asks first — the one permanent delete that skipped every confirmation, closed by the destructive-gesture sweep. |
 | [0.71.134](#071134--2026-09-10) | 2026-09-10 | Nine audit small classes closed — the calculator, bleeding paste styles, honest Select-all, nested Escape, pasted tables, whole backups, autosave traces and a theming leak. |
 | [0.71.125](#071125--2026-09-10) | 2026-09-10 | Six audit medium classes swept whole — visible carets and honest saves, atomic exports that closing waits for, tables that redraw and hold the view, emoji-proof clicks and finds. |
@@ -54,6 +55,176 @@ How the numbers themselves are counted is the
 ---
 
 ## [Unreleased]
+
+## [0.71.154] — 2026-09-11
+
+*Highlights: the product review's Tier 0 — every way the app could lose, mangle or
+refuse your work — closed at the root of each class and then closed again where the
+adversarial review of the first round proved the class was wider than the finding.*
+
+### Fixed
+- **A checklist-only note is a real note, to every part of the app that asks.** The
+  startup clean-up judged a note empty by its title, body, comments and attachments
+  alone, so a note whose content was its checklist (or repeat rule, or date) was deleted
+  on the next launch — not moved to the Trash, simply gone. The first fix widened that
+  one test; the adversarial review then found the same blind spot in three more places
+  that answer "is this the same note?": the stale-copy purge — which authorises an
+  irreversible delete of a leftover notebook folder on every launch — still judged by
+  the old five fields, and Find-duplicates plus all three import scans ignored
+  checklists and repeat rules entirely, though neither is merged when a duplicate is
+  cleaned up. There is now ONE content signature in the data core that every consumer
+  calls (with a check that fails the day anyone grows a private copy again); duplicate
+  matching counts the checklist and the repeat rule, and deliberately keeps ignoring
+  attachments, which the clean-up genuinely merges. From the product review, widened by
+  the adversarial review.
+- **One notebook, one window — and the lock can only ever refuse for the right
+  reason.** Nothing stopped a second copy of the app opening on the same notes; both
+  rewrote the file whole, so whichever autosaved last silently erased the other's work.
+  A second launch now says the notebook is already open and steps aside. The guard is an
+  OS file lock the kernel releases however the process dies, so a crash can never lock
+  you out — and only the errnos that mean "another process holds it" refuse: a folder
+  whose filesystem cannot do locks at all (network shares, exotic mounts) starts
+  normally, where the first version of the guard read every locking error as "already
+  open" and would have bricked the app on exactly those folders. From the product
+  review; the fail-open repair from the adversarial review.
+- **Importing your own backup brings your whole filing system back.** The backup zip has
+  always carried settings.json and the import never read it: categories flattened to
+  "General" under an "Import complete" message, and the calendar's day colours and emoji
+  markers vanished entirely. Both now restore — additively, never overwriting this
+  device's own — and the completion message names what came back. The categories merge
+  runs BEFORE the duplicate scan, because the scan re-files unknown categories to
+  General first, and a distinct note could read as a duplicate of a local General note
+  and be silently skipped. From the product review, the scan order and day decor from
+  the adversarial review.
+- **A note body keeps the shape you gave it — and the app can now SEE that it did.**
+  Every save trimmed leading/trailing whitespace, reshaping pasted code and quoted
+  email, and drifting every styling span measured against the untrimmed text. The save
+  now stores the body exactly as typed — and the change detector compares it exactly as
+  typed too: the first fix left the dirty check stripping both sides, so a
+  whitespace-only edit read as "no change" and the automatic saves threw away precisely
+  the characters the save had just learned to keep. The same canonicalisation reaches a per-day edit of a repeating note, which is shown in the same editor: without it such a day read as permanently unsaved and raised a save-scope question nobody had asked for — whose “whole series” answer replaced the note's text with that one day's. From the product review, the
+  detector half from the adversarial review.
+- **A saved note can be emptied, on every route there is.** Clearing a note and
+  switching away brought the old text back: the app asked "is the editor empty?" in six
+  different hand-rolled places, and the first fix taught the answer to one of them — the
+  autosave and flush gatekeepers in FRONT of it still discarded the emptying, so the
+  finding's own scenario was unchanged. One shared content test now answers everywhere
+  (Save, Ctrl+S, the autosave timer, the note-switch flush, the back-to-calendar guard,
+  the template-replace question — which also learned that attachments and checklists
+  deserve the "replace?" question before a template wipes them). Comments count as
+  content on every route, closing a sibling hole where a comments-only note was
+  discarded with a false "Write something before saving!". The automatic routes still
+  refuse a date-only never-saved editor — the calendar prefills the date field, and an
+  abandoned day-click must not autosave itself into a junk note. The rescue copy behind “Restore previous” follows it: that copy used to appear only when a lot of text vanished at once, which was enough while an emptied note could not be saved at all, so a short note cleared by accident keeps one too now. Ctrl+S and the Save button agree throughout, including about a note holding only a date: both are the user asking. And the way back from a calendar note never blocks on an edit no automatic route would persist — a new note holding only a repeat rule used to make “Back to Calendar” a dead button. From the product
+  review, swept whole by the adversarial review.
+- **"Restore previous" survives a restart — and an aborted save.** The rescue copy was
+  discarded by the next launch while the button offering it looked permanent; it is now
+  part of the note's known shape. And restoring no longer spends the copy up front: the
+  old order deleted it and then ran a save with several legitimate abort paths (a
+  half-typed date, a cancelled question), losing the copy and the restore in one
+  stroke. The copy is cleared only after the save provably landed. From the product
+  review, the ordering from the adversarial review.
+- **A pasted share code can't brick the app through a field with no size limit.**
+  Checklists had no size limit anywhere: a 60 KB code carrying twenty thousand items was
+  saved first and then killed the app on every launch after. Checklists are now capped
+  at 1000 items at the choke point every route passes through — templates included,
+  which the first cap missed — and the sibling fields met the same review: styling spans
+  gained an anti-bomb ceiling (generous enough that a long Word-paste's thousands of
+  legitimate spans are never touched), attachment records a ceiling of 200. When an
+  oversized note does arrive, the import says it was trimmed instead of losing 19,000
+  items in silence. From the product review, the siblings from the adversarial review,
+  the numbers from measurement.
+- **The warn-before-opening list knows today's dangerous files — and can't be fooled by
+  a trailing dot.** The list covered the classic executables and missed the vehicles
+  actually used to deliver code now (.lnk, .url, .iso, .img, .chm, .scf, .appref-ms,
+  .settingcontent-ms and more); a shortcut arriving inside an imported backup opened
+  with no question at all. All warn first now, with "No" pre-selected. And the check
+  can no longer be smuggled past: Windows strips trailing dots and spaces when opening a
+  path, so "invoice.lnk. " read as extension-less to the gate while the OS executed the
+  .lnk — stored names are normalised at the data choke point and the gate strips before
+  deciding, so the name it inspects and the file the OS opens can never disagree. From
+  the product review, the smuggle from the adversarial review.
+- **A colour the app can't draw can't keep it from opening.** Colour strings arrive from
+  every untrusted door — a share code, a backup's settings.json, a hand-edited file —
+  and end their journey in a Tk configure(), which crashes on garbage; because a note is
+  saved before it is first drawn, one bad value meant a crash on every launch after.
+  Every intake now validates: a note's own colour, imported category colours, and the
+  calendar's day colours, on load and on import alike. Found by the adversarial review
+  as the checklist-bomb class wearing a different field.
+- **A malformed attachment record can't corrupt the note next door.** One record without
+  a filename aborted the note-load halfway through its render, leaving the editor still
+  holding the PREVIOUS note's checklist — which the next save then wrote onto the note
+  you had tried to open. Records are normalised at the data choke point (names
+  guaranteed, nameless records dropped) and the render no longer trusts a field to
+  exist. Found by the adversarial review.
+- **A fresh install no longer opens with a maintenance report.** The one-time clean-up
+  announced itself even when it had nothing to say, so the literal first screen of the
+  product was a blocking modal about "IDs renumbered 1–0" over an empty notebook. It now
+  speaks only when it actually removed something. From the product review.
+- **A note you can only see one day of still saves what you change.** Tick an item on a
+  repeating note's checklist while looking at a single day and the tick went nowhere: the
+  editor asked for the save and the change-detector vetoed it, because in that view it
+  only ever compared the five fields a per-day edit can carry. Everything the series owns
+  — the checklist, the files, the date, the repeat rule — is compared against the note
+  itself now, which is where the editor read them from in the first place. From the
+  product review's second wave.
+- **Sharing a note as a code no longer refuses the note.** A note whose content is its
+  checklist, or its comments, was told "Write something before copying a code" — about a
+  note the app had just saved, and whose code would have carried that content perfectly
+  well. From the product review's second wave.
+- **A leftover notebook folder is only deleted when it really is a duplicate.** The
+  start-up tidy-up that removes old copies of your notes compared them by text alone, so
+  a folder whose notes differed only in their styling, their layout, their per-day edits
+  or their skipped dates was judged "already covered" and deleted — while the message on
+  screen said nothing had been removed unless it already existed. It now compares
+  everything a note holds before deleting anything. From the product review's second wave.
+- **A colour on a single day of a repeating note can't stop the app opening.** Per-day
+  edits carry their own colour, and that one was never checked: a bad value from a share
+  code, a backup or a hand-edited file reached the calendar's drawing code on every
+  launch. It is validated like every other colour now, and the day's text edit survives
+  even when its colour does not. From the product review's second wave.
+- **Your categories can't be turned into a wall.** The category list is read from
+  settings and from any backup you import, and the sidebar draws one entry for each with
+  its full name — with no limit on either, a hand-edited file or a hostile backup could
+  make the app unopenable through a door nothing was watching. The limit leaves an over-long name out rather than shortening it: a shortened name would stop matching the notes filed under it, which is worse than the problem it solves. From the product review's
+  second wave.
+- **"Save as template" stopped calling a checklist a nothing.** A note whose content was
+  its checklist was refused with "This note is empty" — by the same screen whose template
+  goes on to store that checklist. From the product review's second wave.
+- **"Restore previous" on a repeating note brings the note back, not a muddle.** It used
+  to travel through the ordinary save, which on a repeating note asks whether you mean
+  this day or the series: answering "this day" filed the recovered text as a per-day edit
+  — plain text only, so the styling came back stripped, the note itself stayed shortened,
+  and the rescue copy was spent anyway under a cheerful "Restored". It writes the note
+  directly now, and says plainly that it restores the whole note. From the product
+  review's second wave.
+- **Changing something the whole series owns no longer asks an impossible question.**
+  Tick a checklist item while looking at one day and the app asked whether you meant
+  that day or the series — but a per-day edit can only hold text, so "this day" had
+  nowhere to put the tick: it wrote a copy of the series' own words over that day,
+  dropped the tick, and asked again the next time. It saves to the series now, without
+  asking, and still asks whenever the edit is one a single day really can carry. From
+  the product review's third pass.
+### Testing
+- Every fix above carries a regression check born red-under-mutation: the emptiness and
+  whitespace checks drive the real gestures (the autosave timer's callee, the
+  note-switch flush, Ctrl+S) rather than the writer those gestures guard; the
+  single-instance guard's wiring is witnessed end-to-end by a subprocess driver that
+  proves _main() consults the lock and honours both answers — deleting the guard used to
+  leave every suite green; and the shared content signature has a delegation check that
+  fails the day a consumer grows a private field list again.
+- **The dropped-event class is closed for every generated POINTER event, not just bare
+  clicks.** Tk silently discards any pointer event aimed at a widget with no native
+  window; the first sweep converted the 26 bare Button-1 calls and left 48 siblings
+  (coordinate clicks, releases, drags, wheel and hover events) on the raw pattern. All
+  go through one helper now, which also refuses KEY events loudly — those follow the
+  focus, not the window, and the six places that aimed keys without a settled focus got
+  the suite's focus discipline instead. One drag stays raw on purpose: its canvas is
+  deliberately dead, and the TclError from the corpse is the point.
+- The wave that found this round's work: 13 hostile reviewers, three refute-by-default
+  verifiers per material finding, and a completeness critic over the whole exchange —
+  33 findings survived, and the critic's audit of the wave itself (which findings were
+  wrongly refuted, what nobody ran) drove three of the fixes above.
 
 ## [0.71.135] — 2026-09-10
 

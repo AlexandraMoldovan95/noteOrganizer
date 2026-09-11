@@ -953,6 +953,482 @@ finally:
     _storage.on_write_failure = _real_wf_cb
     shutil.rmtree(_wf_dir, ignore_errors=True)
 
+# ---- The one-time cleanup must not delete real notes (product review T0-1) ----
+# note_is_empty decides what the cleanup DESTROYS, so it has to mean the
+# same thing by "content" as the editor does. It counted title/body/
+# comments/attachments only, while save_current_note happily saves a note
+# that is nothing but a checklist -- so the app created notes its own
+# cleanup then deleted, with no Trash and no undo.
+_model = NO
+check("a checklist-only note is not 'empty'",
+      not _model.note_is_empty({"title": "", "body": "", "comments": "",
+                                "attachments": [],
+                                "checklist": [{"text": "milk", "done": False}]}))
+check("a repeating note with no text is not 'empty' either",
+      not _model.note_is_empty({"title": "", "body": "", "comments": "",
+                                "attachments": [], "checklist": [],
+                                "recurrence": {"freq": "weekly"}}))
+check("a dated note with no text is not 'empty' either",
+      not _model.note_is_empty({"title": "", "body": "", "comments": "",
+                                "attachments": [], "checklist": [],
+                                "date": "2026-07-01"}))
+check("a genuinely blank note still is",
+      _model.note_is_empty({"title": "  ", "body": "", "comments": "",
+                            "attachments": [], "checklist": []}))
+
+# ...and two notes that differ only in what is TICKED are two notes.
+_dup_a = _model.normalize_note({"id": 1, "title": "Groceries", "body": "",
+                                "checklist": [{"text": "milk", "done": True}]})
+_dup_b = _model.normalize_note({"id": 2, "title": "Groceries", "body": "",
+                                "checklist": [{"text": "milk", "done": False}]})
+_cleaned, _stats = _model.clean_notes([_dup_a, _dup_b])
+check("notes differing only by their checklist are not merged away",
+      len(_cleaned) == 2 and _stats["duplicates_removed"] == 0)
+_same_a = _model.normalize_note({"id": 1, "title": "Same", "body": "x"})
+_same_b = _model.normalize_note({"id": 2, "title": "Same", "body": "x"})
+check("genuinely identical notes still collapse",
+      len(_model.clean_notes([_same_a, _same_b])[0]) == 1)
+
+# ---- A pasted share code cannot make a note that kills the app (T0-7) ----
+# Every checklist item becomes four widgets at render time and nothing
+# capped the count: 20,000 items is a 60KB code that passes every decoder
+# guard, and the app never starts again once the note is saved.
+_bomb = _model.normalize_note(
+    {"id": 1, "title": "bomb",
+     "checklist": [{"text": "x", "done": False}] * 20000})
+check("normalize_note caps the checklist at the data choke point",
+      len(_bomb["checklist"]) == _model.MAX_CHECKLIST_ITEMS)
+check("and the cap is far above any real list",
+      _model.MAX_CHECKLIST_ITEMS >= 500)
+
+# ---- The rescue copy survives a restart (T0-6) ----
+# _prev is written to disk by the save that shrank the note, but was not
+# in the schema -- so the next launch discarded it while the button still
+# offered to restore from it.
+_with_prev = _model.normalize_note(
+    {"id": 1, "title": "t", "body": "short",
+     "_prev": {"title": "t", "body": "the long original text",
+               "comments": "", "formatting": [], "paragraphs": []}})
+check("normalize_note carries the restore-previous copy through",
+      _with_prev.get("_prev", {}).get("body") == "the long original text")
+check("a junk _prev is dropped rather than trusted",
+      "_prev" not in _model.normalize_note({"id": 1, "_prev": "nonsense"}))
+
+# ---- One malformed id cannot break every "new note" forever ----
+# id was the single field normalize_note passed through untouched, so a
+# hand-edited or foreign notes_data.json broke max([n["id"]...]) + 1 on
+# every route that makes a note.
+check("a string id is coerced to an int",
+      _model.normalize_note({"id": "7"})["id"] == 7)
+check("an unusable id falls back to 0 instead of poisoning the list",
+      _model.normalize_note({"id": ["nope"]})["id"] == 0
+      and _model.normalize_note({"id": None})["id"] == 0)
+_mixed = [_model.normalize_note({"id": "3", "title": "a"}),
+          _model.normalize_note({"id": 5, "title": "b"})]
+check("so the next-id arithmetic still works on a repaired list",
+      max(n["id"] for n in _mixed) + 1 == 6)
+
+# ---- One notebook, one app (product review T0-2) ----
+# Two windows on the same data directory each hold their own copy of the
+# whole notebook, and every save rewrites the file wholesale -- so the
+# second one to autosave silently deletes everything the first wrote.
+# The guard is an OS file lock, which the kernel releases however the
+# process dies, so a crash can never lock a user out of their own notes.
+import subprocess as _sp
+from noteorganizer.core import single_instance as _si
+
+_lock_dir = tempfile.mkdtemp()
+_lock_path = os.path.join(_lock_dir, "notebook.lock")
+_PROBE = (
+    "import sys; sys.path.insert(0, %r);"
+    "from noteorganizer.core import single_instance as si;"
+    "print('GOT' if si.acquire(%r) else 'BLOCKED')"
+    % (os.path.dirname(os.path.abspath(__file__)), _lock_path))
+
+
+def _other_process_can_take_it():
+    out = _sp.run([sys.executable, "-c", _PROBE], capture_output=True,
+                  text=True, cwd=_lock_dir)
+    return "GOT" in out.stdout
+
+
+try:
+    check("a second process is refused while the first holds the notebook",
+          _si.acquire(_lock_path) is True
+          and _other_process_can_take_it() is False)
+    check("the holder knows it holds it", _si.held() is True)
+    check("taking it twice in one process is fine (qa builds several apps)",
+          _si.acquire(_lock_path) is True)
+    # Guarded: a release that leaves the handle behind blows up on the
+    # SECOND release (seek on a closed file), and a mutant must fail a
+    # check rather than take the suite down before its footer.
+    try:
+        _si.release()
+        _released_cleanly = True
+    except Exception:
+        _released_cleanly = False
+    check("releasing hands it straight over -- no stale lock to strand anyone",
+          _released_cleanly and _other_process_can_take_it() is True)
+    check("and the holder knows it let go",
+          _released_cleanly and _si.held() is False)
+    # The LOCKING call's failure mode, separately from open()'s: a
+    # filesystem that cannot do byte-range locks answers the lock call
+    # with EINVAL/ENOLCK/EOPNOTSUPP, and reading that as "already open"
+    # bricked the app on exactly those folders (adversarial review,
+    # reinstated by the completeness critic after the wave misjudged it).
+    # Only the someone-holds-it errnos may refuse.
+    import errno as _errno
+    import noteorganizer.core.single_instance as _si_mod
+
+    def _acquire_with_lock_error(err):
+        if os.name == "nt":
+            import msvcrt as _lockmod
+            attr = "locking"
+        else:
+            import fcntl as _lockmod
+            attr = "flock"
+        real = getattr(_lockmod, attr)
+
+        def _boom(*a, **k):
+            raise OSError(err, "synthetic lock failure")
+
+        setattr(_lockmod, attr, _boom)
+        try:
+            got = _si_mod.acquire(os.path.join(_lock_dir, "errno_probe.lock"))
+        finally:
+            setattr(_lockmod, attr, real)
+            try:
+                _si_mod.release()
+            except Exception:
+                pass
+        return got
+
+    check("a filesystem that cannot lock at all fails OPEN, not closed",
+          _acquire_with_lock_error(_errno.EINVAL) is True
+          and _acquire_with_lock_error(_errno.ENOSYS) is True)
+    check("while a lock genuinely held elsewhere still refuses",
+          _acquire_with_lock_error(_errno.EACCES) is False
+          and _acquire_with_lock_error(_errno.EAGAIN) is False)
+
+    # A lock that cannot be created must never stop the app from starting:
+    # refusing to open because a LOCK failed is worse than what it guards.
+    check("an uncreatable lock file reports success rather than blocking",
+          _si.acquire(os.path.join(_lock_dir, "no_such_dir", "x.lock")) is True)
+    try:
+        _si.release()
+    except Exception:
+        pass
+finally:
+    try:
+        _si.release()
+    except Exception:
+        pass
+    shutil.rmtree(_lock_dir, ignore_errors=True)
+
+# ---- ONE content signature, every consumer (T0-1 swept to its class) ----
+# The dedup fixed its field list and the stale-copy purge -- which gates
+# an irreversible os.remove of a whole legacy notebook folder -- kept the
+# old five-field tuple, so notes differing only by checklist still read
+# as "fully covered" and were deleted. The fix is a single definition in
+# model.content_signature; these assert both the behaviour AND the
+# delegation, so the two can never drift apart silently again.
+from noteorganizer.core import paths as _paths_mod
+from noteorganizer.core import model as _model_mod
+from noteorganizer.core.duplicates import find_duplicate_groups as _fdg
+
+_base = {"title": "", "body": "", "comments": "", "category": "General",
+         "date": "", "formatting": [], "paragraphs": [], "attachments": []}
+_ck_milk = dict(_base, checklist=[{"text": "milk", "done": False}])
+_ck_gym = dict(_base, checklist=[{"text": "gym kit", "done": False}])
+
+check("checklist-differing notes carry different content signatures",
+      _model_mod.content_signature(_ck_milk)
+      != _model_mod.content_signature(_ck_gym))
+
+
+def _legacy_file(notes):
+    fd, p = tempfile.mkstemp(suffix=".json")
+    with os.fdopen(fd, "w", encoding="utf-8") as f:
+        _json.dump(notes, f)
+    return p
+
+
+_lf_both = _legacy_file([_ck_milk, _ck_gym])
+_lf_gym = _legacy_file([_ck_gym])
+try:
+    check("the purge no longer reads a checklist-differing folder as covered",
+          _paths_mod.is_redundant_copy(_lf_both, [_ck_gym]) is False)
+    check("a genuinely covered folder still purges (the feature survives)",
+          _paths_mod.is_redundant_copy(_lf_gym, [_ck_gym, _ck_milk]) is True)
+
+    # The delegation itself: bend the single definition and the purge's
+    # answer must bend with it. The fixtures DIFFER IN TITLE on purpose:
+    # a private (title, body, ...) copy answers False for them no matter
+    # what model says, while the bent shared signature collapses them to
+    # True -- so only genuine delegation can pass. (The first version of
+    # this check used title-less fixtures a private copy also collapsed,
+    # and the drift mutant survived it.)
+    _ta = _legacy_file([dict(_base, title="UnTitlu")])
+    _real_sig = _model_mod.content_signature
+    try:
+        _model_mod.content_signature = lambda n, strict=False: ("bent",)
+        check("the purge consults model.content_signature, not a private copy",
+              _paths_mod.is_redundant_copy(_ta, [dict(_base, title="AltTitlu")])
+              is True)
+    finally:
+        _model_mod.content_signature = _real_sig
+        try:
+            os.remove(_ta)
+        except OSError:
+            pass
+finally:
+    for _p in (_lf_both, _lf_gym):
+        try:
+            os.remove(_p)
+        except OSError:
+            pass
+
+# The purge asks a STRICTER question than the duplicate collapse, and
+# the difference is written down rather than drifting: styling, layout,
+# per-day edits and skipped dates are real work that does not show up in
+# the default signature, so a leftover notebook differing only in those
+# was judged "already covered" and deleted -- while the startup message
+# promised nothing was deleted unless it already existed locally.
+_fmt_a = dict(_base, title="Acelasi", body="text",
+              formatting=[{"start": 0, "end": 4, "style": "bold"}])
+_fmt_b = dict(_base, title="Acelasi", body="text")
+check("styling does NOT split a duplicate for the startup collapse",
+      _model_mod.content_signature(_fmt_a)
+      == _model_mod.content_signature(_fmt_b))
+check("but it DOES for the purge, whose wrong answer is unrecoverable",
+      _model_mod.content_signature(_fmt_a, strict=True)
+      != _model_mod.content_signature(_fmt_b, strict=True))
+for _field, _value in (("paragraphs", [{"line": 0, "kind": "bullet"}]),
+                       ("overrides", {"2026-01-01": {"title": "zi"}}),
+                       ("exceptions", ["2026-01-02"])):
+    check("the strict answer also sees %s" % _field,
+          _model_mod.content_signature(dict(_fmt_b, **{_field: _value}),
+                                       strict=True)
+          != _model_mod.content_signature(_fmt_b, strict=True))
+_lf_fmt = _legacy_file([_fmt_a])
+try:
+    check("a folder differing only in styling is NOT purged",
+          _paths_mod.is_redundant_copy(_lf_fmt, [_fmt_b]) is False)
+    check("...while a genuinely identical one still is",
+          _paths_mod.is_redundant_copy(_lf_fmt, [_fmt_a]) is True)
+finally:
+    try:
+        os.remove(_lf_fmt)
+    except OSError:
+        pass
+# Raw shapes off disk must never raise inside the signature: the purge
+# feeds it dicts parsed straight from a file, before any normalization,
+# and an exception there would abort a startup.
+check("the strict signature tolerates raw junk shapes",
+      _model_mod.content_signature(
+          {"formatting": {"a": [1, {"b": None}]}, "overrides": 7,
+           "exceptions": "nope", "paragraphs": object()},
+          strict=True) is not None)
+
+# Find-duplicates and the import scans share _dup_key; checklist and
+# recurrence joined its key (they are never merged, so a grouping there
+# destroys whichever copy is dropped), attachments deliberately did NOT
+# (cleanup hands the kept note the group's combined files).
+_t1 = dict(_base, title="Cumparaturi", checklist=[{"text": "milk", "done": False}])
+_t2 = dict(_base, title="Cumparaturi", checklist=[{"text": "gym", "done": False}])
+check("different checklists keep two same-text notes apart",
+      _fdg([_t1, _t2]) == [])
+_r1 = dict(_base, title="Sport", date="2026-01-01",
+           recurrence={"freq": "weekly", "weekdays": [0]})
+_r2 = dict(_base, title="Sport", date="2026-01-01", recurrence={})
+check("a repeat rule keeps a series apart from its one-off twin",
+      _fdg([_r1, _r2]) == [])
+_a1 = dict(_base, title="Acte", attachments=[{"stored_as": "a.pdf"}])
+_a2 = dict(_base, title="Acte", attachments=[{"stored_as": "b.pdf"}])
+check('a repeat rule signs by MEANING, not representation',
+      _model_mod._recurrence_signature({}) == ()
+      and _model_mod._recurrence_signature(
+          _model_mod.normalize_recurrence({})) == ()
+      and _model_mod._recurrence_signature({'freq': 'weekly'})
+      == _model_mod._recurrence_signature(
+          _model_mod.normalize_recurrence({'freq': 'weekly'})))
+check("attachment-differing copies still group (cleanup merges files)",
+      len(_fdg([_a1, _a2])) == 1)
+_i1 = dict(_base, title="Idem", checklist=[{"text": "x", "done": True}])
+_i2 = dict(_base, title="Idem (copy)",
+           checklist=[{"text": "x", "done": True}])
+check("true duplicates still group, ' (copy)' suffix ignored",
+      len(_fdg([_i1, _i2])) == 1)
+
+# ---- The category door has ceilings, like its siblings ----
+# The category map arrives from settings.json and from any imported
+# backup, and the sidebar builds a widget per entry with the name drawn
+# in full -- so it is the same unbounded-field class as the checklist and
+# the attachment list, through a door that had no limit at all.
+from noteorganizer.core import categories as _cats_mod
+from noteorganizer.core.storage import save_settings as _save_settings
+_cat_backup = dict(_cats_mod.CATEGORY_COLORS)
+_settings_backup = _storage.load_settings()
+try:
+    _save_settings(dict(_settings_backup, categories={
+        ("Cat%04d" % i): "#112233"
+        for i in range(_cats_mod.MAX_CATEGORIES + 150)}))
+    _loaded = _cats_mod.load_categories()
+    check("a settings file full of categories is capped on load",
+          len(_loaded) <= _cats_mod.MAX_CATEGORIES + 1)  # +1: General
+    _save_settings(dict(_settings_backup,
+                        categories={"N" * 5000: "#112233"}))
+    _loaded2 = _cats_mod.load_categories()
+    # DROPPED, not truncated: a count can be capped by shortening the
+    # list, but a NAME is an identifier -- shortening it meant every note
+    # filed under the full name no longer matched a category that
+    # existed, and normalize_note re-filed them all to General.
+    # "dropped" means ABSENT, not shortened. Asserting the full 5000-char
+    # prefix is missing would pass for a truncated name too, which is the
+    # exact failure this check exists to catch -- so it asserts that no
+    # key derived from that name survives at all.
+    check("an absurdly long category name is dropped, not silently renamed",
+          not any(n.startswith("NNNN") for n in _loaded2))
+    _save_settings(dict(_settings_backup,
+                        categories={"Proiecte": "#112233"}))
+    check("...while an ordinary name is kept exactly as written",
+          "Proiecte" in _cats_mod.load_categories())
+finally:
+    _save_settings(_settings_backup)
+    _cats_mod.CATEGORY_COLORS.clear()
+    _cats_mod.CATEGORY_COLORS.update(_cat_backup)
+
+# ---- Colours are validated where they enter (the T0-7 class, colour
+# door) ----
+# A colour string ends its journey inside a Tk configure(), which raises
+# on garbage -- and a note is SAVED before it is first drawn, so one bad
+# value used to crash every launch after. sanitize_color guards the note
+# field, the category import and the calendar day map.
+from noteorganizer.core.model import sanitize_color as _sc
+check("sanitize_color passes real colours and both hex widths",
+      _sc("#A1B2C3") == "#A1B2C3" and _sc("#abc") == "#abc"
+      and _sc(" #ff0000 ") == "#ff0000")
+check("sanitize_color refuses everything Tk would choke on",
+      _sc("#zzz123") == "" and _sc("red)") == "" and _sc(123) == ""
+      and _sc(None) == "" and _sc("#12345") == ""
+      and _sc("#ff0000; rm") == "")
+check("normalize_note strips an undrawable note colour",
+      _nn_att({"color": "#nope!!"})["color"] == ""
+      and _nn_att({"color": "#00ff00"})["color"] == "#00ff00")
+
+# ---- The bomb ceilings swept to the sibling fields (T0-7 class) ----
+from noteorganizer.core.storage import normalize_template as _nt
+from noteorganizer.core.formatting import (normalize_formatting as _nf,
+                                           MAX_FORMATTING_SPANS as _MFS)
+from noteorganizer.core.model import MAX_ATTACHMENTS as _MA
+_big_tpl = _nt({"name": "b",
+                "checklist": [{"text": str(i)} for i in range(3000)]})
+check("a template's checklist meets the same 1000-item ceiling",
+      len(_big_tpl["checklist"]) == 1000)
+# templates.json is hand-editable, and the cap's slice raises on a
+# dict-shaped value: what used to degrade to an empty checklist would
+# have crashed startup instead.
+# Guarded: the defect under test is a CRASH, so calling it unguarded
+# takes the suite down before its FAILURES footer -- which reads as
+# "survived nothing" instead of a red.
+def _tpl_degrades(value):
+    try:
+        return _nt({"name": "b", "checklist": value})["checklist"] == []
+    except Exception:
+        return False
+
+
+check("a malformed template checklist degrades instead of crashing",
+      _tpl_degrades({"a": 1}) and _tpl_degrades("nope")
+      and _tpl_degrades(7))
+_big_fmt = _nf([{"start": i, "end": i + 1, "style": "bold"}
+                for i in range(_MFS + 5000)])
+check("formatting spans meet their anti-bomb ceiling",
+      len(_big_fmt) == _MFS)
+_big_att = _nn_att({"title": "x", "attachments": [
+    {"stored_as": "f%d.txt" % i} for i in range(_MA + 300)]})
+check("attachment records meet their ceiling",
+      len(_big_att["attachments"]) == _MA)
+_dirty_att = _nn_att({"title": "x", "attachments": [
+    {"stored_as": "evil.lnk. "}, {"no_names_at_all": 1},
+    {"filename": "doc.pdf", "stored_as": "doc.pdf"}]})
+check("stored names lose their trailing-dot disguise at the choke point",
+      _dirty_att["attachments"][0]["stored_as"] == "evil.lnk"
+      and _dirty_att["attachments"][0]["filename"] == "evil.lnk")
+check("a record naming no file at all is dropped, not crashed on",
+      len(_dirty_att["attachments"]) == 2)
+
+_MAIN_GUARD_DRIVER = '"""Drive the REAL _main() with the heavy parts stubbed to recorders.\n\nWritten and launched by test_data_safety to prove the single-instance\nguard is WIRED, not merely implemented: _main must consult acquire() and\nhonour the answer. The adversarial review caught the gap this closes --\ndeleting the whole guard from _main left every suite green, because the\nlock primitive was tested end-to-end while the one call site a user ever\ntravels through was tested by nobody.\n"""\nimport json\nimport os\nimport sys\n\nHERE = os.path.dirname(os.path.abspath(__file__))\nos.chdir(HERE)\nsys.path.insert(0, HERE)\n\n# Hermetic seed BEFORE the note_organizer import: the module resolves its\n# data directory and runs migrations at import time, and an unseeded dir\n# invites the adoption of the machine\'s real notebook.\nif not os.path.exists("notes_data.json"):\n    with open("notes_data.json", "w", encoding="utf-8") as f:\n        f.write("[]")\ntry:\n    with open("settings.json", "r", encoding="utf-8") as f:\n        _settings = json.load(f)\nexcept Exception:\n    _settings = {}\nif not isinstance(_settings, dict):\n    _settings = {}\n_settings.setdefault("reclaimed_from_appdata", True)\nwith open("settings.json", "w", encoding="utf-8") as f:\n    json.dump(_settings, f)\n\nimport tkinter.messagebox as mb  # noqa: E402\n\nimport note_organizer as NO  # noqa: E402\nfrom noteorganizer.core import paths  # noqa: E402\n\nevents = []\nNO.initialise = lambda: (paths.configure(HERE), events.append("init"))\n_real_acquire = NO.single_instance.acquire\n\n\ndef _recording_acquire(path=None):\n    events.append("acquire")\n    return _real_acquire(path)\n\n\nNO.single_instance.acquire = _recording_acquire\n\n\nclass FakeApp:\n    def __init__(self):\n        events.append("app")\n\n    def protocol(self, *a, **k):\n        pass\n\n    def on_app_close(self):\n        pass\n\n    def mainloop(self):\n        events.append("loop")\n\n\nclass FakeRoot:\n    def withdraw(self):\n        pass\n\n    def destroy(self):\n        pass\n\n\nNO.NoteOrganizer = FakeApp\nNO.tk.Tk = FakeRoot\nmb.showinfo = lambda *a, **k: events.append("refused-dialog")\n\nNO._main()\nprint("EVENTS:" + json.dumps(events))\n'
+
+# ---- The guard is WIRED, not merely implemented ----
+# The primitive above is proven end-to-end; this proves _main() actually
+# consults it and honours the answer. Without this, deleting the whole
+# guard from _main left every suite green (adversarial review, 2026-09-11)
+# -- the classic tested-library-untested-call-site gap, on the one call
+# site a user ever travels through.
+_driver_path = os.path.join(os.getcwd(), "_main_guard_driver.py")
+with open(_driver_path, "w", encoding="utf-8") as _f:
+    _f.write(_MAIN_GUARD_DRIVER)
+
+
+def _run_main_driver():
+    out = _sp.run([sys.executable, _driver_path], capture_output=True,
+                  text=True, cwd=os.getcwd(), timeout=120)
+    for line in (out.stdout or "").splitlines():
+        if line.startswith("EVENTS:"):
+            try:
+                return json.loads(line[len("EVENTS:"):])
+            except ValueError:
+                break
+    return ["driver-broke", (out.stdout or "")[-300:], (out.stderr or "")[-300:]]
+
+
+try:
+    _got_lock = _si.acquire(os.path.join(os.getcwd(), ".notebook.lock"))
+    _ev_held = _run_main_driver()
+    check("holding the notebook makes _main refuse: dialog shown, no app built",
+          _got_lock and "refused-dialog" in _ev_held
+          and "app" not in _ev_held)
+    # ...and it refuses BEFORE touching the shared folder. initialise()
+    # migrates files out of older locations, purges stale copies and
+    # consumes the one-shot pre-upgrade backup -- all of which a second
+    # launch used to do to the FIRST instance's notebook on its way to
+    # being told no.
+    check("and it refuses before initialise touches the shared folder",
+          "init" not in _ev_held and _ev_held[:1] == ["acquire"])
+    try:
+        _si.release()
+    except Exception:
+        pass
+    _ev_free = _run_main_driver()
+    check("with the notebook free, the same gate lets _main build the app",
+          "app" in _ev_free and "loop" in _ev_free
+          and "refused-dialog" not in _ev_free)
+    # index() raises when a step is MISSING, and a missing step is exactly
+    # what the mutant for this produces -- a crash here would take the
+    # suite down before its FAILURES footer, which reads as "survived
+    # nothing" instead of a red.
+    def _order_ok(events, *steps):
+        try:
+            spots = [events.index(s) for s in steps]
+        except ValueError:
+            return False
+        return spots == sorted(spots)
+
+    check("...and only then does the startup work happen, in that order",
+          _order_ok(_ev_free, "acquire", "init", "app"))
+finally:
+    try:
+        _si.release()
+    except Exception:
+        pass
+    for _leftover in (_driver_path,
+                      os.path.join(os.getcwd(), ".notebook.lock")):
+        try:
+            os.remove(_leftover)
+        except OSError:
+            pass
+
 print()
 print(f"FAILURES: {fails if fails else 'none'}")
 

@@ -21,7 +21,11 @@ WHAT IT RUNS
 2. ``check_class_api`` -- the app class's method surface against its
    recorded baseline, so an added, lost or re-signatured method is a
    deliberate, recorded act rather than a surprise.
-3. ``compile()`` over every tracked ``.py`` in the repo -- tests and qa
+3. ``check_one_definition`` -- a question the app asks in several
+   places, answered by a hand-rolled field list at each one. Every
+   omission an adversarial review has caught in this project had that
+   shape; this is the grep that catches it.
+4. ``compile()`` over every tracked ``.py`` in the repo -- tests and qa
    scripts included, because a syntax error in a TEST file is exactly
    what the remote runner would otherwise find first (a locally-valid
    PEP 701 f-string once died only on CI's older Python; the interpreter
@@ -65,6 +69,8 @@ def main():
                "note_organizer.py"] + scanned)
     _run_gate("class surface unchanged",
               [os.path.join("tools", "check_class_api.py")])
+    _run_gate("one definition per judgement",
+              [os.path.join("tools", "check_one_definition.py")])
 
     print("== every tracked .py compiles", flush=True)
     listed = subprocess.run(["git", "ls-files", "*.py"], cwd=ROOT,

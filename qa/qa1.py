@@ -28,6 +28,13 @@ _seed_io.open('settings.json', 'w', encoding='utf-8').write(
 import sys
 import time
 import note_organizer as NO, tkinter as tk, json, os, re
+# A generated click is DISCARDED in silence when its widget is not
+# viewable, and the app hides popups whenever another program holds the
+# Windows foreground -- which a test process never owns. See
+# qa/_qa_support.py; _qa_click refuses to click into the void.
+from _qa_support import (click as _qa_click, fire as _qa_fire,
+                         pin_popup_visibility as _qa_pin)
+_qa_pin(NO)
 from noteorganizer.core import tables as core_tables
 fails=[]
 def check(name, cond):
@@ -425,6 +432,9 @@ app.update()
 app._calc_display_var.set('6+6')  # simulates a paste — the StringVar is
                                    # the single source of truth regardless
                                    # of whether buttons or direct edits set it
+# The assertion below is NEGATIVE ("stays disabled"), so a KeyRelease
+# dropped by a focus miss would pass it vacuously — force + poll first.
+take_focus(app.calculator_display)
 app.calculator_display.event_generate('<KeyRelease>')
 app.update()
 check('insert stays disabled after a direct paste, before "=" is pressed',
@@ -481,7 +491,7 @@ check('history shows one entry per past calculation', len(history_labels) == 5)
 # whatever's already in the body from earlier insertions in this test.
 target_entry = next(w for w in history_labels if str(w.cget('text')) == '7×8=56')
 body_before_history_click = app.body_text.get('1.0', 'end')
-target_entry.event_generate('<Button-1>')
+_qa_click(target_entry)
 app.update()
 body_after_history_click = app.body_text.get('1.0', 'end')
 check('clicking a history entry inserts that exact formula into the note',
@@ -1011,8 +1021,13 @@ check('adding an item to an existing note updates the list lines it saves',
                                        {'line': 1, 'kind': 'bullet'},
                                        {'line': 2, 'kind': 'bullet'}])
 
-# save_current_note() strips the body, so leading blank lines shift every
-# line up. Without compensating, the reopened note indents the wrong ones.
+# Saving stores the body EXACTLY as typed - blank lines and leading
+# indentation included. It used to .strip() it, which silently deleted the
+# user's own first-line indentation and every trailing blank line on each
+# save (a pasted code block lost its shape), and needed two adapter methods
+# to shift every span and list line back into place. The adapters went with
+# the strip; this check now guards the promise that replaced them: what is
+# on screen is what lands on disk, line for line.
 app.new_note()
 app.title_entry.insert(0, 'LeadingBlanks')
 set_body('\n\nmilk\neggs')
@@ -1023,10 +1038,30 @@ clear_selection()
 app.save_current_note(auto=False)
 app.update()
 blank_note = app.find_note(app.selected_note_id)
-check('leading blank lines that saving strips also shift the list lines up',
-      blank_note['body'] == '• milk\n• eggs'
-      and blank_note.get('paragraphs') == [{'line': 0, 'kind': 'bullet'},
-                                       {'line': 1, 'kind': 'bullet'}])
+check('blank lines survive the save, and list lines stay where the user put them',
+      blank_note['body'] == '\n\n\u2022 milk\n\u2022 eggs'
+      and blank_note.get('paragraphs') == [{'line': 2, 'kind': 'bullet'},
+                                           {'line': 3, 'kind': 'bullet'}])
+
+# Indentation and trailing blank lines are the user's characters too.
+app.new_note()
+app.title_entry.insert(0, 'Indented')
+set_body('    def f():\n        return 1\n\n')
+app.save_current_note(auto=False)
+app.update()
+_ind = app.find_note(app.selected_note_id)
+check('leading indentation and trailing blank lines survive a save',
+      _ind['body'] == '    def f():\n        return 1\n\n')
+
+# ...but a body of nothing but whitespace is still "empty": storing the raw
+# text must not turn a stray New Note click into a saved note.
+app.new_note()
+set_body('   \n\n  ')
+_before_ws = len(app.notes)
+app.save_current_note(auto=True)
+app.update()
+check('a whitespace-only new note is still refused',
+      len(app.notes) == _before_ws)
 
 check('normalize_note drops list lines pointing past the end of the body',
       NO.normalize_note({'body': 'one\ntwo',
@@ -1035,6 +1070,17 @@ check('normalize_note drops list lines pointing past the end of the body',
       == [{'line': 0, 'kind': 'bullet'}])
 
 # ---- Templates carry lists too ----
+# Set the editor up explicitly instead of inheriting whatever the block
+# above happened to leave in it: these two checks silently became about
+# an empty editor the moment a neighbour's last action changed.
+app.new_note()
+app.title_entry.insert(0, 'ListTemplateSource')
+set_body('milk\neggs')
+app.body_text.tag_add('sel', '1.0', '2.end')
+app.update()
+app._list_buttons['bullet'].invoke()
+clear_selection()
+app.update()
 st_for_list_tpl = app.capture_editor_state()
 list_tpl = NO.normalize_template({
     'name': 'ListTemplate',
@@ -2267,8 +2313,23 @@ check(f'padding left over from deleted text is taken back ({lines_now()[0]!r})',
 check('the toolbar has a table button', hasattr(app, 'table_btn'))
 
 set_body('')
-app._insert_table(3, 2)
-app.update()
+# The focus PROMISE is recorded, not polled. focus_settles_on reads an
+# asynchronous result inside a bounded loop, so on a loaded machine it
+# reports a false red about an app that placed the focus correctly --
+# which is how this check went red once in a full-suite run with its name
+# lost (COVERAGE_LEDGER C11b). Wrapping focus_set captures the decision
+# itself, synchronously, and cannot flake. It wraps the INSERT, because
+# opening the editor on the first cell is what inserting a table
+# promises; re-opening it here to watch would test something else.
+_fs_calls = []
+_real_focus_set = tk.Misc.focus_set
+tk.Misc.focus_set = (lambda self, *a, **k:
+                     (_fs_calls.append(self), _real_focus_set(self, *a, **k))[1])
+try:
+    app._insert_table(3, 2)
+    app.update()          # lets the after_idle re-assert run and be seen
+finally:
+    tk.Misc.focus_set = _real_focus_set
 _blank = lines_now()[:3]
 check(f'a blank table is inserted ({_blank[0]!r})',
       all(core_tables.split_row(r) == ['', ''] for r in _blank))
@@ -2279,8 +2340,10 @@ _made = app._grid_at_line(1)
 check('a grid is rendered over the new table', _made is not None)
 check('the one floating editor opens on the first cell',
       app._cell_editor is not None
-      and (app._cell_editor['r'], app._cell_editor['c']) == (0, 0)
-      and focus_settles_on(app._cell_editor['entry']))
+      and (app._cell_editor['r'], app._cell_editor['c']) == (0, 0))
+check('...and the app puts the keyboard in it',
+      app._cell_editor is not None
+      and app._cell_editor['entry'] in _fs_calls)
 
 # Filling in through the editor: type, step, repeat -- the words land in
 # the note's own text, cell by cell.
@@ -2304,6 +2367,11 @@ check(f'typing through the editor lands in the text ({lines_now()[0]!r})',
 _made = app._grid_at_line(1)
 app._open_cell_editor(_made, 1, 0)
 app.update()
+# take_focus, not focus_settles_on: what follows asserts what Shift+Tab
+# DOES, so the focus is a precondition to be forced, not a promise to be
+# read back. (Where the promise really is the placement, the check above
+# records the decision instead.)
+take_focus(app._cell_editor['entry'])
 app._cell_editor['entry'].event_generate('<Shift-Tab>')
 app.update()
 check('Shift+Tab goes back to the row above',
@@ -2674,10 +2742,10 @@ _t = app._grid_at_line(1)
 _cell = _t['cells'][(0, 1)]
 # A click is a press AND a release now that dragging selects; the editor
 # opens on the release, so a drag can end without one.
-_t['canvas'].event_generate('<Button-1>',
-                            x=_cell['x'] + 5, y=_cell['y'] + 5)
-_t['canvas'].event_generate('<ButtonRelease-1>',
-                            x=_cell['x'] + 5, y=_cell['y'] + 5)
+_qa_fire(_t['canvas'], '<Button-1>',
+         x=_cell['x'] + 5, y=_cell['y'] + 5)
+_qa_fire(_t['canvas'], '<ButtonRelease-1>',
+         x=_cell['x'] + 5, y=_cell['y'] + 5)
 app.update()
 check(f'clicking a cell opens the editor on it '
       f'({app._cell_editor and (app._cell_editor["r"], app._cell_editor["c"])})',
@@ -2718,9 +2786,9 @@ app.update()
 _t = app._grid_at_line(1)
 _a, _b2 = _t['cells'][(0, 0)], _t['cells'][(1, 1)]
 _cv = _t['canvas']
-_cv.event_generate('<Button-1>', x=int(_a['x'] + 4), y=int(_a['y'] + 4))
-_cv.event_generate('<B1-Motion>', x=int(_b2['x'] + 4), y=int(_b2['y'] + 4))
-_cv.event_generate('<ButtonRelease-1>', x=int(_b2['x'] + 4), y=int(_b2['y'] + 4))
+_qa_fire(_cv, '<Button-1>', x=int(_a['x'] + 4), y=int(_a['y'] + 4))
+_qa_fire(_cv, '<B1-Motion>', x=int(_b2['x'] + 4), y=int(_b2['y'] + 4))
+_qa_fire(_cv, '<ButtonRelease-1>', x=int(_b2['x'] + 4), y=int(_b2['y'] + 4))
 app.update()
 check(f'dragging selects the spanned rectangle '
       f'({app._grid_sel and app._grid_sel["box"]})',
@@ -2752,9 +2820,9 @@ check('a checkmark is drawn centred in its cell',
 # Merging the selection makes one cell anchored top-left.
 _a, _b2 = _t['cells'][(0, 0)], _t['cells'][(0, 1)]
 _cv = _t['canvas']
-_cv.event_generate('<Button-1>', x=int(_a['x'] + 4), y=int(_a['y'] + 4))
-_cv.event_generate('<B1-Motion>', x=int(_b2['x'] + 4), y=int(_b2['y'] + 4))
-_cv.event_generate('<ButtonRelease-1>', x=int(_b2['x'] + 4), y=int(_b2['y'] + 4))
+_qa_fire(_cv, '<Button-1>', x=int(_a['x'] + 4), y=int(_a['y'] + 4))
+_qa_fire(_cv, '<B1-Motion>', x=int(_b2['x'] + 4), y=int(_b2['y'] + 4))
+_qa_fire(_cv, '<ButtonRelease-1>', x=int(_b2['x'] + 4), y=int(_b2['y'] + 4))
 app.update()
 app._grid_merge_selection(app._grid_sel)
 app.update()
@@ -2963,12 +3031,12 @@ def _select_cells(g, a, bcell):
     # 12px in from the corner: pressing within 4px of a vertical rule is
     # (by design) a grab of the rule, not the start of a selection.
     _ca, _cb = g['cells'][a], g['cells'][bcell]
-    g['canvas'].event_generate('<Button-1>',
-                               x=int(_ca['x'] + 12), y=int(_ca['y'] + 6))
-    g['canvas'].event_generate('<B1-Motion>',
-                               x=int(_cb['x'] + 12), y=int(_cb['y'] + 6))
-    g['canvas'].event_generate('<ButtonRelease-1>',
-                               x=int(_cb['x'] + 12), y=int(_cb['y'] + 6))
+    _qa_fire(g['canvas'], '<Button-1>',
+             x=int(_ca['x'] + 12), y=int(_ca['y'] + 6))
+    _qa_fire(g['canvas'], '<B1-Motion>',
+             x=int(_cb['x'] + 12), y=int(_cb['y'] + 6))
+    _qa_fire(g['canvas'], '<ButtonRelease-1>',
+             x=int(_cb['x'] + 12), y=int(_cb['y'] + 6))
     app.update()
 
 
@@ -3000,7 +3068,8 @@ check('the target row really is empty before the spread',
       _tX['cells'][(1, 0)]['value'] == ''
       and _tX['cells'][(1, 1)]['value'] == '')
 app._open_cell_editor(_tX, 1, 0)
-app.update()          # focus settles; synthetic key events follow focus
+app.update()
+take_focus(app._cell_editor['entry'])  # a precondition for the key below
 app._cell_editor['entry'].event_generate('<Control-v>')
 app.update()
 _tX = app._grid_at_line(1)
@@ -3010,7 +3079,8 @@ check('Ctrl+V in a cell spreads the copied block from it',
 
 # The editor grows with its content instead of hiding the overflow.
 app._open_cell_editor(_tX, 1, 0)
-app.update()          # focus settles; synthetic key events follow focus
+app.update()
+take_focus(app._cell_editor['entry'])  # a precondition for the keys below
 _edX = app._cell_editor
 _w0 = int(float(_tX['canvas'].itemcget(_edX['win'], 'width')))
 _edX['entry'].delete('1.0', 'end')
@@ -3310,13 +3380,13 @@ check('exported HTML has no separator row',
 
 # Dragging the first rule resizes column 0 through press/drag/release.
 _edgeS = int(_tS['col_x'][1])
-_tS['canvas'].event_generate('<Button-1>', x=_edgeS, y=4)
+_qa_fire(_tS['canvas'], '<Button-1>', x=_edgeS, y=4)
 _resS = getattr(app, '_grid_resizing', None)
 check('pressing a rule starts a resize, not a selection',
       _resS is not None and _resS['col'] == 0
       and getattr(app, '_grid_pressed', None) is None)
-_tS['canvas'].event_generate('<B1-Motion>', x=_edgeS + 70, y=4)
-_tS['canvas'].event_generate('<ButtonRelease-1>', x=_edgeS + 70, y=4)
+_qa_fire(_tS['canvas'], '<B1-Motion>', x=_edgeS + 70, y=4)
+_qa_fire(_tS['canvas'], '<ButtonRelease-1>', x=_edgeS + 70, y=4)
 app.update()
 _tS = app._grid_at_line(1)
 _wS = core_tables.parse_separator(
@@ -3331,8 +3401,8 @@ check(f'releasing the drag stores the new width in the separator '
 # check pins the user-visible invariant, whichever layer provides it.)
 _tS = app._grid_at_line(1)
 _edgeS = int(_tS['col_x'][1])
-_tS['canvas'].event_generate('<Button-1>', x=_edgeS, y=4)
-_tS['canvas'].event_generate('<ButtonRelease-1>', x=_edgeS, y=4)
+_qa_fire(_tS['canvas'], '<Button-1>', x=_edgeS, y=4)
+_qa_fire(_tS['canvas'], '<ButtonRelease-1>', x=_edgeS, y=4)
 app.update()
 _wS2 = core_tables.parse_separator(
     app.body_text.get('2.0', '2.end'))[0]['width']
@@ -3612,10 +3682,10 @@ app.update()
 _tE = app._grid_at_line(1)
 _aE, _bE = _tE['cells'][(1, 0)], _tE['cells'][(2, 0)]
 _cvE = _tE['canvas']
-_cvE.event_generate('<Button-1>', x=int(_aE['x'] + 12), y=int(_aE['y'] + 6))
-_cvE.event_generate('<B1-Motion>', x=int(_bE['x'] + 12), y=int(_bE['y'] + 6))
-_cvE.event_generate('<ButtonRelease-1>',
-                    x=int(_bE['x'] + 12), y=int(_bE['y'] + 6))
+_qa_fire(_cvE, '<Button-1>', x=int(_aE['x'] + 12), y=int(_aE['y'] + 6))
+_qa_fire(_cvE, '<B1-Motion>', x=int(_bE['x'] + 12), y=int(_bE['y'] + 6))
+_qa_fire(_cvE, '<ButtonRelease-1>',
+         x=int(_bE['x'] + 12), y=int(_bE['y'] + 6))
 app.body_text.event_generate('<Control-c>')
 app.update()
 check(f'a fast Ctrl+C straight after the drag still means the cells '
@@ -3634,10 +3704,12 @@ app._cell_editor['entry'].insert('1.0', 'text destul de lat sa mute coloana')
 _tE2 = app._grid_at_line(1)
 _aE, _bE = _tE2['cells'][(1, 0)], _tE2['cells'][(2, 0)]
 _cvE = _tE2['canvas']
-_cvE.event_generate('<Button-1>', x=int(_aE['x'] + 12), y=int(_aE['y'] + 6))
+_qa_fire(_cvE, '<Button-1>', x=int(_aE['x'] + 12), y=int(_aE['y'] + 6))
 # The press killed this canvas (the commit rebuilt); a real mouse's
 # motion and release simply never arrive on it, but SYNTHETIC events on
 # a dead widget raise instead -- swallow that to mirror reality.
+# Raw event_generate ON PURPOSE: _qa_fire would turn the except
+# TclError below into an uncaught EventNotDelivered on a healthy app.
 try:
     _cvE.event_generate('<B1-Motion>',
                         x=int(_bE['x'] + 12), y=int(_bE['y'] + 6))
@@ -3980,7 +4052,7 @@ app.update()
 # on a direct binding that _bind_text_wheel silently replaced, so real
 # wheels kept leaping while a direct method call stayed green.
 take_focus(app.body_text)
-app.body_text.event_generate('<MouseWheel>', delta=-120)
+_qa_fire(app.body_text, '<MouseWheel>', delta=-120)
 app.update()
 check('one wheel notch over a tall table moves the view a little, not a table',
       app.body_text.yview()[0] > 0
@@ -3989,7 +4061,7 @@ check('one wheel notch over a tall table moves the view a little, not a table',
 app.body_text.yview_moveto(0.0)
 app.update()
 _gridW = app._grid_at_line(1)
-_gridW['canvas'].event_generate('<MouseWheel>', delta=-120)
+_qa_fire(_gridW['canvas'], '<MouseWheel>', delta=-120)
 app.update()
 check('one wheel notch over the grid glides the note the same way',
       app.body_text.yview()[0] > 0
@@ -4330,10 +4402,10 @@ check('the palette drops an UNCHECKED box wearing the picked colour',
 
 # a click on the box TICKS it -- no text editor -- and keeps its colour
 _cvK = _gM3['canvas']
-_cvK.event_generate('<Button-1>', x=int(_cK['x'] + _cK['w'] / 2),
-                    y=int(_cK['y'] + _cK['h'] / 2))
-_cvK.event_generate('<ButtonRelease-1>', x=int(_cK['x'] + _cK['w'] / 2),
-                    y=int(_cK['y'] + _cK['h'] / 2))
+_qa_fire(_cvK, '<Button-1>', x=int(_cK['x'] + _cK['w'] / 2),
+         y=int(_cK['y'] + _cK['h'] / 2))
+_qa_fire(_cvK, '<ButtonRelease-1>', x=int(_cK['x'] + _cK['w'] / 2),
+         y=int(_cK['y'] + _cK['h'] / 2))
 app.update()
 _gM3 = app._grid_at_line(1)
 _cK = _gM3['cells'][(1, 1)]
@@ -4500,7 +4572,7 @@ app.update()
 _gS = app._grid_at_line(1)
 app._grid_select_range(_gS, (1, 0), (1, 1))
 app.update()
-app.body_text.event_generate('<Button-1>', x=5, y=5)
+_qa_fire(app.body_text, '<Button-1>', x=5, y=5)
 app.update()
 _lastS = int(app.body_text.index('end-1c').split('.')[0])
 app.body_text.tag_add('sel', '%d.0' % _lastS, '%d.4' % _lastS)
@@ -4518,12 +4590,12 @@ check('after a body click, the toolbar colour reaches the body again',
 # meant grabbing its neighbour too.
 _cS = _gS['cells'][(1, 1)]
 _cvS = _gS['canvas']
-_cvS.event_generate('<Button-1>', x=int(_cS['x'] + 12),
-                    y=int(_cS['y'] + 8))
-_cvS.event_generate('<B1-Motion>', x=int(_cS['x'] + 30),
-                    y=int(_cS['y'] + 20))
-_cvS.event_generate('<ButtonRelease-1>', x=int(_cS['x'] + 30),
-                    y=int(_cS['y'] + 20))
+_qa_fire(_cvS, '<Button-1>', x=int(_cS['x'] + 12),
+         y=int(_cS['y'] + 8))
+_qa_fire(_cvS, '<B1-Motion>', x=int(_cS['x'] + 30),
+         y=int(_cS['y'] + 20))
+_qa_fire(_cvS, '<ButtonRelease-1>', x=int(_cS['x'] + 30),
+         y=int(_cS['y'] + 20))
 app.update()
 check('a real drag inside one cell selects exactly that cell',
       getattr(app, '_grid_sel', None) is not None
@@ -4583,8 +4655,8 @@ app.update_idletasks()
 _gV = app._grid_at_line(1)
 _cvV = _gV['canvas']
 _c00V = _gV['cells'][(0, 0)]
-_cvV.event_generate('<Button-1>', x=int(_c00V['x'] + 20),
-                    y=int(_c00V['y'] + 8))
+_qa_fire(_cvV, '<Button-1>', x=int(_c00V['x'] + 20),
+         y=int(_c00V['y'] + 8))
 _shownV = int(float(_cvV.cget('width')))
 _origPtr = app.winfo_pointerxy
 app.winfo_pointerxy = lambda: (_cvV.winfo_rootx() + _shownV - 5,
@@ -4599,8 +4671,8 @@ check('holding the drag at the right edge pans the grid and grows the '
       and getattr(app, '_grid_sel', None) is not None
       and app._grid_sel['box'][3] >= 10)
 app.winfo_pointerxy = _origPtr
-_cvV.event_generate('<ButtonRelease-1>', x=_shownV - 5,
-                    y=int(_c00V['y'] + 8))
+_qa_fire(_cvV, '<ButtonRelease-1>', x=_shownV - 5,
+         y=int(_c00V['y'] + 8))
 app.update()
 
 set_body('| Cap | Doi |\n'
@@ -4613,8 +4685,8 @@ app.update()
 _gV = app._grid_at_line(1)
 _cvV = _gV['canvas']
 _c00V = _gV['cells'][(0, 0)]
-_cvV.event_generate('<Button-1>', x=int(_c00V['x'] + 20),
-                    y=int(_c00V['y'] + 8))
+_qa_fire(_cvV, '<Button-1>', x=int(_c00V['x'] + 20),
+         y=int(_c00V['y'] + 8))
 app.winfo_pointerxy = lambda: (
     app.body_text.winfo_rootx() + 60,
     app.body_text.winfo_rooty() + app.body_text.winfo_height() - 4)
@@ -4629,12 +4701,12 @@ check('holding the drag under the note scrolls it and grows the '
       and app._grid_sel['box'][2] >= 5)
 app.winfo_pointerxy = _origPtr
 # the timer wiring: a motion arms it, the release stops it
-_cvV.event_generate('<B1-Motion>', x=int(_c00V['x'] + 25),
-                    y=int(_c00V['y'] + 9))
+_qa_fire(_cvV, '<B1-Motion>', x=int(_c00V['x'] + 25),
+         y=int(_c00V['y'] + 9))
 app.update()
 _armedV = getattr(app, '_grid_autoscroll_job', None) is not None
-_cvV.event_generate('<ButtonRelease-1>', x=int(_c00V['x'] + 25),
-                    y=int(_c00V['y'] + 9))
+_qa_fire(_cvV, '<ButtonRelease-1>', x=int(_c00V['x'] + 25),
+         y=int(_c00V['y'] + 9))
 app.update()
 check('the autoscroll timer arms on drag and stops on release',
       _armedV
@@ -5305,10 +5377,10 @@ check('the formatting entries are still present in the body menu',
 # fixes, so double-clicking a row with no words in it grabbed that row's
 # invisible newline and painted a full-width selection over an empty line.
 def _dbl_xy(w, x, y, t):
-    w.event_generate('<Button-1>', x=x, y=y, time=t)
-    w.event_generate('<ButtonRelease-1>', x=x, y=y, time=t + 10)
-    w.event_generate('<Button-1>', x=x, y=y, time=t + 120)
-    w.event_generate('<ButtonRelease-1>', x=x, y=y, time=t + 130)
+    _qa_fire(w, '<Button-1>', x=x, y=y, time=t)
+    _qa_fire(w, '<ButtonRelease-1>', x=x, y=y, time=t + 10)
+    _qa_fire(w, '<Button-1>', x=x, y=y, time=t + 120)
+    _qa_fire(w, '<ButtonRelease-1>', x=x, y=y, time=t + 130)
     app.update()
     r = w.tag_ranges('sel')
     return w.get(r[0], r[1]) if r else None
@@ -6626,7 +6698,7 @@ _cat_pop = app._mini_popup
 _rows_cat = [l for l in _walk_widgets(_cat_pop, tk.Label)
              if str(l.cget('text')) == 'Work']
 check('the category dropdown lists Work', len(_rows_cat) >= 1)
-_rows_cat[0].event_generate('<Button-1>')
+_qa_click(_rows_cat[0])
 app.update()
 check('picking a row sets the editor category',
       app.category_var.get() == 'Work')
@@ -6719,7 +6791,7 @@ _chips = [l for l in _walk_widgets(app._mini_popup, tk.Label)
           and str(l.cget('text')).strip()]
 check('the emoji picker offers chips', len(_chips) >= 8)
 _first_emoji = str(_chips[0].cget('text')).strip()
-_chips[0].event_generate('<Button-1>')
+_qa_click(_chips[0])
 app.update()
 check('a chip click inserts that emoji into the body',
       _first_emoji in app.body_text.get('1.0', 'end-1c'))
@@ -6740,7 +6812,7 @@ _w = _tpl_btns[0]
 if isinstance(_w, tk.Button):
     _w.invoke()
 else:
-    _w.event_generate('<Button-1>')
+    _qa_click(_w)
 app.update()
 check('choosing it fills the editor from the template',
       app.title_entry.get() == 'Din sablon'
@@ -6759,8 +6831,8 @@ for topl in _size_pop:
                  if str(c.cget('cursor')) == 'hand2']
 picked = False
 for c in _cells14:
-    c.event_generate('<Enter>')
-    c.event_generate('<Button-1>')
+    _qa_fire(c, '<Enter>')
+    _qa_click(c)
     app.update()
     if core_tables.find_blocks(body()):
         picked = True
@@ -6771,6 +6843,230 @@ for topl in _size_pop:
     if topl.winfo_exists():
         topl.destroy()
 app.update()
+
+# ---- The helper's own repair, witnessed ----
+# _qa_fire asks winfo_id() (Tk_MakeWindowExist) before aiming an event,
+# because Tk DISCARDS a generated pointer event at a widget with no
+# native window -- silently, which is what made a whole class of checks
+# answer by luck. Delete that one line and every suite stays green,
+# because every other site happens to run against mapped widgets: the
+# repair was load-bearing and guarded by nothing. This builds the case
+# it exists for.
+_fw_top = tk.Toplevel(app)
+_fw_top.wm_overrideredirect(True)
+_fw_top.wm_geometry('+50+50')
+_fw_raw = tk.Label(_fw_top, text='raw', bg='#ff0000', cursor='hand2')
+_fw_raw.pack()
+_fw_fired = tk.Label(_fw_top, text='fired', bg='#00ff00', cursor='hand2')
+_fw_fired.pack()
+_fw_hits = []
+_fw_raw.bind('<Button-1>', lambda e: _fw_hits.append('raw'))
+_fw_fired.bind('<Button-1>', lambda e: _fw_hits.append('fired'))
+# NO update() anywhere in this block, in either direction: Tk dispatches
+# a generated event immediately, so the bindings record without one --
+# and a single update() here would MAP the toplevel, leaving the helper
+# nothing to repair and the second check passing with the repair deleted.
+_fw_raw.event_generate('<Button-1>')
+_qa_fire(_fw_fired, '<Button-1>')
+check('a raw generated click at a windowless widget is DISCARDED',
+      'raw' not in _fw_hits)
+check('...while the helper delivers it, which is the whole repair',
+      'fired' in _fw_hits)
+_fw_top.destroy()
+app.update()
+
+# ---- "Save as template" asks a question that matches what it stores ----
+# The eighth hand-rolled emptiness gate: it enumerated title|body|comments
+# and refused a checklist-only note with "This note is empty" -- about a
+# note the app had just saved, and whose template WOULD have carried the
+# checklist (do_save stores it). Deliberately narrower than the shared
+# predicate, because a template carries nothing else: an attachment or a
+# repeat rule alone really would make an empty template.
+_tpl_before = len(app.templates)
+app.open_blank_tab(); app.update()
+app._working_checklist = [{'text': 'de cumparat', 'done': False}]
+app.update()
+_tpl_said = []
+_real_info_tpl = app.show_info
+app.show_info = lambda t, m, **k: (_tpl_said.append((t, m)), True)[1]
+_real_ask_tpl = app.ask_text if hasattr(app, 'ask_text') else None
+try:
+    app.save_current_as_template()
+    app.update()
+finally:
+    app.show_info = _real_info_tpl
+check('a checklist-only note is not called empty by Save-as-template',
+      not any('empty' in m.lower() for _t, m in _tpl_said))
+# The behaviour, not the wording: the mutated gate refuses with a message
+# that also lacks the word "empty", so the check above alone passed while
+# the bug was live. What matters is whether the editor was ALLOWED to
+# become a template at all.
+check('...and it is actually offered as one (the gate let it through)',
+      _tpl_said == [])
+
+# And the teeth stay: an editor holding ONLY an attachment really would
+# make an empty template, so that one is still refused -- with a message
+# that says what a template keeps.
+app.open_blank_tab(); app.update()
+app.current_attachments = [{'filename': 'x.pdf', 'stored_as': 'x.pdf'}]
+app.update()
+_tpl_said2 = []
+app.show_info = lambda t, m, **k: (_tpl_said2.append((t, m)), True)[1]
+try:
+    app.save_current_as_template()
+    app.update()
+finally:
+    app.show_info = _real_info_tpl
+check('an attachment-only editor is still refused as a template',
+      len(_tpl_said2) == 1)
+check('...and told what a template actually keeps',
+      _tpl_said2 and 'checklist' in _tpl_said2[0][1]
+      and 'this note is empty' not in _tpl_said2[0][1].lower())
+app.current_attachments = []
+app.templates = app.templates[:_tpl_before]
+app.open_blank_tab(); app.update()
+
+# ---- A note ending in a table is not permanently "unsaved" ----
+# The editor always draws a line under a trailing table (the caret needs
+# somewhere to live), so the body as SHOWN carries one newline the body
+# as typed does not. While every save ran .strip() that difference was
+# invisible; storing the body exactly as typed (T0-4) surfaced it, and
+# every table-ending note then read as changed forever: an autosave
+# rewrite on every note switch, a dirty dot that lied, and a recurring
+# note asking its save-scope question unprompted.
+# The render is the FEATURE here -- these checks pin the reconciliation
+# on the other side, and the last one pins the feature itself so a
+# future "fix" cannot quietly delete the caret line instead.
+_TBL_Q = '| a | b |\n| --- | --- |\n| 1 | 2 |'
+
+app.open_blank_tab(); app.update()
+app.title_entry.delete(0, 'end'); app.title_entry.insert(0, 'TabelLaFinal')
+app.body_text.delete('1.0', 'end')
+app.body_text.insert('1.0', 'intro\n' + _TBL_Q)
+app.update()
+app.save_current_note(auto=False); app.update()
+_tq_id = app.selected_note_id
+app.open_note_in_tab(app.find_note(_tq_id)); app.update()
+_tq_st = app.capture_editor_state()
+check('a note ending in a table reads as SAVED after a reopen',
+      app.editor_state_matches_saved(_tq_st))
+check('...because stored and shown agree exactly',
+      app.find_note(_tq_id)['body'] == _tq_st['body'])
+# Idempotent: drawing it again must not grow another line.
+app.open_note_in_tab(app.find_note(_tq_id)); app.update()
+check('...and reopening again neither dirties it nor grows the body',
+      app.editor_state_matches_saved(app.capture_editor_state())
+      and app.find_note(_tq_id)['body'].count('\n')
+      == ('intro\n' + _TBL_Q + '\n').count('\n'))
+
+# A note stored by an OLDER version (no caret line) heals on LOAD, with
+# no rewrite: it must read clean the first time it is opened.
+_legacy_tq = NO.normalize_note(
+    {'id': 4242, 'title': 'Legacy', 'body': 'intro\n' + _TBL_Q,
+     'category': 'General', 'updated': '2026-01-01 00:00',
+     'created': '2026-01-01 00:00'})
+check('a table-ending note from an older version is canonical on load',
+      _legacy_tq['body'] == 'intro\n' + _TBL_Q + '\n')
+app.notes.append(_legacy_tq)
+app.save_notes()
+app.open_note_in_tab(app.find_note(4242)); app.update()
+check('...and opens clean, with no silent rewrite behind the user',
+      app.editor_state_matches_saved(app.capture_editor_state()))
+
+# The feature the reconciliation exists to serve: the caret CAN go below
+# the table. Assert the line is really there in the widget.
+_tq_lines = app.body_text.get('1.0', 'end-1c').split('\n')
+# Indexed defensively: with the caret line gone there may be no [-2] at
+# all, and an IndexError here would take the run down before its
+# FAILURES footer -- a mutant that crashes reads as "survived nothing".
+check('the editor still draws a line under the trailing table',
+      len(_tq_lines) >= 2 and _tq_lines[-1] == ''
+      and NO.is_table_row(_tq_lines[-2]))
+
+# BEFORE any render, the widget genuinely lacks the caret line -- which
+# is the only moment the canonicalisation at the save and capture read
+# points does any work. Every case above runs after a render, where the
+# widget already holds it, so without these two the mechanism at those
+# points was asserted by nothing.
+app.open_blank_tab(); app.update()
+app.title_entry.delete(0, 'end'); app.title_entry.insert(0, 'Nerandat')
+app.body_text.delete('1.0', 'end')
+app.body_text.insert('1.0', 'intro\n' + _TBL_Q)   # no update(): no render
+check('the widget itself has no caret line yet (the precondition)',
+      app.body_text.get('1.0', 'end-1c') == 'intro\n' + _TBL_Q)
+check('capture canonicalises a body read before the render',
+      app.capture_editor_state()['body'] == 'intro\n' + _TBL_Q + '\n')
+app.save_current_note(auto=False)
+_pre_id = app.selected_note_id
+check('and the save stores the canonical form, not the short one',
+      app.find_note(_pre_id)['body'] == 'intro\n' + _TBL_Q + '\n')
+# The same, on the EXISTING-note branch -- which is where the save's own
+# canonicalisation actually earns its keep: a new note is built through
+# normalize_note (which canonicalises anyway), while an update writes
+# note['body'] straight onto the dict.
+app.body_text.delete('1.0', 'end')
+app.body_text.insert('1.0', 'alt intro\n' + _TBL_Q)   # again: no render
+check('an existing note also has the short body in the widget',
+      app.body_text.get('1.0', 'end-1c') == 'alt intro\n' + _TBL_Q)
+app.save_current_note(auto=False)
+check('...and updating it stores the canonical form too',
+      app.find_note(_pre_id)['body'] == 'alt intro\n' + _TBL_Q + '\n')
+app.notes = [n for n in app.notes if n.get('id') != _pre_id]
+app.save_notes()
+
+check('with_caret_line adds the line exactly once, and is idempotent',
+      NO.with_caret_line(_TBL_Q) == _TBL_Q + '\n'
+      and NO.with_caret_line(NO.with_caret_line(_TBL_Q)) == _TBL_Q + '\n')
+
+# And a body that does NOT end in a table is untouched by any of this.
+check('with_caret_line leaves every other body exactly alone',
+      NO.with_caret_line('abc') == 'abc'
+      and NO.with_caret_line('') == ''
+      and NO.with_caret_line(_TBL_Q + '\nafter') == _TBL_Q + '\nafter'
+      and NO.with_caret_line(_TBL_Q + '\n') == _TBL_Q + '\n')
+for _nm in (_tq_id, 4242):
+    app.notes = [n for n in app.notes if n.get('id') != _nm]
+app.save_notes()
+app.open_blank_tab(); app.update()
+
+# ---- Closing an abandoned "+ note for this day" leaves no junk ----
+# The calendar's add-note-for-a-day flow PREFILLS the date, so a day
+# clicked and then thought better of leaves an editor holding nothing
+# but a date. The junk-note guard counted the date as content on every
+# route -- including this close sweep, which saves with auto=True -- so
+# the abandoned click was persisted as a blank dated note. The date is
+# deliberate only when the user presses Save; the automatic routes agree
+# with _editor_state_has_content, which leaves it out.
+app.notes = []
+app.save_notes()
+app.open_blank_tab(); app.update()
+app.date_entry.delete(0, 'end')
+app.date_entry.insert(0, '2030-05-05')
+app.update()
+_jd_before = len(app.notes)
+# The timer and the flush both stop earlier than the guard under test:
+# their shared content gate already excludes the date, so neither ever
+# reaches save_current_note. The route that DOES is the window-close
+# sweep, which calls save_current_note(auto=True) for every tab that
+# reads dirty -- and a date-only editor reads dirty by design, so the
+# date must not count as content THERE.
+app._flush_autosave(); app._autosave_now(); app.update()
+check('neither the timer nor the flush touches an abandoned day-click',
+      len(app.notes) == _jd_before)
+app.save_current_note(auto=True)   # exactly what on_app_close does
+app.update()
+check('an abandoned day-click is not autosaved as a junk note',
+      len(app.notes) == _jd_before)
+# ...but pressing Save on it IS deliberate: a bare dated reminder is a
+# real thing a person can want, and the explicit gesture is what says so.
+app.save_current_note(auto=False)
+app.update()
+check('while pressing Save on the same editor does create the reminder',
+      len(app.notes) == _jd_before + 1
+      and app.notes[-1].get('date') == '2030-05-05')
+app.notes = []
+app.save_notes()
+app.open_blank_tab(); app.update()
 
 # ---- CLOSING SAVES SILENTLY (dead last: it destroys the app) ----
 # The quit-time "Unsaved notes" ask could only ever cover the last
@@ -6813,7 +7109,12 @@ def _torn(s):
 _eapp.title_entry.delete(0, 'end')
 _eapp.title_entry.insert(0, 'hi \U0001F600')
 _eapp.title_entry.icursor('end')
-_eapp.title_entry.focus_force(); _eapp.update()
+_eapp.title_entry.focus_force()
+for _ in range(60):
+    _eapp.update(); _eapp.update_idletasks()
+    if _eapp.focus_get() is _eapp.title_entry:
+        break
+    time.sleep(0.01)
 _eapp.title_entry.event_generate('<BackSpace>'); _eapp.update()
 _t1 = _eapp.title_entry.get()
 check('BackSpace after a title emoji removes the whole character',
@@ -6861,7 +7162,12 @@ else:
     _se.delete(0, 'end')
     _se.insert(0, '\U0001F600')
     _se.icursor('end')
-    _se.focus_force(); _eapp.update()
+    _se.focus_force()
+    for _ in range(60):
+        _eapp.update(); _eapp.update_idletasks()
+        if _eapp.focus_get() is _se:
+            break
+        time.sleep(0.01)
     _se.event_generate('<BackSpace>'); _eapp.update()
     check('the search box deletes a whole emoji too',
           _se.get() == '' and not _torn(_se.get()))

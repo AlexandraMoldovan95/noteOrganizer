@@ -374,16 +374,26 @@ OWNED_PREFIXES = ("notes_data_backup_", "notes_data_replaced_")
 
 
 def _content_signatures(notes):
-    """Identity of a note by its content, ignoring id and timestamps."""
+    """Identity of a note by its content, ignoring id and timestamps.
+
+    Delegates to model.content_signature — the ONE definition — because
+    this set gates an irreversible os.remove/rmtree of a leftover
+    notebook folder. A private field tuple here once fell behind the
+    dedup's (no checklist, no recurrence), so a legacy folder whose notes
+    differed from the local ones only by their checklists was judged
+    "fully covered" and deleted outright."""
+    # Imported here, not at the top: model -> categories -> storage ->
+    # paths at import time, so a module-level import of model from here
+    # closes that loop and crashes the whole package. The function-level
+    # import runs long after every module is initialised.
+    from .model import content_signature
+    # strict=True: this set gates an irreversible delete, so ANY content
+    # difference must keep the folder -- styling, layout, per-day edits
+    # and skipped dates included. The default (looser) answer belongs to
+    # the startup duplicate collapse, where a stray bold word does not
+    # make a duplicate into a different note.
     return {
-        (
-            str(n.get("title", "")).strip(),
-            str(n.get("body", "")).strip(),
-            str(n.get("comments", "")).strip(),
-            str(n.get("category", "")),
-            str(n.get("date", "")),
-        )
-        for n in notes if isinstance(n, dict)
+        content_signature(n, strict=True) for n in notes if isinstance(n, dict)
     }
 
 

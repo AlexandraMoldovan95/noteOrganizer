@@ -28,6 +28,13 @@ _seed_io.open('settings.json', 'w', encoding='utf-8').write(
 import sys
 import time
 import note_organizer as NO, tkinter as tk, tkinter.filedialog as fd, os, tempfile
+# A generated click is DISCARDED in silence when its widget is not
+# viewable, and the app hides popups whenever another program holds the
+# Windows foreground -- which a test process never owns. See
+# qa/_qa_support.py; _qa_click refuses to click into the void.
+from _qa_support import (click as _qa_click, fire as _qa_fire,
+                         pin_popup_visibility as _qa_pin)
+_qa_pin(NO)
 fails=[]
 def check(name, cond):
     print(('PASS' if cond else 'FAIL'), name)
@@ -169,7 +176,7 @@ app.update()
 app.set_theme('light' if 'dark' in str(app.theme_name) else 'dark')
 app.update()
 for _xy6 in ((200, 200), (400, 300), (60, 60)):
-    app.event_generate('<Button-1>', x=_xy6[0], y=_xy6[1])
+    _qa_fire(app, '<Button-1>', x=_xy6[0], y=_xy6[1])
     app.update()
 app.set_theme(_theme_before6)
 app.update()
@@ -198,6 +205,31 @@ def _focus_settles_on(widget, cap_s=2.0):
         time.sleep(0.02)
     return False
 
+def _take_focus(widget, cap_s=2.0):
+    """FORCE focus onto a widget and wait until Tk agrees -- for a
+    PRECONDITION, never for an assertion about where the app put it.
+
+    focus_set() is a request the window manager may take its time over,
+    and _focus_settles_on below only waits: used on a precondition it
+    turns a loaded machine into a false red about an app that did
+    nothing wrong. Both of this file's preconditions went red that way
+    in a full-suite run (the same class as qa1's cell editor, closed as
+    COVERAGE_LEDGER C11b). Forcing is correct here precisely because the
+    promise under test is what happens when focus LEAVES."""
+    widget.focus_force()
+    t0 = time.time()
+    while time.time() - t0 < cap_s:
+        try:
+            if app.focus_get() is widget:
+                return True
+        except (KeyError, tk.TclError):
+            pass
+        app.update()
+        app.update_idletasks()
+        time.sleep(0.02)
+    return False
+
+
 def _focus_leaves(widget, cap_s=2.0):
     """The mirror wait: poll until focus is NOT on the widget — clearing
     focus is as asynchronous as granting it."""
@@ -212,10 +244,8 @@ def _focus_leaves(widget, cap_s=2.0):
         time.sleep(0.02)
     return False
 
-name_entry.focus_set()
-app.update()
 check('username entry has focus before clicking elsewhere',
-      _focus_settles_on(name_entry))
+      _take_focus(name_entry))
 # Click the section's own title. It has to be a title that's actually on
 # screen: Settings shows one section at a time, so reaching into a section
 # that isn't selected would be clicking a widget the user cannot see, and
@@ -227,7 +257,7 @@ _section_labels = {k: l for k, l, _b, _e in app.SETTINGS_SECTIONS}
 name_title = find_widget(app.settings_name_panel, tk.Label, _section_labels['name'])
 check('the section title label was found', name_title is not None)
 check('the shown section\'s title is actually visible', name_title.winfo_ismapped())
-name_title.event_generate('<Button-1>')
+_qa_click(name_title)
 app.update()
 check('clicking a section title elsewhere in Settings clears the field\'s focus',
       _focus_leaves(name_entry))
@@ -237,13 +267,11 @@ check('clicking a section title elsewhere in Settings clears the field\'s focus'
 # takes when they finish typing and immediately leave, and it broke once
 # during development when the fix above was implemented too narrowly
 # (bound to individual widgets instead of centrally).
-name_entry.focus_set()
-app.update()
 check('username entry has focus before leaving Settings',
-      _focus_settles_on(name_entry))
+      _take_focus(name_entry))
 back_btn = find_widget(app.settings_page, tk.Button, 'Back to Notes')
-back_btn.event_generate('<Button-1>')
-back_btn.event_generate('<ButtonRelease-1>')
+_qa_click(back_btn)
+_qa_fire(back_btn, '<ButtonRelease-1>')
 app.update()
 check('clicking "Back to Notes" directly clears the field\'s focus',
       _focus_leaves(name_entry))
@@ -283,7 +311,7 @@ check('theme card is on screen', theme_canvases[0].winfo_ismapped())
 check('Settings pane actually overflows, so scrolling is observable',
       app.settings_canvas.yview()[1] < 1.0)
 before_scroll = app.settings_canvas.yview()
-theme_canvases[0].event_generate('<MouseWheel>', delta=-120)
+_qa_fire(theme_canvases[0], '<MouseWheel>', delta=-120)
 app.update()
 check('scrolling with the cursor over a theme card scrolls the Settings page',
       app.settings_canvas.yview() != before_scroll)
@@ -320,7 +348,7 @@ app.update(); app.update_idletasks()
 check('Settings pane overflows for the chip test too',
       app.settings_canvas.yview()[1] < 1.0)
 before_stats_scroll = app.settings_canvas.yview()
-chip_frames[0].event_generate('<MouseWheel>', delta=-120)
+_qa_fire(chip_frames[0], '<MouseWheel>', delta=-120)
 app.update()
 check('scrolling with the cursor over a statistics chip scrolls the Settings page',
       app.settings_canvas.yview() != before_stats_scroll)
@@ -350,8 +378,8 @@ grid_frame = find_all(app.stats_frame, tk.Frame)[0]
 chip = grid_frame.winfo_children()[0]
 check('statistics chip has no hand cursor (not clickable-looking)',
       str(chip.cget('cursor')) != 'hand2')
-chip.event_generate('<Button-1>')
-chip.event_generate('<ButtonRelease-1>')
+_qa_click(chip)
+_qa_fire(chip, '<ButtonRelease-1>')
 app.update()
 check('clicking a statistics chip does not change tabs',
       app.notebook.index(app.notebook.select())==app.TAB_CALENDAR)
@@ -521,7 +549,7 @@ check('template count updates live after saving a new template, no navigation aw
 # emoji label, so find them by the kind each widget records.
 delete_btn = next(c for c in find_all2(app.settings_templates_panel, tk.Canvas)
                   if getattr(c, '_icon_kind', None) == 'trash')
-delete_btn.event_generate('<Button-1>')
+_qa_click(delete_btn)
 app.update()
 check('template count updates live after deleting a template, no navigation away',
       stats_pairs().get('Templates') == 0)
@@ -1108,7 +1136,7 @@ def _find_dd_qw(w):
 
 
 _find_dd_qw(app.settings_trash_panel)
-_ddQW[0].event_generate('<Button-1>')
+_qa_click(_ddQW[0])
 app.update()
 _optQW = []
 
@@ -1121,7 +1149,7 @@ def _find_opt_qw(w):
 
 
 _find_opt_qw(app._mini_popup)
-_optQW[0].event_generate('<Button-1>')
+_qa_click(_optQW[0])
 app.update()
 check('picking 60 days in the dropdown saves the setting',
       NO.get_setting('trash_retention_days') == 60)
@@ -1207,14 +1235,14 @@ def _find_trash_qw(w):
 
 
 _find_trash_qw(_frameQW)
-_trashBtnQW[0].event_generate('<Button-1>')
+_qa_click(_trashBtnQW[0])
 app.update()
 check('the delete ask says templates skip the Trash',
       "don't go to the Trash" in str(_askedQW.get('msg', ''))
       and "can't be undone" in str(_askedQW.get('msg', '')))
 check('No keeps the template', len(app.templates) == 1)
 _ansQW['v'] = True
-_trashBtnQW[0].event_generate('<Button-1>')
+_qa_click(_trashBtnQW[0])
 app.update()
 check('Yes deletes it for good', len(app.templates) == 0)
 app.ask_yes_no = _origAskQW
@@ -1269,7 +1297,7 @@ _old_col = _CC6['Proiecte']
 _swatch6 = next(c for c in _prow.winfo_children()
                 if isinstance(c, tk.Frame)
                 and str(c.cget('cursor')) == 'hand2')
-_swatch6.event_generate('<Button-1>')
+_qa_click(_swatch6)
 app.update()
 _pal6 = [c for c in app._mini_popup.winfo_children()] if app._mini_popup else []
 def _canvases6(root):
@@ -1291,7 +1319,7 @@ def _fill6(c):
 _target6 = next(c for c in _sw6 if _fill6(c).startswith('#')
                 and _fill6(c) != _old_col)
 _want6 = _fill6(_target6)
-_target6.event_generate('<Button-1>')
+_qa_click(_target6)
 app.update()
 check('recolouring through the swatch palette stores the clicked colour',
       _CC6.get('Proiecte') == _want6
@@ -1304,7 +1332,7 @@ _prow = _row_of6(_catf, 'Proiecte')
 # delete). The inline editor's <Return> needs REAL focus first, or the
 # generated key is dropped (the documented class).
 _pencil6 = [c for c in _prow.winfo_children() if isinstance(c, tk.Canvas)][0]
-_pencil6.event_generate('<Button-1>')
+_qa_click(_pencil6)
 app.update()
 # The inline editor is a mini-POPUP (entry + Save button), not a row
 # child — drive it through its own Save button, no focus needed.
@@ -1323,6 +1351,64 @@ for _nm in ('Proiecte', 'ProiecteX'):
     _CC6.pop(_nm, None)
 NO.persist_categories()
 _catf.destroy(); app.update()
+
+# ---- The attachment ceiling refuses; it does not eat files ----
+# MAX_ATTACHMENTS exists because a note carrying thousands of records is
+# a way to make the app unopenable. normalize_note enforces it by
+# TRUNCATING, which is right for a hostile share code and wrong for a
+# person adding their own files: they were copied to disk, listed in the
+# editor, and then silently dropped on the next load. The creation side
+# refuses instead, and says why.
+_cap6 = NO.MAX_ATTACHMENTS
+app.new_note(); app.update()
+app.current_attachments = [{'filename': 'f%d.txt' % i,
+                            'stored_as': 'f%d.txt' % i}
+                           for i in range(_cap6)]
+app.refresh_attachments_list(); app.update()
+_warned6 = []
+_real_warn6 = app.show_warning
+app.show_warning = lambda t, m, **k: _warned6.append((t, m))
+fd.askopenfilenames = lambda **k: (tmp_file,)
+try:
+    app.add_attachment()
+    app.update()
+finally:
+    app.show_warning = _real_warn6
+check('a full note refuses another file instead of losing it',
+      len(app.current_attachments) == _cap6 and len(_warned6) == 1)
+check('...and the message says how many a note can hold',
+      _warned6 and str(_cap6) in _warned6[0][1])
+
+# One short of the ceiling, a multi-file pick asks before taking only
+# what fits -- and answering No takes none of them.
+app.current_attachments = app.current_attachments[:_cap6 - 1]
+app.refresh_attachments_list(); app.update()
+_asked6 = []
+_real_ask6 = app.ask_yes_no
+app.ask_yes_no = lambda t, m, **k: (_asked6.append((t, k)), False)[1]
+fd.askopenfilenames = lambda **k: (tmp_file, tmp_file, tmp_file)
+try:
+    app.add_attachment()
+    app.update()
+finally:
+    app.ask_yes_no = _real_ask6
+check('picking more files than fit asks first, with No pre-selected',
+      len(_asked6) == 1 and _asked6[0][1].get('default') == 'no')
+check('...and answering No attaches none of them',
+      len(app.current_attachments) == _cap6 - 1)
+
+# Saying yes takes exactly the room that was left.
+app.ask_yes_no = lambda *a, **k: True
+try:
+    app.add_attachment()
+    app.update()
+finally:
+    app.ask_yes_no = _real_ask6
+check('answering Yes attaches exactly what fits, no more',
+      len(app.current_attachments) == _cap6)
+app.current_attachments = []
+app.refresh_attachments_list()
+app.new_note(); app.update()
 
 print()
 print(f"=== QA6 FAILURES: {fails if fails else 'NONE'} ===")

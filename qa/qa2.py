@@ -27,6 +27,12 @@ _seed_io.open('settings.json', 'w', encoding='utf-8').write(
 
 import sys
 import note_organizer as NO, tkinter as tk
+# A generated click is DISCARDED in silence when its widget is not
+# viewable, and the app hides popups whenever another program holds the
+# Windows foreground -- which a test process never owns. See
+# qa/_qa_support.py; _qa_click refuses to click into the void.
+from _qa_support import click as _qa_click, pin_popup_visibility as _qa_pin
+_qa_pin(NO)
 from datetime import date
 fails=[]
 def check(name, cond):
@@ -234,7 +240,7 @@ def _find_canvases(root):
 _sw = _find_canvases(_pal)
 check('the palette offers clickable swatches', len(_sw) >= 5)
 if _sw:
-    _sw[0].event_generate('<Button-1>')
+    _qa_click(_sw[0])
     app.update()
     _picked = app.day_colors.get(_D13)
     check('clicking a swatch colours the day and persists it',
@@ -252,7 +258,7 @@ _chips = [c for c in _find_swatches(_emopop)
           if isinstance(c, tk.Label) and str(c.cget('text')).strip()]
 check('the emoji marker popup offers its chips', len(_chips) >= 6)
 for chip in _chips[:5]:
-    chip.event_generate('<Button-1>')
+    _qa_click(chip)
     app.update()
 _save_btn = None
 def _find_btn2(w, txt):
@@ -270,6 +276,199 @@ check('clicking five chips saves exactly the 3-marker cap',
       and NO.get_setting('day_emoji', {}).get(_D13) == _saved_marks)
 app.day_emoji.pop(_D13, None)
 app._persist_day_emoji()
+
+# ---- An edit to the SERIES, made while looking at one day ----
+# The occurrence branch of the dirty check compared only the five
+# overridable fields, so anything series-owned that the user changed
+# while viewing a single day -- a ticked checklist item above all -- was
+# invisible to every save gate: the editor asked for the save and the
+# comparator vetoed it, and the tick never reached disk.
+# It now compares the series-owned fields against the BASE note, which
+# is where load_note read them from in the first place. Formatting and
+# paragraphs stay out on purpose, and the second half of this block is
+# what proves that: an override is plain text, so comparing them made a
+# just-saved occurrence read as dirty FOREVER (field report, 0.71.111).
+_occ_series = NO.normalize_note({
+    'id': 4101, 'title': 'Sport', 'body': 'antrenament',
+    'category': 'General', 'date': '2026-07-01',
+    'recurrence': {'freq': 'weekly', 'weekdays': [2]},
+    'checklist': [{'text': 'incaltari', 'done': False},
+                  {'text': 'prosop', 'done': False}],
+    # The series carries a styling span ON PURPOSE. An override is plain
+    # text, so load_note only re-applies the base's spans when the shown
+    # body equals the base's -- which is exactly why formatting must stay
+    # OUT of the occurrence comparison. With no span in the fixture the
+    # two states are indistinguishable and the check cannot catch a
+    # regression that puts formatting back in.
+    'formatting': [{'start': 0, 'end': 4, 'style': 'bold'}],
+    'updated': '2026-01-01 00:00', 'created': '2026-01-01 00:00'})
+app.notes = [_occ_series]
+app.save_notes()
+app.update()
+_OCC = '2026-07-08'
+
+app.load_note(app.find_note(4101), occurrence_date=_OCC)
+app.update()
+check('an untouched occurrence opens clean',
+      app.editor_state_matches_saved(app.capture_editor_state()))
+app._working_checklist[0]['done'] = True
+app.update()
+check('ticking a checklist item there reads as an unsaved change',
+      not app.editor_state_matches_saved(app.capture_editor_state()))
+app.ask_occurrence_scope = lambda *a, **k: 'series'
+app._flush_autosave()
+app.update()
+check('...and the tick actually reaches the note',
+      app.find_note(4101)['checklist'][0]['done'] is True)
+
+# The half this must NOT undo: a saved occurrence stays clean.
+app.notes = [NO.normalize_note(dict(_occ_series, overrides={}))]
+app.save_notes()
+app.update()
+app.load_note(app.find_note(4101), occurrence_date=_OCC)
+app.update()
+app.body_text.delete('1.0', 'end')
+app.body_text.insert('1.0', 'doar ziua asta e altfel')
+app.ask_occurrence_scope = lambda *a, **k: 'occurrence'
+app.save_current_note(auto=False)
+app.update()
+check('saving just this day writes an override',
+      _OCC in (app.find_note(4101).get('overrides') or {}))
+app.load_note(app.find_note(4101), occurrence_date=_OCC)
+app.update()
+check('and re-opening that day reads CLEAN, not dirty forever',
+      app.editor_state_matches_saved(app.capture_editor_state()))
+# The precondition that gives the check above its teeth: the base note
+# really does hold a span the overridden view does not show, so a
+# comparison that included formatting WOULD read dirty.
+check('...with the base note genuinely holding a span the day does not',
+      app.find_note(4101).get('formatting')
+      and not app.capture_editor_state().get('formatting'))
+del app.ask_occurrence_scope
+app.notes = []
+app.save_notes()
+app.new_note(); app.update()
+
+# ---- A per-day edit ending in a table is not "unsaved" forever ----
+# The caret-line canonicalisation reached the base body but not the
+# override patches, and an override is shown in the SAME editor -- so the
+# renderer added the line, the stored day text did not have it, and the
+# day read as unsaved on every open: a save-scope question nobody asked
+# for at every note switch and at close, whose "whole series" answer
+# replaces the series text with that one day's.
+_TBL_O = '| a | b |\n| --- | --- |\n| 1 | 2 |'
+_ov_note = NO.normalize_note({
+    'id': 4301, 'title': 'Serie', 'body': 'corp de baza',
+    'category': 'General', 'date': '2026-07-01',
+    'recurrence': {'freq': 'weekly', 'weekdays': [2]},
+    'overrides': {'2026-07-08': {'title': 'Ziua', 'body': 'intro\n' + _TBL_O}},
+    'updated': '2026-01-01 00:00', 'created': '2026-01-01 00:00'})
+app.notes = [_ov_note]
+app.save_notes()
+app.update()
+check('a stored override ending in a table is canonical on load',
+      app.find_note(4301)['overrides']['2026-07-08']['body']
+      == 'intro\n' + _TBL_O + '\n')
+app.load_note(app.find_note(4301), occurrence_date='2026-07-08')
+app.update()
+check('...so that day opens CLEAN instead of unsaved forever',
+      app.editor_state_matches_saved(app.capture_editor_state()))
+
+# ---- A series-owned edit does not raise a question it cannot answer ----
+# An override carries the five overridable fields and nothing else, so
+# "this day" has nowhere to put a ticked checklist item: the old code
+# asked anyway, wrote an override duplicating the series' own text, threw
+# the tick away, and left the editor dirty so it asked again next time.
+_sq_note = NO.normalize_note({
+    'id': 4302, 'title': 'Serie2', 'body': 'corp',
+    'category': 'General', 'date': '2026-07-01',
+    'recurrence': {'freq': 'weekly', 'weekdays': [2]},
+    'checklist': [{'text': 'unu', 'done': False}],
+    'updated': '2026-01-01 00:00', 'created': '2026-01-01 00:00'})
+app.notes = [_sq_note]
+app.save_notes()
+app.update()
+app.load_note(app.find_note(4302), occurrence_date='2026-07-08')
+app.update()
+app._working_checklist[0]['done'] = True
+app.update()
+_sq_asked = []
+app.ask_occurrence_scope = lambda *a, **k: (_sq_asked.append(1), 'occurrence')[1]
+app._flush_autosave()
+app.update()
+_sq_after = app.find_note(4302)
+check('a series-owned edit asks no scope question at all', _sq_asked == [])
+check('...the tick lands on the series', _sq_after['checklist'][0]['done'] is True)
+check('...no phantom override is written for that day',
+      '2026-07-08' not in (_sq_after.get('overrides') or {}))
+check('...and the editor is clean afterwards, so it cannot ask again',
+      app.editor_state_matches_saved(app.capture_editor_state()))
+# The question MUST still be asked when an override really could carry
+# the edit -- otherwise this fix would have quietly removed the feature.
+app.body_text.delete('1.0', 'end')
+app.body_text.insert('1.0', 'doar ziua asta')
+app.update()
+_sq_asked2 = []
+app.ask_occurrence_scope = lambda *a, **k: (_sq_asked2.append(1), 'occurrence')[1]
+app.save_current_note(auto=False)
+app.update()
+check('while a text edit on one day still asks, and still overrides',
+      _sq_asked2 == [1]
+      and '2026-07-08' in (app.find_note(4302).get('overrides') or {}))
+del app.ask_occurrence_scope
+app.notes = []
+app.save_notes()
+app.new_note(); app.update()
+
+# ---- "Restore previous" on a repeating note restores the SERIES ----
+# It used to run through the editor's save, which asks a scope question
+# on a repeating note. Answering "this occurrence" wrote the recovered
+# text into a per-day override -- plain text only, so the formatting came
+# back stripped, the SERIES stayed shortened, and the rescue copy was
+# spent anyway under a success message. The other answer left _prev armed
+# with an override present, and the stale button later overwrote new
+# text. It writes straight to the note now: no scope to get wrong.
+_rs_note = NO.normalize_note({
+    'id': 4201, 'title': 'Repetat', 'date': '2026-07-01',
+    'body': 'versiunea lunga originala, cu mult text de pastrat aici',
+    'formatting': [{'start': 0, 'end': 9, 'style': 'bold'}],
+    'recurrence': {'freq': 'weekly', 'weekdays': [2]},
+    'updated': '2026-01-01 00:00', 'created': '2026-01-01 00:00'})
+app.notes = [_rs_note]
+app.save_notes()
+app.update()
+_RS_OCC = '2026-07-08'
+
+app.load_note(app.find_note(4201))
+app.update()
+app.body_text.delete('1.0', 'end')
+app.body_text.insert('1.0', 'scurt')
+app.save_current_note(auto=False)
+app.update()
+check('a drastic shrink on a repeating note leaves a rescue copy',
+      isinstance(app.find_note(4201).get('_prev'), dict))
+
+# Now do the restore from the OCCURRENCE view, answering "this
+# occurrence" to any scope question that might still be asked.
+app.load_note(app.find_note(4201), occurrence_date=_RS_OCC)
+app.update()
+app.ask_occurrence_scope = lambda *a, **k: 'occurrence'
+app.ask_yes_no = lambda *a, **k: True
+app.restore_previous_version()
+app.update()
+_rs_after = app.find_note(4201)
+check('restoring from a day brings the SERIES body back, not an override',
+      'originala' in _rs_after.get('body', ''))
+check('...with its formatting intact, not flattened to plain text',
+      _rs_after.get('formatting') == [{'start': 0, 'end': 9, 'style': 'bold'}])
+check('...and no per-day override was manufactured for that day',
+      _RS_OCC not in (_rs_after.get('overrides') or {}))
+check('...and the rescue copy is spent exactly once',
+      _rs_after.get('_prev') is None)
+del app.ask_occurrence_scope
+app.notes = []
+app.save_notes()
+app.new_note(); app.update()
 
 print()
 print(f"=== QA2 FAILURES: {fails if fails else 'NONE'} ===")

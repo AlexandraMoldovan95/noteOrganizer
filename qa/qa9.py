@@ -28,6 +28,12 @@ _seed_io.open('settings.json', 'w', encoding='utf-8').write(
 import sys
 import time
 import note_organizer as NO, tkinter as tk
+# A generated click is DISCARDED in silence when its widget is not
+# viewable, and the app hides popups whenever another program holds the
+# Windows foreground -- which a test process never owns. See
+# qa/_qa_support.py; _qa_click refuses to click into the void.
+from _qa_support import click as _qa_click, pin_popup_visibility as _qa_pin
+_qa_pin(NO)
 
 
 def open_nested_dropdown(application, btn, cap=60):
@@ -45,7 +51,7 @@ def open_nested_dropdown(application, btn, cap=60):
         application.update()
         time.sleep(0.02)
     for _ in range(cap):
-        btn.event_generate('<Button-1>')
+        _qa_click(btn)
         application.update()
         pop = getattr(btn, '_nested_popup', None)
         if pop is not None and pop.winfo_exists():
@@ -69,7 +75,7 @@ def pick_nested_option(application, pop, option_widget, cap=60):
         try:
             if not pop.winfo_exists():
                 return True
-            option_widget.event_generate('<Button-1>')
+            _qa_click(option_widget)
         except tk.TclError:
             return True
         application.update()
@@ -138,11 +144,15 @@ check('nested dropdown popup exists', dropdown_popup is not None and dropdown_po
 # then tore down the template EDITOR the list sits inside.
 if dropdown_popup is not None:
     dropdown_popup.focus_force(); app.update()
-    dropdown_popup.event_generate('<Escape>')
+    # Generate-and-poll: a single Escape after an unpolled focus_force is
+    # a one-shot bet on where the focus is; regenerating inside the poll
+    # makes the ask deterministic while a real regression still times out
+    # into a hard red.
     for _ in range(60):
-        app.update()
         if not dropdown_popup.winfo_exists():
             break
+        dropdown_popup.event_generate('<Escape>')
+        app.update()
         time.sleep(0.02)
     check('Escape closes the nested list itself',
           not dropdown_popup.winfo_exists())
@@ -381,7 +391,11 @@ def _walkTG(w):
 _walkTG(_popG)
 _bodyG = max(_txtsG, key=lambda t: len(t.get('1.0', 'end')))
 _bodyG.focus_force()
-app.update()
+for _ in range(60):
+    app.update(); app.update_idletasks()
+    if app.focus_get() is _bodyG:
+        break
+    time.sleep(0.01)
 _bodyG.mark_set('insert', '1.0')
 app.update()
 # The guard runs on KeyPress; the class inserts at whatever caret the
@@ -674,7 +688,7 @@ import calendar as cal_module
 current_month_name = cal_module.month_name[app.cal_month]
 month_btn = find_dropdown_by_label(jump_popup, current_month_name)
 check('month dropdown button found', month_btn is not None)
-month_btn.event_generate('<Button-1>')
+_qa_click(month_btn)
 app.update()
 check('Jump-to-month popup stays open after opening the month dropdown',
       jump_popup.winfo_exists())
@@ -694,13 +708,13 @@ app._dismiss_mini_popup(); app.update()
 # click. Clear the tag: each open re-installs its own handler anyway.
 app.unbind('<Button-1>')
 app.notebook.select(app.TAB_NOTES); app.update()
-app.filter_menu.event_generate('<Button-1>'); app.update()
+_qa_click(app.filter_menu); app.update()
 check('first click opens the filter list',
       app._mini_popup is not None and app._mini_popup.winfo_exists())
-app.filter_menu.event_generate('<Button-1>'); app.update()
+_qa_click(app.filter_menu); app.update()
 check('second click on the button closes it, no reopen blink',
       app._mini_popup is None)
-app.filter_menu.event_generate('<Button-1>'); app.update()
+_qa_click(app.filter_menu); app.update()
 check('a third click opens it again', app._mini_popup is not None)
 app._dismiss_mini_popup(); app.update()
 

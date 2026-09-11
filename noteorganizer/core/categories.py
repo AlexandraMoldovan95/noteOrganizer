@@ -46,18 +46,47 @@ from .themes import DEFAULT_CATEGORY_COLORS, PROTECTED_CATEGORY
 # CATEGORY_COLORS constant was, so the whole app reads from one place.
 CATEGORY_COLORS = dict(DEFAULT_CATEGORY_COLORS)
 
+# Ceilings, same class as the checklist and attachment ones: the category
+# map arrives from settings.json and from any imported backup, and the
+# sidebar builds a widget per entry with the name drawn in full. A
+# thousand categories, or one named with 100,000 characters, is a way to
+# make the app unopenable through a door that had no limit at all. Far
+# above any real notebook -- the point is a ceiling, not a budget.
+MAX_CATEGORIES = 200
+MAX_CATEGORY_NAME = 80
+
 
 def load_categories():
     """Read the user's categories from settings, falling back to defaults.
     Guarantees General exists and stays first."""
+    # Lazy import: model itself imports this module (for the live map),
+    # so a top-level import of model from here would close a cycle while
+    # model is still half initialised.
+    from .model import sanitize_color
     saved = load_settings().get("categories")
     result = {}
     if isinstance(saved, dict) and saved:
-        # Keep only well-formed name -> #hex entries.
-        for name, color in saved.items():
-            if (isinstance(name, str) and name.strip()
-                    and isinstance(color, str) and color.startswith("#")):
-                result[name.strip()] = color
+        # Keep only well-formed name -> #hex entries. startswith('#') was
+        # the old test, and it waved through "#not-a-colour", which then
+        # raised TclError inside whatever render touched that category —
+        # settings.json is hand-editable and travels inside backups, so
+        # this is an untrusted door like any other.
+        for name, color in list(saved.items())[:MAX_CATEGORIES]:
+            color = sanitize_color(color)
+            if not (isinstance(name, str) and name.strip() and color):
+                continue
+            name = name.strip()
+            # A COUNT can be capped by truncating the list; a NAME cannot
+            # be capped by truncating the name. The first version did
+            # exactly that, and a category whose name was over the limit
+            # came back shortened on the next launch -- so every note
+            # filed under the full name no longer matched a category that
+            # existed, and normalize_note re-filed them all to General.
+            # A pathological name is dropped instead: one category goes
+            # missing, loudly, rather than silently unbinding notes.
+            if len(name) > MAX_CATEGORY_NAME:
+                continue
+            result[name] = color
     if not result:
         result = dict(DEFAULT_CATEGORY_COLORS)
     # General is mandatory and always first.
