@@ -29,6 +29,7 @@ day-to-day tracking.
 | [The note the editor let you make and the launcher deleted](#the-note-the-editor-let-you-make-and-the-launcher-deleted) | A predicate that enumerates a type's fields comes due silently the day someone adds one — and two that disagree is data loss waiting for its first user. | 0.71.154 |
 | [Two windows, one file, and the last one to autosave wins](#two-windows-one-file-and-the-last-one-to-autosave-wins) | Full-file rewrites turn concurrency into data loss; a guard over data must fail open where its own failure would be worse. | 0.71.154 |
 | [The trim that moved every colour](#the-trim-that-moved-every-colour) | When a transformation forces a second function to undo its effect, the transformation is the bug — and tidying what the user typed is a data change. | 0.71.154 |
+| [The ceiling that counted the wrong thing](#the-ceiling-that-counted-the-wrong-thing) | A ceiling has to bound what the victim actually pays — and a defence at the render is a data-loss bug when the save reads its data back out of the widget. | 0.71.155 |
 | [The template editor that "did nothing" when clicked](#the-template-editor-that-did-nothing-when-clicked) | 'Nothing happens' in a --windowed build is a real bug report — the exception was invisible. | 0.3.0 |
 | [The panel that lost its content depending on how you got there](#the-panel-that-lost-its-content-depending-on-how-you-got-there) | Recalculate layout on Tk's `<Map>` event, not after a guessed delay. | 0.3.0 |
 | [The scroll that stopped twice, for two different reasons](#the-scroll-that-stopped-twice-for-two-different-reasons) | Same symptom, unrelated causes — check neighbouring areas instead of assuming one fix covers all. | 0.28.38 |
@@ -625,6 +626,71 @@ class would look like and make sure the pattern still catches it —
 before the clean report starts being used as evidence. And a gate that
 reports clean over a known-live instance is not merely incomplete: it
 actively certifies the gap, and the next reader believes it.
+
+### The ceiling that counted the wrong thing
+
+**Symptom.** None reported. This one came out of asking whether a row in
+the coverage ledger was honest — the row said a long single-line note
+"hangs Tk's layout outright (>240 s at 2000 spans)" and had been carried
+for a day as a measured, deliberately-accepted residual.
+
+**It did not reproduce.** Two thousand bold and italic spans on a
+3,000-character one-liner open in 0.75 seconds. The neighbouring row was
+worse: it claimed a 300,000-character single-line body is Tk-hostile on
+its own, and a body that size with no styling at all opens in 1.13 s.
+Neither row had ever been measured by the person who wrote it. One was
+wrong about its numbers, the other about its mechanism, and they had
+been sitting next to each other agreeing.
+
+**But something there was real.** Swapping the span style from `bold` to
+`font_size` on the same shape never finished in 90 seconds. That was the
+start of four rounds of measurement, each of which killed the theory the
+round before had produced:
+
+| The theory | What killed it |
+|---|---|
+| It is the number of composite font RUNS | `highlight` and `text_color` hang identically and make no font runs |
+| It is the number of distinct tags | 2,000 spans in ONE colour open in 0.24 s; the same spans in 50 colours never finish |
+| It is the number of ranges on a line | 800 disjoint spans on one line open in 0.59 s |
+| It is spans that START on a crowded line | 2,000 spans each starting on a DIFFERENT line and running to the end of the body never finish — five start on any given line |
+
+What survives all four is narrower and less tidy: the cost is how many
+tagged ranges end up COVERING one line, and the note's total range count
+matters independently, because 500 spans over a 400-line body is 500
+spans and 200,000 ranges.
+
+**Why it is a data-safety story and not a performance one.** A pasted
+note is SAVED before it is ever drawn. A share code of a few kilobytes
+could therefore make the app fail to open on every launch after — the
+same class as the checklist bomb one field over, and through a field
+that cycle had already declared closed, because the ceiling it shipped
+counts spans and the victim pays in ranges.
+
+**The fix that was nearly worse than the bug.** The first version
+refused to lay out the tags past a ceiling: the note opens, the text is
+all there, only the styling is skipped, and the user is told. It passed.
+It was also a silent data-loss bug, caught by walking the readers of the
+value being changed rather than by any test: the editor reads a note's
+formatting back OUT of the text widget when it saves, so the first save
+after opening such a note would have written an empty formatting list
+over the user's styled note. The ceiling belongs at the data door beside
+the checklist and attachment ceilings, where what is kept is what is
+shown is what is saved — and where all three doors into the editor (the
+note, a template, and the previous version behind the restore button)
+are one function away.
+
+**Lessons.**
+
+1. A ceiling must bound the quantity the victim actually pays in. Ours
+   counted spans; Tk charges for ranges per line. Between those two is
+   a whole family of notes that fit under the cap and never open.
+2. A defence at the render is a data change whenever something reads the
+   render back. Enumerating the readers of a value is step 3 of the
+   pre-flight for exactly this reason, and it is the step that caught it.
+3. A ledger row that says "measured" and was not is worse than an empty
+   row, because it buys silence with a number nobody will re-check. Both
+   rows are now marked with what they actually were.
+
 
 ## Tk & platform gotchas
 
