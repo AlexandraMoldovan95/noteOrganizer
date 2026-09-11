@@ -99,7 +99,7 @@ adversarial review of the first round proved the class was wider than the findin
   now stores the body exactly as typed — and the change detector compares it exactly as
   typed too: the first fix left the dirty check stripping both sides, so a
   whitespace-only edit read as "no change" and the automatic saves threw away precisely
-  the characters the save had just learned to keep. From the product review, the
+  the characters the save had just learned to keep. The same canonicalisation reaches a per-day edit of a repeating note, which is shown in the same editor: without it such a day read as permanently unsaved and raised a save-scope question nobody had asked for — whose “whole series” answer replaced the note's text with that one day's. From the product review, the
   detector half from the adversarial review.
 - **A saved note can be emptied, on every route there is.** Clearing a note and
   switching away brought the old text back: the app asked "is the editor empty?" in six
@@ -112,7 +112,7 @@ adversarial review of the first round proved the class was wider than the findin
   content on every route, closing a sibling hole where a comments-only note was
   discarded with a false "Write something before saving!". The automatic routes still
   refuse a date-only never-saved editor — the calendar prefills the date field, and an
-  abandoned day-click must not autosave itself into a junk note. From the product
+  abandoned day-click must not autosave itself into a junk note. The rescue copy behind “Restore previous” follows it: that copy used to appear only when a lot of text vanished at once, which was enough while an emptied note could not be saved at all, so a short note cleared by accident keeps one too now. Ctrl+S and the Save button agree throughout, including about a note holding only a date: both are the user asking. And the way back from a calendar note never blocks on an edit no automatic route would persist — a new note holding only a repeat rule used to make “Back to Calendar” a dead button. From the product
   review, swept whole by the adversarial review.
 - **"Restore previous" survives a restart — and an aborted save.** The rescue copy was
   discarded by the next launch while the button offering it looked permanent; it is now
@@ -183,7 +183,7 @@ adversarial review of the first round proved the class was wider than the findin
 - **Your categories can't be turned into a wall.** The category list is read from
   settings and from any backup you import, and the sidebar draws one entry for each with
   its full name — with no limit on either, a hand-edited file or a hostile backup could
-  make the app unopenable through a door nothing was watching. From the product review's
+  make the app unopenable through a door nothing was watching. The limit leaves an over-long name out rather than shortening it: a shortened name would stop matching the notes filed under it, which is worse than the problem it solves. From the product review's
   second wave.
 - **"Save as template" stopped calling a checklist a nothing.** A note whose content was
   its checklist was refused with "This note is empty" — by the same screen whose template
@@ -195,13 +195,6 @@ adversarial review of the first round proved the class was wider than the findin
   and the rescue copy was spent anyway under a cheerful "Restored". It writes the note
   directly now, and says plainly that it restores the whole note. From the product
   review's second wave.
-- **A per-day edit that ends in a table stops asking to be saved.** A single day of a
-  repeating note, edited and saved, came back every time reading as though it still had
-  unsaved changes: the editor draws a line under a trailing table and the stored text
-  did not have one. That alone would be a nuisance; what made it serious is the question
-  it triggered — "save this day or the whole series?" — on every note switch and at
-  close, for an edit nobody had made, whose "whole series" answer replaced the note's
-  text with that one day's. From the product review's third pass.
 - **Changing something the whole series owns no longer asks an impossible question.**
   Tick a checklist item while looking at one day and the app asked whether you meant
   that day or the series — but a per-day edit can only hold text, so "this day" had
@@ -209,25 +202,6 @@ adversarial review of the first round proved the class was wider than the findin
   dropped the tick, and asked again the next time. It saves to the series now, without
   asking, and still asks whenever the edit is one a single day really can carry. From
   the product review's third pass.
-- **Emptying a short note leaves something to come back to.** The rescue copy behind
-  "Restore previous" only appeared when a lot of text vanished at once, which was
-  enough while an emptied note could not be saved at all. Now that clearing a note is an
-  ordinary edit, a short one — a three-item shopping list — was written away blank with
-  no rescue copy, nothing in the Trash, and the undo history already reset. From the
-  product review's third pass.
-- **A very long category name no longer quietly unfiles your notes.** The list of
-  categories gained a size limit, and the first version enforced it by SHORTENING the
-  name — so every note filed under the full name no longer matched a category that
-  existed and fell back to "General". An over-long name is left out instead, which is
-  visible, rather than renamed, which is not. From the product review's third pass.
-- **Ctrl+S and the Save button agree about a bare dated reminder.** One accepted a note
-  holding only a date; the other silently did nothing. From the product review's third
-  pass.
-- **"Back to Calendar" stopped being a dead button.** Start a note from a calendar day,
-  set it to repeat, then change your mind: the way back refused to work and told you to
-  answer a save question that was never asked. From the product review's third pass.
-
-
 ### Testing
 - Every fix above carries a regression check born red-under-mutation: the emptiness and
   whitespace checks drive the real gestures (the autosave timer's callee, the
