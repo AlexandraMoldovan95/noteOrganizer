@@ -124,7 +124,7 @@ adversarial review of the first round proved the class was wider than the findin
   half-typed date, a cancelled question), losing the copy and the restore in one
   stroke. The copy is cleared only after the save provably landed. From the product
   review, the ordering from the adversarial review.
-- **A pasted share code can't brick or hang the app — through any of its fields.**
+- **A pasted share code can't brick the app through a field with no size limit.**
   Checklists had no size limit anywhere: a 60 KB code carrying twenty thousand items was
   saved first and then killed the app on every launch after. Checklists are now capped
   at 1000 items at the choke point every route passes through — templates included,
