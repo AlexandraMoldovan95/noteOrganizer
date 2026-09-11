@@ -9588,14 +9588,20 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             "Calendar: oldest",
         ]
         self.sort_var = tk.StringVar(value=self.SORT_OPTIONS[0])
-        # width_chars=18: the default (14) renders "Recently updated" at
-        # exactly its natural text width with zero margin, which is why the
-        # last letter looked cut off. Measured with tkinter.font: the
-        # longest option needs 90px, and width=18 gives 114px — comfortable
-        # room without wasting space on the shorter options.
+        # width_chars=0: content-sized, because this control is the one
+        # packed to FLEX below and a width fixed in characters defeats
+        # that. 18 was the previous number, chosen by measuring the label
+        # alone -- the longest option needs 93px and 18 chars gives 114px,
+        # so the label did fit. The ROW then asked for 260px inside a
+        # 250px sidebar, and pack took the 10px off this control's right
+        # edge: its arrow, then the last letters of "Recently updated".
+        # Visible in every scene screenshot, and invisible to any check
+        # that measures the label. No fixed number would have worked
+        # either -- 16 fits Segoe UI on Windows and is still 19px
+        # over-full in DejaVu Sans on the Linux CI image.
         sort_menu = self._build_themed_dropdown(
             filter_row, self.sort_var, self.SORT_OPTIONS,
-            on_change=lambda v: self.refresh_note_list(), width_chars=18)
+            on_change=lambda v: self.refresh_note_list(), width_chars=0)
 
         self.filter_var = tk.StringVar(value="All")
         self.filter_menu = self._build_themed_dropdown(
@@ -9603,7 +9609,13 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             lambda: (["All", self.FILTER_REPEATING, self.FILTER_DATED]
                      + list(CATEGORY_COLORS.keys())),
             on_change=lambda v: self.refresh_note_list(),
-            dot_color_fn=lambda v: CATEGORY_COLORS.get(v), width_chars=13)
+            # Content-sized too, for the same reason as the sort control
+            # above: 13 characters is 113px in Segoe UI and 122px in
+            # DejaVu Sans, and the row has 250px for both. Anchored right
+            # and not flexing, it takes exactly what it is showing; the
+            # sort control beside it absorbs whatever is left, including
+            # when a long category name is selected here.
+            dot_color_fn=lambda v: CATEGORY_COLORS.get(v), width_chars=0)
         # Packed FIRST so pack honours its width — packed last on a full
         # row, the button was squeezed to a bare "🔁 R…" (seen in a
         # screenshot, not guessed). The sort button flexes instead.

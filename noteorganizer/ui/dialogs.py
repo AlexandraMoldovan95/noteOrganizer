@@ -238,6 +238,14 @@ class DialogsMixin:
 
     def _build_themed_dropdown(self, parent, var, options, on_change,
                                dot_color_fn=None, width_chars=14, nested=False):
+        # width_chars=0 means "as wide as whatever is showing" -- Tk's own
+        # content sizing. Use it for a dropdown that shares a row and is
+        # packed to flex: a width fixed in CHARACTERS makes the control
+        # ask for more than the row has, and pack takes the difference off
+        # its right edge (arrow first, then letters) instead of the label
+        # simply shrinking. No fixed number can be right for both
+        # platforms anyway -- the same count that fits Segoe UI on Windows
+        # is 19px over-full in DejaVu Sans on the Linux CI image.
         """Build a small themed dropdown button (replaces ttk.Combobox for
         simple single-choice selectors like sort/filter). Returns the button
         Frame; pack it into the caller's layout. `dot_color_fn(value)` — if
