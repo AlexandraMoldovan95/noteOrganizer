@@ -1345,6 +1345,91 @@ _big_fmt = _nf([{"start": i, "end": i + 1, "style": "bold"}
                 for i in range(_MFS + 5000)])
 check("formatting spans meet their anti-bomb ceiling",
       len(_big_fmt) == _MFS)
+# ---- The styling bomb the SPAN ceiling waves through (per line) ----
+# MAX_FORMATTING_SPANS counts a whole note and sits at 10,000 on purpose,
+# so it is not the defence here: what stops Tk finishing a draw is how
+# many tagged ranges land on ONE LINE, and two shapes get there while
+# staying far under 10,000 spans. Both were measured against the real
+# editor and both failed to finish in 75 seconds; a pasted note is saved
+# before it is ever drawn, so either one made the app unopenable on every
+# launch after -- the checklist bomb, one field over.
+from noteorganizer.core.formatting import (MAX_SPANS_PER_LINE as _MSPL,
+                                           MAX_LINE_RANGES as _MLR)
+
+_one_line = "x" * 9000
+_pile = _nn_att({"title": "x", "body": _one_line,
+                 "formatting": [{"start": (3 * i) % 8000,
+                                 "end": (3 * i) % 8000 + 2,
+                                 "style": "highlight",
+                                 "value": "#%06x" % (i * 4001 % 0xffffff)}
+                                for i in range(2000)]})
+check("2,000 styling spans piled on one line are cut to the line ceiling",
+      len(_pile["formatting"]) == _MSPL)
+check("...and that is well under the span ceiling that was meant to "
+      "cover it", 2000 < _MFS)
+
+# The shape that walked through the first version of this clamp: no line
+# has many spans STARTING on it, yet the last line wears all of them.
+_many = "\n".join("abcdefghij" for _ in range(400))
+_offs, _o = [], 0
+for _ln_ in _many.split("\n"):
+    _offs.append(_o)
+    _o += len(_ln_) + 1
+_reach = _nn_att({"title": "x", "body": _many,
+                  "formatting": [{"start": _offs[i % 400], "end": len(_many),
+                                  "style": "highlight",
+                                  "value": "#%06x" % (i * 4001 % 0xffffff)}
+                                 for i in range(2000)]})
+_drawn = sum(sp["end"] > sp["start"] and
+             _many.count("\n", sp["start"], sp["end"]) + 1
+             for sp in _reach["formatting"])
+check("spans that each run to the end of the note are cut by what they "
+      "would DRAW, not by how many there are", _drawn <= _MLR)
+check("...and only five of them ever started on any one line, so the "
+      "per-line count alone would have let them through",
+      max(sum(1 for sp in _reach["formatting"] if sp["start"] == _offs[i])
+          for i in range(400)) <= 5)
+
+# The asymmetry that matters more than either: a real note is UNTOUCHED.
+# Not "roughly the same length" -- identical, span for span. A ceiling
+# that quietly edits ordinary notes is worse than the bomb it stops.
+_real_spans = [{"start": _offs[i], "end": _offs[i] + 5, "style": "bold"}
+               for i in range(300)]
+_real = _nn_att({"title": "x", "body": _many,
+                 "formatting": [dict(sp) for sp in _real_spans]})
+check("300 bold words across 300 lines pass through unchanged",
+      _real["formatting"] == _real_spans)
+_para_spans = [{"start": 3 * i, "end": 3 * i + 2, "style": "bold"}
+               for i in range(_MSPL)]
+_para = _nn_att({"title": "x", "body": _one_line,
+                 "formatting": [dict(sp) for sp in _para_spans]})
+check("a densely styled paragraph right AT the ceiling is untouched too",
+      _para["formatting"] == _para_spans)
+
+# Every door into the editor, not just the note one. A template is
+# applied straight into the body widget and never meets normalize_note --
+# which is exactly how the checklist bomb got a second life.
+from noteorganizer.core.storage import normalize_template as _nt
+_tpl_bomb = _nt({"name": "t", "body": _one_line,
+                 "formatting": [{"start": (3 * i) % 8000,
+                                 "end": (3 * i) % 8000 + 2,
+                                 "style": "highlight",
+                                 "value": "#%06x" % (i * 4001 % 0xffffff)}
+                                for i in range(2000)]})
+check("a template meets the same per-line ceiling a note does",
+      len(_tpl_bomb["formatting"]) == _MSPL)
+# "Restore previous version" is the third door: it puts stored spans
+# straight back into the editor without passing the note's own field.
+_prev_bomb = _nn_att({"title": "x", "body": "y", "_prev": {
+    "title": "x", "body": _one_line, "comments": "",
+    "formatting": [{"start": (3 * i) % 8000, "end": (3 * i) % 8000 + 2,
+                    "style": "highlight",
+                    "value": "#%06x" % (i * 4001 % 0xffffff)}
+                   for i in range(2000)],
+    "paragraphs": []}})
+check("so does the previous version a note carries for its restore button",
+      len(_prev_bomb["_prev"]["formatting"]) == _MSPL)
+
 _big_att = _nn_att({"title": "x", "attachments": [
     {"stored_as": "f%d.txt" % i} for i in range(_MA + 300)]})
 check("attachment records meet their ceiling",

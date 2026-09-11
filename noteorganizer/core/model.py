@@ -39,7 +39,8 @@ import re
 from datetime import datetime
 
 from .categories import CATEGORY_COLORS
-from .formatting import normalize_formatting, normalize_paragraphs
+from .formatting import (normalize_formatting, normalize_paragraphs,
+                         clamp_spans_per_line)
 from .tables import with_caret_line
 from .recurrence import (
     normalize_recurrence,
@@ -183,8 +184,13 @@ def normalize_note(note):
             "title": prev.get("title") if isinstance(prev.get("title"), str) else "",
             "body": prev.get("body") if isinstance(prev.get("body"), str) else "",
             "comments": prev.get("comments") if isinstance(prev.get("comments"), str) else "",
-            "formatting": normalize_formatting(
-                prev.get("formatting") if isinstance(prev.get("formatting"), list) else []),
+            # Restoring a previous version puts these spans straight into
+            # the editor, so the line ceiling has to hold here too.
+            "formatting": clamp_spans_per_line(
+                prev.get("body") if isinstance(prev.get("body"), str) else "",
+                normalize_formatting(
+                    prev.get("formatting")
+                    if isinstance(prev.get("formatting"), list) else [])),
             "paragraphs": normalize_paragraphs(
                 prev.get("paragraphs") if isinstance(prev.get("paragraphs"), list) else []),
         }
@@ -336,7 +342,12 @@ def normalize_note(note):
             break
     clean["attachments"] = attachments
 
-    clean["formatting"] = normalize_formatting(clean.get("formatting"))
+    # Two ceilings, both anti-bomb: normalize_formatting caps the note's
+    # total, and the clamp caps what may land on any ONE LINE -- the
+    # shape that actually stops Tk from finishing the draw. See
+    # core.formatting.MAX_SPANS_PER_LINE.
+    clean["formatting"] = clamp_spans_per_line(
+        clean["body"], normalize_formatting(clean.get("formatting")))
 
     # A colour the app can't draw must not survive to the render: the
     # note is saved before it is first drawn, so garbage here used to be

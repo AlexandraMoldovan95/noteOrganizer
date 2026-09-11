@@ -45,7 +45,7 @@ except ImportError:
 # Added/Fixed CHANGELOG.md entries, not per-release counts). The running
 # app records this into settings, so the next time a newer build opens
 # over older data it can tell the user what changed version-wise.
-APP_VERSION = "0.71.154"
+APP_VERSION = "0.71.155"
 
 
 def parse_version(v):
@@ -202,6 +202,8 @@ from noteorganizer.core.formatting import (
     MAX_FORMATTING_SPANS,
     parse_font_tag,
     resolve_font_runs,
+    clamp_spans_per_line,
+    MAX_SPANS_PER_LINE,
     COLOR_FORMAT_STYLES,
     FONT_VALUE_STYLES,
     FONT_FAMILIES,
@@ -7420,11 +7422,21 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # the last moment the original sizes are still visible.
         def _ln(v):
             return len(v) if isinstance(v, (list, tuple)) else 0
+        def _line_trimmed(sn):
+            spans = sn.get("formatting")
+            if not isinstance(spans, list) or len(spans) <= MAX_SPANS_PER_LINE:
+                return False
+            body = sn.get("body")
+            clean = normalize_formatting(spans)
+            return len(clamp_spans_per_line(
+                body if isinstance(body, str) else "", clean)) < len(clean)
+
         oversized = sum(
             1 for sn in valid
             if _ln(sn.get("checklist")) > MAX_CHECKLIST_ITEMS
             or _ln(sn.get("attachments")) > MAX_ATTACHMENTS
-            or _ln(sn.get("formatting")) > MAX_FORMATTING_SPANS)
+            or _ln(sn.get("formatting")) > MAX_FORMATTING_SPANS
+            or _line_trimmed(sn))
         if len(valid) == 1:
             incoming = valid[0]
             existing_keys = {_dup_key(n) for n in self.notes}
@@ -7901,7 +7913,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 "so it arrived trimmed to the app's limits "
                 f"({MAX_CHECKLIST_ITEMS} checklist items, "
                 f"{MAX_ATTACHMENTS} files, "
-                f"{MAX_FORMATTING_SPANS} styled spans).\n\n"
+                f"{MAX_FORMATTING_SPANS} styled spans, "
+                f"{MAX_SPANS_PER_LINE} of them on any one line).\n\n"
                 "Nothing of yours was touched — this is only about what "
                 "arrived. Review it before saving.")
 

@@ -12,6 +12,7 @@ How the numbers themselves are counted is the
 
 | Version | Date | In one line |
 |---|---|---|
+| [0.71.155](#071155--2026-09-11) | 2026-09-11 | Styling meets a per-line ceiling — the shape of a note's formatting, not just how much of it there is, can no longer keep the app from opening. |
 | [0.71.154](#071154--2026-09-11) | 2026-09-11 | The product review's Tier 0 closed whole — every way the app could lose, mangle or refuse your work, then closed again where three adversarial passes proved the class was wider than the finding. |
 | [0.71.135](#071135--2026-09-10) | 2026-09-10 | Removing an attachment asks first — the one permanent delete that skipped every confirmation, closed by the destructive-gesture sweep. |
 | [0.71.134](#071134--2026-09-10) | 2026-09-10 | Nine audit small classes closed — the calculator, bleeding paste styles, honest Select-all, nested Escape, pasted tables, whole backups, autosave traces and a theming leak. |
@@ -55,6 +56,39 @@ How the numbers themselves are counted is the
 ---
 
 ## [Unreleased]
+
+## [0.71.155] — 2026-09-11
+
+*Highlights: the styling ceiling shipped one version earlier counted the wrong thing —
+a note could still be built that the editor never finishes drawing, using a fifth of
+what that ceiling allows.*
+
+### Fixed
+
+- **A pasted share code can't hang the app through its styling either.** The ceiling
+  added in 0.71.154 caps how many styling spans a note may carry, and that turns out
+  not to be what costs anything: what stops the editor finishing a draw is how many
+  styled pieces land on a single LINE. Two shapes reach that while staying far under
+  the cap — every span crowded onto one line, or every span stretched to the end of the
+  note so they all pile onto the last one — and neither finished drawing at all. Since a
+  pasted note is saved before it is ever shown, such a note made the app fail to open on
+  every launch after, which is the same failure as the oversized checklist, one field
+  over. Styling now meets two ceilings at the same door the checklist and attachment
+  ceilings already use: how much may cover one line, and how much a note may draw in
+  total. Both sit far above anything a person writes — 300 bold words across 300 lines,
+  or a densely styled paragraph, pass through untouched — and all three ways styling
+  reaches the editor (a note, a template, and the copy behind "Restore previous") meet
+  them. From re-measuring a recorded residual that turned out to be wrong.
+
+### Testing
+
+- The shapes that used to hang are held by the unit suite, which builds no window and
+  can therefore carry them safely; the GUI suite witnesses the same ceiling at the
+  editor door, at a size just over it, so removing the fix turns a check red instead of
+  hanging the run before it can report anything.
+- Five mutants, every one killed with the run reaching its failures footer — and the two
+  checks that guard ordinary, heavily-styled notes stay green under all five, which is
+  what proves the ceiling only refuses what it is meant to.
 
 ## [0.71.154] — 2026-09-11
 

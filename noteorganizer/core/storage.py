@@ -48,7 +48,8 @@ from datetime import datetime, timedelta
 from . import paths
 # normalize_template validates a template's rich-text spans and its
 # paragraph formatting, so the storage layer needs both validators.
-from .formatting import normalize_formatting, normalize_paragraphs
+from .formatting import (normalize_formatting, normalize_paragraphs,
+                         clamp_spans_per_line)
 
 # Deleted notes live in the trash this many days, then auto-purge on
 # startup. This is the DEFAULT; the actual window is a setting, read
@@ -116,7 +117,11 @@ def normalize_template(tpl):
         "name": _s("name") or "Untitled template",
         "title": _s("title"),
         "body": _s("body"),
-        "formatting": normalize_formatting(tpl.get("formatting")),
+        # Capped per line like a note's, and for the same reason the
+        # checklist above is capped here: normalize_note never sees a
+        # template, so this is its own door into the editor.
+        "formatting": clamp_spans_per_line(
+            _s("body"), normalize_formatting(tpl.get("formatting"))),
         "paragraphs": normalize_paragraphs(tpl.get("paragraphs"),
                                            len(_s("body").split("\n"))),
         "comments": _s("comments"),
