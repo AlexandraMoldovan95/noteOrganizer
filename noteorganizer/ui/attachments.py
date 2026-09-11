@@ -105,8 +105,14 @@ class AttachmentsMixin:
             # extension (stored_as preserves the original extension — see
             # add_attachment), NOT the display filename a crafted note
             # controls separately, so a ".exe" masquerading as "doc.pdf"
-            # can't skip the warning.
-            ext = os.path.splitext(stored_as)[1].lower()
+            # can't skip the warning. Trailing dots/spaces come off first,
+            # because Windows strips them when it OPENS a path: to
+            # splitext, "invoice.lnk. " has no extension at all, while
+            # os.startfile on that same string executes invoice.lnk —
+            # normalize_note already stores clean names, and this repeats
+            # the rstrip at the sink so the two can never disagree even
+            # for a record that predates that rule.
+            ext = os.path.splitext(stored_as.rstrip(". "))[1].lower()
 
             # Pillow decodes all of these — shown large, right in the app,
             # instead of handing off to whatever image viewer Windows has
@@ -269,7 +275,14 @@ class AttachmentsMixin:
             return
 
         for i, att in enumerate(self.current_attachments):
-            ext = os.path.splitext(att["filename"])[1].lower()
+            # .get, not [ ]: normalize_note now guarantees every stored
+            # record carries string names, but this render runs mid
+            # load_note — a KeyError here once aborted the load halfway
+            # and left the editor holding the PREVIOUS note's checklist,
+            # which the next save wrote onto the wrong note. A blank name
+            # draws an odd row; a crash here corrupts data.
+            display_name = att.get("filename") or att.get("stored_as") or ""
+            ext = os.path.splitext(display_name)[1].lower()
             icon = "🖼️" if ext in (".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp") else "📄"
             can_preview_inline = ext in (".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp")
 
@@ -279,7 +292,7 @@ class AttachmentsMixin:
             top_row = tk.Frame(row, bg=self.colors["card"])
             top_row.pack(fill="x")
 
-            name_lbl = tk.Label(top_row, text=f"{icon} {att['filename']}", font=("Segoe UI", 9),
+            name_lbl = tk.Label(top_row, text=f"{icon} {display_name}", font=("Segoe UI", 9),
                                  anchor="w", cursor="hand2",
                                  bg=self.colors["card"], fg=self.colors["text"])
             name_lbl.pack(side="left", fill="x", expand=True, padx=8, pady=4)

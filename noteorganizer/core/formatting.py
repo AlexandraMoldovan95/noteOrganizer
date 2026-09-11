@@ -81,6 +81,21 @@ MONOSPACE_FAMILIES = ("Consolas", "Courier New", "DejaVu Sans Mono",
 
 FONT_SIZES = (9, 10, 11, 12, 14, 16, 20, 24)
 
+# The most styling spans one note may carry — an anti-bomb ceiling, NOT a
+# performance promise. A crafted share code with 100,000 spans is a few KB
+# of pasteable text; saved first and re-rendered on every launch, it was
+# the same make-the-app-unopenable class as the checklist bomb, one field
+# over. The ceiling sits far above real content (measured: a 3,000-char
+# body wearing 10,000 spans still opens in ~4 s on a fast machine —
+# unpleasant, alive), because a Word-paste of a long styled document
+# produces THOUSANDS of legitimate spans and truncating those would be
+# visible data corruption. What the ceiling deliberately does not fix,
+# recorded in qa/COVERAGE_LEDGER.md rather than papered over: the editor
+# reads formatting back 5-6 times per note-open, each read costs
+# O(ranges x body length), and a single-line body with a few thousand
+# spans hangs Tk's layout below ANY sane cap.
+MAX_FORMATTING_SPANS = 10000
+
 
 def _is_valid_hex_color(value):
     return (isinstance(value, str) and len(value) == 7 and value[0] == "#"
@@ -123,6 +138,11 @@ def normalize_formatting(value):
             if isinstance(family, str) and family in FONT_FAMILIES:
                 spans.append({"start": start, "end": end, "style": style,
                               "value": family})
+        if len(spans) >= MAX_FORMATTING_SPANS:
+            # See MAX_FORMATTING_SPANS above: a bomb ceiling at the one
+            # choke point every route passes through, generous enough
+            # that no real document ever reaches it.
+            break
     return spans
 
 

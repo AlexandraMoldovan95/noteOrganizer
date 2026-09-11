@@ -28,13 +28,20 @@ which keeps the app's one-dependency promise.
 
 THE DELIBERATE FAILURE MODE
 ---------------------------
-If the lock cannot be created at all — a read-only folder, an exotic
-filesystem — this reports success. Refusing to start because a *lock*
+If the lock cannot be *taken* for any reason other than "another process
+holds it" — a read-only folder where the file can't be created, or a
+filesystem that refuses byte-range locks outright (network shares and
+exotic mounts answer the locking call with EINVAL/ENOLCK/EOPNOTSUPP, not
+the open) — this reports success. Refusing to start because a *lock*
 failed would turn a cosmetic problem into "the app won't open", which is
-worse than the risk it guards against. The lock is advisory: it stops the
-ordinary accident, not a determined user.
+worse than the risk it guards against; the first version got this wrong
+by reading EVERY locking error as "already open", which permanently
+bricked the app on exactly those folders. Only the errnos that
+specifically mean "someone else holds it" refuse. The lock is advisory:
+it stops the ordinary accident, not a determined user.
 """
 
+import errno
 import os
 
 from . import paths
@@ -71,12 +78,20 @@ def acquire(path=None):
         else:
             import fcntl
             fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
-    except (IOError, OSError):
+    except (IOError, OSError) as exc:
         try:
             handle.close()
         except (IOError, OSError):
             pass
-        return False
+        # Only the errnos that mean "another process holds this byte"
+        # refuse: msvcrt answers EACCES (or EDEADLK after its retries),
+        # fcntl with LOCK_NB answers EAGAIN/EWOULDBLOCK. Every other
+        # errno is the filesystem saying it cannot do locking AT ALL,
+        # which must fail open — see the module docstring.
+        if getattr(exc, "errno", None) in (errno.EACCES, errno.EAGAIN,
+                                           errno.EWOULDBLOCK, errno.EDEADLK):
+            return False
+        return True
     _held = handle
     return True
 

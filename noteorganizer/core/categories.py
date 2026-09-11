@@ -50,13 +50,21 @@ CATEGORY_COLORS = dict(DEFAULT_CATEGORY_COLORS)
 def load_categories():
     """Read the user's categories from settings, falling back to defaults.
     Guarantees General exists and stays first."""
+    # Lazy import: model itself imports this module (for the live map),
+    # so a top-level import of model from here would close a cycle while
+    # model is still half initialised.
+    from .model import sanitize_color
     saved = load_settings().get("categories")
     result = {}
     if isinstance(saved, dict) and saved:
-        # Keep only well-formed name -> #hex entries.
+        # Keep only well-formed name -> #hex entries. startswith('#') was
+        # the old test, and it waved through "#not-a-colour", which then
+        # raised TclError inside whatever render touched that category —
+        # settings.json is hand-editable and travels inside backups, so
+        # this is an untrusted door like any other.
         for name, color in saved.items():
-            if (isinstance(name, str) and name.strip()
-                    and isinstance(color, str) and color.startswith("#")):
+            color = sanitize_color(color)
+            if isinstance(name, str) and name.strip() and color:
                 result[name.strip()] = color
     if not result:
         result = dict(DEFAULT_CATEGORY_COLORS)

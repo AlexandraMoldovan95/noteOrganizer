@@ -54,6 +54,15 @@ from .recurrence import (
 # kill the app with a pasted share code (see normalize_note).
 MAX_CHECKLIST_ITEMS = 1000
 
+# Same class, sibling field: attachments render a row of widgets each and
+# arrive through every one of the same untrusted routes (share code,
+# imported backup, hand-edited file). Far above any real notebook — the
+# point is a ceiling, not a budget. Measured: 200 records paint in ~0.6 s
+# on a fast machine (a few seconds on a weak one), and real use tops out
+# around tens of files, so 200 protects the app without ever truncating
+# a genuine notebook.
+MAX_ATTACHMENTS = 200
+
 
 NOTE_DEFAULTS = {
     "title": "",
@@ -94,6 +103,24 @@ def _extract_first_emoji(text):
         return None
     m = _EMOJI_PATTERN.search(text)
     return m.group(0) if m else None
+
+
+_HEX_COLOR = re.compile(r"^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$")
+
+
+def sanitize_color(value, default=""):
+    """*value* if it is a colour Tk can draw, else *default*.
+
+    Colour strings arrive from every untrusted door the app has — a share
+    code, an imported backup's settings.json, a hand-edited file — and
+    end their journey inside a Tk ``configure(bg=...)``, which raises
+    TclError on garbage. Because a note is SAVED before it is first
+    drawn, one bad colour used to mean a crash on every launch after:
+    the T0-7 brick, on a different field. Only #rgb/#rrggbb pass; the
+    app itself never writes anything else."""
+    if isinstance(value, str) and _HEX_COLOR.match(value.strip()):
+        return value.strip()
+    return default
 
 
 def _darken_hex(hex_color, factor=0.85):
@@ -243,11 +270,43 @@ def normalize_note(note):
         item = dict(att)
         stored = item.get("stored_as")
         if isinstance(stored, str) and stored:
-            item["stored_as"] = os.path.basename(stored.replace("\\", "/"))
+            # basename flattens smuggled paths; the rstrip removes
+            # trailing dots/spaces, which Windows itself strips when
+            # opening a file — so "invoice.lnk. " names invoice.lnk on
+            # disk while reading as extension-less to the warn-before-
+            # opening gate. Normalised here, the name the gate inspects
+            # and the file the OS opens can never disagree.
+            stored = os.path.basename(stored.replace("\\", "/")).rstrip(". ")
+            item["stored_as"] = stored
+        else:
+            stored = ""
+        # A record without usable names aborted load_note halfway (a
+        # KeyError mid-render), leaving the editor holding the PREVIOUS
+        # note's checklist — which the next save then wrote onto this
+        # one. Guarantee both names are strings here, at the choke point,
+        # and drop a record that names no file at all.
+        display = item.get("filename")
+        if not isinstance(display, str) or not display:
+            display = stored
+        if not stored and not display:
+            continue
+        item["filename"] = display
+        if not isinstance(item.get("stored_as"), str) or not item["stored_as"]:
+            item["stored_as"] = display
         attachments.append(item)
+        if len(attachments) >= MAX_ATTACHMENTS:
+            # Same class as the checklist cap above: an unbounded list a
+            # share code can inflate for free, met by a renderer that
+            # rebuilds a row per entry.
+            break
     clean["attachments"] = attachments
 
     clean["formatting"] = normalize_formatting(clean.get("formatting"))
+
+    # A colour the app can't draw must not survive to the render: the
+    # note is saved before it is first drawn, so garbage here used to be
+    # a crash on every subsequent launch.
+    clean["color"] = sanitize_color(clean.get("color"))
 
     return clean
 
@@ -338,11 +397,55 @@ def _attachment_signature(attachments):
 
 
 def _recurrence_signature(recurrence):
+    """A repeat rule as a hashable tuple — SEMANTICS, not representation.
+
+    The raw form and the normalized form of the same rule must sign
+    identically: a no-repeat note stores ``{}`` when hand-written and a
+    fully-defaulted dict after normalize_recurrence, and signing those
+    differently made every consumer see two different notes — the purge
+    stopped recognising covered folders, and the duplicate scan stopped
+    recognising true duplicates, the moment one side of the comparison
+    had been normalized and the other had not."""
     if not isinstance(recurrence, dict):
         return ()
+    normalized = normalize_recurrence(recurrence)
+    if not normalized.get("freq"):
+        return ()
     return tuple(sorted(
-        (k, str(v)) for k, v in recurrence.items() if k != "freq"
-    )) + (str(recurrence.get("freq") or ""),)
+        (k, str(v)) for k, v in normalized.items() if k != "freq"
+    )) + (str(normalized["freq"]),)
+
+
+def content_signature(note):
+    """THE identity of a note's content — one definition, every consumer.
+
+    Two other modules ask "is this the same note?" with life-or-death
+    stakes: clean_notes below collapses duplicates at startup, and
+    core/paths.py's stale-copy purge uses it to authorise deleting a whole
+    leftover notebook folder from disk. Each used to carry its own
+    hand-rolled field tuple, and the two drifted: when the checklist
+    joined this one, the purge's copy still judged notes by
+    (title, body, comments, category, date) alone, so a legacy folder
+    whose notes differed from the local ones ONLY by their checklists
+    still read as "fully covered" and was deleted — no Trash, no undo.
+    A field list that exists twice WILL fall out of step; this function
+    is the fix at the root of that class.
+
+    'id' and 'updated' are deliberately excluded — those differ on
+    copies. Defensive about shapes throughout, because the purge feeds it
+    raw dicts parsed straight from disk, before any normalization."""
+    def _text(value):
+        return value.strip() if isinstance(value, str) else ""
+    return (
+        _text(note.get("title")),
+        _text(note.get("body")),
+        _text(note.get("comments")),
+        str(note.get("category") or ""),
+        str(note.get("date") or ""),
+        _checklist_signature(note.get("checklist")),
+        _attachment_signature(note.get("attachments")),
+        _recurrence_signature(note.get("recurrence")),
+    )
 
 
 def clean_notes(notes):
@@ -353,27 +456,12 @@ def clean_notes(notes):
     kept = [n for n in notes if not note_is_empty(n)]
     stats["empty_removed"] = len(notes) - len(kept)
 
-    # Two notes are "the same" if their actual content matches. 'updated'
-    # and 'id' are deliberately excluded — those differ on copies.
+    # Two notes are "the same" if their actual content matches — as
+    # defined ONCE, for every consumer, by content_signature above.
     best_by_signature = {}
     order = []
     for note in kept:
-        # Every field that makes two notes genuinely different belongs in
-        # here. The checklist did not, so a note and its copy that
-        # differed ONLY in what was ticked collapsed into one and the
-        # other was deleted outright — the same blind spot as
-        # note_is_empty above. Checklists and attachments are compared by
-        # a stable, hashable projection of their content.
-        signature = (
-            note["title"].strip(),
-            note["body"].strip(),
-            note["comments"].strip(),
-            note["category"],
-            note["date"],
-            _checklist_signature(note.get("checklist")),
-            _attachment_signature(note.get("attachments")),
-            _recurrence_signature(note.get("recurrence")),
-        )
+        signature = content_signature(note)
         existing = best_by_signature.get(signature)
         if existing is None:
             best_by_signature[signature] = note

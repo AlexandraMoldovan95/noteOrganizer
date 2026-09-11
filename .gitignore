@@ -44,6 +44,10 @@ Thumbs.db
 crash_log.txt
 notes_data.json.tmp
 
+# The single-instance lock: created beside the notebook on every launch
+# (the repo root, when run from source) and kept while the app is open.
+.notebook.lock
+
 # --- QA scratch files (keep the tracked test plan, ignore working copies) ---
 qa/__pycache__/
 qa/*.json

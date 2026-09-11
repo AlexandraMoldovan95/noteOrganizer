@@ -199,6 +199,7 @@ from noteorganizer.core.formatting import (
     merge_spans,
     split_toolbar_rows,
     MAX_INDENT,
+    MAX_FORMATTING_SPANS,
     parse_font_tag,
     resolve_font_runs,
     COLOR_FORMAT_STYLES,
@@ -327,7 +328,10 @@ from noteorganizer.core.model import (
     note_is_empty,
     reading_time,
     clean_notes,
+    content_signature,
+    sanitize_color,
     MAX_CHECKLIST_ITEMS,
+    MAX_ATTACHMENTS,
 )
 
 
@@ -517,18 +521,32 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             save_trash(self.trash)
 
         # User-chosen colors for individual calendar days (date -> #hex).
+        # Each value passes sanitize_color: settings.json is hand-editable
+        # and rides inside backups, and one garbage value here reached
+        # render_calendar's configure() on every launch — the make-the-app-
+        # unopenable class, through the calendar's door.
         saved_day_colors = load_settings().get("day_colors")
-        self.day_colors = dict(saved_day_colors) if isinstance(saved_day_colors, dict) else {}
+        self.day_colors = {}
+        if isinstance(saved_day_colors, dict):
+            for d, c in saved_day_colors.items():
+                c = sanitize_color(c)
+                if isinstance(d, str) and c:
+                    self.day_colors[d] = c
 
         # User-chosen emoji markers for individual calendar days (date -> list
         # of emoji characters), independent of any note. E.g. flag a day with
         # a couple of markers even before you've written a note for it.
+        # Capped at 3 per day on the way in — the same cap the picker
+        # enforces — so a hand-edited file can't stack hundreds of markers
+        # into every day cell's redraw.
         saved_day_emoji = load_settings().get("day_emoji")
         self.day_emoji = {}
         if isinstance(saved_day_emoji, dict):
             for d, v in saved_day_emoji.items():
                 if isinstance(v, list):
-                    self.day_emoji[d] = [e for e in v if isinstance(e, str) and e]
+                    kept = [e for e in v if isinstance(e, str) and e][:3]
+                    if kept:
+                        self.day_emoji[d] = kept
                 elif isinstance(v, str) and v:
                     # Older format stored a single emoji per day — migrate it
                     # into the new list-based format transparently.
@@ -751,14 +769,14 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         except Exception:
             self._log_swallowed("autosave: capture_editor_state")
             return
-        # Never auto-save a completely empty note — that would spawn junk notes
-        # every time the user clicks "New Note". Attachments and checklist
-        # items count as real content too, not just title/body — a note
-        # with only an attached file (no typed text at all) is genuinely
-        # meaningful and shouldn't be silently dropped.
-        if not (st.get("title", "").strip() or st.get("body", "").strip()
-                or st.get("comments", "").strip()
-                or st.get("attachments") or st.get("checklist")):
+        # Never auto-save a completely empty NEVER-SAVED note — that would
+        # spawn junk notes every time the user clicks "New Note". A note
+        # that already exists on disk is the opposite case: an empty editor
+        # there is a deliberate emptying, and this very gate silently
+        # throwing it away was T0-5's actual mechanism — the fix in
+        # save_current_note was unreachable because this early-return ran
+        # first on the autosave route.
+        if not self._editor_state_has_content(st) and not self._editing_saved_note():
             return
         # Only save if something actually changed vs. the saved version.
         try:
@@ -1030,19 +1048,29 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 self._cleanup_report[0].get("empty_removed")
                 or self._cleanup_report[0].get("duplicates_removed")):
             stats, backup_path = self._cleanup_report
+            # Plain words, in the user's vocabulary: this dialog removes
+            # notes PERMANENTLY, and its first draft described that as a
+            # "Cleanup pass" with "IDs renumbered" under a "setup
+            # complete" title — internal maintenance language wrapped
+            # around a deletion (the product review's T2-1, second half).
+            removed_bits = []
+            if stats["empty_removed"]:
+                removed_bits.append(f"{stats['empty_removed']} empty note(s)")
+            if stats["duplicates_removed"]:
+                removed_bits.append(
+                    f"{stats['duplicates_removed']} exact duplicate(s)")
             summary = (
-                f"Cleanup pass (runs once):\n"
-                f"  • Started with {stats['before']} note(s)\n"
-                f"  • Removed {stats['empty_removed']} empty note(s)\n"
-                f"  • Removed {stats['duplicates_removed']} duplicate(s)\n"
-                f"  • {stats['after']} note(s) remain, IDs renumbered 1–{stats['after']}"
+                f"While tidying up, {' and '.join(removed_bits)} "
+                f"were removed.\n"
+                f"{stats['after']} of your {stats['before']} note(s) remain."
             )
             if backup_path:
-                summary += f"\n\nA backup of the original was saved to:\n{backup_path}"
+                summary += (f"\n\nEverything as it was before is saved in:\n"
+                            f"{backup_path}")
             lines.append(summary)
 
         if lines:
-            self.show_info("Note Organizer — setup complete", "\n\n———\n\n".join(lines))
+            self.show_info("Note Organizer — your notes", "\n\n———\n\n".join(lines))
 
     # ---------- Data handling ----------
     def load_notes(self):
@@ -7384,6 +7412,17 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self.import_status.config(text="No valid notes in that code.",
                                       fg=self.colors["danger"])
             return
+        # Oversized notes are trimmed at normalize (the checklist,
+        # attachment and styling-span ceilings) — SAY so instead of
+        # silently dropping 19,000 items. Measured on the raw decode,
+        # the last moment the original sizes are still visible.
+        def _ln(v):
+            return len(v) if isinstance(v, (list, tuple)) else 0
+        oversized = sum(
+            1 for sn in valid
+            if _ln(sn.get("checklist")) > MAX_CHECKLIST_ITEMS
+            or _ln(sn.get("attachments")) > MAX_ATTACHMENTS
+            or _ln(sn.get("formatting")) > MAX_FORMATTING_SPANS)
         if len(valid) == 1:
             incoming = valid[0]
             existing_keys = {_dup_key(n) for n in self.notes}
@@ -7399,6 +7438,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     return
             self.import_box.delete("1.0", "end")
             self.toggle_import_panel()
+            if oversized:
+                self.set_status("Note arrived oversized — trimmed to the "
+                                "app's checklist/attachment/styling limits")
             self._open_imported_note_in_editor(incoming)
             return
         next_id = max([n["id"] for n in self.notes], default=0) + 1
@@ -7447,7 +7489,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.render_calendar()
         self.import_box.delete("1.0", "end")
         skipped_note = f" ({dupe_count} duplicate(s) skipped)" if dupe_count and to_import is not valid else ""
-        self.import_status.config(text=f"Added {added} notes ✓{skipped_note}", fg=self.colors["success"])
+        oversize_note = (f" — {oversized} oversized note(s) trimmed to safe limits"
+                         if oversized else "")
+        self.import_status.config(text=f"Added {added} notes ✓{skipped_note}{oversize_note}",
+                                  fg=self.colors["success"])
 
     def toggle_share_panel(self):
         if self.share_panel.winfo_ismapped():
@@ -7916,6 +7961,18 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                         cats = loaded.get("categories") if isinstance(loaded, dict) else None
                         if isinstance(cats, dict):
                             state["imported_categories"] = cats
+                        # The calendar's day colours and emoji markers are
+                        # user data the backup carries for the same reason
+                        # categories are — dropped on restore, a decorated
+                        # calendar came back bare with no word about it.
+                        # Raw dicts only here (worker thread, no widgets);
+                        # validation happens at the merge on the main
+                        # thread.
+                        if isinstance(loaded, dict):
+                            for decor_key in ("day_colors", "day_emoji"):
+                                decor = loaded.get(decor_key)
+                                if isinstance(decor, dict):
+                                    state["imported_" + decor_key] = decor
                     except (json.JSONDecodeError, IOError, OSError, AttributeError):
                         pass
 
@@ -7998,6 +8055,29 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # a zip full of notes you already have used to get silently merged in
         # with no warning.
         valid_notes = [n for n in imported_notes if isinstance(n, dict)]
+
+        # Bring the backup's categories in FIRST — before the duplicate
+        # scan below, not merely before the final merge loop: the scan
+        # normalizes every incoming note, and normalize_note re-files a
+        # note whose category is still unknown to General. Scanned in
+        # that state, a distinct note could read as a duplicate of a
+        # local General note and be silently skipped, while this dialog
+        # claimed its category matched. Additive — a name this device
+        # already uses keeps its own colour — and each colour passes
+        # sanitize_color, because a backup's settings.json is as
+        # untrusted as any other imported file and a garbage colour
+        # reaches a Tk configure in whatever render touches it.
+        added_categories = 0
+        for name, color in (state.get("imported_categories") or {}).items():
+            color = sanitize_color(color)
+            if (isinstance(name, str) and name.strip() and color
+                    and name.strip() not in CATEGORY_COLORS):
+                CATEGORY_COLORS[name.strip()] = color
+                added_categories += 1
+        if added_categories:
+            persist_categories()
+            self.refresh_category_widgets()
+
         existing_keys = {_dup_key(n) for n in self.notes}
         fresh = [n for n in valid_notes if _dup_key(normalize_note(n)) not in existing_keys]
         dupe_count = len(valid_notes) - len(fresh)
@@ -8028,20 +8108,32 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             if choice == "skip":
                 to_import = fresh
 
-        # Bring the backup's categories in FIRST: normalize_note checks
-        # each note's category against this map, so anything merged after
-        # the notes are normalized is already too late. Additive - a name
-        # this device already uses keeps its own colour.
-        added_categories = 0
-        for name, color in (state.get("imported_categories") or {}).items():
-            if (isinstance(name, str) and name.strip()
-                    and isinstance(color, str) and color.startswith("#")
-                    and name.strip() not in CATEGORY_COLORS):
-                CATEGORY_COLORS[name.strip()] = color
-                added_categories += 1
-        if added_categories:
-            persist_categories()
-            self.refresh_category_widgets()
+        # (Categories were merged above, BEFORE the duplicate scan.)
+
+        # Calendar day colours and emoji markers ride the backup's
+        # settings.json exactly like categories do, and used to be dropped
+        # the same way. Additive — a day this device already decorated
+        # keeps its own decoration — and validated on the way in: the
+        # colours through sanitize_color, the markers as up-to-3 non-empty
+        # strings, matching the picker's own cap.
+        restored_decor = 0
+        for d, c in (state.get("imported_day_colors") or {}).items():
+            c = sanitize_color(c)
+            if isinstance(d, str) and c and d not in self.day_colors:
+                self.day_colors[d] = c
+                restored_decor += 1
+        for d, v in (state.get("imported_day_emoji") or {}).items():
+            if isinstance(d, str) and d not in self.day_emoji:
+                if isinstance(v, str) and v:
+                    v = [v]  # the pre-list format older backups carry
+                if isinstance(v, list):
+                    kept = [e for e in v if isinstance(e, str) and e][:3]
+                    if kept:
+                        self.day_emoji[d] = kept
+                        restored_decor += 1
+        if restored_decor:
+            save_setting("day_colors", dict(self.day_colors))
+            save_setting("day_emoji", dict(self.day_emoji))
 
         # Files already spoken for — by a note we're keeping (re-importing
         # your own backup lands here) or by an earlier note in this same
@@ -8143,6 +8235,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         parts = []
         if added_categories:
             parts.append(f"{added_categories} category/categories")
+        if restored_decor:
+            parts.append(f"{restored_decor} calendar day marking(s)")
         if added_templates:
             parts.append(f"{added_templates} template(s)")
         if added_trash:
@@ -10522,9 +10616,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # Stay put instead; the way back stays armed.
         try:
             st = self.capture_editor_state()
-            if ((st.get("title", "").strip() or st.get("body", "").strip()
-                 or st.get("comments", "").strip() or st.get("attachments")
-                 or st.get("checklist"))
+            # An emptied SAVED note whose flush was cancelled counts as
+            # dirty here too — without the exemption this guard waved the
+            # navigation through and the day panel showed the old content
+            # over the user's unsaved emptying.
+            if ((self._editor_state_has_content(st) or self._editing_saved_note())
                     and not self.editor_state_matches_saved(st)):
                 self.set_status(
                     "Not saved yet — answer the save question (or fix the "
@@ -12044,6 +12140,39 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._pending_calendar_return = None
         self._update_calendar_return_button()
 
+    def _editor_state_has_content(self, st):
+        """The ONE answer to "does the editor hold anything worth keeping?".
+
+        Six gates used to hand-roll this test with six slightly different
+        field lists, and the drift was a real data-loss bug twice over: a
+        comments-only note was silently discarded on every route, and the
+        emptying of a saved note was thrown away by the automatic gates
+        even after the explicit-Save path learned to accept it. Every gate
+        asks here now, so the next field a note grows gets counted once,
+        in one place, or visibly not at all.
+
+        The date is deliberately NOT counted: the calendar's
+        new-note-for-a-day flow prefills the date field, so an abandoned
+        empty editor would otherwise auto-save as a junk date-only note on
+        every switch-away. The explicit Save path adds the date check
+        itself — pressing Save is what makes a bare dated reminder
+        deliberate."""
+        recurrence = st.get("recurrence") or {}
+        freq = recurrence.get("freq") if isinstance(recurrence, dict) else ""
+        return bool((st.get("title") or "").strip()
+                    or (st.get("body") or "").strip()
+                    or (st.get("comments") or "").strip()
+                    or st.get("attachments")
+                    or st.get("checklist")
+                    or freq)
+
+    def _editing_saved_note(self):
+        """True when the editor points at a note that exists on disk — the
+        exemption that lets a saved note be deliberately emptied (an
+        ordinary edit) while a blank never-saved editor stays junk-proof."""
+        return (self.selected_note_id is not None
+                and self.find_note(self.selected_note_id) is not None)
+
     def editor_state_matches_saved(self, st):
         """True if the captured state equals what's on disk for its note — i.e.
         there are no unsaved changes. A brand-new note (no id) counts as unsaved
@@ -12051,10 +12180,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         note_id = st["selected_note_id"]
         if note_id is None:
             # New, never-saved note: "clean" only if completely empty.
-            return not (st["title"].strip() or st["body"].strip()
-                        or st["comments"].strip()
-                        or st["attachments"] or st["date"]
-                        or st["recurrence"].get("freq") or st.get("checklist"))
+            # The date DOES count here, unlike in the shared content test:
+            # a prefilled date must read as "differs from pristine" so the
+            # dirty machinery sees it, while the autosave gates still
+            # refuse to persist a date-only editor.
+            return not (self._editor_state_has_content(st)
+                        or (st.get("date") or "").strip())
         note = self.find_note(note_id)
         if note is None:
             return False  # underlying note deleted -> treat as dirty/gone
@@ -12073,15 +12204,22 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             # scope prompt was cancelled and refuse to navigate, asking
             # again on every click (field report).
             shown = effective_note(note, occ)
+            # The BODY compares unstripped, matching what the save stores:
+            # T0-4 made leading/trailing whitespace part of the note, and a
+            # stripped comparison here made every whitespace-only edit read
+            # as "no change" — so the autosave, the flush and the dirty dot
+            # all ignored exactly the characters the save had just learned
+            # to keep. Titles and comments are STORED stripped, so their
+            # stripped comparison is the honest one.
             return (st["title"].strip() == shown["title"].strip()
-                    and st["body"].strip() == shown["body"].strip()
+                    and st["body"] == shown["body"]
                     and st["comments"].strip()
                     == shown.get("comments", "").strip()
                     and st["category"] == shown["category"]
                     and st["color"] == shown.get("color", ""))
         shown = note
         if (st["title"].strip() != shown["title"].strip()
-                or st["body"].strip() != shown["body"].strip()
+                or st["body"] != shown["body"]
                 or st.get("formatting", []) != note.get("formatting", [])
                 # Paragraphs carry what tags alone hold: list indents, line
                 # alignment, and a table's place on the page. Left out of
@@ -12236,9 +12374,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         except Exception:
             self._log_swallowed("flush: capture_editor_state")
             return
-        if not (st.get("title", "").strip() or st.get("body", "").strip()
-                or st.get("comments", "").strip()
-                or st.get("attachments") or st.get("checklist")):
+        # Same shared gate as _autosave_now, same exemption: an emptied
+        # SAVED note must flush like any other edit — this was the second
+        # of the two gatekeepers that made T0-5's "switch away and come
+        # back" route lose the emptying.
+        if not self._editor_state_has_content(st) and not self._editing_saved_note():
             return
         try:
             if not self.editor_state_matches_saved(st):
@@ -12393,9 +12533,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             st = self.capture_editor_state()
         except Exception:
             return "break"
-        if (st.get("title", "").strip() or st.get("body", "").strip()
-                or st.get("comments", "").strip()
-                or st.get("attachments") or st.get("checklist")):
+        # The emptied-saved-note exemption applies to Ctrl+S too: without
+        # it the shortcut was a silent no-op on exactly the edit T0-5 is
+        # about, while the Save button accepted it.
+        if self._editor_state_has_content(st) or self._editing_saved_note():
             self.save_current_note(auto=False)
         return "break"
 
@@ -13287,9 +13428,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         tpl = normalize_template(tpl)
         try:
             st = self.capture_editor_state()
-            has_content = bool((st.get("title") or "").strip() or
-                               (st.get("body") or "").strip() or
-                               (st.get("comments") or "").strip())
+            # The shared test, so a checklist, attachments or a repeat rule
+            # also earn the "replace?" question — the old three-field list
+            # let a template wipe an attachments-only note without asking.
+            has_content = self._editor_state_has_content(st)
         except Exception:
             has_content = False
         self._dismiss_mini_popup()
@@ -13560,12 +13702,28 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._refresh_format_buttons()
         self.comments_text.delete("1.0", "end")
         self.comments_text.insert("1.0", prev.get("comments", ""))
-        # Clear the backup so the button hides after a successful restore.
-        note.pop("_prev", None)
+        # Save FIRST, spend the rescue copy only after the save provably
+        # landed. The old order popped _prev and then called a save that
+        # has several legitimate abort paths (an invalid half-typed date,
+        # a cancelled scope question) — an abort there lost the rescue
+        # copy AND the restore in one stroke, permanently now that _prev
+        # survives restarts.
         self.save_current_note()
+        try:
+            _landed = self.editor_state_matches_saved(self.capture_editor_state())
+        except Exception:
+            _landed = False
+        if _landed:
+            # Clear the backup so the button hides after a successful
+            # restore.
+            note.pop("_prev", None)
+            self.save_notes()
+            self.set_status("Restored the previous version")
+        else:
+            self.set_status("Restored into the editor — answer the save "
+                            "question (or fix the date) to keep it")
         self.update_word_count()
         self._update_restore_button()
-        self.set_status("Restored the previous version")
 
     def save_current_note(self, auto=False):
         title = self.title_entry.get().strip()
@@ -13608,15 +13766,23 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
         has_attachments = bool(self.current_attachments)
         has_checklist_items = bool(self._get_checklist())
-        if (not title and not body.strip() and not has_attachments
-                and not has_checklist_items):
+        # Read early so the emptiness test below can count a repeat rule as
+        # content — a pure UI read, safe to hoist above the guard.
+        recurrence = self.read_recurrence_from_ui()
+        if (not title and not body.strip() and not comments
+                and not has_attachments and not has_checklist_items
+                and not date_value and not recurrence["freq"]):
             # The guard exists to stop a stray "+ New Note" click becoming
             # a junk note — so it applies to a note that was never saved.
             # Applied to one that EXISTS, it refused to record a deliberate
             # emptying: clear an untitled note, switch away, come back, and
             # the old text was still on disk and reappeared, while Ctrl+S
             # answered "Write something before saving!". Deleting your own
-            # text is a legitimate edit; it saves like any other.
+            # text is a legitimate edit; it saves like any other. The field
+            # list here mirrors _editor_state_has_content PLUS the date:
+            # on an explicit Save a bare dated reminder is deliberate,
+            # while comments-only used to be refused with the same false
+            # "Write something" — comments are content everywhere now.
             already_saved = (self.selected_note_id is not None
                              and self.find_note(self.selected_note_id) is not None)
             if not already_saved:
@@ -13627,7 +13793,6 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     self.show_warning("Empty note", "Write something before saving!")
                 return
 
-        recurrence = self.read_recurrence_from_ui()
         if recurrence["freq"] and not date_value:
             # Same reasoning as the invalid-date case above: don't interrupt
             # an automatic autosave for a state the user may still be
