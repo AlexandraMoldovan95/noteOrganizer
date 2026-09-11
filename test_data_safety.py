@@ -1071,6 +1071,45 @@ try:
           _released_cleanly and _other_process_can_take_it() is True)
     check("and the holder knows it let go",
           _released_cleanly and _si.held() is False)
+    # The LOCKING call's failure mode, separately from open()'s: a
+    # filesystem that cannot do byte-range locks answers the lock call
+    # with EINVAL/ENOLCK/EOPNOTSUPP, and reading that as "already open"
+    # bricked the app on exactly those folders (adversarial review,
+    # reinstated by the completeness critic after the wave misjudged it).
+    # Only the someone-holds-it errnos may refuse.
+    import errno as _errno
+    import noteorganizer.core.single_instance as _si_mod
+
+    def _acquire_with_lock_error(err):
+        if os.name == "nt":
+            import msvcrt as _lockmod
+            attr = "locking"
+        else:
+            import fcntl as _lockmod
+            attr = "flock"
+        real = getattr(_lockmod, attr)
+
+        def _boom(*a, **k):
+            raise OSError(err, "synthetic lock failure")
+
+        setattr(_lockmod, attr, _boom)
+        try:
+            got = _si_mod.acquire(os.path.join(_lock_dir, "errno_probe.lock"))
+        finally:
+            setattr(_lockmod, attr, real)
+            try:
+                _si_mod.release()
+            except Exception:
+                pass
+        return got
+
+    check("a filesystem that cannot lock at all fails OPEN, not closed",
+          _acquire_with_lock_error(_errno.EINVAL) is True
+          and _acquire_with_lock_error(_errno.ENOSYS) is True)
+    check("while a lock genuinely held elsewhere still refuses",
+          _acquire_with_lock_error(_errno.EACCES) is False
+          and _acquire_with_lock_error(_errno.EAGAIN) is False)
+
     # A lock that cannot be created must never stop the app from starting:
     # refusing to open because a LOCK failed is worse than what it guards.
     check("an uncreatable lock file reports success rather than blocking",
@@ -1085,6 +1124,194 @@ finally:
     except Exception:
         pass
     shutil.rmtree(_lock_dir, ignore_errors=True)
+
+# ---- ONE content signature, every consumer (T0-1 swept to its class) ----
+# The dedup fixed its field list and the stale-copy purge -- which gates
+# an irreversible os.remove of a whole legacy notebook folder -- kept the
+# old five-field tuple, so notes differing only by checklist still read
+# as "fully covered" and were deleted. The fix is a single definition in
+# model.content_signature; these assert both the behaviour AND the
+# delegation, so the two can never drift apart silently again.
+from noteorganizer.core import paths as _paths_mod
+from noteorganizer.core import model as _model_mod
+from noteorganizer.core.duplicates import find_duplicate_groups as _fdg
+
+_base = {"title": "", "body": "", "comments": "", "category": "General",
+         "date": "", "formatting": [], "paragraphs": [], "attachments": []}
+_ck_milk = dict(_base, checklist=[{"text": "milk", "done": False}])
+_ck_gym = dict(_base, checklist=[{"text": "gym kit", "done": False}])
+
+check("checklist-differing notes carry different content signatures",
+      _model_mod.content_signature(_ck_milk)
+      != _model_mod.content_signature(_ck_gym))
+
+
+def _legacy_file(notes):
+    fd, p = tempfile.mkstemp(suffix=".json")
+    with os.fdopen(fd, "w", encoding="utf-8") as f:
+        _json.dump(notes, f)
+    return p
+
+
+_lf_both = _legacy_file([_ck_milk, _ck_gym])
+_lf_gym = _legacy_file([_ck_gym])
+try:
+    check("the purge no longer reads a checklist-differing folder as covered",
+          _paths_mod.is_redundant_copy(_lf_both, [_ck_gym]) is False)
+    check("a genuinely covered folder still purges (the feature survives)",
+          _paths_mod.is_redundant_copy(_lf_gym, [_ck_gym, _ck_milk]) is True)
+
+    # The delegation itself: bend the single definition and the purge's
+    # answer must bend with it. The fixtures DIFFER IN TITLE on purpose:
+    # a private (title, body, ...) copy answers False for them no matter
+    # what model says, while the bent shared signature collapses them to
+    # True -- so only genuine delegation can pass. (The first version of
+    # this check used title-less fixtures a private copy also collapsed,
+    # and the drift mutant survived it.)
+    _ta = _legacy_file([dict(_base, title="UnTitlu")])
+    _real_sig = _model_mod.content_signature
+    try:
+        _model_mod.content_signature = lambda n: ("bent",)
+        check("the purge consults model.content_signature, not a private copy",
+              _paths_mod.is_redundant_copy(_ta, [dict(_base, title="AltTitlu")])
+              is True)
+    finally:
+        _model_mod.content_signature = _real_sig
+        try:
+            os.remove(_ta)
+        except OSError:
+            pass
+finally:
+    for _p in (_lf_both, _lf_gym):
+        try:
+            os.remove(_p)
+        except OSError:
+            pass
+
+# Find-duplicates and the import scans share _dup_key; checklist and
+# recurrence joined its key (they are never merged, so a grouping there
+# destroys whichever copy is dropped), attachments deliberately did NOT
+# (cleanup hands the kept note the group's combined files).
+_t1 = dict(_base, title="Cumparaturi", checklist=[{"text": "milk", "done": False}])
+_t2 = dict(_base, title="Cumparaturi", checklist=[{"text": "gym", "done": False}])
+check("different checklists keep two same-text notes apart",
+      _fdg([_t1, _t2]) == [])
+_r1 = dict(_base, title="Sport", date="2026-01-01",
+           recurrence={"freq": "weekly", "weekdays": [0]})
+_r2 = dict(_base, title="Sport", date="2026-01-01", recurrence={})
+check("a repeat rule keeps a series apart from its one-off twin",
+      _fdg([_r1, _r2]) == [])
+_a1 = dict(_base, title="Acte", attachments=[{"stored_as": "a.pdf"}])
+_a2 = dict(_base, title="Acte", attachments=[{"stored_as": "b.pdf"}])
+check('a repeat rule signs by MEANING, not representation',
+      _model_mod._recurrence_signature({}) == ()
+      and _model_mod._recurrence_signature(
+          _model_mod.normalize_recurrence({})) == ()
+      and _model_mod._recurrence_signature({'freq': 'weekly'})
+      == _model_mod._recurrence_signature(
+          _model_mod.normalize_recurrence({'freq': 'weekly'})))
+check("attachment-differing copies still group (cleanup merges files)",
+      len(_fdg([_a1, _a2])) == 1)
+_i1 = dict(_base, title="Idem", checklist=[{"text": "x", "done": True}])
+_i2 = dict(_base, title="Idem (copy)",
+           checklist=[{"text": "x", "done": True}])
+check("true duplicates still group, ' (copy)' suffix ignored",
+      len(_fdg([_i1, _i2])) == 1)
+
+# ---- Colours are validated where they enter (the T0-7 class, colour
+# door) ----
+# A colour string ends its journey inside a Tk configure(), which raises
+# on garbage -- and a note is SAVED before it is first drawn, so one bad
+# value used to crash every launch after. sanitize_color guards the note
+# field, the category import and the calendar day map.
+from noteorganizer.core.model import sanitize_color as _sc
+check("sanitize_color passes real colours and both hex widths",
+      _sc("#A1B2C3") == "#A1B2C3" and _sc("#abc") == "#abc"
+      and _sc(" #ff0000 ") == "#ff0000")
+check("sanitize_color refuses everything Tk would choke on",
+      _sc("#zzz123") == "" and _sc("red)") == "" and _sc(123) == ""
+      and _sc(None) == "" and _sc("#12345") == ""
+      and _sc("#ff0000; rm") == "")
+check("normalize_note strips an undrawable note colour",
+      _nn_att({"color": "#nope!!"})["color"] == ""
+      and _nn_att({"color": "#00ff00"})["color"] == "#00ff00")
+
+# ---- The bomb ceilings swept to the sibling fields (T0-7 class) ----
+from noteorganizer.core.storage import normalize_template as _nt
+from noteorganizer.core.formatting import (normalize_formatting as _nf,
+                                           MAX_FORMATTING_SPANS as _MFS)
+from noteorganizer.core.model import MAX_ATTACHMENTS as _MA
+_big_tpl = _nt({"name": "b",
+                "checklist": [{"text": str(i)} for i in range(3000)]})
+check("a template's checklist meets the same 1000-item ceiling",
+      len(_big_tpl["checklist"]) == 1000)
+_big_fmt = _nf([{"start": i, "end": i + 1, "style": "bold"}
+                for i in range(_MFS + 5000)])
+check("formatting spans meet their anti-bomb ceiling",
+      len(_big_fmt) == _MFS)
+_big_att = _nn_att({"title": "x", "attachments": [
+    {"stored_as": "f%d.txt" % i} for i in range(_MA + 300)]})
+check("attachment records meet their ceiling",
+      len(_big_att["attachments"]) == _MA)
+_dirty_att = _nn_att({"title": "x", "attachments": [
+    {"stored_as": "evil.lnk. "}, {"no_names_at_all": 1},
+    {"filename": "doc.pdf", "stored_as": "doc.pdf"}]})
+check("stored names lose their trailing-dot disguise at the choke point",
+      _dirty_att["attachments"][0]["stored_as"] == "evil.lnk"
+      and _dirty_att["attachments"][0]["filename"] == "evil.lnk")
+check("a record naming no file at all is dropped, not crashed on",
+      len(_dirty_att["attachments"]) == 2)
+
+_MAIN_GUARD_DRIVER = '"""Drive the REAL _main() with the heavy parts stubbed to recorders.\n\nWritten and launched by test_data_safety to prove the single-instance\nguard is WIRED, not merely implemented: _main must consult acquire() and\nhonour the answer. The adversarial review caught the gap this closes --\ndeleting the whole guard from _main left every suite green, because the\nlock primitive was tested end-to-end while the one call site a user ever\ntravels through was tested by nobody.\n"""\nimport json\nimport os\nimport sys\n\nHERE = os.path.dirname(os.path.abspath(__file__))\nos.chdir(HERE)\nsys.path.insert(0, HERE)\n\n# Hermetic seed BEFORE the note_organizer import: the module resolves its\n# data directory and runs migrations at import time, and an unseeded dir\n# invites the adoption of the machine\'s real notebook.\nif not os.path.exists("notes_data.json"):\n    with open("notes_data.json", "w", encoding="utf-8") as f:\n        f.write("[]")\ntry:\n    with open("settings.json", "r", encoding="utf-8") as f:\n        _settings = json.load(f)\nexcept Exception:\n    _settings = {}\nif not isinstance(_settings, dict):\n    _settings = {}\n_settings.setdefault("reclaimed_from_appdata", True)\nwith open("settings.json", "w", encoding="utf-8") as f:\n    json.dump(_settings, f)\n\nimport tkinter.messagebox as mb  # noqa: E402\n\nimport note_organizer as NO  # noqa: E402\nfrom noteorganizer.core import paths  # noqa: E402\n\nevents = []\nNO.initialise = lambda: (paths.configure(HERE), events.append("init"))\n\n\nclass FakeApp:\n    def __init__(self):\n        events.append("app")\n\n    def protocol(self, *a, **k):\n        pass\n\n    def on_app_close(self):\n        pass\n\n    def mainloop(self):\n        events.append("loop")\n\n\nclass FakeRoot:\n    def withdraw(self):\n        pass\n\n    def destroy(self):\n        pass\n\n\nNO.NoteOrganizer = FakeApp\nNO.tk.Tk = FakeRoot\nmb.showinfo = lambda *a, **k: events.append("refused-dialog")\n\nNO._main()\nprint("EVENTS:" + json.dumps(events))\n'
+
+# ---- The guard is WIRED, not merely implemented ----
+# The primitive above is proven end-to-end; this proves _main() actually
+# consults it and honours the answer. Without this, deleting the whole
+# guard from _main left every suite green (adversarial review, 2026-09-11)
+# -- the classic tested-library-untested-call-site gap, on the one call
+# site a user ever travels through.
+_driver_path = os.path.join(os.getcwd(), "_main_guard_driver.py")
+with open(_driver_path, "w", encoding="utf-8") as _f:
+    _f.write(_MAIN_GUARD_DRIVER)
+
+
+def _run_main_driver():
+    out = _sp.run([sys.executable, _driver_path], capture_output=True,
+                  text=True, cwd=os.getcwd(), timeout=120)
+    for line in (out.stdout or "").splitlines():
+        if line.startswith("EVENTS:"):
+            try:
+                return json.loads(line[len("EVENTS:"):])
+            except ValueError:
+                break
+    return ["driver-broke", (out.stdout or "")[-300:], (out.stderr or "")[-300:]]
+
+
+try:
+    _got_lock = _si.acquire(os.path.join(os.getcwd(), ".notebook.lock"))
+    _ev_held = _run_main_driver()
+    check("holding the notebook makes _main refuse: dialog shown, no app built",
+          _got_lock and "refused-dialog" in _ev_held
+          and "app" not in _ev_held and "init" in _ev_held)
+    try:
+        _si.release()
+    except Exception:
+        pass
+    _ev_free = _run_main_driver()
+    check("with the notebook free, the same gate lets _main build the app",
+          "app" in _ev_free and "loop" in _ev_free
+          and "refused-dialog" not in _ev_free)
+finally:
+    try:
+        _si.release()
+    except Exception:
+        pass
+    for _leftover in (_driver_path,
+                      os.path.join(os.getcwd(), ".notebook.lock")):
+        try:
+            os.remove(_leftover)
+        except OSError:
+            pass
 
 print()
 print(f"FAILURES: {fails if fails else 'none'}")

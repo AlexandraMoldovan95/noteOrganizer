@@ -109,6 +109,16 @@ app.save_current_note(auto=False)
 app.update()
 app.date_entry.delete(0,'end')
 app.date_entry.insert(0,'2026-12-25')
+# A generated KEY event follows the FOCUS, wherever it was aimed — with
+# focus elsewhere this KeyRelease lands there instead and the positive
+# check below reads a false red under load. Force + poll first.
+import time as _t5f
+app.date_entry.focus_force()
+for _ in range(60):
+    app.update(); app.update_idletasks()
+    if app.focus_get() is app.date_entry:
+        break
+    _t5f.sleep(0.01)
 app.date_entry.event_generate('<KeyRelease>')
 app.update()
 check('typing a date schedules an autosave', getattr(app, '_autosave_job', None) is not None)
@@ -361,11 +371,80 @@ app5f._cleanup_report = ({'before': 5, 'empty_removed': 1,
                           'duplicates_removed': 2, 'after': 2}, None)
 app5f.announce_startup_changes()
 app5f.update()
-check('a cleanup that DID something still reports it',
-      len(_notices) == 1 and 'Removed 1 empty note(s)' in _notices[0][1])
+check('a cleanup that DID something still reports it, in plain words',
+      len(_notices) == 1 and '1 empty note(s)' in _notices[0][1]
+      and 'removed' in _notices[0][1]
+      # the words the product review flagged as maintenance vocabulary
+      # must be gone from a dialog that reports a permanent deletion
+      and 'Cleanup pass' not in _notices[0][1]
+      and 'renumbered' not in _notices[0][1]
+      and 'setup complete' not in _notices[0][0])
 app5f.destroy()
 
 print()
+# ============================================================
+# GARBAGE COLOURS CANNOT MAKE THE APP UNOPENABLE
+# ============================================================
+# A colour string ends its journey in a Tk configure(), which raises on
+# garbage -- and settings.json/notes_data.json are hand-editable and ride
+# inside backups. Because a note is saved before it is first drawn, one
+# bad value used to be a crash on EVERY launch: the brick class, through
+# the colour door. Both intakes must drop the garbage and open normally.
+import json as _json5g
+with open('settings.json', 'w', encoding='utf-8') as _f5g:
+    _json5g.dump({'reclaimed_from_appdata': True,
+                  'day_colors': {'2026-04-01': '#ff0000',
+                                 '2026-04-02': 'not-a-colour',
+                                 '2026-04-03': '#12zz34'},
+                  'categories': {'General': '#4f6d7a',
+                                 'Rupt': '#nu-e-hex'}}, _f5g)
+with open('notes_data.json', 'w', encoding='utf-8') as _f5g:
+    _json5g.dump([{'id': 1, 'title': 'Colorata', 'body': 'x',
+                   'category': 'General', 'color': '#zzzzzz',
+                   'updated': '2026-01-01 00:00',
+                   'created': '2026-01-01 00:00'}], _f5g)
+# Guarded construction: under the unvalidated-load mutant the garbage
+# reaches render_calendar inside __init__ itself, and an unguarded
+# constructor would kill the script before its FAILURES footer -- the
+# mutant would then read as "ran nothing" instead of failing red (the
+# norelease lesson, again).
+try:
+    app5g = NO.NoteOrganizer()
+    _built5g = True
+except Exception:
+    app5g = None
+    _built5g = False
+check('the app opens over garbage colours instead of crashing',
+      _built5g and bool(app5g.winfo_exists()))
+if _built5g:
+    app5g._poll_active_dirty = lambda: None
+    app5g.show_info = lambda *a, **k: True
+    app5g.update()
+check('the valid day colour is kept, both garbage ones dropped',
+      _built5g and app5g.day_colors.get('2026-04-01') == '#ff0000'
+      and '2026-04-02' not in app5g.day_colors
+      and '2026-04-03' not in app5g.day_colors)
+check('the garbage category colour never enters the palette map',
+      NO.CATEGORY_COLORS.get('Rupt') is None)
+check('the note survives with its undrawable colour blanked',
+      _built5g and app5g.notes and app5g.notes[0]['color'] == ''
+      and app5g.notes[0]['title'] == 'Colorata')
+# The calendar is where day colours are painted -- drive the render
+# over the exact month the garbage pointed at rather than assuming,
+# guarded for the same footer reason as the constructor.
+_rendered5g = False
+if _built5g:
+    try:
+        app5g.cal_year, app5g.cal_month = 2026, 4
+        app5g.render_calendar(); app5g.update()
+        _rendered5g = bool(app5g.winfo_exists())
+    except Exception:
+        _rendered5g = False
+check('the calendar survives rendering the month the garbage aimed at',
+      _rendered5g)
+if _built5g:
+    app5g.destroy()
+
 print(f"=== QA5 FAILURES: {fails if fails else 'NONE'} ===")
 
 sys.exit(1 if fails else 0)

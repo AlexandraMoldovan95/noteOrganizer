@@ -667,6 +667,13 @@ app.notes = [{'id': 1, 'title': 'Planul', 'body': 'x',
               'created': '2026-01-01 00:00', 'checklist': [],
               'attachments': []}]
 app.save_notes()
+# Calendar day decor rides the same settings.json: two valid entries
+# and one garbage colour a hand-editor (or hostile zip) could carry.
+NO.save_setting('day_colors', {'2026-03-03': '#112233',
+                               '2026-03-05': '#zzzzzz'})
+NO.save_setting('day_emoji', {'2026-03-04': ['\u2b50']})
+app.day_colors = {'2026-03-03': '#112233'}
+app.day_emoji = {'2026-03-04': ['\u2b50']}
 _catzip = os.path.join(tempfile.gettempdir(), 'qa3_categories.zip')
 if os.path.exists(_catzip):
     os.remove(_catzip)
@@ -680,6 +687,10 @@ check('the backup zip carries settings.json', os.path.exists(_catzip))
 # Now become a device that has never heard of that category.
 del NO.CATEGORY_COLORS['Proiecte Mari']
 NO.persist_categories()
+NO.save_setting('day_colors', {})
+NO.save_setting('day_emoji', {})
+app.day_colors = {}
+app.day_emoji = {}
 app.notes = []
 app.save_notes()
 app.ask_yes_no = lambda *a, **k: True
@@ -694,8 +705,68 @@ check('importing the backup brings the category back',
       and NO.get_setting('categories', {}).get('Proiecte Mari') == '#ff8800')
 check('and the note keeps its filing instead of falling to General',
       any(n.get('category') == 'Proiecte Mari' for n in app.notes))
+# The calendar decor is user data the backup has always carried and the
+# import used to drop wholesale -- and its colours are as untrusted as
+# any other imported value: the garbage one must NOT come back.
+check('day colours and markers come back with the backup',
+      app.day_colors.get('2026-03-03') == '#112233'
+      and app.day_emoji.get('2026-03-04') == ['\u2b50']
+      and NO.get_setting('day_colors', {}).get('2026-03-03') == '#112233')
+check('a garbage day colour from the backup is refused at the door',
+      '2026-03-05' not in app.day_colors
+      and '2026-03-05' not in NO.get_setting('day_colors', {}))
 os.remove(_catzip)
 NO.CATEGORY_COLORS.pop('Proiecte Mari', None)
+NO.persist_categories()
+NO.save_setting('day_colors', {})
+NO.save_setting('day_emoji', {})
+app.day_colors = {}
+app.day_emoji = {}
+
+# ---- The category merge runs BEFORE the duplicate scan ----
+# The scan normalizes each incoming note, and normalize re-files an
+# unknown category to General. Scanned in that state, a distinct note
+# read as a duplicate of a local General twin and the import offered to
+# skip it -- while the dialog claimed its category matched. With the
+# merge first, the same import must sail through with no question.
+NO.CATEGORY_COLORS['Ordine'] = '#123456'
+NO.persist_categories()
+app.notes = [{'id': 1, 'title': 'Same', 'body': 'y', 'category': 'Ordine',
+              'updated': '2026-01-01 00:00', 'created': '2026-01-01 00:00',
+              'checklist': [], 'attachments': []}]
+app.save_notes()
+_ordzip = os.path.join(tempfile.gettempdir(), 'qa3_order.zip')
+if os.path.exists(_ordzip):
+    os.remove(_ordzip)
+fd.asksaveasfilename = lambda **k: _ordzip
+app.export_data()
+t0 = time.time()
+while app._export_state is not None and time.time() - t0 < 5:
+    app.update()
+# The amnesiac device again -- but THIS one already owns a General note
+# with the identical text, the collision the old order manufactured.
+NO.CATEGORY_COLORS.pop('Ordine', None)
+NO.persist_categories()
+app.notes = [{'id': 1, 'title': 'Same', 'body': 'y', 'category': 'General',
+              'updated': '2026-01-01 00:00', 'created': '2026-01-01 00:00',
+              'checklist': [], 'attachments': []}]
+app.save_notes()
+_dlg_asked = []
+_real_dlg3 = app._themed_dialog
+app._themed_dialog = lambda *a, **k: (_dlg_asked.append(a), 'all')[1]
+fd.askopenfilename = lambda **k: _ordzip
+app.import_data()
+t0 = time.time()
+while app._import_state is not None and time.time() - t0 < 8:
+    app.update()
+app._themed_dialog = _real_dlg3
+check('with categories merged first, the twin is no duplicate: no dialog',
+      _dlg_asked == [])
+check('and it lands under its own category, alongside the local twin',
+      len(app.notes) == 2
+      and any(n.get('category') == 'Ordine' for n in app.notes))
+os.remove(_ordzip)
+NO.CATEGORY_COLORS.pop('Ordine', None)
 NO.persist_categories()
 
 print()

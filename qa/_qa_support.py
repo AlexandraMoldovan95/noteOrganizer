@@ -20,8 +20,8 @@ luck. qa2's 3-marker cap check answered it by luck for weeks: measured
 mid-run, all five chips still read ``highlightthickness=0`` — not one of
 the five clicks had ever been delivered.
 
-The two rules that close it
----------------------------
+The rules that close it
+-----------------------
 ``pin_popup_visibility(NO)``
     A test process cannot own the OS foreground, so popup visibility must
     not depend on it. Patches the class, not an instance, so every app the
@@ -31,12 +31,32 @@ The two rules that close it
     ``_popup_watch_step()`` directly with both answers stubbed on the
     instance, which shadows this and asserts both outcomes.
 
-``click(widget)``
+``fire(widget, sequence)``
     Asks for ``winfo_id()`` first. That is not a query — it calls Tk's
     ``Tk_MakeWindowExist``, so the native window is created on the spot and
-    the event has somewhere to land. The dropped click is *eliminated*
+    the event has somewhere to land. The dropped event is *eliminated*
     rather than detected: measured directly, a never-mapped popup child
     receives the click after ``winfo_id()`` and drops it without.
+
+    ``<Button-1>`` was only the first caught case, not the whole class: Tk
+    delivers EVERY generated pointer event — press, release,
+    ``<B1-Motion>``, ``<MouseWheel>``, ``<Enter>``/``<Leave>`` — to the
+    window named in the event, so all of them share the same
+    no-window/no-delivery/no-error failure. ``fire`` is the one door for
+    all of them. A ``<<virtual>>`` event is window-delivered too (qa9
+    leans on exactly that to refresh previews without holding focus) and
+    may pass through ``fire`` when a check wants the guard.
+
+    Keyboard events are the deliberate exception: Tk hands a generated
+    key event to whatever holds the FOCUS, wherever it was aimed, so
+    ``winfo_id()`` on the target repairs nothing and would only dress a
+    focus problem up as a solved one. ``fire`` refuses them loudly; a key
+    event stays on raw ``event_generate`` behind the
+    ``take_focus``/``focus_settles_on`` discipline (see qa/README.md).
+
+``click(widget)``
+    The ``<Button-1>`` shorthand for ``fire`` — the original helper, kept
+    as the everyday spelling of the everyday gesture.
 
 Why the obvious predicates were rejected
 ----------------------------------------
@@ -55,16 +75,65 @@ different questions, and a check that wants the second asserts it itself
 (scroll the row into view, then assert it is viewable).
 """
 
+import re
 import tkinter as tk
 
 
-class ClickNotDelivered(AssertionError):
-    """A click could not be delivered, so the check below it means nothing."""
+class EventNotDelivered(AssertionError):
+    """An event could not be delivered, so the check below it means nothing."""
+
+
+# The original name, from when click() was this module's only door; kept so
+# older tracebacks and anything that names it stay true.
+ClickNotDelivered = EventNotDelivered
 
 
 def pin_popup_visibility(NO):
     """Make popup visibility independent of who owns the OS foreground."""
     NO.NoteOrganizer._foreground_is_ours = lambda self: True
+
+
+# Pointer events, with any modifier prefixes (<Double-Button-1>,
+# <B1-Motion>, <Shift-ButtonRelease-1>, ...), or a <<virtual>> event —
+# everything Tk delivers to the window named in the event. Keyboard
+# sequences deliberately do not match: Tk delivers those to the focus
+# window instead, which fire() cannot and must not paper over.
+_WINDOW_DELIVERED = re.compile(
+    r"(?:<(?:[A-Za-z0-9_]+-)*"
+    r"(?:Button(?:Press|Release)?|Motion|MouseWheel|Enter|Leave)"
+    r"(?:-[1-5])?>"
+    r"|<<[^<>]+>>)$")
+
+
+def fire(widget, sequence, **kwargs):
+    """Generate a pointer (or ``<<virtual>>``) *sequence* on *widget*,
+    guaranteeing it has a window to land on.
+
+    Extra keyword arguments (``x=``, ``y=``, ``delta=``, ``time=``, ...)
+    pass straight through to ``event_generate``. Keyboard sequences are
+    refused: Tk delivers them to the focus window, not the named one, so
+    the window repair below would be a lie for them — use ``take_focus``
+    and a raw ``event_generate`` instead.
+    """
+    if not _WINDOW_DELIVERED.match(sequence):
+        raise ValueError(
+            "fire() guarantees window delivery, and %r is not a pointer "
+            "or <<virtual>> sequence. Keyboard events are refused by "
+            "design: Tk delivers them to the FOCUS window no matter where "
+            "they were aimed, so winfo_id() on the target repairs nothing "
+            "-- use take_focus()/focus_settles_on() with a raw "
+            "event_generate (see qa/README.md). A pointer shorthand like "
+            "<Double-1> needs its full spelling (<Double-Button-1>)."
+            % (sequence,))
+    try:
+        # Not a query: this creates the native window if it has none, which
+        # is the whole fix. Without it Tk throws the event away in silence.
+        widget.winfo_id()
+    except tk.TclError as exc:
+        raise EventNotDelivered(
+            "%s has no window to receive %s (destroyed?): %s"
+            % (widget, sequence, exc))
+    widget.event_generate(sequence, **kwargs)
 
 
 def click(widget, **kwargs):
@@ -73,12 +142,4 @@ def click(widget, **kwargs):
     Extra keyword arguments (``x=``, ``y=``, ...) pass straight through to
     ``event_generate``.
     """
-    try:
-        # Not a query: this creates the native window if it has none, which
-        # is the whole fix. Without it Tk throws the event away in silence.
-        widget.winfo_id()
-    except tk.TclError as exc:
-        raise ClickNotDelivered(
-            "%s has no window to receive a click (destroyed?): %s"
-            % (widget, exc))
-    widget.event_generate("<Button-1>", **kwargs)
+    fire(widget, "<Button-1>", **kwargs)

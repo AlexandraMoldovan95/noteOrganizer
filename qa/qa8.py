@@ -390,17 +390,30 @@ check('calendar add-note prefills the chosen date on a fresh editor '
       f'(id={app13.selected_note_id!r}, date={app13.date_entry.get()!r})',
       _ca_ok)
 
-# A comments-only note: no "Empty note" warning from the timer, and no
-# junk note saved either — the explicit Save still warns.
+# A comments-only note is REAL CONTENT now (the product review found it
+# silently discarded on every route, with a false "Write something" on
+# Ctrl+S — the T0-5 family): the timer saves it quietly and the explicit
+# Save agrees. The junk guard keeps its ground where it belongs, on a
+# truly EMPTY never-saved editor: the timer stays mute and saves
+# nothing, and only the explicit Save speaks up.
 warned13 = []
 app13.show_warning = lambda t, m: warned13.append(t)
 app13.open_blank_tab(); app13.update()
 app13.comments_text.insert('1.0', 'only a comment')
 app13._autosave_now(); app13.update()
 check('a comments-only note raises no warning from the timer', warned13 == [])
-check('and is not saved as junk either', app13.selected_note_id is None)
+check('and IS saved now — comments are content, not junk',
+      app13.selected_note_id is not None
+      and app13.find_note(app13.selected_note_id)['comments'] == 'only a comment')
 app13.save_current_note(auto=False); app13.update()
-check('the explicit Save still warns about the empty note', warned13 == ['Empty note'])
+check('the explicit Save agrees: no false "Write something"', warned13 == [])
+app13.open_blank_tab(); app13.update()
+app13._autosave_now(); app13.update()
+check('a truly empty editor still saves nothing from the timer, silently',
+      warned13 == [] and app13.selected_note_id is None)
+app13.save_current_note(auto=False); app13.update()
+check('and the explicit Save still warns about THAT one',
+      warned13 == ['Empty note'])
 
 # House rule: un-shadow the real methods rather than leaving section mocks
 # behind for a future section 14 to inherit.

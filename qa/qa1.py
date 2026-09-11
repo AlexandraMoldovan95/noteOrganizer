@@ -32,7 +32,8 @@ import note_organizer as NO, tkinter as tk, json, os, re
 # viewable, and the app hides popups whenever another program holds the
 # Windows foreground -- which a test process never owns. See
 # qa/_qa_support.py; _qa_click refuses to click into the void.
-from _qa_support import click as _qa_click, pin_popup_visibility as _qa_pin
+from _qa_support import (click as _qa_click, fire as _qa_fire,
+                         pin_popup_visibility as _qa_pin)
 _qa_pin(NO)
 from noteorganizer.core import tables as core_tables
 fails=[]
@@ -431,6 +432,9 @@ app.update()
 app._calc_display_var.set('6+6')  # simulates a paste — the StringVar is
                                    # the single source of truth regardless
                                    # of whether buttons or direct edits set it
+# The assertion below is NEGATIVE ("stays disabled"), so a KeyRelease
+# dropped by a focus miss would pass it vacuously — force + poll first.
+take_focus(app.calculator_display)
 app.calculator_display.event_generate('<KeyRelease>')
 app.update()
 check('insert stays disabled after a direct paste, before "=" is pressed',
@@ -2346,6 +2350,9 @@ check(f'typing through the editor lands in the text ({lines_now()[0]!r})',
 _made = app._grid_at_line(1)
 app._open_cell_editor(_made, 1, 0)
 app.update()
+# The app's own focus placement is asynchronous — poll for it (without
+# forcing: placing focus is the editor's job) before aiming keys at it.
+focus_settles_on(app._cell_editor['entry'])
 app._cell_editor['entry'].event_generate('<Shift-Tab>')
 app.update()
 check('Shift+Tab goes back to the row above',
@@ -2716,10 +2723,10 @@ _t = app._grid_at_line(1)
 _cell = _t['cells'][(0, 1)]
 # A click is a press AND a release now that dragging selects; the editor
 # opens on the release, so a drag can end without one.
-_t['canvas'].event_generate('<Button-1>',
-                            x=_cell['x'] + 5, y=_cell['y'] + 5)
-_t['canvas'].event_generate('<ButtonRelease-1>',
-                            x=_cell['x'] + 5, y=_cell['y'] + 5)
+_qa_fire(_t['canvas'], '<Button-1>',
+         x=_cell['x'] + 5, y=_cell['y'] + 5)
+_qa_fire(_t['canvas'], '<ButtonRelease-1>',
+         x=_cell['x'] + 5, y=_cell['y'] + 5)
 app.update()
 check(f'clicking a cell opens the editor on it '
       f'({app._cell_editor and (app._cell_editor["r"], app._cell_editor["c"])})',
@@ -2760,9 +2767,9 @@ app.update()
 _t = app._grid_at_line(1)
 _a, _b2 = _t['cells'][(0, 0)], _t['cells'][(1, 1)]
 _cv = _t['canvas']
-_cv.event_generate('<Button-1>', x=int(_a['x'] + 4), y=int(_a['y'] + 4))
-_cv.event_generate('<B1-Motion>', x=int(_b2['x'] + 4), y=int(_b2['y'] + 4))
-_cv.event_generate('<ButtonRelease-1>', x=int(_b2['x'] + 4), y=int(_b2['y'] + 4))
+_qa_fire(_cv, '<Button-1>', x=int(_a['x'] + 4), y=int(_a['y'] + 4))
+_qa_fire(_cv, '<B1-Motion>', x=int(_b2['x'] + 4), y=int(_b2['y'] + 4))
+_qa_fire(_cv, '<ButtonRelease-1>', x=int(_b2['x'] + 4), y=int(_b2['y'] + 4))
 app.update()
 check(f'dragging selects the spanned rectangle '
       f'({app._grid_sel and app._grid_sel["box"]})',
@@ -2794,9 +2801,9 @@ check('a checkmark is drawn centred in its cell',
 # Merging the selection makes one cell anchored top-left.
 _a, _b2 = _t['cells'][(0, 0)], _t['cells'][(0, 1)]
 _cv = _t['canvas']
-_cv.event_generate('<Button-1>', x=int(_a['x'] + 4), y=int(_a['y'] + 4))
-_cv.event_generate('<B1-Motion>', x=int(_b2['x'] + 4), y=int(_b2['y'] + 4))
-_cv.event_generate('<ButtonRelease-1>', x=int(_b2['x'] + 4), y=int(_b2['y'] + 4))
+_qa_fire(_cv, '<Button-1>', x=int(_a['x'] + 4), y=int(_a['y'] + 4))
+_qa_fire(_cv, '<B1-Motion>', x=int(_b2['x'] + 4), y=int(_b2['y'] + 4))
+_qa_fire(_cv, '<ButtonRelease-1>', x=int(_b2['x'] + 4), y=int(_b2['y'] + 4))
 app.update()
 app._grid_merge_selection(app._grid_sel)
 app.update()
@@ -3005,12 +3012,12 @@ def _select_cells(g, a, bcell):
     # 12px in from the corner: pressing within 4px of a vertical rule is
     # (by design) a grab of the rule, not the start of a selection.
     _ca, _cb = g['cells'][a], g['cells'][bcell]
-    g['canvas'].event_generate('<Button-1>',
-                               x=int(_ca['x'] + 12), y=int(_ca['y'] + 6))
-    g['canvas'].event_generate('<B1-Motion>',
-                               x=int(_cb['x'] + 12), y=int(_cb['y'] + 6))
-    g['canvas'].event_generate('<ButtonRelease-1>',
-                               x=int(_cb['x'] + 12), y=int(_cb['y'] + 6))
+    _qa_fire(g['canvas'], '<Button-1>',
+             x=int(_ca['x'] + 12), y=int(_ca['y'] + 6))
+    _qa_fire(g['canvas'], '<B1-Motion>',
+             x=int(_cb['x'] + 12), y=int(_cb['y'] + 6))
+    _qa_fire(g['canvas'], '<ButtonRelease-1>',
+             x=int(_cb['x'] + 12), y=int(_cb['y'] + 6))
     app.update()
 
 
@@ -3042,7 +3049,8 @@ check('the target row really is empty before the spread',
       _tX['cells'][(1, 0)]['value'] == ''
       and _tX['cells'][(1, 1)]['value'] == '')
 app._open_cell_editor(_tX, 1, 0)
-app.update()          # focus settles; synthetic key events follow focus
+app.update()
+focus_settles_on(app._cell_editor['entry'])  # polled, not assumed
 app._cell_editor['entry'].event_generate('<Control-v>')
 app.update()
 _tX = app._grid_at_line(1)
@@ -3052,7 +3060,8 @@ check('Ctrl+V in a cell spreads the copied block from it',
 
 # The editor grows with its content instead of hiding the overflow.
 app._open_cell_editor(_tX, 1, 0)
-app.update()          # focus settles; synthetic key events follow focus
+app.update()
+focus_settles_on(app._cell_editor['entry'])  # polled, not assumed
 _edX = app._cell_editor
 _w0 = int(float(_tX['canvas'].itemcget(_edX['win'], 'width')))
 _edX['entry'].delete('1.0', 'end')
@@ -3352,13 +3361,13 @@ check('exported HTML has no separator row',
 
 # Dragging the first rule resizes column 0 through press/drag/release.
 _edgeS = int(_tS['col_x'][1])
-_tS['canvas'].event_generate('<Button-1>', x=_edgeS, y=4)
+_qa_fire(_tS['canvas'], '<Button-1>', x=_edgeS, y=4)
 _resS = getattr(app, '_grid_resizing', None)
 check('pressing a rule starts a resize, not a selection',
       _resS is not None and _resS['col'] == 0
       and getattr(app, '_grid_pressed', None) is None)
-_tS['canvas'].event_generate('<B1-Motion>', x=_edgeS + 70, y=4)
-_tS['canvas'].event_generate('<ButtonRelease-1>', x=_edgeS + 70, y=4)
+_qa_fire(_tS['canvas'], '<B1-Motion>', x=_edgeS + 70, y=4)
+_qa_fire(_tS['canvas'], '<ButtonRelease-1>', x=_edgeS + 70, y=4)
 app.update()
 _tS = app._grid_at_line(1)
 _wS = core_tables.parse_separator(
@@ -3373,8 +3382,8 @@ check(f'releasing the drag stores the new width in the separator '
 # check pins the user-visible invariant, whichever layer provides it.)
 _tS = app._grid_at_line(1)
 _edgeS = int(_tS['col_x'][1])
-_tS['canvas'].event_generate('<Button-1>', x=_edgeS, y=4)
-_tS['canvas'].event_generate('<ButtonRelease-1>', x=_edgeS, y=4)
+_qa_fire(_tS['canvas'], '<Button-1>', x=_edgeS, y=4)
+_qa_fire(_tS['canvas'], '<ButtonRelease-1>', x=_edgeS, y=4)
 app.update()
 _wS2 = core_tables.parse_separator(
     app.body_text.get('2.0', '2.end'))[0]['width']
@@ -3654,10 +3663,10 @@ app.update()
 _tE = app._grid_at_line(1)
 _aE, _bE = _tE['cells'][(1, 0)], _tE['cells'][(2, 0)]
 _cvE = _tE['canvas']
-_cvE.event_generate('<Button-1>', x=int(_aE['x'] + 12), y=int(_aE['y'] + 6))
-_cvE.event_generate('<B1-Motion>', x=int(_bE['x'] + 12), y=int(_bE['y'] + 6))
-_cvE.event_generate('<ButtonRelease-1>',
-                    x=int(_bE['x'] + 12), y=int(_bE['y'] + 6))
+_qa_fire(_cvE, '<Button-1>', x=int(_aE['x'] + 12), y=int(_aE['y'] + 6))
+_qa_fire(_cvE, '<B1-Motion>', x=int(_bE['x'] + 12), y=int(_bE['y'] + 6))
+_qa_fire(_cvE, '<ButtonRelease-1>',
+         x=int(_bE['x'] + 12), y=int(_bE['y'] + 6))
 app.body_text.event_generate('<Control-c>')
 app.update()
 check(f'a fast Ctrl+C straight after the drag still means the cells '
@@ -3676,10 +3685,12 @@ app._cell_editor['entry'].insert('1.0', 'text destul de lat sa mute coloana')
 _tE2 = app._grid_at_line(1)
 _aE, _bE = _tE2['cells'][(1, 0)], _tE2['cells'][(2, 0)]
 _cvE = _tE2['canvas']
-_cvE.event_generate('<Button-1>', x=int(_aE['x'] + 12), y=int(_aE['y'] + 6))
+_qa_fire(_cvE, '<Button-1>', x=int(_aE['x'] + 12), y=int(_aE['y'] + 6))
 # The press killed this canvas (the commit rebuilt); a real mouse's
 # motion and release simply never arrive on it, but SYNTHETIC events on
 # a dead widget raise instead -- swallow that to mirror reality.
+# Raw event_generate ON PURPOSE: _qa_fire would turn the except
+# TclError below into an uncaught EventNotDelivered on a healthy app.
 try:
     _cvE.event_generate('<B1-Motion>',
                         x=int(_bE['x'] + 12), y=int(_bE['y'] + 6))
@@ -4022,7 +4033,7 @@ app.update()
 # on a direct binding that _bind_text_wheel silently replaced, so real
 # wheels kept leaping while a direct method call stayed green.
 take_focus(app.body_text)
-app.body_text.event_generate('<MouseWheel>', delta=-120)
+_qa_fire(app.body_text, '<MouseWheel>', delta=-120)
 app.update()
 check('one wheel notch over a tall table moves the view a little, not a table',
       app.body_text.yview()[0] > 0
@@ -4031,7 +4042,7 @@ check('one wheel notch over a tall table moves the view a little, not a table',
 app.body_text.yview_moveto(0.0)
 app.update()
 _gridW = app._grid_at_line(1)
-_gridW['canvas'].event_generate('<MouseWheel>', delta=-120)
+_qa_fire(_gridW['canvas'], '<MouseWheel>', delta=-120)
 app.update()
 check('one wheel notch over the grid glides the note the same way',
       app.body_text.yview()[0] > 0
@@ -4372,10 +4383,10 @@ check('the palette drops an UNCHECKED box wearing the picked colour',
 
 # a click on the box TICKS it -- no text editor -- and keeps its colour
 _cvK = _gM3['canvas']
-_cvK.event_generate('<Button-1>', x=int(_cK['x'] + _cK['w'] / 2),
-                    y=int(_cK['y'] + _cK['h'] / 2))
-_cvK.event_generate('<ButtonRelease-1>', x=int(_cK['x'] + _cK['w'] / 2),
-                    y=int(_cK['y'] + _cK['h'] / 2))
+_qa_fire(_cvK, '<Button-1>', x=int(_cK['x'] + _cK['w'] / 2),
+         y=int(_cK['y'] + _cK['h'] / 2))
+_qa_fire(_cvK, '<ButtonRelease-1>', x=int(_cK['x'] + _cK['w'] / 2),
+         y=int(_cK['y'] + _cK['h'] / 2))
 app.update()
 _gM3 = app._grid_at_line(1)
 _cK = _gM3['cells'][(1, 1)]
@@ -4542,7 +4553,7 @@ app.update()
 _gS = app._grid_at_line(1)
 app._grid_select_range(_gS, (1, 0), (1, 1))
 app.update()
-app.body_text.event_generate('<Button-1>', x=5, y=5)
+_qa_fire(app.body_text, '<Button-1>', x=5, y=5)
 app.update()
 _lastS = int(app.body_text.index('end-1c').split('.')[0])
 app.body_text.tag_add('sel', '%d.0' % _lastS, '%d.4' % _lastS)
@@ -4560,12 +4571,12 @@ check('after a body click, the toolbar colour reaches the body again',
 # meant grabbing its neighbour too.
 _cS = _gS['cells'][(1, 1)]
 _cvS = _gS['canvas']
-_cvS.event_generate('<Button-1>', x=int(_cS['x'] + 12),
-                    y=int(_cS['y'] + 8))
-_cvS.event_generate('<B1-Motion>', x=int(_cS['x'] + 30),
-                    y=int(_cS['y'] + 20))
-_cvS.event_generate('<ButtonRelease-1>', x=int(_cS['x'] + 30),
-                    y=int(_cS['y'] + 20))
+_qa_fire(_cvS, '<Button-1>', x=int(_cS['x'] + 12),
+         y=int(_cS['y'] + 8))
+_qa_fire(_cvS, '<B1-Motion>', x=int(_cS['x'] + 30),
+         y=int(_cS['y'] + 20))
+_qa_fire(_cvS, '<ButtonRelease-1>', x=int(_cS['x'] + 30),
+         y=int(_cS['y'] + 20))
 app.update()
 check('a real drag inside one cell selects exactly that cell',
       getattr(app, '_grid_sel', None) is not None
@@ -4625,8 +4636,8 @@ app.update_idletasks()
 _gV = app._grid_at_line(1)
 _cvV = _gV['canvas']
 _c00V = _gV['cells'][(0, 0)]
-_cvV.event_generate('<Button-1>', x=int(_c00V['x'] + 20),
-                    y=int(_c00V['y'] + 8))
+_qa_fire(_cvV, '<Button-1>', x=int(_c00V['x'] + 20),
+         y=int(_c00V['y'] + 8))
 _shownV = int(float(_cvV.cget('width')))
 _origPtr = app.winfo_pointerxy
 app.winfo_pointerxy = lambda: (_cvV.winfo_rootx() + _shownV - 5,
@@ -4641,8 +4652,8 @@ check('holding the drag at the right edge pans the grid and grows the '
       and getattr(app, '_grid_sel', None) is not None
       and app._grid_sel['box'][3] >= 10)
 app.winfo_pointerxy = _origPtr
-_cvV.event_generate('<ButtonRelease-1>', x=_shownV - 5,
-                    y=int(_c00V['y'] + 8))
+_qa_fire(_cvV, '<ButtonRelease-1>', x=_shownV - 5,
+         y=int(_c00V['y'] + 8))
 app.update()
 
 set_body('| Cap | Doi |\n'
@@ -4655,8 +4666,8 @@ app.update()
 _gV = app._grid_at_line(1)
 _cvV = _gV['canvas']
 _c00V = _gV['cells'][(0, 0)]
-_cvV.event_generate('<Button-1>', x=int(_c00V['x'] + 20),
-                    y=int(_c00V['y'] + 8))
+_qa_fire(_cvV, '<Button-1>', x=int(_c00V['x'] + 20),
+         y=int(_c00V['y'] + 8))
 app.winfo_pointerxy = lambda: (
     app.body_text.winfo_rootx() + 60,
     app.body_text.winfo_rooty() + app.body_text.winfo_height() - 4)
@@ -4671,12 +4682,12 @@ check('holding the drag under the note scrolls it and grows the '
       and app._grid_sel['box'][2] >= 5)
 app.winfo_pointerxy = _origPtr
 # the timer wiring: a motion arms it, the release stops it
-_cvV.event_generate('<B1-Motion>', x=int(_c00V['x'] + 25),
-                    y=int(_c00V['y'] + 9))
+_qa_fire(_cvV, '<B1-Motion>', x=int(_c00V['x'] + 25),
+         y=int(_c00V['y'] + 9))
 app.update()
 _armedV = getattr(app, '_grid_autoscroll_job', None) is not None
-_cvV.event_generate('<ButtonRelease-1>', x=int(_c00V['x'] + 25),
-                    y=int(_c00V['y'] + 9))
+_qa_fire(_cvV, '<ButtonRelease-1>', x=int(_c00V['x'] + 25),
+         y=int(_c00V['y'] + 9))
 app.update()
 check('the autoscroll timer arms on drag and stops on release',
       _armedV
@@ -5347,10 +5358,10 @@ check('the formatting entries are still present in the body menu',
 # fixes, so double-clicking a row with no words in it grabbed that row's
 # invisible newline and painted a full-width selection over an empty line.
 def _dbl_xy(w, x, y, t):
-    w.event_generate('<Button-1>', x=x, y=y, time=t)
-    w.event_generate('<ButtonRelease-1>', x=x, y=y, time=t + 10)
-    w.event_generate('<Button-1>', x=x, y=y, time=t + 120)
-    w.event_generate('<ButtonRelease-1>', x=x, y=y, time=t + 130)
+    _qa_fire(w, '<Button-1>', x=x, y=y, time=t)
+    _qa_fire(w, '<ButtonRelease-1>', x=x, y=y, time=t + 10)
+    _qa_fire(w, '<Button-1>', x=x, y=y, time=t + 120)
+    _qa_fire(w, '<ButtonRelease-1>', x=x, y=y, time=t + 130)
     app.update()
     r = w.tag_ranges('sel')
     return w.get(r[0], r[1]) if r else None
@@ -6801,7 +6812,7 @@ for topl in _size_pop:
                  if str(c.cget('cursor')) == 'hand2']
 picked = False
 for c in _cells14:
-    c.event_generate('<Enter>')
+    _qa_fire(c, '<Enter>')
     _qa_click(c)
     app.update()
     if core_tables.find_blocks(body()):
@@ -6855,7 +6866,12 @@ def _torn(s):
 _eapp.title_entry.delete(0, 'end')
 _eapp.title_entry.insert(0, 'hi \U0001F600')
 _eapp.title_entry.icursor('end')
-_eapp.title_entry.focus_force(); _eapp.update()
+_eapp.title_entry.focus_force()
+for _ in range(60):
+    _eapp.update(); _eapp.update_idletasks()
+    if _eapp.focus_get() is _eapp.title_entry:
+        break
+    time.sleep(0.01)
 _eapp.title_entry.event_generate('<BackSpace>'); _eapp.update()
 _t1 = _eapp.title_entry.get()
 check('BackSpace after a title emoji removes the whole character',
@@ -6903,7 +6919,12 @@ else:
     _se.delete(0, 'end')
     _se.insert(0, '\U0001F600')
     _se.icursor('end')
-    _se.focus_force(); _eapp.update()
+    _se.focus_force()
+    for _ in range(60):
+        _eapp.update(); _eapp.update_idletasks()
+        if _eapp.focus_get() is _se:
+            break
+        time.sleep(0.01)
     _se.event_generate('<BackSpace>'); _eapp.update()
     check('the search box deletes a whole emoji too',
           _se.get() == '' and not _torn(_se.get()))

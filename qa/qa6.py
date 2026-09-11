@@ -32,7 +32,8 @@ import note_organizer as NO, tkinter as tk, tkinter.filedialog as fd, os, tempfi
 # viewable, and the app hides popups whenever another program holds the
 # Windows foreground -- which a test process never owns. See
 # qa/_qa_support.py; _qa_click refuses to click into the void.
-from _qa_support import click as _qa_click, pin_popup_visibility as _qa_pin
+from _qa_support import (click as _qa_click, fire as _qa_fire,
+                         pin_popup_visibility as _qa_pin)
 _qa_pin(NO)
 fails=[]
 def check(name, cond):
@@ -175,7 +176,7 @@ app.update()
 app.set_theme('light' if 'dark' in str(app.theme_name) else 'dark')
 app.update()
 for _xy6 in ((200, 200), (400, 300), (60, 60)):
-    app.event_generate('<Button-1>', x=_xy6[0], y=_xy6[1])
+    _qa_fire(app, '<Button-1>', x=_xy6[0], y=_xy6[1])
     app.update()
 app.set_theme(_theme_before6)
 app.update()
@@ -249,7 +250,7 @@ check('username entry has focus before leaving Settings',
       _focus_settles_on(name_entry))
 back_btn = find_widget(app.settings_page, tk.Button, 'Back to Notes')
 _qa_click(back_btn)
-back_btn.event_generate('<ButtonRelease-1>')
+_qa_fire(back_btn, '<ButtonRelease-1>')
 app.update()
 check('clicking "Back to Notes" directly clears the field\'s focus',
       _focus_leaves(name_entry))
@@ -289,7 +290,7 @@ check('theme card is on screen', theme_canvases[0].winfo_ismapped())
 check('Settings pane actually overflows, so scrolling is observable',
       app.settings_canvas.yview()[1] < 1.0)
 before_scroll = app.settings_canvas.yview()
-theme_canvases[0].event_generate('<MouseWheel>', delta=-120)
+_qa_fire(theme_canvases[0], '<MouseWheel>', delta=-120)
 app.update()
 check('scrolling with the cursor over a theme card scrolls the Settings page',
       app.settings_canvas.yview() != before_scroll)
@@ -326,7 +327,7 @@ app.update(); app.update_idletasks()
 check('Settings pane overflows for the chip test too',
       app.settings_canvas.yview()[1] < 1.0)
 before_stats_scroll = app.settings_canvas.yview()
-chip_frames[0].event_generate('<MouseWheel>', delta=-120)
+_qa_fire(chip_frames[0], '<MouseWheel>', delta=-120)
 app.update()
 check('scrolling with the cursor over a statistics chip scrolls the Settings page',
       app.settings_canvas.yview() != before_stats_scroll)
@@ -357,7 +358,7 @@ chip = grid_frame.winfo_children()[0]
 check('statistics chip has no hand cursor (not clickable-looking)',
       str(chip.cget('cursor')) != 'hand2')
 _qa_click(chip)
-chip.event_generate('<ButtonRelease-1>')
+_qa_fire(chip, '<ButtonRelease-1>')
 app.update()
 check('clicking a statistics chip does not change tabs',
       app.notebook.index(app.notebook.select())==app.TAB_CALENDAR)

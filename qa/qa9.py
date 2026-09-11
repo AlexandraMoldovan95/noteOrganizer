@@ -144,11 +144,15 @@ check('nested dropdown popup exists', dropdown_popup is not None and dropdown_po
 # then tore down the template EDITOR the list sits inside.
 if dropdown_popup is not None:
     dropdown_popup.focus_force(); app.update()
-    dropdown_popup.event_generate('<Escape>')
+    # Generate-and-poll: a single Escape after an unpolled focus_force is
+    # a one-shot bet on where the focus is; regenerating inside the poll
+    # makes the ask deterministic while a real regression still times out
+    # into a hard red.
     for _ in range(60):
-        app.update()
         if not dropdown_popup.winfo_exists():
             break
+        dropdown_popup.event_generate('<Escape>')
+        app.update()
         time.sleep(0.02)
     check('Escape closes the nested list itself',
           not dropdown_popup.winfo_exists())
@@ -387,7 +391,11 @@ def _walkTG(w):
 _walkTG(_popG)
 _bodyG = max(_txtsG, key=lambda t: len(t.get('1.0', 'end')))
 _bodyG.focus_force()
-app.update()
+for _ in range(60):
+    app.update(); app.update_idletasks()
+    if app.focus_get() is _bodyG:
+        break
+    time.sleep(0.01)
 _bodyG.mark_set('insert', '1.0')
 app.update()
 # The guard runs on KeyPress; the class inserts at whatever caret the
