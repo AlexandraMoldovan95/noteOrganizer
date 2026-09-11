@@ -84,9 +84,6 @@ RULES = [
             r"(?=.*\bst\b)(?=.*\bor\b)"),
         allowed={
             "_editor_state_has_content": "the single answer",
-            "save_current_note":
-                "explicit Save additionally counts the date: pressing Save "
-                "is what makes a bare dated reminder deliberate",
             "editor_state_matches_saved":
                 "the pristine-editor test additionally counts the date, so "
                 "a calendar-prefilled editor still reads as changed",
@@ -96,6 +93,27 @@ RULES = [
                 "attachment or a repeat rule alone really would make an "
                 "empty template",
         },
+    ),
+    Rule(
+        question="does the editor hold anything worth keeping? "
+                 "(bare-locals spelling)",
+        owner="_editor_state_has_content",
+        # The same question written with local variables instead of an
+        # editor-state dict. The gate's first rule requires the
+        # st["field"] spelling and so was blind to this one entirely --
+        # which meant save_current_note's guard, a deliberate second
+        # answer, had an allowlist entry that had never matched
+        # anything. An exception nobody can see is not a reviewed
+        # exception; it is a comment.
+        pattern=re.compile(r"(?s)not\s+title\b.{0,200}?\bnot\s+body\b"),
+        allowed={
+            "save_current_note":
+                "explicit Save additionally counts the date and the repeat "
+                "rule: pressing Save is what makes a bare dated reminder "
+                "deliberate, and the automatic routes agree with "
+                "_editor_state_has_content, which leaves both out",
+        },
+        window=8,
     ),
     Rule(
         question="are these two notes the same note?",
@@ -110,8 +128,6 @@ RULES = [
                 "the USER-facing duplicate key is deliberately fuzzier: "
                 "case/whitespace-insensitive, ' (copy)' ignored, and "
                 "attachments excluded because cleanup merges them",
-            "normalize_note": "builds a note, does not judge sameness",
-            "effective_note": "applies an occurrence override, not a judgement",
             "_text": "content_signature's own nested coercion helper",
             # Constructors, not judgements: these BUILD a note or a
             # template dict out of editor state. Naming the fields is

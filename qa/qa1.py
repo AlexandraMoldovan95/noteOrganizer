@@ -6825,6 +6825,37 @@ for topl in _size_pop:
         topl.destroy()
 app.update()
 
+# ---- The helper's own repair, witnessed ----
+# _qa_fire asks winfo_id() (Tk_MakeWindowExist) before aiming an event,
+# because Tk DISCARDS a generated pointer event at a widget with no
+# native window -- silently, which is what made a whole class of checks
+# answer by luck. Delete that one line and every suite stays green,
+# because every other site happens to run against mapped widgets: the
+# repair was load-bearing and guarded by nothing. This builds the case
+# it exists for.
+_fw_top = tk.Toplevel(app)
+_fw_top.wm_overrideredirect(True)
+_fw_top.wm_geometry('+50+50')
+_fw_raw = tk.Label(_fw_top, text='raw', bg='#ff0000', cursor='hand2')
+_fw_raw.pack()
+_fw_fired = tk.Label(_fw_top, text='fired', bg='#00ff00', cursor='hand2')
+_fw_fired.pack()
+_fw_hits = []
+_fw_raw.bind('<Button-1>', lambda e: _fw_hits.append('raw'))
+_fw_fired.bind('<Button-1>', lambda e: _fw_hits.append('fired'))
+# NO update() anywhere in this block, in either direction: Tk dispatches
+# a generated event immediately, so the bindings record without one --
+# and a single update() here would MAP the toplevel, leaving the helper
+# nothing to repair and the second check passing with the repair deleted.
+_fw_raw.event_generate('<Button-1>')
+_qa_fire(_fw_fired, '<Button-1>')
+check('a raw generated click at a windowless widget is DISCARDED',
+      'raw' not in _fw_hits)
+check('...while the helper delivers it, which is the whole repair',
+      'fired' in _fw_hits)
+_fw_top.destroy()
+app.update()
+
 # ---- "Save as template" asks a question that matches what it stores ----
 # The eighth hand-rolled emptiness gate: it enumerated title|body|comments
 # and refused a checklist-only note with "This note is empty" -- about a

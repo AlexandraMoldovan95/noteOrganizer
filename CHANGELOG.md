@@ -195,6 +195,38 @@ adversarial review of the first round proved the class was wider than the findin
   and the rescue copy was spent anyway under a cheerful "Restored". It writes the note
   directly now, and says plainly that it restores the whole note. From the product
   review's second wave.
+- **A per-day edit that ends in a table stops asking to be saved.** A single day of a
+  repeating note, edited and saved, came back every time reading as though it still had
+  unsaved changes: the editor draws a line under a trailing table and the stored text
+  did not have one. That alone would be a nuisance; what made it serious is the question
+  it triggered — "save this day or the whole series?" — on every note switch and at
+  close, for an edit nobody had made, whose "whole series" answer replaced the note's
+  text with that one day's. From the product review's third pass.
+- **Changing something the whole series owns no longer asks an impossible question.**
+  Tick a checklist item while looking at one day and the app asked whether you meant
+  that day or the series — but a per-day edit can only hold text, so "this day" had
+  nowhere to put the tick: it wrote a copy of the series' own words over that day,
+  dropped the tick, and asked again the next time. It saves to the series now, without
+  asking, and still asks whenever the edit is one a single day really can carry. From
+  the product review's third pass.
+- **Emptying a short note leaves something to come back to.** The rescue copy behind
+  "Restore previous" only appeared when a lot of text vanished at once, which was
+  enough while an emptied note could not be saved at all. Now that clearing a note is an
+  ordinary edit, a short one — a three-item shopping list — was written away blank with
+  no rescue copy, nothing in the Trash, and the undo history already reset. From the
+  product review's third pass.
+- **A very long category name no longer quietly unfiles your notes.** The list of
+  categories gained a size limit, and the first version enforced it by SHORTENING the
+  name — so every note filed under the full name no longer matched a category that
+  existed and fell back to "General". An over-long name is left out instead, which is
+  visible, rather than renamed, which is not. From the product review's third pass.
+- **Ctrl+S and the Save button agree about a bare dated reminder.** One accepted a note
+  holding only a date; the other silently did nothing. From the product review's third
+  pass.
+- **"Back to Calendar" stopped being a dead button.** Start a note from a calendar day,
+  set it to repeat, then change your mind: the way back refused to work and told you to
+  answer a save question that was never asked. From the product review's third pass.
+
 
 ### Testing
 - Every fix above carries a regression check born red-under-mutation: the emptiness and

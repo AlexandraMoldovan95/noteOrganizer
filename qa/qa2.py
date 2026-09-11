@@ -349,6 +349,77 @@ app.notes = []
 app.save_notes()
 app.new_note(); app.update()
 
+# ---- A per-day edit ending in a table is not "unsaved" forever ----
+# The caret-line canonicalisation reached the base body but not the
+# override patches, and an override is shown in the SAME editor -- so the
+# renderer added the line, the stored day text did not have it, and the
+# day read as unsaved on every open: a save-scope question nobody asked
+# for at every note switch and at close, whose "whole series" answer
+# replaces the series text with that one day's.
+_TBL_O = '| a | b |\n| --- | --- |\n| 1 | 2 |'
+_ov_note = NO.normalize_note({
+    'id': 4301, 'title': 'Serie', 'body': 'corp de baza',
+    'category': 'General', 'date': '2026-07-01',
+    'recurrence': {'freq': 'weekly', 'weekdays': [2]},
+    'overrides': {'2026-07-08': {'title': 'Ziua', 'body': 'intro\n' + _TBL_O}},
+    'updated': '2026-01-01 00:00', 'created': '2026-01-01 00:00'})
+app.notes = [_ov_note]
+app.save_notes()
+app.update()
+check('a stored override ending in a table is canonical on load',
+      app.find_note(4301)['overrides']['2026-07-08']['body']
+      == 'intro\n' + _TBL_O + '\n')
+app.load_note(app.find_note(4301), occurrence_date='2026-07-08')
+app.update()
+check('...so that day opens CLEAN instead of unsaved forever',
+      app.editor_state_matches_saved(app.capture_editor_state()))
+
+# ---- A series-owned edit does not raise a question it cannot answer ----
+# An override carries the five overridable fields and nothing else, so
+# "this day" has nowhere to put a ticked checklist item: the old code
+# asked anyway, wrote an override duplicating the series' own text, threw
+# the tick away, and left the editor dirty so it asked again next time.
+_sq_note = NO.normalize_note({
+    'id': 4302, 'title': 'Serie2', 'body': 'corp',
+    'category': 'General', 'date': '2026-07-01',
+    'recurrence': {'freq': 'weekly', 'weekdays': [2]},
+    'checklist': [{'text': 'unu', 'done': False}],
+    'updated': '2026-01-01 00:00', 'created': '2026-01-01 00:00'})
+app.notes = [_sq_note]
+app.save_notes()
+app.update()
+app.load_note(app.find_note(4302), occurrence_date='2026-07-08')
+app.update()
+app._working_checklist[0]['done'] = True
+app.update()
+_sq_asked = []
+app.ask_occurrence_scope = lambda *a, **k: (_sq_asked.append(1), 'occurrence')[1]
+app._flush_autosave()
+app.update()
+_sq_after = app.find_note(4302)
+check('a series-owned edit asks no scope question at all', _sq_asked == [])
+check('...the tick lands on the series', _sq_after['checklist'][0]['done'] is True)
+check('...no phantom override is written for that day',
+      '2026-07-08' not in (_sq_after.get('overrides') or {}))
+check('...and the editor is clean afterwards, so it cannot ask again',
+      app.editor_state_matches_saved(app.capture_editor_state()))
+# The question MUST still be asked when an override really could carry
+# the edit -- otherwise this fix would have quietly removed the feature.
+app.body_text.delete('1.0', 'end')
+app.body_text.insert('1.0', 'doar ziua asta')
+app.update()
+_sq_asked2 = []
+app.ask_occurrence_scope = lambda *a, **k: (_sq_asked2.append(1), 'occurrence')[1]
+app.save_current_note(auto=False)
+app.update()
+check('while a text edit on one day still asks, and still overrides',
+      _sq_asked2 == [1]
+      and '2026-07-08' in (app.find_note(4302).get('overrides') or {}))
+del app.ask_occurrence_scope
+app.notes = []
+app.save_notes()
+app.new_note(); app.update()
+
 # ---- "Restore previous" on a repeating note restores the SERIES ----
 # It used to run through the editor's save, which asks a scope question
 # on a repeating note. Answering "this occurrence" wrote the recovered

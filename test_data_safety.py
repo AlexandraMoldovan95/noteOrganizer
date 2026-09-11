@@ -1279,8 +1279,20 @@ try:
     _save_settings(dict(_settings_backup,
                         categories={"N" * 5000: "#112233"}))
     _loaded2 = _cats_mod.load_categories()
-    check("and an absurdly long category name is cut to a drawable size",
-          all(len(n) <= _cats_mod.MAX_CATEGORY_NAME for n in _loaded2))
+    # DROPPED, not truncated: a count can be capped by shortening the
+    # list, but a NAME is an identifier -- shortening it meant every note
+    # filed under the full name no longer matched a category that
+    # existed, and normalize_note re-filed them all to General.
+    # "dropped" means ABSENT, not shortened. Asserting the full 5000-char
+    # prefix is missing would pass for a truncated name too, which is the
+    # exact failure this check exists to catch -- so it asserts that no
+    # key derived from that name survives at all.
+    check("an absurdly long category name is dropped, not silently renamed",
+          not any(n.startswith("NNNN") for n in _loaded2))
+    _save_settings(dict(_settings_backup,
+                        categories={"Proiecte": "#112233"}))
+    check("...while an ordinary name is kept exactly as written",
+          "Proiecte" in _cats_mod.load_categories())
 finally:
     _save_settings(_settings_backup)
     _cats_mod.CATEGORY_COLORS.clear()
@@ -1313,6 +1325,22 @@ _big_tpl = _nt({"name": "b",
                 "checklist": [{"text": str(i)} for i in range(3000)]})
 check("a template's checklist meets the same 1000-item ceiling",
       len(_big_tpl["checklist"]) == 1000)
+# templates.json is hand-editable, and the cap's slice raises on a
+# dict-shaped value: what used to degrade to an empty checklist would
+# have crashed startup instead.
+# Guarded: the defect under test is a CRASH, so calling it unguarded
+# takes the suite down before its FAILURES footer -- which reads as
+# "survived nothing" instead of a red.
+def _tpl_degrades(value):
+    try:
+        return _nt({"name": "b", "checklist": value})["checklist"] == []
+    except Exception:
+        return False
+
+
+check("a malformed template checklist degrades instead of crashing",
+      _tpl_degrades({"a": 1}) and _tpl_degrades("nope")
+      and _tpl_degrades(7))
 _big_fmt = _nf([{"start": i, "end": i + 1, "style": "bold"}
                 for i in range(_MFS + 5000)])
 check("formatting spans meet their anti-bomb ceiling",
@@ -1376,8 +1404,19 @@ try:
     check("with the notebook free, the same gate lets _main build the app",
           "app" in _ev_free and "loop" in _ev_free
           and "refused-dialog" not in _ev_free)
+    # index() raises when a step is MISSING, and a missing step is exactly
+    # what the mutant for this produces -- a crash here would take the
+    # suite down before its FAILURES footer, which reads as "survived
+    # nothing" instead of a red.
+    def _order_ok(events, *steps):
+        try:
+            spots = [events.index(s) for s in steps]
+        except ValueError:
+            return False
+        return spots == sorted(spots)
+
     check("...and only then does the startup work happen, in that order",
-          _ev_free.index("acquire") < _ev_free.index("init") < _ev_free.index("app"))
+          _order_ok(_ev_free, "acquire", "init", "app"))
 finally:
     try:
         _si.release()

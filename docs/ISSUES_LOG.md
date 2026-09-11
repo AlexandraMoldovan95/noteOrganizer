@@ -26,9 +26,9 @@ day-to-day tracking.
 | [The duplicate that wasn't a copy](#the-duplicate-that-wasnt-a-copy) | A "copy" that shares its source's files isn't one — the class is every route that clones a note, not the route reported. | 0.71.119 |
 | [The mend that only ran on the way to disk](#the-mend-that-only-ran-on-the-way-to-disk) | A repair at one serialization boundary is a todo list for the others; and UnicodeEncodeError is a ValueError, not an OSError. | 0.71.119 |
 | [The safety request the dialog never read](#the-safety-request-the-dialog-never-read) | A `**kw` wrapper that forwards a subset silently swallows the rest — callers' safety asks can be dead code for months. | 0.71.119 |
-| [The note the editor let you make and the launcher deleted](#the-note-the-editor-let-you-make-and-the-launcher-deleted) | A predicate that enumerates a type's fields comes due silently the day someone adds one — and two that disagree is data loss waiting for its first user. | 0.71.153 |
-| [Two windows, one file, and the last one to autosave wins](#two-windows-one-file-and-the-last-one-to-autosave-wins) | Full-file rewrites turn concurrency into data loss; a guard over data must fail open where its own failure would be worse. | 0.71.153 |
-| [The trim that moved every colour](#the-trim-that-moved-every-colour) | When a transformation forces a second function to undo its effect, the transformation is the bug — and tidying what the user typed is a data change. | 0.71.153 |
+| [The note the editor let you make and the launcher deleted](#the-note-the-editor-let-you-make-and-the-launcher-deleted) | A predicate that enumerates a type's fields comes due silently the day someone adds one — and two that disagree is data loss waiting for its first user. | 0.71.159 |
+| [Two windows, one file, and the last one to autosave wins](#two-windows-one-file-and-the-last-one-to-autosave-wins) | Full-file rewrites turn concurrency into data loss; a guard over data must fail open where its own failure would be worse. | 0.71.159 |
+| [The trim that moved every colour](#the-trim-that-moved-every-colour) | When a transformation forces a second function to undo its effect, the transformation is the bug — and tidying what the user typed is a data change. | 0.71.159 |
 | [The template editor that "did nothing" when clicked](#the-template-editor-that-did-nothing-when-clicked) | 'Nothing happens' in a --windowed build is a real bug report — the exception was invisible. | 0.3.0 |
 | [The panel that lost its content depending on how you got there](#the-panel-that-lost-its-content-depending-on-how-you-got-there) | Recalculate layout on Tk's `<Map>` event, not after a guessed delay. | 0.3.0 |
 | [The scroll that stopped twice, for two different reasons](#the-scroll-that-stopped-twice-for-two-different-reasons) | Same symptom, unrelated causes — check neighbouring areas instead of assuming one fix covers all. | 0.28.38 |
@@ -38,8 +38,8 @@ day-to-day tracking.
 | [The bullet that had no bullet in it](#the-bullet-that-had-no-bullet-in-it) | Text inserted between same-tagged characters inherits the tag; content, not presentation tags, decides state. | 0.34.51 |
 | [The text box that was always eighty characters wide](#the-text-box-that-was-always-eighty-characters-wide) | When a check passes, ask what it would take to make it fail. | 0.38.59 |
 | [The list that lost its place, twice, for two silent reasons](#the-list-that-lost-its-place-twice-for-two-silent-reasons) | 'Hard to reproduce' means unmeasured timing; instrument what the widget experiences until it's deterministic. | 0.58.82 |
-| [The click that was never delivered](#the-click-that-was-never-delivered) | Tk discards a generated event aimed at a widget with no native window, in silence — and `winfo_ismapped`/`winfo_viewable` do not predict delivery. | 0.71.153 |
-| [The safety net that could not see the gap](#the-safety-net-that-could-not-see-the-gap) | A gate tuned to the instances it already found certifies the ones it cannot see — worse than no gate, because the next reader trusts it. | 0.71.153 |
+| [The click that was never delivered](#the-click-that-was-never-delivered) | Tk discards a generated event aimed at a widget with no native window, in silence — and `winfo_ismapped`/`winfo_viewable` do not predict delivery. | 0.71.159 |
+| [The safety net that could not see the gap](#the-safety-net-that-could-not-see-the-gap) | A gate tuned to the instances it already found certifies the ones it cannot see — worse than no gate, because the next reader trusts it. | 0.71.159 |
 | [A calendar that kept navigating behind the user's back](#a-calendar-that-kept-navigating-behind-the-users-back) | Changing how a page becomes visible invalidates 'is X visible' assumptions in unrelated code. | 0.5.0 |
 | [The date field that either lost your edit, or wouldn't let you finish typing it](#the-date-field-that-either-lost-your-edit-or-wouldnt-let-you-finish-typing-it) | Reusing Save's validation in silent autosave turns a helpful warning into an interruption. | 0.28.38 |
 | [The autosave that could interrupt you over a note that was already gone](#the-autosave-that-could-interrupt-you-over-a-note-that-was-already-gone) | A guard added to one path doesn't cover other routes into the same code. | 0.28.38 |
@@ -475,7 +475,7 @@ knows which confirms are safe by choice, not by omission.
 
 ### The note the editor let you make and the launcher deleted
 
-*([0.71.153](../CHANGELOG.md#071153--2026-09-11) · 2026-09-11)*
+*([0.71.159](../CHANGELOG.md#071159--2026-09-11) · 2026-09-11)*
 
 **Symptom:** Found by the product review. Create a note with no title
 and no body but a checklist of three items. It saves, it appears in the
@@ -516,7 +516,7 @@ inconsistency; they are a data-loss bug waiting for its first user.
 
 ### Two windows, one file, and the last one to autosave wins
 
-*([0.71.153](../CHANGELOG.md#071153--2026-09-11) · 2026-09-11)*
+*([0.71.159](../CHANGELOG.md#071159--2026-09-11) · 2026-09-11)*
 
 **Symptom:** Found by the product review and reproduced by two
 independent verifiers with two real app processes. Open the app twice —
@@ -555,7 +555,7 @@ the one call site a user ever travels through.
 
 ### The trim that moved every colour
 
-*([0.71.153](../CHANGELOG.md#071153--2026-09-11) · 2026-09-11)*
+*([0.71.159](../CHANGELOG.md#071159--2026-09-11) · 2026-09-11)*
 
 **Symptom:** Found by the product review. A body typed with an indented
 first line and a couple of blank lines at the end came back reshaped
@@ -598,7 +598,7 @@ compares the body exactly as stored.
 
 ### The safety net that could not see the gap
 
-*([0.71.153](../CHANGELOG.md#071153--2026-09-11) · 2026-09-11)*
+*([0.71.159](../CHANGELOG.md#071159--2026-09-11) · 2026-09-11)*
 
 **Symptom:** A static gate was written specifically so that one class of
 omission — a question the app asks in several places, answered by a
@@ -828,7 +828,7 @@ with it; and a scrollregion is a claim, not a fact — refresh it from
 
 ### The click that was never delivered
 
-*([0.71.153](../CHANGELOG.md#071153--2026-09-11) · 2026-09-11)*
+*([0.71.159](../CHANGELOG.md#071159--2026-09-11) · 2026-09-11)*
 
 **Symptom:** qa2's check "clicking five chips saves exactly the
 3-marker cap" failed three runs out of three on one machine and passed

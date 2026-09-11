@@ -73,8 +73,20 @@ def load_categories():
         # this is an untrusted door like any other.
         for name, color in list(saved.items())[:MAX_CATEGORIES]:
             color = sanitize_color(color)
-            if isinstance(name, str) and name.strip() and color:
-                result[name.strip()[:MAX_CATEGORY_NAME]] = color
+            if not (isinstance(name, str) and name.strip() and color):
+                continue
+            name = name.strip()
+            # A COUNT can be capped by truncating the list; a NAME cannot
+            # be capped by truncating the name. The first version did
+            # exactly that, and a category whose name was over the limit
+            # came back shortened on the next launch -- so every note
+            # filed under the full name no longer matched a category that
+            # existed, and normalize_note re-filed them all to General.
+            # A pathological name is dropped instead: one category goes
+            # missing, loudly, rather than silently unbinding notes.
+            if len(name) > MAX_CATEGORY_NAME:
+                continue
+            result[name] = color
     if not result:
         result = dict(DEFAULT_CATEGORY_COLORS)
     # General is mandatory and always first.

@@ -7432,7 +7432,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 choice = self._themed_dialog(
                     "Possible duplicate",
                     "This note looks identical to one you already have (same "
-                    "title, text, comments and category).",
+                    "title, text, comments, category, checklist and\n"
+                    "repeat rule).",
                     kind="question",
                     buttons=[("Cancel", "cancel"), ("Open it anyway", "open")]
                 )
@@ -8134,8 +8135,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 choice = self._themed_dialog(
                     "Possible duplicates",
                     f"{dupe_count} of the {len(valid_notes)} note(s) in this backup "
-                    "look identical to notes you already have (same title, text, "
-                    "comments and category).",
+                    "look identical to notes you already have (same title, "
+                    "text, comments, category, checklist and repeat rule).",
                     kind="question",
                     buttons=[("Cancel", "cancel"),
                              ("Import all anyway", "all"),
@@ -10674,8 +10675,18 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             # dirty here too — without the exemption this guard waved the
             # navigation through and the day panel showed the old content
             # over the user's unsaved emptying.
-            if ((self._editor_state_has_content(st) or self._editing_saved_note())
-                    and not self.editor_state_matches_saved(st)):
+            #
+            # But only block for something the flush could actually have
+            # saved. A brand-new calendar note holding ONLY a repeat rule
+            # is refused by every automatic route (the junk guard), so
+            # this guard blocked forever on an edit nothing would ever
+            # persist, telling the user to answer a question that was
+            # never asked — a dead Back button with no way out.
+            _blockable = (self._editing_saved_note()
+                          or self._editor_state_has_content(
+                              {k: v for k, v in st.items()
+                               if k != "recurrence"}))
+            if _blockable and not self.editor_state_matches_saved(st):
                 self.set_status(
                     "Not saved yet — answer the save question (or fix the "
                     "date) to go back to the calendar")
@@ -12615,7 +12626,16 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # The emptied-saved-note exemption applies to Ctrl+S too: without
         # it the shortcut was a silent no-op on exactly the edit T0-5 is
         # about, while the Save button accepted it.
-        if self._editor_state_has_content(st) or self._editing_saved_note():
+        #
+        # And the date counts here for the same reason it counts in the
+        # Save button: both are the user explicitly asking. Left out,
+        # Ctrl+S silently refused the bare dated reminder the button
+        # accepted, which is the two explicit gestures disagreeing about
+        # the same editor.
+        deliberate = (self._editor_state_has_content(st)
+                      or (st.get("date") or "").strip()
+                      or self._editing_saved_note())
+        if deliberate:
             self.save_current_note(auto=False)
         return "break"
 
@@ -13819,7 +13839,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         note["paragraphs"] = normalize_paragraphs(
             prev.get("paragraphs", []), len(note["body"].split("\n")))
         note.pop("_prev", None)
-        note["updated"] = datetime.now().strftime("%Y-%m-%d %H:%M")
+        # Seconds included, matching what save_current_note stamps: the
+        # minute-resolution version sorted a just-restored note BELOW
+        # notes touched earlier in the same minute under "Recently
+        # updated" (the precision-is-part-of-the-contract lesson, in
+        # ISSUES_LOG).
+        note["updated"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         self.save_notes()
         # Reload from the note so the editor and the dirty machinery agree
         # with what is now on disk (the widgets above were filled for the
@@ -13971,9 +13996,28 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
             scope = "series"
             if is_recurring(note) and self.current_occurrence_date:
-                scope = self.ask_occurrence_scope("Save", self.current_occurrence_date)
-                if scope is None:
-                    return
+                # Only ask when the answer could actually change anything.
+                # An override carries OVERRIDABLE_FIELDS and nothing else,
+                # so when the edit is in a SERIES-owned field — a ticked
+                # checklist item above all — "this day" has nowhere to put
+                # it: the old code wrote an override duplicating the
+                # series' own text, threw the tick away, and left the
+                # editor still dirty, so the question came back on every
+                # switch. If nothing overridable differs from what this
+                # day shows, the edit belongs to the series by
+                # construction; save it there without asking.
+                shown_now = effective_note(note, self.current_occurrence_date)
+                overridable_changed = (
+                    title.strip() != (shown_now.get("title") or "").strip()
+                    or body != (shown_now.get("body") or "")
+                    or comments.strip() != (shown_now.get("comments") or "").strip()
+                    or category != shown_now.get("category")
+                    or self.current_note_color != (shown_now.get("color") or ""))
+                if overridable_changed:
+                    scope = self.ask_occurrence_scope(
+                        "Save", self.current_occurrence_date)
+                    if scope is None:
+                        return
 
             if scope == "occurrence":
                 # Only content is overridden. Date, recurrence rule and
@@ -14006,7 +14050,18 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 removed = old_len - new_len
                 big_fraction = old_len > 0 and new_len < old_len * 0.7
                 big_absolute = removed >= 200
-                if removed > 40 and (big_fraction or big_absolute):
+                # Emptied completely counts however short it was. The
+                # thresholds above were written when an empty save could
+                # not happen at all -- the guard refused it -- so they
+                # only ever had to catch a drastic SHRINK. Now that
+                # clearing a saved note is a legitimate edit on every
+                # route, a short one (a 17-character shopping list, say)
+                # slipped under all three and was written to disk with no
+                # rescue copy, nothing in the Trash, and the undo history
+                # reset by the note switch that persisted it. The case
+                # that most needs the safety net had none.
+                emptied = old_len > 0 and new_len == 0
+                if emptied or (removed > 40 and (big_fraction or big_absolute)):
                     note["_prev"] = {
                         "title": note.get("title", ""),
                         "body": note.get("body", ""),

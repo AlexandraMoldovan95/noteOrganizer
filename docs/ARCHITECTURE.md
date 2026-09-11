@@ -21,7 +21,7 @@ lives in two places: the `noteorganizer/` package — a `core/` layer of data an
 `ui/` layer of mixins — and `note_organizer.py` itself, the entry point and the UI hub the
 pieces hang off.
 
-Both layers are fully extracted: thirteen `core/` modules and five `ui/` mixins. The annotated,
+Both layers are fully extracted: fourteen `core/` modules and five `ui/` mixins. The annotated,
 module-by-module inventory is [README's project tree](../README.md#project-structure), and
 [CODE_TOUR.md](CODE_TOUR.md) walks through the modules for someone learning the codebase. Three
 of the core modules — `richtext`, `clipboard` and `tables` — landed with the rich-text and

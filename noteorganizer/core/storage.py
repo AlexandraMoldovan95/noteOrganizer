@@ -129,7 +129,12 @@ def normalize_template(tpl):
         "checklist": [
             {"text": it.get("text", "") if isinstance(it.get("text"), str) else "",
              "done": bool(it.get("done"))}
-            for it in (tpl.get("checklist") or [])[:MAX_CHECKLIST_ITEMS]
+            # isinstance first: the cap's slice raises on a dict-shaped
+            # value, and templates.json is hand-editable -- what used to
+            # degrade to an empty checklist would have crashed startup.
+            for it in (tpl.get("checklist")
+                       if isinstance(tpl.get("checklist"), list)
+                       else [])[:MAX_CHECKLIST_ITEMS]
             if isinstance(it, dict)
         ],
     }

@@ -890,8 +890,15 @@ app.write_recurrence_to_ui({})
 _scopeF = []
 app.ask_occurrence_scope = lambda *a, **k: (_scopeF.append(1), 'series')[1]
 app.save_current_note(auto=False); app.update()
+# The scope question is NOT asked any more, and that is the fix, not a
+# loss: an override carries five text fields, so "this day" has no
+# meaning for un-repeating -- the edit belongs to the series by
+# construction. What the check is really about, the day banner retiring,
+# is asserted exactly as before.
+check('un-repeating asks no scope question it could not act on',
+      _scopeF == [])
 check('un-repeating via a series save retires the day banner',
-      len(_scopeF) == 1 and app.current_occurrence_date is None
+      app.current_occurrence_date is None
       and not app.occurrence_banner.winfo_ismapped())
 del app.ask_occurrence_scope
 
@@ -1551,6 +1558,25 @@ finally:
 check('a checklist-only editor earns the replace? question from a template',
       len(_askedT) == 1
       and app._get_checklist() == [{'text': 'doar lista', 'done': False}])
+
+# ---- Emptying a SHORT note still leaves something to come back to ----
+# The rescue copy was gated on a drastic shrink (>40 characters removed),
+# written when an empty save could not happen at all. Once clearing a
+# saved note became a legitimate edit on every route, a short one slipped
+# under the threshold: written to disk blank, no rescue copy, nothing in
+# the Trash, and the note switch that persisted it reset the undo history
+# too. The case that most needs the net had none.
+app.open_blank_tab(); app.update()
+app.body_text.insert('1.0', 'milk, eggs, bread')
+app.save_current_note(auto=False); app.update()
+_sh_id = app.selected_note_id
+app.body_text.delete('1.0', 'end')
+app._flush_autosave(); app.update()
+_sh = app.find_note(_sh_id)
+check('emptying a short saved note really does persist', _sh['body'] == '')
+check('...and leaves a rescue copy, however few characters it was',
+      isinstance(_sh.get('_prev'), dict)
+      and _sh['_prev'].get('body') == 'milk, eggs, bread')
 
 # ---- Restore previous survives an aborted save (T0-6 hardening) ----
 # The old order popped the rescue copy FIRST and then called a save with

@@ -246,6 +246,16 @@ def normalize_note(note):
                 v = sanitize_color(v)
                 if not v:
                     continue
+            if k == "body":
+                # The same canonicalisation the base body gets. An
+                # override is shown in the same editor, so the renderer
+                # adds the same line under a trailing table -- and
+                # without this the day's stored text is one newline
+                # short of what is on screen, which made a per-day edit
+                # ending in a table read as unsaved FOREVER: a save-scope
+                # question on every note switch and at close, for an
+                # edit nobody made.
+                v = with_caret_line(v)
             out[k] = v
         return out
 
