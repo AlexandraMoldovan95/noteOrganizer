@@ -74,6 +74,12 @@ STATIC = [
      + sorted(glob.glob(os.path.join(ROOT, "noteorganizer", "ui", "*.py")))),
     ("class surface unchanged", [sys.executable,
                                  os.path.join("tools", "check_class_api.py")]),
+    # The third gate, added 2026-09-11: a question the app asks in
+    # several places, answered by a hand-rolled field list at each one,
+    # is how every review-caught omission in this project happened. This
+    # is the grep that would have caught them, run every time.
+    ("one definition per judgement",
+     [sys.executable, os.path.join("tools", "check_one_definition.py")]),
 ]
 
 

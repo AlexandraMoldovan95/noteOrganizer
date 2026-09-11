@@ -40,6 +40,7 @@ from datetime import datetime
 
 from .categories import CATEGORY_COLORS
 from .formatting import normalize_formatting, normalize_paragraphs
+from .tables import with_caret_line
 from .recurrence import (
     normalize_recurrence,
     parse_date,
@@ -218,6 +219,10 @@ def normalize_note(note):
     clean["exceptions"] = sorted({
         d for d in clean["exceptions"] if isinstance(d, str) and parse_date(d)
     })
+
+    # The line the editor guarantees under a trailing table, carried into
+    # the stored form so the two can never disagree. See with_caret_line.
+    clean["body"] = with_caret_line(clean["body"])
 
     # Bounded by the body's real line count, so an entry left pointing past
     # the end of a note that was later shortened is dropped rather than kept

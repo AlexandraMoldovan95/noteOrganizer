@@ -127,6 +127,35 @@ After making a change:
 
 When fixing a bug, prefer adding a regression test when practical.
 
+**The pre-flight, before writing any fix (standing rule, 2026-09-11).**
+Agents are expensive; greps are free. Every omission an adversarial
+review has caught in this project came from skipping one of these four
+steps, so they run FIRST, on every fix, and what they find is part of
+the fix rather than of the next review round:
+
+1. **Name the mechanism in one sentence** — not the symptom, not the
+   route it was reported on. If the sentence names a file, it is still
+   a symptom; keep going until it names a behaviour.
+2. **Grep for siblings of that mechanism** and list every hit before
+   editing: the same question asked elsewhere, the same field list
+   written out twice, the same constant repeated. Fix all of them, or
+   write down why a hit is genuinely different. (Missing this fixed 1
+   of 6 emptiness guards and 1 of 3 content signatures.)
+3. **Enumerate the readers** of any value whose definition changes. If
+   what gets STORED changes, grep every consumer of that field and
+   check each still agrees. (Missing this left the dirty comparator
+   stripping a body the save had just learned to keep.)
+4. **Round-trip the change against the heavy features** with a small
+   local probe — tables, recurrence/occurrences, attachments,
+   formatting — before believing it. (Missing this shipped a
+   regression where every table-ending note read as permanently
+   unsaved.)
+
+Then the mutant, as always: revert the fix, watch the check fail, with
+the suite reaching its FAILURES footer. Steps 2–4 plus the mutant cost
+seconds and catch the mechanical omissions; reviewers are for judgment
+and adversarial imagination, which is what they should be paid for.
+
 **Permanent fixes only (standing rule, 2026-09-05).** Every failure —
 in the app or in a check — gets a fix at the root of its *class*, not a
 patch over the instance, so the same failure cannot reappear:

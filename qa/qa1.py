@@ -6825,6 +6825,70 @@ for topl in _size_pop:
         topl.destroy()
 app.update()
 
+# ---- A note ending in a table is not permanently "unsaved" ----
+# The editor always draws a line under a trailing table (the caret needs
+# somewhere to live), so the body as SHOWN carries one newline the body
+# as typed does not. While every save ran .strip() that difference was
+# invisible; storing the body exactly as typed (T0-4) surfaced it, and
+# every table-ending note then read as changed forever: an autosave
+# rewrite on every note switch, a dirty dot that lied, and a recurring
+# note asking its save-scope question unprompted.
+# The render is the FEATURE here -- these checks pin the reconciliation
+# on the other side, and the last one pins the feature itself so a
+# future "fix" cannot quietly delete the caret line instead.
+_TBL_Q = '| a | b |\n| --- | --- |\n| 1 | 2 |'
+
+app.open_blank_tab(); app.update()
+app.title_entry.delete(0, 'end'); app.title_entry.insert(0, 'TabelLaFinal')
+app.body_text.delete('1.0', 'end')
+app.body_text.insert('1.0', 'intro\n' + _TBL_Q)
+app.update()
+app.save_current_note(auto=False); app.update()
+_tq_id = app.selected_note_id
+app.open_note_in_tab(app.find_note(_tq_id)); app.update()
+_tq_st = app.capture_editor_state()
+check('a note ending in a table reads as SAVED after a reopen',
+      app.editor_state_matches_saved(_tq_st))
+check('...because stored and shown agree exactly',
+      app.find_note(_tq_id)['body'] == _tq_st['body'])
+# Idempotent: drawing it again must not grow another line.
+app.open_note_in_tab(app.find_note(_tq_id)); app.update()
+check('...and reopening again neither dirties it nor grows the body',
+      app.editor_state_matches_saved(app.capture_editor_state())
+      and app.find_note(_tq_id)['body'].count('\n')
+      == ('intro\n' + _TBL_Q + '\n').count('\n'))
+
+# A note stored by an OLDER version (no caret line) heals on LOAD, with
+# no rewrite: it must read clean the first time it is opened.
+_legacy_tq = NO.normalize_note(
+    {'id': 4242, 'title': 'Legacy', 'body': 'intro\n' + _TBL_Q,
+     'category': 'General', 'updated': '2026-01-01 00:00',
+     'created': '2026-01-01 00:00'})
+check('a table-ending note from an older version is canonical on load',
+      _legacy_tq['body'] == 'intro\n' + _TBL_Q + '\n')
+app.notes.append(_legacy_tq)
+app.save_notes()
+app.open_note_in_tab(app.find_note(4242)); app.update()
+check('...and opens clean, with no silent rewrite behind the user',
+      app.editor_state_matches_saved(app.capture_editor_state()))
+
+# The feature the reconciliation exists to serve: the caret CAN go below
+# the table. Assert the line is really there in the widget.
+_tq_lines = app.body_text.get('1.0', 'end-1c').split('\n')
+check('the editor still draws a line under the trailing table',
+      _tq_lines[-1] == '' and NO.is_table_row(_tq_lines[-2]))
+
+# And a body that does NOT end in a table is untouched by any of this.
+check('with_caret_line leaves every other body exactly alone',
+      NO.with_caret_line('abc') == 'abc'
+      and NO.with_caret_line('') == ''
+      and NO.with_caret_line(_TBL_Q + '\nafter') == _TBL_Q + '\nafter'
+      and NO.with_caret_line(_TBL_Q + '\n') == _TBL_Q + '\n')
+for _nm in (_tq_id, 4242):
+    app.notes = [n for n in app.notes if n.get('id') != _nm]
+app.save_notes()
+app.open_blank_tab(); app.update()
+
 # ---- CLOSING SAVES SILENTLY (dead last: it destroys the app) ----
 # The quit-time "Unsaved notes" ask could only ever cover the last
 # half-second of typing; the app now trusts its own autosave and closes

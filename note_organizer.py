@@ -185,7 +185,7 @@ from noteorganizer.core.duplicates import (
 # Rich-text span storage lives in noteorganizer/core/formatting.py.
 from noteorganizer.core import clipboard
 from noteorganizer.core import tables as core_tables
-from noteorganizer.core.tables import is_table_row
+from noteorganizer.core.tables import is_table_row, with_caret_line
 from noteorganizer.core.richtext import (html_to_note, note_to_html,
                                         html_document, reflow_wrapped)
 from noteorganizer.core.formatting import (
@@ -12058,7 +12058,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             "selected_note_id": self.selected_note_id,
             "occurrence_date": self.current_occurrence_date,
             "title": title,
-            "body": self.body_text.get("1.0", "end-1c"),
+            # Canonical, matching what the save stores -- see
+            # with_caret_line. Without it, the dirty comparison reads a
+            # table-ending note as changed forever.
+            "body": with_caret_line(self.body_text.get("1.0", "end-1c")),
             "formatting": self._extract_formatting(self.body_text),
             "paragraphs": self._extract_paragraphs(self.body_text),
             "pending_styles": sorted(self._pending_styles),
@@ -13524,10 +13527,18 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         title = (st.get("title") or "").strip()
         body = (st.get("body") or "").strip()
         comments = (st.get("comments") or "").strip()
-        if not (title or body or comments):
+        # Deliberately NARROWER than _editor_state_has_content: a template
+        # carries title, body, comments and checklist, and nothing else —
+        # so an attachment or a repeat rule alone really would make an
+        # empty template. The checklist, though, belongs here: do_save
+        # below stores it, so refusing a checklist-only note told the user
+        # "this note is empty" about a note the app had just saved for
+        # them, and threw away the one thing the template could have kept.
+        if not (title or body or comments or st.get("checklist")):
             self.show_info(
                 "Nothing to save",
-                "This note is empty, so there's nothing to turn into a template.")
+                "A template keeps a note's title, text, comments and "
+                "checklist — this note has none of those yet.")
             return
 
         default_name = title[:30] if title else "My template"
@@ -13735,7 +13746,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # first line and every trailing blank line, silently, on every
         # single save: a pasted code block or quoted email lost its shape
         # the next time the note loaded.
-        body = self.body_text.get("1.0", "end-1c")
+        # with_caret_line: the editor draws a line under a trailing table
+        # (the caret must have somewhere to live), so a body read BEFORE
+        # that draw is one newline short of the same body read after.
+        # Storing the short form made every table-ending note look
+        # permanently unsaved — canonical on both sides, always.
+        body = with_caret_line(self.body_text.get("1.0", "end-1c"))
         # No remapping any more: `body` IS the widget's content, so span
         # offsets and paragraph line numbers already line up. The two
         # _for_stripped_body adapters existed only to undo the .strip()

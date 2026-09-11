@@ -517,3 +517,33 @@ def blank_table(rows, columns):
     rows = max(1, int(rows))
     columns = max(1, int(columns))
     return format_table([[""] * columns for _ in range(rows)])
+
+
+def with_caret_line(body):
+    """A body ending in a table, plus the line the editor guarantees below it.
+
+    The editor ALWAYS draws a line under a trailing table — the caret needs
+    somewhere to live or writing could never continue past the table, and
+    ``_render_table_grids`` appends one on every draw. So "the note as
+    stored" and "the note as shown" disagree by that one newline unless
+    something reconciles them.
+
+    Nothing had to, while every save ran ``.strip()`` over the body: the
+    trim erased the difference (and much else the user had typed). Storing
+    the body exactly as typed made it visible, and every table-ending note
+    became permanently "unsaved" — an autosave rewrite on each note switch,
+    a dirty dot that lied, and a recurring note asking its save-scope
+    question unprompted.
+
+    The render is not the bug, so this canonicalises the other side: apply
+    it wherever a body is read out of the editor or written into a note,
+    and the stored form becomes a FIXED POINT of the render — draw it and
+    nothing changes. Idempotent, and a no-op for every body that does not
+    end in a table.
+    """
+    if not body or body.endswith("\n"):
+        return body
+    blocks = find_blocks(body)
+    if blocks and blocks[-1][1] == len(body.split("\n")) - 1:
+        return body + "\n"
+    return body
