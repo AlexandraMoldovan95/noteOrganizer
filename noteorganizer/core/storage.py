@@ -448,7 +448,32 @@ def load_notes(version_change=None):
     # list anyway; the cleanup simply waits for the next healthy launch.
     if not settings.get("cleanup_done") and not report["notes_file_corrupt"]:
         backup_path = backup_notes_file()
+        # The note the user had open is remembered by ID, and this cleanup
+        # renumbers every ID from 1 -- so the remembered number has to be
+        # re-pointed at the same NOTE, or it silently comes to mean
+        # whichever note inherits it. Measured before it was fixed: with
+        # one empty note in front of it, the note being read moved from
+        # id 2 to id 1, the setting still said 2, and the next launch
+        # opened the note AFTER it instead.
+        #
+        # Matched by identity, not by content: clean_notes returns the
+        # very dicts it was handed, so the note that survived is the one
+        # that IS this object. A note the cleanup removed (it was empty,
+        # or it was an exact duplicate collapsed into its twin) leaves
+        # nothing to re-point at, and the app then opens no note at all --
+        # which is the honest outcome, and far better than opening
+        # someone else's.
+        remembered = settings.get("last_open_note_id")
+        was_open = None
+        if remembered is not None:
+            was_open = next(
+                (n for n in notes if n.get("id") == remembered), None)
         notes, stats = clean_notes(notes)
+        if remembered is not None:
+            settings["last_open_note_id"] = (
+                was_open["id"]
+                if was_open is not None and any(n is was_open for n in notes)
+                else None)
         report["cleanup_report"] = (stats, backup_path)
 
         _write_json_atomic(paths.DATA_FILE, notes)
