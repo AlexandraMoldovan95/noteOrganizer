@@ -13759,10 +13759,18 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if not (note and note.get("_prev")):
             return
         prev = note["_prev"]
+        # Looking at ONE DAY of a series, say so: the rescue copy is of
+        # the note itself, so restoring it changes the whole series, and
+        # a per-day edit on the day being viewed keeps showing instead.
+        viewing_occurrence = bool(self.current_occurrence_date
+                                  and is_recurring(note))
+        extra = ("\n\nThis note repeats, and the earlier version is of the "
+                 "whole note — not just the day you are looking at."
+                 if viewing_occurrence else "")
         if not self.ask_yes_no(
             "Restore previous version",
             "Bring back the earlier version of this note's text? "
-            "The current text will be replaced.",
+            "The current text will be replaced." + extra,
             icon="warning", default="no"
         ):
             return
@@ -13789,26 +13797,38 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._refresh_format_buttons()
         self.comments_text.delete("1.0", "end")
         self.comments_text.insert("1.0", prev.get("comments", ""))
-        # Save FIRST, spend the rescue copy only after the save provably
-        # landed. The old order popped _prev and then called a save that
-        # has several legitimate abort paths (an invalid half-typed date,
-        # a cancelled scope question) — an abort there lost the rescue
-        # copy AND the restore in one stroke, permanently now that _prev
-        # survives restarts.
-        self.save_current_note()
-        try:
-            _landed = self.editor_state_matches_saved(self.capture_editor_state())
-        except Exception:
-            _landed = False
-        if _landed:
-            # Clear the backup so the button hides after a successful
-            # restore.
-            note.pop("_prev", None)
-            self.save_notes()
-            self.set_status("Restored the previous version")
-        else:
-            self.set_status("Restored into the editor — answer the save "
-                            "question (or fix the date) to keep it")
+        # Written straight onto the NOTE, not routed through the editor's
+        # save. The rescue copy belongs to the note, and the save path
+        # asks a scope question on a repeating note: answering "this
+        # occurrence" put the recovered text into a per-day override,
+        # which carries only plain text — so the formatting came back
+        # stripped, the SERIES stayed shortened, and the rescue copy was
+        # spent anyway under a success message. The other answer had its
+        # own failure: with an override present the editor still showed
+        # the override afterwards, so the landing probe read "not saved"
+        # and left _prev armed, and the stale button later overwrote new
+        # text with the old version.
+        #
+        # A direct write has neither problem: there is no scope to get
+        # wrong, and no probe to misread — the note holds the restored
+        # text the moment this returns.
+        note["title"] = prev.get("title", "")
+        note["body"] = with_caret_line(prev.get("body", ""))
+        note["comments"] = prev.get("comments", "")
+        note["formatting"] = normalize_formatting(prev.get("formatting", []))
+        note["paragraphs"] = normalize_paragraphs(
+            prev.get("paragraphs", []), len(note["body"].split("\n")))
+        note.pop("_prev", None)
+        note["updated"] = datetime.now().strftime("%Y-%m-%d %H:%M")
+        self.save_notes()
+        # Reload from the note so the editor and the dirty machinery agree
+        # with what is now on disk (the widgets above were filled for the
+        # user to see; this makes them the note's official state).
+        self.load_note(note, occurrence_date=self.current_occurrence_date)
+        self.refresh_note_list()
+        self.set_status(
+            "Restored the previous version of the whole note"
+            if viewing_occurrence else "Restored the previous version")
         self.update_word_count()
         self._update_restore_button()
 
@@ -14353,14 +14373,24 @@ def _main():
     # original bug. Left unresolved rather than trading one visible
     # problem for a worse one.
     try:
-        initialise()
         # One notebook, one app. Two windows on the same data directory
         # each hold their own copy of the whole notebook and each save
         # rewrites the file wholesale, so the second one to autosave
         # silently deletes everything the first wrote. The lock is taken
         # here rather than in __init__ so the qa scripts, which build
         # several app objects inside one process, are unaffected.
-        if not single_instance.acquire():
+        #
+        # BEFORE initialise(), not after: initialise migrates files out of
+        # older locations, purges stale copies and stamps the version —
+        # so a second launch that was about to be refused had already
+        # moved and deleted things in the shared folder, and consumed the
+        # one-shot pre-upgrade backup the FIRST instance may still need.
+        # Only the data folder has to be resolved first, and resolving is
+        # pure: it picks a path and proves it writable, nothing more.
+        _data_dir, _ = resolve_data_dir(
+            os.path.dirname(os.path.abspath(__file__)))
+        if not single_instance.acquire(
+                os.path.join(_data_dir, single_instance.LOCK_FILENAME)):
             import tkinter.messagebox as _mb
             root = tk.Tk()
             root.withdraw()
@@ -14374,6 +14404,7 @@ def _main():
                 "the taskbar.")
             root.destroy()
             return
+        initialise()
         app = NoteOrganizer()
         app.protocol("WM_DELETE_WINDOW", app.on_app_close)
         app.mainloop()

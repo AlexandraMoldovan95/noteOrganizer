@@ -1567,17 +1567,18 @@ app.save_current_note(auto=False); app.update()
 _pn = app.find_note(_pid)
 check('a drastic shrink leaves the rescue copy behind',
       _pn is not None and isinstance(_pn.get('_prev'), dict))
+# A half-typed date used to abort the save the restore rode on, losing
+# the copy and the restore together. The restore writes straight to the
+# note now, so a mid-edit date field cannot reach it at all -- which is
+# the stronger promise, and this pins it.
 app.date_entry.delete(0, 'end'); app.date_entry.insert(0, '2030-1')
 app.restore_previous_version(); app.update()
 _pn = app.find_note(_pid)
-check('an aborted save does not spend the rescue copy',
-      _pn is not None and isinstance(_pn.get('_prev'), dict))
-app.date_entry.delete(0, 'end')
-app.restore_previous_version(); app.update()
-_pn = app.find_note(_pid)
-check('the retry restores the text and only then clears the copy',
+check('a half-typed date cannot block the restore any more',
       _pn is not None and _pn.get('_prev') is None
       and 'originala' in _pn.get('body', ''))
+check('...and the button is gone, because the copy was spent',
+      not app.restore_prev_btn.winfo_ismapped())
 
 print(f"=== QA7 FAILURES: {fails if fails else 'NONE'} ===")
 

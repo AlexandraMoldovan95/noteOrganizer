@@ -349,6 +349,56 @@ app.notes = []
 app.save_notes()
 app.new_note(); app.update()
 
+# ---- "Restore previous" on a repeating note restores the SERIES ----
+# It used to run through the editor's save, which asks a scope question
+# on a repeating note. Answering "this occurrence" wrote the recovered
+# text into a per-day override -- plain text only, so the formatting came
+# back stripped, the SERIES stayed shortened, and the rescue copy was
+# spent anyway under a success message. The other answer left _prev armed
+# with an override present, and the stale button later overwrote new
+# text. It writes straight to the note now: no scope to get wrong.
+_rs_note = NO.normalize_note({
+    'id': 4201, 'title': 'Repetat', 'date': '2026-07-01',
+    'body': 'versiunea lunga originala, cu mult text de pastrat aici',
+    'formatting': [{'start': 0, 'end': 9, 'style': 'bold'}],
+    'recurrence': {'freq': 'weekly', 'weekdays': [2]},
+    'updated': '2026-01-01 00:00', 'created': '2026-01-01 00:00'})
+app.notes = [_rs_note]
+app.save_notes()
+app.update()
+_RS_OCC = '2026-07-08'
+
+app.load_note(app.find_note(4201))
+app.update()
+app.body_text.delete('1.0', 'end')
+app.body_text.insert('1.0', 'scurt')
+app.save_current_note(auto=False)
+app.update()
+check('a drastic shrink on a repeating note leaves a rescue copy',
+      isinstance(app.find_note(4201).get('_prev'), dict))
+
+# Now do the restore from the OCCURRENCE view, answering "this
+# occurrence" to any scope question that might still be asked.
+app.load_note(app.find_note(4201), occurrence_date=_RS_OCC)
+app.update()
+app.ask_occurrence_scope = lambda *a, **k: 'occurrence'
+app.ask_yes_no = lambda *a, **k: True
+app.restore_previous_version()
+app.update()
+_rs_after = app.find_note(4201)
+check('restoring from a day brings the SERIES body back, not an override',
+      'originala' in _rs_after.get('body', ''))
+check('...with its formatting intact, not flattened to plain text',
+      _rs_after.get('formatting') == [{'start': 0, 'end': 9, 'style': 'bold'}])
+check('...and no per-day override was manufactured for that day',
+      _RS_OCC not in (_rs_after.get('overrides') or {}))
+check('...and the rescue copy is spent exactly once',
+      _rs_after.get('_prev') is None)
+del app.ask_occurrence_scope
+app.notes = []
+app.save_notes()
+app.new_note(); app.update()
+
 print()
 print(f"=== QA2 FAILURES: {fails if fails else 'NONE'} ===")
 

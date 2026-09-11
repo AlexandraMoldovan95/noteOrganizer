@@ -83,6 +83,18 @@ STATIC = [
 ]
 
 
+# Every child runs in UTF-8, whatever the console it was launched from.
+#
+# The qa scripts print check names containing emoji and box glyphs, and a
+# default Windows console is cp1252: `print` then raises
+# UnicodeEncodeError mid-run and takes the script down. Three suites died
+# that way on a plain `py tools/run_tests.py`, which is the door CLAUDE.md
+# tells everyone to use -- and it is why an entire review wave declared it
+# had run no tests at all. The runner owns the child environment, so it
+# sets this rather than asking each caller to remember two env vars.
+CHILD_ENV = dict(os.environ, PYTHONUTF8="1", PYTHONIOENCODING="utf-8")
+
+
 def _present(names, folder=ROOT):
     """Only what actually exists -- branches differ in which tests they have."""
     return [n for n in names if os.path.exists(os.path.join(folder, n))]
@@ -121,7 +133,8 @@ def run_one(scratch, script):
     wipe_data(scratch)
     started = time.time()
     proc = subprocess.run([sys.executable, script], cwd=scratch,
-                          capture_output=True, text=True, timeout=600)
+                          capture_output=True, text=True, timeout=600,
+                          env=CHILD_ENV, encoding="utf-8", errors="replace")
     took = time.time() - started
     out = proc.stdout or ""
     # "FAIL " with the space, deliberately: a failing check prints
@@ -135,11 +148,22 @@ def run_one(scratch, script):
 def run_static(name, cmd):
     """Run one static check against the project itself. Read-only."""
     started = time.time()
-    proc = subprocess.run(cmd, cwd=ROOT, capture_output=True, text=True, timeout=600)
+    proc = subprocess.run(cmd, cwd=ROOT, capture_output=True, text=True,
+                          timeout=600, env=CHILD_ENV, encoding="utf-8",
+                          errors="replace")
     return proc.returncode, time.time() - started, (proc.stdout or "") + (proc.stderr or "")
 
 
 def main(argv):
+    # Same reason as CHILD_ENV, for THIS process: it echoes the children's
+    # failing check names, glyphs and all, and a cp1252 console would
+    # raise on the first one -- turning a readable report into a
+    # traceback.
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")
+        except (AttributeError, ValueError):
+            pass
     keep = "--keep" in argv
     wanted = [a for a in argv[1:] if not a.startswith("--")]
 

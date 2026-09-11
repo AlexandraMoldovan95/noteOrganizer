@@ -1330,7 +1330,7 @@ check("stored names lose their trailing-dot disguise at the choke point",
 check("a record naming no file at all is dropped, not crashed on",
       len(_dirty_att["attachments"]) == 2)
 
-_MAIN_GUARD_DRIVER = '"""Drive the REAL _main() with the heavy parts stubbed to recorders.\n\nWritten and launched by test_data_safety to prove the single-instance\nguard is WIRED, not merely implemented: _main must consult acquire() and\nhonour the answer. The adversarial review caught the gap this closes --\ndeleting the whole guard from _main left every suite green, because the\nlock primitive was tested end-to-end while the one call site a user ever\ntravels through was tested by nobody.\n"""\nimport json\nimport os\nimport sys\n\nHERE = os.path.dirname(os.path.abspath(__file__))\nos.chdir(HERE)\nsys.path.insert(0, HERE)\n\n# Hermetic seed BEFORE the note_organizer import: the module resolves its\n# data directory and runs migrations at import time, and an unseeded dir\n# invites the adoption of the machine\'s real notebook.\nif not os.path.exists("notes_data.json"):\n    with open("notes_data.json", "w", encoding="utf-8") as f:\n        f.write("[]")\ntry:\n    with open("settings.json", "r", encoding="utf-8") as f:\n        _settings = json.load(f)\nexcept Exception:\n    _settings = {}\nif not isinstance(_settings, dict):\n    _settings = {}\n_settings.setdefault("reclaimed_from_appdata", True)\nwith open("settings.json", "w", encoding="utf-8") as f:\n    json.dump(_settings, f)\n\nimport tkinter.messagebox as mb  # noqa: E402\n\nimport note_organizer as NO  # noqa: E402\nfrom noteorganizer.core import paths  # noqa: E402\n\nevents = []\nNO.initialise = lambda: (paths.configure(HERE), events.append("init"))\n\n\nclass FakeApp:\n    def __init__(self):\n        events.append("app")\n\n    def protocol(self, *a, **k):\n        pass\n\n    def on_app_close(self):\n        pass\n\n    def mainloop(self):\n        events.append("loop")\n\n\nclass FakeRoot:\n    def withdraw(self):\n        pass\n\n    def destroy(self):\n        pass\n\n\nNO.NoteOrganizer = FakeApp\nNO.tk.Tk = FakeRoot\nmb.showinfo = lambda *a, **k: events.append("refused-dialog")\n\nNO._main()\nprint("EVENTS:" + json.dumps(events))\n'
+_MAIN_GUARD_DRIVER = '"""Drive the REAL _main() with the heavy parts stubbed to recorders.\n\nWritten and launched by test_data_safety to prove the single-instance\nguard is WIRED, not merely implemented: _main must consult acquire() and\nhonour the answer. The adversarial review caught the gap this closes --\ndeleting the whole guard from _main left every suite green, because the\nlock primitive was tested end-to-end while the one call site a user ever\ntravels through was tested by nobody.\n"""\nimport json\nimport os\nimport sys\n\nHERE = os.path.dirname(os.path.abspath(__file__))\nos.chdir(HERE)\nsys.path.insert(0, HERE)\n\n# Hermetic seed BEFORE the note_organizer import: the module resolves its\n# data directory and runs migrations at import time, and an unseeded dir\n# invites the adoption of the machine\'s real notebook.\nif not os.path.exists("notes_data.json"):\n    with open("notes_data.json", "w", encoding="utf-8") as f:\n        f.write("[]")\ntry:\n    with open("settings.json", "r", encoding="utf-8") as f:\n        _settings = json.load(f)\nexcept Exception:\n    _settings = {}\nif not isinstance(_settings, dict):\n    _settings = {}\n_settings.setdefault("reclaimed_from_appdata", True)\nwith open("settings.json", "w", encoding="utf-8") as f:\n    json.dump(_settings, f)\n\nimport tkinter.messagebox as mb  # noqa: E402\n\nimport note_organizer as NO  # noqa: E402\nfrom noteorganizer.core import paths  # noqa: E402\n\nevents = []\nNO.initialise = lambda: (paths.configure(HERE), events.append("init"))\n_real_acquire = NO.single_instance.acquire\n\n\ndef _recording_acquire(path=None):\n    events.append("acquire")\n    return _real_acquire(path)\n\n\nNO.single_instance.acquire = _recording_acquire\n\n\nclass FakeApp:\n    def __init__(self):\n        events.append("app")\n\n    def protocol(self, *a, **k):\n        pass\n\n    def on_app_close(self):\n        pass\n\n    def mainloop(self):\n        events.append("loop")\n\n\nclass FakeRoot:\n    def withdraw(self):\n        pass\n\n    def destroy(self):\n        pass\n\n\nNO.NoteOrganizer = FakeApp\nNO.tk.Tk = FakeRoot\nmb.showinfo = lambda *a, **k: events.append("refused-dialog")\n\nNO._main()\nprint("EVENTS:" + json.dumps(events))\n'
 
 # ---- The guard is WIRED, not merely implemented ----
 # The primitive above is proven end-to-end; this proves _main() actually
@@ -1360,7 +1360,14 @@ try:
     _ev_held = _run_main_driver()
     check("holding the notebook makes _main refuse: dialog shown, no app built",
           _got_lock and "refused-dialog" in _ev_held
-          and "app" not in _ev_held and "init" in _ev_held)
+          and "app" not in _ev_held)
+    # ...and it refuses BEFORE touching the shared folder. initialise()
+    # migrates files out of older locations, purges stale copies and
+    # consumes the one-shot pre-upgrade backup -- all of which a second
+    # launch used to do to the FIRST instance's notebook on its way to
+    # being told no.
+    check("and it refuses before initialise touches the shared folder",
+          "init" not in _ev_held and _ev_held[:1] == ["acquire"])
     try:
         _si.release()
     except Exception:
@@ -1369,6 +1376,8 @@ try:
     check("with the notebook free, the same gate lets _main build the app",
           "app" in _ev_free and "loop" in _ev_free
           and "refused-dialog" not in _ev_free)
+    check("...and only then does the startup work happen, in that order",
+          _ev_free.index("acquire") < _ev_free.index("init") < _ev_free.index("app"))
 finally:
     try:
         _si.release()
