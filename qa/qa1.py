@@ -2313,8 +2313,23 @@ check(f'padding left over from deleted text is taken back ({lines_now()[0]!r})',
 check('the toolbar has a table button', hasattr(app, 'table_btn'))
 
 set_body('')
-app._insert_table(3, 2)
-app.update()
+# The focus PROMISE is recorded, not polled. focus_settles_on reads an
+# asynchronous result inside a bounded loop, so on a loaded machine it
+# reports a false red about an app that placed the focus correctly --
+# which is how this check went red once in a full-suite run with its name
+# lost (COVERAGE_LEDGER C11b). Wrapping focus_set captures the decision
+# itself, synchronously, and cannot flake. It wraps the INSERT, because
+# opening the editor on the first cell is what inserting a table
+# promises; re-opening it here to watch would test something else.
+_fs_calls = []
+_real_focus_set = tk.Misc.focus_set
+tk.Misc.focus_set = (lambda self, *a, **k:
+                     (_fs_calls.append(self), _real_focus_set(self, *a, **k))[1])
+try:
+    app._insert_table(3, 2)
+    app.update()          # lets the after_idle re-assert run and be seen
+finally:
+    tk.Misc.focus_set = _real_focus_set
 _blank = lines_now()[:3]
 check(f'a blank table is inserted ({_blank[0]!r})',
       all(core_tables.split_row(r) == ['', ''] for r in _blank))
@@ -2325,8 +2340,10 @@ _made = app._grid_at_line(1)
 check('a grid is rendered over the new table', _made is not None)
 check('the one floating editor opens on the first cell',
       app._cell_editor is not None
-      and (app._cell_editor['r'], app._cell_editor['c']) == (0, 0)
-      and focus_settles_on(app._cell_editor['entry']))
+      and (app._cell_editor['r'], app._cell_editor['c']) == (0, 0))
+check('...and the app puts the keyboard in it',
+      app._cell_editor is not None
+      and app._cell_editor['entry'] in _fs_calls)
 
 # Filling in through the editor: type, step, repeat -- the words land in
 # the note's own text, cell by cell.
@@ -2350,9 +2367,11 @@ check(f'typing through the editor lands in the text ({lines_now()[0]!r})',
 _made = app._grid_at_line(1)
 app._open_cell_editor(_made, 1, 0)
 app.update()
-# The app's own focus placement is asynchronous — poll for it (without
-# forcing: placing focus is the editor's job) before aiming keys at it.
-focus_settles_on(app._cell_editor['entry'])
+# take_focus, not focus_settles_on: what follows asserts what Shift+Tab
+# DOES, so the focus is a precondition to be forced, not a promise to be
+# read back. (Where the promise really is the placement, the check above
+# records the decision instead.)
+take_focus(app._cell_editor['entry'])
 app._cell_editor['entry'].event_generate('<Shift-Tab>')
 app.update()
 check('Shift+Tab goes back to the row above',
@@ -3050,7 +3069,7 @@ check('the target row really is empty before the spread',
       and _tX['cells'][(1, 1)]['value'] == '')
 app._open_cell_editor(_tX, 1, 0)
 app.update()
-focus_settles_on(app._cell_editor['entry'])  # polled, not assumed
+take_focus(app._cell_editor['entry'])  # a precondition for the key below
 app._cell_editor['entry'].event_generate('<Control-v>')
 app.update()
 _tX = app._grid_at_line(1)
@@ -3061,7 +3080,7 @@ check('Ctrl+V in a cell spreads the copied block from it',
 # The editor grows with its content instead of hiding the overflow.
 app._open_cell_editor(_tX, 1, 0)
 app.update()
-focus_settles_on(app._cell_editor['entry'])  # polled, not assumed
+take_focus(app._cell_editor['entry'])  # a precondition for the keys below
 _edX = app._cell_editor
 _w0 = int(float(_tX['canvas'].itemcget(_edX['win'], 'width')))
 _edX['entry'].delete('1.0', 'end')

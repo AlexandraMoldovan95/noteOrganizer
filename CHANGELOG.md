@@ -12,6 +12,7 @@ How the numbers themselves are counted is the
 
 | Version | Date | In one line |
 |---|---|---|
+| [0.71.154](#071154--2026-09-11) | 2026-09-11 | The product review's Tier 0 closed whole — every way the app could lose, mangle or refuse your work, then closed again where three adversarial passes proved the class was wider than the finding. |
 | [0.71.135](#071135--2026-09-10) | 2026-09-10 | Removing an attachment asks first — the one permanent delete that skipped every confirmation, closed by the destructive-gesture sweep. |
 | [0.71.134](#071134--2026-09-10) | 2026-09-10 | Nine audit small classes closed — the calculator, bleeding paste styles, honest Select-all, nested Escape, pasted tables, whole backups, autosave traces and a theming leak. |
 | [0.71.125](#071125--2026-09-10) | 2026-09-10 | Six audit medium classes swept whole — visible carets and honest saves, atomic exports that closing waits for, tables that redraw and hold the view, emoji-proof clicks and finds. |
@@ -54,6 +55,8 @@ How the numbers themselves are counted is the
 ---
 
 ## [Unreleased]
+
+## [0.71.154] — 2026-09-11
 
 *Highlights: the product review's Tier 0 — every way the app could lose, mangle or
 refuse your work — closed at the root of each class and then closed again where the

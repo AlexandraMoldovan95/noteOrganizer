@@ -210,6 +210,19 @@ A new surface joins this list the moment it ships.
   once pointed ~200 checks before the real crash site. Bisect crashes
   on the Docker mirror with `-e PYTHONUNBUFFERED=1`; trust exit codes
   and the FAILURES footer, never the visible tail of a dead process.
+- **Force a precondition; read back only a promise.** The two focus
+  helpers are not interchangeable, and using the waiting one where the
+  forcing one belongs is a false-red generator: a bounded poll on an
+  asynchronous focus read times out on a loaded machine and reports a
+  red about an app that did exactly the right thing. Ask which the line
+  is. "The test needs the caret in this field before it types" is a
+  PRECONDITION — force it (take_focus / _take_focus). "Ctrl+F puts the
+  focus in the find entry" is a PROMISE — poll for it. And where the
+  promise IS the app's own synchronous decision, do not poll at all:
+  wrap the method, record the call, assert the record (qa1's cell
+  editor records focus_set, which cannot flake under any load). This
+  cost the suite a red whose name was lost for a day
+  (COVERAGE_LEDGER C11b) and two more in qa6 the day it was found.
 - **Focus is asynchronous both ways** — granting AND clearing. A check
   about where the app put the focus polls for the promised holder
   (qa1's `focus_settles_on`, the assert-only twin of `take_focus` —

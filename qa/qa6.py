@@ -205,6 +205,31 @@ def _focus_settles_on(widget, cap_s=2.0):
         time.sleep(0.02)
     return False
 
+def _take_focus(widget, cap_s=2.0):
+    """FORCE focus onto a widget and wait until Tk agrees -- for a
+    PRECONDITION, never for an assertion about where the app put it.
+
+    focus_set() is a request the window manager may take its time over,
+    and _focus_settles_on below only waits: used on a precondition it
+    turns a loaded machine into a false red about an app that did
+    nothing wrong. Both of this file's preconditions went red that way
+    in a full-suite run (the same class as qa1's cell editor, closed as
+    COVERAGE_LEDGER C11b). Forcing is correct here precisely because the
+    promise under test is what happens when focus LEAVES."""
+    widget.focus_force()
+    t0 = time.time()
+    while time.time() - t0 < cap_s:
+        try:
+            if app.focus_get() is widget:
+                return True
+        except (KeyError, tk.TclError):
+            pass
+        app.update()
+        app.update_idletasks()
+        time.sleep(0.02)
+    return False
+
+
 def _focus_leaves(widget, cap_s=2.0):
     """The mirror wait: poll until focus is NOT on the widget — clearing
     focus is as asynchronous as granting it."""
@@ -219,10 +244,8 @@ def _focus_leaves(widget, cap_s=2.0):
         time.sleep(0.02)
     return False
 
-name_entry.focus_set()
-app.update()
 check('username entry has focus before clicking elsewhere',
-      _focus_settles_on(name_entry))
+      _take_focus(name_entry))
 # Click the section's own title. It has to be a title that's actually on
 # screen: Settings shows one section at a time, so reaching into a section
 # that isn't selected would be clicking a widget the user cannot see, and
@@ -244,10 +267,8 @@ check('clicking a section title elsewhere in Settings clears the field\'s focus'
 # takes when they finish typing and immediately leave, and it broke once
 # during development when the fix above was implemented too narrowly
 # (bound to individual widgets instead of centrally).
-name_entry.focus_set()
-app.update()
 check('username entry has focus before leaving Settings',
-      _focus_settles_on(name_entry))
+      _take_focus(name_entry))
 back_btn = find_widget(app.settings_page, tk.Button, 'Back to Notes')
 _qa_click(back_btn)
 _qa_fire(back_btn, '<ButtonRelease-1>')
