@@ -158,6 +158,43 @@ adversarial review of the first round proved the class was wider than the findin
   announced itself even when it had nothing to say, so the literal first screen of the
   product was a blocking modal about "IDs renumbered 1–0" over an empty notebook. It now
   speaks only when it actually removed something. From the product review.
+- **A note you can only see one day of still saves what you change.** Tick an item on a
+  repeating note's checklist while looking at a single day and the tick went nowhere: the
+  editor asked for the save and the change-detector vetoed it, because in that view it
+  only ever compared the five fields a per-day edit can carry. Everything the series owns
+  — the checklist, the files, the date, the repeat rule — is compared against the note
+  itself now, which is where the editor read them from in the first place. From the
+  product review's second wave.
+- **Sharing a note as a code no longer refuses the note.** A note whose content is its
+  checklist, or its comments, was told "Write something before copying a code" — about a
+  note the app had just saved, and whose code would have carried that content perfectly
+  well. From the product review's second wave.
+- **A leftover notebook folder is only deleted when it really is a duplicate.** The
+  start-up tidy-up that removes old copies of your notes compared them by text alone, so
+  a folder whose notes differed only in their styling, their layout, their per-day edits
+  or their skipped dates was judged "already covered" and deleted — while the message on
+  screen said nothing had been removed unless it already existed. It now compares
+  everything a note holds before deleting anything. From the product review's second wave.
+- **A colour on a single day of a repeating note can't stop the app opening.** Per-day
+  edits carry their own colour, and that one was never checked: a bad value from a share
+  code, a backup or a hand-edited file reached the calendar's drawing code on every
+  launch. It is validated like every other colour now, and the day's text edit survives
+  even when its colour does not. From the product review's second wave.
+- **Your categories can't be turned into a wall.** The category list is read from
+  settings and from any backup you import, and the sidebar draws one entry for each with
+  its full name — with no limit on either, a hand-edited file or a hostile backup could
+  make the app unopenable through a door nothing was watching. From the product review's
+  second wave.
+- **"Save as template" stopped calling a checklist a nothing.** A note whose content was
+  its checklist was refused with "This note is empty" — by the same screen whose template
+  goes on to store that checklist. From the product review's second wave.
+- **"Restore previous" on a repeating note brings the note back, not a muddle.** It used
+  to travel through the ordinary save, which on a repeating note asks whether you mean
+  this day or the series: answering "this day" filed the recovered text as a per-day edit
+  — plain text only, so the styling came back stripped, the note itself stayed shortened,
+  and the rescue copy was spent anyway under a cheerful "Restored". It writes the note
+  directly now, and says plainly that it restores the whole note. From the product
+  review's second wave.
 
 ### Testing
 - Every fix above carries a regression check born red-under-mutation: the emptiness and
