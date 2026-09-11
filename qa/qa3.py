@@ -937,6 +937,67 @@ check('...with a message that names what a code carries',
       and not any('Write something' in m for m in _sg_status))
 app.open_blank_tab(); app.update()
 
+# ---- A styling bomb, through the editor door it actually arrives by ----
+# The pure suite holds the 2,000-span shapes that used to hang Tk; this
+# one is deliberately just OVER the ceiling instead, so that removing the
+# clamp turns this check red in a third of a second rather than hanging
+# the whole run before it can print its footer.
+#
+# What is witnessed here is the seam the pure suite cannot see: the
+# editor reads a note's formatting back OUT of the text widget when it
+# saves, so whatever the ceiling does to the data has to survive that
+# round trip. The first attempt at this fix skipped the DRAWING instead
+# of the data, which would have made the very next save write an empty
+# formatting list over the user's styled note.
+_lc_body = "x" * 9000
+_lc_spans = [{'start': (3 * i) % 8000, 'end': (3 * i) % 8000 + 2,
+              'style': 'highlight',
+              'value': '#%06x' % (i * 4001 % 0xffffff)}
+             for i in range(NO.MAX_SPANS_PER_LINE + 100)]
+_lc_note = NO.normalize_note({
+    'id': 808080, 'title': 'ceiling', 'body': _lc_body,
+    'formatting': _lc_spans, 'category': 'General',
+    'created': '2026-01-01 00:00', 'updated': '2026-01-01 00:00'})
+check('a note arriving over the per-line ceiling is trimmed to it',
+      len(_lc_note['formatting']) == NO.MAX_SPANS_PER_LINE)
+app.notes = [n for n in app.notes if n.get('id') != 808080] + [_lc_note]
+app.save_notes()
+app.load_note(_lc_note)
+app.update()
+_lc_state = app.capture_editor_state()
+check('...it opens, with its whole text present',
+      app.body_text.get('1.0', 'end-1c') == _lc_body)
+# The round trip, which is the whole reason the ceiling sits in the data
+# and not at the draw: what the editor would SAVE right now is what the
+# note holds -- neither more nor, far worse, nothing at all.
+check('...and what the editor would save back matches what it was given',
+      len(_lc_state.get('formatting', [])) == len(_lc_note['formatting']))
+_lc_reopened = NO.normalize_note(dict(_lc_note, formatting=_lc_state['formatting']))
+check('...so saving and reopening it does not shed its styling',
+      len(_lc_reopened['formatting']) == len(_lc_note['formatting']))
+
+# The asymmetry at the gesture: an ordinary styled note is not trimmed
+# and still draws its colours.
+_ord_spans = [{'start': 3 * i, 'end': 3 * i + 2, 'style': 'highlight',
+               'value': '#ffee88'} for i in range(40)]
+_ord_note = NO.normalize_note({
+    'id': 808081, 'title': 'ordinary', 'body': _lc_body,
+    'formatting': [dict(s) for s in _ord_spans], 'category': 'General',
+    'created': '2026-01-01 00:00', 'updated': '2026-01-01 00:00'})
+check('an ordinary styled note keeps every span it had',
+      _ord_note['formatting'] == _ord_spans)
+app.notes = [n for n in app.notes if n.get('id') != 808081] + [_ord_note]
+app.save_notes()
+app.load_note(_ord_note)
+app.update()
+check('...and the editor really draws them',
+      any(t.startswith('highlight_') and app.body_text.tag_ranges(t)
+          for t in app.body_text.tag_names()))
+
+app.notes = [n for n in app.notes if n.get('id') not in (808080, 808081)]
+app.save_notes()
+app.open_blank_tab(); app.update()
+
 print()
 print(f"=== QA3 FAILURES: {fails if fails else 'NONE'} ===")
 

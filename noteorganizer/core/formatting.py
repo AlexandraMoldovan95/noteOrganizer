@@ -27,6 +27,7 @@ Why ``bold_italic`` is its own style rather than two overlapping spans is
 a Tkinter constraint, explained in the comment just below.
 """
 
+import bisect
 import re
 
 # Tkinter Text tags that both set the widget's font option don't compose —
@@ -96,10 +97,98 @@ FONT_SIZES = (9, 10, 11, 12, 14, 16, 20, 24)
 # spans hangs Tk's layout below ANY sane cap.
 MAX_FORMATTING_SPANS = 10000
 
+# How much styling may pile onto ONE LINE.
+#
+# MAX_FORMATTING_SPANS above counts a whole note and is set high on
+# purpose, so it cannot be the defence here: what makes Tk give up is not
+# how many spans a note carries but how many tagged ranges land on a
+# single line. Measured on this app, opening one note (3,000-char body):
+#
+#     2,000 spans spread over 10 lines ......... 0.28 s
+#     2,000 spans on ONE line .................. did not finish in 75 s
+#       500 overlapping spans on one line ...... 0.30 s
+#     1,000 overlapping spans on one line ...... did not finish in 75 s
+#       500 on one line + 500 crossing it ...... 1.07 s
+#
+# Two shapes hang, and neither is exotic: short overlapping spans of
+# different colours or sizes piled on one line, and spans that each run
+# from somewhere in the body to its end, so they all lie over the last
+# line without starting on it. Both fit inside a share code of a few
+# kilobytes, and a pasted note is SAVED before it is ever drawn -- so
+# such a note took the app down on every launch after, exactly the
+# make-the-app-unopenable class as the checklist bomb.
+#
+# Hence two budgets, because one alone is walked straight through:
+#
+# * MAX_SPANS_PER_LINE bounds how many spans may COVER any one line --
+#   counted by coverage, not by where a span starts. Counting starts was
+#   the first version of this clamp, and a note whose spans each began on
+#   a different line and ran to the END of the body dodged it completely:
+#   five spans started on any given line, and the last line wore all
+#   2,000. It still did not finish in 75 s.
+# * MAX_LINE_RANGES bounds the note's TOTAL, because per-line alone is
+#   not enough either: 500 spans over a 400-line body is only 500 spans,
+#   under any per-line ceiling, and still asks Tk for 200,000 ranges.
+#
+# The pair is pinned to the last measured-alive row above: 500 covering
+# one line and 20,000 in total is exactly that 1.07 s note. Real notes
+# are nowhere near -- 300 bold words across 300 lines is 300 ranges, and
+# a heavily styled long document a few thousand.
+MAX_SPANS_PER_LINE = 500
+MAX_LINE_RANGES = 20000
+
 
 def _is_valid_hex_color(value):
     return (isinstance(value, str) and len(value) == 7 and value[0] == "#"
             and all(c in "0123456789abcdefABCDEF" for c in value[1:]))
+
+
+def clamp_spans_per_line(body, spans):
+    """Drop the styling spans that would pile too deep on one line.
+
+    Takes an ALREADY-normalized span list plus the body those offsets
+    point into, and returns it unchanged unless one of the two budgets
+    above is broken -- which no note a person writes can do. See
+    MAX_SPANS_PER_LINE for the measurements, and for why one budget is
+    per line and the other covers the whole note.
+
+    Trimming here rather than at the point the spans are drawn is
+    deliberate: the editor reads a note's formatting back OUT of the text
+    widget when it saves, so a note drawn without its tags would be saved
+    without its spans. Refusing the data at the door keeps that
+    round-trip honest -- what is kept is what is shown is what is saved.
+    """
+    if not isinstance(spans, list) or not spans or not isinstance(body, str):
+        return spans if isinstance(spans, list) else []
+    if len(spans) <= MAX_SPANS_PER_LINE and "\n" not in body:
+        return spans            # one line, too few spans to break either
+    breaks = [i for i, ch in enumerate(body) if ch == "\n"]
+    if not breaks:
+        return spans[:MAX_SPANS_PER_LINE]        # one line, one budget
+    kept, covered, drawn = [], {}, 0
+    # Lines already carrying their full share, kept sorted so a span can
+    # ask "do I touch one?" without walking its whole range. That answer
+    # is what keeps this loop linear: a span either is refused in one
+    # lookup, or it is cheap to count because none of its lines are full.
+    full = []
+    for span in spans:
+        start = span["start"]
+        first = bisect.bisect_left(breaks, start)
+        last = bisect.bisect_left(breaks, max(start, span["end"] - 1))
+        width = last - first + 1
+        if drawn + width > MAX_LINE_RANGES:
+            continue
+        at = bisect.bisect_left(full, first)
+        if at < len(full) and full[at] <= last:
+            continue                 # crosses a line that has its fill
+        for line in range(first, last + 1):
+            seen = covered.get(line, 0) + 1
+            covered[line] = seen
+            if seen >= MAX_SPANS_PER_LINE:
+                bisect.insort(full, line)
+        drawn += width
+        kept.append(span)
+    return kept
 
 
 def normalize_formatting(value):
