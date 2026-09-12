@@ -350,6 +350,27 @@ were tried and reverted — read
 ["The theme-switch flicker, and three ways not to fix it"](ISSUES_LOG.md#the-theme-switch-flicker-and-three-ways-not-to-fix-it)
 before attempting anything more.
 
+*Field-reported again and re-measured 2026-09-12*, with screenshots caught mid-switch showing the
+sweep plainly: the sidebar and the editor had changed while the Notes/Calendar tab strip had not,
+in both directions. The numbers, so the next person does not start from scratch:
+
+| | |
+|---|---|
+| `apply_theme`, the code | **37 ms**, and flat — the same at 0 notes and at 25 |
+| of which `_recolor_stragglers` | 14–17 ms, the largest single item |
+| the rest of the perceived ~75 ms | Windows actually painting, after the code has finished |
+
+The obvious suspect was measured and is innocent: the straggler pass walks 886 widgets and asks
+1,319 colour questions in **2.4 ms**, and skipping the ones already recoloured saves 0.2 ms. The
+time is in the `configure` calls themselves — that is, in the repainting, which is the limitation
+above and not a thing to optimise. The ttk tab strip is always last to change because ttk repaints
+on its own schedule rather than with the widgets around it.
+
+The growth from ~26 ms to 37 ms is five months of features, not a regression: nothing in the switch
+rebuilds what it did not before. **Do not reach for a rendering trick here** — that is exactly what
+the three reverted attempts were. The only thing that removes this is not being Tkinter, which is a
+decision of a different size and lives under [Under consideration](#under-consideration).
+
 **Audit residuals (2026-09-10)** — the code-audit programme (see
 [Shipped & settled](#the-code-audit-programme-2026-09)) closed every finding that warranted code;
 what follows is what it deliberately left as recorded edges rather than fixes. None is an open
