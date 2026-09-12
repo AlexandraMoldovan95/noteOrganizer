@@ -43,6 +43,7 @@ anti-aliasing of their own.
 RUNNING IT
 ----------
     py tools/make_icon.py                  # the chosen design -> assets/
+    py tools/make_icon.py --all            # one icon per theme accent
     py tools/make_icon.py --sheet          # all five, side by side
     py tools/make_icon.py --design stack   # build a different one
 
@@ -55,10 +56,48 @@ from PIL import Image, ImageDraw
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUT_DIR = os.path.join(ROOT, "assets")
+# Preview sheets live one level down, out of the way of the build. The
+# spec globs assets/icon*.ico and assets/icon*.png into the bundle, and
+# a comparison sheet sitting beside the real icons was shipping with the
+# app -- the kind of thing a glob does quietly.
+PREVIEW_DIR = os.path.join(OUT_DIR, "previews")
 
 # The app's own palette (noteorganizer/core/themes.py, the default theme).
+# ACCENT is rebound per drawing -- see draw_icon and ACCENTS below -- so
+# that every theme gets an icon in its own colour. Everything else stays
+# put on purpose: the panel keeps the dark background whatever the theme,
+# because a light icon disappears into a light taskbar, and the category
+# stripes are the category palette, which does not follow the theme.
 ACCENT = (124, 92, 255)          # #7c5cff
 ACCENT_DEEP = (98, 70, 214)      # a shade down, for the tile's depth
+
+
+def _deepen(rgb, factor=0.79):
+    """The shade used under the accent, derived rather than listed."""
+    return tuple(max(0, min(255, int(round(c * factor)))) for c in rgb)
+
+
+def _rgb(hex_colour):
+    return tuple(int(hex_colour[i:i + 2], 16) for i in (1, 3, 5))
+
+
+def accents_in_use():
+    """Every distinct accent the app's themes wear, read from the themes.
+
+    Read rather than listed, and the FILE IS NAMED AFTER THE COLOUR --
+    `icon_7c5cff.ico` -- on purpose. A table mapping theme names to icon
+    names would be a second place to keep in step, and a theme added
+    later would quietly get the wrong icon or none. This way the app
+    computes the filename from the colour it is already holding, and a
+    new theme needs nothing but a re-run of this script.
+    """
+    import sys
+    sys.path.insert(0, ROOT)
+    from noteorganizer.core.themes import THEMES
+    found = {}
+    for theme, palette in THEMES.items():
+        found.setdefault(palette["accent"].lower(), []).append(theme)
+    return found
 CARD = (248, 248, 252)           # the note card
 CARD_DIM = (214, 210, 236)       # cards sitting behind the front one
 # The stripe is deliberately NOT the accent. The first version made it
@@ -402,8 +441,26 @@ DESIGNS = {
 TILELESS = {"desktop", "pixel", "angled", "tool"}
 
 
-def draw_icon(size, design=DEFAULT_DESIGN):
-    """One icon at `size` pixels, drawn big and brought down."""
+def draw_icon(size, design=DEFAULT_DESIGN, accent=None):
+    """One icon at `size` pixels, drawn big and brought down.
+
+    `accent` is a CSS hex; the design functions read the module-level
+    ACCENT, so it is rebound for the duration of the drawing and put
+    back afterwards. Blunt, but it keeps every design function's
+    signature about drawing rather than about plumbing.
+    """
+    global ACCENT, ACCENT_DEEP
+    previous = (ACCENT, ACCENT_DEEP)
+    if accent:
+        ACCENT = _rgb(accent)
+        ACCENT_DEEP = _deepen(ACCENT)
+    try:
+        return _draw_icon(size, design)
+    finally:
+        ACCENT, ACCENT_DEEP = previous
+
+
+def _draw_icon(size, design):
     s = size * SCALE
     img = Image.new("RGBA", (s, s), (0, 0, 0, 0))
     if design not in TILELESS:
@@ -452,15 +509,46 @@ def write_sheet():
     for r in rows:
         sheet.paste(r, (0, y))
         y += r.height + 14
-    os.makedirs(OUT_DIR, exist_ok=True)
-    path = os.path.join(OUT_DIR, "icon_designs%s.png"
+    os.makedirs(PREVIEW_DIR, exist_ok=True)
+    path = os.path.join(PREVIEW_DIR, "icon_designs%s.png"
                     % ("_" + "_".join(SHEET) if SHEET else ""))
     sheet.save(path)
     print("sheet  ->", path)
 
 
+def write_every_accent(design=DEFAULT_DESIGN):
+    """One .ico and one .png per accent the app can wear.
+
+    Seven files, not eight: `dark` and `light` share the same purple, so
+    they share an icon. The app asks by accent name, which is why the
+    keys of ACCENTS are the filenames.
+    """
+    os.makedirs(OUT_DIR, exist_ok=True)
+    for accent, themes in sorted(accents_in_use().items()):
+        images = [draw_icon(n, design, accent) for n in SIZES]
+        stem = "icon_%s" % accent.lstrip("#")
+        ico = os.path.join(OUT_DIR, stem + ".ico")
+        images[0].save(ico, format="ICO",
+                       sizes=[(n, n) for n in sorted(SIZES)])
+        images[0].save(os.path.join(OUT_DIR, stem + ".png"))
+        print("  %-9s -> %-20s (%s)"
+              % (accent, os.path.basename(ico), ", ".join(sorted(themes))))
+    # The unsuffixed pair stays as the default, for anything that asks
+    # for "the icon" without knowing about themes -- the .exe stamp, and
+    # the window before a theme has been read.
+    images = [draw_icon(n, design, "#7c5cff") for n in SIZES]
+    images[0].save(os.path.join(OUT_DIR, "icon.ico"), format="ICO",
+                   sizes=[(n, n) for n in sorted(SIZES)])
+    images[0].save(os.path.join(OUT_DIR, "icon_256.png"))
+    print("  %-9s -> %s" % ("(default)", "icon.ico + icon_256.png"))
+
+
 def main(argv):
     os.makedirs(OUT_DIR, exist_ok=True)
+    if "--all" in argv:
+        print("one icon per accent:")
+        write_every_accent()
+        return 0
     if "--sheet" in argv:
         after = argv[argv.index("--sheet") + 1:]
         SHEET[:] = [a for a in after if a in DESIGNS]
@@ -480,8 +568,9 @@ def main(argv):
     preview = Image.new("RGBA", (w, h * 2), (30, 30, 47, 255))
     preview.paste(_row(images, (30, 30, 47, 255), w, h), (0, 0))
     preview.paste(_row(images, (242, 242, 247, 255), w, h), (0, h))
-    preview.save(os.path.join(OUT_DIR, "icon_preview.png"))
-    print("preview ->", os.path.join(OUT_DIR, "icon_preview.png"))
+    os.makedirs(PREVIEW_DIR, exist_ok=True)
+    preview.save(os.path.join(PREVIEW_DIR, "icon_preview.png"))
+    print("preview ->", os.path.join(PREVIEW_DIR, "icon_preview.png"))
 
     ico_path = os.path.join(OUT_DIR, "icon.ico")
     images[0].save(ico_path, format="ICO",

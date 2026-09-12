@@ -55,5 +55,4 @@ qa/*.json
 # Icon comparison sheets and previews: artefacts of choosing a design,
 # regenerated any time by `py tools/make_icon.py --sheet`. Only the two
 # files the app actually ships are tracked.
-assets/icon_preview.png
-assets/icon_designs*.png
+assets/previews/

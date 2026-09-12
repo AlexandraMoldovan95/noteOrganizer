@@ -12,6 +12,7 @@ storing it, and ships inside the bundle as well as being stamped on the
 .exe -- the stamp is what Explorer and the taskbar read, the shipped
 copy is what the window itself puts in its title bar.
 """
+import glob
 import os
 import re
 
@@ -68,11 +69,14 @@ a = Analysis(
     ['note_organizer.py'],
     pathex=[],
     binaries=[],
-    # The window reads its own icon at runtime, so it has to travel
-    # inside the bundle as well as being stamped on the .exe. Both
-    # formats: Windows takes the .ico, X11 needs the PNG.
-    datas=[(os.path.join('assets', 'icon.ico'), 'assets'),
-           (os.path.join('assets', 'icon_256.png'), 'assets')],
+    # The window reads its own icon at runtime, so the icons travel
+    # inside the bundle as well as one being stamped on the .exe. Every
+    # accent, not just the default: the icon follows the theme, and a
+    # theme whose icon did not ship would fall back to the purple one.
+    # Globbed rather than listed, so adding a theme and re-running
+    # tools/make_icon.py --all is the whole job.
+    datas=[(f, 'assets') for f in glob.glob(os.path.join('assets', 'icon*.ico'))
+           + glob.glob(os.path.join('assets', 'icon*.png'))],
     hiddenimports=[],
     hookspath=[],
     hooksconfig={},

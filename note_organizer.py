@@ -496,10 +496,16 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         _core_storage.on_write_failure = self._on_data_write_failure
         self.geometry("900x600")
         self.minsize(500, 400)
-        # After the window is mapped, not here: the title bar
-        # belongs to a frame Windows has not created yet, and
-        # wm_frame would name something that cannot be painted.
-        self.after_idle(self._paint_title_bar)
+        # On <Map>, not on after_idle. Measured: before the window is
+        # mapped, wm_frame() names a DIFFERENT window from the one it
+        # names afterwards -- and the compositor accepts a paint on that
+        # first handle, reports success, and then Windows throws the
+        # window away. That is why a fresh launch kept the system colours
+        # until a theme was switched: the switch was simply the first
+        # paint that happened after mapping. Bound with add so nothing
+        # else on <Map> is displaced, and repainting is free (measured at
+        # 0 ms), so the repeats a mapping storm produces cost nothing.
+        self.bind("<Map>", lambda _e: self._paint_title_bar(), add="+")
 
         self.theme_name = self.load_theme_setting()
         self.colors = THEMES[self.theme_name]
@@ -650,8 +656,25 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         except Exception:                             # noqa: BLE001
             self._log_swallowed("title bar colours")
 
+    def _icon_files(self):
+        """The icon files for the current theme, best first.
+
+        Named after the accent colour rather than after the theme --
+        `icon_7c5cff.ico` -- which is why there is no table here mapping
+        one to the other. A table would be a second place to keep in
+        step, and a theme added later would quietly get the wrong icon.
+        The colour is already in hand, so the filename is computed from
+        it, and the plain `icon.ico` is the fallback when a colour has no
+        drawing of its own yet.
+        """
+        accent = (self.colors.get("accent") or "").lstrip("#").lower()
+        stems = ([("icon_%s.ico" % accent, "icon_%s.png" % accent)]
+                 if accent else [])
+        stems.append(("icon.ico", "icon_256.png"))
+        return stems
+
     def _set_window_icon(self):
-        """Put the app's icon on the window, if it is there to be found.
+        """Put the app's icon on the window, in the theme's colour.
 
         Wrapped end to end because an icon is decoration: a missing file,
         an X server that will not take an .ico, an odd Tk build -- none
@@ -663,21 +686,29 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         the task switcher. X11 has no notion of .ico at all and wants a
         PhotoImage, so the PNG is a real second path rather than an
         afterthought.
+
+        Set twice on Windows, which is not belt and braces: `default=`
+        governs windows made LATER, and the plain form repaints the one
+        already on screen. Only doing the first leaves the open window
+        wearing the previous theme's colour until it is reopened.
         """
         try:
-            ico = bundled_file("assets", "icon.ico")
-            if os.path.exists(ico):
-                try:
-                    self.iconbitmap(default=ico)
+            for ico_name, png_name in self._icon_files():
+                ico = bundled_file("assets", ico_name)
+                if os.path.exists(ico):
+                    try:
+                        self.iconbitmap(ico)
+                        self.iconbitmap(default=ico)
+                        return
+                    except tk.TclError:
+                        pass      # not Windows, or a Tk built without it
+                png = bundled_file("assets", png_name)
+                if os.path.exists(png):
+                    # Held on self: Tk keeps no reference of its own, and
+                    # a collected PhotoImage silently blanks the icon.
+                    self._window_icon = tk.PhotoImage(file=png)
+                    self.iconphoto(True, self._window_icon)
                     return
-                except tk.TclError:
-                    pass          # not Windows, or a Tk built without it
-            png = bundled_file("assets", "icon_256.png")
-            if os.path.exists(png):
-                # Held on self: Tk keeps no reference of its own, and a
-                # collected PhotoImage silently blanks the icon again.
-                self._window_icon = tk.PhotoImage(file=png)
-                self.iconphoto(True, self._window_icon)
         except Exception:                             # noqa: BLE001
             self._log_swallowed("window icon")
 
@@ -9130,9 +9161,13 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
     def apply_theme(self):
         self.configure(bg=self.colors["bg"])
-        # The title bar is part of the theme now, so it switches with it:
-        # a light theme under a dark caption looked like two programs.
-        self._paint_title_bar()
+        # The window's own frame last, after the contents: the caption and
+        # the icon are the outermost things on screen, and changing them
+        # before the widgets underneath made the switch look like it
+        # happened twice (field-reported: "the top bar changes first and
+        # only then the one below it").
+        self.after_idle(self._paint_title_bar)
+        self.after_idle(self._set_window_icon)
         # Prune dead entries first: the rebuilt Settings panels re-track
         # their dropdowns and buttons on every visit, and the registry
         # kept the destroyed ones forever — the note-card leak class, at
