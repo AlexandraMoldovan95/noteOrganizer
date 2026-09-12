@@ -80,8 +80,12 @@ CHECKS = [
      "the window geometry is remembered"),
     ("T4-6", lambda: re.search(r"backup.*(prune|keep|max)", STORAGE, re.I) is not None,
      "old backups are pruned"),
-    ("T4-7", lambda: "datas=[]" not in SPEC,
-     "the build ships data files"),
+    # Asks for the USER GUIDE, not for a non-empty datas list. The icon
+    # went into datas on 2026-09-12, which would have flipped this to
+    # DONE while the guide still does not ship -- the exact kind of
+    # almost-right check this file exists to replace.
+    ("T4-7", lambda: "USER_GUIDE" in SPEC,
+     "the build ships the User Guide"),
 ]
 
 print("%-7s %s" % ("#", "verdict"))

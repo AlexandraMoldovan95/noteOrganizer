@@ -168,6 +168,7 @@ noteOrganizer/
 │   ├── pre_push_check.py         # all four, runnable locally in seconds
 │   ├── run_tests.py              # the whole suite, safely, from a scratch copy
 │   ├── visual_scenes.py          # screenshot harness for eyeballing rendered scenes
+│   ├── make_icon.py              # draws the app icon, rather than storing one
 │   ├── doc_screenshots.py        # retakes the documentation's own screenshots
 │   ├── regen_seam_map.py         # rebuilds qa/README's seam map from the suite
 │   └── linux-ci/                 # one Docker command reproduces the Ubuntu CI leg

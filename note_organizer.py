@@ -69,6 +69,7 @@ def parse_version(v):
 from noteorganizer.core import paths as _core_paths
 from noteorganizer.core import single_instance
 from noteorganizer.core.paths import (
+    bundled_file,
     get_appdata_dir,
     _is_writable,
     resolve_data_dir,
@@ -476,6 +477,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         initialise()
         super().__init__()
         self.title("Note Organizer")
+        self._set_window_icon()
         # Armed from day one, for EVERY popup path -- and with bind_all,
         # for every WINDOW: typing in a popup makes the popup the active
         # window, so its deactivation lands on the popup's own toplevel
@@ -582,6 +584,37 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.after(400, self.maybe_show_reminder)
         self._last_active_dirty = None
         self.after(600, self._poll_active_dirty)
+
+    def _set_window_icon(self):
+        """Put the app's icon on the window, if it is there to be found.
+
+        Wrapped end to end because an icon is decoration: a missing file,
+        an X server that will not take an .ico, an odd Tk build -- none
+        of those is a reason for the app not to open. The failure goes to
+        the crash log, not to the user.
+
+        Two formats on purpose. Windows takes the .ico and picks the size
+        it needs from inside it -- 16px for the title bar, larger ones for
+        the task switcher. X11 has no notion of .ico at all and wants a
+        PhotoImage, so the PNG is a real second path rather than an
+        afterthought.
+        """
+        try:
+            ico = bundled_file("assets", "icon.ico")
+            if os.path.exists(ico):
+                try:
+                    self.iconbitmap(default=ico)
+                    return
+                except tk.TclError:
+                    pass          # not Windows, or a Tk built without it
+            png = bundled_file("assets", "icon_256.png")
+            if os.path.exists(png):
+                # Held on self: Tk keeps no reference of its own, and a
+                # collected PhotoImage silently blanks the icon again.
+                self._window_icon = tk.PhotoImage(file=png)
+                self.iconphoto(True, self._window_icon)
+        except Exception:                             # noqa: BLE001
+            self._log_swallowed("window icon")
 
     # A title longer than this cannot be typed or pasted in. The limit is
     # not about storage or layout -- the note list already truncates to 60

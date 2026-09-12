@@ -384,6 +384,7 @@
   "_set_editor_font": "(self, family=None, size=None)",
   "_set_paragraph_align": "(self, align)",
   "_set_paragraph_indent": "(self, line_no, indent)",
+  "_set_window_icon": "(self)",
   "_settings_big_button": "(self, parent_frame, text, command, kind='normal')",
   "_settings_card": "(self, parent, pad=(22, 20))",
   "_settings_section_heading": "(self, parent, title)",
