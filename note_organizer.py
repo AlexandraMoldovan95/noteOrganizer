@@ -496,6 +496,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         _core_storage.on_write_failure = self._on_data_write_failure
         self.geometry("900x600")
         self.minsize(500, 400)
+        # After the window is mapped, not here: the title bar
+        # belongs to a frame Windows has not created yet, and
+        # wm_frame would name something that cannot be painted.
+        self.after_idle(self._paint_title_bar)
 
         self.theme_name = self.load_theme_setting()
         self.colors = THEMES[self.theme_name]
@@ -584,6 +588,67 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.after(400, self.maybe_show_reminder)
         self._last_active_dirty = None
         self.after(600, self._poll_active_dirty)
+
+    # The desktop compositor's attribute numbers, from the DWM docs. Only
+    # these four matter here: the caption's fill, its text, the window's
+    # border, and whether Windows draws its own minimise/maximise/close
+    # glyphs light or dark. That last one is not optional -- a dark
+    # caption with the light-theme glyphs leaves a close button nobody
+    # can see.
+    _DWMWA_USE_IMMERSIVE_DARK_MODE = 20
+    _DWMWA_BORDER_COLOR = 34
+    _DWMWA_CAPTION_COLOR = 35
+    _DWMWA_TEXT_COLOR = 36
+
+    def _paint_title_bar(self):
+        """Ask Windows to draw the title bar in the current theme.
+
+        The alternative was a hand-drawn borderless caption, and it costs
+        far more than it looks: snapping to screen edges, dragging,
+        double-click to maximise, the system menu, Alt+Space, Aero shake,
+        the taskbar's own behaviours and every accessibility affordance
+        are all things Windows does for a real caption and nothing does
+        for a `Frame` with a label in it. This keeps the native title bar
+        and only changes its colours, which is the whole of what was
+        wrong with it.
+
+        Windows 11 (build 22000+) only, and silently nothing anywhere
+        else -- including the Linux CI, where there is no compositor to
+        ask. A title bar is decoration: no failure here is a reason for
+        the app not to open.
+        """
+        if not sys.platform.startswith("win"):
+            return
+        try:
+            import ctypes
+
+            def colorref(hex_colour):
+                # Windows wants 0x00BBGGRR -- a CSS hex, byte-reversed.
+                r = int(hex_colour[1:3], 16)
+                g = int(hex_colour[3:5], 16)
+                b = int(hex_colour[5:7], 16)
+                return (b << 16) | (g << 8) | r
+
+            # winfo_id() is Tk's child window; the caption belongs to the
+            # frame above it, which is what wm_frame names.
+            handle = int(self.wm_frame(), 16)
+            dwm = ctypes.windll.dwmapi
+            dark = self.theme_name.startswith("dark")
+            for attribute, value in (
+                    (self._DWMWA_USE_IMMERSIVE_DARK_MODE, int(dark)),
+                    (self._DWMWA_CAPTION_COLOR, colorref(self.colors["bg"])),
+                    (self._DWMWA_TEXT_COLOR, colorref(self.colors["text"])),
+                    (self._DWMWA_BORDER_COLOR,
+                     colorref(self.colors["accent"]))):
+                payload = ctypes.c_int(value)
+                # c_void_p, not wintypes.HWND: `import ctypes` does not
+                # bring ctypes.wintypes with it, and a handle is a
+                # pointer either way.
+                dwm.DwmSetWindowAttribute(
+                    ctypes.c_void_p(handle), ctypes.c_uint(attribute),
+                    ctypes.byref(payload), ctypes.sizeof(payload))
+        except Exception:                             # noqa: BLE001
+            self._log_swallowed("title bar colours")
 
     def _set_window_icon(self):
         """Put the app's icon on the window, if it is there to be found.
@@ -9065,6 +9130,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
     def apply_theme(self):
         self.configure(bg=self.colors["bg"])
+        # The title bar is part of the theme now, so it switches with it:
+        # a light theme under a dark caption looked like two programs.
+        self._paint_title_bar()
         # Prune dead entries first: the rebuilt Settings panels re-track
         # their dropdowns and buttons on every visit, and the registry
         # kept the destroyed ones forever — the note-card leak class, at

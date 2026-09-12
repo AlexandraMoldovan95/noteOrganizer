@@ -303,6 +303,7 @@
   "_open_table_size_popup": "(self)",
   "_open_today_from_reminder": "(self, today)",
   "_paint_brand_mark": "(self)",
+  "_paint_title_bar": "(self)",
   "_panel_or_page_wheel": "(self, panel_canvas, event)",
   "_paragraph_align_of": "(self, text_widget, line_no)",
   "_paragraph_indent_of": "(self, text_widget, line_no)",
