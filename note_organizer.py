@@ -477,7 +477,6 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         initialise()
         super().__init__()
         self.title("Note Organizer")
-        self._set_window_icon()
         # Armed from day one, for EVERY popup path -- and with bind_all,
         # for every WINDOW: typing in a popup makes the popup the active
         # window, so its deactivation lands on the popup's own toplevel
@@ -509,6 +508,14 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
         self.theme_name = self.load_theme_setting()
         self.colors = THEMES[self.theme_name]
+        # Not before this line: the icon is chosen by the theme's accent,
+        # so asking for it in the constructor's first breath raised on a
+        # self.colors that did not exist yet. The raise was swallowed --
+        # correctly, an icon is never worth failing to open over -- and
+        # the window simply wore the toolkit's feather. It only looked
+        # fine in testing because switching a theme re-runs this, which
+        # is exactly how the title bar's own startup bug hid too.
+        self._set_window_icon()
         # Read before the editor is built, so the body text is created in the
         # right font rather than being restyled a moment after it appears.
         self._load_editor_font()
@@ -667,7 +674,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         it, and the plain `icon.ico` is the fallback when a colour has no
         drawing of its own yet.
         """
-        accent = (self.colors.get("accent") or "").lstrip("#").lower()
+        # getattr, not self.colors: this is called from the constructor
+        # and from the theme switch, and the constructor once called it
+        # before the colours existed. Degrading to the default icon is a
+        # better answer than degrading to none.
+        colors = getattr(self, "colors", None) or {}
+        accent = (colors.get("accent") or "").lstrip("#").lower()
         stems = ([("icon_%s.ico" % accent, "icon_%s.png" % accent)]
                  if accent else [])
         stems.append(("icon.ico", "icon_256.png"))
