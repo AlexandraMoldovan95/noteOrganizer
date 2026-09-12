@@ -84,6 +84,26 @@ def get_appdata_dir():
     return os.path.join(base, "NoteOrganizer")
 
 
+def bundled_file(*parts):
+    """An absolute path to a file that ships WITH the app, not with the
+    user's data.
+
+    Two different places depending on how the app is running, which is
+    the whole reason this exists: from source it is beside this package,
+    and inside a PyInstaller build it is the temporary folder the bundle
+    unpacks itself into (``sys._MEIPASS``). The path comes back whether
+    or not anything is there -- the caller decides what a missing
+    resource means, and for the window icon it means "carry on without
+    one".
+    """
+    if getattr(sys, "frozen", False):
+        base = getattr(sys, "_MEIPASS", os.path.dirname(sys.executable))
+    else:
+        base = os.path.dirname(os.path.dirname(os.path.dirname(
+            os.path.abspath(__file__))))
+    return os.path.join(base, *parts)
+
+
 def _is_writable(folder):
     """True if we can actually create a file here. Existence isn't enough —
     Program Files exists too, but writing to it silently fails."""

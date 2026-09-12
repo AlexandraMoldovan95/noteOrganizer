@@ -331,6 +331,26 @@ check('a theme switch prunes destroyed widgets from the registry',
 app.toggle_theme(); app.update()
 
 # ---- PERFORMANCE: note list with larger count ----
+# This check used to assert a literal True: it measured the time, printed
+# it into its own label, and passed unconditionally. It was the only
+# guard over the note list's rebuild cost -- the thing the product review
+# calls "every pause in typing freezes the app" -- and it could not fail.
+# Recorded as T1-4 in docs/PRODUCT_FINDINGS.md.
+#
+# It asserts two things now, and neither is a timing opinion.
+#
+# First, that the work actually happened. A rebuild that silently stopped
+# building cards would be instant, and a pure stopwatch would applaud it.
+#
+# Second, a ceiling far above the real numbers rather than near them.
+# Measured three runs per platform on an idle machine: Windows
+# 1153/1625/1608 ms, Linux 508/446/462 ms. Windows is the slow side, so
+# the budget is built from it -- 8 s is five times its worst run. That
+# will not catch a 20% drift, and is not meant to: a check that fires on
+# 20% is a check that fires on a busy CI runner, and this project has
+# already thrown away a day to a flaky check. It catches the thing worth
+# catching, which is an accidental order-of-magnitude.
+NOTE_LIST_BUDGET_MS = 8000
 app.notes = [{'id':i,'title':f'Perf{i}','body':'x'*30,'category':'General',
              'updated':'2026-01-01 00:00','created':'2026-01-01 00:00',
              'checklist':[],'attachments':[]} for i in range(300)]
@@ -338,7 +358,12 @@ t0=time.perf_counter()
 app.refresh_note_list()
 app.update()
 elapsed=(time.perf_counter()-t0)*1000
-check(f'refresh_note_list with 300 notes completes ({elapsed:.0f}ms, informational)', True)
+_cards_built = len(getattr(app, '_note_card_widgets', {}))
+check(f'refresh_note_list really builds every card ({_cards_built} of 300)',
+      _cards_built == 300)
+check(f'...and stays inside its budget ({elapsed:.0f}ms of '
+      f'{NOTE_LIST_BUDGET_MS}ms; measured 1.2-1.6s on Windows, 0.5s on Linux)',
+      elapsed < NOTE_LIST_BUDGET_MS)
 
 print()
 print(f"=== QA4 FAILURES: {fails if fails else 'NONE'} ===")

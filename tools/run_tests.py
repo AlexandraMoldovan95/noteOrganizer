@@ -195,6 +195,22 @@ def main(argv):
             broken.append(label)
             for line in output.strip().splitlines()[-25:]:
                 print(f"          {line}")
+            # ...and the WHOLE thing to a file, because the twenty-five
+            # lines above are the ones a piped `tail` throws away. A red
+            # that loses its name costs a day: qa/COVERAGE_LEDGER.md's
+            # C11b was a flake whose name was lost for exactly this
+            # reason, and the rule that recovered it was writing the
+            # output down. The file lives outside the repo and outside
+            # the scratch folder this deletes, so it survives both.
+            try:
+                path = os.path.join(tempfile.gettempdir(),
+                                    f"notesorg-failure-{label}.txt")
+                with open(path, "w", encoding="utf-8",
+                          errors="replace") as fh:
+                    fh.write(output)
+                print(f"          [full output: {path}]")
+            except OSError:
+                pass
     try:
         for script in scripts:
             code, failed, took, output = run_one(scratch, script)

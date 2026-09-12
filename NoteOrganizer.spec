@@ -1,11 +1,82 @@
 # -*- mode: python ; coding: utf-8 -*-
+"""The build. Two things here are generated rather than typed.
+
+The version resource is written from APP_VERSION at build time, so the
+number Windows shows in the file's Properties cannot drift from the one
+the app shows in its own About box -- which is exactly what an
+0.0.0.0 with no product name was: nobody had typed anything, and
+nothing would ever have noticed.
+
+The icon comes from tools/make_icon.py, which draws it rather than
+storing it, and ships inside the bundle as well as being stamped on the
+.exe -- the stamp is what Explorer and the taskbar read, the shipped
+copy is what the window itself puts in its title bar.
+"""
+import glob
+import os
+import re
+
+
+def _app_version():
+    """The version the app reports, read from its own source."""
+    src = open("note_organizer.py", encoding="utf-8").read()
+    m = re.search(r'APP_VERSION\s*=\s*"([^"]+)"', src)
+    return m.group(1) if m else "0.0.0"
+
+
+def _write_version_resource(path):
+    """A Windows version resource, from APP_VERSION.
+
+    Windows wants four numbers; the app carries three, so the fourth is
+    a zero. Everything else is plain truth about what this file is --
+    there is no company, so there is no CompanyName.
+    """
+    version = _app_version()
+    parts = [int(p) for p in version.split(".")[:3]] + [0]
+    quad = ", ".join(str(p) for p in parts)
+    resource = """VSVersionInfo(
+  ffi=FixedFileInfo(
+    filevers=(%(quad)s),
+    prodvers=(%(quad)s),
+    mask=0x3f, flags=0x0, OS=0x40004, fileType=0x1, subtype=0x0,
+    date=(0, 0)
+  ),
+  kids=[
+    StringFileInfo([StringTable('040904B0', [
+      StringStruct('FileDescription',
+                   'Note Organizer - offline notes, calendar and checklists'),
+      StringStruct('FileVersion', '%(version)s'),
+      StringStruct('InternalName', 'NoteOrganizer'),
+      StringStruct('OriginalFilename', 'NoteOrganizer.exe'),
+      StringStruct('ProductName', 'Note Organizer'),
+      StringStruct('ProductVersion', '%(version)s'),
+    ])]),
+    VarFileInfo([VarStruct('Translation', [1033, 1200])])
+  ]
+)
+""" % {"quad": quad, "version": version}
+    with open(path, "w", encoding="utf-8") as fh:
+        fh.write(resource)
+    return path
+
+
+ICON = os.path.join("assets", "icon.ico")
+VERSION_FILE = _write_version_resource(os.path.join("build", "version_info.txt")) \
+    if os.path.isdir("build") else None
 
 
 a = Analysis(
     ['note_organizer.py'],
     pathex=[],
     binaries=[],
-    datas=[],
+    # The window reads its own icon at runtime, so the icons travel
+    # inside the bundle as well as one being stamped on the .exe. Every
+    # accent, not just the default: the icon follows the theme, and a
+    # theme whose icon did not ship would fall back to the purple one.
+    # Globbed rather than listed, so adding a theme and re-running
+    # tools/make_icon.py --all is the whole job.
+    datas=[(f, 'assets') for f in glob.glob(os.path.join('assets', 'icon*.ico'))
+           + glob.glob(os.path.join('assets', 'icon*.png'))],
     hiddenimports=[],
     hookspath=[],
     hooksconfig={},
@@ -39,6 +110,8 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
+    icon=ICON,
+    version=VERSION_FILE,
 )
 coll = COLLECT(
     exe,
