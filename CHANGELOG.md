@@ -12,6 +12,7 @@ How the numbers themselves are counted is the
 
 | Version | Date | In one line |
 |---|---|---|
+| [0.73.159](#073159--2026-09-12) | 2026-09-12 | A note carries an identity that cannot collide, so one you already have — edited elsewhere and sent back — is recognised and you are asked whether to update it or keep both. |
 | [0.72.159](#072159--2026-09-12) | 2026-09-12 | The window looks like it belongs to the app: its own icon, in the theme's colour, and a title bar that wears the theme instead of the system's. |
 | [0.71.158](#071158--2026-09-11) | 2026-09-11 | Three defects found by re-checking what the project had written down: the wrong note opening after a tidy-up, a heavily styled note that looked frozen, and a clipped label in the sidebar. |
 | [0.71.155](#071155--2026-09-11) | 2026-09-11 | Styling meets a per-line ceiling — the shape of a note's formatting, not just how much of it there is, can no longer keep the app from opening. |
@@ -57,7 +58,9 @@ How the numbers themselves are counted is the
 
 ---
 
-## [Unreleased]
+## [0.73.159] — 2026-09-12
+
+*Highlights: a note now has a name of its own, not just a number — so a note you already have, edited somewhere else and sent back, is recognised instead of copied.*
 
 ### Added
 
