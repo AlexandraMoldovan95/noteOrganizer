@@ -286,6 +286,125 @@ app.update()
 check('import code with skip-duplicates adds only the fresh note',
       len(app.notes)==before+1 and any(n['title']=='FreshOne' for n in app.notes))
 
+# ---- A NOTE THAT COMES BACK, EDITED SOMEWHERE ELSE ----
+# The case the text-matching duplicate check answers wrongly: the note IS
+# one we have, and its text differs precisely BECAUSE it was edited, so
+# resemblance says "new note" and would leave two copies behind. Identity
+# is asked first, and the user is asked what to do about it.
+#
+# This block APPENDS to the notebook and deletes exactly what it appended.
+# An earlier version replaced app.notes and put the old list back, and the
+# checks a hundred lines down lost the notes they were set up with.
+app.open_blank_tab()
+app.update()
+_ident_base = len(app.notes)
+app.notes.append(NO.normalize_note({'id': 9001, 'title': 'Plecata',
+                                    'body': 'text original'}))
+app.save_notes()
+_ident_note = app.notes[-1]
+_sent_uid = _ident_note['uid']
+_returned = NO.encode_share_code([{
+    'uid': _sent_uid, 'title': 'Plecata', 'body': 'text corectat pe telefon',
+    'formatting': [], 'paragraphs': [], 'comments': '',
+    'category': 'General', 'date': '', 'color': '', 'checklist': [],
+}])
+
+_asked = []
+_real_dlg_id = app._themed_dialog
+app._themed_dialog = lambda *a, **k: (_asked.append(a[1]), 'update')[1]
+app.import_box.delete('1.0', 'end')
+app.import_box.insert('1.0', _returned)
+app._do_inline_import()
+app.update()
+app._themed_dialog = _real_dlg_id
+
+check('a returning note is recognised as one we already have, and asked about',
+      len(_asked) == 1 and 'already here' in _asked[0])
+check('choosing Update adds no second note',
+      len(app.notes) == _ident_base + 1)
+check('...and the note we had now carries the text that came back',
+      _ident_note['body'] == 'text corectat pe telefon')
+check('...still in its place: the id did not move',
+      _ident_note['id'] == 9001)
+check('...still the same note: the identity did not move',
+      _ident_note['uid'] == _sent_uid)
+check('an update leaves the rescue copy Restore previous reads',
+      (_ident_note.get('_prev') or {}).get('body') == 'text original')
+
+# The other answer. "Add as a new note" must land a SECOND note -- and
+# strip the identity on the way, or the two would be one note wearing two
+# ids, which is the collision the whole field exists to prevent.
+app.open_blank_tab()
+app.update()
+_again = NO.encode_share_code([{
+    'uid': _sent_uid, 'title': 'Plecata', 'body': 'alta varianta',
+    'formatting': [], 'paragraphs': [], 'comments': '',
+    'category': 'General', 'date': '', 'color': '', 'checklist': [],
+}])
+_real_dlg_id = app._themed_dialog
+app._themed_dialog = lambda *a, **k: 'add'
+app.import_box.delete('1.0', 'end')
+app.import_box.insert('1.0', _again)
+app._do_inline_import()
+app.update()
+app._themed_dialog = _real_dlg_id
+
+# A single imported note opens in the editor UNSAVED, by design -- the
+# user reviews it, then saves. The promise lands at the save, so the
+# check follows it there.
+check('choosing Add opens the copy as a NEW note, not over the old one',
+      app.capture_editor_state().get('selected_note_id') is None)
+app.save_current_note(auto=False)
+app.update()
+check('...and once saved it is a second note',
+      len(app.notes) == _ident_base + 2)
+check('...with an identity of its OWN',
+      len(app.notes) >= 2 and app.notes[-1]['uid'] != _sent_uid)
+
+del app.notes[_ident_base:]
+app.save_notes()
+app.open_blank_tab()
+app.update()
+
+# A code carrying SEVERAL notes takes the bulk route, which appends
+# straight into the notebook instead of opening an editor. "Add" there
+# must strip the arriving identity itself -- normalize_note keeps a uid
+# it is handed, so two notes would end up wearing one.
+app.open_blank_tab()
+app.update()
+_bulk_base = len(app.notes)
+app.notes.append(NO.normalize_note({'id': 9002, 'title': 'Lot',
+                                    'body': 'text original'}))
+app.save_notes()
+_bulk_uid = app.notes[-1]['uid']
+_bulk_code = NO.encode_share_code([
+    {'uid': _bulk_uid, 'title': 'Lot', 'body': 'editata aiurea',
+     'formatting': [], 'paragraphs': [], 'comments': '',
+     'category': 'General', 'date': '', 'color': '', 'checklist': []},
+    {'title': 'CuTotulNoua', 'body': 'zzz', 'formatting': [],
+     'paragraphs': [], 'comments': '', 'category': 'General',
+     'date': '', 'color': '', 'checklist': []},
+])
+_real_dlg_b = app._themed_dialog
+app._themed_dialog = lambda *a, **k: 'add'
+app.import_box.delete('1.0', 'end')
+app.import_box.insert('1.0', _bulk_code)
+app._do_inline_import()
+app.update()
+app._themed_dialog = _real_dlg_b
+
+check('a bulk Add brings in both notes',
+      len(app.notes) == _bulk_base + 3)
+_bulk_uids = [n['uid'] for n in app.notes[_bulk_base:]]
+check('...and every one of them has its own identity',
+      len(set(_bulk_uids)) == len(_bulk_uids))
+
+del app.notes[_bulk_base:]
+app.save_notes()
+app.open_blank_tab()
+app.update()
+
+
 # ---- A TABLE THROUGH A SHARE CODE, END TO END ----
 # Not just the text: the separator's hand-set column width and the
 # table's place on the page (paragraphs) must arrive AND render -- the

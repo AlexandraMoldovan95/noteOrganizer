@@ -48,7 +48,7 @@ PAYLOAD = ["note_organizer.py", "noteorganizer"]
 
 STANDALONE = ["test_recurrence.py", "test_calculator.py", "test_data_safety.py",
               "test_entry_module_identity.py", "test_richtext.py",
-              "test_tables.py"]
+              "test_tables.py", "test_note_identity.py"]
 QA = [f"qa{i}.py" for i in range(1, 10)]
 # Every qa script imports this one; it must travel with them or the whole
 # suite dies at import. Kept out of QA itself so it is never *run* as a test.

@@ -329,6 +329,9 @@ from noteorganizer.core.model import (
     _truncate,
     _note_str,
     normalize_note,
+    find_by_uid,
+    split_by_identity,
+    apply_shared_update,
     note_richness,
     note_is_empty,
     reading_time,
@@ -7603,6 +7606,70 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self.import_panel.pack(fill="x", padx=8, pady=(0, 8))
             self.import_box.focus()
 
+    def _take_known_notes(self, incoming, source):
+        """Ask once about the notes in a batch we already have, then act.
+
+        Returns ``(proceed, remaining)``: *remaining* is what the caller
+        should go on to import as new notes, and *proceed* is False when
+        the user cancelled.
+
+        Both bulk routes -- a share code carrying several notes and a
+        restored backup -- come through here, so the two cannot drift
+        apart. A note whose identity matches one already here is the SAME
+        note, edited elsewhere; the text-matching duplicate check below
+        answers a different question and answers it wrongly for exactly
+        this case, because an edited note reads as new.
+
+        One question for the whole batch, not one per note: a restored
+        backup can hold a hundred, and a hundred dialogs is not consent,
+        it is attrition.
+        """
+        known, fresh = split_by_identity(self.notes, incoming)
+        if not known:
+            return True, incoming
+        count = len(known)
+        plural = "" if count == 1 else "s"
+        if fresh:
+            message = (
+                f"{count} of the {len(incoming)} note{'' if len(incoming) == 1 else 's'} "
+                f"in this {source} {'is' if count == 1 else 'are'} already here, "
+                f"edited elsewhere.\n\n"
+                f"Updating replaces this device's copies; each one can be "
+                f"undone with \u201c\u21a9 Restore previous\u201d.\n"
+                f"Adding leaves both versions, so you can compare them."
+            )
+        else:
+            message = (
+                f"All {count} note{plural} in this {source} {'is' if count == 1 else 'are'} "
+                f"already here, edited elsewhere.\n\n"
+                f"Updating replaces this device's copies; each one can be "
+                f"undone with \u201c\u21a9 Restore previous\u201d.\n"
+                f"Adding leaves both versions, so you can compare them."
+            )
+        choice = self._themed_dialog(
+            f"{count} note{plural} you already have",
+            message,
+            kind="question",
+            buttons=[("Cancel", "cancel"),
+                     (f"Add {'it' if count == 1 else 'them'} as new notes", "add"),
+                     (f"Update the {count}", "update")],
+        )
+        if choice is None or choice == "cancel":
+            return False, []
+        if choice == "update":
+            for mine, theirs in known:
+                apply_shared_update(mine, theirs)
+            return True, fresh
+        # "add": the copies go on as new notes, without the identity they
+        # arrived with -- two notes wearing one uid is the collision this
+        # whole field exists to prevent.
+        stripped = []
+        for _mine, theirs in known:
+            copy = dict(theirs)
+            copy.pop("uid", None)
+            stripped.append(copy)
+        return True, fresh + stripped
+
     def _do_inline_import(self):
         code = self.import_box.get("1.0", "end")
         try:
@@ -7638,6 +7705,55 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             or _line_trimmed(sn))
         if len(valid) == 1:
             incoming = valid[0]
+            # Identity first, resemblance second. A note that carries the
+            # uid of one already here IS that note -- most likely the
+            # same note, edited somewhere else and sent back. Asking
+            # _dup_key instead would compare the text, and the text is
+            # different precisely because it was edited, so it would say
+            # "new note" and quietly leave two copies behind.
+            mine = find_by_uid(self.notes, normalize_note(incoming).get("uid"))
+            if mine is not None:
+                choice = self._themed_dialog(
+                    "Same note, a different version",
+                    "This note is already here, and the two differ.\n\n"
+                    "Updating replaces what is on this device; you can undo "
+                    "it with “↩ Restore previous”.\n"
+                    "Adding leaves both, so you can compare them and "
+                    "delete one.",
+                    kind="question",
+                    buttons=[("Cancel", "cancel"),
+                             ("Add as a new note", "add"),
+                             ("Update this note", "update")]
+                )
+                if choice is None or choice == "cancel":
+                    return
+                if choice == "update":
+                    apply_shared_update(mine, incoming)
+                    self.save_notes()
+                    self.import_box.delete("1.0", "end")
+                    self.toggle_import_panel()
+                    self.refresh_note_list()
+                    self.render_calendar()
+                    self.open_note_in_tab(mine)
+                    self.set_status("Note updated from the code "
+                                    "— ↩ Restore previous undoes it")
+                    return
+                # "add" falls through to the ordinary import below, which
+                # opens the copy in a fresh editor tab and lets the user
+                # save it as a new note.
+                #
+                # Dropping the uid here is belt and braces, and honestly
+                # so: the editor carries fields, not a uid, so the saved
+                # copy is minted a fresh identity whether or not this
+                # line runs — a mutant that removes it survives the whole
+                # suite. It stays because it puts the intent where the
+                # decision is made, instead of resting on a property of a
+                # function three calls away that nobody would think to
+                # preserve. The BULK route two branches down has no such
+                # accident and is covered by a check that does bite.
+                incoming = dict(incoming)
+                incoming.pop("uid", None)
+                valid = [incoming]
             existing_keys = {_dup_key(n) for n in self.notes}
             if _dup_key(normalize_note(incoming)) in existing_keys:
                 choice = self._themed_dialog(
@@ -7658,6 +7774,19 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             # their note had been trimmed. Dead code with a ledger row
             # claiming it shipped.
             self._open_imported_note_in_editor(incoming, trimmed=bool(oversized))
+            return
+        # Identity first: notes this batch says we already have.
+        proceed, valid = self._take_known_notes(valid, "code")
+        if not proceed:
+            return
+        if not valid:
+            self.save_notes()
+            self.import_box.delete("1.0", "end")
+            self.toggle_import_panel()
+            self.refresh_note_list()
+            self.render_calendar()
+            self.set_status("Notes updated from the code "
+                            "— ↩ Restore previous undoes each one")
             return
         next_id = max([n["id"] for n in self.notes], default=0) + 1
         # Check each incoming note against what's already here — same
@@ -8338,6 +8467,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 CATEGORY_COLORS.pop(_n, None)
             added_names.clear()
 
+        # Identity first, exactly as the share-code route asks it.
+        proceed, valid_notes = self._take_known_notes(valid_notes, "backup")
+        if not proceed:
+            _undo_category_merge()
+            return
         existing_keys = {_dup_key(n) for n in self.notes}
         fresh = [n for n in valid_notes if _dup_key(normalize_note(n)) not in existing_keys]
         dupe_count = len(valid_notes) - len(fresh)
@@ -13496,6 +13630,13 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         import copy as _copy
         clone = _copy.deepcopy(note)
         clone["id"] = max([n["id"] for n in self.notes], default=0) + 1
+        # The deep copy brought the original's identity with it, and two
+        # notes sharing a uid is the exact collision uid exists to
+        # prevent — manufactured here, locally, by a feature that has
+        # nothing to do with sharing. Dropped so normalize_note below
+        # mints a fresh one: a duplicate is a different note that happens
+        # to start with the same words.
+        clone.pop("uid", None)
         base_title = (note.get("title") or "").strip()
         clone["title"] = f"{base_title} (copy)" if base_title else "(copy)"
         clone["updated"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")

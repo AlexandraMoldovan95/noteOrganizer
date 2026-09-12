@@ -59,6 +59,24 @@ How the numbers themselves are counted is the
 
 ## [Unreleased]
 
+### Added
+
+- **A note keeps the same identity wherever it goes, so bringing one back updates
+  it instead of copying it.** Until now a note's only name was its number, and that
+  number is just its place in one file: a note written on a second computer gets the
+  same number as an unrelated one here, and nothing on either side can tell them
+  apart. Every note now also carries an identity that cannot collide, given to it the
+  first time the app sees it — an existing notebook gains them on its next launch,
+  with nothing to run and nothing to decide. Share codes carry it, which changes what
+  happens when a note you already have comes back: the app recognises it and asks
+  whether to **update the copy you have** or **add it as a separate note**. It used to
+  compare the text instead, and the text differs precisely because the note was edited
+  — which is the only reason anyone re-sends one — so it quietly left you with two.
+  Updating is undone by the editor's existing "↩ Restore previous", so the reversible
+  answer is the one you land on. Both routes that bring notes in, a pasted code and a
+  restored backup, ask the same question through the same code; and duplicating a note
+  gives the copy an identity of its own instead of the original's.
+
 ## [0.72.159] — 2026-09-12
 
 *Highlights: the parts of the window that were never the app's — a system-grey title bar and

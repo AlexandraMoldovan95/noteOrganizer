@@ -36,6 +36,7 @@ load, and reports what it did so the app can tell the user.
 
 import os
 import re
+import uuid
 from datetime import datetime
 
 from .categories import CATEGORY_COLORS
@@ -67,6 +68,21 @@ MAX_ATTACHMENTS = 200
 
 
 NOTE_DEFAULTS = {
+    # A note's identity, as opposed to "id", which is only its place in
+    # THIS file. Two devices both hand a new note id = max + 1, so two
+    # different notes arrive called 87 and nothing downstream can tell
+    # them apart; "uid" is invented independently and cannot collide.
+    #
+    # It exists so a note that LEAVES the app can be recognised when it
+    # comes back: a share code carries it, and an import can then say
+    # "this is the note you already have" instead of guessing from the
+    # text — a guess that is wrong precisely when the note was edited,
+    # which is the only interesting case.
+    #
+    # Empty here, filled by normalize_note on the way through, so every
+    # existing notebook gains identities on its next load with no
+    # migration pass of its own.
+    "uid": "",
     "title": "",
     "body": "",
     "formatting": [],   # list of {"start","end","style"} spans over body
@@ -157,6 +173,97 @@ def _note_str(note, key, default=""):
     return value if isinstance(value, str) else default
 
 
+def new_note_uid():
+    """A fresh note identity.
+
+    uuid4 is random rather than derived from anything about this machine
+    or this moment: two devices editing the same notebook must be able to
+    invent identities at the same second without consulting each other,
+    which is the whole reason this field exists. Stored as plain text,
+    like everything else in the file.
+    """
+    return str(uuid.uuid4())
+
+
+def find_by_uid(notes, uid):
+    """The note that IS this one, or None.
+
+    Identity, not resemblance. :func:`~noteorganizer.core.duplicates._dup_key`
+    answers a different question -- "does this look like something I
+    already have" -- and answers it from the text, so it says no exactly
+    when a note has been edited, which is the only time anyone re-sends
+    one. Both are useful; they are not interchangeable, and identity is
+    asked first.
+    """
+    if not isinstance(uid, str) or not uid.strip():
+        return None
+    wanted = uid.strip()
+    for note in notes:
+        if isinstance(note, dict) and note.get("uid") == wanted:
+            return note
+    return None
+
+
+# The fields an incoming copy of a note replaces. Everything else belongs
+# to THIS device's copy: its id and its place in the file, its attachment
+# files (which a share code never carries), and the per-occurrence
+# exceptions and overrides, which are about a timeline the sender's copy
+# may not share.
+UPDATABLE_FROM_SHARED = [
+    "title", "body", "formatting", "paragraphs",
+    "comments", "category", "date", "color", "recurrence", "checklist",
+]
+
+
+def apply_shared_update(note, incoming):
+    """Overwrite *note*'s content from *incoming*, keeping a way back.
+
+    The rescue copy goes into ``_prev`` -- the same one a drastic shrink
+    leaves behind, read by the editor's "↩ Restore previous". Reusing it
+    means an update that replaced the wrong thing is one button away from
+    being undone, with no new mechanism to build or explain.
+
+    *incoming* is whatever a share code decoded to, so it is normalised
+    before anything is copied out of it.
+    """
+    fresh = normalize_note(dict(incoming))
+    note["_prev"] = {
+        "title": note.get("title") or "",
+        "body": note.get("body") or "",
+        "formatting": note.get("formatting") or [],
+        "paragraphs": note.get("paragraphs") or [],
+        "comments": note.get("comments") or "",
+    }
+    for field in UPDATABLE_FROM_SHARED:
+        note[field] = fresh[field]
+    note["updated"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    return note
+
+
+def split_by_identity(notes, incoming):
+    """Sort an incoming batch into notes we already have and notes we don't.
+
+    Returns ``(known, fresh)``: *known* is a list of ``(mine, theirs)``
+    pairs, *fresh* the incoming notes nothing here matches.
+
+    Both bulk import routes -- a share code carrying several notes, and a
+    restored backup -- ask this one function rather than each walking the
+    list itself. Two hand-rolled copies of the same judgement is how this
+    project's search rules drifted apart once already, and the fix was
+    exactly this: one definition, every caller.
+    """
+    known, fresh = [], []
+    for note in incoming:
+        if not isinstance(note, dict):
+            continue
+        mine = find_by_uid(notes, note.get("uid"))
+        if mine is None:
+            fresh.append(note)
+        else:
+            known.append((mine, note))
+    return known, fresh
+
+
 def normalize_note(note):
     """Guarantee every note has every field, with the right type. Older notes
     were saved before 'comments', 'date', 'color' and 'attachments' existed,
@@ -203,6 +310,16 @@ def normalize_note(note):
         if isinstance(default, dict) and not isinstance(value, dict):
             value = {}
         clean[key] = value
+    # Minted here, AFTER the defaults loop, not before it: the loop
+    # rewrites every key from NOTE_DEFAULTS, so an identity assigned
+    # earlier was overwritten with "" and every note came out without
+    # one. This is where "fill it in if it is missing" already lives.
+    #
+    # A uid that is already there is trusted rather than checked against
+    # a format — it may have been minted by another program, and the only
+    # property needed from it is that it is text nobody else invented.
+    # The loop above has already turned a non-string into "".
+    clean["uid"] = clean["uid"].strip() or new_note_uid()
     if not clean["updated"]:
         # Includes seconds (not just minutes) so two notes saved in the same
         # minute still sort correctly by "Recently updated" instead of tying.
