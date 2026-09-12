@@ -12,6 +12,7 @@ How the numbers themselves are counted is the
 
 | Version | Date | In one line |
 |---|---|---|
+| [0.72.159](#072159--2026-09-12) | 2026-09-12 | The window looks like it belongs to the app: its own icon, in the theme's colour, and a title bar that wears the theme instead of the system's. |
 | [0.71.158](#071158--2026-09-11) | 2026-09-11 | Three defects found by re-checking what the project had written down: the wrong note opening after a tidy-up, a heavily styled note that looked frozen, and a clipped label in the sidebar. |
 | [0.71.155](#071155--2026-09-11) | 2026-09-11 | Styling meets a per-line ceiling — the shape of a note's formatting, not just how much of it there is, can no longer keep the app from opening. |
 | [0.71.154](#071154--2026-09-11) | 2026-09-11 | The product review's Tier 0 closed whole — every way the app could lose, mangle or refuse your work, then closed again where three adversarial passes proved the class was wider than the finding. |
@@ -57,6 +58,48 @@ How the numbers themselves are counted is the
 ---
 
 ## [Unreleased]
+
+## [0.72.159] — 2026-09-12
+
+*Highlights: the parts of the window that were never the app's — a system-grey title bar and
+somebody else's placeholder icon — now belong to it, and follow whichever theme you are in.*
+
+### Added
+
+- **The window wears your theme, all the way to its edges.** The bar along the very top —
+  the one with the app's name and the minimise, maximise and close buttons — used to be
+  whatever colour Windows felt like, which meant a light strip sitting on top of a dark app.
+  It now takes the theme's own background and text colour, with the window's outline in the
+  theme's accent, and it changes in the same moment as everything else. The app's icon
+  changes colour with the theme too: there is one drawn for each accent the themes use, so a
+  green theme gets a green icon and an amber one an amber icon. It is still the native title
+  bar, deliberately — a hand-drawn one would have cost snapping to screen edges, dragging,
+  double-click to maximise, the system menu and every keyboard and accessibility affordance
+  Windows provides for free. Windows 11 only; on anything older the bar is simply the
+  system's usual one.
+
+### Fixed
+
+- **The app has an icon of its own, and the file says what it is.** There was none anywhere:
+  a generic feather in the title bar and the taskbar, the toolkit's own placeholder stamped
+  on the `.exe`, and a version resource reading `0.0.0.0` with no product name, so the file's
+  Properties were blank. The icon is now drawn from the app's own palette, the `.exe` carries
+  it, and the version resource is generated from the app's version at build time — so the
+  number Windows shows can no longer drift from the one the app shows.
+
+### Testing
+
+- The product-findings register had gone stale in a way that made the remaining work
+  unreadable: all thirty-eight findings were marked open, including the eight that shipped
+  months ago. The nine that were done are marked done, each confirmed against the code rather
+  than the changelog, and a tool now asks the code one finding at a time instead of anyone
+  trusting the column.
+- The one check guarding the note list's rebuild cost measured the time, printed it, and then
+  asserted a literal `True` — it could not fail. It now asserts that the rebuild really built
+  every card, and a budget set five times above the slowest measured run rather than anywhere
+  near it.
+- The theme switch was measured again after a field report, and the numbers recorded where
+  the next person will find them. The obvious suspect turned out to account for 2.4 ms of it.
 
 ## [0.71.158] — 2026-09-11
 
