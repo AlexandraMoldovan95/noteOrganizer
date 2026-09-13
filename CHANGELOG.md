@@ -60,6 +60,19 @@ How the numbers themselves are counted is the
 
 ---
 
+## [Unreleased]
+
+### Fixed
+
+- **Changing several notes' category at once no longer comes undone on the one note you
+  had open.** The change reached every note, and then the next thing you typed put the
+  open one back where it was — because the editor was still showing that note's old
+  category and its save writes what the editor shows. Nothing on screen said so, and the
+  other notes kept the new category, which is what made it easy to miss. Anything you had
+  typed before the change is saved first, so nothing is lost either way.
+
+---
+
 ## [0.73.165] — 2026-09-13
 
 *Highlights: a code made in the editor now says which note it is — and updating a note from one sticks, instead of being written back over a moment later by the editor that was still showing the old version.*
