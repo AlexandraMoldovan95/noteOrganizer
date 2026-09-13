@@ -470,6 +470,139 @@ app.notes = []
 app.save_notes()
 app.new_note(); app.update()
 
+
+# ---- FIELD CASES AUTOMATED (test plan 68, 69, 70, 71, 72, 73, 74) ----
+# The duplicates panel, driven through its own buttons rather than
+# through the function behind them: the panel decides which copies are
+# ticked, and a check that calls the cleanup with a list it built itself
+# would not notice the panel ticking the wrong ones.
+def _dp_button(widget, label):
+    for child in widget.winfo_children():
+        if isinstance(child, tk.Button) and label in str(child.cget('text')):
+            return child
+        found = _dp_button(child, label)
+        if found:
+            return found
+    return None
+
+
+def _dp_boxes(widget, found=None):
+    """Every duplicate row's tick box, in the order the panel drew them."""
+    if found is None:
+        found = []
+    for child in widget.winfo_children():
+        if isinstance(child, tk.Checkbutton):
+            found.append(child)
+        _dp_boxes(child, found)
+    return found
+
+
+def _dp_seed(groups):
+    """A notebook holding `groups` groups of identical notes."""
+    app.notes = []
+    app.trash = []
+    nid = 1
+    for gi, copies in enumerate(groups):
+        for _ in range(copies):
+            app.notes.append({
+                'id': nid, 'title': 'Geamana %d' % gi, 'body': 'acelasi text %d' % gi,
+                'comments': '', 'category': 'General', 'date': '', 'color': '',
+                'recurrence': {}, 'checklist': [], 'attachments': [],
+                'created': '2026-01-01 00:00', 'updated': '2026-01-01 00:00'})
+            nid += 1
+    app.save_notes()
+    app.show_settings_page(); app.update()
+    app.toggle_settings_panel('duplicates'); app.update()
+
+
+_dp_saved_notes, _dp_saved_trash = list(app.notes), list(app.trash)
+app.ask_yes_no = lambda *a, **k: True
+
+# 68: ticking two copies of four moves exactly those two.
+_dp_seed([4])
+_dp_all = _dp_boxes(app.settings_duplicates_panel)
+check('the duplicates panel draws one tick box per copy (plan 68)',
+      len(_dp_all) == 4)
+if len(_dp_all) == 4:
+    _dp_all[1].invoke(); _dp_all[3].invoke()      # the 2nd and the 4th
+    app.update()
+    _dp_go = _dp_button(app.settings_duplicates_panel, 'Move ticked')
+    if _dp_go is not None:
+        _dp_go.invoke(); app.update()
+    check('only the ticked copies go to the trash (plan 68)',
+          len(app.notes) == 2 and len(app.trash) == 2)
+    check('...and the ones left are the ones nobody ticked',
+          sorted(n['id'] for n in app.notes) == [1, 3])
+    # 74: and they are recoverable, not destroyed.
+    check('the removed copies are in the Trash, not gone (plan 74)',
+          sorted(e['id'] for e in app.trash) == [2, 4])
+
+# 69: the tool does not insist on keeping exactly one.
+_dp_seed([3])
+_dp_all = _dp_boxes(app.settings_duplicates_panel)
+if len(_dp_all) == 3:
+    _dp_all[2].invoke(); app.update()
+    _dp_go = _dp_button(app.settings_duplicates_panel, 'Move ticked')
+    if _dp_go is not None:
+        _dp_go.invoke(); app.update()
+    check('two copies may be kept -- nothing forces "keep exactly one" (plan 69)',
+          len(app.notes) == 2)
+
+# 70: "Tick all but first" ticks every copy except the first.
+_dp_seed([3])
+_dp_shortcut = _dp_button(app.settings_duplicates_panel, 'Tick all but first')
+check('each group offers "Tick all but first" (plan 70)', _dp_shortcut is not None)
+if _dp_shortcut is not None:
+    _dp_shortcut.invoke(); app.update()
+    _dp_go = _dp_button(app.settings_duplicates_panel, 'Move ticked')
+    if _dp_go is not None:
+        _dp_go.invoke(); app.update()
+    check('...and it leaves the first copy standing, alone (plan 70)',
+          len(app.notes) == 1 and app.notes[0]['id'] == 1)
+
+# 71 and 72: the all-groups button appears only when there are groups to
+# mean it, and reduces every one of them in a single action.
+_dp_seed([2])
+check('with a single group there is no all-groups button (plan 72)',
+      _dp_button(app.settings_duplicates_panel, 'Clean up ALL') is None)
+
+_dp_seed([3, 2])
+_dp_everything = _dp_button(app.settings_duplicates_panel, 'Clean up ALL')
+check('with several groups the all-groups button is offered (plan 71)',
+      _dp_everything is not None)
+if _dp_everything is not None:
+    _dp_asked = []
+    _dp_real_ask = app.ask_yes_no
+    app.ask_yes_no = lambda *a, **k: (_dp_asked.append(1), True)[1]
+    _dp_everything.invoke(); app.update()
+    app.ask_yes_no = _dp_real_ask
+    check('...and one click reduces every group to its first copy (plan 71)',
+          sorted(n['id'] for n in app.notes) == [1, 4])
+    check('...having asked once, not once per group',
+          len(_dp_asked) <= 1)
+
+# 73: ticking nothing deletes nothing, and says so.
+_dp_seed([3])
+_dp_said = []
+_dp_real_info = app.show_info
+app.show_info = lambda *a, **k: (_dp_said.append(a), True)[1]
+_dp_go = _dp_button(app.settings_duplicates_panel, 'Move ticked')
+if _dp_go is not None:
+    _dp_go.invoke(); app.update()
+app.show_info = _dp_real_info
+check('cleaning up with nothing ticked deletes nothing (plan 73)',
+      len(app.notes) == 3 and not app.trash)
+check('...and says that nothing was ticked, rather than doing nothing quietly',
+      any('select' in str(a).lower() or 'tick' in str(a).lower() or
+          'nothing' in str(a).lower() for a in _dp_said))
+
+app.hide_settings_page()
+app.notes = list(_dp_saved_notes)
+app.trash = list(_dp_saved_trash)
+app.save_notes()
+app.new_note(); app.update()
+
+
 print()
 print(f"=== QA2 FAILURES: {fails if fails else 'NONE'} ===")
 
