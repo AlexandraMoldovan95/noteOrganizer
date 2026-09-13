@@ -97,6 +97,50 @@ Docker (`tools/linux-ci/` — build once, then
 Xvfb-only behaviours that used to surface as red CI runs can be caught
 before the push.
 
+## Stories: the app walked, not questioned
+
+`py qa/story_note_travels.py` is a different kind of check, and it exists
+because of a specific failure. Four user-visible bugs shipped in
+`0.73.159` and `0.73.161`; a field test found all four in twenty minutes,
+and not one of them was reachable by the suite as it stood — not because
+the suite was thin, but because each needed something a question cannot
+express:
+
+| What the bug needed | Why no check had it |
+|---|---|
+| a **restart** between two steps | every check lived in one process |
+| a **sequence** (make a code, then open another note, then look) | checks assert a state, not a path |
+| a **second visit** to a page | nothing arrived anywhere twice |
+| a **what-happens-next** (update, then carry on typing) | the check ended at the update |
+
+A story fixes that by walking one thing a person does, from end to end,
+pressing the buttons they press — the note card, `📋 Generate code`, the
+dialog's own buttons — with each chapter in **its own process**, so
+"close the app and open it again" is real rather than simulated. It
+photographs the screen as it goes, and the pictures are meant to be
+looked at: two bugs in this project were invisible in the source and
+obvious in a photograph.
+
+Two rules learned writing the first one, both by being burned:
+
+- **Press the button by its whole name.** A loose search for `Import`
+  found the sidebar's `📥 Import code` and closed the panel; the story
+  then reported that the app had asked nothing. A story that presses the
+  wrong button accuses the app of its own mistake.
+- **Answer a blocking dialog from inside the wait.** The themed dialog
+  waits on a variable, so nothing after the click runs until an answer
+  arrives — which is also the only moment the question is on screen to be
+  photographed.
+
+A story is only worth its runtime if it would have caught the thing it
+was written for, so each of the four bugs was **put back** and the story
+walked again: all four turned it red, naming the step that broke. That
+is the bar for adding another one.
+
+Stories are slow by nature (a real window per chapter, seconds not
+milliseconds), so they are not in `tools/run_tests.py`. Run them before
+calling a user-facing feature done.
+
 ## The surface inventory: what every new feature is walked against
 
 The complete list of the app's functionality surfaces. Before a feature

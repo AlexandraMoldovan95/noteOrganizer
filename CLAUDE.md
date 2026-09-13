@@ -118,6 +118,29 @@ optimize for it unless explicitly instructed.
 
 ### Testing
 
+**Who verifies what (standing rule, 2026-09-13).** Agreed after a field
+test found four user-visible bugs the suite could not reach, and a story
+written afterwards caught all four when they were put back:
+
+- **Anything that can be proved mechanically is proved here, before
+  saying it is done** — not handed over as "please check this on the
+  exe". For a user-facing change that means walking it on the real app:
+  `py qa/story_note_travels.py` and the stories beside it press the
+  buttons a person presses, restart the process where a person would
+  close the app, and photograph the screen. The photographs are looked
+  at, not merely saved.
+- **The test plan still gets the row** (`qa/NoteOrganizer_TestPlan.xlsx`),
+  because a second pair of eyes on the built `.exe` catches what a script
+  was never told to look for. Its "Automation status (Claude)" column
+  must say plainly when a story already walks the case end to end, so a
+  hand check is a choice rather than a duty.
+- **What needs human judgement is named out loud.** After every fix, ask:
+  *which part of this can no script see?* — whether something reads as
+  confusing, whether the safer answer is the one the eye lands on,
+  whether a screen means what it says. Those go to her explicitly AND
+  into the test plan marked as needing her eye. A script checks what it
+  was told to check; it never notices that a button *looks* like a trap.
+
 After making a change:
 1. Run the most relevant existing tests.
 2. Run broader tests when practical.
@@ -155,6 +178,17 @@ Then the mutant, as always: revert the fix, watch the check fail, with
 the suite reaching its FAILURES footer. Steps 2–4 plus the mutant cost
 seconds and catch the mechanical omissions; reviewers are for judgment
 and adversarial imagination, which is what they should be paid for.
+
+Two things a mutant runner must do, both learned the hard way:
+
+- **Restore the source in a `finally`.** One exited on an error with a
+  mutant still in the file. A tool that can leave the code broken is a
+  worse bug than anything it was written to find.
+- **Read and write the file as BYTES.** Reading text and writing it back
+  with `newline="\n"` rewrites every line ending in the file, so a
+  "restore" that changed nothing still left two files rewritten end to
+  end. The content was identical and `git diff` was empty, which is
+  precisely why it went unnoticed until `git status` disagreed.
 
 **Permanent fixes only (standing rule, 2026-09-05).** Every failure —
 in the app or in a check — gets a fix at the root of its *class*, not a
