@@ -156,6 +156,17 @@ the suite reaching its FAILURES footer. Steps 2–4 plus the mutant cost
 seconds and catch the mechanical omissions; reviewers are for judgment
 and adversarial imagination, which is what they should be paid for.
 
+Two things a mutant runner must do, both learned the hard way:
+
+- **Restore the source in a `finally`.** One exited on an error with a
+  mutant still in the file. A tool that can leave the code broken is a
+  worse bug than anything it was written to find.
+- **Read and write the file as BYTES.** Reading text and writing it back
+  with `newline="\n"` rewrites every line ending in the file, so a
+  "restore" that changed nothing still left two files rewritten end to
+  end. The content was identical and `git diff` was empty, which is
+  precisely why it went unnoticed until `git status` disagreed.
+
 **Permanent fixes only (standing rule, 2026-09-05).** Every failure —
 in the app or in a check — gets a fix at the root of its *class*, not a
 patch over the instance, so the same failure cannot reappear:
