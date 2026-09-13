@@ -12,6 +12,7 @@ How the numbers themselves are counted is the
 
 | Version | Date | In one line |
 |---|---|---|
+| [0.73.161](#073161--2026-09-13) | 2026-09-13 | A note's identity is written down the first time it is given out, so it survives closing the app — and a note restored from the Trash never takes one another note is already using. |
 | [0.73.159](#073159--2026-09-12) | 2026-09-12 | A note carries an identity that cannot collide, so one you already have — edited elsewhere and sent back — is recognised and you are asked whether to update it or keep both. |
 | [0.72.159](#072159--2026-09-12) | 2026-09-12 | The window looks like it belongs to the app: its own icon, in the theme's colour, and a title bar that wears the theme instead of the system's. |
 | [0.71.158](#071158--2026-09-11) | 2026-09-11 | Three defects found by re-checking what the project had written down: the wrong note opening after a tidy-up, a heavily styled note that looked frozen, and a clipped label in the sidebar. |
@@ -55,6 +56,31 @@ How the numbers themselves are counted is the
 | [0.3.0](#030--tags-removed-categories-as-the-sole-organization-system) | — | Tags come out entirely, leaving categories as the app's one organization system. |
 | [0.2.0](#020--inline-ui-overhaul--data-resilience) | — | Every OS-native popup becomes an in-app themed one, and the calendar grows richer. |
 | [0.1.0](#010--core-application) | — | The founding feature set — notes, recurrence, calendar, templates, sharing, themes. |
+
+---
+
+## [0.73.161] — 2026-09-13
+
+*Highlights: the identity a note was given in 0.73.159 is now written down, so it is the same identity tomorrow — a share code made today still finds the right note after the app has been closed.*
+
+### Fixed
+
+- **A note's identity now survives closing the app, so a code you made yesterday still
+  finds the right note today.** The identity was handed out the moment a note was read,
+  but it was only kept in memory: on a session where you read and never changed
+  anything, nothing wrote it down, and the next launch handed out a different one. The
+  effect was invisible until it mattered — share a note, close the app, come back the
+  next day and import that code, and the app no longer recognised the note it came from.
+  It added a copy instead, which is exactly the behaviour the identity exists to prevent.
+  The first read that hands out identities now writes them down, once. Nothing to run and
+  nothing to decide; a notebook that already has them is not rewritten, and a notebook
+  the app could not read is never written over.
+- **A note restored from the Trash no longer takes an identity another note is already
+  using.** A restore already gives the note a fresh number, because the one it had may
+  have been taken while it was gone. Its identity can be taken the same way — by a copy
+  of that very note arriving from a share code while the original sits in the Trash — and
+  the restored note then shared a name with it. Now it keeps its identity when that is
+  free, which is the normal case, and is given a new one only when it is not.
 
 ---
 
