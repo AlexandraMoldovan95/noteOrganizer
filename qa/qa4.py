@@ -150,6 +150,7 @@ safe('pin + duplicate note', pin_dup)
 import os as _os4
 from noteorganizer.core import paths as _paths4
 from noteorganizer.core import storage as _storage4
+from noteorganizer.core import model as _model4
 _os4.makedirs(_paths4.ATTACHMENTS_DIR, exist_ok=True)
 
 def _mk_att4(name, text="payload"):
@@ -176,6 +177,26 @@ check('duplicate_note: the copy has its own file on disk',
 _storage4._delete_attachment_files([_clone4])
 check('duplicate_note: deleting the copy leaves the original file intact',
       _os4.path.isfile(_dup_src_path))
+
+# -- duplicate_note and the note's IDENTITY --
+#
+# Same seam, same shape of bug as the attachment above: a deep copy
+# carries something that was never meant to be shared. Two notes with one
+# uid is the exact collision uid exists to prevent, manufactured locally
+# by a feature that has nothing to do with sharing -- and nothing would
+# look wrong until a share code or an import tried to tell them apart.
+_ident_src = _model4.normalize_note(
+    {'id': 1, 'title': 'Are identitate', 'body': 'x'})
+app.notes = [_ident_src]
+app.save_notes()
+_ident_clone = app.duplicate_note(app.notes[0])
+app.update()
+check('duplicate_note: the original still has its identity',
+      bool(_ident_src.get('uid')))
+check('duplicate_note: the copy is given its OWN identity',
+      bool(_ident_clone.get('uid')))
+check('duplicate_note: the two identities differ',
+      _ident_clone.get('uid') != _ident_src.get('uid'))
 
 # -- Settings "clean up duplicates" merge (GAP found by the Fix-1 reviewer) --
 _merge_src = "20260101000000000002_merge.txt"

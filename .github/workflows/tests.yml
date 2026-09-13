@@ -106,6 +106,9 @@ jobs:
       - name: Data safety tests — backups and migration
         run: python test_data_safety.py
 
+      - name: Note identity tests — the uid that survives leaving the app
+        run: python test_note_identity.py
+
       - name: Calculator expression evaluator tests
         run: python test_calculator.py
 

@@ -69,6 +69,12 @@ MAX_SHARED_NOTES = 200                # most notes one code may carry
 # "paragraphs" carries list indents/alignment and a table's place on the
 # page -- without it a shared note arrived flush left with flat lists.
 SHAREABLE_FIELDS = [
+    # "uid" travels; "id" does not. The id is only a note's place in one
+    # file and means nothing anywhere else, but the uid is what lets the
+    # far end recognise a note it already has instead of guessing from
+    # the text -- a guess that fails exactly when the note was edited,
+    # which is the only time anyone re-sends one.
+    "uid",
     "title", "body", "formatting", "comments", "category", "date", "color", "recurrence",
     "paragraphs", "checklist",
 ]

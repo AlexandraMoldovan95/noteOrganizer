@@ -12,6 +12,7 @@ How the numbers themselves are counted is the
 
 | Version | Date | In one line |
 |---|---|---|
+| [0.73.159](#073159--2026-09-12) | 2026-09-12 | A note carries an identity that cannot collide, so one you already have — edited elsewhere and sent back — is recognised and you are asked whether to update it or keep both. |
 | [0.72.159](#072159--2026-09-12) | 2026-09-12 | The window looks like it belongs to the app: its own icon, in the theme's colour, and a title bar that wears the theme instead of the system's. |
 | [0.71.158](#071158--2026-09-11) | 2026-09-11 | Three defects found by re-checking what the project had written down: the wrong note opening after a tidy-up, a heavily styled note that looked frozen, and a clipped label in the sidebar. |
 | [0.71.155](#071155--2026-09-11) | 2026-09-11 | Styling meets a per-line ceiling — the shape of a note's formatting, not just how much of it there is, can no longer keep the app from opening. |
@@ -57,7 +58,27 @@ How the numbers themselves are counted is the
 
 ---
 
-## [Unreleased]
+## [0.73.159] — 2026-09-12
+
+*Highlights: a note now has a name of its own, not just a number — so a note you already have, edited somewhere else and sent back, is recognised instead of copied.*
+
+### Added
+
+- **A note keeps the same identity wherever it goes, so bringing one back updates
+  it instead of copying it.** Until now a note's only name was its number, and that
+  number is just its place in one file: a note written on a second computer gets the
+  same number as an unrelated one here, and nothing on either side can tell them
+  apart. Every note now also carries an identity that cannot collide, given to it the
+  first time the app sees it — an existing notebook gains them on its next launch,
+  with nothing to run and nothing to decide. Share codes carry it, which changes what
+  happens when a note you already have comes back: the app recognises it and asks
+  whether to **update the copy you have** or **add it as a separate note**. It used to
+  compare the text instead, and the text differs precisely because the note was edited
+  — which is the only reason anyone re-sends one — so it quietly left you with two.
+  Updating is undone by the editor's existing "↩ Restore previous", so the reversible
+  answer is the one you land on. Both routes that bring notes in, a pasted code and a
+  restored backup, ask the same question through the same code; and duplicating a note
+  gives the copy an identity of its own instead of the original's.
 
 ## [0.72.159] — 2026-09-12
 

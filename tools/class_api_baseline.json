@@ -419,6 +419,7 @@
   "_tab_title": "(self, tab)",
   "_table_block_at": "(self, line_no)",
   "_tag_add_no_newline": "(text_widget, tag, start, end)",
+  "_take_known_notes": "(self, incoming, source)",
   "_teardown_table_grids": "(self)",
   "_text_button": "(self, parent, text, command, kind='normal')",
   "_text_wheel_scroll": "(self, text_widget, event, fallback_canvas=None)",
