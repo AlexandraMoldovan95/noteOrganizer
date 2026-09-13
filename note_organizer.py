@@ -958,7 +958,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 if dirty != self._last_active_dirty:
                     self._last_active_dirty = dirty
                     self.open_tabs[self.active_tab_index]["state"] = st
-                    self.refresh_tab_strip()
+                    self._sync_editor_snapshot()
         except (tk.TclError, Exception):
             pass
         # Only reschedule if the window is still around — this timer refires
@@ -7657,8 +7657,15 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if choice is None or choice == "cancel":
             return False, []
         if choice == "update":
+            # Same order as the single-note route, for the same reason:
+            # the editor's unsaved work is saved before it is replaced,
+            # and the editor is then brought onto the new version -- or
+            # its next save puts the old one back.
+            self._flush_autosave()
             for mine, theirs in known:
                 apply_shared_update(mine, theirs)
+            self._editor_follows_external_change(
+                {n.get("id") for n, _ in known})
             return True, fresh
         # "add": the copies go on as new notes, without the identity they
         # arrived with -- two notes wearing one uid is the collision this
@@ -7728,13 +7735,23 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 if choice is None or choice == "cancel":
                     return
                 if choice == "update":
+                    # The editor is most likely showing this very note --
+                    # it is where the code came from. Its unsaved edits
+                    # are saved FIRST, so they are what the rescue copy
+                    # holds and "↩ Restore previous" gives back; then the
+                    # incoming version replaces them.
+                    self._flush_autosave()
                     apply_shared_update(mine, incoming)
                     self.save_notes()
                     self.import_box.delete("1.0", "end")
                     self.toggle_import_panel()
                     self.refresh_note_list()
                     self.render_calendar()
-                    self.open_note_in_tab(mine)
+                    # Without flush=False this saves what the editor still
+                    # shows -- the version just replaced -- straight back
+                    # over the update. The flush above already kept the
+                    # user's own work.
+                    self.open_note_in_tab(mine, flush=False)
                     self.set_status("Note updated from the code "
                                     "— ↩ Restore previous undoes it")
                     return
@@ -8121,6 +8138,22 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # formatting, the paragraphs and the checklist that a code from
         # the multi-note Share panel (which passes whole notes) carried.
         note = {k: st.get(k) for k in SHAREABLE_FIELDS if st.get(k) is not None}
+        # The identity is the one shareable field that is NOT editor
+        # content: it belongs to the note this editor has open, and
+        # capture_editor_state has no reason to hold it. Building the
+        # payload from the snapshot therefore dropped it silently -- the
+        # same shape as the hand-rolled list above, one field later.
+        #
+        # Without it a code says "a note with these words" instead of
+        # "this note", so the far end cannot recognise the copy it
+        # already has and adds a second one: exactly what the field was
+        # added to prevent, on the route a user is most likely to take.
+        # A note that has never been saved has no identity yet and
+        # correctly travels without one.
+        open_note = (self.find_note(st.get("selected_note_id"))
+                     if st.get("selected_note_id") is not None else None)
+        if open_note and str(open_note.get("uid") or "").strip():
+            note["uid"] = open_note["uid"]
         had_attachments = bool(st["attachments"])
         code = encode_share_code(note)
         # Render inline in the editor's code area.
@@ -8129,6 +8162,52 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if not self.editor_code_area.winfo_ismapped():
             self.editor_code_area.pack(fill="x", padx=30, pady=(0, 20))
         self._render_editor_code(code, had_attachments)
+
+    def _editor_follows_external_change(self, changed_ids):
+        """Make the editor agree with notes that were rewritten behind it.
+
+        A route that writes straight onto a stored note leaves the editor
+        holding the version from before — and the editor's next save,
+        which is one keystroke away, puts that version back. The change
+        then vanishes with nothing to show it ever happened. Field-
+        reported on the import route, where it is the LIKELY case rather
+        than a corner one: the note you send out is the note you have
+        open, so it is the one you are looking at when its code comes
+        back.
+
+        Callers flush the editor BEFORE they change anything, so what the
+        user had typed is part of what the rescue copy holds instead of
+        something this quietly drops.
+        """
+        if self.selected_note_id is None or self.selected_note_id not in changed_ids:
+            return
+        note = self.find_note(self.selected_note_id)
+        if note is not None:
+            self.open_note_in_tab(note, self.current_occurrence_date, flush=False)
+
+    def _share_code_on_context_switch(self):
+        """A different note is in the editor now, so the code shown under it
+        is not this note's.
+
+        Field-reported: generate a code, click another note, and the code
+        stays sitting there — reading as though it belongs to the note now
+        open. Copying it then shares the wrong note, and the mistake is
+        invisible, because a code is a wall of characters nobody proofreads.
+        Cleared at the same three points the find bar's match model is
+        (see _find_on_context_switch) — for the same reason: it describes
+        a note that is no longer on screen.
+        """
+        area = getattr(self, "editor_code_area", None)
+        if area is None:
+            return
+        try:
+            if area.winfo_ismapped():
+                area.pack_forget()
+            for w in area.winfo_children():
+                w.destroy()
+        except tk.TclError:
+            # Teardown: the editor is going away and the code with it.
+            pass
 
     def _render_editor_code(self, code, had_attachments):
         # Direct .configure() calls, not self.track_theme(): this area is
@@ -10085,13 +10164,6 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         right_side = tk.Frame(parent)
         self.track_theme(right_side, bg="bg")
         right_side.pack(side="left", fill="both", expand=True)
-
-        # The tab strip (one tab per open note). Hidden until >1 note is open,
-        # so a single-note workflow looks exactly like before. Sits on its own
-        # row, visually distinct from the Notes/Calendar/Settings tabs above.
-        self.tab_strip = tk.Frame(right_side, height=34)
-        self.track_theme(self.tab_strip, bg="sidebar")
-        # packed/unpacked dynamically in refresh_tab_strip()
 
         self.editor_outer = tk.Frame(right_side)
         self.track_theme(self.editor_outer, bg="bg")
@@ -12108,8 +12180,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 widget.bind("<Button-1>", lambda e, cb=sel_cb: cb.invoke())
             else:
                 widget.bind("<Button-1>", lambda e, n=note: self.open_note_in_tab(n))
-            # Right-click anywhere on the card opens the context menu.
-            widget.bind("<Button-3>", lambda e, n=note: self.show_note_context_menu(e, n))
+            # Right-click anywhere on the card opens the context menu. A
+            # plain click on this same card opens the note, so the menu
+            # leaves out its "Open / Edit" entry here.
+            widget.bind("<Button-3>", lambda e, n=note: self.show_note_context_menu(
+                e, n, click_opens=True))
 
         self._note_card_widgets[note["id"]] = {
             "card": card, "clickable": widgets, "checkbox": sel_cb, "note": note,
@@ -12347,7 +12422,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         else:
             self.active_tab_index = None
             self.switch_to_tab(min(0, len(self.open_tabs) - 1))
-        self.refresh_tab_strip()
+        self._sync_editor_snapshot()
         self._exit_selection_mode_after_bulk_action()
         self.render_calendar()
         self.set_status(f"Moved {count} note(s) to trash")
@@ -12565,6 +12640,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._reset_text_undo()
         self._update_restore_button()
         self._find_on_context_switch()
+        self._share_code_on_context_switch()
         self._update_occurrence_banner()
         # A tab snapshot never carries a calendar trip — restoring one
         # means the editor's context changed, so any pending return is
@@ -12701,12 +12777,6 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if self.active_tab_index is not None and 0 <= self.active_tab_index < len(self.open_tabs):
             self.open_tabs[self.active_tab_index]["state"] = self.capture_editor_state()
 
-    def _tab_title(self, tab):
-        st = tab.get("state", {})
-        raw = st.get("title") if isinstance(st, dict) else ""
-        title = _truncate(raw, 16)
-        return title or "(untitled)"
-
     def _catch_up_deferred_refresh(self):
         """If a note-list/calendar rebuild was skipped earlier (see
         save_current_note) because a popup was open during autosave, run it
@@ -12750,10 +12820,18 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 pass
         self._last_highlighted_note_id = current
 
-    def open_note_in_tab(self, note, occurrence_date=None):
+    def open_note_in_tab(self, note, occurrence_date=None, flush=True):
         """Open a saved note in the editor. Only one note is open at a time — any
         unsaved work in the current note is auto-saved first, then this note
-        loads in its place."""
+        loads in its place.
+
+        ``flush=False`` is for the one case where that is backwards: the
+        note has just been rewritten on purpose from outside the editor,
+        which is still showing the version from before. Saving that first
+        writes the old version straight back over the new one. Callers
+        that pass False flush themselves, BEFORE making their change, so
+        the user's own unsaved work is kept rather than skipped.
+        """
         # Close any open popup (e.g. an emoji picker) FIRST, before flushing
         # autosave below — otherwise the autosave that follows would see a
         # popup still open and skip refreshing the note list, leaving it
@@ -12767,14 +12845,15 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._update_calendar_return_button()
         self._catch_up_deferred_refresh()
         # Save whatever is currently in the editor before switching away.
-        self._flush_autosave()
+        if flush:
+            self._flush_autosave()
         self.load_note(note, occurrence_date)
         self._remember_last_open_note(note["id"])
         # Keep a single-entry tab list so the save/flush machinery still works.
         self._tab_counter += 1
         self.open_tabs = [{"key": self._tab_counter, "state": self.capture_editor_state()}]
         self.active_tab_index = 0
-        self.refresh_tab_strip()
+        self._sync_editor_snapshot()
         # Moves the highlighted-card border to this note, without rebuilding
         # the whole list — switching notes happens constantly during normal
         # use, and a full refresh_note_list() here just to move a border was
@@ -12794,7 +12873,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._tab_counter += 1
         self.open_tabs = [{"key": self._tab_counter, "state": self.capture_editor_state()}]
         self.active_tab_index = 0
-        self.refresh_tab_strip()
+        self._sync_editor_snapshot()
         # Clears any previously-highlighted card's border — a blank new note
         # isn't "the" open note in the list. Same surgical update as
         # open_note_in_tab, not a full rebuild.
@@ -12853,103 +12932,24 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._sync_active_tab()
         self.active_tab_index = index
         self.restore_editor_state(self.open_tabs[index]["state"])
-        self.refresh_tab_strip()
+        self._sync_editor_snapshot()
 
-    def close_tab(self, index, force=False):
-        """Close one open note tab. If it has unsaved changes, ask first."""
-        if not (0 <= index < len(self.open_tabs)):
-            return
-        # Make sure the tab we're checking reflects live edits if it's active.
-        if index == self.active_tab_index:
-            self._sync_active_tab()
+    def _sync_editor_snapshot(self):
+        """Write the live editor back into the stored state of the note it
+        belongs to.
 
-        tab = self.open_tabs[index]
-        if not force and not self.editor_state_matches_saved(tab["state"]):
-            title = self._tab_title(tab)
-            choice = self._ask_close_unsaved(title)
-            if choice == "cancel":
-                return
-            if choice == "save":
-                # Switch to it, save, then close.
-                self.switch_to_tab(index)
-                self.save_current_note()
-                self._sync_active_tab()
-                # index may have shifted if switch changed nothing; recompute
-                index = self.active_tab_index
+        This was refresh_tab_strip, which drew a row of tabs above the
+        editor -- a row that could never appear. Every path that touches
+        the list resets it to a single entry and no append exists, so the
+        strip's "hidden at 0-1 notes" branch was the only one ever taken
+        (recorded as finding C12 in qa/COVERAGE_LEDGER.md, and closed by
+        removing it in 0.73.165 rather than by building multi-note tabs).
 
-        del self.open_tabs[index]
-
-        if not self.open_tabs:
-            # Nothing open -> blank editor, no active tab.
-            self.active_tab_index = None
-            self.new_note()
-            self.refresh_tab_strip()
-            return
-
-        # Pick a sensible neighbor to focus.
-        new_index = min(index, len(self.open_tabs) - 1)
-        self.active_tab_index = None  # force restore
-        self.switch_to_tab(new_index)
-        self.refresh_tab_strip()
-
-    def _ask_close_unsaved(self, title):
-        """Returns 'save', 'discard', or 'cancel'. Uses the in-app themed
-        dialog overlay (not a separate window)."""
-        return self._themed_dialog(
-            "Unsaved changes",
-            f"“{title}” has unsaved changes. Save before closing?",
-            kind="warning",
-            buttons=[("Cancel", "cancel"),
-                     ("Discard", "discard", "danger"),
-                     ("Save", "save", "success")]
-        )
-
-    def refresh_tab_strip(self):
-        """Redraw the open-note tab row. Hidden entirely when 0–1 notes are
-        open, so the single-note experience is unchanged."""
-        if not hasattr(self, "tab_strip"):
-            return
-        for w in self.tab_strip.winfo_children():
-            w.destroy()
-
-        # Sync dirty markers with live editor before drawing.
+        What was never dead is the snapshot it refreshed on the way: the
+        dirty comparison and the restore after a bulk delete both read it,
+        so it is kept under the name of the thing it actually does.
+        """
         self._sync_active_tab()
-
-        if len(self.open_tabs) <= 1:
-            self.tab_strip.pack_forget()
-            return
-
-        self.tab_strip.pack(side="top", fill="x", before=self.editor_outer)
-
-        for i, tab in enumerate(self.open_tabs):
-            active = (i == self.active_tab_index)
-            dirty = not self.editor_state_matches_saved(tab["state"])
-            bg = self.colors["bg"] if active else self.colors["sidebar"]
-            fg = self.colors["accent"] if active else self.colors["subtext"]
-
-            chip = tk.Frame(self.tab_strip, bg=bg, cursor="hand2")
-            chip.pack(side="left", padx=(6, 0), pady=4)
-
-            dot = "● " if dirty else ""
-            lbl = tk.Label(chip, text=dot + self._tab_title(tab), bg=bg, fg=fg,
-                           font=("Segoe UI", 9, "bold" if active else "normal"),
-                           cursor="hand2")
-            lbl.pack(side="left", padx=(10, 4), pady=4)
-            lbl.bind("<Button-1>", lambda e, idx=i: self.switch_to_tab(idx))
-
-            x = tk.Label(chip, text="✕", bg=bg, fg=fg, font=("Segoe UI", 9),
-                         cursor="hand2")
-            x.pack(side="left", padx=(0, 8))
-            x.bind("<Button-1>", lambda e, idx=i: self.close_tab(idx))
-            # Palette KEYS, resolved at event time: the old closures froze
-            # the build-time hexes, so after a theme switch a hovered ✕
-            # repainted itself in the previous theme's colours (and the
-            # hover red was hardcoded to dark's danger on every theme).
-            x.bind("<Enter>",
-                   lambda e, w=x: w.configure(fg=self.colors["danger"]))
-            x.bind("<Leave>",
-                   lambda e, w=x, k=("accent" if active else "subtext"):
-                   w.configure(fg=self.colors[k]))
 
     def _bind_global_shortcuts(self):
         """App-wide keyboard shortcuts, bound with bind_all so they fire
@@ -13534,6 +13534,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._reset_text_undo()
         self._update_restore_button()
         self._find_on_context_switch()
+        self._share_code_on_context_switch()
         self._update_occurrence_banner()
         # A fresh editor means any calendar trip is over — a pending
         # return that survived (e.g. across a delete) made a later,
@@ -13618,6 +13619,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._reset_text_undo()
         self._update_restore_button()
         self._find_on_context_switch()
+        self._share_code_on_context_switch()
         self._update_occurrence_banner()
 
     # ---------- Right-click context menu ----------
@@ -13676,10 +13678,19 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
 
 
-    def show_note_context_menu(self, event, note, occurrence_date=None):
+    def show_note_context_menu(self, event, note, occurrence_date=None,
+                               click_opens=False):
         """Native right-click dropdown for a note. Extensible — add items here
         as new actions appear. When opened from the calendar (occurrence_date
-        set), it also offers recurrence-specific actions."""
+        set), it also offers recurrence-specific actions.
+
+        ``click_opens`` says the surface underneath already opens the note on
+        an ordinary click — true of the note list, where "Open / Edit" was a
+        second way to do what clicking the card just did. It is NOT true of
+        the calendar, where a click opens the note inside the day panel, or
+        of the History register, where it jumps to a day: there the entry is
+        the one step to the editor and stays.
+        """
         if note is None:
             return
         menu = tk.Menu(self, tearoff=0)
@@ -13689,10 +13700,14 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             relief="flat", bd=0, font=("Segoe UI", 9)
         )
 
-        # On a calendar day, a recurring note gets the two explicit edit
-        # scopes below instead — a generic "Open / Edit" beside them was
-        # pure redundancy (field feedback).
-        if not (occurrence_date is not None and is_recurring(note)):
+        # Two surfaces make this entry redundant, both field-reported. On a
+        # calendar day, a recurring note gets the two explicit edit scopes
+        # below instead. And in the note list, clicking the card already
+        # opens the note for editing — the menu was offering a longer way
+        # to do the thing the click had just done.
+        redundant = (click_opens
+                     or (occurrence_date is not None and is_recurring(note)))
+        if not redundant:
             menu.add_command(
                 label="✏  Open / Edit",
                 command=lambda: self._ctx_open(note, occurrence_date,
@@ -14493,7 +14508,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # The saved note now matches disk; update this tab's snapshot so its
         # dirty dot clears, and refresh the strip labels/markers.
         self._sync_active_tab()
-        self.refresh_tab_strip()
+        self._sync_editor_snapshot()
         self._update_restore_button()
         # If the calendar day panel is showing, reflect the edit there too.
         if getattr(self, "_day_panel_mode", "empty") != "empty":
@@ -14677,7 +14692,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             else:
                 self.active_tab_index = None
                 self.switch_to_tab(min(0, len(self.open_tabs) - 1))
-            self.refresh_tab_strip()
+            self._sync_editor_snapshot()
             self.refresh_note_list()
             self.render_calendar()
             self.set_status("Note moved to Trash (recoverable for 30 days)")

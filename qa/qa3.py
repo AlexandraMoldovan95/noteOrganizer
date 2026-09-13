@@ -268,6 +268,167 @@ app.notes = _rt_saved_notes
 app.save_notes()
 app.new_note(); app.update()
 
+# ---- THE EDITOR'S CODE HAS TO CARRY THE NOTE'S IDENTITY ----
+# The route check above proved the editor's code carries the note's
+# CONTENT; it could not see that it carried no IDENTITY, because the
+# payload is built from the editor snapshot and the identity is not
+# editor content. Field-reported: a note sent out from the editor and
+# brought back was copied instead of recognised -- the one thing the
+# identity exists to prevent, on the route a user is most likely to
+# take. The identity travels only from a SAVED note, so this walks the
+# whole way: save, share from the editor, decode.
+_id_saved = list(app.notes)
+app.notes = []
+app.save_notes()
+app.new_note()
+app.title_entry.delete(0, 'end'); app.title_entry.insert(0, 'TravelsBack')
+app.body_text.delete('1.0', 'end'); app.body_text.insert('1.0', 'first version')
+app.save_current_note()
+app.update()
+_id_note = next(n for n in app.notes if n['title'] == 'TravelsBack')
+app.load_note(_id_note); app.update()
+app.share_current_note_as_code(); app.update()
+_id_code = find_text_widget(app.editor_code_area).get('1.0', 'end-1c')
+_id_payload = NO.decode_share_code(_id_code)
+_id_shared = (_id_payload['notes'] if isinstance(_id_payload, dict)
+              else _id_payload)[0]
+check('a code made in the editor carries the note it was made from',
+      _id_shared.get('uid') == _id_note['uid'])
+
+# And the whole point of carrying it: brought back, the note is
+# recognised rather than copied.
+app.body_text.delete('1.0', 'end')
+app.body_text.insert('1.0', 'second version, edited here')
+app.save_current_note()
+app.update()
+_id_asked = []
+_real_dialog = app._themed_dialog
+app._themed_dialog = lambda *a, **k: (_id_asked.append(a), 'update')[1]
+app.toggle_import_panel(); app.update()
+app.import_box.delete('1.0', 'end')
+app.import_box.insert('1.0', _id_code)
+app._do_inline_import()
+app.update()
+app._themed_dialog = _real_dialog
+check('...so bringing it back asks about THIS note instead of copying it',
+      len(_id_asked) == 1 and _id_asked[0][0] == 'Same note, a different version')
+check('...and answering "update" leaves one note, not two',
+      len(app.notes) == 1)
+check('...the same note, with the version the code carried',
+      app.notes[0]['uid'] == _id_note['uid']
+      and 'first version' in app.notes[0]['body'])
+check('...and the way back is written, so the update can be undone',
+      (app.notes[0].get('_prev') or {}).get('body', '').startswith('second version'))
+
+# A note that was never saved has no identity yet, and must travel
+# without one rather than borrowing whatever the editor last held.
+app.new_note()
+app.title_entry.delete(0, 'end'); app.title_entry.insert(0, 'NeverSaved')
+app.body_text.delete('1.0', 'end'); app.body_text.insert('1.0', 'draft')
+app.update()
+app.share_current_note_as_code(); app.update()
+_draft_payload = NO.decode_share_code(
+    find_text_widget(app.editor_code_area).get('1.0', 'end-1c'))
+_draft_shared = (_draft_payload['notes'] if isinstance(_draft_payload, dict)
+                 else _draft_payload)[0]
+check('a note that has never been saved shares without an identity',
+      not (_draft_shared.get('uid') or '').strip())
+
+# ---- THE CODE ON SCREEN BELONGS TO THE NOTE ON SCREEN ----
+# Field-reported: generate a code, click another note, and the code sits
+# there looking like the new note's. Copying it then shares the wrong
+# note, invisibly -- nobody proofreads a wall of base64.
+app.notes = []
+app.save_notes()
+app.new_note()
+app.title_entry.delete(0, 'end'); app.title_entry.insert(0, 'CodeShown')
+app.body_text.delete('1.0', 'end'); app.body_text.insert('1.0', 'one')
+app.save_current_note(); app.update()
+app.new_note()
+app.title_entry.delete(0, 'end'); app.title_entry.insert(0, 'OtherNote')
+app.body_text.delete('1.0', 'end'); app.body_text.insert('1.0', 'two')
+app.save_current_note(); app.update()
+_shown = next(n for n in app.notes if n['title'] == 'CodeShown')
+_other = next(n for n in app.notes if n['title'] == 'OtherNote')
+app.load_note(_shown); app.update()
+app.share_current_note_as_code(); app.update()
+check('the code appears under the note it was made for',
+      app.editor_code_area.winfo_ismapped())
+app.load_note(_other); app.update()
+check('...and is gone the moment another note is opened',
+      not app.editor_code_area.winfo_ismapped())
+app.load_note(_shown); app.update()
+app.share_current_note_as_code(); app.update()
+app.new_note(); app.update()
+check('...and starting a new note clears it too',
+      not app.editor_code_area.winfo_ismapped())
+
+# ---- AND THE SAME HAZARD ON THE BULK ROUTE ----
+# The bulk route does not re-open anything, so the editor simply keeps
+# showing the old version -- and puts it back on its next save, which is
+# one keystroke away. Nothing on screen says the update was undone.
+app.notes = []
+app.save_notes()
+app.new_note()
+app.title_entry.delete(0, 'end'); app.title_entry.insert(0, 'OpenWhileUpdated')
+app.body_text.delete('1.0', 'end'); app.body_text.insert('1.0', 'mine, on screen')
+app.save_current_note(); app.update()
+_bulk_note = app.notes[0]
+app.load_note(_bulk_note); app.update()
+_bulk_code = NO.encode_share_code([
+    {'uid': _bulk_note['uid'], 'title': 'OpenWhileUpdated',
+     'body': 'the version that arrived', 'comments': '', 'category': 'General',
+     'date': '', 'color': '', 'recurrence': {}},
+    {'title': 'AlsoNew', 'body': 'a stranger', 'comments': '',
+     'category': 'General', 'date': '', 'color': '', 'recurrence': {}},
+])
+app._themed_dialog = lambda *a, **k: 'update'
+app.toggle_import_panel(); app.update()
+app.import_box.delete('1.0', 'end')
+app.import_box.insert('1.0', _bulk_code)
+app._do_inline_import()
+app.update()
+app._themed_dialog = _real_dialog
+_bulk_after = next(n for n in app.notes if n['uid'] == _bulk_note['uid'])
+check('a bulk update reaches the note that was open in the editor',
+      'the version that arrived' in _bulk_after['body'])
+check('...and the editor is showing that version, not the replaced one',
+      'the version that arrived' in app.body_text.get('1.0', 'end-1c'))
+app._flush_autosave()
+app.update()
+_bulk_after = next(n for n in app.notes if n['uid'] == _bulk_note['uid'])
+check('...so the next save cannot put the replaced version back',
+      'the version that arrived' in _bulk_after['body'])
+check('...while the note nothing here matched was added',
+      any(n['title'] == 'AlsoNew' for n in app.notes))
+
+# ---- SETTINGS SHOWS WHAT IS TRUE NOW, NOT AT THE LAST VISIT ----
+# Field-reported: delete a note, open Settings, and Recently deleted did
+# not list it -- the page came back showing the panel built on an earlier
+# visit. It appeared only after clicking the nav entry again.
+app.trash = []
+app.notes = [{'id': 5150, 'title': 'ToBeDeleted', 'body': 'x',
+              'comments': '', 'category': 'General', 'date': '', 'color': '',
+              'recurrence': {}, 'checklist': [], 'attachments': [],
+              'created': '2026-01-01 00:00', 'updated': '2026-01-01 00:00'}]
+app.save_notes()
+app.show_settings_page(); app.update()
+app.toggle_settings_panel('trash'); app.update()
+check('the trash panel starts out empty', count_rows(app.settings_trash_panel,
+                                                     'ToBeDeleted') == 0)
+app.hide_settings_page(); app.update()
+app._delete_note(app.notes[0], None)
+app.update()
+app.show_settings_page(); app.update()
+check('a note deleted since the last visit is in Recently deleted on arrival',
+      count_rows(app.settings_trash_panel, 'ToBeDeleted') == 1)
+app.hide_settings_page(); app.update()
+app.trash = []
+
+app.notes = list(_id_saved)
+app.save_notes()
+app.new_note(); app.update()
+
 # ---- IMPORT CODE with duplicate detection ----
 app.import_box.delete('1.0','end')
 app.import_box.insert('1.0', code)
