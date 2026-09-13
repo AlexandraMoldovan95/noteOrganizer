@@ -807,6 +807,66 @@ check('the calendar menu drops generic Open/Edit for a recurring note',
 check('a plain dated note keeps Open/Edit in the calendar menu',
       any('Open / Edit' in l for l in _plain_labels))
 
+# In the NOTE LIST the same entry is redundant: clicking the card opens
+# the note, so the menu was offering a longer way to do what the click
+# had just done (field feedback). The calendar keeps it, because a click
+# there opens the note inside the day panel instead, and the History
+# register keeps it too, where a click jumps to a day -- one surface's
+# duplication is another's only one-step route to the editor.
+_labels_q7.clear()
+tk.Menu.add_command = lambda self, **kw: _labels_q7.append(
+    (kw.get('label', ''), kw.get('command')))
+tk.Menu.add_cascade = lambda self, **kw: _labels_q7.append(
+    (kw.get('label', ''), None))
+tk.Menu.tk_popup = lambda self, *a, **k: None
+try:
+    app.show_note_context_menu(_ev_q7, app.find_note(61), click_opens=True)
+    _list_labels = [l for l, _ in _labels_q7]
+    _labels_q7.clear()
+    app.show_note_context_menu(_ev_q7, app.find_note(61))
+    _history_labels = [l for l, _ in _labels_q7]
+finally:
+    tk.Menu.add_command = _orig_addc
+    tk.Menu.add_cascade = _orig_casc
+    tk.Menu.tk_popup = _orig_pop
+check('the note list menu leaves out Open/Edit, which the click already did',
+      not any('Open / Edit' in l for l in _list_labels))
+
+# Through the REAL card, not by calling the method with the argument the
+# app is supposed to pass: a mutant that dropped click_opens from the
+# list's own binding survived the check above, which proved only that the
+# method obeys an argument nobody had to send.
+app.notebook.select(app.TAB_NOTES)
+app.refresh_note_list()
+app.update()
+_card_labels = None
+_card = (app._note_card_widgets.get(61) or {}).get('card')
+if _card is not None and _card.winfo_ismapped():
+    _labels_q7.clear()
+    tk.Menu.add_command = lambda self, **kw: _labels_q7.append(
+        (kw.get('label', ''), kw.get('command')))
+    tk.Menu.add_cascade = lambda self, **kw: _labels_q7.append(
+        (kw.get('label', ''), None))
+    tk.Menu.tk_popup = lambda self, *a, **k: None
+    try:
+        _card.event_generate('<Button-3>', x=5, y=5)
+        app.update()
+        _card_labels = [l for l, _ in _labels_q7]
+    finally:
+        tk.Menu.add_command = _orig_addc
+        tk.Menu.add_cascade = _orig_casc
+        tk.Menu.tk_popup = _orig_pop
+check('...and the card itself raises that menu, not one with the entry back',
+      _card_labels is not None
+      and not any('Open / Edit' in l for l in _card_labels)
+      and any('Delete' in l for l in _card_labels))
+check('...while keeping everything the click cannot do',
+      any('Pin to top' in l or 'Unpin' in l for l in _list_labels)
+      and any('Export as file' in l for l in _list_labels)
+      and any('Delete' in l for l in _list_labels))
+check('...and a menu raised where a click does NOT open the note keeps it',
+      any('Open / Edit' in l for l in _history_labels))
+
 # The captured commands are the REAL menu lambdas — invoke them, so the
 # return_day plumbing one frame above _ctx_open is exercised too (the
 # same frame class a hijack once hid in for deletes).
@@ -1336,14 +1396,15 @@ new_id = app.selected_note_id
 saved_settings2 = NO.load_settings()
 check('creating a new note also updates the remembered id', saved_settings2.get('last_open_note_id') == new_id)
 
-# ---- The SINGLE-TAB contract (coverage-lift C12, re-scoped) ----
-# The lift queue sent us at close_tab's 28 uncovered lines — and found
-# they are unreachable: nothing in the app ever creates a second tab
-# (open_note_in_tab and open_blank_tab both RESET open_tabs to one
-# entry; no append exists anywhere). Writing tests that fabricate
-# multi-tab states would be theater on impossible states. What IS real
-# gets asserted; the dead machinery goes to the ledger as a product
-# decision (build real tabs someday, or simplify it out).
+# ---- The SINGLE-NOTE contract (coverage-lift C12, now settled) ----
+# The lift queue sent us at close_tab's 28 uncovered lines and found they
+# were unreachable: nothing ever created a second tab, so the strip that
+# drew them could never appear. That was recorded as a product decision —
+# build real multi-note tabs, or simplify them out — and 0.73.165 took
+# the second: the strip, close_tab and its unsaved-changes dialog are
+# gone. What remains is the contract they were wrapped around, which is
+# load-bearing: one note open at a time, its snapshot kept in step, and
+# the edit flushed to the note it came from before another one loads.
 app.notes = []
 for i in range(3):
     app.notes.append({'id': 700 + i, 'title': f'Tab{i}', 'body': f'corp {i}',
@@ -1354,23 +1415,28 @@ app.save_notes()
 for n in app.notes:
     app.open_note_in_tab(n)
 app.update()
-check('opening three notes keeps the single-tab contract (one entry)',
+check('opening three notes keeps the single-note contract (one entry)',
       len(app.open_tabs) == 1 and app.active_tab_index == 0
       and app.title_entry.get() == 'Tab2')
-check('the tab strip stays hidden at one tab',
-      not app.tab_strip.winfo_ismapped())
+check('nothing draws a tab row above the editor any more',
+      not hasattr(app, 'tab_strip')
+      and not any(w.__class__.__name__ == 'Frame' and w.winfo_height() == 34
+                  for w in app.editor_outer.master.winfo_children()
+                  if w is not app.editor_outer))
 # Switching notes flushes the previous one first — edit, switch, check disk.
 app.body_text.insert('end', ' FLUSHED')
 app.open_note_in_tab(app.notes[0])
 app.update()
 check('switching notes flushes the edit to the note it came from',
       'FLUSHED' in app.notes[2]['body'] and app.title_entry.get() == 'Tab0')
-# The one reachable close: force-closing the single tab collapses clean.
-app.close_tab(0, force=True)
-app.update()
-check('closing the single tab leaves a blank editor and no strip',
-      app.open_tabs == [] and app.active_tab_index is None
-      and not app.tab_strip.winfo_ismapped())
+# The snapshot the removed strip used to refresh on its way past: it is
+# what a restore after a bulk delete reads, so it has to stay in step
+# with the editor rather than with whatever was true when the note opened.
+app.body_text.insert('end', ' LATER EDIT')
+app._sync_editor_snapshot()
+check('the stored snapshot follows the live editor',
+      'LATER EDIT' in app.open_tabs[0]['state']['body'])
+app.open_blank_tab(); app.update()
 
 # ---- DUPLICATES PANEL shortcuts (coverage-lift C15, targeted) ----
 # The panel's "Tick all but first" and its cleanup button had never

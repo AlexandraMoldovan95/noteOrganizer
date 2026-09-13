@@ -1498,6 +1498,17 @@ class SettingsPageMixin:
         self._catch_up_deferred_refresh()
         self.notebook.pack_forget()
         self.settings_page.pack(fill="both", expand=True)
+        # The page comes back showing whatever section it was left on --
+        # built then, not now. Field-reported on Recently deleted: notes
+        # deleted since the last visit were simply missing, and appeared
+        # only after clicking the nav entry again. The same staleness is
+        # there for Categories, Templates and Duplicates, which are lists
+        # of things the rest of the app changes; toggle_settings_panel
+        # already promises those four "rebuild on each visit so they
+        # reflect the current notes", and arriving at the page IS a visit.
+        showing = getattr(self, "_settings_selected_section", None)
+        if showing:
+            self.toggle_settings_panel(showing)
         self._render_statistics()
 
     def hide_settings_page(self):

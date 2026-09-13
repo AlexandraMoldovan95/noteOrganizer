@@ -122,7 +122,7 @@ when nothing else can.
 
 | # | Uncovered area | How it gets covered |
 |---|---|---|
-| ~~C12~~ | **RE-SCOPED (finding):** the multi-tab machinery is unreachable — nothing ever creates a second tab (`open_note_in_tab`/`open_blank_tab` both reset the list to one entry; no append exists), so `close_tab`'s neighbour-pick and unsaved-triage lines are dead code guarding impossible states. The REAL single-tab contract is asserted in qa7 (reset-to-one, flush-on-switch, single-close collapse). The dead machinery is a **product decision for the improvements tour**: build real multi-tabs someday, or simplify it out — until then its lines stay honestly uncovered rather than theater-covered | — |
+| ~~C12~~ | **CLOSED (2026-09-13): simplified out.** The finding stood — the multi-tab machinery was unreachable: nothing ever created a second tab, so the strip that drew them could never appear, and `close_tab` guarded impossible states. The product decision it was parked on was taken in 0.73.165: the strip, `close_tab`, `_ask_close_unsaved` and `_tab_title` are gone (~100 lines), and `refresh_tab_strip` became `_sync_editor_snapshot` — the one thing it did that was never dead. The single-note contract it wrapped is asserted in qa7 (reset-to-one, flush-on-switch, snapshot in step, no tab row drawn) | — |
 | ~~C13~~ | **DONE (lift #1):** keyboard nav, both tooltips (incl. the 10-title cap), day colours through the real palette, emoji marks with the 3-marker cap — 14 qa2 checks, 2 mutants. File: 65.5% → 86.5%, target met | — |
 | ~~C14~~ | **DONE (lift #1):** all five pickers driven through their real widgets (day-15 pick lands in the field, ▶ shifts the month, swatch colours the note, chip lands in the body, template fills the editor, size-cell inserts a drawn table) | — |
 | ~~C15~~ | **DONE (lift #2):** the category panel's add / recolour (targeted swatch fill) / rename (through the inline popup's Save) all drive the real rows; tick-all-but-first + cleanup from lift #1. Residual: the template-editor checklist toggle (~10 lines) | — |
@@ -135,7 +135,6 @@ when nothing else can.
 | `_main` + the last-resort startup crash dialog (~19 lines) | Its whole point is running when nothing else can; a test would mock its own premise |
 | `paths._settings` migration branches (~28 lines) | Per-environment first-launch paths; the reachable migrations are covered in test_data_safety, the rest need machines we don't simulate |
 | `_on_wheel` / `_panel_or_page_wheel` platform branches | Wheel delta dialects (win32 vs X11) — each platform's CI leg executes its own half; the union covers both |
-| `refresh_tab_strip` / `close_tab` multi-tab remainder | Dead machinery guarding unreachable states (the C12 finding); covered the day multi-tabs become real or get simplified out |
 | `_maybe_close_cell_editor` focus-transfer branch | The asynchronous focus-handoff window the house rules tell checks to avoid; the synchronous commit path is covered directly |
 | `core/clipboard` per-platform fallbacks (72.2%) | See C16 |
 
