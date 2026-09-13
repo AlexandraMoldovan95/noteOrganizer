@@ -12,6 +12,7 @@ How the numbers themselves are counted is the
 
 | Version | Date | In one line |
 |---|---|---|
+| [0.73.166](#073166--2026-09-14) | 2026-09-14 | Changing several notes' category at once no longer comes undone on the one note you had open in the editor. |
 | [0.73.165](#073165--2026-09-13) | 2026-09-13 | A code made in the editor carries the note it came from, an update from one is no longer undone by the editor a moment later, a generated code belongs to the note on screen, and Settings shows how things are now. |
 | [0.73.161](#073161--2026-09-13) | 2026-09-13 | A note's identity is written down the first time it is given out, so it survives closing the app — and a note restored from the Trash never takes one another note is already using. |
 | [0.73.159](#073159--2026-09-12) | 2026-09-12 | A note carries an identity that cannot collide, so one you already have — edited elsewhere and sent back — is recognised and you are asked whether to update it or keep both. |
@@ -60,7 +61,9 @@ How the numbers themselves are counted is the
 
 ---
 
-## [Unreleased]
+## [0.73.166] — 2026-09-14
+
+*Highlights: a bulk category change now sticks on the note you happen to have open, instead of being written back the moment you carry on typing.*
 
 ### Fixed
 
