@@ -7,9 +7,13 @@ lets an import say "this is the note you already have" instead of
 guessing from the text — a guess that is wrong precisely when the note
 was edited, which is the only time anyone re-sends one.
 
-Pure logic: no GUI, no filesystem. Still runs from a scratch copy, never
-the project root — see CLAUDE.md, "QA testing safety". Nothing here
-writes, but the rule has no per-file exceptions for a reason.
+No GUI. Mostly pure logic, except the last section, which goes through
+the real load path to answer a question no amount of reasoning about the
+code could settle: whether an identity handed out at startup ever reaches
+the disk. That section writes — inside a temp directory of its own, which
+it configures the app's paths at and restores afterwards. Run it from a
+scratch copy, never the project root — see CLAUDE.md, "QA testing
+safety".
 """
 import sys
 
@@ -263,6 +267,116 @@ check('split_by_identity on an empty batch finds nothing',
       split_by_identity(_mine_all, []) == ([], []))
 check('split_by_identity against an empty notebook calls everything new',
       len(split_by_identity([], _batch)[1]) == 3)
+
+# ---- the identity has to survive the app closing ----
+#
+# Minting happens on every read, in memory. A session that only READS
+# never saves, so unless the first read that mints also writes them down,
+# the next launch invents a different set -- and a code made yesterday
+# matches nothing today, which is the entire point of the field. Measured
+# through the real load path rather than reasoned about: two loads of the
+# same notebook, and the file itself.
+import json
+import os
+import shutil
+import tempfile
+
+from noteorganizer.core import paths as _paths
+from noteorganizer.core import storage as _storage
+
+
+def _seed(directory, notes, indent=2):
+    with open(os.path.join(directory, "notes_data.json"), "w",
+              encoding="utf-8") as handle:
+        json.dump(notes, handle, indent=indent)
+    with open(os.path.join(directory, "settings.json"), "w",
+              encoding="utf-8") as handle:
+        # As it is on any notebook older than its first launch; otherwise
+        # the one-time cleanup rewrites the file and hides the question.
+        json.dump({"cleanup_done": True}, handle)
+
+
+def _bytes_of(directory):
+    with open(os.path.join(directory, "notes_data.json"),
+              encoding="utf-8") as handle:
+        return handle.read()
+
+
+_prev_app_dir = _paths.APP_DIR
+_work = tempfile.mkdtemp(prefix="identity-load-")
+try:
+    _paths.configure(_work)
+
+    _seed(_work, [{"id": 1, "title": "Prima"}, {"id": 2, "title": "A doua"}])
+    _first, _ = _storage.load_notes(False)
+    _second, _ = _storage.load_notes(False)
+
+    check('a notebook read twice keeps the identities it was given',
+          [n["uid"] for n in _first] == [n["uid"] for n in _second])
+    _on_disk = json.loads(_bytes_of(_work))
+    check('the identities are written down, not only held in memory',
+          all(n.get("uid") for n in _on_disk))
+    check('...and they are the ones the app is working with',
+          [n["uid"] for n in _on_disk] == [n["uid"] for n in _first])
+    check('nothing else about the notes is disturbed by that write',
+          [n["title"] for n in _on_disk] == ["Prima", "A doua"])
+
+    # A notebook that needs nothing must not be rewritten. Seeded with an
+    # indent the app never writes, so an untouched file is recognisable
+    # without leaning on a timestamp.
+    _settled = [{"id": 1, "title": "Prima", "uid": "aaa"},
+                {"id": 2, "title": "A doua", "uid": "bbb"}]
+    _seed(_work, _settled, indent=4)
+    _before = _bytes_of(_work)
+    _storage.load_notes(False)
+    check('a notebook that already has its identities is left alone',
+          _bytes_of(_work) == _before)
+
+    # The guard that matters most: a file this launch could not read is
+    # never written over, however much it looks like it needs identities.
+    # Its bytes are what the startup notice promises are still on disk.
+    with open(os.path.join(_work, "notes_data.json"), "w",
+              encoding="utf-8") as _handle:
+        _handle.write("{ nu e json")
+    _corrupt_before = _bytes_of(_work)
+    _notes, _report = _storage.load_notes(False)
+    check('an unreadable notebook is reported, not repaired',
+          _report["notes_file_corrupt"])
+    check('...and its bytes are left exactly where they were',
+          _bytes_of(_work) == _corrupt_before)
+    # ---- through the trash and back ----
+    #
+    # A restore already hands out a fresh id, because the trashed note's
+    # own number may have been reused while it was gone. The identity has
+    # the same problem by a different route: a copy of the note can arrive
+    # from a share code while the original sits in the trash.
+    _seed(_work, [{"id": 1, "title": "Ramasa", "uid": "aaa"}])
+    _live, _ = _storage.load_notes(False)
+    _deleted = {"id": 9, "title": "Stearsa", "uid": "bbb",
+                "deleted_at": "2026-01-01 00:00:00"}
+
+    _back, _ = _storage.restore_from_trash(list(_live), [_deleted], _deleted)
+    check('a note that comes back from the trash is still the same note',
+          _back[-1]["uid"] == "bbb")
+    check('...and it does not bring "deleted_at" back with it',
+          "deleted_at" not in _back[-1])
+
+    _twin = {"id": 9, "title": "Stearsa", "uid": "aaa",
+             "deleted_at": "2026-01-01 00:00:00"}
+    _back2, _ = _storage.restore_from_trash(list(_live), [_twin], _twin)
+    check('a restore whose identity is already in use is given a new one',
+          _back2[-1]["uid"] not in ("", "aaa"))
+    check('...and the note already here keeps its own',
+          _back2[0]["uid"] == "aaa")
+    check('...so the notebook never holds two notes with one identity',
+          len({n["uid"] for n in _back2}) == len(_back2))
+finally:
+    # None when nothing configured paths before this file did — which is
+    # the normal case here, since this suite imports core directly rather
+    # than starting the app. configure() cannot take it back.
+    if _prev_app_dir is not None:
+        _paths.configure(_prev_app_dir)
+    shutil.rmtree(_work, ignore_errors=True)
 
 print()
 print("FAILURES: %s" % (fails if fails else "none"))

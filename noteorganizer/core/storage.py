@@ -432,6 +432,17 @@ def load_notes(version_change=None):
     # Every note gets the full set of fields, so no later code has to
     # guess whether an old note has 'comments' or 'attachments'.
     notes = [normalize_note(n) for n in raw if isinstance(n, dict)]
+    # An identity handed out and never written down is a different
+    # identity every launch. normalize_note mints one for any note that
+    # arrives without it -- in memory. On a session that only READS,
+    # nothing saves, so the next launch mints a fresh set, and a share
+    # code made yesterday matches nothing today, which is the entire
+    # point of the field. So a read that minted any writes them down,
+    # once. Decided here, done after the cleanup below, which rewrites
+    # the file itself on the launch it runs.
+    minted_any = any(
+        isinstance(n, dict) and not str(n.get("uid") or "").strip()
+        for n in raw)
     if raw and not notes and not report["notes_file_corrupt"]:
         # A list-shaped file whose entries are all junk is the same loss
         # in a different costume — every note gone, nothing usable kept.
@@ -480,6 +491,19 @@ def load_notes(version_change=None):
 
         settings["cleanup_done"] = True
         save_settings(settings)
+        # That write already carries the new identities.
+        minted_any = False
+
+    if minted_any and not report["notes_file_corrupt"]:
+        # Guarded exactly like the cleanup above: never over a file this
+        # launch has just declared unreadable, whose bytes the startup
+        # notice is at that moment promising are still on disk. A failure
+        # here is not worth a dialog -- the app runs perfectly well, and
+        # the next save writes them anyway.
+        try:
+            _write_json_atomic(paths.DATA_FILE, notes)
+        except (IOError, OSError):
+            pass
 
     return notes, report
 
@@ -643,7 +667,7 @@ def restore_from_trash(notes, trash, entry):
     Returns:
         ``(notes, trash)`` -- both lists, saved to disk.
     """
-    from .model import normalize_note
+    from .model import find_by_uid, new_note_uid, normalize_note
 
     # normalize_note rebuilds the note from a known schema, so it drops
     # "deleted_at" and anything else the trash entry carried. The method this
@@ -653,6 +677,13 @@ def restore_from_trash(notes, trash, entry):
     # A fresh id: the trashed note's own id may have been reused by a note
     # created after it was deleted.
     note["id"] = max([n["id"] for n in notes], default=0) + 1
+    # The identity has the same problem for a different reason: while this
+    # note sat in the trash, a copy of it may have arrived from a share
+    # code, and two notes wearing one identity is the collision the field
+    # exists to prevent. Only then -- an ordinary restore keeps the
+    # identity, so a code made before the note was deleted still finds it.
+    if find_by_uid(notes, note.get("uid")) is not None:
+        note["uid"] = new_note_uid()
     notes.append(note)
     trash = [e for e in trash if e is not entry]
     save_trash(trash)

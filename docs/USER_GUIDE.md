@@ -503,6 +503,30 @@ everything anyway, or cancel — nothing is silently duplicated.
 
 ![Import code](screenshots/import-code.png)
 
+#### When the code holds a note you already have
+
+A code carries the note's identity, not just its words — so a note of yours that went out as a
+code and comes back, edited, is recognised as **that note** rather than treated as a stranger.
+When that happens you are asked:
+
+> **Same note, a different version**
+> Updating replaces what is on this device; you can undo it with "↩ Restore previous".
+> Adding leaves both, so you can compare them and delete one.
+
+- **Update this note** replaces its title, text, styling, comments, category, date, colour,
+  repeat rule and checklist with the version from the code. It stays the same note in the same
+  place, keeps its attachments, and keeps the date it was created. If it was a mistake, the
+  editor's **↩ Restore previous** puts it back.
+- **Add as a new note** leaves both, so you can read them side by side and delete whichever you
+  don't want. The copy is a note in its own right from then on — editing it never touches the
+  original.
+
+A code holding several notes asks once, and your answer covers all the ones it recognises; notes
+in it that are genuinely new are added either way.
+
+The identity is given to every note the first time the app reads it, and written down there and
+then — nothing to run, nothing to decide, and nothing about your notes changes.
+
 ### Export one note as a file
 
 Right-click any note in the list (or on the calendar) → **Export as file** and pick a format — the

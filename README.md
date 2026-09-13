@@ -59,6 +59,7 @@ Built as a solo/pair project (developer + AI pairing partner) across 40 versione
 
 - Soft-delete to a Trash (Settings → Recently deleted) with a retention window you choose (7–90 days); a corrupt or half-missing note degrades to safe defaults instead of crashing the app
 - Share one or many notes as a compact copy-pasteable text code; export a note or a selection as formatted HTML (opens in any browser or Word) or plain text
+- A note keeps one identity wherever it travels, so a code that brings back a note you already have is recognised as that note — the app asks whether to update your copy or keep both, instead of quietly leaving you with two
 - Full backup as a single `.zip` — notes, settings, attachments, templates and the Trash together — written atomically on a background thread with live progress; import checks for duplicates before merging instead of silently doubling notes
 
 *Full walkthrough: [User Guide → Sharing & backup](docs/USER_GUIDE.md#sharing--backup)*

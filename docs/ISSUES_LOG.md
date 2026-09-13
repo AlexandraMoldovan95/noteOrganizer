@@ -30,6 +30,7 @@ day-to-day tracking.
 | [Two windows, one file, and the last one to autosave wins](#two-windows-one-file-and-the-last-one-to-autosave-wins) | Full-file rewrites turn concurrency into data loss; a guard over data must fail open where its own failure would be worse. | 0.71.154 |
 | [The trim that moved every colour](#the-trim-that-moved-every-colour) | When a transformation forces a second function to undo its effect, the transformation is the bug — and tidying what the user typed is a data change. | 0.71.154 |
 | [The ceiling that counted the wrong thing](#the-ceiling-that-counted-the-wrong-thing) | A ceiling has to bound what the victim actually pays — and a defence at the render is a data-loss bug when the save reads its data back out of the widget. | 0.71.155 |
+| [The identity that only lasted until you closed the app](#the-identity-that-only-lasted-until-you-closed-the-app) | A value computed on every read is not stored; if it must be stable, something has to write it down — and the test that proves it must survive a restart, not a function call. | 0.73.161 |
 | [The template editor that "did nothing" when clicked](#the-template-editor-that-did-nothing-when-clicked) | 'Nothing happens' in a --windowed build is a real bug report — the exception was invisible. | 0.3.0 |
 | [The panel that lost its content depending on how you got there](#the-panel-that-lost-its-content-depending-on-how-you-got-there) | Recalculate layout on Tk's `<Map>` event, not after a guessed delay. | 0.3.0 |
 | [The scroll that stopped twice, for two different reasons](#the-scroll-that-stopped-twice-for-two-different-reasons) | Same symptom, unrelated causes — check neighbouring areas instead of assuming one fix covers all. | 0.28.38 |
@@ -690,6 +691,71 @@ are one function away.
 3. A ledger row that says "measured" and was not is worse than an empty
    row, because it buys silence with a number nobody will re-check. Both
    rows are now marked with what they actually were.
+
+### The identity that only lasted until you closed the app
+
+**Symptom.** None reported, and none reachable by any test the feature
+shipped with. It surfaced while preparing to smoke-test the packaged
+build of the release that had *just* been merged: the last question
+before launching the `.exe` was whether an existing notebook would gain
+its identities on that first read, or only in memory.
+
+**What was true.** `normalize_note()` mints an identity for any note that
+arrives without one, and it is the choke point every read passes through
+— which is exactly why minting there was chosen as the migration. But
+minting there produces a value in memory. The notes file is written when
+something *saves*, and a session where you open the app, read a note and
+close it saves nothing. So the file kept no identities, and the next
+launch minted a different set.
+
+Two launches over the same notebook, measured rather than reasoned
+about:
+
+```
+launch 1: ['59518893-…', 'd9ece3c8-…']
+launch 2: ['36c264bb-…', '1048d093-…']
+file on disk: no identities at all
+```
+
+**Why it mattered.** Share a note, close the app, come back tomorrow and
+import that code: the note it came from is no longer recognisable, and a
+copy is added — precisely the behaviour the identity was introduced to
+prevent. The feature worked perfectly within one session, which is the
+only place its tests ever looked.
+
+**Why every test passed.** They called the functions. `normalize_note`
+mints; `find_by_uid` finds; a share code carries it; `apply_shared_update`
+updates in place — all true, all still true. Not one of them crossed a
+process boundary, and the bug lived exactly there. The new checks load
+the notebook **twice** through the real load path and then read the file
+itself.
+
+**The fix.** The first read that mints writes them down, once — guarded
+like the one-time cleanup beside it: never over a file this launch has
+just declared unreadable, and not at all when the file already has them
+(checked by seeding the file with an indentation the app never writes, so
+"untouched" is provable without leaning on a timestamp).
+
+**The sibling, found by sweeping rather than by failing.** A restore from
+the Trash already hands the note a fresh *number*, because the one it had
+may have been taken while it was gone. Its *identity* can be taken the
+same way — a copy of that very note arriving from a share code while the
+original sits in the Trash — and nothing checked. Fixed in the same
+change, one line below the one it mirrors: keep the identity when it is
+free, mint a new one when it is not.
+
+**The lessons.**
+
+1. A value computed on every read is not *stored*. If it has to be stable
+   across runs, name the thing that writes it down — "the choke point
+   mints it" answers a different question.
+2. A test that never crosses a process boundary cannot see a bug that
+   lives there. For anything whose promise is "this stays the same", the
+   check restarts.
+3. The question that found it came from preparing to photograph the
+   build, not from reviewing the code. That step has now caught bugs in
+   three consecutive cycles, always the same shape: something the code
+   was asked for before it existed.
 
 
 ## Tk & platform gotchas
