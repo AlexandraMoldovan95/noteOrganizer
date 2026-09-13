@@ -7570,6 +7570,71 @@ app.notes = list(_b4_saved)
 app.save_notes()
 app.new_note(); app.update()
 
+
+# ---- A BULK CHANGE MUST SURVIVE WHAT THE USER TYPES NEXT ----
+# Found by qa/story_audit.py, walking a shape nothing else walked: do a
+# bulk action, then carry on typing. The editor was still holding the
+# note's OLD category in its dropdown, and its next save wrote that back
+# -- the bulk change reverted, silently, for the one note that happened
+# to be open. The note nobody had open kept the new category, which is
+# what makes it so easy to miss.
+_bk_saved = list(app.notes)
+NO.CATEGORY_COLORS.setdefault('Munca', '#775599')
+app.notes = [NO.normalize_note({'id': 7700 + i, 'title': 'Masa %d' % i,
+                                'body': 'corp %d' % i, 'category': 'General'})
+             for i in range(3)]
+app.save_notes()
+app.refresh_note_list(); app.update()
+app.open_note_in_tab(app.notes[0]); app.update()
+app.selection_mode = True
+app.selected_note_ids = {7700, 7701}
+app._bulk_change_category()
+app.update()
+# The popup is a Toplevel kept as app._mini_popup, one row per
+# category, each bound to the handler a click reaches. Find the row
+# whose label says Munca and click IT -- never do its work here, or the
+# check passes on its own behaviour instead of the app's.
+_bk_row = None
+_bk_pop = getattr(app, '_mini_popup', None)
+
+
+def _bk_find_row(widget):
+    global _bk_row
+    for child in widget.winfo_children():
+        if isinstance(child, tk.Label) and str(child.cget('text')).strip() == 'Munca':
+            _bk_row = child
+            return
+        _bk_find_row(child)
+
+
+if _bk_pop is not None and _bk_pop.winfo_exists():
+    _bk_find_row(_bk_pop)
+check('the bulk category popup offers the category by name (audit finding)',
+      _bk_row is not None)
+if _bk_row is not None:
+    _qa_click(_bk_row)
+    app.update()
+
+check('a bulk category change reaches the notes (audit finding)',
+      [n['category'] for n in app.notes if n['id'] in (7700, 7701)]
+      == ['Munca', 'Munca'])
+app.body_text.insert('end', ' si scriu mai departe')
+app._flush_autosave()
+app.update()
+_bk_stored = json.load(open('notes_data.json', encoding='utf-8'))
+_bk_open = next(n for n in _bk_stored if n['id'] == 7700)
+_bk_other = next(n for n in _bk_stored if n['id'] == 7701)
+check('...and typing afterwards does not revert it on the OPEN note '
+      '(audit finding)', _bk_open['category'] == 'Munca')
+check('...while the note nobody had open was never at risk',
+      _bk_other['category'] == 'Munca')
+check('...and what was typed afterwards is saved too',
+      'mai departe' in _bk_open['body'])
+
+app.notes = list(_bk_saved)
+app.save_notes()
+app.new_note(); app.update()
+
 # ---- CLOSING SAVES SILENTLY (dead last: it destroys the app) ----
 # The quit-time "Unsaved notes" ask could only ever cover the last
 # half-second of typing; the app now trusts its own autosave and closes

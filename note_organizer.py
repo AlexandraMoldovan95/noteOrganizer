@@ -45,7 +45,7 @@ except ImportError:
 # Added/Fixed CHANGELOG.md entries, not per-release counts). The running
 # app records this into settings, so the next time a newer build opens
 # over older data it can tell the user what changed version-wise.
-APP_VERSION = "0.73.165"
+APP_VERSION = "0.73.166"
 
 
 def parse_version(v):
@@ -12444,11 +12444,24 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
         def apply_category(cat):
             count = len(self.selected_note_ids)
+            # The editor may be holding one of these notes, with its own
+            # category dropdown still showing the old value -- and the
+            # editor's next save writes that dropdown back, undoing the
+            # change with nothing on screen to say so. Found by an audit
+            # walking a bulk action followed by ordinary typing; the same
+            # shape as the import route's, fixed the day before.
+            #
+            # Flush FIRST so anything typed is saved under the old
+            # category rather than dropped, then change, then bring the
+            # editor onto the result.
+            touched = set(self.selected_note_ids)
+            self._flush_autosave()
             for n in self.notes:
                 if n["id"] in self.selected_note_ids:
                     n["category"] = cat
                     n["updated"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             self.save_notes()
+            self._editor_follows_external_change(touched)
             self._dismiss_mini_popup()
             self._exit_selection_mode_after_bulk_action()
             self.set_status(f"Moved {count} note(s) to \u201c{cat}\u201d")

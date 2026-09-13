@@ -12,6 +12,7 @@ How the numbers themselves are counted is the
 
 | Version | Date | In one line |
 |---|---|---|
+| [0.73.166](#073166--2026-09-14) | 2026-09-14 | Changing several notes' category at once no longer comes undone on the one note you had open in the editor. |
 | [0.73.165](#073165--2026-09-13) | 2026-09-13 | A code made in the editor carries the note it came from, an update from one is no longer undone by the editor a moment later, a generated code belongs to the note on screen, and Settings shows how things are now. |
 | [0.73.161](#073161--2026-09-13) | 2026-09-13 | A note's identity is written down the first time it is given out, so it survives closing the app — and a note restored from the Trash never takes one another note is already using. |
 | [0.73.159](#073159--2026-09-12) | 2026-09-12 | A note carries an identity that cannot collide, so one you already have — edited elsewhere and sent back — is recognised and you are asked whether to update it or keep both. |
@@ -57,6 +58,21 @@ How the numbers themselves are counted is the
 | [0.3.0](#030--tags-removed-categories-as-the-sole-organization-system) | — | Tags come out entirely, leaving categories as the app's one organization system. |
 | [0.2.0](#020--inline-ui-overhaul--data-resilience) | — | Every OS-native popup becomes an in-app themed one, and the calendar grows richer. |
 | [0.1.0](#010--core-application) | — | The founding feature set — notes, recurrence, calendar, templates, sharing, themes. |
+
+---
+
+## [0.73.166] — 2026-09-14
+
+*Highlights: a bulk category change now sticks on the note you happen to have open, instead of being written back the moment you carry on typing.*
+
+### Fixed
+
+- **Changing several notes' category at once no longer comes undone on the one note you
+  had open.** The change reached every note, and then the next thing you typed put the
+  open one back where it was — because the editor was still showing that note's old
+  category and its save writes what the editor shows. Nothing on screen said so, and the
+  other notes kept the new category, which is what made it easy to miss. Anything you had
+  typed before the change is saved first, so nothing is lost either way.
 
 ---
 
