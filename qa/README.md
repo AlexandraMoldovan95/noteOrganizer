@@ -141,6 +141,26 @@ Stories are slow by nature (a real window per chapter, seconds not
 milliseconds), so they are not in `tools/run_tests.py`. Run them before
 calling a user-facing feature done.
 
+## Photographs: did a screen change shape while nobody was looking?
+
+`py qa/story_look.py` opens the app on a fixed little notebook,
+photographs six screens — the list, the editor, the calendar, two
+Settings sections and a light theme — and compares each against the copy
+in `qa/screens/`. Those copies are committed, so a change of appearance
+shows up in a diff like any other change.
+
+It does not say "this is wrong"; it cannot know that. It says **this
+changed, and nobody said it would**, which is the honest half a script
+can do. Approve a change you asked for with
+`py qa/story_look.py --accept`.
+
+Deliberately coarse: each picture is reduced to a small grid before
+comparing, so a pixel of text rendering is not a finding while a moved
+control is. Two identical runs report 0.0%. Shrinking one heading by
+five points reported three screens changed, 6.6–10.9% each, and left the
+two it could not affect at 0.0% — which is what "coarse but not blind"
+has to look like before the tool is worth running.
+
 ## The surface inventory: what every new feature is walked against
 
 The complete list of the app's functionality surfaces. Before a feature

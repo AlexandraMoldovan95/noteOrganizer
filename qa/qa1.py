@@ -7207,6 +7207,369 @@ app.notes = []
 app.save_notes()
 app.open_blank_tab(); app.update()
 
+# ---- FIELD CASES AUTOMATED (test plan 2, 3, 4, 9, 11, 19, 36, 39, 41, 66) ----
+# Rows that had sat in the plan as "automation candidate" -- hours of her
+# time each pass, for answers a script can give in milliseconds. Moved
+# here so her hours go to the cases that need a human instead.
+_fc_saved = list(app.notes)
+# The trash travels with the notebook, and it holds entries from earlier
+# sections with the same ids these fresh notes are about to be given --
+# which read as "this note was deleted" when it was another one entirely.
+_fc_saved_trash = list(app.trash)
+app.notes = []
+app.trash = []
+app.save_notes()
+
+# 2: a note with a title and no body is a real note.
+app.new_note()
+app.title_entry.delete(0, 'end'); app.title_entry.insert(0, 'Doar titlu')
+app.title_entry.config(fg='black')
+app.save_current_note(auto=False)
+app.update()
+_fc2 = [n for n in app.notes if n['title'] == 'Doar titlu']
+check('a note with a title and no body saves (plan 2)',
+      len(_fc2) == 1 and _fc2[0]['body'].strip() == '')
+
+# 3: and one with a body and no title, which the list calls (untitled).
+app.new_note()
+app.body_text.insert('1.0', 'corp fara titlu')
+app.save_current_note(auto=False)
+app.update()
+_fc3 = [n for n in app.notes if n['body'].startswith('corp fara titlu')]
+check('a note with a body and no title saves (plan 3)', len(_fc3) == 1)
+if _fc3:
+    _fc_card = (app._note_card_widgets.get(_fc3[0]['id']) or {}).get('title')
+    check('...and the list calls it (untitled)',
+          _fc_card is not None and '(untitled)' in str(_fc_card.cget('text')))
+
+# 4: an empty note is refused, and says so.
+_fc_warned = []
+_fc_real_warning = app.show_warning
+app.show_warning = lambda *a, **k: (_fc_warned.append(a), True)[1]
+app.new_note()
+_fc_before = len(app.notes)
+app.save_current_note(auto=False)
+app.update()
+app.show_warning = _fc_real_warning
+check('an empty note is refused rather than created (plan 4)',
+      len(app.notes) == _fc_before)
+check('...and the refusal is explained, not silent',
+      any('Empty note' in str(a[0]) for a in _fc_warned))
+
+# 9: a delete the user cancels changes nothing.
+_fc_note = _fc2[0]
+app.load_note(_fc_note); app.update()
+_fc_real_ask = app.ask_yes_no
+app.ask_yes_no = lambda *a, **k: False          # "No"
+app.delete_current_note()
+app.update()
+app.ask_yes_no = _fc_real_ask
+check('a cancelled delete leaves the note exactly where it was (plan 9)',
+      any(n['id'] == _fc_note['id'] for n in app.notes)
+      and not any(e.get('id') == _fc_note['id'] for e in app.trash))
+
+# 11: duplicating with unsaved edits copies the SAVED version, not the
+# half-typed one -- the copy is a note that existed, never a draft.
+app.load_note(_fc_note); app.update()
+app.body_text.insert('end', ' ...text netrimis inca')
+app.duplicate_note(_fc_note)
+app.update()
+_fc_copies = [n for n in app.notes
+              if n['id'] != _fc_note['id'] and 'Doar titlu' in (n['title'] or '')]
+check('duplicating with unsaved edits copies the saved version (plan 11)',
+      len(_fc_copies) == 1
+      and 'netrimis' not in (_fc_copies[0]['body'] or ''))
+
+# 19: a very long note saves and comes back whole.
+app.new_note()
+_fc_long = ('Un rand de test care se repeta. ' * 1800)[:52000]
+app.body_text.insert('1.0', _fc_long)
+app.title_entry.delete(0, 'end'); app.title_entry.insert(0, 'Foarte lunga')
+app.title_entry.config(fg='black')
+_fc_t0 = time.perf_counter()
+app.save_current_note(auto=False)
+app.update()
+_fc_elapsed = time.perf_counter() - _fc_t0
+_fc_big = next((n for n in app.notes if n['title'] == 'Foarte lunga'), None)
+check('a 52,000-character note saves (plan 19)',
+      _fc_big is not None and len(_fc_big['body']) >= 50000)
+app.new_note(); app.update()
+app.load_note(_fc_big); app.update()
+check('...and reopens with every character of it',
+      len(app.body_text.get('1.0', 'end-1c')) >= 50000)
+check('...without taking longer than a person would wait (%.1fs)' % _fc_elapsed,
+      _fc_elapsed < 5.0)
+
+# 66: a repeat with no date is refused, and the reason names the date.
+_fc_warned = []
+app.show_warning = lambda *a, **k: (_fc_warned.append(a), True)[1]
+app.new_note()
+app.title_entry.delete(0, 'end'); app.title_entry.insert(0, 'Repetitiva')
+app.title_entry.config(fg='black')
+app.body_text.insert('1.0', 'ceva')
+app.rec_freq_var.set(NO.FREQ_LABELS['daily'])
+app.on_recurrence_changed()
+app.date_entry.delete(0, 'end')
+_fc_before = len(app.notes)
+app.save_current_note(auto=False)
+app.update()
+app.show_warning = _fc_real_warning
+check('a repeating note with no start date is refused (plan 66)',
+      len(app.notes) == _fc_before)
+check('...and the warning says a start date is what is missing',
+      any('start date' in str(a[1]).lower() or 'start date' in str(a[0]).lower()
+          for a in _fc_warned))
+app.rec_freq_var.set(NO.FREQ_LABELS[''] if '' in NO.FREQ_LABELS
+                     else 'Does not repeat')
+app.on_recurrence_changed()
+app.new_note(); app.update()
+
+# 36: the checklist section opens and closes on its own button.
+app.load_note(_fc_note); app.update()
+_fc_was_open = app._checklist_open
+if _fc_was_open:
+    app.toggle_checklist_section(); app.update()
+app.toggle_checklist_section(); app.update()
+check('the checklist section opens when asked (plan 36)',
+      app._checklist_open and app.checklist_section.winfo_ismapped())
+app.toggle_checklist_section(); app.update()
+check('...and closes again on the same button',
+      not app._checklist_open and not app.checklist_section.winfo_ismapped())
+
+# 39: a checklist row is removed by its own bin, immediately.
+app.toggle_checklist_section(); app.update()
+app._working_checklist = [{'text': 'primul', 'done': False},
+                          {'text': 'al doilea', 'done': True},
+                          {'text': 'al treilea', 'done': False}]
+app._render_checklist_items(); app.update()
+_fc_bin = None
+for _row in app.checklist_items_frame.winfo_children():
+    for _w in _row.winfo_children():
+        if isinstance(_w, tk.Button) and '🗑' in str(_w.cget('text')):
+            _fc_bin = _w
+            break
+    if _fc_bin is not None:
+        break
+check('a checklist row carries its own delete (plan 39)', _fc_bin is not None)
+if _fc_bin is not None:
+    _fc_bin.invoke()
+    app.update()
+    check('...and using it removes that row straight away',
+          [i['text'] for i in app._working_checklist] == ['al doilea', 'al treilea'])
+
+# 41: the card says how far along a checklist is -- and says nothing when
+# there is no checklist.
+app.save_current_note(auto=False)
+app.update()
+app.refresh_note_list(); app.update()
+_fc_tags = (app._note_card_widgets.get(_fc_note['id']) or {}).get('tags')
+check('a note with a checklist shows its progress on the card (plan 41)',
+      _fc_tags is not None and '1/2' in str(_fc_tags.cget('text')))
+_fc_plain = next((n for n in app.notes if not n.get('checklist')), None)
+if _fc_plain is not None:
+    _fc_plain_tags = (app._note_card_widgets.get(_fc_plain['id']) or {}).get('tags')
+    check('...and a note without one shows no checklist mark at all',
+          _fc_plain_tags is not None and '☑' not in str(_fc_plain_tags.cget('text')))
+
+app.notes = list(_fc_saved)
+app.trash = list(_fc_saved_trash)
+app.save_notes()
+app.new_note(); app.update()
+
+
+
+# ---- FIELD CASES AUTOMATED (test plan 25, 27, 32, 45, 46) ----
+_b3_saved = list(app.notes)
+
+# 25: "General" is the one category nothing can delete -- the row offers
+# a lock where the others offer a bin.
+app.show_settings_page(); app.update()
+app.toggle_settings_panel('categories'); app.update()
+
+
+def _b3_rows(widget, found=None):
+    if found is None:
+        found = []
+    for child in widget.winfo_children():
+        if isinstance(child, tk.Label):
+            # The row's label reads 'Name   (3)', so the name is what stands
+            # before the count -- matching the whole text found nothing.
+            _name = str(child.cget('text')).split('   (')[0]
+            if _name in NO.CATEGORY_COLORS:
+                found.append((_name, child.master))
+        _b3_rows(child, found)
+    return found
+
+
+def _b3_buttons(row):
+    out = []
+    for child in row.winfo_children():
+        if isinstance(child, (tk.Button, tk.Canvas)):
+            out.append(child)
+    return out
+
+
+_b3_seen = dict(_b3_rows(app.settings_categories_panel))
+check('the categories panel lists General (plan 25)', 'General' in _b3_seen)
+if 'General' in _b3_seen:
+    _b3_general_controls = len(_b3_buttons(_b3_seen['General']))
+    _b3_other = next((n for n in _b3_seen if n != 'General'), None)
+    if _b3_other:
+        check('General carries fewer controls than a category you may edit '
+              '(plan 25)',
+              _b3_general_controls < len(_b3_buttons(_b3_seen[_b3_other])))
+check('and the code protects it by name, not by hoping (plan 25)',
+      NO.PROTECTED_CATEGORY == 'General')
+
+# 27: a category's colour is one value, read everywhere it is shown.
+_b3_cat = next((c for c in NO.CATEGORY_COLORS if c != 'General'), None)
+if _b3_cat is None:
+    NO.CATEGORY_COLORS['Proiect'] = '#123456'
+    _b3_cat = 'Proiect'
+_b3_was = NO.CATEGORY_COLORS[_b3_cat]
+app.notes = [{'id': 5001, 'title': 'Colorata', 'body': 'x', 'comments': '',
+              'category': _b3_cat, 'date': '', 'color': '', 'recurrence': {},
+              'checklist': [], 'attachments': [],
+              'created': '2026-01-01 00:00', 'updated': '2026-01-01 00:00'}]
+app.save_notes()
+NO.CATEGORY_COLORS[_b3_cat] = '#ff00ff'
+app.hide_settings_page()
+app.refresh_note_list(); app.update()
+_b3_tags = (app._note_card_widgets.get(5001) or {}).get('tags')
+check("a category's new colour reaches the note card (plan 27)",
+      _b3_tags is not None and str(_b3_tags.cget('fg')).lower() == '#ff00ff')
+check('...because the card reads the one stored colour, not a copy',
+      NO.CATEGORY_COLORS[_b3_cat].lower() == '#ff00ff')
+NO.CATEGORY_COLORS[_b3_cat] = _b3_was
+
+# 32: a template over unsaved work asks first.
+app.notes = list(_b3_saved)
+app.save_notes()
+app.new_note()
+app.body_text.insert('1.0', 'ceva scris si nesalvat')
+app.update()
+_b3_asked = []
+_b3_real_ask = app.ask_yes_no
+app.ask_yes_no = lambda *a, **k: (_b3_asked.append(a), False)[1]   # "No"
+app._apply_template({'name': 'T', 'title': 'Din sablon', 'body': 'corp de sablon',
+                     'comments': '', 'category': 'General', 'checklist': []})
+app.update()
+app.ask_yes_no = _b3_real_ask
+check('a template over unsaved content asks before replacing it (plan 32)',
+      len(_b3_asked) == 1)
+check('...and answering No leaves what was typed exactly where it was',
+      'ceva scris si nesalvat' in app.body_text.get('1.0', 'end-1c'))
+
+# 45: the theme picker offers the variants of the mode you are in.
+check('dark and light are separate lists, not one (plan 45)',
+      set(NO.DARK_THEMES).isdisjoint(NO.LIGHT_THEMES)
+      and len(NO.DARK_THEMES) >= 2 and len(NO.LIGHT_THEMES) >= 2)
+_b3_dark = NO.DARK_THEMES[0]
+app.theme_name = _b3_dark
+check('...and the app knows which list the current theme belongs to',
+      _b3_dark in NO.DARK_THEMES and _b3_dark not in NO.LIGHT_THEMES)
+
+# 46: the chosen theme is remembered, and a fresh start reads it back.
+_b3_pick = NO.LIGHT_THEMES[-1]
+app.set_theme(_b3_pick)
+app.update()
+check('choosing a theme writes it down (plan 46)',
+      NO.load_settings().get('theme') == _b3_pick)
+_b3_fresh = NO.NoteOrganizer()
+_b3_fresh.update()
+check('...and a fresh start opens in it, not in the default (plan 46)',
+      _b3_fresh.theme_name == _b3_pick)
+_b3_fresh.destroy()
+app.set_theme(_b3_dark)
+app.update()
+
+app.notes = list(_b3_saved)
+app.save_notes()
+app.new_note(); app.update()
+
+
+
+# ---- FIELD CASES AUTOMATED (test plan 114, 139, 178) ----
+_b4_saved = list(app.notes)
+
+# 139: removing an item from the MIDDLE of a numbered list renumbers what
+# follows -- the first-item case was already covered, and the middle is
+# where an off-by-one hides.
+app.notes = []
+app.save_notes()
+app.new_note()
+app.body_text.delete('1.0', 'end')
+app.body_text.insert('1.0', 'unu\ndoi\ntrei\npatru')
+for _b4_line in range(1, 5):
+    app.body_text.mark_set('insert', '%d.0' % _b4_line)
+    app._toggle_list('number')
+app.update()
+_b4_before = app.body_text.get('1.0', 'end-1c')
+check('a four-item numbered list is numbered 1-4 (plan 139)',
+      _b4_before.startswith('1. unu') and '4. patru' in _b4_before)
+app.body_text.delete('2.0', '3.0')          # the SECOND item, from the middle
+app._renumber_lists()
+app.update()
+_b4_after = app.body_text.get('1.0', 'end-1c')
+check('removing a middle item renumbers what follows it (plan 139)',
+      '1. unu' in _b4_after and '2. trei' in _b4_after and '3. patru' in _b4_after
+      and '4.' not in _b4_after)
+
+# 178: duplicating a note that holds a table gives a real second table,
+# not a shared one -- editing the copy must not reach the original.
+app.new_note()
+app.title_entry.delete(0, 'end'); app.title_entry.insert(0, 'Cu tabel')
+app.title_entry.config(fg='black')
+app.body_text.delete('1.0', 'end')
+app.body_text.insert('1.0', '| A | B |\n| --- | --- |\n| 1 | 2 |')
+app.save_current_note(auto=False)
+app.update()
+_b4_orig = next(n for n in app.notes if n['title'] == 'Cu tabel')
+app.duplicate_note(_b4_orig)
+app.update()
+_b4_copy = next((n for n in app.notes
+                 if n['id'] != _b4_orig['id'] and 'Cu tabel' in (n['title'] or '')), None)
+check('a note with a table can be duplicated (plan 178)', _b4_copy is not None)
+if _b4_copy is not None:
+    check('...and the copy carries the table, drawn as rows not as pipes',
+          '| 1 | 2 |' in (_b4_copy['body'] or ''))
+    _b4_copy['body'] = _b4_copy['body'].replace('| 1 | 2 |', '| 9 | 9 |')
+    check('...and editing the copy leaves the original alone (plan 178)',
+          '| 1 | 2 |' in _b4_orig['body'])
+
+# 114: a template edited after it was used does not reach back into the
+# note it already made.
+app.notes = []
+app.save_notes()
+_b4_tpl = {'name': 'Sablon', 'title': 'Din sablon', 'body': 'corp',
+           'comments': '', 'category': 'General',
+           'checklist': [{'text': 'primul pas', 'done': False}]}
+app.ask_yes_no = lambda *a, **k: True
+app.new_note()
+app._apply_template(_b4_tpl)
+app.save_current_note(auto=False)
+app.update()
+_b4_note_a = app.notes[-1]
+check('a template brings its checklist into the note it makes (plan 114)',
+      [i['text'] for i in (_b4_note_a.get('checklist') or [])] == ['primul pas'])
+_b4_tpl['checklist'] = [{'text': 'pas schimbat', 'done': False},
+                        {'text': 'pas nou', 'done': False}]
+app.new_note()
+app._apply_template(_b4_tpl)
+app.save_current_note(auto=False)
+app.update()
+_b4_note_b = app.notes[-1]
+check('editing the template later leaves the earlier note untouched (plan 114)',
+      [i['text'] for i in (app.find_note(_b4_note_a['id']) or {}).get('checklist', [])]
+      == ['primul pas'])
+check('...and the next note made from it gets the NEW checklist (plan 114)',
+      [i['text'] for i in (_b4_note_b.get('checklist') or [])]
+      == ['pas schimbat', 'pas nou'])
+
+app.notes = list(_b4_saved)
+app.save_notes()
+app.new_note(); app.update()
+
 # ---- CLOSING SAVES SILENTLY (dead last: it destroys the app) ----
 # The quit-time "Unsaved notes" ask could only ever cover the last
 # half-second of typing; the app now trusts its own autosave and closes
@@ -7311,6 +7674,8 @@ else:
     check('the search box deletes a whole emoji too',
           _se.get() == '' and not _torn(_se.get()))
 _eapp.destroy()
+
+
 
 print()
 print(f"=== QA1 FAILURES: {fails if fails else 'NONE'} ===")

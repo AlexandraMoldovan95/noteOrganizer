@@ -470,6 +470,296 @@ app.notes = []
 app.save_notes()
 app.new_note(); app.update()
 
+
+# ---- FIELD CASES AUTOMATED (test plan 68, 69, 70, 71, 72, 73, 74) ----
+# The duplicates panel, driven through its own buttons rather than
+# through the function behind them: the panel decides which copies are
+# ticked, and a check that calls the cleanup with a list it built itself
+# would not notice the panel ticking the wrong ones.
+def _dp_button(widget, label):
+    for child in widget.winfo_children():
+        if isinstance(child, tk.Button) and label in str(child.cget('text')):
+            return child
+        found = _dp_button(child, label)
+        if found:
+            return found
+    return None
+
+
+def _dp_boxes(widget, found=None):
+    """Every duplicate row's tick box, in the order the panel drew them."""
+    if found is None:
+        found = []
+    for child in widget.winfo_children():
+        if isinstance(child, tk.Checkbutton):
+            found.append(child)
+        _dp_boxes(child, found)
+    return found
+
+
+def _dp_seed(groups):
+    """A notebook holding `groups` groups of identical notes."""
+    app.notes = []
+    app.trash = []
+    nid = 1
+    for gi, copies in enumerate(groups):
+        for _ in range(copies):
+            app.notes.append({
+                'id': nid, 'title': 'Geamana %d' % gi, 'body': 'acelasi text %d' % gi,
+                'comments': '', 'category': 'General', 'date': '', 'color': '',
+                'recurrence': {}, 'checklist': [], 'attachments': [],
+                'created': '2026-01-01 00:00', 'updated': '2026-01-01 00:00'})
+            nid += 1
+    app.save_notes()
+    app.show_settings_page(); app.update()
+    app.toggle_settings_panel('duplicates'); app.update()
+
+
+_dp_saved_notes, _dp_saved_trash = list(app.notes), list(app.trash)
+app.ask_yes_no = lambda *a, **k: True
+
+# 68: ticking two copies of four moves exactly those two.
+_dp_seed([4])
+_dp_all = _dp_boxes(app.settings_duplicates_panel)
+check('the duplicates panel draws one tick box per copy (plan 68)',
+      len(_dp_all) == 4)
+if len(_dp_all) == 4:
+    _dp_all[1].invoke(); _dp_all[3].invoke()      # the 2nd and the 4th
+    app.update()
+    _dp_go = _dp_button(app.settings_duplicates_panel, 'Move ticked')
+    if _dp_go is not None:
+        _dp_go.invoke(); app.update()
+    check('only the ticked copies go to the trash (plan 68)',
+          len(app.notes) == 2 and len(app.trash) == 2)
+    check('...and the ones left are the ones nobody ticked',
+          sorted(n['id'] for n in app.notes) == [1, 3])
+    # 74: and they are recoverable, not destroyed.
+    check('the removed copies are in the Trash, not gone (plan 74)',
+          sorted(e['id'] for e in app.trash) == [2, 4])
+
+# 69: the tool does not insist on keeping exactly one.
+_dp_seed([3])
+_dp_all = _dp_boxes(app.settings_duplicates_panel)
+if len(_dp_all) == 3:
+    _dp_all[2].invoke(); app.update()
+    _dp_go = _dp_button(app.settings_duplicates_panel, 'Move ticked')
+    if _dp_go is not None:
+        _dp_go.invoke(); app.update()
+    check('two copies may be kept -- nothing forces "keep exactly one" (plan 69)',
+          len(app.notes) == 2)
+
+# 70: "Tick all but first" ticks every copy except the first.
+_dp_seed([3])
+_dp_shortcut = _dp_button(app.settings_duplicates_panel, 'Tick all but first')
+check('each group offers "Tick all but first" (plan 70)', _dp_shortcut is not None)
+if _dp_shortcut is not None:
+    _dp_shortcut.invoke(); app.update()
+    _dp_go = _dp_button(app.settings_duplicates_panel, 'Move ticked')
+    if _dp_go is not None:
+        _dp_go.invoke(); app.update()
+    check('...and it leaves the first copy standing, alone (plan 70)',
+          len(app.notes) == 1 and app.notes[0]['id'] == 1)
+
+# 71 and 72: the all-groups button appears only when there are groups to
+# mean it, and reduces every one of them in a single action.
+_dp_seed([2])
+check('with a single group there is no all-groups button (plan 72)',
+      _dp_button(app.settings_duplicates_panel, 'Clean up ALL') is None)
+
+_dp_seed([3, 2])
+_dp_everything = _dp_button(app.settings_duplicates_panel, 'Clean up ALL')
+check('with several groups the all-groups button is offered (plan 71)',
+      _dp_everything is not None)
+if _dp_everything is not None:
+    _dp_asked = []
+    _dp_real_ask = app.ask_yes_no
+    app.ask_yes_no = lambda *a, **k: (_dp_asked.append(1), True)[1]
+    _dp_everything.invoke(); app.update()
+    app.ask_yes_no = _dp_real_ask
+    check('...and one click reduces every group to its first copy (plan 71)',
+          sorted(n['id'] for n in app.notes) == [1, 4])
+    check('...having asked once, not once per group',
+          len(_dp_asked) <= 1)
+
+# 73: ticking nothing deletes nothing, and says so.
+_dp_seed([3])
+_dp_said = []
+_dp_real_info = app.show_info
+app.show_info = lambda *a, **k: (_dp_said.append(a), True)[1]
+_dp_go = _dp_button(app.settings_duplicates_panel, 'Move ticked')
+if _dp_go is not None:
+    _dp_go.invoke(); app.update()
+app.show_info = _dp_real_info
+check('cleaning up with nothing ticked deletes nothing (plan 73)',
+      len(app.notes) == 3 and not app.trash)
+check('...and says that nothing was ticked, rather than doing nothing quietly',
+      any('select' in str(a).lower() or 'tick' in str(a).lower() or
+          'nothing' in str(a).lower() for a in _dp_said))
+
+app.hide_settings_page()
+app.notes = list(_dp_saved_notes)
+app.trash = list(_dp_saved_trash)
+app.save_notes()
+app.new_note(); app.update()
+
+
+
+# ---- FIELD CASES AUTOMATED (test plan 52, 53, 55, 77, 78, 83) ----
+_b3c_saved = list(app.notes)
+
+# 52: "Today" comes back to this month, with today marked.
+import datetime as _b3dt, re as _b3re
+_b3_today = _b3dt.date.today()
+app.cal_year, app.cal_month = 2020, 1
+app.render_calendar(); app.update()
+app.go_to_today(); app.update()
+check('Today returns the calendar to the current month (plan 52)',
+      (app.cal_year, app.cal_month) == (_b3_today.year, _b3_today.month))
+
+# 53: a day with more notes than fit says how many more.
+_b3_day = '%04d-%02d-15' % (_b3_today.year, _b3_today.month)
+app.notes = [{'id': 6000 + i, 'title': 'Zi plina %d' % i, 'body': 'x',
+              'comments': '', 'category': 'General', 'date': _b3_day,
+              'color': '', 'recurrence': {}, 'checklist': [], 'attachments': [],
+              'created': '2026-01-01 00:00', 'updated': '2026-01-01 00:00'}
+             for i in range(4)]
+app.save_notes()
+app.render_calendar(); app.update()
+
+
+def _b3_texts(widget, out=None):
+    if out is None:
+        out = []
+    for child in widget.winfo_children():
+        if isinstance(child, tk.Label):
+            out.append(str(child.cget('text')))
+        _b3_texts(child, out)
+    return out
+
+
+_b3_all = _b3_texts(app.cal_grid_frame)
+check('a day holding more notes than fit says how many more (plan 53)',
+      any(_b3re.match(r'^\+\d+ more$', t) for t in _b3_all))
+check('...and still shows some of them by name',
+      sum(1 for t in _b3_all if t.startswith('Zi plina')) >= 1)
+
+# 55: a day painted a colour keeps it, and only that day.
+app.day_colors = {}
+app.day_colors[_b3_day] = '#ff8800'
+app._persist_day_colors()
+app.render_calendar(); app.update()
+check('a day given a colour remembers it (plan 55)',
+      app.day_colors.get(_b3_day) == '#ff8800')
+check('...and it is written down, so it survives a restart',
+      (NO.load_settings().get('day_colors') or {}).get(_b3_day) == '#ff8800')
+_b3_neighbour = '%04d-%02d-16' % (_b3_today.year, _b3_today.month)
+check('...and the day beside it is left alone',
+      _b3_neighbour not in app.day_colors)
+app.day_colors = {}
+app._persist_day_colors()
+
+# 77 and 83: the sidebar filter, and sorting inside groups.
+app.notebook.select(app.TAB_NOTES); app.update()
+NO.CATEGORY_COLORS.setdefault('Scoala', '#4477aa')
+NO.CATEGORY_COLORS.setdefault('Acasa', '#aa7744')
+app.notes = [
+    {'id': 7001, 'title': 'Beta', 'category': 'Scoala'},
+    {'id': 7002, 'title': 'Alfa', 'category': 'Scoala'},
+    {'id': 7003, 'title': 'Delta', 'category': 'Acasa'},
+    {'id': 7004, 'title': 'Gama', 'category': 'Acasa'},
+]
+app.notes = [NO.normalize_note(n) for n in app.notes]
+app.save_notes()
+app.filter_var.set('Scoala')
+app.refresh_note_list(); app.update()
+_b3_shown = set(app._note_card_widgets)
+check('filtering by a category shows only that category (plan 77)',
+      _b3_shown == {7001, 7002})
+app.filter_var.set('All')
+app.refresh_note_list(); app.update()
+
+# 78: a category added later is in the filter without a restart.
+NO.CATEGORY_COLORS['ProaspatAdaugata'] = '#336699'
+app.refresh_category_widgets(); app.update()
+# The dropdown keeps no list of its own: it asks for the categories at
+# the moment it opens, which IS the promise this case is about. So the
+# check opens it the way a click does, and reads what is on offer --
+# rather than asking the same source the menu asks and proving nothing.
+_qa_click(app.filter_menu)
+app.update()
+_b3_pop = getattr(app.filter_menu, '_nested_popup', None) or getattr(app, '_mini_popup', None)
+_b3_labels = _b3_texts(_b3_pop) if _b3_pop is not None else []
+app._dismiss_mini_popup()
+app.update()
+check('a category added just now is in the filter, no restart (plan 78)',
+      'ProaspatAdaugata' in _b3_labels)
+NO.CATEGORY_COLORS.pop('ProaspatAdaugata', None)
+app.refresh_category_widgets(); app.update()
+
+# 83: with grouping on, the sort still orders inside each group.
+app.group_by_category.set(True)
+# Taken from the app's own list, not typed: the label uses an EN
+# DASH, and a hyphen here set the variable to a value no sort
+# matches -- the list stayed as it was and the check passed on
+# the wrong order.
+app.sort_var.set(next(o for o in app.SORT_OPTIONS if o.startswith('Title A')))
+app.refresh_note_list(); app.update()
+_b3_order = [n['title'] for n in app._visible_notes_in_order()] \
+    if hasattr(app, '_visible_notes_in_order') else None
+if _b3_order is None:
+    _b3_order = []
+    for _cid, _w in app._note_card_widgets.items():
+        _b3_order.append((_w['card'].winfo_rooty(), _w['note']['title'],
+                          _w['note']['category']))
+    _b3_order = [t for _y, t, _c in sorted(_b3_order)]
+check('sorting A-Z orders the notes inside each group (plan 83)',
+      _b3_order == ['Delta', 'Gama', 'Alfa', 'Beta']
+      or _b3_order == ['Alfa', 'Beta', 'Delta', 'Gama'])
+app.group_by_category.set(False)
+app.sort_var.set('Recently updated')
+app.refresh_note_list(); app.update()
+
+app.notes = list(_b3c_saved)
+app.save_notes()
+app.new_note(); app.update()
+
+
+
+# ---- FIELD CASE AUTOMATED (test plan 109) ----
+# Cleaning up duplicates and then looking in the Trash: the copies are
+# recoverable, which is what makes the cleanup safe to offer at all.
+_b4d_saved_notes, _b4d_saved_trash = list(app.notes), list(app.trash)
+app.notes = []
+app.trash = []
+app.notes = [NO.normalize_note({'id': i + 1, 'title': 'Identica',
+                                'body': 'acelasi corp', 'category': 'General'})
+             for i in range(3)]
+app.save_notes()
+app.ask_yes_no = lambda *a, **k: True
+app.show_settings_page(); app.update()
+app.toggle_settings_panel('duplicates'); app.update()
+_b4d_shortcut = _dp_button(app.settings_duplicates_panel, 'Tick all but first')
+if _b4d_shortcut is not None:
+    _b4d_shortcut.invoke(); app.update()
+    _b4d_go = _dp_button(app.settings_duplicates_panel, 'Move ticked')
+    if _b4d_go is not None:
+        _b4d_go.invoke(); app.update()
+check('cleaning up duplicates leaves one copy (plan 109)', len(app.notes) == 1)
+check('...and the removed copies are in the Trash, recoverable (plan 109)',
+      len(app.trash) == 2)
+app.toggle_settings_panel('trash'); app.update()
+_b4d_restore = _dp_button(app.settings_trash_panel, 'Restore')
+if _b4d_restore is not None:
+    _b4d_restore.invoke(); app.update()
+    check('...and one of them really comes back (plan 109)',
+          len(app.notes) == 2 and len(app.trash) == 1)
+app.hide_settings_page()
+app.notes = list(_b4d_saved_notes)
+app.trash = list(_b4d_saved_trash)
+app.save_notes()
+app.new_note(); app.update()
+
+
 print()
 print(f"=== QA2 FAILURES: {fails if fails else 'NONE'} ===")
 
