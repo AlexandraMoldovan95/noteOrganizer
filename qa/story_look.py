@@ -1,0 +1,234 @@
+"""Photograph the app's screens, and say what MOVED since last time.
+
+WHY THIS EXISTS
+---------------
+The suite answers questions. The stories walk paths. Neither can see a
+screen that simply stopped looking right: a control clipped, a panel
+sliding under another one, a colour that stayed behind after a theme
+switch. Twice in this project a bug was invisible in the source and
+obvious in a photograph, and both times a person had to be looking.
+
+This takes the photographs itself and compares them with the ones from
+the last run. What it reports is not "this is wrong" -- it cannot know
+that -- but "this changed, and nobody said it would". A change you asked
+for is approved by running with ``--accept``; anything else is worth a
+look before it ships.
+
+WHAT IT IS NOT
+--------------
+It is not a pixel-perfect gate. Text rendering shifts by a pixel between
+runs for reasons nobody controls, so a tiny difference is noise and is
+reported as such. It answers one question honestly: did a screen change
+shape while we were not looking?
+
+    py qa/story_look.py            # compare against the stored shots
+    py qa/story_look.py --accept   # bless what is on screen now
+
+The stored shots live in qa/screens/ and are meant to be committed, so a
+change of appearance shows up in a diff like any other change.
+"""
+import io
+import json
+import os
+import shutil
+import subprocess
+import sys
+import tempfile
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+ROOT = os.path.dirname(HERE)
+STORE = os.path.join(HERE, "screens")
+
+# Each scene: a name, and what to do to the app before the picture.
+SCENES = [
+    ("01-lista", """
+app.notebook.select(app.TAB_NOTES)
+app.refresh_note_list()
+"""),
+    ("02-editor", """
+app.notebook.select(app.TAB_NOTES)
+app.load_note(app.notes[0])
+"""),
+    ("03-calendar", """
+app.notebook.select(app.TAB_CALENDAR)
+app.cal_year, app.cal_month = 2026, 9
+app.render_calendar()
+"""),
+    ("04-setari-cos", """
+app.show_settings_page()
+app.toggle_settings_panel('trash')
+"""),
+    ("05-setari-categorii", """
+app.show_settings_page()
+app.toggle_settings_panel('categories')
+"""),
+    ("06-tema-deschisa", """
+app.hide_settings_page()
+app.notebook.select(app.TAB_NOTES)
+app.set_theme(NO.LIGHT_THEMES[0])
+app.refresh_note_list()
+"""),
+]
+
+SEED = [
+    {"id": 1, "title": "Reteta de paine", "body": "500g faina\\n300ml apa\\nsare",
+     "category": "General", "date": "2026-09-15",
+     "checklist": [{"text": "framantat", "done": True},
+                   {"text": "copt", "done": False}],
+     "created": "2026-09-01 09:00", "updated": "2026-09-01 09:00"},
+    {"id": 2, "title": "De cumparat", "body": "lapte\\noua\\npaine",
+     "category": "General", "created": "2026-09-02 09:00",
+     "updated": "2026-09-02 09:00"},
+    {"id": 3, "title": "", "body": "o notita fara titlu, ca in caietul real",
+     "category": "General", "created": "2026-09-03 09:00",
+     "updated": "2026-09-03 09:00"},
+]
+
+SHOOTER = '''
+import io, json, os, subprocess, sys, time
+sys.path.insert(0, ".")
+import note_organizer as NO, tkinter as tk
+from _qa_support import pin_popup_visibility
+pin_popup_visibility(NO)
+
+app = NO.NoteOrganizer()
+app._poll_active_dirty = lambda: None
+app.show_info = lambda *a, **k: True
+app.show_warning = lambda *a, **k: True
+app.ask_yes_no = lambda *a, **k: True
+app.geometry("1150x820+60+60")
+app.update()
+
+scenes = json.load(io.open("scenes.json", encoding="utf-8"))
+for name, script in scenes:
+    exec(script)
+    app.update()
+    app.update_idletasks()
+    time.sleep(0.4)
+    x, y = app.winfo_rootx(), app.winfo_rooty()
+    w, h = app.winfo_width(), app.winfo_height()
+    subprocess.run(["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass",
+                    "-File", "grab.ps1", "-Out", os.path.join("shots", name + ".png"),
+                    "-X", str(x), "-Y", str(y), "-W", str(w), "-H", str(h)],
+                   capture_output=True)
+app.destroy()
+'''
+
+GRAB = """param([string]$Out, [int]$X, [int]$Y, [int]$W, [int]$H)
+Add-Type -AssemblyName System.Windows.Forms, System.Drawing
+$bmp = New-Object System.Drawing.Bitmap($W, $H)
+$g = [System.Drawing.Graphics]::FromImage($bmp)
+$g.CopyFromScreen((New-Object System.Drawing.Point($X, $Y)),
+                  [System.Drawing.Point]::Empty,
+                  (New-Object System.Drawing.Size($W, $H)))
+$bmp.Save($Out, [System.Drawing.Imaging.ImageFormat]::Png)
+$g.Dispose(); $bmp.Dispose()
+"""
+
+
+def take_the_pictures():
+    """Run the app in a scratch copy and photograph each scene."""
+    work = tempfile.mkdtemp(prefix="look-")
+    os.makedirs(os.path.join(work, "shots"))
+    shutil.copy2(os.path.join(ROOT, "note_organizer.py"), work)
+    shutil.copytree(os.path.join(ROOT, "noteorganizer"),
+                    os.path.join(work, "noteorganizer"))
+    shutil.copy2(os.path.join(HERE, "_qa_support.py"), work)
+    io.open(os.path.join(work, "notes_data.json"), "w", encoding="utf-8").write(
+        json.dumps(SEED))
+    io.open(os.path.join(work, "settings.json"), "w", encoding="utf-8").write(
+        json.dumps({"cleanup_done": True, "reclaimed_from_appdata": True,
+                    "theme": "Midnight"}))
+    io.open(os.path.join(work, "scenes.json"), "w", encoding="utf-8").write(
+        json.dumps(SCENES))
+    io.open(os.path.join(work, "shoot.py"), "w", encoding="utf-8").write(SHOOTER)
+    io.open(os.path.join(work, "grab.ps1"), "w", encoding="utf-8").write(GRAB)
+    run = subprocess.run([sys.executable, "shoot.py"], cwd=work,
+                         capture_output=True, text=True,
+                         encoding="utf-8", errors="replace", timeout=600)
+    return work, run
+
+
+def compare(new_dir):
+    """How much of each picture changed, as a percentage of its pixels.
+
+    Deliberately coarse: images are reduced to a small grid and compared
+    cell by cell, so a pixel of text rendering does not read as a
+    change while a moved control does.
+    """
+    try:
+        from PIL import Image
+    except ImportError:
+        print("Pillow lipseste -- nu pot compara pozele.")
+        return None
+    results = []
+    for name, _script in SCENES:
+        fresh = os.path.join(new_dir, name + ".png")
+        stored = os.path.join(STORE, name + ".png")
+        if not os.path.exists(fresh):
+            results.append((name, None, "poza nu s-a facut"))
+            continue
+        if not os.path.exists(stored):
+            results.append((name, None, "nu exista o poza de referinta"))
+            continue
+        a = Image.open(stored).convert("L").resize((160, 120))
+        b = Image.open(fresh).convert("L").resize((160, 120))
+        if a.size != b.size:
+            results.append((name, 100.0, "alta marime"))
+            continue
+        pa, pb = a.load(), b.load()
+        moved = sum(1 for y in range(120) for x in range(160)
+                    if abs(pa[x, y] - pb[x, y]) > 12)
+        results.append((name, moved * 100.0 / (160 * 120), ""))
+    return results
+
+
+def main():
+    accept = "--accept" in sys.argv
+    work, run = take_the_pictures()
+    shots = os.path.join(work, "shots")
+    taken = sorted(os.listdir(shots)) if os.path.isdir(shots) else []
+    if not taken:
+        print("NICIO POZA. Aplicatia nu a pornit sau PowerShell nu a scris fisierele.")
+        print((run.stdout + run.stderr)[-800:])
+        shutil.rmtree(work, ignore_errors=True)
+        return 2
+
+    if accept:
+        if not os.path.isdir(STORE):
+            os.makedirs(STORE)
+        for name in taken:
+            shutil.copy2(os.path.join(shots, name), os.path.join(STORE, name))
+        print("acceptat: %d ecrane sunt de acum referinta" % len(taken))
+        shutil.rmtree(work, ignore_errors=True)
+        return 0
+
+    results = compare(shots)
+    if results is None:
+        shutil.rmtree(work, ignore_errors=True)
+        return 2
+
+    changed = []
+    for name, pct, note in results:
+        if pct is None:
+            print("  ?     %-22s %s" % (name, note))
+            changed.append(name)
+        elif pct < 0.5:
+            print("  la fel %-22s (%.1f%%)" % (name, pct))
+        else:
+            print("  S-A SCHIMBAT %-16s %.1f%% din ecran %s" % (name, pct, note))
+            changed.append(name)
+
+    print()
+    if changed:
+        print("ECRANE SCHIMBATE: %s" % ", ".join(changed))
+        print("Pozele noi sunt in: %s" % shots)
+        print("Daca schimbarea e ceruta, accept-o cu:  py qa/story_look.py --accept")
+        return 1
+    print("Niciun ecran nu si-a schimbat forma.")
+    shutil.rmtree(work, ignore_errors=True)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

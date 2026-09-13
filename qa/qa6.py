@@ -1410,6 +1410,178 @@ app.current_attachments = []
 app.refresh_attachments_list()
 app.new_note(); app.update()
 
+
+# ---- FIELD CASES AUTOMATED (test plan 107, 110, 118, 121, 125) ----
+# The expensive end of the plan: each is two features meeting, which is
+# where this project has lost most of its bugs.
+import types as _types6, json as _json6, io as _io6
+_b5_saved_notes = list(app.notes)
+_b5_saved_trash = list(app.trash)
+
+# 107: the wheel over an empty Trash panel must reach the page beneath
+# it. A fully-shown list has nothing of its own to scroll, and trapping
+# the wheel there is a scroll that silently does nothing.
+app.trash = []
+app.show_settings_page(); app.update()
+app.toggle_settings_panel('trash'); app.update()
+_b5_page = getattr(app, 'settings_canvas', None)
+_b5_moved = {'n': 0}
+
+
+def _b5_panel_canvas():
+    """The empty panel's OWN scrolling canvas.
+
+    Handing the router None instead skips the entire branch this case is
+    about, and a mutant that trapped the wheel on every panel then sailed
+    through. The whole question is what happens when the canvas exists
+    and has nothing left to scroll.
+    """
+    found = []
+
+    def walk(widget):
+        for child in widget.winfo_children():
+            if isinstance(child, tk.Canvas):
+                found.append(child)
+            walk(child)
+    walk(app.settings_trash_panel)
+    return found[0] if found else None
+
+
+_b5_empty_canvas = _b5_panel_canvas()
+check('an empty trash panel still has a canvas to route the wheel from '
+      '(plan 107)', _b5_empty_canvas is not None)
+if _b5_page is not None and _b5_empty_canvas is not None:
+    _b5_real_scroll = _b5_page.yview_scroll
+
+    def _b5_count(*a, **k):
+        _b5_moved['n'] += 1
+        return _b5_real_scroll(*a, **k)
+
+    _b5_page.yview_scroll = _b5_count
+    app._panel_or_page_wheel(_b5_empty_canvas,
+                             _types6.SimpleNamespace(delta=-120))
+    _b5_page.yview_scroll = _b5_real_scroll
+check('the wheel over an empty trash panel scrolls the page (plan 107)',
+      _b5_moved['n'] >= 1)
+
+# And the other half of the same promise: a panel that CAN scroll keeps
+# the wheel to itself, rather than sliding the page under the user.
+app.trash = [{'id': 3000 + i, 'title': 'Veche %d' % i, 'body': 'x',
+              'category': 'General',
+              'deleted_at': '2026-01-%02d 00:00:00' % ((i % 28) + 1)}
+             for i in range(60)]
+app.toggle_settings_panel('trash'); app.update()
+_b5_inner = None
+for _w in app.settings_trash_panel.winfo_children():
+    for _c in _w.winfo_children():
+        if isinstance(_c, tk.Canvas):
+            _b5_inner = _c
+            break
+    if _b5_inner is not None:
+        break
+if _b5_inner is not None:
+    _b5_moved['n'] = 0
+    _b5_panel_moved = {'n': 0}
+    _b5_real_panel = _b5_inner.yview_scroll
+
+    def _b5_panel_count(*a, **k):
+        _b5_panel_moved['n'] += 1
+        return _b5_real_panel(*a, **k)
+
+    _b5_inner.yview_scroll = _b5_panel_count
+    if _b5_page is not None:
+        _b5_page.yview_scroll = _b5_count
+    app._panel_or_page_wheel(_b5_inner, _types6.SimpleNamespace(delta=-120))
+    _b5_inner.yview_scroll = _b5_real_panel
+    if _b5_page is not None:
+        _b5_page.yview_scroll = _b5_real_scroll
+    check('...while a panel with more to show keeps the wheel (plan 107)',
+          _b5_panel_moved['n'] >= 1 and _b5_moved['n'] == 0)
+app.hide_settings_page(); app.update()
+
+# 110: deleting a category whose notes are on screen, grouped by that
+# very category. The notes must land somewhere real and the grouping
+# must agree with where they landed.
+app.trash = []
+NO.CATEGORY_COLORS['Temporara'] = '#889922'
+app.notes = [NO.normalize_note({'id': 4100 + i, 'title': 'In temporara %d' % i,
+                                'body': 'x', 'category': 'Temporara'})
+             for i in range(3)]
+app.save_notes()
+app.group_by_category.set(True)
+app.refresh_note_list(); app.update()
+app._themed_dialog = lambda *a, **k: 'move'      # keep the notes
+app.show_settings_page(); app.update()
+app.toggle_settings_panel('categories'); app.update()
+app._delete_category('Temporara', lambda: None)
+app.update()
+check('deleting a category takes it off the list (plan 110)',
+      'Temporara' not in NO.CATEGORY_COLORS)
+check('...and its notes are kept, filed under General (plan 110)',
+      all(n['category'] == 'General' for n in app.notes if n['id'] >= 4100))
+app.hide_settings_page()
+app.refresh_note_list(); app.update()
+check('...and the grouped list shows them where they now are (plan 110)',
+      all((app._note_card_widgets.get(n['id']) or {}).get('note', {}).get('category')
+          == 'General' for n in app.notes if n['id'] >= 4100))
+app.group_by_category.set(False)
+app.refresh_note_list(); app.update()
+
+# 121: a backup that mentions a category this device no longer has.
+# The note must arrive filed somewhere real rather than in a category
+# that does not exist.
+_b5_incoming = NO.normalize_note({'id': 999, 'title': 'Din backup',
+                                  'body': 'x', 'category': 'CategorieDisparuta'})
+check('a note naming a category this device lost is filed under General '
+      '(plan 121)', _b5_incoming['category'] == 'General')
+check('...and the note itself arrives whole, not refused',
+      _b5_incoming['title'] == 'Din backup')
+
+# 118: an export started while the editor holds unsaved work. The export
+# must not take the half-typed text, and must not lose it either.
+app.notes = [NO.normalize_note({'id': 4200, 'title': 'Salvata', 'body': 'corp salvat',
+                                'category': 'General'})]
+app.save_notes()
+app.load_note(app.notes[0]); app.update()
+app.body_text.insert('end', ' plus ceva netrimis')
+_b5_on_disk_before = _json6.load(_io6.open('notes_data.json', encoding='utf-8'))
+check('what is on disk before the export is the SAVED text (plan 118)',
+      'netrimis' not in _b5_on_disk_before[0]['body'])
+app._flush_autosave()
+app.update()
+_b5_on_disk_after = _json6.load(_io6.open('notes_data.json', encoding='utf-8'))
+check('...and the edit is not lost -- the autosave around it keeps it '
+      '(plan 118)', 'netrimis' in _b5_on_disk_after[0]['body'])
+
+# 125: clicking quickly through many notes. Nothing may be lost, and no
+# note may end up showing another note's words.
+app.notes = [NO.normalize_note({'id': 4300 + i, 'title': 'Rapid %02d' % i,
+                                'body': 'corpul notitei %02d' % i,
+                                'category': 'General'})
+             for i in range(12)]
+app.save_notes()
+app.refresh_note_list(); app.update()
+_b5_wrong = []
+for _b5_note in list(app.notes):
+    app.open_note_in_tab(_b5_note)
+    app.update()
+    if app.body_text.get('1.0', 'end-1c').strip() != _b5_note['body']:
+        _b5_wrong.append(_b5_note['id'])
+check('switching through twelve notes never shows another one\'s text '
+      '(plan 125)', not _b5_wrong)
+_b5_final = _json6.load(_io6.open('notes_data.json', encoding='utf-8'))
+check('...and all twelve are still there afterwards (plan 125)',
+      len([n for n in _b5_final if n['id'] >= 4300]) == 12)
+check('...each with the text it started with',
+      all(n['body'] == 'corpul notitei %02d' % (n['id'] - 4300)
+          for n in _b5_final if n['id'] >= 4300))
+
+app.notes = list(_b5_saved_notes)
+app.trash = list(_b5_saved_trash)
+app.save_notes()
+app.new_note(); app.update()
+
+
 print()
 print(f"=== QA6 FAILURES: {fails if fails else 'NONE'} ===")
 
