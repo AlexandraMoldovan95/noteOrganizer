@@ -31,6 +31,7 @@ day-to-day tracking.
 | [The trim that moved every colour](#the-trim-that-moved-every-colour) | When a transformation forces a second function to undo its effect, the transformation is the bug — and tidying what the user typed is a data change. | 0.71.154 |
 | [The ceiling that counted the wrong thing](#the-ceiling-that-counted-the-wrong-thing) | A ceiling has to bound what the victim actually pays — and a defence at the render is a data-loss bug when the save reads its data back out of the widget. | 0.71.155 |
 | [The identity that only lasted until you closed the app](#the-identity-that-only-lasted-until-you-closed-the-app) | A value computed on every read is not stored; if it must be stable, something has to write it down — and the test that proves it must survive a restart, not a function call. | 0.73.161 |
+| [The code that would not say which note it was](#the-code-that-would-not-say-which-note-it-was) | A payload built from the screen carries only what is on the screen — and a checked route proves nothing about the field added to it afterwards. | 0.73.165 |
 | [The template editor that "did nothing" when clicked](#the-template-editor-that-did-nothing-when-clicked) | 'Nothing happens' in a --windowed build is a real bug report — the exception was invisible. | 0.3.0 |
 | [The panel that lost its content depending on how you got there](#the-panel-that-lost-its-content-depending-on-how-you-got-there) | Recalculate layout on Tk's `<Map>` event, not after a guessed delay. | 0.3.0 |
 | [The scroll that stopped twice, for two different reasons](#the-scroll-that-stopped-twice-for-two-different-reasons) | Same symptom, unrelated causes — check neighbouring areas instead of assuming one fix covers all. | 0.28.38 |
@@ -756,6 +757,68 @@ free, mint a new one when it is not.
    build, not from reviewing the code. That step has now caught bugs in
    three consecutive cycles, always the same shape: something the code
    was asked for before it existed.
+
+### The code that would not say which note it was
+
+**Symptom, field-reported, one day after the feature shipped.** Generate
+a code for a note, close the app, reopen it, edit the note, import the
+code. Instead of "Same note, a different version", a second note
+appeared holding the original text. The whole point of the identity —
+and on the route a user is most likely to take, it had never worked.
+
+**The mechanism.** The editor's "Generate code" builds its payload from
+`capture_editor_state()` — the title, the body, the styling, the
+comments, the checklist: what is *on the screen*. The identity is not on
+the screen. It belongs to the note, so the snapshot has no reason to
+carry it, and the payload was assembled with a comprehension that drops
+anything the snapshot lacks. The field was added to `SHAREABLE_FIELDS`
+and this route silently declined it.
+
+The comment directly above that line warns about this exact shape: the
+dict "once named seven fields by hand and silently dropped everything
+added to sharing later". It was rewritten to read `SHAREABLE_FIELDS`,
+which fixed the field list — and left the assumption underneath it
+intact, that every shareable field is something the editor holds.
+
+**Why the checks did not see it.** There is an end-to-end check for this
+exact route, added after the earlier loss: editor state → the code
+widget → the import box → the opened editor. It asserts the content
+arrives. Content was never the problem. A route check pins what it
+compares, and the field added a release later was not in its list.
+
+**The second bug, found by the check written for the first.** With the
+identity travelling, the new check still failed: the note was recognised,
+`_prev` was written, and the body was the OLD version. Updating a note
+writes onto the stored note — while the editor goes on showing what it
+had. The route then re-opened the note, and re-opening flushes the
+editor first, which saw a difference and wrote the editor's version
+straight back over the update. The note reverted with nothing on screen
+to say it had ever changed, and the same is true one keystroke later on
+the bulk route, which does not re-open anything at all.
+
+So: flush first, deliberately, so the user's unsaved work is what the
+rescue copy holds; then apply; then bring the editor onto the new
+version without flushing again.
+
+**Two more from the same field test**, both about the screen telling the
+truth: a generated code stayed on display under whichever note you moved
+to next, and Settings came back showing a section built on an earlier
+visit — so a note deleted in between was simply missing from Recently
+deleted.
+
+**The lessons.**
+
+1. A payload built from the screen carries only what is on the screen.
+   When a field is added to a shared shape, the question is not "which
+   list names it" but "does every producer HAVE it".
+2. A green route check proves what it compares, not that the route is
+   whole. Adding a field to a format is a reason to revisit every check
+   that walks it.
+3. Writing onto a note behind the editor's back is a save waiting to
+   undo it. Any route that does it owns making the editor agree.
+4. Four user-visible bugs, none of them findable by the suite as it
+   stood, all found in twenty minutes of somebody actually using the
+   app. The field test is not a formality at the end of the cycle.
 
 
 ## Tk & platform gotchas

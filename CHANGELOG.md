@@ -59,6 +59,52 @@ How the numbers themselves are counted is the
 
 ---
 
+## [Unreleased]
+
+### Fixed
+
+- **A code made in the editor now says which note it is, so bringing that note
+  back updates it instead of copying it.** "Generate code" built the code out of what
+  the editor had on screen, and a note's identity is not something on screen — so the
+  code went out describing a note with those words rather than *that* note. Sent to
+  another device and brought back, it was a stranger: you were asked whether to keep the
+  duplicate, not whether to update the note it came from. Codes made by ticking notes in
+  the sidebar's Share panel always carried it; the editor's did not, and the editor is
+  the route you reach for when you have the note open.
+- **Updating a note from a code no longer gets undone a moment later.** The note you
+  send out is usually the note you have open — and the update replaced what was stored
+  while the editor went on showing the version from before. Saving the editor, which any
+  keystroke does, wrote that version straight back over the update. Nothing on screen
+  said so: the note simply reverted. The editor is now brought onto the new version, and
+  whatever you had typed is saved first, so "↩ Restore previous" still hands it back.
+- **A generated code disappears when you open another note.** It used to stay on
+  screen under whichever note you moved to, reading as though it belonged to that one.
+  Copying it then shared the wrong note, and nobody proofreads a wall of characters.
+- **Settings shows how things are now, not how they were when you last looked.**
+  Recently deleted, Duplicates, Categories and Templates came back exactly as they were
+  built on an earlier visit: a note deleted since then was missing from Recently deleted
+  until you clicked the section again.
+
+### Changed
+
+- **Right-clicking a note in the list no longer offers "Open / Edit".** Clicking the
+  note already opens it for editing, so the entry was a longer way to do what the click
+  had just done. It stays where a click means something else: on a calendar day, where
+  clicking opens the note inside the day panel, and in the calendar's History register,
+  where clicking jumps to a date.
+
+### Removed
+
+- **The unused multi-note tab machinery.** A row of tabs above the editor was built for
+  keeping several notes open at once, and the app never opened more than one: every path
+  reset the list to a single entry, so the row could not appear and the code that closed
+  a tab could not run. About a hundred lines guarding states the app could not reach.
+  The choice it had been waiting on — build real multi-note tabs, or take it out — is
+  settled by taking it out; nothing you could do in the app changes. What it wrapped and
+  what does the real work, keeping the editor and the stored note in step, stays.
+
+---
+
 ## [0.73.161] — 2026-09-13
 
 *Highlights: the identity a note was given in 0.73.159 is now written down, so it is the same identity tomorrow — a share code made today still finds the right note after the app has been closed.*
