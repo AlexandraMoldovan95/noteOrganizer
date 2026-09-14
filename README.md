@@ -7,6 +7,13 @@ Built as a solo/pair project (developer + AI pairing partner) across 40 versione
 ![The main window: a note with a table, the formatting toolbar, and the notes sidebar](docs/screenshots/main-window.png)
 *More screenshots throughout the [User Guide](docs/USER_GUIDE.md).*
 
+Every image here is this app: the screenshots are captures of it running,
+and the icon is **drawn from code** at build time by
+[`tools/make_icon.py`](tools/make_icon.py) rather than stored as a file —
+five designs to choose between, each one redrawn (not shrunk) at small
+sizes so it still reads at 16px in a taskbar. Nothing was taken from
+anywhere else.
+
 ## Project highlights
 
 - **Ships as a real Windows app** — a PyInstaller one-folder build, released across 40 versions — five early milestones plus 35 numbered bumps — and field-tested against a written test plan along the way (the [Changelog](CHANGELOG.md) tells the story; the [version ledger](docs/ROADMAP.md#version-ledger) accounts for every number).

@@ -1,6 +1,13 @@
 # Screenshots
 
-The images in this folder illustrate [`docs/USER_GUIDE.md`](../USER_GUIDE.md)
+Every image in this folder is a capture of **this app running** — taken
+here, on the build named below, by the person or the script that wrote the
+line beside it. None of it comes from anywhere else, and the app's icon is
+not a picture at all: it is drawn from code by
+[`tools/make_icon.py`](../../tools/make_icon.py) every time the app is
+built.
+
+The images illustrate [`docs/USER_GUIDE.md`](../USER_GUIDE.md)
 and [`README.md`](../../README.md). They are referenced by exact filename, so
 **to replace or add one, drop a PNG here using the filename below** — it then
 renders automatically everywhere the docs reference it, no other change needed.
