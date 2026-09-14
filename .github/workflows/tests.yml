@@ -19,9 +19,53 @@ name: QA Tests
 # where that claim applies (sys.platform gates inside the qa scripts) --
 # and the Windows job below is exactly what makes those assertions bite in
 # CI rather than only on a developer's machine.
+# WHEN IT RUNS, AND WHY NOT MORE OFTEN
+#
+# This is a private repository, so every minute is billed against the
+# account's monthly allowance -- and this suite is the expensive one:
+# two platforms, and a Windows minute counts as two. Four measures keep
+# it inside the allowance without narrowing what gets checked:
+#
+#   * Once per change, not twice. Pushes are watched only on `main`;
+#     work on a branch is covered by its pull request. A branch with an
+#     open PR used to run the whole matrix twice, on the push AND on the
+#     PR, for one set of commits. (To see a verdict before opening a PR,
+#     use the Run workflow button -- workflow_dispatch, below.)
+#   * Only when it could tell us something. A paragraph of documentation,
+#     a screenshot or a row in the test plan cannot turn a check red.
+#     Everything NOT listed under paths-ignore still triggers it --
+#     `noteorganizer/`, `note_organizer.py`, `test_*.py`, `qa/qa*.py`,
+#     `tools/`, the spec file and this workflow included.
+#   * A new push cancels the run it has already made pointless.
+#   * And the timeout below, which was here first.
+#
+# NOTE, if required status checks are ever turned on for `main`: a
+# documentation-only PR will not run this workflow at all, so a required
+# "qa" check would stay pending forever and block the merge. Say so and
+# this gets solved a different way.
 on:
   push:
+    branches: [main]
+    paths-ignore:
+      - "**.md"
+      - "docs/**"
+      - "qa/*.xlsx"
+      - ".gitignore"
+      - "LICENSE"
   pull_request:
+    paths-ignore:
+      - "**.md"
+      - "docs/**"
+      - "qa/*.xlsx"
+      - ".gitignore"
+      - "LICENSE"
+  workflow_dispatch:
+
+# One run per branch. A push that supersedes another makes the older run
+# pointless the moment it lands, and a pointless run still costs minutes.
+concurrency:
+  group: qa-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   qa:

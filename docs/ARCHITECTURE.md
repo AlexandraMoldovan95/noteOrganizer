@@ -529,7 +529,8 @@ a persistent bug can no longer stop saving with nothing anywhere to diagnose.
 
 ## Testing
 
-Everything runs automatically on every push and Pull Request via GitHub Actions
+Everything runs automatically on every Pull Request, and on every push to
+`main`, via GitHub Actions
 (`.github/workflows/tests.yml`), on **both** Windows and Linux: the Linux job supplies a
 virtual display via Xvfb, and Windows runs through native win32, which is what makes the
 platform-specific pixel checks bite in CI. A regression shows up as a failed check rather than
