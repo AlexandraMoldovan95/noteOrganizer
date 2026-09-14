@@ -45,7 +45,8 @@ calls, no accounts, no database.
   `test_richtext.py` and `test_tables.py` need no GUI;
   `test_entry_module_identity.py` builds a window. `qa/qa1.py`–`qa9.py` are
   headless GUI tests, each starting from a clean data directory. All of them
-  run automatically via `.github/workflows/tests.yml` on every push/PR — on
+  run automatically via `.github/workflows/tests.yml` on every pull request
+  and on every push to `main` — on
   **both** Windows and Linux (the Linux job supplies the display via Xvfb;
   Windows runs through native win32). There's also a manual test plan
   spreadsheet (`qa/NoteOrganizer_TestPlan.xlsx`) for scenarios not worth
