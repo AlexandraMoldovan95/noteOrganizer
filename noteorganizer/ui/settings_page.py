@@ -213,6 +213,38 @@ class SettingsPageMixin:
                 pass
         return "break"
 
+    def _wrap_to_own_width(self, label, inset=4):
+        """Wrap where the label ends, not where somebody guessed it ends.
+
+        A Label breaks its text at `wraplength` pixels and then draws
+        those lines inside whatever width the geometry manager gave it.
+        When the two disagree, the ends of the lines are simply not
+        drawn -- a sentence that stops mid-word with nothing to say it
+        was cut. Three labels in this page did exactly that, by 51, 57
+        and up to 69 pixels.
+
+        Each of their wraplengths was SETTINGS_CONTENT_MAX minus a
+        hand-picked number, and each of those numbers was a guess at the
+        padding between the pane and the label. The padding is 48 a side
+        on the panel alone, so every guess was short. A number that has
+        to agree with a layout it cannot see is wrong the first time the
+        layout changes -- and it had been.
+
+        So the width is taken from the label itself, once it has one.
+        Only for labels the parent stretches (fill="x"): a label that
+        sizes itself to its text would shrink, re-wrap, and shrink again.
+
+        `inset` covers the label's own border and padding, which Tk adds
+        to the wrapped text when it asks for room -- measured at three
+        pixels, so four is asked for and one is spare.
+        """
+        def fit(event):
+            want = max(160, event.width - inset)
+            if int(label.cget("wraplength") or 0) != want:
+                label.configure(wraplength=want)
+        label.bind("<Configure>", fit, add="+")
+        return label
+
     def _settings_subtitle(self, parent, text):
         """The explanatory line under a section title.
 
@@ -223,10 +255,10 @@ class SettingsPageMixin:
         already on.
         """
         lbl = tk.Label(parent, text=text, font=("Segoe UI", 10), anchor="w",
-                       justify="left", wraplength=self.SETTINGS_CONTENT_MAX - 20,
+                       justify="left",
                        bg=self.colors["bg"], fg=self.colors["subtext"])
         lbl.pack(fill="x", pady=(0, 22))
-        return lbl
+        return self._wrap_to_own_width(lbl)
 
     def _render_statistics(self):
         """Compute and draw a compact, read-only snapshot: total notes; a
@@ -2003,10 +2035,11 @@ class SettingsPageMixin:
                  bg=self._surface(), fg=self.colors["text"], anchor="w"
                  ).pack(fill="x")
         if hint:
-            tk.Label(text_col, text=hint, font=("Segoe UI", 9),
-                     bg=self._surface(), fg=self.colors["subtext"], anchor="w",
-                     justify="left", wraplength=self.SETTINGS_CONTENT_MAX - 260
-                     ).pack(fill="x", pady=(2, 0))
+            note = tk.Label(text_col, text=hint, font=("Segoe UI", 9),
+                            bg=self._surface(), fg=self.colors["subtext"],
+                            anchor="w", justify="left")
+            note.pack(fill="x", pady=(2, 0))
+            self._wrap_to_own_width(note)
         control = tk.Frame(row, bg=self._surface())
         control.pack(side="right", padx=(16, 0))
         return control
@@ -2040,10 +2073,10 @@ class SettingsPageMixin:
         ico = tk.Canvas(wrap, width=16, height=16, highlightthickness=0, bd=0, bg=bg)
         ico.pack(side="left", padx=(12, 8), pady=11)
         self._draw_icon(ico, "about", self.colors["accent"], size=16)
-        tk.Label(wrap, text=text, font=("Segoe UI", 9), bg=bg,
-                 fg=self.colors["subtext"], anchor="w", justify="left",
-                 wraplength=self.SETTINGS_CONTENT_MAX - 90
-                 ).pack(side="left", fill="x", expand=True, pady=10, padx=(0, 12))
+        band = tk.Label(wrap, text=text, font=("Segoe UI", 9), bg=bg,
+                        fg=self.colors["subtext"], anchor="w", justify="left")
+        band.pack(side="left", fill="x", expand=True, pady=10, padx=(0, 12))
+        self._wrap_to_own_width(band)
         return wrap
 
     def _text_button(self, parent, text, command, kind="normal"):
@@ -2842,11 +2875,11 @@ class SettingsPageMixin:
         path_text = paths.APP_DIR or "(not set yet)"
         well = tk.Frame(card, bg=self._surface("inset"))
         well.pack(fill="x")
-        tk.Label(well, text=path_text, font=("Consolas", 9),
-                 bg=self._surface("inset"), fg=self.colors["subtext"],
-                 anchor="w", justify="left",
-                 wraplength=self.SETTINGS_CONTENT_MAX - 110
-                 ).pack(fill="x", padx=12, pady=10)
+        where = tk.Label(well, text=path_text, font=("Consolas", 9),
+                         bg=self._surface("inset"), fg=self.colors["subtext"],
+                         anchor="w", justify="left")
+        where.pack(fill="x", padx=12, pady=10)
+        self._wrap_to_own_width(where)
 
         buttons = tk.Frame(card, bg=self._surface())
         buttons.pack(fill="x", pady=(10, 0))

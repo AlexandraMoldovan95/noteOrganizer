@@ -453,6 +453,7 @@
   "_wait_for_io_workers": "(self, cap_s=30.0)",
   "_wheel_pixels": "(self, delta)",
   "_widget_alive": "(widget)",
+  "_wrap_to_own_width": "(self, label, inset=4)",
   "_write_cell": "(self, info, r, c, value)",
   "add_attachment": "(self)",
   "add_placeholder": "(self, entry, placeholder)",
