@@ -12,7 +12,7 @@ How the numbers themselves are counted is the
 
 | Version | Date | In one line |
 |---|---|---|
-| [0.74.172](#074172--2026-09-15) | 2026-09-15 | The selection bar shows all four of its actions, and a ticked box looks ticked on a dark theme. |
+| [0.75.172](#075172--2026-09-15) | 2026-09-15 | The selection bar shows all four of its actions, and a ticked box looks ticked on a dark theme. |
 | [0.74.170](#074170--2026-09-15) | 2026-09-15 | A repeating series says so wherever it can be deleted — including the Trash, where deleting cannot be undone. |
 | [0.74.169](#074169--2026-09-15) | 2026-09-15 | Deleting a note stops redrawing the whole screen — the list, the calendar and the statistics were all rebuilt, two of them off screen. |
 | [0.74.168](#074168--2026-09-15) | 2026-09-15 | Deleting something offers Undo where you deleted it — including the one delete that had no way back at all. |
@@ -83,9 +83,18 @@ How the numbers themselves are counted is the
 
 ---
 
-## [0.74.172] — 2026-09-15
+## [0.75.172] — 2026-09-15
 
-*Highlights: both halves of using Select — seeing the actions you can take, and seeing which notes you have ticked.*
+*Highlights: using Select is all of a piece now — seeing the actions you can take, seeing which notes you have ticked, and being able to change your mind about all of them at once.*
+
+### Added
+
+- **"Select all" becomes "Unselect all" once everything on screen is selected.** One
+  button rather than two, because the second is only ever wanted straight after the
+  first: a mis-aimed press used to mean leaving selection mode altogether and starting
+  over, since nothing else lets go of a selection in one gesture. "All" still means what
+  the list is showing, so with a search or a category filter active it takes — and
+  releases — exactly those notes.
 
 ### Fixed
 

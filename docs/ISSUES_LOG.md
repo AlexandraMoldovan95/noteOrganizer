@@ -1970,7 +1970,7 @@ has not been tested — it has been lucky.
 
 ### Two ways to be invisible
 
-*([0.74.172](../CHANGELOG.md#074172--2026-09-15) · 2026-09-15)*
+*([0.75.172](../CHANGELOG.md#075172--2026-09-15) · 2026-09-15)*
 
 Two reports, one strip of sidebar, and two different ways for a thing to
 be on screen and not be seen.

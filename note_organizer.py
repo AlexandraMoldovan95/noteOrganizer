@@ -45,7 +45,7 @@ except ImportError:
 # Added/Fixed CHANGELOG.md entries, not per-release counts). The running
 # app records this into settings, so the next time a newer build opens
 # over older data it can tell the user what changed version-wise.
-APP_VERSION = "0.74.172"
+APP_VERSION = "0.75.172"
 
 
 def parse_version(v):
@@ -10097,6 +10097,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             relief="flat", font=("Segoe UI", 8), cursor="hand2")
         self.track_theme(bulk_select_all_btn, bg="card", fg="text")
         _bulk_pack(bulk_select_all_btn)
+        # Kept, because its label is not fixed: it becomes "Unselect all"
+        # once everything on screen is selected.
+        self._bulk_select_all_btn = bulk_select_all_btn
         bulk_trash_btn = tk.Button(
             top_row, text="🗑 Trash", command=self._bulk_move_to_trash,
             relief="flat", font=("Segoe UI", 8, "bold"), cursor="hand2")
@@ -12031,6 +12034,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 self.build_note_card(note)
 
         self._bind_mousewheel_recursive(self.list_frame, self.canvas)
+        if getattr(self, "selection_mode", False):
+            # What "all" means has just changed -- a search or a filter
+            # alters which notes are on screen, and the Select all button
+            # says what pressing it would do. Only while the bar is up,
+            # so an ordinary refresh pays nothing for it.
+            self._update_bulk_selected_label()
 
     def _render_grouped_notes(self, filtered):
         """Render notes clustered under collapsible category headers. Group
@@ -12494,6 +12503,20 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
     def _update_bulk_selected_label(self):
         n = len(self.selected_note_ids)
         self.bulk_selected_lbl.config(text=f"{n} selected")
+        # The button says what pressing it will do, which changes once
+        # everything on screen is already selected. Asked from the same
+        # _visible_note_ids() the press itself uses, so the word and the
+        # action cannot disagree.
+        button = getattr(self, "_bulk_select_all_btn", None)
+        if button is None:
+            return
+        try:
+            visible = self._visible_note_ids()
+            button.config(text="Unselect all"
+                          if visible and visible <= self.selected_note_ids
+                          else "Select all")
+        except (tk.TclError, AttributeError):
+            pass
 
     @staticmethod
     def _query_matches_note(query, note):
@@ -12517,21 +12540,44 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 or query in body_txt
                 or query in _txt(note.get("comments")))
 
-    def _bulk_select_all(self):
-        """Selects every note currently visible in the list (respecting
-        whatever search/category filter is active) — not necessarily every
-        note in the whole app."""
+    def _visible_note_ids(self):
+        """The notes the list is showing right now, by id.
+
+        The ONE definition, for the same reason _query_matches_note is
+        one: the moment two places work out "what is on screen" for
+        themselves, they drift, and this project has already paid for
+        that once (see that method's note). Select-all and the label
+        that decides whether everything IS selected have to mean exactly
+        the same set, or the button offers to select what is already
+        selected.
+        """
         query = self.search_var.get().lower()
         if query == "search notes...":
             query = ""
-
         visible = [n for n in self.notes
                    if self._query_matches_note(query, n)]
         chosen_category = getattr(self, "filter_var", None)
         if chosen_category is not None and self.filter_var.get() != "All":
             visible = [n for n in visible
                        if self._note_passes_filter(n, self.filter_var.get())]
-        self.selected_note_ids = {n["id"] for n in visible}
+        return {n["id"] for n in visible}
+
+    def _bulk_select_all(self):
+        """Select every note the list is showing — or, if they are all
+        already selected, let them all go again.
+
+        One button rather than two, because the second is only ever
+        wanted straight after the first: a mis-aimed "Select all" used to
+        mean leaving selection mode entirely and starting over, since
+        nothing else clears a selection in one gesture. It respects
+        whatever search or category filter is active, so "all" is what is
+        on screen, never the whole notebook.
+        """
+        visible = self._visible_note_ids()
+        if visible and visible <= self.selected_note_ids:
+            self.selected_note_ids = set()
+        else:
+            self.selected_note_ids = set(visible)
         self._update_bulk_selected_label()
         self.refresh_note_list()
 
