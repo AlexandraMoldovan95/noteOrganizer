@@ -79,6 +79,7 @@ day-to-day tracking.
 | [The teeth that had gone dull](#the-teeth-that-had-gone-dull) | Reintroduce the original bug occasionally — green must prove it can still go red. | 0.64.95 |
 | [The safety net that hid the missing mechanism](#the-safety-net-that-hid-the-missing-mechanism) | When a fallback masks the primary mechanism, assert the mechanism — a behaviour check green under two themes proved nothing. | 0.71.125 |
 | [The width that was guessed](#the-width-that-was-guessed) | A layout number that must agree with a layout it cannot see is wrong the first time either changes — ask the widget; and when a measurement disagrees with a photograph, doubt the measurement. | 0.73.167 |
+| [The rebuild nobody was looking at](#the-rebuild-nobody-was-looking-at) | When a new feature makes the user look somewhere new, expect a report about something that was always wrong there — measure before blaming the newest change; and a guard applied at one call site out of thirty-one is a comment, not a guard. | 0.74.169 |
 
 
 ## Data safety & integrity
@@ -1836,6 +1837,75 @@ much.
 see is wrong the first time either changes, and stays wrong silently. Ask
 the widget. And when a measurement disagrees with a photograph, the
 measurement is the thing to doubt first.
+
+### The rebuild nobody was looking at
+
+*([0.74.169](../CHANGELOG.md#074169--2026-09-15) · 2026-09-15)*
+
+**Symptom:** field-reported in four words — "the picture breaks a little
+and rebuilds itself when I delete a note and the Undo button appears".
+
+**First finding: it was not the Undo.** The banner had just shipped and
+was the obvious suspect, so it was measured rather than blamed. A delete
+cost 185ms and rebuilt 264 widgets *with the banner removed from the code
+entirely*; the banner itself cost 7ms and built nothing. What the new
+feature had done was hold her eyes on that part of the screen for eight
+seconds instead of one and a half. The flicker had always been there.
+
+**Cause:** three rebuilds, of which two were invisible.
+
+| Piece | Cost | Widgets | On screen? |
+|---|---|---|---|
+| `refresh_note_list()` | 129ms | 169 | yes |
+| `render_calendar()` | 36ms | 98 | no — the Notes tab was showing |
+| `_render_statistics()` | 12ms | 49 | no — Settings was closed |
+
+One mechanism in three places: work done unconditionally on a data
+change, for a surface nobody was looking at. And the app already knew
+better — `apply_theme` had skipped the calendar since the theme-switch
+flicker work, with the reasoning written beside it. That test lived at
+one call site out of thirty-one.
+
+**Fix:** the test moved *inside* `render_calendar()`, so every caller is
+right by construction rather than by having remembered. The statistics
+panel gained the same gate. And deleting a note stopped rebuilding the
+list at all: `_remove_note_cards()` takes the one card off and leaves the
+rest untouched — the fourth member of a family the list already had
+(`_recolor_note_cards`, `_apply_selection_mode_to_cards`,
+`_update_open_highlight`), each written because a full rebuild "visibly
+flickered the whole list" for a change that touched a few cards.
+
+185ms and 264 widgets became 31ms and 3.
+
+Every uncertain case still hands over to the full rebuild — an emptied
+list (whose message depends on whether anything is filtered), a header
+that would not update, a card that is not where the registry says. A list
+that quietly disagrees with the notes is far worse than one that
+flickers.
+
+**The gap that listing the routes found.** Deferring a rebuild is only
+safe if something catches it up before the screen can be seen again.
+There are exactly four ways back to the calendar, and the fourth had no
+catch-up: leaving Settings re-packs the notebook with the *same tab still
+selected*, so no tab-change event ever fires — and Settings is exactly
+where notes are restored, purged and recategorised. Found by enumerating
+the routes, not by testing.
+
+**And the trap inside that fix.** The first attempt called the catch-up
+from `hide_settings_page()`, which asked `_calendar_is_showing()`, which
+read `winfo_ismapped()` — and `pack()` does not settle that until Tk next
+goes idle. It answered "not showing", deferred again, and left exactly
+the staleness it was added to prevent. `after_idle` did not escape it
+either: measured, the callback still ran with the notebook reading as
+hidden. The fix was to stop asking an unreliable question: an explicit
+flag, set by the two methods that own the swap — the same lesson
+`_calendar_is_showing()` had already learned for the *tab* half of the
+question and not for the other.
+
+**Takeaway:** when a feature makes a user look somewhere new, expect a
+report about something that was always wrong there. Measure before
+believing the newest change caused it. And a guard that exists at one
+call site out of thirty-one is not a guard — it is a comment.
 
 ## Tests & CI discipline
 

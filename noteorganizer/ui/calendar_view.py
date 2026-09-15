@@ -309,6 +309,30 @@ class CalendarViewMixin:
     def render_calendar(self):
         if not hasattr(self, "cal_grid_frame"):
             return
+        # Rebuilding ~35-42 day cells for a month nobody is looking at is
+        # work the user pays for and never sees. Measured from the Notes
+        # tab: 36ms and 98 widgets, on every delete, save, import and
+        # category change -- a quarter of what a delete costs, spent on
+        # the other tab.
+        #
+        # apply_theme has skipped this since the theme-switch flicker
+        # work, with the reasoning written beside it; every OTHER caller
+        # went through regardless. The decision belongs here, once, so
+        # all thirty-one call sites are right by construction rather than
+        # by each having remembered.
+        #
+        # Deferring is only safe because something catches it up before
+        # the calendar can be seen again. There are exactly four ways
+        # back to it, and all four are covered: switching tabs
+        # (_on_tab_changed), leaving Settings (hide_settings_page),
+        # "Back to Calendar" (which selects the tab, so the first), and
+        # already standing on it -- where this guard does not fire at
+        # all. _calendar_is_showing() answers the question from the
+        # notebook's own selection rather than winfo_ismapped(), which
+        # pack() does not update synchronously.
+        if not self._calendar_is_showing():
+            self._calendar_needs_render = True
+            return
         # Tracks date_str -> cell Frame, so a single day's marker badge can be
         # refreshed later (see _refresh_day_badge) without tearing down and
         # rebuilding all ~35-42 day cells just for one small change.

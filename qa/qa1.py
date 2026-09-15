@@ -5378,8 +5378,23 @@ check('a theme switch defers the calendar rebuild while it is off screen',
       getattr(app, '_calendar_needs_render', False) is True)
 app._catch_up_deferred_refresh()
 app.update()
-check('the deferred calendar rebuild is caught up at the next transition',
+# A transition that does NOT bring the calendar into view must leave the
+# work deferred rather than do it: _catch_up_deferred_refresh() runs on
+# every note switch too, and rebuilding an off-screen month there is the
+# same waste in a different place. The promise is not "the flag is
+# cleared" -- it is "the calendar is never SEEN stale".
+app._catch_up_deferred_refresh()
+app.update()
+check('a transition that does not show the calendar leaves it deferred',
+      getattr(app, '_calendar_needs_render', False) is True)
+app.notebook.select(app.TAB_CALENDAR)
+app.update()
+check('the deferred calendar rebuild is caught up when the tab is opened',
       getattr(app, '_calendar_needs_render', False) is False)
+check('...and the month really was drawn, not merely marked done',
+      len(app.cal_grid_frame.winfo_children()) > 0)
+app.notebook.select(app.TAB_NOTES)
+app.update()
 
 # Statistics is no longer rebuilt on a theme switch either (nothing about a
 # statistic changes when only the palette does), so it must be left with no
@@ -7463,6 +7478,137 @@ check('a template over unsaved content asks before replacing it (plan 32)',
 check('...and answering No leaves what was typed exactly where it was',
       'ceva scris si nesalvat' in app.body_text.get('1.0', 'end-1c'))
 
+# ---------------------------------------------------------------------
+# Deleting a note takes ONE card off the list instead of rebuilding it.
+#
+# Field-reported as "the picture breaks a little and rebuilds itself".
+# Measured: 264 widgets and 185ms per delete, of which the list was 169
+# and 129. The surgical path is the fourth of its family here, and the
+# rule it lives by is that any doubt falls back to the full rebuild --
+# so these checks are as much about the FALLBACK firing as about the
+# fast path working.
+# ---------------------------------------------------------------------
+app.group_by_category.set(False)
+app.search_var.set('')
+if hasattr(app, 'filter_var'):
+    app.filter_var.set('All')
+app.notes = [NO.normalize_note(
+    {'id': 400 + i, 'title': 'Surgical%d' % i, 'body': 'b%d' % i,
+     'category': 'General'}) for i in range(12)]
+app.save_notes()
+app.new_note()
+app.refresh_note_list()
+app.update()
+def _sg_settle():
+    """Stop anything that rebuilds the list on a timer of its own.
+
+    The sidebar search debounces with after(180, refresh_note_list). A
+    full rebuild produces correct cards, so a timer landing between a
+    surgical removal and the reading below would repair whatever the
+    removal got wrong and report it as right. Once deleting stopped
+    costing 185ms there is no longer enough slack for that timer to have
+    always fired already, which is how a sibling check in qa7 turned red
+    without anything being wrong with it.
+    """
+    app._flush_autosave()
+    if getattr(app, '_search_debounce_job', None) is not None:
+        app.after_cancel(app._search_debounce_job)
+        app._search_debounce_job = None
+    app.update()
+
+
+_sg_settle()
+_sg_before = len(app._note_card_widgets)
+check('the list drew a card per note to begin with', _sg_before == 12)
+# The witness. Every check below about "the cards survived" would pass
+# just as happily after a full rebuild, which produces correct cards
+# too -- so one card's Tk path is remembered. A rebuild destroys and
+# recreates it under a new name; taking one card off does not touch it.
+# Without this, nothing here can tell the two apart.
+_sg_witness = str(app._note_card_widgets[400]['card'])
+
+_sg_target = app.find_note(405)
+app._delete_note(_sg_target, None)
+_sg_settle()
+check('the deleted note loses its card',
+      405 not in app._note_card_widgets)
+check('...and every other card is still there',
+      len(app._note_card_widgets) == _sg_before - 1)
+check('...and the cards were not rebuilt around it',
+      all(w['card'].winfo_exists() for w in app._note_card_widgets.values()))
+check('...and a surviving card is the SAME widget, not a remade one',
+      str(app._note_card_widgets[400]['card']) == _sg_witness)
+check('...and the list agrees with the notes',
+      sorted(app._note_card_widgets) == sorted(n['id'] for n in app.notes))
+
+# The scroll guards exist because a REBUILD empties the frame and a
+# Configure landing in that window clamps the canvas to the top. Taking
+# one card off never empties anything, so the position should simply not
+# move -- no save, no restore, nothing to get wrong.
+app.canvas.yview_moveto(1.0)
+app.update()
+_sg_scroll = app.canvas.canvasy(0)
+app._delete_note(app.find_note(404), None)
+_sg_settle()
+check('a delete does not move the list scroll at all',
+      abs(app.canvas.canvasy(0) - _sg_scroll) < 2)
+app.canvas.yview_moveto(0.0)
+app.update()
+
+# The open-note border is moved by _update_open_highlight, which reads
+# the same registry. A card removed from under it must not leave it
+# pointing at something that no longer exists.
+app.open_note_in_tab(app.find_note(403))
+app.update()
+app._delete_note(app.find_note(403), None)
+_sg_settle()
+check('deleting the OPEN note leaves the highlight with nothing stale',
+      403 not in app._note_card_widgets)
+app.open_note_in_tab(app.find_note(402))
+app.update()
+check('...and the next note opened still takes the border',
+      app._note_card_widgets[402]['card'].cget('highlightthickness') == 2)
+
+# A theme switch afterwards recolours what is left, in place, and must
+# not trip over the entry that was removed.
+app.set_theme('light')
+app.update()
+check('a theme switch after a delete recolours the surviving cards',
+      all(str(w['card'].cget('bg')).lower() == app.colors['card'].lower()
+          for w in app._note_card_widgets.values()))
+app.set_theme('dark')
+app.update()
+
+# THE FALLBACK. Deleting the last note on screen must hand over to the
+# full rebuild, because an empty list is not "no cards" -- it carries a
+# message, and which message depends on whether anything is filtered.
+app.notes = [NO.normalize_note({'id': 500, 'title': 'LastOne', 'body': 'b',
+                                'category': 'General'})]
+app.save_notes()
+app.new_note()
+app.refresh_note_list()
+app.update()
+app._delete_note(app.find_note(500), None)
+_sg_settle()
+check('deleting the last note empties the card registry',
+      not app._note_card_widgets)
+_sg_texts = []
+for _w in app.list_frame.winfo_children():
+    try:
+        _sg_texts.append(str(_w.cget('text')))
+    except tk.TclError:
+        pass
+check('...and the empty list says so, which only a full rebuild writes',
+      any('No notes' in t for t in _sg_texts))
+
+app.notes = []
+app.trash = []
+app.save_notes()
+NO.save_trash(app.trash)
+app.new_note()
+app.refresh_note_list()
+app.update()
+
 # 45: the theme picker offers the variants of the mode you are in.
 check('dark and light are separate lists, not one (plan 45)',
       set(NO.DARK_THEMES).isdisjoint(NO.LIGHT_THEMES)
@@ -7742,7 +7888,6 @@ else:
     check('the search box deletes a whole emoji too',
           _se.get() == '' and not _torn(_se.get()))
 _eapp.destroy()
-
 
 
 print()

@@ -45,7 +45,7 @@ except ImportError:
 # Added/Fixed CHANGELOG.md entries, not per-release counts). The running
 # app records this into settings, so the next time a newer build opens
 # over older data it can tell the user what changed version-wise.
-APP_VERSION = "0.74.168"
+APP_VERSION = "0.74.169"
 
 
 def parse_version(v):
@@ -9436,14 +9436,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # no new information. Real data changes still redraw it through
         # refresh_note_list(), which is unchanged.
         #
-        # Same reasoning for the calendar: rebuilding every day cell costs
-        # ~19ms and is pointless while the calendar isn't even on screen.
-        # Checked against the selected tab (reliable state) rather than
-        # winfo_ismapped(), which isn't updated synchronously.
-        if self._calendar_is_showing():
-            self.render_calendar()
-        else:
-            self._calendar_needs_render = True
+        # Same reasoning for the calendar: rebuilding every day cell is
+        # pointless while the calendar isn't even on screen. That test
+        # used to be written out here, and here only -- it now lives
+        # inside render_calendar() itself, so every caller gets it and
+        # this one simply asks for a render like all the others.
+        self.render_calendar()
         # Safety net: catch any widget that slipped through the registered list
         # (e.g. built once and never rebuilt) by swapping known theme colors from
         # the OTHER theme to the current one. This guarantees a clean flip.
@@ -9518,9 +9516,17 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         tab = getattr(self, "_calendar_tab", None)
         if tab is None:
             return True  # unknown layout: rebuild rather than risk staleness
+        # Settings replaces the whole notebook, and it used to be spotted
+        # here by winfo_ismapped(). That answer lags: pack()/pack_forget()
+        # do not settle it until Tk goes idle, so a caller on either side
+        # of the swap could read the state from before it. Measured
+        # failing for real once deferral rode on this answer -- leaving
+        # Settings rebuilt nothing, because the notebook it had just
+        # re-packed still read as hidden. The flag is set by the two
+        # methods that own the swap and is right the instant they run.
+        if getattr(self, "_settings_open", False):
+            return False
         try:
-            if not self.notebook.winfo_ismapped():
-                return False
             return str(self.notebook.select()) == str(tab)
         except tk.TclError:
             return True
@@ -11943,6 +11949,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # only really noticeable on the frequent actions that started using
         # it too: switching notes, and toggling selection mode).
         self._note_card_widgets = {}
+        # Category headers, by the same logic and for the same reason:
+        # _remove_note_cards has to update the "(N)" on a header without
+        # rebuilding the list around it. Rebuilt here, like the cards, so
+        # it only ever describes what is on screen.
+        self._group_header_widgets = {}
 
         query = self.search_var.get().lower()
         if query == "search notes...":
@@ -12021,6 +12032,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
             for w in (header, dot, caret, lbl):
                 w.bind("<Button-1>", lambda e, c=cat: self._toggle_group_collapsed(c))
+
+            # The ids, not the cards: a collapsed group draws no cards at
+            # all, and its header still has to show the right number.
+            self._group_header_widgets[cat] = {
+                "frame": header, "label": lbl,
+                "ids": [n["id"] for n in notes_in_group]}
 
             if not collapsed:
                 for note in notes_in_group:
@@ -12280,6 +12297,87 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self.bulk_action_bar.pack_forget()
         self._update_bulk_selected_label()
         self._apply_selection_mode_to_cards()
+
+    def _remove_note_cards(self, note_ids):
+        """Take deleted notes' cards off the list without rebuilding it.
+
+        The fourth member of a family the list already has -- alongside
+        _recolor_note_cards, _apply_selection_mode_to_cards and
+        _update_open_highlight, each written because a full rebuild
+        "visibly flickered the whole list" for a change that touched a
+        few cards. Deleting a note was the one frequent action still
+        paying the full price: 120 widgets destroyed and remade, 115ms,
+        to take one card away. Field-reported as "the picture breaks a
+        little and rebuilds itself".
+
+        Returns True when the list on screen now matches the data, and
+        False when it could not be done surgically -- the caller then
+        falls back to refresh_note_list(). Every uncertain case returns
+        False on purpose: a list that quietly disagrees with the notes
+        is far worse than one that flickers.
+        """
+        cards = getattr(self, "_note_card_widgets", None)
+        if cards is None:
+            return False
+        removed = 0
+        for note_id in note_ids:
+            info = cards.pop(note_id, None)
+            if info is None:
+                # Never drawn -- filtered out by the search box or the
+                # category dropdown. Nothing on screen to take away, and
+                # nothing wrong either.
+                continue
+            card = info.get("card")
+            try:
+                if card is not None and card.winfo_exists():
+                    card.destroy()
+                    removed += 1
+            except tk.TclError:
+                return False
+        # Headers first, and whether or not a card came off: a COLLAPSED
+        # group draws no cards at all, so deleting a note from one takes
+        # nothing off the screen while its header's count still has to
+        # come down. An early "nothing was drawn, nothing to do" left
+        # that number stale -- caught by a check only once the search
+        # debounce, which had been quietly rebuilding the list and
+        # repairing it, was settled first.
+        if not self._sync_group_headers(note_ids):
+            return False
+        if not cards and not getattr(self, "_group_header_widgets", None):
+            # Nothing drawn at all now. An empty list is not simply "no
+            # cards": it carries a message, and which message depends on
+            # whether anything is filtered. That belongs to
+            # refresh_note_list().
+            return False
+        # refresh_note_list() recomputes these on its way past, and
+        # Settings may be open on them right now. Due even when no card
+        # was drawn -- a note still left the notebook.
+        self._render_statistics()
+        return True
+
+    def _sync_group_headers(self, removed_ids):
+        """Update the category headers after cards were taken off the list.
+
+        Counts come from the ids each header was built with, not from the
+        cards under it: a COLLAPSED group has a header and no cards at
+        all, and counting what is drawn would read it as empty and throw
+        its header away.
+        """
+        headers = getattr(self, "_group_header_widgets", None)
+        if headers is None:
+            return True
+        gone = set(removed_ids)
+        for cat, head in list(headers.items()):
+            head["ids"] = [i for i in head.get("ids", []) if i not in gone]
+            try:
+                if head["ids"]:
+                    head["label"].configure(text=f"{cat} ({len(head['ids'])})")
+                else:
+                    head["frame"].destroy()
+                    headers.pop(cat, None)
+            except (tk.TclError, KeyError):
+                return False
+        return True
 
     def _exit_selection_mode_after_bulk_action(self):
         """Same UI cleanup as turning selection mode off, but followed by a
@@ -14817,7 +14915,13 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 self.active_tab_index = None
                 self.switch_to_tab(min(0, len(self.open_tabs) - 1))
             self._sync_editor_snapshot()
-            self.refresh_note_list()
+            # Take the one card off rather than rebuilding all of them.
+            # Falls back to the full rebuild whenever the surgical path
+            # is not certain -- an emptied list, a grouping header that
+            # would not update, a card that is not where the registry
+            # says it is.
+            if not self._remove_note_cards([deleted_id]):
+                self.refresh_note_list()
             self.render_calendar()
             self.set_status("Note moved to Trash (recoverable for 30 days)")
             # The status line says where it went; the toast is the way

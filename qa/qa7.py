@@ -339,6 +339,26 @@ check('other note is not highlighted', app._note_card_widgets[21]['card'].cget('
 check('highlight color matches the theme accent',
       app._note_card_widgets[20]['card'].cget('highlightbackground') == app.colors['accent'])
 
+# Settle every timer that can rebuild the list on its own before
+# measuring, and say out loud that they are settled.
+#
+# This check compares the cards' Tk paths across a note switch, and for
+# months it passed on timing rather than on its subject: the sidebar
+# search debounces with after(180, self.refresh_note_list), and the work
+# ahead of this point used to take long enough that the timer had always
+# fired already. When deleting a note stopped rebuilding the whole list
+# (185ms -> 31ms), that slack disappeared, the timer landed BETWEEN the
+# two readings, and the check went red without the switch doing anything
+# wrong. A check that can be decided by how fast the code above it runs
+# is not measuring what it names.
+app._flush_autosave()
+if getattr(app, '_search_debounce_job', None) is not None:
+    app.after_cancel(app._search_debounce_job)
+    app._search_debounce_job = None
+app.update()
+check('nothing is queued to rebuild the list before the measurement',
+      getattr(app, '_search_debounce_job', None) is None
+      and getattr(app, '_autosave_job', None) is None)
 card_ids_before2 = {nid: str(info['card']) for nid, info in app._note_card_widgets.items()}
 app.open_note_in_tab(app.find_note(21))
 app.update()
