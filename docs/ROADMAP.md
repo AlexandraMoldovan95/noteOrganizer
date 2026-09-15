@@ -29,8 +29,6 @@ Genuinely open ideas, roughly ordered by how soon they're likely to happen.
   [Global keyboard shortcuts](#global-keyboard-shortcuts)):
   - **Undo on the delete toast** — moving a note to the Trash could offer a one-click Undo right
     on the confirmation toast, instead of the trip through Settings → Recently deleted.
-  - **Import a .md/.html file as a note** — the reverse of the single-note export; `html_to_note`
-    already exists, and a Markdown file's tables/checkboxes are already the note format.
   - **Rebuild only the table block an edit touched** — `_render_table_grids` deliberately tears
     down and rebuilds every grid in the note ("a grid is cheap to make, and tracking which of them
     an arbitrary edit invalidated is not"). The 2026-09-02 senior audit measured the cost
@@ -42,10 +40,6 @@ Genuinely open ideas, roughly ordered by how soon they're likely to happen.
 - **Route template deletion through the Trash** — so templates would be restorable like notes.
   It is a data-format change, not a quick win; meanwhile the delete confirmation says plainly that
   it skips the Trash (see [Settings redesign](#settings-redesign)).
-- **"Export as PDF" via Edge headless** — phase 2 of the single-note export:
-  `msedge --headless --print-to-pdf` exists on every Windows 10/11, no Python dependency; needs an
-  honest fallback ("saved as HTML, open it and Ctrl+P") for machines where Edge is missing or
-  changes flags.
 - **Spell-check in the editor (desktop only).** A red wavy underline on misspelled words with
   right-click suggestions — **not** silent auto-correct, which would mangle names, technical terms
   and other-language words in a notes app without asking. This is a desktop-only feature: Tkinter
@@ -90,6 +84,18 @@ Genuinely open ideas, roughly ordered by how soon they're likely to happen.
 - Tags as a separate feature from categories — removed in 0.3.0 after concluding categories cover
   the need on their own; revisiting this isn't currently planned.
 - Cloud sync / accounts — the app is intentionally offline-only.
+- Importing a `.md`/`.html` file as a note — decided against (2026-09-15). Exporting one is
+  enough: it answers "get this note out of here", which is the question people actually ask.
+  The reverse direction asks the app to align somebody else's HTML with the editor's own idea of
+  a note, and every mismatch — markup the editor has no concept of, a malformed file, a structure
+  that arrives looking nothing like what the writer saw — becomes an error we would then have to
+  design and defend. A feature whose failure modes are mostly other people's files is a poor
+  trade for a return trip nobody has asked for.
+- "Export as PDF" — decided against (2026-09-15). The single-note export already writes HTML, and
+  turning HTML into a PDF is something the machine already does: open it and print to PDF.
+  Wrapping that would add a dependency on Edge's headless flags, a fallback for when they change
+  or Edge is missing, and a second export path to keep honest — to save one step of something
+  Windows does natively.
 - Recognising tables pasted from a PDF — decided against (2026-08-28). A PDF carries no table
   structure at all, only text positioned on a page; guessing columns from spacing is a large,
   unreliable feature of its own. Pasting from a PDF keeps working as it does today — the table's
