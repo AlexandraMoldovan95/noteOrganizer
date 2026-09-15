@@ -222,6 +222,34 @@ check('"Older" catches everything before two years ago',
 check('"2 years ago" is its own bucket, not part of Older',
       _hist(_h_notes, year_bucket='2 years ago', today=_H_TODAY) == [])
 
+# ---------------------------------------------------------------------
+# is_recurring on a note that never went through normalize_note.
+#
+# Live notes are normalised on load, so this question was always asked of
+# a well-formed dict. Trash entries are not -- load_trash() returns
+# whatever the file held -- so the first caller to ask a TRASHED note
+# whether it repeats met whatever a hand-edit, an older format or a
+# crafted backup had left in the field. A string there is truthy, and
+# .get() on a string raises: the whole Trash panel went down with it.
+# ---------------------------------------------------------------------
+check('a proper recurrence still reads as one',
+      NO.is_recurring({'recurrence': {'freq': 'daily'}}) is True)
+check('a missing recurrence is not one',
+      NO.is_recurring({}) is False)
+check('an empty recurrence is not one',
+      NO.is_recurring({'recurrence': {}}) is False)
+check('a recurrence with no freq is not one',
+      NO.is_recurring({'recurrence': {'count': 3}}) is False)
+for _junk in ('daily', 0, 1, [], ['freq'], 3.5, True):
+    try:
+        _answer = NO.is_recurring({'recurrence': _junk})
+        check('a %r recurrence answers instead of raising' % (_junk,),
+              _answer is False)
+    except Exception as _e:
+        check('a %r recurrence answers instead of raising (%s)' % (_junk, _e),
+              False)
+
+
 print()
 print(f"FAILURES: {fails if fails else 'none'}")
 

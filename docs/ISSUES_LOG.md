@@ -80,6 +80,7 @@ day-to-day tracking.
 | [The safety net that hid the missing mechanism](#the-safety-net-that-hid-the-missing-mechanism) | When a fallback masks the primary mechanism, assert the mechanism — a behaviour check green under two themes proved nothing. | 0.71.125 |
 | [The width that was guessed](#the-width-that-was-guessed) | A layout number that must agree with a layout it cannot see is wrong the first time either changes — ask the widget; and when a measurement disagrees with a photograph, doubt the measurement. | 0.73.167 |
 | [The rebuild nobody was looking at](#the-rebuild-nobody-was-looking-at) | When a new feature makes the user look somewhere new, expect a report about something that was always wrong there — measure before blaming the newest change; and a guard applied at one call site out of thirty-one is a comment, not a guard. | 0.74.169 |
+| [The sentence that counted notes](#the-sentence-that-counted-notes) | When a dialog counts things, ask what one of those things can be — a repeating series is one note in the count and every occurrence in the consequence; and a guard that has only ever been asked well-formed questions has been lucky, not tested. | 0.74.170 |
 
 
 ## Data safety & integrity
@@ -1906,6 +1907,65 @@ question and not for the other.
 report about something that was always wrong there. Measure before
 believing the newest change caused it. And a guard that exists at one
 call site out of thirty-one is not a guard — it is a comment.
+
+### The sentence that counted notes
+
+*([0.74.170](../CHANGELOG.md#074170--2026-09-15) · 2026-09-15)*
+
+**Symptom, field-reported:** "I selected two notes to delete — one was an
+ordinary note, the second was a series. It didn't ask me about the
+series the way it does when I delete one on its own."
+
+**Cause:** a confirmation that counts notes is telling the truth and
+hiding the consequence. A repeating series is ONE note in every list and
+every count, and deleting it takes every occurrence it has. The
+single-note delete has asked "Delete this entire repeating series?" since
+the feature shipped. Nothing that acts on a SELECTION asked anything.
+
+Walking the siblings rather than the report found the same silence three
+more times, and the worst two are past the point of no return:
+
+| Place | Said it was a series? | Consequence |
+|---|---|---|
+| Note list card | yes — 🔁 on the title and in the tags | — |
+| Calendar day panel | yes — 🔁 | — |
+| Single delete confirm | yes | recoverable |
+| Bulk move to trash | **no** | recoverable |
+| Trash row | **no** | — |
+| Delete permanently | **no** | **irreversible** |
+| Empty trash | **no** | **irreversible** |
+
+`settings_page.py` did not import `is_recurring` at all. In the one list
+in the app where deleting cannot be undone, a whole series looked exactly
+like a note about milk.
+
+**Fix:** the sentence is written once, in `_series_warning()`, and used by
+all three confirmations; the Trash marks a series the way every other
+list does. Four copies of a sentence is four chances for them to stop
+agreeing.
+
+**What the check found that the fix had not.** The interaction pass
+listed "a trash entry whose recurrence is corrupt" as a risky row, so a
+check was written for it — and it went red. `is_recurring` read
+``(note.get("recurrence") or {}).get("freq")``: safe for a note that has
+been through `normalize_note`, fatal for one that has not, because a
+string in that field is truthy and `.get` on a string raises. Live notes
+are normalised on load. **Trash entries are not** — `load_trash()`
+returns whatever the file held. So the first caller ever to ask a trashed
+note whether it repeats would have taken the whole Trash panel down with
+it, on a file a hand-edit or an older format could easily produce. The
+type check now lives in `is_recurring`, at the choke point.
+
+**And the fix's own bruise.** Giving a trash row its "repeats ..." line
+made the Restore and Delete buttons cramped — reported within the hour.
+The packer hands out the cavity in pack order, and the expanding text
+frame was packed first, so the buttons lived on the remainder. They are
+packed first now. A row can afford a shortened title; it cannot afford an
+unclickable Restore.
+
+**Takeaway:** when a dialog counts things, ask what one of those things
+can be. And a guard that has only ever been asked well-formed questions
+has not been tested — it has been lucky.
 
 ## Tests & CI discipline
 

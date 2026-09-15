@@ -210,8 +210,20 @@ def normalize_recurrence(rec):
 
 
 def is_recurring(note):
-    """True if this note repeats at all."""
-    return bool((note.get("recurrence") or {}).get("freq"))
+    """True if this note repeats at all.
+
+    The type check is not belt-and-braces. This used to read
+    ``(note.get("recurrence") or {}).get("freq")``, which is safe for a
+    note that has been through :func:`normalize_note` and fatal for one
+    that has not: a ``recurrence`` holding a string is truthy, and
+    ``.get`` on a string raises. Live notes are normalised on load;
+    TRASH entries are not -- ``load_trash`` returns whatever the file
+    held -- so the first caller to ask a trashed note whether it repeats
+    would have taken the whole Trash panel down with it. Found by a
+    check written for exactly that, the day such a caller appeared.
+    """
+    recurrence = note.get("recurrence")
+    return bool(isinstance(recurrence, dict) and recurrence.get("freq"))
 
 
 def _shift_month(year, month, months_to_add):
