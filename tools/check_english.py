@@ -49,6 +49,13 @@ WORDS = [
     "fisierul", "fisiere", "inainte", "inapoi", "notita", "notite",
     "pentru", "poate", "ramane", "sterge", "sters", "stearsa", "sunt",
     "toate", "trebuie", "verifica", "vreau",
+    # Added 2026-09-15, after the gate read a seeded notebook full of
+    # Romanian nouns -- "Reteta de paine", "lapte", "oua" -- and called
+    # the repository clean. The list had only function words, and nouns
+    # carry just as much language. Widening it turned up twenty-six more
+    # lines of test data nobody had looked at since writing them.
+    "reteta", "cumparat", "lapte", "paine", "faina", "framantat",
+    "caiet", "caietul", "aliment", "fructe", "nume", "cant", "zile",
 ]
 ROMANIAN = re.compile(r"\b(%s)\b" % "|".join(WORDS), re.I)
 

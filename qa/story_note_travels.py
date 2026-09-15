@@ -76,10 +76,10 @@ def drive():
     # A hermetic notebook, so the story never meets the real one.
     io.open(os.path.join(work, "notes_data.json"), "w", encoding="utf-8").write(
         json.dumps([
-            {"id": 1, "title": "Reteta de paine", "body": "500g faina\n300ml apa",
+            {"id": 1, "title": "Bread recipe", "body": "500g flour\n300ml water",
              "category": "General", "created": "2026-09-01 09:00",
              "updated": "2026-09-01 09:00"},
-            {"id": 2, "title": "De cumparat", "body": "lapte\noua",
+            {"id": 2, "title": "Shopping", "body": "milk\neggs",
              "category": "General", "created": "2026-09-02 09:00",
              "updated": "2026-09-02 09:00"},
         ], indent=2))
@@ -295,7 +295,7 @@ def chapter_1():
     story = Chapter()
 
     story.check("the note opens when I click it in the list",
-                _open_note_by_clicking(app, "Reteta de paine"))
+                _open_note_by_clicking(app, "Bread recipe"))
 
     generate = _button(app, "Generate code")
     story.check("butonul 'Generate code' e acolo, in editor", generate is not None)
@@ -324,7 +324,7 @@ def chapter_2():
     story = Chapter()
     code = io.open(CODE_FILE, encoding="utf-8").read().strip()
 
-    _open_note_by_clicking(app, "Reteta de paine")
+    _open_note_by_clicking(app, "Bread recipe")
     app.body_text.insert("end", "\n-- changed after I closed the app")
     save = _button(app, "Save")
     if save is not None:
@@ -372,9 +372,9 @@ def chapter_2():
 
     notes = json.load(io.open("notes_data.json", encoding="utf-8"))
     story.check("no second copy of the note appeared",
-                len([n for n in notes if "Reteta" in (n.get("title") or "")]) == 1,
+                len([n for n in notes if "Bread" in (n.get("title") or "")]) == 1,
                 "titluri: %s" % [n.get("title") for n in notes])
-    mine = next((n for n in notes if "Reteta" in (n.get("title") or "")), {})
+    mine = next((n for n in notes if "Bread" in (n.get("title") or "")), {})
     story.check("the note shows the version the code brought",
                 "changed after I closed" not in (mine.get("body") or ""),
                 (mine.get("body") or "")[:60])
@@ -384,7 +384,7 @@ def chapter_2():
     app._flush_autosave()
     app.update()
     notes = json.load(io.open("notes_data.json", encoding="utf-8"))
-    mine = next((n for n in notes if "Reteta" in (n.get("title") or "")), {})
+    mine = next((n for n in notes if "Bread" in (n.get("title") or "")), {})
     story.check("...and it stays that way after I keep typing",
                 "changed after I closed" not in (mine.get("body") or ""),
                 (mine.get("body") or "")[:60])
@@ -397,7 +397,7 @@ def chapter_3():
     tk, NO, app = _chapter_setup()
     story = Chapter()
 
-    _open_note_by_clicking(app, "De cumparat")
+    _open_note_by_clicking(app, "Shopping")
     generate = _button(app, "Generate code")
     if generate is not None:
         generate.invoke()
@@ -405,7 +405,7 @@ def chapter_3():
     story.check("the code on screen belongs to the note I am on",
                 app.editor_code_area.winfo_ismapped())
 
-    _open_note_by_clicking(app, "Reteta de paine")
+    _open_note_by_clicking(app, "Bread recipe")
     _photograph("4-after-moving-to-another-note")
     story.check("the code is NOT still on screen at the next note",
                 not app.editor_code_area.winfo_ismapped(),
@@ -428,7 +428,7 @@ def chapter_4():
     app.hide_settings_page()
     app.update()
 
-    _open_note_by_clicking(app, "De cumparat")
+    _open_note_by_clicking(app, "Shopping")
     delete = _button(app, "Delete")
     story.check("the delete button is in the editor", delete is not None)
     if delete is not None:
@@ -449,7 +449,7 @@ def chapter_4():
 
     shown = labels(app.settings_trash_panel, [])
     story.check("the deleted note is in the trash when I get there",
-                any("De cumparat" in t for t in shown),
+                any("Shopping" in t for t in shown),
                 "in cos scrie: %s" % [t[:30] for t in shown if t][:4])
     story.save()
 

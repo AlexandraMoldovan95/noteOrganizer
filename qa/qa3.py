@@ -1190,7 +1190,7 @@ def _share_code_for(setup):
     return _found[0] if _found else None
 
 
-_sg_list = [{'text': 'lapte', 'done': False}, {'text': 'oua', 'done': True}]
+_sg_list = [{'text': 'milk', 'done': False}, {'text': 'eggs', 'done': True}]
 _sg_code = _share_code_for(
     lambda: setattr(app, '_working_checklist', [dict(i) for i in _sg_list]))
 check('a checklist-only note can be shared as a code', _sg_code is not None)
