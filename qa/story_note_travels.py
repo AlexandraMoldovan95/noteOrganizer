@@ -86,18 +86,18 @@ def drive():
     io.open(os.path.join(work, "settings.json"), "w", encoding="utf-8").write(
         json.dumps({"cleanup_done": True, "reclaimed_from_appdata": True}))
 
-    print("povestea se joaca in: %s" % work)
+    print("the story is played in: %s" % work)
     print()
 
     chapters = [
-        (1, "Fac un cod pentru o notita, din editor"),
-        (2, "Inchid aplicatia, o redeschid, editez notita si aduc codul inapoi"),
-        (3, "Generez un cod si trec la alta notita"),
-        (4, "Sterg o notita si ma intorc in Settings"),
+        (1, "I make a code for a note, from the editor"),
+        (2, "I close the app, reopen it, edit the note and bring the code back"),
+        (3, "I generate a code and move to another note"),
+        (4, "I delete a note and go back into Settings"),
     ]
     results = []
     for number, title in chapters:
-        print("--- capitolul %d: %s" % (number, title))
+        print("--- chapter %d: %s" % (number, title))
         run = subprocess.run(
             [sys.executable, "story_note_travels.py", "--chapter", str(number)],
             cwd=work, capture_output=True, text=True,
@@ -108,17 +108,17 @@ def drive():
             print("    %s %s%s" % ("PASS" if ok else "FAIL", name,
                                    "" if ok else "   <- %s" % detail))
         if not found:
-            print("    CAPITOLUL NU A SPUS NIMIC (a crapat?)")
+            print("    THE CHAPTER SAID NOTHING (did it crash?)")
             tail = (run.stdout + run.stderr).strip().splitlines()[-6:]
             for line in tail:
                 print("      | %s" % line)
-            results.append(("capitolul %d a rulat" % number, False, "fara rezultate"))
+            results.append(("chapter %d ran" % number, False, "no results"))
         _clear_results(work)
 
     print()
     shot_files = sorted(os.path.join(shots, f) for f in os.listdir(shots))
     for path in shot_files:
-        print("poza: %s" % path)
+        print("picture: %s" % path)
     failed = [name for name, ok, _ in results if not ok]
     print()
     print("STORY FAILURES: %s" % (failed if failed else "none"))
@@ -294,7 +294,7 @@ def chapter_1():
     tk, NO, app = _chapter_setup()
     story = Chapter()
 
-    story.check("notita se deschide cand dau click pe ea in lista",
+    story.check("the note opens when I click it in the list",
                 _open_note_by_clicking(app, "Reteta de paine"))
 
     generate = _button(app, "Generate code")
@@ -304,16 +304,16 @@ def chapter_1():
         app.update()
 
     shown = app.editor_code_area.winfo_ismapped()
-    story.check("codul apare sub notita", shown)
+    story.check("the code appears under the note", shown)
     code = ""
     if shown:
         widget = _text_widget(app.editor_code_area)
         if widget is not None:
             code = widget.get("1.0", "end-1c").strip()
-    story.check("codul arata a cod de partajare", code.startswith("NOTE1"),
+    story.check("the code looks like a share code", code.startswith("NOTE1"),
                 code[:20])
     io.open(CODE_FILE, "w", encoding="utf-8").write(code)
-    _photograph("1-codul-facut-in-editor")
+    _photograph("1-the-code-made-in-the-editor")
     story.save()
 
 
@@ -325,7 +325,7 @@ def chapter_2():
     code = io.open(CODE_FILE, encoding="utf-8").read().strip()
 
     _open_note_by_clicking(app, "Reteta de paine")
-    app.body_text.insert("end", "\n-- schimbat dupa ce am inchis aplicatia")
+    app.body_text.insert("end", "\n-- changed after I closed the app")
     save = _button(app, "Save")
     if save is not None:
         save.invoke()
@@ -348,7 +348,7 @@ def chapter_2():
 
     def answer_the_dialog(_var):
         seen["titles"] = _dialog_titles(app)
-        _photograph("2-ce-ma-intreaba-la-import")
+        _photograph("2-what-it-asks-me-on-import")
         for label in ("Update this note", "Open it anyway", "Cancel"):
             if _click_dialog(app, label):
                 seen["answered"] = label
@@ -363,20 +363,20 @@ def chapter_2():
 
     titles = seen["titles"]
     asked_about_the_note = any("Same note" in t for t in titles)
-    story.check("ma intreaba despre NOTITA MEA, nu despre un duplicat",
+    story.check("it asks me about MY NOTE, not about a duplicate",
                 asked_about_the_note,
                 "pe ecran scria: %s" % [t[:45] for t in titles if t][:3])
-    story.check("si raspunsul pe care il vreau e acolo de apasat",
+    story.check("and the answer I want is there to press",
                 seen["answered"] == "Update this note",
                 "am putut apasa doar: %r" % seen["answered"])
 
     notes = json.load(io.open("notes_data.json", encoding="utf-8"))
-    story.check("nu mi-a aparut o a doua copie a notitei",
+    story.check("no second copy of the note appeared",
                 len([n for n in notes if "Reteta" in (n.get("title") or "")]) == 1,
                 "titluri: %s" % [n.get("title") for n in notes])
     mine = next((n for n in notes if "Reteta" in (n.get("title") or "")), {})
-    story.check("notita arata versiunea adusa de cod",
-                "schimbat dupa ce am inchis" not in (mine.get("body") or ""),
+    story.check("the note shows the version the code brought",
+                "changed after I closed" not in (mine.get("body") or ""),
                 (mine.get("body") or "")[:60])
 
     # And what happens NEXT: she carries on typing, which saves.
@@ -385,10 +385,10 @@ def chapter_2():
     app.update()
     notes = json.load(io.open("notes_data.json", encoding="utf-8"))
     mine = next((n for n in notes if "Reteta" in (n.get("title") or "")), {})
-    story.check("...si ramane asa dupa ce scriu mai departe",
-                "schimbat dupa ce am inchis" not in (mine.get("body") or ""),
+    story.check("...and it stays that way after I keep typing",
+                "changed after I closed" not in (mine.get("body") or ""),
                 (mine.get("body") or "")[:60])
-    _photograph("3-dupa-actualizare")
+    _photograph("3-after-the-update")
     story.save()
 
 
@@ -402,12 +402,12 @@ def chapter_3():
     if generate is not None:
         generate.invoke()
         app.update()
-    story.check("codul e pe ecran pentru notita la care sunt",
+    story.check("the code on screen belongs to the note I am on",
                 app.editor_code_area.winfo_ismapped())
 
     _open_note_by_clicking(app, "Reteta de paine")
-    _photograph("4-dupa-ce-am-trecut-la-alta-notita")
-    story.check("codul NU mai e pe ecran la notita urmatoare",
+    _photograph("4-after-moving-to-another-note")
+    story.check("the code is NOT still on screen at the next note",
                 not app.editor_code_area.winfo_ismapped(),
                 "a ramas codul notitei dinainte")
     story.save()
@@ -430,7 +430,7 @@ def chapter_4():
 
     _open_note_by_clicking(app, "De cumparat")
     delete = _button(app, "Delete")
-    story.check("butonul de stergere e in editor", delete is not None)
+    story.check("the delete button is in the editor", delete is not None)
     if delete is not None:
         delete.invoke()
         app.update()
@@ -438,7 +438,7 @@ def chapter_4():
     if settings is not None:
         settings.invoke()
         app.update()
-    _photograph("5-cosul-dupa-ce-am-sters")
+    _photograph("5-the-trash-after-deleting")
 
     def labels(widget, out):
         for child in widget.winfo_children():
@@ -448,7 +448,7 @@ def chapter_4():
         return out
 
     shown = labels(app.settings_trash_panel, [])
-    story.check("notita stearsa e in cos cand ajung acolo",
+    story.check("the deleted note is in the trash when I get there",
                 any("De cumparat" in t for t in shown),
                 "in cos scrie: %s" % [t[:30] for t in shown if t][:4])
     story.save()

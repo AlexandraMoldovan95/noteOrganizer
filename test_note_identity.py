@@ -162,7 +162,7 @@ check('find_by_uid ignores whitespace around the identity asked for',
       find_by_uid(_notes, "  %s  " % _a["uid"]) is _a)
 
 check('find_by_uid survives a list holding something that is not a note',
-      find_by_uid([_a, "nu e o notita", None], _a["uid"]) is _a)
+      find_by_uid([_a, "not a note", None], _a["uid"]) is _a)
 
 # The guard above earns its keep only against a note that HAS an empty
 # identity -- which normalize_note never produces, but a raw dict from a
@@ -170,7 +170,7 @@ check('find_by_uid survives a list holding something that is not a note',
 # list, an empty search returns None anyway and the check proves nothing:
 # a mutant that removed the guard survived this suite until this case
 # was added.
-_hollow = {"id": 3, "title": "fara identitate", "uid": ""}
+_hollow = {"id": 3, "title": "no identity", "uid": ""}
 for _empty, _what in [("", "an empty string"), ("   ", "whitespace")]:
     check('%s does not match a note whose identity is blank' % _what,
           find_by_uid([_a, _hollow], _empty) is None)
@@ -247,7 +247,7 @@ _mine_all = [_have1, _have2]
 _batch = [
     {"uid": _have2["uid"], "title": "Am si asta, editata"},
     {"uid": "necunoscut", "title": "Noua"},
-    {"title": "Fara identitate deloc"},
+    {"title": "No identity at all"},
 ]
 _known, _fresh = split_by_identity(_mine_all, _batch)
 
@@ -258,7 +258,7 @@ check('...and hands back the incoming copy beside it',
 check('split_by_identity treats an unknown identity as new',
       any(n.get("uid") == "necunoscut" for n in _fresh))
 check('split_by_identity treats a note with NO identity as new',
-      any(n.get("title") == "Fara identitate deloc" for n in _fresh))
+      any(n.get("title") == "No identity at all" for n in _fresh))
 check('split_by_identity accounts for every note in the batch',
       len(_known) + len(_fresh) == len(_batch))
 check('split_by_identity skips an entry that is not a note at all',
@@ -352,7 +352,7 @@ try:
     # from a share code while the original sits in the trash.
     _seed(_work, [{"id": 1, "title": "Ramasa", "uid": "aaa"}])
     _live, _ = _storage.load_notes(False)
-    _deleted = {"id": 9, "title": "Stearsa", "uid": "bbb",
+    _deleted = {"id": 9, "title": "Deleted", "uid": "bbb",
                 "deleted_at": "2026-01-01 00:00:00"}
 
     _back, _ = _storage.restore_from_trash(list(_live), [_deleted], _deleted)
@@ -361,7 +361,7 @@ try:
     check('...and it does not bring "deleted_at" back with it',
           "deleted_at" not in _back[-1])
 
-    _twin = {"id": 9, "title": "Stearsa", "uid": "aaa",
+    _twin = {"id": 9, "title": "Deleted", "uid": "aaa",
              "deleted_at": "2026-01-01 00:00:00"}
     _back2, _ = _storage.restore_from_trash(list(_live), [_twin], _twin)
     check('a restore whose identity is already in use is given a new one',

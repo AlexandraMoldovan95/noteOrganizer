@@ -170,10 +170,11 @@ noteOrganizer/
 │       ├── calendar_view.py     #   the Calendar tab
 │       └── attachments.py       #   the attachments section
 ├── tools/                    # refactor safety net, run by CI
-│   ├── check_*.py                # four static gates: names that resolve, the app
+│   ├── check_*.py                # five static gates: names that resolve, the app
 │   │                             #   class's surface, one definition per judgement,
-│   │                             #   and documentation links that go somewhere
-│   ├── pre_push_check.py         # all four, runnable locally in seconds
+│   │                             #   documentation links that go somewhere, and
+│   │                             #   English in everything a reader sees
+│   ├── pre_push_check.py         # all five, runnable locally in seconds
 │   ├── run_tests.py              # the whole suite, safely, from a scratch copy
 │   ├── visual_scenes.py          # screenshot harness for eyeballing rendered scenes
 │   ├── make_icon.py              # draws the app icon, rather than storing one

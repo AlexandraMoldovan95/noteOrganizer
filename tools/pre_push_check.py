@@ -25,7 +25,10 @@ WHAT IT RUNS
    places, answered by a hand-rolled field list at each one. Every
    omission an adversarial review has caught in this project had that
    shape; this is the grep that catches it.
-4. ``compile()`` over every tracked ``.py`` in the repo -- tests and qa
+4. ``check_doc_links`` and ``check_english`` -- anchors that still go
+   somewhere, and no Romanian in anything a reader of this repository
+   sees. The app's interface is English; the qa stories had drifted.
+5. ``compile()`` over every tracked ``.py`` in the repo -- tests and qa
    scripts included, because a syntax error in a TEST file is exactly
    what the remote runner would otherwise find first (a locally-valid
    PEP 701 f-string once died only on CI's older Python; the interpreter
@@ -76,6 +79,11 @@ def main():
     # Cheap enough to run on every push rather than once a release.
     _run_gate("documentation links resolve",
               [os.path.join("tools", "check_doc_links.py")])
+    # The work is discussed in Romanian and written down in English. The
+    # qa stories crossed that line without anybody noticing, and every CI
+    # run then printed Romanian check names into a public log.
+    _run_gate("English throughout",
+              [os.path.join("tools", "check_english.py")])
 
     print("== every tracked .py compiles", flush=True)
     listed = subprocess.run(["git", "ls-files", "*.py"], cwd=ROOT,
