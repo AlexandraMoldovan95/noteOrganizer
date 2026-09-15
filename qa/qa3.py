@@ -1645,7 +1645,7 @@ _sr_plain = NO.normalize_note({'id': 910, 'title': 'JustANote', 'body': 'b',
 _sr_series = NO.normalize_note({'id': 911, 'title': 'WaterThePlants',
                                 'body': 'b', 'category': 'General',
                                 'date': '2026-09-01',
-                                'recurrence': {'freq': 'daily'}})
+                                'recurrence': {'freq': 'weekly', 'weekdays': [0], 'count': 10}})
 app.notes = [_sr_plain, _sr_series]
 app.save_notes()
 app.refresh_note_list()
@@ -1757,6 +1757,22 @@ for _r in _sr_rows:
             check('...so %s is drawn at least as wide as it asks'
                   % str(_w.cget('text')),
                   _w.winfo_width() >= _w.winfo_reqwidth())
+
+# Reserving the buttons' width left the text less room, and a series'
+# second line is long: "deleted ... · 84 day(s) left · repeats every week
+# on mon, 10 times". Drawn on one line it was cut mid-word with nothing
+# to say so -- reported the same hour the buttons were fixed, one
+# clipping traded for another. It wraps at its own width now. The measure
+# is the one the Settings labels taught: what the label ASKED for against
+# what it was GIVEN.
+for _r in _sr_rows:
+    for _frame in [w for w in _r.pack_slaves() if isinstance(w, tk.Frame)]:
+        for _lbl in _frame.winfo_children():
+            if not isinstance(_lbl, tk.Label):
+                continue
+            check('a trash row draws its text inside the room it has (%s)'
+                  % str(_lbl.cget('text'))[:26].replace('\n', ' '),
+                  _lbl.winfo_reqwidth() <= _lbl.winfo_width() + 1)
 
 # Delete permanently, on the series. No way back from here.
 _sr_said.clear()

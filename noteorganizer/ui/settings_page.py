@@ -52,6 +52,10 @@ from ..core.duplicates import find_duplicate_groups
 # repeating series. Both of these read a note's own recurrence field, so
 # a trash entry -- which is a copy of the note -- answers them too.
 from ..core.recurrence import describe_recurrence, is_recurring
+# Shortens with an ellipsis rather than by slicing: a title cut at N
+# characters with nothing to show for it is the same defect as a
+# sentence clipped by a layout, only cheaper to make.
+from ..core.model import _truncate
 from ..core.storage import (
     TRASH_RETENTION_DAYS,
     trash_retention_days,
@@ -1148,7 +1152,7 @@ class SettingsPageMixin:
         # cards, the calendar day panel -- and this one, the only list
         # where deleting cannot be undone, did not.
         repeats = is_recurring(entry)
-        tk.Label(left, text=(("🔁 " if repeats else "") + title)[:44],
+        tk.Label(left, text=("🔁 " if repeats else "") + _truncate(title, 42),
                  bg=self.colors["card"], fg=self.colors["text"],
                  font=("Segoe UI", 10, "bold"), anchor="w").pack(fill="x")
         # Show when it was deleted and how long remains.
@@ -1159,8 +1163,18 @@ class SettingsPageMixin:
             sub += f" · {remaining} day(s) left"
         if repeats:
             sub += f" · repeats {describe_recurrence(entry).lower()}"
-        tk.Label(left, text=sub, bg=self.colors["card"], fg=self.colors["subtext"],
-                 font=("Segoe UI", 8), anchor="w").pack(fill="x")
+        sub_lbl = tk.Label(left, text=sub, bg=self.colors["card"],
+                           fg=self.colors["subtext"], font=("Segoe UI", 8),
+                           anchor="w", justify="left")
+        sub_lbl.pack(fill="x")
+        # A series' line is long -- "deleted 2026-09-09 · 84 day(s) left ·
+        # repeats every week on mon, 10 times" -- and reserving the
+        # buttons' width left it too little room, so it was drawn cut
+        # mid-word with nothing to say it had been. Reported the same
+        # hour the buttons were fixed: one clipping traded for another.
+        # Wrapped at the label's OWN width instead, which is the only
+        # number that cannot disagree with the layout.
+        self._wrap_to_own_width(sub_lbl)
 
         def restore():
             self._restore_from_trash(entry)
