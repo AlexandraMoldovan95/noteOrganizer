@@ -45,7 +45,7 @@ except ImportError:
 # Added/Fixed CHANGELOG.md entries, not per-release counts). The running
 # app records this into settings, so the next time a newer build opens
 # over older data it can tell the user what changed version-wise.
-APP_VERSION = "0.73.167"
+APP_VERSION = "0.74.168"
 
 
 def parse_version(v):
@@ -9771,7 +9771,20 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.toast_lbl = tk.Label(
             self.toast_frame, font=("Segoe UI", 9, "bold"),
             bg=self.colors["success"], fg="white", padx=14, pady=6)
-        self.toast_lbl.pack()
+        self.toast_lbl.pack(side="left")
+        # The toast can carry one action -- "Undo", after a delete. Built
+        # here and packed on demand, so a plain toast looks exactly as it
+        # did. Its colours are set in _show_toast() rather than tracked:
+        # the toast is recoloured on every appearance from self.colors,
+        # which is the app's other theming pattern and the right one for
+        # a widget nobody sees between showings.
+        self.toast_action_lbl = tk.Label(
+            self.toast_frame, font=("Segoe UI", 9, "bold", "underline"),
+            bg=self.colors["success"], fg="white", padx=0, pady=6,
+            cursor="hand2")
+        self._toast_action = None
+        self.toast_action_lbl.bind(
+            "<Button-1>", lambda _e: self._run_toast_action())
         self._toast_hide_job = None
         # Not placed yet — shown on demand by _show_toast().
 
@@ -12404,7 +12417,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             icon="question"
         ):
             return
-        self._move_notes_to_trash(to_trash)
+        marks = [(e.get("id"), e.get("deleted_at"))
+                 for e in self._move_notes_to_trash(to_trash)]
         self.notes = [n for n in self.notes if n["id"] not in self.selected_note_ids]
         self.save_notes()
         # If the note currently open in the editor was among the ones just
@@ -12426,6 +12440,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._exit_selection_mode_after_bulk_action()
         self.render_calendar()
         self.set_status(f"Moved {count} note(s) to trash")
+        # The bulk route is the easiest one to regret: a tick box, a
+        # confirm, and a list that was filtered by whatever was typed in
+        # the search box at the time.
+        self._show_toast(
+            f"Moved {count} {'note' if count == 1 else 'notes'} to Trash",
+            action=lambda: self._undo_trash(marks))
 
     def _bulk_change_category(self):
         if not self.selected_note_ids:
@@ -14550,6 +14570,82 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.refresh_note_list()
         self.render_calendar()
 
+    def _undo_trash(self, marks):
+        """Put back the notes the toast's Undo was offered for.
+
+        `marks` are (id, deleted_at) pairs rather than the trash entries
+        themselves: the trash list is rebuilt whenever it is reloaded or
+        purged, so an object held from a moment ago can be a stranger by
+        the time anybody clicks. Matching on the pair means a later
+        delete cannot be mistaken for this one -- a bulk delete shares
+        one stamp across its notes, and their ids differ.
+
+        Restores through the same core function Settings uses, so the two
+        routes cannot drift into meaning different things. That function
+        gives the note a NEW id (the old one may have been reused while
+        it sat in the trash), so what comes back is identified by where
+        it lands -- appended -- and never by the id that went in.
+        """
+        restored = []
+        for note_id, stamp in marks:
+            entry = next((e for e in self.trash
+                          if isinstance(e, dict) and e.get("id") == note_id
+                          and e.get("deleted_at") == stamp), None)
+            if entry is None:
+                continue
+            before = len(self.notes)
+            self.notes, self.trash = core_restore_from_trash(
+                self.notes, self.trash, entry)
+            if len(self.notes) > before:
+                restored.append(self.notes[-1])
+
+        if not restored:
+            # Emptied, purged, or already put back -- a second click on a
+            # toast that had not yet faded. Nothing to apologise for: the
+            # note is simply not where the click expected it.
+            self._show_toast("Nothing left to put back", kind="info")
+            return
+
+        self.save_notes()
+        self.refresh_note_list()
+        self.render_calendar()
+
+        if len(restored) == 1:
+            # Back in front of whoever asked for it: the click meant "I
+            # did not mean to delete this", and leaving it in the list
+            # answers only half of that. A bulk undo opens nothing --
+            # five tabs is not a favour.
+            self.open_note_in_tab(restored[0])
+            title = (restored[0].get("title") or "").strip() or "Untitled note"
+            self.set_status(f"Put back: {title}")
+        else:
+            self.set_status(f"Put back {len(restored)} notes")
+
+    def _undo_occurrence_delete(self, note_id, date_str):
+        """Put back the one day a repeating note was removed from.
+
+        This half has no other way home. Deleting a single occurrence
+        writes the date into the note's `exceptions`, and nothing in the
+        app takes it out again -- so without this the choice was
+        permanent, made from a dialog offering no hint that it was.
+        """
+        note = self.find_note(note_id)
+        if note is None:
+            self._show_toast("That note is no longer here", kind="info")
+            return
+        exceptions = set(note.get("exceptions") or [])
+        if date_str not in exceptions:
+            self._show_toast("That day is already back", kind="info")
+            return
+        exceptions.discard(date_str)
+        note["exceptions"] = sorted(exceptions)
+        note["updated"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        self.save_notes()
+        self.refresh_note_list()
+        self.render_calendar()
+        self.open_note_in_tab(note, occurrence_date=date_str)
+        self.set_status("Put that day back")
+
     def _attach_dup_preview(self, widget, note):
         """Show a small floating preview of a note's contents while the mouse
         hovers over its row in the duplicates dialog, so the user can tell the
@@ -14630,8 +14726,15 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
         The work is in core/storage.py; this keeps the method name, which
         every delete path and the QA suite call.
+
+        Returns the entries it appended, so a caller offering Undo can
+        name exactly what it deleted -- the timestamp is stamped down
+        there, and reading it back off the end of the trash is the kind
+        of guess that is right until two deletes land together.
         """
+        before = len(self.trash)
         core_move_to_trash(self.trash, notes_to_trash)
+        return self.trash[before:]
 
     def delete_current_note(self):
         """Delete the note open in the editor (the Delete button / shortcut)."""
@@ -14676,6 +14779,13 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 self.refresh_note_list()
                 self.render_calendar()
                 self.set_status("Removed that one occurrence")
+                # This one had no way back at all: the date goes into the
+                # note's exceptions and no screen in the app takes it out
+                # again. The toast is not a convenience here.
+                self._show_toast(
+                    "Occurrence removed",
+                    action=lambda nid=note["id"], day=occurrence_date:
+                        self._undo_occurrence_delete(nid, day))
                 return
 
         attachment_count = len(note.get("attachments") or [])
@@ -14692,7 +14802,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             deleted_id = note["id"]
             # Move to trash (30-day recovery) rather than destroying it.
             doomed = [n for n in self.notes if n["id"] == deleted_id]
-            self._move_notes_to_trash(doomed)
+            marks = [(e.get("id"), e.get("deleted_at"))
+                     for e in self._move_notes_to_trash(doomed)]
             self.notes = [n for n in self.notes if n["id"] != deleted_id]
             self.save_notes()
             # Close any open tab that pointed at the deleted note (force: its
@@ -14709,6 +14820,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self.refresh_note_list()
             self.render_calendar()
             self.set_status("Note moved to Trash (recoverable for 30 days)")
+            # The status line says where it went; the toast is the way
+            # back. Settings -> Recently deleted was the only route home
+            # until now, and it asks you to know the trash exists.
+            self._show_toast("Note moved to Trash",
+                             action=lambda: self._undo_trash(marks))
 
     def report_callback_exception(self, exc_type, exc_value, exc_tb):
         """Overrides Tkinter's default handler for exceptions raised inside
@@ -14783,18 +14899,60 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         except (tk.TclError, RuntimeError):
             pass
 
-    def _show_toast(self, text, kind="success"):
+    def _run_toast_action(self):
+        """Do whatever the toast on screen is offering, once.
+
+        Cleared before it runs, so a double click cannot run it twice, and
+        so a click landing as the toast disappears does nothing at all.
+        """
+        action, self._toast_action = self._toast_action, None
+        self._hide_toast()
+        if action is not None:
+            action()
+
+    def _hide_toast(self):
+        try:
+            self.toast_frame.place_forget()
+        except tk.TclError:
+            pass
+        self._toast_action = None
+        if self._toast_hide_job is not None:
+            try:
+                self.after_cancel(self._toast_hide_job)
+            except (tk.TclError, ValueError):
+                pass
+            self._toast_hide_job = None
+
+    def _show_toast(self, text, kind="success", action=None, action_text="Undo"):
         """Briefly show a small floating banner near the top of the window —
         visible regardless of scroll position or which tab is active. Used for
-        'auto-saved' feedback so it's never missed inside a long note."""
+        'auto-saved' feedback so it's never missed inside a long note.
+
+        With an `action`, the banner also carries one clickable word and
+        stays up far longer. 1.8 seconds is feedback; it is not a window
+        in which to decide anything, and an Undo nobody can reach is
+        decoration."""
         if not hasattr(self, "toast_frame"):
             return
         color = {"success": self.colors["success"],
                  "info": self.colors["accent"],
                  "error": self.colors["danger"]}.get(kind, self.colors["success"])
+        # The mark follows the kind. It used to be a tick whatever had
+        # happened, so the banner reporting a failure opened with a tick
+        # of success -- and the "nothing left to put back" answer to an
+        # Undo would have read as a job well done.
+        mark = {"success": "✓", "info": "i", "error": "!"}.get(kind, "✓")
+        self._toast_action = action
         try:
             self.toast_frame.configure(bg=color)
-            self.toast_lbl.configure(text=f"✓  {text}", bg=color, fg="white")
+            self.toast_lbl.configure(text=f"{mark}  {text}", bg=color, fg="white")
+            if action is not None:
+                # Recoloured here, not tracked: see where it is built.
+                self.toast_action_lbl.configure(text=action_text, bg=color,
+                                                fg="white", padx=0)
+                self.toast_action_lbl.pack(side="left", padx=(0, 14))
+            else:
+                self.toast_action_lbl.pack_forget()
             self.toast_frame.place(relx=0.5, rely=0.0, anchor="n", y=4)
             self.toast_frame.lift()
         except tk.TclError:
@@ -14807,13 +14965,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 pass
 
         def hide():
-            try:
-                self.toast_frame.place_forget()
-            except tk.TclError:
-                pass
             self._toast_hide_job = None
+            self._hide_toast()
 
-        self._toast_hide_job = self.after(1800, hide)
+        self._toast_hide_job = self.after(8000 if action else 1800, hide)
 
 
 def _main():

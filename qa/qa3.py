@@ -1395,6 +1395,239 @@ app.save_notes()
 app.new_note(); app.update()
 
 
+# ---------------------------------------------------------------------
+# Undo on the delete toast
+#
+# A delete used to leave only a status line. The way back was Settings ->
+# Recently deleted, which asks the user to already know the trash exists.
+# The toast now carries the way back with it.
+#
+# What these checks are really about is the CLICK still finding the right
+# note eight seconds later. The trash is a list other actions rewrite, so
+# "the last thing deleted" is a guess; the toast remembers an id AND the
+# deletion stamp, and the restore hands back a note with a NEW id. Every
+# check below is aimed at one of those three facts.
+# ---------------------------------------------------------------------
+def _undo_reset():
+    """Empty notebook and trash, with the editor let go of first.
+
+    Order matters, and getting it wrong cost an hour: rewriting
+    app.notes while the editor still holds a note leaves a pending
+    autosave aimed at that note's id, and the id is then worn by
+    whichever note this function seeds next -- the autosave lands on a
+    stranger and renames it. new_note() clears selected_note_id, so the
+    stale save has nothing to aim at. The app itself never reaches this
+    state (a restore takes a NEW id precisely so ids are not reused);
+    only a test rebuilding the list by hand can.
+    """
+    app.new_note()
+    app.update()
+    app.notes = []
+    app.trash = []
+    app.save_notes()
+    NO.save_trash(app.trash)
+    app.refresh_note_list()
+    app.update()
+
+
+_undo_reset()
+
+
+def _undo_seed(title):
+    app.notes.append(NO.normalize_note(
+        {'id': max([n['id'] for n in app.notes], default=0) + 1,
+         'title': title, 'body': title.lower(), 'category': 'General'}))
+    app.save_notes()
+    return app.notes[-1]
+
+
+def _titles():
+    return [n.get('title') for n in app.notes]
+
+
+def _trash_titles():
+    return [e.get('title') for e in app.trash]
+
+
+_u_keep = _undo_seed('UndoKeepMe')
+_u_gone = _undo_seed('UndoDeleteMe')
+app.refresh_note_list(); app.update()
+
+app._delete_note(_u_gone, None); app.update()
+check('a single delete puts the note in the trash',
+      'UndoDeleteMe' in _trash_titles() and 'UndoDeleteMe' not in _titles())
+check('...and the toast offers a way back',
+      app.toast_frame.winfo_ismapped() and app.toast_action_lbl.winfo_ismapped())
+check('...saying Undo', str(app.toast_action_lbl.cget('text')) == 'Undo')
+
+_qa_click(app.toast_action_lbl); app.update()
+check('Undo brings the note back out of the trash',
+      'UndoDeleteMe' in _titles() and 'UndoDeleteMe' not in _trash_titles())
+check('...without disturbing the note beside it',
+      'UndoKeepMe' in _titles() and len(app.notes) == 2)
+check('...and the toast goes away with the offer it carried',
+      not app.toast_frame.winfo_ismapped())
+_u_back = next((n for n in app.notes if n.get('title') == 'UndoDeleteMe'), None)
+check('...and the restored note is opened, not merely re-listed',
+      _u_back is not None and app.selected_note_id == _u_back['id'])
+
+# Clicking Undo twice must not leave two copies of one note. What stops
+# it is not the toast forgetting its offer -- it does, twice over -- but
+# the offer naming a note that is no longer in the trash to take out.
+# Proved by the mutant that makes the restore grab the LAST trash entry
+# instead of the marked one: that one restores on every click.
+_u_count = len(app.notes)
+_qa_click(app.toast_action_lbl); app.update()
+check('clicking Undo again does not put back a second copy',
+      len(app.notes) == _u_count)
+
+# Something else deleted in between. The toast from the FIRST delete must
+# still put back its own note and leave the second one in the trash --
+# this is what identifying by (id, deleted_at) buys over "the last entry".
+_undo_reset()
+_u_first = _undo_seed('UndoFirstGone')
+_u_second = _undo_seed('UndoSecondGone')
+app.refresh_note_list(); app.update()
+
+app._delete_note(_u_first, None); app.update()
+_u_stale_action = app._toast_action          # the offer as it stood then
+app._delete_note(_u_second, None); app.update()
+check('two deletes leave two notes in the trash', len(app.trash) == 2)
+_u_stale_action(); app.update()
+check('the older toast puts back ITS note, not the newer one',
+      'UndoFirstGone' in _titles() and 'UndoFirstGone' not in _trash_titles())
+check('...and leaves the newer delete alone in the trash',
+      _trash_titles() == ['UndoSecondGone'])
+
+# The trash emptied under a toast that is still on screen. Nothing to put
+# back is an answer, not a crash.
+_undo_reset()
+_u_doomed = _undo_seed('UndoEmptiedUnderIt')
+app.refresh_note_list(); app.update()
+app._delete_note(_u_doomed, None); app.update()
+_u_orphan_action = app._toast_action
+app.trash = []
+NO.save_trash(app.trash)
+app.update()
+_u_orphan_action(); app.update()
+check('Undo after the trash was emptied puts back nothing',
+      app.notes == [] or 'UndoEmptiedUnderIt' not in _titles())
+check('...and says so rather than failing silently',
+      'put back' in str(app.toast_lbl.cget('text')).lower())
+
+# The bulk route -- the easiest one to regret, since the list it acts on
+# was filtered by whatever was in the search box.
+_undo_reset()
+_u_b1 = _undo_seed('UndoBulkOne')
+_u_b2 = _undo_seed('UndoBulkTwo')
+_u_b3 = _undo_seed('UndoBulkKept')
+app.refresh_note_list(); app.update()
+app.selected_note_ids = {_u_b1['id'], _u_b2['id']}
+app._bulk_move_to_trash(); app.update()
+check('a bulk delete trashes exactly what was ticked',
+      sorted(_trash_titles()) == ['UndoBulkOne', 'UndoBulkTwo']
+      and _titles() == ['UndoBulkKept'])
+check('...and the toast offers Undo for the batch',
+      app.toast_action_lbl.winfo_ismapped())
+_qa_click(app.toast_action_lbl); app.update()
+check('Undo brings back every note the batch took',
+      sorted(_titles()) == ['UndoBulkKept', 'UndoBulkOne', 'UndoBulkTwo']
+      and app.trash == [])
+
+# A plain toast must look exactly as it did before any of this: no
+# stranded Undo label left over from the delete before it.
+app._show_toast('plain as before'); app.update()
+check('a toast with nothing to undo carries no action word',
+      not app.toast_action_lbl.winfo_ismapped())
+
+# The round trip through the heavy features. A note is not a title and a
+# line of prose: it carries a table (which lives in the body TEXT, so
+# every formatting offset after it depends on the characters surviving
+# unchanged), character formatting, a checklist and an attachment record.
+# The restore goes through normalize_note, which rebuilds a note from a
+# known schema -- exactly the kind of place a field quietly goes missing.
+_undo_reset()
+app.new_note()
+app.title_entry.delete(0, 'end'); app.title_entry.insert(0, 'UndoRichNote')
+app.body_text.insert('1.0', 'bold word here\n| Cheese | 2 |\ncentred line')
+app.body_text.tag_add('sel', '1.0', '1.4')
+app._fmt_buttons['bold'].invoke()
+app.body_text.tag_remove('sel', '1.0', 'end')
+app.body_text.mark_set('insert', '3.0')
+app._set_paragraph_align('center')
+app._working_checklist = [{'text': 'pack bags', 'done': True},
+                          {'text': 'call venue', 'done': False}]
+app.update()
+app.save_current_note(); app.update()
+_u_rich = next((n for n in app.notes if n.get('title') == 'UndoRichNote'), None)
+_u_rich['attachments'] = [{'filename': 'receipt.png', 'stored_as': 'receipt.png'}]
+app.save_notes()
+_u_rich_before = {k: _u_rich[k] for k in
+                  ('title', 'body', 'formatting', 'paragraphs',
+                   'checklist', 'attachments')}
+app.refresh_note_list(); app.update()
+
+app._delete_note(_u_rich, None); app.update()
+check('a note carrying a table and formatting goes to the trash whole',
+      'UndoRichNote' in _trash_titles())
+_qa_click(app.toast_action_lbl); app.update()
+_u_rich_after = next((n for n in app.notes
+                      if n.get('title') == 'UndoRichNote'), None)
+check('Undo brings the rich note back at all', _u_rich_after is not None)
+check('...with its body character for character, table row included',
+      _u_rich_after is not None
+      and _u_rich_after['body'] == _u_rich_before['body']
+      and '| Cheese | 2 |' in _u_rich_after['body'])
+check('...with its formatting offsets still pointing at the same words',
+      _u_rich_after is not None
+      and _u_rich_after['formatting'] == _u_rich_before['formatting']
+      and any(sp.get('style') == 'bold'
+              for sp in _u_rich_after.get('formatting', [])))
+check('...with its paragraph alignment',
+      _u_rich_after is not None
+      and _u_rich_after['paragraphs'] == _u_rich_before['paragraphs'])
+check('...with its checklist and the ticks on it',
+      _u_rich_after is not None
+      and _u_rich_after['checklist'] == _u_rich_before['checklist'])
+check('...and with the file that was attached to it',
+      _u_rich_after is not None
+      and [a.get('filename') for a in _u_rich_after.get('attachments', [])]
+      == ['receipt.png'])
+
+# Theming x the toast. The toast is recoloured on every appearance rather
+# than tracked, so a theme switched WHILE it is on screen is the seam.
+# It survives on the straggler sweep, which walks the whole widget tree --
+# but the window that sweep has to cover grew from 1.8 seconds to 8 the
+# moment the toast started holding a decision, so it is checked here
+# rather than assumed.
+_u_theme_before = app.theme_name
+_undo_reset()
+_u_themed = _undo_seed('UndoThroughATheme')
+app.refresh_note_list(); app.update()
+app._delete_note(_u_themed, None); app.update()
+_u_other = next((t for t in NO.LIGHT_THEMES + NO.DARK_THEMES
+                 if NO.THEMES[t]['success'].lower()
+                 != NO.THEMES[app.theme_name]['success'].lower()), None)
+if _u_other is None:
+    check('every theme shares one success colour, so nothing can go stale', True)
+else:
+    app.set_theme(_u_other); app.update()
+    check('a theme switched under a live toast recolours it too',
+          str(app.toast_frame.cget('bg')).lower()
+          == NO.THEMES[_u_other]['success'].lower())
+    check('...including the Undo word inside it',
+          str(app.toast_action_lbl.cget('bg')).lower()
+          == NO.THEMES[_u_other]['success'].lower())
+    check('...and it still works after the switch',
+          app._toast_action is not None)
+    _qa_click(app.toast_action_lbl); app.update()
+    check('...putting the note back in the new theme',
+          'UndoThroughATheme' in _titles())
+app.set_theme(_u_theme_before); app.update()
+
+_undo_reset()
+
+
 print()
 print(f"=== QA3 FAILURES: {fails if fails else 'NONE'} ===")
 

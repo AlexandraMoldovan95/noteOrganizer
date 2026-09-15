@@ -12,6 +12,7 @@ How the numbers themselves are counted is the
 
 | Version | Date | In one line |
 |---|---|---|
+| [0.74.168](#074168--2026-09-15) | 2026-09-15 | Deleting something offers Undo where you deleted it — including the one delete that had no way back at all. |
 | [0.73.166](#073166--2026-09-14) | 2026-09-14 | Changing several notes' category at once no longer comes undone on the one note you had open in the editor. |
 | [0.73.165](#073165--2026-09-13) | 2026-09-13 | A code made in the editor carries the note it came from, an update from one is no longer undone by the editor a moment later, a generated code belongs to the note on screen, and Settings shows how things are now. |
 | [0.73.161](#073161--2026-09-13) | 2026-09-13 | A note's identity is written down the first time it is given out, so it survives closing the app — and a note restored from the Trash never takes one another note is already using. |
@@ -76,6 +77,40 @@ How the numbers themselves are counted is the
   padding the label could not see, and each was short — the subtitle asked for 620
   pixels and was given 544. They are taken from the label itself now, so a change to
   the layout cannot leave them behind again.
+
+---
+
+## [0.74.168] — 2026-09-15
+
+*Highlights: the way back from a delete is now where the delete happened, instead of three clicks away in Settings — and for one kind of delete, there was no way back at all until now.*
+
+### Added
+
+- **Undo on the delete banner.** Delete a note and the banner that confirms it carries an
+  **Undo**: one click puts the note back and opens it, with everything it held — tables,
+  formatting, checklist ticks, attached files. The same after deleting several at once;
+  all of them return. Until now the only route home was Settings → Recently deleted,
+  which asks you to already know the Trash exists. It also covers the one delete that
+  was permanent and said nothing about it: removing a single day from a repeating note
+  writes that day into the note's exceptions, and no screen in the app took it out
+  again. The banner stays eight seconds when it carries an Undo, rather than the usual
+  one and a half — an offer nobody can reach in time is decoration.
+
+### Fixed
+
+- **A banner reporting a failure no longer opens with a tick of success.** Every banner
+  began with "✓", whatever it had to say — so a disk that could not be written to
+  announced itself as "✓ Something went wrong with that". The mark now follows the kind
+  of message.
+
+### Testing
+
+- Twenty-two checks for the new behaviour across qa3 (the Trash) and qa7 (the calendar's
+  delete routes), covering the restore itself, an Undo after something else was deleted
+  in between, an Undo on a trash that was emptied underneath it, a second click on a
+  spent offer, a theme switched while the banner is on screen, and a note carrying a
+  table, formatting, a checklist and an attachment making the round trip unchanged.
+  Thirteen mutants, each dying on the check written for it.
 
 ---
 

@@ -21,6 +21,7 @@ every major feature.
   - [Finding notes: search, sort, and grouping](#finding-notes-search-sort-and-grouping)
   - [Organizing](#organizing)
   - [Templates](#templates)
+  - [Undoing a delete](#undoing-a-delete)
   - [Trash](#trash)
   - [Finding & cleaning up duplicates](#finding--cleaning-up-duplicates)
 - [Recurring notes](#recurring-notes)
@@ -375,6 +376,20 @@ deleting one can't be undone, and the confirmation warns you and pre-selects **N
 irreversible confirmation in the app.
 
 ![Templates panel](screenshots/templates-panel.png)
+
+### Undoing a delete
+
+Right after you delete something, the banner at the top of the window carries an **Undo**
+next to it. One click puts the note back and opens it, so you don't have to know the Trash
+exists to change your mind. It works the same after deleting several notes at once — all of
+them come back.
+
+The banner stays for eight seconds, which is long enough to read it and decide. After that
+it fades, and the note is still in the Trash below.
+
+Undo is the **only** way back for one other thing: removing a single day from a repeating
+note. That day is not kept anywhere you can reach — so if the banner has gone, the way to
+bring the day back is to set the repeat up again.
 
 ### Trash
 
