@@ -12,6 +12,7 @@ How the numbers themselves are counted is the
 
 | Version | Date | In one line |
 |---|---|---|
+| [0.74.169](#074169--2026-09-15) | 2026-09-15 | Deleting a note stops redrawing the whole screen — the list, the calendar and the statistics were all rebuilt, two of them off screen. |
 | [0.74.168](#074168--2026-09-15) | 2026-09-15 | Deleting something offers Undo where you deleted it — including the one delete that had no way back at all. |
 | [0.73.166](#073166--2026-09-14) | 2026-09-14 | Changing several notes' category at once no longer comes undone on the one note you had open in the editor. |
 | [0.73.165](#073165--2026-09-13) | 2026-09-13 | A code made in the editor carries the note it came from, an update from one is no longer undone by the editor a moment later, a generated code belongs to the note on screen, and Settings shows how things are now. |
@@ -77,6 +78,42 @@ How the numbers themselves are counted is the
   padding the label could not see, and each was short — the subtitle asked for 620
   pixels and was given 544. They are taken from the label itself now, so a change to
   the layout cannot leave them behind again.
+
+---
+
+## [0.74.169] — 2026-09-15
+
+*Highlights: the note list no longer empties and refills every time you delete something — and the calendar and statistics stop being rebuilt for screens you are not looking at.*
+
+### Fixed
+
+- **Deleting a note no longer makes the screen flicker.** The whole note list was
+  destroyed and rebuilt to take one card away, and two more screens were rebuilt
+  alongside it that were not even visible: the calendar's month grid and the Settings
+  statistics panel. Together that was 264 widgets and about a fifth of a second, every
+  time — long enough to see, which is how it was reported ("the picture breaks a little
+  and rebuilds itself"). A delete now takes the one card off the list, leaves the others
+  exactly where they are, and rebuilds the calendar and the statistics only when someone
+  is actually looking at them: 3 widgets and about a thirtieth of a second. Anything the
+  surgical path is not certain of — an emptied list, a category header that would not
+  update — still falls back to the full rebuild, because a list that quietly disagrees
+  with your notes would be far worse than one that flickers.
+
+### Testing
+
+- Eighteen checks across qa1, qa6 and qa7 covering the surgical path and, as much,
+  the fallback: a surviving card proved to be the same widget rather than a remade
+  one, the scroll position untouched, category counts coming down (including for a
+  collapsed group, which draws no cards at all), a group's header leaving with its
+  last note, the calendar caught up on every route back to it, and the statistics
+  current both while Settings is open and on the next visit. Eight mutants, each
+  dying on the check written for it.
+- **A check that had been passing on timing was repaired.** qa7's "switching notes
+  does not rebuild the list" had always run after a 180ms search-debounce timer
+  happened to have fired; once deleting got six times faster the timer landed
+  mid-measurement instead. It — and the new checks beside it — now settle every
+  timer that could rebuild the list first, and say so. Written up in
+  [qa/README.md](qa/README.md).
 
 ---
 

@@ -275,14 +275,28 @@ class SettingsPageMixin:
         looked like the right optimization (skip the work when Settings
         isn't visible), but pack()/pack_forget() don't always update
         ismapped() synchronously, so that check could skip a real update
-        and leave stale data on screen. Redrawing every time is cheap
-        (this panel is at most a couple dozen small widgets) compared to
-        the note-card rebuild refresh_note_list() already does around it,
-        so there's no real cost to just always doing it. Every field is
-        read defensively — a note with a missing/odd timestamp or
-        category just gets skipped from that specific count instead of
-        crashing the whole panel."""
+        and leave stale data on screen.
+
+        It gates on ``_settings_open`` instead, which is set by the two
+        methods that own the swap and is therefore right the instant they
+        run — the objection above was to the unreliable *question*, not
+        to skipping the work. Both halves of the promise still hold:
+        while Settings is open the flag is True and this redraws on every
+        list refresh, exactly as before; and opening Settings renders it
+        on the way in, so it is never arrived at stale.
+
+        The cost was worth going back for. "At most a couple dozen small
+        widgets" measured as 49 widgets and 12ms — negligible next to the
+        150-widget card rebuild it used to sit inside, but that rebuild
+        is gone from the delete path (see _remove_note_cards), and this
+        was then 49 of the 52 widgets a delete still touched.
+
+        Every field is read defensively — a note with a missing/odd
+        timestamp or category just gets skipped from that specific count
+        instead of crashing the whole panel."""
         if not hasattr(self, "stats_frame"):
+            return
+        if not getattr(self, "_settings_open", False):
             return
         for w in self.stats_frame.winfo_children():
             w.destroy()
@@ -1529,6 +1543,14 @@ class SettingsPageMixin:
         self._dismiss_mini_popup()
         self._catch_up_deferred_refresh()
         self.notebook.pack_forget()
+        # Stated, not inferred. Whether the notebook is on screen is
+        # asked by _calendar_is_showing(), which decides whether a
+        # rebuild can be deferred -- and pack_forget() below does not
+        # update winfo_ismapped() until Tk next goes idle, so a reader
+        # a moment later gets the previous answer. The flag is set by
+        # the two methods that own the swap, which are the only two that
+        # ever hide or show the notebook.
+        self._settings_open = True
         self.settings_page.pack(fill="both", expand=True)
         # The page comes back showing whatever section it was left on --
         # built then, not now. Field-reported on Recently deleted: notes
@@ -1544,10 +1566,26 @@ class SettingsPageMixin:
         self._render_statistics()
 
     def hide_settings_page(self):
-        self._dismiss_mini_popup()
         """Return from Settings to the Notes/Calendar notebook."""
+        self._dismiss_mini_popup()
         self.settings_page.pack_forget()
         self.notebook.pack(fill="both", expand=True)
+        self._settings_open = False
+        # The one way back to the calendar that does NOT change the
+        # notebook's selected tab, and so never fires the tab-changed
+        # handler that normally catches up a deferred rebuild. Restoring
+        # a note, emptying the Trash and renaming a category all happen
+        # in here, with the Calendar tab still selected underneath --
+        # without this the user comes back to a grid built before any of
+        # it happened.
+        #
+        # Synchronous, and only because the line above made it safe to
+        # be: the catch-up asks whether the calendar is showing, and
+        # that used to be answered from winfo_ismapped(). An attempt to
+        # dodge the timing with after_idle was measured still answering
+        # "not showing", deferring again and leaving exactly the
+        # staleness this was added to prevent.
+        self._catch_up_deferred_refresh()
 
     # ---------- Settings tab ----------
     # One row per section: nav order, the builder that fills the pane, and

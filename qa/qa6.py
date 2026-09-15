@@ -1582,6 +1582,264 @@ app.save_notes()
 app.new_note(); app.update()
 
 
+# ---------------------------------------------------------------------
+# Settings x Calendar: coming back must not show a month built before
+# anything happened in there.
+#
+# render_calendar() now defers a rebuild while the calendar is off
+# screen, which is safe only because every route back to it catches the
+# work up first. Three of those routes go through the tab-changed
+# handler. This one does not: leaving Settings re-packs the notebook
+# with the SAME tab still selected, so no tab-change event ever fires --
+# and Settings is exactly where notes are restored, purged and
+# recategorised. The gap was found by listing the routes rather than by
+# trusting that a mechanism existed.
+# ---------------------------------------------------------------------
+_cal_day = '2026-08-14'
+
+
+def _calendar_says(text):
+    """Is `text` drawn anywhere in the month grid on screen right now?"""
+    found = []
+
+    def walk(w):
+        try:
+            value = str(w.cget('text'))
+        except tk.TclError:
+            value = ''
+        if text in value:
+            found.append(w)
+        for kid in w.winfo_children():
+            walk(kid)
+
+    if hasattr(app, 'cal_grid_frame'):
+        walk(app.cal_grid_frame)
+    return bool(found)
+
+
+app.hide_settings_page(); app.update()
+app.notes = []
+app.trash = [{'id': 880, 'title': 'Marker9', 'body': 'x',
+              'category': 'General', 'date': _cal_day,
+              'deleted_at': '2026-08-01 10:00:00'}]
+app.save_notes()
+NO.save_trash(app.trash)
+app.new_note()
+app.notebook.select(app.TAB_CALENDAR)
+app.cal_year, app.cal_month = 2026, 8
+app.render_calendar()
+app.update()
+check('a trashed note is not on the calendar to begin with',
+      not _calendar_says('Marker9'))
+
+# Into Settings -- which leaves the Calendar tab selected underneath --
+# and put the note back from there.
+app.show_settings_page()
+app.toggle_settings_panel('trash')
+app.update()
+_restore = None
+for _w in (app.settings_trash_panel,):
+    def _find(widget):
+        global _restore
+        if isinstance(widget, tk.Button) and 'Restore' in str(widget.cget('text')):
+            _restore = _restore or widget
+        for kid in widget.winfo_children():
+            _find(kid)
+    _find(_w)
+check('the Restore button is there in Settings', _restore is not None)
+if _restore is not None:
+    _restore.invoke()
+    app.update()
+check('restoring from Settings puts the note back in the notebook',
+      any(n.get('title') == 'Marker9' for n in app.notes))
+
+app.hide_settings_page()
+app.update()
+app.update_idletasks()
+app.update()
+check('the calendar is up to date the moment Settings is left',
+      _calendar_says('Marker9'))
+
+app.notes = []
+app.trash = []
+app.save_notes()
+NO.save_trash(app.trash)
+app.notebook.select(app.TAB_NOTES)
+app.new_note(); app.update()
+
+
+# ---------------------------------------------------------------------
+# Grouping x the surgical card removal.
+#
+# A delete now takes one card off instead of rebuilding the list, and a
+# category header carries a count that has to come down with it. The
+# counts are kept from the note IDS each header was built with, NOT from
+# the cards under it -- because a COLLAPSED group has a header and no
+# cards at all, and counting what is drawn would read it as empty and
+# throw its header away. That is the case worth a check.
+# ---------------------------------------------------------------------
+app.hide_settings_page(); app.update()
+app.notebook.select(app.TAB_NOTES)
+app.search_var.set('')
+if hasattr(app, 'filter_var'):
+    app.filter_var.set('All')
+app.notes = [
+    NO.normalize_note({'id': 601, 'title': 'Grp1', 'body': 'b',
+                       'category': 'Work'}),
+    NO.normalize_note({'id': 602, 'title': 'Grp2', 'body': 'b',
+                       'category': 'Work'}),
+    NO.normalize_note({'id': 603, 'title': 'Grp3', 'body': 'b',
+                       'category': 'Personal'}),
+]
+app.save_notes()
+app.new_note()
+app.collapsed_groups.clear()
+app.group_by_category.set(True)
+app._on_toggle_group_by_category()
+app.update()
+
+
+def _settle():
+    """Stop anything that would rebuild the list on a timer of its own.
+
+    The sidebar search debounces with after(180, refresh_note_list), and
+    a full rebuild puts every header back correctly -- which would repair
+    a broken surgical update before a check could see it. That is not
+    hypothetical: the mutant for the collapsed-group count died when its
+    suite ran alone and survived when it ran under load, because the
+    timer landed on the other side of the assertion. A check whose answer
+    depends on machine speed is measuring the machine.
+    """
+    app._flush_autosave()
+    if getattr(app, '_search_debounce_job', None) is not None:
+        app.after_cancel(app._search_debounce_job)
+        app._search_debounce_job = None
+    app.update()
+
+
+def _header_text(cat):
+    head = app._group_header_widgets.get(cat)
+    if head is None:
+        return None
+    try:
+        return str(head['label'].cget('text'))
+    except tk.TclError:
+        return None
+
+
+check('a grouped list builds a header per category',
+      _header_text('Work') == 'Work (2)'
+      and _header_text('Personal') == 'Personal (1)')
+
+_settle()
+app._delete_note(app.find_note(602), None)
+_settle()
+check('deleting from a group brings its header count down',
+      _header_text('Work') == 'Work (1)')
+check('...and leaves the other group alone',
+      _header_text('Personal') == 'Personal (1)')
+
+_settle()
+app._delete_note(app.find_note(603), None)
+_settle()
+check('emptying a group takes its header away with the last note',
+      'Personal' not in app._group_header_widgets)
+check('...and the surviving group is untouched',
+      _header_text('Work') == 'Work (1)')
+
+# The collapsed case: a header with no cards under it at all.
+app.notes = [
+    NO.normalize_note({'id': 611, 'title': 'Col1', 'body': 'b',
+                       'category': 'Work'}),
+    NO.normalize_note({'id': 612, 'title': 'Col2', 'body': 'b',
+                       'category': 'Work'}),
+    NO.normalize_note({'id': 613, 'title': 'Keep', 'body': 'b',
+                       'category': 'Personal'}),
+]
+app.save_notes()
+app.new_note()
+app.collapsed_groups.add('Work')
+app.refresh_note_list()
+app.update()
+check('a collapsed group draws its header and none of its cards',
+      _header_text('Work') == 'Work (2)'
+      and 611 not in app._note_card_widgets
+      and 612 not in app._note_card_widgets)
+_settle()
+app._delete_note(app.find_note(611), None)
+_settle()
+check('deleting inside a COLLAPSED group still counts it down',
+      _header_text('Work') == 'Work (1)')
+check('...and does not mistake "no cards drawn" for "no notes left"',
+      'Work' in app._group_header_widgets)
+
+app.collapsed_groups.discard('Work')
+app.group_by_category.set(False)
+app._on_toggle_group_by_category()
+app.update()
+
+# ---------------------------------------------------------------------
+# Statistics stays live while Settings is open, and is never arrived at
+# stale -- the two halves of the promise it kept by redrawing on every
+# list refresh, now that it redraws only when Settings is actually open.
+# ---------------------------------------------------------------------
+app.notes = [NO.normalize_note({'id': 620 + i, 'title': 'Stat%d' % i,
+                                'body': 'b', 'category': 'General'})
+             for i in range(5)]
+app.save_notes()
+app.new_note()
+app.refresh_note_list()
+app.update()
+
+
+def _stats_says(text):
+    found = []
+
+    def walk(w):
+        try:
+            if text in str(w.cget('text')):
+                found.append(w)
+        except tk.TclError:
+            pass
+        for kid in w.winfo_children():
+            walk(kid)
+    if hasattr(app, 'stats_frame'):
+        walk(app.stats_frame)
+    return bool(found)
+
+
+app.show_settings_page()
+app.toggle_settings_panel('statistics')
+app.update()
+check('arriving at Statistics shows the count as it is now',
+      _stats_says('5'))
+# Deleted from under an open Settings page: the panel must follow.
+app._delete_note(app.find_note(620), None)
+app.update()
+check('a delete while Statistics is open updates it', _stats_says('4'))
+app.hide_settings_page()
+app.update()
+
+# Deletes with Settings CLOSED are where the redraw is skipped -- so
+# this is the half that could go stale, and does not.
+app._delete_note(app.find_note(621), None)
+app._delete_note(app.find_note(622), None)
+app.update()
+app.show_settings_page()
+app.toggle_settings_panel('statistics')
+app.update()
+check('Statistics is current on the next visit, not left behind',
+      _stats_says('2') and not _stats_says('4'))
+app.hide_settings_page()
+app.update()
+
+app.notes = []
+app.trash = []
+app.save_notes()
+NO.save_trash(app.trash)
+app.new_note(); app.update()
+
+
 print()
 print(f"=== QA6 FAILURES: {fails if fails else 'NONE'} ===")
 

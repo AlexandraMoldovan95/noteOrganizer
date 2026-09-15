@@ -208,6 +208,45 @@ A new surface joins this list the moment it ships.
   never just grep for FAIL lines: a mutant that crashes the import
   prints no failures at all, and reads as "survived nothing" when it
   really ran nothing (this exact false-clean happened here once).
+- **A check that can be decided by how fast the code above it runs is
+  measuring the machine.** The sidebar search debounces with
+  `after(180, refresh_note_list)`, and a full rebuild puts every card
+  and header back correctly — so that timer repairs whatever a surgical
+  update got wrong, and a check reading the result afterwards reports it
+  as right. It had been doing exactly that for months: qa7's
+  "switching notes does NOT rebuild the list" passed because the work
+  ahead of it was slow enough for the timer to have always fired
+  already. When deleting a note stopped rebuilding the whole list
+  (185ms → 31ms) the slack vanished, the timer landed *between* the two
+  readings, and the check went red with nothing wrong. Worse, in the
+  same window a mutant **survived under load and died when run alone** —
+  the timer had rebuilt the list and undone the damage.
+  **Settle every timer that can rebuild what you are about to measure,
+  and assert that they are settled** (`_flush_autosave()`, cancel
+  `_search_debounce_job`), so the reading is about its subject. A check
+  that only passes on a fast machine — or only on a slow one — has not
+  been written yet.
+
+  The list's scroll has a **third** timer, and it is not a debounce:
+  `_restore_list_scroll` stays in force for 400ms and re-applies itself
+  at 60, 160 and 360, because a rebuilt list's geometry settles over
+  several passes and each one re-clamps the canvas. A `yview_moveto`
+  made inside that window is simply put back — measured, with `yview`
+  reading bit-for-bit identical before and after the move. The app says
+  what beats it: `_list_scrollbar_moved` clears `_list_restore_px`
+  because "a deliberate drag beats a rebuild's still-pending restore",
+  so a test that positions the view does the same.
+- **Say out loud what the check needs to be true, or it will one day be
+  true of nothing.** The same scroll check asserted that a delete does
+  not move the list — with twelve cards in a tall window there was
+  nothing to scroll, `canvasy(0)` was 0 before and after, and it passed
+  on a tautology. It went red on CI, where the geometry differs, and the
+  red was right twice over: the list did scroll there, and the check had
+  also been scrolled to the BOTTOM, where removing a card must move the
+  view. It now asserts that the list is long enough to scroll and that
+  the view is away from the top *before* it measures anything. Reproduce
+  a CI-only failure locally before fixing it — `tools/linux-ci/` is one
+  docker command, and it showed both faults in ten seconds.
 - **A surviving mutant is a question, not a verdict.** When a promise is
   held by two independent mechanisms, breaking one leaves the check
   green — and the honest reading is "I broke the wrong thing", not "the

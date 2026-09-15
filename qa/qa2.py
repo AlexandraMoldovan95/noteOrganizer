@@ -79,6 +79,13 @@ check('is_recurring false for one-off note', NO.is_recurring({'recurrence':{}})=
 # ---- CALENDAR RENDER ----
 app.notes.append(dict(note, id=100))
 app.cal_year, app.cal_month = 2026, 7
+# On the Calendar tab first, the way a person is when they look at one.
+# render_calendar() defers a rebuild for a month that is not on screen --
+# 36ms and 98 widgets nobody sees, on every save and delete -- so asking
+# for cells from the Notes tab now asks for something the app
+# deliberately has not drawn yet.
+app.notebook.select(app.TAB_CALENDAR)
+app.update()
 try:
     app.render_calendar()
     app.update()
