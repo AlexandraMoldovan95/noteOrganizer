@@ -81,6 +81,7 @@ day-to-day tracking.
 | [The width that was guessed](#the-width-that-was-guessed) | A layout number that must agree with a layout it cannot see is wrong the first time either changes — ask the widget; and when a measurement disagrees with a photograph, doubt the measurement. | 0.73.167 |
 | [The rebuild nobody was looking at](#the-rebuild-nobody-was-looking-at) | When a new feature makes the user look somewhere new, expect a report about something that was always wrong there — measure before blaming the newest change; and a guard applied at one call site out of thirty-one is a comment, not a guard. | 0.74.169 |
 | [The sentence that counted notes](#the-sentence-that-counted-notes) | When a dialog counts things, ask what one of those things can be — a repeating series is one note in the count and every occurrence in the consequence; and a guard that has only ever been asked well-formed questions has been lucky, not tested. | 0.74.170 |
+| [Two ways to be invisible](#two-ways-to-be-invisible) | A layout whose last element absorbs every shortfall reports nothing and fails last — measure asked-for against given, on every font it will meet; and a fixture that does not do what its name says turns a measurement into a rumour. | 0.74.172 |
 
 
 ## Data safety & integrity
@@ -1966,6 +1967,77 @@ unclickable Restore.
 **Takeaway:** when a dialog counts things, ask what one of those things
 can be. And a guard that has only ever been asked well-formed questions
 has not been tested — it has been lucky.
+
+### Two ways to be invisible
+
+*([0.74.172](../CHANGELOG.md#074172--2026-09-15) · 2026-09-15)*
+
+Two reports, one strip of sidebar, and two different ways for a thing to
+be on screen and not be seen.
+
+**The word against the edge.** "Export is very cramped, you can barely
+see the whole word." The bar laid five controls in one line across a
+sidebar of fixed width, and the packer hands out that width in order:
+each control takes what it asks for and the LAST one lives on the
+remainder. So everything before it is drawn perfectly and the failure
+lands entirely on whoever is last — which is why nothing looks wrong
+until the end of the row.
+
+Measured: Export asked 40px and was drawn at 27. Everything else got
+exactly what it asked for.
+
+The comment being replaced had recorded the same fight, won by one pixel:
+*"four controls need 281px and the sidebar is a fixed 280 — the emoji
+alone is the overflow."* A layout that fits by one pixel is one font away
+from not fitting, and this one had already lost that bet somewhere nobody
+had looked: on the Linux CI image, where DejaVu is wider, the same four
+asked **338px of the 250 available and Export was drawn at one pixel**.
+It had been that broken there the whole time.
+
+So the fix is not a smaller font, which would just move the margin. The
+count went to its own line and the four actions went two by two, which
+changes what has to be TRUE: the widest row now needs the two widest
+labels side by side — 180px on Linux, 105 on Windows — instead of all
+four. Room to spare on both, rather than a margin waiting for the next
+label.
+
+**The tick that was the same colour as its box.** "The tick boxes are
+almost invisible in dark mode, being black. Maybe we can lighten the
+squares, so the black tick shows better in them."
+
+She was right, and the first attempt at it was wrong in a way worth
+writing down.
+
+The photograph taken to study it showed every box empty — because the
+script had called `_toggle_note_selected`, which updates the set of
+selected ids, rather than invoking the widget, which is what moves a
+checkbox. **The fixture ticked nothing.** On that picture a whole
+diagnosis was built: pixel measurements, a table of candidate colours, a
+conclusion of "use the accent", and a change to twelve call sites.
+
+Ticking the boxes properly showed the accent making an EMPTY box look
+filled — worse than before. The change was reverted whole, and she was
+asked for a screenshot of her own machine instead. Hers showed what the
+report said all along: a ticked box dark, with a dark mark in it, barely
+distinguishable from an empty one.
+
+The mechanism, once the picture was honest: `selectcolor` is the well a
+check mark sits in, and every one of them in this app was set to `card`
+or `sidebar` — the very surface the box is drawn on. Tk draws the mark
+dark on Windows whatever the palette says. Dark mark, dark well.
+
+Light themes never showed it, because their card already is white. That
+is the trap that kept it alive: the well has to be light because the MARK
+is dark, not because the theme is one thing or the other. It is a named
+palette entry now, `check_well`, light in all eight, so a future theme
+disagrees in one place instead of twelve.
+
+**Takeaway:** a layout whose last element absorbs every shortfall reports
+nothing and fails last, so measure what it ASKS against what it is GIVEN,
+on every font it will meet. And a fixture that does not do what its name
+says turns a measurement into a rumour — the tick boxes cost a full wrong
+diagnosis, and the only reason it shipped nothing was a screenshot asked
+for before the commit.
 
 ## Tests & CI discipline
 

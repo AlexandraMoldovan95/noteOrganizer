@@ -975,7 +975,7 @@ class SettingsPageMixin:
 
                 cb = tk.Checkbutton(row, variable=v, command=on_tog,
                                     bg=self.colors["sidebar"], activebackground=self.colors["sidebar"],
-                                    selectcolor=self.colors["card"], bd=0, highlightthickness=0)
+                                    selectcolor=self.colors["check_well"], bd=0, highlightthickness=0)
                 cb.pack(side="left")
                 lbl = tk.Label(row, text=item.get("text", ""), bg=self.colors["sidebar"],
                                fg=self.colors["subtext"] if item.get("done") else self.colors["text"],
@@ -1397,7 +1397,7 @@ class SettingsPageMixin:
                     box, text=f"Delete this copy   ({meta})" if meta else "Delete this copy",
                     variable=var,
                     bg=self.colors["sidebar"], fg=self.colors["text"],
-                    selectcolor=self.colors["card"],
+                    selectcolor=self.colors["check_well"],
                     activebackground=self.colors["sidebar"], activeforeground=self.colors["text"],
                     font=("Segoe UI", 8), anchor="w")
                 cb.pack(fill="x", padx=20)

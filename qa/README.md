@@ -236,6 +236,17 @@ A new surface joins this list the moment it ships.
   what beats it: `_list_scrollbar_moved` clears `_list_restore_px`
   because "a deliberate drag beats a rebuild's still-pending restore",
   so a test that positions the view does the same.
+- **A fixture that does not do what its name says turns a
+  measurement into a rumour.** A script studying the note checkboxes
+  called `_toggle_note_selected` — which updates the set of selected ids
+  — instead of invoking the widget, which is what actually moves a
+  checkbox. Every box in the resulting photograph was empty, and a whole
+  diagnosis was built on it: pixel measurements, a table of candidate
+  colours, a conclusion, and a change to twelve call sites. All of it
+  wrong, and none of it visibly wrong. **Assert the state you set up**,
+  in the fixture, before measuring anything from it: one line checking
+  that a box really is ticked would have caught it before the first
+  number was written down.
 - **Never hold a widget across something that rebuilds.** A reference
   found before a resize, a theme switch or a note-list refresh can name
   a widget that no longer exists by the time it is used, and Tk answers

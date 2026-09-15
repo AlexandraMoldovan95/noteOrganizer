@@ -6688,10 +6688,19 @@ check('find/theme: the find highlight is re-tinted to the new accent',
       == app.colors['accent'].lower())
 # The "Aa" case checkbox is long-lived (built once with the bar); its
 # selectcolor -- the box's own fill -- must follow the theme too, or a
-# switch leaves a stuck (dark-on-light) box you can't read as checked.
-check('find/theme: the case checkbox selectcolor follows the theme',
+# switch leaves a stuck box you can't read as checked.
+#
+# It used to be asked for the SIDEBAR colour by name, which made this
+# check agree with the defect beside it: a well the same value as the
+# surface behind it passed happily, and on every dark theme a ticked box
+# therefore looked exactly like an empty one. The well has its own
+# palette entry now, so the question is the one that was always meant --
+# is it still the palette's, and is it still not the surface it sits on?
+check('find/theme: the case checkbox well follows the theme and stays readable',
       str(app._find_case_cb.cget('selectcolor')).lower()
-      == app.colors['sidebar'].lower())
+      == app.colors['check_well'].lower()
+      and str(app._find_case_cb.cget('selectcolor')).lower()
+      != str(app._find_case_cb.cget('bg')).lower())
 # The bar's accent-coloured border is likewise long-lived; changing the
 # accent while the bar is open must recolour it, not leave the old accent
 # framing the bar.
@@ -7499,6 +7508,52 @@ app.save_notes()
 app.new_note()
 app.refresh_note_list()
 app.update()
+# ---------------------------------------------------------------------
+# The selection bar fits in the sidebar it lives in.
+#
+# It used to be one line of five controls across a fixed 280px sidebar,
+# which meant it could not fit and had no way to say so: the packer
+# gives each control what it asks for in order, and the last one lives
+# on the remainder. Measured, Export asked 40px and was drawn at 27 --
+# the word against the edge with its caret cut off, reported from the
+# field. Everything before it got exactly what it asked for, which is
+# why nothing looked wrong until the end of the row.
+# ---------------------------------------------------------------------
+if not app.selection_mode:
+    app._toggle_selection_mode()
+app.update()
+app.update_idletasks()
+_bar = app.bulk_action_bar
+check('the selection bar asks for no more room than it is given',
+      _bar.winfo_reqwidth() <= _bar.winfo_width())
+
+
+def _bar_buttons(widget, out=None):
+    out = [] if out is None else out
+    for child in widget.winfo_children():
+        if isinstance(child, tk.Button):
+            out.append(child)
+        _bar_buttons(child, out)
+    return out
+
+
+_bar_btns = _bar_buttons(_bar)
+check('the bar has its four actions', len(_bar_btns) == 4)
+for _b in _bar_btns:
+    check('...and "%s" is drawn at least as wide as it asks'
+          % str(_b.cget('text')),
+          _b.winfo_width() >= _b.winfo_reqwidth())
+# No check for "the shortfall is shared": with the count on its own row
+# the four actions ask 193px of the 250 they are given, so nothing is
+# under pressure and no single edit can starve one. Sharing the width is
+# defence in depth against a future font or label, not a promise this
+# suite can currently break -- and a check that cannot fail proves
+# nothing. Written down rather than left as a passing line.
+if app.selection_mode:
+    app._toggle_selection_mode()
+app.update()
+
+
 def _sg_settle():
     """Stop anything that rebuilds the list on a timer of its own.
 

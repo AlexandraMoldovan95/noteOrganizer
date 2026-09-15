@@ -12,6 +12,7 @@ How the numbers themselves are counted is the
 
 | Version | Date | In one line |
 |---|---|---|
+| [0.74.172](#074172--2026-09-15) | 2026-09-15 | The selection bar shows all four of its actions, and a ticked box looks ticked on a dark theme. |
 | [0.74.170](#074170--2026-09-15) | 2026-09-15 | A repeating series says so wherever it can be deleted — including the Trash, where deleting cannot be undone. |
 | [0.74.169](#074169--2026-09-15) | 2026-09-15 | Deleting a note stops redrawing the whole screen — the list, the calendar and the statistics were all rebuilt, two of them off screen. |
 | [0.74.168](#074168--2026-09-15) | 2026-09-15 | Deleting something offers Undo where you deleted it — including the one delete that had no way back at all. |
@@ -79,6 +80,40 @@ How the numbers themselves are counted is the
   padding the label could not see, and each was short — the subtitle asked for 620
   pixels and was given 544. They are taken from the label itself now, so a change to
   the layout cannot leave them behind again.
+
+---
+
+## [0.74.172] — 2026-09-15
+
+*Highlights: both halves of using Select — seeing the actions you can take, and seeing which notes you have ticked.*
+
+### Fixed
+
+- **The selection bar's last button is no longer cut off.** Its five controls were laid
+  out in one line across a sidebar of fixed width, so when they did not fit, the one at
+  the end simply lost the room — everything before it looked perfect, which is why
+  nothing seemed wrong until you reached "Export" against the edge with its caret sliced
+  off. The count moved onto its own line and the four actions sit two by two, so the
+  widest row needs the two widest labels rather than all four. Measured, that is 180
+  pixels of the 250 available on the strictest of the fonts the app is drawn in, instead
+  of 338 — room to spare rather than a margin waiting to be eaten by the next word.
+- **A ticked box now looks ticked on a dark theme.** The little well a check mark sits in
+  was set to the very surface the box sits on, and the mark itself is drawn dark
+  whatever the theme — so on any dark theme a ticked note and an untouched one looked
+  the same. Light themes hid it completely, because their surface is already white. The
+  well is now a named colour of its own, light in every palette, because the reason has
+  nothing to do with which theme is loaded: the mark is dark, so its background must not
+  be.
+
+### Testing
+
+- The bar's fit is now measured rather than assumed — every action drawn at least as
+  wide as it asks — and the tick boxes are judged on both things that matter: a well
+  that is not the surface behind it, and one light enough for a dark mark, checked on
+  both routes that build those boxes and across every palette. Four mutants, each dying
+  on the check written for it. `qa/probe_bar_width.py` prints the widths on whatever
+  system runs it, since the fonts differ between Windows and the Linux CI image and a
+  layout that fits on only one of them is a coincidence.
 
 ---
 
