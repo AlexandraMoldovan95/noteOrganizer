@@ -12,6 +12,38 @@ and [`README.md`](../../README.md). They are referenced by exact filename, so
 **to replace or add one, drop a PNG here using the filename below** — it then
 renders automatically everywhere the docs reference it, no other change needed.
 
+## They are taken by a script, not by hand
+
+    py tools/doc_screenshots.py            # every scene
+    py tools/doc_screenshots.py tables     # just one
+
+Run it from a scratch copy, never in place -- the qa safety rule applies
+here too, and the script refuses to start beside a `notes_data.json` that
+holds real notes.
+
+Every picture in the table below has a scene in that file which stages it
+deliberately: it writes a small notebook of its own, opens the panel,
+ticks what needs ticking, and photographs the result. Before 2026-09-14
+only three did, and the other nineteen were taken by hand on a real
+notebook -- which showed, in the pictures: a sidebar counting "General
+(71)", notes titled "3" and "5", a Duplicates panel announcing
+thirty-three groups. Nothing private was legible, but nothing was chosen
+either.
+
+Three things the script does that a careful hand cannot promise:
+
+- **It refuses to photograph a covered window.** Before each shutter it
+  asks, at forty-nine points across the frame, which window is actually
+  on top there; a window from another program means the shot is not
+  taken. An Android emulator sat in the middle of nineteen pictures on
+  the first full run, and a browser did it once before that.
+- **A crop can never leave the window.** The checklist shot came back
+  with the Windows taskbar along its bottom edge. A picture of this app
+  is made only of pixels belonging to this app.
+- **It puts the screen back between scenes**, not just the notebook. A
+  scene that searched for "team" left every later sidebar reading "No
+  notes match your search or filter" -- including the hero shot.
+
 Rules that keep the set reading as one app:
 
 - **The current app on screen** — window title **Note Organizer**, current UI
@@ -19,8 +51,9 @@ Rules that keep the set reading as one app:
 - **One theme throughout** — a partial refresh in another theme silently
   produces a mixed set.
 
-**Current set:** captured in the default dark (purple) theme, refreshed for
-app version 0.64.97; update this line whenever the set is recaptured.
+**Current set:** retaken 2026-09-14 in the default dark (purple) theme, all
+twenty-two by `tools/doc_screenshots.py`; update this line whenever the set
+is recaptured.
 
 | Filename | What to capture |
 |---|---|
