@@ -348,6 +348,20 @@ app.update(); app.update_idletasks()
 check('Settings pane overflows for the chip test too',
       app.settings_canvas.yview()[1] < 1.0)
 before_stats_scroll = app.settings_canvas.yview()
+# Found again, here, and not reused from before the resize. The
+# statistics panel is destroyed and rebuilt from scratch on every
+# note-list refresh while Settings is open, so a chip captured earlier
+# can name a widget that no longer exists by the time the wheel is aimed
+# at it -- "bad window path name", and the script dies rather than fails.
+#
+# It was always this fragile; it only started biting when gating the
+# panel's redraw on whether Settings is open moved WHEN that rebuild
+# lands. Two runs in four on Linux, none on Windows, and none at all
+# before that change -- which is the shape of a check holding a
+# reference across something that rebuilds.
+chip_frames = find_all(app.stats_frame, tk.Frame)
+check('the chips are still there to aim at after the resize',
+      len(chip_frames) > 0)
 _qa_fire(chip_frames[0], '<MouseWheel>', delta=-120)
 app.update()
 check('scrolling with the cursor over a statistics chip scrolls the Settings page',
@@ -374,12 +388,19 @@ app.update()
 app.filter_var.set('All')
 app.notebook.select(app.TAB_CALENDAR)
 app.update()
-grid_frame = find_all(app.stats_frame, tk.Frame)[0]
-chip = grid_frame.winfo_children()[0]
+_stat_frames = find_all(app.stats_frame, tk.Frame)
+# Indexed [0] straight off a find_all() before, which turns "the panel
+# was rebuilt just now and is briefly empty" into an IndexError -- the
+# script dies instead of failing, and a dead script reports no failures
+# at all. Same family as the chips held across a rebuild below.
+check('the statistics panel has a chip grid to inspect', bool(_stat_frames))
+grid_frame = _stat_frames[0] if _stat_frames else None
+chip = (grid_frame.winfo_children() or [None])[0] if grid_frame else None
 check('statistics chip has no hand cursor (not clickable-looking)',
-      str(chip.cget('cursor')) != 'hand2')
-_qa_click(chip)
-_qa_fire(chip, '<ButtonRelease-1>')
+      chip is not None and str(chip.cget('cursor')) != 'hand2')
+if chip is not None:
+    _qa_click(chip)
+    _qa_fire(chip, '<ButtonRelease-1>')
 app.update()
 check('clicking a statistics chip does not change tabs',
       app.notebook.index(app.notebook.select())==app.TAB_CALENDAR)

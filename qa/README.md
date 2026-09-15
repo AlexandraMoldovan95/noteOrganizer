@@ -236,6 +236,19 @@ A new surface joins this list the moment it ships.
   what beats it: `_list_scrollbar_moved` clears `_list_restore_px`
   because "a deliberate drag beats a rebuild's still-pending restore",
   so a test that positions the view does the same.
+- **Never hold a widget across something that rebuilds.** A reference
+  found before a resize, a theme switch or a note-list refresh can name
+  a widget that no longer exists by the time it is used, and Tk answers
+  "bad window path name" — which **kills the script** rather than
+  failing a check, and a dead script reports no failures at all. qa6
+  held a Statistics chip across `app.geometry(...)`; the panel is
+  destroyed and rebuilt on every list refresh while Settings is open, so
+  the reference was a coin toss. It had always been one, and only began
+  landing wrong when gating that redraw on whether Settings is open
+  moved WHEN the rebuild happens: two runs in four on Linux, none on
+  Windows, none at all before the change. **Find it again immediately
+  before using it**, and never index `find_all(...)[0]` without
+  asserting there is something there.
 - **Say out loud what the check needs to be true, or it will one day be
   true of nothing.** The same scroll check asserted that a delete does
   not move the list — with twelve cards in a tall window there was
