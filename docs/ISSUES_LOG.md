@@ -78,6 +78,8 @@ day-to-day tracking.
 | [The fix that was dead on arrival](#the-fix-that-was-dead-on-arrival) | A test calling the method proves the method; only the user's route proves the feature. | 0.55.81 |
 | [The teeth that had gone dull](#the-teeth-that-had-gone-dull) | Reintroduce the original bug occasionally — green must prove it can still go red. | 0.64.95 |
 | [The safety net that hid the missing mechanism](#the-safety-net-that-hid-the-missing-mechanism) | When a fallback masks the primary mechanism, assert the mechanism — a behaviour check green under two themes proved nothing. | 0.71.125 |
+| [The width that was guessed](#the-width-that-was-guessed) | A layout number that must agree with a layout it cannot see is wrong the first time either changes — ask the widget; and when a measurement disagrees with a photograph, doubt the measurement. | 0.73.167 |
+
 
 ## Data safety & integrity
 
@@ -1775,6 +1777,65 @@ interpreter rather than a red check.
 — budget for "the process just dies" when a check feeds user input to
 Tcl. And never bisect a crash from a piped log's tail: trust exit codes
 and the footer, re-run unbuffered for the location.
+
+### The width that was guessed
+
+*([0.73.167](../CHANGELOG.md#073167--2026-09-15) · 2026-09-15)*
+
+**Symptom:** In Settings, the explanatory line under each title stopped
+mid-word. Duplicates ended at "date and col"; Templates at "use Save as
+template on an"; Backup at "not in the a folder". Nothing on screen said
+anything had been cut, and the missing words were the ones carrying the
+meaning — "date and col" should read "date and color). Tick the copies
+you want to remove — the rest are kept."
+
+**Cause:** A `tk.Label` breaks its text at `wraplength` pixels and then
+draws those lines inside whatever width the geometry manager gave it.
+When the two disagree, the ends of the lines are simply not drawn.
+
+Every wrapping width in that page was `SETTINGS_CONTENT_MAX` minus a
+hand-picked number — a guess at the padding between the pane and the
+label. The panel alone is packed with `padx=48` a side, so every guess
+was short by at least 96 pixels before anything else was counted: the
+section subtitle asked for 620 and was given 544.
+
+Three labels were clipped, by 51, 57 and up to 69 pixels. A fourth had
+the same construction and survived only because its text was short
+enough not to wrap.
+
+**Fix:** the numbers are gone rather than corrected. `_wrap_to_own_width`
+binds `<Configure>` and sets the wraplength from the label's own width,
+less four pixels for the border Tk adds when it asks for room. The only
+number that cannot disagree with the layout is the one the layout
+produced. Applied to all four labels, including the one still fitting.
+
+Only for labels a parent stretches. A label that sizes itself to its text
+would shrink, re-wrap, and shrink again.
+
+**How it was found, and the two wrong measurements:** it was found by
+*photographing* the app for the documentation gallery — no check had ever
+compared a wraplength with a width, and reading the code would not have
+shown it either, because both numbers look reasonable on their own.
+
+Locating it took three measurements, and the first two were wrong in
+instructive ways.
+
+*"wraplength larger than the label's width"* flags every label that sizes
+itself to its text — those are always narrower than their wraplength and
+are never clipped. It reported six problems, two imaginary.
+
+*"does the label reach past the pane"* reported none at all. The widget
+fits; it is the text inside it that does not.
+
+*`winfo_reqwidth()` against `winfo_width()`* — what Tk asked for, given
+the text and the wrapping, against what it was given — matched the
+photographs exactly, down to which three sentences were cut and by how
+much.
+
+**Takeaway:** a layout number that has to agree with a layout it cannot
+see is wrong the first time either changes, and stays wrong silently. Ask
+the widget. And when a measurement disagrees with a photograph, the
+measurement is the thing to doubt first.
 
 ## Tests & CI discipline
 
