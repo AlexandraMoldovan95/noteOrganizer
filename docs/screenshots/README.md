@@ -51,9 +51,9 @@ Rules that keep the set reading as one app:
 - **One theme throughout** — a partial refresh in another theme silently
   produces a mixed set.
 
-**Current set:** retaken 2026-09-14 in the default dark (purple) theme, all
-twenty-two by `tools/doc_screenshots.py`; update this line whenever the set
-is recaptured.
+**Current set:** retaken 2026-09-15 in the default dark (purple) theme, all
+twenty-two by `tools/doc_screenshots.py`, on app version 0.73.167; update
+this line whenever the set is recaptured.
 
 | Filename | What to capture |
 |---|---|

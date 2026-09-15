@@ -61,6 +61,24 @@ How the numbers themselves are counted is the
 
 ---
 
+## [0.73.167] — 2026-09-15
+
+*Highlights: the explanations in Settings no longer stop mid-word.*
+
+### Fixed
+
+- **The explanatory line under each Settings title was cut off at the right edge.**
+  Duplicates ended at "date and col", Templates at "use 🧩 Save as template on an",
+  Backup at "not in the a folder" — and the missing words were the ones carrying the
+  meaning. A label breaks its text at a set width and then draws those lines inside
+  whatever width it was actually given; when the two disagree, the ends are not drawn
+  and nothing says so. Each of those widths was a hand-picked number standing in for
+  padding the label could not see, and each was short — the subtitle asked for 620
+  pixels and was given 544. They are taken from the label itself now, so a change to
+  the layout cannot leave them behind again.
+
+---
+
 ## [0.73.166] — 2026-09-14
 
 *Highlights: a bulk category change now sticks on the note you happen to have open, instead of being written back the moment you carry on typing.*
