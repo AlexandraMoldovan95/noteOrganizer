@@ -71,12 +71,19 @@ app.refresh_note_list()
 ]
 
 SEED = [
-    {"id": 1, "title": "Reteta de paine", "body": "500g faina\\n300ml apa\\nsare",
+    # English, like the app's own interface, and with real line breaks.
+    # Both were wrong: the notes were Romanian, and each body held a
+    # backslash followed by an n rather than the newline it stood for --
+    # so the reference screens showed "lapte\noua\npaine" on one line.
+    # The language gate did not catch the first, because none of those
+    # words are in its list. It is a net, not a proof, and says so.
+    {"id": 1, "title": "Bread recipe",
+     "body": "500g flour\n300ml water\n10g salt",
      "category": "General", "date": "2026-09-15",
-     "checklist": [{"text": "framantat", "done": True},
-                   {"text": "copt", "done": False}],
+     "checklist": [{"text": "kneaded", "done": True},
+                   {"text": "baked", "done": False}],
      "created": "2026-09-01 09:00", "updated": "2026-09-01 09:00"},
-    {"id": 2, "title": "De cumparat", "body": "lapte\\noua\\npaine",
+    {"id": 2, "title": "Shopping", "body": "milk\neggs\nbread",
      "category": "General", "created": "2026-09-02 09:00",
      "updated": "2026-09-02 09:00"},
     {"id": 3, "title": "", "body": "a note with no title, as in a real notebook",
@@ -98,6 +105,21 @@ app.show_warning = lambda *a, **k: True
 app.ask_yes_no = lambda *a, **k: True
 app.geometry("1150x820+60+60")
 app.update()
+# Raised and kept on top before anything is photographed. The grab copies
+# from the SCREEN at the window's coordinates, so whatever is in front is
+# what gets saved -- and these pictures are committed.
+app.lift()
+app.attributes("-topmost", True)
+app.focus_force()
+
+# PowerShell's CopyFromScreen works in PHYSICAL pixels; Tk reports its
+# geometry in LOGICAL ones. On a display with any scaling the two differ,
+# and a box built from Tk's numbers lands up and to the left of the
+# window: the reference screens carried a strip of the developer's own
+# desktop down their left edge, and lost the right edge of the app.
+# Measured once, here, rather than assumed to be 1.
+from PIL import ImageGrab as _Grab
+SCALE = _Grab.grab().size[0] / float(app.winfo_screenwidth())
 
 scenes = json.load(io.open("scenes.json", encoding="utf-8"))
 for name, script in scenes:
@@ -105,8 +127,13 @@ for name, script in scenes:
     app.update()
     app.update_idletasks()
     time.sleep(0.4)
-    x, y = app.winfo_rootx(), app.winfo_rooty()
-    w, h = app.winfo_width(), app.winfo_height()
+    app.lift()
+    app.attributes("-topmost", True)
+    app.update()
+    x = int(round(app.winfo_rootx() * SCALE))
+    y = int(round(app.winfo_rooty() * SCALE))
+    w = int(round(app.winfo_width() * SCALE))
+    h = int(round(app.winfo_height() * SCALE))
     subprocess.run(["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass",
                     "-File", "grab.ps1", "-Out", os.path.join("shots", name + ".png"),
                     "-X", str(x), "-Y", str(y), "-W", str(w), "-H", str(h)],
