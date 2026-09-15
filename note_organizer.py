@@ -45,7 +45,7 @@ except ImportError:
 # Added/Fixed CHANGELOG.md entries, not per-release counts). The running
 # app records this into settings, so the next time a newer build opens
 # over older data it can tell the user what changed version-wise.
-APP_VERSION = "0.74.170"
+APP_VERSION = "0.75.173"
 
 
 def parse_version(v):
@@ -7925,7 +7925,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 extra = " 📎" if n.get("attachments") else ""
                 cb = tk.Checkbutton(inner, text=title + extra, variable=var,
                                     bg=self.colors["sidebar"], fg=self.colors["text"],
-                                    selectcolor=self.colors["card"],
+                                    selectcolor=self.colors["check_well"],
                                     activebackground=self.colors["sidebar"],
                                     activeforeground=self.colors["text"],
                                     font=("Segoe UI", 8), anchor="w")
@@ -8918,7 +8918,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
         cb = tk.Checkbutton(row, variable=var, command=on_toggle,
                             bg=self.colors["card"], activebackground=self.colors["card"],
-                            selectcolor=self.colors["sidebar"], bd=0,
+                            selectcolor=self.colors["check_well"], bd=0,
                             highlightthickness=0)
         cb.pack(side="left")
 
@@ -9497,7 +9497,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             for c in w.winfo_children():
                 if isinstance(c, tk.Checkbutton):
                     try:
-                        c.configure(selectcolor=self.colors["sidebar"],
+                        c.configure(selectcolor=self.colors["check_well"],
                                     activebackground=self.colors["card"])
                     except tk.TclError:
                         pass
@@ -10022,7 +10022,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # it needs LIVE theme tracking, or selectcolor stays stuck at
         # whichever theme was active when the app started, regardless of any
         # later theme switch.
-        self.track_theme(group_cb, bg="sidebar", fg="subtext", selectcolor="card",
+        self.track_theme(group_cb, bg="sidebar", fg="subtext", selectcolor="check_well",
                          activebackground="sidebar")
         group_cb.pack(side="left")
 
@@ -10050,35 +10050,76 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # spacing they need 209px — comfortable room to spare.
         self.bulk_action_bar = tk.Frame(self.sidebar)
         self.track_theme(self.bulk_action_bar, bg="sidebar")
+        # The count on its own line, then the four actions two by two.
+        #
+        # All five used to sit in ONE line across a fixed 280px sidebar,
+        # which meant the line could not fit and had no way to say so:
+        # the packer gives each control what it asks for in order and the
+        # LAST one lives on whatever is left. Everything before it looks
+        # perfect, which is why nothing seemed wrong until the end of the
+        # row. On Windows that was Export asking 40px and drawn at 27 --
+        # the word against the edge with its caret cut off, which is how
+        # it was reported. On the Linux CI image, where the fonts are
+        # wider, the same four asked 338px of the 250 available and
+        # Export was drawn at ONE pixel. It had been that broken there
+        # the whole time, and no check had ever measured it.
+        #
+        # (The comment this replaces recorded the same fight being won by
+        # a single pixel: "four controls need 281px and the sidebar is a
+        # fixed 280 -- the emoji alone is the overflow". A layout that
+        # fits by one pixel is one font away from not fitting, and this
+        # one had already lost that bet on the other platform.)
+        #
+        # Two by two is the fix rather than a smaller font, because it
+        # changes what has to be true: the widest row now needs the two
+        # widest labels side by side (180px measured on Linux, 105 on
+        # Windows) instead of all four, which leaves room to spare on
+        # both rather than a margin to be eaten by the next label, glyph
+        # or font. Each button expands to fill its half, so they stay the
+        # same size as each other whatever the text does.
         self.bulk_selected_lbl = tk.Label(
-            self.bulk_action_bar, text="0 selected", font=("Segoe UI", 7, "bold"))
+            self.bulk_action_bar, text="0 selected", font=("Segoe UI", 8, "bold"))
         self.track_theme(self.bulk_selected_lbl, bg="sidebar", fg="text")
-        self.bulk_selected_lbl.pack(side="left", padx=(0, 3))
+        self.bulk_selected_lbl.pack(anchor="w", pady=(0, 3))
+
+        def _bulk_row():
+            row = tk.Frame(self.bulk_action_bar)
+            self.track_theme(row, bg="sidebar")
+            row.pack(fill="x", pady=1)
+            return row
+
+        def _bulk_pack(button):
+            button.pack(side="left", expand=True, fill="x", padx=1, ipady=3)
+
+        top_row = _bulk_row()
         bulk_select_all_btn = tk.Button(
-            self.bulk_action_bar, text="Select all", command=self._bulk_select_all,
-            relief="flat", font=("Segoe UI", 7), cursor="hand2")
+            top_row, text="Select all", command=self._bulk_select_all,
+            relief="flat", font=("Segoe UI", 8), cursor="hand2")
         self.track_theme(bulk_select_all_btn, bg="card", fg="text")
-        bulk_select_all_btn.pack(side="left", padx=(0, 2), ipadx=2, ipady=2)
+        _bulk_pack(bulk_select_all_btn)
+        # Kept, because its label is not fixed: it becomes "Unselect all"
+        # once everything on screen is selected.
+        self._bulk_select_all_btn = bulk_select_all_btn
         bulk_trash_btn = tk.Button(
-            self.bulk_action_bar, text="🗑 Trash", command=self._bulk_move_to_trash,
-            relief="flat", font=("Segoe UI", 7, "bold"), cursor="hand2")
+            top_row, text="🗑 Trash", command=self._bulk_move_to_trash,
+            relief="flat", font=("Segoe UI", 8, "bold"), cursor="hand2")
         self.track_theme(bulk_trash_btn, bg="danger")
         bulk_trash_btn.configure(fg="white")
-        bulk_trash_btn.pack(side="left", padx=(0, 2), ipadx=2, ipady=2)
+        _bulk_pack(bulk_trash_btn)
+
+        bottom_row = _bulk_row()
         bulk_category_btn = tk.Button(
-            self.bulk_action_bar, text="🗂 Category ▾", command=self._bulk_change_category,
-            relief="flat", font=("Segoe UI", 7), cursor="hand2")
+            bottom_row, text="🗂 Category ▾", command=self._bulk_change_category,
+            relief="flat", font=("Segoe UI", 8), cursor="hand2")
         self.track_theme(bulk_category_btn, bg="accent")
         bulk_category_btn.configure(fg="white")
-        bulk_category_btn.pack(side="left", padx=(0, 2), ipadx=2, ipady=2)
+        _bulk_pack(bulk_category_btn)
         self._bulk_category_btn = bulk_category_btn
-        # No 💾 glyph: with it the bar's four controls need 281px and the
-        # sidebar is a fixed 280 — the emoji alone is the overflow.
         bulk_export_btn = tk.Button(
-            self.bulk_action_bar, text="Export ▾", command=self._bulk_export,
-            relief="flat", font=("Segoe UI", 7), cursor="hand2")
+            bottom_row, text="Export ▾", command=self._bulk_export,
+            relief="flat", font=("Segoe UI", 8), cursor="hand2")
         self.track_theme(bulk_export_btn, bg="card", fg="text")
-        bulk_export_btn.pack(side="left", ipadx=2, ipady=2)
+        _bulk_pack(bulk_export_btn)
         self._bulk_export_btn = bulk_export_btn
         # Not packed yet — shown by _toggle_selection_mode() when active.
 
@@ -11528,9 +11569,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 end_row, text=text, value=value, variable=self.rec_end_mode_var,
                 font=("Segoe UI", 9), relief="flat", cursor="hand2",
                 command=self.on_end_mode_changed,
-                selectcolor=self.colors["card"]
+                selectcolor=self.colors["check_well"]
             )
-            self.track_theme(rb, bg="bg", fg="text", activebackground="bg", activeforeground="text", selectcolor="card")
+            self.track_theme(rb, bg="bg", fg="text", activebackground="bg", activeforeground="text", selectcolor="check_well")
             rb.pack(side="left", padx=2)
             return rb
 
@@ -11993,6 +12034,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 self.build_note_card(note)
 
         self._bind_mousewheel_recursive(self.list_frame, self.canvas)
+        if getattr(self, "selection_mode", False):
+            # What "all" means has just changed -- a search or a filter
+            # alters which notes are on screen, and the Select all button
+            # says what pressing it would do. Only while the bar is up,
+            # so an ordinary refresh pays nothing for it.
+            self._update_bulk_selected_label()
 
     def _render_grouped_notes(self, filtered):
         """Render notes clustered under collapsible category headers. Group
@@ -12131,7 +12178,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             sel_var = tk.BooleanVar(value=note["id"] in self.selected_note_ids)
             sel_cb = tk.Checkbutton(
                 card, variable=sel_var, bg=self.colors["card"],
-                activebackground=self.colors["card"], selectcolor=self.colors["sidebar"],
+                activebackground=self.colors["card"], selectcolor=self.colors["check_well"],
                 bd=0, highlightthickness=0,
                 command=lambda n=note, v=sel_var: self._toggle_note_selected(n["id"], v.get())
             )
@@ -12276,7 +12323,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 checkbox = info.get("checkbox")
                 if checkbox is not None:
                     checkbox.configure(bg=c["card"], activebackground=c["card"],
-                                       selectcolor=c["sidebar"])
+                                       selectcolor=c["check_well"])
             except tk.TclError:
                 # The card (or one of its children) was destroyed between the
                 # snapshot above and now — nothing to recolour.
@@ -12422,7 +12469,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 sel_var = tk.BooleanVar(value=note_id in self.selected_note_ids)
                 sel_cb = tk.Checkbutton(
                     card, variable=sel_var, bg=self.colors["card"],
-                    activebackground=self.colors["card"], selectcolor=self.colors["sidebar"],
+                    activebackground=self.colors["card"], selectcolor=self.colors["check_well"],
                     bd=0, highlightthickness=0,
                     command=lambda n=note_id, v=sel_var: self._toggle_note_selected(n, v.get())
                 )
@@ -12456,6 +12503,20 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
     def _update_bulk_selected_label(self):
         n = len(self.selected_note_ids)
         self.bulk_selected_lbl.config(text=f"{n} selected")
+        # The button says what pressing it will do, which changes once
+        # everything on screen is already selected. Asked from the same
+        # _visible_note_ids() the press itself uses, so the word and the
+        # action cannot disagree.
+        button = getattr(self, "_bulk_select_all_btn", None)
+        if button is None:
+            return
+        try:
+            visible = self._visible_note_ids()
+            button.config(text="Unselect all"
+                          if visible and visible <= self.selected_note_ids
+                          else "Select all")
+        except (tk.TclError, AttributeError):
+            pass
 
     @staticmethod
     def _query_matches_note(query, note):
@@ -12479,23 +12540,78 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 or query in body_txt
                 or query in _txt(note.get("comments")))
 
-    def _bulk_select_all(self):
-        """Selects every note currently visible in the list (respecting
-        whatever search/category filter is active) — not necessarily every
-        note in the whole app."""
+    def _visible_note_ids(self):
+        """The notes the list is showing right now, by id.
+
+        The ONE definition, for the same reason _query_matches_note is
+        one: the moment two places work out "what is on screen" for
+        themselves, they drift, and this project has already paid for
+        that once (see that method's note). Select-all and the label
+        that decides whether everything IS selected have to mean exactly
+        the same set, or the button offers to select what is already
+        selected.
+        """
         query = self.search_var.get().lower()
         if query == "search notes...":
             query = ""
-
         visible = [n for n in self.notes
                    if self._query_matches_note(query, n)]
         chosen_category = getattr(self, "filter_var", None)
         if chosen_category is not None and self.filter_var.get() != "All":
             visible = [n for n in visible
                        if self._note_passes_filter(n, self.filter_var.get())]
-        self.selected_note_ids = {n["id"] for n in visible}
+        return {n["id"] for n in visible}
+
+    def _bulk_select_all(self):
+        """Select every note the list is showing — or, if they are all
+        already selected, let them all go again.
+
+        One button rather than two, because the second is only ever
+        wanted straight after the first: a mis-aimed "Select all" used to
+        mean leaving selection mode entirely and starting over, since
+        nothing else clears a selection in one gesture. It respects
+        whatever search or category filter is active, so "all" is what is
+        on screen, never the whole notebook.
+        """
+        visible = self._visible_note_ids()
+        if visible and visible <= self.selected_note_ids:
+            self.selected_note_ids = set()
+        else:
+            self.selected_note_ids = set(visible)
         self._update_bulk_selected_label()
-        self.refresh_note_list()
+        # Not refresh_note_list(). Nothing about the notes changed -- only
+        # which of them are ticked -- and rebuilding the list to move a
+        # tick costs 140 widgets and ~170ms, which is the flicker this
+        # button was reported for. The fifth member of the family that
+        # already exists for exactly this reason (see _recolor_note_cards,
+        # _apply_selection_mode_to_cards, _update_open_highlight,
+        # _remove_note_cards).
+        self._sync_card_checkboxes()
+
+    def _sync_card_checkboxes(self):
+        """Make every card's tick box agree with selected_note_ids.
+
+        select()/deselect() set the widget's own variable WITHOUT firing
+        its command, which matters: the command is _toggle_note_selected,
+        and letting it run here would have each box re-report a change
+        that has already been made -- twenty times over, each one asking
+        the label to recount.
+
+        Cards that are not drawn (filtered out, or inside a collapsed
+        group) have no box to update, and need none: build_note_card
+        reads selected_note_ids for the initial value when it makes one.
+        """
+        for note_id, info in list(getattr(self, "_note_card_widgets", {}).items()):
+            box = info.get("checkbox")
+            if box is None:
+                continue
+            try:
+                if note_id in self.selected_note_ids:
+                    box.select()
+                else:
+                    box.deselect()
+            except tk.TclError:
+                pass
 
     def _series_warning(self, notes):
         """One sentence saying how many of `notes` are whole repeating
@@ -13234,7 +13350,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # the map they stay stuck at whichever theme was active when the bar
         # was first built, leaving a dark box on a light theme where the
         # checkmark can't be read (the group-by checkbox hit the same trap).
-        self.track_theme(cb, bg="card", fg="subtext", selectcolor="sidebar",
+        self.track_theme(cb, bg="card", fg="subtext", selectcolor="check_well",
                          activebackground="card")
         self._find_case_cb = cb
         cb.pack(side="left", padx=(2, 2))

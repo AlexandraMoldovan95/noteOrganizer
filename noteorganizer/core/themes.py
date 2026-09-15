@@ -46,6 +46,10 @@ THEMES = {
         "accent": "#7c5cff",
         "accent_hover": "#9377ff",
         "card": "#2e2e48",
+        # The well a check mark sits in. Tk draws that mark dark on
+        # Windows whatever the palette says, so this stays light in
+        # every theme -- a dark well made a ticked box read as empty.
+        "check_well": "#f7f7fb",
         "text": "#f2f2f7",
         "subtext": "#a0a0c0",
         "danger": "#ff5c7c",
@@ -58,6 +62,10 @@ THEMES = {
         "accent": "#2f9be0",
         "accent_hover": "#54b0ec",
         "card": "#1c3350",
+        # The well a check mark sits in. Tk draws that mark dark on
+        # Windows whatever the palette says, so this stays light in
+        # every theme -- a dark well made a ticked box read as empty.
+        "check_well": "#f7f7fb",
         "text": "#eaf2fb",
         "subtext": "#8fa8c4",
         "danger": "#ff6b6b",
@@ -70,6 +78,10 @@ THEMES = {
         "accent": "#43c07a",
         "accent_hover": "#5ed494",
         "card": "#213e30",
+        # The well a check mark sits in. Tk draws that mark dark on
+        # Windows whatever the palette says, so this stays light in
+        # every theme -- a dark well made a ticked box read as empty.
+        "check_well": "#f7f7fb",
         "text": "#eafaf0",
         "subtext": "#8fbaa1",
         "danger": "#ff7a7a",
@@ -82,6 +94,10 @@ THEMES = {
         "accent": "#e0863f",
         "accent_hover": "#ec9d5a",
         "card": "#2d2d38",
+        # The well a check mark sits in. Tk draws that mark dark on
+        # Windows whatever the palette says, so this stays light in
+        # every theme -- a dark well made a ticked box read as empty.
+        "check_well": "#f7f7fb",
         "text": "#f3f2f0",
         "subtext": "#a8a8b0",
         "danger": "#ff6b6b",
@@ -95,6 +111,10 @@ THEMES = {
         "accent": "#7c5cff",
         "accent_hover": "#6a49e6",
         "card": "#ffffff",
+        # The well a check mark sits in. Tk draws that mark dark on
+        # Windows whatever the palette says, so this stays light in
+        # every theme -- a dark well made a ticked box read as empty.
+        "check_well": "#f7f7fb",
         "text": "#22223a",
         "subtext": "#6b6b85",
         "danger": "#e0405f",
@@ -107,6 +127,10 @@ THEMES = {
         "accent": "#1f88d6",
         "accent_hover": "#1873ba",
         "card": "#ffffff",
+        # The well a check mark sits in. Tk draws that mark dark on
+        # Windows whatever the palette says, so this stays light in
+        # every theme -- a dark well made a ticked box read as empty.
+        "check_well": "#f7f7fb",
         "text": "#173049",
         "subtext": "#5a748c",
         "danger": "#e0405f",
@@ -119,6 +143,10 @@ THEMES = {
         "accent": "#2aa971",
         "accent_hover": "#238e5f",
         "card": "#ffffff",
+        # The well a check mark sits in. Tk draws that mark dark on
+        # Windows whatever the palette says, so this stays light in
+        # every theme -- a dark well made a ticked box read as empty.
+        "check_well": "#f7f7fb",
         "text": "#183328",
         "subtext": "#5b7d6c",
         "danger": "#e0405f",
@@ -131,6 +159,10 @@ THEMES = {
         "accent": "#d97a2b",
         "accent_hover": "#bd6822",
         "card": "#ffffff",
+        # The well a check mark sits in. Tk draws that mark dark on
+        # Windows whatever the palette says, so this stays light in
+        # every theme -- a dark well made a ticked box read as empty.
+        "check_well": "#f7f7fb",
         "text": "#3a2c1c",
         "subtext": "#8a7660",
         "danger": "#e0405f",

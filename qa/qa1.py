@@ -6688,10 +6688,19 @@ check('find/theme: the find highlight is re-tinted to the new accent',
       == app.colors['accent'].lower())
 # The "Aa" case checkbox is long-lived (built once with the bar); its
 # selectcolor -- the box's own fill -- must follow the theme too, or a
-# switch leaves a stuck (dark-on-light) box you can't read as checked.
-check('find/theme: the case checkbox selectcolor follows the theme',
+# switch leaves a stuck box you can't read as checked.
+#
+# It used to be asked for the SIDEBAR colour by name, which made this
+# check agree with the defect beside it: a well the same value as the
+# surface behind it passed happily, and on every dark theme a ticked box
+# therefore looked exactly like an empty one. The well has its own
+# palette entry now, so the question is the one that was always meant --
+# is it still the palette's, and is it still not the surface it sits on?
+check('find/theme: the case checkbox well follows the theme and stays readable',
       str(app._find_case_cb.cget('selectcolor')).lower()
-      == app.colors['sidebar'].lower())
+      == app.colors['check_well'].lower()
+      and str(app._find_case_cb.cget('selectcolor')).lower()
+      != str(app._find_case_cb.cget('bg')).lower())
 # The bar's accent-coloured border is likewise long-lived; changing the
 # accent while the bar is open must recolour it, not leave the old accent
 # framing the bar.
@@ -7479,6 +7488,129 @@ check('...and answering No leaves what was typed exactly where it was',
       'ceva scris si nesalvat' in app.body_text.get('1.0', 'end-1c'))
 
 # ---------------------------------------------------------------------
+# Select all turns into Unselect all once everything on screen is
+# selected. One button rather than two, because the second is only ever
+# wanted straight after the first -- a mis-aimed press used to mean
+# leaving selection mode and starting over, since nothing else clears a
+# selection in one gesture.
+#
+# The trap this is walking past: "which notes are on screen" is now
+# asked by BOTH the press and the word on the button. The project has
+# already paid once for that question being answered in two places (see
+# _query_matches_note), so the checks below make the filter disagree
+# with the whole notebook on purpose.
+# ---------------------------------------------------------------------
+app.search_var.set('')
+if hasattr(app, 'filter_var'):
+    app.filter_var.set('All')
+app.notes = [NO.normalize_note(
+    {'id': 470 + i, 'title': 'Pick%d' % i, 'body': 'body %d' % i,
+     'category': 'General'}) for i in range(6)]
+app.notes[0]['title'] = 'PickOdd'
+app.save_notes()
+app.new_note()
+app.refresh_note_list()
+app.update()
+if not app.selection_mode:
+    app._toggle_selection_mode()
+app.update()
+_btn_text = lambda: str(app._bulk_select_all_btn.cget('text'))
+
+
+def _box_states():
+    """Each drawn card's tick box, as the widget itself believes it."""
+    out = {}
+    for _nid, _info in app._note_card_widgets.items():
+        _cb = _info.get('checkbox')
+        if _cb is None:
+            continue
+        out[_nid] = str(app.getvar(str(_cb.cget('variable')))) in ('1', 'True')
+    return out
+
+
+def _card_paths():
+    return {_nid: str(_info['card'])
+            for _nid, _info in app._note_card_widgets.items()}
+
+
+check('the button offers to select everything to begin with',
+      _btn_text() == 'Select all')
+_sel_paths_before = _card_paths()
+app._bulk_select_all()
+app.update()
+check('pressing it selects every note on screen',
+      app.selected_note_ids == {n['id'] for n in app.notes})
+check('...and the button now offers to let them go', _btn_text() == 'Unselect all')
+# The boxes themselves, not just the set behind them: they carry their
+# own variables, so a selection changed without touching them leaves
+# every card looking untouched.
+check('...and every tick box on screen shows it',
+      _box_states() and all(_box_states().values()))
+# And without rebuilding the list to do it. Moving a tick used to cost
+# 140 widgets and ~170ms -- reported as "the list rebuilds and takes a
+# moment", and twice as often once the button could also let go.
+check('...without rebuilding a single card to move a tick',
+      _card_paths() == _sel_paths_before)
+app._bulk_select_all()
+app.update()
+check('pressing it again clears the selection', app.selected_note_ids == set())
+check('...and clears every tick box with it',
+      _box_states() and not any(_box_states().values()))
+check('...still without rebuilding the list',
+      _card_paths() == _sel_paths_before)
+check('...without leaving selection mode, which is the whole point',
+      app.selection_mode is True)
+check('...and the button offers to select again', _btn_text() == 'Select all')
+
+# Half-selected is not all-selected: the button must still offer to
+# finish the job rather than to undo it.
+app._toggle_note_selected(470, True)
+app.update()
+check('one note selected still reads as Select all', _btn_text() == 'Select all')
+app._bulk_select_all()
+app.update()
+check('...and pressing it takes the rest, rather than dropping the one',
+      app.selected_note_ids == {n['id'] for n in app.notes})
+
+# The filter changes what "all" means. Select everything, then narrow the
+# search: the notes on screen are still all selected, so the button must
+# still say Unselect all -- and widening it again must put the offer back.
+app.selected_note_ids = set()
+app._update_bulk_selected_label()
+app.search_var.set('PickOdd')
+app.refresh_note_list()
+app.update()
+check('a narrowed list with nothing selected offers Select all',
+      _btn_text() == 'Select all')
+app._bulk_select_all()
+app.update()
+# The discriminating case, and the reason "what is on screen" has one
+# definition: ONE note of six is selected here, so a button that asked
+# the whole notebook would still be offering to select. It has to answer
+# for the list, which is where the word "all" was read.
+check('...and taking the one visible note reads as Unselect all',
+      _btn_text() == 'Unselect all' and len(app.selected_note_ids) == 1)
+app._bulk_select_all()
+app.update()
+check('...and Unselect there clears the selection', app.selected_note_ids == set())
+app.search_var.set('')
+app.refresh_note_list()
+app.update()
+check('widening the search offers Select all again', _btn_text() == 'Select all')
+app._bulk_select_all()
+app.update()
+check('...and it takes every note, not just the ones the filter had shown',
+      app.selected_note_ids == {n['id'] for n in app.notes})
+app.selected_note_ids = set()
+app._update_bulk_selected_label()
+app.update()
+
+if app.selection_mode:
+    app._toggle_selection_mode()
+app.update()
+
+
+# ---------------------------------------------------------------------
 # Deleting a note takes ONE card off the list instead of rebuilding it.
 #
 # Field-reported as "the picture breaks a little and rebuilds itself".
@@ -7499,6 +7631,47 @@ app.save_notes()
 app.new_note()
 app.refresh_note_list()
 app.update()
+# ---------------------------------------------------------------------
+# The selection bar fits in the sidebar it lives in.
+#
+# It used to be one line of five controls across a fixed 280px sidebar,
+# which meant it could not fit and had no way to say so: the packer
+# gives each control what it asks for in order, and the last one lives
+# on the remainder. Measured, Export asked 40px and was drawn at 27 --
+# the word against the edge with its caret cut off, reported from the
+# field. Everything before it got exactly what it asked for, which is
+# why nothing looked wrong until the end of the row.
+# ---------------------------------------------------------------------
+if not app.selection_mode:
+    app._toggle_selection_mode()
+app.update()
+app.update_idletasks()
+_bar = app.bulk_action_bar
+check('the selection bar asks for no more room than it is given',
+      _bar.winfo_reqwidth() <= _bar.winfo_width())
+
+
+def _bar_buttons(widget, out=None):
+    out = [] if out is None else out
+    for child in widget.winfo_children():
+        if isinstance(child, tk.Button):
+            out.append(child)
+        _bar_buttons(child, out)
+    return out
+
+
+_bar_btns = _bar_buttons(_bar)
+check('the bar has its four actions', len(_bar_btns) == 4)
+for _b in _bar_btns:
+    check('...and "%s" is drawn at least as wide as it asks'
+          % str(_b.cget('text')),
+          _b.winfo_width() >= _b.winfo_reqwidth())
+# No check for "the shortfall is shared": with the count on its own row
+# the four actions ask 193px of the 250 they are given, so nothing is
+# under pressure and no single edit can starve one. Sharing the width is
+# defence in depth against a future font or label, not a promise this
+# suite can currently break -- and a check that cannot fail proves
+# nothing. Written down rather than left as a passing line.
 def _sg_settle():
     """Stop anything that rebuilds the list on a timer of its own.
 

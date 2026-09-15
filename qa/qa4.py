@@ -307,11 +307,20 @@ def _caret_ok():
             and str(app.title_entry.cget('insertbackground')) == app.colors['text']
             and str(app.comments_text.cget('insertbackground')) == app.colors['text'])
 def _wells_ok():
+    # Asked for the SIDEBAR colour by name until the wells moved to their
+    # own palette entry. Naming a colour made the check agree with the
+    # bug it sat next to: a well the same value as the surface behind it
+    # passed happily, which is how a ticked box came to look like an
+    # empty one on every dark theme. What matters is that the well is
+    # still the palette's (so a theme switch cannot leave it stale) AND
+    # that it is not the surface it sits on.
     hits = []
     def walk(w):
         for c in w.winfo_children():
             if isinstance(c, tk.Checkbutton):
-                hits.append(str(c.cget('selectcolor')) == app.colors['sidebar'])
+                well = str(c.cget('selectcolor'))
+                hits.append(well == app.colors['check_well']
+                            and well != str(c.cget('bg')))
             walk(c)
     walk(app.checklist_items_frame)
     return bool(hits) and all(hits)
@@ -328,10 +337,10 @@ app.set_theme('light'); app.update()
 _light2 = (_caret_ok(), _wells_ok())
 check('the caret follows the theme in body, title and comments',
       _dark2[0] and _light2[0])
-check('checklist checkbox wells repaint on a theme switch',
+check('checklist checkbox wells stay readable across a theme switch',
       _dark2[1] and _light2[1])
-check('recurrence radios track their selectcolor well',
-      any(isinstance(w, tk.Radiobutton) and m.get('selectcolor') == 'card'
+check('recurrence radios still have their well tracked, so it cannot go stale',
+      any(isinstance(w, tk.Radiobutton) and m.get('selectcolor') == 'check_well'
           for w, m in app.themed_widgets))
 _back2 = _find_btn_text(app.settings_page, 'Back to Notes') \
     if hasattr(app, 'settings_page') else None
@@ -385,6 +394,109 @@ check(f'refresh_note_list really builds every card ({_cards_built} of 300)',
 check(f'...and stays inside its budget ({elapsed:.0f}ms of '
       f'{NOTE_LIST_BUDGET_MS}ms; measured 1.2-1.6s on Windows, 0.5s on Linux)',
       elapsed < NOTE_LIST_BUDGET_MS)
+
+# ---------------------------------------------------------------------
+# A tick box's well must be light, because the mark in it is dark.
+#
+# Tk draws a Checkbutton's mark dark on Windows whatever the palette
+# says. Every well in the app used to be set to `card` or `sidebar` --
+# the very surface the box sits on -- so on a dark theme a ticked box
+# and an empty one looked the same. Field-reported with a screenshot:
+# "you can barely see that it is ticked".
+#
+# Light themes never showed it, because their card already is white.
+# That is the trap: the well has to be light because the MARK is dark,
+# not because the theme is one thing or the other. So the check is about
+# luminance, not about which theme is loaded -- a future palette that
+# picks a dark well fails here rather than in somebody's screenshot.
+# ---------------------------------------------------------------------
+
+
+def _luminance(hex_colour):
+    """0 (black) to 1 (white), weighted the way an eye weights it."""
+    raw = str(hex_colour).lstrip('#')
+    if len(raw) != 6:
+        return None
+    r, g, b = (int(raw[i:i + 2], 16) / 255.0 for i in (0, 2, 4))
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b
+
+
+for _tname, _palette in NO.THEMES.items():
+    _well = _palette.get('check_well')
+    check('%s names a well for its tick boxes' % _tname, bool(_well))
+    _lum = _luminance(_well) if _well else None
+    check('...and it is light enough for a dark mark to read (%s)' % _well,
+          _lum is not None and _lum > 0.75)
+
+
+def _every_toggle(widget, out=None):
+    out = [] if out is None else out
+    for child in widget.winfo_children():
+        if isinstance(child, (tk.Checkbutton, tk.Radiobutton)):
+            out.append(child)
+        _every_toggle(child, out)
+    return out
+
+
+# Built on screen, not just in the palette: selection mode puts a box on
+# every card, and Settings carries several more.
+app.notes = [NO.normalize_note({'id': 960 + i, 'title': 'Toggle%d' % i,
+                                'body': 'b', 'category': 'General'})
+             for i in range(3)]
+app.save_notes()
+app.new_note()
+app.refresh_note_list()
+app.update()
+if not app.selection_mode:
+    app._toggle_selection_mode()
+app.update()
+app.show_settings_page()
+app.update()
+
+def _inspect_wells(route):
+    """Every tick box on screen, judged on the two things that matter."""
+    toggles = _every_toggle(app)
+    check('there are tick boxes on screen to inspect (%s)' % route,
+          len(toggles) >= 3)
+    borrowed, dark = [], []
+    for widget in toggles:
+        try:
+            well = str(widget.cget('selectcolor')).lower()
+            behind = str(widget.cget('bg')).lower()
+        except tk.TclError:
+            continue
+        # The promise is not "it equals check_well" -- a literal written
+        # somewhere else would pass that by luck. It is that the well is
+        # not the surface it sits on, which is the mistake that was made
+        # twelve times over.
+        if well == behind:
+            borrowed.append(str(widget))
+        if (_luminance(well) or 1) <= 0.75:
+            dark.append(str(widget))
+    check('no tick box borrows the colour of the surface behind it (%s)'
+          % route, not borrowed)
+    check('every tick box on screen has a light well (%s)' % route, not dark)
+
+
+# Both routes, because both build the boxes and the fix had to reach
+# both: entering selection mode adds a box to each existing card in
+# place, while a refresh builds every card from scratch with its box
+# already on. A mutant put back in one of them survived a check that
+# only ever saw the other.
+_inspect_wells('added to the cards in place')
+app.refresh_note_list()
+app.update()
+_inspect_wells('built with the cards')
+
+app.hide_settings_page()
+app.update()
+if app.selection_mode:
+    app._toggle_selection_mode()
+app.notes = []
+app.save_notes()
+app.new_note()
+app.update()
+
 
 print()
 print(f"=== QA4 FAILURES: {fails if fails else 'NONE'} ===")
