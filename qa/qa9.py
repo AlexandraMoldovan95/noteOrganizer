@@ -272,7 +272,7 @@ check(f'the body box hides its table text ({_vis9} of {_tot9} visible)',
 # <KeyRelease> is a real key event and follows the focus, which this
 # box does not hold under test. The multi-table body goes through the
 # REAL clipboard so the class paste inserts exactly it.
-_multi9 = ('text liber\n| Tabel | < |\n| Aliment | Sursa |\n'
+_multi9 = ('free text\n| Table | < |\n| Food | Source |\n'
            '| Carne | vita |\n\n| Zi | Plan |\n| luni | scris |\n'
            '| marti | citit |\n| miercuri | sport |\n| joi | piata |\n'
            '| vineri | film |\n| sambata | drum |\n| duminica | odihna |')

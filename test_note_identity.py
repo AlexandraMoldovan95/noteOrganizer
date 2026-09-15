@@ -108,7 +108,7 @@ check('a note with no uid still gets its id unchanged',
 
 # ---- travelling in a share code ----
 
-_note = normalize_note({"id": 5, "title": "Cumparaturi", "body": "lapte"})
+_note = normalize_note({"id": 5, "title": "Shopping", "body": "milk"})
 _back = decode_share_code(encode_share_code([_note]))[0]
 
 check('uid is one of the fields a share code carries',

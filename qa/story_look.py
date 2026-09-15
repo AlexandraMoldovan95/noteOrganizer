@@ -74,7 +74,8 @@ SEED = [
     # English, like the app's own interface, and with real line breaks.
     # Both were wrong: the notes were Romanian, and each body held a
     # backslash followed by an n rather than the newline it stood for --
-    # so the reference screens showed "lapte\noua\npaine" on one line.
+    # so a note meant to be three lines was drawn across one, with the
+    # backslashes showing.
     # The language gate did not catch the first, because none of those
     # words are in its list. It is a net, not a proof, and says so.
     {"id": 1, "title": "Bread recipe",

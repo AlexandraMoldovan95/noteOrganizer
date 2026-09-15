@@ -3157,7 +3157,7 @@ app.update()
 # triggers, and the body keeps its own scroll through any rebuild.
 set_body('')
 _stub_clipboard(html='<table><tr>'
-                + ''.join(f'<th>Coloana cu nume lung {i}</th>'
+                + ''.join(f'<th>Column with a long name {i}</th>'
                           for i in range(9))
                 + '</tr><tr>'
                 + ''.join(f'<td>v{i}</td>' for i in range(9))
@@ -3314,7 +3314,7 @@ set_body('')
 # Markdown's own separator line carries per-column width (the dash count),
 # alignment (the colons) and hiding (~). It must never be drawn as a row
 # of dashes, never counted when measuring, and never exported.
-_md = ('| Nume | Cant |\n|:-----:|---|\n| Lapte | 2 |\n| Paine | 1 |')
+_md = ('| Name | Qty |\n|:-----:|---|\n| Cheese | 2 |\n| Bread | 1 |')
 set_body(_md)
 app._render_table_grids()
 app.update()
@@ -3323,7 +3323,7 @@ check(f'a pasted markdown separator becomes mechanics, not a data row '
       f'({_tS["nrows"]} text rows, {_tS["data_rows"]} drawn)',
       _tS['data_rows'] == 3 and _tS['nrows'] == 4
       and _tS['sep_cols'] is not None
-      and _tS['cells'][(1, 0)]['value'] == 'Lapte')
+      and _tS['cells'][(1, 0)]['value'] == 'Cheese')
 check('no drawn cell wears the dashes',
       not any('---' in c['value'] for c in _tS['cells'].values()))
 
@@ -3338,7 +3338,10 @@ check(f'a hand-widened column pads its data cells ({len(_dataS)} chars)',
           app.body_text.get('2.0', '2.end'))[0]['width'] == 24)
 
 # Narrowing below the content is display-only: the drawn cell ellipsizes,
-# the text keeps every character.
+# the text keeps every character. The fixture word has to be WIDER than
+# the column, in pixels and not in letters -- a five-letter word of narrow
+# glyphs fits where a five-letter word of wide ones does not, and this
+# check went quietly green that way once.
 app._grid_set_col_width(_tS, 0, 4)
 app.update()
 _tS = app._grid_at_line(1)
@@ -3346,7 +3349,7 @@ _shownS = ''.join(_tS['canvas'].itemcget(t, 'text')
                   for t in _tS['cells'][(1, 0)]['texts'])
 check(f'a too-narrow column draws an ellipsis and keeps its text '
       f'({_shownS!r})',
-      chr(0x2026) in _shownS and _tS['cells'][(1, 0)]['value'] == 'Lapte')
+      chr(0x2026) in _shownS and _tS['cells'][(1, 0)]['value'] == 'Cheese')
 
 # Hiding draws a stub and takes the cells out of play; unhide restores.
 app._grid_hide_col(_tS, 1)
@@ -3570,7 +3573,7 @@ set_body('')
 # With cells selected, Bold means THOSE cells -- not a pending style for
 # the body. The tag lands on the cell's text (so save and export carry
 # it) and the drawn cell repaints.
-set_body('| Nume | Cant |\n| Lapte | 2 |')
+set_body('| Name | Qty |\n| Cheese | 2 |')
 app._render_table_grids()
 app.update()
 _tF = app._grid_at_line(1)
@@ -3621,8 +3624,8 @@ _sliceF = (body()[_hlF[0]['start']:_hlF[0]['end']] if _hlF else '')
 # text WITH its padding, never crossing the pipes.
 check(f'and the saved highlight span covers the whole cell region '
       f'({_sliceF!r})',
-      'Nume' in _sliceF and '|' not in _sliceF
-      and _sliceF.strip() == 'Nume')
+      'Name' in _sliceF and '|' not in _sliceF
+      and _sliceF.strip() == 'Name')
 app._grid_apply_style(_tF, (0, 0, 0, 1), 'highlight', None)
 app.update()
 _tF = app._grid_at_line(1)
@@ -3673,7 +3676,7 @@ set_body('')
 # click's open rebuilds the grids; the editor must land on the FRESH
 # grid, not crash on the dead canvas (the field failure that then broke
 # selections and dropped Ctrl+V into the body as literal text).
-set_body('| Nume | Cant |\n| a | 2 |\n| b | 3 |')
+set_body('| Name | Qty |\n| a | 2 |\n| b | 3 |')
 app._render_table_grids()
 app.update()
 _tR = app._grid_at_line(1)
@@ -3710,8 +3713,8 @@ set_body('')
 # and copying used to copy the ENTRY's word and paste it back into the
 # entry's own cell. The press now closes the editor and hands the
 # keyboard to the grid.
-set_body('| Aliment | X | Y |\n| Fructe | Lapte |  |\n'
-         '| Cereale |  |  |\n| Oua |  |  |')
+set_body('| Food | X | Y |\n| Fruit | Cheese |  |\n'
+         '| Cereal |  |  |\n| Oua |  |  |')
 app._render_table_grids()
 app.update()
 take_focus(app.body_text)   # the window must own the desktop focus first
@@ -3730,7 +3733,7 @@ app.body_text.event_generate('<Control-c>')
 app.update()
 check(f'Ctrl+C copies the selected cells, not the entry '
       f'({app.clipboard_get()!r})',
-      app.clipboard_get() == 'Fructe\nCereale')
+      app.clipboard_get() == 'Fruit\nCereal')
 
 # The same, in one breath: a FAST Ctrl+C right on the heels of the
 # release, before the event queue settles. The press must have taken
@@ -3751,7 +3754,7 @@ app.body_text.event_generate('<Control-c>')
 app.update()
 check(f'a fast Ctrl+C straight after the drag still means the cells '
       f'({app.clipboard_get()!r})',
-      app.clipboard_get() == 'Fructe\nCereale')
+      app.clipboard_get() == 'Fruit\nCereal')
 
 # A drag started over an editor whose content WIDENED the column: the
 # commit's rebuild kills the gesture's canvas, so the one-gesture drag
@@ -3790,8 +3793,8 @@ app._commit_cell_editor()
 app.update()
 _tE = app._grid_at_line(1)
 # The widened text served its purpose; the flow below still expects
-# 'Lapte' in that cell.
-app._grid_fill_selection({'info': _tE, 'box': (1, 1, 1, 1)}, 'Lapte')
+# 'Cheese' in that cell.
+app._grid_fill_selection({'info': _tE, 'box': (1, 1, 1, 1)}, 'Cheese')
 app.update()
 _tE = app._grid_at_line(1)
 _select_cells(_tE, (1, 2), (2, 2))
@@ -3799,10 +3802,10 @@ app.body_text.event_generate('<Control-v>')
 app.update()
 _tE = app._grid_at_line(1)
 check('a vertical pair lands in the vertical target',
-      _tE['cells'][(1, 2)]['value'] == 'Fructe'
-      and _tE['cells'][(2, 2)]['value'] == 'Cereale')
+      _tE['cells'][(1, 2)]['value'] == 'Fruit'
+      and _tE['cells'][(2, 2)]['value'] == 'Cereal')
 check("and the editor's old cell is untouched",
-      _tE['cells'][(1, 1)]['value'] == 'Lapte')
+      _tE['cells'][(1, 1)]['value'] == 'Cheese')
 
 # ---- DELETE CLEARS THE SELECTED CELLS ----
 _select_cells(_tE, (1, 0), (2, 0))
@@ -3812,7 +3815,7 @@ _tE = app._grid_at_line(1)
 check('Delete clears exactly the selected cells',
       _tE['cells'][(1, 0)]['value'] == ''
       and _tE['cells'][(2, 0)]['value'] == ''
-      and _tE['cells'][(0, 0)]['value'] == 'Aliment')
+      and _tE['cells'][(0, 0)]['value'] == 'Food')
 
 # ---- THE ALIGN BUTTONS FOLLOW THE CELL ----
 app._grid_set_alignment(_tE, (0, 1, 0, 1), core_tables.ALIGN_CENTER)
@@ -5481,8 +5484,8 @@ _origToastCP = app._show_toast
 app._show_toast = lambda text, kind='success': _toastsCP.append(text)
 _c.delete('1.0', 'end')
 app.clipboard_clear()
-app.clipboard_append('Before' + chr(10) + '| Nume | Cant |' + chr(10)
-                     + '| --- | --- |' + chr(10) + '| Lapte | 2 |' + chr(10)
+app.clipboard_append('Before' + chr(10) + '| Name | Qty |' + chr(10)
+                     + '| --- | --- |' + chr(10) + '| Cheese | 2 |' + chr(10)
                      + 'After')
 _c.focus_force()
 app.update()
@@ -6945,7 +6948,7 @@ app.update()
 # repeat rule alone really would make an empty template.
 _tpl_before = len(app.templates)
 app.open_blank_tab(); app.update()
-app._working_checklist = [{'text': 'de cumparat', 'done': False}]
+app._working_checklist = [{'text': 'to buy', 'done': False}]
 app.update()
 _tpl_said = []
 _real_info_tpl = app.show_info
