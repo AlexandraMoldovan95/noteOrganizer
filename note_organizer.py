@@ -45,7 +45,7 @@ except ImportError:
 # Added/Fixed CHANGELOG.md entries, not per-release counts). The running
 # app records this into settings, so the next time a newer build opens
 # over older data it can tell the user what changed version-wise.
-APP_VERSION = "0.74.169"
+APP_VERSION = "0.74.170"
 
 
 def parse_version(v):
@@ -12497,6 +12497,35 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._update_bulk_selected_label()
         self.refresh_note_list()
 
+    def _series_warning(self, notes):
+        """One sentence saying how many of `notes` are whole repeating
+        series, or "" when none are.
+
+        A confirmation that counts notes is telling the truth and still
+        hiding the consequence: a repeating series is ONE note in every
+        list and every count, and deleting it takes every occurrence it
+        has. The single-note delete has always asked "Delete this entire
+        repeating series?"; none of the routes that act on a selection
+        said anything at all -- neither the bulk move to trash, nor
+        either of the two permanent deletes in the Trash, where there is
+        no way back at all.
+
+        Written once, here, because four copies of a sentence is four
+        chances for them to stop agreeing. Field-reported: "it doesn't
+        tell me one of them is a series".
+        """
+        count = sum(1 for n in notes if isinstance(n, dict) and is_recurring(n))
+        if not count:
+            return ""
+        if count == 1:
+            if len(notes) == 1:
+                return ("\n\nThis is a repeating series — every occurrence "
+                        "goes with it.")
+            return ("\n\n1 of them is a repeating series — every occurrence "
+                    "goes with it.")
+        return (f"\n\n{count} of them are repeating series — every occurrence "
+                "goes with them.")
+
     def _bulk_move_to_trash(self):
         if not self.selected_note_ids:
             self.show_info("Nothing selected", "Tick one or more notes first.")
@@ -12504,14 +12533,16 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         count = len(self.selected_note_ids)
         to_trash = [n for n in self.notes if n["id"] in self.selected_note_ids]
         attachment_count = sum(len(n.get("attachments") or []) for n in to_trash)
-        warning = ""
+        warning = self._series_warning(to_trash)
         if attachment_count:
             plural = "s" if attachment_count != 1 else ""
-            warning = f"\n\n{attachment_count} attached file{plural} will go to trash with them."
+            warning += f"\n\n{attachment_count} attached file{plural} will go to trash with them."
+        noun = "note" if count == 1 else "notes"
         if not self.ask_yes_no(
             "Move to trash",
-            f"Move {count} selected note(s) to the trash? "
-            f"You can restore them within {trash_retention_days()} days.{warning}",
+            f"Move {count} selected {noun} to the trash? "
+            f"You can restore {'it' if count == 1 else 'them'} within "
+            f"{trash_retention_days()} days.{warning}",
             icon="question"
         ):
             return

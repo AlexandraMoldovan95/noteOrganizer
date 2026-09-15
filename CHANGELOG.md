@@ -12,6 +12,7 @@ How the numbers themselves are counted is the
 
 | Version | Date | In one line |
 |---|---|---|
+| [0.74.170](#074170--2026-09-15) | 2026-09-15 | A repeating series says so wherever it can be deleted — including the Trash, where deleting cannot be undone. |
 | [0.74.169](#074169--2026-09-15) | 2026-09-15 | Deleting a note stops redrawing the whole screen — the list, the calendar and the statistics were all rebuilt, two of them off screen. |
 | [0.74.168](#074168--2026-09-15) | 2026-09-15 | Deleting something offers Undo where you deleted it — including the one delete that had no way back at all. |
 | [0.73.166](#073166--2026-09-14) | 2026-09-14 | Changing several notes' category at once no longer comes undone on the one note you had open in the editor. |
@@ -78,6 +79,37 @@ How the numbers themselves are counted is the
   padding the label could not see, and each was short — the subtitle asked for 620
   pixels and was given 544. They are taken from the label itself now, so a change to
   the layout cannot leave them behind again.
+
+---
+
+## [0.74.170] — 2026-09-15
+
+*Highlights: a repeating series is one note in every list and every count, and deleting it takes every occurrence — the routes that act on a selection now say so, including the two in the Trash that cannot be undone.*
+
+### Fixed
+
+- **Deleting several notes at once now tells you when one of them is a whole repeating
+  series.** Deleting a single repeating note has always asked "Delete this entire
+  repeating series?". Ticking it along with others asked only whether to move N notes to
+  the trash — and a series is one note in that count while taking every occurrence with
+  it. The same silence ran deeper: the Trash listed a series exactly like a one-off note,
+  and both of its permanent deletes — one row, or Empty trash — called it "a note" while
+  destroying the whole series with no way back. A series is now marked in the Trash the
+  way it is marked everywhere else (🔁, and how often it repeats), and all three
+  confirmations say what goes with it.
+
+### Changed
+
+- The Trash's list is taller (three rows and a lot of scrollbar became six), and the
+  Restore and Delete buttons on each row are guaranteed their width — they used to be
+  squeezed by a long title, since the text was given the space first.
+
+### Testing
+
+- Twenty-three checks in qa3 and eight in `test_recurrence.py`, covering the marking, all
+  three confirmations, the silence when no series is involved, the row's layout
+  guarantee, and a trash entry whose recurrence field holds something that is not a
+  recurrence at all. Eight mutants, each dying on the check written for it.
 
 ---
 

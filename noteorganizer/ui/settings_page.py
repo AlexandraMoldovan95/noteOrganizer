@@ -47,6 +47,15 @@ from ..core import paths
 from ..core.categories import CATEGORY_COLORS, persist_categories
 from ..core.formatting import FONT_FAMILIES, FONT_SIZES
 from ..core.duplicates import find_duplicate_groups
+# The Trash is the one list in the app where deleting cannot be undone,
+# and it is the one that never said which of its rows is a whole
+# repeating series. Both of these read a note's own recurrence field, so
+# a trash entry -- which is a copy of the note -- answers them too.
+from ..core.recurrence import describe_recurrence, is_recurring
+# Shortens with an ellipsis rather than by slicing: a title cut at N
+# characters with nothing to show for it is the same defect as a
+# sentence clipped by a layout, only cheaper to make.
+from ..core.model import _truncate
 from ..core.storage import (
     TRASH_RETENTION_DAYS,
     trash_retention_days,
@@ -1128,10 +1137,23 @@ class SettingsPageMixin:
         row = tk.Frame(parent, bg=self.colors["card"])
         row.pack(fill="x", pady=3)
 
+        # Built now, packed LAST -- see the buttons below. The packer
+        # hands out the cavity in pack order, so whatever is packed first
+        # gets what it asks for and whatever is packed last lives on the
+        # remainder. This frame expands, so packing it first let a long
+        # title or a long "repeats ..." line take the room the Restore
+        # and Delete buttons needed, and those are the only things in the
+        # row a person has to be able to hit.
         left = tk.Frame(row, bg=self.colors["card"])
-        left.pack(side="left", fill="x", expand=True, padx=10, pady=8)
         title = (entry.get("title") or "").strip() or "(untitled)"
-        tk.Label(left, text=title[:42], bg=self.colors["card"], fg=self.colors["text"],
+        # A repeating series is one row here, exactly like a one-off note,
+        # and the Delete button beside it destroys every occurrence it
+        # has. Every other list in the app marks a series -- the note
+        # cards, the calendar day panel -- and this one, the only list
+        # where deleting cannot be undone, did not.
+        repeats = is_recurring(entry)
+        tk.Label(left, text=("🔁 " if repeats else "") + _truncate(title, 42),
+                 bg=self.colors["card"], fg=self.colors["text"],
                  font=("Segoe UI", 10, "bold"), anchor="w").pack(fill="x")
         # Show when it was deleted and how long remains.
         meta = entry.get("deleted_at", "")
@@ -1139,8 +1161,20 @@ class SettingsPageMixin:
         sub = f"deleted {meta[:10]}" if meta else "deleted"
         if remaining is not None:
             sub += f" · {remaining} day(s) left"
-        tk.Label(left, text=sub, bg=self.colors["card"], fg=self.colors["subtext"],
-                 font=("Segoe UI", 8), anchor="w").pack(fill="x")
+        if repeats:
+            sub += f" · repeats {describe_recurrence(entry).lower()}"
+        sub_lbl = tk.Label(left, text=sub, bg=self.colors["card"],
+                           fg=self.colors["subtext"], font=("Segoe UI", 8),
+                           anchor="w", justify="left")
+        sub_lbl.pack(fill="x")
+        # A series' line is long -- "deleted 2026-09-09 · 84 day(s) left ·
+        # repeats every week on mon, 10 times" -- and reserving the
+        # buttons' width left it too little room, so it was drawn cut
+        # mid-word with nothing to say it had been. Reported the same
+        # hour the buttons were fixed: one clipping traded for another.
+        # Wrapped at the label's OWN width instead, which is the only
+        # number that cannot disagree with the layout.
+        self._wrap_to_own_width(sub_lbl)
 
         def restore():
             self._restore_from_trash(entry)
@@ -1149,7 +1183,8 @@ class SettingsPageMixin:
         def delete_forever():
             if self.ask_yes_no(
                 "Delete permanently",
-                f"Permanently delete “{title}”? This can't be undone.",
+                f"Permanently delete “{title}”? This can't be undone."
+                + self._series_warning([entry]),
                 parent=row, icon="warning", default="no"
             ):
                 _delete_attachment_files([entry])
@@ -1163,6 +1198,11 @@ class SettingsPageMixin:
         tk.Button(row, text="Restore", command=restore, relief="flat",
                   cursor="hand2", bg=self.colors["accent"], fg="white",
                   font=("Segoe UI", 8, "bold")).pack(side="right", padx=2, ipadx=4, ipady=1)
+        # The text last, on what the buttons left. Reported from the
+        # field once a series row grew a "repeats ..." line: the buttons
+        # were squeezed to slivers. A row can afford a shortened title;
+        # it cannot afford an unclickable Restore.
+        left.pack(side="left", fill="x", expand=True, padx=10, pady=8)
 
     def _build_settings_trash_panel(self, parent):
         self._trash_subtitle_lbl = self._settings_subtitle(
@@ -1198,7 +1238,12 @@ class SettingsPageMixin:
             ["7 days", "14 days", "30 days", "60 days", "90 days"],
             set_retention, width_chars=10
         ).pack(side="right")
-        wrap = tk.Frame(parent, bg=self.colors["card"], height=240)
+        # 240 showed about three rows and a lot of scrollbar. This is a
+        # list you come to in order to find one note among several, and
+        # its rows now carry a line more when the note is a repeating
+        # series. The drag handle below still takes it anywhere from 100
+        # to 800 for anyone who wants it back.
+        wrap = tk.Frame(parent, bg=self.colors["card"], height=340)
         wrap.pack(fill="x", padx=12, pady=(0, 0))
         wrap.pack_propagate(False)
         self._resize_handles_pending = getattr(self, "_resize_handles_pending", [])
@@ -1261,8 +1306,10 @@ class SettingsPageMixin:
                 return
             if self.ask_yes_no(
                 "Empty trash",
-                f"Permanently delete all {len(self.trash)} note(s) in the trash? "
-                "This can't be undone.", icon="warning", default="no"
+                f"Permanently delete all {len(self.trash)} "
+                f"{'note' if len(self.trash) == 1 else 'notes'} in the trash? "
+                "This can't be undone." + self._series_warning(self.trash),
+                icon="warning", default="no"
             ):
                 _delete_attachment_files(self.trash)
                 self.trash = []

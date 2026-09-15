@@ -1628,6 +1628,226 @@ app.set_theme(_u_theme_before); app.update()
 _undo_reset()
 
 
+# ---------------------------------------------------------------------
+# A repeating series says so wherever it can be deleted.
+#
+# A series is ONE note in every list and every count, and deleting it
+# takes every occurrence it has. The single-note delete has always asked
+# "Delete this entire repeating series?". None of the routes that act on
+# a selection said anything at all -- not the bulk move to trash, and
+# neither of the two permanent deletes in the Trash, where there is no
+# way back. Field-reported: "it doesn't tell me one of them is a series".
+# ---------------------------------------------------------------------
+_undo_reset()
+app.show_settings_page = getattr(app, 'show_settings_page')
+_sr_plain = NO.normalize_note({'id': 910, 'title': 'JustANote', 'body': 'b',
+                               'category': 'General'})
+_sr_series = NO.normalize_note({'id': 911, 'title': 'WaterThePlants',
+                                'body': 'b', 'category': 'General',
+                                'date': '2026-09-01',
+                                'recurrence': {'freq': 'weekly', 'weekdays': [0], 'count': 10}})
+app.notes = [_sr_plain, _sr_series]
+app.save_notes()
+app.refresh_note_list()
+app.update()
+
+_sr_said = {}
+_sr_real_ask = app.ask_yes_no
+app.ask_yes_no = lambda t, m, **k: (_sr_said.__setitem__('msg', m), True)[1]
+
+# A selection with no series in it must not mention one.
+app.selected_note_ids = {910}
+app._bulk_move_to_trash()
+app.update()
+check('a bulk delete of ordinary notes says nothing about series',
+      'series' not in _sr_said.get('msg', '').lower())
+check('...and stops saying "note(s)" while it is at it',
+      'note(s)' not in _sr_said.get('msg', ''))
+
+_undo_reset()
+app.notes = [NO.normalize_note(dict(_sr_plain)),
+             NO.normalize_note(dict(_sr_series))]
+app.save_notes()
+app.refresh_note_list()
+app.update()
+app.selected_note_ids = {910, 911}
+app._bulk_move_to_trash()
+app.update()
+_sr_msg = _sr_said.get('msg', '')
+check('a bulk delete naming a series says so',
+      'repeating series' in _sr_msg)
+check('...and says what goes with it',
+      'every occurrence' in _sr_msg)
+check('...counting it, since a series is one note in the count, and '
+      'agreeing with itself',
+      '1 of them is a repeating series' in _sr_msg)
+check('the series really did go to the trash whole',
+      any(e.get('id') == 911 and e.get('recurrence') for e in app.trash))
+
+# The Trash panel. This is the list where deleting cannot be undone, and
+# the only one in the app that never marked a series.
+app.show_settings_page()
+app.toggle_settings_panel('trash')
+app.update()
+
+
+def _trash_rows():
+    """Every row frame holding a Restore/Delete pair.
+
+    Matched on the button TEXTS, not on "a frame with two buttons" --
+    the retention card above the list is also a frame with buttons in
+    it, and counting it made three checks fail for the wrong reason.
+    """
+    out = []
+
+    def walk(w):
+        labels = set()
+        for k in w.winfo_children():
+            if isinstance(k, tk.Button):
+                try:
+                    labels.add(str(k.cget('text')))
+                except tk.TclError:
+                    pass
+        if {'Restore', 'Delete'} <= labels:
+            out.append(w)
+        for k in w.winfo_children():
+            walk(k)
+    walk(app.settings_trash_panel)
+    return out
+
+
+def _row_text(row):
+    texts = []
+
+    def walk(w):
+        try:
+            texts.append(str(w.cget('text')))
+        except tk.TclError:
+            pass
+        for k in w.winfo_children():
+            walk(k)
+    walk(row)
+    return ' '.join(texts)
+
+
+_sr_rows = _trash_rows()
+check('the trash panel drew a row per deleted note', len(_sr_rows) == 2)
+_sr_series_row = next((r for r in _sr_rows if 'WaterThePlants' in _row_text(r)), None)
+_sr_plain_row = next((r for r in _sr_rows if 'JustANote' in _row_text(r)), None)
+check('a trashed series is marked as one',
+      _sr_series_row is not None and '🔁' in _row_text(_sr_series_row))
+check('...and says how often it repeats',
+      _sr_series_row is not None and 'repeats' in _row_text(_sr_series_row))
+check('an ordinary trashed note carries no such marks',
+      _sr_plain_row is not None and '🔁' not in _row_text(_sr_plain_row)
+      and 'repeats' not in _row_text(_sr_plain_row))
+
+# The buttons' space is RESERVED, not left over. The packer hands out the
+# cavity in pack order, so this is about order, not about today's window
+# size: with the expanding text frame packed first, a longer title or a
+# longer "repeats ..." line ate the room Restore and Delete needed.
+for _r in _sr_rows:
+    _slaves = _r.pack_slaves()
+    _btns = [i for i, w in enumerate(_slaves) if isinstance(w, tk.Button)]
+    _frames = [i for i, w in enumerate(_slaves) if isinstance(w, tk.Frame)]
+    check('the row packs its buttons before the text that can be shortened',
+          bool(_btns) and bool(_frames) and max(_btns) < min(_frames))
+    for _w in _slaves:
+        if isinstance(_w, tk.Button):
+            check('...so %s is drawn at least as wide as it asks'
+                  % str(_w.cget('text')),
+                  _w.winfo_width() >= _w.winfo_reqwidth())
+
+# Reserving the buttons' width left the text less room, and a series'
+# second line is long: "deleted ... · 84 day(s) left · repeats every week
+# on mon, 10 times". Drawn on one line it was cut mid-word with nothing
+# to say so -- reported the same hour the buttons were fixed, one
+# clipping traded for another. It wraps at its own width now. The measure
+# is the one the Settings labels taught: what the label ASKED for against
+# what it was GIVEN.
+for _r in _sr_rows:
+    for _frame in [w for w in _r.pack_slaves() if isinstance(w, tk.Frame)]:
+        for _lbl in _frame.winfo_children():
+            if not isinstance(_lbl, tk.Label):
+                continue
+            check('a trash row draws its text inside the room it has (%s)'
+                  % str(_lbl.cget('text'))[:26].replace('\n', ' '),
+                  _lbl.winfo_reqwidth() <= _lbl.winfo_width() + 1)
+
+# Delete permanently, on the series. No way back from here.
+_sr_said.clear()
+# Found first, invoked once. Pressing Delete redraws the whole list, so
+# carrying on through the loop afterwards reads widgets that no longer
+# exist -- which is a crash in the test, not a finding.
+_sr_del_btn = None
+for _r in _sr_rows:
+    if 'WaterThePlants' not in _row_text(_r):
+        continue
+    for _w in _r.winfo_children():
+        if isinstance(_w, tk.Button) and 'Delete' in str(_w.cget('text')):
+            _sr_del_btn = _w
+            break
+    break
+check('the trashed series has a Delete button of its own',
+      _sr_del_btn is not None)
+if _sr_del_btn is not None:
+    _sr_del_btn.invoke()
+    app.update()
+check('deleting a series for good warns that it is one',
+      'repeating series' in _sr_said.get('msg', ''))
+check('...and still says it cannot be undone',
+      "can't be undone" in _sr_said.get('msg', ''))
+
+# Empty trash, counting what is in there.
+app.trash = [
+    {'id': 920, 'title': 'P1', 'body': 'b', 'category': 'General',
+     'deleted_at': '2026-09-01 10:00:00'},
+    {'id': 921, 'title': 'S1', 'body': 'b', 'category': 'General',
+     'recurrence': {'freq': 'daily'}, 'deleted_at': '2026-09-01 10:00:00'},
+    {'id': 922, 'title': 'S2', 'body': 'b', 'category': 'General',
+     'recurrence': {'freq': 'weekly'}, 'deleted_at': '2026-09-01 10:00:00'},
+]
+NO.save_trash(app.trash)
+app.toggle_settings_panel('trash')
+app.toggle_settings_panel('trash')
+app.update()
+_sr_said.clear()
+_sr_empty = find_btn(app.settings_trash_panel, 'Empty trash')
+if _sr_empty is not None:
+    _sr_empty.invoke()
+    app.update()
+check('emptying the trash counts the series in it',
+      '2 of them are repeating series' in _sr_said.get('msg', ''))
+
+# A corrupt recurrence must not break the sentence -- the trash holds
+# whatever was on disk, and normalize_note does not run on the way out.
+app.trash = [
+    {'id': 930, 'title': 'Broken', 'body': 'b', 'category': 'General',
+     'recurrence': 'not a dict at all', 'deleted_at': '2026-09-01 10:00:00'},
+    {'id': 931, 'title': 'AlsoBroken', 'body': 'b', 'category': 'General',
+     'recurrence': None, 'deleted_at': '2026-09-01 10:00:00'},
+]
+NO.save_trash(app.trash)
+try:
+    _sr_broken = app._series_warning(app.trash)
+    check('a corrupt recurrence does not break the warning', True)
+    check('...and is not mistaken for a series', 'series' not in _sr_broken)
+except Exception as _e:
+    check('a corrupt recurrence does not break the warning (%s)' % _e, False)
+try:
+    app.toggle_settings_panel('trash')
+    app.toggle_settings_panel('trash')
+    app.update()
+    check('...and the trash panel still draws it', True)
+except Exception as _e:
+    check('...and the trash panel still draws it (%s)' % _e, False)
+
+app.ask_yes_no = _sr_real_ask
+app.hide_settings_page()
+app.update()
+_undo_reset()
+
+
 print()
 print(f"=== QA3 FAILURES: {fails if fails else 'NONE'} ===")
 
