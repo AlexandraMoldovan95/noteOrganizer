@@ -418,6 +418,7 @@
   "_surface": "(self, kind='card')",
   "_sync_active_tab": "(self)",
   "_sync_calculator_open_state": "(self)",
+  "_sync_card_checkboxes": "(self)",
   "_sync_checklist_open_state": "(self)",
   "_sync_editor_snapshot": "(self)",
   "_sync_group_headers": "(self, removed_ids)",

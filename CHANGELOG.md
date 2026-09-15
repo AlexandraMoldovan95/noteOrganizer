@@ -12,7 +12,7 @@ How the numbers themselves are counted is the
 
 | Version | Date | In one line |
 |---|---|---|
-| [0.75.172](#075172--2026-09-15) | 2026-09-15 | The selection bar shows all four of its actions, and a ticked box looks ticked on a dark theme. |
+| [0.75.173](#075173--2026-09-15) | 2026-09-15 | The selection bar shows all four of its actions, and a ticked box looks ticked on a dark theme. |
 | [0.74.170](#074170--2026-09-15) | 2026-09-15 | A repeating series says so wherever it can be deleted — including the Trash, where deleting cannot be undone. |
 | [0.74.169](#074169--2026-09-15) | 2026-09-15 | Deleting a note stops redrawing the whole screen — the list, the calendar and the statistics were all rebuilt, two of them off screen. |
 | [0.74.168](#074168--2026-09-15) | 2026-09-15 | Deleting something offers Undo where you deleted it — including the one delete that had no way back at all. |
@@ -83,7 +83,7 @@ How the numbers themselves are counted is the
 
 ---
 
-## [0.75.172] — 2026-09-15
+## [0.75.173] — 2026-09-15
 
 *Highlights: using Select is all of a piece now — seeing the actions you can take, seeing which notes you have ticked, and being able to change your mind about all of them at once.*
 
@@ -106,6 +106,10 @@ How the numbers themselves are counted is the
   widest row needs the two widest labels rather than all four. Measured, that is 180
   pixels of the 250 available on the strictest of the fonts the app is drawn in, instead
   of 338 — room to spare rather than a margin waiting to be eaten by the next word.
+- **Selecting or unselecting every note no longer redraws the list.** Moving a tick is
+  not a change to the notes, but the whole list was destroyed and rebuilt to do it — 140
+  widgets and about a sixth of a second, on every press, and twice as often now that the
+  button can also let go. The tick boxes are moved where they stand.
 - **A ticked box now looks ticked on a dark theme.** The little well a check mark sits in
   was set to the very surface the box sits on, and the mark itself is drawn dark
   whatever the theme — so on any dark theme a ticked note and an untouched one looked

@@ -7515,16 +7515,49 @@ if not app.selection_mode:
     app._toggle_selection_mode()
 app.update()
 _btn_text = lambda: str(app._bulk_select_all_btn.cget('text'))
+
+
+def _box_states():
+    """Each drawn card's tick box, as the widget itself believes it."""
+    out = {}
+    for _nid, _info in app._note_card_widgets.items():
+        _cb = _info.get('checkbox')
+        if _cb is None:
+            continue
+        out[_nid] = str(app.getvar(str(_cb.cget('variable')))) in ('1', 'True')
+    return out
+
+
+def _card_paths():
+    return {_nid: str(_info['card'])
+            for _nid, _info in app._note_card_widgets.items()}
+
+
 check('the button offers to select everything to begin with',
       _btn_text() == 'Select all')
+_sel_paths_before = _card_paths()
 app._bulk_select_all()
 app.update()
 check('pressing it selects every note on screen',
       app.selected_note_ids == {n['id'] for n in app.notes})
 check('...and the button now offers to let them go', _btn_text() == 'Unselect all')
+# The boxes themselves, not just the set behind them: they carry their
+# own variables, so a selection changed without touching them leaves
+# every card looking untouched.
+check('...and every tick box on screen shows it',
+      _box_states() and all(_box_states().values()))
+# And without rebuilding the list to do it. Moving a tick used to cost
+# 140 widgets and ~170ms -- reported as "the list rebuilds and takes a
+# moment", and twice as often once the button could also let go.
+check('...without rebuilding a single card to move a tick',
+      _card_paths() == _sel_paths_before)
 app._bulk_select_all()
 app.update()
 check('pressing it again clears the selection', app.selected_note_ids == set())
+check('...and clears every tick box with it',
+      _box_states() and not any(_box_states().values()))
+check('...still without rebuilding the list',
+      _card_paths() == _sel_paths_before)
 check('...without leaving selection mode, which is the whole point',
       app.selection_mode is True)
 check('...and the button offers to select again', _btn_text() == 'Select all')

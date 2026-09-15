@@ -45,7 +45,7 @@ except ImportError:
 # Added/Fixed CHANGELOG.md entries, not per-release counts). The running
 # app records this into settings, so the next time a newer build opens
 # over older data it can tell the user what changed version-wise.
-APP_VERSION = "0.75.172"
+APP_VERSION = "0.75.173"
 
 
 def parse_version(v):
@@ -12579,7 +12579,39 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         else:
             self.selected_note_ids = set(visible)
         self._update_bulk_selected_label()
-        self.refresh_note_list()
+        # Not refresh_note_list(). Nothing about the notes changed -- only
+        # which of them are ticked -- and rebuilding the list to move a
+        # tick costs 140 widgets and ~170ms, which is the flicker this
+        # button was reported for. The fifth member of the family that
+        # already exists for exactly this reason (see _recolor_note_cards,
+        # _apply_selection_mode_to_cards, _update_open_highlight,
+        # _remove_note_cards).
+        self._sync_card_checkboxes()
+
+    def _sync_card_checkboxes(self):
+        """Make every card's tick box agree with selected_note_ids.
+
+        select()/deselect() set the widget's own variable WITHOUT firing
+        its command, which matters: the command is _toggle_note_selected,
+        and letting it run here would have each box re-report a change
+        that has already been made -- twenty times over, each one asking
+        the label to recount.
+
+        Cards that are not drawn (filtered out, or inside a collapsed
+        group) have no box to update, and need none: build_note_card
+        reads selected_note_ids for the initial value when it makes one.
+        """
+        for note_id, info in list(getattr(self, "_note_card_widgets", {}).items()):
+            box = info.get("checkbox")
+            if box is None:
+                continue
+            try:
+                if note_id in self.selected_note_ids:
+                    box.select()
+                else:
+                    box.deselect()
+            except tk.TclError:
+                pass
 
     def _series_warning(self, notes):
         """One sentence saying how many of `notes` are whole repeating
