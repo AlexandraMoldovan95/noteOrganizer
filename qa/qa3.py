@@ -1317,7 +1317,7 @@ def _b4_find(widget, label, kind=tk.Button):
 
 # 13: deleting one trashed note forever leaves the others alone.
 app.notes = []
-app.trash = [{'id': 900 + i, 'title': 'Stearsa %d' % i, 'body': 'x',
+app.trash = [{'id': 900 + i, 'title': 'Deleted %d' % i, 'body': 'x',
               'category': 'General', 'deleted_at': '2026-01-0%d 00:00:00' % (i + 1)}
              for i in range(3)]
 app.save_notes()
@@ -1336,7 +1336,7 @@ if _b4_forever is not None:
     # app rather than the app being wrong.
     check('...and the two left are the two it was not aimed at',
           len(set(e['title'] for e in app.trash)) == 2
-          and all(e['title'].startswith('Stearsa') for e in app.trash))
+          and all(e['title'].startswith('Deleted') for e in app.trash))
 app.hide_settings_page(); app.update()
 
 # 96: the share panel pages instead of drawing 200 rows at once.

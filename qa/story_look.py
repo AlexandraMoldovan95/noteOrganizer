@@ -41,7 +41,7 @@ STORE = os.path.join(HERE, "screens")
 
 # Each scene: a name, and what to do to the app before the picture.
 SCENES = [
-    ("01-lista", """
+    ("01-note-list", """
 app.notebook.select(app.TAB_NOTES)
 app.refresh_note_list()
 """),
@@ -54,15 +54,15 @@ app.notebook.select(app.TAB_CALENDAR)
 app.cal_year, app.cal_month = 2026, 9
 app.render_calendar()
 """),
-    ("04-setari-cos", """
+    ("04-settings-trash", """
 app.show_settings_page()
 app.toggle_settings_panel('trash')
 """),
-    ("05-setari-categorii", """
+    ("05-settings-categories", """
 app.show_settings_page()
 app.toggle_settings_panel('categories')
 """),
-    ("06-tema-deschisa", """
+    ("06-light-theme", """
 app.hide_settings_page()
 app.notebook.select(app.TAB_NOTES)
 app.set_theme(NO.LIGHT_THEMES[0])
@@ -79,7 +79,7 @@ SEED = [
     {"id": 2, "title": "De cumparat", "body": "lapte\\noua\\npaine",
      "category": "General", "created": "2026-09-02 09:00",
      "updated": "2026-09-02 09:00"},
-    {"id": 3, "title": "", "body": "o notita fara titlu, ca in caietul real",
+    {"id": 3, "title": "", "body": "a note with no title, as in a real notebook",
      "category": "General", "created": "2026-09-03 09:00",
      "updated": "2026-09-03 09:00"},
 ]
@@ -159,22 +159,22 @@ def compare(new_dir):
     try:
         from PIL import Image
     except ImportError:
-        print("Pillow lipseste -- nu pot compara pozele.")
+        print("Pillow is missing -- I cannot compare the pictures.")
         return None
     results = []
     for name, _script in SCENES:
         fresh = os.path.join(new_dir, name + ".png")
         stored = os.path.join(STORE, name + ".png")
         if not os.path.exists(fresh):
-            results.append((name, None, "poza nu s-a facut"))
+            results.append((name, None, "the picture was not taken"))
             continue
         if not os.path.exists(stored):
-            results.append((name, None, "nu exista o poza de referinta"))
+            results.append((name, None, "there is no reference picture"))
             continue
         a = Image.open(stored).convert("L").resize((160, 120))
         b = Image.open(fresh).convert("L").resize((160, 120))
         if a.size != b.size:
-            results.append((name, 100.0, "alta marime"))
+            results.append((name, 100.0, "a different size"))
             continue
         pa, pb = a.load(), b.load()
         moved = sum(1 for y in range(120) for x in range(160)
@@ -189,7 +189,7 @@ def main():
     shots = os.path.join(work, "shots")
     taken = sorted(os.listdir(shots)) if os.path.isdir(shots) else []
     if not taken:
-        print("NICIO POZA. Aplicatia nu a pornit sau PowerShell nu a scris fisierele.")
+        print("NO PICTURES. Either the app did not start or PowerShell wrote none.")
         print((run.stdout + run.stderr)[-800:])
         shutil.rmtree(work, ignore_errors=True)
         return 2
@@ -199,7 +199,7 @@ def main():
             os.makedirs(STORE)
         for name in taken:
             shutil.copy2(os.path.join(shots, name), os.path.join(STORE, name))
-        print("acceptat: %d ecrane sunt de acum referinta" % len(taken))
+        print("accepted: %d screen(s) are the reference from now on" % len(taken))
         shutil.rmtree(work, ignore_errors=True)
         return 0
 
@@ -214,18 +214,18 @@ def main():
             print("  ?     %-22s %s" % (name, note))
             changed.append(name)
         elif pct < 0.5:
-            print("  la fel %-22s (%.1f%%)" % (name, pct))
+            print("  same    %-22s (%.1f%%)" % (name, pct))
         else:
-            print("  S-A SCHIMBAT %-16s %.1f%% din ecran %s" % (name, pct, note))
+            print("  CHANGED %-16s %.1f%% of the screen %s" % (name, pct, note))
             changed.append(name)
 
     print()
     if changed:
-        print("ECRANE SCHIMBATE: %s" % ", ".join(changed))
-        print("Pozele noi sunt in: %s" % shots)
-        print("Daca schimbarea e ceruta, accept-o cu:  py qa/story_look.py --accept")
+        print("SCREENS CHANGED: %s" % ", ".join(changed))
+        print("The new pictures are in: %s" % shots)
+        print("If the change was wanted, accept it with:  py qa/story_look.py --accept")
         return 1
-    print("Niciun ecran nu si-a schimbat forma.")
+    print("No screen has changed its shape.")
     shutil.rmtree(work, ignore_errors=True)
     return 0
 

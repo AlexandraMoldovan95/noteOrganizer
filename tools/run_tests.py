@@ -80,6 +80,12 @@ STATIC = [
     # is the grep that would have caught them, run every time.
     ("one definition per judgement",
      [sys.executable, os.path.join("tools", "check_one_definition.py")]),
+    # The fourth, added 2026-09-15. The work is discussed in Romanian and
+    # written down in English, and the qa stories had drifted across that
+    # line -- naming their checks in Romanian, which every CI run then
+    # printed into a log anybody can open.
+    ("English throughout",
+     [sys.executable, os.path.join("tools", "check_english.py")]),
 ]
 
 

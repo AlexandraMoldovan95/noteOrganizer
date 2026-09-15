@@ -5481,16 +5481,16 @@ _origToastCP = app._show_toast
 app._show_toast = lambda text, kind='success': _toastsCP.append(text)
 _c.delete('1.0', 'end')
 app.clipboard_clear()
-app.clipboard_append('Inainte' + chr(10) + '| Nume | Cant |' + chr(10)
+app.clipboard_append('Before' + chr(10) + '| Nume | Cant |' + chr(10)
                      + '| --- | --- |' + chr(10) + '| Lapte | 2 |' + chr(10)
-                     + 'Dupa')
+                     + 'After')
 _c.focus_force()
 app.update()
 _c.event_generate('<<Paste>>')
 app.update()
 _cpTxt = _c.get('1.0', 'end-1c')
 check('comments strip a pasted table to its prose, with a note',
-      '|' not in _cpTxt and 'Inainte' in _cpTxt and 'Dupa' in _cpTxt
+      '|' not in _cpTxt and 'Before' in _cpTxt and 'After' in _cpTxt
       and any('text only' in t.lower() or "wasn't added" in t
               for t in _toastsCP))
 # A plain paste (no table) still lands untouched.
@@ -7232,10 +7232,10 @@ check('a note with a title and no body saves (plan 2)',
 
 # 3: and one with a body and no title, which the list calls (untitled).
 app.new_note()
-app.body_text.insert('1.0', 'corp fara titlu')
+app.body_text.insert('1.0', 'body with no title')
 app.save_current_note(auto=False)
 app.update()
-_fc3 = [n for n in app.notes if n['body'].startswith('corp fara titlu')]
+_fc3 = [n for n in app.notes if n['body'].startswith('body with no title')]
 check('a note with a body and no title saves (plan 3)', len(_fc3) == 1)
 if _fc3:
     _fc_card = (app._note_card_widgets.get(_fc3[0]['id']) or {}).get('title')

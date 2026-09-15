@@ -189,7 +189,7 @@ app.notes = [{'id': 9, 'title': 'PreviewNote', 'category': 'General',
               'date': '2026-07-20', 'updated': '2026-01-01 00:00',
               'created': '2026-01-01 00:00', 'attachments': [],
               'body': 'Text sus\n| A | B |\n| --- | --- |\n| 1 | 2 |\nText jos',
-              'comments': 'comentariu care nu trebuie afisat',
+              'comments': 'a comment that must not be shown',
               'checklist': [{'text': 'a', 'done': True},
                             {'text': 'b', 'done': False}]}]
 app.save_notes()
@@ -213,7 +213,7 @@ _pv_chip = next((w.cget('text') for w in _pv_texts
 check('calendar preview strips the table to plain text',
       '|' not in _pv_text and 'Text sus' in _pv_text and 'Text jos' in _pv_text)
 check('calendar preview does not dump the comments inline',
-      'comentariu care nu trebuie' not in _pv_text)
+      'a comment that must not' not in _pv_text)
 check('calendar preview flags table + checklist + comments as chips',
       '▦' in _pv_chip and '1/2' in _pv_chip and '💬' in _pv_chip)
 app.close_day_panel(); app.update()

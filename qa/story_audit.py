@@ -39,12 +39,12 @@ def _root():
 
 
 CHAPTERS = [
-    (1, "Ce am ales ramane ales dupa ce inchid aplicatia"),
-    (2, "Un atasament traieste mai mult decat notita lui"),
-    (3, "Fiecare sectiune din Settings, la a doua vizita"),
-    (4, "O actiune in masa, si apoi scriu mai departe"),
-    (5, "O zi editata separat, apoi seria intreaga"),
-    (6, "Numaratoarea din cos se socoteste din ce e scris, nu din sesiune"),
+    (1, "What I chose stays chosen after I close the app"),
+    (2, "An attachment outlives the note it belongs to"),
+    (3, "Every Settings section, on a second visit"),
+    (4, "A bulk action, and then I keep typing"),
+    (5, "One day edited on its own, then the whole series"),
+    (6, "The trash countdown is read from what was written, not from the session"),
 ]
 
 
@@ -61,11 +61,11 @@ def drive():
     io.open(os.path.join(work, "settings.json"), "w", encoding="utf-8").write(
         json.dumps({"cleanup_done": True, "reclaimed_from_appdata": True}))
 
-    print("auditul ruleaza in: %s" % work)
+    print("the audit is running in: %s" % work)
     print()
     rows = []
     for number, title in CHAPTERS:
-        print("--- capitolul %d: %s" % (number, title))
+        print("--- chapter %d: %s" % (number, title))
         # A fresh notebook for every chapter. They used to share one,
         # and chapter five then failed on what chapter four had left --
         # a recurrence bug that did not exist, nearly reported as real.
@@ -86,22 +86,22 @@ def drive():
             print("    %s %s%s" % ("PASS" if ok else "FAIL", name,
                                    "" if ok else "\n         <- %s" % detail))
         if not found:
-            print("    CAPITOLUL NU A SPUS NIMIC (a crapat?)")
+            print("    THE CHAPTER SAID NOTHING (did it crash?)")
             for line in (run.stdout + run.stderr).strip().splitlines()[-8:]:
                 print("      | %s" % line)
-            rows.append(("capitolul %d a rulat" % number, False, "fara rezultate"))
+            rows.append(("chapter %d ran" % number, False, "no results"))
         _clear(work)
 
     failed = [name for name, ok, _ in rows if not ok]
     print()
-    print("AUDIT: %d verificari, %d gasiri" % (len(rows), len(failed)))
+    print("AUDIT: %d checks, %d findings" % (len(rows), len(failed)))
     if failed:
         for name in failed:
             print("   * %s" % name)
-        print("Directorul a ramas pe loc: %s" % work)
+        print("The directory was left in place: %s" % work)
         return 1
     shutil.rmtree(work, ignore_errors=True)
-    print("Nimic nou. Asta nu inseamna corect -- inseamna ca aici nu e nimic.")
+    print("Nothing new. That does not mean correct -- it means nothing is here.")
     return 0
 
 
@@ -182,7 +182,7 @@ def chapter_1():
     app.destroy()
 
     tk2, NO2, again = _app()
-    story.check("tema aleasa se intoarce", again.theme_name == chosen["theme"],
+    story.check("the chosen theme comes back", again.theme_name == chosen["theme"],
                 "%r -> %r" % (chosen["theme"], again.theme_name))
     # Sort and filter are NOT remembered, and the app never claimed
     # they were: it writes the theme, the open note, the day colours and
@@ -190,18 +190,18 @@ def chapter_1():
     # how an audit manufactures its own findings. What IS worth pinning
     # is that they come back at their honest defaults rather than at
     # something half-restored.
-    story.check("sortarea porneste de la valoarea implicita, nu pe jumatate",
+    story.check("the sort starts at its default, not half way",
                 again.sort_var.get() == again.SORT_OPTIONS[0],
                 "%r" % again.sort_var.get())
-    story.check("filtrul porneste de la Toate, nu pe o categorie fantoma",
+    story.check("the filter starts at All, not on a category that is gone",
                 again.filter_var.get() == "All",
                 "%r" % again.filter_var.get())
-    story.check("gruparea pe categorii se intoarce",
+    story.check("grouping by category comes back",
                 bool(again.group_by_category.get()))
-    story.check("ziua colorata se intoarce",
+    story.check("the painted day comes back",
                 again.day_colors.get("2026-09-20") == "#ff8800",
                 repr(again.day_colors))
-    story.check("notita deschisa ultima oara se redeschide",
+    story.check("the note open last time opens again",
                 again.selected_note_id == chosen["open"],
                 "%r -> %r" % (chosen["open"], again.selected_note_id))
     again.destroy()
@@ -231,21 +231,21 @@ def chapter_2():
     app.update()
     note = app.find_note(app.notes[0]["id"])
     stored = [a.get("stored_as") for a in (note.get("attachments") or [])]
-    story.check("fisierul se ataseaza notitei", bool(stored), repr(note.get("attachments")))
+    story.check("the file is attached to the note", bool(stored), repr(note.get("attachments")))
     folder = os.path.join(os.getcwd(), "attachments")
     on_disk = [f for f in os.listdir(folder)] if os.path.isdir(folder) else []
-    story.check("...si ajunge in folderul de atasamente", bool(on_disk), repr(on_disk))
+    story.check("...and lands in the attachments folder", bool(on_disk), repr(on_disk))
 
     app._delete_note(note, None)
     app.update()
     still = [f for f in os.listdir(folder)] if os.path.isdir(folder) else []
-    story.check("stergerea notitei NU sterge fisierul (e recuperabila)",
+    story.check("deleting the note does NOT delete the file (it can be undone)",
                 still == on_disk, "%r -> %r" % (on_disk, still))
     app.destroy()
 
     tk2, NO2, again = _app()
     trashed = [e for e in again.trash if (e.get("attachments") or [])]
-    story.check("dupa repornire, cosul tine minte atasamentul",
+    story.check("after a restart, the trash still remembers the attachment",
                 bool(trashed), repr([e.get("title") for e in again.trash]))
     if trashed:
         again.notes, again.trash = NO2.core_restore_from_trash(
@@ -253,10 +253,10 @@ def chapter_2():
         again.save_notes()
         again.update()
         back = again.notes[-1]
-        story.check("notita restaurata isi are atasamentul",
+        story.check("the restored note has its attachment",
                     bool(back.get("attachments")), repr(back.get("attachments")))
         names = [a.get("stored_as") for a in (back.get("attachments") or [])]
-        story.check("...si fisierul chiar exista pe disc",
+        story.check("...and the file really is on disk",
                     all(os.path.exists(os.path.join(folder, n)) for n in names if n),
                     repr(names))
     again.destroy()
@@ -310,18 +310,18 @@ def chapter_3():
     app.toggle_settings_panel("categories")
     app.update()
     seen = texts(getattr(app, "settings_categories_panel", app))
-    story.check("Categories, la a doua vizita, arata categoria noua",
+    story.check("Categories, on a second visit, shows the new category",
                 any("ProaspatAdaugata" in t for t in seen),
                 "pe ecran: %s" % [t[:20] for t in seen if t][:6])
-    story.check("...si nu mai arata categoria stearsa",
+    story.check("...and no longer shows the deleted one",
                 not any("DeSters" in t for t in seen))
     app.toggle_settings_panel("trash")
     app.update()
-    story.check("Recently deleted arata notita stearsa intre timp",
+    story.check("Recently deleted shows the note deleted in the meantime",
                 any("Nota 1" in t for t in texts(app.settings_trash_panel)))
     app.toggle_settings_panel("duplicates")
     app.update()
-    story.check("Duplicates arata perechea aparuta intre timp",
+    story.check("Duplicates shows the pair that appeared in the meantime",
                 any("Geamana" in t for t in texts(app.settings_duplicates_panel)))
     app.destroy()
     story.save()
@@ -358,11 +358,11 @@ def chapter_4():
     popup = getattr(app, "_mini_popup", None)
     if popup is not None and popup.winfo_exists():
         find_row(popup)
-    story.check("popup-ul ofera categoria pe nume", row is not None)
+    story.check("the popup offers the category by name", row is not None)
     if row is not None:
         row.event_generate("<Button-1>", x=3, y=3)
         app.update()
-    story.check("actiunea in masa ajunge pe disc",
+    story.check("the bulk action reaches the disk",
                 all(n["category"] == "Munca" for n in app.notes[:3]),
                 repr([n["category"] for n in app.notes[:3]]))
 
@@ -372,9 +372,9 @@ def chapter_4():
     app.update()
     after = json.load(io.open("notes_data.json", encoding="utf-8"))
     first = next(n for n in after if n["id"] == app.notes[0]["id"])
-    story.check("scrisul de dupa nu anuleaza schimbarea in masa",
+    story.check("typing afterwards does not undo the bulk change",
                 first["category"] == "Munca", repr(first["category"]))
-    story.check("...si textul scris dupa chiar s-a salvat",
+    story.check("...and the text typed afterwards really was saved",
                 "mai departe" in first["body"], repr(first["body"][:60]))
     app.destroy()
     story.save()
@@ -409,13 +409,13 @@ def chapter_5():
 
     tk2, NO2, again = _app()
     back = again.notes[0]
-    story.check("seria a primit textul nou",
+    story.check("the series received the new text",
                 "schimbat" in back["body"], repr(back["body"][:50]))
-    story.check("ziua editata separat si-a pastrat textul ei",
+    story.check("the day edited on its own kept its own text",
                 (back.get("overrides") or {}).get("2026-09-14", {}).get("body")
                 == "doar ziua asta e altfel",
                 repr(back.get("overrides")))
-    story.check("si repetarea a ramas intreaga",
+    story.check("and the recurrence stayed whole",
                 (back.get("recurrence") or {}).get("freq") == "weekly",
                 repr(back.get("recurrence")))
     again.destroy()
@@ -432,17 +432,17 @@ def chapter_6():
     app.update()
     entry = app.trash[0]
     stamp = entry.get("deleted_at")
-    story.check("stergerea scrie momentul in cos", bool(stamp), repr(entry))
+    story.check("deleting writes the moment into the trash", bool(stamp), repr(entry))
     app.destroy()
 
     tk2, NO2, again = _app()
     back = again.trash[0] if again.trash else {}
-    story.check("dupa repornire, momentul stergerii e acelasi",
+    story.check("after a restart, the moment of deletion is the same",
                 back.get("deleted_at") == stamp,
                 "%r -> %r" % (stamp, back.get("deleted_at")))
     left = NO2.days_left_in_trash(back) if hasattr(NO2, "days_left_in_trash") else None
     if left is not None:
-        story.check("...si zilele ramase se socotesc din el",
+        story.check("...and the days left are counted from it",
                     isinstance(left, int) and 0 < left <= NO2.trash_retention_days(),
                     repr(left))
     again.destroy()
