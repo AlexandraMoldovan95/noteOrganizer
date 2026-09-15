@@ -7542,18 +7542,87 @@ check('...and the list agrees with the notes',
       sorted(app._note_card_widgets) == sorted(n['id'] for n in app.notes))
 
 # The scroll guards exist because a REBUILD empties the frame and a
-# Configure landing in that window clamps the canvas to the top. Taking
-# one card off never empties anything, so the position should simply not
-# move -- no save, no restore, nothing to get wrong.
-app.canvas.yview_moveto(1.0)
-app.update()
-_sg_scroll = app.canvas.canvasy(0)
-app._delete_note(app.find_note(404), None)
+# Configure landing in that window clamps the canvas to the top -- the
+# "the list jumps back to the top" report. Taking one card off empties
+# nothing, so the position should simply stay.
+#
+# Two things this check got wrong the first time, and both are written
+# down because each would have passed for the wrong reason:
+#
+#   * it scrolled to the BOTTOM. Deleting a card makes the content
+#     shorter, so Tk must scroll up to keep the view inside the
+#     scrollregion -- correct behaviour that the check called a defect.
+#     It reads from the middle now, and deletes the note at the very
+#     END of the list, so nothing above the viewport changes.
+#   * it never made sure the list was scrollable at all. With twelve
+#     cards in a tall window there was nothing to scroll, canvasy(0)
+#     was 0 before and after, and the check passed on a tautology --
+#     locally. On CI, where the geometry differs, the list DID scroll
+#     and the first mistake showed. So scrollability is asserted before
+#     anything is measured, rather than assumed.
 _sg_settle()
-check('a delete does not move the list scroll at all',
+for _i in range(30):
+    app.notes.append(NO.normalize_note(
+        {'id': 450 + _i, 'title': 'Scrolls%d' % _i, 'body': 'b',
+         'category': 'General'}))
+app.save_notes()
+app.new_note()
+app.refresh_note_list()
+_sg_settle()
+_sg_content = app.canvas.bbox('all')
+_sg_room = app.canvas.winfo_height()
+check('the list is long enough to scroll, so the next check means something',
+      _sg_content is not None and (_sg_content[3] - _sg_content[1]) > _sg_room + 50)
+# The bottom card: deleting it changes nothing above the viewport.
+_sg_last_id = list(app._note_card_widgets)[-1]
+
+
+def _sg_quiet():
+    """Let the list settle WITHOUT provoking a new refresh.
+
+    _sg_settle() flushes the autosave, and a flush that saves calls
+    refresh_note_list(), which remembers the current scroll and puts it
+    back on after_idle. Used after positioning the view, that pending
+    restore lands on top of the move and undoes it -- measured: yview
+    was bit-for-bit identical before and after yview_moveto(0.4), and
+    canvasy sat at the 10px the earlier refresh had memorised. The
+    search debounce still gets cancelled; nothing here starts anything.
+    """
+    if getattr(app, '_search_debounce_job', None) is not None:
+        app.after_cancel(app._search_debounce_job)
+        app._search_debounce_job = None
+    for _ in range(3):
+        app.update()
+        app.update_idletasks()
+
+
+# Every pending refresh-and-restore from the seeding above has to land
+# BEFORE the view is positioned, or it lands on top of it afterwards.
+_sg_settle()
+_sg_quiet()
+app.canvas.yview_moveto(0.4)
+# A rebuild's restore is not a single event: it stays in force for 400ms
+# and re-applies itself at 60, 160 and 360 -- because a rebuilt list's
+# geometry settles over several passes and each one re-clamps the canvas
+# (see _restore_list_scroll). Any move made inside that window is simply
+# put back, which is what happened here: yview read bit-for-bit
+# identical before and after the moveto.
+#
+# The app already says what beats it. _list_scrollbar_moved clears the
+# pending restore because "a deliberate drag beats a rebuild's
+# still-pending restore" -- and moving the view here is that same
+# gesture without a mouse, so it clears it the same way.
+app._list_restore_px = None
+_sg_quiet()
+_sg_scroll = app.canvas.canvasy(0)
+check('...and the view really is away from the top before the delete',
+      _sg_scroll > 10)
+app._delete_note(app.find_note(_sg_last_id), None)
+_sg_quiet()
+check('a delete leaves the list scrolled where it was',
       abs(app.canvas.canvasy(0) - _sg_scroll) < 2)
 app.canvas.yview_moveto(0.0)
-app.update()
+_sg_quiet()
 
 # The open-note border is moved by _update_open_highlight, which reads
 # the same registry. A card removed from under it must not leave it
