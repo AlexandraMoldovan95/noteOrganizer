@@ -17,9 +17,15 @@
 
 FROM python:3.13-slim
 
+# git is here for the language gate, not for version control: it asks git
+# which files are TRACKED, and refuses to run at all outside a checkout
+# rather than reporting "0 files, all clean" -- a gate that cannot pass
+# vacuously. Without git in the image, the one check that reads every
+# tracked file was the only thing this image could not reproduce, and it
+# failed here for a reason that has nothing to do with the code.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
-        tk xvfb xauth fonts-dejavu-core \
+        tk xvfb xauth fonts-dejavu-core git \
     && rm -rf /var/lib/apt/lists/* \
     # The official python image links _tkinter against the system tcl/tk;
     # prove it at build time rather than discovering it at run time.

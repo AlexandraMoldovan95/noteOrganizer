@@ -226,6 +226,27 @@ A new surface joins this list the moment it ships.
   `_search_debounce_job`), so the reading is about its subject. A check
   that only passes on a fast machine — or only on a slow one — has not
   been written yet.
+
+  The list's scroll has a **third** timer, and it is not a debounce:
+  `_restore_list_scroll` stays in force for 400ms and re-applies itself
+  at 60, 160 and 360, because a rebuilt list's geometry settles over
+  several passes and each one re-clamps the canvas. A `yview_moveto`
+  made inside that window is simply put back — measured, with `yview`
+  reading bit-for-bit identical before and after the move. The app says
+  what beats it: `_list_scrollbar_moved` clears `_list_restore_px`
+  because "a deliberate drag beats a rebuild's still-pending restore",
+  so a test that positions the view does the same.
+- **Say out loud what the check needs to be true, or it will one day be
+  true of nothing.** The same scroll check asserted that a delete does
+  not move the list — with twelve cards in a tall window there was
+  nothing to scroll, `canvasy(0)` was 0 before and after, and it passed
+  on a tautology. It went red on CI, where the geometry differs, and the
+  red was right twice over: the list did scroll there, and the check had
+  also been scrolled to the BOTTOM, where removing a card must move the
+  view. It now asserts that the list is long enough to scroll and that
+  the view is away from the top *before* it measures anything. Reproduce
+  a CI-only failure locally before fixing it — `tools/linux-ci/` is one
+  docker command, and it showed both faults in ten seconds.
 - **A surviving mutant is a question, not a verdict.** When a promise is
   held by two independent mechanisms, breaking one leaves the check
   green — and the honest reading is "I broke the wrong thing", not "the
