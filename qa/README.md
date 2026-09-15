@@ -187,8 +187,9 @@ A new surface joins this list the moment it ships.
   TSV) · share codes · single-note export (HTML, TXT) · backup `.zip`
   export/import · background threading
 - **Shell:** theming (both patterns, canvas repaints) · popups & dialogs
-  (positioning, multi-monitor) · keyboard shortcuts · Settings page ·
-  statistics · open-note tabs · window sizing
+  (positioning, multi-monitor) · the toast banner, plain and carrying an
+  action (Undo) · keyboard shortcuts · Settings page · statistics ·
+  open-note tabs · window sizing
 - **Standing invariants:** plain text is the store · `core/` never
   imports tkinter · the worker thread never touches a widget · offsets
   counted in characters · any-script input · fast on weak machines ·
@@ -207,6 +208,14 @@ A new surface joins this list the moment it ships.
   never just grep for FAIL lines: a mutant that crashes the import
   prints no failures at all, and reads as "survived nothing" when it
   really ran nothing (this exact false-clean happened here once).
+- **A surviving mutant is a question, not a verdict.** When a promise is
+  held by two independent mechanisms, breaking one leaves the check
+  green — and the honest reading is "I broke the wrong thing", not "the
+  check is dead". The delete toast's *no second copy on a second click*
+  took three simultaneous edits to make fail: the toast forgetting its
+  offer, `_hide_toast` forgetting it again, and the restore taking its
+  entry out of the trash. Two wrong guesses came first, and both would
+  have read as a dead check to anyone who stopped at the first.
 - Windows-specific pixel checks assert on `sys.platform == 'win32'`
   only (fonts differ on Xvfb), and the Windows CI job is what makes
   them bite remotely — never delete the assertion, aim it.

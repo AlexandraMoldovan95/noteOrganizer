@@ -25,12 +25,9 @@ Genuinely open ideas, roughly ordered by how soon they're likely to happen.
   grid rebuild before any de-flicker fix is trusted.
 
 - **Small candidates from the 2026-08-31 idea pass** (put aside deliberately, in rough order of
-  appeal; the keyboard-shortcuts candidate from that pass has since shipped — see
-  [Global keyboard shortcuts](#global-keyboard-shortcuts)):
-  - **Undo on the delete toast** — moving a note to the Trash could offer a one-click Undo right
-    on the confirmation toast, instead of the trip through Settings → Recently deleted.
-  - **Import a .md/.html file as a note** — the reverse of the single-note export; `html_to_note`
-    already exists, and a Markdown file's tables/checkboxes are already the note format.
+  appeal; two candidates from that pass have since shipped — see
+  [Global keyboard shortcuts](#global-keyboard-shortcuts) and, for the delete-toast Undo,
+  [CHANGELOG](../CHANGELOG.md)):
   - **Rebuild only the table block an edit touched** — `_render_table_grids` deliberately tears
     down and rebuilds every grid in the note ("a grid is cheap to make, and tracking which of them
     an arbitrary edit invalidated is not"). The 2026-09-02 senior audit measured the cost
@@ -42,10 +39,6 @@ Genuinely open ideas, roughly ordered by how soon they're likely to happen.
 - **Route template deletion through the Trash** — so templates would be restorable like notes.
   It is a data-format change, not a quick win; meanwhile the delete confirmation says plainly that
   it skips the Trash (see [Settings redesign](#settings-redesign)).
-- **"Export as PDF" via Edge headless** — phase 2 of the single-note export:
-  `msedge --headless --print-to-pdf` exists on every Windows 10/11, no Python dependency; needs an
-  honest fallback ("saved as HTML, open it and Ctrl+P") for machines where Edge is missing or
-  changes flags.
 - **Spell-check in the editor (desktop only).** A red wavy underline on misspelled words with
   right-click suggestions — **not** silent auto-correct, which would mangle names, technical terms
   and other-language words in a notes app without asking. This is a desktop-only feature: Tkinter
@@ -90,6 +83,18 @@ Genuinely open ideas, roughly ordered by how soon they're likely to happen.
 - Tags as a separate feature from categories — removed in 0.3.0 after concluding categories cover
   the need on their own; revisiting this isn't currently planned.
 - Cloud sync / accounts — the app is intentionally offline-only.
+- Importing a `.md`/`.html` file as a note — decided against (2026-09-15). Exporting one is
+  enough: it answers "get this note out of here", which is the question people actually ask.
+  The reverse direction asks the app to align somebody else's HTML with the editor's own idea of
+  a note, and every mismatch — markup the editor has no concept of, a malformed file, a structure
+  that arrives looking nothing like what the writer saw — becomes an error we would then have to
+  design and defend. A feature whose failure modes are mostly other people's files is a poor
+  trade for a return trip nobody has asked for.
+- "Export as PDF" — decided against (2026-09-15). The single-note export already writes HTML, and
+  turning HTML into a PDF is something the machine already does: open it and print to PDF.
+  Wrapping that would add a dependency on Edge's headless flags, a fallback for when they change
+  or Edge is missing, and a second export path to keep honest — to save one step of something
+  Windows does natively.
 - Recognising tables pasted from a PDF — decided against (2026-08-28). A PDF carries no table
   structure at all, only text positioned on a page; guessing columns from spacing is a large,
   unreliable feature of its own. Pasting from a PDF keeps working as it does today — the table's
@@ -310,6 +315,7 @@ counting notes record what counted, what didn't, and why. The features themselve
 | `0.73.159` | 2026-09-12 | 73 | 159 | One `Added`, no `Fixed`. A note gains a `uid` alongside its `id`, share codes carry it, and both import routes ask whether an arriving note should update the copy here or be added beside it. Counted as a capability rather than a repair: the old text-matching behaviour was deliberate and documented, and its gap only appears once a second device exists. NOT counted: the duplicate-note collision the sibling sweep found, introduced and closed inside this same unreleased work — the rule that folded five bullets in the 0.71.154 cycle. The new headless suite, the qa3 and qa4 checks and the thirteen mutants are `Testing`.
 | `0.73.161` | 2026-09-13 | 73 | 161 | Two `Fixed`, no `Added`. The identity minted at every read was never written to disk, so a notebook that was only READ came back with a different set of identities on the next launch — counted, because a share code made before closing the app stopped matching the note it came from, which is the behaviour 0.73.159 shipped to prevent. Counted separately from it: a restore from the Trash could take an identity already in use, a different mechanism (a copy arriving by code while the note sat in the Trash) with its own field check. The eleven new checks and the six mutants are `Testing`.
 | `0.73.165` | 2026-09-13 | 73 | 165 | Four `Fixed`, no `Added`. All four came out of one field test on the previous build, and none was reachable by the suite as it stood: the editor's share code carried no identity (its payload is built from the editor snapshot, and identity is not editor content); an update applied from a code was written back over by the editor, which still showed the replaced version; a generated code stayed on screen under the next note opened; and Settings showed the section built on an earlier visit. Counted as four because they are four mechanisms with four field checks, not one report. NOT counted: dropping "Open / Edit" from the note list's right-click menu (`Changed`) and removing the unreachable multi-tab machinery (`Removed`, the C12 finding settled). The sixteen qa3 checks, the qa7 menu and single-note checks and the nine mutants are `Testing`.
+| `0.74.168` | 2026-09-15 | 74 | 168 | One `Added` and one `Fixed`. The `Added` is Undo on the delete banner, counted as one entry the way each formatting phase was: the three delete routes (a note, several at once, one day of a repeating note) are one feature reached three ways, not three features. The `Fixed` is the banner opening with a tick of success whatever it had to say, so a failed disk write announced itself as “✓ Something went wrong with that” — pre-existing, shipped and user-visible, so it counts. NOT counted: the wording of the banner's own new text (“note(s)” → “notes”), which was written and corrected inside this branch without shipping in between; and the twenty-two qa checks with their thirteen mutants, which are `Testing`. Worth recording for the next cycle: a field report during this work (“the picture breaks a little and rebuilds itself when I delete”) was measured to be the note-list rebuild — 169 widgets, 129ms, identical with the banner removed entirely — so it belongs to the theme-switch flicker's class, not to this feature. |
 | `0.73.167` | 2026-09-15 | 73 | 167 | One `Fixed`, no `Added`. The explanatory line under every Settings title was drawn wider than the label that held it, so each sentence stopped mid-word with nothing to say it had been cut -- three of them, by 51, 57 and up to 69 pixels. Counted because it is user-visible and shipped. The mechanism is one class, not three instances: every wrapping width in that page was a hand-picked number standing in for padding the label cannot see, and the panel's own `padx=48` a side made every guess short. Found by photographing the app for the documentation gallery, not by any check -- and the measurement that located it took three attempts, two of which asked the wrong question. |
 | `0.73.166` | 2026-09-14 | 73 | 166 | One `Fixed`, no `Added`. A bulk category change was undone on whichever note was open in the editor, by the editor's own next save -- the same class as the import route's, fixed a day earlier, and now sharing its helper. Counted because it is user-visible and silent: the notes nobody had open kept the new category, so the one that reverted looked like a mistake the user had made. Found by `qa/story_audit.py`, which walks shapes the suite cannot express (a restart, a sequence, a second visit, a what-happens-next) over surfaces nobody had walked that way. NOT counted: nine of that audit's first ten flags, which were faults in the audit itself and are written into it.
 

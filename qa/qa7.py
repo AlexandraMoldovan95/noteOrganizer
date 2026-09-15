@@ -1672,6 +1672,75 @@ check('a half-typed date cannot block the restore any more',
 check('...and the button is gone, because the copy was spent',
       not app.restore_prev_btn.winfo_ismapped())
 
+# ============================================================
+# UNDO ON THE DELETE TOAST: THE OCCURRENCE HALF
+#
+# The other two delete routes always had a way home -- Settings ->
+# Recently deleted, if you knew it was there. This one had none at all.
+# Removing a single day writes the date into the note's `exceptions`, and
+# no screen in the app takes it out again, so the scope dialog's
+# "occurrence" button was a permanent choice offering no hint that it
+# was. These checks are about that date coming back out.
+# ============================================================
+app.ask_occurrence_scope = lambda *a, **k: 'occurrence'
+app.ask_yes_no = lambda *a, **k: True
+app.notes = [NO.normalize_note({
+    'id': 700, 'title': 'UndoOccurrence', 'body': 'every day',
+    'category': 'General', 'date': '2026-07-06',
+    'recurrence': {'freq': 'daily'}})]
+app.save_notes()
+app.new_note(); app.refresh_note_list(); app.update()
+
+app._delete_note(app.find_note(700), '2026-07-14')
+app.update()
+check('removing one day writes it into the exceptions',
+      '2026-07-14' in app.find_note(700).get('exceptions', []))
+check('...and the toast offers that day back',
+      app.toast_frame.winfo_ismapped() and app.toast_action_lbl.winfo_ismapped())
+
+_qa_click(app.toast_action_lbl); app.update()
+check('Undo takes the day back out of the exceptions',
+      '2026-07-14' not in app.find_note(700).get('exceptions', []))
+check('...leaving the rest of the series untouched',
+      app.find_note(700).get('recurrence', {}).get('freq') == 'daily')
+check('...and puts the user back on that very day',
+      app.selected_note_id == 700
+      and app.current_occurrence_date == '2026-07-14')
+
+# Two days removed, then the older toast. Each offer carries its own
+# date, so the newer removal must survive an Undo of the older one.
+app._delete_note(app.find_note(700), '2026-07-15'); app.update()
+_u7_older = app._toast_action
+app._delete_note(app.find_note(700), '2026-07-16'); app.update()
+check('two removals, two dates in the exceptions',
+      {'2026-07-15', '2026-07-16'} <= set(app.find_note(700).get('exceptions', [])))
+_u7_older(); app.update()
+check('the older toast restores ITS day only',
+      '2026-07-15' not in app.find_note(700).get('exceptions', [])
+      and '2026-07-16' in app.find_note(700).get('exceptions', []))
+
+# Clicked again after the day is already back: an answer, not a crash.
+_u7_older(); app.update()
+check('putting back a day that is already back changes nothing',
+      '2026-07-15' not in app.find_note(700).get('exceptions', [])
+      and '2026-07-16' in app.find_note(700).get('exceptions', []))
+check('...and says so on the toast',
+      'already back' in str(app.toast_lbl.cget('text')).lower())
+
+# The whole series deleted under an offer that names one of its days.
+app._delete_note(app.find_note(700), '2026-07-17'); app.update()
+_u7_orphan = app._toast_action
+app.ask_occurrence_scope = lambda *a, **k: 'series'
+app._delete_note(app.find_note(700), '2026-07-18'); app.update()
+check('the series delete removes the note itself', app.find_note(700) is None)
+_u7_orphan(); app.update()
+check('an Undo for a day of a note that is gone does not resurrect it',
+      app.find_note(700) is None)
+check('...and says the note is no longer there',
+      'no longer here' in str(app.toast_lbl.cget('text')).lower())
+
+del app.ask_occurrence_scope
+
 print(f"=== QA7 FAILURES: {fails if fails else 'NONE'} ===")
 
 sys.exit(1 if fails else 0)
