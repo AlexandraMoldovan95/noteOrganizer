@@ -45,7 +45,7 @@ except ImportError:
 # Added/Fixed CHANGELOG.md entries, not per-release counts). The running
 # app records this into settings, so the next time a newer build opens
 # over older data it can tell the user what changed version-wise.
-APP_VERSION = "0.75.177"
+APP_VERSION = "0.75.179"
 
 
 def parse_version(v):
@@ -8931,12 +8931,32 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         lbl.bind("<Button-1>", lambda e: (var.set(0 if var.get() else 1), on_toggle()))
 
         def delete():
+            items = self._get_checklist()
+            # The index is read from the list now rather than taken from
+            # the idx this row was built with. Every route that changes
+            # the list re-renders, so today the two always agree -- but
+            # the pair handed to the undo has to be a position IN THIS
+            # LIST, and reading it here says so instead of depending on
+            # that invariant holding for whoever edits next.
             try:
-                self._get_checklist().remove(item)
+                index = items.index(item)
             except ValueError:
-                pass
+                return
+            items.pop(index)
             self._render_checklist_items()
             self._schedule_autosave()
+            # The one thing that could be taken off a note with no way
+            # back at all: Ctrl+Z reaches the Text widgets (edit_undo),
+            # and a checklist is a list of dicts beside them, so nothing
+            # in the editor could return an item. A toast rather than a
+            # confirmation because the app's rule is that a destructive
+            # action is confirmed in proportion to how recoverable it is
+            # -- and a question in front of every tick-list tidy-up would
+            # be worse than the risk it guards.
+            label = _truncate(item.get("text", ""), 40)
+            self._show_toast(
+                f"Removed “{label}”" if label else "Checklist item removed",
+                action=lambda: self._undo_checklist_delete(items, index, item))
 
         tk.Button(row, text="🗑", command=delete, relief="flat", cursor="hand2",
                   bg=self.colors["card"], fg=self.colors["danger"],
@@ -14737,7 +14757,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self._remember_last_open_note(new_id)
             self.set_status(("Auto-saved " if auto else "Saved at ") + now)
             if auto:
-                self._show_toast("Note created")
+                self._show_toast("Note created", yield_to_action=True)
         else:
             note = self.find_note(self.selected_note_id)
             if note is None:
@@ -14789,7 +14809,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 note["updated"] = now
                 self.set_status(("Auto-saved " if auto else "Saved ") + f"{self.current_occurrence_date} only")
                 if auto:
-                    self._show_toast("Note updated")
+                    self._show_toast("Note updated", yield_to_action=True)
             else:
                 # Before overwriting, keep a one-step backup of the OLD version
                 # if the user just removed a lot of text — either a big fraction
@@ -14838,7 +14858,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     note["overrides"] = {}
                 self.set_status(("Auto-saved " if auto else "Saved at ") + now)
                 if auto:
-                    self._show_toast("Note updated")
+                    self._show_toast("Note updated", yield_to_action=True)
             # A series save can have just removed the recurrence — an
             # occurrence view of a note that no longer repeats is a lie
             # the day banner must not keep telling.
@@ -15017,6 +15037,49 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 "back to a category that no longer exists")
         else:
             self.set_status(f"Put back {len(restored)} note(s)")
+
+    def _undo_checklist_delete(self, items, index, item):
+        """Put a removed checklist item back where it was.
+
+        `items` is the working list the item came out of, and it is
+        checked by IDENTITY rather than by note id. Every route that
+        changes what the editor is holding -- another note, another
+        occurrence, a template applied, a new note started -- rebinds
+        `_working_checklist` to a fresh list, so a toast clicked after any
+        of them is pointing at an editing session that has ended.
+
+        Without that check the item would go back into the captured list,
+        which nothing reads any more: the visible result is a redraw of
+        somebody else's checklist, a save of the note now open, and a
+        status line claiming the item was put back. Not corruption --
+        a confident lie, which is the harder one to notice. (Measured:
+        the mutant that removes this guard leaves the other note's list
+        untouched, so a check watching that list cannot see it.)
+
+        Unlike _undo_bulk_category, this does not restore the note's
+        `updated` stamp. There the user was saying "I did not want this at
+        all" about notes they were not editing; here they were in the
+        editor, working on this note, and the edit genuinely happened --
+        a fresh stamp is the honest answer.
+        """
+        if self._get_checklist() is not items:
+            self._show_toast("That note is no longer open", kind="info")
+            return
+        if any(existing is item for existing in items):
+            # A second click on a toast that has not yet faded. Matched by
+            # identity, not equality, so an item the user has since typed
+            # again by hand is not mistaken for this one.
+            self._show_toast("That item is already back", kind="info")
+            return
+        # The list can have shrunk since -- other items deleted while the
+        # offer was up -- so the remembered position is a preference, not
+        # a promise. No clamping written here: list.insert already treats
+        # an index past the end as "at the end", and a min() in front of
+        # it would be code no test could ever make matter.
+        items.insert(index, item)
+        self._render_checklist_items()
+        self._schedule_autosave()
+        self.set_status("Checklist item put back")
 
     def _undo_occurrence_delete(self, note_id, date_str):
         """Put back the one day a repeating note was removed from.
@@ -15326,7 +15389,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 pass
             self._toast_hide_job = None
 
-    def _show_toast(self, text, kind="success", action=None, action_text="Undo"):
+    def _show_toast(self, text, kind="success", action=None, action_text="Undo",
+                    yield_to_action=False):
         """Briefly show a small floating banner near the top of the window —
         visible regardless of scroll position or which tab is active. Used for
         'auto-saved' feedback so it's never missed inside a long note.
@@ -15334,8 +15398,26 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         With an `action`, the banner also carries one clickable word and
         stays up far longer. 1.8 seconds is feedback; it is not a window
         in which to decide anything, and an Undo nobody can reach is
-        decoration."""
+        decoration.
+
+        `yield_to_action` marks a banner that is only reassurance, and so
+        must not stand on top of a one-time chance. The autosave's own
+        "Note updated" is the case: a plain banner replaces `_toast_action`
+        with None, so an Undo offered a moment earlier was wiped as soon
+        as the debounce fired — about a second, not the eight it appeared
+        to promise. Measured on the checklist route, and it was already
+        true of the bulk category route, where typing anything at all
+        removed the offer.
+        """
         if not hasattr(self, "toast_frame"):
+            return
+        if (yield_to_action and getattr(self, "_toast_action", None) is not None
+                and getattr(self, "_toast_hide_job", None) is not None):
+            # An offer is on screen right now and has been neither taken
+            # nor expired — both of those clear _toast_action, so this
+            # cannot mistake a stale one for a live offer. Nothing is
+            # lost by staying quiet: every caller that yields also writes
+            # the same news to the status line.
             return
         color = {"success": self.colors["success"],
                  "info": self.colors["accent"],

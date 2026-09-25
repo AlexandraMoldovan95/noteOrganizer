@@ -12,6 +12,7 @@ How the numbers themselves are counted is the
 
 | Version | Date | In one line |
 |---|---|---|
+| [0.75.179](#075179--2026-09-25) | 2026-09-25 | A checklist item you remove can be put back where it was — and an offer of Undo stays on screen instead of being wiped a second later by the autosave's own banner. |
 | [0.75.177](#075177--2026-09-25) | 2026-09-25 | Moving a batch of ticked notes to another category asks first, and offers a way back — each note to the category it actually came from. |
 | [0.75.176](#075176--2026-09-25) | 2026-09-25 | The calendar stops drawing previews over menus and tables as rows of bars, and offers a note's actions the same way the rest of the app does. |
 | [0.75.173](#075173--2026-09-15) | 2026-09-15 | The selection bar shows all four of its actions, and a ticked box looks ticked on a dark theme. |
@@ -82,6 +83,42 @@ How the numbers themselves are counted is the
   padding the label could not see, and each was short — the subtitle asked for 620
   pixels and was given 544. They are taken from the label itself now, so a change to
   the layout cannot leave them behind again.
+
+---
+
+## [0.75.179] — 2026-09-25
+
+*Highlights: the last thing you could remove from a note with no way back has one — and the Undo offers that already existed now last as long as they look like they will.*
+
+### Fixed
+
+- **A checklist item you remove can be put back, where it was.** The small bin on a
+  checklist row was the one delete in the app with no route home at all: Ctrl+Z reaches the
+  note's text boxes, and a checklist is a list of items beside them, so nothing in the
+  editor could return a line struck off by a mis-click. Removing one now offers **Undo**,
+  and the item returns to its own position rather than to the end of the list. There is
+  still no question first, deliberately — a dialog in front of every tick-list tidy-up
+  would cost more than it protects, and the app's rule is that a destructive action is
+  confirmed in proportion to how recoverable it is. What it needed was to become
+  recoverable.
+- **An offer of Undo stays on screen for as long as it looks like it will.** Every Undo in
+  the app — a deleted note, a removed day of a repeating note, a batch refiled into
+  another category — is offered on the small banner at the top, and the autosave's own
+  "Note updated" banner replaced it. So the offer was gone about a second after it
+  appeared rather than the eight it seemed to promise: long enough to see, rarely long
+  enough to use. The autosave's banner is only reassurance, so it now waits while an offer
+  is on screen, and the status line reports the save as it always did. Bad news never
+  waits: an error still interrupts anything.
+
+### Testing
+
+- Thirty-three checks in qa1 over ten scenarios — the item returning to its own place, the
+  offer surviving the save it triggered, the autosave's banner still appearing when no offer
+  is up, an error never being held back, a second click on a toast that has not faded,
+  switching notes or applying a template inside the offer's life, an item written in another
+  alphabet, and one day of a repeating note. Ten of the thirty-three state what the fixture
+  set up before anything is measured from it. Nine mutants, each dying on the check written
+  for it — two of them only after the checks they exposed as toothless were rewritten.
 
 ---
 

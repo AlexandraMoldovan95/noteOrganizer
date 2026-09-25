@@ -7398,6 +7398,265 @@ if _fc_plain is not None:
     check('...and a note without one shows no checklist mark at all',
           _fc_plain_tags is not None and '☑' not in str(_fc_plain_tags.cget('text')))
 
+
+# ---- A REMOVED CHECKLIST ITEM CAN COME BACK ----
+# It was the one thing that could be taken off a note with no way back at
+# all: Ctrl+Z reaches the Text widgets through edit_undo, and a checklist
+# is a list of dicts beside them (finding C-2 in docs/PRODUCT_FINDINGS.md).
+# A toast rather than a confirmation, because a question in front of every
+# tick-list tidy-up would be worse than the risk it guards.
+#
+# The offer is guarded by the IDENTITY of the working list: five routes
+# rebind _working_checklist to a fresh list (another note, another
+# occurrence, a template, a new note, an imported note), and writing into
+# whatever list is current would drop the item into somebody else's note.
+_cu_saved = list(app.notes)
+
+
+def _cu_setup(items, note_id=9100, extra=None):
+    """Load a note through the real route and open the checklist, then say
+    what was set up -- a click at an unmapped row is discarded in silence,
+    and loading a note CLOSES the section."""
+    if getattr(app, '_autosave_job', None) is not None:
+        app.after_cancel(app._autosave_job)
+        app._autosave_job = None
+    app._hide_toast()
+    _cu_raw = {'id': note_id, 'title': 'Shopping', 'body': 'a body',
+               'checklist': [{'text': t, 'done': False} for t in items]}
+    _cu_raw.update(extra or {})
+    app.notes = [NO.normalize_note(_cu_raw),
+                 NO.normalize_note({'id': note_id + 1, 'title': 'Elsewhere',
+                                    'body': 'other body',
+                                    'checklist': [{'text': 'their item',
+                                                   'done': False}]})]
+    app.save_notes()
+    # Leave first: opening the note that is already open does not reload
+    # the editor, which is right for the app and wrong for a fixture
+    # re-seeding the same id.
+    app.new_note(); app.update()
+    app.open_note_in_tab(app.find_note(note_id)); app.update()
+    if not app._checklist_open:
+        app.toggle_checklist_section()
+    app.update()
+    return (app._checklist_open
+            and [i['text'] for i in app._get_checklist()] == list(items))
+
+
+def _cu_texts():
+    return [i.get('text') for i in app._get_checklist()]
+
+
+def _cu_bin(position):
+    _cu_rows = [w for w in app.checklist_items_frame.winfo_children()
+                if isinstance(w, tk.Frame)]
+    if not (0 <= position < len(_cu_rows)):
+        return None
+    for _cu_w in _cu_rows[position].winfo_children():
+        if isinstance(_cu_w, tk.Button) and '🗑' in str(_cu_w.cget('text')):
+            return _cu_w
+    return None
+
+
+def _cu_press(position):
+    """Press the row's bin through the button itself.
+
+    invoke(), not a generated <Button-1>: Tk runs a real tk.Button's
+    command from its ButtonRelease binding, and neither a synthetic press
+    nor press-then-release puts the widget in the state that binding needs
+    -- measured, the item simply stayed. _qa_click remains right for the
+    Label-bound handlers it was written for."""
+    _cu_b = _cu_bin(position)
+    if _cu_b is None:
+        return False
+    _cu_b.invoke()
+    app.update()
+    return True
+
+
+check('checklist undo: the fixture opens the section with three items',
+      _cu_setup(['milk', 'bread', 'eggs']))
+check('checklist undo: the middle row has a bin', _cu_bin(1) is not None)
+_cu_press(1)
+check('checklist undo: the item is removed straight away',
+      _cu_texts() == ['milk', 'eggs'])
+_cu_undo = app._toast_action
+check('checklist undo: removing an item now offers a way back',
+      _cu_undo is not None)
+if _cu_undo is not None:
+    _cu_undo()
+    app.update()
+check('checklist undo: it comes back in the MIDDLE, not appended',
+      _cu_texts() == ['milk', 'bread', 'eggs'])
+check('checklist undo: the rows on screen come back with it',
+      [str(_w.cget('text'))
+       for _r in app.checklist_items_frame.winfo_children()
+       for _w in _r.winfo_children()
+       if isinstance(_w, tk.Label)] == ['milk', 'bread', 'eggs'])
+
+# The offer must survive the save the deletion itself scheduled. A plain
+# banner replaces _toast_action with None, so the autosave's own "Note
+# updated" used to wipe the Undo about a second after it appeared.
+check('checklist undo: fixture ready for the autosave case',
+      _cu_setup(['milk', 'bread']))
+_cu_press(0)
+app._flush_autosave()
+app.update()
+check('checklist undo: the autosave does not wipe the Undo it triggered',
+      app._toast_action is not None)
+check('checklist undo: and the autosave still reports itself on the status line',
+      'Auto-saved' in str(app.status_lbl.cget('text')))
+_cu_stored = json.load(open('notes_data.json', encoding='utf-8'))
+check('checklist undo: the removal really did reach disk',
+      [i['text'] for i in next(n for n in _cu_stored
+                               if n['id'] == 9100)['checklist']] == ['bread'])
+app._toast_action()
+app.update()
+# The undo has to schedule its OWN save, the way the removal did. Checked
+# by looking for the queued job, not by flushing and reading the file: a
+# flush saves whatever the editor holds whether anything asked it to or
+# not, so the disk check below passes even with the scheduling removed.
+check('checklist undo: the way back schedules its own save',
+      getattr(app, '_autosave_job', None) is not None)
+app._flush_autosave()
+app.update()
+_cu_stored = json.load(open('notes_data.json', encoding='utf-8'))
+check('checklist undo: and the way back reaches disk too',
+      [i['text'] for i in next(n for n in _cu_stored
+                               if n['id'] == 9100)['checklist']]
+      == ['milk', 'bread'])
+
+# The yielding is conditional, not a mute button, and bad news never yields.
+check('checklist undo: fixture ready for the conditional case',
+      _cu_setup(['milk', 'bread']))
+app._hide_toast()
+app.body_text.insert('end', ' more words')
+app._flush_autosave()
+app.update()
+check('checklist undo: with no offer up, the autosave banner still shows',
+      'Note updated' in str(app.toast_lbl.cget('text')))
+check('checklist undo: fixture ready for the error case',
+      _cu_setup(['milk', 'bread']))
+_cu_press(0)
+app._show_toast('a failure the user must see', kind='error')
+app.update()
+check('checklist undo: an error is never held back by a live offer',
+      'a failure the user must see' in str(app.toast_lbl.cget('text')))
+
+# A second click on a toast that has not faded, and an offer whose
+# remembered position no longer exists.
+check('checklist undo: fixture ready for the second click',
+      _cu_setup(['milk', 'bread', 'eggs']))
+_cu_press(0)
+_cu_undo = app._toast_action
+_cu_undo()
+app.update()
+_cu_toasts = []
+_cu_real_toast = app._show_toast
+app._show_toast = (
+    lambda _t, kind='success', action=None, action_text='Undo',
+    yield_to_action=False: (
+        _cu_toasts.append((str(_t), kind)),
+        _cu_real_toast(_t, kind=kind, action=action, action_text=action_text,
+                       yield_to_action=yield_to_action))[1])
+_cu_undo()
+app.update()
+app._show_toast = _cu_real_toast
+check('checklist undo: a second click does not add the item twice',
+      _cu_texts() == ['milk', 'bread', 'eggs'])
+check('checklist undo: a second click says the item is already back',
+      any('already back' in _t and _k == 'info' for _t, _k in _cu_toasts))
+
+check('checklist undo: fixture ready for the shrunken list',
+      _cu_setup(['milk', 'bread', 'eggs']))
+_cu_press(2)
+_cu_stale = app._toast_action
+_cu_press(0)
+_cu_stale()
+app.update()
+check('checklist undo: a stale offer still lands instead of raising',
+      _cu_texts() == ['bread', 'eggs'])
+
+# The guard, on the two routes most likely to be taken inside eight
+# seconds: another note, and a template.
+check('checklist undo: fixture ready for the note switch',
+      _cu_setup(['milk', 'bread']))
+_cu_press(0)
+_cu_undo = app._toast_action
+app.open_note_in_tab(app.find_note(9101))
+app.update()
+_cu_toasts = []
+app._show_toast = (
+    lambda _t, kind='success', action=None, action_text='Undo',
+    yield_to_action=False: (
+        _cu_toasts.append((str(_t), kind)),
+        _cu_real_toast(_t, kind=kind, action=action, action_text=action_text,
+                       yield_to_action=yield_to_action))[1])
+_cu_undo()
+app.update()
+app._show_toast = _cu_real_toast
+check('checklist undo: Undo after switching notes refuses',
+      any('no longer open' in _t for _t, _k in _cu_toasts))
+check("checklist undo: and the other note's list is untouched",
+      _cu_texts() == ['their item'])
+# The damage without the guard is not contamination -- the insert goes
+# into the captured list, which nothing reads once the editor has moved
+# on. It is the CLAIM: a redraw of somebody else's checklist and a status
+# line saying the item was put back. Measured: a check watching the other
+# note's list cannot see this, so watch what the app says instead.
+check('checklist undo: and it does not claim to have put anything back',
+      'put back' not in str(app.status_lbl.cget('text')))
+
+check('checklist undo: fixture ready for the template',
+      _cu_setup(['milk', 'bread']))
+_cu_press(0)
+_cu_undo = app._toast_action
+app._apply_template({'title': 'T', 'body': 'template body',
+                     'checklist': [{'text': 'from the template',
+                                    'done': False}]})
+app.update()
+_cu_undo()
+app.update()
+check('checklist undo: Undo after a template leaves the template list alone',
+      _cu_texts() == ['from the template'])
+
+# Any alphabet, and a day of a repeating note.
+check('checklist undo: fixture ready for the astral item',
+      _cu_setup(['milk', 'cafe \U0001F600 اختبار',
+                 'eggs']))
+_cu_press(1)
+app._toast_action()
+app.update()
+check('checklist undo: an astral-emoji item comes back unchanged',
+      _cu_texts() == ['milk',
+                      'cafe \U0001F600 اختبار',
+                      'eggs'])
+
+check('checklist undo: fixture ready for the series',
+      _cu_setup(['milk', 'bread'],
+                extra={'date': '2026-09-01',
+                       'recurrence': {'freq': 'daily', 'interval': 1}}))
+app.open_note_in_tab(app.find_note(9100), '2026-09-03')
+app.update()
+if not app._checklist_open:
+    app.toggle_checklist_section()
+app.update()
+check('checklist undo: a day of a series shows the series checklist',
+      _cu_texts() == ['milk', 'bread'])
+_cu_press(0)
+app._toast_action()
+app.update()
+app._flush_autosave()
+app.update()
+check('checklist undo: delete and undo on one day land on the series',
+      [i['text'] for i in app.find_note(9100)['checklist']] == ['milk', 'bread'])
+check('checklist undo: and no per-day checklist override is invented',
+      'checklist' not in (app.find_note(9100).get('overrides') or {})
+      .get('2026-09-03', {}))
+
+app.notes = list(_cu_saved)
+app.save_notes()
+app.new_note(); app.update()
+
 app.notes = list(_fc_saved)
 app.trash = list(_fc_saved_trash)
 app.save_notes()

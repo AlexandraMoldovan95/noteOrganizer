@@ -33,6 +33,7 @@ day-to-day tracking.
 | [The identity that only lasted until you closed the app](#the-identity-that-only-lasted-until-you-closed-the-app) | A value computed on every read is not stored; if it must be stable, something has to write it down — and the test that proves it must survive a restart, not a function call. | 0.73.161 |
 | [The code that would not say which note it was](#the-code-that-would-not-say-which-note-it-was) | A payload built from the screen carries only what is on the screen — and a checked route proves nothing about the field added to it afterwards. | 0.73.165 |
 | [The undo that would have put everything in one place](#the-undo-that-would-have-put-everything-in-one-place) | An undo over many items remembers each item's own previous value; and "like the thing beside it" means asking what that thing's safety net really is. | 0.75.177 |
+| [The offer that was gone before you could take it](#the-offer-that-was-gone-before-you-could-take-it) | Reassurance must never displace a one-time offer — and re-read the reason a finding gives, not just the finding. | 0.75.179 |
 | [The template editor that "did nothing" when clicked](#the-template-editor-that-did-nothing-when-clicked) | 'Nothing happens' in a --windowed build is a real bug report — the exception was invisible. | 0.3.0 |
 | [The panel that lost its content depending on how you got there](#the-panel-that-lost-its-content-depending-on-how-you-got-there) | Recalculate layout on Tk's `<Map>` event, not after a guessed delay. | 0.3.0 |
 | [The scroll that stopped twice, for two different reasons](#the-scroll-that-stopped-twice-for-two-different-reasons) | Same symptom, unrelated causes — check neighbouring areas instead of assuming one fix covers all. | 0.28.38 |
@@ -895,6 +896,77 @@ not do what its name says turns a measurement into a rumour.
    first, or it opens behind its own question.
 4. A surviving mutant is a question about the fixture as often as about
    the check.
+
+### The offer that was gone before you could take it
+
+*([0.75.179](../CHANGELOG.md#075179--2026-09-25))*
+
+**What was being fixed.** A checklist item's bin was the last delete in
+the app with no route home: Ctrl+Z reaches the note's Text widgets
+through `edit_undo`, and a checklist is a list of dicts beside them, so
+nothing in the editor could return a line struck off by a mis-click.
+Recorded as C-2. The plan was an Undo toast rather than a confirmation —
+a question in front of every tick-list tidy-up costs more than it
+protects.
+
+**The premise was wrong, and the right answer changed with it.** The
+register's reason for the comparison read: the attachment, "which at
+least the file system still remembers", is the one that gets the
+ceremony. `remove_attachment` calls `_delete_attachment_files`; the
+stored copy goes with the note's reference to it, and the code says so
+three lines above. So the asymmetry was not unfair in the way it had
+been written down — the attachment's warning is correct for something
+irreversible on disk, and the checklist's answer was never to add a
+dialog but to stop being irreversible. The finding survived; its
+reasoning did not, and the cell now says so rather than quietly dropping
+the sentence.
+
+**Then the probe found the bug behind the bug.** The new toast worked and
+then vanished, in a probe written only to confirm the removal reached
+disk. `_show_toast` stores the pending action in `self._toast_action`,
+and a banner with no action stores `None` — so the autosave's own "Note
+updated", firing a second later on the very save the deletion had
+scheduled, wiped the Undo that deletion had just offered. Eight seconds
+on the banner, about one in practice: long enough to see, rarely long
+enough to use.
+
+That was not new and not the checklist's. **Every Undo in the app was
+affected** — a deleted note, a removed day of a repeating note, a batch
+refiled into another category — because typing anything at all schedules
+an autosave, and the trash and occurrence offers had been shipping that
+way since `0.74.168`. The fix is at the class: a banner that is only
+reassurance now yields while an offer is on screen (`yield_to_action`,
+passed by the three autosave call sites and nothing else), and the status
+line reports the save as it always did. An error never yields.
+
+**Two of the nine mutants survived, and both were right to.**
+
+- Removing the identity guard — the check that the working list is still
+  the one the item came out of — left the other note's checklist
+  untouched, so the check watching that list could not see it. The reason
+  is that the undo inserts into the *captured* list, which is orphaned
+  once the editor moves on: nothing is corrupted. What is wrong is the
+  claim — a redraw of somebody else's checklist, a save of the note now
+  open, and a status line saying the item was put back. The check now
+  watches for that sentence, and the docstring no longer asserts a
+  contamination that cannot happen.
+- Removing the `_schedule_autosave()` from the undo also changed nothing
+  the suite could see, because the check reached disk by calling
+  `_flush_autosave()` — which saves whatever the editor holds whether
+  anything asked it to or not. The check now looks for the queued job.
+
+**The lessons.**
+
+1. A banner that only reassures must never displace one that offers a
+   one-time choice. Reassurance can be repeated; an offer cannot.
+2. Re-read the reason a finding gives, not just the finding. This one's
+   comparison was sound and its explanation was false, and the
+   explanation was what pointed at the wrong fix.
+3. A check that reaches its end state through a *forcing* call proves the
+   forcing call works. If the point is that the app asked for something,
+   look for the request.
+4. A probe written to confirm one thing is where the next thing is found.
+   This one was three lines about whether a delete reached disk.
 
 
 ## Tk & platform gotchas
