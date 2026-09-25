@@ -257,6 +257,20 @@ A new surface joins this list the moment it ships.
   see. The fixture now seeds an explicit **old** stamp and checks that it
   did. Where a check compares a value before and after, make sure the
   fixture's value could not have been the answer by coincidence.
+- **If the point is that the app ASKED for something, look for the
+  request, not the result.** A check that the checklist undo persists
+  reached disk by calling `_flush_autosave()` — which saves whatever the
+  editor holds whether anything asked it to or not — so removing the
+  undo's own `_schedule_autosave()` changed nothing it could see. The
+  check now looks for the queued job. A forcing call in a check proves the
+  forcing call works.
+- **A mutant that leaves no visible damage is telling you where the damage
+  really is.** Removing the checklist undo's identity guard left the other
+  note's list untouched, because the insert goes into the captured list,
+  which is orphaned once the editor moves on. Nothing is corrupted; what
+  is wrong is the status line claiming the item was put back. Before
+  rewriting a mutant, ask what the broken code actually does — the answer
+  names the check that was missing.
 - **Never hold a widget across something that rebuilds.** A reference
   found before a resize, a theme switch or a note-list refresh can name
   a widget that no longer exists by the time it is used, and Tk answers
