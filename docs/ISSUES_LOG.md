@@ -36,6 +36,7 @@ day-to-day tracking.
 | [The offer that was gone before you could take it](#the-offer-that-was-gone-before-you-could-take-it) | Reassurance must never displace a one-time offer — and re-read the reason a finding gives, not just the finding. | 0.75.179 |
 | [The eight failures that hid two live mutants](#the-eight-failures-that-hid-two-live-mutants) | A check asserting a count is satisfied by the wrong answer of the same size; and never read a verdict out of output that truncates silently. | 0.75.180 |
 | [The finding that described a dialog nobody had opened](#the-finding-that-described-a-dialog-nobody-had-opened) | A review that only reads finds where to look but cannot decide — check a finding's reason separately from the finding, and correct a refuted row in place. | — |
+| [The undo that guarded the wrong state](#the-undo-that-guarded-the-wrong-state) | An undo must test for the state its own action produced, not the one it means to restore; and sweep for what else reaches the same loss. | 0.75.181 |
 | [The template editor that "did nothing" when clicked](#the-template-editor-that-did-nothing-when-clicked) | 'Nothing happens' in a --windowed build is a real bug report — the exception was invisible. | 0.3.0 |
 | [The panel that lost its content depending on how you got there](#the-panel-that-lost-its-content-depending-on-how-you-got-there) | Recalculate layout on Tk's `<Map>` event, not after a guessed delay. | 0.3.0 |
 | [The scroll that stopped twice, for two different reasons](#the-scroll-that-stopped-twice-for-two-different-reasons) | Same symptom, unrelated causes — check neighbouring areas instead of assuming one fix covers all. | 0.28.38 |
@@ -969,6 +970,74 @@ line reports the save as it always did. An error never yields.
    look for the request.
 4. A probe written to confirm one thing is where the next thing is found.
    This one was three lines about whether a delete reached disk.
+
+### The undo that guarded the wrong state
+
+*([0.75.181](../CHANGELOG.md#075181--2026-09-26))*
+
+**The finding held; the map around it did not.** Clearing a calendar day's
+colour or its markers wrote to disk on the spot with nothing offered in
+return — the third destructive finding in the survey to survive contact
+with the code, and the first whose reasoning survived with it. Two things
+about its neighbourhood were wrong, in opposite directions.
+
+A **third** route discarded the same thing: the day's own colour palette
+carries a "No color" button whose handler pops the colour exactly as the
+menu entry does. Fixing only the two entries the report named would have
+left one of two doors unguarded — and the unguarded one is reached from
+inside the very popup you open to *change* a colour.
+
+And a route the report implied was broken was already safe. The marker
+popup works on a copy, writes nothing until Save, and discards on ✕,
+which its own docstring explains was a deliberate change. A check now
+holds it that way, so a later pass cannot helpfully give it an undo it has
+never needed.
+
+**The hazard was geometry, not stakes.** The report argued from effort
+invested — a year of marked birthdays. Reading the menu the app actually
+draws makes a sharper case:
+
+```
+➕ Add note for this day │ 🎨 Color this day… │ ✖ Clear day color │ 🏷 Mark this day… │ ✖ Clear day markers
+```
+
+Each Clear sits *directly under* the entry that creates the same thing. A
+mis-aim by one row turns "let me change this" into "discard it".
+
+**The mistake worth recording is in the guard.** The first version asked:
+*is what is there now equal to what I am about to restore?* That catches a
+second click on a toast, and nothing else. A marker chosen by hand in the
+seconds since is not equal to the old one, so the undo cheerfully
+overwrote it. The right question is *is the slot still in the state the
+clear left it in?* — and the clear left it **empty**, so an empty slot is
+the only state the offer still fits.
+
+Both earlier undos in this cycle had got that right without naming it:
+the bulk category undo acts only on notes still filed under the category it
+applied, and the checklist undo only while the working list is the one the
+item came out of. Written as a rule: **an undo is a claim about a state, and
+the state it must test for is the one its own action produced** — not the
+one it intends to restore.
+
+It was found by probing, not by review. The check for it was in the probe
+before the guard was written, because the question "what if they decorate
+the day again in those seconds?" is one of the five in the project's own
+quality bar.
+
+**The lessons.**
+
+1. An undo guards the state its action *created*, not the state it means
+   to put back. The weaker test passes the double-click case and fails
+   everything else.
+2. Sweep for siblings by asking what else reaches the same loss, not what
+   else looks like the reported control. The second door here was inside
+   the popup for changing the thing.
+3. Check whether a neighbour the report implies is broken is actually
+   broken. One of them was already correct, and "fixing" it would have
+   undone a deliberate design.
+4. Prove an undo on the screen as well as in the store. A check reading
+   the calendar cell's own background is what stops a version that repairs
+   the data and forgets to repaint.
 
 
 ## Tk & platform gotchas

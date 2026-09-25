@@ -1171,6 +1171,267 @@ _labels_q7.clear()
 check('a note that does not repeat still just says Delete',
       next((l for l in _c4_plain if 'Delete' in l), '') == '🗑  Delete')
 
+# ---- CLEARING A DAY'S DECORATION CAN BE UNDONE ----
+# Three routes discarded it and none of them asked: the two "Clear day …"
+# menu entries, which sit DIRECTLY under the entries that create the same
+# thing, and the palette's own "No color" -- a route finding C-5 did not
+# mention. A mis-aim by one menu row turned "change this" into "discard
+# it", permanently. No confirmation added: the app's rule is proportion to
+# recoverability, and a question in front of every colour change would
+# cost more than the loss. So the loss stopped being permanent.
+#
+# The marker POPUP is deliberately untouched -- it works on a copy, writes
+# only on Save and discards on ✕ -- and a check below holds that, so a
+# later "consistency" pass does not helpfully break it.
+_cc_saved_colors = dict(app.day_colors)
+_cc_saved_emoji = dict(app.day_emoji)
+_CC_COLOUR = '#cc4444'
+_CC_MARKERS = ['🎂', '🎉']
+app.notebook.select(app.TAB_CALENDAR)
+app.update()
+# A day in the month the calendar is SHOWING. A fixed date failed here
+# while passing in isolation: earlier checks in this file navigate the
+# calendar to another month, and a cell outside the visible month is not
+# drawn at all -- so the paint assertions were reading an absent widget
+# rather than a wrong colour.
+_CC_DAY = '%04d-%02d-10' % (app.cal_year, app.cal_month)
+
+
+def _cc_seed():
+    app.day_colors = {_CC_DAY: _CC_COLOUR}
+    app.day_emoji = {_CC_DAY: list(_CC_MARKERS)}
+    app._persist_day_colors()
+    app._persist_day_emoji()
+    app._hide_toast()
+    app.render_calendar()
+    app.update()
+    _cc_stored = NO.load_settings()
+    return (_cc_stored.get('day_colors', {}).get(_CC_DAY) == _CC_COLOUR
+            and _cc_stored.get('day_emoji', {}).get(_CC_DAY) == _CC_MARKERS)
+
+
+def _cc_menu(needle):
+    """The day menu's own command, captured -- tk_popup blocks, so it is
+    suppressed for the duration the way every other menu check here does."""
+    _cc_caught = []
+    _cc_real_add, _cc_real_pop = tk.Menu.add_command, tk.Menu.tk_popup
+    tk.Menu.add_command = lambda self, **kw: _cc_caught.append(
+        (kw.get('label', ''), kw.get('command')))
+    tk.Menu.tk_popup = lambda self, *a, **k: None
+    try:
+        app.show_day_context_menu(
+            _types_q7.SimpleNamespace(x_root=200, y_root=200), _CC_DAY)
+    finally:
+        tk.Menu.add_command = _cc_real_add
+        tk.Menu.tk_popup = _cc_real_pop
+    for _cc_l, _cc_c in _cc_caught:
+        if needle in _cc_l and _cc_c is not None:
+            return _cc_c
+    return None
+
+
+def _cc_disk():
+    _cc_stored = NO.load_settings()
+    return (_cc_stored.get('day_colors', {}).get(_CC_DAY),
+            _cc_stored.get('day_emoji', {}).get(_CC_DAY))
+
+
+def _cc_cell_bg():
+    """What the calendar cell is painted -- so the undo is proved on the
+    screen, not only in the store."""
+    _cc_cell = getattr(app, '_cal_cell_widgets', {}).get(_CC_DAY)
+    if _cc_cell is None:
+        return None
+    try:
+        return str(_cc_cell.cget('bg'))
+    except tk.TclError:
+        return None
+
+
+_cc_toasts = []
+_cc_real_toast = app._show_toast
+
+
+def _cc_record():
+    _cc_toasts.clear()
+    app._show_toast = (
+        lambda text, kind='success', action=None, action_text='Undo',
+        yield_to_action=False: (
+            _cc_toasts.append((str(text), kind)),
+            _cc_real_toast(text, kind=kind, action=action,
+                           action_text=action_text,
+                           yield_to_action=yield_to_action))[1])
+
+
+check('clear day: fixture sets a colour and two markers, both on disk',
+      _cc_seed())
+check('clear day: the calendar really painted the day', _cc_cell_bg() == _CC_COLOUR)
+_cc_menu('Clear day color')()
+app.update()
+check('clear day: the colour goes', _CC_DAY not in app.day_colors
+      and _cc_disk()[0] is None)
+_cc_undo = app._toast_action
+check('clear day: clearing a colour now offers a way back', _cc_undo is not None)
+if _cc_undo is not None:
+    _cc_undo()
+    app.update()
+check('clear day: Undo restores the exact colour, in memory and on disk',
+      app.day_colors.get(_CC_DAY) == _CC_COLOUR and _cc_disk()[0] == _CC_COLOUR)
+check('clear day: ...and repaints the day on screen',
+      _cc_cell_bg() == _CC_COLOUR)
+check('clear day: clearing a colour never touched the markers',
+      _cc_disk()[1] == _CC_MARKERS)
+
+# The palette's "No color" is the same loss by a second door.
+_cc_seed()
+app._color_day(_CC_DAY, _types_q7.SimpleNamespace(x_root=200, y_root=200))
+app.update()
+_cc_reset = []
+
+
+def _cc_find_reset(w):
+    for ch in w.winfo_children():
+        try:
+            if isinstance(ch, tk.Button) and 'No color' in str(ch.cget('text')):
+                _cc_reset.append(ch)
+        except Exception:
+            pass
+        _cc_find_reset(ch)
+
+
+_cc_pop = getattr(app, '_mini_popup', None)
+if _cc_pop is not None and _cc_pop.winfo_exists():
+    _cc_find_reset(_cc_pop)
+check('clear day: the palette carries a "No color" button', bool(_cc_reset))
+if _cc_reset:
+    _cc_reset[0].invoke()
+    app.update()
+check('clear day: "No color" discards it like the menu entry does',
+      _CC_DAY not in app.day_colors)
+_cc_undo = app._toast_action
+check('clear day: the palette route offers a way back too', _cc_undo is not None)
+if _cc_undo is not None:
+    _cc_undo()
+    app.update()
+check('clear day: Undo works from the palette route',
+      app.day_colors.get(_CC_DAY) == _CC_COLOUR)
+
+# Choosing a real colour is not a loss and must stay silent.
+_cc_seed()
+app._color_day(_CC_DAY, _types_q7.SimpleNamespace(x_root=200, y_root=200))
+app.update()
+_cc_record()
+_cc_swatch = []
+
+
+def _cc_find_swatch(w):
+    for ch in w.winfo_children():
+        if ch.winfo_class() == 'Canvas':
+            _cc_swatch.append(ch)
+        _cc_find_swatch(ch)
+
+
+_cc_pop = getattr(app, '_mini_popup', None)
+if _cc_pop is not None and _cc_pop.winfo_exists():
+    _cc_find_swatch(_cc_pop)
+if _cc_swatch:
+    _qa_click(_cc_swatch[0])
+    app.update()
+app._show_toast = _cc_real_toast
+check('clear day: picking an actual colour offers nothing, nothing was lost',
+      not any('cleared' in _t for _t, _k in _cc_toasts))
+
+# The markers.
+_cc_seed()
+_cc_menu('Clear day markers')()
+app.update()
+check('clear day: the markers go', _CC_DAY not in app.day_emoji
+      and _cc_disk()[1] is None)
+_cc_undo = app._toast_action
+check('clear day: clearing markers offers a way back', _cc_undo is not None)
+if _cc_undo is not None:
+    _cc_undo()
+    app.update()
+check('clear day: Undo restores the exact markers, in order',
+      app.day_emoji.get(_CC_DAY) == _CC_MARKERS
+      and _cc_disk()[1] == _CC_MARKERS)
+check('clear day: clearing markers never touched the colour',
+      _cc_disk()[0] == _CC_COLOUR)
+
+# The offer only fits the state the clear left: an EMPTY slot. Anything
+# there now is either the same value back or one chosen by hand since, and
+# a stale memory must overwrite neither.
+_cc_seed()
+_cc_menu('Clear day color')()
+app.update()
+_cc_undo = app._toast_action
+_cc_undo()
+app.update()
+_cc_record()
+_cc_undo()
+app.update()
+app._show_toast = _cc_real_toast
+check('clear day: a second Undo says the day is occupied, not that it worked',
+      any('has a colour again' in _t and _k == 'info' for _t, _k in _cc_toasts))
+check('clear day: ...and leaves the colour the first Undo restored',
+      app.day_colors.get(_CC_DAY) == _CC_COLOUR)
+
+_cc_seed()
+_cc_menu('Clear day markers')()
+app.update()
+_cc_undo = app._toast_action
+app.day_emoji[_CC_DAY] = ['🗓']
+app._persist_day_emoji()
+_cc_record()
+_cc_undo()
+app.update()
+app._show_toast = _cc_real_toast
+check('clear day: Undo does not overwrite a marker chosen in between',
+      app.day_emoji.get(_CC_DAY) == ['🗓'])
+check('clear day: ...and says the day is occupied',
+      any('has markers again' in _t and _k == 'info' for _t, _k in _cc_toasts))
+
+# The popup was already safe. Hold that, so a later consistency pass does
+# not helpfully give it an undo it does not need.
+_cc_seed()
+app._mark_day_emoji(_CC_DAY, _types_q7.SimpleNamespace(x_root=200, y_root=200))
+app.update()
+_cc_chips = []
+
+
+def _cc_find_chip(w, glyph):
+    for ch in w.winfo_children():
+        try:
+            if isinstance(ch, tk.Label) and str(ch.cget('text')) == glyph:
+                _cc_chips.append(ch)
+        except Exception:
+            pass
+        _cc_find_chip(ch, glyph)
+
+
+_cc_pop = getattr(app, '_mini_popup', None)
+if _cc_pop is not None and _cc_pop.winfo_exists():
+    _cc_find_chip(_cc_pop, _CC_MARKERS[0])
+check('clear day: the marker popup still draws its chips', bool(_cc_chips))
+if _cc_chips:
+    _qa_click(_cc_chips[0])
+    app.update()
+check('clear day: un-ticking a chip still writes nothing until Save',
+      _cc_disk()[1] == _CC_MARKERS)
+app._dismiss_mini_popup()
+app.update()
+check('clear day: dismissing still discards, as the popup promises',
+      _cc_disk()[1] == _CC_MARKERS)
+
+app._show_toast = _cc_real_toast
+app.day_colors = dict(_cc_saved_colors)
+app.day_emoji = dict(_cc_saved_emoji)
+app._persist_day_colors()
+app._persist_day_emoji()
+app._hide_toast()
+app.notebook.select(app.TAB_NOTES)
+app.update()
+
 # The captured commands are the REAL menu lambdas — invoke them, so the
 # return_day plumbing one frame above _ctx_open is exercised too (the
 # same frame class a hijack once hid in for deletes).
