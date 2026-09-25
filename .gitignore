@@ -37,6 +37,14 @@ dist/
 .DS_Store
 Thumbs.db
 *.log
+# Claude Code's permission lists: machine-specific (absolute paths, this
+# user's home directory) and not part of the product. This line is
+# deliberate rather than decorative. `settings.json` further up has no
+# leading slash, so it already matches `.claude/settings.json` at any
+# depth — meaning anchoring that line to `/settings.json`, which is the
+# correct fix for the app's own settings file, would silently make this
+# one committable.
+.claude/settings.json
 
 # --- Runtime artifacts the app writes beside itself when run from source ---
 # crash_log.txt is the app's own last-resort logger; the .tmp is a save
