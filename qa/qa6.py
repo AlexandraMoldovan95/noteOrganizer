@@ -1195,6 +1195,231 @@ _keptQW2, _nQW2 = NO.purge_expired_trash([dict(_entryQW)])
 check('a 10-day-old entry purges under a 7-day window', _nQW == 1)
 check('and survives under the 30-day default', _nQW2 == 0)
 
+# ---- SHORTENING THE WINDOW ASKS, AND ONLY WHEN IT COSTS SOMETHING ----
+# The dropdown used to save on the click. Pick "7 days" with notes in the
+# trash from last month and they were destroyed at the next startup --
+# their attached files with them -- with no dialog, while every other
+# permanent deletion in this panel warns. Finding C-3.
+#
+# The count comes from the same function the purge acts on, so the
+# question cannot name a number the purge will not deliver.
+_rt_saved_trash = list(app.trash)
+_rt_real_ask = app.ask_yes_no
+_rt_asked = {}
+
+
+def _rt_answer(reply):
+    """Record the question and give a fixed answer. Recording matters as
+    much as answering: what the dialog SAYS is half the fix."""
+    def _ask(title, message, **kw):
+        _rt_asked.clear()
+        _rt_asked.update({'title': title, 'msg': message, 'kw': kw})
+        return reply
+    app.ask_yes_no = _ask
+
+
+def _rt_days_ago(n):
+    return (_dtQW.datetime.now()
+            - _dtQW.timedelta(days=n)).strftime('%Y-%m-%d %H:%M:%S')
+
+
+_RT_OLD = {'id': 9801, 'title': 'from last month',
+           'deleted_at': _rt_days_ago(40),
+           'attachments': [{'filename': 'a.txt', 'stored_as': 'a.txt'},
+                           {'filename': 'b.txt', 'stored_as': 'b.txt'}]}
+_RT_RECENT = {'id': 9802, 'title': 'yesterday',
+              'deleted_at': _rt_days_ago(1), 'attachments': []}
+_RT_BROKEN = {'id': 9803, 'title': 'no stamp', 'deleted_at': 'not a date',
+              'attachments': []}
+_RT_SERIES = {'id': 9804, 'title': 'standup', 'deleted_at': _rt_days_ago(40),
+              'attachments': [], 'recurrence': {'freq': 'daily',
+                                                'interval': 1}}
+# Older than every window the dropdown offers. A lengthening fixture built
+# from a 40-day-old note proves nothing: 40 is inside a 90-day window, so
+# the doomed list is empty and the "is this shorter?" test never has to
+# hold. This one stays expired at 90 days, so dropping that test really
+# does produce a question about a change that destroys nothing new.
+_RT_ANCIENT = {'id': 9805, 'title': 'from last year',
+               'deleted_at': _rt_days_ago(200), 'attachments': []}
+# Twelve hours, not one day: the clamp turns a previewed 0 into a 1, and
+# only an entry INSIDE one day can tell those apart. A day-old entry sits
+# exactly on the boundary and reads as expired either way.
+_RT_HOURS = {'id': 9806, 'title': 'this morning',
+             'deleted_at': (_dtQW.datetime.now()
+                            - _dtQW.timedelta(hours=12)
+                            ).strftime('%Y-%m-%d %H:%M:%S'),
+             'attachments': []}
+# Past the 365-day ceiling, which is the only way to see the ceiling: a
+# 40-day-old note is inside both 365 and 10000, so comparing those two
+# windows on it returns zero twice and proves nothing.
+_RT_BEYOND = {'id': 9807, 'title': 'ancient history',
+              'deleted_at': _rt_days_ago(400), 'attachments': []}
+
+
+def _rt_setup(entries, retention):
+    """Put the panel in a stated state and say so -- the checks below are
+    only meaningful because the window really is `retention` and the trash
+    really holds these entries."""
+    NO.save_setting('trash_retention_days', retention)
+    app.trash = [dict(e) for e in entries]
+    app.toggle_settings_panel('trash')
+    app.update()
+    _rt_asked.clear()
+    return (NO.trash_retention_days() == retention
+            and str(app.trash_retention_var.get()) == '%d days' % retention)
+
+
+def _rt_pick(label_text):
+    """Open the retention dropdown and click an option, through the widgets
+    the app drew -- never by calling set_retention here."""
+    _rt_btn = []
+
+    def _rt_find_btn(w):
+        for ch in w.winfo_children():
+            try:
+                if (ch.winfo_class() == 'Label'
+                        and str(ch.cget('textvariable'))
+                        == str(app.trash_retention_var)):
+                    _rt_btn.append(ch.master)
+                    return
+            except Exception:
+                pass
+            _rt_find_btn(ch)
+
+    _rt_find_btn(app.settings_trash_panel)
+    if not _rt_btn:
+        return False
+    _qa_click(_rt_btn[0])
+    app.update()
+    _rt_opt = []
+
+    def _rt_find_opt(w):
+        for ch in w.winfo_children():
+            if (ch.winfo_class() == 'Label'
+                    and str(ch.cget('text')) == label_text):
+                _rt_opt.append(ch)
+            _rt_find_opt(ch)
+
+    _rt_pop = getattr(app, '_mini_popup', None)
+    if _rt_pop is None or not _rt_pop.winfo_exists():
+        return False
+    _rt_find_opt(_rt_pop)
+    if not _rt_opt:
+        return False
+    _qa_click(_rt_opt[0])
+    app.update()
+    return True
+
+
+# A question nobody needs teaches people to dismiss questions, so the
+# silent cases are checks in their own right.
+check('retention: fixture is 30 days with an empty trash', _rt_setup([], 30))
+_rt_answer(False)
+check('retention: the dropdown offers 7 days', _rt_pick('7 days'))
+check('retention: shortening with an empty trash asks nothing', not _rt_asked)
+check('retention: ...and still saves the shorter window',
+      NO.trash_retention_days() == 7)
+
+check('retention: fixture is 30 days with one recent note',
+      _rt_setup([_RT_RECENT], 30))
+_rt_answer(False)
+_rt_pick('14 days')
+check('retention: shortening past nothing old enough asks nothing',
+      not _rt_asked)
+check('retention: ...and saves', NO.trash_retention_days() == 14)
+
+check('retention: fixture is 7 days with a note older than every window',
+      _rt_setup([_RT_ANCIENT], 7)
+      and len(NO.trash_entries_past_window([_RT_ANCIENT], 90)) == 1)
+_rt_answer(False)
+_rt_pick('90 days')
+check('retention: lengthening never asks, even with notes already expired',
+      not _rt_asked)
+check('retention: ...and saves', NO.trash_retention_days() == 90)
+
+# The case that destroys something.
+check('retention: fixture is 30 days with a 40-day-old note carrying 2 files',
+      _rt_setup([_RT_OLD, _RT_RECENT], 30))
+_rt_answer(False)
+check('retention: the dropdown offers 7 days again', _rt_pick('7 days'))
+check('retention: shortening past something old DOES ask', bool(_rt_asked))
+check('retention: the question counts only what would go',
+      'holds 1 note older than 7 days' in _rt_asked.get('msg', ''))
+check('retention: the question names both windows',
+      'for 7 days instead of 30' in _rt_asked.get('msg', ''))
+check('retention: the question says when it happens',
+      'the next time the app starts' in _rt_asked.get('msg', ''))
+check('retention: the question names the attached files going with them',
+      'along with 2 attached files' in _rt_asked.get('msg', ''))
+check("retention: the question says it can't be undone",
+      "This can't be undone" in _rt_asked.get('msg', ''))
+check('retention: it warns like the other permanent deletions in this panel',
+      _rt_asked.get('kw', {}).get('icon') == 'warning'
+      and _rt_asked.get('kw', {}).get('default') == 'no')
+check('retention: answering No leaves the setting alone',
+      NO.trash_retention_days() == 30)
+check('retention: answering No puts the label back',
+      str(app.trash_retention_var.get()) == '30 days')
+check('retention: answering No leaves the subtitle alone',
+      'Kept for 30 days' in str(app._trash_subtitle_lbl.cget('text')))
+
+check('retention: fixture is 30 days again', _rt_setup([_RT_OLD, _RT_RECENT], 30))
+_rt_answer(True)
+_rt_pick('7 days')
+check('retention: answering Yes saves the shorter window',
+      NO.trash_retention_days() == 7)
+check('retention: answering Yes moves the label',
+      str(app.trash_retention_var.get()) == '7 days')
+check('retention: answering Yes moves the subtitle',
+      'Kept for 7 days' in str(app._trash_subtitle_lbl.cget('text')))
+
+# The preview and the purge must be the same judgement. A dialog that
+# counts with one rule while the purge deletes by another is a dialog
+# that lies.
+check('retention: fixture is 30 days with a mixed trash',
+      _rt_setup([_RT_OLD, _RT_RECENT, _RT_BROKEN, _RT_SERIES], 30))
+_rt_answer(False)
+_rt_pick('7 days')
+check('retention: the question counts both old ones',
+      'holds 2 notes older than 7 days' in _rt_asked.get('msg', ''))
+check('retention: an unreadable deleted_at is not counted',
+      'holds 3' not in _rt_asked.get('msg', ''))
+check('retention: a repeating series in the trash is named',
+      'repeating series' in _rt_asked.get('msg', ''))
+NO.save_setting('trash_retention_days', 7)
+_rt_previewed = len(NO.trash_entries_past_window(app.trash, 7))
+_rt_kept, _rt_purged = NO.purge_expired_trash([dict(e) for e in app.trash])
+check('retention: the preview and the purge remove the same number',
+      _rt_previewed == _rt_purged == 2)
+check('retention: the purge keeps the unreadable stamp',
+      any(e.get('id') == 9803 for e in _rt_kept))
+check('retention: the preview of the CURRENT window matches the purge too',
+      len(NO.trash_entries_past_window(app.trash)) == _rt_purged)
+
+# The preview clamps a window the same way the stored one is clamped, so
+# it can never be judged by looser arithmetic than what gets applied.
+check('retention: a previewed 0 days is clamped to 1, like a stored one',
+      len(NO.trash_entries_past_window([_RT_HOURS], 0)) == 0)
+check('retention: a previewed nonsense window falls back to the default',
+      len(NO.trash_entries_past_window([_RT_OLD], 'forever')) == 1
+      and len(NO.trash_entries_past_window([_RT_BEYOND], 'forever')) == 1
+      and len(NO.trash_entries_past_window([_RT_RECENT], 'forever')) == 0)
+check('retention: a window past the ceiling is held at 365 days',
+      len(NO.trash_entries_past_window([_RT_BEYOND], 10000)) == 1)
+# WHICH entries, not just how many. A count alone is satisfied by the
+# wrong answer: invert the window comparison and this fixture still yields
+# one doomed entry, just the other one.
+_rt_doomed_ids = [e.get('id')
+                  for e in NO.trash_entries_past_window(
+                      [_RT_OLD, _RT_RECENT, _RT_HOURS], 7)]
+check('retention: the preview names the expired entry, not merely a count',
+      _rt_doomed_ids == [9801])
+
+app.ask_yes_no = _rt_real_ask
+app.trash = list(_rt_saved_trash)
+NO.save_setting('trash_retention_days', 30)
+app.update()
+
 # F3: the keyboard-shortcut reference exists and lists what is bound.
 app.toggle_settings_panel('shortcuts')
 app.update()

@@ -12,6 +12,7 @@ How the numbers themselves are counted is the
 
 | Version | Date | In one line |
 |---|---|---|
+| [0.75.180](#075180--2026-09-25) | 2026-09-25 | Shortening how long the Trash keeps notes asks first — and only when the shorter window would really destroy something. |
 | [0.75.179](#075179--2026-09-25) | 2026-09-25 | A checklist item you remove can be put back where it was — and an offer of Undo stays on screen instead of being wiped a second later by the autosave's own banner. |
 | [0.75.177](#075177--2026-09-25) | 2026-09-25 | Moving a batch of ticked notes to another category asks first, and offers a way back — each note to the category it actually came from. |
 | [0.75.176](#075176--2026-09-25) | 2026-09-25 | The calendar stops drawing previews over menus and tables as rows of bars, and offers a note's actions the same way the rest of the app does. |
@@ -83,6 +84,44 @@ How the numbers themselves are counted is the
   padding the label could not see, and each was short — the subtitle asked for 620
   pixels and was given 544. They are taken from the label itself now, so a change to
   the layout cannot leave them behind again.
+
+---
+
+## [0.75.180] — 2026-09-25
+
+*Highlights: the quietest way to lose notes in the app now says what it is about to cost, and stays quiet the rest of the time.*
+
+### Fixed
+
+- **Shortening how long the Trash keeps notes asks first.** Picking a shorter window in
+  Settings saved on the click. Choose "7 days" with notes sitting in the Trash from last
+  month and they were destroyed for good at the next startup — their attached files
+  deleted from disk with them — with no dialog at all, while every other permanent
+  deletion on that same screen warns that it cannot be undone. The damage also landed on
+  a *later* launch, when nobody would connect it to a dropdown they touched days before.
+  It now asks with the same warning the panel's other permanent deletions use, naming how
+  many notes would go, how many attached files go with them, that it happens the next time
+  the app starts, and — if one of them repeats — that a whole series is among them.
+  Backing out puts the dropdown back where it was rather than leaving it showing a window
+  the app did not adopt. **And it stays quiet when there is nothing to lose:** a longer
+  window never asks, and neither does a shorter one with nothing old enough to lose, since
+  a question nobody needs teaches people to dismiss questions.
+
+### Testing
+
+- Thirty-seven checks in qa6 over seven scenarios, six of them stating what the fixture
+  set up. Ten mutants, each dying on the check written for it — four only after the checks
+  they exposed were rewritten, because each was satisfied by a coincidence: a lengthening
+  fixture whose notes were inside the longer window either way, two clamp comparisons that
+  returned the same number clamped or not, and a count that the inverted window satisfied
+  with the wrong note. The count in
+  the question and the startup purge now come from **one** function, so a dialog cannot
+  name a number the purge will not deliver — and a check proves the two agree, on which
+  entries as well as how many.
+- `tools/run_tests.py` gained `--all-failures`, and says "... and N more" when it cuts the
+  list. It printed only the first eight failing checks, which made two live mutants read
+  as survivors: the checks they broke were the ninth and later, so the names being watched
+  for were simply never printed.
 
 ---
 

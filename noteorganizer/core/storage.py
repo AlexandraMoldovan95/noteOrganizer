@@ -293,6 +293,59 @@ def _delete_attachment_files(notes_or_entries):
                 pass  # best-effort — a locked/missing file shouldn't block the delete
 
 
+def _trash_cutoff(days=None):
+    """The moment an entry has to predate to count as expired.
+
+    `days=None` means the window currently in force. A number is clamped
+    the same way trash_retention_days() clamps a stored one, so a window
+    being PREVIEWED cannot be judged by looser arithmetic than the window
+    that will actually be applied.
+    """
+    if days is None:
+        window = trash_retention_days()
+    elif isinstance(days, bool) or not isinstance(days, int):
+        window = TRASH_RETENTION_DAYS
+    else:
+        window = max(1, min(days, 365))
+    return datetime.now() - timedelta(days=window)
+
+
+def _trash_entry_is_past(entry, cutoff):
+    """THE single answer to "has this entry outlived the window?".
+
+    Two callers ask it: the startup purge, which acts on the answer, and
+    trash_entries_past_window below, which is how the UI can say out loud
+    what a shorter window is about to destroy. A dialog that counts with
+    one rule while the purge deletes by another is a dialog that lies, and
+    a field list written twice always falls out of step -- the lesson
+    content_signature exists for.
+
+    An entry whose `deleted_at` cannot be read is never past the window:
+    better to keep a note too long than to delete it early.
+    """
+    if not isinstance(entry, dict):
+        return False
+    try:
+        when = datetime.strptime(entry.get("deleted_at", "") or "",
+                                 "%Y-%m-%d %H:%M:%S")
+    except (ValueError, TypeError):
+        return False
+    return when < cutoff
+
+
+def trash_entries_past_window(trash, days=None):
+    """The entries a retention window of `days` has already outlived.
+
+    Nothing is deleted and no file is touched -- this is the question on
+    its own, so a confirmation can name what it is about to cost. With
+    `days=None` it describes the window in force, which is exactly what
+    the next startup's purge will remove.
+    """
+    cutoff = _trash_cutoff(days)
+    return [entry for entry in (trash or [])
+            if _trash_entry_is_past(entry, cutoff)]
+
+
 def purge_expired_trash(trash):
     """Remove entries older than the retention window. Returns (kept, purged
     count). Entries with a missing/invalid deleted_at are kept (fail-safe: we'd
@@ -300,18 +353,11 @@ def purge_expired_trash(trash):
     belonging to purged notes are permanently deleted too — this is the one
     place purging happens automatically, without an explicit user action, so
     it must not be the one place that silently leaves orphaned files behind."""
-    cutoff = datetime.now() - timedelta(days=trash_retention_days())
+    cutoff = _trash_cutoff()
     kept = []
     purged_entries = []
-    for entry in trash:
-        stamp = entry.get("deleted_at", "") if isinstance(entry, dict) else ""
-        try:
-            when = datetime.strptime(stamp, "%Y-%m-%d %H:%M:%S")
-        except (ValueError, TypeError):
-            # Unknown timestamp -> keep it, don't risk early deletion.
-            kept.append(entry)
-            continue
-        if when < cutoff:
+    for entry in (trash or []):
+        if _trash_entry_is_past(entry, cutoff):
             purged_entries.append(entry)
         else:
             kept.append(entry)

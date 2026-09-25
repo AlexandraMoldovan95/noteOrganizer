@@ -27,6 +27,9 @@ USAGE
     py tools/run_tests.py            # everything
     py tools/run_tests.py qa6        # one script
     py tools/run_tests.py --keep     # leave the scratch folder for poking at
+    py tools/run_tests.py --all-failures   # print every failing check, not
+                                           # the first eight (for tools that
+                                           # read this output)
 
 Exits non-zero if anything failed, so it works as a pre-commit check.
 """
@@ -171,6 +174,12 @@ def main(argv):
         except (AttributeError, ValueError):
             pass
     keep = "--keep" in argv
+    # For anything reading this output rather than looking at it: print
+    # every failing check instead of the first eight. A mutation runner
+    # that judges a mutant by which check names appear needs the whole
+    # list, or a mutant that breaks nine checks reads as one that broke
+    # none of the ones being watched for.
+    all_failures = "--all-failures" in argv
     wanted = [a for a in argv[1:] if not a.startswith("--")]
 
     scripts = _present(STANDALONE) + [
@@ -224,8 +233,19 @@ def main(argv):
             print(f"  {'PASS' if ok else 'FAIL'}  {script:<32} {took:5.1f}s")
             if not ok:
                 broken.append(script)
-                for line in failed[:8]:
+                for line in (failed if all_failures else failed[:8]):
                     print(f"          {line}")
+                # Say when the list was cut. Eight lines is the right
+                # amount for a person reading a terminal, and a silent
+                # truncation is a trap for anything reading this output:
+                # a mutation runner judged two mutants "survived" because
+                # the checks they broke were the ninth and later, so the
+                # names it was looking for were simply not printed. A
+                # verdict a tool can get wrong quietly is worse than no
+                # tool.
+                if not all_failures and len(failed) > 8:
+                    print(f"          ... and {len(failed) - 8} more "
+                          f"({len(failed)} checks failed in total)")
                 if not failed:
                     # No "FAIL" line means the script died rather than
                     # reporting -- so this is a traceback, and the frames

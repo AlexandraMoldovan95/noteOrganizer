@@ -373,6 +373,7 @@
   "_restyle_checklist_label": "(self, lbl, done)",
   "_resync_list_tags": "(self, line_no=None)",
   "_resync_pending_style_anchor": "(self, event=None)",
+  "_retention_loss_warning": "(self, doomed, days, current)",
   "_retint_find_tags": "(self, text_widget)",
   "_retint_highlight_tags": "(self, text_widget)",
   "_return_to_calendar": "(self)",
