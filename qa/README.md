@@ -264,6 +264,19 @@ A new surface joins this list the moment it ships.
   undo's own `_schedule_autosave()` changed nothing it could see. The
   check now looks for the queued job. A forcing call in a check proves the
   forcing call works.
+- **An undo's guard is checked against the state its own action produced.**
+  The day-clear undo first asked "is what is there now equal to what I am
+  about to restore?", which catches a second click on the toast and nothing
+  else — a marker chosen by hand in the seconds since is not equal, so the
+  undo overwrote it. The clear left the slot **empty**, so an empty slot is
+  the only state the offer fits. When writing checks for an undo, include
+  the case where someone put something else there in between; it is one of
+  the five questions in CLAUDE.md's quality bar, and it is the one that
+  finds this.
+- **Prove an undo on the screen as well as in the store.** A check that
+  reads the calendar cell's own background is what stops a version which
+  repairs the data and forgets to repaint. Asserting the model alone passes
+  a half-done fix.
 - **A check that asserts a COUNT is satisfied by any wrong answer of the
   same size.** Inverting the retention window's comparison still left one
   doomed entry in a two-entry fixture — the other one — so a check reading

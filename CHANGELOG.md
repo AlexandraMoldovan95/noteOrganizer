@@ -12,6 +12,7 @@ How the numbers themselves are counted is the
 
 | Version | Date | In one line |
 |---|---|---|
+| [0.75.181](#075181--2026-09-26) | 2026-09-26 | Clearing a calendar day's colour or markers can be undone — on all three routes that discard it — and a note's menu says when Delete means the whole series. |
 | [0.75.180](#075180--2026-09-25) | 2026-09-25 | Shortening how long the Trash keeps notes asks first — and only when the shorter window would really destroy something. |
 | [0.75.179](#075179--2026-09-25) | 2026-09-25 | A checklist item you remove can be put back where it was — and an offer of Undo stays on screen instead of being wiped a second later by the autosave's own banner. |
 | [0.75.177](#075177--2026-09-25) | 2026-09-25 | Moving a batch of ticked notes to another category asks first, and offers a way back — each note to the category it actually came from. |
@@ -87,11 +88,23 @@ How the numbers themselves are counted is the
 
 ---
 
-## [Unreleased]
+## [0.75.181] — 2026-09-26
 
-*Not yet numbered: nothing here is an `Added` or a `Fixed`, and the version is counted from
-those alone (see the [Roadmap's Versioning section](docs/ROADMAP.md#versioning)). It ships with
-whatever bump comes next.*
+*Highlights: nothing you do to a calendar day is permanent any more — and a note's menu says, before the click, when Delete means the whole series.*
+
+### Fixed
+
+- **Clearing a calendar day's colour or its markers can be undone.** Both entries sit
+  directly under the entries that *create* the same thing — "Clear day color" under "Color
+  this day…", "Clear day markers" under "Mark this day…" — so a mis-aim by one row turned
+  "let me change this" into "discard it", written to disk on the spot with nothing offered
+  in return. A year of marked birthdays was one slipped click away from losing one of them,
+  permanently. Both now offer **Undo**, and so does a third route the report did not
+  mention: the "No color" button on the day's own colour palette, which discards exactly
+  what the menu entry does. No question first, deliberately — a dialog in front of every
+  colour change would cost more than the loss it guards, and the app's rule is to confirm
+  in proportion to how recoverable something is. The loss simply stopped being permanent.
+  Putting a day back never overwrites a colour or a marker chosen since.
 
 ### Changed
 
@@ -104,6 +117,19 @@ whatever bump comes next.*
   On a single day of a series the entry keeps the plain word, deliberately, because from
   there the scope is still a question you answer — naming one in the label would pre-empt a
   choice nobody has made.
+
+### Testing
+
+- Twenty-three checks in qa7 over eight scenarios for the day-clear undo, and five more over
+  four label surfaces for the menu wording. Ten mutants, each dying on the check written for
+  it — after two were rewritten: one changed the wrong thing (it broke the clear instead of
+  the offer, and a different check caught it), and one was anchored on an indentation that
+  turned out to be a substring of its neighbour's.
+- The undo is proved on the **screen** as well as in the store: a check reads the calendar
+  cell's own background, so a version that fixes the data and forgets to repaint goes red.
+- A check also holds the marker popup *unchanged* — it works on a copy, writes only on Save
+  and discards on ✕ — so a later consistency pass cannot helpfully give it an undo it has
+  never needed.
 
 ---
 

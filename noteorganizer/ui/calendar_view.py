@@ -1234,8 +1234,7 @@ class CalendarViewMixin:
         if self.day_emoji.get(date_str):
             menu.add_command(
                 label="✖  Clear day markers",
-                command=lambda: (self.day_emoji.pop(date_str, None),
-                                 self._persist_day_emoji(), self.render_calendar())
+                command=lambda: self._clear_day_markers(date_str)
             )
         # Same guard as the note menu: a hover preview drawing over an
         # open menu is what was reported, and this is the menu it was
@@ -1256,12 +1255,22 @@ class CalendarViewMixin:
         current = self.day_colors.get(date_str, "")
 
         def on_pick(color):
+            old = self.day_colors.get(date_str)
             if color:
                 self.day_colors[date_str] = color
             else:
                 self.day_colors.pop(date_str, None)
             self._persist_day_colors()
             self.render_calendar()
+            # "No color" on this palette discards the day's colour exactly
+            # as the menu's own Clear entry does: the same loss reached by
+            # a second route, so it gets the same way back. Missing this
+            # would have left one of the two doors unguarded, which is the
+            # shape a sibling sweep exists to catch.
+            if not color and old:
+                self._show_toast(
+                    "Day colour cleared",
+                    action=lambda: self._undo_day_clear(date_str, "color", old))
 
         if event is not None:
             anchor_xy = (event.x_root, event.y_root)
@@ -1272,9 +1281,72 @@ class CalendarViewMixin:
 
     def _clear_day_color(self, date_str):
         if date_str in self.day_colors:
-            del self.day_colors[date_str]
+            old = self.day_colors.pop(date_str)
             self._persist_day_colors()
             self.render_calendar()
+            self._show_toast(
+                "Day colour cleared",
+                action=lambda: self._undo_day_clear(date_str, "color", old))
+
+    def _clear_day_markers(self, date_str):
+        """Discard a day's markers, and offer the way back.
+
+        This was an inline lambda on the menu entry; it needs a name now
+        that it has to remember what it removed.
+        """
+        old = self.day_emoji.pop(date_str, None)
+        if not old:
+            return
+        self._persist_day_emoji()
+        self.render_calendar()
+        self._show_toast(
+            "Day markers cleared",
+            action=lambda: self._undo_day_clear(date_str, "markers", old))
+
+    def _undo_day_clear(self, date_str, kind, value):
+        """Put back a day's colour, or its markers, after a clear.
+
+        Three routes discarded a day's decoration and none of them asked:
+        the two "Clear day …" menu entries, which sit directly under the
+        entries that CREATE the same thing, and the palette's own "No
+        color". A mis-aim by one menu row turned "change this" into
+        "discard it", permanently. No confirmation added, deliberately —
+        the app's rule is that a destructive action is confirmed in
+        proportion to how recoverable it is, and a question in front of
+        every colour change would cost more than the loss it guards. So
+        the loss stopped being permanent instead.
+
+        One method for both kinds, because they are the same act on two
+        stores; a second copy of this reasoning would drift from the first.
+        `value` is what was there, captured by the caller before it went.
+
+        The markers are named, not echoed: they are astral emoji, and the
+        sentence does not need them to say what happened.
+        """
+        store, persist, done, occupied = {
+            "color": (self.day_colors, self._persist_day_colors,
+                      "Day colour put back", "That day has a colour again"),
+            "markers": (self.day_emoji, self._persist_day_emoji,
+                        "Day markers put back", "That day has markers again"),
+        }[kind]
+        # The clear left this slot EMPTY, so an empty slot is the only
+        # state this offer still fits. Anything there now is either the
+        # same value back (a second click on a toast that has not faded)
+        # or something chosen by hand in the seconds since -- and a stale
+        # memory must not overwrite either. The weaker test, "is it equal
+        # to what I am about to restore?", let a marker picked in between
+        # be clobbered; found by probing rather than by review.
+        #
+        # No guard on an empty `value`: every caller establishes it, the
+        # two clears by returning early and the palette by asking. A branch
+        # nothing can reach is a branch no check can defend.
+        if store.get(date_str):
+            self._show_toast(occupied, kind="info")
+            return
+        store[date_str] = list(value) if isinstance(value, list) else value
+        persist()
+        self.render_calendar()
+        self.set_status(done)
 
     def _persist_day_colors(self):
         save_setting("day_colors", dict(self.day_colors))
