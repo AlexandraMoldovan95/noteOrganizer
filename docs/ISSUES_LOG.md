@@ -35,6 +35,7 @@ day-to-day tracking.
 | [The undo that would have put everything in one place](#the-undo-that-would-have-put-everything-in-one-place) | An undo over many items remembers each item's own previous value; and "like the thing beside it" means asking what that thing's safety net really is. | 0.75.177 |
 | [The offer that was gone before you could take it](#the-offer-that-was-gone-before-you-could-take-it) | Reassurance must never displace a one-time offer — and re-read the reason a finding gives, not just the finding. | 0.75.179 |
 | [The eight failures that hid two live mutants](#the-eight-failures-that-hid-two-live-mutants) | A check asserting a count is satisfied by the wrong answer of the same size; and never read a verdict out of output that truncates silently. | 0.75.180 |
+| [The finding that described a dialog nobody had opened](#the-finding-that-described-a-dialog-nobody-had-opened) | A review that only reads finds where to look but cannot decide — check a finding's reason separately from the finding, and correct a refuted row in place. | — |
 | [The template editor that "did nothing" when clicked](#the-template-editor-that-did-nothing-when-clicked) | 'Nothing happens' in a --windowed build is a real bug report — the exception was invisible. | 0.3.0 |
 | [The panel that lost its content depending on how you got there](#the-panel-that-lost-its-content-depending-on-how-you-got-there) | Recalculate layout on Tk's `<Map>` event, not after a guessed delay. | 0.3.0 |
 | [The scroll that stopped twice, for two different reasons](#the-scroll-that-stopped-twice-for-two-different-reasons) | Same symptom, unrelated causes — check neighbouring areas instead of assuming one fix covers all. | 0.28.38 |
@@ -2458,3 +2459,58 @@ and `run_tests.py` says "… and N more" when it cuts one.
 4. Four of ten checks were satisfied by coincidence, and every one of them
    passed against the real code. Mutation testing is not a formality that
    confirms good checks; it is the only thing that finds this class at all.
+
+### The finding that described a dialog nobody had opened
+
+*(no version — the label change it produced is `Changed`, and the version
+counts `Added` and `Fixed` alone)*
+
+**Three findings in a row, and each one's reasoning was wrong.** The
+consistency survey recorded 25 asymmetries by reading the source. Working
+through its destructive rows in order, the first three all held as
+*findings* and all three were wrong about *why*:
+
+- **C-2** said the checklist item was the worse of the pair because the
+  attachment beside it is one "the file system still remembers".
+  `remove_attachment` deletes the stored copy. The comparison survived;
+  its reason did not, and the reason was what pointed at the wrong fix —
+  a dialog, where the answer was an undo.
+- **C-3** described the retention dropdown as destroying notes. It also
+  deletes their attached files from disk, which no sentence on that screen
+  had ever mentioned, and which the new confirmation now names.
+- **C-4** said a day row's Delete "removes only that day", with nothing
+  but the row you aimed at to distinguish it from deleting the series. It
+  raises a three-button question naming the day. Two more of its claims
+  were false: Enter answering the dialog, which no dialog on this Tk
+  accepts and which the same register records as T3-1 two sections above;
+  and a series being lost, when it goes to the Trash with an Undo.
+
+**One cause, admitted in advance.** The survey's own coverage confession
+said no reader ran the app. Everything above is what that produces: the
+code says `if is_recurring(note) and occurrence_date:` and the reader
+follows the branch, but the *dialog inside it* is a call to a function two
+files away whose three buttons nobody saw. Reading gets the control flow
+right and the experience wrong, and a finding is a claim about the
+experience.
+
+**What the pattern is worth keeping for.** The survey was still the most
+productive thing in the cycle: C-1 was real and serious, C-2 and C-3 were
+real with the wrong reasons attached, and C-4's label was worth changing.
+A review that reads is cheap and finds where to look. It just cannot be
+the thing that decides, and the corrections belong in the register beside
+the claims rather than replacing them — otherwise the next reader inherits
+the confidence without the correction.
+
+**The lessons.**
+
+1. A finding is a claim about what a person meets. Confirm it by meeting
+   it: drive the real route and record which dialogs actually appear.
+2. Where a finding gives a reason, check the reason separately from the
+   finding. Three times running, the finding survived and the reason did
+   not — and the reason is what chooses the fix.
+3. A refuted finding is corrected in place, struck through rather than
+   deleted, with the measurement beside it. A register that quietly loses
+   its wrong rows teaches nothing about how it got them wrong.
+4. Cross-check a new finding against the register's own older rows. C-4's
+   "Yes ready for Enter" was contradicted by T3-1, already recorded on the
+   same page.

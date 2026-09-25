@@ -14142,8 +14142,23 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             label="📄  Duplicate",
             command=lambda: (self.duplicate_note(note), self.refresh_day_panel())
         )
+        # Say what it aims at, before the click rather than after it. With
+        # no occurrence_date the target is the stored note, so on a
+        # repeating one that is every day of it -- and the two surfaces
+        # that open this menu without a date are the sidebar card and the
+        # History register's series row, where the whole series really is
+        # what Delete means. The confirmation has always said so; it just
+        # said it second.
+        #
+        # A day row keeps the plain word on purpose: from there the scope
+        # is still a question the user answers (Cancel / the entire series
+        # / this occurrence only), so naming one scope in the label would
+        # pre-empt a choice that has not been made.
+        delete_label = ("🗑  Delete the whole series"
+                        if occurrence_date is None and is_recurring(note)
+                        else "🗑  Delete")
         menu.add_command(
-            label="🗑  Delete",
+            label=delete_label,
             command=(lambda: self._delete_note_from_calendar(note, occurrence_date))
                     if occurrence_date is not None else
                     (lambda: (self._context_delete_note(note, occurrence_date),

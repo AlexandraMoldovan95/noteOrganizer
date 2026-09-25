@@ -1044,7 +1044,7 @@ _plain_labels = [l for l, _ in _plain_items]
 check('the calendar menu drops generic Open/Edit for a recurring note',
       not any('Open / Edit' in l for l in _rec_labels)
       and any('only this occurrence' in l for l in _rec_labels)
-      and any('whole series' in l for l in _rec_labels))
+      and any('Edit whole series' in l for l in _rec_labels))
 check('a plain dated note keeps Open/Edit in the calendar menu',
       any('Open / Edit' in l for l in _plain_labels))
 
@@ -1108,10 +1108,77 @@ check('...while keeping everything the click cannot do',
 check('...and a menu raised where a click does NOT open the note keeps it',
       any('Open / Edit' in l for l in _history_labels))
 
+# ---- DELETE NAMES ITS SCOPE BEFORE THE CLICK, NOT AFTER IT ----
+# Finding C-4 claimed the two History rows destroy different amounts with
+# one label and nothing to tell them apart. Measured, that is not what
+# happens: a DAY row asks which scope first (Cancel / the entire series /
+# this occurrence only), and a SERIES row asks a yes/no that names the
+# series and then moves it to the Trash with an Undo. What was true is the
+# label -- both rows read "Delete" -- so the menu said nothing about scope
+# until after the click. The entry now says it, on the two surfaces that
+# open this menu with no date: the sidebar card and the History series row.
+#
+# A day row keeps the plain word deliberately: from there the scope is
+# still a question the user answers, and naming one in the label would
+# pre-empt a choice nobody has made.
+_c4_labels = {}
+for _c4_key, _c4_kwargs in (
+        ('series_row', {}),
+        ('sidebar_card', {'click_opens': True}),
+        ('day_row', {'occurrence_date': '2026-07-15'})):
+    _labels_q7.clear()
+    tk.Menu.add_command = lambda self, **kw: _labels_q7.append(
+        (kw.get('label', ''), kw.get('command')))
+    tk.Menu.add_cascade = lambda self, **kw: _labels_q7.append(
+        (kw.get('label', ''), None))
+    tk.Menu.tk_popup = lambda self, *a, **k: None
+    try:
+        app.show_note_context_menu(_ev_q7, app.find_note(60), **_c4_kwargs)
+        _c4_labels[_c4_key] = [l for l, _ in _labels_q7]
+    finally:
+        tk.Menu.add_command = _orig_addc
+        tk.Menu.add_cascade = _orig_casc
+        tk.Menu.tk_popup = _orig_pop
+_labels_q7.clear()
+
+
+def _c4_delete(key):
+    return next((l for l in _c4_labels[key] if 'Delete' in l), '')
+
+
+check('a repeating series row says Delete names the whole series',
+      _c4_delete('series_row') == '🗑  Delete the whole series')
+check('...and so does the sidebar card, which aims at the same thing',
+      _c4_delete('sidebar_card') == '🗑  Delete the whole series')
+check('a day row keeps the plain word, because the scope is still a question',
+      _c4_delete('day_row') == '🗑  Delete')
+# A plain dated note has no series to name, so it must not inherit the
+# longer wording from the same branch.
+_labels_q7.clear()
+tk.Menu.add_command = lambda self, **kw: _labels_q7.append(
+    (kw.get('label', ''), kw.get('command')))
+tk.Menu.add_cascade = lambda self, **kw: _labels_q7.append(
+    (kw.get('label', ''), None))
+tk.Menu.tk_popup = lambda self, *a, **k: None
+try:
+    app.show_note_context_menu(_ev_q7, app.find_note(61))
+    _c4_plain = [l for l, _ in _labels_q7]
+finally:
+    tk.Menu.add_command = _orig_addc
+    tk.Menu.add_cascade = _orig_casc
+    tk.Menu.tk_popup = _orig_pop
+_labels_q7.clear()
+check('a note that does not repeat still just says Delete',
+      next((l for l in _c4_plain if 'Delete' in l), '') == '🗑  Delete')
+
 # The captured commands are the REAL menu lambdas — invoke them, so the
 # return_day plumbing one frame above _ctx_open is exercised too (the
 # same frame class a hijack once hid in for deletes).
-_series_cmd = next((c for l, c in _rec_items if 'whole series' in l), None)
+# "Edit whole series", named in full: the Delete entry says "Delete the
+# whole series" on the surfaces that open this menu without a date, and a
+# substring match on "whole series" alone would one day pick up the wrong
+# lambda -- an edit check that silently exercises a delete.
+_series_cmd = next((c for l, c in _rec_items if 'Edit whole series' in l), None)
 if _series_cmd is not None:
     _series_cmd(); app.update()
 check("the menu's Edit-whole-series lambda arms the way back",

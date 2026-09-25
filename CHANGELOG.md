@@ -87,6 +87,26 @@ How the numbers themselves are counted is the
 
 ---
 
+## [Unreleased]
+
+*Not yet numbered: nothing here is an `Added` or a `Fixed`, and the version is counted from
+those alone (see the [Roadmap's Versioning section](docs/ROADMAP.md#versioning)). It ships with
+whatever bump comes next.*
+
+### Changed
+
+- **The Delete entry in a note's right-click menu says when it means the whole series.** On
+  the two surfaces that offer a repeating note's menu without picking a day — the note card
+  in the sidebar and the series row in the calendar's History register — it now reads
+  "Delete the whole series" instead of just "Delete". Nothing about the deletion changed:
+  it asked "Delete this entire repeating series?" before and still does, and the series
+  still goes to the Trash with an Undo. The menu simply says it first rather than second.
+  On a single day of a series the entry keeps the plain word, deliberately, because from
+  there the scope is still a question you answer — naming one in the label would pre-empt a
+  choice nobody has made.
+
+---
+
 ## [0.75.180] — 2026-09-25
 
 *Highlights: the quietest way to lose notes in the app now says what it is about to cost, and stays quiet the rest of the time.*
