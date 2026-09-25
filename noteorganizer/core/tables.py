@@ -547,3 +547,57 @@ def with_caret_line(body):
     if blocks and blocks[-1][1] == len(body.split("\n")) - 1:
         return body + "\n"
     return body
+
+
+def _reads_as_plumbing(line):
+    """True if a PERSON would see this line as part of a table.
+
+    Deliberately looser than :func:`is_table_row`, and the difference is
+    the whole point. That function decides what the editor will treat as
+    a row, so it is strict: both ends must be a pipe. A line whose last
+    cell was typed past -- ``| a | b | c |and then this`` -- is therefore
+    not a row, and every caller that filtered on it left the line in.
+
+    In an editor that is right: the line is what the user typed and must
+    be shown back. In a PREVIEW it is wrong, because a preview shows a
+    note's words and that line has none to show -- just punctuation. It
+    was field-reported twice from the calendar, as "I only see vertical
+    lines".
+    """
+    stripped = (line or "").strip()
+    return stripped.startswith(CELL) and stripped.count(CELL) >= 2
+
+
+def preview_text(body):
+    """A note's words, without its tables, and how many it had.
+
+    Returns ``(prose, tables)``. Both halves come from the same pass on
+    purpose: a preview says what a note CARRIES rather than drawing it,
+    so the sentence "this note has 2 tables" and the text beside it have
+    to be answering about the same lines. Counting with one rule and
+    stripping with another is how a preview came to announce five tables
+    and then show a sixth as pipes.
+
+    A run of consecutive table lines counts as one table, the way
+    :func:`find_blocks` counts, and the blank line a table leaves behind
+    is collapsed so the prose does not float in a gap.
+    """
+    lines = (body or "").split("\n")
+    kept, tables, inside = [], 0, False
+    for line in lines:
+        if _reads_as_plumbing(line):
+            if not inside:
+                tables += 1
+                inside = True
+            continue
+        inside = False
+        kept.append(line)
+
+    prose = []
+    for line in kept:
+        if not line.strip() and (not prose or not prose[-1].strip()):
+            continue          # no runs of blank lines where a table was
+        prose.append(line)
+    while prose and not prose[-1].strip():
+        prose.pop()
+    return "\n".join(prose), tables

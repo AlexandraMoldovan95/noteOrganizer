@@ -344,6 +344,52 @@ _sep_html = note_to_html(_sep_body)
 check("export skips the separator row",
       "---" not in _sep_html and _sep_html.count("<tr>") == 2)
 
+# ---------------------------------------------------------------------
+# preview_text: a note's words, without its tables.
+#
+# A preview says what a note CARRIES rather than drawing it, so it needs
+# a rule looser than is_table_row(). That one is strict on purpose --
+# both ends must be a pipe, or the editor would treat prose as a table.
+# A line whose last cell was typed past is therefore not a row, and a
+# preview filtering on it left the line in: field-reported twice from
+# the calendar as "I only see vertical lines".
+# ---------------------------------------------------------------------
+_pv, _pn = tables.preview_text("before\n| a | b |\n| c | d |\nafter")
+check("preview_text keeps the words either side of a table",
+      _pv == "before\nafter")
+check("...and counts a run of rows as one table", _pn == 1)
+
+# The line the strict test refuses, which is exactly the one that leaked.
+_pv2, _pn2 = tables.preview_text("words\n| a | b | c |and then this")
+check("a row typed past its last cell is not a row to the editor",
+      tables.is_table_row("| a | b | c |and then this") is False)
+check("...but a preview drops it anyway", _pv2 == "words")
+check("...and counts it", _pn2 == 1)
+
+# Her note: cells that are nearly all empty, which is also not a row.
+_ragged = "|      |      |     | [x]  |    |    |     |fig2efwfwe"
+_pv3, _pn3 = tables.preview_text("note\n" + _ragged)
+check("a ragged half-empty row is dropped from a preview too", _pv3 == "note")
+
+_pv4, _pn4 = tables.preview_text("| a | b |\n\n| c | d |")
+check("two runs separated by a blank line count as two tables", _pn4 == 2)
+
+_pv5, _pn5 = tables.preview_text("just words")
+check("a note with no table is left exactly as it is",
+      _pv5 == "just words" and _pn5 == 0)
+check("an empty body survives", tables.preview_text("") == ("", 0))
+check("a None body survives", tables.preview_text(None) == ("", 0))
+
+# Prose that merely mentions a pipe must not be eaten.
+_pv6, _pn6 = tables.preview_text("the command is ls | grep x")
+check("prose containing a pipe is not mistaken for a table",
+      _pv6 == "the command is ls | grep x" and _pn6 == 0)
+
+_pv7, _pn7 = tables.preview_text("top\n\n\n| a | b |\n\n\nbottom")
+check("the gap a table leaves behind is collapsed, not doubled",
+      _pv7 == "top\n\nbottom")
+
+
 print()
 print(f"FAILURES: {fails if fails else 'none'}")
 

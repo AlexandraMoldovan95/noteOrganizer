@@ -125,10 +125,42 @@ app.render_calendar()
 app.open_day_popup('2026-07-15')
 app.update()
 
-del_icon = find_widget(app.day_panel, tk.Button, '🗑')
-check('calendar day-list delete icon exists', del_icon is not None)
-del_icon.invoke()
-app.update()
+# The day list carries no delete button of its own. It used to carry the
+# only per-row note delete in the app -- a lone grey glyph with no word,
+# packed hard against the scrollbar -- while the sidebar's note cards,
+# which are the same kind of thing, have always offered their actions
+# through the right-click menu and no button at all.
+check('the day list carries no bare delete button of its own',
+      find_widget(app.day_panel, tk.Button, '🗑') is None)
+
+# Deleting from the day list still works, through the actions menu that
+# was already bound to every row -- and that menu carries six other
+# things besides, which is why it was never "the delete system".
+_cal_posted = []
+_cal_real_popup = NO.tk.Menu.tk_popup
+NO.tk.Menu.tk_popup = lambda _m, *a, **k: _cal_posted.append(_m)
+try:
+    app.show_note_context_menu(
+        type('E', (), {'x_root': 0, 'y_root': 0})(),
+        app.notes[0], occurrence_date='2026-07-15')
+    _cal_labels = []
+    if _cal_posted:
+        for _i in range(_cal_posted[-1].index('end') + 1):
+            try:
+                _cal_labels.append(str(_cal_posted[-1].entrycget(_i, 'label')))
+            except tk.TclError:
+                _cal_labels.append('---')
+    check('a day-list row offers the actions menu (%d entries)' % len(_cal_labels),
+          any('Delete' in _l for _l in _cal_labels))
+    check('...and it is the whole menu, not a delete on its own',
+          any('Open' in _l for _l in _cal_labels)
+          and any('Export' in _l for _l in _cal_labels))
+    if _cal_posted and any('Delete' in _l for _l in _cal_labels):
+        _cal_posted[-1].invoke(
+            [_i for _i, _l in enumerate(_cal_labels) if 'Delete' in _l][0])
+        app.update()
+finally:
+    NO.tk.Menu.tk_popup = _cal_real_popup
 check('calendar day-list delete removes the note', len(app.notes) == 0)
 
 # detail view + Cancel doesn't bounce
@@ -167,9 +199,31 @@ app.update()
 scope_asked = {'called': False}
 app.ask_occurrence_scope = lambda *a, **k: (scope_asked.__setitem__('called', True), 'occurrence')[1]
 app.ask_yes_no = lambda *a, **k: True
-del_icon2 = find_widget(app.day_panel, tk.Button, '🗑')
-del_icon2.invoke()
-app.update()
+_cal_posted2 = []
+_cal_real_popup2 = NO.tk.Menu.tk_popup
+NO.tk.Menu.tk_popup = lambda _m, *a, **k: _cal_posted2.append(_m)
+try:
+    app.show_note_context_menu(
+        type('E', (), {'x_root': 0, 'y_root': 0})(),
+        app.notes[0], occurrence_date='2026-07-08')
+    _lbl2 = []
+    if _cal_posted2:
+        for _i in range(_cal_posted2[-1].index('end') + 1):
+            try:
+                _lbl2.append(str(_cal_posted2[-1].entrycget(_i, 'label')))
+            except tk.TclError:
+                _lbl2.append('---')
+    # A repeating note's menu says so, which is the reason the panel had
+    # to be given the menu at all: it is opened ON a day, so the menu
+    # must offer that day rather than act on the series behind it.
+    check('a repeating note offers its per-day actions in the menu',
+          any('only this occurrence' in _l for _l in _lbl2))
+    if _cal_posted2 and any('Delete' in _l for _l in _lbl2):
+        _cal_posted2[-1].invoke(
+            [_i for _i, _l in enumerate(_lbl2) if 'Delete' in _l][0])
+        app.update()
+finally:
+    NO.tk.Menu.tk_popup = _cal_real_popup2
 check('recurring note delete via calendar asks for scope', scope_asked['called'])
 check('only that occurrence removed, series intact', '2026-07-08' in app.notes[0].get('exceptions', []))
 
@@ -216,6 +270,173 @@ check('calendar preview does not dump the comments inline',
       'a comment that must not' not in _pv_text)
 check('calendar preview flags table + checklist + comments as chips',
       '▦' in _pv_chip and '1/2' in _pv_chip and '💬' in _pv_chip)
+app.close_day_panel(); app.update()
+
+# ---- NOTHING HOVERS OVER AN OPEN MENU ----
+# A right-click menu keeps the app's event loop running -- tk_popup
+# blocks the caller but not the loop -- so drifting the mouse a few
+# pixels onto a neighbouring cell still fired the hover preview, which
+# then drew itself OVER the menu being read. Field-reported with a
+# screenshot.
+app.notes = [{'id': 60, 'title': 'HoverMe', 'body': 'some words',
+              'category': 'General', 'date': '2026-07-20',
+              'updated': '2026-01-01 00:00', 'created': '2026-01-01 00:00',
+              'checklist': [], 'attachments': []}]
+app.save_notes()
+app.render_calendar()
+app.update()
+app.hide_day_tooltip()
+app._context_menu_open = False
+app.show_day_summary_tooltip('2026-07-20')
+app.update()
+check('hovering a day normally does show its preview',
+      getattr(app, '_day_tooltip', None) is not None)
+app.hide_day_tooltip()
+app._context_menu_open = True
+app.show_day_summary_tooltip('2026-07-20')
+app.update()
+check('...but not while a right-click menu is open',
+      getattr(app, '_day_tooltip', None) is None)
+app.show_note_hover_preview(app.notes[0], '2026-07-20')
+app.update()
+check('...and the single-note preview stays away too',
+      getattr(app, '_day_tooltip', None) is None)
+app._context_menu_open = False
+
+# The flag is only worth anything if it is actually up WHILE the menu is
+# posted. The stub stands exactly where the real, blocking tk_popup
+# stands, so what it sees is what the menu's whole life sees.
+_flag_seen = []
+_flag_real = NO.tk.Menu.tk_popup
+NO.tk.Menu.tk_popup = lambda _m, *a, **k: _flag_seen.append(
+    getattr(app, '_context_menu_open', False))
+try:
+    app.show_note_context_menu(
+        type('E', (), {'x_root': 0, 'y_root': 0})(), app.notes[0])
+finally:
+    NO.tk.Menu.tk_popup = _flag_real
+check('the menu raises the flag for as long as it is posted',
+      _flag_seen == [True])
+check('...and lowers it once the menu is gone',
+      getattr(app, '_context_menu_open', False) is False)
+
+# ---- A PREVIEW SHOWS WORDS, NOT PUNCTUATION ----
+# Both calendar previews used to put table rows on screen as raw pipes.
+# The panel filtered them with is_table_row(), which is strict because it
+# decides what the EDITOR treats as a row -- so a line typed past its
+# last cell was neither counted nor removed, and the panel announced
+# five tables and drew a sixth as bars. The hover preview did not filter
+# at all. Reported as "I only see vertical lines".
+# Two runs on purpose, and the second one is a line the strict test
+# refuses: it starts with a pipe and was typed past its last cell. Under
+# the old rule that run was neither counted nor stripped -- so this
+# fixture asks for "2 tables" where the old code would have said one and
+# then drawn the other.
+_ragged = '|   |   |   | [x] |   |   |   |fig2efwfwe'
+app.notes = [{'id': 61, 'title': 'HasTables',
+              'body': 'real words here\n| a | b |\n| c | d |\n\n' + _ragged,
+              'category': 'General', 'date': '2026-07-21',
+              'updated': '2026-01-01 00:00', 'created': '2026-01-01 00:00',
+              'checklist': [], 'attachments': []}]
+app.save_notes()
+app.render_calendar()
+app.update()
+
+
+def _all_text(widget):
+    """Everything readable in there -- labels AND text widgets.
+
+    The panel puts the note's body in a disabled tk.Text, so a sweep
+    that only asks cget('text') sees the chips and misses the very
+    thing under test.
+    """
+    out = []
+
+    def walk(w):
+        try:
+            out.append(str(w.cget('text')))
+        except tk.TclError:
+            pass
+        if isinstance(w, tk.Text):
+            try:
+                out.append(w.get('1.0', 'end-1c'))
+            except tk.TclError:
+                pass
+        for k in w.winfo_children():
+            walk(k)
+    walk(widget)
+    return ' '.join(out)
+
+
+app.hide_day_tooltip()
+app.show_note_hover_preview(app.notes[0], '2026-07-21')
+app.update()
+_hov = _all_text(app._day_tooltip) if getattr(app, '_day_tooltip', None) else ''
+check('the hover preview shows the note\'s words', 'real words here' in _hov)
+check('...and not one vertical bar of its tables', '|' not in _hov)
+check('...but does say a table is there', 'table' in _hov)
+app.hide_day_tooltip()
+
+app.open_day_popup('2026-07-21')
+app.show_day_note(app.notes[0], '2026-07-21')
+app.update()
+_pan = _all_text(app.day_panel)
+check('the day panel shows the words too', 'real words here' in _pan)
+check('...with no bars left over from a row it could not parse',
+      '|' not in _pan)
+check('...and counts every run of them, including that one',
+      '2 tables' in _pan)
+app.close_day_panel(); app.update()
+
+# ---- THE PREVIEW ANSWERS TO RIGHT-CLICK LIKE EVERY OTHER NOTE SURFACE ----
+# It was the only one in the app that did not. What it lacked was not a
+# second way to delete -- it was Open/Edit, Pin, Export as file, and, for
+# a repeating note, editing just this day, editing the whole series, and
+# resetting this day back to the series content. Arriving here from the
+# History register was arriving somewhere with fewer actions than the
+# list you could have reached the same note from.
+app.notes = [{'id': 77, 'title': 'PreviewMenu', 'body': 'x',
+              'category': 'General', 'date': '2026-07-01',
+              'recurrence': {'freq': 'daily'}, 'updated': '2026-01-01 00:00',
+              'created': '2026-01-01 00:00', 'checklist': [],
+              'attachments': [], 'exceptions': [], 'overrides': {}}]
+app.save_notes()
+app.render_calendar()
+app.open_day_popup('2026-07-09')
+app.show_day_note(app.notes[0], '2026-07-09')
+app.update()
+_pm_posted = []
+_pm_real = NO.tk.Menu.tk_popup
+NO.tk.Menu.tk_popup = lambda _m, *a, **k: _pm_posted.append(_m)
+try:
+    _qa_fire(app.day_panel, '<Button-3>')
+    app.update()
+    check('right-clicking the preview posts a menu', bool(_pm_posted))
+    _pm_labels = []
+    if _pm_posted:
+        for _i in range(_pm_posted[-1].index('end') + 1):
+            try:
+                _pm_labels.append(str(_pm_posted[-1].entrycget(_i, 'label')))
+            except tk.TclError:
+                _pm_labels.append('---')
+    # Not "Open / Edit": that entry is deliberately left out for a
+    # repeating note shown on a day, because the two explicit scope
+    # entries below replace it (field-reported, and commented where it
+    # is decided). What must be there is everything unconditional, so
+    # the menu is the whole menu rather than a delete wearing a hat.
+    check('...the same actions the day list offers (%s)'
+          % ' | '.join(_l.strip() for _l in _pm_labels),
+          any('Pin' in _l for _l in _pm_labels)
+          and any('Export' in _l for _l in _pm_labels)
+          and any('Duplicate' in _l for _l in _pm_labels)
+          and any('Delete' in _l for _l in _pm_labels))
+    # The day it was opened on, not the series behind it. Without the
+    # occurrence date the menu would quietly offer to edit every
+    # occurrence while the panel shows one.
+    check('...and it knows which DAY the preview is showing',
+          any('only this occurrence' in _l for _l in _pm_labels))
+finally:
+    NO.tk.Menu.tk_popup = _pm_real
 app.close_day_panel(); app.update()
 
 # ============================================================

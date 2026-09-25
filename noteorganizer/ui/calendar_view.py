@@ -566,7 +566,15 @@ class CalendarViewMixin:
         """Compact, TITLES-ONLY list for hovering the day cell itself (not a
         specific note's chip). Deliberately shows no note bodies — with many
         notes on one day this would otherwise balloon into a huge box, which
-        is exactly what this avoids."""
+        is exactly what this avoids.
+
+        Nothing hovers over an open menu. A right-click menu keeps the
+        app's event loop running, so drifting the mouse a few pixels onto
+        a neighbouring cell still fires this -- and the preview drew
+        itself over the menu the user was reading.
+        """
+        if getattr(self, "_context_menu_open", False):
+            return
         self.hide_day_tooltip()
         day_notes = self.notes_on_date(date_str)
         if not day_notes:
@@ -614,7 +622,13 @@ class CalendarViewMixin:
 
     def show_note_hover_preview(self, base_note, date_str):
         """Focused preview for hovering ONE specific note's title chip in a
-        calendar cell — just that note, not the whole day crammed together."""
+        calendar cell — just that note, not the whole day crammed together.
+
+        Suppressed while a right-click menu is open, for the same reason
+        as the day summary above.
+        """
+        if getattr(self, "_context_menu_open", False):
+            return
         self.hide_day_tooltip()
         note = effective_note(base_note, date_str)
         color = self.get_note_color(note)
@@ -647,7 +661,13 @@ class CalendarViewMixin:
                      fg=self.colors["accent"], font=("Segoe UI", 8, "italic"),
                      anchor="w", justify="left").pack(anchor="w")
 
-        preview = _note_str(note, "body").strip()
+        # The raw body used to go straight in here, tables and all, so a
+        # note with a table hovered as a wall of vertical bars -- and
+        # unlike the panel below, this preview never even said a table
+        # was there. It is the same quick look, so it follows the same
+        # rule: the note's words, and a chip for what else it carries.
+        preview, tables_here = core_tables.preview_text(_note_str(note, "body"))
+        preview = preview.strip()
         if preview:
             if len(preview) > 150:
                 preview = preview[:150].strip() + "…"
@@ -656,6 +676,9 @@ class CalendarViewMixin:
                      wraplength=260).pack(anchor="w", pady=(3, 0))
 
         icons = []
+        if tables_here:
+            icons.append("▦ 1 table" if tables_here == 1
+                         else "▦ %d tables" % tables_here)
         if note.get("comments"):
             icons.append("💬")
         if note.get("attachments"):
@@ -736,13 +759,15 @@ class CalendarViewMixin:
             stripe = tk.Frame(row, bg=color, width=4)
             stripe.pack(side="left", fill="y")
 
-            del_btn = tk.Button(
-                row, text="🗑", relief="flat", cursor="hand2", bd=0,
-                bg=self.colors["card"], fg=self.colors["subtext"], font=("Segoe UI", 10),
-                command=lambda n=base_note, d=date_str: self._delete_note_from_calendar(n, d)
-            )
-            del_btn.pack(side="right", padx=(0, 8))
-
+            # No per-row delete button here. It was the only one in the
+            # app: a lone grey glyph with no word, packed hard against
+            # the scrollbar, where a slipped click destroys a note. The
+            # rest of the app already says how a list behaves -- the
+            # sidebar's note cards offer their actions through the
+            # right-click menu and carry no button of their own, and a
+            # labelled Delete appears only where a SINGLE note is open.
+            # This row now does the same, and the menu bound below
+            # carries six other actions besides.
             title_text = _note_str(note, "title") or "(untitled)"
             if is_recurring(base_note):
                 title_text = "🔁 " + title_text
@@ -797,9 +822,28 @@ class CalendarViewMixin:
                   ).pack(side="right", padx=(0, 6), ipadx=6, ipady=2)
 
         title = _note_str(note, "title").strip() or "(untitled)"
-        tk.Label(self.day_panel, text=title, font=("Segoe UI", 12, "bold"),
-                 bg=self.colors["sidebar"], fg=self.colors["text"], anchor="w",
-                 wraplength=700, justify="left").pack(fill="x", padx=15, pady=(2, 4))
+        title_lbl = tk.Label(self.day_panel, text=title,
+                             font=("Segoe UI", 12, "bold"),
+                             bg=self.colors["sidebar"], fg=self.colors["text"],
+                             anchor="w", wraplength=700, justify="left")
+        title_lbl.pack(fill="x", padx=15, pady=(2, 4))
+
+        # The actions menu, which this panel was the only note surface in
+        # the app to lack. It was not missing "another way to delete" --
+        # it was missing Open/Edit, Pin, Export as file, and, for a
+        # repeating note, editing just this day, editing the whole
+        # series, and resetting this day back to the series content.
+        #
+        # occurrence_date is passed, and that is the whole point of
+        # passing it: this panel is opened ON a date, so the menu must
+        # offer to edit THAT day rather than silently acting on the
+        # series behind it.
+        def _panel_menu(event):
+            self.show_note_context_menu(event, base_note,
+                                        occurrence_date=date_str)
+
+        for widget in (self.day_panel, top, title_lbl):
+            widget.bind("<Button-3>", _panel_menu)
 
         # The preview is a QUICK LOOK, not the editor: it shows the note's
         # plain text and, like the note-list cards, only SAYS what else the
@@ -807,11 +851,16 @@ class CalendarViewMixin:
         # to render it. Tables drawn here were raw pipe soup, and comments
         # dumped inline read as part of the body -- both belong in the
         # editor, which is one "Open in editor" click away.
+        # Both halves from one pass, because the sentence "this note has
+        # N tables" and the text beside it have to be about the same
+        # lines. They were not: the count and the strip both asked
+        # is_table_row(), which is strict on purpose -- it decides what
+        # the EDITOR treats as a row, so a line typed past its last cell
+        # is not one. Such a line was therefore neither counted nor
+        # removed, and the preview announced five tables and then drew a
+        # sixth as pipes. Field-reported: "I only see vertical lines."
         note_body = _note_str(note, "body")
-        table_count = len(core_tables.find_blocks(note_body))
-        # Drop the table rows; keep the prose, collapse the gap they leave.
-        text_only = "\n".join(ln for ln in note_body.split("\n")
-                              if not core_tables.is_table_row(ln))
+        text_only, table_count = core_tables.preview_text(note_body)
         text_only = re.sub(r"\n{3,}", "\n\n", text_only).strip("\n")
 
         chips = []
@@ -1188,10 +1237,16 @@ class CalendarViewMixin:
                 command=lambda: (self.day_emoji.pop(date_str, None),
                                  self._persist_day_emoji(), self.render_calendar())
             )
+        # Same guard as the note menu: a hover preview drawing over an
+        # open menu is what was reported, and this is the menu it was
+        # drawn over. See show_note_context_menu for why the flag holds.
+        self.hide_day_tooltip()
+        self._context_menu_open = True
         try:
             menu.tk_popup(event.x_root, event.y_root)
         finally:
             menu.grab_release()
+            self._context_menu_open = False
 
     def _color_day(self, date_str, event=None):
         """Color a calendar day using the same curated in-app palette used
