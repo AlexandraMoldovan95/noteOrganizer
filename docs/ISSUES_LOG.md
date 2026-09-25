@@ -37,6 +37,7 @@ day-to-day tracking.
 | [The eight failures that hid two live mutants](#the-eight-failures-that-hid-two-live-mutants) | A check asserting a count is satisfied by the wrong answer of the same size; and never read a verdict out of output that truncates silently. | 0.75.180 |
 | [The finding that described a dialog nobody had opened](#the-finding-that-described-a-dialog-nobody-had-opened) | A review that only reads finds where to look but cannot decide — check a finding's reason separately from the finding, and correct a refuted row in place. | — |
 | [The undo that guarded the wrong state](#the-undo-that-guarded-the-wrong-state) | An undo must test for the state its own action produced, not the one it means to restore; and sweep for what else reaches the same loss. | 0.75.181 |
+| [The binding that could never fire](#the-binding-that-could-never-fire) | A binding is not an answer to "does this key work" — ask where the key goes; and a probe whose finding is an absence needs a control that produces the presence. | 0.75.183 |
 | [The template editor that "did nothing" when clicked](#the-template-editor-that-did-nothing-when-clicked) | 'Nothing happens' in a --windowed build is a real bug report — the exception was invisible. | 0.3.0 |
 | [The panel that lost its content depending on how you got there](#the-panel-that-lost-its-content-depending-on-how-you-got-there) | Recalculate layout on Tk's `<Map>` event, not after a guessed delay. | 0.3.0 |
 | [The scroll that stopped twice, for two different reasons](#the-scroll-that-stopped-twice-for-two-different-reasons) | Same symptom, unrelated causes — check neighbouring areas instead of assuming one fix covers all. | 0.28.38 |
@@ -1038,6 +1039,65 @@ quality bar.
 4. Prove an undo on the screen as well as in the store. A check reading
    the calendar cell's own background is what stops a version that repairs
    the data and forgets to repaint.
+
+### The binding that could never fire
+
+*([0.75.183](../CHANGELOG.md#075183--2026-09-26))*
+
+**Two reviewers said Escape does not close the app's popups. The code said
+the binding is right there.** Both were looking at the truth. The binding
+sits on the popup's own Toplevel — and those windows are borderless, take
+no keyboard focus and never call `grab_set`, so Tk delivers a keypress to
+the window that *does* hold the focus: the app window, which had no Escape
+binding at all while a popup was open. A handler nothing could ever reach.
+
+**Why "press it and see" is not enough on its own.** The register's row
+ended with the right instruction — prove it by pressing Escape on the real
+app, not by reading the binding — but pressing it proves less than it
+looks. `qa/_qa_support.py` states the reason plainly, and refuses keyboard
+sequences in `fire()` because of it: **Tk delivers a generated key event to
+the focus window, not to the widget it was aimed at.** So "I generated an
+Escape and nothing happened" is exactly as consistent with a harness that
+cannot deliver keys as with the bug.
+
+The probe therefore carried a control: force the focus *inside* the popup,
+then press Escape. It closed at once. That single reading is what turns the
+silence into a fact about focus rather than a fact about the probe — and
+without it the whole file would have been a rumour with a conclusion
+attached.
+
+**The part that was easy to break.** A dropdown nested inside another popup
+— a category list inside the template editor — is deliberately not
+`self._mini_popup`; the host is. An app-window handler that simply called
+`_dismiss_mini_popup()` would tear down the editor the list is sitting in,
+which is precisely the breakage recorded in a comment beside the per-popup
+binding, from an earlier attempt. So the handler closes one level at a
+time, and the app-level binding is installed **once** rather than per
+popup: a nested placement runs through the same method while the host's
+binding is still live, and two handlers would mean one Escape closing both
+levels. Each of those has a mutant.
+
+**Two smaller things, both worth the ink.** The row's claim that "none
+calls focus_set" is wrong — the inline rename popup focuses its own field
+and binds Escape there, which is exactly why Escape works in that one, and
+is the shape this fix generalised rather than invented. And the new block
+passed once and failed once with nothing changed but how fast the run
+happened to be: a section earlier in the same file can leave the keyboard
+inside a leftover Toplevel, where a key never reaches the app window's
+bindtags at all. Every press now states its precondition and establishes
+it.
+
+**The lessons.**
+
+1. A binding is not an answer to "does this key work". Ask where the key
+   goes, which for keyboard events is never the widget you aimed at.
+2. When a probe's finding is an absence, it needs a control that produces
+   the presence. Otherwise the probe cannot distinguish the bug from its
+   own limits.
+3. Two reviewers disagreeing with the code usually means the code is true
+   and irrelevant. Look for the thing that stops it mattering.
+4. A verdict that changes with the speed of the run is not a verdict.
+   State the precondition and establish it, in the check itself.
 
 
 ## Tk & platform gotchas

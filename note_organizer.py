@@ -45,7 +45,7 @@ except ImportError:
 # Added/Fixed CHANGELOG.md entries, not per-release counts). The running
 # app records this into settings, so the next time a newer build opens
 # over older data it can tell the user what changed version-wise.
-APP_VERSION = "0.75.181"
+APP_VERSION = "0.75.183"
 
 
 def parse_version(v):
@@ -12839,6 +12839,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             for w in (row, dot, lbl):
                 w.bind("<Button-1>", lambda e, c=cat: apply_category(c))
 
+        # A way out that says so. Every row here refiles every ticked note,
+        # and until now the only way to leave without picking one was to
+        # click empty space and hope -- no Cancel, no close glyph, and
+        # Escape went to the app window, which had no binding for it.
+        self._bulk_popup_cancel(frame)
         self._place_dropdown_popup(pop, self._bulk_category_btn)
 
     def _bulk_export(self):
@@ -12870,7 +12875,23 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 w.bind("<Button-1>",
                        lambda e, f=fmt: (self._dismiss_mini_popup(),
                                          self._bulk_export_run(f)))
+        self._bulk_popup_cancel(frame)
         self._place_dropdown_popup(pop, self._bulk_export_btn)
+
+    def _bulk_popup_cancel(self, frame):
+        """A worded way out of a bulk popup whose every other row acts.
+
+        The Import and Share panels have carried a "Close" for a long time;
+        these two had nothing, so leaving meant clicking empty space and
+        trusting that it counted. Escape now works as well, but a keystroke
+        is not a visible affordance -- the survey's point was that the way
+        out has to be on the screen.
+        """
+        tk.Button(frame, text="Cancel", command=self._dismiss_mini_popup,
+                  relief="flat", cursor="hand2", bd=0,
+                  bg=self.colors["sidebar"], fg=self.colors["text"],
+                  font=("Segoe UI", 8)).pack(fill="x", padx=6, pady=(6, 4),
+                                             ipady=2)
 
     def _bulk_export_run(self, fmt):
         """Write every ticked note into a chosen folder, one file per

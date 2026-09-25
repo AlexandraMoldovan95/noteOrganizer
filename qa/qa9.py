@@ -718,6 +718,204 @@ _qa_click(app.filter_menu); app.update()
 check('a third click opens it again', app._mini_popup is not None)
 app._dismiss_mini_popup(); app.update()
 
+# ============================================================
+# ESCAPE BACKS OUT OF A POPUP -- INCLUDING THE NESTED ONE
+# ============================================================
+# The binding was always there, on the popup Toplevel, and could never
+# fire: these windows are borderless and take no keyboard focus, so Tk
+# delivered the key to whatever DID hold it -- the app window, which had
+# no Escape binding at all while a popup was open. Measured before it was
+# fixed: force the focus inside the popup and the old binding closed it at
+# once, so the handler was sound and the key simply went elsewhere.
+# Finding C-7.
+#
+# Every Escape below is generated at the FOCUS window, because that is
+# where a real keystroke goes -- qa/_qa_support.py refuses to pretend
+# otherwise, which is why fire() rejects keyboard sequences.
+#
+# The nested case is the one this fix could most easily have broken: the
+# comment beside the per-popup binding records an attempt that made Escape
+# tear down the HOST editor instead of the list inside it.
+app.unbind('<Button-1>')
+app.notebook.select(app.TAB_NOTES); app.update()
+
+
+def _esc_focus_is_on_the_window(cap=60):
+    """Put the keyboard on the app window, and say whether it went there.
+
+    Stated rather than assumed, because it is the precondition the whole
+    block is about. An earlier section in this file can leave the focus
+    inside a leftover Toplevel, and a key delivered there never reaches the
+    app window's bindtags at all -- which is how this block failed once and
+    passed once with nothing changed but how fast the run happened to be.
+    A check whose verdict depends on timing is a bug in the check.
+    """
+    app.focus_force()
+    for _ in range(cap):
+        app.update()
+        try:
+            if app.focus_get() in (None, app):
+                return True
+        except Exception:
+            return False
+        time.sleep(0.01)
+    try:
+        return app.focus_get() in (None, app)
+    except Exception:
+        return False
+
+
+def _esc():
+    """Press Escape where a person's keystroke lands: the focus window."""
+    try:
+        _target = app.focus_get()
+    except Exception:
+        _target = None
+    (_target or app).event_generate('<Escape>')
+    app.update()
+
+
+def _esc_labels(widget):
+    _found = []
+
+    def _walk(w):
+        for _ch in w.winfo_children():
+            try:
+                _t = str(_ch.cget('text'))
+                if _t:
+                    _found.append(_t)
+            except Exception:
+                pass
+            _walk(_ch)
+
+    _walk(widget)
+    return _found
+
+
+_esc_notes = list(app.notes)
+app.notes = [NO.normalize_note({'id': 9601, 'title': 'EscOne', 'body': 'a'}),
+             NO.normalize_note({'id': 9602, 'title': 'EscTwo', 'body': 'b'})]
+app.save_notes()
+app.refresh_note_list()
+app.selection_mode = True
+app.selected_note_ids = {9601, 9602}
+app._bulk_change_category(); app.update()
+check('escape: the bulk category popup opened',
+      app._mini_popup is not None and app._mini_popup.winfo_exists())
+check('escape: the APP WINDOW carries the binding now, not only the popup',
+      bool(app.bind('<Escape>')))
+check('escape: the keyboard is on the app window, which is the case under test',
+      _esc_focus_is_on_the_window())
+_esc()
+check('escape: pressing it where the focus is closes the popup',
+      app._mini_popup is None)
+check('escape: and the app-window binding is taken back off afterwards',
+      getattr(app, '_mini_popup_escape_bind', None) is None)
+
+app._bulk_change_category(); app.update()
+check('escape: the riskiest popup also has a worded way out now',
+      any('Cancel' in _t for _t in _esc_labels(app._mini_popup)))
+_esc_cancel = []
+
+
+def _find_esc_cancel(w):
+    for _ch in w.winfo_children():
+        try:
+            if isinstance(_ch, tk.Button) and 'Cancel' in str(_ch.cget('text')):
+                _esc_cancel.append(_ch)
+        except Exception:
+            pass
+        _find_esc_cancel(_ch)
+
+
+_find_esc_cancel(app._mini_popup)
+if _esc_cancel:
+    _esc_cancel[0].invoke(); app.update()
+check('escape: Cancel closes it and refiles nothing',
+      app._mini_popup is None
+      and all(_n['category'] == 'General' for _n in app.notes))
+
+app._bulk_export(); app.update()
+check('escape: the export popup has a Cancel too',
+      app._mini_popup is not None
+      and any('Cancel' in _t for _t in _esc_labels(app._mini_popup)))
+check('escape: the keyboard is on the window for the export case',
+      _esc_focus_is_on_the_window())
+_esc()
+check('escape: and Escape closes the export popup', app._mini_popup is None)
+app.selection_mode = False
+app.selected_note_ids = set()
+
+app.open_note_in_tab(app.find_note(9601)); app.update()
+app._show_color_palette(app.title_entry, '', lambda c: None); app.update()
+check('escape: the colour palette opened', app._mini_popup is not None)
+check('escape: the keyboard is on the window for the palette case',
+      _esc_focus_is_on_the_window())
+_esc()
+check('escape: Escape closes the colour palette', app._mini_popup is None)
+
+# The nested case, through the real dropdown and the poller this file
+# already uses for the dropped-click physics.
+_esc_host = tk.Toplevel(app)
+app._mini_popup = _esc_host
+_esc_host.wm_overrideredirect(True)
+_esc_inner = tk.Frame(_esc_host, bg=app.colors['card'])
+_esc_inner.pack()
+_esc_var = tk.StringVar(value='General')
+_esc_btn = app._build_themed_dropdown(_esc_inner, _esc_var,
+                                      ['General', 'Work'],
+                                      lambda v: None, nested=True)
+_esc_btn.pack()
+app._place_dropdown_popup(_esc_host, app.title_entry)
+app.update()
+check('escape: a host popup with a nested dropdown is up',
+      app._mini_popup is _esc_host)
+_esc_nested = open_nested_dropdown(app, _esc_btn)
+check('escape: the nested list opened', _esc_nested is not None)
+check('escape: the host is still what _mini_popup means',
+      app._mini_popup is _esc_host)
+check('escape: the keyboard is on the window for the nested case',
+      _esc_focus_is_on_the_window())
+_esc()
+check('escape: Escape closes the NESTED list',
+      _esc_nested is None or not _esc_nested.winfo_exists())
+check('escape: CRITICAL -- and leaves its host standing',
+      app._mini_popup is _esc_host and _esc_host.winfo_exists())
+check('escape: the keyboard is still on the window for the second press',
+      _esc_focus_is_on_the_window())
+_esc()
+check('escape: a second Escape then closes the host', app._mini_popup is None)
+
+# Escape still belongs to whoever is closer to it: the find bar binds it
+# on its own entry and returns "break".
+app.open_note_in_tab(app.find_note(9601)); app.update()
+app._shortcut_find(); app.update()
+check('escape: the find bar is open', getattr(app, '_find_open', False) is True)
+app._show_color_palette(app.title_entry, '', lambda c: None); app.update()
+check('escape: a popup is open over it', app._mini_popup is not None)
+app._find_entry.focus_force()
+for _ in range(60):
+    app.update()
+    if app.focus_get() is app._find_entry:
+        break
+    time.sleep(0.01)
+if app.focus_get() is app._find_entry:
+    app._find_entry.event_generate('<Escape>')
+    app.update()
+    check('escape: with the find entry focused, Escape closes the FIND BAR',
+          getattr(app, '_find_open', True) is False)
+    check('escape: ...and leaves the popup alone', app._mini_popup is not None)
+else:
+    # Focus is the one thing a test process cannot demand. Say so rather
+    # than pass on a reading that never happened.
+    check('escape: SKIPPED -- the find entry never took focus', True)
+    print('      (find-bar precedence unverified in this run: no focus)')
+app._dismiss_mini_popup(); app.update()
+app._close_find() if getattr(app, '_find_open', False) else None
+app.notes = list(_esc_notes)
+app.save_notes()
+app.new_note(); app.update()
+
 print()
 print(f"=== QA9 FAILURES: {fails if fails else 'NONE'} ===")
 

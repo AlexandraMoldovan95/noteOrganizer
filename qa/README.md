@@ -264,6 +264,15 @@ A new surface joins this list the moment it ships.
   undo's own `_schedule_autosave()` changed nothing it could see. The
   check now looks for the queued job. A forcing call in a check proves the
   forcing call works.
+- **When a check's finding is an ABSENCE, it needs a control that produces
+  the presence.** "I generated an Escape and the popup did not close" is
+  equally consistent with the bug and with a harness that cannot deliver
+  the key — and Tk delivers a generated keypress to the FOCUS window, not
+  to the widget it was aimed at, which is why `fire()` refuses keyboard
+  sequences outright. The probe that established C-7 forced the focus
+  *inside* the popup and watched Escape close it; that one reading is what
+  makes the silence a fact about focus rather than about the probe. Without
+  it the file is a rumour with a conclusion attached.
 - **An undo's guard is checked against the state its own action produced.**
   The day-clear undo first asked "is what is there now equal to what I am
   about to restore?", which catches a second click on the toast and nothing
