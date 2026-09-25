@@ -45,7 +45,7 @@ except ImportError:
 # Added/Fixed CHANGELOG.md entries, not per-release counts). The running
 # app records this into settings, so the next time a newer build opens
 # over older data it can tell the user what changed version-wise.
-APP_VERSION = "0.75.173"
+APP_VERSION = "0.75.176"
 
 
 def parse_version(v):
@@ -14054,10 +14054,23 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                              self.refresh_day_panel()))
         )
 
+        # A hover preview drew itself ON TOP of this menu: the mouse only
+        # has to drift a few pixels onto a neighbouring calendar cell,
+        # and tk_popup does not stop the app's own <Enter> bindings from
+        # firing -- it runs a nested event loop, which is precisely why
+        # the tooltip still appeared. Field-reported with a screenshot.
+        #
+        # The flag works because tk_popup BLOCKS until the menu is
+        # dismissed, measured rather than assumed: posted for real with
+        # nothing to dismiss it, the call never came back. So it is set
+        # for exactly as long as the menu is on screen.
+        self.hide_day_tooltip()
+        self._context_menu_open = True
         try:
             menu.tk_popup(event.x_root, event.y_root)
         finally:
             menu.grab_release()
+            self._context_menu_open = False
 
     def toggle_pin(self, note):
         """Flip a note's pinned state and re-sort the list."""

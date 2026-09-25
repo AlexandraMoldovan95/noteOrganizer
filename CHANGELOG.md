@@ -12,6 +12,7 @@ How the numbers themselves are counted is the
 
 | Version | Date | In one line |
 |---|---|---|
+| [0.75.176](#075176--2026-09-25) | 2026-09-25 | The calendar stops drawing previews over menus and tables as rows of bars, and offers a note's actions the same way the rest of the app does. |
 | [0.75.173](#075173--2026-09-15) | 2026-09-15 | The selection bar shows all four of its actions, and a ticked box looks ticked on a dark theme. |
 | [0.74.170](#074170--2026-09-15) | 2026-09-15 | A repeating series says so wherever it can be deleted — including the Trash, where deleting cannot be undone. |
 | [0.74.169](#074169--2026-09-15) | 2026-09-15 | Deleting a note stops redrawing the whole screen — the list, the calendar and the statistics were all rebuilt, two of them off screen. |
@@ -80,6 +81,44 @@ How the numbers themselves are counted is the
   padding the label could not see, and each was short — the subtitle asked for 620
   pixels and was given 544. They are taken from the label itself now, so a change to
   the layout cannot leave them behind again.
+
+---
+
+## [0.75.176] — 2026-09-25
+
+*Highlights: whichever way you reach a note in the calendar, it now offers the same things — and offers them the way the rest of the app already does.*
+
+### Fixed
+
+- **A note's preview no longer hovers over the menu you just opened.** Right-click a day,
+  then let the mouse drift a few pixels onto a neighbouring cell, and the day's preview
+  drew itself on top of the menu you were reading. A menu keeps the app running
+  underneath it, so the hover never stopped firing. Nothing hovers over an open menu now.
+- **A table in a preview is mentioned, not drawn as a row of bars.** The panel under the
+  calendar showed a note's tables as raw vertical lines, and the small preview that
+  follows the mouse showed the note's body untouched — tables and all — without even
+  saying a table was there. Both now show the note's words and a chip saying what else it
+  carries, which is what the panel had always meant to do: the rule it used to strip
+  tables is the editor's rule, and it is strict on purpose, so a row typed past its last
+  cell was neither counted nor removed. That is the line you could see.
+- **A note in the calendar answers the same way wherever you meet it.** Two screens show
+  the same note and each had half the story. Arriving from the History register put you
+  on a preview that was the only place in the app where right-clicking a note did
+  nothing — so Pin, Export as file, Duplicate, and, for a repeating note, *edit just this
+  day* / *edit the whole series* / *reset this day to the series content* were all simply
+  unavailable there, even though the same note offered every one of them from the day's
+  list. Meanwhile the day's list carried the only per-row delete button in the app: a
+  grey glyph with no word, packed against the scrollbar, where a slipped click destroyed
+  a note. The app already had a rule and the calendar was the one screen breaking it —
+  a list of notes offers its actions by right-click, and a labelled **Delete** appears
+  only where a single note is open. Both screens follow it now.
+
+### Testing
+
+- Seven checks in qa7: the day list carrying no button of its own, deleting from it
+  still working through the menu, the menu being the whole menu rather than a delete on
+  its own, and the preview answering to right-click with the actions appropriate to the
+  day it is showing rather than to the series behind it.
 
 ---
 

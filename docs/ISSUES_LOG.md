@@ -82,6 +82,7 @@ day-to-day tracking.
 | [The rebuild nobody was looking at](#the-rebuild-nobody-was-looking-at) | When a new feature makes the user look somewhere new, expect a report about something that was always wrong there — measure before blaming the newest change; and a guard applied at one call site out of thirty-one is a comment, not a guard. | 0.74.169 |
 | [The sentence that counted notes](#the-sentence-that-counted-notes) | When a dialog counts things, ask what one of those things can be — a repeating series is one note in the count and every occurrence in the consequence; and a guard that has only ever been asked well-formed questions has been lucky, not tested. | 0.74.170 |
 | [Two ways to be invisible](#two-ways-to-be-invisible) | A layout whose last element absorbs every shortfall reports nothing and fails last — measure asked-for against given, on every font it will meet; and a fixture that does not do what its name says turns a measurement into a rumour. | 0.74.172 |
+| [The rule the app already had](#the-rule-the-app-already-had) | When two screens disagree, do not pick one — ask what the rest of the app does and make the odd one out match; and read what a gesture really offers before calling it a duplicate. | 0.75.174 |
 
 
 ## Data safety & integrity
@@ -2038,6 +2039,54 @@ on every font it will meet. And a fixture that does not do what its name
 says turns a measurement into a rumour — the tick boxes cost a full wrong
 diagnosis, and the only reason it shipped nothing was a screenshot asked
 for before the commit.
+
+### The rule the app already had
+
+*([0.75.176](../CHANGELOG.md#075176--2026-09-25) · 2026-09-25)*
+
+**Symptom, field-reported:** "the delete button only shows up when I go
+through History; if I click a date there's no delete button, only
+right-click — and the History path has no right-click. Let's keep a
+single delete system."
+
+**The report was right about what she saw and wrong about what it was.**
+The thing reachable by right-click is not a delete system: it is the
+note's actions menu, and it carries Open/Edit, Pin, Export as file,
+Duplicate, and — for a repeating note on a given day — edit only this
+occurrence, edit the whole series, and reset this day to the series
+content. Picking "one of the two systems" by deleting that one would
+have cost six actions to gain consistency.
+
+**What was actually wrong** is that the app already had a rule, applied
+everywhere except here:
+
+| Surface | Right-click menu | Labelled Delete |
+|---|---|---|
+| Sidebar note card (*a list*) | yes | no |
+| Editor (*one note open*) | — | yes |
+| Calendar day list | yes | **also a bare 🗑 per row** |
+| Calendar note preview | **none** | yes |
+
+So the calendar broke it in both directions at once. Its day list held
+the only per-row note delete in the app — a grey glyph with no word,
+packed hard against the scrollbar, which is a destructive action sitting
+exactly where a click is most likely to slip. And its preview was the
+only note surface in the app that ignored a right-click, so arriving
+there from History meant arriving somewhere with fewer actions than the
+list you could have reached the same note from.
+
+**Fix:** the glyph is gone and the preview answers to right-click, with
+the occurrence date passed through — which is the point of passing it:
+the panel is opened ON a day, so its menu must offer to edit THAT day
+rather than silently acting on the series behind it.
+
+**Takeaway:** when two screens disagree, do not pick one. Ask what the
+REST of the app does, and make the odd one out match it — the answer is
+usually already written somewhere in the code, and it is better than
+either of the two you were choosing between. And read what a gesture
+actually offers before calling it "the delete system": the menu that
+looked like a duplicate way to delete was the only way to reach a third
+of the note's actions.
 
 ## Tests & CI discipline
 
