@@ -304,6 +304,49 @@ pattern like `*.json` — as a second layer of protection. Verify the
 working directory (`pwd`) immediately before any destructive command,
 every time, not just when something already looks risky.
 
+### What runs without asking (permission policy, 2026-09-25)
+
+The lists live in `.claude/settings.json`, which is **git-ignored on
+purpose** — it holds absolute paths and one machine's home directory. That
+means the policy can be lost with the machine, so it is written here in
+words as well. Agreed after the lists had grown to ~90 entries that were
+almost all one-off exact commands (full scratchpad paths, exact line
+ranges, whole commit messages), so nothing matched twice and every
+ordinary step asked again.
+
+Three tiers:
+
+- **Runs without asking:** read-only git (`status`, `diff`, `log`, `show`,
+  `blame`, `fetch`, `pull --ff-only`), `git add` / `git commit` / new
+  branches, `tools/run_tests.py` and every `tools/check_*.py`, the Linux
+  CI image, anything inside the session scratchpad, and edits to files in
+  the repository.
+- **Always asks:** `git push`, merge, PR creation, `git branch -d`, any
+  `rm`, the PyInstaller build, the screenshot tools.
+- **Denied outright, by the system:** running any `qa*.py`, `test_*.py` or
+  `note_organizer.py` inside the project tree; `reset --hard`,
+  `push --force`, `rebase`, `branch -D`, `restore`, `clean`; installing
+  anything; and reading or writing `%APPDATA%\NoteOrganizer` or the real
+  data files at the project root.
+
+The last tier is the point: the [QA testing safety](#qa-testing-safety-hard-rule--real-data-has-been-lost-to-this-three-times)
+rule stops depending on an agent remembering it. The chat protocol is
+unchanged and independent — push, merge and PR creation are still
+explained and approved in the moment, whatever the permission system says.
+
+Two things learned while writing it, both worth keeping:
+
+- **A prefix rule that stops inside a word never fires.** `Bash(py test_:*)`
+  matched nothing; the deny list looked complete and protected nothing.
+  Found by probing a harmless member of the rule shape (`py test_recurrence.py`,
+  which touches no data files) and watching it run. Every dangerous script
+  is now named in full, in each spelling that could reach it — 204
+  spellings, none uncovered.
+- **Never probe a destructive deny rule with the destructive command.**
+  Whether `py test_data_safety.py` is blocked is verified by reading the
+  list, not by running it: if the rule were wrong, the probe would delete
+  the notebook it was meant to protect.
+
 ### File safety
 
 Before editing:
