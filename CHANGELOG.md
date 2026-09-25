@@ -12,6 +12,7 @@ How the numbers themselves are counted is the
 
 | Version | Date | In one line |
 |---|---|---|
+| [0.75.183](#075183--2026-09-26) | 2026-09-26 | Escape backs out of the app's small anchored popups — it never could before — and the two bulk popups that had no visible way out now carry a Cancel. |
 | [0.75.181](#075181--2026-09-26) | 2026-09-26 | Clearing a calendar day's colour or markers can be undone — on all three routes that discard it — and a note's menu says when Delete means the whole series. |
 | [0.75.180](#075180--2026-09-25) | 2026-09-25 | Shortening how long the Trash keeps notes asks first — and only when the shorter window would really destroy something. |
 | [0.75.179](#075179--2026-09-25) | 2026-09-25 | A checklist item you remove can be put back where it was — and an offer of Undo stays on screen instead of being wiped a second later by the autosave's own banner. |
@@ -85,6 +86,49 @@ How the numbers themselves are counted is the
   padding the label could not see, and each was short — the subtitle asked for 620
   pixels and was given 544. They are taken from the label itself now, so a change to
   the layout cannot leave them behind again.
+
+---
+
+## [0.75.183] — 2026-09-26
+
+*Highlights: the reflex for backing out of something you opened by accident now works, and the riskiest popup in the app finally says how to leave it.*
+
+### Fixed
+
+- **Escape closes the app's small anchored popups.** The colour palettes, the bulk
+  Category and Export lists, the month picker, the emoji picker, the template picker — none
+  of them answered Escape, which is the reflex for backing out of something opened by
+  mistake. The binding had been there all along and could never fire: these windows are
+  borderless and take no keyboard focus, so the key went to the window that *does* hold it —
+  the app window, which had no Escape binding at all while a popup was open. Measured
+  before it was fixed by forcing the focus inside a popup, where the old binding closed it
+  at once, so the handler was always sound and the key simply went elsewhere. Escape is now
+  bound where the keyboard actually is. A dropdown nested inside another popup closes one
+  level at a time — the list first, its host only once the list is gone — and anything with
+  a closer claim on Escape, such as the find bar, still gets it first.
+- **The bulk Category and Export popups have a Cancel.** Every row in them acts: one click
+  refiles every ticked note, or starts writing files. Until now the only way to leave
+  without picking one was to click empty space and trust that it counted — no Cancel, no
+  close glyph, and Escape did nothing. The Import and Share panels have carried a Close for
+  a long time; these two now say how to leave as well, and a keystroke is not a substitute
+  for something visible on the screen.
+
+### Testing
+
+- Twenty-five checks in qa9 (a twenty-sixth reports itself skipped if the find entry never
+  takes focus, rather than passing on a reading that never happened), five mutants, each
+  dying on the check written for it. The
+  nested-dropdown case has a check of its own because it is what this change could most
+  easily have broken: the code carries a comment about an earlier attempt that made Escape
+  tear down the host editor instead of the list inside it.
+- Every Escape is generated at the **focus window**, because that is where a real keystroke
+  goes — `qa/_qa_support.py` refuses to pretend otherwise, which is why its `fire()` rejects
+  keyboard sequences outright. The probe that established the bug carried a control for the
+  same reason: with the focus forced inside the popup the key *did* land, which is what
+  makes the silence a fact about focus rather than about the harness.
+- Each press states its precondition — that the keyboard is on the app window — and
+  establishes it, after the block passed once and failed once with nothing changed but how
+  fast the run happened to be. A verdict that depends on timing is a bug in the check.
 
 ---
 

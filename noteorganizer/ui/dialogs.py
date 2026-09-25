@@ -293,8 +293,15 @@ class DialogsMixin:
                             existing.destroy()
                     except tk.TclError:
                         pass
+                    if getattr(self, "_nested_dropdown", None) is existing:
+                        self._nested_dropdown = None
                 pop = tk.Toplevel(self)
                 btn._nested_popup = pop
+                # Also remembered app-wide, so the app-window Escape can
+                # close THIS list rather than the popup it lives inside.
+                # btn._nested_popup alone is not enough: the handler runs on
+                # the window, and has no button to ask.
+                self._nested_dropdown = pop
             else:
                 # Clicking the button while its OWN list is open closes
                 # it and stops. Without this, the shared dismiss below
@@ -347,6 +354,8 @@ class DialogsMixin:
                         except tk.TclError:
                             pass
                         btn._nested_popup = None
+                        if getattr(self, "_nested_dropdown", None) is pop:
+                            self._nested_dropdown = None
                     else:
                         self._dismiss_mini_popup()
                     on_change(v)
@@ -473,6 +482,20 @@ class DialogsMixin:
         # inside instead of the list itself.
         if not pop.bind("<Escape>"):
             pop.bind("<Escape>", lambda e: self._dismiss_mini_popup())
+        # ...and that binding could never fire. These popups are borderless
+        # and take no keyboard focus, so Tk delivers a keypress to whatever
+        # DOES hold it — the app window, which had no Escape binding at all
+        # while a popup was open. Measured: with the focus forced inside the
+        # popup the binding above closes it at once, so the handler was
+        # always sound and the key simply went elsewhere.
+        #
+        # Bound here the way _themed_dialog binds its own, and bound ONCE:
+        # a nested dropdown is placed through this same method while the
+        # host's binding is still live, and a second one would mean a
+        # single Escape closing both levels.
+        if getattr(self, "_mini_popup_escape_bind", None) is None:
+            self._mini_popup_escape_bind = self.bind(
+                "<Escape>", self._escape_backs_out, add="+")
         if enable_click_outside:
             self._mini_popup_click_bind = self.bind(
                 "<Button-1>", self._maybe_dismiss_mini_popup, add="+")
@@ -602,6 +625,37 @@ class DialogsMixin:
             return
         self.after_idle(self._popup_watch_step)
 
+    def _escape_backs_out(self, event=None):
+        """Escape, arriving at the app window, closes the innermost popup.
+
+        It has to be the innermost, and that is the whole difficulty. A
+        nested dropdown — a category list inside the template editor, say —
+        is deliberately NOT `self._mini_popup`; the host popup is. So a
+        handler that simply called `_dismiss_mini_popup()` would tear down
+        the editor the list is sitting in, which is exactly the breakage
+        recorded beside the per-popup binding in `_place_dropdown_popup`.
+        One level at a time: the list first, its host only once the list is
+        gone.
+
+        No "break" returned, deliberately. `_themed_dialog` binds its own
+        Escape on this same window, and breaking here would leave a modal
+        dialog open while the popup underneath it closed — the wrong one
+        answered. Widget-level Escapes (the find bar, an inline rename
+        entry) already return "break" of their own, so they never reach
+        this at all.
+        """
+        nested = getattr(self, "_nested_dropdown", None)
+        if nested is not None:
+            self._nested_dropdown = None
+            try:
+                if nested.winfo_exists():
+                    nested.destroy()
+                    return
+            except tk.TclError:
+                pass
+        if getattr(self, "_mini_popup", None) is not None:
+            self._dismiss_mini_popup()
+
     def _dismiss_mini_popup(self):
         gif_job = getattr(self, "_gif_anim_job", None)
         if gif_job is not None:
@@ -637,6 +691,15 @@ class DialogsMixin:
             except tk.TclError:
                 pass
             self._mini_popup_configure_bind = None
+        escape_bind_id = getattr(self, "_mini_popup_escape_bind", None)
+        if escape_bind_id is not None:
+            try:
+                self.unbind("<Escape>", escape_bind_id)
+            except tk.TclError:
+                pass
+            self._mini_popup_escape_bind = None
+        # A nested list belongs to the popup that is going away with it.
+        self._nested_dropdown = None
         # Run any deferred work now that the popup is actually closing — e.g.
         # a full note-list/calendar rebuild, which is heavy enough to cause a
         # visible flicker if it runs WHILE a popup is open on top of it (this
