@@ -8026,6 +8026,332 @@ app.notes = list(_bk_saved)
 app.save_notes()
 app.new_note(); app.update()
 
+
+# ---- THE BULK CATEGORY CHANGE ASKS, AND OFFERS A WAY BACK ----
+# It was the one action in that bar that rewrote stored data with neither
+# a question nor an undo, while the button beside it had both -- and the
+# categories it overwrote were gone from the file the moment it ran
+# (finding C-1 in docs/PRODUCT_FINDINGS.md). These checks hold both
+# halves of the promise, and every seam the interaction pass marked
+# risky: a MIXED selection, the editor holding one of the notes, a
+# table-ending note, a series with a day of its own, a filtered list,
+# and a second click on a toast that has not faded.
+_bc_saved = list(app.notes)
+for _bc_name, _bc_colour in (('Alpha', '#4488cc'), ('Beta', '#775599'),
+                             ('Gamma', '#cc8844'), ('Target', '#44aa88')):
+    NO.CATEGORY_COLORS.setdefault(_bc_name, _bc_colour)
+_bc_real_ask = app.ask_yes_no
+_bc_asked = {}
+_BC_TABLE_BODY = ('Before the table.\n'
+                  '\n'
+                  '| Item | Qty |\n'
+                  '| --- | --- |\n'
+                  '| Nails | 40 |\n'
+                  '| Screws | 12 |')
+_BC_HEAVY_FIELDS = ('body', 'checklist', 'formatting', 'paragraphs',
+                    'attachments')
+
+
+def _bc_seed(spec):
+    """(id, title, category, extra) per note.
+
+    Each scenario starts from a state this file STATES rather than one it
+    inherits from whatever ran above -- a fixture that does not say what
+    it set turns the reading that follows into a rumour.
+    """
+    app.notes = []
+    for _bc_id, _bc_title, _bc_cat, _bc_extra in spec:
+        # An explicit OLD stamp, not whatever normalize_note puts on a
+        # note made now. With a fresh stamp the change's own stamp is the
+        # same string to the second, so an undo that never restores
+        # `updated` looks identical to one that does -- the mutant for
+        # that check survived until this line existed.
+        _bc_raw = {'id': _bc_id, 'title': _bc_title, 'category': _bc_cat,
+                   'body': 'body of %s' % _bc_title,
+                   'updated': '2020-01-01 00:00:00'}
+        _bc_raw.update(_bc_extra or {})
+        app.notes.append(NO.normalize_note(_bc_raw))
+    app.save_notes()
+    app.new_note()
+    app.refresh_note_list()
+    # The search debounce can rebuild the list under a later reading and
+    # repair whatever a surgical update got wrong -- settle it here so
+    # every check below is about its own subject (qa/README house rules).
+    if getattr(app, '_search_debounce_job', None) is not None:
+        app.after_cancel(app._search_debounce_job)
+        app._search_debounce_job = None
+    app.update()
+
+
+def _bc_pick(label_text):
+    """Open the popup and click the row named `label_text`.
+
+    Never calls apply_category from here: a check that does the app's own
+    work reports on its own behaviour instead of the app's, which is how
+    chapter 4 of qa/story_audit.py went on reporting a bug for an hour
+    after it had been fixed.
+    """
+    app._bulk_change_category()
+    app.update()
+    _bc_hit = []
+
+    def _bc_walk(widget):
+        for _bc_child in widget.winfo_children():
+            if isinstance(_bc_child, tk.Label) and \
+                    str(_bc_child.cget('text')).strip() == label_text:
+                _bc_hit.append(_bc_child)
+                return
+            _bc_walk(_bc_child)
+
+    _bc_pop = getattr(app, '_mini_popup', None)
+    if _bc_pop is None or not _bc_pop.winfo_exists():
+        return False
+    _bc_walk(_bc_pop)
+    if not _bc_hit:
+        return False
+    _qa_click(_bc_hit[0])
+    app.update()
+    return True
+
+
+def _bc_cats():
+    return {n['id']: n['category'] for n in app.notes}
+
+
+def _bc_heavy(note_id):
+    _bc_note = app.find_note(note_id)
+    return {_bc_k: json.dumps(_bc_note.get(_bc_k), sort_keys=True,
+                              ensure_ascii=False)
+            for _bc_k in _BC_HEAVY_FIELDS}
+
+
+# The question is recorded, not merely answered: what it SAYS is half the
+# fix. It also reports whether the borderless category popup was still on
+# screen at the moment a modal opened -- the popup takes no focus, so one
+# left up floats over the very question it is asking.
+#
+# A named function rather than a lambda, and reinstated by name after the
+# "No" scenario borrows the slot: the first version of this block put a
+# plain `lambda: True` back afterwards, so the last two checks read a
+# _bc_asked nobody had written to since -- they failed on the fixture, not
+# on the app.
+def _bc_ask_recording(_bc_title, _bc_msg, **_bc_kw):
+    _bc_asked.clear()
+    _bc_asked.update({
+        'msg': _bc_msg,
+        'popup_alive': bool(getattr(app, '_mini_popup', None)
+                            and app._mini_popup.winfo_exists())})
+    return True
+
+
+app.ask_yes_no = _bc_ask_recording
+
+# A MIXED selection: three notes in three different categories. One
+# remembered "old category" for the batch would file all three back under
+# whichever was read first, and would pass a single-category check.
+_bc_seed([(8100, 'BcOne', 'Alpha', None), (8101, 'BcTwo', 'Beta', None),
+          (8102, 'BcThree', 'Gamma', None)])
+_bc_before = _bc_cats()
+_bc_stamps = {n['id']: n['updated'] for n in app.notes}
+# State what the fixture prepared, rather than assuming it: the stamp
+# check below is only meaningful because these are OLD stamps, so a
+# change that rewrites them is visible.
+check('bulk category: the fixture starts from old updated stamps',
+      set(_bc_stamps.values()) == {'2020-01-01 00:00:00'})
+app.selection_mode = True
+app.selected_note_ids = {8100, 8101, 8102}
+check('bulk category: the popup offers the target by name', _bc_pick('Target'))
+check('bulk category: it asks first, naming the count and the target',
+      '3 selected notes' in _bc_asked.get('msg', '')
+      and '“Target”' in _bc_asked.get('msg', ''))
+check('bulk category: the question says how many categories it overwrites',
+      'They sit in 3 different categories today.' in _bc_asked.get('msg', ''))
+check('bulk category: the popup is gone before the question is asked',
+      _bc_asked.get('popup_alive') is False)
+check('bulk category: the change reaches every ticked note',
+      set(_bc_cats().values()) == {'Target'})
+check('bulk category: selection mode is left behind',
+      not app.selection_mode and not app.selected_note_ids)
+# The other end of the stamp check: if the change never moved the stamp,
+# "the undo restored it" would be true of nothing.
+check('bulk category: the change moves the updated stamp forward',
+      all(n['updated'] != '2020-01-01 00:00:00' for n in app.notes
+          if n['id'] in (8100, 8101, 8102)))
+_bc_undo = app._toast_action
+check('bulk category: the toast carries an Undo', _bc_undo is not None)
+if _bc_undo is not None:
+    _bc_undo()
+    app.update()
+check('bulk category: Undo puts each note back in ITS OWN category',
+      _bc_cats() == _bc_before)
+check('bulk category: Undo restores the old updated stamps too',
+      {n['id']: n['updated'] for n in app.notes} == _bc_stamps)
+check('bulk category: Undo does not re-enter selection mode',
+      not app.selection_mode)
+
+# Saying No has to cost nothing at all -- not the category, not the stamp.
+_bc_seed([(8110, 'BcNo', 'Alpha', None), (8111, 'BcNo2', 'Beta', None)])
+_bc_untouched = _bc_cats()
+_bc_untouched_stamps = {n['id']: n['updated'] for n in app.notes}
+app.ask_yes_no = lambda *_a, **_k: False
+app.selection_mode = True
+app.selected_note_ids = {8110, 8111}
+_bc_pick('Target')
+check('bulk category: answering No leaves the categories alone',
+      _bc_cats() == _bc_untouched)
+check('bulk category: answering No leaves the stamps alone too',
+      {n['id']: n['updated'] for n in app.notes} == _bc_untouched_stamps)
+app.ask_yes_no = _bc_ask_recording
+
+# A second click on a toast that has not faded, with one note filed by
+# hand in between: a stale memory of what used to be there must not win.
+_bc_seed([(8120, 'BcTwice', 'Alpha', None), (8121, 'BcTwice2', 'Beta', None)])
+app.selection_mode = True
+app.selected_note_ids = {8120, 8121}
+_bc_pick('Target')
+_bc_undo = app._toast_action
+_bc_undo()
+app.update()
+app.find_note(8120)['category'] = 'Gamma'
+app.save_notes()
+_bc_toasts = []
+_bc_real_toast = app._show_toast
+app._show_toast = (
+    lambda _bc_text, kind='success', action=None, action_text='Undo': (
+        _bc_toasts.append((str(_bc_text), kind)),
+        _bc_real_toast(_bc_text, kind=kind, action=action,
+                       action_text=action_text))[1])
+_bc_undo()
+app.update()
+app._show_toast = _bc_real_toast
+check('bulk category: a second Undo does not clobber a category set by hand',
+      app.find_note(8120)['category'] == 'Gamma')
+check('bulk category: a second Undo says so instead of claiming success',
+      any('Nothing left to put back' in _bc_t and _bc_k == 'info'
+          for _bc_t, _bc_k in _bc_toasts))
+
+# The editor holding one of the ticked notes, and that note ending in a
+# table -- the shape that once made every table-ending note read as
+# permanently unsaved. Both directions, and nothing but the category may
+# move.
+_bc_seed([(8130, 'BcHeavy', 'Alpha', {
+               'body': _BC_TABLE_BODY,
+               'checklist': [{'text': 'buy nails', 'done': False},
+                             {'text': 'buy screws', 'done': True}],
+               'formatting': [{'start': 0, 'end': 6, 'tags': ['bold']}],
+               'paragraphs': {'0': {'align': 'center'}},
+               'attachments': [{'name': 'plan.txt',
+                                'path': 'attachments/plan.txt', 'size': 12}]}),
+          (8131, 'BcPlain', 'Beta', None)])
+_bc_heavy_before = _bc_heavy(8130)
+app.open_note_in_tab(app.find_note(8130))
+app.update()
+check('bulk category: a table-ending note opens clean before any of this',
+      app.editor_state_matches_saved(app.capture_editor_state()))
+check('bulk category: the editor starts on the stored category',
+      app.category_var.get() == 'Alpha')
+app.selection_mode = True
+app.selected_note_ids = {8130, 8131}
+_bc_pick('Target')
+check('bulk category: the editor follows the change',
+      app.category_var.get() == 'Target')
+check('bulk category: the changed note does not read as unsaved',
+      app.editor_state_matches_saved(app.capture_editor_state()))
+check('bulk category: the change moves the category and nothing else',
+      _bc_heavy(8130) == _bc_heavy_before)
+_bc_undo = app._toast_action
+_bc_undo()
+app.update()
+check('bulk category: the editor follows the Undo back',
+      app.category_var.get() == 'Alpha')
+check('bulk category: the Undo does not leave the note reading as unsaved',
+      app.editor_state_matches_saved(app.capture_editor_state()))
+check('bulk category: the Undo moves the category and nothing else',
+      _bc_heavy(8130) == _bc_heavy_before)
+
+# A series with one day given a category by hand. The change writes the
+# series' own category and leaves that day alone -- so the question must
+# not promise it replaces the category "on each of them" full stop.
+_bc_seed([(8140, 'BcSeries', 'Alpha', {
+               'date': '2026-09-01',
+               'recurrence': {'freq': 'daily', 'interval': 1},
+               'overrides': {'2026-09-03': {'category': 'Gamma'}}}),
+          (8141, 'BcSeriesPlain', 'Beta', None)])
+app.selection_mode = True
+app.selected_note_ids = {8140, 8141}
+_bc_pick('Target')
+check('bulk category: the question warns a day keeps its own category',
+      'has a day with its own category' in _bc_asked.get('msg', ''))
+check("bulk category: the series' own category moves",
+      app.find_note(8140)['category'] == 'Target')
+check('bulk category: the overridden day keeps its category',
+      app.find_note(8140)['overrides']['2026-09-03']['category'] == 'Gamma')
+_bc_undo = app._toast_action
+_bc_undo()
+app.update()
+check('bulk category: Undo puts the series back',
+      app.find_note(8140)['category'] == 'Alpha')
+check('bulk category: Undo still leaves the overridden day alone',
+      app.find_note(8140)['overrides']['2026-09-03']['category'] == 'Gamma')
+
+# The bulk route acts on a list that was filtered by whatever was typed
+# in the search box at the time -- the easiest one to regret, and the
+# reason the undo is here at all.
+_bc_seed([(8150, 'BcFindMe', 'Alpha', None),
+          (8151, 'BcHidden', 'Beta', None)])
+app.search_var.set('BcFindMe')
+if getattr(app, '_search_debounce_job', None) is not None:
+    app.after_cancel(app._search_debounce_job)
+    app._search_debounce_job = None
+app.refresh_note_list()
+app.update()
+check('bulk category: the filtered list shows only the match',
+      set(app._visible_note_ids()) == {8150})
+app.selection_mode = True
+app.selected_note_ids = {8150}
+_bc_pick('Target')
+check('bulk category: a single note is asked about in the singular',
+      '1 selected note' in _bc_asked.get('msg', '')
+      and 'This replaces the category on it.' in _bc_asked.get('msg', ''))
+check('bulk category: only the ticked note moved out of the filtered list',
+      app.find_note(8150)['category'] == 'Target'
+      and app.find_note(8151)['category'] == 'Beta')
+_bc_undo = app._toast_action
+_bc_undo()
+app.update()
+check('bulk category: Undo works from a filtered list too',
+      app.find_note(8150)['category'] == 'Alpha')
+app.search_var.set('')
+if getattr(app, '_search_debounce_job', None) is not None:
+    app.after_cancel(app._search_debounce_job)
+    app._search_debounce_job = None
+app.refresh_note_list()
+app.update()
+
+# The old category is deleted while the toast is still up. There is
+# nowhere to put the note back into, and inventing a destination is worse
+# than admitting it.
+_bc_seed([(8160, 'BcGone', 'Alpha', None), (8161, 'BcGone2', 'Beta', None)])
+app.selection_mode = True
+app.selected_note_ids = {8160, 8161}
+_bc_pick('Target')
+_bc_undo = app._toast_action
+_bc_dropped = NO.CATEGORY_COLORS.pop('Beta')
+_bc_undo()
+app.update()
+NO.CATEGORY_COLORS['Beta'] = _bc_dropped
+check('bulk category: a note whose old category is gone stays where it is',
+      app.find_note(8161)['category'] == 'Target')
+check('bulk category: the note whose category still exists goes back',
+      app.find_note(8160)['category'] == 'Alpha')
+check('bulk category: the status line admits the one it could not place',
+      'could not go back' in str(app.status_lbl.cget('text')))
+
+app.ask_yes_no = _bc_real_ask
+app.notes = list(_bc_saved)
+app.save_notes()
+app.new_note(); app.update()
+
 # ---- CLOSING SAVES SILENTLY (dead last: it destroys the app) ----
 # The quit-time "Unsaved notes" ask could only ever cover the last
 # half-second of typing; the app now trusts its own autosave and closes
