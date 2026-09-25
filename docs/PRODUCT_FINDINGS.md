@@ -43,6 +43,14 @@ Two findings are marked fixed on the changelog's evidence rather than
 the code's, and are labelled that way above: T0-3 and T2-1 are
 user-visible messages, where the shipped bullet is the better witness.
 
+One thing the column cannot keep honest on its own is a line number. An
+evidence cell cites `file:line` as it stood when the finding was written
+down, so on a **fixed** row it points into code that has since moved or
+gone — three do today, in T0-1, T0-4 and T1-4. Read those as part of the
+story rather than as directions. Only citations on rows still awaiting
+work are worth keeping current, which is why Round 2's rows name the
+build theirs were read against.
+
 ## How this was produced
 
 Two waves of parallel reviewers, each finding verified against the code
