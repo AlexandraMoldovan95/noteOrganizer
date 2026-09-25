@@ -247,6 +247,16 @@ A new surface joins this list the moment it ships.
   in the fixture, before measuring anything from it: one line checking
   that a box really is ticked would have caught it before the first
   number was written down.
+
+  A quieter instance of the same rule: a fixture can be *accidentally
+  indistinguishable* from what it is meant to contrast with. The bulk
+  category checks seed notes and then move them, and the undo is supposed
+  to put each note's `updated` stamp back — but notes created a moment
+  earlier carry a stamp equal to the change's own, to the second, so the
+  mutant that removed the restore entirely changed nothing the suite could
+  see. The fixture now seeds an explicit **old** stamp and checks that it
+  did. Where a check compares a value before and after, make sure the
+  fixture's value could not have been the answer by coincidence.
 - **Never hold a widget across something that rebuilds.** A reference
   found before a resize, a theme switch or a note-list refresh can name
   a widget that no longer exists by the time it is used, and Tk answers

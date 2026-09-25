@@ -32,6 +32,7 @@ day-to-day tracking.
 | [The ceiling that counted the wrong thing](#the-ceiling-that-counted-the-wrong-thing) | A ceiling has to bound what the victim actually pays — and a defence at the render is a data-loss bug when the save reads its data back out of the widget. | 0.71.155 |
 | [The identity that only lasted until you closed the app](#the-identity-that-only-lasted-until-you-closed-the-app) | A value computed on every read is not stored; if it must be stable, something has to write it down — and the test that proves it must survive a restart, not a function call. | 0.73.161 |
 | [The code that would not say which note it was](#the-code-that-would-not-say-which-note-it-was) | A payload built from the screen carries only what is on the screen — and a checked route proves nothing about the field added to it afterwards. | 0.73.165 |
+| [The undo that would have put everything in one place](#the-undo-that-would-have-put-everything-in-one-place) | An undo over many items remembers each item's own previous value; and "like the thing beside it" means asking what that thing's safety net really is. | 0.75.177 |
 | [The template editor that "did nothing" when clicked](#the-template-editor-that-did-nothing-when-clicked) | 'Nothing happens' in a --windowed build is a real bug report — the exception was invisible. | 0.3.0 |
 | [The panel that lost its content depending on how you got there](#the-panel-that-lost-its-content-depending-on-how-you-got-there) | Recalculate layout on Tk's `<Map>` event, not after a guessed delay. | 0.3.0 |
 | [The scroll that stopped twice, for two different reasons](#the-scroll-that-stopped-twice-for-two-different-reasons) | Same symptom, unrelated causes — check neighbouring areas instead of assuming one fix covers all. | 0.28.38 |
@@ -825,6 +826,75 @@ deleted.
 4. Four user-visible bugs, none of them findable by the suite as it
    stood, all found in twenty minutes of somebody actually using the
    app. The field test is not a formality at the end of the cycle.
+
+### The undo that would have put everything in one place
+
+*([0.75.177](../CHANGELOG.md#075177--2026-09-25))*
+
+**Symptom, found by comparing neighbours rather than by using the app.**
+Tick fifty notes, mean to export them, click one button to the left, and
+every one of them is refiled the instant a category name is clicked — no
+question, nothing on screen but a status line, and the categories they
+came from gone from the file. The button beside it, **Trash**, asks first
+*and* offers Undo. Recorded as C-1 in the
+[consistency survey](PRODUCT_FINDINGS.md#round-2--the-consistency-survey-2026-09-25).
+
+**Why the obvious fix would have been the wrong one.** "Same shape as its
+neighbour" is easy to say and easy to get half right. The Trash's real
+safety net is not its toast — it is the thirty days the note then spends
+in the Trash; the toast is a convenience on top. A category undo lasts
+eight seconds and then the old filing is gone for good. *Less durable
+recovery is what earns the question*, which is why this got both halves
+rather than the toast alone.
+
+**The part that was actually hard.** An undo for a batch is not one value
+remembered, it is one value *per member*. A bulk change exists for a
+mixed selection — notes sitting in several categories at once — so a
+single remembered "old category" would file every one of them back under
+whichever happened to be read first, and would have passed any check
+built on notes that all started in the same place. The marks therefore
+carry `(id, category, updated)` per note, mirroring how `_undo_trash`
+matches on `(id, deleted_at)` rather than on an object held from a moment
+ago.
+
+Three smaller things came out of the same read:
+
+- The confirmation had to be raised **after** the category popup is
+  dismissed. That popup is a borderless `Toplevel` that never takes
+  focus, so a modal opened in front of it leaves it floating over the
+  very question it is asking.
+- `updated` goes back too, because the alternative — stamping now, as
+  `_undo_occurrence_delete` does, having no record of the old value — would
+  send the whole batch to the top of a "Recently updated" list on account
+  of a change the user had just said they did not want.
+- The question must not over-promise. `category` is in
+  `OVERRIDABLE_FIELDS`, so a repeating note can have one day filed by
+  hand; the change leaves that day alone, which is right, and so "this
+  replaces the category on each of them" needed the same kind of
+  footnote the trash confirmation gives attached files.
+
+**A mutant that survived, and the fixture that was lying.** Breaking the
+`updated` restore changed nothing the suite could see. The reason was not
+the check but the notes it ran on: created a moment before the change,
+their stamp and the change's stamp were the same string to the second, so
+restoring it and not restoring it looked identical. The fixture now seeds
+an explicit old stamp and *states* it in a check of its own — a new
+instance of the rule qa/README already carries, that a fixture which does
+not do what its name says turns a measurement into a rumour.
+
+**The lessons.**
+
+1. An undo over many items remembers each item's own previous value. One
+   value for the batch is a bug that only shows on the selection the
+   feature exists for.
+2. "Make it like the thing beside it" is a starting point, not a
+   specification — ask what the neighbour's safety net actually is before
+   copying its shape. Here the neighbour's net was thirty days, not the
+   toast.
+3. A modal raised from inside a focus-less popup needs that popup gone
+   first, or it opens behind its own question.
+4. A surviving mutant is a question about the fixture as often as about
+   the check.
 
 
 ## Tk & platform gotchas

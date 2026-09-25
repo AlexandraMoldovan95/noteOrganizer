@@ -12,6 +12,7 @@ How the numbers themselves are counted is the
 
 | Version | Date | In one line |
 |---|---|---|
+| [0.75.177](#075177--2026-09-25) | 2026-09-25 | Moving a batch of ticked notes to another category asks first, and offers a way back — each note to the category it actually came from. |
 | [0.75.176](#075176--2026-09-25) | 2026-09-25 | The calendar stops drawing previews over menus and tables as rows of bars, and offers a note's actions the same way the rest of the app does. |
 | [0.75.173](#075173--2026-09-15) | 2026-09-15 | The selection bar shows all four of its actions, and a ticked box looks ticked on a dark theme. |
 | [0.74.170](#074170--2026-09-15) | 2026-09-15 | A repeating series says so wherever it can be deleted — including the Trash, where deleting cannot be undone. |
@@ -81,6 +82,35 @@ How the numbers themselves are counted is the
   padding the label could not see, and each was short — the subtitle asked for 620
   pixels and was given 544. They are taken from the label itself now, so a change to
   the layout cannot leave them behind again.
+
+---
+
+## [0.75.177] — 2026-09-25
+
+*Highlights: the one action in the selection bar that changed your notes with no question and no way back now has both.*
+
+### Fixed
+
+- **Moving a batch of ticked notes to another category asks first, and offers a way
+  back.** It was the only action in that bar with no guard at all: pick a category and
+  every ticked note was refiled the instant you clicked, with nothing on screen but a
+  status line — while **Trash**, the button beside it, asked first *and* offered Undo.
+  The categories it overwrote were gone from the file the moment it ran, which matters
+  most for exactly the selection a bulk change is for: notes that sat in several
+  different categories, whose old filing no single "put it back" could guess. So the
+  Undo remembers each note's own category rather than one value for the batch, and puts
+  the *last edited* stamps back too, so nothing you did not ask for is left behind. The
+  question says how many categories are being overwritten, and — where it applies — that
+  a day you gave its own category by hand keeps it.
+
+### Testing
+
+- Thirty-six checks in qa1 across eight scenarios: a mixed selection and the way back
+  from it, saying No costing nothing, a second click on a toast that has not faded, the
+  editor holding one of the ticked notes, a note ending in a table, a repeating series
+  with a day of its own, a filtered list, and a category deleted while the offer was
+  still on screen. Ten mutants break the mechanisms behind them one at a time, and each
+  dies on the check written for it.
 
 ---
 

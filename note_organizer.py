@@ -45,7 +45,7 @@ except ImportError:
 # Added/Fixed CHANGELOG.md entries, not per-release counts). The running
 # app records this into settings, so the next time a newer build opens
 # over older data it can tell the user what changed version-wise.
-APP_VERSION = "0.75.176"
+APP_VERSION = "0.75.177"
 
 
 def parse_version(v):
@@ -12642,6 +12642,35 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         return (f"\n\n{count} of them are repeating series — every occurrence "
                 "goes with them.")
 
+    def _category_override_warning(self, notes):
+        """Name the notes a category change will not reach all the way into.
+
+        `category` is in OVERRIDABLE_FIELDS, so a repeating note can carry
+        a per-day patch giving one occurrence its own category. A bulk
+        change writes the series' own category and leaves those days
+        alone, which is the right answer — a day filed by hand was filed
+        deliberately — but it makes "this replaces the category on each of
+        them" not quite true. Said out loud rather than promised away,
+        the same way the trash confirmation names attached files.
+        """
+        count = 0
+        for note in notes:
+            if not isinstance(note, dict):
+                continue
+            patches = note.get("overrides") or {}
+            if not isinstance(patches, dict):
+                continue
+            if any(isinstance(p, dict) and p.get("category")
+                   for p in patches.values()):
+                count += 1
+        if not count:
+            return ""
+        if count == 1:
+            return ("\n\nOne of them has a day with its own category, and "
+                    "that day keeps it.")
+        return (f"\n\n{count} of them have days with their own category, and "
+                "those days keep them.")
+
     def _bulk_move_to_trash(self):
         if not self.selected_note_ids:
             self.show_info("Nothing selected", "Tick one or more notes first.")
@@ -12708,7 +12737,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                  font=("Segoe UI", 8, "bold")).pack(anchor="w", padx=6, pady=(4, 2))
 
         def apply_category(cat):
-            count = len(self.selected_note_ids)
+            # The popup goes first, ahead of anything modal: it is an
+            # overrideredirect Toplevel that never takes focus, so a
+            # dialog raised while it is still up leaves it floating over
+            # the question being asked.
+            self._dismiss_mini_popup()
             # The editor may be holding one of these notes, with its own
             # category dropdown still showing the old value -- and the
             # editor's next save writes that dropdown back, undoing the
@@ -12718,18 +12751,57 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             #
             # Flush FIRST so anything typed is saved under the old
             # category rather than dropped, then change, then bring the
-            # editor onto the result.
+            # editor onto the result. It also has to happen before the
+            # question rather than only before the write: that dropdown
+            # may name a category the note is already leaving, and a
+            # dialog counting the categories ahead of the flush would be
+            # describing a state that no longer exists by the time the
+            # user answers.
             touched = set(self.selected_note_ids)
             self._flush_autosave()
-            for n in self.notes:
-                if n["id"] in self.selected_note_ids:
-                    n["category"] = cat
-                    n["updated"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            to_move = [n for n in self.notes if n["id"] in touched]
+            if not to_move:
+                # The ticked notes are gone. A dialog naming a count it
+                # cannot deliver is worse than saying so plainly.
+                self.show_info("Nothing to move", "Those notes are no longer here.")
+                return
+            count = len(to_move)
+            noun = "note" if count == 1 else "notes"
+            from_count = len({n.get("category") for n in to_move})
+            spread = ("" if from_count < 2
+                      else f" They sit in {from_count} different categories today.")
+            if not self.ask_yes_no(
+                "Change category",
+                f"Move {count} selected {noun} to \u201c{cat}\u201d?{spread} "
+                f"This replaces the category on "
+                f"{'it' if count == 1 else 'each of them'}."
+                f"{self._category_override_warning(to_move)}",
+                icon="question"
+            ):
+                return
+            # One mark per note, recording what THAT note is being moved
+            # out of. A single remembered "old category" for the batch
+            # would file every note back under whichever one happened to
+            # be read first -- and a mixed selection is precisely what a
+            # bulk change is for, so it is also what an undo has to
+            # survive.
+            marks = [(n["id"], n.get("category"), n.get("updated"))
+                     for n in to_move]
+            stamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            for n in to_move:
+                n["category"] = cat
+                n["updated"] = stamp
             self.save_notes()
             self._editor_follows_external_change(touched)
-            self._dismiss_mini_popup()
             self._exit_selection_mode_after_bulk_action()
             self.set_status(f"Moved {count} note(s) to \u201c{cat}\u201d")
+            # This was the one action in the bar that changed stored data
+            # with neither a question nor a way back, while the button
+            # beside it had both -- and the categories it overwrote were
+            # gone from the file the moment it ran.
+            self._show_toast(
+                f"Moved {count} {noun} to \u201c{cat}\u201d",
+                action=lambda: self._undo_bulk_category(marks, cat))
 
         for cat in CATEGORY_COLORS.keys():
             row = tk.Frame(frame, bg=self.colors["card"], cursor="hand2")
@@ -14878,6 +14950,73 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self.set_status(f"Put back: {title}")
         else:
             self.set_status(f"Put back {len(restored)} notes")
+
+    def _undo_bulk_category(self, marks, applied):
+        """Put each note back in the category it was moved out of.
+
+        `marks` carry one (id, category, updated) per note rather than one
+        old value for the batch, because the ticked notes can sit in
+        several categories at once -- which is the case a bulk change
+        exists for, and therefore the case its undo has to get right.
+
+        Only notes still filed under the category this undo is about are
+        touched. A second click on a toast that has not yet faded, or a
+        category set by hand in the seconds since, must not be overwritten
+        by a stale memory of what used to be there -- the same guard
+        _undo_trash gets by matching on (id, deleted_at).
+
+        `updated` goes back too. _undo_occurrence_delete stamps `now`
+        instead, because it has no record of the old value; here the mark
+        carries it, and restoring it means the notes do not all jump to
+        the top of a "Recently updated" list on account of a change the
+        user just said they did not want.
+        """
+        # The editor may be holding one of these notes and may have been
+        # typed into while the toast was up: save that under the category
+        # it was typed against, then move the note, then bring the editor
+        # onto the result -- the same order the change itself uses.
+        self._flush_autosave()
+        restored = []
+        homeless = 0
+        for note_id, old_category, old_updated in marks:
+            note = self.find_note(note_id)
+            if note is None or note.get("category") != applied:
+                continue
+            if old_category not in CATEGORY_COLORS:
+                # Renamed or deleted while the toast was up. There is
+                # nowhere to put this note back into, and normalize_note
+                # would file it under General on the next load anyway --
+                # so leave it where it is and say so, rather than invent
+                # a destination.
+                homeless += 1
+                continue
+            note["category"] = old_category
+            if isinstance(old_updated, str) and old_updated:
+                note["updated"] = old_updated
+            restored.append(note)
+
+        if not restored:
+            # Already put back, filed elsewhere by hand, or the old
+            # categories are gone: a second click on a toast that had not
+            # yet faded. Nothing to apologise for -- the notes are simply
+            # not where the click expected them.
+            self._show_toast("Nothing left to put back", kind="info")
+            return
+
+        self.save_notes()
+        self._editor_follows_external_change({n["id"] for n in restored})
+        self.refresh_note_list()
+        # No render_calendar() here, unlike _undo_trash: nothing the
+        # calendar draws comes from a note's category -- calendar_view.py
+        # does not read CATEGORY_COLORS at all -- and no note appears or
+        # disappears from a date. A delete changes which notes exist; this
+        # only changes how they are filed.
+        if homeless:
+            self.set_status(
+                f"Put back {len(restored)} note(s); {homeless} could not go "
+                "back to a category that no longer exists")
+        else:
+            self.set_status(f"Put back {len(restored)} note(s)")
 
     def _undo_occurrence_delete(self, note_id, date_str):
         """Put back the one day a repeating note was removed from.
