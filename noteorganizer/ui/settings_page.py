@@ -59,6 +59,11 @@ from ..core.model import _truncate
 from ..core.storage import (
     TRASH_RETENTION_DAYS,
     trash_retention_days,
+    # Asks which entries a window has already outlived, without deleting
+    # any of them: the same answer the startup purge acts on, so the
+    # confirmation below cannot promise a different number from the one
+    # that will actually go.
+    trash_entries_past_window,
     _delete_attachment_files,
     copy_attachment_file,
     get_setting,
@@ -1204,6 +1209,31 @@ class SettingsPageMixin:
         # it cannot afford an unclickable Restore.
         left.pack(side="left", fill="x", expand=True, padx=10, pady=8)
 
+    def _retention_loss_warning(self, doomed, days, current):
+        """What shortening the window to `days` is about to cost, in words.
+
+        `doomed` comes from trash_entries_past_window — the same answer the
+        startup purge acts on — so this cannot name a number the purge will
+        not deliver. The attached files are named because the purge deletes
+        them from disk too, which is the part of the damage nothing on this
+        screen has ever mentioned.
+        """
+        count = len(doomed)
+        noun = "note" if count == 1 else "notes"
+        files = sum(len(entry.get("attachments") or []) for entry in doomed
+                    if isinstance(entry, dict))
+        attached = ""
+        if files:
+            attached = (f", along with {files} attached "
+                        f"{'file' if files == 1 else 'files'}")
+        return (
+            f"The trash holds {count} {noun} older than {days} days.\n\n"
+            f"Keeping deleted notes for {days} days instead of {current} "
+            f"removes {'it' if count == 1 else 'them'} for good the next time "
+            f"the app starts{attached}. This can't be undone."
+            + self._series_warning(doomed)
+        )
+
     def _build_settings_trash_panel(self, parent):
         self._trash_subtitle_lbl = self._settings_subtitle(
             parent,
@@ -1223,6 +1253,31 @@ class SettingsPageMixin:
                 days = int(value.split()[0])
             except (ValueError, IndexError):
                 return
+            current = trash_retention_days()
+            # Only a SHORTER window can destroy anything, and only the
+            # entries it has already outlived. Lengthening is silent, and
+            # so is shortening with nothing old enough to lose -- a
+            # question nobody needs teaches people to dismiss questions.
+            if days < current:
+                doomed = trash_entries_past_window(self.trash, days)
+                # No parent= here, unlike its neighbours in this file: the
+                # dialog renders as an overlay inside the app window and
+                # _themed_dialog has no such parameter, so every parent=
+                # passed to it is silently dropped. Seven of those are
+                # already in this file; this is not the eighth.
+                if doomed and not self.ask_yes_no(
+                        "Keep deleted notes for less time",
+                        self._retention_loss_warning(doomed, days, current),
+                        icon="warning", default="no"):
+                    # The dropdown already shows the new label -- it is set
+                    # before this callback runs -- so backing out has to
+                    # put the old one back, or the screen says 7 days while
+                    # the setting says 30.
+                    try:
+                        self.trash_retention_var.set(f"{current} days")
+                    except tk.TclError:
+                        pass
+                    return
             save_setting("trash_retention_days", days)
             # The subtitle above quotes the window -- keep it honest
             # without rebuilding the panel under the dropdown's feet.

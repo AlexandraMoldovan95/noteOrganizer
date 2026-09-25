@@ -264,6 +264,23 @@ A new surface joins this list the moment it ships.
   undo's own `_schedule_autosave()` changed nothing it could see. The
   check now looks for the queued job. A forcing call in a check proves the
   forcing call works.
+- **A check that asserts a COUNT is satisfied by any wrong answer of the
+  same size.** Inverting the retention window's comparison still left one
+  doomed entry in a two-entry fixture — the other one — so a check reading
+  "1 note older than 7 days" passed over a mechanism that had been turned
+  inside out. Assert *which*, not how many, wherever identity is the point.
+  And pick fixture values that can only be explained one way: a note
+  deleted a day ago sits exactly on the one-day boundary and reads as
+  expired whether or not the clamp works, while twelve hours tells the two
+  apart. Three of that block's ten checks were satisfied by a boundary
+  coincidence like this one.
+- **Never read a verdict out of output that can be truncated without
+  saying so.** `tools/run_tests.py` prints the first eight failing checks.
+  Two live mutants read as survivors because the checks they broke were the
+  ninth and later: the names the runner searched for were never printed,
+  and a tool whose whole job is to say "this check has teeth" said the
+  opposite of the truth. Pass `--all-failures` when a script is reading the
+  output, and treat a list you can see was cut as no answer at all.
 - **A mutant that leaves no visible damage is telling you where the damage
   really is.** Removing the checklist undo's identity guard left the other
   note's list untouched, because the insert goes into the captured list,

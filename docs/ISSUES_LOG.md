@@ -34,6 +34,7 @@ day-to-day tracking.
 | [The code that would not say which note it was](#the-code-that-would-not-say-which-note-it-was) | A payload built from the screen carries only what is on the screen — and a checked route proves nothing about the field added to it afterwards. | 0.73.165 |
 | [The undo that would have put everything in one place](#the-undo-that-would-have-put-everything-in-one-place) | An undo over many items remembers each item's own previous value; and "like the thing beside it" means asking what that thing's safety net really is. | 0.75.177 |
 | [The offer that was gone before you could take it](#the-offer-that-was-gone-before-you-could-take-it) | Reassurance must never displace a one-time offer — and re-read the reason a finding gives, not just the finding. | 0.75.179 |
+| [The eight failures that hid two live mutants](#the-eight-failures-that-hid-two-live-mutants) | A check asserting a count is satisfied by the wrong answer of the same size; and never read a verdict out of output that truncates silently. | 0.75.180 |
 | [The template editor that "did nothing" when clicked](#the-template-editor-that-did-nothing-when-clicked) | 'Nothing happens' in a --windowed build is a real bug report — the exception was invisible. | 0.3.0 |
 | [The panel that lost its content depending on how you got there](#the-panel-that-lost-its-content-depending-on-how-you-got-there) | Recalculate layout on Tk's `<Map>` event, not after a guessed delay. | 0.3.0 |
 | [The scroll that stopped twice, for two different reasons](#the-scroll-that-stopped-twice-for-two-different-reasons) | Same symptom, unrelated causes — check neighbouring areas instead of assuming one fix covers all. | 0.28.38 |
@@ -2400,3 +2401,60 @@ more than one route, pin the route the promise is about.
 behaviour checks lie — they go green when the belt is gone and only the
 braces remain. Assert the mechanism where a net exists, and distrust
 any palette pair that shares a hex: it can vouch for nothing.
+
+### The eight failures that hid two live mutants
+
+*([0.75.180](../CHANGELOG.md#075180--2026-09-25))*
+
+**The fix was the easy half.** Shortening the Trash retention window
+destroyed everything the new window had already outlived, at the next
+startup, with no dialog. Ten mutants were written for the ten mechanisms
+behind the fix. Four survived, and every one of them was right to.
+
+**Four checks satisfied by coincidence.** None was wrong about what it
+asserted; each was simply also true when the mechanism was broken.
+
+1. The lengthening fixture used a note deleted 40 days ago and lengthened
+   the window to 90. Removing the "is this shorter?" test changed nothing,
+   because 40 days is *inside* a 90-day window — the doomed list was empty
+   either way, so the test never had to hold. The fixture now uses a note
+   older than every window the dropdown offers, the only shape where
+   lengthening has something already expired and the test therefore
+   matters.
+2. The clamp check compared a previewed window of 0 days against 1, on a
+   note deleted a day ago. A day-old note sits exactly on that boundary
+   and reads as expired under both, so unclamping changed neither side.
+   Twelve hours tells them apart.
+3. The ceiling check compared 10000 days against the 365-day clamp on a
+   40-day-old note: inside both, zero twice. It needed a note older than
+   the ceiling itself.
+4. The "counts only what would go" check asserted the number 1. Inverting
+   the window comparison also yields 1 — the other note. A count is
+   satisfied by the wrong answer whenever the wrong answer is the same
+   size, so the check now names *which* entry.
+
+**And two of the four had not survived at all.** After the first three
+were repaired, two mutants still read as survivors with no explanation.
+`tools/run_tests.py` prints the first eight failing checks; those mutants
+broke nine and fourteen, so the names the runner was searching for were
+never printed. The checks had fired. The verdict was the tool's.
+
+That is the more dangerous of the two lessons, because it inverts the
+sign: a mutation runner exists to say "this check has teeth", and a
+silently truncated list makes it say the opposite of the truth. The runner
+now asks for `--all-failures`, refuses to trust a list it can see was cut,
+and `run_tests.py` says "… and N more" when it cuts one.
+
+**The lessons.**
+
+1. A check that asserts a *count* is satisfied by any wrong answer of the
+   same size. Assert which, not how many, wherever identity is the point.
+2. A fixture chosen to look realistic is often chosen to sit inside every
+   boundary at once. Pick the value that can only be explained one way —
+   twelve hours, not one day; four hundred days, not forty.
+3. Never read a verdict out of output that can be truncated without saying
+   so. A tool that can be quietly wrong about whether a check works is
+   worse than no tool.
+4. Four of ten checks were satisfied by coincidence, and every one of them
+   passed against the real code. Mutation testing is not a formality that
+   confirms good checks; it is the only thing that finds this class at all.

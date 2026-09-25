@@ -45,7 +45,7 @@ except ImportError:
 # Added/Fixed CHANGELOG.md entries, not per-release counts). The running
 # app records this into settings, so the next time a newer build opens
 # over older data it can tell the user what changed version-wise.
-APP_VERSION = "0.75.179"
+APP_VERSION = "0.75.180"
 
 
 def parse_version(v):
@@ -233,6 +233,10 @@ from noteorganizer.core.storage import (
     _delete_attachment_files,
     copy_attachment_file,
     purge_expired_trash,
+    # The same question the purge acts on, asked without acting: what a
+    # retention window has already outlived. Re-exported here because the
+    # qa suite reaches everything through `import note_organizer as NO`.
+    trash_entries_past_window,
     backup_notes_file,
     # Aliased because the methods that call them are also called load_notes
     # and save_notes; without the alias the method name would shadow the
