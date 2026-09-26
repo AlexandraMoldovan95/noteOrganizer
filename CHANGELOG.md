@@ -12,6 +12,7 @@ How the numbers themselves are counted is the
 
 | Version | Date | In one line |
 |---|---|---|
+| [0.75.184](#075184--2026-09-26) | 2026-09-26 | In Settings → Duplicates, the button that cleans up every group now looks like the bigger action instead of the smaller one. |
 | [0.75.183](#075183--2026-09-26) | 2026-09-26 | Escape backs out of the app's small anchored popups — it never could before — and the two bulk popups that had no visible way out now carry a Cancel. |
 | [0.75.181](#075181--2026-09-26) | 2026-09-26 | Clearing a calendar day's colour or markers can be undone — on all three routes that discard it — and a note's menu says when Delete means the whole series. |
 | [0.75.180](#075180--2026-09-25) | 2026-09-25 | Shortening how long the Trash keeps notes asks first — and only when the shorter window would really destroy something. |
@@ -86,6 +87,34 @@ How the numbers themselves are counted is the
   padding the label could not see, and each was short — the subtitle asked for 620
   pixels and was given 544. They are taken from the label itself now, so a change to
   the layout cannot leave them behind again.
+
+---
+
+## [0.75.184] — 2026-09-26
+
+*Highlights: the last of the seven — a button that told you it was the smaller action while being the larger one.*
+
+### Fixed
+
+- **In Settings → Duplicates, the button that cleans up every group looks like the bigger
+  action now.** It carried the sidebar's own fill, the ordinary text colour, a smaller font
+  and less padding than the button directly below it — which only acts on the copies you
+  ticked. Photographed before the change, it did not read as a button at all: it blended
+  into the panel behind it, like a heading or something disabled. Visual weight is how a
+  reader works out which action is the broad one, and it said the opposite. It now matches
+  the other in size and carries the fill this app already uses for taking notes out of the
+  list — the same one the selection bar's **🗑 Trash** wears, which is likewise a move to
+  the Trash rather than a permanent delete. The precise action keeps the accent, so the eye
+  is warned by the sweeping one rather than drawn to it. Nothing about either button's
+  behaviour changed: both went and still go through one confirming path.
+
+### Testing
+
+- Five checks in qa2, four mutants — one for each dimension the weight can be wrong in:
+  the fill, the font, the padding, and both buttons shouting at once.
+- Photographed before and after on the real app, and the pictures were looked at. The
+  "before" is worse than the report described, which is why the size and padding moved as
+  well as the colour.
 
 ---
 

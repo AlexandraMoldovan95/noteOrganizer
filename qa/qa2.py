@@ -577,6 +577,35 @@ _dp_seed([3, 2])
 _dp_everything = _dp_button(app.settings_duplicates_panel, 'Clean up ALL')
 check('with several groups the all-groups button is offered (plan 71)',
       _dp_everything is not None)
+
+# The all-groups button was the quietest thing on the panel: the sidebar
+# fill, the theme's ordinary text colour, a smaller font and less padding
+# than the button below it, which acts only on what you ticked. Photographed
+# before the change, it did not read as a button at all -- it blended into
+# the panel behind it. Visual weight is how a reader works out which action
+# is the broad one, and it said the opposite (finding C-6).
+#
+# These run BEFORE the invoke below, which rebuilds the panel and would
+# leave the widgets they are about destroyed.
+_dp_ticked_btn = _dp_button(app.settings_duplicates_panel, 'Move ticked')
+check('the two cleanup buttons are both found for the weight check',
+      _dp_everything is not None and _dp_ticked_btn is not None)
+if _dp_everything is not None and _dp_ticked_btn is not None:
+    check('duplicates: the all-groups button is not painted quieter than '
+          'the one that acts on less',
+          str(_dp_everything.cget('font')) == str(_dp_ticked_btn.cget('font'))
+          and _dp_everything.pack_info().get('ipady')
+          == _dp_ticked_btn.pack_info().get('ipady'))
+    check('duplicates: it carries the fill this app uses for taking notes '
+          'out of the list',
+          str(_dp_everything.cget('bg')) == str(app.colors['danger'])
+          and str(_dp_everything.cget('fg')) == 'white')
+    check('duplicates: and it is no longer the sidebar colour it blended into',
+          str(_dp_everything.cget('bg')) != str(app.colors['sidebar']))
+    check('duplicates: the precise action keeps the accent, so the eye is '
+          'warned by the sweeping one rather than drawn to it',
+          str(_dp_ticked_btn.cget('bg')) == str(app.colors['accent']))
+
 if _dp_everything is not None:
     _dp_asked = []
     _dp_real_ask = app.ask_yes_no

@@ -1497,11 +1497,31 @@ class SettingsPageMixin:
             do_cleanup()
 
         if len(groups) > 1:
+            # Painted as the bigger action, because it is. This button was
+            # the quietest thing on the panel -- the sidebar fill, the
+            # theme's ordinary text colour, a smaller font and less padding
+            # than the button below it, which only acts on what you ticked.
+            # Visual weight is how a reader works out which action is the
+            # broad one, and it said the opposite (finding C-6).
+            #
+            # `danger` rather than `accent`: in this app that fill means
+            # "this takes notes out of your list" -- the selection bar's
+            # own "🗑 Trash" carries it, and that is a move to the Trash
+            # too, not a permanent delete. Both buttons here go through one
+            # confirming path, so nothing is lost for good either way; the
+            # red is about scope, not about danger of loss. Accent stays on
+            # the precise action, so the eye is warned by the sweeping one
+            # rather than drawn to it.
+            #
+            # Colours passed in the constructor, not track_theme: this panel
+            # is destroyed and rebuilt by _reopen_dup_panel, so it picks up
+            # the current palette on every build (see ARCHITECTURE on the
+            # two theming patterns).
             tk.Button(parent, text=f"🧹✨  Clean up ALL {len(groups)} groups (keep first in each)",
                       command=clean_up_everything,
-                      bg=self.colors["sidebar"], fg=self.colors["text"], relief="flat",
-                      font=("Segoe UI", 9, "bold"), cursor="hand2"
-                      ).pack(fill="x", padx=12, pady=(4, 4), ipady=5)
+                      bg=self.colors["danger"], fg="white", relief="flat",
+                      font=("Segoe UI", 10, "bold"), cursor="hand2"
+                      ).pack(fill="x", padx=12, pady=(4, 4), ipady=6)
 
         tk.Button(parent, text="🧹  Move ticked duplicates to trash", command=do_cleanup,
                   bg=self.colors["accent"], fg="white", relief="flat",

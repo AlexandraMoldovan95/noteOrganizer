@@ -264,6 +264,15 @@ A new surface joins this list the moment it ships.
   undo's own `_schedule_autosave()` changed nothing it could see. The
   check now looks for the queued job. A forcing call in a check proves the
   forcing call works.
+- **For a change that is about how something LOOKS, take the picture.** The
+  measurement for C-6 said the sweeping cleanup button was "quieter" than
+  its neighbour — a different fill, a smaller font. The photograph said it
+  did not read as a button at all: it blended into the panel behind it. The
+  numbers were right and the conclusion they supported was too small, so
+  the fix moved the size and padding as well as the colour. A before/after
+  pair costs one scratch script (stage the panel, `ImageGrab` the window)
+  and the "before" is taken by putting the old code back in a `finally`,
+  exactly as a mutant runner does.
 - **When a check's finding is an ABSENCE, it needs a control that produces
   the presence.** "I generated an Escape and the popup did not close" is
   equally consistent with the bug and with a harness that cannot deliver
