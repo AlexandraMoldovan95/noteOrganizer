@@ -39,6 +39,7 @@ day-to-day tracking.
 | [The undo that guarded the wrong state](#the-undo-that-guarded-the-wrong-state) | An undo must test for the state its own action produced, not the one it means to restore; and sweep for what else reaches the same loss. | 0.75.181 |
 | [The binding that could never fire](#the-binding-that-could-never-fire) | A binding is not an answer to "does this key work" — ask where the key goes; and a probe whose finding is an absence needs a control that produces the presence. | 0.75.183 |
 | [The paste that landed on top of the placeholder](#the-paste-that-landed-on-top-of-the-placeholder) | `bind()` replaces where `add="+"` accumulates, so a widget's own binding silently displaces a shared helper's; and a virtual event outranks the physical one beside it in the same bindtag. | 0.75.185 |
+| [The seven small rows, four of which were not what they said](#the-seven-small-rows-four-of-which-were-not-what-they-said) | A suggested fix is a hypothesis about the code — four of seven were wrong about scope, premise or mechanism, each found by a grep; and a check asserting `not in` against a name the code would never write cannot fail. | 0.76.192 |
 | [The template editor that "did nothing" when clicked](#the-template-editor-that-did-nothing-when-clicked) | 'Nothing happens' in a --windowed build is a real bug report — the exception was invisible. | 0.3.0 |
 | [The panel that lost its content depending on how you got there](#the-panel-that-lost-its-content-depending-on-how-you-got-there) | Recalculate layout on Tk's `<Map>` event, not after a guessed delay. | 0.3.0 |
 | [The scroll that stopped twice, for two different reasons](#the-scroll-that-stopped-twice-for-two-different-reasons) | Same symptom, unrelated causes — check neighbouring areas instead of assuming one fix covers all. | 0.28.38 |
@@ -2746,3 +2747,96 @@ the confidence without the correction.
 4. Cross-check a new finding against the register's own older rows. C-4's
    "Yes ready for Enter" was contradicted by T3-1, already recorded on the
    same page.
+
+### The seven small rows, four of which were not what they said
+
+*([0.76.192](../CHANGELOG.md#076192--2026-09-28))*
+
+The consistency survey's cheapest seven — a search box with no paste menu,
+a box that forgot its size, two different plus signs — were picked precisely
+because each looked like one or two lines. The pre-flight that runs before
+any fix here changed the shape of **four of the seven** before a line was
+written, and that is the whole point of the story: the cheap batch was where
+it paid off most, because nobody was looking hard at it.
+
+**C-11 grew a constant.** The row asked for `_add_paste_menu(search_entry)`
+and an ✕. The ✕ needs to know whether the box holds a real query or only its
+grey hint — and that judgement was already written out **three times**: once
+where the box is built, and twice, lowercased, inside the two functions that
+read the query (`if query == "search notes...": query = ""`). Nothing
+connected them, so rewording the hint would have left the app quietly
+filtering every list by it. The ✕ would have been a fourth. There is one
+`SEARCH_PLACEHOLDER` and one `_search_query()` now. The gate that polices
+this class, `tools/check_one_definition.py`, says of itself that it gains a
+rule when a duplicate costs the project something; this one had not, so it
+was consolidated without adding one.
+
+**C-12 grew from one field to six, and from a menu to a save.** The row said
+"the date entry at minimum; the recurrence number boxes are a weaker case,
+since they hold single digits". There are four Repeat boxes, and two are not
+digits: the end-date is a date, the same shape as the field the row *did*
+want fixed, and the day list holds "1,15". They are also free, because each
+one's variable traces to `update_recurrence_summary`, which schedules the
+autosave. The date field is **not** free: it autosaves on `<KeyRelease>`
+alone, and a paste fires none — measured, a pasted date scheduled no save
+while a typed character did. That is the silent loss the field's own comment
+says was repaired once for typing, and the new menu would have re-opened it
+on a new route. The check is now an invariant over the whole editor rather
+than a list of four fields, so the next box added without a menu fails it.
+
+**C-19's premise was different from the row's.** The row offered two
+branches: persist it, or say in a comment that the omission is deliberate.
+The code had something in between — a line at the **body's** call site
+noting that the comments box did not remember. That states the difference
+without giving a reason, so the row's condition was never met.
+
+**C-24 needed a different mechanism from its twin, and hid a third
+divergence.** The row asked for one sentence and an ✕ "to match the
+editor's". The editor's ✕ calls `pack_forget()` on its own area; the
+sidebar's frame is packed once when the Share panel is built and is part of
+that panel's layout, so forgetting it would take the panel's space with it —
+it clears the frame's children instead. And the two surfaces disagreed in a
+**third** way the row never mentioned: their titles ("Code for 3 notes (412
+chars)" against "Share code (412 characters)"). Left alone deliberately: the
+sidebar's note count is information the editor cannot carry, and its "chars"
+is a width accommodation in the 250px panel this project has already lost
+time to clipping fights over.
+
+**Two checks were wrong in instructive ways, and mutants found both.**
+
+A new one asserted the date reached the store *after calling
+`_flush_autosave()`* — a forcing call, which saves whatever the editor holds
+whether anything asked it to. It survived the mutant that removed the paste's
+save binding outright. That rule was already written down in `qa/README`,
+six rules above where the same mistake was made.
+
+An **old** one could never have failed:
+`check('the comments box is deliberately not persisted', 'comments_expanded'
+not in load_settings())`. The key the helper would write is
+`editor_comments_expanded`; `comments_expanded` was never a candidate, so the
+check asserted the absence of a name nothing would ever create. It stayed
+green through the change that made the box persist, which is how it was
+found — by a change that should have broken it, not by anyone reading it.
+
+**And one platform difference, caught by the Linux image and not by
+Windows:** Tk's Entry paste deletes the selected text only on non-X11. A
+check that selected a field's contents and pasted over them passed here and
+failed there with the field holding both values. The app ships on Windows, so
+that is the test's problem rather than the product's — but it is the third
+time the Linux image has found something invisible on Windows.
+
+**The lessons.**
+
+1. A row's own suggested fix is a hypothesis about the code, and it is
+   cheaper to check than to unpick. Four of seven were wrong about scope,
+   premise or mechanism, and every one of those was found by a grep.
+2. Where a new reader of a judgement is being added, count the existing
+   readers first. The fourth copy is the one that makes the first three a
+   bug.
+3. A check about an absence has to name the thing that would actually be
+   there. Asserting `not in` against a name the code would never write is a
+   check that cannot fail.
+4. Reading a rule is not following it. The forcing-call mistake was made
+   again on the same page it is documented on, so the mutant is what caught
+   it — which is the argument for running mutants on checks that look
+   obviously right.

@@ -85,7 +85,8 @@ The writing area starts at twelve lines. **Expand**, underneath it, makes it rou
 for a long note, and **Collapse** puts it back — the note itself is unaffected either way, only
 how much of it you can see at once. The buttons at the bottom of the editor do not go out of
 reach; the page simply gets longer and scrolls. The app remembers which you chose. The comments
-box has the same toggle, though it always opens small. Comments are plain text only — pasting a
+box has the same toggle and remembers it too, so a box you expanded stays expanded next time.
+Comments are plain text only — pasting a
 table there keeps the words and drops the table (tables live in the body, which draws them as a
 real grid), with a brief note telling you it happened.
 
@@ -334,6 +335,9 @@ it really is does.*
 
 Search the note list by keyword, and sort by recency, title, category, or date, from the controls
 above the list. This is the search for finding *which* note you want, across the whole notebook.
+An **✕** appears inside the search box once you have typed something; it empties the box and puts
+the whole list straight back. Right-clicking the box offers Cut / Copy / Paste, like every other
+text field in the app.
 
 To search *within* the note you already have open, press **Ctrl+F**. A small find bar appears in
 the top-right corner of the editor — inside the window, not a separate dialog. It looks through
@@ -506,7 +510,7 @@ note's own colour — useful for marking something about the day itself, like a 
 Open a note → Generate code. This generates a compact block of text representing that note's
 content, checklist included (attachments stay home — the full backup is what carries files) — paste it to someone
 else, and they can import it with **Import code** in the sidebar. You can also select several notes at once and generate one code covering
-all of them.
+all of them. Either way the code area carries an **✕** to put it away once you have copied it.
 
 ![Share panel](screenshots/share-panel.png)
 

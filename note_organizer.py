@@ -45,7 +45,7 @@ except ImportError:
 # Added/Fixed CHANGELOG.md entries, not per-release counts). The running
 # app records this into settings, so the next time a newer build opens
 # over older data it can tell the user what changed version-wise.
-APP_VERSION = "0.75.185"
+APP_VERSION = "0.76.192"
 
 
 def parse_version(v):
@@ -758,6 +758,76 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
     # a warning rather than a surprise, close enough that an ordinary title
     # never sees it.
     TITLE_COUNT_FROM = 40
+
+    # The sidebar search box's hint, and the single place it is written down.
+    # It used to be spelled out three times -- once where the box is built
+    # and twice, lowercased, in the two functions that read the query
+    # (`if query == "search notes...": query = ""`). Nothing connected them,
+    # so changing the wording would have left the app quietly filtering every
+    # list by its own hint text. Adding a fourth reader (the ✕ that appears
+    # only for a real query) is what made that worth closing.
+    SEARCH_PLACEHOLDER = "Search notes..."
+
+    def _search_query(self):
+        """What the user is actually searching for, lowercased.
+
+        Empty when the box is only showing its hint, which is not a query
+        even though it is the box's contents: the entry is wired to
+        `search_var`, so `add_placeholder` writing the hint in makes it
+        readable as one.
+        """
+        query = self.search_var.get().lower()
+        return "" if query == self.SEARCH_PLACEHOLDER.lower() else query
+
+    def _refresh_search_clear(self):
+        """Show the ✕ only while the box holds a real query.
+
+        A clear button that is always there invites clearing an empty box,
+        and one sitting beside the hint text suggests the hint is something
+        you could remove.
+        """
+        btn = getattr(self, "search_clear_btn", None)
+        if btn is None:
+            return                      # called while the row is being built
+        if self._search_query():
+            if not btn.winfo_ismapped():
+                btn.pack(side="right", padx=(0, 6))
+        elif btn.winfo_ismapped():
+            btn.pack_forget()
+
+    def _clear_search(self):
+        """Empty the search box and put the full list back, at once.
+
+        The hint is NOT written back here. The box takes the focus instead,
+        which is the state add_placeholder already gives a box someone has
+        clicked into, and its own <FocusOut> puts the hint back when they
+        look elsewhere — one mechanism for the hint rather than two.
+        """
+        self.search_var.set("")
+        try:
+            self.search_entry.focus_set()
+        except tk.TclError:
+            pass
+        # The var write above queued a rebuild 180ms out. Clearing a search
+        # should feel like the list snapping back, so the wait is dropped and
+        # the rebuild happens now -- the debounce is there to make TYPING
+        # cheap, and this is one event, not a stream of them.
+        if self._search_debounce_job is not None:
+            try:
+                self.after_cancel(self._search_debounce_job)
+            except (tk.TclError, ValueError):
+                pass
+            self._search_debounce_job = None
+        self.refresh_note_list()
+
+    # One sentence for one fact. A share code carries a note's text and not
+    # its files, and the two places that say so said it differently -- the
+    # sidebar "Attachments not included", the editor "Attachments aren't
+    # included in a code". The editor's wording is the one kept, because it
+    # names WHICH mechanism leaves them out, which is the part a reader needs
+    # to know that Export does include them.
+    SHARE_ATTACHMENT_WARNING = (
+        "⚠ Attachments aren't included in a code — use Export for files.")
 
     def _refresh_title_count(self, event=None):
         """Show how much title is left, once there is little enough of it.
@@ -4806,6 +4876,16 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         drift away from it again."""
         outer = tk.Frame(popup, bg=self.colors["card"], padx=1, pady=1)
         outer.pack()
+        # The same header the text-colour popup beside it has carried all
+        # along. It lived at that popup's own call site, inside the branch
+        # `kind == "highlight"` never takes, so the highlight palette drew
+        # none -- on either route here. Putting it in the shared function
+        # rather than at a call site is what gives the toolbar popup and
+        # the table cell's popup the same one.
+        header = tk.Label(outer, text="Pick a highlight color",
+                          font=("Segoe UI", 10, "bold"),
+                          bg=self.colors["card"], fg=self.colors["text"])
+        header.pack(padx=15, pady=(12, 8))
         # The hairline is the COLUMN's background peeking through the
         # one-pixel gaps between swatches: the theme's accent softened
         # toward the card, so a purple theme parts them with a paler
@@ -7094,7 +7174,6 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._dismiss_mini_popup()
         palette = PRESET_NOTE_COLORS if kind == "text_color" else HIGHLIGHT_COLOR_PALETTE
         anchor_btn = self.text_color_btn if kind == "text_color" else self.highlight_btn
-        label_text = "Pick a text color" if kind == "text_color" else "Pick a highlight color"
 
         popup = tk.Toplevel(self)
         self._mini_popup = popup
@@ -7116,8 +7195,14 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             body = tk.Frame(outer, bg=self.colors["card"])
             body.pack()
 
-            label = tk.Label(body, text=label_text, font=("Segoe UI", 10, "bold"),
-                              bg=self.colors["card"], fg=self.colors["text"])
+            # Only this branch draws a header, and only text_color reaches
+            # it, so the text is written out rather than chosen here. It used
+            # to be picked above by a conditional whose highlight half was
+            # computed on every open and never displayed -- the highlight
+            # popup takes the branch above and carries its own header now.
+            label = tk.Label(body, text="Pick a text color",
+                             font=("Segoe UI", 10, "bold"),
+                             bg=self.colors["card"], fg=self.colors["text"])
             label.pack(padx=15, pady=(12, 8))
 
             swatch_grid = tk.Frame(body, bg=self.colors["card"])
@@ -7978,15 +8063,50 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         code = encode_share_code(chosen)
         self._render_inline_code(self.share_code_area, code, len(chosen), had_attachments)
 
+    def _clear_inline_code(self, area):
+        """Take a generated share code off the panel it was drawn on.
+
+        The children are destroyed rather than the frame being
+        pack_forget()ed, because that frame is packed once when the Share
+        panel is built and is part of its layout -- the same gesture
+        _generate_inline_share makes before redrawing into it.
+
+        Deferred because the ✕ that calls this lives INSIDE the frame being
+        emptied, so a synchronous loop destroys the button whose callback is
+        still running. That is a documented Tk hazard rather than something
+        measured here: a generated click cannot press this button in the test
+        harness at all (`tk.Button` fires on release, and even a generated
+        press+release does not reach it), so the synchronous version could not
+        be shown to break. The editor's own ✕ avoids the same hazard a
+        different way, by pack_forget()ing an ancestor instead of destroying
+        itself. One idle cycle is a cheap way not to rely on luck.
+        """
+        def clear():
+            for w in area.winfo_children():
+                w.destroy()
+        self.after_idle(clear)
+
     def _render_inline_code(self, parent, code, count, had_attachments):
         """Show a generated code inline with a Copy button (used by share)."""
         noun = "note" if count == 1 else "notes"
-        tk.Label(parent, text=f"Code for {count} {noun} ({len(code)} chars):",
+        head = tk.Frame(parent, bg=self.colors["sidebar"])
+        head.pack(fill="x", pady=(4, 2))
+        # "chars" and not "characters" on purpose: this line lives in a 250px
+        # sidebar at font 8, where the editor's roomier wording would clip.
+        # The note count is information the editor's version cannot carry,
+        # since that one is always about the open note.
+        tk.Label(head, text=f"Code for {count} {noun} ({len(code)} chars):",
                  font=("Segoe UI", 8, "bold"), anchor="w",
                  bg=self.colors["sidebar"], fg=self.colors["text"]
-                 ).pack(fill="x", pady=(4, 2))
+                 ).pack(side="left")
+        # The editor's code area has always had an ✕; this one could only be
+        # dismissed by closing the whole Share panel.
+        tk.Button(head, text="✕", command=lambda p=parent: self._clear_inline_code(p),
+                  bg=self.colors["sidebar"], fg=self.colors["subtext"],
+                  relief="flat", font=("Segoe UI", 9, "bold"),
+                  cursor="hand2", bd=0).pack(side="right")
         if had_attachments:
-            tk.Label(parent, text="⚠ Attachments not included — use Export for files.",
+            tk.Label(parent, text=self.SHARE_ATTACHMENT_WARNING,
                      font=("Segoe UI", 7), anchor="w", wraplength=200, justify="left",
                      bg=self.colors["sidebar"], fg=self.colors["danger"]
                      ).pack(fill="x", pady=(0, 2))
@@ -8228,7 +8348,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                   bg=self.colors["bg"], fg=self.colors["subtext"], relief="flat",
                   font=("Segoe UI", 10, "bold"), cursor="hand2").pack(side="right")
         if had_attachments:
-            tk.Label(parent, text="⚠ Attachments aren't included in a code — use Export for files.",
+            tk.Label(parent, text=self.SHARE_ATTACHMENT_WARNING,
                      font=("Segoe UI", 8), anchor="w", wraplength=600, justify="left",
                      bg=self.colors["bg"], fg=self.colors["danger"]).pack(fill="x", pady=(2, 2))
         box = tk.Text(parent, height=3, wrap="char", font=("Consolas", 9),
@@ -8882,7 +9002,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # on the build-time palette — invisible after a dark<->light switch.
         self.track_theme(entry, bg="sidebar", fg="text",
                          insertbackground="text")
-        tk.Button(add_row, text="＋ Add", command=self._add_checklist_item,
+        # ASCII "+", like every other add-button in the app. A fullwidth
+        # U+FF0B renders noticeably wider, and this one sits a few
+        # centimetres from the attachments panel's "+ Add file".
+        tk.Button(add_row, text="+ Add", command=self._add_checklist_item,
                   bg=self.colors["accent"], fg="white", relief="flat",
                   font=("Segoe UI", 9, "bold"), cursor="hand2"
                   ).pack(side="left", padx=(6, 0), ipadx=8, ipady=2)
@@ -9954,6 +10077,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._search_debounce_job = None
 
         def _debounced_search_refresh(*args):
+            # The ✕ first, and NOT on the timer: whether the box holds a real
+            # query is known now, and a clear button that appeared a fifth of
+            # a second after the typing would read as a glitch.
+            self._refresh_search_clear()
             # Rebuilding the whole note list is not cheap (every card is a
             # handful of widgets) — doing it on every keystroke made typing a
             # search term feel laggy with a large note collection, worse the
@@ -9967,14 +10094,38 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self._search_debounce_job = self.after(180, self.refresh_note_list)
 
         self.search_var.trace_add("write", _debounced_search_refresh)
-        search_entry = tk.Entry(
-            self.sidebar, textvariable=self.search_var,
+        # The entry and its ✕ share a frame wearing the entry's own fill, so
+        # the button reads as sitting inside the box rather than beside it.
+        # The row carries the padding the entry used to carry itself.
+        search_row = tk.Frame(self.sidebar)
+        self.track_theme(search_row, bg="card")
+        search_row.pack(fill="x", padx=15, pady=(0, 10))
+        self.search_entry = search_entry = tk.Entry(
+            search_row, textvariable=self.search_var,
             insertbackground=self.colors["text"], relief="flat", font=("Segoe UI", 11)
         )
         self.track_theme(search_entry, bg="card", fg="text", insertbackground="text")
         self._guard_entry_astral(search_entry)
-        search_entry.pack(fill="x", padx=15, pady=(0, 10), ipady=6)
+        search_entry.pack(side="left", fill="x", expand=True, ipady=6)
+        # The most-used field in the app was the only text field without one.
+        self._add_paste_menu(search_entry)
+        # Long-lived (this row is built once and never rebuilt), so
+        # track_theme — and every colour option it has, not just bg and fg:
+        # an untracked activebackground is how a button ends up wearing the
+        # old accent after a theme switch.
+        self.search_clear_btn = tk.Button(
+            search_row, text="✕", command=self._clear_search,
+            relief="flat", bd=0, cursor="hand2", font=("Segoe UI", 9, "bold"),
+            highlightthickness=0)
+        self.track_theme(self.search_clear_btn, bg="card", fg="subtext",
+                         activebackground="card", activeforeground="text",
+                         highlightbackground="card")
         self.add_placeholder(search_entry, "Search notes...")
+        # The placeholder went in through search_var, so the trace has
+        # already run once and settled the ✕. Called again anyway, because
+        # relying on that ordering is how this breaks when someone reorders
+        # these lines.
+        self._refresh_search_clear()
 
         # Sort + category filter row
         filter_row = tk.Frame(self.sidebar)
@@ -10409,6 +10560,17 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # already autosaves via _pick()) previously had no autosave binding
         # at all, so a typed date change could be silently lost.
         self.date_entry.bind("<KeyRelease>", self._schedule_autosave)
+        # And a PASTED date reaches the field without any key release, so the
+        # line above never sees it -- measured: a pasted date scheduled no
+        # save at all while a typed character did. That is the same silent
+        # loss the comment above describes, on the route the paste menu below
+        # is about to open. add="+" keeps add_placeholder's own <<Paste>>
+        # clear, which runs first and is what stops the paste landing on top
+        # of "YYYY-MM-DD".
+        self.date_entry.bind("<<Paste>>", self._schedule_autosave, add="+")
+        # Pasting a date copied out of an email is an ordinary thing to want,
+        # and this was the field that most invited it and refused.
+        self._add_paste_menu(self.date_entry)
 
         pick_date_btn = tk.Button(
             meta_row, text="📅", command=self.open_date_picker,
@@ -10803,11 +10965,14 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
         # How tall the writing area should be is a property of the note, not
         # of the app: twelve rows suits most notes and is cramped for a long
-        # one. Unlike the comments box below, this one remembers the choice --
-        # someone who writes long notes wants the taller box every time, not
-        # once per launch. Nothing else has to change for the taller box to
-        # work: the editor already scrolls, so the page simply gets longer and
-        # the buttons underneath stay reachable.
+        # one. This box remembers the choice -- someone who writes long notes
+        # wants the taller box every time, not once per launch. (It used to
+        # say "unlike the comments box below", which was the only thing
+        # written down about that asymmetry: a statement of it, never a reason
+        # for it. The comments box remembers too now, by the same argument.)
+        # Nothing else has to change for the taller box to work: the editor
+        # already scrolls, so the page simply gets longer and the buttons
+        # underneath stay reachable.
         self.body_resize_btn = self._add_text_resize_toggle(
             self.editor, self.body_text, compact=12, expanded=26,
             pack_kwargs={"padx": 30, "pady": (0, 8)},
@@ -10892,9 +11057,14 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.comments_text.bind("<<Paste>>", self._on_comments_paste, add="+")
         self.comments_text.bind("<KeyRelease>", self._schedule_autosave)
         # Expand/Collapse toggle for the comments box (compact 4 rows <-> 12).
+        # Remembered, like the body's identical toggle above. The helper's own
+        # docstring draws the line at "a box whose size is incidental" versus
+        # "one someone chose", and a box someone reached down and expanded is
+        # the second kind whichever box it is.
         self._add_text_resize_toggle(self.editor, self.comments_text,
                                      compact=4, expanded=12,
-                                     pack_kwargs={"padx": 30, "pady": (0, 8)})
+                                     pack_kwargs={"padx": 30, "pady": (0, 8)},
+                                     remember_key="editor_comments_expanded")
 
         # Reliable undo/redo on both editors (Ctrl+Z / Ctrl+Y and
         # Ctrl+Shift+Z). The body goes through _body_undo_redo, which also
@@ -11519,6 +11689,16 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         )
         self.track_theme(interval_entry, bg="card", fg="text", insertbackground="text")
         interval_entry.pack(side="left", padx=6, ipady=2)
+        # Every box in the Repeat panel gets the paste menu, not just the two
+        # that obviously invite it. The register's row waved these away as
+        # "single digits, reasonable to leave" -- true for this one and the
+        # count, and false for the end-date (a date, the same shape as the
+        # note's own) and the day list ("1,15"). And they are free: each of
+        # these vars traces to update_recurrence_summary, which schedules the
+        # autosave, so a paste here saves without a binding of its own --
+        # unlike the date field above. Leaving two of four would be the same
+        # patchwork the row is about.
+        self._add_paste_menu(interval_entry)
         self.rec_interval_var.trace_add("write", lambda *a: self.update_recurrence_summary())
 
         self.rec_unit_lbl = tk.Label(interval_row, text="day(s)", font=("Segoe UI", 9))
@@ -11558,6 +11738,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         )
         self.track_theme(monthdays_entry, bg="card", fg="text", insertbackground="text")
         monthdays_entry.pack(side="left", ipady=2)
+        # A list like "1,15", not a single digit -- the one of these four the
+        # row's reasoning fits least.
+        self._add_paste_menu(monthdays_entry)
         self.rec_monthdays_var.trace_add("write", lambda *a: self.update_recurrence_summary())
 
         md_hint = tk.Label(
@@ -11616,6 +11799,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         )
         self.track_theme(self.rec_end_date_entry, bg="card", fg="text", insertbackground="text")
         self.rec_end_date_entry.pack(side="left", padx=(4, 2), ipady=2)
+        # A date, exactly like the note's own date field, and just as likely
+        # to be pasted from somewhere else.
+        self._add_paste_menu(self.rec_end_date_entry)
         self.rec_end_date_var.trace_add("write", lambda *a: self.update_recurrence_summary())
 
         self.rec_end_date_pick_btn = tk.Button(
@@ -11636,6 +11822,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         )
         self.track_theme(self.rec_count_entry, bg="card", fg="text", insertbackground="text")
         self.rec_count_entry.pack(side="left", padx=(4, 2), ipady=2)
+        self._add_paste_menu(self.rec_count_entry)
         self.rec_count_var.trace_add("write", lambda *a: self.update_recurrence_summary())
 
         times_lbl = tk.Label(end_row, text="times", font=("Segoe UI", 9))
@@ -12046,9 +12233,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # it only ever describes what is on screen.
         self._group_header_widgets = {}
 
-        query = self.search_var.get().lower()
-        if query == "search notes...":
-            query = ""
+        query = self._search_query()
 
         filtered = [n for n in self.notes
                     if self._query_matches_note(query, n)]
@@ -12601,9 +12786,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         the same set, or the button offers to select what is already
         selected.
         """
-        query = self.search_var.get().lower()
-        if query == "search notes...":
-            query = ""
+        query = self._search_query()
         visible = [n for n in self.notes
                    if self._query_matches_note(query, n)]
         chosen_category = getattr(self, "filter_var", None)

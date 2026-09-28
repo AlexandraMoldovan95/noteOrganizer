@@ -675,6 +675,79 @@ app.templates.remove(app.templates[-1])
 app.ask_yes_no = _real_ask9
 
 # ============================================================
+# THE TEMPLATE EDITOR'S DELETE IS A DRAWN GLYPH (C-21)
+# ============================================================
+# Every other delete in Settings draws its bin on a canvas; this row was the
+# last literal emoji. An emoji is a fixed-colour bitmap, so it stayed the same
+# red on all eight themes while the shapes beside it followed the palette --
+# and it was red at rest, where the drawn ones are faint until hovered.
+# _icon_button records which glyph it drew on the canvas, because a canvas has
+# no text to search for the way a Button does.
+_tplBin = NO.normalize_template({
+    'name': 'BinTest', 'title': 't', 'body': 'b', 'category': 'General',
+    'checklist': [{'text': 'one', 'done': False},
+                  {'text': 'two', 'done': False}]})
+app.templates.append(_tplBin)
+app._edit_template(_tplBin, lambda: None)
+app.update()
+
+
+def _all_widgets9(w, acc=None):
+    if acc is None:
+        acc = []
+    for c in w.winfo_children():
+        acc.append(c)
+        _all_widgets9(c, acc)
+    return acc
+
+
+_tplKids = _all_widgets9(app._mini_popup)
+_drawnBins = [w for w in _tplKids if getattr(w, '_icon_kind', None) == 'trash']
+_emojiBins = [w for w in _tplKids
+              if isinstance(w, tk.Button) and str(w.cget('text')) == '🗑']
+check(f'the template checklist rows delete with a drawn bin '
+      f'({len(_drawnBins)} found, one per item)', len(_drawnBins) == 2)
+check('and no literal emoji bin is left in the dialog', not _emojiBins)
+# Faint at rest, like the reference: a list of rows must not read as a column
+# of red warnings before anyone has reached for anything. The emoji one was
+# self.colors["danger"] always.
+if _drawnBins:
+    _binColours = {str(w.itemcget(i, 'fill'))
+                   for w in _drawnBins[:1]
+                   for i in w.find_withtag('glyph')}
+    check(f'the bin is drawn faint, not danger-red, at rest ({_binColours})',
+          str(app.colors['danger']).lower() not in
+          {c.lower() for c in _binColours})
+
+# ============================================================
+# ONE PLUS CHARACTER IN THE WHOLE INTERFACE (C-20)
+# ============================================================
+# Add-buttons were spelled with two different plus signs -- ASCII "+" in four
+# places and fullwidth U+FF0B in three, which render at noticeably different
+# widths, so panels beside each other looked like they came from different
+# apps. Asked of the BUILT widgets rather than of the source, so it covers
+# what a person actually sees, and so a new button added later is caught.
+_fullwidth = []
+for _w in _all_widgets9(app) + _all_widgets9(app._mini_popup):
+    try:
+        _t = str(_w.cget('text'))
+    except tk.TclError:
+        continue
+    if '＋' in _t:
+        _fullwidth.append((_w.winfo_class(), _t[:40]))
+check(f'no widget uses a fullwidth plus ({_fullwidth})', not _fullwidth)
+# THE CONTROL: the ASCII ones are really there, so the check above is not
+# passing because nothing has a plus at all.
+_ascii_plus = [str(_w.cget('text')) for _w in _all_widgets9(app._mini_popup)
+               if _w.winfo_class() == 'Button'
+               and str(_w.cget('text')).startswith('+ ')]
+check(f'and the template dialog really does have an ASCII add-button '
+      f'({_ascii_plus})', any(t.startswith('+ ') for t in _ascii_plus))
+app._dismiss_mini_popup()
+app.update()
+app.templates.remove(_tplBin)
+
+# ============================================================
 # Same class of bug, second location: the calendar's Jump-to-month popup
 # ============================================================
 app.notebook.select(app.TAB_CALENDAR)
