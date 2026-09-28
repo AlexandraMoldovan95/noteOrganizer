@@ -288,6 +288,18 @@ A new surface joins this list the moment it ships.
   a 2-second run with one unrelated failure means the suite never reached
   the line. Read the timing and the failure count, not just the absence
   of the name.
+- **`winfo_ismapped()` is False for a moment after packing, and code that
+  asks it will skip the widget you just packed.** `toggle_settings_panel`
+  hides whichever section is showing by looping over the panels and
+  unpacking the mapped one. Called straight after `show_settings_page()`
+  with no `update()` between, the previous section is packed but not yet
+  mapped, the loop skips it, and BOTH sections end up on screen — a
+  reference photograph came out with Recently deleted stacked under a nav
+  reading Templates. A person never hits this, because a click always
+  arrives after Tk has drawn. A script does. **Put an `update()` between
+  showing a thing and selecting within it**, and the same applies to any
+  check reading `winfo_ismapped` to decide what is on screen. Sibling of
+  the chip that looked clickable, in the Issues Log.
 - **A check about an ABSENCE must name the thing that would actually be
   there.** `check('the comments box is deliberately not persisted',
   'comments_expanded' not in NO.load_settings())` could never have failed:
