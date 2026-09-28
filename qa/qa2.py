@@ -214,6 +214,88 @@ check('a repeating note is flagged in its preview title',
       any('\U0001F501' in t for t in _lbls))
 app.hide_day_tooltip(); app.update()
 
+# ============================================================
+# THE CHIP IS THE NOTE, AND BEHAVES LIKE ONE (C-8)
+# ============================================================
+# Hovering a note's title in the month grid has always previewed THAT
+# note -- and then clicking it opened the whole day, so someone who had
+# just read "Dentist, 14:00" landed on a list of the day's notes and had
+# to find it again. Right-click, this app's own route to a note's
+# actions, offered "Color this day...". Every action a note has was
+# unreachable from the grid, although the same-looking row in the day
+# panel carries all of them.
+import datetime as _c8_dt
+_c8_d = _c8_dt.date.fromisoformat(_D13)
+app.cal_year, app.cal_month = _c8_d.year, _c8_d.month
+app.render_calendar()
+app.update()
+
+
+def _c8_chips(root, acc=None):
+    """The note titles drawn in the grid: a Label that names a note."""
+    acc = [] if acc is None else acc
+    for child in root.winfo_children():
+        if isinstance(child, tk.Label) and 'Hover' in str(child.cget('text')):
+            acc.append(child)
+        _c8_chips(child, acc)
+    return acc
+
+
+_c8_found = _c8_chips(app.cal_frame if hasattr(app, 'cal_frame') else app)
+check(f'the grid draws the note as a chip ({len(_c8_found)} found)',
+      bool(_c8_found))
+if _c8_found:
+    _c8_chip = _c8_found[0]
+    # THE PROMISE THE HOVER MAKES. Clicking the chip must land on that one
+    # note, not on the day's list -- which is what the day cell around it
+    # still does, and rightly.
+    _qa_click(_c8_chip)
+    app.update()
+    check('clicking the chip lands on that one note, not the whole day',
+          getattr(app, '_day_panel_mode', None) == 'note')
+    # And the right-click is the note's menu, not the day's.
+    _c8_posted = []
+    _c8_real = NO.tk.Menu.tk_popup
+    NO.tk.Menu.tk_popup = lambda _m, *a, **k: _c8_posted.append(_m)
+    try:
+        _c8_chip.event_generate('<Button-3>', x=5, y=5)
+        app.update()
+        _c8_labels = []
+        if _c8_posted:
+            for _i in range(_c8_posted[-1].index('end') + 1):
+                try:
+                    _c8_labels.append(
+                        str(_c8_posted[-1].entrycget(_i, 'label')))
+                except tk.TclError:
+                    _c8_labels.append('---')
+        check(f'right-clicking the chip offers the NOTE\'s actions '
+              f'({len(_c8_labels)} entries)',
+              any('Pin' in _l for _l in _c8_labels)
+              and any('Duplicate' in _l for _l in _c8_labels))
+        check('...and not the day menu it used to give',
+              not any('Color this day' in _l for _l in _c8_labels))
+        # THE CONTROL: the DAY's own menu must still be there, on the cell
+        # around the chip -- the day number and the background are the day,
+        # and taking its menu away would trade one gap for another.
+        _c8_posted.clear()
+        _c8_cell = _c8_chip.master
+        _c8_cell.event_generate('<Button-3>', x=5, y=5)
+        app.update()
+        _c8_day_labels = []
+        if _c8_posted:
+            for _i in range(_c8_posted[-1].index('end') + 1):
+                try:
+                    _c8_day_labels.append(
+                        str(_c8_posted[-1].entrycget(_i, 'label')))
+                except tk.TclError:
+                    _c8_day_labels.append('---')
+        check(f'the cell around it still offers the DAY\'s menu '
+              f'({len(_c8_day_labels)} entries)',
+              any('day' in _l.lower() for _l in _c8_day_labels))
+    finally:
+        NO.tk.Menu.tk_popup = _c8_real
+app.update()
+
 # Day COLOUR through the real palette popup: open, click a swatch,
 # assert the colour lands, persists, and the reset path clears it.
 def _find_swatches(root):

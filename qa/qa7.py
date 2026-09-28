@@ -612,8 +612,133 @@ app.save_notes()
 app.refresh_note_list(); app.update()
 app.open_note_in_tab(app.find_note(20))
 app.update()
-check('opened note is highlighted', app._note_card_widgets[20]['card'].cget('highlightthickness') == 2)
-check('other note is not highlighted', app._note_card_widgets[21]['card'].cget('highlightthickness') == 0)
+# Asked of the COLOUR, not the thickness. Every card carries a two-pixel
+# ring now, because the same border does double duty: Tk paints
+# `highlightbackground` while a widget has no keyboard focus and
+# `highlightcolor` while it does, so one border says both "this is the
+# note you have open" (accent) and "this is where the keyboard is"
+# (text). Uniform thickness is what stops the list shifting by two pixels
+# as the focus walks down it -- and it means thickness no longer answers
+# the question this check is about.
+check('opened note is highlighted',
+      str(app._note_card_widgets[20]['card'].cget('highlightbackground'))
+      == str(app.colors['accent']))
+check('other note is not highlighted',
+      str(app._note_card_widgets[21]['card'].cget('highlightbackground'))
+      == str(app.colors['card']))
+
+# ============================================================
+# A NOTE'S ACTIONS ARE REACHABLE FROM THE KEYBOARD (C-9)
+# ============================================================
+# Pinning, exporting, duplicating and deleting all live in the right-click
+# menu and nowhere else, so anyone working by keyboard could reach none of
+# them. The row asked for two bindings; measured first, a card's takefocus
+# was '0' and nothing in the app ever focused one -- so the bindings would
+# have been bindings that could never fire, and the missing piece was a
+# way for a person to get there.
+_c9_card = app._note_card_widgets[20]['card']
+_c9_other = app._note_card_widgets[21]['card']
+check('a note card is in the keyboard traversal now',
+      str(_c9_card.cget('takefocus')) in ('1', 'True'))
+_c9_card.focus_set()
+app.update(); app.update_idletasks()
+check('fixture: the keyboard really is on the card',
+      app.focus_get() is _c9_card)
+# The ring does double duty, so a focused card must be distinguishable
+# from the open one rather than sharing its colour.
+check(f'the focus ring is a different colour from the open-note ring '
+      f'(ring={str(_c9_card.cget("highlightcolor"))!r}, '
+      f'text={str(app.colors["text"])!r}, '
+      f'accent={str(app.colors["accent"])!r})',
+      str(_c9_card.cget('highlightcolor')) != str(app.colors['accent'])
+      and str(_c9_card.cget('highlightcolor')) == str(app.colors['text']))
+
+# The menu, from the keyboard, posted where the note is.
+_c9_posted = []
+_c9_real = NO.tk.Menu.tk_popup
+NO.tk.Menu.tk_popup = lambda _m, *a, **k: _c9_posted.append((_m, a))
+try:
+    _c9_card.event_generate('<Shift-F10>')
+    app.update()
+    check('Shift+F10 on a focused card opens its actions menu',
+          bool(_c9_posted))
+    if _c9_posted:
+        _c9_menu, _c9_at = _c9_posted[-1]
+        # A separator carries no -label and raises, so each entry is asked
+        # for on its own -- the same shape the calendar block below uses.
+        _c9_labels = []
+        for _i in range(_c9_menu.index('end') + 1):
+            try:
+                _c9_labels.append(str(_c9_menu.entrycget(_i, 'label')))
+            except tk.TclError:
+                _c9_labels.append('---')
+        check('...and it is the whole menu, not a fragment',
+              any('Pin' in _l for _l in _c9_labels)
+              and any('Export' in _l for _l in _c9_labels)
+              and any('Duplicate' in _l for _l in _c9_labels))
+        # Posted at the CARD, not at wherever the pointer happens to rest:
+        # a menu that opens under the mouse when the mouse was not used is
+        # a menu nobody can see.
+        check(f'...and it opens at the card rather than at the pointer '
+              f'({_c9_at})',
+              len(_c9_at) == 2
+              and abs(_c9_at[0] - _c9_card.winfo_rootx()) < 200
+              and abs(_c9_at[1] - _c9_card.winfo_rooty()) < 200)
+    # The dedicated menu key, by whichever name this platform knows it --
+    # "App" on Windows, "Menu" on X11, and Tk raises on the other one.
+    # Asked of the binding rather than by generating a key that may not
+    # exist here: what the row promises is that the key IS bound wherever
+    # it exists, and the Shift+F10 route above already proves the handler.
+    _c9_bound = set(_c9_card.bind())
+    check(f'the dedicated menu key is bound under a name this platform '
+          f'knows ({sorted(s for s in _c9_bound if "App" in s or "Menu" in s or "F10" in s)})',
+          '<Key-App>' in _c9_bound or '<Key-Menu>' in _c9_bound)
+finally:
+    NO.tk.Menu.tk_popup = _c9_real
+
+# Walking the list. Asked of the order the cards are PACKED in, because
+# the list is sorted, filtered and grouped -- the note after this one in
+# the file is very often not the one underneath it on screen.
+_c9_card.focus_set()
+app.update(); app.update_idletasks()
+_c9_card.event_generate('<Down>')
+app.update(); app.update_idletasks()
+_c9_order = [w for w in app.list_frame.winfo_children()
+             if getattr(w, '_card_note_id', None) is not None]
+_c9_expected = _c9_order[_c9_order.index(_c9_card) + 1] \
+    if _c9_order.index(_c9_card) + 1 < len(_c9_order) else None
+check('Down moves the keyboard to the next card on screen',
+      _c9_expected is not None and app.focus_get() is _c9_expected)
+if _c9_expected is not None:
+    _c9_expected.event_generate('<Up>')
+    app.update(); app.update_idletasks()
+    check('and Up brings it back', app.focus_get() is _c9_card)
+# THE CONTROL: Up at the top must not wrap or crash -- it should simply
+# stay put, which is what a list does.
+_c9_order[0].focus_set()
+app.update(); app.update_idletasks()
+_c9_order[0].event_generate('<Up>')
+app.update(); app.update_idletasks()
+check('Up on the first card stays there rather than wrapping',
+      app.focus_get() is _c9_order[0])
+
+# The keyboard survives a rebuild. The list is destroyed and rebuilt on a
+# save, a search keystroke, a note switch -- a focus left pointing at a
+# widget that no longer exists would make this route unusable after the
+# first thing that happens.
+_c9_card.focus_set()
+app.update(); app.update_idletasks()
+check('fixture: the keyboard is on a known card before the rebuild',
+      app.focus_get() is _c9_card)
+app.refresh_note_list()
+app.update(); app.update_idletasks()
+import time as _c9_time
+for _ in range(60):
+    if app.focus_get() is app._note_card_widgets[20]['card']:
+        break
+    app.update(); app.update_idletasks(); _c9_time.sleep(0.01)
+check('a rebuilt list puts the keyboard back on the same note',
+      app.focus_get() is app._note_card_widgets[20]['card'])
 check('highlight color matches the theme accent',
       app._note_card_widgets[20]['card'].cget('highlightbackground') == app.colors['accent'])
 

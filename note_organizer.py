@@ -45,7 +45,7 @@ except ImportError:
 # Added/Fixed CHANGELOG.md entries, not per-release counts). The running
 # app records this into settings, so the next time a newer build opens
 # over older data it can tell the user what changed version-wise.
-APP_VERSION = "0.80.198"
+APP_VERSION = "0.81.199"
 
 
 def parse_version(v):
@@ -12423,6 +12423,13 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 self.build_note_card(note)
 
         self._bind_mousewheel_recursive(self.list_frame, self.canvas)
+        # After BOTH branches, so grouped and ungrouped lists behave the
+        # same. The list is destroyed and rebuilt on a save, a search
+        # keystroke, a note switch -- and a keyboard left pointing at a
+        # widget that no longer exists would make the whole route unusable
+        # after the first thing that happens. Deferred because the cards
+        # exist here but Tk has not laid them out yet.
+        self.after_idle(self._restore_card_focus)
         if getattr(self, "selection_mode", False):
             # What "all" means has just changed -- a search or a filter
             # alters which notes are on screen, and the Select all button
@@ -12543,6 +12550,107 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # from the chosen sort. Python's sort is stable, so this preserves it.
         notes.sort(key=lambda n: not n.get("pinned", False))
 
+    def _bind_card_keys(self, card, note):
+        """Make one note card answer the keyboard the way it answers a mouse.
+
+        Pinning, exporting, duplicating and deleting a note all live in the
+        right-click menu and nowhere else, so anyone working by keyboard
+        could not reach a single one of them. The menu is one keystroke
+        away now, and the list is walkable.
+
+        `show_note_context_menu` reads nothing off the event but `x_root`
+        and `y_root` -- checked, not assumed -- so a keyboard route can
+        hand it the card's own position on screen and the menu opens where
+        the note is rather than wherever the pointer happens to rest.
+        """
+        def open_menu(_event=None):
+            self.show_note_context_menu(
+                # A tiny stand-in rather than an import: the menu reads two
+                # attributes off the event and nothing else, checked rather
+                # than assumed, so this is the whole of what it needs.
+                type("KeyEvent", (), {
+                    "x_root": card.winfo_rootx() + 30,
+                    "y_root": card.winfo_rooty() + card.winfo_height() - 4,
+                })(),
+                note, click_opens=True)
+            return "break"
+
+        def activate(_event=None):
+            # Enter does what a plain click does, which is not the same
+            # thing in both modes: in selection mode clicking a card ticks
+            # it rather than opening it, and a keyboard that opened the
+            # note instead would be the one route that ignores the mode.
+            if self.selection_mode:
+                entry = self._note_card_widgets.get(note["id"]) or {}
+                box = entry.get("checkbox")
+                if box is not None:
+                    box.invoke()
+            else:
+                self.open_note_in_tab(note)
+            return "break"
+
+        def step(delta):
+            def go(_event=None):
+                self._focus_card_by_offset(note["id"], delta)
+                return "break"
+            return go
+
+        card.bind("<Return>", activate)
+        card.bind("<space>", activate)
+        card.bind("<Down>", step(1))
+        card.bind("<Up>", step(-1))
+        # The dedicated menu key has a different keysym per platform --
+        # "App" on Windows, "Menu" on X11 -- and Tk RAISES on an unknown
+        # one rather than ignoring it, so binding both unguarded takes the
+        # whole note list down. It did: every card failed to build and all
+        # nine qa scripts died on the Linux image while Windows was green.
+        # Measured on Windows first and assumed universal, which is what
+        # that image is for.
+        for seq in ("<Shift-F10>", "<App>", "<Menu>"):
+            try:
+                card.bind(seq, open_menu)
+            except tk.TclError:
+                pass
+        # Remembered so a rebuild can put the keyboard back where it was:
+        # the list is destroyed and rebuilt on a save, a search keystroke,
+        # a note switch -- and a focus that silently went to nowhere in the
+        # middle of that would make the whole route unusable.
+        card.bind("<FocusIn>",
+                  lambda _e, n=note: setattr(self, "_focused_note_id", n["id"]),
+                  add="+")
+
+    def _focus_card_by_offset(self, note_id, delta):
+        """Move the keyboard focus `delta` cards along the list on screen.
+
+        Asked of the ORDER THE CARDS ARE PACKED IN rather than of
+        self.notes: the list is sorted, filtered, searched and grouped, so
+        the note after this one in the file is very often not the one
+        underneath it on screen.
+        """
+        order = [w for w in self.list_frame.winfo_children()
+                 if getattr(w, "_card_note_id", None) is not None]
+        ids = [w._card_note_id for w in order]
+        if note_id not in ids:
+            return
+        target = ids.index(note_id) + delta
+        if 0 <= target < len(order):
+            order[target].focus_set()
+
+    def _restore_card_focus(self):
+        """Put the keyboard back on the card it was on before a rebuild."""
+        wanted = getattr(self, "_focused_note_id", None)
+        if wanted is None:
+            return
+        entry = self._note_card_widgets.get(wanted)
+        card = (entry or {}).get("card")
+        if card is None:
+            return
+        try:
+            if self.focus_get() is None or self.focus_get() is self:
+                card.focus_set()
+        except (tk.TclError, KeyError):
+            pass
+
     def build_note_card(self, note):
         # Direct .configure() calls here, not self.track_theme(): every card
         # is destroyed and rebuilt from scratch on every refresh_note_list()
@@ -12555,12 +12663,32 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # and every future theme switch.
         color = self.get_note_color(note)
         is_open = note["id"] == self.selected_note_id
+        # takefocus=1, and the ring does double duty. Tk draws
+        # `highlightbackground` while a widget does NOT have the keyboard
+        # focus and `highlightcolor` while it does -- so one border says
+        # both things without either hiding the other: accent for "this is
+        # the note you have open", the plain text colour for "this is where
+        # the keyboard is". The thickness is now on every card rather than
+        # only the open one, so nothing shifts by two pixels as the focus
+        # moves down the list.
+        #
+        # Without takefocus a card cannot be focused by Tab at all, and the
+        # keyboard bindings below would be bindings that could never fire --
+        # measured before any of this was written: a card's takefocus was
+        # '0', focus_set() on one worked, and a freshly opened window had
+        # the focus nowhere.
         card = tk.Frame(
             self.list_frame, cursor="hand2", bg=self.colors["card"],
-            highlightthickness=2 if is_open else 0,
-            highlightbackground=self.colors["accent"], highlightcolor=self.colors["accent"]
+            takefocus=1, highlightthickness=2,
+            highlightbackground=(self.colors["accent"] if is_open
+                                 else self.colors["card"]),
+            highlightcolor=self.colors["text"]
         )
         card.pack(fill="x", pady=5, padx=2)
+        # Which note this card is for, recorded on the widget so walking the
+        # list on screen needs no second index to go stale.
+        card._card_note_id = note["id"]
+        self._bind_card_keys(card, note)
 
         sel_cb = None
         if self.selection_mode:
@@ -12691,8 +12819,21 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 if not card.winfo_exists():
                     continue
                 note_color = self.get_note_color(info.get("note") or {})
-                card.configure(bg=c["card"], highlightbackground=c["accent"],
-                               highlightcolor=c["accent"])
+                # The ring says two things, so the recolour has to know
+                # which one this card is wearing: accent for the note that
+                # is open, the card's own fill (invisible) for the rest,
+                # and the text colour for wherever the keyboard is. Set
+                # unconditionally before, when every unopened card had no
+                # ring to see -- now they all have one, and painting them
+                # all accent on a theme switch would light up the whole
+                # list. Caught by the check that compares an in-place
+                # recolour against a full rebuild.
+                card.configure(
+                    bg=c["card"],
+                    highlightbackground=(c["accent"]
+                                         if note_id == self.selected_note_id
+                                         else c["card"]),
+                    highlightcolor=c["text"])
                 for key in ("content",):
                     w = info.get(key)
                     if w is not None:
@@ -13569,16 +13710,28 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if prev == current:
             return
         cards = getattr(self, "_note_card_widgets", {})
+        # The THIRD place that says which note is open, after build_note_card
+        # and _recolor_note_cards -- and the one a sweep missed, because it
+        # was found by the Linux image rather than by reading. It used to set
+        # thickness 0 and 2, which was the whole of the old scheme; now every
+        # card keeps a two-pixel ring and the COLOUR carries the meaning, so
+        # a thickness of 0 here would take the keyboard's focus ring off
+        # whichever card you just left, and highlightcolor=accent would make
+        # a focused card indistinguishable from an open one.
         if prev is not None and prev in cards:
             try:
-                cards[prev]["card"].configure(highlightthickness=0)
+                cards[prev]["card"].configure(
+                    highlightthickness=2,
+                    highlightbackground=self.colors["card"],
+                    highlightcolor=self.colors["text"])
             except tk.TclError:
                 pass
         if current is not None and current in cards:
             try:
                 cards[current]["card"].configure(
-                    highlightthickness=2, highlightbackground=self.colors["accent"],
-                    highlightcolor=self.colors["accent"])
+                    highlightthickness=2,
+                    highlightbackground=self.colors["accent"],
+                    highlightcolor=self.colors["text"])
             except tk.TclError:
                 pass
         self._last_highlighted_note_id = current

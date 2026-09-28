@@ -184,6 +184,22 @@ app.selected_note_ids = {n['id'] for n in app.notes[:2]}
 app._update_bulk_selected_label()
 app.refresh_note_list()
 """),
+    # Added for 0.84.198: the focus ring is that release's visible change,
+    # and a ring only shows while something actually has the keyboard.
+    ("15-note-card-with-keyboard-focus", """
+if app.selection_mode:
+    app._toggle_selection_mode()
+app.hide_settings_page()
+app.notebook.select(app.TAB_NOTES)
+app.refresh_note_list()
+app.update()
+_cards = [w for w in app.list_frame.winfo_children()
+          if getattr(w, '_card_note_id', None) is not None]
+if len(_cards) > 1:
+    _cards[1].focus_set()
+app.update()
+app.update_idletasks()
+"""),
     ("12-day-markers-at-the-cap", """
 if app.selection_mode:
     app._toggle_selection_mode()
