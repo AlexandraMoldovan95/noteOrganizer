@@ -21,6 +21,14 @@ runs for reasons nobody controls, so a tiny difference is noise and is
 reported as such. It answers one question honestly: did a screen change
 shape while we were not looking?
 
+HOW SMALL A THING IT CANNOT SEE, measured rather than guessed. The
+comparison reduces each picture to a 40x40 grid, so one cell is about
+1/1600 of the screen -- roughly 43x31 pixels at the size these are taken.
+A control smaller than that can appear or vanish and this tool will report
+"same". Measured: adding the search box's clear button moved 0.0%. So a
+green run means no screen changed SHAPE; it does not mean no button came
+or went. For a small control, look at the picture.
+
     py qa/story_look.py            # compare against the stored shots
     py qa/story_look.py --accept   # bless what is on screen now
 
@@ -68,6 +76,65 @@ app.notebook.select(app.TAB_NOTES)
 app.set_theme(NO.LIGHT_THEMES[0])
 app.refresh_note_list()
 """),
+    # ---- The five scenes below were added for 0.76.192, because five of
+    # that release's seven changes were about how something LOOKS and none
+    # of the six scenes above contains any of them: the search box is
+    # always empty here, the template editor is never open, and no popup
+    # or Share panel is ever on screen. A check reading a widget's
+    # properties cannot see that a new button crowds the text beside it.
+    ("07-search-with-a-query", """
+app.hide_settings_page()
+app.notebook.select(app.TAB_NOTES)
+app.set_theme('Midnight')
+app.search_var.set('bread')
+app.refresh_note_list()
+"""),
+    ("08-share-panel-with-a-code", """
+app.search_var.set('')
+app.refresh_note_list()
+app.toggle_share_panel()
+# The EXISTING vars are set rather than replaced: the checkbuttons on screen
+# are bound to the ones the panel built, so a fresh BooleanVar would generate
+# a code for notes whose boxes still looked unticked -- a picture that lies
+# about what was asked for.
+app._share_vars[app.notes[0]['id']].set(True)
+app._share_vars[app.notes[1]['id']].set(True)
+app.notes[0]['attachments'] = [{'filename': 'f.txt', 'stored_as': 'x_f.txt'}]
+app._generate_inline_share()
+"""),
+    ("09-template-editor", """
+app.notes[0].pop('attachments', None)
+app.toggle_share_panel()
+app.hide_settings_page()
+app.templates.append(NO.normalize_template({
+    'name': 'Weekly review', 'title': 'Week of', 'body': 'What went well',
+    'category': 'General',
+    'checklist': [{'text': 'read last week', 'done': False},
+                  {'text': 'pick three things', 'done': False}]}))
+app.show_settings_page()
+# update() between the two, and it is load-bearing: toggle_settings_panel
+# unpacks the section that was showing by asking winfo_ismapped(), which Tk
+# answers False until it has processed the geometry. Called back to back, the
+# previous section is still packed and unmapped, the unpack loop skips it, and
+# the picture comes out with two sections stacked -- Recently deleted above a
+# nav reading Templates, which is what the first version of this shot showed.
+app.update()
+app.toggle_settings_panel('templates')
+app.update()
+app._edit_template(app.templates[-1], lambda: None)
+"""),
+    ("10-highlight-picker", """
+app._dismiss_mini_popup()
+app.hide_settings_page()
+app.notebook.select(app.TAB_NOTES)
+app.load_note(app.notes[0])
+app.body_text.tag_add('sel', '1.0', '1.10')
+app._open_color_swatch_popup('highlight')
+"""),
+    ("11-text-colour-picker", """
+app._dismiss_mini_popup()
+app._open_color_swatch_popup('text_color')
+"""),
 ]
 
 SEED = [
@@ -113,6 +180,23 @@ app.lift()
 app.attributes("-topmost", True)
 app.focus_force()
 
+# The reminder bar is packed on demand when a note is due TODAY, and the
+# seed carries a fixed date -- so on one day a year these pictures grow a
+# purple band across the top and every reference taken that day is
+# unusable on every other day. It is not a small difference either: the
+# window does not simply shift, it REFLOWS, because the 47px the bar
+# occupies are absorbed by the note list rather than pushed down. That is
+# how the stored screens came to report 20% changed with nothing wrong.
+# Kept off deliberately, so what these pictures show does not depend on
+# the calendar. The bar itself is not what this tool is for.
+def _no_reminder():
+    try:
+        app.reminder_bar.pack_forget()
+    except Exception:
+        pass
+app.after(500, _no_reminder)
+app.after(900, _no_reminder)
+
 # PowerShell's CopyFromScreen works in PHYSICAL pixels; Tk reports its
 # geometry in LOGICAL ones. On a display with any scaling the two differ,
 # and a box built from Tk's numbers lands up and to the left of the
@@ -125,12 +209,28 @@ SCALE = _Grab.grab().size[0] / float(app.winfo_screenwidth())
 scenes = json.load(io.open("scenes.json", encoding="utf-8"))
 for name, script in scenes:
     exec(script)
+    _no_reminder()          # belt and braces; see the note above
     app.update()
     app.update_idletasks()
     time.sleep(0.4)
     app.lift()
     app.attributes("-topmost", True)
+    # A scene whose subject is a POPUP would otherwise be photographed with
+    # the popup behind the window that owns it: the lift above raises the
+    # app, and an anchored Toplevel is a separate window. So whatever popup
+    # the scene opened is raised after the app, not before. Harmless when
+    # there is none, which is the other five scenes.
+    _pop = getattr(app, "_mini_popup", None)
+    if _pop is not None:
+        try:
+            if _pop.winfo_exists():
+                _pop.lift()
+                _pop.attributes("-topmost", True)
+        except tk.TclError:
+            pass
     app.update()
+    app.update_idletasks()
+    time.sleep(0.2)
     x = int(round(app.winfo_rootx() * SCALE))
     y = int(round(app.winfo_rooty() * SCALE))
     w = int(round(app.winfo_width() * SCALE))
