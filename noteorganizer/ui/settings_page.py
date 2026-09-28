@@ -632,7 +632,7 @@ class SettingsPageMixin:
                     "Delete template",
                     f"Delete the template “{name}” for good?\n\n"
                     "Templates don't go to the Trash — this can't be undone.",
-                    parent=parent, icon="warning", default="no"):
+                    icon="warning", default="no"):
                 self.templates = [t for t in self.templates if t is not tpl]
                 save_templates(self.templates)
                 redraw()
@@ -1056,7 +1056,7 @@ class SettingsPageMixin:
             # guard unreachable -- the junk rows named exactly that in
             # the templates list were its silent proof.
             if not name_var.get().strip():
-                self.show_warning("Name needed", "Give the template a name.", parent=pop)
+                self.show_warning("Name needed", "Give the template a name.")
                 return
             new_tpl = collect()
             # A colliding name never overwrites (or duplicates) silently:
@@ -1071,7 +1071,7 @@ class SettingsPageMixin:
                         f"You already have a template named “{taken_name}”.\n\n"
                         "Replace the old template with this one?\n"
                         "Choose No to give this one another name.",
-                        parent=pop, icon="warning", default="no"):
+                        icon="warning", default="no"):
                     return
                 self.templates = [t for t in self.templates
                                   if t not in others]
@@ -1190,7 +1190,7 @@ class SettingsPageMixin:
                 "Delete permanently",
                 f"Permanently delete “{title}”? This can't be undone."
                 + self._series_warning([entry]),
-                parent=row, icon="warning", default="no"
+                icon="warning", default="no"
             ):
                 _delete_attachment_files([entry])
                 self.trash = [e for e in self.trash if e is not entry]
@@ -2571,9 +2571,9 @@ class SettingsPageMixin:
                 if not new or new == name:
                     return True
                 if new in CATEGORY_COLORS:
-                    self.show_warning("Already exists",
-                                           f"A category named “{new}” already exists.",
-                                           parent=row)
+                    self.show_warning(
+                        "Already exists",
+                        f"A category named “{new}” already exists.")
                     return False
                 CATEGORY_COLORS[new] = CATEGORY_COLORS.pop(name)
                 self.rename_category_everywhere(name, new)
@@ -2709,13 +2709,13 @@ class SettingsPageMixin:
         if not to_trash:
             self.show_info(
                 "Nothing selected",
-                "Tick the duplicates you want to remove first.", parent=dlg)
+                "Tick the duplicates you want to remove first.")
             return
         if not self.ask_yes_no(
             "Move duplicates to trash",
             f"Move {len(to_trash)} selected note(s) to the trash? "
             f"You can restore them within {trash_retention_days()} days.",
-            parent=dlg, icon="question"
+            icon="question"
         ):
             return
         trash_ids = {id(n) for n in to_trash}

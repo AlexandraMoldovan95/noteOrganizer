@@ -90,6 +90,27 @@ How the numbers themselves are counted is the
 
 ---
 
+## [Unreleased]
+
+*Not yet numbered: nothing here is an `Added` or a `Fixed`, and the version is counted from
+those alone (see the [Roadmap's Versioning section](docs/ROADMAP.md#versioning)). It ships with
+whatever bump comes next.*
+
+### Changed
+
+- **The themed dialogs no longer accept keywords they cannot honour.** Internal only —
+  nothing about any dialog looks or behaves differently. The five wrappers took `**kw` and
+  forwarded a subset of it, so anything a caller sent that they did not understand was
+  dropped in silence. That cost a real safety guarantee once (`0.71.119`, where a
+  destructive confirm's `default="no"` never reached the dialog) and this time cost
+  nothing: seven `parent=` arguments that read like they anchored the dialog somewhere and
+  did nothing, because the dialog is an overlay inside the app window and has never had
+  such a parameter. The seven are gone, and the signatures are named and keyword-only, so a
+  stray keyword is now an error at the call instead of a silence that survives every
+  review.
+
+---
+
 ## [0.75.184] — 2026-09-26
 
 *Highlights: the last of the seven — a button that told you it was the smaller action while being the larger one.*

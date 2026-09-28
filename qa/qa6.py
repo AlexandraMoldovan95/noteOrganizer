@@ -800,8 +800,33 @@ check('dialog focus index: no default -> primary (last) button',
 check('dialog focus index: unknown default falls back to primary, never unfocused',
       app._dialog_focus_index([("No", False), ("Yes", True)], "maybe") == 1)
 check('dialog kind: icon= is honoured, not dropped for the fallback glyph',
-      app._kind_from_kw({"icon": "warning"}, "question") == "warning"
-      and app._kind_from_kw({}, "question") == "question")
+      app._kind_from("warning", None, "question") == "warning"
+      and app._kind_from(None, None, "question") == "question")
+# The same class, closed at the root rather than guarded one keyword at a
+# time. The five wrappers took **kw and forwarded a subset, so anything
+# they did not understand vanished: first that `default="no"`, then seven
+# `parent=` arguments that read like they anchored the dialog somewhere
+# and did nothing -- this is an overlay inside the app window, and
+# _themed_dialog has never had such a parameter. The signatures are named
+# and keyword-only now, so Python refuses a stray keyword at the call.
+#
+# Reached through the CLASS, not the instance: this file monkeypatches
+# show_info, show_warning and ask_yes_no to lambdas that swallow anything,
+# so the first version of this check tested the stubs and passed nothing.
+# Safe to call for real -- an unexpected keyword is a TypeError at binding
+# time, before a line of the body runs, so no dialog ever opens.
+_kw_refused = []
+for _kw_name in ('show_info', 'show_warning', 'show_error',
+                 'ask_yes_no', 'ask_yes_no_cancel'):
+    try:
+        getattr(app.__class__, _kw_name)(app, "t", "m", parent=app)
+    except TypeError:
+        _kw_refused.append(_kw_name)
+    except Exception:
+        # Anything else means the keyword got through and the body ran.
+        pass
+check('dialog: a keyword the dialogs cannot honour is refused, not swallowed',
+      len(_kw_refused) == 5)
 
 def _find_label_with(w, needle):
     if isinstance(w, tk.Label) and needle in str(w.cget('text')):

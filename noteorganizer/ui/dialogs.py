@@ -197,44 +197,59 @@ class DialogsMixin:
                     return i
         return len(buttons) - 1
 
+    # These five took **kw and forwarded a subset of it, so anything a
+    # caller sent that they did not understand was dropped without a word.
+    # That has cost this project twice: first a `default="no"` on a
+    # destructive confirm that never reached the dialog (ISSUES_LOG, "the
+    # safety request the dialog never read"), then seven `parent=`
+    # arguments that read like they anchored the dialog somewhere and did
+    # nothing at all — this is an overlay inside the app window, and
+    # _themed_dialog has never had such a parameter.
+    #
+    # Named parameters instead, keyword-only, so Python itself refuses
+    # anything else at the call rather than swallowing it. A stray keyword
+    # is now a TypeError the first time that path runs, which is the whole
+    # point: the failure this class produces is silence.
+
     @staticmethod
-    def _kind_from_kw(kw, fallback):
+    def _kind_from(icon, kind, fallback):
         """Callers use messagebox's vocabulary: an `icon=` naming the glyph
         ("warning"/"error"/"question"/"info"). Those names ARE our `kind`
         keys, so honour `icon=` (and an explicit `kind=`) instead of
         silently dropping it and always drawing the fallback glyph."""
-        return kw.get("kind") or kw.get("icon") or fallback
+        return kind or icon or fallback
 
-    def show_info(self, title, message, **kw):
+    def show_info(self, title, message, *, icon=None, kind=None):
         return self._themed_dialog(title, message,
-                                   kind=self._kind_from_kw(kw, "info"),
+                                   kind=self._kind_from(icon, kind, "info"),
                                    buttons=[("OK", True)])
 
-    def show_warning(self, title, message, **kw):
+    def show_warning(self, title, message, *, icon=None, kind=None):
         return self._themed_dialog(title, message,
-                                   kind=self._kind_from_kw(kw, "warning"),
+                                   kind=self._kind_from(icon, kind, "warning"),
                                    buttons=[("OK", True)])
 
-    def show_error(self, title, message, **kw):
+    def show_error(self, title, message, *, icon=None, kind=None):
         return self._themed_dialog(title, message,
-                                   kind=self._kind_from_kw(kw, "error"),
+                                   kind=self._kind_from(icon, kind, "error"),
                                    buttons=[("OK", True)])
 
-    def ask_yes_no(self, title, message, **kw):
+    def ask_yes_no(self, title, message, *, icon=None, kind=None, default=None):
         # `default=` (messagebox's word) names which button keyboard focus
         # lands on — pass default="no" on a destructive confirm so a
         # reflexive Enter doesn't fire "Yes".
         return self._themed_dialog(title, message,
-                                   kind=self._kind_from_kw(kw, "question"),
+                                   kind=self._kind_from(icon, kind, "question"),
                                    buttons=[("No", False), ("Yes", True)],
-                                   default=kw.get("default"))
+                                   default=default)
 
-    def ask_yes_no_cancel(self, title, message, **kw):
+    def ask_yes_no_cancel(self, title, message, *, icon=None, kind=None,
+                          default=None):
         # Returns True (yes), False (no), or None (cancel) — matches messagebox.
         return self._themed_dialog(title, message,
-                                   kind=self._kind_from_kw(kw, "question"),
+                                   kind=self._kind_from(icon, kind, "question"),
                                    buttons=[("Cancel", None), ("No", False), ("Yes", True)],
-                                   default=kw.get("default"))
+                                   default=default)
 
     def _build_themed_dropdown(self, parent, var, options, on_change,
                                dot_color_fn=None, width_chars=14, nested=False):
