@@ -264,6 +264,22 @@ A new surface joins this list the moment it ships.
   undo's own `_schedule_autosave()` changed nothing it could see. The
   check now looks for the queued job. A forcing call in a check proves the
   forcing call works.
+- **A check that counts on an action CREATING something assumes no timer
+  beat it to it.** "...the overtyped note really was saved" proved the
+  save by watching `len(app.notes)` go up by one — true only while the
+  500ms autosave has not already created the note, in which case the
+  explicit save merely updates and the count never moves. Green on a
+  developer machine, red on CI. Prove the outcome by **identity** — the
+  note the editor points at, and its stored content — so create and
+  update both satisfy it and only a real failure does not.
+
+  Two things that came with it. A slow machine is reproducible: pause
+  long enough for the timer to fire and the red appears locally, which is
+  how the diagnosis was confirmed instead of guessed. And a mutant that
+  aborts the script before the check runs is **not** a surviving mutant —
+  a 2-second run with one unrelated failure means the suite never reached
+  the line. Read the timing and the failure count, not just the absence
+  of the name.
 - **A red that loses its name costs a day, so the runner writes it down.**
   `tools/run_tests.py` saves a failing run's whole output to
   `%TEMP%/notesorg-failure-<label>.txt` and prints the path — the terminal

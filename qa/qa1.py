@@ -7241,13 +7241,34 @@ check('...and the caret is still somewhere real in what remains',
 # with an autosave that never fired -- so it read an empty dict, found no
 # table in nothing, and passed. A mutant that stored a ghost table row
 # walked straight through it.
-_sa_before_save = len(app.notes)
+# Proved by IDENTITY, not by the count going up. Counting assumed the
+# explicit save must CREATE the note, which is true only while the 500ms
+# autosave has not got there first -- and on a loaded machine it does.
+# The save then UPDATES instead, the count never moves, and the check
+# goes red about an app that saved correctly. CI found it; reproduced
+# here by pausing long enough for the timer to fire, which is all a
+# loaded runner does.
+#
+# The original point stands and is kept: the first version read
+# app.notes[-1] with an autosave that never fired, found no table in an
+# empty dict and passed vacuously. Asking for the note the editor points
+# at still fails outright when nothing was saved -- find_note(None)
+# answers None.
 app.save_current_note(auto=False)
 app.update()
-check('...the overtyped note really was saved',
-      len(app.notes) == _sa_before_save + 1)
+_sa_saved = app.find_note(app.selected_note_id)
+check('...the overtyped note really was saved', _sa_saved is not None)
+# The guard above is only worth having while an unsaved editor really
+# does find nothing, so that is pinned rather than assumed. It has no
+# mutant of its own: every way of stopping the save outright kills qa1 at
+# its first save, two seconds in, long before this line runs -- so the
+# behaviour claim here is the equality below, which is mutation-proven,
+# and this is the guard that keeps it from passing over an empty store.
+check('...and that proof is not vacuous: an unsaved editor finds nothing',
+      app.find_note(None) is None)
 check('...and what is stored is exactly what was typed — no table, no '
-      'leftover line', app.notes and app.notes[-1].get('body') == 'x')
+      'leftover line',
+      _sa_saved is not None and _sa_saved.get('body') == 'x')
 app.notes = []
 app.save_notes()
 app.open_blank_tab(); app.update()
