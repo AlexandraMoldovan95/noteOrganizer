@@ -25,7 +25,7 @@ day-to-day tracking.
 | [The repeat interval with no ceiling](#the-repeat-interval-with-no-ceiling) | Clamp untrusted values on both sides at the choke point — valid means valid for every consumer. | 0.71.113 |
 | [The duplicate that wasn't a copy](#the-duplicate-that-wasnt-a-copy) | A "copy" that shares its source's files isn't one — the class is every route that clones a note, not the route reported. | 0.71.119 |
 | [The mend that only ran on the way to disk](#the-mend-that-only-ran-on-the-way-to-disk) | A repair at one serialization boundary is a todo list for the others; and UnicodeEncodeError is a ValueError, not an OSError. | 0.71.119 |
-| [The safety request the dialog never read](#the-safety-request-the-dialog-never-read) | A `**kw` wrapper that forwards a subset silently swallows the rest — callers' safety asks can be dead code for months. | 0.71.119 |
+| [The safety request the dialog never read](#the-safety-request-the-dialog-never-read) | A `**kw` wrapper that forwards a subset silently swallows the rest — callers' safety asks can be dead code for months. Recurred; "forward two more keywords" was never "stop swallowing keywords". | 0.71.119, and again after |
 | [The note the editor let you make and the launcher deleted](#the-note-the-editor-let-you-make-and-the-launcher-deleted) | A predicate that enumerates a type's fields comes due silently the day someone adds one — and two that disagree is data loss waiting for its first user. | 0.71.154 |
 | [Two windows, one file, and the last one to autosave wins](#two-windows-one-file-and-the-last-one-to-autosave-wins) | Full-file rewrites turn concurrency into data loss; a guard over data must fail open where its own failure would be worse. | 0.71.154 |
 | [The trim that moved every colour](#the-trim-that-moved-every-colour) | When a transformation forces a second function to undo its effect, the transformation is the bug — and tidying what the user typed is a data change. | 0.71.154 |
@@ -487,6 +487,31 @@ protections that don't exist. The fix is the wrapper (make the
 vocabulary real), then a sweep that classifies every caller against an
 explicit criterion — here "is it irreversible?" — so the next reader
 knows which confirms are safe by choice, not by omission.
+
+**It happened again, and that is why the root was not the vocabulary.**
+Seventeen days later the consistency survey turned up seven `parent=`
+arguments on these same five wrappers. `_themed_dialog` has never had
+such a parameter — the dialog is an overlay inside the app window and
+never needed one — so all seven were doing nothing, while reading at
+every call site like the dialog was being anchored somewhere.
+
+Harmless this time, which is exactly the point: the first instance cost
+a safety guarantee, the second cost nothing, and neither announced
+itself. The 2026-09-09 fix taught the wrappers two more words; it left
+them able to swallow the next one.
+
+So the signatures are named and keyword-only now — `icon`, `kind`, and
+`default` on the two that ask — and Python refuses anything else at the
+call. A stray keyword is a `TypeError` the first time that path runs
+instead of a silence that survives every review. An AST sweep of all 58
+call sites, the qa suite included, found `parent` and nothing else, and
+confirmed no caller passes a third positional argument that the
+keyword-only marker would now reject.
+
+**The second takeaway:** when a class recurs, the first fix addressed the
+instance even if it looked general. "Forward two more keywords" is not
+"stop swallowing keywords". Ask which of those two a fix is, before
+calling the class closed.
 
 ### The note the editor let you make and the launcher deleted
 
