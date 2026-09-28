@@ -15775,7 +15775,23 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         def show(event):
             if tip["win"] is not None:
                 return
-            win = tk.Toplevel(widget)
+            # Parented to the WINDOW, not to the row it describes. A
+            # Toplevel whose master is a widget appears in that widget's
+            # winfo_children(), so a floating preview parented to a row
+            # joins the panel's tree -- and everything that walks a panel
+            # meets it: a theme sweep, the wheel binding, and any check
+            # counting what is on screen.
+            #
+            # That is not theoretical. It turned CI red on two pull
+            # requests while the same script passed on this desktop and on
+            # the local Linux image: qa3 counts the trash rows by walking
+            # the panel, and on a headless display the pointer sits still
+            # over whatever is drawn under it, so one row's preview opened
+            # and was counted as a twenty-sixth row. On a desktop the
+            # pointer is somewhere else and it never happened. Measured
+            # before it was changed -- hovering one row took the count
+            # from 25 to 26, with exactly one Toplevel inside the tree.
+            win = tk.Toplevel(widget.winfo_toplevel())
             win.wm_overrideredirect(True)  # no title bar / borders
             win.configure(bg=self.colors["accent"])
             frame = tk.Frame(win, bg=self.colors["card"], padx=10, pady=8)

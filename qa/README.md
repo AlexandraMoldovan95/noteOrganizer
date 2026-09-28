@@ -288,6 +288,24 @@ A new surface joins this list the moment it ships.
   a 2-second run with one unrelated failure means the suite never reached
   the line. Read the timing and the failure count, not just the absence
   of the name.
+- **A `Toplevel` parented to a widget JOINS that widget's tree, and on a
+  headless display the pointer never moves.** A hover preview created as
+  `tk.Toplevel(row)` appears in `row.winfo_children()`, so it lands inside
+  the panel the row belongs to — where a theme sweep, the wheel binding
+  and any check counting what is on screen all meet it. qa3 counts the
+  trash rows by walking the panel, and CI went red on two pull requests
+  while the same script passed on a desktop and on the local Linux image:
+  on a headless display the pointer sits still over whatever gets drawn
+  under it, so one row's preview opened every run and was counted as an
+  extra row. On a desktop the pointer is somewhere else and it never
+  happened once. **Parent a floating window to `winfo_toplevel()`**, and
+  when a check looks for one, find it by being NEW rather than by being a
+  child of the thing it describes.
+
+  The second half is the part worth carrying: *"it passes on my machine
+  and on my own Linux image"* is not the same claim as *"it passes"*. The
+  pointer's resting position is a hidden input, and it is the one input a
+  developer's machine can never reproduce.
 - **`winfo_ismapped()` is False for a moment after packing, and code that
   asks it will skip the widget you just packed.** `toggle_settings_panel`
   hides whichever section is showing by looping over the panels and

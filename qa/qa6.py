@@ -1774,6 +1774,32 @@ _c14_hoverable = [w for w in _c14_widgets(app.settings_trash_panel, tk.Frame)
                   if '<Enter>' in w.bind()]
 check(f'a trash row explains itself on hover ({len(_c14_hoverable)} rows '
       f'bound)', len(_c14_hoverable) >= 4)
+# And the preview FLOATS rather than joining the panel. A Toplevel whose
+# master is a widget appears in that widget's winfo_children(), so a
+# preview parented to a row lands inside the panel's tree -- where
+# everything that walks a panel meets it: a theme sweep, the wheel
+# binding, and any check counting what is on screen.
+#
+# This is not hypothetical. It turned CI red on two pull requests while
+# the same script passed on a desktop and on the local Linux image: qa3
+# counts the trash rows by walking the panel, and on a headless display
+# the pointer sits still over whatever is drawn under it, so one row's
+# preview opened and was counted as an extra row. On a desktop the
+# pointer is elsewhere and it never happened. This is the guard that
+# would have caught it here.
+_c14_labels_before = len(_c14_widgets(app.settings_trash_panel, tk.Label))
+if _c14_hoverable:
+    _c14_hoverable[0].event_generate('<Enter>', x=5, y=5)
+    app.update()
+    _c14_labels_after = len(_c14_widgets(app.settings_trash_panel, tk.Label))
+    check(f'resting on a row does not add anything to the panel it floats '
+          f'over ({_c14_labels_before} -> {_c14_labels_after})',
+          _c14_labels_after == _c14_labels_before)
+    _c14_tops = [w for w in _c14_widgets(app.settings_trash_panel, tk.Toplevel)]
+    check(f'and no floating window is parented inside the panel '
+          f'({len(_c14_tops)} found)', not _c14_tops)
+    _c14_hoverable[0].event_generate('<Leave>')
+    app.update()
 
 
 def _c14_button(text):
