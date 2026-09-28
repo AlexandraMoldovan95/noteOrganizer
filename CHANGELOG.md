@@ -12,6 +12,7 @@ How the numbers themselves are counted is the
 
 | Version | Date | In one line |
 |---|---|---|
+| [0.80.198](#080198--2026-09-29) | 2026-09-29 | Doing a thing to many notes at once — pinning, sharing, and getting several back out of the Trash. |
 | [0.76.198](#076198--2026-09-28) | 2026-09-28 | The note list remembers how you sorted it, and marking a day says why it stops at three. |
 | [0.76.195](#076195--2026-09-28) | 2026-09-28 | Three controls that did something without saying what, and four written claims that no longer matched the code. |
 | [0.76.192](#076192--2026-09-28) | 2026-09-28 | Seven small places where the app contradicted itself: a field that would not paste, a box that forgot its size, two different plus signs, a picker with no title. |
@@ -114,6 +115,34 @@ whatever bump comes next.*
   review.
 
 ---
+
+## [0.80.198] — 2026-09-29
+
+*Highlights: doing a thing to many notes at once — pinning, sharing, and getting several back out of the Trash.*
+
+### Added
+
+- **Pin or unpin every ticked note at once.** Pinning lived in exactly one place:
+  the right-click menu, one note at a time, so reordering twenty notes meant
+  opening it twenty times. It sits in the selection bar now, beside Trash,
+  Category and Export, and the button says which of the two it will do.
+- **Select all in the Share panel.** Sharing a whole notebook meant ticking a
+  hundred notes one at a time, then "Show 100 more", then a hundred more — while
+  the selection bar a few centimetres above had had a "Select all" since it was
+  built. It ticks what the panel is showing, not the whole notebook, so nothing
+  you have not seen is included.
+- **Tick boxes and "Restore selected" in Recently deleted.** You could put back
+  one note at a time or destroy all of them at once, and nothing in between: the
+  only bulk gesture on the screen was the irreversible one. Recovering yesterday's
+  forty deleted notes was forty clicks.
+- **A preview of a deleted note when you rest on its row.** Two notes both called
+  "Notes" had nothing to tell them apart, so the safe answer was to restore both
+  and sort it out afterwards. The Duplicates panel has answered exactly this
+  question the same way for a long time.
+- **"Move to category" on a note's own right-click menu**, with a tick beside the
+  one it is in now. Changing one note's category without opening it meant ticking
+  it and using the bulk popup — the selection bar could recategorise but not
+  duplicate, and this menu could duplicate but not recategorise.
 
 ## [0.76.198] — 2026-09-28
 

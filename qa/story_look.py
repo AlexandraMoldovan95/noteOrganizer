@@ -140,7 +140,54 @@ app._open_color_swatch_popup('text_color')
     # contains a popup from the calendar. Seeded to three rather than clicked
     # to three, so the picture is the same every time: the popup works out on
     # build that it is already at the cap.
+    # Added for 0.80.198. Three of that release's four changes had nowhere
+    # to show: the stored Trash is empty in these scenes so its rows never
+    # appear, and the selection bar only exists while notes are ticked.
+    ("13-trash-with-rows-ticked", """
+app._dismiss_mini_popup()
+app.notebook.select(app.TAB_NOTES)
+app.trash = [
+    {'id': 9001, 'title': 'Notes', 'body': 'the one about the boiler',
+     'category': 'General', 'deleted_at': '2026-09-20 09:00:00'},
+    {'id': 9002, 'title': 'Notes', 'body': 'the one about the car',
+     'category': 'General', 'deleted_at': '2026-09-21 09:00:00'},
+    {'id': 9003, 'title': 'Weekend plan', 'body': 'walk, then the market',
+     'category': 'General', 'deleted_at': '2026-09-22 09:00:00'},
+]
+app.show_settings_page()
+app.update()
+app.toggle_settings_panel('trash')
+app.update()
+# Pressed rather than set: the offer to restore appears from the tick
+# box's own command, and re-opening the panel would rebuild it and clear
+# the selection on purpose -- ticks are not meant to survive leaving
+# Settings and coming back.
+_boxes = []
+def _find_ticks(w):
+    for c in w.winfo_children():
+        if isinstance(c, tk.Checkbutton):
+            _boxes.append(c)
+        _find_ticks(c)
+_find_ticks(app.settings_trash_panel)
+if _boxes:
+    _boxes[1].invoke()
+app.update()
+"""),
+    ("14-selection-bar-with-pin", """
+app.hide_settings_page()
+app.trash = []
+app.notebook.select(app.TAB_NOTES)
+app.update()
+if not app.selection_mode:
+    app._toggle_selection_mode()
+app.selected_note_ids = {n['id'] for n in app.notes[:2]}
+app._update_bulk_selected_label()
+app.refresh_note_list()
+"""),
     ("12-day-markers-at-the-cap", """
+if app.selection_mode:
+    app._toggle_selection_mode()
+app.update()
 app._dismiss_mini_popup()
 app.notebook.select(app.TAB_CALENDAR)
 app.cal_year, app.cal_month = 2026, 9
