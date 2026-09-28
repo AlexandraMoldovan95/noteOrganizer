@@ -319,12 +319,14 @@ Three tiers:
 - **Runs without asking:** read-only git (`status`, `diff`, `log`, `show`,
   `blame`, `fetch`, `pull --ff-only`), `git add` / `git commit` / new
   branches, `tools/run_tests.py` and every `tools/check_*.py`, the Linux
-  CI image, anything inside the session scratchpad, and edits to files in
-  the repository.
+  CI image, the three story scripts (`qa/story_look.py`,
+  `qa/story_audit.py`, `qa/story_note_travels.py` — see below), anything
+  inside the session scratchpad, and edits to files in the repository.
 - **Always asks:** `git push`, merge, PR creation, `git branch -d`, any
-  `rm`, the PyInstaller build, the screenshot tools.
-- **Denied outright, by the system:** running any `qa*.py`, `test_*.py` or
-  `note_organizer.py` inside the project tree; `reset --hard`,
+  `rm`, the PyInstaller build.
+- **Denied outright, by the system:** running the qa suite (`qa1`–`qa9`),
+  `qa/probe_bar_width.py`, any `test_*.py`, or `note_organizer.py` itself
+  inside the project tree; `reset --hard`,
   `push --force`, `rebase`, `branch -D`, `restore`, `clean`; installing
   anything; and reading or writing `%APPDATA%\NoteOrganizer` or the real
   data files at the project root.
@@ -346,6 +348,48 @@ Two things learned while writing it, both worth keeping:
   Whether `py test_data_safety.py` is blocked is verified by reading the
   list, not by running it: if the rule were wrong, the probe would delete
   the notebook it was meant to protect.
+
+**The story scripts moved from denied to allowed (2026-09-28), and why.**
+The rule above once read "the screenshot tools" under *always asks*, while
+the lists themselves had no `ask` tier at all and put all three story
+scripts in `deny` — swept there with `qa1`–`qa9` because they live in the
+same folder. The effect was that the [testing rule's](#testing) own
+instruction, *walk a user-facing change on the real app with the story
+scripts and look at the photographs*, could not be followed by an agent at
+all. It surfaced when five visual changes shipped with nobody having
+looked at them.
+
+They are allowed now because the hazard the deny list exists to stop is
+structurally impossible for them, which was **read in their code rather
+than assumed**. Each one does what the
+[QA testing safety](#qa-testing-safety-hard-rule--real-data-has-been-lost-to-this-three-times)
+rule prescribes, in its own source:
+
+```python
+work = tempfile.mkdtemp(prefix=...)
+shutil.copy2(<root>/note_organizer.py, work)
+shutil.copytree(<root>/noteorganizer, work/noteorganizer)
+io.open(os.path.join(work, "notes_data.json"), "w")...   # the seed, inside work
+subprocess.run([...], cwd=work)
+```
+
+The seed is written **inside** the temp directory and the app runs with its
+working directory there, so a wrong-directory mistake cannot reach the real
+notebook. `qa1`–`qa9` stay denied, in all twelve spellings each, because
+those genuinely wipe `*.json` in whatever directory they are run from — and
+so does `qa/probe_bar_width.py`, which builds the app the same way.
+
+Two things this cost, both worth not repeating:
+
+- **A written policy and its configuration can disagree silently.** This
+  one did for three weeks, and the config won every time. When a rule here
+  describes what the lists do, check it against the lists rather than
+  against memory.
+- **Do not route around a deny rule.** When a command is refused, the
+  answer is to say so and ask — not to try a different spelling until one
+  gets through. The deny tier exists precisely because an agent's judgement
+  about whether *this particular* run is safe is the thing that failed
+  three times.
 
 ### File safety
 
