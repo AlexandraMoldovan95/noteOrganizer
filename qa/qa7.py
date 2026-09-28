@@ -2178,10 +2178,32 @@ _pv_lbl = tk.Label(app, text='hover me')
 _pv_lbl.pack()
 app._attach_dup_preview(_pv_lbl, _pv_note)
 app.update()
+# Which toplevels existed BEFORE the hover, so the one that appears can be
+# named without assuming where it is parented.
+_pv_before = set()
+
+
+def _all_tops7(root, acc):
+    for c in root.winfo_children():
+        if isinstance(c, tk.Toplevel):
+            acc.add(c)
+        _all_tops7(c, acc)
+
+
+_all_tops7(app, _pv_before)
 _qa_fire(_pv_lbl, '<Enter>')
 app.update()
-_tips = [w for w in _pv_lbl.winfo_children()
-         if isinstance(w, tk.Toplevel)]
+# Found by being NEW, not by being a child of the row. The preview is
+# parented to the window rather than to the widget it describes: a
+# Toplevel whose master is a widget joins that widget's winfo_children(),
+# so a preview parented to a row lands inside its panel's tree, where a
+# theme sweep, the wheel binding and any check counting what is on screen
+# all meet it. That cost two red CI runs -- qa3 counted one open preview
+# as an extra trash row, deterministically on a headless display where
+# the pointer sits still, and never here where it does not.
+_pv_after = set()
+_all_tops7(app, _pv_after)
+_tips = [w for w in (_pv_after - _pv_before)]
 def _tip_txts7(tops):
     out = []
     def walk(w):
