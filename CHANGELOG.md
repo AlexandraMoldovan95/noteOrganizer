@@ -12,6 +12,7 @@ How the numbers themselves are counted is the
 
 | Version | Date | In one line |
 |---|---|---|
+| [0.76.198](#076198--2026-09-28) | 2026-09-28 | The note list remembers how you sorted it, and marking a day says why it stops at three. |
 | [0.76.195](#076195--2026-09-28) | 2026-09-28 | Three controls that did something without saying what, and four written claims that no longer matched the code. |
 | [0.76.192](#076192--2026-09-28) | 2026-09-28 | Seven small places where the app contradicted itself: a field that would not paste, a box that forgot its size, two different plus signs, a picker with no title. |
 | [0.75.185](#075185--2026-09-28) | 2026-09-28 | Pasting into an empty field no longer lands on top of the grey hint text sitting in it. |
@@ -113,6 +114,31 @@ whatever bump comes next.*
   review.
 
 ---
+
+## [0.76.198] — 2026-09-28
+
+*Highlights: the note list remembers how you sorted it, and marking a day says why it stops at three.*
+
+### Fixed
+
+- **The note list remembers your sort order and your filter.** The "Group by
+  category" checkbox a few pixels below them has always been remembered, and so
+  have the groups you folded shut — three controls on adjacent rows of one panel,
+  two of which stuck. Someone who prefers Title A–Z re-picked it at every launch
+  with no way to tell why that one preference did not. A stored filter naming a
+  category you have since deleted falls back to showing everything, rather than
+  opening on an empty list with no explanation.
+- **Adding or renaming a category no longer throws away a "Repeating" or "Dated"
+  filter.** Filter the list to one of those, go and add a category in Settings,
+  and the filter silently reset to All and showed every note — the check that
+  keeps the selection valid knew only about categories, and neither of those two
+  is one.
+- **Marking a calendar day says why it stops at three.** The popup's header says
+  "up to 3" once at the top, and the rule was then kept by silence: the fourth
+  click simply did nothing, which reads as the app being broken rather than as a
+  limit being enforced. Once three are chosen the rest go flat, so the fourth
+  click is visibly unavailable before you make it, and a line under the grid
+  explains it for anyone who clicks anyway.
 
 ## [0.76.195] — 2026-09-28
 

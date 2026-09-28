@@ -40,6 +40,7 @@ day-to-day tracking.
 | [The binding that could never fire](#the-binding-that-could-never-fire) | A binding is not an answer to "does this key work" — ask where the key goes; and a probe whose finding is an absence needs a control that produces the presence. | 0.75.183 |
 | [The paste that landed on top of the placeholder](#the-paste-that-landed-on-top-of-the-placeholder) | `bind()` replaces where `add="+"` accumulates, so a widget's own binding silently displaces a shared helper's; and a virtual event outranks the physical one beside it in the same bindtag. | 0.75.185 |
 | [The seven small rows, four of which were not what they said](#the-seven-small-rows-four-of-which-were-not-what-they-said) | A suggested fix is a hypothesis about the code — four of seven were wrong about scope, premise or mechanism, each found by a grep; and a check asserting `not in` against a name the code would never write cannot fail. | 0.76.192 |
+| [The guard that knew half the vocabulary](#the-guard-that-knew-half-the-vocabulary) | Before persisting a value, read what the app already does to it at runtime — a stored preference inherits every rule the live one has, including the wrong ones; and a guard written against one kind of value governs every kind sharing the variable. | 0.76.198 |
 | [The template editor that "did nothing" when clicked](#the-template-editor-that-did-nothing-when-clicked) | 'Nothing happens' in a --windowed build is a real bug report — the exception was invisible. | 0.3.0 |
 | [The panel that lost its content depending on how you got there](#the-panel-that-lost-its-content-depending-on-how-you-got-there) | Recalculate layout on Tk's `<Map>` event, not after a guessed delay. | 0.3.0 |
 | [The scroll that stopped twice, for two different reasons](#the-scroll-that-stopped-twice-for-two-different-reasons) | Same symptom, unrelated causes — check neighbouring areas instead of assuming one fix covers all. | 0.28.38 |
@@ -2747,6 +2748,55 @@ the confidence without the correction.
 4. Cross-check a new finding against the register's own older rows. C-4's
    "Yes ready for Enter" was contradicted by T3-1, already recorded on the
    same page.
+
+### The guard that knew half the vocabulary
+
+*([0.76.198](../CHANGELOG.md#076198--2026-09-28))*
+
+Filter the note list to **🔁 Repeating**, go to Settings and add a
+category, come back — and you are looking at every note again. The filter
+reset itself, said nothing, and the two things are far enough apart that
+nobody would connect them.
+
+**Found by a pre-flight, and it was not what the pre-flight was for.** The
+register's C-15 asks for the sort and filter to survive a restart. Before
+storing a value it is worth knowing what the app already does to that
+value at runtime, and `refresh_category_widgets()` carried this:
+
+```python
+current = self.filter_var.get()
+if current != "All" and current not in CATEGORY_COLORS:
+    self.filter_var.set("All")
+```
+
+The dropdown offers more than categories. Two of its entries are type
+filters — `FILTER_REPEATING` and `FILTER_DATED` — and neither is a key in
+`CATEGORY_COLORS`, so the guard threw both away. Five call sites in
+Settings reach it: adding, renaming and deleting a category all do.
+
+**Measured before it was believed, with a control.** A probe set each of
+the four kinds of value in turn, asserted the field really held it, then
+made the ordinary call: both type filters were reset, a real category
+survived, and a deleted one was correctly reset. The control is what makes
+the first result a fact about the vocabulary rather than about the guard
+firing on everything.
+
+**The class is one judgement written twice.** The vocabulary lived inline
+at the dropdown — `["All", FILTER_REPEATING, FILTER_DATED] + categories` —
+and the guard held a half-remembered copy of it. There is one
+`_filter_options()` now, which the dropdown is built from and which
+`_keep_filter_valid()` asks; and because C-15 needed exactly the same
+question at startup, both the load-time and the runtime answer come from
+that one place. The alternative was a third copy.
+
+**Takeaway:** before persisting a value, read what the app already does to
+that value while it is running. A stored preference inherits every rule
+the live one has, including the wrong ones — and a guard written against
+one *kind* of value silently governs every kind that shares the variable.
+Sibling of
+[The paste that landed on top of the placeholder](#the-paste-that-landed-on-top-of-the-placeholder):
+both were found by asking what else touches the thing about to be changed,
+and both had been shipped for a long time.
 
 ### The seven small rows, four of which were not what they said
 
