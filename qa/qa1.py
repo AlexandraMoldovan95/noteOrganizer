@@ -496,11 +496,24 @@ check('history becomes visible after the toggle', app._calc_history_open == True
 check('history section is now actually packed on screen',
       hist_wrap_widget.winfo_ismapped())
 
+# The CLICKABLE rows, not every Label in the frame: the list is headed by a
+# line of hint text saying what clicking one does, and counting labels
+# counted that too. What this check is about is one row per calculation, and
+# a row is the thing wired to _calc_insert_formula -- so it is now asked by
+# the binding rather than by the widget class, which also stops a second
+# explanatory line from breaking it.
 history_labels = [w for w in app.calculator_history_frame.winfo_children()
-                   if isinstance(w, tk.Label)]
+                  if isinstance(w, tk.Label) and '<Button-1>' in w.bind()]
 # 5 successful "="es so far this test (7x8, 9-4, 6+6, sqrt9, 3^3) — the
 # 5/0 division-by-zero attempt correctly did NOT add an entry.
 check('history shows one entry per past calculation', len(history_labels) == 5)
+# And the hint itself: a row that inserts into the note on a plain click,
+# with nothing saying so, is what this row of the register was about.
+_calc_hint = [str(w.cget('text')) for w in
+              app.calculator_history_frame.winfo_children()
+              if isinstance(w, tk.Label) and '<Button-1>' not in w.bind()]
+check('the history says what clicking a line does',
+      any('insert' in t.lower() for t in _calc_hint))
 # Click the oldest entry (7×8=56) — should insert it, landing after
 # whatever's already in the body from earlier insertions in this test.
 target_entry = next(w for w in history_labels if str(w.cget('text')) == '7×8=56')
@@ -6350,6 +6363,27 @@ check('search skips table plumbing but still finds cell content',
 # these go through the widget, because that is where both gaps were.
 check('the search box has a right-click paste menu now',
       '<Button-3>' in app.search_entry.bind())
+
+# ---- THE TWO DROPDOWNS SAY WHAT THEY ARE (C-23) ----
+# Both are labelled with their current VALUE -- "Recently updated ▾",
+# "All ▾" -- so the words "sort" and "show" appeared nowhere on screen, and
+# "All" in particular reads as a state rather than as a control. The
+# captions sit ABOVE the row on purpose: the row has 250px for two controls
+# and the comments beside it record real clipping fights over exactly that.
+_sidebar_captions = [str(w.cget('text'))
+                     for w in _walk_widgets(app.sidebar, tk.Label)]
+check(f'the sort control is captioned', 'Sort' in _sidebar_captions)
+check(f'and the filter control is captioned', 'Show' in _sidebar_captions)
+# THE CONTROL that keeps this from being a change of the control text, which
+# the register's row explicitly warned against: each control must still SHOW
+# its current value, because that is what the sizing was fought over. A
+# themed dropdown is a Frame holding a Label wired to the var -- not a
+# Button, and cget('text') on it is empty -- so the question is asked of the
+# textvariable, which is the thing that makes the label show the value.
+_bound_vars = {str(w.cget('textvariable'))
+               for w in _walk_widgets(app.sidebar, tk.Label)}
+check('and each control still shows its own current value',
+      str(app.sort_var) in _bound_vars and str(app.filter_var) in _bound_vars)
 # The hint is wired to search_var like everything else in this box, so a
 # paste onto it would land glued and then be SEARCHED FOR -- a query of
 # "search notes...NotaTabelQ" matches nothing and reads as a broken search.

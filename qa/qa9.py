@@ -743,9 +743,78 @@ _ascii_plus = [str(_w.cget('text')) for _w in _all_widgets9(app._mini_popup)
                and str(_w.cget('text')).startswith('+ ')]
 check(f'and the template dialog really does have an ASCII add-button '
       f'({_ascii_plus})', any(t.startswith('+ ') for t in _ascii_plus))
+
+# ============================================================
+# THE WORDLESS SETTINGS ICONS EXPLAIN THEMSELVES (C-18)
+# ============================================================
+# Settings had no hover explanations at all, on the screen where the buttons
+# are silent AND the actions are permanent -- a pencil and a bin side by
+# side, nothing written on either -- while the formatting toolbar in the
+# editor has explained every one of its buttons for a long time. The app
+# taught the lesson in one place and broke it in the other.
+#
+# The words are attached inside _icon_button, keyed by glyph, so this asks
+# the CLASS: every drawn icon on screen carries them, including the next one
+# added. A per-call-site fix would have left that open.
+#
+# Asked by _icon_tip and NOT by '<Enter>' in bind(): a clickable icon binds
+# <Enter> anyway, for its hover colour, so that question is true whether or
+# not any words were ever attached. The first version of this check asked it
+# that way and survived a mutant that removed every tooltip in the file --
+# noticed only by the padlock, the one icon with no command and therefore no
+# hover binding. A check has to name the thing it is about.
+_icons = [w for w in _tplKids if getattr(w, '_icon_kind', None) is not None]
+_silent = [getattr(w, '_icon_kind', '?') for w in _icons
+           if not getattr(w, '_icon_tip', None)]
+check(f'every drawn icon in the template dialog explains itself '
+      f'({len(_icons)} icons, silent: {_silent})', _icons and not _silent)
 app._dismiss_mini_popup()
 app.update()
 app.templates.remove(_tplBin)
+
+# The same question of the category rows, which carry a pencil, a bin and --
+# on a built-in category -- a padlock that is not even clickable. "Why can't
+# I rename this one" is exactly what a silent indicator raises.
+app.toggle_settings_panel('categories')
+app.update()
+_cat_icons = [w for w in _all_widgets9(app.settings_categories_panel)
+              if getattr(w, '_icon_kind', None) is not None]
+_cat_silent = [getattr(w, '_icon_kind', '?') for w in _cat_icons
+               if not getattr(w, '_icon_tip', None)]
+check(f'and so does every icon on the category rows '
+      f'({len(_cat_icons)} icons, silent: {_cat_silent})',
+      _cat_icons and not _cat_silent)
+# And the words really reach the screen, not just the widget: rest on one and
+# wait out the 450ms the tooltip deliberately waits before appearing, so this
+# is the feature and not an attribute someone set.
+_probe = next((w for w in _cat_icons if getattr(w, '_icon_tip', None)), None)
+# Guarded rather than assumed: with the words removed this is None, and an
+# unguarded probe would CRASH the script instead of failing it -- which the
+# runner's summary still reports as a failure, so the difference is invisible
+# in a mutant run and costly in a real one.
+check('there is an icon with words to rest on', _probe is not None)
+if _probe is not None:
+    _probe.event_generate('<Enter>')
+    for _ in range(80):
+        app.update(); app.update_idletasks(); time.sleep(0.01)
+        if getattr(app, '_tooltip', None) is not None:
+            break
+    _shown = getattr(app, '_tooltip', None)
+    _tip_texts = ([str(w.cget('text')) for w in _all_widgets9(_shown)
+                   if isinstance(w, tk.Label)]
+                  if _shown is not None else [])
+    check(f'and resting on one really puts the words on screen '
+          f'({_tip_texts})',
+          _shown is not None
+          and any(getattr(_probe, '_icon_tip') in t for t in _tip_texts))
+    _probe.event_generate('<Leave>')
+    app.update()
+# The theme halves at the bottom of the nav do not go through _icon_button,
+# so they are the one place a class fix could not reach.
+_mode_btns = list(getattr(app, '_settings_mode_buttons', {}).values())
+check(f'the light/dark halves explain themselves too '
+      f'({len(_mode_btns)} found)',
+      _mode_btns and all('<Enter>' in b.bind() for b in _mode_btns))
 
 # ============================================================
 # Same class of bug, second location: the calendar's Jump-to-month popup

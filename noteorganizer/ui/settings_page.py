@@ -1304,8 +1304,14 @@ class SettingsPageMixin:
         # 240 showed about three rows and a lot of scrollbar. This is a
         # list you come to in order to find one note among several, and
         # its rows now carry a line more when the note is a repeating
-        # series. The drag handle below still takes it anywhere from 100
-        # to 800 for anyone who wants it back.
+        # series. The Expand toggle below still takes it taller for anyone
+        # who wants more rows at once -- to 680, which is what
+        # _add_resize_handle works out from this height and the 800 ceiling
+        # passed to it (max(340+260, 340*2), capped). It is a two-state
+        # toggle and not a drag: this comment used to say "the drag handle
+        # below still takes it anywhere from 100 to 800", which was wrong
+        # about the gesture and about the range, and the helper's own
+        # docstring has said "no dragging" the whole time.
         wrap = tk.Frame(parent, bg=self.colors["card"], height=340)
         wrap.pack(fill="x", padx=12, pady=(0, 0))
         wrap.pack_propagate(False)
@@ -2212,26 +2218,18 @@ class SettingsPageMixin:
         control.pack(side="right", padx=(16, 0))
         return control
 
-    def _add_row(self, parent, text, command):
-        """The "+ Add category" affordance: accent text, not a filled block.
-
-        A full-width saturated button for "add another one" outweighed every
-        real control on the page.
-        """
-        row = tk.Frame(parent, bg=self._surface(), cursor="hand2")
-        row.pack(fill="x", pady=(8, 0))
-        icon = self._icon_button(row, "plus", bg_key="card")
-        icon.pack(side="left")
-        lbl = tk.Label(row, text=text, font=("Segoe UI", 10, "bold"),
-                       bg=self._surface(), fg=self.colors["accent"], anchor="w",
-                       cursor="hand2")
-        lbl.pack(side="left", padx=(2, 0))
-        for w in (row, lbl, icon):
-            w.bind("<Button-1>", lambda _e: command())
-        self._draw_icon(icon, "plus", self.colors["accent"],
-                        size=self.ROW_ICON_SIZE)
-        icon.move("glyph", 5, 5)
-        return row
+    # _add_row() stood here: an "+ Add category" affordance drawn as accent
+    # text with the drawn plus glyph, instead of a filled button. It had no
+    # callers -- the category panel builds its own "+ Add" button directly --
+    # and its docstring described itself as the add-category control, so a
+    # reader looking for that control found this and read twenty lines of a
+    # design that is not on screen. Removed rather than marked, because a
+    # comment saying "this is unused" is one more thing to keep true.
+    #
+    # The "plus" glyph in _draw_icon is left where it is. It has no caller
+    # now either, but it belongs to a set of eleven drawn icons that are
+    # built and themed together, and pulling one out of the set is a
+    # different change from removing a dead helper.
 
     def _note_banner(self, parent, text):
         """An informational strip -- retention notices and the like."""
@@ -2302,7 +2300,28 @@ class SettingsPageMixin:
 
     ROW_ICON_SIZE = 15
 
-    def _icon_button(self, parent, kind, command=None, danger=False, bg_key="card"):
+    # What each wordless row icon does, in words. Settings is the screen where
+    # the buttons are silent AND the actions are permanent -- a pencil and a
+    # bin side by side, nothing written on either -- while the formatting
+    # toolbar in the editor has explained every one of its buttons on hover
+    # for a long time. The app taught the lesson in one place and broke it in
+    # the other.
+    #
+    # Keyed by glyph rather than passed in at each call site, so every icon
+    # button gets one, including the next one added. Where a row needs to say
+    # something more specific than the glyph, `tip=` overrides.
+    ICON_TIPS = {
+        "pencil":     ("Rename", "Change what this is called."),
+        "trash":      ("Delete", "Removes this one. Categories and templates "
+                                 "do not go to the Trash."),
+        "lock":       ("Protected", "A built-in item — it can't be renamed or "
+                                    "deleted."),
+        "plus":       ("Add", ""),
+        "templates":  ("Template", ""),
+    }
+
+    def _icon_button(self, parent, kind, command=None, danger=False,
+                     bg_key="card", tip=None):
         """A small drawn-glyph button for a list row.
 
         Replaces the emoji these rows used to use. Emoji are fixed-colour
@@ -2351,6 +2370,23 @@ class SettingsPageMixin:
 
             c.bind("<Enter>", _on)
             c.bind("<Leave>", _off)
+        # After the hover bindings above, and with add="+" inside the helper,
+        # so the glyph still lights up while the words appear. The padlock
+        # gets one too although it takes no command: "why can't I rename this
+        # one" is exactly the question a silent indicator raises.
+        words = tip if tip is not None else self.ICON_TIPS.get(kind)
+        if words:
+            title, detail = words if isinstance(words, tuple) else (words, "")
+            self._attach_tooltip(c, title, detail)
+            # Recorded the same way and for the same reason as _icon_kind
+            # above: a canvas has no text to search. Without it a check can
+            # only ask whether <Enter> is bound, and a clickable icon binds
+            # that anyway for its hover colour -- so "it explains itself"
+            # and "it lights up" become the same question, and the first one
+            # passes whenever the second is true. Found by a mutant that
+            # removed every tooltip and was noticed only by the padlock,
+            # which is the one icon with no command and so no hover binding.
+            c._icon_tip = title
         return c
 
     def _row_divider(self, parent):
@@ -2414,6 +2450,13 @@ class SettingsPageMixin:
                           bg=self.colors["sidebar"], cursor="hand2")
             b.pack(side="left")
             b.bind("<Button-1>", lambda _e, m=mode: self._pick_settings_mode(m))
+            # Two drawn shapes at the very bottom of the nav, with nothing
+            # written near them. They do not go through _icon_button, so the
+            # words are attached here.
+            self._attach_tooltip(
+                b, "Dark mode" if mode == "dark" else "Light mode",
+                "Switches to the last %s theme you used. The full list is "
+                "under Appearance." % ("dark" if mode == "dark" else "light"))
             self._settings_mode_buttons[mode] = b
         self._refresh_mode_toggle()
 
