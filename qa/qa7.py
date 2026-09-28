@@ -1739,6 +1739,67 @@ check('search finds override content and auto-expands its group',
 app._history_search_var.set('')
 app.update(); _t7.sleep(0.4); app.update()
 
+# ---- A PASTE ONTO THIS SEARCH BOX'S PLACEHOLDER ----
+# The check above drives the search through the VARIABLE, which steps over
+# the widget entirely -- so it could never see that a right-click Paste
+# landed glued to the placeholder: "Search all calendar entries...bugetul",
+# a query that matches nothing, which reads as the search being broken. Set
+# through the var it works; set through the field it did not. The fix lives
+# in add_placeholder, so this is the sibling of qa1's title checks on the
+# one other field shipping with both a placeholder and a paste menu.
+#
+# The entry is a local in the History builder, not an attribute, so it is
+# found by the variable it is wired to -- the one thing that cannot be
+# confused with another box on the same screen.
+def _entry_for_var(root, var_name):
+    for ch in root.winfo_children():
+        if isinstance(ch, tk.Entry) and str(ch.cget('textvariable')) == var_name:
+            return ch
+        found = _entry_for_var(ch, var_name)
+        if found is not None:
+            return found
+    return None
+
+
+_hist_entry = _entry_for_var(app.history_frame,
+                             str(app._history_search_var))
+check('the History search box is reachable to press on', _hist_entry is not None)
+if _hist_entry is not None:
+    _PH_HIST = 'Search all calendar entries...'
+    _hist_entry.delete(0, 'end')
+    _hist_entry.event_generate('<FocusOut>')
+    app.update()
+    check('fixture: the History search shows its placeholder',
+          _hist_entry.get() == _PH_HIST)
+    app.clipboard_clear(); app.clipboard_append('bugetul'); app.update()
+    _hist_entry.event_generate('<<Paste>>')
+    app.update(); _t7.sleep(0.4); app.update()
+    check('pasting into the History search replaces the placeholder',
+          _hist_entry.get() == 'bugetul')
+    # And the consequence, not just the contents: the query the user pasted
+    # is the query that ran. The same hit the var-driven check above proved,
+    # so a failure here is about the paste and not about the fixture.
+    _hl = find_all_labels(app._history_rows)
+    check('and the pasted query is the one the register searched for',
+          any('2026-08-17' in t for t in _hl)
+          and not any('HistDated' in t for t in _hl))
+    # The control: a paste must not wipe a query someone typed.
+    _hist_entry.delete(0, 'end')
+    _hist_entry.insert(0, 'bug')
+    _hist_entry.icursor('end')
+    app.update()
+    check('fixture: the History search holds real text, no placeholder',
+          _hist_entry.get() == 'bug')
+    app.clipboard_clear(); app.clipboard_append('etul'); app.update()
+    _hist_entry.event_generate('<<Paste>>')
+    app.update(); _t7.sleep(0.4); app.update()
+    check('a paste into a typed History query leaves that text alone',
+          _hist_entry.get() == 'bugetul')
+    _hist_entry.delete(0, 'end')
+    app.update(); _t7.sleep(0.4); app.update()
+app._history_search_var.set('')
+app.update(); _t7.sleep(0.4); app.update()
+
 # Year chips filter by the year of the activity.
 app._history_set_bucket('Last year'); app.update()
 _hl = find_all_labels(app._history_rows)

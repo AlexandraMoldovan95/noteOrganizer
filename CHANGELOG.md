@@ -12,6 +12,7 @@ How the numbers themselves are counted is the
 
 | Version | Date | In one line |
 |---|---|---|
+| [0.75.185](#075185--2026-09-28) | 2026-09-28 | Pasting into an empty field no longer lands on top of the grey hint text sitting in it. |
 | [0.75.184](#075184--2026-09-26) | 2026-09-26 | In Settings → Duplicates, the button that cleans up every group now looks like the bigger action instead of the smaller one. |
 | [0.75.183](#075183--2026-09-26) | 2026-09-26 | Escape backs out of the app's small anchored popups — it never could before — and the two bulk popups that had no visible way out now carry a Cancel. |
 | [0.75.181](#075181--2026-09-26) | 2026-09-26 | Clearing a calendar day's colour or markers can be undone — on all three routes that discard it — and a note's menu says when Delete means the whole series. |
@@ -110,6 +111,24 @@ whatever bump comes next.*
   review.
 
 ---
+
+## [0.75.185] — 2026-09-28
+
+*Highlights: pasting into an empty field no longer lands on top of the grey hint sitting in it.*
+
+### Fixed
+
+- **Pasting into a field that is showing its grey hint text no longer lands on top of
+  it.** Right-click a new note's title, choose Paste, and the field read
+  `Note title...My pasted title` — the hint that says "type a title here" was still in
+  the box and the pasted text was stuck to the end of it. The same on the Calendar's
+  History search, where the result was a query like
+  `Search all calendar entries...bugetul`, which matches nothing, so the search looked
+  broken rather than misfilled. The note title also lost thirteen characters of its
+  200-character limit to the hint, so a long pasted title came back shorter than it had
+  to be. The hint is now cleared by a paste exactly as it is by typing, on every field
+  that has one — the note title, the date, and both search boxes — and on both ways of
+  pasting, the right-click menu and Ctrl+V.
 
 ## [0.75.184] — 2026-09-26
 

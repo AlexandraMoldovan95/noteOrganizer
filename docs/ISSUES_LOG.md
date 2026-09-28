@@ -38,6 +38,7 @@ day-to-day tracking.
 | [The finding that described a dialog nobody had opened](#the-finding-that-described-a-dialog-nobody-had-opened) | A review that only reads finds where to look but cannot decide — check a finding's reason separately from the finding, and correct a refuted row in place. | — |
 | [The undo that guarded the wrong state](#the-undo-that-guarded-the-wrong-state) | An undo must test for the state its own action produced, not the one it means to restore; and sweep for what else reaches the same loss. | 0.75.181 |
 | [The binding that could never fire](#the-binding-that-could-never-fire) | A binding is not an answer to "does this key work" — ask where the key goes; and a probe whose finding is an absence needs a control that produces the presence. | 0.75.183 |
+| [The paste that landed on top of the placeholder](#the-paste-that-landed-on-top-of-the-placeholder) | `bind()` replaces where `add="+"` accumulates, so a widget's own binding silently displaces a shared helper's; and a virtual event outranks the physical one beside it in the same bindtag. | 0.75.185 |
 | [The template editor that "did nothing" when clicked](#the-template-editor-that-did-nothing-when-clicked) | 'Nothing happens' in a --windowed build is a real bug report — the exception was invisible. | 0.3.0 |
 | [The panel that lost its content depending on how you got there](#the-panel-that-lost-its-content-depending-on-how-you-got-there) | Recalculate layout on Tk's `<Map>` event, not after a guessed delay. | 0.3.0 |
 | [The scroll that stopped twice, for two different reasons](#the-scroll-that-stopped-twice-for-two-different-reasons) | Same symptom, unrelated causes — check neighbouring areas instead of assuming one fix covers all. | 0.28.38 |
@@ -1383,6 +1384,83 @@ false green just as easily as a false red, on any check asserting that
 some click did *nothing*. Sibling of
 [The chip that looked clickable, and the fix that looked like it worked](#the-chip-that-looked-clickable-and-the-fix-that-looked-like-it-worked):
 the same widget-visibility machinery, met from the other direction.
+
+### The paste that landed on top of the placeholder
+
+*([0.75.185](../CHANGELOG.md#075185--2026-09-28))*
+
+Right-click a new note's title, choose Paste, and the field read
+`Note title...My pasted title`. The grey hint text the app puts there to
+say "type a title here" was still sitting in the box, and the pasted text
+was glued to the end of it. The same on the Calendar's History search,
+where the glued query — `Search all calendar entries...bugetul` — matched
+nothing, so the search read as broken rather than as misfilled.
+
+**Found by a pre-flight, not by a report.** The register wanted a paste
+menu on two fields that had none (the sidebar search, the date field), and
+the sibling sweep that precedes any fix here asked the obvious next
+question: which fields have a placeholder *and* a paste menu already? Two
+did. Both were broken, and had been for as long as the two features had
+coexisted.
+
+**The mechanism is a Tk precedence rule.** `add_placeholder` clears the
+hint in two places — `<FocusIn>`, and `<KeyPress>`, the latter with a
+comment explaining that focus alone loses the race when someone clicks and
+types immediately. A paste is neither. `_add_paste_menu`'s Paste entry
+performs the paste with `event_generate("<<Paste>>")`, so no key is
+pressed at all and the `<KeyPress>` clear never runs.
+
+Ctrl+V looked like it should be safe — it *is* a key press — and on the
+date field it was. On the title it was not, and the difference is the
+whole lesson: **Tk fires one binding per bindtag, and in the same tag a
+VIRTUAL event outranks the physical one that produced it.** The title
+binds `<<Paste>>` itself, for its length cap. So on Ctrl+V the title's own
+handler won the widget tag and `<KeyPress>` was never consulted. The date
+field binds no `<<Paste>>`, so `<KeyPress>` matched and the hint cleared.
+One field, two routes broken; the other, one route broken — from a single
+missing binding, and the shape of the difference was invisible until it
+was measured on both.
+
+**A prediction of mine was wrong in the middle of this**, which is why the
+second half is measured rather than argued: I reasoned that Ctrl+V must
+already be safe everywhere because it is a key press, and the probe said
+otherwise on the title. The bindtag rule above is the explanation that
+survived being measured on both fields.
+
+**The second face of the same bug.** `_on_title_paste` computes
+`room = TITLE_MAX_LEN - len(self.title_entry.get())`, and with the hint
+still in the box that `len` was 13 too large — so a long paste came back
+thirteen characters short of the cap. One mechanism, two symptoms.
+
+**Fixed at the root of the class:** `add_placeholder` now clears on
+`<<Paste>>` too, which covers all four placeholder fields at once and the
+next one added without anybody remembering to. That needed a second edit
+to work: the title bound its own `<<Paste>>` with a plain `bind()`, which
+*replaces* the widget's binding for that sequence — so the new clear would
+have been silently displaced on the one field where the bug was worst.
+Both are `add="+"` now, and registration order makes the clear run first.
+
+**What the existing check had proved, and what it hadn't.** qa1 already
+covered pasting a long title — by calling `app._on_title_paste()`
+directly, on a field it had just emptied. So it proved the handler and
+said nothing about the route, and it passed throughout. The same shape as
+the register's C-22, found days earlier: a check only ever proves what it
+actually exercises.
+
+**One of the new checks was satisfied by coincidence**, caught by the
+mutants rather than by review. It read
+`len(title.get()) == TITLE_MAX_LEN` after a long paste — and with the bug
+present the field held `Note title...` plus `TITLE_MAX_LEN - 13` q's,
+which is `TITLE_MAX_LEN` characters exactly. Right length, first thirteen
+characters wrong. It now asserts the content, and a length is on notice as
+the weaker question.
+
+**Takeaway:** when a widget's own binding and a shared helper's binding
+name the same sequence, one of them is about to disappear — `bind()`
+replaces, `add="+"` accumulates. And a "clear the hint before input lands"
+rule must enumerate the ways input *arrives*, not the ways it is typed:
+`<KeyPress>` is one door, `<<Paste>>` is another, and a virtual event will
+quietly take precedence over the physical one beside it.
 
 ## Editor & input interaction
 

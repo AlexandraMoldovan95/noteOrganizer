@@ -45,7 +45,7 @@ except ImportError:
 # Added/Fixed CHANGELOG.md entries, not per-release counts). The running
 # app records this into settings, so the next time a newer build opens
 # over older data it can tell the user what changed version-wise.
-APP_VERSION = "0.75.184"
+APP_VERSION = "0.75.185"
 
 
 def parse_version(v):
@@ -10344,7 +10344,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.track_theme(self.title_count_lbl, bg="bg", fg="subtext")
         self.title_entry.bind("<KeyRelease>", self._schedule_autosave)
         self.title_entry.bind("<KeyRelease>", self._refresh_title_count, add="+")
-        self.title_entry.bind("<<Paste>>", self._on_title_paste)
+        # add="+": add_placeholder() above already bound <<Paste>> to clear
+        # the placeholder first, and a plain bind() here would replace it --
+        # which is exactly how the title came to paste "Note title...X".
+        # Registration order is the run order, so the clear happens before
+        # the length cap below is measured against the field's contents.
+        self.title_entry.bind("<<Paste>>", self._on_title_paste, add="+")
         self._guard_entry_astral(self.title_entry)
 
         self.category_var = tk.StringVar(value="General")
@@ -11947,6 +11952,23 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             # race if the user starts typing immediately after clicking in.
             clear_if_placeholder()
 
+        def on_paste(e):
+            # A paste is not a keystroke, so on_key above never sees it and
+            # the pasted text used to land glued to the placeholder --
+            # "Note title...My pasted title", measured on the real app.
+            # Two routes reach here and BOTH were affected:
+            #
+            #   * the right-click Paste, which _add_paste_menu performs with
+            #     event_generate("<<Paste>>") — no key is pressed at all;
+            #   * Ctrl+V on a field that binds <<Paste>> itself (the title
+            #     does, for its length cap), because Tk fires one binding
+            #     per bindtag and a VIRTUAL event outranks a physical one in
+            #     the same tag, so <<Paste>> wins and <KeyPress> never runs.
+            #
+            # Fixing it here rather than at the two call sites is what makes
+            # every placeholder field safe, including the next one added.
+            clear_if_placeholder()
+
         def on_focus_out(e):
             if not entry.get():
                 entry.insert(0, placeholder)
@@ -11954,6 +11976,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
         entry.bind("<FocusIn>", on_focus_in)
         entry.bind("<KeyPress>", on_key)
+        # add="+" both ways: this must not displace a field's own <<Paste>>
+        # handler, and a field's own handler must not displace this. The
+        # title binds one at its call site and is bound the same way.
+        entry.bind("<<Paste>>", on_paste, add="+")
         entry.bind("<FocusOut>", on_focus_out)
 
     # ---------- Note list rendering ----------
