@@ -264,6 +264,29 @@ A new surface joins this list the moment it ships.
   undo's own `_schedule_autosave()` changed nothing it could see. The
   check now looks for the queued job. A forcing call in a check proves the
   forcing call works.
+- **A red that loses its name costs a day, so the runner writes it down.**
+  `tools/run_tests.py` saves a failing run's whole output to
+  `%TEMP%/notesorg-failure-<label>.txt` and prints the path — the terminal
+  shows a summary, and a summary is what a piped `tail` throws away. The
+  static gates had this and the qa half did not, which is how a rare qa3
+  red during a full run went undiagnosed: the names scrolled past, the
+  next run was green, and there was nothing left to read. **When a check
+  goes red, open that file before re-running anything.** Re-running is
+  how a flake escapes.
+- **Assert the app's DECISION, not the arrival, wherever the promise is
+  about focus.** `focus_get()` needs the process to own the desktop
+  foreground, which a test run never does; measured, it answers 100/100
+  when the window happens to hold it and nothing at all when it does not.
+  So a check that polls it reports a false red about an app that placed
+  the focus correctly. Wrap `tk.Misc.focus_set`, record which widget was
+  asked for, and assert that — synchronously, and it cannot flake. The
+  table-insert check has done this since C11b; the Ctrl+F one was the
+  sibling it was never applied to.
+
+  Keep the waiting helpers for what they are genuinely for: establishing
+  a precondition before generating a real keystroke, where the focus must
+  actually have arrived. There, force it with `take_focus` and assert it
+  took — do not assert an arrival nobody forced.
 - **For a change that is about how something LOOKS, take the picture.** The
   measurement for C-6 said the sweeping cleanup button was "quieter" than
   its neighbour — a different fill, a smaller font. The photograph said it
