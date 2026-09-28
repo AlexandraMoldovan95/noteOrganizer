@@ -280,6 +280,27 @@ A new surface joins this list the moment it ships.
   a 2-second run with one unrelated failure means the suite never reached
   the line. Read the timing and the failure count, not just the absence
   of the name.
+- **A length is a weaker question than the content, and a cap makes the
+  two look alike.** A new check for the title's paste cap read
+  `len(title.get()) == TITLE_MAX_LEN` after pasting something far too
+  long. It survived two mutants: with the bug present the field held the
+  placeholder `Note title...` plus `TITLE_MAX_LEN - 13` q's, which is
+  `TITLE_MAX_LEN` characters exactly. The right length, and the first
+  thirteen characters were somebody else's text. Anywhere a limit clips
+  the result, the size is the one property the bug preserves — assert what
+  the field HOLDS (`get() == 'q' * CAP`), not how much of it there is.
+  Sibling of the count that was satisfied by the wrong answer of the same
+  size, two rules above.
+- **Reach the widget the user reaches, not the handler behind it.** qa1
+  had covered pasting an over-long title since the cap shipped — by
+  calling `app._on_title_paste()` directly, on a field it had emptied
+  first. Both of those made it pass while the real route was broken: a
+  right-click Paste arrives as `event_generate("<<Paste>>")` on a field
+  that still holds its placeholder, and the pasted text landed glued to
+  the hint text. A check that calls the handler proves the handler. Where
+  a binding, a placeholder, a validator or a menu sits between the user
+  and the function, drive the outermost thing the app itself drives —
+  here, the same virtual event the app's own menu sends.
 - **A red that loses its name costs a day, so the runner writes it down.**
   `tools/run_tests.py` saves a failing run's whole output to
   `%TEMP%/notesorg-failure-<label>.txt` and prints the path — the terminal

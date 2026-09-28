@@ -1919,6 +1919,93 @@ app.update()
 check('pasting something too long shortens it instead of refusing it',
       len(_title.get()) == NO.NoteOrganizer.TITLE_MAX_LEN)
 
+# ---- A PASTE ONTO A PLACEHOLDER ----
+# The check above calls _on_title_paste() DIRECTLY on a field that was just
+# emptied, so it proves the handler and says nothing about the route. Going
+# through the route instead found the field glued the pasted text to the
+# placeholder still sitting in it: "Note title...My pasted title", and the
+# length cap was measured against that, so a paste also lost room to it.
+#
+# Both routes to a paste were affected. _add_paste_menu's Paste entry fires
+# event_generate("<<Paste>>"), which is no keystroke at all, so the
+# placeholder's <KeyPress> clear never ran. Ctrl+V went the same way on this
+# field, because Tk fires one binding per bindtag and a VIRTUAL event
+# outranks a physical one in the same tag -- the title's own <<Paste>>
+# handler won and <KeyPress> was never consulted. The suite cannot generate
+# a trustworthy Ctrl+V (see _qa_support.fire), so what is asserted here is
+# the virtual event the app itself sends; the keystroke's fix is the same
+# line.
+
+
+def _restore_placeholder(entry, placeholder):
+    """Put `entry` back in the state a freshly-opened app leaves it in.
+
+    Through the app's OWN mechanism -- empty the field and let <FocusOut>
+    refill it -- rather than by inserting the text here, so the fixture is
+    the real thing and not a hand-made imitation of it.
+    """
+    entry.delete(0, 'end')
+    entry.event_generate('<FocusOut>')
+    app.update()
+    return entry.get() == placeholder
+
+
+_PH_TITLE = 'Note title...'
+check('fixture: the title really is showing its placeholder again',
+      _restore_placeholder(_title, _PH_TITLE))
+app.clipboard_clear(); app.clipboard_append('Pasted Title'); app.update()
+_title.event_generate('<<Paste>>')
+app.update()
+check('pasting onto the title placeholder replaces it, not appends to it',
+      _title.get() == 'Pasted Title')
+
+# The second half of the same bug: room was TITLE_MAX_LEN minus whatever the
+# placeholder happened to be, so a long paste came back short by 13.
+#
+# Asserted on the CONTENT, not the length, and the first version of this
+# check got that wrong -- it read len(...) == TITLE_MAX_LEN and survived
+# both mutants. With the bug the field held "Note title..." plus
+# TITLE_MAX_LEN - 13 q's, which is TITLE_MAX_LEN characters exactly, so the
+# length was right while every one of the first thirteen was wrong. A length
+# is a weaker question than "is this the text the user pasted".
+check('fixture: placeholder restored before the long paste',
+      _restore_placeholder(_title, _PH_TITLE))
+app.clipboard_clear(); app.clipboard_append('q' * 5000); app.update()
+_title.event_generate('<<Paste>>')
+app.update()
+check('and the cap still measures the title alone, not the placeholder too',
+      _title.get() == 'q' * NO.NoteOrganizer.TITLE_MAX_LEN)
+
+# THE CONTROL. Without this the two checks above would also pass if the
+# clear had become unconditional -- wiping a real title every time someone
+# pasted into it, which is a worse bug than the one being fixed.
+_title.delete(0, 'end')
+_title.insert(0, 'Kept')
+_title.icursor('end')
+app.update()
+check('fixture: the title holds real text, no placeholder',
+      _title.get() == 'Kept')
+app.clipboard_clear(); app.clipboard_append('More'); app.update()
+_title.event_generate('<<Paste>>')
+app.update()
+check('a paste into a title that has real text leaves that text alone',
+      _title.get() == 'KeptMore')
+
+# The date field carries the same placeholder and is the field the register
+# wants a paste menu on next; it has no <<Paste>> route a user can reach
+# today, so this is the latent half of the same hole, checked so that adding
+# the menu cannot re-open it.
+_PH_DATE = 'YYYY-MM-DD'
+check('fixture: the date field is showing its placeholder',
+      _restore_placeholder(app.date_entry, _PH_DATE))
+app.clipboard_clear(); app.clipboard_append('2026-10-05'); app.update()
+app.date_entry.event_generate('<<Paste>>')
+app.update()
+check('pasting onto the date placeholder replaces it too',
+      app.date_entry.get() == '2026-10-05')
+app.date_entry.delete(0, 'end')
+app.update()
+
 # The one that matters: the cap must never shorten a title already saved.
 # Validation fires on programmatic inserts too, so loading a note written
 # before the cap could have had the widget drop the overflow -- and the next
