@@ -264,6 +264,62 @@ _emopop = app._mini_popup
 _chips = [c for c in _find_swatches(_emopop)
           if isinstance(c, tk.Label) and str(c.cget('text')).strip()]
 check('the emoji marker popup offers its chips', len(_chips) >= 6)
+
+# ---- THE CAP SAYS WHY, INSTEAD OF SWALLOWING THE CLICK (C-16) ----
+# The header says "up to 3" once at the top, and the rule was then kept by
+# silence: the fourth click simply did nothing, which reads as the app being
+# broken rather than as a limit being enforced. Every other ceiling here
+# speaks -- the title cap sets a status line, the attachment cap warns.
+def _cap_note_text(pop):
+    """The line under the grid, found by being the one wordy Label."""
+    out = []
+    def walk(w):
+        for c in w.winfo_children():
+            if isinstance(c, tk.Label) and len(str(c.cget('text'))) > 12:
+                out.append(str(c.cget('text')))
+            walk(c)
+    walk(pop)
+    return out
+
+_before_cap = ' '.join(_cap_note_text(_emopop))
+check('before the cap, nothing is complaining',
+      'unpick' not in _before_cap.lower())
+_chip_bgs_before = [str(c.cget('bg')) for c in _chips]
+for chip in _chips[:3]:
+    _qa_click(chip)
+    app.update()
+# Three chosen: the rest must READ as unavailable before a dead click is
+# ever made, which is the half a message alone does not cover.
+_flat = [c for c in _chips[3:] if str(c.cget('bg')) != _chip_bgs_before[
+    _chips.index(c)]]
+check(f'at the cap the unpicked chips go flat ({len(_flat)} of '
+      f'{len(_chips) - 3})', len(_flat) == len(_chips) - 3)
+check('and the popup says why, without waiting to be clicked',
+      'unpick' in ' '.join(_cap_note_text(_emopop)).lower())
+# THE CONTROL: the three that ARE chosen must keep their own colour, or
+# "everything went flat" would pass this just as well.
+_chosen_kept = [c for c in _chips[:3]
+                if str(c.cget('bg')) == _chip_bgs_before[_chips.index(c)]]
+check(f'while the three chosen keep their colour ({len(_chosen_kept)} of 3)',
+      len(_chosen_kept) == 3)
+# And unpicking one puts the rest back, so the state is not a one-way door.
+_qa_click(_chips[0])
+app.update()
+_back = [c for c in _chips[3:] if str(c.cget('bg')) == _chip_bgs_before[
+    _chips.index(c)]]
+check(f'unpicking one lights the others again ({len(_back)} of '
+      f'{len(_chips) - 3})', len(_back) == len(_chips) - 3)
+# Put every chip back to unchosen before the original five-click check
+# below, so that check still means what its name says -- five clicks on
+# five chips, the last two refused by the cap -- rather than a toggle
+# sequence that happens to land on three.
+for chip in _chips[1:3]:
+    _qa_click(chip)
+    app.update()
+check('fixture: nothing is chosen again before the five-click check',
+      'unpick' not in ' '.join(_cap_note_text(_emopop)).lower()
+      and all(str(c.cget('bg')) == _chip_bgs_before[_chips.index(c)]
+              for c in _chips))
 for chip in _chips[:5]:
     _qa_click(chip)
     app.update()

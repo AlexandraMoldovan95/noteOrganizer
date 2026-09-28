@@ -135,6 +135,25 @@ app._open_color_swatch_popup('highlight')
 app._dismiss_mini_popup()
 app._open_color_swatch_popup('text_color')
 """),
+    # Added for 0.76.198. The day-marker popup at its three-marker cap is the
+    # only place that release changed on screen, and none of the scenes above
+    # contains a popup from the calendar. Seeded to three rather than clicked
+    # to three, so the picture is the same every time: the popup works out on
+    # build that it is already at the cap.
+    ("12-day-markers-at-the-cap", """
+app._dismiss_mini_popup()
+app.notebook.select(app.TAB_CALENDAR)
+app.cal_year, app.cal_month = 2026, 9
+app.render_calendar()
+# update() before opening the popup, and it is load-bearing: select() QUEUES
+# <<NotebookTabChanged>>, which the app binds to _dismiss_mini_popup. Opened
+# back to back, the popup is created first and the queued event closes it a
+# moment later -- the first version of this shot was a calendar with no
+# popup on it. Same shape as the settings panel two scenes up.
+app.update()
+app.day_emoji['2026-09-15'] = [e for e, _c in app.DAY_MARKER_EMOJIS[:3]]
+app._mark_day_emoji('2026-09-15')
+"""),
 ]
 
 SEED = [

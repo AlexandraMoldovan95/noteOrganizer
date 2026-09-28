@@ -6384,6 +6384,69 @@ _bound_vars = {str(w.cget('textvariable'))
                for w in _walk_widgets(app.sidebar, tk.Label)}
 check('and each control still shows its own current value',
       str(app.sort_var) in _bound_vars and str(app.filter_var) in _bound_vars)
+
+# ---- THE TWO CONTROLS REMEMBER, AND THE FILTER STAYS VALID (C-15) ----
+# The checkbox a few pixels below them has always been remembered, and so
+# have the folded groups beside it. Three controls on one panel, two of them
+# remembered: someone who prefers Title A–Z re-picked it at every launch
+# with no way to tell why that one preference did not stick.
+app.sort_var.set('Title A–Z')
+app.filter_var.set(app.FILTER_REPEATING)
+app.update()
+_stored = NO.load_settings()
+check('choosing a sort is written to settings',
+      _stored.get('note_sort') == 'Title A–Z')
+check('and so is choosing a filter',
+      _stored.get('note_filter') == app.FILTER_REPEATING)
+
+# The read side, and the guard on it. A stored value comes off disk and can
+# name a sort this version no longer has, or a category this notebook never
+# had -- an unknown sort would reach the comparator, and an unknown filter
+# would show an empty list with no way to tell why.
+NO.save_setting('note_sort', 'Sorted By Moon Phase')
+NO.save_setting('note_filter', 'A Category Nobody Has')
+_fresh = NO.NoteOrganizer(); _fresh._poll_active_dirty = lambda: None
+_fresh.update()
+check('a stored sort this version does not have falls back to the default',
+      _fresh.sort_var.get() == _fresh.SORT_OPTIONS[0])
+check('and a stored filter naming an unknown category falls back to All',
+      _fresh.filter_var.get() == 'All')
+# THE CONTROL: a valid stored pair must actually be restored, or the two
+# checks above would pass on an app that simply ignores the file.
+NO.save_setting('note_sort', 'Title A–Z')
+NO.save_setting('note_filter', app.FILTER_DATED)
+_fresh2 = NO.NoteOrganizer(); _fresh2._poll_active_dirty = lambda: None
+_fresh2.update()
+check('a stored sort that IS on offer comes back',
+      _fresh2.sort_var.get() == 'Title A–Z')
+check('and so does a stored type filter',
+      _fresh2.filter_var.get() == _fresh2.FILTER_DATED)
+_fresh.destroy(); _fresh2.destroy()
+
+# ---- TOUCHING A CATEGORY NO LONGER THROWS THE FILTER AWAY ----
+# Found by the pre-flight for the row above: the guard that keeps the
+# selection valid asked `not in CATEGORY_COLORS`, which is true of BOTH
+# type filters -- neither is a category. So filtering to Repeating and then
+# adding a category in Settings silently showed everything again. One
+# vocabulary now answers both this and the load above.
+for _name, _value, _survives in (
+        ('the Repeating type filter', app.FILTER_REPEATING, True),
+        ('the Dated type filter', app.FILTER_DATED, True),
+        ('a category that is gone', 'No Such Category', False)):
+    app.filter_var.set(_value)
+    app.update()
+    check(f'fixture: the filter holds {_name}', app.filter_var.get() == _value)
+    app.refresh_category_widgets()
+    app.update()
+    if _survives:
+        check(f'{_name} survives a category being touched',
+              app.filter_var.get() == _value)
+    else:
+        check(f'{_name} is reset to All, as it should be',
+              app.filter_var.get() == 'All')
+app.filter_var.set('All')
+app.sort_var.set(app.SORT_OPTIONS[0])
+app.refresh_note_list(); app.update()
 # The hint is wired to search_var like everything else in this box, so a
 # paste onto it would land glued and then be SEARCHED FOR -- a query of
 # "search notes...NotaTabelQ" matches nothing and reads as a broken search.

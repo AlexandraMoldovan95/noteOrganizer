@@ -45,7 +45,7 @@ except ImportError:
 # Added/Fixed CHANGELOG.md entries, not per-release counts). The running
 # app records this into settings, so the next time a newer build opens
 # over older data it can tell the user what changed version-wise.
-APP_VERSION = "0.76.195"
+APP_VERSION = "0.76.198"
 
 
 def parse_version(v):
@@ -10169,7 +10169,22 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             "Calendar: soonest",
             "Calendar: oldest",
         ]
-        self.sort_var = tk.StringVar(value=self.SORT_OPTIONS[0])
+        # Remembered across launches, like the "Group by category" checkbox a
+        # few pixels below and the folded groups beside it. Three controls on
+        # adjacent rows of one panel, two of which were remembered: someone
+        # who prefers Title A–Z re-picked it at every launch with no way to
+        # tell why that one preference did not stick.
+        #
+        # Validated on the way IN, not only on the way out. What comes back is
+        # whatever is in a settings file -- possibly written by an older build,
+        # possibly hand-edited, possibly naming a sort this version no longer
+        # has -- and an unknown key here would reach the sort comparator.
+        _stored_sort = load_settings().get("note_sort")
+        self.sort_var = tk.StringVar(
+            value=_stored_sort if _stored_sort in self.SORT_OPTIONS
+            else self.SORT_OPTIONS[0])
+        self.sort_var.trace_add(
+            "write", lambda *a: save_setting("note_sort", self.sort_var.get()))
         # width_chars=0: content-sized, because this control is the one
         # packed to FLEX below and a width fixed in characters defeats
         # that. 18 was the previous number, chosen by measuring the label
@@ -10185,11 +10200,19 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             filter_row, self.sort_var, self.SORT_OPTIONS,
             on_change=lambda v: self.refresh_note_list(), width_chars=0)
 
-        self.filter_var = tk.StringVar(value="All")
+        # Same as the sort above, with one more thing to be careful about: a
+        # stored filter can name a category that has since been deleted, or
+        # one this notebook never had. _keep_filter_valid asks the dropdown's
+        # own vocabulary rather than a second copy of it, so the load-time
+        # answer and the runtime answer cannot drift apart. It runs after the
+        # dropdown exists, below.
+        self.filter_var = tk.StringVar(
+            value=load_settings().get("note_filter", "All"))
+        self.filter_var.trace_add(
+            "write",
+            lambda *a: save_setting("note_filter", self.filter_var.get()))
         self.filter_menu = self._build_themed_dropdown(
-            filter_row, self.filter_var,
-            lambda: (["All", self.FILTER_REPEATING, self.FILTER_DATED]
-                     + list(CATEGORY_COLORS.keys())),
+            filter_row, self.filter_var, self._filter_options,
             on_change=lambda v: self.refresh_note_list(),
             # Content-sized too, for the same reason as the sort control
             # above: 13 characters is 113px in Segoe UI and 122px in
@@ -10203,6 +10226,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # screenshot, not guessed). The sort button flexes instead.
         self.filter_menu.pack(side="right")
         sort_menu.pack(side="left", fill="x", expand=True, padx=(0, 4))
+        # After the dropdown exists, because the guard checks hasattr on it
+        # the same way refresh_category_widgets does. A stored filter naming
+        # a category this notebook does not have falls back to All here,
+        # before anything reads it.
+        self._keep_filter_valid()
 
         # Group by category — an independent toggle. When on, notes are
         # clustered under collapsible category headers instead of one flat
@@ -12203,6 +12231,33 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
     # select-all can never diverge on what "visible" means.
     FILTER_REPEATING = "🔁 Repeating"
     FILTER_DATED = "📅 Dated"
+
+    def _filter_options(self):
+        """Everything the sidebar's filter dropdown offers, in order.
+
+        The dropdown is built from this, and so is every check of whether a
+        filter value is still a real choice. It had been written out inline
+        at the dropdown and then half-remembered by the guard that keeps the
+        selection valid, which asked `not in CATEGORY_COLORS` -- true of both
+        type filters above, neither of which is a category. So filtering the
+        list to Repeating and then adding a category in Settings silently
+        threw the filter away and showed everything. Measured on the real
+        app before it was changed, with a control: a real category survived
+        the same call and a deleted one was correctly reset.
+        """
+        return ["All", self.FILTER_REPEATING, self.FILTER_DATED] + \
+            list(CATEGORY_COLORS.keys())
+
+    def _keep_filter_valid(self):
+        """Fall back to All if the current filter is no longer on offer.
+
+        Called wherever the vocabulary can change -- which today means the
+        categories, and at startup, where the value comes off disk and could
+        name a category this notebook has never had.
+        """
+        var = getattr(self, "filter_var", None)
+        if var is not None and var.get() not in self._filter_options():
+            var.set("All")
 
     def _note_passes_filter(self, note, selected):
         """One judgment for the sidebar filter dropdown's current choice."""
@@ -14798,9 +14853,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # The category filter dropdown reads CATEGORY_COLORS live when opened,
         # so no values push is needed — just keep the selection valid.
         if hasattr(self, "filter_menu"):
-            current = self.filter_var.get()
-            if current != "All" and current not in CATEGORY_COLORS:
-                self.filter_var.set("All")
+            self._keep_filter_valid()
 
 
 

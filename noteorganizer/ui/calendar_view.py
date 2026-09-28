@@ -1378,7 +1378,22 @@ class CalendarViewMixin:
         # Working copy — the real self.day_emoji isn't touched until Save.
         pending = list(self.day_emoji.get(date_str, []))[:3]
         cells = {}
+        # Each chip's own fill, kept so a flattened one can be given it back.
+        colours = {}
         MAX_DAY_MARKERS = 3
+
+        # The header says "up to 3" once, at the top, and the rule was then
+        # enforced by silence: the fourth click simply did nothing, which
+        # reads as the app being broken rather than as a limit being kept.
+        # Every other ceiling in this app speaks when it is reached -- the
+        # title cap sets a status line, the attachment cap raises a warning
+        # -- so this one was the outlier.
+        #
+        # Two things rather than one, because they answer different halves.
+        # The unpicked chips go flat once three are chosen, so the fourth
+        # click is visibly unavailable BEFORE it is made; and a line under
+        # the grid says why, for anyone who clicks anyway.
+        capped = {"now": False}
 
         def refresh_cell(em):
             cell = cells[em]
@@ -1386,17 +1401,37 @@ class CalendarViewMixin:
             cell.configure(highlightthickness=2 if selected else 0,
                            highlightbackground=self.colors["text"],
                            highlightcolor=self.colors["text"])
+            # An unpicked chip at the cap wears the theme's own muted surface
+            # rather than its own colour, and a hardcoded grey would be wrong
+            # on half the eight themes.
+            cell.configure(bg=(self.colors["sidebar"]
+                               if capped["now"] and not selected
+                               else colours[em]))
+
+        def refresh_all_cells():
+            was = capped["now"]
+            capped["now"] = len(pending) >= MAX_DAY_MARKERS
+            for em in cells:
+                refresh_cell(em)
+            if capped["now"] != was:
+                cap_note.configure(
+                    text=("Three is the most a day can show — unpick one to "
+                          "choose another." if capped["now"] else " "))
 
         def toggle(em):
             if em in pending:
                 pending.remove(em)
             elif len(pending) < MAX_DAY_MARKERS:
                 pending.append(em)
-            # else: already at the 3-marker cap — ignore, keeps the calendar
-            # cell readable and avoids piling on emoji that would just show
-            # as an anonymous "+N" nobody could identify without reopening
-            # this same popup.
-            refresh_cell(em)
+            else:
+                # Clicked anyway -- the chip is flat but a flat chip is not a
+                # disabled one, and saying nothing here is what the row was
+                # about. Keeps the calendar cell readable: more than three
+                # would show as an anonymous "+N" nobody could identify
+                # without reopening this same popup.
+                cap_note.configure(
+                    text="Three is the most a day can show — unpick one first.")
+            refresh_all_cells()
             # Purely local: just updates this chip's highlight. No disk write,
             # no calendar rebuild — that's what made rapid clicking feel
             # laggy before. Stays snappy no matter how many you pick.
@@ -1411,19 +1446,35 @@ class CalendarViewMixin:
                             bg=color, cursor="hand2", width=2, height=1)
             cell.grid(row=r, column=c, padx=2, pady=2)
             cells[em] = cell
+            colours[em] = color
             hover_color = _darken_hex(color)
             # "break" stops this click from also reaching the app-wide
             # click-outside-closes-the-popup handler — without it, picking an
             # emoji could immediately close this same popup.
             cell.bind("<Button-1>", lambda e, em=em: toggle(em))
-            cell.bind("<Enter>", lambda e, w=cell, h=hover_color: w.configure(bg=h))
-            cell.bind("<Leave>", lambda e, w=cell, b=color: w.configure(bg=b))
-            refresh_cell(em)
+            # The hover handlers consult the cap, or resting on a flattened
+            # chip would light it up again and undo the one thing that says
+            # it is not available.
+            cell.bind("<Enter>",
+                      lambda e, w=cell, h=hover_color, em=em:
+                      None if (capped["now"] and em not in pending)
+                      else w.configure(bg=h))
+            cell.bind("<Leave>", lambda e, em=em: refresh_cell(em))
+
+        # Under the grid, and given a blank line's worth of height from the
+        # start so that reaching the cap does not shove the buttons down.
+        cap_note = tk.Label(outer, text=" ", bg=self.colors["card"],
+                            fg=self.colors["subtext"], font=("Segoe UI", 8),
+                            wraplength=230, justify="left", anchor="w")
+        cap_note.pack(fill="x", pady=(4, 0))
+        # Once, now that every chip and the note exist: a day that already
+        # holds three opens with the others flat and the reason showing,
+        # rather than waiting for a dead click to explain itself.
+        refresh_all_cells()
 
         def clear_pending():
             pending.clear()
-            for em in cells:
-                refresh_cell(em)
+            refresh_all_cells()
 
         def save_and_close():
             if pending:
