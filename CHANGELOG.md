@@ -12,6 +12,7 @@ How the numbers themselves are counted is the
 
 | Version | Date | In one line |
 |---|---|---|
+| [0.76.195](#076195--2026-09-28) | 2026-09-28 | Three controls that did something without saying what, and four written claims that no longer matched the code. |
 | [0.76.192](#076192--2026-09-28) | 2026-09-28 | Seven small places where the app contradicted itself: a field that would not paste, a box that forgot its size, two different plus signs, a picker with no title. |
 | [0.75.185](#075185--2026-09-28) | 2026-09-28 | Pasting into an empty field no longer lands on top of the grey hint text sitting in it. |
 | [0.75.184](#075184--2026-09-26) | 2026-09-26 | In Settings → Duplicates, the button that cleans up every group now looks like the bigger action instead of the smaller one. |
@@ -112,6 +113,40 @@ whatever bump comes next.*
   review.
 
 ---
+
+## [0.76.195] — 2026-09-28
+
+*Highlights: three controls that did something without saying what, and four
+written claims that no longer matched the code.*
+
+### Fixed
+
+- **The calculator's history says what clicking a line does.** A line in it types
+  itself into your note when clicked, and nothing on screen admitted that — a row
+  of text, no button, no wording. A stray click read as the app typing on its own,
+  while someone who wanted an old calculation back retyped it. One line of hint
+  now sits above the list, the same way the attachment rows explain themselves.
+- **The wordless buttons in Settings explain themselves on hover**, the way the
+  formatting toolbar in the editor always has. Settings is the screen where the
+  buttons are silent *and* the actions are permanent — a pencil and a bin side by
+  side, nothing written on either. The padlock on a built-in category now says why
+  it cannot be renamed, and the light/dark halves at the bottom say which is which.
+- **The sort and filter controls say what they are for.** Both are labelled with
+  their current value — "Recently updated ▾", "All ▾" — so the words "sort" and
+  "show" appeared nowhere on the screen, and "All" read as a state rather than as
+  something you can press. Small captions now sit above them. The buttons keep
+  showing their value, which is what their careful sizing was built around.
+
+### Changed
+
+- **Four written claims that no longer matched the code are corrected**: a
+  docstring promising a Markdown export that was never offered, a comment
+  describing a drag handle that is really a two-state toggle, a dead helper
+  documented as the add-category control (removed), and the project's own
+  description saying no native OS dialogs are used anywhere — the system's file
+  chooser is used in five places, deliberately, because it knows the user's drives
+  and recent places and a hand-built one would be worse. None of it was visible to
+  anyone using the app; all of it misled the next person reading the code.
 
 ## [0.76.192] — 2026-09-28
 

@@ -2,7 +2,7 @@
 
 A fast, fully offline desktop notes app built with Python and Tkinter — no cloud, no accounts, and a single third-party dependency (Pillow, for image previews). Every note, attachment, and setting lives in a folder on your own machine.
 
-Built as a solo/pair project (developer + AI pairing partner) across 40 versioned releases, with a strong focus on real-world polish: a custom themed UI (no OS-native popups anywhere), a recurring-events engine, background-threaded import/export, and a defensive data layer that keeps the app usable even when things go wrong.
+Built as a solo/pair project (developer + AI pairing partner) across 40 versioned releases, with a strong focus on real-world polish: a custom themed UI (every popup and dialog is drawn by the app; only picking a file hands over to the system), a recurring-events engine, background-threaded import/export, and a defensive data layer that keeps the app usable even when things go wrong.
 
 ![The main window: a note with a table, the formatting toolbar, and the notes sidebar](docs/screenshots/main-window.png)
 *More screenshots throughout the [User Guide](docs/USER_GUIDE.md).*
@@ -19,7 +19,7 @@ anywhere else.
 - **Ships as a real Windows app** — a PyInstaller one-folder build, released across 40 versions — five early milestones plus 35 numbered bumps — and field-tested against a written test plan along the way (the [Changelog](CHANGELOG.md) tells the story; the [version ledger](docs/ROADMAP.md#version-ledger) accounts for every number).
 - **~1,540 automated checks on every pull request** — a nine-script headless GUI suite (~1,070 checks) driving the real app plus six unit suites, run in CI on both Windows and Linux.
 - **Fully offline by design** — plain local JSON files, no accounts, no network calls, one dependency.
-- **A hand-built themed UI** — every dialog, dropdown and picker is custom-drawn; 8 themes, switchable live.
+- **A hand-built themed UI** — every dialog, dropdown and picker is drawn by the app itself; only choosing a file or folder uses the system's own chooser. 8 themes, switchable live.
 - **Everything is plain text underneath** — tables drawn as real grids, checkboxes, rich text and lists are all stored as readable Markdown-style text, so notes survive export, sharing and backup intact.
 
 ---
@@ -73,7 +73,7 @@ anywhere else.
 
 ### Interface
 
-- A fully custom themed UI — nothing ever falls back to an OS-native dialog; 8 themes with a one-press ☀/🌙 flip in the editor
+- A fully custom themed UI — every message, confirmation, dropdown and picker is drawn by the app; the system's dialog appears only where it belongs, choosing a file or folder. 8 themes with a one-press ☀/🌙 flip in the editor
 - Single-editor design, like a browser with one tab: switching notes always autosaves the previous one first
 - App-wide shortcuts — **Ctrl+N** new note, **Ctrl+S** save, **Ctrl+F** find in note — with every bound combo listed under Settings → Keyboard shortcuts
 

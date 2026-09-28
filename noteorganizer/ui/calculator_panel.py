@@ -307,6 +307,19 @@ class CalculatorPanelMixin:
                      bg=self.colors["card"], fg=self.colors["subtext"],
                      font=("Segoe UI", 8), anchor="w").pack(fill="x", padx=6, pady=4)
             return
+        # What these rows do, said once. Clicking one types it into the note,
+        # and nothing on screen admitted that: a row of text with no button
+        # and no wording, so a stray click read as the app typing on its own,
+        # while someone who wanted a calculation back retyped it. The panel
+        # has already taught that inserting is something a button does --
+        # "⬇ Insert into note" is a few centimetres above. Same shape as the
+        # line the attachment rows carry ("Opens in your default app for this
+        # file type"), and only drawn when there is something to click.
+        tk.Label(self.calculator_history_frame,
+                 text="Click a line to insert it into the note",
+                 bg=self.colors["card"], fg=self.colors["subtext"],
+                 font=("Segoe UI", 7), anchor="w").pack(fill="x", padx=6,
+                                                        pady=(2, 1))
         for entry in self._calc_history:
             lbl = tk.Label(self.calculator_history_frame, text=entry,
                            bg=self.colors["card"], fg=self.colors["subtext"],

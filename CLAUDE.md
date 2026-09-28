@@ -25,9 +25,15 @@ calls, no accounts, no database.
   when run from source, `%APPDATA%\NoteOrganizer` when running as the built
   `.exe`. Every note passes through `normalize_note()` as a single choke
   point that coerces malformed/missing fields to safe defaults.
-- **UI:** every dropdown, popup, and dialog is a hand-built `Toplevel` —
-  no native OS dialogs anywhere except the last-resort startup-crash
-  dialog. Two different, deliberate theming patterns exist
+- **UI:** every dropdown, popup, and dialog the app draws is a hand-built
+  `Toplevel`. The system's own dialogs appear in exactly two situations,
+  both deliberate: **choosing a file or folder** (`filedialog`, five call
+  sites — save an export, open a backup `.zip`, pick a folder, attach
+  files), because the OS chooser knows the user's drives and recent places
+  and a hand-built one would be worse; and the last-resort startup-crash
+  dialog. This line used to say "no native OS dialogs anywhere except the
+  startup-crash dialog", which was wrong about the code while the code was
+  right. Two different, deliberate theming patterns exist
   (`track_theme()` for persistent widgets vs. plain `.configure()` for
   widgets that get rebuilt on every refresh) — see `docs/ARCHITECTURE.md`
   before touching theming code; mixing these up has caused a real

@@ -45,7 +45,7 @@ except ImportError:
 # Added/Fixed CHANGELOG.md entries, not per-release counts). The running
 # app records this into settings, so the next time a newer build opens
 # over older data it can tell the user what changed version-wise.
-APP_VERSION = "0.76.192"
+APP_VERSION = "0.76.195"
 
 
 def parse_version(v):
@@ -8136,13 +8136,17 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
     def export_note_as_file(self, note, fmt):
         """Write one note to a standalone file the rest of the world reads.
 
-        Three formats, honestly labelled: HTML carries everything the
-        note has (styles, colours, tables as real tables) and is the
-        road to PDF (open, Ctrl+P) and Word (opens .html natively);
-        Markdown keeps the structure -- tables and checkboxes are
-        already its own syntax -- but drops colours; plain text is the
-        body as stored. Attachments never travel with a single-note
-        export -- that is what the full Backup export is for.
+        Two formats: HTML carries everything the note has (styles,
+        colours, tables as real tables) and is the road to PDF (open,
+        Ctrl+P) and Word (opens .html natively); plain text is the body
+        as stored. Attachments never travel with a single-note export --
+        that is what the full Backup export is for.
+
+        This said "three formats" and described a Markdown one for a long
+        time. `kinds` below has never held it and the menu has never
+        offered it, so nothing ever raised -- it was a docstring that
+        lied to the next reader rather than a crash waiting to happen,
+        which is the harder kind to notice.
         """
         title = (note.get("title") or "").strip() or "Untitled note"
         kinds = {"html": ("HTML file", ".html"),
@@ -10128,6 +10132,29 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._refresh_search_clear()
 
         # Sort + category filter row
+        # Captions for the two controls below, because both are labelled with
+        # their current VALUE -- "Recently updated ▾", "All ▾" -- so the words
+        # "sort" and "show" appeared nowhere on the screen, and "All" in
+        # particular reads as a state rather than as a control you can press.
+        #
+        # ABOVE the row and not inside it, deliberately. The row has 250px for
+        # two controls and the comments further down record real clipping
+        # fights over exactly that; a caption here competes for none of it.
+        # The alignment is free: the sort control below packs left and the
+        # filter packs right, so a caption at each end of a frame with the
+        # same padding sits over the edge its control is anchored to.
+        caption_row = tk.Frame(self.sidebar)
+        self.track_theme(caption_row, bg="sidebar")
+        caption_row.pack(fill="x", padx=15, pady=(0, 1))
+        sort_caption = tk.Label(caption_row, text="Sort", font=("Segoe UI", 8),
+                                anchor="w")
+        self.track_theme(sort_caption, bg="sidebar", fg="subtext")
+        sort_caption.pack(side="left")
+        show_caption = tk.Label(caption_row, text="Show", font=("Segoe UI", 8),
+                                anchor="e")
+        self.track_theme(show_caption, bg="sidebar", fg="subtext")
+        show_caption.pack(side="right")
+
         filter_row = tk.Frame(self.sidebar)
         self.track_theme(filter_row, bg="sidebar")
         filter_row.pack(fill="x", padx=15, pady=(0, 8))
