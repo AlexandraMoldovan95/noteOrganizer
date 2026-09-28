@@ -163,6 +163,29 @@ def run_static(name, cmd):
     return proc.returncode, time.time() - started, (proc.stdout or "") + (proc.stderr or "")
 
 
+def _save_failure_output(label, output):
+    """Write a failed run's WHOLE output where it will still be there later.
+
+    The terminal shows a summary, and a summary is what a piped `tail`
+    throws away. A red that loses its name costs a day: COVERAGE_LEDGER's
+    C11b was a flake whose name was lost for exactly this reason, and the
+    rule that recovered it was writing the output down. A second flake,
+    in qa3, went undiagnosed the same way before this covered the qa half
+    as well as the static one.
+
+    Deliberately outside the repository and outside the scratch folder the
+    run deletes, so it survives both.
+    """
+    try:
+        path = os.path.join(tempfile.gettempdir(),
+                            f"notesorg-failure-{label}.txt")
+        with open(path, "w", encoding="utf-8", errors="replace") as fh:
+            fh.write(output)
+        print(f"          [full output: {path}]")
+    except OSError:
+        pass
+
+
 def main(argv):
     # Same reason as CHILD_ENV, for THIS process: it echoes the children's
     # failing check names, glyphs and all, and a cp1252 console would
@@ -211,21 +234,8 @@ def main(argv):
             for line in output.strip().splitlines()[-25:]:
                 print(f"          {line}")
             # ...and the WHOLE thing to a file, because the twenty-five
-            # lines above are the ones a piped `tail` throws away. A red
-            # that loses its name costs a day: qa/COVERAGE_LEDGER.md's
-            # C11b was a flake whose name was lost for exactly this
-            # reason, and the rule that recovered it was writing the
-            # output down. The file lives outside the repo and outside
-            # the scratch folder this deletes, so it survives both.
-            try:
-                path = os.path.join(tempfile.gettempdir(),
-                                    f"notesorg-failure-{label}.txt")
-                with open(path, "w", encoding="utf-8",
-                          errors="replace") as fh:
-                    fh.write(output)
-                print(f"          [full output: {path}]")
-            except OSError:
-                pass
+            # lines above are the ones a piped `tail` throws away.
+            _save_failure_output(label, output)
     try:
         for script in scripts:
             code, failed, took, output = run_one(scratch, script)
@@ -255,6 +265,15 @@ def main(argv):
                     # from. Deep enough to reach the app's own frames.
                     for line in output.strip().splitlines()[-25:]:
                         print(f"          {line}")
+                # ...and the WHOLE thing to a file, exactly as the static
+                # gates above already do. They learned this and the qa
+                # half never did: a rare red in qa3 during a full run was
+                # reported with a piped `tail`, the names scrolled away,
+                # and the run after it was green -- so a real flake went
+                # undiagnosed for want of the output it had already
+                # produced. The file lives outside the repo and outside
+                # the scratch folder deleted below, so it survives both.
+                _save_failure_output(script, output)
     finally:
         if keep:
             print(f"\nscratch kept at {scratch}")
