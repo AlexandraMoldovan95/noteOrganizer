@@ -61,6 +61,20 @@ def take_focus(widget, attempts=60):
     return False
 
 
+def _walk_widgets(root, klass):
+    """Every descendant of `root` that is a `klass`. Defined up here with
+    the other helpers because checks in two different sections use it now;
+    it used to sit halfway down the file, in front of only one of them."""
+    out = []
+    def walk(w):
+        for c in w.winfo_children():
+            if isinstance(c, klass):
+                out.append(c)
+            walk(c)
+    walk(root)
+    return out
+
+
 def focus_settles_on(widget, attempts=60):
     """The assert-only twin of take_focus: wait (WITHOUT forcing) until
     the app's own action has landed the focus on `widget`. Asserting
@@ -4327,6 +4341,24 @@ def _walkH(w):
 _walkH(app._mini_popup)
 check('the toolbar highlight picker is the hairline column, Clear included',
       _barsH == len(NO.HIGHLIGHT_COLOR_PALETTE) and _clearH == 1)
+# ---- AND IT SAYS WHAT IT IS (C-22) ----
+# The text-colour popup, opened from the button right beside this one, has
+# carried "Pick a text color" all along. This one had no title: the header
+# was written at the text popup's own call site, inside the branch
+# `kind == "highlight"` never takes. It lives in the shared column function
+# now, which is why the table's popup below gets the same one.
+_hdrH = [str(l.cget('text')) for l in _walk_widgets(app._mini_popup, tk.Label)]
+check('the toolbar highlight picker has a title line too',
+      'Pick a highlight color' in _hdrH)
+app._dismiss_mini_popup()
+app.update()
+# The other route into the same function: a table cell's highlight popup.
+app._open_color_swatch_popup('text_color')
+app.update()
+_hdrT = [str(l.cget('text')) for l in _walk_widgets(app._mini_popup, tk.Label)]
+check('the control holds: the text-colour picker still says its own name',
+      'Pick a text color' in _hdrT
+      and 'Pick a highlight color' not in _hdrT)
 app._dismiss_mini_popup()
 app.update()
 
@@ -6311,6 +6343,107 @@ app.update()
 check('search skips table plumbing but still finds cell content',
       not _hitQ1 and _hitQ2)
 
+# ---- THE SEARCH BOX PASTES, AND CAN BE CLEARED (C-11) ----
+# It was the only text field in the app with no right-click paste menu, and
+# the only search box with no way to empty it but selecting and deleting.
+# The checks above drive it through search_var, which steps over the widget;
+# these go through the widget, because that is where both gaps were.
+check('the search box has a right-click paste menu now',
+      '<Button-3>' in app.search_entry.bind())
+# The hint is wired to search_var like everything else in this box, so a
+# paste onto it would land glued and then be SEARCHED FOR -- a query of
+# "search notes...NotaTabelQ" matches nothing and reads as a broken search.
+app.search_entry.delete(0, 'end')
+app.search_entry.event_generate('<FocusOut>')
+app.update()
+check('fixture: the search box is showing its hint',
+      app.search_entry.get() == NO.NoteOrganizer.SEARCH_PLACEHOLDER)
+app.clipboard_clear(); app.clipboard_append('NotaTabelQ'); app.update()
+app.search_entry.event_generate('<<Paste>>')
+app.update()
+check('pasting into the search box replaces the hint',
+      app.search_entry.get() == 'NotaTabelQ')
+app.refresh_note_list(); app.update()
+check('and the list filters by what was pasted, not by the hint',
+      _idQ in getattr(app, '_note_card_widgets', {}))
+
+# The ✕. It appears only for a real query: always-there invites clearing an
+# empty box, and beside the hint it suggests the hint is removable.
+check('the ✕ is showing while a real query is in the box',
+      app.search_clear_btn.winfo_ismapped())
+app.search_clear_btn.invoke()
+app.update()
+check('pressing it empties the box', app.search_var.get() == '')
+check('and takes the ✕ away with it',
+      not app.search_clear_btn.winfo_ismapped())
+check('and the full list is back at once, without waiting for the debounce',
+      len(getattr(app, '_note_card_widgets', {})) == len(app.notes))
+# The hint is not written back by the ✕ -- the box takes the focus instead,
+# which is the state add_placeholder gives any box someone clicked into, and
+# its own <FocusOut> restores the hint. One mechanism for the hint, not two.
+app.search_entry.event_generate('<FocusOut>')
+app.update()
+check('looking away then restores the hint, through the app own route',
+      app.search_entry.get() == NO.NoteOrganizer.SEARCH_PLACEHOLDER)
+# THE CONTROL: the hint must not be readable as a query, or the list would
+# come back empty at every launch. This is the judgement the three hardcoded
+# copies of "search notes..." used to answer separately.
+check('the hint is not a query', app._search_query() == '')
+app.search_entry.delete(0, 'end')
+app.search_var.set('')
+app.refresh_note_list(); app.update()
+
+# ---- A PASTED DATE IS SAVED (C-12) ----
+# The date field autosaves on <KeyRelease>, and a paste fires none -- so the
+# menu it now has would have handed back the silent loss the field's own
+# comment says was fixed once for typing.
+app.new_note(); app.update()
+app.title_entry.delete(0, 'end'); app.title_entry.insert(0, 'PastedDate')
+app.title_entry.config(fg='black')
+app.body_text.insert('1.0', 'x')
+app.save_current_note(auto=False); app.update()
+_idD = app.selected_note_id
+check('the date field has a paste menu now',
+      '<Button-3>' in app.date_entry.bind())
+app.date_entry.delete(0, 'end')
+app.date_entry.insert(0, '2020-01-01')
+app.date_entry.config(fg='black')
+app.update()
+app._flush_autosave(); app.update()
+check('fixture: the stored date is the old one',
+      app.find_note(_idD).get('date') == '2020-01-01')
+app._autosave_job = None
+check('fixture: no autosave is pending before the date is pasted',
+      not getattr(app, '_autosave_job', None))
+app.clipboard_clear(); app.clipboard_append('2026-10-05'); app.update()
+# Emptied first rather than selected-then-pasted. Tk's Entry paste deletes
+# the selection only on NON-X11 -- on X11 it inserts at the caret and leaves
+# the selected text where it is -- so a select_range here passed on Windows
+# and failed on the Linux image with the field holding both dates. The app
+# ships on Windows, so that difference is the test's problem and not the
+# product's; the check is about the date reaching the store either way.
+app.date_entry.delete(0, 'end')
+app.date_entry.event_generate('<<Paste>>')
+app.update()
+check('the pasted date is in the field', app.date_entry.get() == '2026-10-05')
+# THE REQUEST, not the result. The first version of this check called
+# _flush_autosave() and then read the store -- and it survived the mutant that
+# removed the paste binding entirely, because a forcing call saves whatever
+# the editor holds whether anything asked it to or not. That is qa/README's
+# own rule, made again here. What this asserts is that the PASTE queued a
+# save, which is the thing the binding does.
+check('pasting a date asks for a save, the way typing one does',
+      bool(getattr(app, '_autosave_job', None)))
+# And the outcome, through the app's own timer rather than a forced flush --
+# waiting for the promised state, with a ceiling, so a slow machine is slow
+# rather than red.
+for _ in range(200):
+    if app.find_note(_idD).get('date') == '2026-10-05':
+        break
+    app.update(); app.update_idletasks(); time.sleep(0.01)
+check('and the note ends up with the date that was pasted',
+      app.find_note(_idD).get('date') == '2026-10-05')
+
 # A one-column table cannot exist as a row (is_table_row wants two
 # cells) -- the insert raises it to two, else dead pipe text came out.
 set_body('')
@@ -6839,17 +6972,6 @@ app.update()
 
 # ---- LIFT #2: cell styling, raw-row Tab, category dropdown, share panel ----
 
-def _walk_widgets(root, klass):
-    out = []
-    def walk(w):
-        for c in w.winfo_children():
-            if isinstance(c, klass):
-                out.append(c)
-            walk(c)
-    walk(root)
-    return out
-
-
 # Bold/italic INSIDE the cell editor (_editor_apply_style's chars walk).
 set_body('| stilcel | b |\n| c | d |')
 app._render_table_grids(); app.update()
@@ -6916,6 +7038,64 @@ _decoded_share = NO.decode_share_code(
     next(t for t in _share_texts if t.startswith('NOTE1:')))
 check('the shown code round-trips to the note',
       _decoded_share and _decoded_share[0].get('title') == 'DeShare')
+
+# ---- ONE SENTENCE, AND AN ✕ ON BOTH CODE AREAS (C-24) ----
+# Two surfaces generate a share code, and they warned about attachments in
+# two different sentences for one fact -- "Attachments not included" in the
+# sidebar, "Attachments aren't included in a code" in the editor. The
+# editor's is the one kept: it names WHICH mechanism leaves them out, which
+# is what tells a reader Export does include them. Asserted against the
+# constant rather than a copy of the string, so a reworded sentence moves
+# both places or fails here.
+check('the editor code area uses the shared attachments sentence',
+      any(t == NO.NoteOrganizer.SHARE_ATTACHMENT_WARNING for t in _share_lbls))
+# The editor area could always be dismissed; the sidebar's could not, except
+# by closing the whole Share panel.
+_editor_closers = [b for b in _walk_widgets(app.editor_code_area, tk.Button)
+                   if str(b.cget('text')) == '✕']
+check('the editor code area has its ✕', len(_editor_closers) == 1)
+
+app.toggle_share_panel(); app.update()
+_first_id = app.notes[0]['id']
+app._share_vars[_first_id] = tk.BooleanVar(value=True)
+app.notes[0]['attachments'] = [{'filename': 'f.txt', 'stored_as': 'x_f.txt'}]
+app._generate_inline_share(); app.update()
+_side_lbls = [str(l.cget('text'))
+              for l in _walk_widgets(app.share_code_area, tk.Label)]
+_side_texts = [str(w.get('1.0', 'end-1c'))
+               for w in _walk_widgets(app.share_code_area, tk.Text)]
+check('fixture: the sidebar really generated a code',
+      any(t.startswith('NOTE1:') for t in _side_texts))
+check('and the sidebar uses the SAME sentence as the editor',
+      any(t == NO.NoteOrganizer.SHARE_ATTACHMENT_WARNING for t in _side_lbls))
+_side_closers = [b for b in _walk_widgets(app.share_code_area, tk.Button)
+                 if str(b.cget('text')) == '✕']
+check('the sidebar code area now has an ✕ too', len(_side_closers) == 1)
+# It clears the area's children rather than pack_forget()ing the frame: that
+# frame is packed once when the panel is built and is part of its layout, so
+# forgetting it would take the panel's own space with it.
+if _side_closers:
+    # invoke(), the suite's idiom for a real tk.Button: a generated click
+    # depends on the widget being viewable and this one is a few pixels wide
+    # in a sidebar. The ✕ being ON SCREEN is asserted separately above; what
+    # this presses is its command.
+    # invoke(), not a generated click: _qa_click fires <Button-1>, and a
+    # tk.Button runs its command from <ButtonRelease-1> -- which is why this
+    # file presses buttons with invoke() everywhere else. Measured while
+    # writing this check: neither a bare release nor a generated
+    # press+release reaches it either. The ✕ being ON SCREEN is asserted
+    # separately above; this presses its command.
+    _side_closers[0].invoke()
+    # The clear is deferred (the ✕ sits inside the frame it empties), so the
+    # idle queue has to run before the result can be read.
+    app.update_idletasks(); app.update()
+    check('and pressing it clears the code away',
+          not [w for w in _walk_widgets(app.share_code_area, tk.Text)])
+    check('while the area itself stays in the panel',
+          app.share_code_area.winfo_ismapped())
+app.notes[0].pop('attachments', None)
+app.toggle_share_panel(); app.update()
+
 app.current_attachments = []
 app.update()
 
@@ -7472,6 +7652,60 @@ check('a repeating note with no start date is refused (plan 66)',
 check('...and the warning says a start date is what is missing',
       any('start date' in str(a[1]).lower() or 'start date' in str(a[0]).lower()
           for a in _fc_warned))
+
+# ---- THE REPEAT PANEL'S BOXES PASTE TOO (C-12) ----
+# The register's row waved these away as "single digits, reasonable to
+# leave". Two of the four are not: the end-date is a date, the same shape as
+# the note's own, and the day list holds something like "1,15". All four have
+# the menu now, and they need no save binding of their own -- each var traces
+# to update_recurrence_summary, which schedules the autosave. That is the
+# difference from the date field above, and it is asserted rather than
+# assumed.
+app.rec_freq_var.set(NO.FREQ_LABELS['monthly'])
+app.on_recurrence_changed()
+app.update()
+# Asked as an INVARIANT over the whole editor rather than field by field: two
+# of the four Repeat boxes are locals with no attribute to name them, and a
+# check that walks the tree also catches the next editor field added without a
+# menu. This is the shape the register's rows were about -- "the only field in
+# the app that behaves differently" is a question about a set.
+_editor_entries = _walk_widgets(app.editor, tk.Entry)
+_no_menu = [e for e in _editor_entries if '<Button-3>' not in e.bind()]
+check(f'every text box in the editor has a right-click paste menu '
+      f'({len(_editor_entries)} boxes, {len(_no_menu)} without)',
+      _editor_entries and not _no_menu)
+
+# The end-date is the box the row's own reasoning got wrong -- it called these
+# "single digits" -- so it is the one driven end to end. It is disabled until
+# the end mode says "On date", which is correct: a paste into a greyed-out
+# field should do nothing.
+check('fixture: the end-date box is disabled while the repeat never ends',
+      str(app.rec_end_date_entry.cget('state')) == 'disabled')
+app.rec_end_mode_var.set('on')
+app.on_end_mode_changed()
+app.update()
+check('fixture: choosing "On date" enables it',
+      str(app.rec_end_date_entry.cget('state')) == 'normal')
+app._autosave_job = None
+check('fixture: no autosave is pending before the paste',
+      not getattr(app, '_autosave_job', None))
+app.clipboard_clear(); app.clipboard_append('2027-03-01'); app.update()
+app.rec_end_date_entry.delete(0, 'end')
+app.rec_end_date_entry.event_generate('<<Paste>>')
+app.update()
+check('a pasted end-date lands in the box',
+      app.rec_end_date_entry.get() == '2027-03-01')
+check('and its own trace schedules the save, with no binding of its own',
+      bool(getattr(app, '_autosave_job', None)))
+check("and the field's <<Paste>> really is unbound, so the trace is what did "
+      "it -- unlike the date field, which needed one",
+      '<<Paste>>' not in app.rec_end_date_entry.bind()
+      and '<<Paste>>' in app.date_entry.bind())
+app.rec_end_date_entry.delete(0, 'end')
+app.rec_end_mode_var.set('never')
+app.on_end_mode_changed()
+app.update()
+
 app.rec_freq_var.set(NO.FREQ_LABELS[''] if '' in NO.FREQ_LABELS
                      else 'Does not repeat')
 app.on_recurrence_changed()

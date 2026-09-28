@@ -1066,7 +1066,12 @@ _scratch_host.destroy()
 NO.save_setting('editor_body_expanded', False)
 
 # The comments box shares the helper and must be untouched by all this: same
-# toggle, still four rows, and still deliberately not remembered.
+# toggle, still four rows by default, and -- since 0.75.186 -- remembered the
+# same way the body's is. The asymmetry was never argued for: the only thing
+# written down about it was a line at the BODY's call site noting that the
+# comments box did not remember, which states the difference without giving a
+# reason, while the helper's own docstring draws the line at "a box whose size
+# is incidental" against "one someone chose".
 check(f'the comments box is still compact at 4 rows ({_rows(app.comments_text)})',
       _rows(app.comments_text) == 4)
 # Both boxes now carry a toggle reading "Expand", so the body's own button
@@ -1081,8 +1086,52 @@ if _comment_btns:
     app.update()
     check(f'the comments toggle still works ({_rows(app.comments_text)} rows)',
           _rows(app.comments_text) == 12)
-    check('the comments box is deliberately not persisted',
-          'comments_expanded' not in NO.load_settings())
+    # This line used to read
+    #     check('the comments box is deliberately not persisted',
+    #           'comments_expanded' not in NO.load_settings())
+    # and it could never have failed. The key the helper would write is
+    # `editor_comments_expanded`; `comments_expanded` was never a candidate
+    # for it, so the check asserted the absence of a name nothing would ever
+    # have created. It stayed green through the change that made the box
+    # persist, which is how it was found. A check about an absence has to name
+    # the thing that would actually be there.
+    check('expanding the comments box is written to settings now',
+          NO.load_settings().get('editor_comments_expanded') is True)
+    _comment_btns[0].invoke()
+    app.update()
+    check('and collapsing it is written too',
+          NO.load_settings().get('editor_comments_expanded') is False)
+    # The read side, on a throwaway widget for the same reason as above: a
+    # second window would mean two Tk interpreters at once.
+    NO.save_setting('editor_comments_expanded', True)
+    _c_host = tk.Frame(app)
+    _c_text = tk.Text(_c_host, height=4)
+    _c_text.pack()
+    app._add_text_resize_toggle(_c_host, _c_text, compact=4, expanded=12,
+                                remember_key='editor_comments_expanded')
+    check(f'a comments box built while the stored choice is "expanded" opens '
+          f'expanded ({_rows(_c_text)} rows)', _rows(_c_text) == 12)
+    _c_host.destroy()
+    # THE CONTROL, so the check above is not just reading a default: the same
+    # build with the choice stored as collapsed must open compact.
+    NO.save_setting('editor_comments_expanded', False)
+    _c_host2 = tk.Frame(app)
+    _c_text2 = tk.Text(_c_host2, height=4)
+    _c_text2.pack()
+    app._add_text_resize_toggle(_c_host2, _c_text2, compact=4, expanded=12,
+                                remember_key='editor_comments_expanded')
+    check(f'and one built while it is "collapsed" opens compact '
+          f'({_rows(_c_text2)} rows)', _rows(_c_text2) == 4)
+    _c_host2.destroy()
+    # The two boxes must not share one key, or expanding either would expand
+    # both at the next launch.
+    NO.save_setting('editor_comments_expanded', True)
+    NO.save_setting('editor_body_expanded', False)
+    _s = NO.load_settings()
+    check('the two boxes remember separately',
+          _s.get('editor_comments_expanded') is True
+          and _s.get('editor_body_expanded') is False)
+    NO.save_setting('editor_comments_expanded', False)
 app.update()
 
 # ---- BOTH TEXT BOXES USE THE FULL WIDTH ----

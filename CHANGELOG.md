@@ -12,6 +12,7 @@ How the numbers themselves are counted is the
 
 | Version | Date | In one line |
 |---|---|---|
+| [0.76.192](#076192--2026-09-28) | 2026-09-28 | Seven small places where the app contradicted itself: a field that would not paste, a box that forgot its size, two different plus signs, a picker with no title. |
 | [0.75.185](#075185--2026-09-28) | 2026-09-28 | Pasting into an empty field no longer lands on top of the grey hint text sitting in it. |
 | [0.75.184](#075184--2026-09-26) | 2026-09-26 | In Settings → Duplicates, the button that cleans up every group now looks like the bigger action instead of the smaller one. |
 | [0.75.183](#075183--2026-09-26) | 2026-09-26 | Escape backs out of the app's small anchored popups — it never could before — and the two bulk popups that had no visible way out now carry a Cancel. |
@@ -111,6 +112,43 @@ whatever bump comes next.*
   review.
 
 ---
+
+## [0.76.192] — 2026-09-28
+
+*Highlights: seven small places where the app contradicted itself — a field that
+would not paste, a box that forgot, two plus signs, and a picker that would not
+say what it was for.*
+
+### Added
+
+- **An ✕ to clear the search box.** Emptying it meant selecting the text and
+  deleting it; the ✕ appears only while a real search is in the box, and puts the
+  whole list back at once.
+
+### Fixed
+
+- **The search box over the note list takes a right-click Paste.** It was the
+  only text field in the app without one, which made the most-used field the one
+  that behaved least like the rest.
+- **The date field and every box in the Repeat panel take a right-click Paste
+  too** — and a pasted date is saved, exactly as a typed one is. Pasting a date
+  copied out of an email is an ordinary thing to want, and these were the fields
+  that most invited it and refused.
+- **The comments box remembers whether you expanded it**, like the writing area
+  directly above it, which has always remembered. Two identical toggles, one of
+  which forgot at every launch.
+- **Buttons that add something all use the same plus sign.** Three used a wider
+  character than the rest, so panels beside each other looked like they came from
+  different apps.
+- **The delete in the template editor is the same drawn bin as every other delete
+  in Settings.** It was the last emoji one: a fixed-colour picture that stayed the
+  same red on all eight themes while the shapes beside it followed the theme.
+- **The highlight picker says what it is for**, the way the text-colour picker
+  right beside it always has. The one whose swatches are hardest to read out of
+  context was the one with no title.
+- **Both places that show a share code now warn about attachments in the same
+  words, and both can be dismissed.** The sidebar's code could only be put away
+  by closing the whole Share panel, and the two warnings said one fact two ways.
 
 ## [0.75.185] — 2026-09-28
 

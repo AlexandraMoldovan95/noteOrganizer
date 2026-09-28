@@ -264,6 +264,14 @@ A new surface joins this list the moment it ships.
   undo's own `_schedule_autosave()` changed nothing it could see. The
   check now looks for the queued job. A forcing call in a check proves the
   forcing call works.
+
+  **This one recurred, which is why it is worth re-reading before writing
+  any save check.** The new "a pasted date is saved" check called
+  `_flush_autosave()` and then read the store — and survived the mutant
+  that removed the paste's save binding outright. Identical shape, six
+  rules further down the same page, written by someone who had read it.
+  It now asserts the queued job AND, separately, waits for the app's own
+  timer to put the value in the store; the mutant kills both.
 - **A check that counts on an action CREATING something assumes no timer
   beat it to it.** "...the overtyped note really was saved" proved the
   save by watching `len(app.notes)` go up by one — true only while the
@@ -280,6 +288,32 @@ A new surface joins this list the moment it ships.
   a 2-second run with one unrelated failure means the suite never reached
   the line. Read the timing and the failure count, not just the absence
   of the name.
+- **A check about an ABSENCE must name the thing that would actually be
+  there.** `check('the comments box is deliberately not persisted',
+  'comments_expanded' not in NO.load_settings())` could never have failed:
+  the key the helper would write is `editor_comments_expanded`, and
+  `comments_expanded` was never a candidate for it. The check asserted the
+  absence of a name nothing would ever create, and stayed green straight
+  through the change that made the box persist — which is how it was found,
+  rather than by anyone reading it. Sibling of the rule that a probe whose
+  finding is an absence needs a control producing the presence: here the
+  control would have been writing the key and watching the check go red.
+- **`_qa_click` cannot press a `tk.Button`.** It fires `<Button-1>`, and a
+  button runs its command from `<ButtonRelease-1>` — which is why this file
+  presses buttons with `.invoke()` in eighty-odd places. Measured while
+  writing the share-panel checks: a bare release does not reach it either,
+  nor does a generated press+release. Half an hour went into diagnosing an
+  app bug that was the wrong tool. Generated clicks are for widgets that
+  bind `<Button-1>` themselves (labels, canvases, list rows); a real button
+  gets `.invoke()`.
+- **A paste does not replace the selection on X11.** Tk's Entry paste
+  deletes the selected text only on non-X11 platforms; on X11 it inserts at
+  the caret and leaves the selection in place. A check that did
+  `select_range(0, 'end')` then `<<Paste>>` passed on Windows and failed on
+  the Linux image with the field holding both values. The app ships on
+  Windows, so this is the test's problem and not the product's — clear the
+  field with `delete(0, 'end')` when what is being checked is what landed,
+  and reach for the selection only when the selection itself is the subject.
 - **A length is a weaker question than the content, and a cap makes the
   two look alike.** A new check for the title's paste cap read
   `len(title.get()) == TITLE_MAX_LEN` after pasting something far too

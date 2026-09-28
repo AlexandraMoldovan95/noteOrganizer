@@ -610,7 +610,9 @@ class SettingsPageMixin:
         # New-from-scratch row.
         add_row = tk.Frame(parent, bg=self.colors["card"])
         add_row.pack(fill="x", padx=12, pady=(6, 10))
-        new_tpl_btn = tk.Button(add_row, text="＋ New template",
+        # ASCII "+": the category panel's own "+ Add" a few sections up uses
+        # it, and the two characters are visibly different widths.
+        new_tpl_btn = tk.Button(add_row, text="+ New template",
                   command=lambda: self._edit_template(None, redraw, new_tpl_btn),
                   bg=self.colors["accent"], fg="white", relief="flat",
                   font=("Segoe UI", 9, "bold"), cursor="hand2")
@@ -994,9 +996,15 @@ class SettingsPageMixin:
                         pass
                     render_tpl_checklist()
 
-                tk.Button(row, text="🗑", command=do_del, relief="flat", cursor="hand2",
-                          bg=self.colors["sidebar"], fg=self.colors["danger"],
-                          font=("Segoe UI", 8), bd=0).pack(side="right")
+                # The drawn glyph every other delete in Settings uses. This
+                # row was the last emoji bin left: an emoji is a fixed-colour
+                # bitmap, so it stayed the same red on all eight themes while
+                # the shapes beside it followed the palette -- and it was red
+                # at rest, where the drawn ones are faint until hovered. Same
+                # bg_key as the row it sits in, and no track_theme, because
+                # render_tpl_checklist() rebuilds these rows.
+                self._icon_button(row, "trash", do_del, danger=True,
+                                  bg_key="sidebar").pack(side="right")
 
         render_tpl_checklist()
 
@@ -1020,7 +1028,7 @@ class SettingsPageMixin:
             cl_entry.focus_set()
 
         cl_entry.bind("<Return>", lambda e: add_tpl_item())
-        tk.Button(cl_add_row, text="＋ Add", command=add_tpl_item,
+        tk.Button(cl_add_row, text="+ Add", command=add_tpl_item,
                   bg=self.colors["accent"], fg="white", relief="flat",
                   font=("Segoe UI", 9, "bold"), cursor="hand2"
                   ).pack(side="left", padx=(6, 0), ipadx=8, ipady=2)
