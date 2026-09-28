@@ -1146,9 +1146,28 @@ class SettingsPageMixin:
                  lambda e: (self._dismiss_mini_popup()
                             if confirm_dismiss() else None))
 
-    def _build_trash_row(self, parent, entry, redraw):
+    def _build_trash_row(self, parent, entry, redraw, on_tick=None):
         row = tk.Frame(parent, bg=self.colors["card"])
         row.pack(fill="x", pady=3)
+
+        # A tick box, so recovering yesterday's forty deleted notes is not
+        # forty clicks while destroying all of them stays one. The only
+        # bulk gesture this screen had was the irreversible one.
+        #
+        # The var is kept in a dict on the app rather than in the row,
+        # because redraw() destroys every row -- paging, restoring or
+        # deleting anything would otherwise clear what you had ticked. The
+        # Duplicates panel below does the same thing with its own list.
+        key = entry.get("id")
+        var = self._trash_sel.get(key)
+        if var is None:
+            var = tk.IntVar(value=0)
+            self._trash_sel[key] = var
+        tick = tk.Checkbutton(
+            row, variable=var, command=(on_tick or (lambda: None)),
+            bg=self.colors["card"], activebackground=self.colors["card"],
+            selectcolor=self.colors["check_well"], bd=0, highlightthickness=0)
+        tick.pack(side="left", padx=(8, 0))
 
         # Built now, packed LAST -- see the buttons below. The packer
         # hands out the cavity in pack order, so whatever is packed first
@@ -1188,6 +1207,12 @@ class SettingsPageMixin:
         # Wrapped at the label's OWN width instead, which is the only
         # number that cannot disagree with the layout.
         self._wrap_to_own_width(sub_lbl)
+
+        # Two notes both called "Notes", deleted the same day, are told apart
+        # by nothing this row shows. The Duplicates panel already answers
+        # exactly that question the same way, and a trash entry is a note, so
+        # the same helper reads it without any adapting.
+        self._attach_dup_preview(left, entry)
 
         def restore():
             self._restore_from_trash(entry)
@@ -1344,6 +1369,53 @@ class SettingsPageMixin:
         # time it was cheaply closing rather than rebuilding.
         PAGE_SIZE = self.TRASH_PAGE_SIZE
         shown_count = {"n": PAGE_SIZE}
+        # Rebuilt each time the panel is opened, so ticks do not survive
+        # leaving Settings and coming back -- which would be a selection
+        # nobody can see.
+        self._trash_sel = {}
+
+        def ticked_entries():
+            """The trashed notes currently ticked, in the trash's own order.
+
+            Read from self.trash rather than from the tick dict, so an entry
+            that has since been restored or destroyed cannot be acted on
+            twice: the ticks outlive individual rows on purpose.
+            """
+            return [e for e in self.trash
+                    if self._trash_sel.get(e.get("id"))
+                    and self._trash_sel[e.get("id")].get()]
+
+        def refresh_restore_btn():
+            picked = ticked_entries()
+            try:
+                if picked:
+                    restore_btn.configure(
+                        text="↩ Restore %d selected" % len(picked),
+                        state="normal")
+                    if not restore_btn.winfo_ismapped():
+                        restore_btn.pack(fill="x", padx=12, pady=(6, 0),
+                                         ipady=4, before=empty_holder)
+                elif restore_btn.winfo_ismapped():
+                    restore_btn.pack_forget()
+            except tk.TclError:
+                pass
+
+        def restore_selected():
+            picked = ticked_entries()
+            if not picked:
+                return
+            # No confirmation: this is the recovering direction. The app asks
+            # in proportion to how recoverable an action is, and putting a
+            # note back is undone by deleting it again -- which is the button
+            # right beside it.
+            for entry in picked:
+                self._restore_from_trash(entry)
+            for entry in picked:
+                self._trash_sel.pop(entry.get("id"), None)
+            self.set_status("Restored %d note%s"
+                            % (len(picked), "" if len(picked) == 1 else "s"))
+            shown_count["n"] = max(PAGE_SIZE, shown_count["n"])
+            redraw()
 
         def redraw():
             for w in rows.winfo_children():
@@ -1356,7 +1428,8 @@ class SettingsPageMixin:
             ordered = sorted(self.trash, key=lambda e: e.get("deleted_at", ""), reverse=True)
             visible = ordered[:shown_count["n"]]
             for entry in visible:
-                self._build_trash_row(rows, entry, redraw)
+                self._build_trash_row(rows, entry, redraw,
+                                      on_tick=refresh_restore_btn)
             remaining = len(ordered) - len(visible)
             if remaining > 0:
                 def show_more():
@@ -1368,7 +1441,7 @@ class SettingsPageMixin:
                           bg=self.colors["sidebar"], fg=self.colors["text"],
                           font=("Segoe UI", 8)).pack(fill="x", pady=(6, 2), ipady=4)
             self._bind_wheel_tree(rows, lambda e: self._panel_or_page_wheel(canvas, e))
-        redraw()
+            refresh_restore_btn()
 
         def empty_trash():
             if not self.trash:
@@ -1386,9 +1459,24 @@ class SettingsPageMixin:
                 shown_count["n"] = PAGE_SIZE
                 redraw()
 
-        self._settings_big_button(
-            parent, "Empty trash", empty_trash, kind="danger"
-        ).pack(fill="x", padx=12, pady=(4, 10), ipady=5)
+        # Built before the two buttons below so `before=empty_holder` has
+        # something to aim at, and shown only while something is ticked: a
+        # permanently visible "Restore 0 selected" is noise on the screen
+        # people come to when they are already worried.
+        #
+        # Quieter than Empty trash on purpose. C-6 taught the inverse of this
+        # -- the sweeping action must not look smaller than the narrow one --
+        # and here the sweeping action IS the destructive one, so the weights
+        # are right this way round: the recovering button is an ordinary
+        # control, the irreversible one wears `danger`.
+        restore_btn = tk.Button(
+            parent, text="↩ Restore selected", command=restore_selected,
+            relief="flat", cursor="hand2", font=("Segoe UI", 9, "bold"),
+            bg=self.colors["accent"], fg="white")
+        empty_holder = self._settings_big_button(
+            parent, "Empty trash", empty_trash, kind="danger")
+        empty_holder.pack(fill="x", padx=12, pady=(4, 10), ipady=5)
+        redraw()
 
     def _build_settings_duplicates_panel(self, parent):
         self._settings_subtitle(

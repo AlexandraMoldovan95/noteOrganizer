@@ -45,7 +45,7 @@ except ImportError:
 # Added/Fixed CHANGELOG.md entries, not per-release counts). The running
 # app records this into settings, so the next time a newer build opens
 # over older data it can tell the user what changed version-wise.
-APP_VERSION = "0.76.198"
+APP_VERSION = "0.80.198"
 
 
 def parse_version(v):
@@ -7965,9 +7965,22 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                      bg=self.colors["sidebar"], fg=self.colors["subtext"]
                      ).pack(padx=6, pady=6)
             return
-        tk.Label(p, text="Pick notes to share:", font=("Segoe UI", 8, "bold"),
-                 anchor="w", bg=self.colors["sidebar"], fg=self.colors["text"]
-                 ).pack(fill="x", padx=6, pady=(6, 2))
+        # The heading and the select-all share a row: the selection bar a few
+        # centimetres above this panel has had a "Select all" since it was
+        # built, and this list -- the one where a whole notebook means a
+        # hundred clicks, then "Show 100 more", then a hundred more -- had
+        # none. Two tick-box lists in one sidebar, one fillable in a click.
+        head_row = tk.Frame(p, bg=self.colors["sidebar"])
+        head_row.pack(fill="x", padx=6, pady=(6, 2))
+        tk.Label(head_row, text="Pick notes to share:",
+                 font=("Segoe UI", 8, "bold"), anchor="w",
+                 bg=self.colors["sidebar"], fg=self.colors["text"]
+                 ).pack(side="left")
+        select_all_btn = tk.Button(
+            head_row, text="Select all", command=lambda: toggle_select_all(),
+            relief="flat", font=("Segoe UI", 8), cursor="hand2",
+            bg=self.colors["card"], fg=self.colors["text"], bd=0)
+        select_all_btn.pack(side="right", ipadx=4)
 
         # Scrollable checklist (a notebook can have many notes). Fixed height so
         # it never grows the whole panel off-screen; the scrollbar handles the
@@ -8002,10 +8015,46 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         SHARE_PAGE_SIZE = 100
         shown = {"n": SHARE_PAGE_SIZE}
 
+        # What render_checkboxes last actually drew. "Select all" acts on
+        # what is ON SCREEN, and that is not the same as self.notes[:n]:
+        # the list is paginated, so a button that silently ticked a hundred
+        # notes nobody had seen would be the opposite of the control this
+        # asks for -- and the panel is not live, so a note deleted while it
+        # is open leaves the drawn list behind. Reading self.notes here
+        # ticked ids that had no tick box on screen, which is how the first
+        # version of this was caught.
+        rendered = {"ids": []}
+
+        def _revealed():
+            """The ids the panel is actually showing right now."""
+            return list(rendered["ids"])
+
+        def _all_revealed_ticked():
+            ids = _revealed()
+            return bool(ids) and all(
+                self._share_vars.get(i) and self._share_vars[i].get()
+                for i in ids)
+
+        def toggle_select_all():
+            want = not _all_revealed_ticked()
+            for i in _revealed():
+                if i in self._share_vars:
+                    self._share_vars[i].set(want)
+            refresh_select_all_label()
+
+        def refresh_select_all_label():
+            all_on = _all_revealed_ticked()
+            try:
+                select_all_btn.configure(
+                    text="Unselect all" if all_on else "Select all")
+            except tk.TclError:
+                pass
+
         def render_checkboxes():
             for w in inner.winfo_children():
                 w.destroy()
             visible_notes = self.notes[:shown["n"]]
+            rendered["ids"] = [n["id"] for n in visible_notes]
             for n in visible_notes:
                 if n["id"] not in self._share_vars:
                     self._share_vars[n["id"]] = tk.BooleanVar(value=False)
@@ -8013,6 +8062,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 title = (n["title"].strip() or "(untitled)")[:24]
                 extra = " 📎" if n.get("attachments") else ""
                 cb = tk.Checkbutton(inner, text=title + extra, variable=var,
+                                    command=refresh_select_all_label,
                                     bg=self.colors["sidebar"], fg=self.colors["text"],
                                     selectcolor=self.colors["check_well"],
                                     activebackground=self.colors["sidebar"],
@@ -8032,6 +8082,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             # Bind the wheel now that the checkboxes exist, so scrolling works
             # with the cursor anywhere over the list.
             self._bind_mousewheel_recursive(inner, self._share_checklist_canvas)
+            # "Show 100 more" reveals notes that are not ticked, so a button
+            # reading "Unselect all" would be wrong the moment the page grows.
+            refresh_select_all_label()
 
         render_checkboxes()
 
@@ -10351,6 +10404,25 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.track_theme(bulk_export_btn, bg="card", fg="text")
         _bulk_pack(bulk_export_btn)
         self._bulk_export_btn = bulk_export_btn
+
+        # Pinning had exactly one route in the whole app -- the right-click
+        # menu, one note at a time -- so reordering twenty notes meant opening
+        # the menu twenty times. It belongs here, where Trash, Category and
+        # Export already act on everything ticked.
+        #
+        # On a THIRD row rather than squeezed beside Export, and that is not
+        # fussiness: the comment above records the two-by-two layout being the
+        # fix for a bar that once fitted by a single pixel and then did not on
+        # the other platform. Two per row is the invariant; a fifth button on
+        # a row of two would put three of the widest labels side by side and
+        # re-open the fight. Vertical space is cheap here, because this bar
+        # only exists while notes are ticked.
+        pin_row = _bulk_row()
+        self._bulk_pin_btn = tk.Button(
+            pin_row, text="📌 Pin", command=self._bulk_toggle_pin,
+            relief="flat", font=("Segoe UI", 8), cursor="hand2")
+        self.track_theme(self._bulk_pin_btn, bg="card", fg="text")
+        _bulk_pack(self._bulk_pin_btn)
         # Not packed yet — shown by _toggle_selection_mode() when active.
 
         # Bottom action zone — pinned to the bottom of the sidebar so New Note /
@@ -12820,6 +12892,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
     def _update_bulk_selected_label(self):
         n = len(self.selected_note_ids)
         self.bulk_selected_lbl.config(text=f"{n} selected")
+        # Same idea as the Select-all label below, from the same place: what
+        # "Pin" will do depends on what is ticked at this moment, so the word
+        # is worked out wherever the selection changes rather than only when
+        # the bar is built.
+        self._refresh_bulk_pin_label()
         # The button says what pressing it will do, which changes once
         # everything on screen is already selected. Asked from the same
         # _visible_note_ids() the press itself uses, so the word and the
@@ -14405,7 +14482,13 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # One note out into the world as a file. HTML is the complete
         # export (colours, tables, everything) and doubles as the road
         # to PDF (browser, Ctrl+P) and Word (opens .html natively);
-        # Markdown is portable but drops what Markdown cannot say.
+        # plain text is the body as stored.
+        #
+        # (This said "Markdown is portable but drops what Markdown cannot
+        # say", describing a third format the menu below has never built.
+        # A sibling of the docstring corrected in 0.76.195, and missed by
+        # that sweep because it greps as a comment about Markdown rather
+        # than as a claim about the formats on offer.)
         export_menu = tk.Menu(menu, tearoff=0)
         export_menu.configure(
             bg=self.colors["card"], fg=self.colors["text"],
@@ -14419,6 +14502,26 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 label=fmt_label,
                 command=lambda f=fmt: self.export_note_as_file(note, f))
         menu.add_cascade(label="💾  Export as file", menu=export_menu)
+
+        # Recategorising one note had exactly one route that did not mean
+        # opening it: the bulk popup, which requires ticking it first. The
+        # selection bar can change a category but not duplicate; this menu
+        # could duplicate but not change a category. Neither gap was a rule
+        # anyone could learn, and this is the cheaper half to close.
+        cat_menu = tk.Menu(menu, tearoff=0)
+        cat_menu.configure(
+            bg=self.colors["card"], fg=self.colors["text"],
+            activebackground=self.colors["accent"], activeforeground="white",
+            relief="flat", bd=0, font=("Segoe UI", 9)
+        )
+        current_cat = (note or {}).get("category")
+        for cat_name in CATEGORY_COLORS.keys():
+            cat_menu.add_command(
+                # A tick beside the one it is already in, so the menu answers
+                # "which is this?" as well as offering to change it.
+                label=("✓  " if cat_name == current_cat else "     ") + cat_name,
+                command=lambda c=cat_name: self._ctx_move_to_category(note, c))
+        menu.add_cascade(label="🗂  Move to category", menu=cat_menu)
 
         # Recurrence-specific actions, only meaningful from the calendar.
         if occurrence_date is not None:
@@ -14504,6 +14607,81 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.save_notes()
         self.refresh_note_list()
         self.set_status("Pinned to top" if real["pinned"] else "Unpinned")
+
+    def _ctx_move_to_category(self, note, category):
+        """Change one note's category from its own menu.
+
+        No question and no undo toast, unlike the bulk route beside it, and
+        that is the app's rule rather than an oversight: a confirmation is
+        asked in proportion to how recoverable the action is. This replaces
+        one field on one note, the menu says which category it is in now,
+        and picking another is how you put it back -- which is exactly what
+        the editor's own category dropdown has always done with no ceremony
+        at all. The bulk version asks because it overwrites a mixed set of
+        categories on notes you cannot all see at once.
+
+        The flush and the reconciliation are NOT optional. The editor may be
+        holding this very note with its dropdown still showing the old
+        value, and the editor's next save would write that back -- undoing
+        this with nothing on screen to say so. Same shape as the bulk route,
+        which learned it the hard way.
+        """
+        real = self.find_note((note or {}).get("id"))
+        if real is None:
+            self.show_info("Not here any more", "That note is no longer in the list.")
+            return
+        if real.get("category") == category:
+            return
+        self._flush_autosave()
+        # Re-read after the flush: the note object above was fetched before
+        # anything the editor was holding reached the store.
+        real = self.find_note(note["id"])
+        if real is None:
+            return
+        real["category"] = category
+        self.save_notes()
+        self._editor_follows_external_change({real["id"]})
+        self.refresh_note_list()
+        title = (real.get("title") or "").strip() or "Untitled note"
+        self.set_status("Moved “%s” to “%s”"
+                        % (_truncate(title, 30), category))
+
+    def _bulk_toggle_pin(self):
+        """Pin every ticked note, or unpin them if they are all pinned.
+
+        The label flips the same way "Select all" does, and for the same
+        reason: one button whose word is always the thing it will do, rather
+        than two buttons of which one is usually the wrong one. A mixed
+        selection pins -- that is the reading of "Pin" that does something
+        for every note in it, and it leaves an unambiguous state behind.
+        """
+        chosen = [n for n in self.notes if n["id"] in self.selected_note_ids]
+        if not chosen:
+            self.show_info("Nothing selected", "Tick one or more notes first.")
+            return
+        # No confirmation and no undo, deliberately: pinning takes nothing out
+        # of the list and is undone by pressing the same button again, so the
+        # rule this app follows -- confirm in proportion to how recoverable it
+        # is -- asks for neither.
+        pinning = not all(n.get("pinned", False) for n in chosen)
+        for note in chosen:
+            note["pinned"] = pinning
+        self.save_notes()
+        self.refresh_note_list()
+        self._refresh_bulk_pin_label()
+        word = "Pinned" if pinning else "Unpinned"
+        self.set_status("%s %d note%s"
+                        % (word, len(chosen), "" if len(chosen) == 1 else "s"))
+
+    def _refresh_bulk_pin_label(self):
+        """Say what pressing it will do, given what is ticked right now."""
+        btn = getattr(self, "_bulk_pin_btn", None)
+        if btn is None:
+            return
+        chosen = [n for n in self.notes if n["id"] in self.selected_note_ids]
+        all_pinned = bool(chosen) and all(n.get("pinned", False)
+                                          for n in chosen)
+        btn.configure(text="📌 Unpin" if all_pinned else "📌 Pin")
 
     def _ctx_open(self, note, occurrence_date, return_day=None):
         """Open a note in the editor tab from the context menu.

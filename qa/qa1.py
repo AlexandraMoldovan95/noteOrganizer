@@ -7168,6 +7168,66 @@ check('and the sidebar uses the SAME sentence as the editor',
 _side_closers = [b for b in _walk_widgets(app.share_code_area, tk.Button)
                  if str(b.cget('text')) == '✕']
 check('the sidebar code area now has an ✕ too', len(_side_closers) == 1)
+
+# ---- AND THE SHARE LIST CAN BE FILLED IN ONE CLICK (C-13) ----
+# The selection bar a few centimetres above this panel has had a
+# "Select all" since it was built; this list -- the one where a whole
+# notebook meant a hundred clicks, then "Show 100 more", then a hundred
+# more -- had none. Two tick-box lists in one sidebar, one fillable.
+_share_all = next(
+    (b for b in _walk_widgets(app.share_panel, tk.Button)
+     if str(b.cget('text')) in ('Select all', 'Unselect all')), None)
+check('the Share panel offers a select-all', _share_all is not None)
+# Asked of the TICK BOXES on screen, not of app.notes: the panel is
+# paginated and is not live, so "what it is showing" and "what the notebook
+# holds" are two different lists. Taking the second one is how the first
+# version of the app's own select-all came to tick ids that had no box on
+# screen -- this check found that, by accident, and the button acts on what
+# it rendered now.
+_share_boxes_all = [b for b in _walk_widgets(app, tk.Checkbutton)
+                    if str(b.cget('variable')).startswith('PY_VAR')
+                    and b.winfo_toplevel() is app]
+_share_shown = [b for b in _share_boxes_all
+                if str(b.cget('variable')) in
+                {str(v) for v in app._share_vars.values()}]
+check(f'fixture: the panel is showing tick boxes ({len(_share_shown)})',
+      bool(_share_shown))
+if _share_all is not None and _share_shown:
+    _share_all.invoke()
+    app.update()
+    check('pressing it ticks every note the panel is showing',
+          all(b.getvar(str(b.cget('variable'))) in (1, '1')
+              for b in _share_shown))
+    check('and the button then offers to unselect',
+          str(_share_all.cget('text')) == 'Unselect all')
+    _share_all.invoke()
+    app.update()
+    check('pressing it again clears them',
+          not any(b.getvar(str(b.cget('variable'))) in (1, '1')
+                  for b in _share_shown))
+    # THE CONTROL: untick one BY PRESSING IT and the label must go back to
+    # "Select all", or a button reading "Unselect all" would clear a list
+    # that was not full. Pressed rather than set: the label is refreshed by
+    # the Checkbutton's own command, and setting the variable behind it is
+    # something no person can do -- the first version of this check did
+    # exactly that and reported a failure about a route nobody can take.
+    _share_all.invoke()
+    app.update()
+    # Found by the VARIABLE it is wired to, not by being the first
+    # Checkbutton in the panel: the first version took the first one and it
+    # turned out not to belong to a note at all -- invoking it ticked
+    # something rather than unticking, and the check reported a label that
+    # was correct for the state it had accidentally produced.
+    _share_shown[0].invoke()
+    app.update()
+    _still_on = [b for b in _share_shown
+                 if b.getvar(str(b.cget('variable'))) in (1, '1')]
+    check(f'a part-ticked list offers Select all, not Unselect all '
+          f'(label={str(_share_all.cget("text"))!r}, '
+          f'{len(_still_on)} of {len(_share_shown)} still ticked)',
+          str(_share_all.cget('text')) == 'Select all')
+    _share_shown[0].invoke()
+    app.update()
 # It clears the area's children rather than pack_forget()ing the frame: that
 # frame is packed once when the panel is built and is part of its layout, so
 # forgetting it would take the panel's own space with it.
@@ -8377,17 +8437,76 @@ def _bar_buttons(widget, out=None):
 
 
 _bar_btns = _bar_buttons(_bar)
-check('the bar has its four actions', len(_bar_btns) == 4)
+_bar_labels = [str(_b.cget('text')) for _b in _bar_btns]
+# Asked by NAME rather than by count. The count was five when Pin joined
+# the bar, and a number is the one thing that goes stale on every addition
+# while telling nobody which action went missing -- which is what this
+# check is really about. It was written after Export was drawn 13px
+# narrower than it asked for, with its caret cut off.
+for _want in ('Select all', 'Trash', 'Category', 'Export', 'Pin'):
+    check('the bar offers "%s"' % _want,
+          any(_want in t for t in _bar_labels))
 for _b in _bar_btns:
     check('...and "%s" is drawn at least as wide as it asks'
           % str(_b.cget('text')),
           _b.winfo_width() >= _b.winfo_reqwidth())
+# Two per row is the invariant the bar's own comment records as the fix
+# for a layout that once fitted by a single pixel and then did not on the
+# other platform. Pin therefore went on a third row rather than beside
+# Export, and this is the check that keeps it there.
+_bar_rows = [w for w in _bar.winfo_children() if isinstance(w, tk.Frame)]
+_per_row = [len([c for c in _r.winfo_children() if isinstance(c, tk.Button)])
+            for _r in _bar_rows]
+check('no row of the bar carries more than two actions (%s)' % _per_row,
+      _per_row and max(_per_row) <= 2)
+
+# ---- PINNING SEVERAL NOTES AT ONCE (C-9, C-17) ----
+# Pinning had exactly one route in the whole app: the right-click menu,
+# one note at a time. Reordering twenty notes meant opening it twenty
+# times, on a bar whose whole purpose is acting on many at once.
+_pin_btn = next(b for b in _bar_btns if 'Pin' in str(b.cget('text')))
+app.selected_note_ids = {400, 401, 402}
+app._update_bulk_selected_label()
+app.update()
+check('with nothing pinned the button offers to Pin',
+      str(_pin_btn.cget('text')).endswith('Pin'))
+_pin_btn.invoke()
+app.update()
+check('it pins every ticked note',
+      all(app.find_note(i).get('pinned') for i in (400, 401, 402)))
+check('and leaves the rest alone',
+      not app.find_note(403).get('pinned'))
+# The label flips the way Select all does, so the word is always the
+# thing pressing it will do.
+check('the button now offers to Unpin',
+      str(_pin_btn.cget('text')).endswith('Unpin'))
+_pin_btn.invoke()
+app.update()
+check('and pressing it again unpins them',
+      not any(app.find_note(i).get('pinned') for i in (400, 401, 402)))
+# THE CONTROL: a MIXED selection must pin rather than unpin, or "Pin" on a
+# partly-pinned set would be the one press that does nothing for some of
+# the notes it names.
+app.find_note(400)['pinned'] = True
+app._update_bulk_selected_label()
+app.update()
+check('a mixed selection still offers Pin',
+      str(_pin_btn.cget('text')).endswith('Pin'))
+_pin_btn.invoke()
+app.update()
+check('and pinning a mixed selection pins all of it',
+      all(app.find_note(i).get('pinned') for i in (400, 401, 402)))
+for _i in (400, 401, 402):
+    app.find_note(_i)['pinned'] = False
+app.selected_note_ids = set()
+app.save_notes()
+app._update_bulk_selected_label()
+app.update()
 # No check for "the shortfall is shared": with the count on its own row
-# the four actions ask 193px of the 250 they are given, so nothing is
-# under pressure and no single edit can starve one. Sharing the width is
-# defence in depth against a future font or label, not a promise this
-# suite can currently break -- and a check that cannot fail proves
-# nothing. Written down rather than left as a passing line.
+# nothing in the bar is under pressure, so no single edit can starve one.
+# Sharing the width is defence in depth against a future font or label,
+# not a promise this suite can currently break -- and a check that cannot
+# fail proves nothing. Written down rather than left as a passing line.
 def _sg_settle():
     """Stop anything that rebuilds the list on a timer of its own.
 

@@ -155,6 +155,63 @@ try:
     check('...and it is the whole menu, not a delete on its own',
           any('Open' in _l for _l in _cal_labels)
           and any('Export' in _l for _l in _cal_labels))
+
+    # ---- AND IT CAN CHANGE A CATEGORY NOW (C-17) ----
+    # The selection bar could recategorise but not duplicate; this menu
+    # could duplicate but not recategorise. Neither gap was a rule anyone
+    # could learn, and the bulk popup was the only route that did not mean
+    # opening the note first.
+    check('the menu offers to move the note to a category',
+          any('Move to category' in _l for _l in _cal_labels))
+    _c17_idx = next((_i for _i, _l in enumerate(_cal_labels)
+                     if 'Move to category' in _l), None)
+    if _c17_idx is not None:
+        _c17_sub = _cal_posted[-1].entrycget(_c17_idx, 'menu')
+        _c17_menu = app.nametowidget(_c17_sub)
+        # index('end') is None on an EMPTY menu, and range(None + 1) raises
+        # -- so a submenu that listed nothing crashed the script instead of
+        # failing this check, and the runner's summary reports a crash as a
+        # failure either way. Found by a mutant that emptied the loop.
+        _c17_end = _c17_menu.index('end')
+        _c17_labels = ([] if _c17_end is None else
+                       [str(_c17_menu.entrycget(_i, 'label'))
+                        for _i in range(_c17_end + 1)])
+        check(f'the submenu lists every category ({len(_c17_labels)})',
+              len(_c17_labels) == len(NO.CATEGORY_COLORS))
+        # A tick beside the one it is in now, so the menu answers "which is
+        # this?" as well as offering to change it.
+        _c17_note = app.notes[0]
+        check(f'and marks the one it is in now '
+              f'({_c17_note.get("category")!r})',
+              any(_l.startswith('✓') and _c17_note.get('category') in _l
+                  for _l in _c17_labels))
+        _c17_target = next(
+            (_i for _i, _l in enumerate(_c17_labels)
+             if not _l.startswith('✓')), None)
+        if _c17_target is not None:
+            _c17_want = _c17_labels[_c17_target].strip()
+            _c17_id = _c17_note['id']
+            # THE SEAM the bulk route learned the hard way, and it only
+            # exists while the EDITOR IS HOLDING THIS NOTE with its own
+            # category dropdown on the old value -- the editor's next save
+            # writes that dropdown back and undoes the change with nothing
+            # on screen to say so. Without this line the reconciliation is a
+            # no-op and removing it changes nothing a check can see: a
+            # mutant that deleted it survived until the note was loaded here.
+            app.load_note(app.find_note(_c17_id))
+            app.update()
+            check(f'fixture: the editor is holding the note, on its old '
+                  f'category ({app.category_var.get()!r})',
+                  app.selected_note_id == _c17_id
+                  and app.category_var.get() == _c17_note.get('category'))
+            _c17_menu.invoke(_c17_target)
+            app.update()
+            check(f'picking one moves the note to it ({_c17_want!r})',
+                  app.find_note(_c17_id).get('category') == _c17_want)
+            app._flush_autosave()
+            app.update()
+            check('and the editor does not undo it on its next save',
+                  app.find_note(_c17_id).get('category') == _c17_want)
     if _cal_posted and any('Delete' in _l for _l in _cal_labels):
         _cal_posted[-1].invoke(
             [_i for _i, _l in enumerate(_cal_labels) if 'Delete' in _l][0])

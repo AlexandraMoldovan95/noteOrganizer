@@ -1738,6 +1738,111 @@ import types as _types6, json as _json6, io as _io6
 _b5_saved_notes = list(app.notes)
 _b5_saved_trash = list(app.trash)
 
+# ============================================================
+# RECOVERING SEVERAL NOTES IS NOT FORTY CLICKS (C-14)
+# ============================================================
+# You could restore one note at a time or destroy all of them at once,
+# and nothing in between -- the only bulk gesture on the screen was the
+# irreversible one. And two notes both called "Notes" had nothing to
+# tell them apart, so the safe answer was to restore both.
+app.trash = [{'id': 5000 + i, 'title': 'Notes', 'body': 'body number %d' % i,
+              'category': 'General',
+              'deleted_at': '2026-02-%02d 00:00:00' % (i + 1)}
+             for i in range(4)]
+app.notes = []
+app.save_notes()
+app.show_settings_page(); app.update()
+app.toggle_settings_panel('trash'); app.update()
+
+
+def _c14_widgets(root, kind, acc=None):
+    acc = [] if acc is None else acc
+    for child in root.winfo_children():
+        if isinstance(child, kind):
+            acc.append(child)
+        _c14_widgets(child, kind, acc)
+    return acc
+
+
+_c14_ticks = _c14_widgets(app.settings_trash_panel, tk.Checkbutton)
+check(f'every trash row carries a tick box ({len(_c14_ticks)} for 4 rows)',
+      len(_c14_ticks) == 4)
+# The preview the Duplicates panel already gives its rows, on the screen
+# where the question "which of these two is which" is harder: a trashed
+# note is not open anywhere.
+_c14_hoverable = [w for w in _c14_widgets(app.settings_trash_panel, tk.Frame)
+                  if '<Enter>' in w.bind()]
+check(f'a trash row explains itself on hover ({len(_c14_hoverable)} rows '
+      f'bound)', len(_c14_hoverable) >= 4)
+
+
+def _c14_button(text):
+    """Find a button by its words.
+
+    Careful with "Restore": EVERY row carries one of those, and the first
+    version of this looked for the bare word and kept finding a row's own
+    button -- so it reported no bulk offer while one was on screen, and
+    then invoked the wrong thing. The bulk one is the one that says
+    "selected".
+    """
+    return next((b for b in _c14_widgets(app.settings_trash_panel, tk.Button)
+                 if text.lower() in str(b.cget('text')).lower()), None)
+
+
+check('no Restore-selected button while nothing is ticked',
+      _c14_button('selected') is None
+      or not _c14_button('selected').winfo_ismapped())
+# Tick two of the four.
+_c14_ticks[0].invoke(); _c14_ticks[2].invoke()
+app.update()
+_c14_restore = _c14_button('selected')
+check('ticking notes offers to restore them',
+      _c14_restore is not None and _c14_restore.winfo_ismapped())
+check(f'and the button says how many '
+      f'({_c14_restore and str(_c14_restore.cget("text"))!r})',
+      _c14_restore is not None and '2' in str(_c14_restore.cget('text')))
+# THE CONTROL for the tick dict outliving its rows: redraw destroys every
+# row, so a selection kept on the row itself would be silently lost by
+# paging or by restoring anything.
+_c14_kept = sum(1 for v in app._trash_sel.values() if v.get())
+check('the ticks live on the panel, not on the rows that get destroyed',
+      _c14_kept == 2)
+
+# Read WHICH ones are ticked rather than assuming: the panel sorts newest
+# first, so ticking the first and third rows is not ticking ids 5000 and
+# 5002. The first version of this hardcoded that guess and failed on a
+# correct app -- which is the whole reason to ask the state rather than
+# predict it.
+_c14_picked = sorted(k for k, v in app._trash_sel.items() if v.get())
+_c14_left = sorted(e['id'] for e in app.trash if e['id'] not in _c14_picked)
+# Identified by BODY, not by id, and that is not a workaround: restoring
+# deliberately assigns a fresh id, because the trashed note's own may have
+# been reused by a note created after it was deleted -- core/storage says
+# so at the line that does it. All four of these are titled "Notes", which
+# is the situation this row is about, so the body is the only thing that
+# tells them apart -- exactly what the new hover preview shows a person.
+_c14_want_bodies = sorted(e['body'] for e in app.trash
+                          if e['id'] in _c14_picked)
+_c14_restore.invoke()
+app.update()
+check('restoring the ticked notes brings back exactly those two',
+      len(app.notes) == 2 and len(app.trash) == 2)
+check(f'and the two restored are the ones that were ticked '
+      f'({_c14_want_bodies})',
+      sorted(n['body'] for n in app.notes) == _c14_want_bodies)
+check(f'while the untouched two are still in the trash ({_c14_left})',
+      sorted(e['id'] for e in app.trash) == _c14_left)
+_c14_after = _c14_button('selected')
+check('and the offer goes away once nothing is ticked',
+      _c14_after is None or not _c14_after.winfo_ismapped())
+# The destructive neighbour still works and still asks -- restoring must
+# not have disturbed the one gesture this screen always had.
+check('Empty trash is still there, and still wears the danger weight',
+      _c14_button('Empty trash') is not None)
+app.trash = []
+app.notes = []
+app.save_notes()
+
 # 107: the wheel over an empty Trash panel must reach the page beneath
 # it. A fully-shown list has nothing of its own to scroll, and trapping
 # the wheel there is a scroll that silently does nothing.
