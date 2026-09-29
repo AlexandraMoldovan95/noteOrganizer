@@ -119,9 +119,43 @@ for _ in range(60):
     if app.focus_get() is app.date_entry:
         break
     _t5f.sleep(0.01)
-app.date_entry.event_generate('<KeyRelease>')
+# The REQUEST is counted, not the pending timer. A queued job is a fact
+# about a moment: between the keystroke and the read there is an update(),
+# and on a loaded machine that can outlast the 500ms debounce -- the timer
+# fires, the job is cleared, and the check reports a missing request about
+# an app that made one. A sibling of this shape went red on CI while
+# passing here three times running; proved by pausing past the debounce,
+# which turns the old form red on an unmodified app.
+_d5_fired = {'n': 0}
+_d5_real_now = app._autosave_now
+
+
+def _d5_counting_now(*a, **k):
+    _d5_fired['n'] += 1
+    return _d5_real_now(*a, **k)
+
+
+# Replacing _schedule_autosave here would catch nothing: every binding
+# captured the bound method when it was bound. The timer captures
+# _autosave_now at SCHEDULE time, which is after this line.
+# Cleared and ASSERTED first. Without this the check passes on a job that
+# was already pending from something earlier in this script, whatever the
+# keystroke does -- which is exactly how the mutant that removed the
+# <KeyRelease> binding survived it.
+app._flush_autosave()
 app.update()
-check('typing a date schedules an autosave', getattr(app, '_autosave_job', None) is not None)
+check('fixture: no save is pending before the keystroke',
+      getattr(app, '_autosave_job', None) is None)
+app._autosave_now = _d5_counting_now
+try:
+    app.date_entry.event_generate('<KeyRelease>')
+    app.update()
+finally:
+    app._autosave_now = _d5_real_now
+check(f'typing a date schedules an autosave '
+      f'(pending={getattr(app, "_autosave_job", None) is not None}, '
+      f'fired={_d5_fired["n"]})',
+      getattr(app, '_autosave_job', None) is not None or _d5_fired['n'] >= 1)
 # Flush it now rather than leaving it pending — the same thing the real app
 # does when switching notes. Left dangling, this timer could fire later in
 # this script (e.g. after a subsequent test clears app.notes entirely),

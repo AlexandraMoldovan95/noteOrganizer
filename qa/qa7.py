@@ -2194,11 +2194,34 @@ with open(tmp_file, 'w') as f: f.write('x')
 app.open_blank_tab()
 app.update()
 fd.askopenfilenames = lambda **k: (tmp_file,)
-app.add_attachment()
-app.update()
-check('adding an attachment schedules an autosave', getattr(app, '_autosave_job', None) is not None)
+# Counted rather than caught pending: a queued job is a fact about a
+# moment, and adding an attachment does real work (a file copy) before the
+# update() below -- so on a loaded machine the 500ms debounce can fire and
+# clear the job before it is read. A sibling of this shape went red on CI
+# while passing here three times running.
+_at7_fired = {'n': 0}
+_at7_real_now = app._autosave_now
 
-app.after_cancel(app._autosave_job)
+
+def _at7_counting_now(*a, **k):
+    _at7_fired['n'] += 1
+    return _at7_real_now(*a, **k)
+
+
+app._autosave_now = _at7_counting_now
+try:
+    app.add_attachment()
+    app.update()
+finally:
+    app._autosave_now = _at7_real_now
+check(f'adding an attachment schedules an autosave '
+      f'(pending={getattr(app, "_autosave_job", None) is not None}, '
+      f'fired={_at7_fired["n"]})',
+      getattr(app, '_autosave_job', None) is not None
+      or _at7_fired['n'] >= 1)
+
+if getattr(app, '_autosave_job', None) is not None:
+    app.after_cancel(app._autosave_job)
 app._autosave_now()
 app.update()
 check('attachment-only note (no title/body) gets saved', app.selected_note_id is not None)

@@ -6557,9 +6557,28 @@ app.clipboard_clear(); app.clipboard_append('2026-10-05'); app.update()
 # and failed on the Linux image with the field holding both dates. The app
 # ships on Windows, so that difference is the test's problem and not the
 # product's; the check is about the date reaching the store either way.
-app.date_entry.delete(0, 'end')
-app.date_entry.event_generate('<<Paste>>')
-app.update()
+# Watch the SAVE ITSELF, not _schedule_autosave. Replacing the scheduler
+# on the instance catches nothing: every binding captured the bound method
+# when it was bound, long before any of this, so they still call the
+# original. The timer does `self.after(500, self._autosave_now)` and
+# captures THAT at schedule time -- which is after this line -- so
+# replacing _autosave_now here does get seen.
+_pd_fired = {'n': 0}
+_pd_real_now = app._autosave_now
+
+
+def _pd_counting_now(*a, **k):
+    _pd_fired['n'] += 1
+    return _pd_real_now(*a, **k)
+
+
+app._autosave_now = _pd_counting_now
+try:
+    app.date_entry.delete(0, 'end')
+    app.date_entry.event_generate('<<Paste>>')
+    app.update()
+finally:
+    app._autosave_now = _pd_real_now
 check('the pasted date is in the field', app.date_entry.get() == '2026-10-05')
 # THE REQUEST, not the result. The first version of this check called
 # _flush_autosave() and then read the store -- and it survived the mutant that
@@ -6567,8 +6586,22 @@ check('the pasted date is in the field', app.date_entry.get() == '2026-10-05')
 # the editor holds whether anything asked it to or not. That is qa/README's
 # own rule, made again here. What this asserts is that the PASTE queued a
 # save, which is the thing the binding does.
-check('pasting a date asks for a save, the way typing one does',
-      bool(getattr(app, '_autosave_job', None)))
+#
+# Counted, not caught pending: a queued job is a fact about a moment, and
+# the update() above can outlast the 500ms debounce on a loaded machine --
+# a sibling of this shape went red on CI while passing here three times
+# running, proved by pausing past the debounce.
+#
+# "A save is pending OR a save already ran" -- either answers the promise,
+# and together they cannot be decided by timing. A pending job alone is a
+# fact about a MOMENT: the update() above can outlast the 500ms debounce
+# on a loaded machine, the timer fires, the job is cleared, and the check
+# reports a missing request about an app that made one. A sibling of that
+# shape went red on CI while passing here three times running.
+check(f'pasting a date asks for a save, the way typing one does '
+      f'(pending={getattr(app, "_autosave_job", None) is not None}, '
+      f'fired={_pd_fired["n"]})',
+      getattr(app, '_autosave_job', None) is not None or _pd_fired['n'] >= 1)
 # And the outcome, through the app's own timer rather than a forced flush --
 # waiting for the promised state, with a ceiling, so a slow machine is slow
 # rather than red.
@@ -7885,13 +7918,29 @@ app._autosave_job = None
 check('fixture: no autosave is pending before the paste',
       not getattr(app, '_autosave_job', None))
 app.clipboard_clear(); app.clipboard_append('2027-03-01'); app.update()
-app.rec_end_date_entry.delete(0, 'end')
-app.rec_end_date_entry.event_generate('<<Paste>>')
-app.update()
+_re_fired = {'n': 0}
+_re_real_now = app._autosave_now
+
+
+def _re_counting_now(*a, **k):
+    _re_fired['n'] += 1
+    return _re_real_now(*a, **k)
+
+
+app._autosave_now = _re_counting_now
+try:
+    app.rec_end_date_entry.delete(0, 'end')
+    app.rec_end_date_entry.event_generate('<<Paste>>')
+    app.update()
+finally:
+    app._autosave_now = _re_real_now
 check('a pasted end-date lands in the box',
       app.rec_end_date_entry.get() == '2027-03-01')
-check('and its own trace schedules the save, with no binding of its own',
-      bool(getattr(app, '_autosave_job', None)))
+# Pending OR already fired, for the same reason as the date field above.
+check(f'and its own trace schedules the save, with no binding of its own '
+      f'(pending={getattr(app, "_autosave_job", None) is not None}, '
+      f'fired={_re_fired["n"]})',
+      getattr(app, '_autosave_job', None) is not None or _re_fired['n'] >= 1)
 check("and the field's <<Paste>> really is unbound, so the trace is what did "
       "it -- unlike the date field, which needed one",
       '<<Paste>>' not in app.rec_end_date_entry.bind()
@@ -8064,14 +8113,35 @@ _cu_stored = json.load(open('notes_data.json', encoding='utf-8'))
 check('checklist undo: the removal really did reach disk',
       [i['text'] for i in next(n for n in _cu_stored
                                if n['id'] == 9100)['checklist']] == ['bread'])
-app._toast_action()
-app.update()
-# The undo has to schedule its OWN save, the way the removal did. Checked
-# by looking for the queued job, not by flushing and reading the file: a
-# flush saves whatever the editor holds whether anything asked it to or
-# not, so the disk check below passes even with the scheduling removed.
-check('checklist undo: the way back schedules its own save',
-      getattr(app, '_autosave_job', None) is not None)
+# The undo has to ASK for its own save, the way the removal did. Not by
+# flushing and reading the file -- a flush saves whatever the editor holds
+# whether anything asked it to or not, so the disk check below passes even
+# with the scheduling removed.
+#
+# And not by looking for a queued job either, which is how this was
+# written and why it went red on CI while passing here three times out of
+# three: a pending timer is a fact about a MOMENT. Between scheduling and
+# reading there is an app.update(), and on a loaded runner that can take
+# longer than the 500ms debounce -- the timer fires, the job is cleared,
+# and the check reports a missing request about an app that made one. The
+# call is what the promise is about, so the call is what is counted.
+_cu_asked = {'n': 0}
+_cu_real_schedule = app._schedule_autosave
+
+
+def _cu_counting_schedule(*a, **k):
+    _cu_asked['n'] += 1
+    return _cu_real_schedule(*a, **k)
+
+
+app._schedule_autosave = _cu_counting_schedule
+try:
+    app._toast_action()
+    app.update()
+finally:
+    app._schedule_autosave = _cu_real_schedule
+check(f'checklist undo: the way back schedules its own save '
+      f'({_cu_asked["n"]} request(s))', _cu_asked['n'] >= 1)
 app._flush_autosave()
 app.update()
 _cu_stored = json.load(open('notes_data.json', encoding='utf-8'))
