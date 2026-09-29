@@ -8786,6 +8786,63 @@ for _w in app.list_frame.winfo_children():
 check('...and the empty list says so, which only a full rebuild writes',
       any('No notes' in t for t in _sg_texts))
 
+# ---- NOTHING ON A CARD IS CUT OFF AT ITS EDGE ----
+# The sidebar is a fixed width and a Label with no wraplength draws one
+# line as long as its text, so the card simply does not show the end of
+# it -- silently. Photographed on an ordinary note: a title lost four
+# words, a preview stopped mid-word, and the tags row dropped the
+# attachment count, the table mark and the checklist progress outright,
+# leaving "1/2" reading as "1/".
+#
+# Asked as "does any label want more room than it has" rather than "is
+# wraplength set", so the check is about what a person sees and survives
+# a different fix. Every string here is long enough to have overflowed
+# before, which is what makes it able to fail.
+app.notes = [NO.normalize_note({
+    'id': 7100,
+    'title': 'Quarterly planning meeting with the whole team',
+    'body': ('Agenda, decisions and the follow-ups we owe each other.'
+             + chr(10) + '| Item | Owner |' + chr(10) + '| --- | --- |'
+             + chr(10) + '| Budget | Ana |'),
+    'category': 'General', 'comments': 'Room 2 is booked',
+    'checklist': [{'text': 'send the agenda', 'done': True},
+                  {'text': 'book the room', 'done': False}],
+    'attachments': [{'name': 'agenda.pdf', 'stored_as': 'agenda.pdf'}],
+    'date': '2026-09-15',
+    'recurrence': {'freq': 'weekly', 'weekdays': [0]}})]
+app.save_notes()
+app.refresh_note_list()
+app.update()
+app.update_idletasks()
+_ov_card = next((w for w in app.list_frame.winfo_children()
+                 if getattr(w, '_card_note_id', None) == 7100), None)
+check('the card for a note carrying everything is on screen',
+      _ov_card is not None)
+
+
+def _ov_labels(w, out):
+    for c in w.winfo_children():
+        if isinstance(c, tk.Label) and str(c.cget('text')).strip():
+            out.append(c)
+        _ov_labels(c, out)
+    return out
+
+
+_ov_found = _ov_labels(_ov_card, []) if _ov_card is not None else []
+_ov_wide = [str(lb.cget('text'))[:28] for lb in _ov_found
+            if lb.winfo_reqwidth() > _ov_card.winfo_width()]
+check('no label on the card asks for more room than the card has '
+      '(over: %s)' % _ov_wide,
+      bool(_ov_found) and _ov_wide == [])
+# The tags are the reason this matters most: each one is a separate
+# fact, so a row that runs out of room drops whole marks rather than
+# the tail of a sentence.
+_ov_tags = ' | '.join(str(lb.cget('text')) for lb in _ov_found)
+check('...and the checklist progress is whole, not a clipped "1/"',
+      '1/2' in _ov_tags)
+check('...with the table mark and the attachment count still there',
+      '1 table' in _ov_tags and chr(0x00D7) + '1' in _ov_tags)
+
 app.notes = []
 app.trash = []
 app.save_notes()

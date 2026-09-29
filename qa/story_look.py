@@ -217,6 +217,35 @@ app.update()
 app.day_emoji['2026-09-15'] = [e for e, _c in app.DAY_MARKER_EMOJIS[:3]]
 app._mark_day_emoji('2026-09-15')
 """),
+    # A card carrying everything a card can carry. The three labels on a
+    # card are the widest thing in a fixed-width sidebar, and nothing was
+    # watching what happens when their text outgrows it -- which is how a
+    # checklist count came to read "1/" with the total cut off the edge,
+    # on an ordinary note, in a picture taken for the documentation.
+    ("17-a-note-card-at-its-fullest", """
+app._dismiss_mini_popup()
+app.notebook.select(app.TAB_NOTES)
+if app.selection_mode:
+    app._toggle_selection_mode()
+app.notes = [NO.normalize_note({
+    'id': 7100,
+    'title': 'Quarterly planning meeting with the whole team',
+    'body': ('Agenda, decisions and the follow-ups we owe each other.'
+             + chr(10) + '| Item | Owner |' + chr(10) + '| --- | --- |'
+             + chr(10) + '| Budget | Ana |'),
+    'category': 'General',
+    'comments': 'Room 2 is booked',
+    'checklist': [{'text': 'send the agenda', 'done': True},
+                  {'text': 'book the room', 'done': False}],
+    'attachments': [{'name': 'agenda.pdf', 'stored_as': 'agenda.pdf'}],
+    'date': '2026-09-15',
+    'recurrence': {'freq': 'weekly', 'weekdays': [0]},
+})]
+app.save_notes()
+app.refresh_note_list()
+app.update()
+app.update_idletasks()
+"""),
 ]
 
 SEED = [
@@ -359,12 +388,21 @@ def take_the_pictures():
     return work, run
 
 
+# Below this share of the picture, a difference is rendering noise
+# rather than a change of shape. One definition, because the report and
+# --accept must not disagree about which screens changed.
+SAME_ENOUGH = 0.5
+
+
 def compare(new_dir):
     """How much of each picture changed, as a percentage of its pixels.
 
     Deliberately coarse: images are reduced to a small grid and compared
     cell by cell, so a pixel of text rendering does not read as a
     change while a moved control does.
+
+    The threshold lives in SAME_ENOUGH, in one place, because both the
+    report and --accept have to mean the same thing by "changed".
     """
     try:
         from PIL import Image
@@ -405,11 +443,38 @@ def main():
         return 2
 
     if accept:
+        # Blessed by the SAME judgement the report prints, so "accepted"
+        # and "CHANGED" can never disagree -- and, more to the point, so
+        # that a screen the tool calls unchanged is left alone on disk.
+        # This used to copy every picture it had just taken. A PNG
+        # re-encoded from identical pixels is a different FILE, so
+        # accepting one new scene rewrote all sixteen and put fifteen
+        # binary blobs into a commit about something else. Comparing the
+        # bytes instead would not fix it, for the same reason.
+        results = compare(shots)
+        if results is None:
+            shutil.rmtree(work, ignore_errors=True)
+            return 2
         if not os.path.isdir(STORE):
             os.makedirs(STORE)
-        for name in taken:
-            shutil.copy2(os.path.join(shots, name), os.path.join(STORE, name))
-        print("accepted: %d screen(s) are the reference from now on" % len(taken))
+        blessed, left = [], []
+        for name, pct, _note in results:
+            fresh = os.path.join(shots, name + ".png")
+            if pct is not None and pct < SAME_ENOUGH:
+                left.append(name)
+                continue
+            if not os.path.exists(fresh):
+                continue
+            shutil.copy2(fresh, os.path.join(STORE, name + ".png"))
+            blessed.append(name)
+        if blessed:
+            print("accepted %d screen(s):" % len(blessed))
+            for name in blessed:
+                print("    %s" % name)
+        else:
+            print("nothing to accept -- no screen has changed its shape.")
+        if left:
+            print("left alone: %d unchanged picture(s)." % len(left))
         shutil.rmtree(work, ignore_errors=True)
         return 0
 
@@ -423,7 +488,7 @@ def main():
         if pct is None:
             print("  ?     %-22s %s" % (name, note))
             changed.append(name)
-        elif pct < 0.5:
+        elif pct < SAME_ENOUGH:
             print("  same    %-22s (%.1f%%)" % (name, pct))
         else:
             print("  CHANGED %-16s %.1f%% of the screen %s" % (name, pct, note))

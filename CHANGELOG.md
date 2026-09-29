@@ -12,6 +12,7 @@ How the numbers themselves are counted is the
 
 | Version | Date | In one line |
 |---|---|---|
+| [0.81.202](#081202--2026-09-29) | 2026-09-29 | A note's card stops cutting off the end of what it says — its title, its preview, and the marks that say what the note carries. |
 | [0.81.200](#081200--2026-09-29) | 2026-09-29 | The note list stops pulling the keyboard away from what you were typing in. |
 | [0.81.199](#081199--2026-09-29) | 2026-09-29 | A note's actions are reachable from where the note is — on the calendar, and from the keyboard. |
 | [0.80.198](#080198--2026-09-29) | 2026-09-29 | Doing a thing to many notes at once — pinning, sharing, and getting several back out of the Trash. |
@@ -94,6 +95,26 @@ How the numbers themselves are counted is the
   padding the label could not see, and each was short — the subtitle asked for 620
   pixels and was given 544. They are taken from the label itself now, so a change to
   the layout cannot leave them behind again.
+
+---
+
+## [0.81.202] — 2026-09-29
+
+*Highlights: a note's card stops cutting off the end of what it says — its title, its preview,
+and the marks that tell you what the note carries.*
+
+### Fixed
+
+- **Nothing on a note's card is cut off at its edge any more.** The sidebar is a fixed width
+  and each of the card's three lines was a label with no wrapping, so a label longer than the
+  card drew one line as long as its text and the card simply did not show the end of it —
+  with nothing to say it had been cut. Photographed on an ordinary note: the title lost "with
+  the whole team", the preview stopped mid-word with the "..." it had earned cut off too, and
+  the row of marks dropped the attachment count, the table mark and the checklist progress
+  outright — leaving "☑ 1/2" reading as "☑ 1/", which is worse than dropping it, because a
+  half-drawn fraction looks like a number. One mechanism in three places, and the same one
+  `0.73.167` fixed in Settings; the note list was never swept then. Each line now wraps to the
+  width it is actually given, by the helper that sweep left behind.
 
 ---
 

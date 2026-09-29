@@ -45,7 +45,7 @@ except ImportError:
 # Added/Fixed CHANGELOG.md entries, not per-release counts). The running
 # app records this into settings, so the next time a newer build opens
 # over older data it can tell the user what changed version-wise.
-APP_VERSION = "0.81.200"
+APP_VERSION = "0.81.202"
 
 
 def parse_version(v):
@@ -12751,10 +12751,20 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             title_text = "📌 " + title_text
         if is_recurring(note):
             title_text = "🔁 " + title_text
+        # Wrapped to the width it is actually given, like the Settings
+        # subtitles in 0.73.167 and for the same reason: a Label with no
+        # wraplength draws one line as long as its text and the card
+        # simply does not show the end of it, with nothing to say so.
+        # The sidebar is a fixed width, so this is not an edge case --
+        # photographed on an ordinary note, a title lost "with the whole
+        # team", the preview stopped mid-word, and the tags row dropped
+        # the attachment count, the table mark and the checklist
+        # progress entirely.
         title_lbl = tk.Label(content, text=title_text, font=("Segoe UI", 11, "bold"),
                              anchor="w", justify="left",
                              bg=self.colors["card"], fg=self.colors["text"])
         title_lbl.pack(fill="x")
+        self._wrap_to_own_width(title_lbl)
 
         # Table rows read as pipe soup at card size, so the preview shows
         # only the note's plain text; the tags row says a table is there.
@@ -12768,10 +12778,20 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         preview = preview_src[:40]
         preview_lbl = tk.Label(
             content, text=preview + ("..." if len(preview_src) > 40 else ""),
-            font=("Segoe UI", 9), anchor="w",
+            # justify="left" matters only once there are two lines, which
+            # is exactly what wrapping introduced: Tk CENTRES a Label's
+            # second line by default, and anchor="w" does not change that
+            # -- anchor places the text block, justify places the lines
+            # inside it. Seen in the photograph, not reasoned about.
+            font=("Segoe UI", 9), anchor="w", justify="left",
             bg=self.colors["card"], fg=self.colors["subtext"]
         )
         preview_lbl.pack(fill="x")
+        # The 40-character cap above is not a width: forty narrow
+        # characters fit and forty wide ones do not, which is why a
+        # 39-character body still ran off the card. The cap keeps the
+        # preview a glimpse; this keeps the glimpse readable.
+        self._wrap_to_own_width(preview_lbl)
 
         tags_text = note_category
         if is_recurring(note):
@@ -12795,8 +12815,14 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                        if isinstance(it, dict) and it.get("done"))
             tags_text += f"   ☑ {done}/{len(checklist)}"
         cat_lbl = tk.Label(content, text=tags_text, fg=color, font=("Segoe UI", 8, "bold"),
-                           anchor="w", bg=self.colors["card"])
+                           anchor="w", justify="left", bg=self.colors["card"])
         cat_lbl.pack(fill="x", pady=(3, 0))
+        # The worst of the three, because each tag is a separate fact
+        # rather than the tail of a sentence: a row that ran out of room
+        # dropped whole marks, and a clipped "1/2" read as "1/". The
+        # three spaces between tags give the wrap somewhere to break, so
+        # a second line starts at a tag rather than inside one.
+        self._wrap_to_own_width(cat_lbl)
 
         widgets = [card, stripe, content, title_lbl, preview_lbl, cat_lbl]
         for widget in widgets:
