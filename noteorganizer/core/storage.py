@@ -435,18 +435,25 @@ def load_notes(version_change=None):
         * ``corrupt_backup_path`` -- where the unreadable original was
           copied aside, or None if even that copy failed (the boolean
           above still says the file was unreadable).
+        * ``categories_adopted`` -- the category names the notes were
+          filed under that settings.json had lost, now back in the map
+          with default colours. The caller says so: the colours changed,
+          and the user should know why.
 
-        All are None/False the rest of the time, which is almost always.
+        All are None/False/empty the rest of the time, which is almost
+        always.
     """
     # Imported here rather than at the top of the file because there is a
     # real cycle: storage -> model -> categories -> storage. At module level
     # it fails with "cannot import name 'load_settings' from partially
     # initialized module". Inside the function the import runs long after
     # every module is built, so it resolves cleanly.
-    from .model import normalize_note, clean_notes
+    from .model import normalize_note, clean_notes, repair_note_ids
+    from .categories import adopt_categories_of, persist_categories
 
     report = {"version_backup_path": None, "cleanup_report": None,
-              "notes_file_corrupt": False, "corrupt_backup_path": None}
+              "notes_file_corrupt": False, "corrupt_backup_path": None,
+              "categories_adopted": []}
     raw = []
     if os.path.exists(paths.DATA_FILE):
         # A newer app version is about to run against data last saved by
@@ -475,9 +482,19 @@ def load_notes(version_change=None):
     if not isinstance(raw, list):
         raw = []
 
+    # The categories the notes are filed under join the map BEFORE the
+    # notes are normalised: normalize_note re-files a note whose category
+    # is not in the map to General, and the map comes from a different
+    # file. Saved straight away -- and before the cleanup below reads the
+    # settings, so its own write carries them too.
+    report["categories_adopted"] = adopt_categories_of(raw)
+    if report["categories_adopted"]:
+        persist_categories()
+
     # Every note gets the full set of fields, so no later code has to
     # guess whether an old note has 'comments' or 'attachments'.
     notes = [normalize_note(n) for n in raw if isinstance(n, dict)]
+    ids_repaired = repair_note_ids(notes)
     # An identity handed out and never written down is a different
     # identity every launch. normalize_note mints one for any note that
     # arrives without it -- in memory. On a session that only READS,
@@ -537,15 +554,19 @@ def load_notes(version_change=None):
 
         settings["cleanup_done"] = True
         save_settings(settings)
-        # That write already carries the new identities.
+        # That write already carries the new identities, and numbers
+        # every note afresh besides.
         minted_any = False
+        ids_repaired = False
 
-    if minted_any and not report["notes_file_corrupt"]:
+    if (minted_any or ids_repaired) and not report["notes_file_corrupt"]:
         # Guarded exactly like the cleanup above: never over a file this
         # launch has just declared unreadable, whose bytes the startup
         # notice is at that moment promising are still on disk. A failure
         # here is not worth a dialog -- the app runs perfectly well, and
-        # the next save writes them anyway.
+        # the next save writes them anyway. Repaired ids ride the same
+        # write, for the same reason identities do: a session that only
+        # reads would otherwise repair them afresh on every launch.
         try:
             _write_json_atomic(paths.DATA_FILE, notes)
         except (IOError, OSError):

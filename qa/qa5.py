@@ -413,6 +413,37 @@ check('a cleanup that DID something still reports it, in plain words',
       and 'Cleanup pass' not in _notices[0][1]
       and 'renumbered' not in _notices[0][1]
       and 'setup complete' not in _notices[0][0])
+
+# ---- Categories brought back from the notes are announced ----
+# When settings.json has lost categories the notes are filed under, the
+# load now puts them back with default colours instead of re-filing the
+# notes to General. The colours change, so the user is told why.
+_notices.clear()
+app5f._cleanup_report = None
+app5f._categories_adopted = ['Clients 2026', 'Gym']
+app5f.announce_startup_changes()
+app5f.update()
+check('categories recovered from the notes are named in the startup notice',
+      len(_notices) == 1 and 'Clients 2026' in _notices[0][1]
+      and 'Gym' in _notices[0][1] and 'default colours' in _notices[0][1])
+app5f._categories_adopted = []
+
+# ---- The migration notice says only what is true ----
+# A fixed tail followed every migration message: "the script and
+# dist\NoteOrganizer.exe both read this same folder, so they can never
+# drift apart" -- false in source mode after a reclaim, jargon in the
+# built app.
+_notices.clear()
+_mig_was = NO.MIGRATION_INFO
+NO.MIGRATION_INFO = 'Copied your notebook into the app folder: X'
+try:
+    app5f.announce_startup_changes()
+    app5f.update()
+finally:
+    NO.MIGRATION_INFO = _mig_was
+check('the migration notice carries no promise that the two copies agree',
+      len(_notices) == 1 and 'drift apart' not in _notices[0][1]
+      and 'dist\\' not in _notices[0][1])
 app5f.destroy()
 
 print()

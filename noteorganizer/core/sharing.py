@@ -160,7 +160,18 @@ def decode_share_code(code):
         )
     if not isinstance(payload, dict) or "notes" not in payload:
         raise ValueError("This share code doesn't contain any notes.")
-    if payload.get("v", 1) > 1:
+    # The version is the code's own claim about its format, and the code
+    # is text anyone can edit. Compared unchecked, a string, null or list
+    # here raised TypeError -- which the import box does not catch, so a
+    # hand-edited code got an internal error instead of the message
+    # below. bool is refused by name because it is an int to Python.
+    version = payload.get("v", 1)
+    if isinstance(version, bool) or not isinstance(version, (int, float)):
+        raise ValueError(
+            "This share code is damaged or incomplete. Ask the sender to copy "
+            "the whole code again."
+        )
+    if version > 1:
         raise ValueError(
             "This code was made by a newer version of Note Organizer. "
             "Update the app to import it."

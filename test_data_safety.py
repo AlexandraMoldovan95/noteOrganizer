@@ -1171,7 +1171,7 @@ try:
     _ta = _legacy_file([dict(_base, title="UnTitlu")])
     _real_sig = _model_mod.content_signature
     try:
-        _model_mod.content_signature = lambda n, strict=False: ("bent",)
+        _model_mod.content_signature = lambda n: ("bent",)
         check("the purge consults model.content_signature, not a private copy",
               _paths_mod.is_redundant_copy(_ta, [dict(_base, title="AltTitlu")])
               is True)
@@ -1188,28 +1188,39 @@ finally:
         except OSError:
             pass
 
-# The purge asks a STRICTER question than the duplicate collapse, and
-# the difference is written down rather than drifting: styling, layout,
-# per-day edits and skipped dates are real work that does not show up in
-# the default signature, so a leftover notebook differing only in those
-# was judged "already covered" and deleted -- while the startup message
-# promised nothing was deleted unless it already existed locally.
+# ONE answer, and it is the strict one. Styling, layout, per-day edits
+# and skipped dates are real work, and a leftover notebook differing only
+# in those was once judged "already covered" and deleted. The startup
+# duplicate collapse kept a looser answer for years -- "a stray bold word
+# does not make a duplicate" -- until two copies of a weekly routine, one
+# edited on a single day and pinned, were merged and the edited copy
+# removed under a dialog calling it an exact duplicate. Every automatic
+# removal asks the same strict question now, pin and colour included.
 _fmt_a = dict(_base, title="The same", body="text",
               formatting=[{"start": 0, "end": 4, "style": "bold"}])
 _fmt_b = dict(_base, title="The same", body="text")
-check("styling does NOT split a duplicate for the startup collapse",
+check("styling splits a duplicate -- for the startup collapse too",
       _model_mod.content_signature(_fmt_a)
-      == _model_mod.content_signature(_fmt_b))
-check("but it DOES for the purge, whose wrong answer is unrecoverable",
-      _model_mod.content_signature(_fmt_a, strict=True)
-      != _model_mod.content_signature(_fmt_b, strict=True))
+      != _model_mod.content_signature(_fmt_b))
 for _field, _value in (("paragraphs", [{"line": 0, "kind": "bullet"}]),
                        ("overrides", {"2026-01-01": {"title": "day"}}),
-                       ("exceptions", ["2026-01-02"])):
-    check("the strict answer also sees %s" % _field,
-          _model_mod.content_signature(dict(_fmt_b, **{_field: _value}),
-                                       strict=True)
-          != _model_mod.content_signature(_fmt_b, strict=True))
+                       ("exceptions", ["2026-01-02"]),
+                       ("pinned", True),
+                       ("color", "#ff0000")):
+    check("the signature sees %s" % _field,
+          _model_mod.content_signature(dict(_fmt_b, **{_field: _value}))
+          != _model_mod.content_signature(_fmt_b))
+# The scenario itself, end to end through the cleanup.
+_gym = {"title": "Gym", "body": "Leg day", "date": "2026-09-01",
+        "recurrence": {"freq": "weekly"}}
+_gym_a = _model_mod.normalize_note(dict(_gym, id=1, exceptions=["2026-09-08"]))
+_gym_b = _model_mod.normalize_note(dict(
+    _gym, id=2, exceptions=["2026-09-08"], pinned=True,
+    overrides={"2026-09-15": {"body": "Rest week"}}))
+_gym_kept, _gym_stats = _model_mod.clean_notes([_gym_a, _gym_b])
+check("the startup cleanup keeps a routine's copy that was edited on one day",
+      len(_gym_kept) == 2 and _gym_stats["duplicates_removed"] == 0
+      and any(n["overrides"] for n in _gym_kept))
 _lf_fmt = _legacy_file([_fmt_a])
 try:
     check("a folder differing only in styling is NOT purged",
@@ -1224,11 +1235,11 @@ finally:
 # Raw shapes off disk must never raise inside the signature: the purge
 # feeds it dicts parsed straight from a file, before any normalization,
 # and an exception there would abort a startup.
-check("the strict signature tolerates raw junk shapes",
+check("the signature tolerates raw junk shapes",
       _model_mod.content_signature(
           {"formatting": {"a": [1, {"b": None}]}, "overrides": 7,
-           "exceptions": "nope", "paragraphs": object()},
-          strict=True) is not None)
+           "exceptions": "nope", "paragraphs": object(), "pinned": "yes",
+           "color": ["#fff"]}) is not None)
 
 # Find-duplicates and the import scans share _dup_key; checklist and
 # recurrence joined its key (they are never merged, so a grouping there
@@ -1519,7 +1530,7 @@ check("stored names lose their trailing-dot disguise at the choke point",
 check("a record naming no file at all is dropped, not crashed on",
       len(_dirty_att["attachments"]) == 2)
 
-_MAIN_GUARD_DRIVER = '"""Drive the REAL _main() with the heavy parts stubbed to recorders.\n\nWritten and launched by test_data_safety to prove the single-instance\nguard is WIRED, not merely implemented: _main must consult acquire() and\nhonour the answer. The adversarial review caught the gap this closes --\ndeleting the whole guard from _main left every suite green, because the\nlock primitive was tested end-to-end while the one call site a user ever\ntravels through was tested by nobody.\n"""\nimport json\nimport os\nimport sys\n\nHERE = os.path.dirname(os.path.abspath(__file__))\nos.chdir(HERE)\nsys.path.insert(0, HERE)\n\n# Hermetic seed BEFORE the note_organizer import: the module resolves its\n# data directory and runs migrations at import time, and an unseeded dir\n# invites the adoption of the machine\'s real notebook.\nif not os.path.exists("notes_data.json"):\n    with open("notes_data.json", "w", encoding="utf-8") as f:\n        f.write("[]")\ntry:\n    with open("settings.json", "r", encoding="utf-8") as f:\n        _settings = json.load(f)\nexcept Exception:\n    _settings = {}\nif not isinstance(_settings, dict):\n    _settings = {}\n_settings.setdefault("reclaimed_from_appdata", True)\nwith open("settings.json", "w", encoding="utf-8") as f:\n    json.dump(_settings, f)\n\nimport tkinter.messagebox as mb  # noqa: E402\n\nimport note_organizer as NO  # noqa: E402\nfrom noteorganizer.core import paths  # noqa: E402\n\nevents = []\nNO.initialise = lambda: (paths.configure(HERE), events.append("init"))\n_real_acquire = NO.single_instance.acquire\n\n\ndef _recording_acquire(path=None):\n    events.append("acquire")\n    return _real_acquire(path)\n\n\nNO.single_instance.acquire = _recording_acquire\n\n\nclass FakeApp:\n    def __init__(self):\n        events.append("app")\n\n    def protocol(self, *a, **k):\n        pass\n\n    def on_app_close(self):\n        pass\n\n    def mainloop(self):\n        events.append("loop")\n\n\nclass FakeRoot:\n    def withdraw(self):\n        pass\n\n    def destroy(self):\n        pass\n\n\nNO.NoteOrganizer = FakeApp\nNO.tk.Tk = FakeRoot\nmb.showinfo = lambda *a, **k: events.append("refused-dialog")\n\nNO._main()\nprint("EVENTS:" + json.dumps(events))\n'
+_MAIN_GUARD_DRIVER = '"""Drive the REAL _main() with the heavy parts stubbed to recorders.\n\nWritten and launched by test_data_safety to prove the single-instance\nguard is WIRED, not merely implemented: _main must consult acquire() and\nhonour the answer. The adversarial review caught the gap this closes --\ndeleting the whole guard from _main left every suite green, because the\nlock primitive was tested end-to-end while the one call site a user ever\ntravels through was tested by nobody.\n"""\nimport json\nimport os\nimport sys\n\nHERE = os.path.dirname(os.path.abspath(__file__))\nos.chdir(HERE)\nsys.path.insert(0, HERE)\n\n# Hermetic seed BEFORE the note_organizer import: the module resolves its\n# data directory and runs migrations at import time, and an unseeded dir\n# invites the adoption of the machine\'s real notebook.\nif not os.path.exists("notes_data.json"):\n    with open("notes_data.json", "w", encoding="utf-8") as f:\n        f.write("[]")\ntry:\n    with open("settings.json", "r", encoding="utf-8") as f:\n        _settings = json.load(f)\nexcept Exception:\n    _settings = {}\nif not isinstance(_settings, dict):\n    _settings = {}\n_settings.setdefault("reclaimed_from_appdata", True)\nwith open("settings.json", "w", encoding="utf-8") as f:\n    json.dump(_settings, f)\n\nimport tkinter.messagebox as mb  # noqa: E402\n\nimport note_organizer as NO  # noqa: E402\nfrom noteorganizer.core import paths  # noqa: E402\n\nevents = []\nfolders = {}\n\n\ndef _recording_initialise(app_dir=None, resolved=None):\n    paths.configure(HERE)\n    events.append("init")\n    folders["opened"] = resolved[0] if resolved else None\n\n\nNO.initialise = _recording_initialise\n_real_acquire = NO.single_instance.acquire\n\n\ndef _recording_acquire(path=None):\n    events.append("acquire")\n    folders["locked"] = os.path.dirname(path) if path else None\n    return _real_acquire(path)\n\n\nNO.single_instance.acquire = _recording_acquire\n\n\nclass FakeApp:\n    def __init__(self):\n        events.append("app")\n\n    def protocol(self, *a, **k):\n        pass\n\n    def on_app_close(self):\n        pass\n\n    def mainloop(self):\n        events.append("loop")\n\n\nclass FakeRoot:\n    def withdraw(self):\n        pass\n\n    def destroy(self):\n        pass\n\n\nNO.NoteOrganizer = FakeApp\nNO.tk.Tk = FakeRoot\nmb.showinfo = lambda *a, **k: events.append("refused-dialog")\n\nNO._main()\nprint("EVENTS:" + json.dumps(events))\nprint("FOLDERS:" + json.dumps(folders))\n'
 
 # ---- The guard is WIRED, not merely implemented ----
 # The primitive above is proven end-to-end; this proves _main() actually
@@ -1532,9 +1543,19 @@ with open(_driver_path, "w", encoding="utf-8") as _f:
     _f.write(_MAIN_GUARD_DRIVER)
 
 
+_driver_folders = {}
+
+
 def _run_main_driver():
     out = _sp.run([sys.executable, _driver_path], capture_output=True,
                   text=True, cwd=os.getcwd(), timeout=120)
+    _driver_folders.clear()
+    for line in (out.stdout or "").splitlines():
+        if line.startswith("FOLDERS:"):
+            try:
+                _driver_folders.update(json.loads(line[len("FOLDERS:"):]))
+            except ValueError:
+                pass
     for line in (out.stdout or "").splitlines():
         if line.startswith("EVENTS:"):
             try:
@@ -1578,6 +1599,17 @@ try:
 
     check("...and only then does the startup work happen, in that order",
           _order_ok(_ev_free, "acquire", "init", "app"))
+    # The folder locked and the folder opened are ONE answer. _main used
+    # to resolve the data folder, lock it, and let initialise() resolve
+    # again -- two launches at the same instant made the first answer
+    # "not writable", so a launch locked a fallback folder and then
+    # opened the notebook its twin was holding, unlocked.
+    _locked = _driver_folders.get("locked")
+    _opened = _driver_folders.get("opened")
+    check("initialise opens the very folder _main locked, not a second answer",
+          bool(_locked) and bool(_opened)
+          and os.path.normcase(os.path.abspath(_locked))
+          == os.path.normcase(os.path.abspath(_opened)))
 finally:
     try:
         _si.release()
@@ -1589,6 +1621,391 @@ finally:
             os.remove(_leftover)
         except OSError:
             pass
+
+# ======================================================================
+# The "try to break it" audit of 2026-09-29: nothing moves a user's notes
+# behind their back. Each block names the finding it closes.
+# ======================================================================
+
+# ---- A share code's version field is checked before it is compared ----
+# Compared unchecked, a string/null/list version raised TypeError, which
+# the import box does not catch: an internal error instead of the
+# damaged-code message. The check lives where the decoder is, not at the
+# one caller, so any future caller gets the ValueError it expects.
+from noteorganizer.core import sharing as _sharing_mod
+import base64 as _b64
+import copy as copy_mod
+import zlib as _zlib
+
+
+def _code_with_version(version):
+    raw = json.dumps({"v": version, "notes": [{"title": "x"}]}).encode()
+    return "NOTE1:" + _b64.urlsafe_b64encode(_zlib.compress(raw)).decode()
+
+
+def _decode_answer(code):
+    try:
+        _sharing_mod.decode_share_code(code)
+        return "accepted"
+    except ValueError as exc:
+        return "ValueError: " + str(exc)
+    except Exception as exc:  # the defect under test is a crash
+        return "CRASH: " + type(exc).__name__
+
+
+for _bad in ("2", None, [1], {"major": 1}):
+    check("a share code whose version is %r is refused as damaged, not crashed on"
+          % (_bad,),
+          _decode_answer(_code_with_version(_bad)).startswith("ValueError")
+          and "damaged" in _decode_answer(_code_with_version(_bad)))
+check("an ordinary version still imports, and a newer one is still refused",
+      _decode_answer(_code_with_version(1)) == "accepted"
+      and "newer version" in _decode_answer(_code_with_version(2)))
+
+# ---- One rule for every door a category name comes in by ----
+# Add and Rename accepted any length and any count; the loader then
+# dropped a name over 80 characters and the 201st category, and every
+# note filed under them was in General from the next launch on.
+from noteorganizer.core import categories as _cats2
+_cat_keep = dict(_cats2.CATEGORY_COLORS)
+try:
+    check("an 80-character name is a fine category name",
+          _cats2.category_name_refusal("x" * _cats2.MAX_CATEGORY_NAME) is None)
+    _long_answer = _cats2.category_name_refusal(
+        "x" * (_cats2.MAX_CATEGORY_NAME + 1))
+    check("an 81-character one is refused, and the refusal says why",
+          bool(_long_answer) and str(_cats2.MAX_CATEGORY_NAME) in _long_answer)
+    _cats2.CATEGORY_COLORS.clear()
+    _cats2.CATEGORY_COLORS.update({"General": "#888888"})
+    _cats2.CATEGORY_COLORS.update(
+        {"Cat%03d" % i: "#123456" for i in range(_cats2.MAX_CATEGORIES - 1)})
+    check("the 201st category is refused at the door...",
+          _cats2.category_name_refusal("One too many") is not None)
+    check("...while renaming one of the 200 is not about the count",
+          _cats2.category_name_refusal("Renamed", adding=False) is None)
+finally:
+    _cats2.CATEGORY_COLORS.clear()
+    _cats2.CATEGORY_COLORS.update(_cat_keep)
+
+# ---- The notes are believed: categories come back from them ----
+# Categories live in settings.json and a note stores only the name, so
+# deleting settings.json (a common way to "reset the preferences") or
+# copying only notes_data.json to a new PC used to re-file every note
+# into General at the next launch -- written to disk before any user
+# action, with no word said.
+_cat_keep = dict(_cats2.CATEGORY_COLORS)
+try:
+    _cats2.CATEGORY_COLORS.clear()
+    _cats2.CATEGORY_COLORS.update({"General": "#888888"})
+    _adopted = _cats2.adopt_categories_of([
+        {"category": "Clients 2026"},
+        {"category": "General"},
+        {"category": "Gym", "overrides": {"2026-09-15": {"category": "Travel"}}},
+        {"category": " padded "},                       # normalize would miss it
+        {"category": "y" * (_cats2.MAX_CATEGORY_NAME + 1)},  # the ceiling holds
+        {"category": 7},
+        "not a note",
+    ])
+    check("categories the notes are filed under come back into the map",
+          _adopted == ["Clients 2026", "Gym", "Travel"]
+          and all(n in _cats2.CATEGORY_COLORS for n in _adopted))
+    check("...each with a real colour",
+          all(_sc(_cats2.CATEGORY_COLORS[n]) for n in _adopted))
+    check("...and not a padded or over-long name normalize_note would not match",
+          " padded " not in _cats2.CATEGORY_COLORS
+          and not any(len(n) > _cats2.MAX_CATEGORY_NAME
+                      for n in _cats2.CATEGORY_COLORS))
+finally:
+    _cats2.CATEGORY_COLORS.clear()
+    _cats2.CATEGORY_COLORS.update(_cat_keep)
+
+# The whole route: a notebook whose settings.json has gone.
+_rt_prev_dir = _paths.APP_DIR
+_rt_dir = tempfile.mkdtemp(prefix="nd_adopt_")
+_cat_keep = dict(_cats2.CATEGORY_COLORS)
+try:
+    _paths.configure(_rt_dir)
+    with open(_paths.DATA_FILE, "w", encoding="utf-8") as _f:
+        json.dump([{"id": 1, "uid": "u1", "title": "Invoice",
+                    "category": "Clients 2026"},
+                   {"id": 2, "uid": "u2", "title": "Plain",
+                    "category": "General"}], _f)
+    # No settings.json at all -- exactly what "reset the preferences" is.
+    _cats2.CATEGORY_COLORS.clear()
+    _cats2.CATEGORY_COLORS.update(_cats2.load_categories())
+    _rt_notes, _rt_report = _storage.load_notes(None)
+    check("with settings.json gone, a note keeps the category it was filed under",
+          next((n for n in _rt_notes if n.get("uid") == "u1"), {}).get("category")
+          == "Clients 2026")
+    with open(_paths.DATA_FILE, encoding="utf-8") as _f:
+        _rt_disk = json.load(_f)
+    check("...on disk too, after the startup cleanup rewrote the file",
+          next((n for n in _rt_disk if n.get("uid") == "u1"), {}).get("category")
+          == "Clients 2026")
+    check("...the category is saved back into the settings",
+          "Clients 2026" in (_storage.load_settings().get("categories") or {}))
+    check("...and the load reports it, so the app can say what happened",
+          _rt_report.get("categories_adopted") == ["Clients 2026"])
+finally:
+    _paths.configure(_rt_prev_dir)
+    _cats2.CATEGORY_COLORS.clear()
+    _cats2.CATEGORY_COLORS.update(_cat_keep)
+    shutil.rmtree(_rt_dir, ignore_errors=True)
+
+# ---- Every note's id is its own, on every load ----
+# find_note returns the FIRST match and delete filters by id, so two notes
+# sharing an id (two notebooks merged by hand both number from 1) meant
+# editing one silently overwrote the other, and deleting one took both.
+_dups = [_model_mod.normalize_note(n) for n in (
+    {"id": 1, "title": "Mortgage"}, {"id": 1, "title": "Car service"},
+    {"id": 2, "title": "Holiday"}, {"id": 0, "title": "Zero"},
+    {"id": -4, "title": "Negative"}, {"id": "junk", "title": "Junk"})]
+check("colliding and unusable ids are repaired",
+      _model_mod.repair_note_ids(_dups) is True)
+check("...every note ends up with an id of its own, all positive",
+      len({n["id"] for n in _dups}) == len(_dups)
+      and all(n["id"] > 0 for n in _dups))
+check("...and the first holder of a number keeps it",
+      _dups[0]["title"] == "Mortgage" and _dups[0]["id"] == 1
+      and _dups[2]["id"] == 2)
+check("a list that was already fine is left exactly as it was",
+      _model_mod.repair_note_ids(
+          [_model_mod.normalize_note({"id": i}) for i in (3, 1, 2)]) is False)
+
+_ids_prev_dir = _paths.APP_DIR
+_ids_dir = tempfile.mkdtemp(prefix="nd_ids_")
+try:
+    _paths.configure(_ids_dir)
+    _storage.save_settings({"cleanup_done": True})
+    with open(_paths.DATA_FILE, "w", encoding="utf-8") as _f:
+        json.dump([{"id": 1, "uid": "a1", "title": "Mortgage"},
+                   {"id": 1, "uid": "b1", "title": "Car service"}], _f)
+    _ids_notes, _ = _storage.load_notes(None)
+    with open(_paths.DATA_FILE, encoding="utf-8") as _f:
+        _ids_disk = json.load(_f)
+    check("the load repairs a collision even after the one-time cleanup has run",
+          len({n["id"] for n in _ids_notes}) == 2)
+    check("...and writes the repair down, so the next launch agrees",
+          len({n["id"] for n in _ids_disk}) == 2)
+finally:
+    _paths.configure(_ids_prev_dir)
+    shutil.rmtree(_ids_dir, ignore_errors=True)
+
+# ---- "Restore previous" brings back everything an update replaced ----
+# The update dialog promised each update "can be undone with ↩ Restore
+# previous", while the rescue copy held the text alone: a ticked
+# checklist, a date, a yearly repeat and a colour were gone for good.
+_up_note = _model_mod.normalize_note({
+    "id": 1, "title": "Passport", "body": "renew",
+    "checklist": [{"text": "photo", "done": True},
+                  {"text": "form", "done": True},
+                  {"text": "fee", "done": False}],
+    "date": "2026-10-01", "recurrence": {"freq": "yearly"},
+    "color": "#ff0000"})
+_up_before = {k: copy_mod.deepcopy(_up_note[k])
+              for k in _model_mod.UPDATABLE_FROM_SHARED}
+_model_mod.apply_shared_update(_up_note, {
+    "title": "Passport", "body": "renew (from phone)",
+    "checklist": [{"text": "photo", "done": False}]})
+check("a share-code update snapshots every field it replaces",
+      all((_up_note.get("_prev") or {}).get(k) == _up_before[k]
+          for k in _model_mod.UPDATABLE_FROM_SHARED))
+_up_reloaded = _model_mod.normalize_note(json.loads(json.dumps(_up_note)))
+check("...and the snapshot survives a save and a reload",
+      all((_up_reloaded.get("_prev") or {}).get(k) == _up_before[k]
+          for k in _model_mod.UPDATABLE_FROM_SHARED))
+check("a text-only rescue copy stays text-only across a reload",
+      set(_model_mod.normalize_note(
+          {"id": 1, "_prev": {"title": "t", "body": "b"}}).get("_prev") or {})
+      == set(_model_mod.PREV_TEXT_FIELDS))
+_junk_prev = _model_mod.normalize_note({"id": 1, "_prev": {
+    "title": "t", "body": "b", "color": "#nope!!", "pinned": "yes",
+    "checklist": [{"text": "x"}] * 5000, "exceptions": ["junk", "2026-01-02"]}})
+# .get throughout: a copy that lost these keys must FAIL here, not raise
+# and take the suite down before its footer (the mutant that removes the
+# shaping did exactly that, and read as a run that had not finished).
+_junk_p = _junk_prev.get("_prev") or {}
+check("the extra fields of a rescue copy pass the note's own validators",
+      _junk_p.get("color") == ""
+      and _junk_p.get("pinned") is True
+      and len(_junk_p.get("checklist") or []) == _model_mod.MAX_CHECKLIST_ITEMS
+      and _junk_p.get("exceptions") == ["2026-01-02"])
+
+# A backup is the user's own notebook: its copy owns the timeline and the
+# pin as well, and dropping them was silent.
+_bk_note = _model_mod.normalize_note({
+    "id": 1, "title": "Gym", "date": "2026-09-01",
+    "recurrence": {"freq": "weekly"}})
+_model_mod.apply_shared_update(_bk_note, {
+    "title": "Gym", "date": "2026-09-01", "recurrence": {"freq": "weekly"},
+    "exceptions": ["2026-09-08"], "pinned": True,
+    "overrides": {"2026-09-15": {"body": "moved to Wed"}}},
+    _model_mod.UPDATABLE_FROM_BACKUP)
+check("a backup's update brings its skipped days, per-day edits and pin",
+      _bk_note["exceptions"] == ["2026-09-08"] and _bk_note["pinned"] is True
+      and _bk_note["overrides"].get("2026-09-15", {}).get("body")
+      == "moved to Wed")
+check("...and its rescue copy holds what they replaced",
+      (_bk_note.get("_prev") or {}).get("exceptions") == []
+      and (_bk_note.get("_prev") or {}).get("pinned") is False
+      and (_bk_note.get("_prev") or {}).get("overrides") == {})
+
+# The restore's own list of what it can put back must be exactly what an
+# update can replace beyond the text -- a field added to one without the
+# other is the drift this closes.
+check("Restore previous can name every field an update replaces",
+      {k for k, _ in NO.NoteOrganizer._PREV_EXTRA_LABELS}
+      == set(_model_mod.UPDATABLE_FROM_BACKUP)
+      - set(_model_mod.PREV_TEXT_FIELDS))
+
+# ---- Two launches probing the same folder at once both see it writable ----
+# The probe file had one fixed name, and overlapping probes collided --
+# measured at nearly half answering "not writable". Threads reproduce it
+# on both Windows (sharing violation) and Linux (the other probe already
+# removed the file).
+import threading as _threading
+_wr_dir = tempfile.mkdtemp(prefix="nd_writable_")
+_wr_false = []
+
+
+def _wr_worker():
+    for _ in range(300):
+        if not _paths._is_writable(_wr_dir):
+            _wr_false.append(1)
+
+
+try:
+    _wr_threads = [_threading.Thread(target=_wr_worker) for _ in range(4)]
+    for _t in _wr_threads:
+        _t.start()
+    for _t in _wr_threads:
+        _t.join()
+    check("overlapping writability probes never answer 'not writable'",
+          not _wr_false)
+    check("...and leave no probe files behind",
+          not [f for f in os.listdir(_wr_dir) if f.startswith(".write_test")])
+finally:
+    shutil.rmtree(_wr_dir, ignore_errors=True)
+
+# ---- The stale-copy purge deletes only what it proved it copied ----
+# It compared attachment NAMES at the top level only, then deleted the
+# whole attachments tree: a file in a subfolder (never copied) or a
+# different file sharing a name was destroyed, while the startup message
+# said every attachment had been checked. And in the built app the folder
+# above the app's own is scanned -- Downloads, the Desktop -- where a
+# generic settings.json was adopted, then deleted.
+_pg_real_legacy = _paths.get_legacy_dirs
+_pg_root = tempfile.mkdtemp(prefix="nd_purge_")
+try:
+    _pg_app = os.path.join(_pg_root, "app")
+    _pg_stale = os.path.join(_pg_root, "stale")
+    for _d in (_pg_app, _pg_stale):
+        os.makedirs(os.path.join(_d, "attachments"))
+    _pg_notes = [{"id": 1, "title": "Same", "body": "x"}]
+    for _d in (_pg_app, _pg_stale):
+        with open(os.path.join(_d, "notes_data.json"), "w",
+                  encoding="utf-8") as _f:
+            json.dump(_pg_notes, _f)
+    _paths.get_legacy_dirs = lambda app_dir: [_pg_stale]
+
+    def _pg_write(path, text):
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w", encoding="utf-8") as _f:
+            _f.write(text)
+
+    # 1. A subfolder in the stale attachments: never copied, so the
+    #    folder is not covered and nothing in it may go.
+    _pg_write(os.path.join(_pg_stale, "attachments", "a.txt"), "same")
+    _pg_write(os.path.join(_pg_app, "attachments", "a.txt"), "same")
+    _pg_write(os.path.join(_pg_stale, "attachments", "2024 trip", "beach.jpg"),
+              "only copy")
+    _paths.purge_stale_copies(_pg_app)
+    check("a subfolder's file the migration never copied survives the purge",
+          os.path.isfile(os.path.join(_pg_stale, "attachments", "2024 trip",
+                                      "beach.jpg")))
+    check("...and so does the rest of that folder's notebook",
+          os.path.isfile(os.path.join(_pg_stale, "notes_data.json")))
+
+    # 2. Same name, different bytes: not covered either.
+    shutil.rmtree(os.path.join(_pg_stale, "attachments", "2024 trip"))
+    _pg_write(os.path.join(_pg_stale, "attachments", "a.txt"), "DIFFERENT")
+    _paths.purge_stale_copies(_pg_app)
+    check("a file that merely shares a name with ours is not deleted",
+          os.path.isfile(os.path.join(_pg_stale, "attachments", "a.txt")))
+    check("...and neither is the notebook beside it",
+          os.path.isfile(os.path.join(_pg_stale, "notes_data.json")))
+
+    # 3. Genuinely covered, but beside a settings.json that is not ours.
+    _pg_write(os.path.join(_pg_stale, "attachments", "a.txt"), "same")
+    with open(os.path.join(_pg_stale, "settings.json"), "w",
+              encoding="utf-8") as _f:
+        json.dump({"someOtherApp.fontSize": 14}, _f)
+    _paths.purge_stale_copies(_pg_app)
+    check("a covered folder is still cleaned up, file by file",
+          not os.path.exists(os.path.join(_pg_stale, "notes_data.json"))
+          and not os.path.exists(os.path.join(_pg_stale, "attachments")))
+    check("...but another program's settings.json there is left alone",
+          os.path.isfile(os.path.join(_pg_stale, "settings.json")))
+finally:
+    _paths.get_legacy_dirs = _pg_real_legacy
+    shutil.rmtree(_pg_root, ignore_errors=True)
+
+# Adoption: the same "is this ours" question before a settings.json is
+# copied in as this app's preferences.
+_ad_real_legacy = _paths.get_legacy_dirs
+_ad_real_appdata = _paths.get_appdata_dir
+_ad_root = tempfile.mkdtemp(prefix="nd_adopt_settings_")
+try:
+    _ad_app = os.path.join(_ad_root, "app")
+    _ad_old = os.path.join(_ad_root, "old")
+    os.makedirs(_ad_app)
+    os.makedirs(_ad_old)
+    with open(os.path.join(_ad_old, "notes_data.json"), "w",
+              encoding="utf-8") as _f:
+        json.dump([{"id": 1, "title": "Old note"}], _f)
+    with open(os.path.join(_ad_old, "settings.json"), "w",
+              encoding="utf-8") as _f:
+        json.dump({"someOtherApp.fontSize": 14}, _f)
+    _paths.get_legacy_dirs = lambda app_dir: [_ad_old]
+    _paths.get_appdata_dir = lambda: os.path.join(_ad_root, "no_appdata")
+    _paths.run_migrations(_ad_app)
+    check("an old notebook is still adopted...",
+          os.path.isfile(os.path.join(_ad_app, "notes_data.json")))
+    _ad_settings = os.path.join(_ad_app, "settings.json")
+    _ad_took = False
+    if os.path.isfile(_ad_settings):
+        with open(_ad_settings, encoding="utf-8") as _f:
+            _ad_took = "someOtherApp.fontSize" in json.load(_f)
+    check("...without adopting another program's settings.json beside it",
+          not _ad_took)
+finally:
+    _paths.get_legacy_dirs = _ad_real_legacy
+    _paths.get_appdata_dir = _ad_real_appdata
+    shutil.rmtree(_ad_root, ignore_errors=True)
+
+# ---- The reclaim message says what happened ----
+# "Moved your notebook back", when it was COPIED and the AppData copy
+# stays -- and the entry file added that the two "can never drift apart".
+_rc_real_appdata = _paths.get_appdata_dir
+_rc_root = tempfile.mkdtemp(prefix="nd_reclaim_")
+try:
+    _rc_app = os.path.join(_rc_root, "app")
+    _rc_appdata = os.path.join(_rc_root, "appdata")
+    os.makedirs(_rc_app)
+    os.makedirs(_rc_appdata)
+    with open(os.path.join(_rc_appdata, "notes_data.json"), "w",
+              encoding="utf-8") as _f:
+        json.dump([{"id": 1, "title": "From the exe"}], _f)
+    _paths.get_appdata_dir = lambda: _rc_appdata
+    _rc_msg = _paths.run_migrations(_rc_app) or ""
+    check("the reclaim says it COPIED the notebook, not moved it",
+          _rc_msg.startswith("Copied") and "Moved" not in _rc_msg)
+    check("...and that the installed app keeps its own copy",
+          "will not appear" in _rc_msg
+          and os.path.isfile(os.path.join(_rc_appdata, "notes_data.json")))
+finally:
+    _paths.get_appdata_dir = _rc_real_appdata
+    shutil.rmtree(_rc_root, ignore_errors=True)
 
 print()
 print(f"FAILURES: {fails if fails else 'none'}")

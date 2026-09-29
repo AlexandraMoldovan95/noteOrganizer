@@ -414,9 +414,13 @@ bug being chased.
 - *A second full grid rebuild after a push-down* — a diagnostic-confidence finding about
   `_align_table_on_leaving` re-rendering redundantly (a late echo/flicker); needs a pixel-level
   investigation before any fix is trusted.
-- *Three "same note" definitions* — `clean_notes`, the migration's content signatures and the
-  duplicates panel each judge "same" slightly differently; consolidation is a refactor with its
-  own risks, and the drift is internal (no user-visible wrong answer known).
+- *Three "same note" definitions* — **settled after the 2026-09-29 audit.** Recorded here as
+  internal drift with "no user-visible wrong answer known"; the audit found one — the startup
+  collapse, on the looser signature, merged away a copy of a routine edited on a single day. Every
+  automatic removal (the startup collapse, the stale-copy purge, a restored backup's Trash skip)
+  now asks the one strict `content_signature`. The duplicates panel keeps its deliberately
+  fuzzier `_dup_key`, because there a person looks before anything is removed. See
+  [the story](ISSUES_LOG.md#eleven-decisions-about-your-notes-made-from-half-the-evidence).
 - *Omitted-close-tag HTML* — pasted HTML that legally omits `</li>`/`</p>` still bleeds inline
   styles to the end of the document; every real clipboard serializer closes its tags, which is
   why this stays an edge note rather than a parser rewrite.

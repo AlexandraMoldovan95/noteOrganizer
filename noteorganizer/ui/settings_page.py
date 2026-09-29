@@ -44,7 +44,8 @@ import tkinter.font as tkfont
 from datetime import datetime, timedelta, date as date_cls
 
 from ..core import paths
-from ..core.categories import CATEGORY_COLORS, persist_categories
+from ..core.categories import (CATEGORY_COLORS, category_name_refusal,
+                               persist_categories)
 from ..core.formatting import FONT_FAMILIES, FONT_SIZES
 from ..core.duplicates import find_duplicate_groups
 # The Trash is the one list in the app where deleting cannot be undone,
@@ -553,6 +554,10 @@ class SettingsPageMixin:
             if name in CATEGORY_COLORS:
                 self.show_warning("Already exists",
                                        f"A category named “{name}” already exists.")
+                return
+            refusal = category_name_refusal(name)
+            if refusal:
+                self.show_warning("Can't add that category", refusal)
                 return
             palette = list(DEFAULT_CATEGORY_COLORS.values())
             CATEGORY_COLORS[name] = palette[len(CATEGORY_COLORS) % len(palette)]
@@ -2713,6 +2718,10 @@ class SettingsPageMixin:
                     self.show_warning(
                         "Already exists",
                         f"A category named “{new}” already exists.")
+                    return False
+                refusal = category_name_refusal(new, adding=False)
+                if refusal:
+                    self.show_warning("Can't rename it to that", refusal)
                     return False
                 CATEGORY_COLORS[new] = CATEGORY_COLORS.pop(name)
                 self.rename_category_everywhere(name, new)

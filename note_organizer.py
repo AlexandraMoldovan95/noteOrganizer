@@ -5,6 +5,7 @@
 import tkinter as tk
 from tkinter import ttk, filedialog
 import tkinter.font as tkfont
+import copy
 import json
 import os
 import sys
@@ -114,7 +115,7 @@ FIRST_LAUNCH_DATE = None
 _initialised = False
 
 
-def initialise(app_dir=None):
+def initialise(app_dir=None, resolved=None):
     """Work out where the data lives, bring it up to date, and open it.
 
     Does, in order: resolve the data folder, migrate anything left in an
@@ -131,6 +132,10 @@ def initialise(app_dir=None):
     Args:
         app_dir: Override the data folder. Only for tests; normally the
             folder is derived from this file's location.
+        resolved: A ``(folder, warning)`` pair resolve_data_dir already
+            answered. _main passes the one it took the notebook lock in,
+            so the folder locked and the folder opened are the same by
+            construction rather than by two answers agreeing.
 
     Returns:
         The resolved data folder.
@@ -141,13 +146,16 @@ def initialise(app_dir=None):
     if _initialised:
         return APP_DIR
 
-    # The data folder is resolved relative to THIS file, the entry point.
-    # resolve_data_dir() takes it as an argument rather than deriving it
-    # from its own location: once that code moved into noteorganizer/core/,
-    # its __file__ pointed there instead, and the app silently picked a
-    # data folder two levels below the right one.
-    base = app_dir or os.path.dirname(os.path.abspath(__file__))
-    APP_DIR, STORAGE_WARNING = resolve_data_dir(base)
+    if resolved is not None:
+        APP_DIR, STORAGE_WARNING = resolved
+    else:
+        # The data folder is resolved relative to THIS file, the entry
+        # point. resolve_data_dir() takes it as an argument rather than
+        # deriving it from its own location: once that code moved into
+        # noteorganizer/core/, its __file__ pointed there instead, and the
+        # app silently picked a data folder two levels below the right one.
+        base = app_dir or os.path.dirname(os.path.abspath(__file__))
+        APP_DIR, STORAGE_WARNING = resolve_data_dir(base)
     MIGRATION_INFO = run_migrations(APP_DIR)
     PURGED_DIRS = purge_stale_copies(APP_DIR)
 
@@ -319,6 +327,7 @@ from noteorganizer.core.categories import (
     CATEGORY_COLORS,
     load_categories,
     persist_categories,
+    category_name_refusal,
     MAX_CATEGORIES,
     MAX_CATEGORY_NAME,
 )
@@ -336,6 +345,9 @@ from noteorganizer.core.model import (
     find_by_uid,
     split_by_identity,
     apply_shared_update,
+    UPDATABLE_FROM_SHARED,
+    UPDATABLE_FROM_BACKUP,
+    PREV_TEXT_FIELDS,
     note_richness,
     note_is_empty,
     reading_time,
@@ -536,6 +548,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         CATEGORY_COLORS.update(load_categories())
 
         self._cleanup_report = None  # filled in by load_notes if cleanup ran
+        self._categories_adopted = []  # names load_notes brought back from the notes
         self._version_backup_path = None  # filled in by load_notes on a version upgrade
         self._corrupt_notes_report = None  # (flag, preserved-copy path) if the notes file was unreadable
         self.notes = self.load_notes()
@@ -1246,11 +1259,31 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             lines.append("⚠ " + STORAGE_WARNING)
 
         if MIGRATION_INFO:
+            # Said by the migration itself, per case, and only what is
+            # true. A fixed tail used to follow it here -- "the script and
+            # dist\NoteOrganizer.exe both read this same folder, so they
+            # can never drift apart" -- which was false in source mode
+            # after a reclaim, and developer jargon in the built app.
+            lines.append(MIGRATION_INFO)
+
+        if self._categories_adopted:
+            # The notes were right and settings.json had lost track: say
+            # which categories came back, because their colours are now
+            # the default palette's, and a change nobody explains looks
+            # like the app forgetting things.
+            count = len(self._categories_adopted)
+            shown = self._categories_adopted[:8]
+            listed = "\n".join(f"  • {name}" for name in shown)
+            if count > len(shown):
+                listed += f"\n  • …and {count - len(shown)} more"
             lines.append(
-                MIGRATION_INFO
-                + "\n\nThe script and dist\\NoteOrganizer.exe both read this "
-                  "same folder, so they can never drift apart."
-            )
+                f"{count} categor{'y' if count == 1 else 'ies'} your notes "
+                "are filed under had gone missing from the settings, so "
+                f"{'it was' if count == 1 else 'they were'} added back, "
+                "with default colours:\n"
+                f"{listed}\n\n"
+                "Your notes stayed where you filed them. Settings → "
+                "Categories changes the colours.")
 
         if PURGED_DIRS:
             listed = "\n".join(f"  • {d}" for d in PURGED_DIRS)
@@ -1311,6 +1344,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self._version_backup_path = report["version_backup_path"]
         if report["cleanup_report"]:
             self._cleanup_report = report["cleanup_report"]
+        self._categories_adopted = report.get("categories_adopted") or []
         if report.get("notes_file_corrupt"):
             self._corrupt_notes_report = report.get("corrupt_backup_path")
             # Sentinel distinct from "nothing happened": the file WAS
@@ -7751,8 +7785,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             # and the editor is then brought onto the new version -- or
             # its next save puts the old one back.
             self._flush_autosave()
+            fields = (UPDATABLE_FROM_BACKUP if source == "backup"
+                      else UPDATABLE_FROM_SHARED)
             for mine, theirs in known:
-                apply_shared_update(mine, theirs)
+                apply_shared_update(mine, theirs, fields)
+                if source == "backup":
+                    self._adopt_backup_attachments(mine, theirs)
             self._editor_follows_external_change(
                 {n.get("id") for n, _ in known})
             return True, fresh
@@ -7765,6 +7803,41 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             copy.pop("uid", None)
             stripped.append(copy)
         return True, fresh + stripped
+
+    def _adopt_backup_attachments(self, mine, theirs):
+        """Add the files a backup's copy of a note has and this one lacks.
+
+        Added, never swapped: an attachment this device holds and the
+        backup does not stays where it is, so updating from a backup can
+        only ever bring files in. The backup's files are already in the
+        attachments folder by now -- the import's worker copied them --
+        and a file another note or a Trash entry already owns gets a copy
+        of its own, the same claimed-file discipline the rest of the
+        import follows, so deleting one note can never take another's
+        file with it.
+        """
+        have = {a.get("stored_as") for a in mine.get("attachments") or []
+                if isinstance(a, dict)}
+        incoming = normalize_note(dict(theirs)).get("attachments") or []
+        claimed = {a.get("stored_as")
+                   for n in (self.notes + self.trash)
+                   if isinstance(n, dict) and n is not mine
+                   for a in (n.get("attachments") or [])
+                   if isinstance(a, dict)}
+        for att in incoming:
+            name = att.get("stored_as")
+            if not name or name in have:
+                continue
+            if len(mine.setdefault("attachments", [])) >= MAX_ATTACHMENTS:
+                break
+            att = dict(att)
+            if name in claimed:
+                new_name = copy_attachment_file(name)
+                if not new_name:
+                    continue
+                att["stored_as"] = new_name
+            mine["attachments"].append(att)
+            have.add(att["stored_as"])
 
     def _do_inline_import(self):
         code = self.import_box.get("1.0", "end")
@@ -8712,13 +8785,24 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # with no note to explain them. What is written is decided after
         # the dialog; this list is what gets rolled back if it is not.
         added_names = []
+        refused_categories = 0
         for name, color in list(
                 (state.get("imported_categories") or {}).items())[:MAX_CATEGORIES]:
             color = sanitize_color(color)
-            name = name.strip()[:MAX_CATEGORY_NAME] if isinstance(name, str) else ""
-            if name and color and name not in CATEGORY_COLORS:
-                CATEGORY_COLORS[name] = color
-                added_names.append(name)
+            name = name.strip() if isinstance(name, str) else ""
+            if not (name and color) or name in CATEGORY_COLORS:
+                continue
+            # Skipped whole, never cut short. Cutting a name to the limit
+            # was the very mistake load_categories records: the notes
+            # filed under the full name then match nothing, and go to
+            # General. Past the 200th category the next launch would drop
+            # it anyway, with the same result, so the door refuses what
+            # the loader will not keep -- and the dialog says so.
+            if category_name_refusal(name) is not None:
+                refused_categories += 1
+                continue
+            CATEGORY_COLORS[name] = color
+            added_names.append(name)
         added_categories = len(added_names)
 
         def _undo_category_merge():
@@ -8845,7 +8929,14 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if added_templates:
             save_templates(self.templates)
         added_trash = 0
-        existing_trash_keys = {_dup_key(normalize_note(e))
+        # Skipped with nobody asked, so the question is identity of
+        # content, not resemblance: _dup_key ignores the date, the
+        # attachments and the per-day edits, and a backup's trashed note
+        # differing from a local one in exactly those was dropped -- the
+        # only copy of it gone, on a route that says it adds and never
+        # removes. content_signature is the strict answer every automatic
+        # removal in the app asks.
+        existing_trash_keys = {content_signature(normalize_note(e))
                                for e in self.trash if isinstance(e, dict)}
         for entry in (state.get("imported_trash") or []):
             if not isinstance(entry, dict):
@@ -8858,7 +8949,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             entry = normalize_note(entry)
             entry["deleted_at"] = (raw_deleted
                                    if isinstance(raw_deleted, str) else "")
-            key = _dup_key(entry)
+            key = content_signature(entry)
             if key in existing_trash_keys:
                 # Re-importing your own backup must not double the trash.
                 continue
@@ -8904,6 +8995,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             parts.append(f"{added_trash} trashed note(s)")
         if parts:
             extras_note = " Also restored " + " and ".join(parts) + "."
+        if refused_categories:
+            extras_note += (
+                f"\n\n{refused_categories} of the backup's categories could "
+                f"not be added (a name over {MAX_CATEGORY_NAME} characters, "
+                f"or more than {MAX_CATEGORIES} categories in all), so the "
+                "notes filed under them are in General.")
         self.show_info("Import complete",
                        f"Added {len(to_import)} note(s) from the backup."
                        f"{skipped_note}{extras_note}")
@@ -15261,9 +15358,22 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         elif not has_prev and self.restore_prev_btn.winfo_ismapped():
             self.restore_prev_btn.grid_forget()
 
+    # What "↩ Restore previous" can bring back beyond the text, in the
+    # words its question uses. The keys are exactly the fields an update
+    # replaces beyond PREV_TEXT_FIELDS (core.model); test_data_safety
+    # holds the two lists together, so a field the update learns to
+    # replace cannot be left out of the restore without a red.
+    _PREV_EXTRA_LABELS = (
+        ("checklist", "checklist"), ("date", "date"),
+        ("recurrence", "repeat rule"), ("color", "colour"),
+        ("category", "category"), ("overrides", "per-day edits"),
+        ("exceptions", "skipped days"), ("pinned", "pin"),
+    )
+
     def restore_previous_version(self):
-        """Bring back the previous non-empty version saved before the last
-        drastic shortening (accidental deletion recovery)."""
+        """Bring back the rescue copy: the text a drastic shortening
+        replaced, or everything an update from a share code or backup
+        replaced."""
         note = self.find_note(self.selected_note_id) if self.selected_note_id else None
         if not (note and note.get("_prev")):
             return
@@ -15276,10 +15386,24 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         extra = ("\n\nThis note repeats, and the earlier version is of the "
                  "whole note — not just the day you are looking at."
                  if viewing_occurrence else "")
+        # A drastic shrink's rescue copy is the text alone; an update's
+        # holds everything the update replaced (apply_shared_update), and
+        # the question has to name all of it -- "this note's text" was
+        # true of the one and a promise the other could not keep.
+        also = [label for key, label in self._PREV_EXTRA_LABELS
+                if key in prev]
+        if also:
+            question = (
+                "Bring back this note as it was before it was updated? "
+                "Its text comes back, and so do its "
+                + ", ".join(also[:-1])
+                + (" and " if len(also) > 1 else "") + also[-1]
+                + ". What the note holds now will be replaced.")
+        else:
+            question = ("Bring back the earlier version of this note's text? "
+                        "The current text will be replaced.")
         if not self.ask_yes_no(
-            "Restore previous version",
-            "Bring back the earlier version of this note's text? "
-            "The current text will be replaced." + extra,
+            "Restore previous version", question + extra,
             icon="warning", default="no"
         ):
             return
@@ -15327,6 +15451,15 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         note["formatting"] = normalize_formatting(prev.get("formatting", []))
         note["paragraphs"] = normalize_paragraphs(
             prev.get("paragraphs", []), len(note["body"].split("\n")))
+        # ...and whatever else the update replaced. Already shaped when it
+        # was loaded or snapshotted; the one thing that can have changed
+        # since is the category map, so a category deleted in between
+        # comes back as General, the way normalize_note would file it.
+        for key, _label in self._PREV_EXTRA_LABELS:
+            if key in prev:
+                note[key] = copy.deepcopy(prev[key])
+        if note.get("category") not in CATEGORY_COLORS:
+            note["category"] = "General"
         note.pop("_prev", None)
         # Seconds included, matching what save_current_note stamps: the
         # minute-resolution version sorted a just-restored note BELOW
@@ -16217,8 +16350,16 @@ def _main():
         # one-shot pre-upgrade backup the FIRST instance may still need.
         # Only the data folder has to be resolved first, and resolving is
         # pure: it picks a path and proves it writable, nothing more.
-        _data_dir, _ = resolve_data_dir(
+        #
+        # Resolved ONCE, and that answer is the one initialise() opens.
+        # It used to ask again, and the two answers could differ: two
+        # launches probing AppData at the same instant made one of them
+        # read it as unwritable, so that launch locked a fallback folder
+        # -- then its second answer came back AppData, and it opened the
+        # notebook its twin was holding, unlocked and with no warning.
+        _resolved = resolve_data_dir(
             os.path.dirname(os.path.abspath(__file__)))
+        _data_dir = _resolved[0]
         if not single_instance.acquire(
                 os.path.join(_data_dir, single_instance.LOCK_FILENAME)):
             import tkinter.messagebox as _mb
@@ -16234,7 +16375,7 @@ def _main():
                 "the taskbar.")
             root.destroy()
             return
-        initialise()
+        initialise(resolved=_resolved)
         app = NoteOrganizer()
         app.protocol("WM_DELETE_WINDOW", app.on_app_close)
         app.mainloop()

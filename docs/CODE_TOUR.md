@@ -766,23 +766,31 @@ the backup fails, it **aborts**. Losing a migration is recoverable; losing
 the notes isn't. When a step can't be made safe, not doing it is the
 correct outcome.
 
-`purge_stale_copies()` is the one that deletes, and two rules hold it in
+`purge_stale_copies()` is the one that deletes, and three rules hold it in
 check:
 
 1. It only removes files it recognises as its own (`OWNED_FILENAMES`,
-   `OWNED_PREFIXES`) — never something you happened to put there.
+   `OWNED_PREFIXES`) — never something you happened to put there. A
+   `settings.json` also has to carry keys only this app writes, because in
+   the built app one of the folders it looks at is wherever the zip was
+   unpacked.
 2. The `%APPDATA%` folder is **permanently exempt**, no matter how
    redundant it looks.
+3. It deletes **file by file, only what it proved it had** — never a whole
+   folder in one go.
 
-That second rule exists because it was once missing, and a real notebook
+The second rule exists because it was once missing, and a real notebook
 was deleted. `docs/ISSUES_LOG.md` has the full story under "The cleanup
 that deleted the real notebook". The exemption is not tidy-up-later code.
+The third is newer: the purge used to compare attachments by name, at the
+top level only, and then remove the whole attachments tree, so a file in a
+subfolder was destroyed without ever having been copied.
 
 `is_redundant_copy()` is the judgement behind it: a folder counts as
-redundant only if every note in it is already present locally *and* its
-attachments are covered. Content is compared by **signature**, not by
-counting files — "10 notes here, 10 notes there" must never be mistaken
-for "the same 10 notes".
+redundant only if every note in it is already present locally *and* every
+attachment in it exists locally byte for byte, with nothing else beside
+them. Content is compared by **signature**, not by counting files — "10
+notes here, 10 notes there" must never be mistaken for "the same 10 notes".
 
 ### Two bugs this extraction caused — both worth learning from
 

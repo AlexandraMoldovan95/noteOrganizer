@@ -28,6 +28,25 @@ d3 = NO.expand_occurrences(n3, date(2026,1,1), date(2026,6,30))
 check('monthly day-31 clamp includes Feb 28', '2026-02-28' in d3)
 check('monthly day-31 clamp includes Apr 30', '2026-04-30' in d3)
 
+# "The end of the month", typed the way people type it: days 28-31, with
+# the default clamp policy. 29, 30 and 31 all land on Feb 28, and each
+# landing used to count as its own occurrence -- the note sat in one
+# calendar cell four times, and a "stop after N times" series spent four
+# of its N on a single day.
+_eom = {'id': 30, 'date': '2026-01-01',
+        'recurrence': {'freq': 'monthly', 'month_days': [28, 29, 30, 31]}}
+_eom_feb = NO.expand_occurrences(_eom, date(2026, 2, 1), date(2026, 2, 28))
+check('month-end days that clamp onto one date occur on it ONCE',
+      _eom_feb == ['2026-02-28'])
+_eom_apr = NO.expand_occurrences(_eom, date(2026, 4, 1), date(2026, 4, 30))
+check('...in a 30-day month too (30 and 31 are one day)',
+      _eom_apr == ['2026-04-28', '2026-04-29', '2026-04-30'])
+_eom8 = dict(_eom, recurrence=dict(_eom['recurrence'], count=8))
+_eom8_all = NO.expand_occurrences(_eom8, date(2026, 1, 1), date(2026, 12, 31))
+check('"8 times" means 8 different days, not 8 landings',
+      len(_eom8_all) == 8 and len(set(_eom8_all)) == 8
+      and _eom8_all[-1] == '2026-03-30')
+
 # Monthly with skip
 n4 = {'id':4,'date':'2026-01-31','recurrence':{'freq':'monthly','month_days':[31],'month_day_policy':'skip'}}
 d4 = NO.expand_occurrences(n4, date(2026,1,1), date(2026,6,30))

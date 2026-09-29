@@ -367,9 +367,18 @@ def expand_occurrences(note, range_start, range_end):
             year, month = _shift_month(anchor.year, anchor.month, step_index * interval)
             if date_cls(year, month, 1) > horizon:
                 break
-            for wanted in month_days:
-                candidate = _day_in_month(year, month, wanted, policy)
-                if candidate is None or candidate > horizon:
+            # Resolved first, THEN counted: under "clamp", days 29, 30 and
+            # 31 all land on Feb 28 -- which is exactly what someone who
+            # means "the end of the month" types. Taken one by one, each
+            # landing was a separate occurrence: the note showed up four
+            # times in one calendar cell, and a "stop after N times" series
+            # spent four of its N on a single day and ended months early.
+            landed = sorted({
+                d for d in (_day_in_month(year, month, wanted, policy)
+                            for wanted in month_days)
+                if d is not None})
+            for candidate in landed:
+                if candidate > horizon:
                     continue
                 if not take(candidate):
                     stop = True
