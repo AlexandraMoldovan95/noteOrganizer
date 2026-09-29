@@ -46,7 +46,7 @@ except ImportError:
 # Added/Fixed CHANGELOG.md entries, not per-release counts). The running
 # app records this into settings, so the next time a newer build opens
 # over older data it can tell the user what changed version-wise.
-APP_VERSION = "0.81.202"
+APP_VERSION = "0.81.213"
 
 
 def parse_version(v):

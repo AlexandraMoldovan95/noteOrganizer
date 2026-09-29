@@ -12,6 +12,7 @@ How the numbers themselves are counted is the
 
 | Version | Date | In one line |
 |---|---|---|
+| [0.81.213](#081213--2026-09-29) | 2026-09-29 | Nothing moves or removes your notes behind your back: categories survive a lost settings file, an update can be taken back whole, and nothing is deleted on a resemblance. |
 | [0.81.202](#081202--2026-09-29) | 2026-09-29 | Two places where the app left something out: a note's card cut off the end of what it says, and the keyboard shortcuts page was missing a whole group of keys. |
 | [0.81.200](#081200--2026-09-29) | 2026-09-29 | The note list stops pulling the keyboard away from what you were typing in. |
 | [0.81.199](#081199--2026-09-29) | 2026-09-29 | A note's actions are reachable from where the note is — on the calendar, and from the keyboard. |
@@ -81,7 +82,7 @@ How the numbers themselves are counted is the
 
 ---
 
-## [Unreleased]
+## [0.81.213] — 2026-09-29
 
 *Highlights: nothing moves or removes your notes behind your back — found by trying to break
 the app on purpose, and every one of them a place where it decided something about your work
