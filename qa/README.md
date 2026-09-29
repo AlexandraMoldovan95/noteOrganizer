@@ -179,10 +179,14 @@ A new surface joins this list the moment it ships.
   comments · attachments · emoji picker · find-in-note · word count &
   reading time · Expand toggles · caret/scroll & view restore
 - **Organization:** sidebar search · sort modes · categories · grouping ·
-  pinning · multi-select & bulk bar · note list rendering & scroll guards
-- **Time:** date field · recurrence · calendar (view, day colours,
-  preview) · calendar History register (search incl. override content,
-  year chips, collapsible series groups, pagination)
+  pinning · multi-select & bulk bar · note list rendering & scroll guards ·
+  the note list's keyboard route (focus ring, ↑/↓ walk, Enter, menu key,
+  focus restored across a rebuild) · remembered sort & filter
+- **Time:** date field · recurrence · calendar (view, day colours, day
+  markers with their cap, preview) · a day cell's note chips as notes
+  (click opens, right-click gives the note's menu, hover previews one) ·
+  calendar History register (search incl. override content, year chips,
+  collapsible series groups, pagination)
 - **In/out:** clipboard in (rich, plain, TSV) · clipboard out (HTML,
   TSV) · share codes · single-note export (HTML, TXT) · backup `.zip`
   export/import · background threading

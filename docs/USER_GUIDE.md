@@ -339,6 +339,13 @@ An **✕** appears inside the search box once you have typed something; it empti
 the whole list straight back. Right-clicking the box offers Cut / Copy / Paste, like every other
 text field in the app.
 
+Two dropdowns sit under the box, each with its own caption so you can tell at a glance which is
+which. **Sort** offers seven orders — Recently updated, Oldest updated, Title A–Z, Title Z–A,
+Category, Calendar: soonest, Calendar: oldest. **Show** narrows the list instead of reordering it:
+all your categories, plus **🔁 Repeating** and **📅 Dated** for the notes that live on the
+calendar. Both are remembered, so the list you left is the list you come back to; if the category
+a filter names is later deleted, the filter falls back to **All** rather than showing you nothing.
+
 To search *within* the note you already have open, press **Ctrl+F**. A small find bar appears in
 the top-right corner of the editor — inside the window, not a separate dialog. It looks through
 the note's text and its tables: type a word and every match highlights, with the current one
@@ -351,6 +358,15 @@ Each note's card previews its first words. A table would be pipe soup at that si
 shows only the note's plain text and the card's tag row marks the table itself — **▦ 1 table**, or
 how many the note holds — next to the comment and attachment marks.
 
+The list can be worked without a mouse. **Tab** into it and the card you land on gets a visible
+ring; **↑** and **↓** walk from card to card in the order they are actually shown — sorted,
+filtered, searched or grouped as you left them, not the order they sit in the file. **Enter** (or
+**Space**) opens the note, and **Shift+F10** — or the menu key, if your keyboard has one — opens
+that note's own right-click menu where the note is, so pinning, duplicating, exporting and
+deleting are all reachable without leaving the keyboard. If the list rebuilds underneath you,
+because a save landed or a search keystroke filtered it, the ring comes back to the card you were
+on.
+
 ![Search and sort](screenshots/search-and-sort.png)
 
 **Group by category** (checkbox above the note list) clusters the list under collapsible category
@@ -361,14 +377,29 @@ remembered.
 
 ### Organizing
 
-- **Pin** a note (right-click → Pin) to keep it at the top of the list regardless of sort order.
+- **Pin** a note (right-click → Pin to top) to keep it at the top of the list regardless of sort
+  order.
 - **Duplicate** a note to create an editable copy, titled "(copy)". The copy owns its own
   copies of any attached files, so the two notes can be edited — or deleted — independently.
+- **Move a note to another category** from its own right-click menu (**🗂 Move to category**),
+  without opening it — the same list of categories the editor offers.
 - **Categories** act as folders — create, rename, recolour, or delete them from Settings →
   Categories. Deleting a category with notes in it asks where to move them first; nothing is ever
   silently lost.
 
 ![Categories panel](screenshots/categories-panel.png)
+
+#### Several notes at once
+
+Turn on **☑ Select** above the list and every card grows a tick box. **Select all** ticks exactly
+what the list is showing — never a note the current search or filter is hiding — and its label
+flips to **Unselect all** once everything on screen is ticked.
+
+The bar below then acts on what you ticked: **🗑 Trash**, **🗂 Category ▾**, **Export ▾**, and
+**📌 Pin** — which reads **📌 Unpin** when everything you ticked is already pinned, so one button
+covers both directions. Moving a batch to another category asks first and offers a way back, each
+note to the category it actually came from; trashing a batch is undoable from the banner, and the
+notes sit in the Trash besides.
 
 ### Templates
 
@@ -403,6 +434,15 @@ selector at the top of the same panel offers 7 to 90 days, and a change applies 
 startup's cleanup. Restore individual notes, delete them permanently one at a time, or empty the
 whole trash at once. With a lot of deleted notes, the list loads the most recent batch first, with
 a button to reveal more — so it stays quick to open no matter how much has accumulated there.
+
+Each row also carries a tick box, so getting a batch back is one gesture rather than forty: tick
+what you want and an **↩ Restore N selected** button appears at the foot of the panel, just above
+**Empty trash**, counting what you ticked. It is only there while something is ticked — and it is
+deliberately the quieter of the two, because the sweeping button beside it is the irreversible one.
+
+Two deleted notes with the same title used to be impossible to tell apart, which made restoring
+both the only safe choice. Hovering a row now floats a small preview of that note's contents
+beside it — it appears on hover and goes when you move away, nothing to click and nothing to close.
 
 ![Trash panel](screenshots/trash-panel.png)
 
@@ -459,7 +499,12 @@ chronological order by each note's own date.
 The Calendar tab shows every note (including every occurrence of every recurring note) on the day
 it falls on. Navigate month-to-month, jump directly to a specific month/year, or return to today.
 Multiple notes on one day show up to two title previews plus a "+N more" indicator; hovering a day
-gives a quick summary.
+gives a quick summary of everything on it, while hovering one title shows just that note.
+
+Those titles are the notes themselves, and behave like them: **click** a title to land on that
+note's preview, and **right-click** it for that note's own menu — open, pin, duplicate, export,
+delete. Right-clicking anywhere else in the cell, or on the day number, still gives the menu for
+the *day* (colour, markers, add a note here), so the two are never confused.
 
 Clicking a note in the day panel opens a **quick-look preview** — the note's plain text, plus a
 line of small flags saying what else it carries (▦ a table, ☑ a checklist, 💬 comments). Like the
@@ -496,8 +541,16 @@ and you land back on that exact day's preview; right-click gives the usual day m
 "Reset this day". Handy when you know a meeting happened *sometime* and only remember a word of
 what was discussed.
 
-You can also paint a specific calendar day a custom colour (right-click it), independent of any
-note's own colour — useful for marking something about the day itself, like a holiday or deadline.
+You can also mark the day itself, independent of any note on it — right-click a day for both:
+
+- **🎨 Color this day…** paints it a custom colour, useful for a holiday, a deadline, or a week
+  you want to see at a glance.
+- **🏷 Mark this day…** puts emoji on it — a birthday, a trip, a payday. **Up to three**, and the
+  picker says so: once you have three, the ones you have not picked go flat and a line reads
+  "Three is the most a day can show — unpick one to choose another", rather than the fourth click
+  simply doing nothing. The day's cell shows them as a small badge in the corner.
+
+Both can be cleared from the same menu, and both clears offer an **Undo** in the banner.
 
 ![Calendar day colouring](screenshots/calendar-day-color.png)
 
@@ -509,8 +562,14 @@ note's own colour — useful for marking something about the day itself, like a 
 
 Open a note → Generate code. This generates a compact block of text representing that note's
 content, checklist included (attachments stay home — the full backup is what carries files) — paste it to someone
-else, and they can import it with **Import code** in the sidebar. You can also select several notes at once and generate one code covering
-all of them. Either way the code area carries an **✕** to put it away once you have copied it.
+else, and they can import it with **Import code** in the sidebar. Either way the code area carries
+an **✕** to put it away once you have copied it.
+
+To put several notes in one code, use **🔗 Share notes** in the sidebar: a tick box per note, with
+**Select all** above the list. It ticks the notes the panel is actually *showing* — with a long
+notebook the list arrives a hundred at a time, and a button that silently ticked notes you had
+never seen would be the opposite of the control you asked for. Reveal more and press it again; its
+label reads **Unselect all** once everything on screen is ticked.
 
 ![Share panel](screenshots/share-panel.png)
 
@@ -630,8 +689,9 @@ category — click one to jump straight to your notes filtered to that category.
 
 Three shortcuts work from anywhere in the app: **Ctrl+N** starts a new note, **Ctrl+S** saves the
 note you're editing, and **Ctrl+F** opens the find bar for searching within the current note (see
-*Finding notes*, above). They, and every other bound combo, are listed under Settings → Keyboard
-shortcuts.
+*Finding notes*, above). Settings → Keyboard shortcuts carries this reference inside the app,
+grouped by where each combo works. The table below is the longer of the two — it also covers the
+keys that only mean something inside a list, in the find bar, or on the note list.
 
 | Shortcut | Where | What it does |
 | --- | --- | --- |
@@ -641,6 +701,8 @@ shortcuts.
 | **Ctrl+B** / **Ctrl+I** / **Ctrl+U** / **Ctrl+D** | editor | Bold / Italic / Underline / Strikethrough. |
 | **Ctrl+V** | editor | Pastes — the bold, the colours and the lists come with it. |
 | **Ctrl+Shift+V** | editor | Pastes the words on their own, with none of the styling. |
+| **Ctrl+Z** | editor | Undoes, in the note body and in comments. |
+| **Ctrl+Y** / **Ctrl+Shift+Z** | editor | Redoes. |
 | **Enter** | in a list | Starts the next item; on an item you haven't typed anything into, the list ends there. |
 | **Backspace** | in a list | With the cursor just after a marker, removes the marker. |
 | **Tab** / **Shift+Tab** | in a list | Pushes an item one level in / pulls it back out. |
@@ -653,6 +715,12 @@ shortcuts.
 | **Ctrl+Z** | in a table | Takes back one whole operation. |
 | **Enter** / **Shift+Enter** | find bar | Step forward and back through matches. |
 | **Esc** | find bar | Closes the bar. |
+| **↑** / **↓** | note list | Walks from card to card, in the order the list is showing them. |
+| **Enter** / **Space** | note list | Opens the note — or ticks it, while ☑ Select is on. |
+| **Shift+F10** or the menu key | note list | Opens that note's own right-click menu, at the note. |
+| **Page Up** / **Page Down** | Calendar tab | Previous / next month. |
+| **Ctrl+Page Up** / **Ctrl+Page Down** | Calendar tab | Previous / next year. |
+| **Home** | Calendar tab | Jumps back to today. |
 
 ### Appearance
 

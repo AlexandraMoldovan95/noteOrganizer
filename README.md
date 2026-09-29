@@ -32,7 +32,7 @@ anywhere else.
 - Autosave on pause, on note switch and on close — quitting never asks about "unsaved notes"
 - Rich text (bold, italic, underline, strikethrough, colour, highlight, font size & family) plus nested bullet/numbered lists, indentation and alignment
 - Paste from a browser, a word processor or a PDF and keep the formatting (**Ctrl+Shift+V** for plain text); a PDF's broken line endings are rejoined into the paragraphs they came from
-- Full-text search across the notebook with six sort modes — plus **Ctrl+F** to find within the open note, text and tables alike
+- Full-text search across the notebook with seven sort modes — plus **Ctrl+F** to find within the open note, text and tables alike
 - A collapsible in-note calculator, and a reading-time estimate beside the word count
 
 *Full walkthrough: [User Guide → Notes](docs/USER_GUIDE.md#notes)*
@@ -50,7 +50,8 @@ anywhere else.
 
 - Daily / weekly / monthly / yearly repeats with custom intervals — specific weekdays, or month-days with a *clamp/skip* choice for "the 31st"
 - End after N occurrences, by a date, or never; edit or delete "just this one" vs "this and all future"
-- A full calendar view with month navigation, jump-to-date and per-day colouring — plus a searchable **History** register of every dated note and each series' edited days
+- A full calendar view with month navigation, jump-to-date, per-day colouring and up to three emoji markers a day — plus a searchable **History** register of every dated note and each series' edited days
+- A day's own notes are reachable from the month grid: click a title to open that note, right-click it for that note's menu
 
 *Full walkthrough: [User Guide → Recurring notes](docs/USER_GUIDE.md#recurring-notes)*
 
@@ -58,6 +59,7 @@ anywhere else.
 
 - Custom colour-coded categories, safely renameable and deletable (affected notes are reassigned, never lost)
 - Group the note list by category with per-group collapse; reusable note templates with a live preview
+- Tick several notes and pin, recategorise, share, export or delete them in one go — the sort mode and the filter you left the list on are still there next time you open the app
 - Duplicate detection with per-group or one-click cleanup
 
 *Full walkthrough: [User Guide → Finding notes](docs/USER_GUIDE.md#finding-notes-search-sort-and-grouping)*
@@ -76,6 +78,7 @@ anywhere else.
 - A fully custom themed UI — every message, confirmation, dropdown and picker is drawn by the app; the system's dialog appears only where it belongs, choosing a file or folder. 8 themes with a one-press ☀/🌙 flip in the editor
 - Single-editor design, like a browser with one tab: switching notes always autosaves the previous one first
 - App-wide shortcuts — **Ctrl+N** new note, **Ctrl+S** save, **Ctrl+F** find in note — with every bound combo listed under Settings → Keyboard shortcuts
+- The note list works without a mouse: **Tab** into it, **↑/↓** to walk it, **Enter** to open, **Shift+F10** for a note's own menu — so pinning, duplicating, exporting and deleting are reachable from the keyboard too
 
 *Full walkthrough: [User Guide → Settings](docs/USER_GUIDE.md#settings)*
 
