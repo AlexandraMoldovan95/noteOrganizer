@@ -298,7 +298,8 @@ def chapter_1():
                 _open_note_by_clicking(app, "Bread recipe"))
 
     generate = _button(app, "Generate code")
-    story.check("butonul 'Generate code' e acolo, in editor", generate is not None)
+    story.check("the 'Generate code' button is there, in the editor",
+                generate is not None)
     if generate is not None:
         generate.invoke()
         app.update()
@@ -332,7 +333,8 @@ def chapter_2():
     app.update()
 
     imported = _button(app, "Import code")
-    story.check("butonul 'Import code' e in bara laterala", imported is not None)
+    story.check("the 'Import code' button is in the sidebar",
+                imported is not None)
     if imported is not None:
         imported.invoke()
         app.update()
@@ -356,7 +358,7 @@ def chapter_2():
     app.wait_variable = answer_the_dialog
 
     go = _button(app, "Import", exact=True)
-    story.check("butonul 'Import' e in panou", go is not None)
+    story.check("the 'Import' button is in the panel", go is not None)
     if go is not None:
         go.invoke()
         app.update()
@@ -365,15 +367,15 @@ def chapter_2():
     asked_about_the_note = any("Same note" in t for t in titles)
     story.check("it asks me about MY NOTE, not about a duplicate",
                 asked_about_the_note,
-                "pe ecran scria: %s" % [t[:45] for t in titles if t][:3])
+                "what the screen said: %s" % [t[:45] for t in titles if t][:3])
     story.check("and the answer I want is there to press",
                 seen["answered"] == "Update this note",
-                "am putut apasa doar: %r" % seen["answered"])
+                "the only answer I could press: %r" % seen["answered"])
 
     notes = json.load(io.open("notes_data.json", encoding="utf-8"))
     story.check("no second copy of the note appeared",
                 len([n for n in notes if "Bread" in (n.get("title") or "")]) == 1,
-                "titluri: %s" % [n.get("title") for n in notes])
+                "titles: %s" % [n.get("title") for n in notes])
     mine = next((n for n in notes if "Bread" in (n.get("title") or "")), {})
     story.check("the note shows the version the code brought",
                 "changed after I closed" not in (mine.get("body") or ""),
@@ -409,7 +411,7 @@ def chapter_3():
     _photograph("4-after-moving-to-another-note")
     story.check("the code is NOT still on screen at the next note",
                 not app.editor_code_area.winfo_ismapped(),
-                "a ramas codul notitei dinainte")
+                "the previous note's code is still on screen")
     story.save()
 
 
@@ -419,7 +421,7 @@ def chapter_4():
     story = Chapter()
 
     settings = _button(app, "Settings")
-    story.check("butonul 'Settings' e in bara laterala", settings is not None)
+    story.check("the 'Settings' button is in the sidebar", settings is not None)
     if settings is not None:
         settings.invoke()
         app.update()
@@ -450,7 +452,7 @@ def chapter_4():
     shown = labels(app.settings_trash_panel, [])
     story.check("the deleted note is in the trash when I get there",
                 any("Shopping" in t for t in shown),
-                "in cos scrie: %s" % [t[:30] for t in shown if t][:4])
+                "the trash says: %s" % [t[:30] for t in shown if t][:4])
     story.save()
 
 

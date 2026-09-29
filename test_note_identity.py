@@ -151,7 +151,7 @@ check('find_by_uid finds the note with that identity',
       find_by_uid(_notes, _b["uid"]) is _b)
 
 check('find_by_uid returns None for an identity nobody has',
-      find_by_uid(_notes, "nimeni") is None)
+      find_by_uid(_notes, "nobody") is None)
 
 for _empty, _what in [("", "an empty string"), ("   ", "whitespace"),
                       (None, "None"), (7, "a number")]:
@@ -186,19 +186,19 @@ check('...while its content no longer matches',
 # ---- updating a note from an incoming copy ----
 
 _mine = normalize_note({
-    "id": 9, "title": "Vechi", "body": "corp vechi", "category": "Work",
-    "comments": "nota mea", "created": "2020-01-01 00:00:00",
+    "id": 9, "title": "Old", "body": "the old body", "category": "Work",
+    "comments": "my own note", "created": "2020-01-01 00:00:00",
     "attachments": [{"filename": "p.png", "stored_as": "a1.png"}],
 })
 _mine_uid, _mine_id = _mine["uid"], _mine["id"]
-_incoming = {"uid": _mine_uid, "title": "Nou", "body": "corp nou",
+_incoming = {"uid": _mine_uid, "title": "New", "body": "the new body",
              "category": "Personal"}
 apply_shared_update(_mine, _incoming)
 
 check('an update takes the incoming title',
-      _mine["title"] == "Nou")
+      _mine["title"] == "New")
 check('an update takes the incoming body',
-      _mine["body"] == "corp nou")
+      _mine["body"] == "the new body")
 check('an update keeps the note IN PLACE: the id does not move',
       _mine["id"] == _mine_id)
 check('an update keeps the identity',
@@ -213,19 +213,19 @@ check('an update leaves the attachments alone — a code never carried them',
 check('an update leaves a rescue copy behind',
       isinstance(_mine.get("_prev"), dict))
 check('...holding the title it replaced',
-      _mine["_prev"]["title"] == "Vechi")
+      _mine["_prev"]["title"] == "Old")
 check('...and the body it replaced',
-      _mine["_prev"]["body"] == "corp vechi")
+      _mine["_prev"]["body"] == "the old body")
 check('...and the comments, which Restore previous also puts back',
-      _mine["_prev"]["comments"] == "nota mea")
+      _mine["_prev"]["comments"] == "my own note")
 
 check('the rescue copy survives the gate, so the button is not a lie',
-      normalize_note(dict(_mine)).get("_prev", {}).get("body") == "corp vechi")
+      normalize_note(dict(_mine)).get("_prev", {}).get("body") == "the old body")
 
 # An incoming copy is untrusted like any other: it goes through the gate
 # before a single field is taken out of it.
 _hostile = {"uid": _mine["uid"], "title": ["nu e text"], "body": None,
-            "checklist": "nici asta", "category": "Categorie inexistenta"}
+            "checklist": "not this either", "category": "No such category"}
 apply_shared_update(_mine, _hostile)
 check('an update coerces a wrong type instead of storing it',
       _mine["title"] == "" and _mine["body"] == "")
@@ -241,12 +241,12 @@ check('an update files an unknown category under General',
 # judgement is how this project's search rules drifted apart once.
 
 _have1 = normalize_note({"id": 1, "title": "Am"})
-_have2 = normalize_note({"id": 2, "title": "Am si asta"})
+_have2 = normalize_note({"id": 2, "title": "I have this one too"})
 _mine_all = [_have1, _have2]
 
 _batch = [
-    {"uid": _have2["uid"], "title": "Am si asta, editata"},
-    {"uid": "necunoscut", "title": "Noua"},
+    {"uid": _have2["uid"], "title": "I have this one too, edited"},
+    {"uid": "unknown-to-us", "title": "Brand new"},
     {"title": "No identity at all"},
 ]
 _known, _fresh = split_by_identity(_mine_all, _batch)
@@ -254,9 +254,9 @@ _known, _fresh = split_by_identity(_mine_all, _batch)
 check('split_by_identity pairs an incoming note with the one it IS',
       len(_known) == 1 and _known[0][0] is _have2)
 check('...and hands back the incoming copy beside it',
-      _known[0][1]["title"] == "Am si asta, editata")
+      _known[0][1]["title"] == "I have this one too, edited")
 check('split_by_identity treats an unknown identity as new',
-      any(n.get("uid") == "necunoscut" for n in _fresh))
+      any(n.get("uid") == "unknown-to-us" for n in _fresh))
 check('split_by_identity treats a note with NO identity as new',
       any(n.get("title") == "No identity at all" for n in _fresh))
 check('split_by_identity accounts for every note in the batch',
@@ -307,7 +307,7 @@ _work = tempfile.mkdtemp(prefix="identity-load-")
 try:
     _paths.configure(_work)
 
-    _seed(_work, [{"id": 1, "title": "Prima"}, {"id": 2, "title": "A doua"}])
+    _seed(_work, [{"id": 1, "title": "First"}, {"id": 2, "title": "Second"}])
     _first, _ = _storage.load_notes(False)
     _second, _ = _storage.load_notes(False)
 
@@ -319,13 +319,13 @@ try:
     check('...and they are the ones the app is working with',
           [n["uid"] for n in _on_disk] == [n["uid"] for n in _first])
     check('nothing else about the notes is disturbed by that write',
-          [n["title"] for n in _on_disk] == ["Prima", "A doua"])
+          [n["title"] for n in _on_disk] == ["First", "Second"])
 
     # A notebook that needs nothing must not be rewritten. Seeded with an
     # indent the app never writes, so an untouched file is recognisable
     # without leaning on a timestamp.
-    _settled = [{"id": 1, "title": "Prima", "uid": "aaa"},
-                {"id": 2, "title": "A doua", "uid": "bbb"}]
+    _settled = [{"id": 1, "title": "First", "uid": "aaa"},
+                {"id": 2, "title": "Second", "uid": "bbb"}]
     _seed(_work, _settled, indent=4)
     _before = _bytes_of(_work)
     _storage.load_notes(False)
@@ -350,7 +350,7 @@ try:
     # own number may have been reused while it was gone. The identity has
     # the same problem by a different route: a copy of the note can arrive
     # from a share code while the original sits in the trash.
-    _seed(_work, [{"id": 1, "title": "Ramasa", "uid": "aaa"}])
+    _seed(_work, [{"id": 1, "title": "Left behind", "uid": "aaa"}])
     _live, _ = _storage.load_notes(False)
     _deleted = {"id": 9, "title": "Deleted", "uid": "bbb",
                 "deleted_at": "2026-01-01 00:00:00"}

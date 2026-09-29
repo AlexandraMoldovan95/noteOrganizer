@@ -203,13 +203,13 @@ check("the clipboard-flavoured markup carries its borders inline",
 
 # --- counting and searching see the writing, not the plumbing ------------
 _ct = tables.content_text("\n".join([
-    "doua vorbe",
+    "two words",
     "| Milk | 2 |",
     "| --- | ~ |",
-    "| [x] | note<br>aici |",
+    "| [x] | note<br>here |",
 ]))
 check("content_text keeps prose and cell words only",
-      "doua vorbe" in _ct and "Milk" in _ct and "note aici" in _ct)
+      "two words" in _ct and "Milk" in _ct and "note here" in _ct)
 check("content_text drops pipes, dashes, markers and checkboxes",
       "|" not in _ct and "---" not in _ct and "[x]" not in _ct
       and "<br>" not in _ct)

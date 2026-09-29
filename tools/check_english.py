@@ -56,6 +56,41 @@ WORDS = [
     # lines of test data nobody had looked at since writing them.
     "reteta", "cumparat", "lapte", "paine", "faina", "framantat",
     "caiet", "caietul", "aliment", "fructe", "nume", "cant", "zile",
+    # Added 2026-09-29, after the gate called the repository clean while
+    # six check names in story_note_travels printed Romanian into every
+    # CI log -- the exact thing the docstring above says this was written
+    # to stop -- plus two messages in doc_screenshots and some eighty
+    # lines of seeded test data. None of them used a word on the list.
+    #
+    # That is the lesson, and it is why this block is long: a hand-picked
+    # sample answers "none of MY words are here", which is not the same
+    # question as "is this English". The words below were not guessed --
+    # they are every word the 2026-09-29 sweep actually found, plus the
+    # ordinary connectives that carry a Romanian sentence around them.
+    # A word goes in only if it is not also English: "face", "nota",
+    # "plan", "corp" and "lista" were all tried and rejected here,
+    # because a gate that cries wolf gets switched off.
+    "aici", "acolo", "altfel", "apasa", "apoi", "asta", "atentie",
+    "atunci", "butonul", "butoane", "cateva", "ceva", "comentariu",
+    "culoare", "culori", "deschide", "deschis", "doar", "eroare",
+    "fereastra", "foarte", "garda", "gasit", "gasita", "gasite",
+    "greseala", "gresit", "inchide", "inchis", "inca", "insa", "intai",
+    "lunga", "mereu", "nesalvat", "netrimis", "nicio", "niciun",
+    "nimeni", "nimic", "niste", "numai", "oprit", "orice", "pastrat",
+    "porneste", "prea", "ramas", "ramane", "randul", "ruleaza",
+    "salut", "salvat", "salvata", "salveaza", "scris", "scrie",
+    "sedinta", "simplu", "sterge", "titlul", "titluri", "vechi",
+    "vorbe", "acelasi", "aiurea", "editata", "inexistenta", "notitei",
+    "sablon", "scurta", "versiunea",
+    # A third pass, same day: translating the list above turned up seven
+    # more lines whose words were not on it either -- "coada", "facut
+    # deja", "Ramasa", "necunoscut". Three rounds of widening on one day
+    # is the honest measure of how far a wordlist gets you, and it is
+    # why anything new written here is read before it is committed
+    # rather than trusted to this gate.
+    "coada", "facut", "deja", "necunoscut", "ramasa", "dinainte",
+    "laterala", "panou", "bara", "continut", "acelasi", "baza",
+    "scurt", "originala", "versiune",
 ]
 ROMANIAN = re.compile(r"\b(%s)\b" % "|".join(WORDS), re.I)
 

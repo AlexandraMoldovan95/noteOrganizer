@@ -193,8 +193,8 @@ check('twelve notes cap at ten titles plus a "+2 more" line',
       and sum(1 for t in _lbls if t.startswith('Multa')) == 10)
 app.hide_day_tooltip(); app.update()
 
-_rich = {'id': 500, 'title': 'Hover', 'body': 'corp de text',
-         'category': 'General', 'date': _D13, 'comments': 'un comentariu',
+_rich = {'id': 500, 'title': 'Hover', 'body': 'some body text',
+         'category': 'General', 'date': _D13, 'comments': 'a comment',
          'updated': '2026-01-01 00:00', 'created': '2026-01-01 00:00',
          'checklist': [{'text': 'a', 'done': True},
                        {'text': 'b', 'done': False}],
@@ -207,7 +207,7 @@ _lbls = _tip_labels()
 check('the note hover preview carries title, body, and the icon row',
       _lbls is not None
       and any('Hover' in t for t in _lbls)
-      and any('corp de text' in t for t in _lbls)
+      and any('some body text' in t for t in _lbls)
       and any('\U0001F4AC' in t and '\U0001F4CE' in t and '1/2' in t
               for t in _lbls))
 check('a repeating note is flagged in its preview title',
@@ -473,7 +473,7 @@ app.update()
 app.load_note(app.find_note(4101), occurrence_date=_OCC)
 app.update()
 app.body_text.delete('1.0', 'end')
-app.body_text.insert('1.0', 'doar ziua asta e altfel')
+app.body_text.insert('1.0', 'only this day is different')
 app.ask_occurrence_scope = lambda *a, **k: 'occurrence'
 app.save_current_note(auto=False)
 app.update()
@@ -503,7 +503,7 @@ app.new_note(); app.update()
 # replaces the series text with that one day's.
 _TBL_O = '| a | b |\n| --- | --- |\n| 1 | 2 |'
 _ov_note = NO.normalize_note({
-    'id': 4301, 'title': 'Serie', 'body': 'corp de baza',
+    'id': 4301, 'title': 'Series', 'body': 'the base body',
     'category': 'General', 'date': '2026-07-01',
     'recurrence': {'freq': 'weekly', 'weekdays': [2]},
     'overrides': {'2026-07-08': {'title': 'Ziua', 'body': 'intro\n' + _TBL_O}},
@@ -525,7 +525,7 @@ check('...so that day opens CLEAN instead of unsaved forever',
 # asked anyway, wrote an override duplicating the series' own text, threw
 # the tick away, and left the editor dirty so it asked again next time.
 _sq_note = NO.normalize_note({
-    'id': 4302, 'title': 'Serie2', 'body': 'corp',
+    'id': 4302, 'title': 'Series2', 'body': 'body',
     'category': 'General', 'date': '2026-07-01',
     'recurrence': {'freq': 'weekly', 'weekdays': [2]},
     'checklist': [{'text': 'unu', 'done': False}],
@@ -551,7 +551,7 @@ check('...and the editor is clean afterwards, so it cannot ask again',
 # The question MUST still be asked when an override really could carry
 # the edit -- otherwise this fix would have quietly removed the feature.
 app.body_text.delete('1.0', 'end')
-app.body_text.insert('1.0', 'doar ziua asta')
+app.body_text.insert('1.0', 'only this day')
 app.update()
 _sq_asked2 = []
 app.ask_occurrence_scope = lambda *a, **k: (_sq_asked2.append(1), 'occurrence')[1]
@@ -575,7 +575,7 @@ app.new_note(); app.update()
 # text. It writes straight to the note now: no scope to get wrong.
 _rs_note = NO.normalize_note({
     'id': 4201, 'title': 'Repetat', 'date': '2026-07-01',
-    'body': 'versiunea lunga originala, cu mult text de pastrat aici',
+    'body': 'the long original version, with plenty of text worth keeping',
     'formatting': [{'start': 0, 'end': 9, 'style': 'bold'}],
     'recurrence': {'freq': 'weekly', 'weekdays': [2]},
     'updated': '2026-01-01 00:00', 'created': '2026-01-01 00:00'})
@@ -587,7 +587,7 @@ _RS_OCC = '2026-07-08'
 app.load_note(app.find_note(4201))
 app.update()
 app.body_text.delete('1.0', 'end')
-app.body_text.insert('1.0', 'scurt')
+app.body_text.insert('1.0', 'short')
 app.save_current_note(auto=False)
 app.update()
 check('a drastic shrink on a repeating note leaves a rescue copy',
@@ -603,7 +603,7 @@ app.restore_previous_version()
 app.update()
 _rs_after = app.find_note(4201)
 check('restoring from a day brings the SERIES body back, not an override',
-      'originala' in _rs_after.get('body', ''))
+      'original version' in _rs_after.get('body', ''))
 check('...with its formatting intact, not flattened to plain text',
       _rs_after.get('formatting') == [{'start': 0, 'end': 9, 'style': 'bold'}])
 check('...and no per-day override was manufactured for that day',
@@ -650,7 +650,7 @@ def _dp_seed(groups):
     for gi, copies in enumerate(groups):
         for _ in range(copies):
             app.notes.append({
-                'id': nid, 'title': 'Geamana %d' % gi, 'body': 'acelasi text %d' % gi,
+                'id': nid, 'title': 'Twin %d' % gi, 'body': 'the same text %d' % gi,
                 'comments': '', 'category': 'General', 'date': '', 'color': '',
                 'recurrence': {}, 'checklist': [], 'attachments': [],
                 'created': '2026-01-01 00:00', 'updated': '2026-01-01 00:00'})
@@ -792,7 +792,7 @@ check('Today returns the calendar to the current month (plan 52)',
 
 # 53: a day with more notes than fit says how many more.
 _b3_day = '%04d-%02d-15' % (_b3_today.year, _b3_today.month)
-app.notes = [{'id': 6000 + i, 'title': 'Zi plina %d' % i, 'body': 'x',
+app.notes = [{'id': 6000 + i, 'title': 'Busy day %d' % i, 'body': 'x',
               'comments': '', 'category': 'General', 'date': _b3_day,
               'color': '', 'recurrence': {}, 'checklist': [], 'attachments': [],
               'created': '2026-01-01 00:00', 'updated': '2026-01-01 00:00'}
@@ -815,7 +815,7 @@ _b3_all = _b3_texts(app.cal_grid_frame)
 check('a day holding more notes than fit says how many more (plan 53)',
       any(_b3re.match(r'^\+\d+ more$', t) for t in _b3_all))
 check('...and still shows some of them by name',
-      sum(1 for t in _b3_all if t.startswith('Zi plina')) >= 1)
+      sum(1 for t in _b3_all if t.startswith('Busy day')) >= 1)
 
 # 55: a day painted a colour keeps it, and only that day.
 app.day_colors = {}
@@ -906,7 +906,7 @@ _b4d_saved_notes, _b4d_saved_trash = list(app.notes), list(app.trash)
 app.notes = []
 app.trash = []
 app.notes = [NO.normalize_note({'id': i + 1, 'title': 'Identica',
-                                'body': 'acelasi corp', 'category': 'General'})
+                                'body': 'the very same body', 'category': 'General'})
              for i in range(3)]
 app.save_notes()
 app.ask_yes_no = lambda *a, **k: True

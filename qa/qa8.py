@@ -84,7 +84,7 @@ app.search_var.set('')
 # ways: the table note is kept, the plain note is filtered out.
 _tbl_note = {'title': 'TabelNote',
              'body': '| Produs | Pret |\n| CuvantUnicInCelula | 3 |'}
-_oth_note = {'title': 'AltaNota', 'body': 'nimic special aici'}
+_oth_note = {'title': 'OtherNote', 'body': 'nothing special here'}
 app.notes.append(NO.normalize_note(_tbl_note))
 app.notes.append(NO.normalize_note(_oth_note))
 app.refresh_note_list()
@@ -459,7 +459,7 @@ if getattr(app13, '_autosave_job', None):
 # The audit's WORST silent spot: a save failing at flush time
 # (note-switch/close) — that trace must exist too.
 app13.new_note()
-app13.body_text.insert('1.0', 'ceva de salvat')
+app13.body_text.insert('1.0', 'something to save')
 _real_save13 = app13.save_current_note
 app13.save_current_note = lambda *a, **k: (_ for _ in ()).throw(
     RuntimeError('flush save probe'))

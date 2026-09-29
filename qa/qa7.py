@@ -2273,7 +2273,7 @@ check('creating a new note also updates the remembered id', saved_settings2.get(
 # the edit flushed to the note it came from before another one loads.
 app.notes = []
 for i in range(3):
-    app.notes.append({'id': 700 + i, 'title': f'Tab{i}', 'body': f'corp {i}',
+    app.notes.append({'id': 700 + i, 'title': f'Tab{i}', 'body': f'body {i}',
                       'category': 'General', 'updated': '2026-01-01 00:00',
                       'created': '2026-01-01 00:00', 'checklist': [],
                       'attachments': []})
@@ -2349,7 +2349,7 @@ check('tick-all-but-first plus cleanup keeps exactly one twin',
 _dpf.destroy(); app.update()
 
 # ---- Duplicates hover PREVIEW (coverage-lift #2) ----
-_pv_note = {'id': 900, 'title': 'PreviewNota', 'body': 'corp preview',
+_pv_note = {'id': 900, 'title': 'PreviewNote', 'body': 'preview body',
             'category': 'General', 'updated': '2026-01-01 00:00',
             'created': '2026-01-01 00:00', 'checklist': [],
             'attachments': []}
@@ -2394,7 +2394,7 @@ def _tip_txts7(tops):
         walk(t)
     return out
 check('hovering a duplicate row shows its floating preview',
-      _tips and any('PreviewNota' in t for t in _tip_txts7(_tips)))
+      _tips and any('PreviewNote' in t for t in _tip_txts7(_tips)))
 _qa_fire(_pv_lbl, '<Leave>')
 app.update()
 check('leaving the row hides the preview',
@@ -2412,7 +2412,7 @@ print()
 # lived in front of it.
 app.open_blank_tab(); app.update()
 app.title_entry.insert(0, 'DeGolit')
-app.body_text.insert('1.0', 'continut vechi')
+app.body_text.insert('1.0', 'old content')
 app.save_current_note(auto=False); app.update()
 _gid = app.selected_note_id
 app.title_entry.delete(0, 'end')
@@ -2424,7 +2424,7 @@ check('switch-away flush records the emptying of a saved note',
 
 app.open_blank_tab(); app.update()
 app.title_entry.insert(0, 'DeGolit2')
-app.body_text.insert('1.0', 'alt continut')
+app.body_text.insert('1.0', 'other content')
 app.save_current_note(auto=False); app.update()
 _gid2 = app.selected_note_id
 app.title_entry.delete(0, 'end')
@@ -2436,7 +2436,7 @@ check('the autosave timer route records the emptying too',
 
 app.open_blank_tab(); app.update()
 app.title_entry.insert(0, 'DeGolit3')
-app.body_text.insert('1.0', 'iar continut')
+app.body_text.insert('1.0', 'content again')
 app.save_current_note(auto=False); app.update()
 _gid3 = app.selected_note_id
 app.title_entry.delete(0, 'end')
@@ -2465,11 +2465,11 @@ check('a date-only new editor is not autosaved as a junk note',
 # Comments are content now, on every route -- a comments-only note used
 # to be discarded in total silence with a false "Write something".
 app.open_blank_tab(); app.update()
-app.comments_text.insert('1.0', 'doar un comentariu')
+app.comments_text.insert('1.0', 'just one comment')
 app._autosave_now(); app.update()
 check('a comments-only note is real content to the autosave',
       len(app.notes) == _before + 1
-      and app.notes[-1]['comments'] == 'doar un comentariu')
+      and app.notes[-1]['comments'] == 'just one comment')
 
 # ---- Whitespace edits reach the disk (T0-4, the half in FRONT of the
 # writer) ----
@@ -2497,7 +2497,7 @@ check('and the flush writes it: trailing blank lines land on disk',
 # them with no question at all. The gate now shares the ONE content
 # test; this witnesses the call site, not just the helper.
 app.open_blank_tab(); app.update()
-app._working_checklist = [{'text': 'doar lista', 'done': False}]
+app._working_checklist = [{'text': 'just the list', 'done': False}]
 _askedT = []
 app.ask_yes_no = lambda t, m, **k: (_askedT.append(t), False)[1]
 try:
@@ -2511,7 +2511,7 @@ finally:
     app.ask_yes_no = lambda *a, **k: True
 check('a checklist-only editor earns the replace? question from a template',
       len(_askedT) == 1
-      and app._get_checklist() == [{'text': 'doar lista', 'done': False}])
+      and app._get_checklist() == [{'text': 'just the list', 'done': False}])
 
 # ---- Emptying a SHORT note still leaves something to come back to ----
 # The rescue copy was gated on a drastic shrink (>40 characters removed),
@@ -2539,10 +2539,10 @@ check('...and leaves a rescue copy, however few characters it was',
 app.open_blank_tab(); app.update()
 app.title_entry.insert(0, 'Prev')
 app.body_text.insert('1.0',
-                     'versiunea lunga originala care se va scurta drastic imediat')
+                     'the long original version, about to be cut down sharply')
 app.save_current_note(auto=False); app.update()
 _pid = app.selected_note_id
-app.body_text.delete('1.0', 'end'); app.body_text.insert('1.0', 'scurt')
+app.body_text.delete('1.0', 'end'); app.body_text.insert('1.0', 'short')
 app.save_current_note(auto=False); app.update()
 _pn = app.find_note(_pid)
 check('a drastic shrink leaves the rescue copy behind',
@@ -2556,7 +2556,7 @@ app.restore_previous_version(); app.update()
 _pn = app.find_note(_pid)
 check('a half-typed date cannot block the restore any more',
       _pn is not None and _pn.get('_prev') is None
-      and 'originala' in _pn.get('body', ''))
+      and 'original version' in _pn.get('body', ''))
 check('...and the button is gone, because the copy was spent',
       not app.restore_prev_btn.winfo_ismapped())
 

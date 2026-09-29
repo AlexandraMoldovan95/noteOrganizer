@@ -551,7 +551,7 @@ app.notes.append(NO.normalize_note({'id': 9002, 'title': 'Lot',
 app.save_notes()
 _bulk_uid = app.notes[-1]['uid']
 _bulk_code = NO.encode_share_code([
-    {'uid': _bulk_uid, 'title': 'Lot', 'body': 'editata aiurea',
+    {'uid': _bulk_uid, 'title': 'Batch', 'body': 'edited carelessly',
      'formatting': [], 'paragraphs': [], 'comments': '',
      'category': 'General', 'date': '', 'color': '', 'checklist': []},
     {'title': 'CuTotulNoua', 'body': 'zzz', 'formatting': [],
@@ -1069,7 +1069,7 @@ NO.persist_categories()
 # as shipped. It is passed down now, so the one status line that
 # survives carries it.
 _big_code = NO.encode_share_code({
-    'title': 'Prea mare', 'body': 'x', 'category': 'General',
+    'title': 'Too big', 'body': 'x', 'category': 'General',
     'checklist': [{'text': 'item %d' % i, 'done': False}
                   for i in range(NO.MAX_CHECKLIST_ITEMS + 50)]})
 app.toggle_import_panel(); app.update()
@@ -1199,11 +1199,11 @@ check('...and the code really carries the checklist',
       and NO.decode_share_code(_sg_code)[0].get('checklist') == _sg_list)
 
 _sg_code2 = _share_code_for(
-    lambda: app.comments_text.insert('1.0', 'doar un comentariu'))
+    lambda: app.comments_text.insert('1.0', 'just one comment'))
 check('a comments-only note can be shared too',
       _sg_code2 is not None
       and NO.decode_share_code(_sg_code2)[0].get('comments')
-      == 'doar un comentariu')
+      == 'just one comment')
 
 # The guard must keep its teeth: a truly empty editor still refuses, and
 # says what a code actually carries instead of "write something".
@@ -1341,8 +1341,8 @@ app.hide_settings_page(); app.update()
 
 # 96: the share panel pages instead of drawing 200 rows at once.
 app.trash = []
-app.notes = [NO.normalize_note({'id': 1000 + i, 'title': 'Nota %03d' % i,
-                                'body': 'corp', 'category': 'General'})
+app.notes = [NO.normalize_note({'id': 1000 + i, 'title': 'Note %03d' % i,
+                                'body': 'body', 'category': 'General'})
              for i in range(200)]
 app.save_notes()
 app.refresh_note_list(); app.update()
