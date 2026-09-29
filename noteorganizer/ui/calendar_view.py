@@ -453,11 +453,28 @@ class CalendarViewMixin:
                                         bg=cell_bg,
                                         fg=(lbl_fg if day_color else self.colors["text"]))
                         chip.pack(pady=(0, 1), padx=2, anchor="w", fill="x")
-                        # Hovering THIS specific title previews just that one
-                        # note, not the whole day's notes crammed together.
-                        chip.bind("<Button-1>", lambda e, d=date_str: self.open_day_popup(d))
+                        # The chip is the NOTE, and now behaves like one.
+                        #
+                        # Hovering it has always previewed just this note --
+                        # and then clicking it opened the whole day, so
+                        # someone who had just read "Dentist, 14:00" landed
+                        # on a list of the day's six notes and had to find it
+                        # again. Right-click, the app's own route to a note's
+                        # actions everywhere else, offered "Color this day…".
+                        # Every action a note has was unreachable from the
+                        # grid, although the same-looking row in the day panel
+                        # carries all of them.
+                        #
+                        # The day's own menu stays on the cell background, the
+                        # day number and the dot row, which is where it
+                        # belongs: those are the day, and this is a note.
+                        chip.bind("<Button-1>",
+                                  lambda e, n=dn, d=date_str:
+                                  self._open_note_from_grid(n, d))
                         chip.bind("<Button-3>",
-                                  lambda e, d=date_str: self.show_day_context_menu(e, d))
+                                  lambda e, n=dn, d=date_str:
+                                  self.show_note_context_menu(
+                                      e, n, occurrence_date=d))
                         chip.bind("<Enter>",
                                   lambda e, n=dn, d=date_str: self.show_note_hover_preview(n, d))
                         chip.bind("<Leave>", lambda e: self.hide_day_tooltip())
@@ -796,6 +813,18 @@ class CalendarViewMixin:
 
         # Bind the wheel now that every note row exists.
         self._bind_mousewheel_recursive(inner, canvas)
+
+    def _open_note_from_grid(self, base_note, date_str):
+        """Land on ONE note from a chip in the month grid.
+
+        The day panel has to be showing that day before a single note can
+        be drawn into it -- show_day_note's own "← Back" returns to the
+        day's list, and that list is whatever open_day_popup last put
+        there. Both calls, in this order, are the same landing the History
+        register's rows already use.
+        """
+        self.open_day_popup(date_str)
+        self.show_day_note(base_note, date_str)
 
     def show_day_note(self, base_note, date_str):
         """Open a single note inside the day panel, with a Back button that

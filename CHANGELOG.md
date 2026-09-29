@@ -12,6 +12,7 @@ How the numbers themselves are counted is the
 
 | Version | Date | In one line |
 |---|---|---|
+| [0.81.199](#081199--2026-09-29) | 2026-09-29 | A note's actions are reachable from where the note is — on the calendar, and from the keyboard. |
 | [0.80.198](#080198--2026-09-29) | 2026-09-29 | Doing a thing to many notes at once — pinning, sharing, and getting several back out of the Trash. |
 | [0.76.198](#076198--2026-09-28) | 2026-09-28 | The note list remembers how you sorted it, and marking a day says why it stops at three. |
 | [0.76.195](#076195--2026-09-28) | 2026-09-28 | Three controls that did something without saying what, and four written claims that no longer matched the code. |
@@ -115,6 +116,30 @@ whatever bump comes next.*
   review.
 
 ---
+
+## [0.81.199] — 2026-09-29
+
+*Highlights: a note's actions are reachable from where the note is — on the calendar, and from the keyboard.*
+
+### Added
+
+- **The note list can be used from the keyboard.** Pinning, exporting,
+  duplicating and deleting all lived in the right-click menu and nowhere else,
+  so anyone working by keyboard could reach none of them. Tab into the list and
+  the card you are on wears a ring; **↑** and **↓** walk it, **Enter** opens the
+  note (or ticks it, while you are selecting), and **Shift+F10** or the menu key
+  opens its actions where the note is. The ring survives the list being rebuilt,
+  which happens on every save and every search keystroke.
+
+### Fixed
+
+- **A note's title in the calendar now behaves like the note it names.**
+  Hovering it has always previewed that one note — and then clicking it opened
+  the whole day, so after reading "Dentist, 14:00" you landed on a list of the
+  day's six notes and had to find it again. Right-clicking offered "Color this
+  day…" rather than the note's own actions. Clicking the title now opens that
+  note, and right-clicking gives it the same menu it has everywhere else. The
+  day's own menu stays where the day is: the cell, the date and the dots.
 
 ## [0.80.198] — 2026-09-29
 
