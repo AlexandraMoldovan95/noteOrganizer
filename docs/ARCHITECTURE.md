@@ -70,7 +70,7 @@ that have moved, so existing callers — including the ~270 `note_organizer.<nam
 across the QA scripts — keep working untouched. That's deliberate: it means each extraction is
 a pure move that leaves the whole test suite green, rather than a rewrite.
 
-What remains in the file is ~14,100 lines of genuinely shared surface. It grew again through
+What remains in the file is ~16,200 lines of genuinely shared surface. It grew again through
 the rich-text and tables work even as the pure logic behind those features went into `core/`.
 
 ### How it got here
@@ -616,7 +616,7 @@ After dialogs, the calendar and attachments, nothing else clears the bar. The ed
 module hiding inside the class — moving any of the shared surface into a file would relocate
 the tangle rather than remove it.
 
-The entry file has grown well past that measurement since — ~14,100 lines now — but the growth
+The entry file has grown well past that measurement since — ~16,200 lines now — but the growth
 is the rich-text and tables UI, which is more of exactly this shared surface, not a new
 extractable module.
 

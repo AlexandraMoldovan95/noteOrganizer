@@ -30,6 +30,7 @@ How the numbers themselves are counted is the
 | [0.74.170](#074170--2026-09-15) | 2026-09-15 | A repeating series says so wherever it can be deleted — including the Trash, where deleting cannot be undone. |
 | [0.74.169](#074169--2026-09-15) | 2026-09-15 | Deleting a note stops redrawing the whole screen — the list, the calendar and the statistics were all rebuilt, two of them off screen. |
 | [0.74.168](#074168--2026-09-15) | 2026-09-15 | Deleting something offers Undo where you deleted it — including the one delete that had no way back at all. |
+| [0.73.167](#073167--2026-09-15) | 2026-09-15 | The explanation under each Settings title stops being cut off mid-word. |
 | [0.73.166](#073166--2026-09-14) | 2026-09-14 | Changing several notes' category at once no longer comes undone on the one note you had open in the editor. |
 | [0.73.165](#073165--2026-09-13) | 2026-09-13 | A code made in the editor carries the note it came from, an update from one is no longer undone by the editor a moment later, a generated code belongs to the note on screen, and Settings shows how things are now. |
 | [0.73.161](#073161--2026-09-13) | 2026-09-13 | A note's identity is written down the first time it is given out, so it survives closing the app — and a note restored from the Trash never takes one another note is already using. |
@@ -76,24 +77,6 @@ How the numbers themselves are counted is the
 | [0.3.0](#030--tags-removed-categories-as-the-sole-organization-system) | — | Tags come out entirely, leaving categories as the app's one organization system. |
 | [0.2.0](#020--inline-ui-overhaul--data-resilience) | — | Every OS-native popup becomes an in-app themed one, and the calendar grows richer. |
 | [0.1.0](#010--core-application) | — | The founding feature set — notes, recurrence, calendar, templates, sharing, themes. |
-
----
-
-## [0.73.167] — 2026-09-15
-
-*Highlights: the explanations in Settings no longer stop mid-word.*
-
-### Fixed
-
-- **The explanatory line under each Settings title was cut off at the right edge.**
-  Duplicates ended at "date and col", Templates at "use 🧩 Save as template on an",
-  Backup at "not in the a folder" — and the missing words were the ones carrying the
-  meaning. A label breaks its text at a set width and then draws those lines inside
-  whatever width it was actually given; when the two disagree, the ends are not drawn
-  and nothing says so. Each of those widths was a hand-picked number standing in for
-  padding the label could not see, and each was short — the subtitle asked for 620
-  pixels and was given 544. They are taken from the label itself now, so a change to
-  the layout cannot leave them behind again.
 
 ---
 
@@ -701,6 +684,24 @@ say what it was for.*
   spent offer, a theme switched while the banner is on screen, and a note carrying a
   table, formatting, a checklist and an attachment making the round trip unchanged.
   Thirteen mutants, each dying on the check written for it.
+
+---
+
+## [0.73.167] — 2026-09-15
+
+*Highlights: the explanations in Settings no longer stop mid-word.*
+
+### Fixed
+
+- **The explanatory line under each Settings title was cut off at the right edge.**
+  Duplicates ended at "date and col", Templates at "use 🧩 Save as template on an",
+  Backup at "not in the a folder" — and the missing words were the ones carrying the
+  meaning. A label breaks its text at a set width and then draws those lines inside
+  whatever width it was actually given; when the two disagree, the ends are not drawn
+  and nothing says so. Each of those widths was a hand-picked number standing in for
+  padding the label could not see, and each was short — the subtitle asked for 620
+  pixels and was given 544. They are taken from the label itself now, so a change to
+  the layout cannot leave them behind again.
 
 ---
 
