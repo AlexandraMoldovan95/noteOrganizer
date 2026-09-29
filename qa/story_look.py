@@ -184,7 +184,7 @@ app.selected_note_ids = {n['id'] for n in app.notes[:2]}
 app._update_bulk_selected_label()
 app.refresh_note_list()
 """),
-    # Added for 0.84.198: the focus ring is that release's visible change,
+    # Added for 0.81.199: the focus ring is that release's visible change,
     # and a ring only shows while something actually has the keyboard.
     ("15-note-card-with-keyboard-focus", """
 if app.selection_mode:
@@ -217,6 +217,27 @@ app.update()
 app.day_emoji['2026-09-15'] = [e for e, _c in app.DAY_MARKER_EMOJIS[:3]]
 app._mark_day_emoji('2026-09-15')
 """),
+    # The shortcuts page had no picture at all, which is part of how it
+    # came to be missing a whole group without anyone noticing. Its rows
+    # are drawn from SHORTCUT_GROUPS, so this is also the only place the
+    # longest group title gets looked at rather than counted.
+    ("16-the-shortcuts-page", """
+app._dismiss_mini_popup()
+app.notebook.select(app.TAB_NOTES)
+app.update()
+app.show_settings_page()
+app.update()
+app.toggle_settings_panel('shortcuts')
+app.update()
+app.update_idletasks()
+# Scrolled to the note-list group on purpose. A picture of the top of
+# this page would show the same three Ctrl combos it always has and
+# would not have caught the missing group -- which is the whole reason
+# this scene exists.
+app.settings_canvas.yview_moveto(0.62)
+app.update()
+app.update_idletasks()
+"""),
     # A card carrying everything a card can carry. The three labels on a
     # card are the widest thing in a fixed-width sidebar, and nothing was
     # watching what happens when their text outgrows it -- which is how a
@@ -224,6 +245,13 @@ app._mark_day_emoji('2026-09-15')
     # on an ordinary note, in a picture taken for the documentation.
     ("17-a-note-card-at-its-fullest", """
 app._dismiss_mini_popup()
+# hide_settings_page() is load-bearing, and was missing: the scene before
+# this one leaves the Settings page open, so without it this photographed
+# the shortcuts page instead of a note card -- a 21% difference that read
+# as "the card scene changed" and would have been accepted as one. A
+# scene sets up everything it needs and assumes nothing about the scene
+# before it.
+app.hide_settings_page()
 app.notebook.select(app.TAB_NOTES)
 if app.selection_mode:
     app._toggle_selection_mode()

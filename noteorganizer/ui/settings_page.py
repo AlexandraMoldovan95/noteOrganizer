@@ -3082,6 +3082,14 @@ class SettingsPageMixin:
     # Every combo listed here is verified against a real binding -- the
     # groups below name the widget the binding lives on, and the calendar
     # keys only act while that tab is showing (see _calendar_key's guard).
+    #
+    # The other direction is the one that failed: every real binding has
+    # to BE here. The note list's keys shipped in 0.81.199 and were not
+    # added, so this page went on saying it holds everything the keyboard
+    # can do while the newest way to use the keyboard was missing from
+    # it -- and the user guide repeated the claim, because it had no
+    # reason to doubt it. Anything bound from here on gets its row in the
+    # same change that binds it.
     SHORTCUT_GROUPS = (
         ("App", (
             ("Ctrl+N", "New note (switches to the Notes tab first)."),
@@ -3115,6 +3123,15 @@ class SettingsPageMixin:
             ("Ctrl+A", "Select the whole cell."),
             ("Escape", "Leave the cell."),
             ("Delete", "Clear the selected cells."),
+        )),
+        ("Note list (Tab into it from the search box)", (
+            ("Up  /  Down", "Walk from card to card, in the order the list "
+                            "is showing them."),
+            ("Enter  /  Space", "Open the note — or tick it, while "
+                                "☑ Select is on."),
+            ("Shift+F10", "That note's own right-click menu, opened at the "
+                          "note. The menu key does the same where a "
+                          "keyboard has one."),
         )),
         ("Calendar (while the Calendar tab is showing)", (
             ("Page Up  /  Page Down", "Previous / next month."),

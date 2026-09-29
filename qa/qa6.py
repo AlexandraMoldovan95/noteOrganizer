@@ -1517,6 +1517,39 @@ check('and the undiscoverable rest',
       all(k in _allQW for k in ('Ctrl+Shift+V', 'Page Up', 'Home',
                                 'Shift+Tab')))
 
+# The page promises it holds everything the keyboard can do, and the
+# promise was broken once: the note list's keys shipped in 0.81.199 and
+# nobody added their rows, so the page and the user guide both went on
+# claiming completeness they no longer had. Asking for the three names
+# would only pin THIS omission. So this asks the CARD what it binds and
+# requires every answer to be named here -- a key bound later with no row
+# fails at the first check, and one that is named but not drawn fails at
+# the second.
+_QW_NOT_KEYS = {'<Button-1>', '<Button-3>', '<Button-2>', '<Enter>',
+                '<Leave>', '<FocusIn>', '<FocusOut>', '<Motion>',
+                '<MouseWheel>', '<Double-Button-1>'}
+# Spelled the way Tk reports them back, not the way they were bound:
+# bind('<Return>') is read back as '<Key-Return>', and this check was
+# written with the binding spelling and caught its own mistake.
+_QW_KEY_NAMES = {'<Key-Return>': 'Enter', '<Key-space>': 'Space',
+                 '<Key-Down>': 'Down', '<Key-Up>': 'Up',
+                 '<Shift-Key-F10>': 'Shift+F10',
+                 '<Key-App>': 'menu key', '<Key-Menu>': 'menu key'}
+_qw_card = next((w for w in app.list_frame.winfo_children()
+                 if getattr(w, '_card_note_id', None) is not None), None)
+# A check that cannot find its subject must fail rather than pass on an
+# empty list -- the shape of every check that has quietly stopped working.
+check('a note card is on screen to ask about', _qw_card is not None)
+_qw_bound = ([s for s in _qw_card.bind() if s not in _QW_NOT_KEYS]
+             if _qw_card is not None else [])
+_qw_unnamed = [s for s in _qw_bound if s not in _QW_KEY_NAMES]
+check('every key a note card binds has a name here (unnamed: %s)'
+      % _qw_unnamed, bool(_qw_bound) and _qw_unnamed == [])
+_qw_missing = [s for s in _qw_bound
+               if s in _QW_KEY_NAMES and _QW_KEY_NAMES[s] not in _allQW]
+check('...and every one of them is on the shortcuts page (missing: %s)'
+      % _qw_missing, _qw_missing == [])
+
 # Every nav entry draws a real glyph -- a section registered without a
 # branch in _draw_icon would show a BLANK icon and nothing would error
 # (exactly how the shortcuts section first shipped, caught in review).

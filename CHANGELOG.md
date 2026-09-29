@@ -12,7 +12,7 @@ How the numbers themselves are counted is the
 
 | Version | Date | In one line |
 |---|---|---|
-| [0.81.202](#081202--2026-09-29) | 2026-09-29 | A note's card stops cutting off the end of what it says — its title, its preview, and the marks that say what the note carries. |
+| [0.81.202](#081202--2026-09-29) | 2026-09-29 | Two places where the app left something out: a note's card cut off the end of what it says, and the keyboard shortcuts page was missing a whole group of keys. |
 | [0.81.200](#081200--2026-09-29) | 2026-09-29 | The note list stops pulling the keyboard away from what you were typing in. |
 | [0.81.199](#081199--2026-09-29) | 2026-09-29 | A note's actions are reachable from where the note is — on the calendar, and from the keyboard. |
 | [0.80.198](#080198--2026-09-29) | 2026-09-29 | Doing a thing to many notes at once — pinning, sharing, and getting several back out of the Trash. |
@@ -100,10 +100,22 @@ How the numbers themselves are counted is the
 
 ## [0.81.202] — 2026-09-29
 
-*Highlights: a note's card stops cutting off the end of what it says — its title, its preview,
-and the marks that tell you what the note carries.*
+*Highlights: two places where the app was leaving something out — a note's card cutting off the
+end of what it says, and the keyboard shortcuts page missing a whole group of keys it promised
+to hold.*
 
 ### Fixed
+
+- **Settings → Keyboard shortcuts was missing a whole group.** The page opens by saying
+  "Everything the keyboard can do", and since `0.81.199` that had not been true: the note
+  list's own keys — ↑ and ↓ between cards, Enter or Space to open one, Shift+F10 for a
+  note's menu — were bound and listed nowhere. The user guide repeated the claim, because
+  it had no reason to doubt it. The page's own comment said every combo on it is verified
+  against a real binding, which was true and is the weaker half of the promise; the half
+  that failed is that every real binding has to BE on it. The check written with this fix
+  asks that direction instead: it reads the keys a note card actually binds and requires
+  each one to be named on the page, so a key bound later with no row fails rather than
+  ships.
 
 - **Nothing on a note's card is cut off at its edge any more.** The sidebar is a fixed width
   and each of the card's three lines was a label with no wrapping, so a label longer than the
@@ -115,14 +127,6 @@ and the marks that tell you what the note carries.*
   half-drawn fraction looks like a number. One mechanism in three places, and the same one
   `0.73.167` fixed in Settings; the note list was never swept then. Each line now wraps to the
   width it is actually given, by the helper that sweep left behind.
-
----
-
-## [Unreleased]
-
-*Not yet numbered: nothing here is an `Added` or a `Fixed`, and the version is counted from
-those alone (see the [Roadmap's Versioning section](docs/ROADMAP.md#versioning)). It ships with
-whatever bump comes next.*
 
 ### Changed
 
