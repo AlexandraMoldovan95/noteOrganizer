@@ -151,8 +151,8 @@ def _app():
 
 def _seed(NO, app, count=4):
     app.notes = [NO.normalize_note({
-        "id": i + 1, "title": "Nota %d" % (i + 1),
-        "body": "corpul notitei %d" % (i + 1), "category": "General"})
+        "id": i + 1, "title": "Note %d" % (i + 1),
+        "body": "the body of note %d" % (i + 1), "category": "General"})
         for i in range(count)]
     app.save_notes()
     app.refresh_note_list()
@@ -165,11 +165,11 @@ def chapter_1():
     tk, NO, app = _app()
     story = Chapter()
     _seed(NO, app)
-    NO.CATEGORY_COLORS.setdefault("Scoala", "#4477aa")
+    NO.CATEGORY_COLORS.setdefault("School", "#4477aa")
 
     app.set_theme(NO.LIGHT_THEMES[-1])
     app.sort_var.set(next(o for o in app.SORT_OPTIONS if o.startswith("Title Z")))
-    app.filter_var.set("Scoala")
+    app.filter_var.set("School")
     app.group_by_category.set(True)
     app._on_toggle_group_by_category()
     app.day_colors["2026-09-20"] = "#ff8800"
@@ -184,18 +184,23 @@ def chapter_1():
     tk2, NO2, again = _app()
     story.check("the chosen theme comes back", again.theme_name == chosen["theme"],
                 "%r -> %r" % (chosen["theme"], again.theme_name))
-    # Sort and filter are NOT remembered, and the app never claimed
-    # they were: it writes the theme, the open note, the day colours and
-    # the grouping, and nothing else. Asserting a promise nobody made is
-    # how an audit manufactures its own findings. What IS worth pinning
-    # is that they come back at their honest defaults rather than at
-    # something half-restored.
-    story.check("the sort starts at its default, not half way",
-                again.sort_var.get() == again.SORT_OPTIONS[0],
-                "%r" % again.sort_var.get())
-    story.check("the filter starts at All, not on a category that is gone",
+    # Sort and filter ARE remembered, since 0.76.198 (C-15). This comment
+    # used to say the opposite and the check below asserted the default
+    # coming back -- written when that was true, and left alone when the
+    # app changed under it. A check that pins the behaviour a release
+    # deliberately replaced is worse than no check: it either fails for
+    # the right reason and gets explained away, or passes by accident.
+    story.check("the sort I left the list on comes back",
+                again.sort_var.get() == chosen["sort"],
+                "%r -> %r" % (chosen["sort"], again.sort_var.get()))
+    # The filter is the other half of C-15, and this is its guard rather
+    # than its promise: "School" existed only as a runtime entry in the
+    # first process, so on the way back in it names a category this
+    # notebook does not have, and the honest answer is All rather than a
+    # filter that hides everything.
+    story.check("a filter naming a category that is gone falls back to All",
                 again.filter_var.get() == "All",
-                "%r" % again.filter_var.get())
+                "%r -> %r" % (chosen["filter"], again.filter_var.get()))
     story.check("grouping by category comes back",
                 bool(again.group_by_category.get()))
     story.check("the painted day comes back",
@@ -215,8 +220,8 @@ def chapter_2():
     story = Chapter()
     _seed(NO, app, 2)
 
-    source = os.path.abspath("un_fisier.txt")
-    io.open(source, "w", encoding="utf-8").write("continut de test")
+    source = os.path.abspath("a_file.txt")
+    io.open(source, "w", encoding="utf-8").write("test content")
     app.open_note_in_tab(app.notes[0])
     app.update()
     # The real route asks the OS for the file; replacing that ask is the
@@ -269,8 +274,8 @@ def chapter_3():
     tk, NO, app = _app()
     story = Chapter()
     _seed(NO, app, 3)
-    NO.CATEGORY_COLORS["DeSters"] = "#993333"
-    app.save_templates([{"name": "Sablon vechi", "title": "T", "body": "b",
+    NO.CATEGORY_COLORS["OldFiling"] = "#993333"
+    app.save_templates([{"name": "An old template", "title": "T", "body": "b",
                          "comments": "", "category": "General", "checklist": []}]) \
         if hasattr(app, "save_templates") else None
 
@@ -292,11 +297,11 @@ def chapter_3():
     app.update()
 
     # Change the world behind every one of them.
-    NO.CATEGORY_COLORS.pop("DeSters", None)
-    NO.CATEGORY_COLORS["ProaspatAdaugata"] = "#227744"
-    app.notes.append(NO.normalize_note({"id": 90, "title": "Geamana",
+    NO.CATEGORY_COLORS.pop("OldFiling", None)
+    NO.CATEGORY_COLORS["JustAdded"] = "#227744"
+    app.notes.append(NO.normalize_note({"id": 90, "title": "Twin",
                                         "body": "idem", "category": "General"}))
-    app.notes.append(NO.normalize_note({"id": 91, "title": "Geamana",
+    app.notes.append(NO.normalize_note({"id": 91, "title": "Twin",
                                         "body": "idem", "category": "General"}))
     app._delete_note(app.notes[0], None)
     app.save_notes()
@@ -311,18 +316,18 @@ def chapter_3():
     app.update()
     seen = texts(getattr(app, "settings_categories_panel", app))
     story.check("Categories, on a second visit, shows the new category",
-                any("ProaspatAdaugata" in t for t in seen),
-                "pe ecran: %s" % [t[:20] for t in seen if t][:6])
+                any("JustAdded" in t for t in seen),
+                "on screen: %s" % [t[:20] for t in seen if t][:6])
     story.check("...and no longer shows the deleted one",
-                not any("DeSters" in t for t in seen))
+                not any("OldFiling" in t for t in seen))
     app.toggle_settings_panel("trash")
     app.update()
     story.check("Recently deleted shows the note deleted in the meantime",
-                any("Nota 1" in t for t in texts(app.settings_trash_panel)))
+                any("Note 1" in t for t in texts(app.settings_trash_panel)))
     app.toggle_settings_panel("duplicates")
     app.update()
     story.check("Duplicates shows the pair that appeared in the meantime",
-                any("Geamana" in t for t in texts(app.settings_duplicates_panel)))
+                any("Twin" in t for t in texts(app.settings_duplicates_panel)))
     app.destroy()
     story.save()
 
@@ -333,7 +338,7 @@ def chapter_4():
     tk, NO, app = _app()
     story = Chapter()
     _seed(NO, app, 4)
-    NO.CATEGORY_COLORS.setdefault("Munca", "#775599")
+    NO.CATEGORY_COLORS.setdefault("Errands", "#775599")
 
     app.open_note_in_tab(app.notes[0])
     app.update()
@@ -350,7 +355,7 @@ def chapter_4():
         nonlocal row
         for child in widget.winfo_children():
             if isinstance(child, tk.Label) and \
-                    str(child.cget("text")).strip() == "Munca":
+                    str(child.cget("text")).strip() == "Errands":
                 row = child
                 return
             find_row(child)
@@ -363,19 +368,19 @@ def chapter_4():
         row.event_generate("<Button-1>", x=3, y=3)
         app.update()
     story.check("the bulk action reaches the disk",
-                all(n["category"] == "Munca" for n in app.notes[:3]),
+                all(n["category"] == "Errands" for n in app.notes[:3]),
                 repr([n["category"] for n in app.notes[:3]]))
 
     # And then the user carries on typing in the note that was open.
-    app.body_text.insert("end", " si scriu mai departe")
+    app.body_text.insert("end", " and I carry on typing")
     app._flush_autosave()
     app.update()
     after = json.load(io.open("notes_data.json", encoding="utf-8"))
     first = next(n for n in after if n["id"] == app.notes[0]["id"])
     story.check("typing afterwards does not undo the bulk change",
-                first["category"] == "Munca", repr(first["category"]))
+                first["category"] == "Errands", repr(first["category"]))
     story.check("...and the text typed afterwards really was saved",
-                "mai departe" in first["body"], repr(first["body"][:60]))
+                "carry on typing" in first["body"], repr(first["body"][:60]))
     app.destroy()
     story.save()
 
@@ -386,7 +391,7 @@ def chapter_5():
     tk, NO, app = _app()
     story = Chapter()
     app.notes = [NO.normalize_note({
-        "id": 1, "title": "Sedinta", "body": "text de serie",
+        "id": 1, "title": "Standup", "body": "the series text",
         "category": "General", "date": "2026-09-07",
         "recurrence": {"freq": "weekly", "interval": 1, "weekdays": [0]}})]
     app.save_notes()
@@ -394,7 +399,7 @@ def chapter_5():
 
     note = app.notes[0]
     note.setdefault("overrides", {})["2026-09-14"] = {
-        "title": "Sedinta", "body": "doar ziua asta e altfel",
+        "title": "Standup", "body": "only this day is different",
         "comments": "", "category": "General", "color": ""}
     app.save_notes()
     app.update()
@@ -402,7 +407,7 @@ def chapter_5():
     app.open_note_in_tab(note)
     app.update()
     app.body_text.delete("1.0", "end")
-    app.body_text.insert("1.0", "text de serie, schimbat")
+    app.body_text.insert("1.0", "the series text, changed")
     app.save_current_note(auto=False)
     app.update()
     app.destroy()
@@ -410,10 +415,10 @@ def chapter_5():
     tk2, NO2, again = _app()
     back = again.notes[0]
     story.check("the series received the new text",
-                "schimbat" in back["body"], repr(back["body"][:50]))
+                "changed" in back["body"], repr(back["body"][:50]))
     story.check("the day edited on its own kept its own text",
                 (back.get("overrides") or {}).get("2026-09-14", {}).get("body")
-                == "doar ziua asta e altfel",
+                == "only this day is different",
                 repr(back.get("overrides")))
     story.check("and the recurrence stayed whole",
                 (back.get("recurrence") or {}).get("freq") == "weekly",

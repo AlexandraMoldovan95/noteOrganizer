@@ -545,6 +545,37 @@ A new surface joins this list the moment it ships.
   against a moving reference targets the wrong value no matter how
   well the wait afterwards is built. Failure messages carry the
   expected and landed values, so the next red names its mechanism.
+- **Tk hands back the sequences it NORMALISED, not the ones you bound.**
+  `bind("<Return>")` reads back from `widget.bind()` as `<Key-Return>`;
+  `<space>` as `<Key-space>`; `<Shift-F10>` as `<Shift-Key-F10>`. A check
+  that asks a widget what it binds and compares against the binding
+  spelling matches nothing and reads as "everything is unnamed". The
+  qa6 check that requires every key a note card binds to appear on the
+  shortcuts page caught its own version of this on its first run, which
+  is the argument for asking the widget rather than a hand-written list.
+- **A cap in CHARACTERS is not a width.** `preview_src[:40]`,
+  `_truncate(title, 42)` and friends keep a string short; they do not
+  keep it inside a box. Forty narrow characters fit where forty wide
+  ones do not, so a 39-character body still ran off the edge of a note
+  card. Where a label is stretched by its parent (`fill="x"`), the only
+  number that cannot disagree with the layout is the label's own width —
+  `_wrap_to_own_width`. Where a label sizes itself (`side="left"` with
+  no fill, inside a popup that grows), that helper is the wrong tool and
+  its docstring says so.
+- **`anchor` places the block, `justify` places the lines inside it.**
+  A single-line Label looks identical either way, so `justify` is
+  invisible until something makes the text wrap — and then Tk CENTRES
+  the second line by default, with `anchor="w"` doing nothing about it.
+  Any change that introduces wrapping has to set `justify="left"` in the
+  same edit. Found in a photograph; unreachable by reading.
+- **A "bless what is on screen" tool must bless only what CHANGED.**
+  `story_look --accept` copied every picture it had just taken, and a
+  PNG re-encoded from identical pixels is a different file — so
+  accepting one new scene rewrote all sixteen references and put fifteen
+  binary blobs into a commit about something else. Comparing the bytes
+  does not fix it, for the same reason. It now blesses exactly what the
+  report calls changed, from one shared threshold, so "accepted" and
+  "CHANGED" cannot disagree.
 - A failure gets a **permanent fix, at the root of its class**: when a
   check fails without a real regression, the check's *strategy* is
   wrong — fix the strategy, sweep the suite for every sibling using

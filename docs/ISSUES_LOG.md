@@ -39,6 +39,7 @@ day-to-day tracking.
 | [The undo that guarded the wrong state](#the-undo-that-guarded-the-wrong-state) | An undo must test for the state its own action produced, not the one it means to restore; and sweep for what else reaches the same loss. | 0.75.181 |
 | [The binding that could never fire](#the-binding-that-could-never-fire) | A binding is not an answer to "does this key work" — ask where the key goes; and a probe whose finding is an absence needs a control that produces the presence. | 0.75.183 |
 | [The paste that landed on top of the placeholder](#the-paste-that-landed-on-top-of-the-placeholder) | `bind()` replaces where `add="+"` accumulates, so a widget's own binding silently displaces a shared helper's; and a virtual event outranks the physical one beside it in the same bindtag. | 0.75.185 |
+| [The sweep that stopped at the edge of the Settings page](#the-sweep-that-stopped-at-the-edge-of-the-settings-page) | A fix's sibling sweep must name the surfaces it did not visit; a cap in characters is not a width; and text that wraps for the first time inherits every multi-line default the widget was hiding. | 0.81.202 |
 | [The seven small rows, four of which were not what they said](#the-seven-small-rows-four-of-which-were-not-what-they-said) | A suggested fix is a hypothesis about the code — four of seven were wrong about scope, premise or mechanism, each found by a grep; and a check asserting `not in` against a name the code would never write cannot fail. | 0.76.192 |
 | [The guard that knew half the vocabulary](#the-guard-that-knew-half-the-vocabulary) | Before persisting a value, read what the app already does to it at runtime — a stored preference inherits every rule the live one has, including the wrong ones; and a guard written against one kind of value governs every kind sharing the variable. | 0.76.198 |
 | [The template editor that "did nothing" when clicked](#the-template-editor-that-did-nothing-when-clicked) | 'Nothing happens' in a --windowed build is a real bug report — the exception was invisible. | 0.3.0 |
@@ -52,6 +53,8 @@ day-to-day tracking.
 | [The list that lost its place, twice, for two silent reasons](#the-list-that-lost-its-place-twice-for-two-silent-reasons) | 'Hard to reproduce' means unmeasured timing; instrument what the widget experiences until it's deterministic. | 0.58.82 |
 | [The click that was never delivered](#the-click-that-was-never-delivered) | Tk discards a generated event aimed at a widget with no native window, in silence — and `winfo_ismapped`/`winfo_viewable` do not predict delivery. | 0.71.154 |
 | [The safety net that could not see the gap](#the-safety-net-that-could-not-see-the-gap) | A gate tuned to the instances it already found certifies the ones it cannot see — worse than no gate, because the next reader trusts it. | 0.71.154 |
+| [The same net, woven again](#the-same-net-woven-again--and-the-question-it-was-answering) | A wordlist answers "are any of MY words here", not "is this English" — when a check's method can only answer a narrower question than its promise, say so where the promise is made. | — |
+| [The check that pinned the behaviour a release had deliberately replaced](#the-check-that-pinned-the-behaviour-a-release-had-deliberately-replaced) | When a feature changes what the app promises, the checks asserting the old promise are part of the change — and a suite that cannot run a check cannot tell you it is wrong. | — |
 | [A calendar that kept navigating behind the user's back](#a-calendar-that-kept-navigating-behind-the-users-back) | Changing how a page becomes visible invalidates 'is X visible' assumptions in unrelated code. | 0.5.0 |
 | [The date field that either lost your edit, or wouldn't let you finish typing it](#the-date-field-that-either-lost-your-edit-or-wouldnt-let-you-finish-typing-it) | Reusing Save's validation in silent autosave turns a helpful warning into an interruption. | 0.28.38 |
 | [The autosave that could interrupt you over a note that was already gone](#the-autosave-that-could-interrupt-you-over-a-note-that-was-already-gone) | A guard added to one path doesn't cover other routes into the same code. | 0.28.38 |
@@ -668,6 +671,100 @@ class would look like and make sure the pattern still catches it —
 before the clean report starts being used as evidence. And a gate that
 reports clean over a known-live instance is not merely incomplete: it
 actively certifies the gap, and the next reader believes it.
+
+### The same net, woven again — and the question it was answering
+
+*(2026-09-29, `Testing`)*
+
+The story above, with a different gate, eighteen days later. Worth its
+own entry only because of how the second one failed: not by being too
+narrow for a *weaker* instance, but by answering a different question
+from the one it claimed to.
+
+**Symptom:** `tools/check_english.py` reported the repository clean. Its
+own docstring says it exists because "the qa stories named their checks
+in Romanian … and every CI run printed those names into a log anybody
+can open". Six check names in `story_note_travels` were doing exactly
+that, plus two printed messages in `doc_screenshots`, one in `qa1`, and
+some eighty lines of seeded test data across eleven files.
+
+**Root cause:** the gate searches a hand-written list of Romanian words.
+That answers *"are any of MY words here"*. The question it claims to
+answer is *"is this English"*, and the two are only the same question
+while the list happens to be complete. Nothing that leaked used a word on
+the list — not one.
+
+The gate had been widened once before, in September, after it read a
+seeded notebook full of Romanian nouns and called the repository clean.
+That widening added nouns. It did not change the shape of the answer.
+
+**What made it visible:** not the gate. A sweep for something else
+noticed one Romanian line in a tool, and the question *"what else is
+like this"* did the rest.
+
+**Fix, and how little it proves:** the list is roughly three times
+longer, built from what a sweep actually found rather than from guessing,
+and words that are also English were tried and rejected on purpose —
+`face`, `nota`, `plan`, `corp`, `lista` — because a gate that cries wolf
+gets switched off. The commit says in the source that this is a floor and
+not a proof.
+
+The widening was itself the evidence for that. Run once, the longer list
+immediately found **eight more lines** the hand sweep had missed,
+including an assertion left stranded by one of my own renames. A third
+pass found **seven more**. Three rounds in one day, each one finding what
+the round before had certified as clean.
+
+**Mutation-tested on the line it started from:** restoring the original
+wording of `story_note_travels`' "the Settings button is in the sidebar"
+check — the one that had been printing Romanian into every CI log — turns
+the gate red, naming the file, the line and the word that caught it. The
+Romanian is described rather than quoted here on purpose: quoting it made
+this very paragraph fail the gate, which is a small proof that the
+widened list now bites.
+
+**Takeaway:** when a check's method can only answer a narrower question
+than its promise, say so where the promise is made. The widened list is
+worth having; believing it is finished is the thing that costs. And the
+second failure of a class is the one worth reading — the first looks like
+an oversight, the second shows you the shape.
+
+### The check that pinned the behaviour a release had deliberately replaced
+
+*(2026-09-29, `Testing`)*
+
+**Symptom:** none, for a fortnight. `story_audit`'s first chapter sets the
+note list's sort to "Title Z–A" and its filter to a category, closes the
+app, reopens it, and checks that both come back at their defaults — with
+a comment above explaining, reasonably, that the app writes the theme,
+the open note, the day colours and the grouping, and never claimed to
+write these two. "Asserting a promise nobody made is how an audit
+manufactures its own findings."
+
+All of that was true when it was written. Then `0.76.198` shipped C-15,
+which made sort and filter persist — the exact behaviour the check
+asserts does not happen.
+
+**Why nobody noticed:** the stories are not in `tools/run_tests.py`. The
+suite ran green through the whole cycle that changed the behaviour, and
+the check that contradicted it was never executed. It was found by
+reading the file for an unrelated reason.
+
+**Measured rather than assumed:** run on `main`, the chapter fails with
+`<- 'Title Z–A'` — the value coming back off disk, which is the fix
+working and the check disagreeing.
+
+**Fix:** the check now asks for the sort it was left on. The filter check
+stays as written, because its category only ever existed as a runtime
+entry in the first process, so `All` really is the honest answer on the
+way back in — which turns it from a contradiction of C-15's promise into
+the guard on C-15's fallback.
+
+**Takeaway:** a check that pins behaviour a release deliberately replaced
+is worse than no check — it either fails for the right reason and gets
+explained away, or passes by accident. When a feature changes what the
+app promises, the checks that asserted the old promise are part of the
+change, and a suite that cannot run a check cannot tell you that.
 
 ### The ceiling that counted the wrong thing
 
@@ -1463,6 +1560,62 @@ replaces, `add="+"` accumulates. And a "clear the hint before input lands"
 rule must enumerate the ways input *arrives*, not the ways it is typed:
 `<KeyPress>` is one door, `<<Paste>>` is another, and a virtual event will
 quietly take precedence over the physical one beside it.
+
+### The sweep that stopped at the edge of the Settings page
+
+*([0.81.202](../CHANGELOG.md#081202--2026-09-29))*
+
+**Symptom:** a note card in the sidebar showed its checklist as `☑ 1/` —
+a fraction with its denominator gone. Not reported: noticed in a
+screenshot taken for the documentation, of an ordinary note.
+
+**What it really was:** every line on a card is a `tk.Label` with no
+`wraplength`, packed `fill="x"` into a sidebar of fixed width. Tk draws
+such a label as one line as long as its text and lets the container show
+whatever fits. Nothing marks the cut. Staging a note carrying everything
+a note can carry showed the size of it: the title lost four words, the
+preview stopped mid-word with the `...` it had earned cut off as well,
+and the row of marks dropped the attachment count, the table mark and the
+checklist progress outright.
+
+**Why it is a story rather than a commit:** this exact mechanism had
+already been found and fixed — in `0.73.167`, where three Settings
+subtitles stopped mid-word, and which left behind `_wrap_to_own_width`
+precisely so nobody would hand-pick a width again. That sweep looked at
+the Settings page and stopped there. The note list has the narrowest
+labels in the app and was never walked.
+
+Two things made it survive eleven weeks. The character caps beside it
+*look* like width management: `preview_src[:40]` and
+`_truncate(title, 42)` keep a string short, and a reader checking for
+"is the length bounded" finds a yes. They bound the wrong quantity —
+forty narrow characters fit where forty wide ones do not, which is how a
+39-character body still ran off the card. And the qa suite had no check
+that asks what a card actually *shows*: everything about cards was
+asserted against the model, never against the pixels.
+
+**The fix and its sibling sweep.** Three calls to the existing helper,
+and no new idea — a second way to do the same thing would have been the
+real regression. Then every other `_truncate` call site was walked, and
+the sweep's result is mostly *not a bug*, which is worth recording as
+much as a fix: the Trash row's sub-line had already been wrapped by an
+earlier report, its title's 42-character cap is enough in a panel that
+wide (photographed to check, not assumed), the calendar's day chips carry
+`wraplength=88`, and the day tooltip packs `side="left"` inside a popup
+that grows — where the helper would be actively wrong, as its own
+docstring says.
+
+**One thing only the photograph could say.** Wrapping the preview left it
+ragged, because `anchor="w"` places the text *block* and `justify` places
+the lines inside it — and Tk centres a second line by default. The label
+had been single-line for its whole life, so `justify` had never mattered.
+No amount of reading the diff would have shown that; looking at the
+picture did, immediately.
+
+**Takeaway:** a fix's sweep has to name the surfaces it did *not* visit,
+or the next instance waits for a screenshot. A cap in characters is not a
+width. And any change that makes text wrap for the first time inherits
+every multi-line default the widget had been hiding.
 
 ## Editor & input interaction
 

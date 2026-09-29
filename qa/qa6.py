@@ -1204,7 +1204,7 @@ NO.save_setting('last_export_at', 'marker')
 _origErrQW = app.show_error
 app.show_error = lambda *a, **k: None
 app._export_state = {'current': 0, 'total': 1, 'done': True,
-                     'error': 'disc plin', 'save_path': 'X:/fake.zip'}
+                     'error': 'disk full', 'save_path': 'X:/fake.zip'}
 app._poll_export_progress()
 app.show_error = _origErrQW
 check('a FAILED export leaves the stamp alone',
@@ -1517,6 +1517,39 @@ check('and the undiscoverable rest',
       all(k in _allQW for k in ('Ctrl+Shift+V', 'Page Up', 'Home',
                                 'Shift+Tab')))
 
+# The page promises it holds everything the keyboard can do, and the
+# promise was broken once: the note list's keys shipped in 0.81.199 and
+# nobody added their rows, so the page and the user guide both went on
+# claiming completeness they no longer had. Asking for the three names
+# would only pin THIS omission. So this asks the CARD what it binds and
+# requires every answer to be named here -- a key bound later with no row
+# fails at the first check, and one that is named but not drawn fails at
+# the second.
+_QW_NOT_KEYS = {'<Button-1>', '<Button-3>', '<Button-2>', '<Enter>',
+                '<Leave>', '<FocusIn>', '<FocusOut>', '<Motion>',
+                '<MouseWheel>', '<Double-Button-1>'}
+# Spelled the way Tk reports them back, not the way they were bound:
+# bind('<Return>') is read back as '<Key-Return>', and this check was
+# written with the binding spelling and caught its own mistake.
+_QW_KEY_NAMES = {'<Key-Return>': 'Enter', '<Key-space>': 'Space',
+                 '<Key-Down>': 'Down', '<Key-Up>': 'Up',
+                 '<Shift-Key-F10>': 'Shift+F10',
+                 '<Key-App>': 'menu key', '<Key-Menu>': 'menu key'}
+_qw_card = next((w for w in app.list_frame.winfo_children()
+                 if getattr(w, '_card_note_id', None) is not None), None)
+# A check that cannot find its subject must fail rather than pass on an
+# empty list -- the shape of every check that has quietly stopped working.
+check('a note card is on screen to ask about', _qw_card is not None)
+_qw_bound = ([s for s in _qw_card.bind() if s not in _QW_NOT_KEYS]
+             if _qw_card is not None else [])
+_qw_unnamed = [s for s in _qw_bound if s not in _QW_KEY_NAMES]
+check('every key a note card binds has a name here (unnamed: %s)'
+      % _qw_unnamed, bool(_qw_bound) and _qw_unnamed == [])
+_qw_missing = [s for s in _qw_bound
+               if s in _QW_KEY_NAMES and _QW_KEY_NAMES[s] not in _allQW]
+check('...and every one of them is on the shortcuts page (missing: %s)'
+      % _qw_missing, _qw_missing == [])
+
 # Every nav entry draws a real glyph -- a section registered without a
 # branch in _draw_icon would show a BLANK icon and nothing would error
 # (exactly how the shortcuts section first shipped, caught in review).
@@ -1538,7 +1571,7 @@ def _fake_ask_qw(title, msg, **kw):
 
 
 app.ask_yes_no = _fake_ask_qw
-app.templates = [NO.normalize_template({'name': 'Proba QW', 'body': 'x'})]
+app.templates = [NO.normalize_template({'name': 'Trial QW', 'body': 'x'})]
 _holdQW = tk.Toplevel(app)
 _frameQW = tk.Frame(_holdQW)
 _frameQW.pack()
@@ -1990,24 +2023,24 @@ check('...and the note itself arrives whole, not refused',
 
 # 118: an export started while the editor holds unsaved work. The export
 # must not take the half-typed text, and must not lose it either.
-app.notes = [NO.normalize_note({'id': 4200, 'title': 'Salvata', 'body': 'corp salvat',
+app.notes = [NO.normalize_note({'id': 4200, 'title': 'Saved', 'body': 'the saved body',
                                 'category': 'General'})]
 app.save_notes()
 app.load_note(app.notes[0]); app.update()
-app.body_text.insert('end', ' plus ceva netrimis')
+app.body_text.insert('end', ' plus something not sent')
 _b5_on_disk_before = _json6.load(_io6.open('notes_data.json', encoding='utf-8'))
 check('what is on disk before the export is the SAVED text (plan 118)',
-      'netrimis' not in _b5_on_disk_before[0]['body'])
+      'not sent' not in _b5_on_disk_before[0]['body'])
 app._flush_autosave()
 app.update()
 _b5_on_disk_after = _json6.load(_io6.open('notes_data.json', encoding='utf-8'))
 check('...and the edit is not lost -- the autosave around it keeps it '
-      '(plan 118)', 'netrimis' in _b5_on_disk_after[0]['body'])
+      '(plan 118)', 'not sent' in _b5_on_disk_after[0]['body'])
 
 # 125: clicking quickly through many notes. Nothing may be lost, and no
 # note may end up showing another note's words.
 app.notes = [NO.normalize_note({'id': 4300 + i, 'title': 'Rapid %02d' % i,
-                                'body': 'corpul notitei %02d' % i,
+                                'body': 'the body of note %02d' % i,
                                 'category': 'General'})
              for i in range(12)]
 app.save_notes()
@@ -2024,7 +2057,7 @@ _b5_final = _json6.load(_io6.open('notes_data.json', encoding='utf-8'))
 check('...and all twelve are still there afterwards (plan 125)',
       len([n for n in _b5_final if n['id'] >= 4300]) == 12)
 check('...each with the text it started with',
-      all(n['body'] == 'corpul notitei %02d' % (n['id'] - 4300)
+      all(n['body'] == 'the body of note %02d' % (n['id'] - 4300)
           for n in _b5_final if n['id'] >= 4300))
 
 app.notes = list(_b5_saved_notes)

@@ -225,7 +225,7 @@ _lines9 = [l for l in _body9.get('1.0', 'end-1c').split('\n') if l]
 check(f'a pasted Excel/web table lands as pipe rows ({_lines9[:1]})',
       _took9 == 'break' and len(_lines9) == 2
       and _lines9[0].count('|') == 3 and 'Column1' in _lines9[0])
-NO.clipboard.read_html = lambda: '<p>doar text</p>'
+NO.clipboard.read_html = lambda: '<p>just text</p>'
 check('a non-table paste falls through to the normal path',
       app._paste_table_aware(_body9) is None)
 
@@ -233,8 +233,8 @@ check('a non-table paste falls through to the normal path',
 # The body box stays text (that is the store), but the dialog shows the
 # table AS a table underneath -- the same visual language as the editor.
 NO.clipboard.read_html = lambda: (
-    '<table><tr><th>Zi</th><th>Plan</th></tr>'
-    '<tr><td>luni</td><td>scris</td></tr></table>')
+    '<table><tr><th>Day</th><th>Plan</th></tr>'
+    '<tr><td>mon</td><td>written</td></tr></table>')
 _body9.delete('1.0', 'end')
 _body9.event_generate('<<Paste>>')
 for _ in range(5):
@@ -273,9 +273,9 @@ check(f'the body box hides its table text ({_vis9} of {_tot9} visible)',
 # box does not hold under test. The multi-table body goes through the
 # REAL clipboard so the class paste inserts exactly it.
 _multi9 = ('free text\n| Table | < |\n| Food | Source |\n'
-           '| Carne | vita |\n\n| Zi | Plan |\n| luni | scris |\n'
-           '| marti | citit |\n| miercuri | sport |\n| joi | piata |\n'
-           '| vineri | film |\n| sambata | drum |\n| duminica | odihna |')
+           '| Meat | beef |\n\n| Day | Plan |\n| mon | writing |\n'
+           '| tue | reading |\n| wed | sport |\n| thu | market |\n'
+           '| fri | film |\n| sat | a walk |\n| sun | resting |')
 NO.clipboard.read_html = lambda: None
 app.clipboard_clear()
 app.clipboard_append(_multi9)
@@ -309,7 +309,7 @@ check('a wide table reports sideways overflow for the h-scrollbar',
 NO.clipboard.read_html = lambda: None
 app.clipboard_clear()
 app.clipboard_append('| T | X |\n| a | b |\n\n| Z | P |\n| c | d |\n\n'
-                     'randul de text ramas')
+                     'the line of text left over')
 _body9.delete('1.0', 'end')
 _body9.event_generate('<<Paste>>')
 app.update()
@@ -317,7 +317,7 @@ app.update()
 _visC = _n9(_body9.count('1.0', 'end', 'displaychars'))
 check(f'blank lines around hidden tables hide with them '
       f'({_visC} visible)',
-      _visC <= len('randul de text ramas') + 2)
+      _visC <= len('the line of text left over') + 2)
 
 # ---- A THEMED QUESTION IS NEVER BURIED UNDER A -TOPMOST POPUP ----
 # The overlay lives in the main window; the popup floats above it. For
@@ -348,7 +348,7 @@ check('step-forward restores it',
 # paste instead.
 NO.clipboard.read_html = lambda: None
 app.clipboard_clear()
-app.clipboard_append('doar un rand simplu')
+app.clipboard_append('just one plain line')
 _body9.delete('1.0', 'end')
 _body9.event_generate('<<Paste>>')
 app.update()
@@ -420,7 +420,7 @@ check('backspace at the visible edge refuses to eat the hidden table',
 # -- the refresh used to park it at the end unconditionally, scattering
 # the letters of an edit to the tail.
 _bodyG.mark_set('insert', 'end')
-_bodyG.insert('insert', 'coada')
+_bodyG.insert('insert', 'tail')
 app.update()
 _lastG = int(_bodyG.index('end-1c').split('.')[0])
 _bodyG.mark_set('insert', '%d.2' % _lastG)
@@ -473,13 +473,13 @@ check('the template preview splits a <br> cell into its lines',
 
 # ---- A TAKEN TEMPLATE NAME ASKS, NEVER SILENTLY OVERWRITES ----
 app.templates = [NO.normalize_template({
-    'name': 'Cumparaturi', 'title': 'T', 'body': 'continut vechi',
+    'name': 'Shopping', 'title': 'T', 'body': 'old content',
     'comments': '', 'category': 'General', 'checklist': []})]
 NO.save_templates(app.templates)
 app.new_note()
 app.update()
-app.title_entry.insert(0, 'Alta nota')
-app.body_text.insert('1.0', 'continut NOU')
+app.title_entry.insert(0, 'Another note')
+app.body_text.insert('1.0', 'NEW content')
 app.update()
 def _ents21(w):
     out = []
@@ -495,7 +495,7 @@ app.save_current_as_template()
 app.update()
 _entC9 = _ents21(app._mini_popup)[0]
 _entC9.delete(0, 'end')
-_entC9.insert(0, 'Cumparaturi')
+_entC9.insert(0, 'Shopping')
 # Synthetic KEY events follow FOCUS; under Xvfb nothing had focused
 # the box, so the Return sailed past it. Insist first.
 for _tryC in range(40):
@@ -511,12 +511,12 @@ app.update()
 check('saving over a taken name from the editor asks, and No keeps both',
       len(_asksC) == 1
       and len(app.templates) == 1
-      and app.templates[0]['body'] == 'continut vechi'
+      and app.templates[0]['body'] == 'old content'
       and app._mini_popup is not None and app._mini_popup.winfo_exists())
 app.ask_yes_no = lambda *a, **k: (_asksC.append(1), True)[1]
 _entC9 = _ents21(app._mini_popup)[0]
 _entC9.delete(0, 'end')
-_entC9.insert(0, 'Cumparaturi')
+_entC9.insert(0, 'Shopping')
 # Synthetic KEY events follow FOCUS; under Xvfb nothing had focused
 # the box, so the Return sailed past it. Insist first.
 for _tryC in range(40):
@@ -530,8 +530,8 @@ for _tryC in range(40):
 _entC9.event_generate('<Return>')
 app.update()
 check('Yes replaces the old template, one copy of the name remains',
-      [t['name'] for t in app.templates].count('Cumparaturi') == 1
-      and app.templates[-1]['body'] == 'continut NOU')
+      [t['name'] for t in app.templates].count('Shopping') == 1
+      and app.templates[-1]['body'] == 'NEW content')
 
 # renaming a template onto a neighbour in Settings asks the same way
 app.templates.append(NO.normalize_template({
@@ -542,19 +542,19 @@ app._edit_template(app.templates[-1], lambda: None)
 app.update()
 _entR9 = _ents21(app._mini_popup)[0]
 _entR9.delete(0, 'end')
-_entR9.insert(0, 'Cumparaturi')
+_entR9.insert(0, 'Shopping')
 app.ask_yes_no = lambda *a, **k: (_asksC.append(1), False)[1]
 find_widget(app._mini_popup, tk.Button, 'Save').invoke()
 app.update()
 _names9 = [t['name'] for t in app.templates]
 check('renaming onto a neighbour asks too; No leaves no duplicate',
-      _names9.count('Cumparaturi') == 1 and 'Retete' in _names9)
+      _names9.count('Shopping') == 1 and 'Retete' in _names9)
 app.ask_yes_no = lambda *a, **k: (_asksC.append(1), True)[1]
 find_widget(app._mini_popup, tk.Button, 'Save').invoke()
 app.update()
 _names9 = [t['name'] for t in app.templates]
 check('Yes removes the neighbour and keeps one template with that name',
-      _names9 == ['Cumparaturi']
+      _names9 == ['Shopping']
       and app.templates[0]['body'] == 'retetele mele')
 app.ask_yes_no = _origAsk9
 _popG._confirm_dismiss = False
@@ -623,7 +623,7 @@ def _fake_ask(*a, **k):
 _real_ask9 = app.ask_yes_no
 app.ask_yes_no = _fake_ask
 _tplC = NO.normalize_template({
-    'name': 'ConfTest', 'title': 'x', 'body': 'corp',
+    'name': 'ConfTest', 'title': 'x', 'body': 'body',
     'category': 'General', 'checklist': [],
     'formatting': [{'start': 0, 'end': 2, 'style': 'bold'}]})
 app.templates.append(_tplC)

@@ -77,7 +77,7 @@ if hasattr(NO.NoteOrganizer, '_popup_watch_step'):
     NO.NoteOrganizer._popup_watch_step = lambda self: None
     _pinned = True
 if not _pinned:
-    print('ATENTIE: nicio garda de popup gasita -- popupurile se pot inchide')
+    print('WARNING: no popup guard found -- popups may close while shooting')
 
 app = NO.NoteOrganizer()
 app.show_info = lambda *a, **k: True
@@ -228,7 +228,7 @@ def capture(name, widgets=None, pad=8):
     intruders = _foreign_window_over(box)
     if intruders:
         who = ", ".join(_window_title_of(p) for p in intruders)
-        print('  %-22s NU FOTOGRAFIEZ: %s acopera fereastra' % (name, who))
+        print('  %-22s NOT TAKEN: %s is covering the window' % (name, who))
         return
     box = tuple(int(round(v * SCALE)) for v in box)
     img = ImageGrab.grab(bbox=box)
