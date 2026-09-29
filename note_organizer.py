@@ -513,7 +513,17 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         from noteorganizer.core import storage as _core_storage
         _core_storage.on_write_failure = self._on_data_write_failure
         self.geometry("900x600")
-        self.minsize(500, 400)
+        # The smallest window that still looks like the app, measured and
+        # photographed rather than guessed. The sidebar's fixed parts -- the
+        # heading, search, sort and select row above the list, New Note,
+        # Import, Share and Settings below it -- take about 496 pixels of
+        # height, so at the old 500x400 the list had NO room at all: an app
+        # with no notes in it, which is what a person who drags the window
+        # small or snaps it to a corner saw. At 600 the list holds a whole
+        # card. The width stays small enough for a half-screen snap on a
+        # 1280-wide (150%-scaled) laptop; below 900 the page scrolls
+        # sideways, which is the design choice the main canvas already makes.
+        self.minsize(640, 600)
         # On <Map>, not on after_idle. Measured: before the window is
         # mapped, wm_frame() names a DIFFERENT window from the one it
         # names afterwards -- and the compositor accepts a paint on that
@@ -2735,6 +2745,16 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # and synthetic key events, which follow focus, reach the entry.
         self.after_idle(lambda e=entry: e.focus_set()
                         if e.winfo_exists() else None)
+        # The record dies with the widget, on every route that can kill it.
+        # Opening another note tears the grids down and this Text with them,
+        # and nothing cleared the record -- so the toolbar kept aiming at a
+        # dead widget: Bold, Italic and the colours did nothing on the next
+        # note except raise "Something went wrong". A <Destroy> binding
+        # cannot be missed by a route nobody thought to list; the identity
+        # test keeps an old editor's death from clearing a new one's record.
+        entry.bind("<Destroy>",
+                   lambda _e, this=entry: self._forget_dead_cell_editor(this),
+                   add="+")
         entry.bind("<Tab>", lambda _e: self._editor_step(+1))
         entry.bind("<Shift-Tab>", lambda _e: self._editor_step(-1))
         # X11 reports Shift+Tab as its own keysym rather than a modified
@@ -2815,6 +2835,13 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
     def _cancel_cell_editor(self):
         self._close_cell_editor()
+
+    def _forget_dead_cell_editor(self, entry):
+        """A destroyed cell editor stops being the open one (see where
+        _open_cell_editor binds this)."""
+        editor = getattr(self, "_cell_editor", None)
+        if editor is not None and editor.get("entry") is entry:
+            self._cell_editor = None
 
     def _maybe_close_cell_editor(self, source=None):
         """FocusOut closes the editor -- except while the emoji picker is
@@ -7783,8 +7810,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             # Same order as the single-note route, for the same reason:
             # the editor's unsaved work is saved before it is replaced,
             # and the editor is then brought onto the new version -- or
-            # its next save puts the old one back.
-            self._flush_autosave()
+            # its next save puts the old one back. Cancel on the day's
+            # save question cancels the import: going on would replace
+            # the very edit the person just declined to let go of.
+            if self._flush_autosave() is False:
+                return False, []
             fields = (UPDATABLE_FROM_BACKUP if source == "backup"
                       else UPDATABLE_FROM_SHARED)
             for mine, theirs in known:
@@ -7901,8 +7931,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     # it is where the code came from. Its unsaved edits
                     # are saved FIRST, so they are what the rescue copy
                     # holds and "↩ Restore previous" gives back; then the
-                    # incoming version replaces them.
-                    self._flush_autosave()
+                    # incoming version replaces them. Cancel on a day's
+                    # save question stops here, with nothing replaced.
+                    if self._flush_autosave() is False:
+                        return
                     apply_shared_update(mine, incoming)
                     self.save_notes()
                     self.import_box.delete("1.0", "end")
@@ -8815,6 +8847,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         proceed, valid_notes = self._take_known_notes(valid_notes, "backup")
         if not proceed:
             _undo_category_merge()
+            # The extracted backup goes with it, as it does when the
+            # duplicate question below is cancelled; this exit left the
+            # whole unpacked zip in the temp folder.
+            shutil.rmtree(temp_dir, ignore_errors=True)
             return
         existing_keys = {_dup_key(n) for n in self.notes}
         fresh = [n for n in valid_notes if _dup_key(normalize_note(n)) not in existing_keys]
@@ -10489,15 +10525,17 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
         bottom_row = _bulk_row()
         bulk_category_btn = tk.Button(
-            bottom_row, text="🗂 Category ▾", command=self._bulk_change_category,
+            bottom_row, text="🗂 Category ▾",
             relief="flat", font=("Segoe UI", 8), cursor="hand2")
+        self._toggles_its_popup(bulk_category_btn, self._bulk_change_category)
         self.track_theme(bulk_category_btn, bg="accent")
         bulk_category_btn.configure(fg="white")
         _bulk_pack(bulk_category_btn)
         self._bulk_category_btn = bulk_category_btn
         bulk_export_btn = tk.Button(
-            bottom_row, text="Export ▾", command=self._bulk_export,
+            bottom_row, text="Export ▾",
             relief="flat", font=("Segoe UI", 8), cursor="hand2")
+        self._toggles_its_popup(bulk_export_btn, self._bulk_export)
         self.track_theme(bulk_export_btn, bg="card", fg="text")
         _bulk_pack(bulk_export_btn)
         self._bulk_export_btn = bulk_export_btn
@@ -10797,9 +10835,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._add_paste_menu(self.date_entry)
 
         pick_date_btn = tk.Button(
-            meta_row, text="📅", command=self.open_date_picker,
+            meta_row, text="📅",
             relief="flat", font=("Segoe UI", 9), cursor="hand2"
         )
+        self._toggles_its_popup(pick_date_btn, self.open_date_picker)
         self.track_theme(pick_date_btn, bg="sidebar", fg="text")
         pick_date_btn.pack(side="left", padx=(0, 2), ipadx=2)
         self.pick_date_btn = pick_date_btn
@@ -10819,9 +10858,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.current_note_color = ""  # "" means "use the category's default color"
 
         self.color_swatch_btn = tk.Button(
-            meta_row, text="", width=3, relief="flat", cursor="hand2",
-            command=self.open_color_picker
-        )
+            meta_row, text="", width=3, relief="flat", cursor="hand2")
+        self._toggles_its_popup(self.color_swatch_btn, self.open_color_picker)
         self.color_swatch_btn.pack(side="left", padx=(6, 6))
 
         self._update_color_swatch()
@@ -10957,17 +10995,20 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # _refresh_format_buttons / _contrasting_fg.
         self.text_color_btn = tk.Button(
             format_bar, text="A", font=("Segoe UI", 10, "bold"), width=2,
-            relief="flat", cursor="hand2",
-            command=lambda: self._open_color_swatch_popup("text_color")
-        )
+            relief="flat", cursor="hand2")
+        # A second click closes the palette instead of blinking it.
+        self._toggles_its_popup(
+            self.text_color_btn,
+            lambda: self._open_color_swatch_popup("text_color"))
         self._add_fmt_item(self.text_color_btn, padx=(0, 2), ipady=2)
         self._attach_tooltip(self.text_color_btn, "Text colour",
                              "Colours the letters themselves")
         self.highlight_btn = tk.Button(
             format_bar, text="H", font=("Segoe UI", 10, "bold"), width=2,
-            relief="flat", cursor="hand2",
-            command=lambda: self._open_color_swatch_popup("highlight")
-        )
+            relief="flat", cursor="hand2")
+        self._toggles_its_popup(
+            self.highlight_btn,
+            lambda: self._open_color_swatch_popup("highlight"))
         self._add_fmt_item(self.highlight_btn, padx=(0, 2), ipady=2)
         self._attach_tooltip(self.highlight_btn, "Highlight",
                              "Colours the background behind the letters")
@@ -11032,9 +11073,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
         self.table_btn = tk.Button(
             format_bar, text="\u25a6", font=("Segoe UI", 11), width=2,
-            relief="flat", cursor="hand2",
-            command=self._open_table_size_popup
-        )
+            relief="flat", cursor="hand2")
+        self._toggles_its_popup(self.table_btn, self._open_table_size_popup)
         self.track_theme(self.table_btn, bg="sidebar", fg="text")
         self._add_fmt_item(self.table_btn, padx=(0, 2), ipady=2)
         self._attach_tooltip(
@@ -11044,8 +11084,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
         self.emoji_btn = tk.Button(
             format_bar, text="\U0001f600", font=("Segoe UI Emoji", 10),
-            width=2, relief="flat", cursor="hand2",
-            command=self._insert_emoji_from_toolbar)
+            width=2, relief="flat", cursor="hand2")
+        self._toggles_its_popup(self.emoji_btn, self._insert_emoji_from_toolbar)
         self.track_theme(self.emoji_btn, bg="sidebar", fg="text")
         self._add_fmt_item(self.emoji_btn, padx=(0, 2), ipady=2)
         self._attach_tooltip(
@@ -11370,9 +11410,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
         use_template_btn = tk.Button(
             action_row, text="📎 Use template",
-            command=self.show_template_picker,
             relief="flat", font=("Segoe UI", 10, "bold"), cursor="hand2"
         )
+        self._toggles_its_popup(use_template_btn, self.show_template_picker)
         self.track_theme(use_template_btn, bg="sidebar", fg="text")
         self.use_template_btn = use_template_btn
 
@@ -12030,10 +12070,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
         self.rec_end_date_pick_btn = tk.Button(
             end_row, text="📅",
-            command=lambda: self.open_date_picker(self.rec_end_date_entry,
-                                                  self.rec_end_date_pick_btn),
             relief="flat", font=("Segoe UI", 9), cursor="hand2"
         )
+        self._toggles_its_popup(
+            self.rec_end_date_pick_btn,
+            lambda: self.open_date_picker(self.rec_end_date_entry,
+                                          self.rec_end_date_pick_btn))
         self.track_theme(self.rec_end_date_pick_btn, bg="sidebar", fg="text")
         self.rec_end_date_pick_btn.pack(side="left", padx=(0, 8), ipadx=2)
 
@@ -13447,7 +13489,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             # describing a state that no longer exists by the time the
             # user answers.
             touched = set(self.selected_note_ids)
-            self._flush_autosave()
+            if self._flush_autosave() is False:
+                return  # Cancel on a day's save question: nothing moves
             to_move = [n for n in self.notes if n["id"] in touched]
             if not to_move:
                 # The ticked notes are gone. A dialog naming a count it
@@ -13913,12 +13956,18 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # the calendar-originated one — clear this BEFORE the flush below, so
         # that flush's save can't accidentally trigger an unwanted jump back
         # to the calendar out from under the note the user is trying to open.
+        pending_return = getattr(self, "_pending_calendar_return", None)
         self._pending_calendar_return = None
         self._update_calendar_return_button()
         self._catch_up_deferred_refresh()
         # Save whatever is currently in the editor before switching away.
-        if flush:
-            self._flush_autosave()
+        # Cancel on a repeating day's save question means stay: the edited
+        # day remains in the editor, unsaved, and the way back to the
+        # calendar is armed again as it was.
+        if flush and self._flush_autosave() is False:
+            self._pending_calendar_return = pending_return
+            self._update_calendar_return_button()
+            return False
         self.load_note(note, occurrence_date)
         self._remember_last_open_note(note["id"])
         # Keep a single-entry tab list so the save/flush machinery still works.
@@ -13932,15 +13981,21 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # a much more noticeable flicker than the same cost is for genuinely
         # rare actions like saving or searching.
         self._update_open_highlight()
+        return True
 
     def open_blank_tab(self):
         """Start a brand-new empty note, replacing whatever was open (after
         auto-saving any unsaved work in it)."""
         self._dismiss_mini_popup()
+        pending_return = getattr(self, "_pending_calendar_return", None)
         self._pending_calendar_return = None
         self._update_calendar_return_button()
         self._catch_up_deferred_refresh()
-        self._flush_autosave()
+        if self._flush_autosave() is False:
+            # Cancel means stay, exactly as in open_note_in_tab.
+            self._pending_calendar_return = pending_return
+            self._update_calendar_return_button()
+            return
         self.new_note()
         self._tab_counter += 1
         self.open_tabs = [{"key": self._tab_counter, "state": self.capture_editor_state()}]
@@ -13954,7 +14009,20 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
     def _flush_autosave(self):
         """Cancel any pending debounced auto-save and, if the current editor has
         real unsaved changes, save them right now. Called before switching notes
-        or closing so a late timer can't fire into the wrong note."""
+        or closing so a late timer can't fire into the wrong note.
+
+        Returns False when the person pressed Cancel on the question a
+        repeating note's day asks ("What should Save apply to?"), and True
+        otherwise. Every caller about to replace the editor -- another note,
+        a new one, closing the window -- stops on False, because Cancel
+        means "take me back", in this dialog as in every other. They used
+        to carry on regardless, and Cancel quietly threw the day's edit
+        away.
+
+        Callers stop on an explicit False only (``is False``), never on
+        anything falsy: a return added later without a value, or a test
+        standing in for this method, must not turn into a window that
+        will not close."""
         if getattr(self, "_autosave_job", None) is not None:
             try:
                 self.after_cancel(self._autosave_job)
@@ -13962,7 +14030,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 pass
             self._autosave_job = None
         if self.selected_note_id is None and not self.open_tabs:
-            return
+            return True
         # selected_note_id can end up stale — pointing at a note that no
         # longer exists — in the brief window between a delete removing the
         # note from self.notes and the editor being repointed somewhere
@@ -13974,33 +14042,36 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # invisible safety net shouldn't ever surface an interruptive error
         # for something the user didn't directly ask to happen.
         if self.selected_note_id is not None and self.find_note(self.selected_note_id) is None:
-            return
+            return True
         try:
             st = self.capture_editor_state()
         except Exception:
             self._log_swallowed("flush: capture_editor_state")
-            return
+            return True
         # Same shared gate as _autosave_now, same exemption: an emptied
         # SAVED note must flush like any other edit — this was the second
         # of the two gatekeepers that made T0-5's "switch away and come
         # back" route lose the emptying.
         if not self._editor_state_has_content(st) and not self._editing_saved_note():
-            return
+            return True
         try:
             if not self.editor_state_matches_saved(st):
-                self.save_current_note(auto=True)
+                if self.save_current_note(auto=True) is self._SAVE_CANCELLED:
+                    return False
         except Exception:
             # THE silent spot the audit named: a save failing here, at
             # note-switch or close, is exactly "stopped saving in
             # complete silence" — leave the trace.
             self._log_swallowed("flush: save_current_note")
+        return True
 
     def switch_to_tab(self, index):
         if index == self.active_tab_index:
             return
         if not (0 <= index < len(self.open_tabs)):
             return
-        self._flush_autosave()
+        if self._flush_autosave() is False:
+            return
         self._sync_active_tab()
         self.active_tab_index = index
         self.restore_editor_state(self.open_tabs[index]["state"])
@@ -14039,15 +14110,51 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self.bind_all(lower, handler, add="+")
             self.bind_all(upper, handler, add="+")
 
+    def _leave_settings_for_the_editor(self):
+        """What a shortcut that needs the editor does first: let a popup
+        holding typed work have its say, then leave Settings the way the
+        Back button does. Returns False when the person has to stay.
+
+        Settings is a page swapped in place of the notebook, not a tab of
+        it, so Ctrl+N and Ctrl+F used to select the Notes tab of a notebook
+        that was not on screen: nothing visible happened, the hidden editor
+        was cleared (or grew an invisible find bar), and the keys typed next
+        went nowhere. Worse, with a template half-written in its editor and
+        the Calendar tab underneath, that tab change dismissed the editor
+        directly -- the template gone without the question a click outside
+        it asks.
+        """
+        pop = getattr(self, "_mini_popup", None)
+        confirm = getattr(pop, "_confirm_dismiss", None) if pop is not None else None
+        if confirm is not None:
+            try:
+                alive = bool(pop.winfo_exists())
+            except tk.TclError:
+                alive = False
+            if alive and not confirm():
+                # False means "stay open" -- or "I saved and closed myself".
+                # Only a popup still on screen is someone's unfinished work.
+                try:
+                    if pop.winfo_exists():
+                        return False
+                except tk.TclError:
+                    pass
+        if getattr(self, "_settings_open", False):
+            self.hide_settings_page()
+        return True
+
     def _shortcut_new_note(self, event=None):
         """Ctrl+N: a fresh note. Switches to the Notes tab first, since the
         editor lives there and the shortcut can fire from the Calendar."""
+        if self._a_dialog_is_asking() or not self._leave_settings_for_the_editor():
+            return "break"
         self.notebook.select(self.TAB_NOTES)
         # Flush before clearing, like every other route into an empty
         # editor — without it the shortcut silently discarded whatever
         # the debounce hadn't caught yet (and a deferred occurrence
-        # session in full).
-        self._flush_autosave()
+        # session in full). Cancel on the day's question keeps the day.
+        if self._flush_autosave() is False:
+            return "break"
         self.new_note()
         return "break"
 
@@ -14056,6 +14163,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         genuinely nothing to save, rather than popping the "write something"
         warning a global shortcut would otherwise trigger from anywhere
         (same emptiness test the autosave uses)."""
+        if self._a_dialog_is_asking():
+            return "break"
         try:
             st = self.capture_editor_state()
         except Exception:
@@ -14089,6 +14198,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
     def _shortcut_find(self, event=None):
         """Ctrl+F: open the in-note find bar (on the Notes tab)."""
+        if self._a_dialog_is_asking() or not self._leave_settings_for_the_editor():
+            return "break"
         try:
             self.notebook.select(self.TAB_NOTES)
         except tk.TclError:
@@ -14941,7 +15052,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             return
         if real.get("category") == category:
             return
-        self._flush_autosave()
+        if self._flush_autosave() is False:
+            return  # Cancel on a day's save question: nothing moves
         # Re-read after the flush: the note object above was fetched before
         # anything the editor was holding reached the store.
         real = self.find_note(note["id"])
@@ -15002,7 +15114,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         keeps an explicit Save from yanking the user out of the editor.
         """
         self.notebook.select(self.TAB_NOTES)
-        self.open_note_in_tab(note, occurrence_date=occurrence_date)
+        # Not opened -- Cancel on the day still in the editor -- means no
+        # way back to arm either: it would point at a note never opened.
+        if not self.open_note_in_tab(note, occurrence_date=occurrence_date):
+            return
         if return_day is not None:
             self._pending_calendar_return = {
                 "year": self.cal_year, "month": self.cal_month,
@@ -15014,7 +15129,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         """Open a plain dated note in the editor and focus the Repeat control so
         the user can turn it into a recurring series."""
         self.notebook.select(self.TAB_NOTES)
-        self.open_note_in_tab(note)
+        if not self.open_note_in_tab(note):
+            return  # Cancel on the day still in the editor: see _ctx_open
         if return_day is not None:
             # Raised on a calendar day — same way-back memory as _ctx_open.
             self._pending_calendar_return = {
@@ -15063,8 +15179,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         delete logic so recurring-series scope prompts still apply."""
         # Flush whatever's genuinely open in the editor FIRST, under its real
         # selected_note_id, so the list re-render after the delete shows the
-        # editor's latest content rather than a stale preview.
-        self._flush_autosave()
+        # editor's latest content rather than a stale preview. Cancel on a
+        # day's save question stops the delete before it asks anything.
+        if self._flush_autosave() is False:
+            return
         # The target travels as a parameter — never by repointing the
         # editor's selection at it. An earlier version did exactly that,
         # and when the user cancelled the confirm dialog the selection
@@ -15479,6 +15597,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.update_word_count()
         self._update_restore_button()
 
+    # What save_current_note returns when the person pressed Cancel on the
+    # occurrence-scope question -- the one outcome a caller that is about
+    # to replace the editor must not carry on past.
+    _SAVE_CANCELLED = object()
+
     def save_current_note(self, auto=False):
         title = self.title_entry.get().strip()
         if title == "Note title...":
@@ -15617,7 +15740,13 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 return
 
             scope = "series"
-            if is_recurring(note) and self.current_occurrence_date:
+            # Read once, before any question is asked. The question runs a
+            # nested event loop, and whatever else happens while it waits
+            # must not decide which day this save writes to: a Ctrl+N
+            # pressed under the question used to clear the day, and the
+            # answer then wrote the edit under a key of None.
+            occurrence_date = self.current_occurrence_date
+            if is_recurring(note) and occurrence_date:
                 # Only ask when the answer could actually change anything.
                 # An override carries OVERRIDABLE_FIELDS and nothing else,
                 # so when the edit is in a SERIES-owned field — a ticked
@@ -15628,7 +15757,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 # switch. If nothing overridable differs from what this
                 # day shows, the edit belongs to the series by
                 # construction; save it there without asking.
-                shown_now = effective_note(note, self.current_occurrence_date)
+                shown_now = effective_note(note, occurrence_date)
                 overridable_changed = (
                     title.strip() != (shown_now.get("title") or "").strip()
                     or body != (shown_now.get("body") or "")
@@ -15636,10 +15765,14 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     or category != shown_now.get("category")
                     or self.current_note_color != (shown_now.get("color") or ""))
                 if overridable_changed:
-                    scope = self.ask_occurrence_scope(
-                        "Save", self.current_occurrence_date)
+                    scope = self.ask_occurrence_scope("Save", occurrence_date)
                     if scope is None:
-                        return
+                        # Said out loud, because Cancel means "take me
+                        # back": a caller about to leave this note (another
+                        # note, Ctrl+N, closing the window) has to know the
+                        # edit was NOT saved, or it replaces the editor and
+                        # the edit is gone without a word.
+                        return self._SAVE_CANCELLED
 
             if scope == "occurrence":
                 # Only content is overridden. Date, recurrence rule and
@@ -15651,7 +15784,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 # note's, so the base note's formatting spans wouldn't
                 # necessarily land on the right characters. An occurrence
                 # with its own overridden text shows as plain text.
-                note.setdefault("overrides", {})[self.current_occurrence_date] = {
+                note.setdefault("overrides", {})[occurrence_date] = {
                     "title": title,
                     "body": body,
                     "comments": comments,
@@ -15659,7 +15792,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     "color": self.current_note_color,
                 }
                 note["updated"] = now
-                self.set_status(("Auto-saved " if auto else "Saved ") + f"{self.current_occurrence_date} only")
+                self.set_status(("Auto-saved " if auto else "Saved ") + f"{occurrence_date} only")
                 if auto:
                     self._show_toast("Note updated", yield_to_action=True)
             else:
@@ -15847,7 +15980,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # typed into while the toast was up: save that under the category
         # it was typed against, then move the note, then bring the editor
         # onto the result -- the same order the change itself uses.
-        self._flush_autosave()
+        if self._flush_autosave() is False:
+            return  # Cancel on a day's save question: the undo waits
         restored = []
         homeless = 0
         for note_id, old_category, old_updated in marks:
@@ -16193,8 +16327,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         window closes. One exception is no longer silent: a dirty
         occurrence view (whose background autosave defers rather than
         ask -- see _autosave_now) raises its occurrence-scope question
-        here, at the gesture; cancelling it discards that edit."""
-        self._flush_autosave()
+        here, at the gesture. Cancelling it keeps the window open, on the
+        edited day: it used to close anyway and discard the edit, which
+        is the opposite of what Cancel means anywhere else."""
+        if self._flush_autosave() is False:
+            return
         self._sync_active_tab()
         for i in range(len(self.open_tabs)):
             try:

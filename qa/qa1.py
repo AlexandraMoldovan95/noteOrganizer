@@ -394,7 +394,10 @@ check('typing cursor stays at the end after button presses, not stuck '
 
 find_calc_btn('=').invoke()
 app.update()
-check('calculator computes 7x8=56 via real button clicks',
+# The value goes into the name: this went red once, in a run while someone
+# was typing on the same desktop, and said nothing about what it had found.
+check('calculator computes 7x8=56 via real button clicks (display %r)'
+      % app._calc_display_var.get(),
       app._calc_display_var.get() == '56')
 check('insert into note becomes enabled right after "="',
       str(app.calculator_insert_btn.cget('state')) == 'normal')
@@ -516,13 +519,19 @@ check('the history says what clicking a line does',
       any('insert' in t.lower() for t in _calc_hint))
 # Click the oldest entry (7×8=56) — should insert it, landing after
 # whatever's already in the body from earlier insertions in this test.
-target_entry = next(w for w in history_labels if str(w.cget('text')) == '7×8=56')
+# A default, so that a missing entry is a red rather than a StopIteration
+# that ends qa1 before its footer (it did, once, and took every check
+# after it with it).
+target_entry = next((w for w in history_labels
+                     if str(w.cget('text')) == '7×8=56'), None)
 body_before_history_click = app.body_text.get('1.0', 'end')
-_qa_click(target_entry)
-app.update()
+if target_entry is not None:
+    _qa_click(target_entry)
+    app.update()
 body_after_history_click = app.body_text.get('1.0', 'end')
 check('clicking a history entry inserts that exact formula into the note',
-      body_after_history_click.count('7×8=56') == body_before_history_click.count('7×8=56') + 1)
+      target_entry is not None
+      and body_after_history_click.count('7×8=56') == body_before_history_click.count('7×8=56') + 1)
 
 find_calc_btn('Clear').invoke()
 app.update()

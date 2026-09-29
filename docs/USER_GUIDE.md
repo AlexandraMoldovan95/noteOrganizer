@@ -476,7 +476,9 @@ specific date.
 ![Recurrence setup](screenshots/recurrence-setup.png)
 
 Editing or deleting one specific occurrence (rather than the whole series) is always offered as a
-separate choice — your edit only applies where you meant it to.
+separate choice — your edit only applies where you meant it to. Leaving a day you have edited —
+opening another note, starting a new one, or closing the window — asks where the edit belongs
+first, and **Cancel** keeps you on that day with the edit still on screen, unsaved.
 
 A day you edited with **"only this occurrence"** keeps its own content from then on: later edits
 to the series deliberately do not touch it (that day is *yours*), which can look surprising — a
@@ -698,7 +700,9 @@ category — click one to jump straight to your notes filtered to that category.
 
 Three shortcuts work from anywhere in the app: **Ctrl+N** starts a new note, **Ctrl+S** saves the
 note you're editing, and **Ctrl+F** opens the find bar for searching within the current note (see
-*Finding notes*, above). Settings → Keyboard shortcuts carries this reference inside the app,
+*Finding notes*, above). From the Settings page, Ctrl+N and Ctrl+F take you back to the editor
+first (asking about a template you were halfway through). While a question is on screen, the
+shortcuts wait for your answer. Settings → Keyboard shortcuts carries this reference inside the app,
 grouped by where each combo works. The table below is the longer of the two — it also covers the
 keys that only mean something inside a list, in the find bar, or on the note list.
 

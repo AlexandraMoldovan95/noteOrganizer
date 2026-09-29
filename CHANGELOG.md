@@ -82,6 +82,83 @@ How the numbers themselves are counted is the
 
 ---
 
+## [Unreleased]
+
+*Highlights: Cancel means stay, the keyboard goes back where it was, and a button that opens
+something closes it on the next click — the everyday places where the app did something other
+than what a person just asked.*
+
+### Fixed
+
+- **Cancel on a repeating day's save question keeps you on that day.** Leaving a day of a
+  repeating note you had edited — by opening another note, Ctrl+N, + New Note, a delete from
+  another note's menu, or closing the window — asks what Save should apply to. Cancel quietly
+  discarded the edit: the save returned without saving, nothing said so, and the app went where
+  it was going anyway. Cancel means "take me back" in every other dialog, and now in this one:
+  the edited day stays on screen, unsaved, and the way back to the calendar stays armed. It was
+  already true of one route, Back to Calendar; every other route now does the same.
+
+- **A question on screen holds the keyboard shortcuts.** A dialog's grab stops the mouse but
+  not keys bound app-wide, so Ctrl+S pressed twice put the same question on screen twice,
+  stacked, and Ctrl+N pressed under it cleared the editor — after which the answer wrote the
+  edit into the notes file under a day of "None". While a question waits for an answer,
+  Ctrl+N, Ctrl+F, Ctrl+S and the calendar's PgUp, PgDn and Home now wait too, and a save
+  decides which day it is writing to before it asks anything.
+
+- **After a question, the keyboard goes back where it was.** Every dialog took the keyboard
+  onto its own button and then vanished, leaving it on the bare window: someone typing a note
+  who answered a question kept typing into nothing until they clicked back in. Every dialog in
+  the app now hands the keyboard back to where it found it.
+
+- **Formatting works on the next note after editing a table cell.** Opening another note while
+  a table cell was open tore the table down, and the cell's editor with it, but the app went on
+  believing a cell was open — so Bold, Italic and the colours did nothing on the next note
+  except put up "Something went wrong". The record now ends with the editor, on every route
+  that can end it.
+
+- **Ctrl+N and Ctrl+F leave the Settings page for the editor.** Settings takes the editor's
+  place on screen, and both shortcuts acted on the editor behind it: Ctrl+N emptied a note
+  nobody could see and Ctrl+F opened an invisible find bar, while what was typed next went
+  nowhere. With a template half-written in its editor, the same keys threw the template away
+  without the question a click outside it asks. Both leave Settings now, the way Back does —
+  after asking about unsaved template text, and staying put if it cannot be saved.
+
+- **A second click on a button that opened a popup closes it.** Eleven buttons — text colour,
+  highlight, emoji, the table size, both date pickers, the note's colour, Use template, the
+  calendar's month, and the selection bar's Category and Export — closed their popup on the
+  press and opened a fresh one on the release, so it blinked instead of going away. The
+  dropdowns were fixed for exactly this after a field report; these now answer the same way.
+
+- **The window cannot be made so small that no note shows.** The smallest size it allowed,
+  500 by 400, left the note list no room at all under the sidebar's buttons: an app with no
+  notes in it, which is what dragging the window small or snapping it to a corner showed.
+  Measured and photographed, the minimum is now 640 by 600, where a whole note card fits.
+
+- **Cancelling a backup import leaves nothing behind.** Answering Cancel when a backup holds
+  notes you already have left the whole unpacked backup — attachments included — in the temp
+  folder. The other Cancel on that screen always cleaned up; this one does too.
+
+### Testing
+
+- Checks in qa7 (Cancel on six routes plus a control, shortcuts pressed from inside an open
+  question's own wait, the keyboard handed back after a dialog, a table cell's editor on the
+  next note) and qa9 (ten popup buttons clicked twice as a person clicks them, Ctrl+N and
+  Ctrl+F on the Settings page with both answers to a half-written template, the smallest
+  window). Fourteen mutants, each killed by its check with the suite reaching its footer.
+- The mutants caught three checks that were weaker than their names. The smallest-window check
+  asked the list for its height, which a widget clipped by its window still reports in full —
+  it now compares where things are on screen. The stacked-question scenario answered Cancel,
+  which the Cancel fix itself then protected — it now answers the way a person clicking
+  through would. And a mutant run once ended early because qa7's keyboard walk held a card
+  widget across a wait long enough for the list to be rebuilt; it now looks cards up afresh
+  by note after every wait.
+- qa1's closing check stands in for the flush with a function that returns nothing, and the
+  first version of this change read that as Cancel — the window refused to close. Callers now
+  stop on an explicit `False` only, and a mutant restoring the looser test is caught by that
+  same check.
+
+---
+
 ## [0.81.213] — 2026-09-29
 
 *Highlights: nothing moves or removes your notes behind your back — found by trying to break

@@ -665,19 +665,41 @@ def _c9_take(widget, cap_s=4.0):
     return False
 
 
-def _c9_settles_on(widget, cap_s=2.0):
-    """Wait for the focus the APP moved -- a PROMISE, so it is only polled,
-    never forced: the handler's own focus_set is asynchronous too."""
+# Settle every timer that can rebuild the list before anything below is
+# measured (qa/README): the waits in _c9_take can last seconds, and a
+# rebuild inside one replaced the card a check was holding -- index() of
+# the old widget then raised, and qa7 died before its footer, once, in a
+# mutant run. Cards are also looked up afresh after every wait, by note.
+app._flush_autosave()
+if getattr(app, '_search_debounce_job', None) is not None:
+    app.after_cancel(app._search_debounce_job)
+    app._search_debounce_job = None
+app.update()
+
+
+def _c9_live(note_id):
+    """The card on screen NOW for a note -- never one held across a wait."""
+    return (app._note_card_widgets.get(note_id) or {}).get('card')
+
+
+def _c9_on_note(note_id, cap_s=2.0):
+    """Poll for the keyboard on this NOTE's card, whichever widget draws it.
+    A PROMISE, so it is only polled, never forced: the handler's own
+    focus_set is asynchronous too."""
     end = _c9_time.time() + cap_s
     while _c9_time.time() < end:
         app.update(); app.update_idletasks()
-        if app.focus_get() is widget:
-            return True
+        try:
+            if getattr(app.focus_get(), '_card_note_id', None) == note_id:
+                return True
+        except (KeyError, tk.TclError):
+            pass
         _c9_time.sleep(0.01)
     return False
 
 
-check('fixture: the keyboard really is on the card', _c9_take(_c9_card))
+check('fixture: the keyboard really is on the card', _c9_take(_c9_live(20)))
+_c9_card = _c9_live(20)
 # The ring does double duty, so a focused card must be distinguishable
 # from the open one rather than sharing its colour.
 check(f'the focus ring is a different colour from the open-note ring '
@@ -733,19 +755,20 @@ finally:
 # Walking the list. Asked of the order the cards are PACKED in, because
 # the list is sorted, filtered and grouped -- the note after this one in
 # the file is very often not the one underneath it on screen.
-_c9_take(_c9_card)
-_c9_card.event_generate('<Down>')
+_c9_take(_c9_live(20))
+_c9_live(20).event_generate('<Down>')
 app.update(); app.update_idletasks()
-_c9_order = [w for w in app.list_frame.winfo_children()
-             if getattr(w, '_card_note_id', None) is not None]
-_c9_expected = _c9_order[_c9_order.index(_c9_card) + 1] \
-    if _c9_order.index(_c9_card) + 1 < len(_c9_order) else None
+_c9_ids = [w._card_note_id for w in app.list_frame.winfo_children()
+           if getattr(w, '_card_note_id', None) is not None]
+_c9_pos = _c9_ids.index(20) if 20 in _c9_ids else None
+_c9_next_id = (_c9_ids[_c9_pos + 1]
+               if _c9_pos is not None and _c9_pos + 1 < len(_c9_ids) else None)
 check('Down moves the keyboard to the next card on screen',
-      _c9_expected is not None and _c9_settles_on(_c9_expected))
-if _c9_expected is not None:
-    _c9_expected.event_generate('<Up>')
+      _c9_next_id is not None and _c9_on_note(_c9_next_id))
+if _c9_next_id is not None and _c9_live(_c9_next_id) is not None:
+    _c9_live(_c9_next_id).event_generate('<Up>')
     app.update(); app.update_idletasks()
-    check('and Up brings it back', _c9_settles_on(_c9_card))
+    check('and Up brings it back', _c9_on_note(20))
 # THE CONTROL: Up at the top must not wrap or crash -- it should simply
 # stay put, which is what a list does. An ABSENCE, so it cannot be polled
 # for: the keyboard is already on the first card, and a poll would answer
@@ -754,16 +777,26 @@ if _c9_expected is not None:
 # it is made. The precondition is part of the check: a key event only
 # reaches the card that has the keyboard, and one that went elsewhere
 # would record no move and read as a pass.
-_c9_top_ready = _c9_take(_c9_order[0])
+_c9_first_id = _c9_ids[0] if _c9_ids else None
+_c9_top_ready = (_c9_first_id is not None
+                 and _c9_take(_c9_live(_c9_first_id)))
+# Read AFTER the wait, so the widgets whose decisions are recorded are the
+# ones on screen when the key arrives.
+_c9_order = [w for w in app.list_frame.winfo_children()
+             if getattr(w, '_card_note_id', None) is not None]
 _c9_moved = []
 for _c9_w in _c9_order:
     _c9_w.focus_set = (lambda _w=_c9_w: _c9_moved.append(_w))
 try:
-    _c9_order[0].event_generate('<Up>')
+    if _c9_first_id is not None and _c9_live(_c9_first_id) is not None:
+        _c9_live(_c9_first_id).event_generate('<Up>')
     app.update(); app.update_idletasks()
 finally:
     for _c9_w in _c9_order:
-        del _c9_w.focus_set
+        try:
+            del _c9_w.focus_set
+        except AttributeError:
+            pass
 check('Up on the first card stays there rather than wrapping',
       _c9_top_ready and _c9_moved == [])
 
@@ -772,11 +805,11 @@ check('Up on the first card stays there rather than wrapping',
 # widget that no longer exists would make this route unusable after the
 # first thing that happens.
 check('fixture: the keyboard is on a known card before the rebuild',
-      _c9_take(_c9_card))
+      _c9_take(_c9_live(20)))
 app.refresh_note_list()
 app.update(); app.update_idletasks()
 check('a rebuilt list puts the keyboard back on the same note',
-      _c9_settles_on(app._note_card_widgets[20]['card']))
+      _c9_on_note(20))
 
 # THE OTHER HALF, and the one that shipped broken. The restore must not
 # fire when the keyboard was somewhere ELSE -- and the guard that decided
@@ -2666,6 +2699,221 @@ check('...and says the note is no longer there',
       'no longer here' in str(app.toast_lbl.cget('text')).lower())
 
 del app.ask_occurrence_scope
+
+# ============================================================
+# CANCEL MEANS STAY -- ON EVERY ROUTE THAT WOULD REPLACE THE EDITOR
+# ============================================================
+# Leaving an edited day of a repeating note asks what Save applies to, and
+# Cancel was a silent "discard": save_current_note returned without saving,
+# the flush never said so, and the caller loaded what came next anyway.
+# Cancel means "take me back" in every other dialog, and now in this one.
+_cs_notes = [
+    {'id': 90, 'title': 'Weekly sync', 'body': 'agenda', 'category': 'General',
+     'date': '2026-09-07', 'recurrence': {'freq': 'weekly', 'weekdays': [0]},
+     'updated': '2026-01-01 00:00', 'created': '2026-01-01 00:00',
+     'checklist': [], 'attachments': []},
+    {'id': 91, 'title': 'Something else', 'body': 'x', 'category': 'General',
+     'updated': '2026-01-01 00:00', 'created': '2026-01-01 00:00',
+     'checklist': [], 'attachments': []},
+]
+
+
+def _cs_reset():
+    app.notes = [NO.normalize_note(dict(n)) for n in _cs_notes]
+    app.save_notes()
+    app.refresh_note_list(); app.update()
+
+
+def _cs_on_the_edited_day():
+    app.open_note_in_tab(app.find_note(90), '2026-09-21', flush=False)
+    app.update()
+    app.body_text.insert('end-1c', ' EDITED')
+    app.update()
+
+
+def _cs_still_there():
+    base = app.find_note(90) or {}
+    return (app.selected_note_id == 90
+            and app.current_occurrence_date == '2026-09-21'
+            and 'EDITED' in app.body_text.get('1.0', 'end-1c')
+            and not (base.get('overrides') or {}))
+
+
+def _cs_other():
+    """Note 91 -- put back if a broken fix let a delete through, so that a
+    red here stays a red and never becomes a crash before the footer."""
+    note = app.find_note(91)
+    if note is None:
+        app.notes.append(NO.normalize_note(dict(_cs_notes[1])))
+        app.save_notes()
+        note = app.find_note(91)
+    return note
+
+
+def _cs_back_on_the_day():
+    """Put the edited day back on screen if a broken fix navigated away."""
+    if not _cs_still_there():
+        _cs_on_the_edited_day()
+
+
+_cs_reset()
+_cs_on_the_edited_day()
+app.ask_occurrence_scope = lambda *a, **k: None          # Cancel
+app.open_note_in_tab(_cs_other()); app.update()
+check('Cancel on the day\'s question keeps the day when opening another note',
+      _cs_still_there())
+_cs_back_on_the_day()
+app._shortcut_new_note(); app.update()
+check('...and when pressing Ctrl+N', _cs_still_there())
+_cs_back_on_the_day()
+app.open_blank_tab(); app.update()
+check('...and on the + New Note button', _cs_still_there())
+_cs_back_on_the_day()
+app._context_delete_note(_cs_other()); app.update()
+check('...and on another note\'s Delete, which deletes nothing',
+      _cs_still_there() and app.find_note(91) is not None)
+_cs_back_on_the_day()
+_cs_way_back = {"year": 2026, "month": 9, "date_str": "2026-09-21",
+                "origin": "edit"}
+app._pending_calendar_return = dict(_cs_way_back)
+app._ctx_open(_cs_other(), None, return_day='2026-09-30'); app.update()
+check('...and the way back to the calendar is still the day it was, '
+      'not re-pointed at the note that did not open',
+      _cs_still_there() and app._pending_calendar_return == _cs_way_back)
+app._pending_calendar_return = None
+app._update_calendar_return_button()
+_cs_back_on_the_day()
+# Closing: the window must stay. destroy is stood in for, so that a broken
+# fix fails this check instead of taking the rest of the file with it.
+_cs_closed = []
+app.destroy = lambda: _cs_closed.append(1)
+try:
+    app.on_app_close(); app.update()
+finally:
+    del app.destroy
+check('...and closing the window, which stays open on the edited day',
+      not _cs_closed and _cs_still_there())
+# THE CONTROL: the other answer still saves the day and moves on.
+_cs_back_on_the_day()
+app.ask_occurrence_scope = lambda *a, **k: 'occurrence'
+app.open_note_in_tab(_cs_other()); app.update()
+check('answering "This occurrence only" still saves the day and moves on',
+      app.selected_note_id == 91
+      and 'EDITED' in ((app.find_note(90).get('overrides') or {})
+                       .get('2026-09-21', {}).get('body') or ''))
+del app.ask_occurrence_scope
+
+# ============================================================
+# A QUESTION ON SCREEN HOLDS THE GLOBAL SHORTCUTS
+# ============================================================
+# The dialog's grab confines the POINTER; keys bound with bind_all still
+# ran underneath it. Ctrl+S pressed twice stacked the same question on
+# itself, and Ctrl+N under it cleared the editor, so the answer wrote the
+# edit under a day of None. The shortcuts are asked here from inside the
+# question's own wait -- where a person's keypress would land.
+def _cs_press(label):
+    app.update()
+    for frame in app.place_slaves():
+        stack = [frame]
+        while stack:
+            w = stack.pop()
+            if isinstance(w, tk.Button) and str(w.cget('text')) == label:
+                w.invoke()
+                return True
+            stack.extend(w.winfo_children())
+    return False
+
+
+_cs_reset()
+_cs_on_the_edited_day()
+_cs_questions = []
+
+
+def _cs_answer(_var):
+    _cs_questions.append(1)
+    if len(_cs_questions) == 1:
+        app._shortcut_save_now()
+        app._shortcut_new_note()
+        app.update()
+    # A question stacked on this one (only possible if the shortcuts ran
+    # underneath) is answered the way a person clicking through would,
+    # which is what lets Ctrl+N go on to clear the editor -- the damage
+    # the checks below are about.
+    _cs_press('This occurrence only')
+
+
+app.wait_variable = _cs_answer
+try:
+    app._shortcut_save_now(); app.update()
+finally:
+    del app.wait_variable
+check('a shortcut pressed under the question does not stack a second one',
+      len(_cs_questions) == 1)
+check('...nor clear the editor underneath it',
+      app.selected_note_id == 90 and app.current_occurrence_date == '2026-09-21')
+check('...and the answer is written under the day it was asked about',
+      set((app.find_note(90).get('overrides') or {}).keys()) == {'2026-09-21'})
+
+# ============================================================
+# THE KEYBOARD GOES BACK WHERE IT WAS AFTER A QUESTION
+# ============================================================
+# The dialog takes the focus onto its own button and is then destroyed;
+# Tk handed the keyboard to the bare window, and typing went nowhere until
+# the person clicked back in. What is asserted is the dialog's decision --
+# it hands the keyboard back to the body -- recorded where it is made.
+app.open_note_in_tab(_cs_other()); app.update()
+_cs_body_ready = _c9_take(app.body_text)
+_cs_given_back = []
+app.body_text.focus_set = lambda *a, **k: _cs_given_back.append('body')
+app.wait_variable = lambda _var: _cs_press('No')
+del app.ask_yes_no
+try:
+    app.ask_yes_no('Delete note', 'Move it to the Trash?', icon='warning',
+                   default='no')
+finally:
+    del app.wait_variable
+    del app.body_text.focus_set
+    app.ask_yes_no = lambda *a, **k: True
+check('after a question is answered, the keyboard is handed back to the note',
+      _cs_body_ready and _cs_given_back == ['body'])
+
+# ============================================================
+# A CELL EDITOR DOES NOT OUTLIVE ITS TABLE
+# ============================================================
+# Opening another note tore the table down and the open cell's editor with
+# it, and nothing cleared the record: Bold, Italic and the colours then
+# aimed at a dead widget on the next note, did nothing, and raised.
+app.notes = [NO.normalize_note(n) for n in (
+    {'id': 95, 'title': 'Table note',
+     'body': '| a | b |\n| --- | --- |\n| 1 | 2 |\n', 'category': 'General'},
+    {'id': 96, 'title': 'Plain', 'body': 'hello world', 'category': 'General'})]
+app.save_notes()
+app.refresh_note_list(); app.update()
+app.open_note_in_tab(app.find_note(95)); app.update()
+_cs_grids = list(getattr(app, '_table_grids', []) or [])
+check('fixture: the table is drawn as a grid', bool(_cs_grids))
+if _cs_grids:
+    app._open_cell_editor(_cs_grids[0], 1, 0)
+    app.update()
+    _cs_entry = (app._cell_editor or {}).get('entry')
+    if _cs_entry is not None:
+        _cs_entry.insert('end', 'pear')
+check('fixture: a cell editor is open', app._cell_editor is not None)
+app.open_note_in_tab(app.find_note(96)); app.update()
+check('the cell editor is gone with the table it was drawn in',
+      app._cell_editor is None)
+check('...and the typing in it was kept',
+      'pear' in (app.find_note(95).get('body') or ''))
+app.body_text.tag_remove('sel', '1.0', 'end')
+app.body_text.tag_add('sel', '1.0', '1.5')
+_cs_raised = None
+try:
+    app._toggle_body_style('bold')
+    app.update()
+except Exception as _e:
+    _cs_raised = _e
+check('...so Bold works on the next note instead of raising',
+      _cs_raised is None and 'bold' in app.body_text.tag_names('1.2'))
 
 print(f"=== QA7 FAILURES: {fails if fails else 'NONE'} ===")
 

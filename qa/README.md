@@ -421,6 +421,15 @@ A new surface joins this list the moment it ships.
   a binding, a placeholder, a validator or a menu sits between the user
   and the function, drive the outermost thing the app itself drives —
   here, the same virtual event the app's own menu sends.
+- **A widget clipped by its window still reports its full height.** The
+  check for the window's smallest size first asked whether the note
+  list's `winfo_height()` could hold a card, and passed at the old,
+  broken 500x400: pack had given the list its requested 354px, running
+  past the bottom of the window, while the New Note button was drawn
+  over the card. The mutant restoring the old minimum survived it. What
+  shows is a question about where things ARE: compare screen
+  coordinates (`winfo_rooty()` + height) against the window's edge and
+  the next widget's top.
 - **A red that loses its name costs a day, so the runner writes it down.**
   `tools/run_tests.py` saves a failing run's whole output to
   `%TEMP%/notesorg-failure-<label>.txt` and prints the path — the terminal

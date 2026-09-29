@@ -1058,6 +1058,204 @@ app.notes = list(_esc_notes)
 app.save_notes()
 app.new_note(); app.update()
 
+# ============================================================
+# EVERY BUTTON THAT OPENS A POPUP TOGGLES IT
+# ============================================================
+# The filter dropdown above was fixed after a field report. Eleven other
+# openers had the same shape and never were: a tk.Button acts on the
+# RELEASE, the click-outside handler closes the popup on the PRESS, so a
+# second click closed the palette and opened a fresh one -- a blink.
+def _tg_click(btn):
+    """A whole click on a tk.Button as a person makes it: the pointer
+    arrives, presses, lets go. A Button runs its command from the release,
+    and only for a pointer Tk believes is over it -- hence the Enter
+    (qa/README: a bare press+release does not reach the command)."""
+    btn.event_generate('<Enter>')
+    btn.event_generate('<ButtonPress-1>')
+    btn.event_generate('<ButtonRelease-1>')
+    app.update()
+
+
+def _tg_open():
+    pop = getattr(app, '_mini_popup', None)
+    try:
+        return pop is not None and bool(pop.winfo_exists())
+    except tk.TclError:
+        return False
+
+
+_tg_saved_notes = list(app.notes)
+_tg_saved_templates = list(app.templates)
+app.notes = [NO.normalize_note({'id': 9701, 'title': 'Toggle me',
+                                'body': 'hello', 'category': 'General'})]
+app.templates = [NO.normalize_template({'name': 'A template', 'body': 'x'})]
+app.save_notes()
+app.refresh_note_list(); app.update()
+app.notebook.select(app.TAB_NOTES); app.update()
+app.open_note_in_tab(app.notes[0]); app.update()
+
+
+def _tg_calendar():
+    app.notebook.select(app.TAB_CALENDAR); app.update()
+
+
+def _tg_selecting():
+    app.notebook.select(app.TAB_NOTES); app.update()
+    if not app.selection_mode:
+        app._toggle_selection_mode()
+    app.selected_note_ids = {9701}
+    app._update_bulk_selected_label()
+    app.update()
+
+
+_tg_buttons = [
+    ('the text colour button (A)', lambda: app.text_color_btn, None),
+    ('the highlight button (H)', lambda: app.highlight_btn, None),
+    ('the emoji button', lambda: app.emoji_btn, None),
+    ('the table button', lambda: app.table_btn, None),
+    ("the note's date picker", lambda: app.pick_date_btn, None),
+    ("the note's colour", lambda: app.color_swatch_btn, None),
+    ('Use template', lambda: find_widget(app, tk.Button, 'Use template'), None),
+    ("the calendar's month", lambda: app.cal_month_lbl, _tg_calendar),
+    ("the selection bar's Category", lambda: app._bulk_category_btn, _tg_selecting),
+    ("the selection bar's Export", lambda: app._bulk_export_btn, _tg_selecting),
+]
+for _tg_label, _tg_get, _tg_setup in _tg_buttons:
+    app._dismiss_mini_popup(); app.update()
+    # Stale click-outside handlers from earlier sections, cleared the way
+    # the dropdown block above does: each open installs its own.
+    app.unbind('<Button-1>')
+    if _tg_setup is not None:
+        _tg_setup()
+    _tg_btn = _tg_get()
+    if _tg_btn is None or not _tg_btn.winfo_viewable():
+        check('toggle: fixture -- %s is on screen' % _tg_label, False)
+        continue
+    _tg_click(_tg_btn)
+    _tg_opened = _tg_open()
+    _tg_click(_tg_btn)
+    _tg_closed = not _tg_open()
+    check('a second click on %s closes its popup instead of reopening it'
+          % _tg_label, _tg_opened and _tg_closed)
+app._dismiss_mini_popup(); app.update()
+if app.selection_mode:
+    app._toggle_selection_mode()
+app.notebook.select(app.TAB_NOTES); app.update()
+
+# ============================================================
+# CTRL+N AND CTRL+F ON THE SETTINGS PAGE
+# ============================================================
+# Settings is a page swapped in place of the notebook, so the shortcuts
+# selected the Notes tab of a notebook that was not on screen: nothing
+# visible happened, the hidden editor was cleared or grew an invisible find
+# bar, and the keys typed next went nowhere.
+app.show_settings_page(); app.update()
+app._shortcut_new_note(); app.update()
+check('Ctrl+N on the Settings page leaves it for the editor',
+      not app._settings_open and app.notebook.winfo_manager() == 'pack'
+      and app.settings_page.winfo_manager() == '')
+app.show_settings_page(); app.update()
+app._shortcut_find(); app.update()
+check('Ctrl+F on the Settings page leaves it and opens the find bar',
+      not app._settings_open and getattr(app, '_find_open', False))
+if getattr(app, '_find_open', False):
+    app._close_find()
+    app.update()
+
+# ...and a half-written template is asked about, not thrown away. With the
+# Calendar tab underneath, the shortcut's tab change dismissed the template
+# editor directly -- the text gone without the question a click outside it
+# asks.
+_tg_asked = []
+app.notebook.select(app.TAB_CALENDAR); app.update()
+app.show_settings_page(); app.update()
+app._edit_template(None, redraw=lambda: None); app.update()
+_tg_tpl = app._mini_popup
+find_widget(_tg_tpl, tk.Entry).insert(0, 'Half written')
+app.ask_yes_no = lambda *a, **k: (_tg_asked.append(a[0]), False)[1]  # No
+try:
+    app._shortcut_find(); app.update()
+finally:
+    del app.ask_yes_no
+check('a half-written template is asked about before a shortcut takes it away',
+      _tg_asked == ['Save changes?'])
+check('...and after the answer the shortcut still does its job',
+      not app._settings_open and getattr(app, '_find_open', False))
+if getattr(app, '_find_open', False):
+    app._close_find()
+    app.update()
+# "Yes, save": the template is kept, and the shortcut carries on. (A new
+# template starts out named "Untitled template", so this save succeeds.)
+app.show_settings_page(); app.update()
+app._edit_template(None, redraw=lambda: None); app.update()
+find_widget(app._mini_popup, tk.Text).insert('1.0', 'kept by answering yes')
+_tg_count = len(app.templates)
+app.ask_yes_no = lambda *a, **k: True                              # Yes, save
+try:
+    app._shortcut_new_note(); app.update()
+finally:
+    del app.ask_yes_no
+check('...answering Yes saves the template, then the shortcut carries on',
+      len(app.templates) == _tg_count + 1 and not app._settings_open)
+# ...and a save that cannot happen (the name cleared) leaves the editor
+# open for fixing -- and the person with it, on Settings.
+app.show_settings_page(); app.update()
+app._edit_template(None, redraw=lambda: None); app.update()
+_tg_tpl2 = app._mini_popup
+find_widget(_tg_tpl2, tk.Entry).delete(0, 'end')
+find_widget(_tg_tpl2, tk.Text).insert('1.0', 'a body, and no name')
+app.ask_yes_no = lambda *a, **k: True                              # Yes, save
+try:
+    app._shortcut_new_note(); app.update()
+finally:
+    del app.ask_yes_no
+check('...while a save that cannot happen keeps the editor, and Settings, open',
+      app._settings_open and _tg_tpl2.winfo_exists()
+      and app._mini_popup is _tg_tpl2)
+app._dismiss_mini_popup(); app.update()
+app.hide_settings_page(); app.update()
+app.notebook.select(app.TAB_NOTES); app.update()
+
+# ============================================================
+# THE SMALLEST WINDOW STILL SHOWS A NOTE
+# ============================================================
+# The sidebar's fixed parts take about 496 pixels of height, so at the old
+# minimum (500x400) the list had no room at all: a window with no notes in
+# it. Measured and photographed; the minimum now leaves room for a card.
+app.notes = [NO.normalize_note({'id': 9702, 'title': 'Still here',
+                                'body': 'a note that must be visible',
+                                'category': 'General'})]
+app.save_notes()
+app.refresh_note_list(); app.update()
+_ms_w, _ms_h = app.minsize()
+app.geometry('%dx%d' % (_ms_w, _ms_h))
+for _ in range(30):
+    app.update(); time.sleep(0.02)
+_ms_cards = [w for w in app.list_frame.winfo_children()
+             if getattr(w, '_card_note_id', None) is not None]
+_ms_new = find_widget(app, tk.Button, 'New Note')
+# Asked of where things ARE, in screen coordinates. The list's own height
+# cannot answer it: at the old 500x400 the list still reported 354px,
+# running past the bottom of the window, while the New Note button was
+# drawn over the card (measured: card 482-571, button from 487). A card
+# is visible when it ends above the first button below the list and
+# inside the window.
+_ms_card_bottom = (_ms_cards[0].winfo_rooty() + _ms_cards[0].winfo_height()
+                   if _ms_cards else 10 ** 6)
+_ms_limit = min(_ms_new.winfo_rooty() if _ms_new is not None else 10 ** 6,
+                app.winfo_rooty() + app.winfo_height())
+check('at the smallest size the window allows, a whole note card is on screen '
+      '(card ends at %d, room ends at %d)' % (_ms_card_bottom, _ms_limit),
+      bool(_ms_cards) and _ms_new is not None
+      and _ms_cards[0].winfo_height() > 1 and _ms_card_bottom <= _ms_limit)
+app.geometry('1100x850')
+for _ in range(10):
+    app.update(); time.sleep(0.02)
+app.notes = list(_tg_saved_notes)
+app.templates = list(_tg_saved_templates)
+app.save_notes()
+app.new_note(); app.update()
+
 print()
 print(f"=== QA9 FAILURES: {fails if fails else 'NONE'} ===")
 
