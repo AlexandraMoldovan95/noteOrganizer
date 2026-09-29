@@ -86,21 +86,37 @@ def drive():
     io.open(os.path.join(work, "settings.json"), "w", encoding="utf-8").write(
         json.dumps({"cleanup_done": True, "reclaimed_from_appdata": True}))
 
+    # %APPDATA% of its own, empty. The app reads that folder on every
+    # start -- it is where the installed app keeps its notebook -- and a
+    # story that loses its settings.json on purpose (chapter 6) would
+    # otherwise walk straight into the one-time migration that copies the
+    # real notebook in. Pointing it here makes that impossible rather
+    # than merely unlikely, for every chapter.
+    sandbox = os.path.join(work, "appdata-sandbox")
+    os.makedirs(sandbox)
+    env = dict(os.environ, APPDATA=sandbox, XDG_DATA_HOME=sandbox)
+
     print("the story is played in: %s" % work)
     print()
 
     chapters = [
-        (1, "I make a code for a note, from the editor"),
-        (2, "I close the app, reopen it, edit the note and bring the code back"),
-        (3, "I generate a code and move to another note"),
-        (4, "I delete a note and go back into Settings"),
+        (1, "I make a code for a note, from the editor", None),
+        (2, "I close the app, reopen it, edit the note and bring the code back", None),
+        (3, "I generate a code and move to another note", None),
+        (4, "I delete a note and go back into Settings", None),
+        (5, "I name a category too long, then make a real one and file a note in it", None),
+        (6, "My settings file is gone, and I open the app again", _lose_the_settings),
+        (7, "A note comes back from a code; I update it, then take the update back",
+         _a_list_from_yesterday),
     ]
     results = []
-    for number, title in chapters:
+    for number, title, before in chapters:
         print("--- chapter %d: %s" % (number, title))
+        if before is not None:
+            before(work)
         run = subprocess.run(
             [sys.executable, "story_note_travels.py", "--chapter", str(number)],
-            cwd=work, capture_output=True, text=True,
+            cwd=work, capture_output=True, text=True, env=env,
             encoding="utf-8", errors="replace")
         found = _read_results(work)
         results.extend(found)
@@ -139,6 +155,29 @@ def drive():
             else:
                 os.remove(path)
     return 1 if failed else 0
+
+
+def _lose_the_settings(work):
+    """What a person does between two sessions to reset the preferences:
+    the settings file goes. The notebook stays."""
+    path = os.path.join(work, "settings.json")
+    if os.path.exists(path):
+        os.remove(path)
+
+
+def _a_list_from_yesterday(work):
+    """A note left in an earlier session: a checklist with two of its three
+    items ticked, and a date. (Chapter 4 sent "Shopping" to the Trash, so
+    this is a note of its own.)"""
+    path = os.path.join(work, "notes_data.json")
+    notes = json.load(io.open(path, encoding="utf-8"))
+    notes.append({"id": 50, "title": "Groceries", "body": "for the weekend",
+                  "category": "General", "date": "2026-10-01",
+                  "checklist": [{"text": "milk", "done": True},
+                                {"text": "eggs", "done": True},
+                                {"text": "bread", "done": False}],
+                  "created": "2026-09-20 09:00", "updated": "2026-09-20 09:00"})
+    io.open(path, "w", encoding="utf-8").write(json.dumps(notes, indent=2))
 
 
 def _read_results(work):
@@ -250,6 +289,23 @@ def _open_note_by_clicking(app, title):
     return False
 
 
+def _let_it_paint(app, seconds=0.6):
+    """Let the app draw before a picture is taken from inside a dialog.
+
+    A chapter answers a dialog by standing in for the wait the dialog
+    blocks on -- and the real wait processes events while it waits, so the
+    window paints behind the question. The stand-in does not, so a
+    picture taken at once showed the startup notice over a window of white
+    rectangles: a portrait of the harness, not of the app."""
+    end = time.time() + seconds
+    while time.time() < end:
+        try:
+            app.update()
+        except Exception:
+            return
+        time.sleep(0.03)
+
+
 def _photograph(name):
     """Photograph the screen. Best effort: a missing picture is not a
     failed story, it is a missing picture."""
@@ -350,6 +406,7 @@ def chapter_2():
 
     def answer_the_dialog(_var):
         seen["titles"] = _dialog_titles(app)
+        _let_it_paint(app)
         _photograph("2-what-it-asks-me-on-import")
         for label in ("Update this note", "Open it anyway", "Cancel"):
             if _click_dialog(app, label):
@@ -456,7 +513,227 @@ def chapter_4():
     story.save()
 
 
-CHAPTERS = {1: chapter_1, 2: chapter_2, 3: chapter_3, 4: chapter_4}
+def _entries_under(widget, out=None):
+    import tkinter as tk
+    out = [] if out is None else out
+    for child in widget.winfo_children():
+        if isinstance(child, tk.Entry):
+            out.append(child)
+        _entries_under(child, out)
+    return out
+
+
+def chapter_5():
+    """She makes a category with a long, descriptive name. The app says
+    no, and why; she makes a shorter one and files a note under it."""
+    tk, NO, app = _chapter_setup()
+    story = Chapter()
+    # The real warning, not the stub the setup installs: the point is to
+    # see the message a person gets, so it has to be on screen.
+    del app.show_warning
+    said = []
+
+    def answer(_var):
+        said[:] = _dialog_titles(app)
+        _let_it_paint(app)
+        _photograph("6-a-category-name-that-is-too-long")
+        _click_dialog(app, "OK")
+    app.wait_variable = answer
+
+    settings = _button(app, "Settings")
+    if settings is not None:
+        settings.invoke()
+        app.update()
+    app.toggle_settings_panel("categories")
+    app.update()
+    panel = app.settings_categories_panel
+    boxes = _entries_under(panel)
+    story.check("the Categories panel has a box to type a new name in",
+                bool(boxes))
+    long_name = ("Kitchen and bathroom renovation for the new apartment - "
+                 "quotes, invoices, contacts")
+    if boxes:
+        boxes[-1].insert(0, long_name)
+        add = _button(panel, "+ Add")
+        if add is not None:
+            add.invoke()
+            app.update()
+    story.check("a name longer than 80 characters is refused",
+                long_name not in NO.CATEGORY_COLORS)
+    story.check("...and the message says why, naming the limit",
+                any("80" in t for t in said),
+                "what the screen said: %s" % [t[:60] for t in said if t][:3])
+
+    boxes = _entries_under(panel)
+    if boxes:
+        boxes[-1].delete(0, "end")
+        boxes[-1].insert(0, "Clients 2026")
+        add = _button(panel, "+ Add")
+        if add is not None:
+            add.invoke()
+            app.update()
+    story.check("a shorter name is added", "Clients 2026" in NO.CATEGORY_COLORS)
+    app.hide_settings_page()
+    app.update()
+
+    _open_note_by_clicking(app, "Bread recipe")
+    app.category_var.set("Clients 2026")
+    save = _button(app, "Save")
+    if save is not None:
+        save.invoke()
+    app.update()
+    notes = json.load(io.open("notes_data.json", encoding="utf-8"))
+    bread = next((n for n in notes if n.get("title") == "Bread recipe"), {})
+    story.check("the note is filed under it, on disk",
+                bread.get("category") == "Clients 2026", bread.get("category"))
+    story.save()
+
+
+def chapter_6():
+    """A NEW PROCESS, and the settings file is gone: she deleted it to
+    reset her preferences. The notebook is untouched."""
+    import tkinter as tk
+    sys.path.insert(0, ".")
+    import note_organizer as NO
+    from _qa_support import pin_popup_visibility
+    pin_popup_visibility(NO)
+    story = Chapter()
+    said = []
+    app = NO.NoteOrganizer()
+    app._poll_active_dirty = lambda: None
+
+    # The startup notice is scheduled a moment after the window appears,
+    # and it blocks until answered -- so it is read, photographed and
+    # answered from inside the wait, the way chapter 2 answers its dialog.
+    def answer(_var):
+        said[:] = _dialog_titles(app)
+        _let_it_paint(app)
+        _photograph("7-what-the-app-says-after-the-settings-were-lost")
+        _click_dialog(app, "OK")
+    app.wait_variable = answer
+    app.geometry("1150x860+40+40")
+    deadline = time.time() + 5
+    while time.time() < deadline and not said:
+        app.update()
+        time.sleep(0.05)
+
+    story.check("the app tells me something happened, instead of saying nothing",
+                bool(said))
+    story.check("...and it names the category that came back",
+                any("Clients 2026" in t for t in said),
+                "what the screen said: %s" % [t[:70] for t in said if t][:3])
+    notes = json.load(io.open("notes_data.json", encoding="utf-8"))
+    bread = next((n for n in notes if n.get("title") == "Bread recipe"), {})
+    story.check("my note is still filed where I put it, not in General",
+                bread.get("category") == "Clients 2026", bread.get("category"))
+    story.check("...and the category is back in the app",
+                "Clients 2026" in NO.CATEGORY_COLORS)
+    _photograph("7b-the-list-after-the-settings-were-lost")
+    story.save()
+
+
+def chapter_7():
+    """She makes a code for a list, changes the list, and brings the code
+    back as an update. Then she changes her mind."""
+    tk, NO, app = _chapter_setup()
+    story = Chapter()
+    # Both questions for real: the one the import asks, and the one
+    # Restore previous asks -- the second is the one whose words matter.
+    del app.ask_yes_no
+    asked = []
+
+    def answer(_var):
+        titles = _dialog_titles(app)
+        asked.append(titles)
+        if any("Same note" in t for t in titles):
+            _click_dialog(app, "Update this note")
+        elif any("Restore previous" in t for t in titles):
+            _let_it_paint(app)
+            _photograph("8-the-question-before-restoring")
+            _click_dialog(app, "Yes")
+        else:
+            _click_dialog(app, "Cancel") or _click_dialog(app, "OK")
+    app.wait_variable = answer
+
+    story.check("the list opens when I click it",
+                _open_note_by_clicking(app, "Groceries"))
+    generate = _button(app, "Generate code")
+    if generate is not None:
+        generate.invoke()
+        app.update()
+    code = ""
+    if app.editor_code_area.winfo_ismapped():
+        widget = _text_widget(app.editor_code_area)
+        if widget is not None:
+            code = widget.get("1.0", "end-1c").strip()
+    story.check("I have a code for the list as it is", code.startswith("NOTE1"))
+
+    # Now she changes it: everything unticked, the date taken off.
+    for box in [w for w in _all_children(app.checklist_items_frame)
+                if isinstance(w, tk.Checkbutton)]:
+        if box.cget("variable") and int(app.getvar(box.cget("variable"))):
+            box.invoke()
+    app.date_entry.delete(0, "end")
+    save = _button(app, "Save")
+    if save is not None:
+        save.invoke()
+    app.update()
+
+    imported = _button(app, "Import code")
+    if imported is not None:
+        imported.invoke()
+        app.update()
+    app.import_box.delete("1.0", "end")
+    app.import_box.insert("1.0", code)
+    go = _button(app, "Import", exact=True)
+    if go is not None:
+        go.invoke()
+        app.update()
+
+    def on_disk():
+        notes = json.load(io.open("notes_data.json", encoding="utf-8"))
+        return next((n for n in notes if n.get("title") == "Groceries"), {})
+
+    after_update = on_disk()
+    story.check("the update brings the code's version: two ticked, and the date",
+                [i.get("done") for i in after_update.get("checklist", [])]
+                == [True, True, False]
+                and after_update.get("date") == "2026-10-01",
+                after_update.get("checklist"))
+
+    restore = _button(app, "Restore previous")
+    story.check("the editor offers Restore previous, on screen",
+                restore is not None and restore.winfo_ismapped())
+    if restore is not None:
+        restore.invoke()
+        app.update()
+    restored = on_disk()
+    story.check("Restore previous puts my changes back: nothing ticked",
+                [i.get("done") for i in restored.get("checklist", [])]
+                == [False, False, False], restored.get("checklist"))
+    story.check("...and no date, as I had left it",
+                not restored.get("date"), restored.get("date"))
+    story.check("...on screen too, not only in the file",
+                not any(i.get("done") for i in
+                        app.capture_editor_state().get("checklist", [])))
+    question = next((t for titles in asked for t in titles
+                     if "Bring back" in t), "")
+    story.check("the question named the checklist, not just the text",
+                "checklist" in question, question[:90])
+    _photograph("9-after-restoring")
+    story.save()
+
+
+def _all_children(widget, out=None):
+    out = [] if out is None else out
+    for child in widget.winfo_children():
+        out.append(child)
+        _all_children(child, out)
+    return out
+
+
+CHAPTERS = {1: chapter_1, 2: chapter_2, 3: chapter_3, 4: chapter_4,
+            5: chapter_5, 6: chapter_6, 7: chapter_7}
 
 
 if __name__ == "__main__":
