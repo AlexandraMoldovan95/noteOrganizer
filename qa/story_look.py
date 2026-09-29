@@ -246,6 +246,32 @@ app.refresh_note_list()
 app.update()
 app.update_idletasks()
 """),
+    # The sibling sweep for the card fix. A trash row draws a title in a
+    # panel that reserves width for two buttons, and its sub-line was
+    # already wrapped to its own width by an earlier fix -- but the title
+    # above it only has a 42-CHARACTER cap, which is not a width: forty
+    # two narrow characters fit where forty two wide ones do not. This
+    # scene is the measurement that says whether it is a real sibling.
+    ("18-a-trash-row-with-a-long-title", """
+app._dismiss_mini_popup()
+app.notebook.select(app.TAB_NOTES)
+if app.selection_mode:
+    app._toggle_selection_mode()
+app.trash = [
+    {'id': 9101,
+     'title': 'Quarterly planning meeting with the whole team',
+     'body': 'the long one', 'category': 'General',
+     'deleted_at': '2026-09-20 09:00:00',
+     'recurrence': {'freq': 'weekly', 'weekdays': [0]}},
+    {'id': 9102, 'title': 'Short one', 'body': 'b',
+     'category': 'General', 'deleted_at': '2026-09-21 09:00:00'},
+]
+app.show_settings_page()
+app.update()
+app.toggle_settings_panel('trash')
+app.update()
+app.update_idletasks()
+"""),
 ]
 
 SEED = [

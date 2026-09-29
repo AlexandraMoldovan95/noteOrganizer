@@ -39,6 +39,7 @@ day-to-day tracking.
 | [The undo that guarded the wrong state](#the-undo-that-guarded-the-wrong-state) | An undo must test for the state its own action produced, not the one it means to restore; and sweep for what else reaches the same loss. | 0.75.181 |
 | [The binding that could never fire](#the-binding-that-could-never-fire) | A binding is not an answer to "does this key work" — ask where the key goes; and a probe whose finding is an absence needs a control that produces the presence. | 0.75.183 |
 | [The paste that landed on top of the placeholder](#the-paste-that-landed-on-top-of-the-placeholder) | `bind()` replaces where `add="+"` accumulates, so a widget's own binding silently displaces a shared helper's; and a virtual event outranks the physical one beside it in the same bindtag. | 0.75.185 |
+| [The sweep that stopped at the edge of the Settings page](#the-sweep-that-stopped-at-the-edge-of-the-settings-page) | A fix's sibling sweep must name the surfaces it did not visit; a cap in characters is not a width; and text that wraps for the first time inherits every multi-line default the widget was hiding. | 0.81.202 |
 | [The seven small rows, four of which were not what they said](#the-seven-small-rows-four-of-which-were-not-what-they-said) | A suggested fix is a hypothesis about the code — four of seven were wrong about scope, premise or mechanism, each found by a grep; and a check asserting `not in` against a name the code would never write cannot fail. | 0.76.192 |
 | [The guard that knew half the vocabulary](#the-guard-that-knew-half-the-vocabulary) | Before persisting a value, read what the app already does to it at runtime — a stored preference inherits every rule the live one has, including the wrong ones; and a guard written against one kind of value governs every kind sharing the variable. | 0.76.198 |
 | [The template editor that "did nothing" when clicked](#the-template-editor-that-did-nothing-when-clicked) | 'Nothing happens' in a --windowed build is a real bug report — the exception was invisible. | 0.3.0 |
@@ -1463,6 +1464,62 @@ replaces, `add="+"` accumulates. And a "clear the hint before input lands"
 rule must enumerate the ways input *arrives*, not the ways it is typed:
 `<KeyPress>` is one door, `<<Paste>>` is another, and a virtual event will
 quietly take precedence over the physical one beside it.
+
+### The sweep that stopped at the edge of the Settings page
+
+*([0.81.202](../CHANGELOG.md#081202--2026-09-29))*
+
+**Symptom:** a note card in the sidebar showed its checklist as `☑ 1/` —
+a fraction with its denominator gone. Not reported: noticed in a
+screenshot taken for the documentation, of an ordinary note.
+
+**What it really was:** every line on a card is a `tk.Label` with no
+`wraplength`, packed `fill="x"` into a sidebar of fixed width. Tk draws
+such a label as one line as long as its text and lets the container show
+whatever fits. Nothing marks the cut. Staging a note carrying everything
+a note can carry showed the size of it: the title lost four words, the
+preview stopped mid-word with the `...` it had earned cut off as well,
+and the row of marks dropped the attachment count, the table mark and the
+checklist progress outright.
+
+**Why it is a story rather than a commit:** this exact mechanism had
+already been found and fixed — in `0.73.167`, where three Settings
+subtitles stopped mid-word, and which left behind `_wrap_to_own_width`
+precisely so nobody would hand-pick a width again. That sweep looked at
+the Settings page and stopped there. The note list has the narrowest
+labels in the app and was never walked.
+
+Two things made it survive eleven weeks. The character caps beside it
+*look* like width management: `preview_src[:40]` and
+`_truncate(title, 42)` keep a string short, and a reader checking for
+"is the length bounded" finds a yes. They bound the wrong quantity —
+forty narrow characters fit where forty wide ones do not, which is how a
+39-character body still ran off the card. And the qa suite had no check
+that asks what a card actually *shows*: everything about cards was
+asserted against the model, never against the pixels.
+
+**The fix and its sibling sweep.** Three calls to the existing helper,
+and no new idea — a second way to do the same thing would have been the
+real regression. Then every other `_truncate` call site was walked, and
+the sweep's result is mostly *not a bug*, which is worth recording as
+much as a fix: the Trash row's sub-line had already been wrapped by an
+earlier report, its title's 42-character cap is enough in a panel that
+wide (photographed to check, not assumed), the calendar's day chips carry
+`wraplength=88`, and the day tooltip packs `side="left"` inside a popup
+that grows — where the helper would be actively wrong, as its own
+docstring says.
+
+**One thing only the photograph could say.** Wrapping the preview left it
+ragged, because `anchor="w"` places the text *block* and `justify` places
+the lines inside it — and Tk centres a second line by default. The label
+had been single-line for its whole life, so `justify` had never mattered.
+No amount of reading the diff would have shown that; looking at the
+picture did, immediately.
+
+**Takeaway:** a fix's sweep has to name the surfaces it did *not* visit,
+or the next instance waits for a screenshot. A cap in characters is not a
+width. And any change that makes text wrap for the first time inherits
+every multi-line default the widget had been hiding.
 
 ## Editor & input interaction
 
