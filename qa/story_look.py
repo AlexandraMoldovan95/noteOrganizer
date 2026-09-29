@@ -184,7 +184,7 @@ app.selected_note_ids = {n['id'] for n in app.notes[:2]}
 app._update_bulk_selected_label()
 app.refresh_note_list()
 """),
-    # Added for 0.84.198: the focus ring is that release's visible change,
+    # Added for 0.81.199: the focus ring is that release's visible change,
     # and a ring only shows while something actually has the keyboard.
     ("15-note-card-with-keyboard-focus", """
 if app.selection_mode:
@@ -216,6 +216,89 @@ app.render_calendar()
 app.update()
 app.day_emoji['2026-09-15'] = [e for e, _c in app.DAY_MARKER_EMOJIS[:3]]
 app._mark_day_emoji('2026-09-15')
+"""),
+    # The shortcuts page had no picture at all, which is part of how it
+    # came to be missing a whole group without anyone noticing. Its rows
+    # are drawn from SHORTCUT_GROUPS, so this is also the only place the
+    # longest group title gets looked at rather than counted.
+    ("16-the-shortcuts-page", """
+app._dismiss_mini_popup()
+app.notebook.select(app.TAB_NOTES)
+app.update()
+app.show_settings_page()
+app.update()
+app.toggle_settings_panel('shortcuts')
+app.update()
+app.update_idletasks()
+# Scrolled to the note-list group on purpose. A picture of the top of
+# this page would show the same three Ctrl combos it always has and
+# would not have caught the missing group -- which is the whole reason
+# this scene exists.
+app.settings_canvas.yview_moveto(0.62)
+app.update()
+app.update_idletasks()
+"""),
+    # A card carrying everything a card can carry. The three labels on a
+    # card are the widest thing in a fixed-width sidebar, and nothing was
+    # watching what happens when their text outgrows it -- which is how a
+    # checklist count came to read "1/" with the total cut off the edge,
+    # on an ordinary note, in a picture taken for the documentation.
+    ("17-a-note-card-at-its-fullest", """
+app._dismiss_mini_popup()
+# hide_settings_page() is load-bearing, and was missing: the scene before
+# this one leaves the Settings page open, so without it this photographed
+# the shortcuts page instead of a note card -- a 21% difference that read
+# as "the card scene changed" and would have been accepted as one. A
+# scene sets up everything it needs and assumes nothing about the scene
+# before it.
+app.hide_settings_page()
+app.notebook.select(app.TAB_NOTES)
+if app.selection_mode:
+    app._toggle_selection_mode()
+app.notes = [NO.normalize_note({
+    'id': 7100,
+    'title': 'Quarterly planning meeting with the whole team',
+    'body': ('Agenda, decisions and the follow-ups we owe each other.'
+             + chr(10) + '| Item | Owner |' + chr(10) + '| --- | --- |'
+             + chr(10) + '| Budget | Ana |'),
+    'category': 'General',
+    'comments': 'Room 2 is booked',
+    'checklist': [{'text': 'send the agenda', 'done': True},
+                  {'text': 'book the room', 'done': False}],
+    'attachments': [{'name': 'agenda.pdf', 'stored_as': 'agenda.pdf'}],
+    'date': '2026-09-15',
+    'recurrence': {'freq': 'weekly', 'weekdays': [0]},
+})]
+app.save_notes()
+app.refresh_note_list()
+app.update()
+app.update_idletasks()
+"""),
+    # The sibling sweep for the card fix. A trash row draws a title in a
+    # panel that reserves width for two buttons, and its sub-line was
+    # already wrapped to its own width by an earlier fix -- but the title
+    # above it only has a 42-CHARACTER cap, which is not a width: forty
+    # two narrow characters fit where forty two wide ones do not. This
+    # scene is the measurement that says whether it is a real sibling.
+    ("18-a-trash-row-with-a-long-title", """
+app._dismiss_mini_popup()
+app.notebook.select(app.TAB_NOTES)
+if app.selection_mode:
+    app._toggle_selection_mode()
+app.trash = [
+    {'id': 9101,
+     'title': 'Quarterly planning meeting with the whole team',
+     'body': 'the long one', 'category': 'General',
+     'deleted_at': '2026-09-20 09:00:00',
+     'recurrence': {'freq': 'weekly', 'weekdays': [0]}},
+    {'id': 9102, 'title': 'Short one', 'body': 'b',
+     'category': 'General', 'deleted_at': '2026-09-21 09:00:00'},
+]
+app.show_settings_page()
+app.update()
+app.toggle_settings_panel('trash')
+app.update()
+app.update_idletasks()
 """),
 ]
 
@@ -359,12 +442,21 @@ def take_the_pictures():
     return work, run
 
 
+# Below this share of the picture, a difference is rendering noise
+# rather than a change of shape. One definition, because the report and
+# --accept must not disagree about which screens changed.
+SAME_ENOUGH = 0.5
+
+
 def compare(new_dir):
     """How much of each picture changed, as a percentage of its pixels.
 
     Deliberately coarse: images are reduced to a small grid and compared
     cell by cell, so a pixel of text rendering does not read as a
     change while a moved control does.
+
+    The threshold lives in SAME_ENOUGH, in one place, because both the
+    report and --accept have to mean the same thing by "changed".
     """
     try:
         from PIL import Image
@@ -405,11 +497,38 @@ def main():
         return 2
 
     if accept:
+        # Blessed by the SAME judgement the report prints, so "accepted"
+        # and "CHANGED" can never disagree -- and, more to the point, so
+        # that a screen the tool calls unchanged is left alone on disk.
+        # This used to copy every picture it had just taken. A PNG
+        # re-encoded from identical pixels is a different FILE, so
+        # accepting one new scene rewrote all sixteen and put fifteen
+        # binary blobs into a commit about something else. Comparing the
+        # bytes instead would not fix it, for the same reason.
+        results = compare(shots)
+        if results is None:
+            shutil.rmtree(work, ignore_errors=True)
+            return 2
         if not os.path.isdir(STORE):
             os.makedirs(STORE)
-        for name in taken:
-            shutil.copy2(os.path.join(shots, name), os.path.join(STORE, name))
-        print("accepted: %d screen(s) are the reference from now on" % len(taken))
+        blessed, left = [], []
+        for name, pct, _note in results:
+            fresh = os.path.join(shots, name + ".png")
+            if pct is not None and pct < SAME_ENOUGH:
+                left.append(name)
+                continue
+            if not os.path.exists(fresh):
+                continue
+            shutil.copy2(fresh, os.path.join(STORE, name + ".png"))
+            blessed.append(name)
+        if blessed:
+            print("accepted %d screen(s):" % len(blessed))
+            for name in blessed:
+                print("    %s" % name)
+        else:
+            print("nothing to accept -- no screen has changed its shape.")
+        if left:
+            print("left alone: %d unchanged picture(s)." % len(left))
         shutil.rmtree(work, ignore_errors=True)
         return 0
 
@@ -423,7 +542,7 @@ def main():
         if pct is None:
             print("  ?     %-22s %s" % (name, note))
             changed.append(name)
-        elif pct < 0.5:
+        elif pct < SAME_ENOUGH:
             print("  same    %-22s (%.1f%%)" % (name, pct))
         else:
             print("  CHANGED %-16s %.1f%% of the screen %s" % (name, pct, note))
