@@ -330,6 +330,20 @@ A new surface joins this list the moment it ships.
   was False for the new card that now held the keyboard, and the check
   passed while the theft happened. Ask by a marker on the widget, never by
   identity against something the code under test is about to replace.
+- **A photograph of a focus ring is a photograph of the desktop foreground.**
+  Tk draws a widget's `highlightcolor` only while its toplevel really owns
+  the foreground, so `focus_set()` on a card records the focus and draws
+  nothing if another process is in front. `story_look` runs PowerShell
+  between scenes to make each grab, and that process can hold the
+  foreground when the next scene starts — so the focus-ring scene lost its
+  ring about one run in three, 0.6% apart, reported as a change of shape.
+  It passed often enough that the first sighting was written down as
+  "observed, not diagnosed" and the next re-run went green — which is how
+  a flake gets a second life. The fix is `focus_force()` on the window
+  **before** `focus_set()` on the
+  card; the other order moves the focus off the card and loses the ring
+  every time, turning the flake into a certainty. Found by opening the
+  failing picture beside the reference — the ring was simply not there.
 - **A `Toplevel` parented to a widget JOINS that widget's tree, and on a
   headless display the pointer never moves.** A hover preview created as
   `tk.Toplevel(row)` appears in `row.winfo_children()`, so it lands inside
