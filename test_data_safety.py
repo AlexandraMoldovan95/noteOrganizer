@@ -1194,9 +1194,9 @@ finally:
 # the default signature, so a leftover notebook differing only in those
 # was judged "already covered" and deleted -- while the startup message
 # promised nothing was deleted unless it already existed locally.
-_fmt_a = dict(_base, title="Acelasi", body="text",
+_fmt_a = dict(_base, title="The same", body="text",
               formatting=[{"start": 0, "end": 4, "style": "bold"}])
-_fmt_b = dict(_base, title="Acelasi", body="text")
+_fmt_b = dict(_base, title="The same", body="text")
 check("styling does NOT split a duplicate for the startup collapse",
       _model_mod.content_signature(_fmt_a)
       == _model_mod.content_signature(_fmt_b))
@@ -1204,7 +1204,7 @@ check("but it DOES for the purge, whose wrong answer is unrecoverable",
       _model_mod.content_signature(_fmt_a, strict=True)
       != _model_mod.content_signature(_fmt_b, strict=True))
 for _field, _value in (("paragraphs", [{"line": 0, "kind": "bullet"}]),
-                       ("overrides", {"2026-01-01": {"title": "zi"}}),
+                       ("overrides", {"2026-01-01": {"title": "day"}}),
                        ("exceptions", ["2026-01-02"])):
     check("the strict answer also sees %s" % _field,
           _model_mod.content_signature(dict(_fmt_b, **{_field: _value}),

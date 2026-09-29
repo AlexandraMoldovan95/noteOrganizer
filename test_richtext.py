@@ -455,22 +455,22 @@ check("None is handled", reflow_wrapped(None) == "")
 
 
 
-_doc = html_document("Nota <mea>", "<div>corpul</div>")
+_doc = html_document("Note <of mine>", "<div>the body</div>")
 check("the HTML document declares its doctype and charset",
       _doc.startswith("<!DOCTYPE html>") and "utf-8" in _doc)
 check("the title is escaped, not injected",
-      "&lt;mea&gt;" in _doc and "<mea>" not in _doc)
+      "&lt;of mine&gt;" in _doc and "<of mine>" not in _doc)
 check("the title is a styled div, not a heading Word would fold away",
       "<h1" not in _doc and "font-weight: bold" in _doc)
 check("the fragment lands inside the body",
-      "<div>corpul</div>" in _doc)
+      "<div>the body</div>" in _doc)
 check("table borders exist in the styling, or a table reads as loose words",
       "border" in _doc)
 
 # A highlight covering a whole cell lands on the <td> itself -- an empty
 # highlighted cell's colour would otherwise ride pad spaces that HTML
 # collapses into nothing.
-_hl_body = "| plin | gol |" + chr(10) + "| --- | --- |" + chr(10) + "| aa | bb |"
+_hl_body = "| full | empty |" + chr(10) + "| --- | --- |" + chr(10) + "| aa | bb |"
 _hl_row = _hl_body.index("| aa | bb |")
 _hl_spans = [{"start": _hl_row + 5, "end": _hl_row + 10, "style": "highlight",
               "value": "#c8f7c5"}]
@@ -490,8 +490,8 @@ check("a partial highlight stays a span inside the cell",
 # centre th by default, so the stylesheet pins it back to the left.
 _th_html = note_to_html(_hl_body, [], [])
 check("the header row exports as th and data rows as td",
-      "<th>plin</th>" in _th_html and "<td>aa</td>" in _th_html
-      and "<td>plin</td>" not in _th_html)
+      "<th>full</th>" in _th_html and "<td>aa</td>" in _th_html
+      and "<td>full</td>" not in _th_html)
 _th_doc = html_document("T", "<div>x</div>")
 check("the document CSS keeps th left-aligned and bordered",
       "th { text-align: left; }" in _th_doc
@@ -531,11 +531,11 @@ check("a wide table wraps instead of running off the page",
 # A colour on <p>/<div>/<li>/<td> used to bleed to the end of the
 # document (block and cell end tags never closed style spans), and a
 # span opening two styles closed only the first.
-_t, _s, _p = html_to_note('<p style="color:#ff0000">rosu</p><p>negru</p>')
+_t, _s, _p = html_to_note('<p style="color:#ff0000">red</p><p>black</p>')
 _reds = [s for s in _s if s["style"] == "text_color"]
 check("a coloured paragraph's colour stops at its own end tag",
-      len(_reds) == 1 and _t[_reds[0]["start"]:_reds[0]["end"]] == "rosu"
-      and "negru" not in _t[_reds[0]["start"]:_reds[0]["end"]])
+      len(_reds) == 1 and _t[_reds[0]["start"]:_reds[0]["end"]] == "red"
+      and "black" not in _t[_reds[0]["start"]:_reds[0]["end"]])
 
 # A pale yellow: the highlight-legibility filter (deliberate) rejects
 # saturated-dark fills like pure green, and would hide this bug.

@@ -3034,7 +3034,7 @@ check('the outer rules fit inside the drawn area',
 
 # ---- CELL ALIGNMENT, AND THE TABLE THAT JUMPED TO THE MIDDLE ----
 set_body('')
-_stub_clipboard(html='<table><tr><td>Titlu</td><td>B</td></tr>'
+_stub_clipboard(html='<table><tr><td>Heading</td><td>B</td></tr>'
                      '<tr><td>C</td><td>D</td></tr></table>')
 app._on_body_paste()
 app.update()
@@ -3136,7 +3136,7 @@ _t9 = app._grid_at_line(app._grid_first_line(app._table_grids[0]))
 app._open_cell_editor(_t9, 0, 0)
 _e9 = app._cell_editor['entry']
 _e9.delete('1.0', 'end')
-_e9.insert('1.0', 'Titlu')
+_e9.insert('1.0', 'Heading')
 app._set_paragraph_align('center')
 app.update()
 _first9 = app._grid_first_line(app._table_grids[0])
@@ -3151,7 +3151,7 @@ app.update()
 
 # Copy cell remembers like copy cells, and the system clipboard outranks a
 # stale remembered matrix -- a fresh copy used to paste older content.
-app._grid_cell_clip = [['VECHI', 'STALE']]
+app._grid_cell_clip = [['OLD', 'STALE']]
 _t9 = app._grid_at_line(_first9)
 app._grid_copy_cell(_t9, 0, 0)
 app._grid_paste_cells(_t9, 1, 0)
@@ -3159,7 +3159,7 @@ app.update()
 _t9 = app._grid_at_line(_first9)
 check(f'a fresh single-cell copy is what pastes '
       f'({_t9["cells"][(1, 0)]["value"]!r})',
-      _t9['cells'][(1, 0)]['value'] == 'Titlu')
+      _t9['cells'][(1, 0)]['value'] == 'Heading')
 app._grid_cell_clip = [['MEMORAT']]
 app.clipboard_clear()
 app.clipboard_append('EXTERN\tNOU')
@@ -3193,7 +3193,7 @@ set_body('')
 # week's clipboard in charge -- and paste into the body beside the table.
 set_body('')
 app.clipboard_clear()
-app.clipboard_append('VECHI DE SAPTAMANA TRECUTA')
+app.clipboard_append('OLD FROM LAST WEEK')
 _stub_clipboard(html='<table><tr><td>Unu</td><td>Doi</td></tr>'
                      '<tr><td></td><td></td></tr></table>')
 app._on_body_paste()
@@ -3229,7 +3229,7 @@ check(f'Ctrl+C/Ctrl+V move the selected cells '
       and _tX['cells'][(1, 1)]['value'] == 'Doi')
 check('nothing lands outside the table',
       len(body().split('\n')) == _linesX
-      and 'VECHI' not in body())
+      and 'OLD' not in body())
 
 # Ctrl+V inside an open cell spreads a copied block from that cell. The
 # target row is cleared first: it already held these values from the check
@@ -3259,7 +3259,7 @@ take_focus(app._cell_editor['entry'])  # a precondition for the keys below
 _edX = app._cell_editor
 _w0 = int(float(_tX['canvas'].itemcget(_edX['win'], 'width')))
 _edX['entry'].delete('1.0', 'end')
-_edX['entry'].insert('1.0', 'un continut mult mai lung decat coloana initiala')
+_edX['entry'].insert('1.0', 'a much longer value than the column started out with')
 _edX['entry'].event_generate('<KeyRelease>')
 app.update()
 _w1 = int(float(_tX['canvas'].itemcget(_edX['win'], 'width')))
@@ -3302,7 +3302,7 @@ check(f'a wide table keeps its sideways place through a commit '
 # 0.164 on a checkmark. The op context captures the views first, and the
 # restore waits for the queue so the fresh windows are mapped when the
 # fraction is reapplied.
-set_body('rand de text\n' * 30)
+set_body('a line of text\n' * 30)
 app.body_text.mark_set('insert', 'end -1c')
 app.update()
 app._insert_table(3, 3)
@@ -3376,7 +3376,7 @@ app._commit_cell_editor()
 app.update()
 _lineU = app.body_text.get('1.0', '1.end')
 check(f'two emoji land as two, through three flushes '
-      f'(gasit {_lineU.count(chr(0x1F600))})',
+      f'(found {_lineU.count(chr(0x1F600))})',
       _lineU.count(chr(0x1F600)) == 2
       and chr(0xFFFD) not in _lineU
       and not any(0xD800 <= ord(ch) <= 0xDFFF for ch in _lineU))
@@ -3854,7 +3854,7 @@ check(f'Ctrl+C copies the selected cells, not the entry '
 # the keyboard already -- a deferred, FocusOut-time close would leave
 # this copy to the entry.
 app.clipboard_clear()
-app.clipboard_append('vechi')
+app.clipboard_append('old')
 app._open_cell_editor(_tE, 1, 1)
 app.update()
 _tE = app._grid_at_line(1)
@@ -4166,8 +4166,8 @@ set_body('')
 # The template store is plain note fields, so a table should ride along
 # like any text -- but only a check proves the applied note renders a
 # real, editable grid rather than bare pipes.
-_tplT = {'name': 'SablonTabel', 'title': 'Din sablon',
-         'body': '| Zi | Plan |\n| luni | scris |',
+_tplT = {'name': 'TableTemplate', 'title': 'From template',
+         'body': '| Day | Plan |\n| mon | written |',
          'category': 'General', 'checklist': []}
 app.templates.append(_tplT)
 app.ask_yes_no = lambda *a, **k: True
@@ -4176,7 +4176,7 @@ app.update()
 _gT = app._grid_at_line(1)
 check('a template with a table applies as a drawn grid',
       _gT is not None and _gT['data_rows'] == 2 and _gT['ncols'] == 2
-      and _gT['cells'][(1, 0)]['value'] == 'luni')
+      and _gT['cells'][(1, 0)]['value'] == 'mon')
 app._open_cell_editor(_gT, 1, 1)
 app.update()
 app._cell_editor['entry'].delete('1.0', 'end')
@@ -4403,7 +4403,7 @@ app.apply_theme()
 app.update()
 
 # ---- AN EMPTY CELL TAKES A HIGHLIGHT, AND KEEPS IT WHEN FILLED ----
-set_body('| Cap | G |\n| plin |  |')
+set_body('| Head | G |\n| full |  |')
 app._render_table_grids()
 app.update()
 _gE = app._grid_at_line(1)
@@ -4429,7 +4429,7 @@ set_body('')
 # with an emoji stored its spans one further right per emoji, the note
 # read as 'changed' on every startup with no edit anywhere, autosave
 # rewrote it, and the span walked another character each launch.
-set_body('\U0001f600 salut\n| A | B |\n| c | d |\nvorbe alese aici')
+set_body('\U0001f600 hello\n| A | B |\n| c | d |\nwords chosen here')
 app.title_entry.delete(0, 'end')
 app.title_entry.insert(0, 'EmojiSpan')
 app._render_table_grids()
@@ -4443,7 +4443,7 @@ _spE = [s for s in _noteE.get('formatting', [])
         if s.get('style') == 'bold']
 check('a bold span behind an emoji saves at its true character offsets',
       len(_spE) == 1
-      and _noteE['body'][_spE[0]['start']:_spE[0]['end']] == 'vorbe')
+      and _noteE['body'][_spE[0]['start']:_spE[0]['end']] == 'words')
 app.load_note(_noteE)
 app.update()
 check('reloading an emoji-and-table note reads clean, not phantom-dirty',
@@ -4459,7 +4459,7 @@ check('a second save moves nothing (span drift is dead)',
 _toastsE = []
 _origToastE = app._show_toast
 app._show_toast = lambda msg, *a, **k: _toastsE.append(str(msg))
-app.body_text.insert('end', ' si inca ceva')
+app.body_text.insert('end', ' and a bit more')
 app._schedule_autosave()
 app._flush_autosave()
 app.update()
@@ -4473,7 +4473,7 @@ check('a real edit still toasts Note updated',
 # stripped the bold the user had JUST applied to it. Alignment is a
 # padding edit, and padding edits are exactly what pad_ops does with
 # the tags left in place.
-set_body('| Cap | Doi |\n| :--- | ---: |\n| gros | colorat |')
+set_body('| Cap | Doi |\n| :--- | ---: |\n| bold | colorat |')
 app._render_table_grids()
 app.update()
 _gA = app._grid_at_line(1)
@@ -4626,13 +4626,13 @@ check('a fast second click unticks instead of being swallowed',
 app._open_cell_editor(_gM3, 1, 1, select=True)
 app.update()
 app._cell_editor['entry'].delete('1.0', 'end')
-app._cell_editor['entry'].insert('1.0', 'text simplu')
+app._cell_editor['entry'].insert('1.0', 'plain text')
 app._commit_cell_editor()
 app.update()
 _gM3 = app._grid_at_line(1)
 check('overwriting the marker turns the cell back into text',
-      _gM3['cells'][(1, 1)]['value'] == 'text simplu'
-      and core_tables.checkbox_state('text simplu') is None)
+      _gM3['cells'][(1, 1)]['value'] == 'plain text'
+      and core_tables.checkbox_state('plain text') is None)
 set_body('')
 
 # ---- TYPING CONTINUES THE STYLE IT LANDS BESIDE ----
@@ -4762,7 +4762,7 @@ set_body('')
 # A cell selection lingering from an earlier drag silently caught the
 # next toolbar colour meant for the body text -- 'coloring stopped
 # working' on plain notes that merely FOLLOWED a table interaction.
-set_body('| A | B |\n| c | d |\n\ncorp de colorat')
+set_body('| A | B |\n| c | d |\n\nbody to colour')
 app._render_table_grids()
 app.update()
 _gS = app._grid_at_line(1)
@@ -4915,7 +4915,7 @@ set_body('')
 # the list showed the same family of symptoms (a displaced origin, and
 # a rebuild clamping the scroll to the top) without either guard.
 _savedNotes23 = app.notes
-app.notes = [NO.normalize_note({'id': 9000 + i, 'title': 'Scurt %d' % i,
+app.notes = [NO.normalize_note({'id': 9000 + i, 'title': 'Short %d' %i,
                                 'body': 'x', 'category': 'General'})
              for i in range(2)]
 app.refresh_note_list()
@@ -4931,8 +4931,8 @@ app.update()
 check('a displaced list origin snaps back to the top',
       _disp23 > 100 and _cv23.canvasy(0) == 0)
 
-app.notes = [NO.normalize_note({'id': 9100 + i, 'title': 'Lung %d' % i,
-                                'body': 'corp', 'category': 'General'})
+app.notes = [NO.normalize_note({'id': 9100 + i, 'title': 'Long %d' % i,
+                                'body': 'body', 'category': 'General'})
              for i in range(30)]
 app.refresh_note_list()
 app.update()
@@ -4988,11 +4988,11 @@ _g24 = []
 for _i24 in range(16):
     _g24.append(NO.normalize_note(
         {'id': 9200 + _i24, 'title': 'General %d' % _i24,
-         'body': 'corp ' * 12, 'category': 'General'}))
+         'body': 'body ' * 12, 'category': 'General'}))
 for _i24 in range(12):
     _g24.append(NO.normalize_note(
         {'id': 9300 + _i24, 'title': 'Work %d' % _i24,
-         'body': 'corp ' * 12, 'category': 'Work'}))
+         'body': 'body ' * 12, 'category': 'Work'}))
 app.notes = _g24
 app.group_by_category.set(True)
 app._on_toggle_group_by_category()
@@ -5165,13 +5165,13 @@ check('the theme switch repaints the drawn header',
 app._open_cell_editor(_tT, 1, 0)
 app.update()
 app._cell_editor['entry'].delete('1.0', 'end')
-app._cell_editor['entry'].insert('1.0', 'scris in timpul comutarii')
+app._cell_editor['entry'].insert('1.0', 'written while switching')
 app.set_theme(_oldT)
 app.apply_theme()
 app.update()
 _tT = app._grid_at_line(1)
 check('a theme switch mid-typing keeps the typed text',
-      _tT['cells'][(1, 0)]['value'] == 'scris in timpul comutarii'
+      _tT['cells'][(1, 0)]['value'] == 'written while switching'
       and app._cell_editor is None)
 set_body('')
 
@@ -5645,12 +5645,12 @@ check('comments strip a pasted table to its prose, with a note',
               for t in _toastsCP))
 # A plain paste (no table) still lands untouched.
 _c.delete('1.0', 'end')
-app.clipboard_clear(); app.clipboard_append('doar text')
+app.clipboard_clear(); app.clipboard_append('just text')
 _c.focus_force(); app.update()
 _c.event_generate('<<Paste>>')
 app.update()
 check('comments still accept ordinary pasted text',
-      _c.get('1.0', 'end-1c').strip() == 'doar text')
+      _c.get('1.0', 'end-1c').strip() == 'just text')
 app._show_toast = _origToastCP
 _c.tag_remove('sel', '1.0', 'end')
 _c.delete('1.0', 'end')
@@ -5665,16 +5665,18 @@ disk_path = NO.DATA_FILE
 import tkinter.filedialog as _fdX
 import io as _ioX
 _exp_note = NO.normalize_note({
-    'id': 8800, 'title': 'Export <proba>',
-    'body': ('linia intai' + chr(10)
+    'id': 8800, 'title': 'Export <trial>',
+    'body': ('first line' + chr(10)
              + chr(0x2022) + ' bullet' + chr(10)
              + '| A | B |' + chr(10) + '| --- | --- |' + chr(10)
-             + '| [x] | val |' + chr(10) + 'coada'),
+             + '| [x] | val |' + chr(10) + 'tail'),
+    # Covers exactly the first word, so the export's <b> can be asked for
+    # by name below rather than by offset.
     'formatting': [{'start': 0, 'end': 5, 'style': 'bold'}],
     'paragraphs': [{'line': 1, 'kind': 'bullet'}],
-    'comments': 'un comentariu', 'category': 'General',
-    'checklist': [{'text': 'facut deja', 'done': True},
-                  {'text': 'de facut <inca>', 'done': False}]})
+    'comments': 'a comment', 'category': 'General',
+    'checklist': [{'text': 'done already', 'done': True},
+                  {'text': 'to do <more>', 'done': False}]})
 _exp_dir = os.path.abspath('qa_export_out')
 os.makedirs(_exp_dir, exist_ok=True)
 _toastsX = []
@@ -5686,25 +5688,25 @@ _openAsksX = []
 app.ask_yes_no = (lambda title, msg, **kw:
                   (_openAsksX.append(title), False)[1])
 
-_pX = os.path.join(_exp_dir, 'nota.html')
+_pX = os.path.join(_exp_dir, 'note.html')
 _fdX.asksaveasfilename = lambda **kw: _pX
 app.export_note_as_file(_exp_note, 'html')
 _htmlX = _ioX.open(_pX, encoding='utf-8').read() if os.path.exists(_pX) else ''
 check('HTML export writes a full document with the table as a table',
       _htmlX.startswith('<!DOCTYPE html>') and '<table>' in _htmlX
-      and '&lt;proba&gt;' in _htmlX and '<b>linia</b>' in _htmlX)
+      and '&lt;trial&gt;' in _htmlX and '<b>first</b>' in _htmlX)
 
-_pX = os.path.join(_exp_dir, 'nota.txt')
+_pX = os.path.join(_exp_dir, 'note.txt')
 _fdX.asksaveasfilename = lambda **kw: _pX
 app.export_note_as_file(_exp_note, 'txt')
 _txtX = _ioX.open(_pX, encoding='utf-8').read() if os.path.exists(_pX) else ''
 check('text export is the body as stored, comments included',
-      'linia intai' in _txtX and 'un comentariu' in _txtX)
+      'first line' in _txtX and 'a comment' in _txtX)
 check('the checklist exports in both formats, states kept',
-      chr(0x2611) + ' facut deja' in _htmlX
-      and chr(0x2610) + ' de facut' in _htmlX
-      and '&lt;inca&gt;' in _htmlX
-      and '[x] facut deja' in _txtX)
+      chr(0x2611) + ' done already' in _htmlX
+      and chr(0x2610) + ' to do' in _htmlX
+      and '&lt;more&gt;' in _htmlX
+      and '[x] done already' in _txtX)
 check('each export announces itself with a toast',
       len(_toastsX) == 2 and all('Exported to' in t for t in _toastsX))
 
@@ -5718,7 +5720,7 @@ _seenX = {}
 _fdX.asksaveasfilename = lambda **kw: _seenX.update(kw) or ''
 app.export_note_as_file(_exp_note, 'html')
 check('the suggested filename is scrubbed of forbidden characters',
-      _seenX.get('initialfile') == 'Export _proba.html')
+      _seenX.get('initialfile') == 'Export _trial.html')
 check('each single export offers to open the file',
       len([t for t in _openAsksX if 'Open it now' in t]) == 2)
 
@@ -5743,7 +5745,7 @@ check('export content mends a just-typed emoji instead of crashing', _emo_ok)
 # ---- BULK EXPORT ----
 # Two notes with the SAME title -> the second gets the " (2)" suffix.
 _exp_note2 = NO.normalize_note({
-    'id': 8801, 'title': 'Export <proba>', 'body': 'alt corp',
+    'id': 8801, 'title': 'Export <trial>', 'body': 'another body',
     'category': 'General'})
 _savedNotesX = app.notes
 app.notes = [_exp_note, _exp_note2]
@@ -5755,15 +5757,15 @@ _toastsX.clear()
 app._bulk_export_run('txt')
 _bulk_files = sorted(os.listdir(_bulk_dir))
 check('bulk export writes one file per note',
-      _bulk_files == ['Export _proba (2).txt', 'Export _proba.txt'])
-_first = _ioX.open(os.path.join(_bulk_dir, 'Export _proba.txt'),
+      _bulk_files == ['Export _trial (2).txt', 'Export _trial.txt'])
+_first = _ioX.open(os.path.join(_bulk_dir, 'Export _trial.txt'),
                    encoding='utf-8').read()
-_second = _ioX.open(os.path.join(_bulk_dir, 'Export _proba (2).txt'),
+_second = _ioX.open(os.path.join(_bulk_dir, 'Export _trial (2).txt'),
                     encoding='utf-8').read()
 check('same-title notes never overwrite each other',
-      'linia intai' in _first and 'alt corp' in _second)
+      'first line' in _first and 'another body' in _second)
 check('bulk export renders through the same pipeline as single',
-      _first == app._note_export_content(_exp_note, 'txt', 'Export <proba>'))
+      _first == app._note_export_content(_exp_note, 'txt', 'Export <trial>'))
 check('bulk export announces the count',
       any('Exported 2 note(s)' in t for t in _toastsX))
 check('bulk export leaves selection mode',
@@ -5801,21 +5803,21 @@ def _table_spans_F():
 
 
 def _styled_table_F():
-    set_body('| rosu | verde |' + chr(10) + '| --- | --- |' + chr(10)
-             + '| gros | plin |')
+    set_body('| blue | green |' + chr(10) + '| --- | --- |' + chr(10)
+             + '| bold | full |')
     app._render_table_grids()
     app.update()
     _b = app.body_text
     app._ensure_color_tag(_b, 'text_color', '#e63946')
     app._ensure_color_tag(_b, 'highlight', '#ffff00')
     _l1 = _b.get('1.0', '1.end')
-    _b.tag_add('text_color_e63946', '1.%d' % _l1.index('rosu'),
-               '1.%d' % (_l1.index('rosu') + 4))
+    _b.tag_add('text_color_e63946', '1.%d' % _l1.index('blue'),
+               '1.%d' % (_l1.index('blue') + 4))
     _l3 = _b.get('3.0', '3.end')
-    _b.tag_add('highlight_ffff00', '3.%d' % _l3.index('plin'),
-               '3.%d' % (_l3.index('plin') + 4))
-    _b.tag_add('bold', '3.%d' % _l3.index('gros'),
-               '3.%d' % (_l3.index('gros') + 4))
+    _b.tag_add('highlight_ffff00', '3.%d' % _l3.index('full'),
+               '3.%d' % (_l3.index('full') + 4))
+    _b.tag_add('bold', '3.%d' % _l3.index('bold'),
+               '3.%d' % (_l3.index('bold') + 4))
     app.update()
     return app._grid_at_line(1)
 
@@ -5863,8 +5865,8 @@ set_body('')
 
 # 4. The cell editor wears the cell's background -- full, empty, and
 # while typing; an unstyled cell stays on the theme's surface.
-set_body('| plin | gol | simplu |' + chr(10) + '| --- | --- | --- |'
-         + chr(10) + '| text |  | alt |')
+set_body('| full | empty | plain |' + chr(10) + '| --- | --- | --- |'
+         + chr(10) + '| text |  | other |')
 app._render_table_grids()
 app.update()
 _infoF = app._grid_at_line(1)
@@ -6012,7 +6014,7 @@ set_body('')
 
 # ---- FIELD ROUND 3 ----
 # Autofit over a selection of columns, in a single pass.
-set_body('| lung continut aici | x |' + chr(10) + '| --- | --- |'
+set_body('| long content here | x |' + chr(10) + '| --- | --- |'
          + chr(10) + '| a | b |')
 app._render_table_grids()
 app.update()
@@ -6260,7 +6262,7 @@ set_body('')
 
 # The table's placement travels with the cell copy.
 set_body('| p | q |' + chr(10) + '| --- | --- |' + chr(10)
-         + '| 1 | 2 |' + chr(10) + chr(10) + 'coada')
+         + '| 1 | 2 |' + chr(10) + chr(10) + 'tail')
 app._render_table_grids()
 app.update()
 _iL = app._grid_at_line(1)
@@ -6362,7 +6364,7 @@ set_body('')
 
 # The word count counts what the PERSON wrote, not the plumbing: every
 # pipe used to count as "a word", an empty 3x3 table claimed twelve.
-set_body('doua vorbe' + chr(10) + chr(10).join(core_tables.blank_table(3, 3)))
+set_body('two words' + chr(10) + chr(10).join(core_tables.blank_table(3, 3)))
 app._render_table_grids()
 app.update()
 app.update_word_count()
@@ -7189,7 +7191,7 @@ check('picking a row sets the editor category',
 # The inline share panel: code box + the attachments warning.
 app.title_entry.delete(0, 'end'); app.title_entry.insert(0, 'DeShare')
 app.title_entry.config(fg='black')
-app.body_text.insert('1.0', 'ceva')
+app.body_text.insert('1.0', 'something')
 app.save_current_note(auto=False); app.update()
 app.current_attachments = [{'filename': 'f.txt', 'stored_as': 'x_f.txt'}]
 app.share_current_note_as_code()
@@ -7400,7 +7402,7 @@ app._dismiss_mini_popup(); app.update()
 
 # Template picker: choosing the seeded template fills the editor.
 app.templates.append(NO.normalize_template(
-    {'name': 'PickerTpl', 'title': 'Din sablon', 'body': 'corp de sablon'}))
+    {'name': 'PickerTpl', 'title': 'From template', 'body': 'template body'}))
 NO.save_templates(app.templates)
 app.new_note(); app.update()
 app.show_template_picker()
@@ -7416,8 +7418,8 @@ else:
     _qa_click(_w)
 app.update()
 check('choosing it fills the editor from the template',
-      app.title_entry.get() == 'Din sablon'
-      and app.body_text.get('1.0', 'end-1c').startswith('corp de sablon'))
+      app.title_entry.get() == 'From template'
+      and app.body_text.get('1.0', 'end-1c').startswith('template body'))
 
 # Table-size popup: clicking a size cell inserts a real drawn table.
 set_body('')
@@ -7783,11 +7785,11 @@ app.save_notes()
 
 # 2: a note with a title and no body is a real note.
 app.new_note()
-app.title_entry.delete(0, 'end'); app.title_entry.insert(0, 'Doar titlu')
+app.title_entry.delete(0, 'end'); app.title_entry.insert(0, 'Title only')
 app.title_entry.config(fg='black')
 app.save_current_note(auto=False)
 app.update()
-_fc2 = [n for n in app.notes if n['title'] == 'Doar titlu']
+_fc2 = [n for n in app.notes if n['title'] == 'Title only']
 check('a note with a title and no body saves (plan 2)',
       len(_fc2) == 1 and _fc2[0]['body'].strip() == '')
 
@@ -7832,26 +7834,26 @@ check('a cancelled delete leaves the note exactly where it was (plan 9)',
 # 11: duplicating with unsaved edits copies the SAVED version, not the
 # half-typed one -- the copy is a note that existed, never a draft.
 app.load_note(_fc_note); app.update()
-app.body_text.insert('end', ' ...text netrimis inca')
+app.body_text.insert('end', ' ...text not sent yet')
 app.duplicate_note(_fc_note)
 app.update()
 _fc_copies = [n for n in app.notes
-              if n['id'] != _fc_note['id'] and 'Doar titlu' in (n['title'] or '')]
+              if n['id'] != _fc_note['id'] and 'Title only' in (n['title'] or '')]
 check('duplicating with unsaved edits copies the saved version (plan 11)',
       len(_fc_copies) == 1
-      and 'netrimis' not in (_fc_copies[0]['body'] or ''))
+      and 'not sent yet' not in (_fc_copies[0]['body'] or ''))
 
 # 19: a very long note saves and comes back whole.
 app.new_note()
-_fc_long = ('Un rand de test care se repeta. ' * 1800)[:52000]
+_fc_long = ('A test line that repeats itself. ' * 1800)[:52000]
 app.body_text.insert('1.0', _fc_long)
-app.title_entry.delete(0, 'end'); app.title_entry.insert(0, 'Foarte lunga')
+app.title_entry.delete(0, 'end'); app.title_entry.insert(0, 'Very long')
 app.title_entry.config(fg='black')
 _fc_t0 = time.perf_counter()
 app.save_current_note(auto=False)
 app.update()
 _fc_elapsed = time.perf_counter() - _fc_t0
-_fc_big = next((n for n in app.notes if n['title'] == 'Foarte lunga'), None)
+_fc_big = next((n for n in app.notes if n['title'] == 'Very long'), None)
 check('a 52,000-character note saves (plan 19)',
       _fc_big is not None and len(_fc_big['body']) >= 50000)
 app.new_note(); app.update()
@@ -7867,7 +7869,7 @@ app.show_warning = lambda *a, **k: (_fc_warned.append(a), True)[1]
 app.new_note()
 app.title_entry.delete(0, 'end'); app.title_entry.insert(0, 'Repetitiva')
 app.title_entry.config(fg='black')
-app.body_text.insert('1.0', 'ceva')
+app.body_text.insert('1.0', 'something')
 app.rec_freq_var.set(NO.FREQ_LABELS['daily'])
 app.on_recurrence_changed()
 app.date_entry.delete(0, 'end')
@@ -8357,19 +8359,19 @@ NO.CATEGORY_COLORS[_b3_cat] = _b3_was
 app.notes = list(_b3_saved)
 app.save_notes()
 app.new_note()
-app.body_text.insert('1.0', 'ceva scris si nesalvat')
+app.body_text.insert('1.0', 'something written and unsaved')
 app.update()
 _b3_asked = []
 _b3_real_ask = app.ask_yes_no
 app.ask_yes_no = lambda *a, **k: (_b3_asked.append(a), False)[1]   # "No"
-app._apply_template({'name': 'T', 'title': 'Din sablon', 'body': 'corp de sablon',
+app._apply_template({'name': 'T', 'title': 'From template', 'body': 'template body',
                      'comments': '', 'category': 'General', 'checklist': []})
 app.update()
 app.ask_yes_no = _b3_real_ask
 check('a template over unsaved content asks before replacing it (plan 32)',
       len(_b3_asked) == 1)
 check('...and answering No leaves what was typed exactly where it was',
-      'ceva scris si nesalvat' in app.body_text.get('1.0', 'end-1c'))
+      'something written and unsaved' in app.body_text.get('1.0', 'end-1c'))
 
 # ---------------------------------------------------------------------
 # Select all turns into Unselect all once everything on screen is
@@ -8932,7 +8934,7 @@ if _b4_copy is not None:
 # note it already made.
 app.notes = []
 app.save_notes()
-_b4_tpl = {'name': 'Sablon', 'title': 'Din sablon', 'body': 'corp',
+_b4_tpl = {'name': 'Template', 'title': 'From template', 'body': 'body',
            'comments': '', 'category': 'General',
            'checklist': [{'text': 'primul pas', 'done': False}]}
 app.ask_yes_no = lambda *a, **k: True
@@ -8972,7 +8974,7 @@ app.new_note(); app.update()
 _bk_saved = list(app.notes)
 NO.CATEGORY_COLORS.setdefault('Munca', '#775599')
 app.notes = [NO.normalize_note({'id': 7700 + i, 'title': 'Masa %d' % i,
-                                'body': 'corp %d' % i, 'category': 'General'})
+                                'body': 'body %d' % i, 'category': 'General'})
              for i in range(3)]
 app.save_notes()
 app.refresh_note_list(); app.update()
@@ -9009,7 +9011,7 @@ if _bk_row is not None:
 check('a bulk category change reaches the notes (audit finding)',
       [n['category'] for n in app.notes if n['id'] in (7700, 7701)]
       == ['Munca', 'Munca'])
-app.body_text.insert('end', ' si scriu mai departe')
+app.body_text.insert('end', ' and I carry on typing')
 app._flush_autosave()
 app.update()
 _bk_stored = json.load(open('notes_data.json', encoding='utf-8'))
@@ -9020,7 +9022,7 @@ check('...and typing afterwards does not revert it on the OPEN note '
 check('...while the note nobody had open was never at risk',
       _bk_other['category'] == 'Munca')
 check('...and what was typed afterwards is saved too',
-      'mai departe' in _bk_open['body'])
+      'carry on typing' in _bk_open['body'])
 
 app.notes = list(_bk_saved)
 app.save_notes()
