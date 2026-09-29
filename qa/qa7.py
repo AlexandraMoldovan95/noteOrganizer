@@ -739,6 +739,37 @@ for _ in range(60):
     app.update(); app.update_idletasks(); _c9_time.sleep(0.01)
 check('a rebuilt list puts the keyboard back on the same note',
       app.focus_get() is app._note_card_widgets[20]['card'])
+
+# THE OTHER HALF, and the one that shipped broken. The restore must not
+# fire when the keyboard was somewhere ELSE -- and the guard that decided
+# it asked focus_get(), which answers None whenever the process does not
+# own the desktop foreground. This project measured that on the Ctrl+F
+# checks; a real window hits it for a moment after any other program comes
+# to the front. So "focus_get() is None" was read as "nothing has the
+# keyboard" in exactly the case where something did, and a person typing a
+# title had the next autosave's rebuild pull the keyboard onto a card.
+app.title_entry.focus_set()
+app.update(); app.update_idletasks()
+check('fixture: the keyboard is in the title box, not on a card',
+      getattr(app.focus_get(), '_card_note_id', None) is None)
+# focus_get() made to answer None, the way a lost foreground does. Without
+# this the safe branch is the only one exercised and the bug is invisible.
+_c9_real_fg = app.focus_get
+app.focus_get = lambda: None
+try:
+    app.refresh_note_list()
+    for _ in range(40):
+        app.update(); app.update_idletasks()
+finally:
+    app.focus_get = _c9_real_fg
+# Asked by the MARKER, not by identity against cards captured earlier:
+# the rebuild destroyed those, so `is` against them is False for the new
+# card that would now hold the keyboard -- a check written that way passes
+# while the theft happens. It did, in the probe that found this.
+_c9_where = app.focus_get()
+check(f'a rebuild does NOT pull the keyboard off what someone was typing '
+      f'in ({_c9_where!r})',
+      getattr(_c9_where, '_card_note_id', None) is None)
 check('highlight color matches the theme accent',
       app._note_card_widgets[20]['card'].cget('highlightbackground') == app.colors['accent'])
 

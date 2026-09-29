@@ -12,6 +12,7 @@ How the numbers themselves are counted is the
 
 | Version | Date | In one line |
 |---|---|---|
+| [0.81.200](#081200--2026-09-29) | 2026-09-29 | The note list stops pulling the keyboard away from what you were typing in. |
 | [0.81.199](#081199--2026-09-29) | 2026-09-29 | A note's actions are reachable from where the note is — on the calendar, and from the keyboard. |
 | [0.80.198](#080198--2026-09-29) | 2026-09-29 | Doing a thing to many notes at once — pinning, sharing, and getting several back out of the Trash. |
 | [0.76.198](#076198--2026-09-28) | 2026-09-28 | The note list remembers how you sorted it, and marking a day says why it stops at three. |
@@ -116,6 +117,21 @@ whatever bump comes next.*
   review.
 
 ---
+
+## [0.81.200] — 2026-09-29
+
+*Highlights: the note list stops pulling the keyboard away from what you were typing in.*
+
+### Fixed
+
+- **A list rebuild no longer takes the keyboard off what you were typing in.**
+  The keyboard route added in `0.81.199` puts the ring back on the card you were
+  on after the list rebuilds — which happens on every save and every search
+  keystroke. It decided whether to do that by asking the window where the
+  keyboard was, and that question answers "nowhere" whenever another program is
+  in front. So typing a title while something else came forward could hand the
+  next keystroke to a note card instead. It now remembers whether the keyboard
+  was on a card rather than asking after the fact.
 
 ## [0.81.199] — 2026-09-29
 

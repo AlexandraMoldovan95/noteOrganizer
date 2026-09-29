@@ -45,7 +45,7 @@ except ImportError:
 # Added/Fixed CHANGELOG.md entries, not per-release counts). The running
 # app records this into settings, so the next time a newer build opens
 # over older data it can tell the user what changed version-wise.
-APP_VERSION = "0.81.199"
+APP_VERSION = "0.81.200"
 
 
 def parse_version(v):
@@ -12371,6 +12371,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # Placed before the early-return branches below (e.g. an empty
         # filtered list) so it isn't skipped in those cases.
         self._render_statistics()
+        # Snapshot BEFORE the destroy: tearing the focused card down fires
+        # its own <FocusOut>, which would clear the flag the restore below
+        # depends on -- so the question "was the keyboard on a card" has to
+        # be asked while the answer still exists.
+        self._restore_focus_wanted = getattr(self, "_keyboard_on_card", False)
         for widget in self.list_frame.winfo_children():
             widget.destroy()
         # Tracks note id -> the card's own widgets, so switching the open
@@ -12615,9 +12620,20 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # the list is destroyed and rebuilt on a save, a search keystroke,
         # a note switch -- and a focus that silently went to nowhere in the
         # middle of that would make the whole route unusable.
-        card.bind("<FocusIn>",
-                  lambda _e, n=note: setattr(self, "_focused_note_id", n["id"]),
-                  add="+")
+        def took_focus(_event=None, n=note):
+            self._focused_note_id = n["id"]
+            self._keyboard_on_card = True
+
+        def lost_focus(_event=None):
+            # Moving between two cards fires Leave then Enter, so the flag
+            # ends up True either way. Moving to the title box, the search
+            # box or anything else leaves it False -- which is the whole
+            # point: only a rebuild that interrupted the KEYBOARD ON A CARD
+            # should put it back.
+            self._keyboard_on_card = False
+
+        card.bind("<FocusIn>", took_focus, add="+")
+        card.bind("<FocusOut>", lost_focus, add="+")
 
     def _focus_card_by_offset(self, note_id, delta):
         """Move the keyboard focus `delta` cards along the list on screen.
@@ -12637,7 +12653,25 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             order[target].focus_set()
 
     def _restore_card_focus(self):
-        """Put the keyboard back on the card it was on before a rebuild."""
+        """Put the keyboard back on the card it was on before a rebuild.
+
+        Decided by whether the keyboard WAS on a card, recorded as it
+        moved, and NOT by asking focus_get() where it is now.
+        focus_get() answers None whenever the process does not own the
+        desktop foreground -- measured in this project on the Ctrl+F
+        checks, and true of a real window for a moment after any other
+        program comes to the front. A guard reading "focus_get() is None"
+        as "nothing has the keyboard" therefore fires in exactly the case
+        where something does.
+
+        It was not theoretical: with that guard, someone typing a title
+        while another window came forward had the next autosave's list
+        rebuild pull the keyboard out of the title box and onto a card.
+        Measured before this was changed, by making focus_get() answer
+        None the way a lost foreground does.
+        """
+        if not getattr(self, "_restore_focus_wanted", False):
+            return
         wanted = getattr(self, "_focused_note_id", None)
         if wanted is None:
             return
@@ -12646,8 +12680,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if card is None:
             return
         try:
-            if self.focus_get() is None or self.focus_get() is self:
-                card.focus_set()
+            card.focus_set()
         except (tk.TclError, KeyError):
             pass
 
