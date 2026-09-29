@@ -195,6 +195,20 @@ app.refresh_note_list()
 app.update()
 _cards = [w for w in app.list_frame.winfo_children()
           if getattr(w, '_card_note_id', None) is not None]
+# Take the desktop foreground back BEFORE placing the focus, not after.
+# Tk draws a widget's highlightcolor only while its toplevel really owns
+# the foreground, and between scenes the shooter runs PowerShell to make
+# the grab -- a separate process that can hold the foreground when this
+# scene starts. So focus_set() alone recorded the focus on the card and
+# drew no ring about one run in three: the reference had the ring, the
+# re-take did not, 0.6% apart, and "re-run it until it is green" would
+# have hidden exactly that. Seen by opening the two pictures side by side.
+#
+# The order is the whole fix. focus_force() on the window after the card
+# had the focus would move the focus OFF the card onto the window and
+# lose the ring every time -- the flake would become a certainty.
+app.focus_force()
+app.update()
 if len(_cards) > 1:
     _cards[1].focus_set()
 app.update()
