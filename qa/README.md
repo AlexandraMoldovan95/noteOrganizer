@@ -430,6 +430,18 @@ A new surface joins this list the moment it ships.
   next run was green, and there was nothing left to read. **When a check
   goes red, open that file before re-running anything.** Re-running is
   how a flake escapes.
+- **Every app a check builds answers its own dialogs, before it handles
+  one event.** The startup notice is scheduled 250ms after the window and
+  blocks until someone presses OK; nobody does in a test. qa1 built three
+  fresh apps that answered nothing, and was lucky for months that there
+  was nothing to announce — until a fixture's note filed under a category
+  the settings never had ('Zeta') met a fix that now brings such a
+  category back and says so. The script hung for ten minutes, and the
+  runner, which did not survive a timeout, never ran the eight suites
+  after it. qa8 does it right in all twelve places:
+  `app.show_info = lambda *a, **k: True` on the line after the constructor.
+  A hang is reported now as that script's failure, with its last printed
+  lines, and the run goes on.
 - **Assert the app's DECISION, not the arrival, wherever the promise is
   about focus.** `focus_get()` needs the process to own the desktop
   foreground, which a test run never does; measured, it answers 100/100
@@ -640,6 +652,9 @@ A new surface joins this list the moment it ships.
   once pointed ~200 checks before the real crash site. Bisect crashes
   on the Docker mirror with `-e PYTHONUNBUFFERED=1`; trust exit codes
   and the FAILURES footer, never the visible tail of a dead process.
+  `tools/run_tests.py` sets `PYTHONUNBUFFERED` for every script it runs,
+  so a local run's tail is honest — that is what located the qa1 hang
+  above to its line.
 - **Force a precondition; read back only a promise.** The two focus
   helpers are not interchangeable, and using the waiting one where the
   forcing one belongs is a false-red generator: a bounded poll on an
@@ -652,7 +667,12 @@ A new surface joins this list the moment it ships.
   wrap the method, record the call, assert the record (qa1's cell
   editor records focus_set, which cannot flake under any load). This
   cost the suite a red whose name was lost for a day
-  (COVERAGE_LEDGER C11b) and two more in qa6 the day it was found.
+  (COVERAGE_LEDGER C11b) and two more in qa6 the day it was found. qa7's
+  keyboard walk was the fourth: seven checks that passed, failed and
+  passed again on the same code minutes apart, whenever someone was
+  using the PC during the run. Its "Up on the first card stays put" is
+  an ABSENCE, so it records the handler's decision instead of polling —
+  a poll there answers yes before a wrong move could land.
 - **Focus is asynchronous both ways** — granting AND clearing. A check
   about where the app put the focus polls for the promised holder
   (qa1's `focus_settles_on`, the assert-only twin of `take_focus` —

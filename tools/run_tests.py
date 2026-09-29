@@ -101,7 +101,17 @@ STATIC = [
 # tells everyone to use -- and it is why an entire review wave declared it
 # had run no tests at all. The runner owns the child environment, so it
 # sets this rather than asking each caller to remember two env vars.
-CHILD_ENV = dict(os.environ, PYTHONUTF8="1", PYTHONIOENCODING="utf-8")
+CHILD_ENV = dict(os.environ, PYTHONUTF8="1", PYTHONIOENCODING="utf-8",
+                 # Unbuffered, so a script that HANGS still hands over every
+                 # line it printed. Piped stdout is block-buffered, and a
+                 # killed process takes its last few kilobytes with it --
+                 # exactly the lines that say where it stopped.
+                 PYTHONUNBUFFERED="1")
+
+# How long one script may run before it is called hung. A hang is a real
+# finding -- usually a dialog nobody answers -- so it is reported as a
+# failure of THAT script, with everything it printed, and the run goes on.
+SCRIPT_TIMEOUT = 600
 
 
 def _present(names, folder=ROOT):
@@ -138,12 +148,34 @@ def wipe_data(scratch):
         shutil.rmtree(att, ignore_errors=True)
 
 
+def _as_text(value):
+    if value is None:
+        return ""
+    if isinstance(value, bytes):
+        return value.decode("utf-8", "replace")
+    return value
+
+
 def run_one(scratch, script):
     wipe_data(scratch)
     started = time.time()
-    proc = subprocess.run([sys.executable, script], cwd=scratch,
-                          capture_output=True, text=True, timeout=600,
-                          env=CHILD_ENV, encoding="utf-8", errors="replace")
+    try:
+        proc = subprocess.run([sys.executable, script], cwd=scratch,
+                              capture_output=True, text=True,
+                              timeout=SCRIPT_TIMEOUT, env=CHILD_ENV,
+                              encoding="utf-8", errors="replace")
+    except subprocess.TimeoutExpired as hung:
+        # This used to escape and end the whole run: one hung script,
+        # and every suite after it was never run at all -- the report
+        # said nothing about them, which reads like nothing to report.
+        # A hang is this script's failure, named, with the output it
+        # had printed up to the moment it stopped.
+        took = time.time() - started
+        out = _as_text(hung.stdout)
+        failed = [l for l in out.splitlines() if l.startswith("FAIL ")]
+        failed.append("FAIL %s did not finish within %d seconds (last lines "
+                      "below)" % (script, SCRIPT_TIMEOUT))
+        return 1, failed, took, out + _as_text(hung.stderr)
     took = time.time() - started
     out = proc.stdout or ""
     # "FAIL " with the space, deliberately: a failing check prints
@@ -256,6 +288,11 @@ def main(argv):
                 if not all_failures and len(failed) > 8:
                     print(f"          ... and {len(failed) - 8} more "
                           f"({len(failed)} checks failed in total)")
+                if any("did not finish within" in l for l in failed):
+                    # A hang: the last lines it printed are where it
+                    # stopped, which is the whole diagnosis.
+                    for line in output.strip().splitlines()[-15:]:
+                        print(f"          | {line}")
                 if not failed:
                     # No "FAIL" line means the script died rather than
                     # reporting -- so this is a traceback, and the frames
