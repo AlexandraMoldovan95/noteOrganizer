@@ -288,6 +288,44 @@ A new surface joins this list the moment it ships.
   a 2-second run with one unrelated failure means the suite never reached
   the line. Read the timing and the failure count, not just the absence
   of the name.
+- **"A timer is pending" is a fact about a MOMENT, and the moment can pass
+  inside your own `update()`.** Four checks asserted a save had been asked
+  for by reading `_autosave_job is not None`. Between the action and the
+  read sits an `app.update()`, and on a loaded runner that can outlast the
+  500ms debounce: the timer fires, the job is cleared, and the check
+  reports a missing request about an app that made one. One of them went
+  red on CI while passing here three times running. **Ask for "pending OR
+  already fired"** — both answer the promise, and together they cannot be
+  decided by speed. Proved rather than argued: pausing past the debounce
+  turns the old form red on an unmodified app.
+
+  Two traps met while fixing it, both worth knowing. **Replacing
+  `_schedule_autosave` on the instance catches nothing** — every binding
+  captured the bound method when it was bound, long before, so they still
+  call the original. What the timer captures at SCHEDULE time is
+  `_autosave_now`, so that is the one to replace, and it has to be
+  replaced before the action. And **clear any pending save first, and
+  assert it is clear**: without that the check passes on a job left over
+  from something earlier in the same script, which is exactly how one of
+  these survived the mutant that deleted the binding it guards.
+- **Never decide from `focus_get()` whether something has the keyboard.**
+  It answers `None` whenever the process does not own the desktop
+  foreground — already measured here on the Ctrl+F checks, and true of a
+  real window for a moment after any other program comes to the front. A
+  guard reading `focus_get() is None` as "nothing has the keyboard" fires
+  in exactly the case where something does: the note list's focus restore
+  shipped that way and could pull the keyboard out of the title box mid
+  typing. **Record what happened as it happens** — a `<FocusIn>` /
+  `<FocusOut>` pair on the widgets that can hold it — and read the record.
+
+  Two things that made this hard to see, both worth copying. The first
+  probe ran with the foreground held, so it exercised the safe branch and
+  proved nothing; forcing `focus_get` to answer `None` is what reproduced
+  it. And the check compared the focused widget against a list of cards
+  captured BEFORE the rebuild — which destroyed them — so `where in cards`
+  was False for the new card that now held the keyboard, and the check
+  passed while the theft happened. Ask by a marker on the widget, never by
+  identity against something the code under test is about to replace.
 - **A `Toplevel` parented to a widget JOINS that widget's tree, and on a
   headless display the pointer never moves.** A hover preview created as
   `tk.Toplevel(row)` appears in `row.winfo_children()`, so it lands inside
