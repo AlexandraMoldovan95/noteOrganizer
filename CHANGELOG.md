@@ -198,6 +198,14 @@ the list itself is one drawing now, which a click hands to the keyboard.*
   tick box's mark, which is always dark; the circle had been given the tick boxes' rule. It takes
   the card colour now, which stands apart from the text on every theme. Field-reported.
 
+- **Dragging the window's edge follows the mouse.** Every step of a drag handed the window's
+  content its new size at once, and laying it out cost more than a step lasts — a quarter of a
+  second on the Calendar, a sixth on the editor — so the edge crawled behind the pointer. While
+  the button holds the edge, the content now waits and is laid out once, when the drag pauses or
+  the button is let go; a step of the drag costs a quarter to a third of what it did. Maximising,
+  a snap to the side of the screen and the keyboard lay the window out at once, as before.
+  Field-reported.
+
 ### Testing
 
 - Checks in qa7 (Cancel on six routes plus a control, shortcuts pressed from inside an open
@@ -257,6 +265,11 @@ the list itself is one drawing now, which a click hands to the keyboard.*
   top of the list failed there, because Tk 8.6.16 stopped padding a rectangle's `bbox` by the
   pixel 8.6.15 adds, and the drawing's extent had been taken from Tk. It is worked out from the
   rows now, and a mutant that puts the top at 1 — what the image read — fails the same checks.
+- qa9 drives a held drag of the window's edge, answering the mouse button for the app because a
+  script cannot hold it: the layout waits, the release lays it out, so does a pause, and a resize
+  with no button held is laid out at once. Four mutants, each killed with the suite reaching its
+  footer — after the one for the pause survived the first version of its check, whose wait
+  began before the window had changed size and so was over before it started.
 
 ---
 

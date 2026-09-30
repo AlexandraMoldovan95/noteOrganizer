@@ -10109,6 +10109,97 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         """Mix two #rrggbb colors. t=0 -> hex_a, t=1 -> hex_b."""
         return core_blend(hex_a, hex_b, t)
 
+    # ---------- Resizing the window by its edge ----------
+    # A drag of the window's edge sends a new size every few milliseconds,
+    # and laying the whole window out again cost far more than that:
+    # measured, 260 ms a step with the Calendar showing, 155 with a note in
+    # the editor, 70 on Settings -- 98% of it inside Tk, placing and
+    # painting hundreds of widgets, so no Python could make it quicker. The
+    # edge crawled behind the pointer (field-reported on the Calendar).
+    #
+    # So while the mouse button holds the edge, the window waits: its frame
+    # follows the pointer, and the content is laid out once, when the drag
+    # pauses or the button is let go. A resize with no button held --
+    # maximising, a snap, the keyboard -- is laid out at once, as before.
+    RESIZE_PAUSE_MS = 120   # a held drag this still is laid out anyway
+    RESIZE_WATCH_MS = 40    # how often a held drag looks for the release
+
+    def _on_main_canvas_configure(self, event):
+        self._main_size_wanted = (max(event.width, self._main_min_width),
+                                  event.height)
+        if self._pointer_button_held():
+            self._wait_for_resize_to_settle()
+            return
+        self._lay_out_at_window_size()
+
+    def _lay_out_at_window_size(self):
+        """Give the window's content the window's size: the one place it
+        happens, whether at once or when a drag settles."""
+        for name in ("_resize_pause_job", "_resize_watch_job"):
+            job = getattr(self, name, None)
+            if job is not None:
+                try:
+                    self.after_cancel(job)
+                except (tk.TclError, ValueError):
+                    pass
+                setattr(self, name, None)
+        size = getattr(self, "_main_size_wanted", None)
+        if size is None or size == getattr(self, "_main_size_laid_out", None):
+            return
+        try:
+            self.main_canvas.itemconfig(self._main_window_item,
+                                        width=size[0], height=size[1])
+        except tk.TclError:
+            return
+        self._main_size_laid_out = size
+
+    def _wait_for_resize_to_settle(self):
+        """A held drag of the edge: lay out after a pause in it, or at the
+        release, whichever comes first."""
+        job = getattr(self, "_resize_pause_job", None)
+        if job is not None:
+            try:
+                self.after_cancel(job)
+            except (tk.TclError, ValueError):
+                pass
+        self._resize_pause_job = self.after(self.RESIZE_PAUSE_MS,
+                                            self._lay_out_at_window_size)
+        if getattr(self, "_resize_watch_job", None) is None:
+            self._resize_watch_job = self.after(self.RESIZE_WATCH_MS,
+                                                self._watch_resize_release)
+
+    def _watch_resize_release(self):
+        """One look at the mouse button during a held drag: still down,
+        look again shortly; let go, lay the window out now."""
+        self._resize_watch_job = None
+        if not self._still_alive():
+            return
+        if self._pointer_button_held():
+            self._resize_watch_job = self.after(self.RESIZE_WATCH_MS,
+                                                self._watch_resize_release)
+            return
+        self._lay_out_at_window_size()
+
+    def _pointer_button_held(self):
+        """Whether the mouse's primary button is down right now.
+
+        Asked of Windows, because the window's edge belongs to the
+        operating system: Tk hears the new sizes and nothing of the button
+        making them. Windows reports the PHYSICAL button, so for someone
+        who has swapped the buttons the primary one is the right. Anywhere
+        else, or if the question fails, the answer is no -- which is simply
+        the behaviour from before."""
+        if not sys.platform.startswith("win"):
+            return False
+        try:
+            import ctypes
+            user32 = ctypes.windll.user32
+            swapped = user32.GetSystemMetrics(23)       # SM_SWAPBUTTON
+            key = 0x02 if swapped else 0x01              # VK_RBUTTON, VK_LBUTTON
+            return bool(user32.GetAsyncKeyState(key) & 0x8000)
+        except Exception:                                # noqa: BLE001
+            return False
+
     # ---------- UI construction ----------
     def build_ui(self):
         self._placeholders = []
@@ -10131,14 +10222,13 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         def _on_inner_configure(event):
             self.main_canvas.configure(scrollregion=self.main_canvas.bbox("all"))
 
-        MIN_TOTAL_WIDTH = SIDEBAR_WIDTH + EDITOR_MIN_WIDTH
-
-        def _on_main_canvas_configure(event):
-            target_width = max(event.width, MIN_TOTAL_WIDTH)
-            self.main_canvas.itemconfig(main_window, width=target_width, height=event.height)
+        # Read by _on_main_canvas_configure, which gives the content the
+        # window's size -- at once, or when a drag of the edge settles.
+        self._main_window_item = main_window
+        self._main_min_width = SIDEBAR_WIDTH + EDITOR_MIN_WIDTH
 
         self.main_inner.bind("<Configure>", _on_inner_configure)
-        self.main_canvas.bind("<Configure>", _on_main_canvas_configure)
+        self.main_canvas.bind("<Configure>", self._on_main_canvas_configure)
 
         def _on_shift_wheel(event):
             self.main_canvas.xview_scroll(int(-1 * (event.delta / 120)), "units")

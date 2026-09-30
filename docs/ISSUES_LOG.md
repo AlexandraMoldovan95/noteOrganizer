@@ -78,6 +78,7 @@ day-to-day tracking.
 | [Export/import freezing the app](#exportimport-freezing-the-app) | Do file I/O on a worker thread; only the main thread touches Tkinter widgets. | 0.4.0 |
 | [The theme-switch flicker, and three ways not to fix it](#the-theme-switch-flicker-and-three-ways-not-to-fix-it) | Profile before reaching for rendering tricks; the fix was stopping work nothing asked for. | 0.32.49 |
 | [The list that was drawn whole, for every pause in typing](#the-list-that-was-drawn-whole-for-every-pause-in-typing) | Measure where the time goes before trimming what is easy to count; before removing work that looks wasted, ask what it was doing for someone; when every symptom is the same cost seen from another side, remove the cost — six windows per card became none. | Unreleased |
+| [The window that crawled behind its edge](#the-window-that-crawled-behind-its-edge) | When the cost is inside the toolkit and paid per step, stop taking the step until it counts; and a smooth frame over a stale picture is a judgement for the eye, not a number. | Unreleased |
 | [The Settings panels that stayed dark on a light theme](#the-settings-panels-that-stayed-dark-on-a-light-theme) | A computed colour is invisible to palette matching; derive it once, teach the theme switch. | 0.36.54 |
 | [The title box that took three and a half seconds a keystroke](#the-title-box-that-took-three-and-a-half-seconds-a-keystroke) | Measure to isolate: the app was fine, one widget was quadratic — cap its input. | 0.36.55 |
 | [The dropdown that opened on the wrong monitor](#the-dropdown-that-opened-on-the-wrong-monitor) | Position popups against the app window's own bounds, not the full virtual desktop. | 0.2.0 |
@@ -2374,6 +2375,50 @@ callbacks were real and worth removing, and still not the cost; the cost was how
 existed. Before removing work that looks wasted, ask what it was doing for someone. And a list
 that stops drawing everything owes every reader of "what is on the list" an answer that does
 not depend on what happens to be drawn.
+
+### The window that crawled behind its edge
+
+*(Unreleased)*
+
+**Symptom:** dragging the window's edge to make it wider or narrower moved in jerks, the
+Calendar most of all — the edge fell behind the pointer and caught up in steps. Field-reported,
+with the observation that Settings felt better, "maybe because half of it is empty".
+
+**What was happening.** A drag of the edge sends the window a new size every few milliseconds,
+and the app handed each one to its content at once: every widget placed and painted again.
+Timed per step, dragging from 1,400 pixels wide to 900 and back: 275 ms with the Calendar
+showing, 149 with a note in the editor, 70 on Settings — the field report's ranking, and for its
+reason, since the cost follows the number of widgets on screen. Profiled, 98% of it was inside
+Tk, so no Python was going to make a step cheap.
+
+**The fix: take the step away until it counts.** While the mouse button holds the edge, the new
+size waits. The window's frame follows the pointer, and the content is laid out once — when the
+button is let go, or when the drag pauses for 120 ms. A resize with no button held (maximising,
+a snap to the side of the screen, the keyboard) is laid out at once, as before. Tk hears the
+sizes and nothing of the button making them, so the app asks Windows whether the primary button
+is down — the physical right one, for someone who has swapped them; anywhere else, or if the
+question fails, the answer is no, which is the old behaviour.
+
+Timed the same way, a held step is 66–77 ms on the Calendar and 52–54 on the editor, and the one
+layout at the end about a third of a second. The layout a settled drag leaves was compared with
+the same size given at once: identical. Photographed mid-drag, the Calendar keeps its old width
+— cut off at the right when the window shrinks, an empty strip when it grows — and at the
+release it fits the window again.
+
+What a held step still costs is Windows repainting what is on screen while the window changes
+size. With the content hidden for the drag a step measured 13 ms — and the window would show
+nothing until the button was let go. Whether a quicker edge is worth an empty window is a
+question for the eye rather than the stopwatch, so it went to the field test instead of being
+decided here.
+
+**One check that asked nothing.** The first version of "a pause in a held drag lays it out"
+passed with the pause taken out of the code: its wait began before the window had changed
+size, when the content's width and the window's still agreed, so it was over before it started.
+It now sees the layout waiting first, then waits for the pause.
+
+**Takeaway:** when the cost is inside the toolkit and paid per step, stop taking the step until
+it counts. And a smooth frame over a stale picture is a judgement, not a measurement — say so,
+and hand it to someone who will look.
 
 ### The Settings panels that stayed dark on a light theme
 

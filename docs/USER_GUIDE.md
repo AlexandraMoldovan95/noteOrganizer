@@ -49,6 +49,11 @@ locally on your own computer — there's no account to create and no internet co
 Run from source, the data folder sits next to the script; the installed app keeps it per-user
 under `%APPDATA%\NoteOrganizer` (worth knowing if you ever go looking for your notes folder).
 
+The window can be made as small as 640 by 600 pixels. While you drag its edge, the page inside
+keeps its size — cut off at the edge, or with an empty strip beside it — and settles to fit the
+moment you pause or let go. Laying the whole page out at every step of the drag is what made
+the edge lag behind the mouse.
+
 ![Main window](screenshots/main-window.png)
 
 ---

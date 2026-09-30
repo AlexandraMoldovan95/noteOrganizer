@@ -1254,6 +1254,89 @@ check('at the smallest size the window allows, a whole note card is on screen '
 app.geometry('1100x850')
 for _ in range(10):
     app.update(); time.sleep(0.02)
+
+# ============================================================
+# A DRAG OF THE WINDOW'S EDGE LAYS THE WINDOW OUT ONCE
+# ============================================================
+# Laying the window out costs more than a step of a drag lasts (measured:
+# 260 ms a step on the Calendar), so while the mouse button holds the edge
+# the content waits, and is laid out when the drag pauses or the button is
+# let go. A script cannot hold the edge -- the drag belongs to Windows --
+# so the button is answered for the app, and each promise is asked of the
+# layout itself: the width the content was given.
+def _rz_width():
+    return int(float(app.main_canvas.itemcget(app._main_window_item, 'width')))
+
+
+def _rz_window():
+    return max(app.main_canvas.winfo_width(), app._main_min_width)
+
+
+check('the mouse button can be asked, and says no when nobody holds it',
+      app._pointer_button_held() in (False, True)
+      and (sys.platform.startswith('win') or app._pointer_button_held() is False))
+_rz_held = {'now': True}
+app._pointer_button_held = lambda: _rz_held['now']
+# The pause must not land by accident between two steps of the check.
+app.RESIZE_PAUSE_MS = 60000
+try:
+    _rz_before = _rz_width()
+    app.geometry('1180x850')
+    for _ in range(5):
+        app.update_idletasks(); app.update()
+    check(f'while the mouse holds the window\'s edge, the layout waits '
+          f'({_rz_before} kept, the window is {_rz_window()})',
+          _rz_width() == _rz_before != _rz_window()
+          and app._resize_watch_job is not None)
+
+    def _rz_wait_for_layout():
+        """Until the content has the window's width, or five seconds."""
+        _rz_end = time.time() + 5
+        while time.time() < _rz_end and _rz_width() != _rz_window():
+            app.update(); time.sleep(0.02)
+
+    # The release, as the watch sees it on its next look -- the pause is out
+    # of reach, so nothing else can lay the window out.
+    _rz_held['now'] = False
+    _rz_wait_for_layout()
+    check(f'...and letting go lays it out at the new size '
+          f'({_rz_width()} for {_rz_window()})',
+          _rz_width() == _rz_window())
+    # A drag that pauses with the button still down is laid out too. The
+    # fixture first: a held step whose layout visibly waits -- a wait that
+    # starts before the window has changed is over before it begins, which
+    # is how the first version of this check passed with the pause removed.
+    _rz_held['now'] = True
+    app.geometry('1060x850')
+    for _ in range(5):
+        app.update_idletasks(); app.update()
+    _rz_waiting = _rz_width() != _rz_window()
+    app.RESIZE_PAUSE_MS = 50
+    app.geometry('1040x850')      # the next step arms the (now short) pause
+    for _ in range(2):
+        app.update_idletasks(); app.update()
+    _rz_wait_for_layout()
+    check(f'...and a pause in a held drag lays it out without the release '
+          f'({_rz_width()} for {_rz_window()}; it waited first: {_rz_waiting})',
+          _rz_waiting and _rz_width() == _rz_window())
+    # No button: a maximise, a snap or the keyboard -- at once, as always.
+    # Neither timer may stand in for "at once": both are put out of reach.
+    _rz_held['now'] = False
+    app.RESIZE_PAUSE_MS = 60000
+    app.RESIZE_WATCH_MS = 60000
+    app.geometry('1120x850')
+    app.update_idletasks(); app.update()
+    check(f'a resize with no button held is laid out at once '
+          f'({_rz_width()} for {_rz_window()})',
+          _rz_width() == _rz_window())
+finally:
+    for _rz_attr in ('_pointer_button_held', 'RESIZE_PAUSE_MS', 'RESIZE_WATCH_MS'):
+        app.__dict__.pop(_rz_attr, None)
+    app._lay_out_at_window_size()
+app.geometry('1100x850')
+for _ in range(10):
+    app.update(); time.sleep(0.02)
+
 app.notes = list(_tg_saved_notes)
 app.templates = list(_tg_saved_templates)
 app.save_notes()

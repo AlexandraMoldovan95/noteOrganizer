@@ -532,12 +532,34 @@ So the two scrolling canvases carry the same guard family. The editor page has p
 content to the top since `0.32.x`; the note list (since `0.58.82`) additionally remembers its
 offset in **pixels** across a full rebuild and keeps that restore *in force* for a short
 window — re-applied on every late Configure and on short timers for the silent-shrink case,
-with the scrollregion refreshed from `bbox("all")` before any fraction math, because a
-scrollregion is a claim, not a fact.
+with the scrollregion refreshed from the content's real extent before any fraction math (the
+editor page's window item, the list's own `_list_extent()`), because a scrollregion is a claim,
+not a fact.
 
 A deliberate wheel or scrollbar move cancels the pending restore: the user always outranks the
 machinery. Any new scrollable canvas whose content gets rebuilt should either reuse this family
 or consciously argue why it can't suffer the same two failures.
+
+### A drag of the window's edge waits for the hand
+
+The whole window sits in one frame inside `main_canvas`, and every size the window takes is
+handed to that frame — which places and paints every widget again. A drag of the edge sends a
+new size every few milliseconds, and a layout cost more than that: 275 ms a step with the
+Calendar showing, 149 with the editor, 70 on Settings, 98% of it inside Tk.
+
+So `_on_main_canvas_configure` asks whether the mouse's primary button is down
+(`_pointer_button_held`, a question for Windows: the edge belongs to the operating system, and Tk
+hears the sizes but not the button). While it is, the new size waits; `_lay_out_at_window_size`
+hands it over once, when the drag pauses for `RESIZE_PAUSE_MS` or a watch every
+`RESIZE_WATCH_MS` sees the button let go. With no button held — maximising, a snap, the
+keyboard — it is handed over at once, as it always was. Anywhere but Windows, or if the question
+fails, the answer is "not held", which is the old behaviour.
+
+What a held step still costs (about 70 ms on the Calendar) is Windows repainting what is on
+screen while the window changes size. Hiding the content for the drag measured 13 ms a step
+and shows an empty window until the release; that trade is for the eye, and is left to the
+field test. See
+[The window that crawled behind its edge](ISSUES_LOG.md#the-window-that-crawled-behind-its-edge).
 
 ## Background work: exporting and importing
 
