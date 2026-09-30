@@ -1653,7 +1653,17 @@ class SettingsPageMixin:
 
         del_vars = []  # (var, note, group) across all groups
         all_group_vars = []  # list of per-group var lists, for the "clean up everything" button
+        # A tick for every copy in every group, drawn or not: the groups are
+        # drawn a page at a time, and "Clean up ALL" still has to reach the
+        # copies on pages nobody has opened yet.
         for group in groups:
+            group_vars = [tk.IntVar(value=0) for _note in group]
+            all_group_vars.append(group_vars)
+            del_vars.extend((var, note, group) for var, note in zip(group_vars, group))
+        wheel = lambda e: self._panel_or_page_wheel(canvas, e)  # noqa: E731
+        inner.bind("<MouseWheel>", wheel)
+
+        def draw_group(group, group_vars):
             box = tk.Frame(inner, bg=self.colors["sidebar"])
             box.pack(fill="x", pady=5, padx=2)
             title = (group[0].get("title") or "").strip() or "(untitled)"
@@ -1672,16 +1682,12 @@ class SettingsPageMixin:
                          fg=self.colors["accent"], anchor="w", wraplength=460, justify="left"
                          ).pack(fill="x", padx=14, pady=(0, 2))
 
-            group_vars = []
-            for note in group:
+            for note, var in zip(group, group_vars):
                 created = note.get("created", "")
                 updated = note.get("updated", "")
                 meta = f"created {created[:10]}" if created else ""
                 if updated and updated != created:
                     meta += f" · updated {updated[:10]}"
-                var = tk.IntVar(value=0)
-                del_vars.append((var, note, group))
-                group_vars.append(var)
                 cb = tk.Checkbutton(
                     box, text=f"Delete this copy   ({meta})" if meta else "Delete this copy",
                     variable=var,
@@ -1701,8 +1707,6 @@ class SettingsPageMixin:
                 for v in gv:
                     v.set(0)
 
-            all_group_vars.append(group_vars)
-
             btn_row = tk.Frame(box, bg=self.colors["sidebar"])
             btn_row.pack(fill="x", padx=10, pady=(2, 8))
             tk.Button(btn_row, text="Tick all but first", command=check_all_but_first,
@@ -1713,8 +1717,36 @@ class SettingsPageMixin:
                       bg=self.colors["card"], fg=self.colors["subtext"], relief="flat",
                       font=("Segoe UI", 8), cursor="hand2"
                       ).pack(side="left", padx=(6, 0), ipadx=6, ipady=2)
+            self._bind_wheel_tree(box, wheel)
 
-        self._bind_wheel_tree(inner, lambda e: self._panel_or_page_wheel(canvas, e))
+        # A page of groups at a time. Every group was drawn at once --
+        # 676 widgets for the hundred groups of a 5,000-note notebook, most of
+        # a visit's 900 ms -- and the list shows a handful at a time anyway.
+        # "Show more" draws the next page from the groups already found:
+        # nothing is looked for again until the section is built again.
+        DUP_PAGE_SIZE = 20
+        drawn = {"n": 0, "more": None}
+
+        def draw_next_page():
+            if drawn["more"] is not None:
+                drawn["more"].destroy()
+                drawn["more"] = None
+            start = drawn["n"]
+            drawn["n"] = min(len(groups), start + DUP_PAGE_SIZE)
+            for gi in range(start, drawn["n"]):
+                draw_group(groups[gi], all_group_vars[gi])
+            remaining = len(groups) - drawn["n"]
+            if remaining > 0:
+                drawn["more"] = tk.Button(
+                    inner, text=f"Show {min(remaining, DUP_PAGE_SIZE)} more groups "
+                                f"({remaining} not shown)",
+                    command=draw_next_page, relief="flat", cursor="hand2",
+                    bg=self.colors["sidebar"], fg=self.colors["text"],
+                    font=("Segoe UI", 8))
+                drawn["more"].pack(fill="x", pady=(6, 2), ipady=4)
+                drawn["more"].bind("<MouseWheel>", wheel)
+
+        draw_next_page()
 
         def do_cleanup():
             self._cleanup_selected_duplicates(

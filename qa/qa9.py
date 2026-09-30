@@ -2374,6 +2374,72 @@ check('ten rebuilds of the theme picker leave no Tcl command behind (%d -> %d)'
 app.notes = list(_st_notes)
 app._render_statistics(); app.update()
 
+# ============================================================
+# DUPLICATES: A PAGE OF GROUPS AT A TIME, FOUND ONCE
+# ============================================================
+# Every group was drawn at once -- 676 widgets for the hundred groups of a
+# 5,000-note notebook -- and "Show more" did not exist. Twenty are drawn
+# now, the rest a page at a time from the groups already found; and the
+# one button that acts on ALL groups still reaches the undrawn ones.
+import noteorganizer.ui.settings_page as _dq_page
+_dq_real = _dq_page.find_duplicate_groups
+_dq_calls = []
+_dq_page.find_duplicate_groups = lambda notes: (_dq_calls.append(1),
+                                                _dq_real(notes))[1]
+_dq_notes = list(app.notes)
+app.notes = []
+for _dq_g in range(30):
+    for _dq_c in range(2):
+        app.notes.append(NO.normalize_note({
+            'id': 9700 + _dq_g * 2 + _dq_c, 'title': 'Twin %02d' % _dq_g,
+            'body': 'same text %d' % _dq_g, 'category': 'General'}))
+app.notes.append(NO.normalize_note({'id': 9699, 'title': 'Alone', 'body': 'z',
+                                    'category': 'General'}))
+try:
+    app.toggle_settings_panel('duplicates'); app.update()
+
+    def _dq_drawn():
+        # A group's heading reads “Title” — N copies; the section's own
+        # explanations use the word too, so the shape is what is asked.
+        return [str(w.cget('text')) for w in _walk9(app.settings_duplicates_panel)
+                if isinstance(w, tk.Label)
+                and str(w.cget('text')).startswith('“')
+                and str(w.cget('text')).endswith(' copies')]
+
+    _dq_more = find_widget(app.settings_duplicates_panel, tk.Button, 'more groups')
+    check('the Duplicates section draws the first twenty of thirty groups, in '
+          'the order they were found, and offers the rest (%d drawn)'
+          % len(_dq_drawn()),
+          len(_dq_drawn()) == 20 and _dq_more is not None
+          and '10 not shown' in str(_dq_more.cget('text'))
+          and [t.split('”')[0].lstrip('“') for t in _dq_drawn()]
+          == ['Twin %02d' % i for i in range(20)])
+    if _dq_more is not None:
+        _dq_more.invoke(); app.update()
+    check('"Show more" draws the other ten without looking for duplicates '
+          'again (%d drawn, %d searches)' % (len(_dq_drawn()), len(_dq_calls)),
+          len(_dq_drawn()) == 30 and len(_dq_calls) == 1
+          and find_widget(app.settings_duplicates_panel, tk.Button,
+                          'more groups') is None)
+    # Built again (twenty drawn), then "Clean up ALL" pressed at once: it
+    # must take a copy from every one of the thirty groups.
+    app.toggle_settings_panel('duplicates'); app.update()
+    app.ask_yes_no = lambda *a, **k: True
+    try:
+        find_widget(app.settings_duplicates_panel, tk.Button, 'Clean up ALL').invoke()
+        app.update()
+    finally:
+        del app.ask_yes_no
+    _dq_left = sorted(n['title'] for n in app.notes)
+    check('"Clean up ALL" reaches the groups not drawn yet: one of each pair '
+          'is left (%d notes)' % len(app.notes),
+          _dq_left == sorted(['Alone'] + ['Twin %02d' % i for i in range(30)]))
+finally:
+    _dq_page.find_duplicate_groups = _dq_real
+    app.notes = list(_dq_notes)
+    app.save_notes()
+app.hide_settings_page(); app.update()
+
 check('none of the blocks above raised a background error (%s)' % _bg9[:2],
       not _bg9)
 app.notes = list(_na_notes)
