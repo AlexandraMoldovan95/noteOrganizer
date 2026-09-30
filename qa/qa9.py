@@ -1603,6 +1603,179 @@ check('a template\'s pencil clicked while another template\'s editor is open '
 app._dismiss_mini_popup(); app.update()
 
 # ============================================================
+# CLOSING THE WINDOW UNDER A QUESTION
+# ============================================================
+# The X while a question waited destroyed the window under it, and nothing
+# ever ended the question's wait: the process lived on with no window,
+# holding the notebook lock, and every later launch was refused as
+# "already open". The close is refused now and the question brought
+# forward with the keyboard on its button, as Windows does for a modal
+# question. destroy() is recorded rather than run: this script needs the
+# window, and a close that goes through must still turn this check red.
+_cl_destroyed, _cl_forced, _cl_seen = [], [], {}
+_cl_real_force = tk.Misc.focus_force
+
+
+def _cl_spy_force(self):
+    _cl_forced.append(self)
+    return _cl_real_force(self)
+
+
+def _cl_close_during():
+    _cl_seen['asking_before'] = app._a_dialog_is_asking()
+    del _cl_forced[:]
+    app.on_app_close()
+    app.update()
+    _cl_seen['asking_after'] = app._a_dialog_is_asking()
+    _cl_seen['forced'] = list(_cl_forced)
+    _cl_seen['default'] = _question_button('No', 'Delete note')
+    if _cl_seen['default'] is not None:
+        _cl_seen['default'].invoke()
+
+
+app.destroy = lambda: _cl_destroyed.append(1)
+tk.Misc.focus_force = _cl_spy_force
+try:
+    _cl_answer, _cl_rescued = _while_asking(
+        lambda: app.ask_yes_no('Delete note', 'Move it to the Trash?',
+                               icon='warning', default='no'),
+        _cl_close_during, 'Yes', 'Delete note')
+finally:
+    tk.Misc.focus_force = _cl_real_force
+    del app.destroy
+check('closing the window while a question waits is refused: nothing is '
+      'destroyed, the question still waits (destroyed=%s, %s)'
+      % (_cl_destroyed, {k: v for k, v in _cl_seen.items()
+                         if k.startswith('asking')}),
+      _cl_seen.get('asking_before') and _cl_seen.get('asking_after')
+      and not _cl_destroyed)
+check('...the question comes forward with the keyboard on its button',
+      _cl_seen.get('default') is not None
+      and _cl_seen['default'] in _cl_seen.get('forced', []))
+check('...and the person still answers it',
+      _cl_answer is False and not _cl_rescued)
+# The net under every other route: a question whose window is destroyed
+# anyway ends its wait with its safe answer. Its card is what goes. The
+# wait is watched, so a missing net stops this check, not the script.
+_cl_waits, _cl_unstuck = [], []
+_cl_real_wait = app.wait_variable
+
+
+def _cl_spy_wait(var):
+    _cl_waits.append(var)
+    return _cl_real_wait(var)
+
+
+def _cl_destroy_card():
+    _b = _question_button('Yes', 'Keep going?')
+    while _b is not None and _b.master is not app:
+        _b = _b.master
+    if _b is not None:
+        _b.destroy()
+
+
+def _cl_unstick():
+    for _v in _cl_waits:
+        try:
+            if not _v.get():
+                _cl_unstuck.append(1)
+                _v.set(1)
+        except tk.TclError:
+            pass
+
+
+app.wait_variable = _cl_spy_wait
+app.after(300, _cl_destroy_card)
+_cl_job = app.after(4000, _cl_unstick)
+try:
+    _cl_answer2 = app.ask_yes_no('Keep going?', 'A question whose window goes.',
+                                 default='yes')
+finally:
+    app.after_cancel(_cl_job)
+    del app.wait_variable
+check('a question whose window is destroyed under it ends its wait with its '
+      'safe answer (%r; unstuck by hand: %s)' % (_cl_answer2, bool(_cl_unstuck)),
+      _cl_answer2 is False and not _cl_unstuck)
+app.update()
+
+# ============================================================
+# ENTER ANSWERS A QUESTION WITH THE BUTTON THAT HOLDS THE KEYBOARD
+# ============================================================
+# The docstring and ARCHITECTURE promised Enter takes the default button;
+# it did nothing at all -- a tk.Button answers Space and the mouse. Each
+# question is answered by a key pressed where the keyboard really is; the
+# rescue, if the key never lands, is the WRONG answer.
+_en_seen = {}
+
+
+def _en_press(label, key, title):
+    def act():
+        _b = _question_button(label, title)
+        _en_seen[title] = _b is not None and _keyboard_on(_b)
+        if _en_seen[title]:
+            _b.event_generate('<%s>' % key)
+    return act
+
+
+_en_results = [
+    ('Enter takes the default button', True,
+     _while_asking(lambda: app.ask_yes_no('Q-enter', 'Enter takes the default.',
+                                          default='yes'),
+                   _en_press('Yes', 'Return', 'Q-enter'), 'No', 'Q-enter'),
+     'Q-enter'),
+    ('Enter takes the button the keyboard was moved to', False,
+     _while_asking(lambda: app.ask_yes_no('Q-moved', 'The keyboard went to No.',
+                                          default='yes'),
+                   _en_press('No', 'Return', 'Q-moved'), 'Yes', 'Q-moved'),
+     'Q-moved'),
+]
+# The keypad's Enter is its own key (KP_Enter) where Tk has one to
+# generate. Tk on Windows has none -- measured: "no keycode for keysym
+# KP_Enter", and a generated one arrives as "??" -- so there it is asked
+# where it can be: on the Linux image. Both keys are bound either way.
+if not sys.platform.startswith('win'):
+    _en_results.append(
+        ('keypad Enter takes it too', False,
+         _while_asking(lambda: app.ask_yes_no('Q-keypad', 'The keypad Enter too.',
+                                              default='no'),
+                       _en_press('No', 'KP_Enter', 'Q-keypad'), 'Yes', 'Q-keypad'),
+         'Q-keypad'))
+for _en_name, _en_want, (_en_got, _en_rescued), _en_title in _en_results:
+    if _en_seen.get(_en_title) is False:
+        check('%s: SKIPPED -- the keyboard never reached the question' % _en_name,
+              True)
+        continue
+    check('%s (%r, rescued: %s)' % (_en_name, _en_got, _en_rescued),
+          _en_got is _en_want and not _en_rescued)
+# One key, one question: asked over another, Enter answers the inner one
+# and leaves the outer still asking (Escape likewise).
+_nq = {}
+
+
+def _nq_outer_act():
+    _nq['inner'] = _while_asking(
+        lambda: app.ask_yes_no('Inner question', 'Asked over another.',
+                               default='no'),
+        _en_press('No', 'Return', 'Inner question'), 'Yes', 'Inner question')
+    app.update()
+    _b = _question_button('No', 'Outer question')
+    _nq['outer_still_there'] = _b is not None
+    if _b is not None:
+        _b.invoke()
+
+
+_nq['outer'] = _while_asking(
+    lambda: app.ask_yes_no('Outer question', 'Asked first.', default='yes'),
+    _nq_outer_act, 'Yes', 'Outer question', cap_ms=15000)
+if _en_seen.get('Inner question') is False:
+    check('enter on nested questions: SKIPPED -- no keyboard', True)
+else:
+    check('one Enter answers the question asked last, and leaves the one under '
+          'it asking (%s)' % _nq,
+          _nq.get('inner') == (False, False) and _nq.get('outer_still_there')
+          and _nq.get('outer') == (False, False))
+
+# ============================================================
 # AN IMAGE PREVIEW CLOSED AT ONCE LEAVES NOTHING ON THE WINDOW
 # ============================================================
 # The preview binds its click-outside 50 ms after it opens, so the click

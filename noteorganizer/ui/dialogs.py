@@ -87,7 +87,11 @@ class DialogsMixin:
         last (primary) button is focused — which is wrong for a
         destructive confirm, where Enter would fire "Yes": pass
         default="No" so a reflexive Enter is safe. Escape still returns
-        the first button's value (the safe/cancel choice) regardless."""
+        the first button's value (the safe/cancel choice) regardless.
+
+        Both keys answer only the innermost question when one is asked
+        over another, and Enter takes the button holding the keyboard --
+        the default, unless the person moved it (Tab)."""
         if buttons is None:
             buttons = [("OK", True)]
         focus_index = self._dialog_focus_index(buttons, default)
@@ -120,7 +124,7 @@ class DialogsMixin:
         accent = {"error": self.colors["danger"], "warning": self.colors["danger"],
                   "success": self.colors["success"]}.get(kind, self.colors["accent"])
 
-        result = {"value": None}
+        result = {"value": None, "answered": False}
         done = tk.IntVar(value=0)
 
         # A thin transparent-ish "click catcher" that keeps the background
@@ -150,9 +154,18 @@ class DialogsMixin:
         btn_row.pack(fill="x", padx=20, pady=(0, 16))
 
         def choose(val):
+            # The first answer is the answer: the <Destroy> safety net
+            # below runs again as the card is torn down after a real one.
+            if result["answered"]:
+                return
+            result["answered"] = True
             result["value"] = val
-            done.set(1)
+            try:
+                done.set(1)
+            except tk.TclError:
+                pass
 
+        dialog_buttons = []
         for i, spec in enumerate(buttons):
             label, value = spec[0], spec[1]
             color_key = spec[2] if len(spec) > 2 else None
@@ -169,12 +182,50 @@ class DialogsMixin:
                 bg=btn_color, fg=fg_color,
                 activebackground=btn_color, activeforeground=fg_color)
             b.pack(side="right", padx=(8, 0), ipadx=12, ipady=4)
+            dialog_buttons.append(b)
             if i == focus_index:
                 b.focus_set()
 
         # Escape = the "safe" (first) value, usually cancel/no.
         safe_val = buttons[0][1] if len(buttons) > 1 else buttons[-1][1]
-        esc_bind = self.bind("<Escape>", lambda e: choose(safe_val), add="+")
+        asking = {"border": border, "buttons": dialog_buttons,
+                  "default": dialog_buttons[focus_index]}
+
+        def innermost():
+            stack = getattr(self, "_asking_dialogs", None) or []
+            return bool(stack) and stack[-1] is asking
+
+        def escape(_event=None):
+            # Both keys are bound on the window, so a question asked over
+            # another heard them too: one Escape answered both.
+            if innermost():
+                choose(safe_val)
+
+        def enter(event):
+            # The docstring above and ARCHITECTURE always said Enter takes
+            # the default, and it did nothing at all: a tk.Button answers
+            # Space and the mouse, and nothing bound Return. The button
+            # holding the keyboard is what Enter presses. A key typed into
+            # some other field (Tab can walk out of the card) is that
+            # field's own business.
+            if not innermost():
+                return
+            w = getattr(event, "widget", None)
+            if w in dialog_buttons:
+                w.invoke()
+            elif w is self or self._is_inside_popup(w, border):
+                asking["default"].invoke()
+
+        esc_bind = self.bind("<Escape>", escape, add="+")
+        enter_binds = [(seq, self.bind(seq, enter, add="+"))
+                       for seq in ("<Return>", "<KP_Enter>")]
+        # No wait may outlive its window. Closing the app under a question
+        # destroyed the window while this still waited for `done`, which
+        # nothing would ever set again: the process lived on with no
+        # window, holding the notebook lock, and every later launch was
+        # refused as "already open". on_app_close refuses the close while
+        # a question asks; this is the net under every other route.
+        border.bind("<Destroy>", lambda e: choose(safe_val), add="+")
 
         # Modal, but the background stays fully visible (we don't cover it). A
         # local grab on the dialog frame routes input to the dialog only; because
@@ -193,17 +244,27 @@ class DialogsMixin:
         # the edit under a day of None. Raised here, right beside the
         # finally that lowers it, so no failure can leave it raised.
         self._modal_depth = getattr(self, "_modal_depth", 0) + 1
+        # Innermost last: what the keys answer, and what a close of the
+        # window brings to the front (_bring_question_forward).
+        if getattr(self, "_asking_dialogs", None) is None:
+            self._asking_dialogs = []
+        self._asking_dialogs.append(asking)
         try:
             self.wait_variable(done)
         finally:
             try:
+                self._asking_dialogs.remove(asking)
+            except ValueError:
+                pass
+            try:
                 border.grab_release()
             except tk.TclError:
                 pass
-            try:
-                self.unbind("<Escape>", esc_bind)
-            except tk.TclError:
-                pass
+            for seq, bind_id in [("<Escape>", esc_bind)] + enter_binds:
+                try:
+                    self.unbind(seq, bind_id)
+                except tk.TclError:
+                    pass
             try:
                 border.destroy()
             except tk.TclError:
@@ -222,6 +283,31 @@ class DialogsMixin:
         """True while a themed dialog waits for an answer. Every handler
         bound with bind_all asks this first and does nothing if so."""
         return getattr(self, "_modal_depth", 0) > 0
+
+    def _bring_question_forward(self):
+        """The window was asked to close while a question waits: show the
+        question instead, as Windows does for a modal one. The window comes
+        back from the taskbar if it went there, the question's card is
+        lifted, and the keyboard goes to its button -- the one that held
+        it, or the default."""
+        stack = getattr(self, "_asking_dialogs", None) or []
+        if not stack:
+            return
+        asking = stack[-1]
+        try:
+            if self.state() == "iconic":
+                self.deiconify()
+            self.lift()
+            asking["border"].lift()
+            try:
+                holder = self.focus_get()
+            except (KeyError, tk.TclError):
+                holder = None
+            target = (holder if holder in asking["buttons"]
+                      else asking["default"])
+            target.focus_force()
+        except tk.TclError:
+            pass
 
     def _toggles_its_popup(self, btn, open_popup):
         """Make a button open its popup on one click and close it on the next.

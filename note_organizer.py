@@ -18351,7 +18351,18 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         ask -- see _autosave_now) raises its occurrence-scope question
         here, at the gesture. Cancelling it keeps the window open, on the
         edited day: it used to close anyway and discard the edit, which
-        is the opposite of what Cancel means anywhere else."""
+        is the opposite of what Cancel means anywhere else.
+
+        One thing comes before any of that. A question on screen owns the
+        window until it is answered, as a modal question does on Windows:
+        the close is refused and the question brought to the front.
+        Closing under it destroyed the window while the question still
+        waited, and the process lived on with no window, holding the
+        notebook lock -- every later launch was refused as "already
+        open"."""
+        if self._a_dialog_is_asking():
+            self._bring_question_forward()
+            return
         if self._flush_autosave() is False:
             return
         self._sync_active_tab()
