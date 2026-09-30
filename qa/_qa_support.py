@@ -88,10 +88,74 @@ One thing this deliberately does NOT police: whether a human could have
 clicked the widget where it currently sits. Delivery and realism are
 different questions, and a check that wants the second asserts it itself
 (scroll the row into view, then assert it is viewable).
+
+``hermetic_seed()``
+    The first line of every qa script, before ``import note_organizer``:
+    gives the script a data folder of its own, or refuses to run. It lives
+    here, once, because it was nine identical copies -- the one state a
+    copied safety rule does not stay in.
 """
 
+import io
+import json
+import os
 import re
+import sys
 import tkinter as tk
+
+# Set by tools/run_tests.py and by the CI workflow for the scripts they
+# start, each in a throwaway folder. Nothing else sets it.
+SCRATCH_MARKER = "NOTEORG_SCRATCH"
+
+
+def hermetic_seed():
+    """Give this script a data folder of its own -- or refuse to run.
+
+    Called first, BEFORE ``import note_organizer``: the module resolves
+    its data folder and runs the data MIGRATIONS at import time, so by the
+    first line of test code the adoption has already happened. An empty
+    folder invites run_migrations to adopt whatever real notebook
+    %APPDATA% holds, and real notes then leak into every scenario -- the
+    checks start flaking whenever the owner's data changes. Seeding an
+    empty notebook plus the reclaim marker closes both migration doors
+    before the app is even constructed.
+
+    It refuses, and fails closed:
+
+    * outside a scratch run. A script started by hand, from whatever
+      folder the terminal happened to be in, stops here before it wipes
+      anything -- the way three real notebooks were lost.
+    * beside a notes_data.json that holds notes, or that it cannot read.
+      The nine copies this replaced read an unreadable notebook as EMPTY
+      and overwrote it with ``[]`` -- and an unreadable notebook is
+      exactly the one the app itself could still have rescued. They also
+      overwrote settings.json unconditionally; now nothing is written
+      until every check has passed.
+    """
+    if os.environ.get(SCRATCH_MARKER) != "1":
+        sys.exit(
+            "REFUSING to run: this script wipes the data files in its "
+            "working folder, and nothing says this folder is a throwaway "
+            "copy. Run it through tools/run_tests.py, or set %s=1 yourself "
+            "in a scratch folder outside the project (see CLAUDE.md, "
+            "'QA testing safety')." % SCRATCH_MARKER)
+    if os.path.exists("notes_data.json"):
+        try:
+            with io.open("notes_data.json", encoding="utf-8") as fh:
+                held = json.load(fh)
+        except (OSError, ValueError) as exc:
+            sys.exit(
+                "REFUSING to run: notes_data.json here cannot be read (%s). "
+                "It may be a real notebook the app could still rescue; this "
+                "script would overwrite it." % exc)
+        if not isinstance(held, list) or held:
+            sys.exit(
+                "REFUSING to run: notes_data.json here holds real notes. "
+                "Copy this script to a scratch folder instead.")
+    with io.open("notes_data.json", "w", encoding="utf-8") as fh:
+        fh.write("[]")
+    with io.open("settings.json", "w", encoding="utf-8") as fh:
+        fh.write(json.dumps({"reclaimed_from_appdata": True}))
 
 
 class EventNotDelivered(AssertionError):

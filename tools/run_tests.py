@@ -160,9 +160,14 @@ def run_one(scratch, script):
     wipe_data(scratch)
     started = time.time()
     try:
+        # The scratch marker: the scripts that wipe their working folder
+        # refuse to run without it (qa/_qa_support.hermetic_seed,
+        # test_data_safety.py), and only a run in a throwaway folder --
+        # this one, or CI's fresh checkout -- sets it.
         proc = subprocess.run([sys.executable, script], cwd=scratch,
                               capture_output=True, text=True,
-                              timeout=SCRIPT_TIMEOUT, env=CHILD_ENV,
+                              timeout=SCRIPT_TIMEOUT,
+                              env=dict(CHILD_ENV, NOTEORG_SCRATCH="1"),
                               encoding="utf-8", errors="replace")
     except subprocess.TimeoutExpired as hung:
         # This used to escape and end the whole run: one hung script,

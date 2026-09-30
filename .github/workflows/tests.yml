@@ -88,6 +88,10 @@ jobs:
       # a Windows console defaults to cp1252 and dies on the first one.
       # (The same variable is set when running the suite locally.)
       PYTHONIOENCODING: utf-8
+      # A fresh checkout is a throwaway folder: the scripts that wipe their
+      # working folder refuse to run without this marker, which only
+      # tools/run_tests.py and this workflow set.
+      NOTEORG_SCRATCH: "1"
     defaults:
       run:
         # Git Bash exists on the Windows runners too, so ONE set of steps

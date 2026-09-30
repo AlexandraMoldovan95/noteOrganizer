@@ -18,20 +18,41 @@ import tempfile
 # happened once, despite the warning above being here the whole time. A
 # warning depends on being read; this check does not. CI and a proper
 # scratch copy have no notes_data.json here, so they pass through.
+#
+# It fails CLOSED. It used to let an unreadable notes_data.json through
+# as if it were no notebook at all -- and an unreadable notebook is the
+# one the app itself could still have rescued. And it runs only where a
+# throwaway folder has been declared (NOTEORG_SCRATCH=1, set by
+# tools/run_tests.py and by CI), the rule the qa scripts follow too
+# (qa/_qa_support.hermetic_seed).
 def _guard_real_notes():
+    if os.environ.get("NOTEORG_SCRATCH") != "1":
+        sys.exit(
+            "REFUSING to run: this test deletes and rewrites notes_data.json "
+            "beside it, and nothing says this folder is a throwaway copy. "
+            "Run it through tools/run_tests.py, or set NOTEORG_SCRATCH=1 "
+            "yourself in a scratch folder outside the project -- see "
+            "CLAUDE.md, 'QA testing safety'.")
     here = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                         "notes_data.json")
+    if not os.path.exists(here):
+        return
     try:
         with open(here, encoding="utf-8") as f:
             notes = json.load(f)
-    except (IOError, OSError, ValueError):
-        return
-    if isinstance(notes, list) and notes:
+    except (IOError, OSError, ValueError) as exc:
+        sys.exit(
+            "REFUSING to run: the notes_data.json beside this test cannot "
+            "be read (%s). It may be a real notebook the app could still "
+            "rescue; this test would delete it." % exc)
+    if not isinstance(notes, list) or notes:
+        held = ("%d notes" % len(notes) if isinstance(notes, list)
+                else "something other than an empty notebook")
         sys.exit(
             "REFUSING to run: the notes_data.json beside this test holds "
-            "%d notes.\nThis test deletes and rewrites that file. Run it "
+            "%s.\nThis test deletes and rewrites that file. Run it "
             "only from a throwaway copy\noutside the project tree -- see "
-            "CLAUDE.md, 'QA testing safety'." % len(notes))
+            "CLAUDE.md, 'QA testing safety'." % held)
 
 
 _guard_real_notes()
@@ -571,16 +592,30 @@ _ok, _exc = _storage.save_notes(
     [{"id": 991, "title": "x " + _pair + " y", "body": ""}])
 check("a surrogate-pair emoji no longer kills the save", _ok and _exc is None)
 import json as _json
-_back = _json.load(open(_paths.DATA_FILE, encoding="utf-8"))
+
+
+def _first_title_on_disk():
+    """The first note's title as the file holds it, or None when there is
+    no readable file: a failed save must be one red check, not a crash
+    that hides every check after it (a mutant that broke the mend used
+    to end this suite here, before its footer, with no verdict)."""
+    try:
+        with open(_paths.DATA_FILE, encoding="utf-8") as fh:
+            notes = _json.load(fh)
+        return notes[0].get("title") if notes else None
+    except (OSError, ValueError, AttributeError, IndexError):
+        return None
+
+
+_title_back = _first_title_on_disk() or ""
 check("and it lands as the real character, not the pair",
-      chr(0x1F600) in _back[0]["title"] and len(_back[0]["title"]) == 5)
+      chr(0x1F600) in _title_back and len(_title_back) == 5)
 check("no half-written .tmp is left beside the file",
       not os.path.exists(_paths.DATA_FILE + ".tmp"))
 
 _ok2, _exc2 = _storage.save_notes([{"id": 992, "title": "l " + chr(0xD83D)}])
-_back2 = _json.load(open(_paths.DATA_FILE, encoding="utf-8"))
 check("a lone surrogate is replaced rather than poisoning the file",
-      _ok2 and chr(0xFFFD) in _back2[0]["title"])
+      _ok2 and chr(0xFFFD) in (_first_title_on_disk() or ""))
 
 _ok3, _exc3 = _storage.save_notes([{"id": 993, "bad": {1, 2}}])
 check("an unserializable note reports (False, exc) instead of raising",
@@ -2026,6 +2061,71 @@ try:
 finally:
     _paths.get_appdata_dir = _rc_real_appdata
     shutil.rmtree(_rc_root, ignore_errors=True)
+
+# ---- The qa scripts' own guard fails closed ----
+# Nine identical copies of it read an unreadable notebook as EMPTY and
+# overwrote it with [], and ran from any folder at all. One definition now
+# (qa/_qa_support.hermetic_seed) refuses outside a declared scratch run,
+# and beside any notebook it cannot prove is empty -- leaving it untouched.
+_here = os.path.dirname(os.path.abspath(__file__))
+for _support_dir in (_here, os.path.join(_here, "qa")):
+    if os.path.isfile(os.path.join(_support_dir, "_qa_support.py")):
+        sys.path.insert(0, _support_dir)
+        break
+import _qa_support  # noqa: E402
+_hs_root = tempfile.mkdtemp(prefix="nd_seed_")
+_hs_cwd = os.getcwd()
+_hs_marker = os.environ.get(_qa_support.SCRATCH_MARKER)
+
+
+def _hs_try(contents, marker):
+    """Run the guard in a fresh folder holding `contents` as its
+    notes_data.json (None: no file). Returns (refused, file afterwards)."""
+    folder = tempfile.mkdtemp(dir=_hs_root)
+    path = os.path.join(folder, "notes_data.json")
+    if contents is not None:
+        with open(path, "w", encoding="utf-8") as fh:
+            fh.write(contents)
+    if marker:
+        os.environ[_qa_support.SCRATCH_MARKER] = "1"
+    else:
+        os.environ.pop(_qa_support.SCRATCH_MARKER, None)
+    os.chdir(folder)
+    try:
+        _qa_support.hermetic_seed()
+        refused = False
+    except SystemExit:
+        refused = True
+    finally:
+        os.chdir(_hs_cwd)
+    after = None
+    if os.path.exists(path):
+        with open(path, encoding="utf-8") as fh:
+            after = fh.read()
+    return refused, after
+
+
+try:
+    _ok_refused, _ok_after = _hs_try(None, marker=True)
+    check("the qa seed runs in a declared scratch folder and seeds it",
+          not _ok_refused and _ok_after == "[]")
+    _nm_refused, _nm_after = _hs_try("[]", marker=False)
+    check("...refuses to run where no scratch run was declared",
+          _nm_refused and _nm_after == "[]")
+    _bad = '[{"id": 1, "title": "half a notebook"'
+    _bad_refused, _bad_after = _hs_try(_bad, marker=True)
+    check("...refuses beside a notebook it cannot read, leaving it as it was",
+          _bad_refused and _bad_after == _bad)
+    _real = '[{"id": 1, "title": "Groceries"}]'
+    _real_refused, _real_after = _hs_try(_real, marker=True)
+    check("...and refuses beside a notebook holding notes, leaving it as it was",
+          _real_refused and _real_after == _real)
+finally:
+    if _hs_marker is None:
+        os.environ.pop(_qa_support.SCRATCH_MARKER, None)
+    else:
+        os.environ[_qa_support.SCRATCH_MARKER] = _hs_marker
+    shutil.rmtree(_hs_root, ignore_errors=True)
 
 print()
 print(f"FAILURES: {fails if fails else 'none'}")
