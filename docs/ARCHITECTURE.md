@@ -515,6 +515,33 @@ rendering stays on the [ROADMAP](ROADMAP.md) for notebooks far larger than the t
 this was measured with. See
 [The list that was drawn whole, for every pause in typing](ISSUES_LOG.md#the-list-that-was-drawn-whole-for-every-pause-in-typing).
 
+### Custom order: a place is written only by a move
+
+A note's place in Custom order is its `order` number, and only a person's move writes it — a
+drag on the list or Alt+↑/↓ (`_move_note`). Nothing else touches it: a save, an edit, a
+recolour. A move is not an edit, so no `updated` changes. `normalize_note` keeps the number only
+if it is a real one, and a note without it has not been placed yet: it stands above the placed
+ones, newest first — where a new note, or one from a share code, is looked for.
+
+`_move_note` renumbers every note in one pass (0, 1, 2 …) rather than squeezing a number between
+two neighbours, so there is never a precision problem to manage. It works on the whole notebook
+in Custom order, not only on what a search shows, so a hidden note keeps its place among the
+rest. When the list was sorted some other way, it first places every note as that sort had them
+(`_place_notes_as_sorted`) — the drag happened in *that* order — and switches the sort.
+
+Two rules keep a move from being undone by the next rebuild: a card only trades places with
+cards of the same pin state, and, in a grouped list, the same category (`_same_list_block`).
+
+The drag itself (`_list_drag_arm` → `_start_list_drag` → `_follow_list_drag` → `_list_released`)
+moves only the card's **drawing**: its record keeps its place, and the lifted card's offset is
+tracked on the side. That matters because a drag near the list's edge scrolls it, and scrolling
+draws the rows still waiting — which `_draw_list_rows` places from the records. Anything that
+changes the rows under a drag (a rebuild, a save redrawing a card, a delete) ends it first
+(`_cancel_list_drag`), putting the card back before the rows move.
+
+The number is this notebook's own: `SHAREABLE_FIELDS` leaves it out of a share code, while a
+backup — the same notebook on another machine — keeps it.
+
 ### Scrollable canvases guard their own view
 
 A Tk canvas holding rebuilt content will lie to you twice. A rebuilt frame's geometry settles

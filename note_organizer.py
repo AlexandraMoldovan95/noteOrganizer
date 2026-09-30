@@ -10489,6 +10489,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             "Category",
             "Calendar: soonest",
             "Calendar: oldest",
+            self.SORT_CUSTOM,
         ]
         # Remembered across launches, like the "Group by category" checkbox a
         # few pixels below and the folded groups beside it. Three controls on
@@ -10519,7 +10520,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # over-full in DejaVu Sans on the Linux CI image.
         sort_menu = self._build_themed_dropdown(
             filter_row, self.sort_var, self.SORT_OPTIONS,
-            on_change=lambda v: self.refresh_note_list(), width_chars=0)
+            on_change=self._on_sort_chosen, width_chars=0)
 
         # Same as the sort above, with one more thing to be careful about: a
         # stored filter can name a category that has since been deleted, or
@@ -12624,6 +12625,15 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
     def refresh_note_list(self):
         if not hasattr(self, "canvas") or not self._still_alive():
             return
+        # A card lifted by a drag is drawn away from its record; the
+        # rebuild below would draw the list around a card that is not
+        # where it seems. The drag ends, and the card goes back first.
+        self._cancel_list_drag()
+        # The sort this list is drawn in -- what Custom order starts from
+        # when it is chosen for the first time (_on_sort_chosen).
+        sort_var = getattr(self, "sort_var", None)
+        if sort_var is not None:
+            self._sort_shown = sort_var.get()
         # The rebuild empties the drawing for a moment, and a Configure
         # landing in that window clamps the canvas to the top -- the
         # 'scroll jumps back to the top' report on the grouped list.
@@ -12705,6 +12715,15 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
     # not widgets. These reproduce the widget cards they replaced, to the
     # pixel where it could be measured (a card of both kinds, photographed
     # side by side). See _draw_note_card.
+    # The sort a person arranges by hand -- by dragging a card, or with
+    # Alt+Up and Alt+Down -- stored as each note's "order" (see
+    # normalize_note). One name, because the dropdown, the sort and the
+    # move all have to mean the same option.
+    SORT_CUSTOM = "Custom order"
+    DRAG_THRESHOLD = 5          # pixels a press must travel to become a drag
+    DRAG_EDGE = 28              # near the list's top or bottom, a drag scrolls
+    DRAG_SCROLL_MS = 40         # ...one step this often
+
     LIST_DRAW_WIDTH = 250       # the list's width, as the old frame's was
     CARD_MARGIN = (5, 5)        # above and below each card
     HEADER_MARGIN = (6, 2)      # above and below each category header
@@ -12972,18 +12991,30 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._group_headers[cat] = rec
         return rec
 
-    def _sort_notes(self, notes):
-        """Sort the list in place according to the chosen sort option. All keys
+    def _sort_notes(self, notes, choice=None):
+        """Sort the list in place according to the chosen sort option -- or
+        to `choice`, when the question is how the list WAS sorted. All keys
         coerce missing/None fields to safe defaults so a single odd note can't
         crash the whole list."""
-        choice = getattr(self, "sort_var", None)
-        choice = choice.get() if choice is not None else "Recently updated"
+        if choice is None:
+            choice = getattr(self, "sort_var", None)
+            choice = choice.get() if choice is not None else "Recently updated"
 
         def _s(n, key):
             v = n.get(key, "")
             return v if isinstance(v, str) else ""
 
-        if choice == "Recently updated":
+        if choice == self.SORT_CUSTOM:
+            # Where a person put each note. A note nobody has placed yet --
+            # new since, or arrived in a share code -- stands above the
+            # placed ones, newest first, so it is found where it was just
+            # made. Two passes, the second stable: newest first, then the
+            # placed notes by their number below the unplaced.
+            notes.sort(key=lambda n: (_s(n, "created"), n.get("id") or 0),
+                       reverse=True)
+            notes.sort(key=lambda n: (0, 0) if "order" not in n
+                       else (1, n["order"]))
+        elif choice == "Recently updated":
             notes.sort(key=lambda n: _s(n, "updated"), reverse=True)
         elif choice == "Oldest updated":
             notes.sort(key=lambda n: _s(n, "updated"))
@@ -13036,6 +13067,324 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # from the chosen sort. Python's sort is stable, so this preserves it.
         notes.sort(key=lambda n: not n.get("pinned", False))
 
+    # ---------- Custom order: the list arranged by hand ----------
+
+    def _on_sort_chosen(self, value):
+        """The Sort dropdown's choice. Custom order chosen before anything
+        was ever placed starts from the order the list was showing, rather
+        than from an order nobody has seen."""
+        if (value == self.SORT_CUSTOM
+                and not any("order" in n for n in self.notes)):
+            before = getattr(self, "_sort_shown", None)
+            if before and before != self.SORT_CUSTOM:
+                self._place_notes_as_sorted(before)
+                self.save_notes()
+        self.refresh_note_list()
+
+    def _place_notes_as_sorted(self, choice):
+        """Give every note its place in Custom order from the way `choice`
+        sorts them -- all of them, not only those a search lets through,
+        so what a filter hides keeps its place among the rest."""
+        everything = list(self.notes)
+        self._sort_notes(everything, choice=choice)
+        for place, note in enumerate(everything):
+            note["order"] = place
+
+    def _same_list_block(self, a, b):
+        """Whether two notes may trade places: both pinned or both not, and
+        -- in a grouped list -- in the same group. A pinned note always
+        stands above the rest, and a group is its category; a move that
+        crossed either would be undone by the next rebuild."""
+        if bool(a.get("pinned")) != bool(b.get("pinned")):
+            return False
+        grouped = getattr(self, "group_by_category", None)
+        if grouped is not None and grouped.get():
+            return ((a.get("category") or "General")
+                    == (b.get("category") or "General"))
+        return True
+
+    def _move_note(self, note_id, before_id=None, after_id=None):
+        """Put a note just before one note, or just after one, in Custom
+        order, and show the list in that order.
+
+        The list may have been sorted some other way: then Custom order
+        starts from the order it was showing -- the one the person just
+        moved a card in -- and the move is made there. Every note gets its
+        place again, in one pass, so a number never has to fit between two
+        others. A move is not an edit: nothing's "updated" changes."""
+        note = self.find_note(note_id)
+        anchor = self.find_note(before_id if before_id is not None else after_id)
+        if note is None or anchor is None or anchor is note:
+            return False
+        if self.sort_var.get() != self.SORT_CUSTOM:
+            self._place_notes_as_sorted(self.sort_var.get())
+            self.sort_var.set(self.SORT_CUSTOM)
+        everything = list(self.notes)
+        self._sort_notes(everything, choice=self.SORT_CUSTOM)
+        everything.remove(note)
+        at = everything.index(anchor) + (0 if before_id is not None else 1)
+        everything.insert(at, note)
+        for place, each in enumerate(everything):
+            each["order"] = place
+        self.save_notes()
+        self.refresh_note_list()
+        return True
+
+    def _list_move_by_keyboard(self, delta):
+        """Alt+Up or Alt+Down: the card with the ring moves one place, and
+        the ring goes with it."""
+        nid = getattr(self, "_focused_note_id", None)
+        note = self.find_note(nid) if nid is not None else None
+        if note is None or self.selection_mode:
+            return "break"
+        block = [row[1]["id"] for row in self._list_rows()
+                 if row[0] == "note" and self._same_list_block(row[1], note)]
+        if nid not in block:
+            return "break"
+        at = block.index(nid) + delta
+        if not 0 <= at < len(block):
+            return "break"
+        if delta < 0:
+            moved = self._move_note(nid, before_id=block[at])
+        else:
+            moved = self._move_note(nid, after_id=block[at])
+        if moved:
+            self._put_keyboard_on_card(nid)
+        return "break"
+
+    # ---------- Custom order: dragging a card ----------
+
+    def _list_drag_arm(self, rec, event):
+        """A press on a card that might become a drag: remembered, nothing
+        drawn yet. It becomes one only after the pointer has travelled
+        DRAG_THRESHOLD pixels, so an ordinary click never moves anything."""
+        try:
+            cy = self.canvas.canvasy(event.y)
+        except tk.TclError:
+            return
+        self._drag = {"nid": rec["note"]["id"], "press_y": cy,
+                      "grab_dy": cy - rec["y0"], "started": False,
+                      "offset": 0, "slot": None, "line": None,
+                      "pointer_y": event.y, "scroll_job": None}
+
+    def _list_dragged(self, event):
+        """The pointer moving with the button down."""
+        drag = getattr(self, "_drag", None)
+        if not drag:
+            return
+        try:
+            cy = self.canvas.canvasy(event.y)
+        except tk.TclError:
+            return
+        if not drag["started"]:
+            if abs(cy - drag["press_y"]) < self.DRAG_THRESHOLD:
+                return
+            if not self._start_list_drag():
+                self._drag = None
+                return
+        drag["pointer_y"] = event.y
+        self._follow_list_drag()
+        self._scroll_list_drag_near_edge()
+
+    def _start_list_drag(self):
+        """Lift the card: it is drawn over the others and follows the
+        pointer, and a line shows where it would land. Nothing is moved
+        in the notebook until the button is let go."""
+        drag = self._drag
+        rec = (getattr(self, "_note_cards", None) or {}).get(drag["nid"])
+        if rec is None:
+            return False
+        cv = self.canvas
+        try:
+            cv.tag_raise(rec["tag"])
+            drag["line"] = cv.create_line(
+                self.CARD_INSET_X, -10, self.LIST_DRAW_WIDTH - self.CARD_INSET_X, -10,
+                width=3, fill=self.colors["accent"], tags=("row", "drag_line"))
+            cv.configure(cursor="fleur")
+        except tk.TclError:
+            return False
+        drag["started"] = True
+        return True
+
+    def _follow_list_drag(self):
+        """Keep the lifted card under the pointer and the line at the slot
+        it would drop into. The card's record is left where it was: only
+        its drawing moves, so a step of rows drawn below while the list
+        scrolls under a drag still finds everything where it stands."""
+        drag = self._drag
+        rec = self._note_cards.get(drag["nid"])
+        if rec is None:
+            return
+        cv = self.canvas
+        try:
+            cy = cv.canvasy(drag["pointer_y"])
+            view_top = cv.canvasy(0)
+            view_bottom = cv.canvasy(cv.winfo_height())
+        except tk.TclError:
+            return
+        # Under the pointer, but never out of sight: carried past the top
+        # or the bottom of the list, the card stays at that edge while the
+        # list scrolls under it. Photographed first without this -- a line
+        # at the top of the list, and the card it belonged to nowhere.
+        top = cy - drag["grab_dy"]
+        top = max(view_top, min(top, view_bottom - (rec["y1"] - rec["y0"])))
+        dy = top - (rec["y0"] + drag["offset"])
+        if dy:
+            cv.move(rec["tag"], 0, dy)
+            drag["offset"] += dy
+        slot = self._list_drop_slot(rec, cy)
+        drag["slot"] = slot
+        if slot is None:
+            cv.coords(drag["line"], 0, -10, 0, -10)
+            return
+        kind, other = slot
+        target = self._note_cards[other]
+        if kind == "before":
+            y = target["y0"] - target["margin"][0] / 2.0
+        else:
+            y = target["y1"] + target["margin"][1] / 2.0
+        cv.coords(drag["line"], self.CARD_INSET_X, y,
+                  self.LIST_DRAW_WIDTH - self.CARD_INSET_X, y)
+
+    def _list_drop_slot(self, rec, cy):
+        """Where the lifted card would land for a pointer at canvas y `cy`:
+        ("before", id) or ("after", id), among the drawn cards it may trade
+        places with -- or None when that is where it already stands."""
+        note = rec["note"]
+        block = [r for r in self._list_drawn
+                 if r["kind"] == "note" and r is not rec
+                 and self._same_list_block(r["note"], note)]
+        if not block:
+            return None
+        slot = None
+        for r in block:
+            if cy < (r["y0"] + r["y1"]) / 2.0:
+                slot = ("before", r["note"]["id"])
+                break
+        if slot is None:
+            slot = ("after", block[-1]["note"]["id"])
+        # Dropping a card right where it is moves nothing, and says so by
+        # showing no line.
+        order = [r["note"]["id"] for r in self._list_drawn
+                 if r["kind"] == "note" and self._same_list_block(r["note"], note)]
+        at = order.index(note["id"])
+        if slot == ("before", order[at + 1] if at + 1 < len(order) else None):
+            return None
+        if slot == ("after", order[at - 1] if at > 0 else None):
+            return None
+        return slot
+
+    def _scroll_list_drag_near_edge(self):
+        """Near the top or bottom of the list a drag scrolls it, one step
+        at a time while the pointer stays there -- or a card could never
+        be taken further than the list shows."""
+        drag = getattr(self, "_drag", None)
+        if not drag or not drag["started"]:
+            return
+        try:
+            height = self.canvas.winfo_height()
+        except tk.TclError:
+            return
+        y = drag["pointer_y"]
+        if y < self.DRAG_EDGE:
+            depth, direction = self.DRAG_EDGE - y, -1
+        elif y > height - self.DRAG_EDGE:
+            depth, direction = y - (height - self.DRAG_EDGE), 1
+        else:
+            if drag["scroll_job"] is not None:
+                self.after_cancel(drag["scroll_job"])
+                drag["scroll_job"] = None
+            return
+        # Faster the further the pointer is pushed past the edge: a step a
+        # beat at the edge itself, ten beyond it. At one step a beat, taking
+        # a card from the bottom of 300 notes to the top took over a minute.
+        step = direction * min(10, 1 + int(depth) // 8)
+        if drag["scroll_job"] is None:
+            drag["scroll_job"] = self.after(self.DRAG_SCROLL_MS,
+                                            lambda: self._list_drag_scroll_step(step))
+
+    def _list_drag_scroll_step(self, step):
+        drag = getattr(self, "_drag", None)
+        if not drag or not drag["started"]:
+            return
+        drag["scroll_job"] = None
+        # A deliberate move beats a rebuild's still-pending restore.
+        self._list_restore_px = None
+        try:
+            self.canvas.yview_scroll(step, "units")
+        except tk.TclError:
+            return
+        self._follow_list_drag()
+        self._scroll_list_drag_near_edge()
+
+    def _list_released(self, _event=None):
+        """The button let go: a drag drops its card where the line was; a
+        press that never became a drag has already done what a click does."""
+        drag = getattr(self, "_drag", None)
+        self._drag = None
+        if not drag or not drag["started"]:
+            return
+        self._end_list_drag(drag)
+        slot = drag["slot"]
+        if slot is None:
+            self._put_lifted_card_back(drag)
+            return
+        kind, other = slot
+        nid = drag["nid"]
+        if kind == "before":
+            moved = self._move_note(nid, before_id=other)
+        else:
+            moved = self._move_note(nid, after_id=other)
+        if not moved:
+            self._put_lifted_card_back(drag)
+            return
+        self._put_keyboard_on_card(nid)
+
+    def _list_drag_escape(self, _event=None):
+        """Escape during a drag puts the card back and moves nothing."""
+        drag = getattr(self, "_drag", None)
+        if not drag or not drag["started"]:
+            return None
+        self._cancel_list_drag()
+        return "break"
+
+    def _cancel_list_drag(self):
+        """Stop a drag in progress, if there is one, and put its card back
+        -- also when the list is about to change under it (a rebuild, a
+        save redrawing a card, a delete), which would otherwise reflow the
+        rows around a card whose drawing is not where its record says."""
+        drag = getattr(self, "_drag", None)
+        self._drag = None
+        if not drag or not drag["started"]:
+            return
+        self._end_list_drag(drag)
+        self._put_lifted_card_back(drag)
+
+    def _end_list_drag(self, drag):
+        if drag.get("scroll_job") is not None:
+            try:
+                self.after_cancel(drag["scroll_job"])
+            except (tk.TclError, ValueError):
+                pass
+            drag["scroll_job"] = None
+        try:
+            if drag.get("line") is not None:
+                self.canvas.delete(drag["line"])
+            self.canvas.configure(cursor="")
+        except tk.TclError:
+            pass
+        self._list_cursor = ""
+
+    def _put_lifted_card_back(self, drag):
+        rec = (getattr(self, "_note_cards", None) or {}).get(drag["nid"])
+        if rec is None or not drag.get("offset"):
+            return
+        try:
+            self.canvas.move(rec["tag"], 0, -drag["offset"])
+        except tk.TclError:
+            pass
+        drag["offset"] = 0
+
     def _bind_list_input(self):
         """The list's mouse and keyboard, bound once on the canvas that
         draws it -- a card is a drawing, and has no bindings of its own.
@@ -13051,8 +13400,15 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         cv.bind("<Button-3>", self._list_right_pressed)
         cv.bind("<Motion>", self._list_pointer_moved)
         cv.bind("<Leave>", self._list_pointer_left)
+        # A card can be dragged to another place (Custom order): the press
+        # above arms it, these carry it and drop it, Escape puts it back.
+        cv.bind("<B1-Motion>", self._list_dragged)
+        cv.bind("<ButtonRelease-1>", self._list_released)
+        cv.bind("<Escape>", self._list_drag_escape)
         cv.bind("<Down>", lambda _e: self._list_step(1))
         cv.bind("<Up>", lambda _e: self._list_step(-1))
+        cv.bind("<Alt-Down>", lambda _e: self._list_move_by_keyboard(1))
+        cv.bind("<Alt-Up>", lambda _e: self._list_move_by_keyboard(-1))
         cv.bind("<Return>", self._list_activate)
         cv.bind("<space>", self._list_activate)
         # The dedicated menu key has a different keysym per platform --
@@ -13089,6 +13445,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         the keyboard comes to the list, on the card clicked, so Down and Up
         carry on from there. Nothing is returned: the window's own click
         handling (closing an open popup) still hears the click."""
+        self._drag = None
         rec = self._list_record_at(event.x, event.y)
         if rec is None:
             return
@@ -13106,6 +13463,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # save question keeps the person on the day they were editing.
         if self.open_note_in_tab(note) is not False:
             self._put_keyboard_on_card(nid)
+            # Asked afresh: the open can have saved the note left behind,
+            # and that save can have moved this card.
+            rec = (getattr(self, "_note_cards", None) or {}).get(nid)
+            if rec is not None:
+                self._list_drag_arm(rec, event)
 
     def _list_right_pressed(self, event):
         """Right-click on a card opens that note's menu. A plain click on
@@ -13584,6 +13946,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         False on purpose: a list that quietly disagrees with the notes
         is far worse than one that flickers.
         """
+        # The rows are about to slide; a card lifted by a drag goes back
+        # to its record first (see _cancel_list_drag).
+        self._cancel_list_drag()
         cards = getattr(self, "_note_cards", None)
         drawn = getattr(self, "_list_drawn", None)
         if cards is None or drawn is None:
@@ -13684,6 +14049,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         quietly disagrees with the notes is far worse than one that is slow
         to catch up.
         """
+        # As in _remove_note_cards: rows are about to move.
+        self._cancel_list_drag()
         cards = getattr(self, "_note_cards", None)
         drawn = getattr(self, "_list_drawn", None)
         pending = getattr(self, "_list_pending", None)

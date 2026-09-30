@@ -88,7 +88,19 @@ How the numbers themselves are counted is the
 something closes it on the next click — the everyday places where the app did something other
 than what a person just asked. And a big notebook stops making you wait: a pause in typing,
 coming back to the list and opening a picture no longer cost time for every note you have, and
-the list itself is one drawing now, which a click hands to the keyboard.*
+the list itself is one drawing now, which a click hands to the keyboard — and which you can
+arrange by hand.*
+
+### Added
+
+- **Arrange the note list by hand.** Drag a card up or down the list and let go where the line
+  shows — or press Alt+↑ or Alt+↓ on the card with the ring. The list switches to a new sort,
+  **Custom order**, starting from the order it was showing, and keeps the arrangement: in the
+  notes file, across restarts, through saves (an edit does not move a card) and in backups. New
+  notes appear at the top; pinned notes stay above the rest, and in a grouped list a card stays
+  in its group. Near the top or bottom of the list a drag scrolls it, faster the further you
+  push; Escape puts a dragged card back. A share code does not carry a note's place — it is
+  yours, not the note's. Asked for in the field test.
 
 ### Fixed
 
@@ -270,6 +282,21 @@ the list itself is one drawing now, which a click hands to the keyboard.*
   with no button held is laid out at once. Four mutants, each killed with the suite reaching its
   footer — after the one for the pause survived the first version of its check, whose wait
   began before the window had changed size and so was over before it started.
+- Custom order, in qa4 with real pointer events on the list: a drag up and a drag down land where
+  the line was, the list switches to Custom order starting from what it showed, the file holds
+  the order and no note's "updated" moves; a shaky click is not a drag; Escape and a rebuild
+  under a drag both put the card back; Alt+↑/↓ move the card and keep the ring; a save leaves a
+  card where it was, a new note starts at the top; the pinned line and the groups hold; choosing
+  Custom order first keeps the order shown; Select mode drags nothing; share codes carry no
+  place; the list's edge scrolls a drag both ways, with rows drawn on demand arriving under it;
+  and a card carried past the edge stays in sight. The travel story gains two chapters: a card
+  dragged to the top and one moved from the keyboard, then the app closed and opened again, the
+  order still there after an edit. Fourteen mutants, each killed with the suite reaching its
+  footer — two only after their checks were made to ask where the line said the card would
+  land: a pinned card and a group both re-sort a card after the drop, so the landing looked
+  right while the line had promised a place the card could never take.
+- The travel story carried a Romanian failure message; it is English now, like everything else
+  in the repository.
 
 ---
 

@@ -984,6 +984,307 @@ check('deleting a drawn card closes the gap -- the list a full rebuild draws',
       _ls_gone not in app._note_cards and _ls_same_as_rebuild())
 
 # ---------------------------------------------------------------------
+# 4. Custom order: the list arranged by hand.
+#
+# A card dragged to another place stays there -- in the notebook file,
+# not only on screen -- and so does one moved with Alt+Up or Alt+Down.
+# Every drag below is real events on the list's canvas: a press on the
+# card, the pointer moving with the button down, the release. Alt+arrows
+# and Escape are keys, which Tk delivers to whichever window has the
+# focus, and a test process does not own the desktop's focus (qa/README):
+# their handlers are called as the bindings call them, and qa6 checks
+# the bindings themselves exist.
+# ---------------------------------------------------------------------
+import json as _co_json
+import io as _co_io
+
+
+def _co_file_order():
+    """The notes' ids in the order their stored places put them."""
+    with _co_io.open(NO.DATA_FILE, encoding='utf-8') as fh:
+        stored = _co_json.load(fh)
+    placed = [n for n in stored if 'order' in n]
+    return [n['id'] for n in sorted(placed, key=lambda n: n['order'])]
+
+
+def _co_press(nid):
+    """A press on a card's middle, where a hand would take it -- once the
+    card is on screen, as a hand would need it to be (and so the press's
+    own scroll-into-view moves nothing under the pointer)."""
+    app._scroll_row_into_view(app._note_cards[nid])
+    _ls_settle()
+    v = app._card_view(nid)
+    y = int((v['y0'] + v['y1']) / 2 - app.canvas.canvasy(0))
+    _qa_click(app.canvas, x=120, y=y)
+    _ls_settle()
+    return y
+
+
+def _co_move_to(from_y, canvas_y):
+    """The pointer carried, button down, from `from_y` to canvas y
+    `canvas_y`, in steps as a hand moves."""
+    to = int(canvas_y - app.canvas.canvasy(0))
+    step = 6 if to > from_y else -6
+    for y in range(from_y, to, step):
+        _qa_fire(app.canvas, '<B1-Motion>', x=120, y=y)
+        app.update()
+    _qa_fire(app.canvas, '<B1-Motion>', x=120, y=to)
+    app.update()
+    return to
+
+
+def _co_drag(nid, canvas_y):
+    y = _co_move_to(_co_press(nid), canvas_y)
+    _qa_fire(app.canvas, '<ButtonRelease-1>', x=120, y=y)
+    _ls_settle()
+
+
+def _co_fresh(notes, sort='Recently updated'):
+    app.group_by_category.set(False)
+    if app.selection_mode:
+        app._toggle_selection_mode()
+    app.sort_var.set(sort)
+    app.notes = [NO.normalize_note(n) for n in notes]
+    app.save_notes()
+    app.new_note()
+    _ls_let_restores_finish()
+    app.canvas.yview_moveto(0)
+    app._list_restore_px = None
+    app.refresh_note_list(); _ls_settle()
+
+
+_ls_search('')
+# The list shows about 140px in this window, so a pointer carried to a card
+# a few places away passes the list's edge, where a drag scrolls the list
+# under it. That has its own checks at the end of this block; here it would
+# move the target while the pointer travels.
+app.DRAG_EDGE = -10000
+_co_notes = [{'id': 1500 + i, 'title': 'Arrange %02d' % i, 'body': 'b',
+              'category': 'General', 'created': '2026-01-01 00:%02d' % i,
+              'updated': '2026-02-01 00:%02d' % (59 - i)} for i in range(8)]
+_co_fresh(_co_notes)
+_co_ids = [1500 + i for i in range(8)]
+check(f'fixture: eight cards, in the order Recently updated puts them '
+      f'({app._card_order()})', app._card_order() == _co_ids
+      and not any('order' in n for n in app.notes))
+
+# Dragged up: the card lands before the one the line was above.
+_co_updated = {n['id']: n['updated'] for n in app.notes}
+_co_drag(1505, app._card_view(1501)['y0'] + 2)
+_co_want = [1500, 1505, 1501, 1502, 1503, 1504, 1506, 1507]
+check(f'a card dragged up lands where the line was ({app._card_order()})',
+      app._card_order() == _co_want)
+check('...and the list is in Custom order now, started from the order it '
+      'showed', app.sort_var.get() == 'Custom order')
+check(f'...and the notebook file holds that order ({_co_file_order()})',
+      _co_file_order() == _co_want)
+check('...and a move is not an edit: no note\'s "updated" changed',
+      all(n['updated'] == _co_updated[n['id']] for n in app.notes))
+check('...and nothing of the drag is left on the drawing',
+      not app.canvas.find_withtag('drag_line') and _ls_same_as_rebuild())
+
+# Dragged down, to just below a card: after it.
+_co_drag(1500, app._card_view(1503)['y1'] + 2)
+_co_want = [1505, 1501, 1502, 1503, 1500, 1504, 1506, 1507]
+check(f'a card dragged down lands after the card it was let go under '
+      f'({app._card_order()})', app._card_order() == _co_want)
+
+# A hand that shakes a little while clicking has not started a drag.
+_co_y = _co_press(1502)
+_qa_fire(app.canvas, '<B1-Motion>', x=120, y=_co_y + 2); app.update()
+_co_shaky = getattr(app, '_drag', None)
+_qa_fire(app.canvas, '<ButtonRelease-1>', x=120, y=_co_y + 2); _ls_settle()
+check('a press that moves a pixel or two is a click, not a drag',
+      _co_shaky is not None and not _co_shaky['started']
+      and app._card_order() == _co_want)
+
+# Escape puts the card back and moves nothing. The pointer is carried far
+# above the list's top on the way (the list shows a card and a half), and
+# the card it carries must still be in sight -- first photographed with the
+# line at the top of the list and its card nowhere.
+_co_y = _co_move_to(_co_press(1507), app._card_view(1505)['y0'] + 2)
+_co_lifted = bool(getattr(app, '_drag', None) and app._drag['started']
+                  and app.canvas.find_withtag('drag_line'))
+_co_box = app.canvas.coords(app._note_cards[1507]['items']['bg'])
+_co_view = (app.canvas.canvasy(0), app.canvas.canvasy(app.canvas.winfo_height()))
+check(f'a card carried past the list\'s edge stays in sight (card '
+      f'{_co_box[1]:.0f}-{_co_box[3]:.0f}, view {_co_view[0]:.0f}-{_co_view[1]:.0f})',
+      _co_lifted and _co_box[1] >= _co_view[0] - 1 and _co_box[3] <= _co_view[1] + 1)
+app._list_drag_escape(); _ls_settle()
+_qa_fire(app.canvas, '<ButtonRelease-1>', x=120, y=_co_y); _ls_settle()
+check(f'Escape during a drag puts the card back and moves nothing '
+      f'(lifted first: {_co_lifted})',
+      _co_lifted and app._card_order() == _co_want
+      and not app.canvas.find_withtag('drag_line') and _ls_same_as_rebuild())
+
+# The list changing under a drag -- a rebuild -- ends it cleanly.
+_co_y = _co_move_to(_co_press(1504), app._card_view(1501)['y0'] + 2)
+_co_lifted = bool(getattr(app, '_drag', None) and app._drag['started'])
+app.refresh_note_list(); _ls_settle()
+_qa_fire(app.canvas, '<ButtonRelease-1>', x=120, y=_co_y); _ls_settle()
+check(f'a rebuild under a drag ends it, with the card back in its place '
+      f'(lifted first: {_co_lifted})',
+      _co_lifted and getattr(app, '_drag', None) is None
+      and app._card_order() == _co_want
+      and not app.canvas.find_withtag('drag_line') and _ls_same_as_rebuild())
+
+# Alt+Up and Alt+Down: the card with the ring moves, the ring with it.
+app._put_keyboard_on_card(1503); _ls_settle()
+app._list_move_by_keyboard(-1); _ls_settle()
+_co_want = [1505, 1501, 1503, 1502, 1500, 1504, 1506, 1507]
+check(f'Alt+Up moves the card with the ring one place up ({app._card_order()})',
+      app._card_order() == _co_want)
+check('...and the ring stays on it', app._focused_note_id == 1503)
+app._list_move_by_keyboard(1); _ls_settle()
+app._list_move_by_keyboard(1); _ls_settle()
+_co_want = [1505, 1501, 1502, 1500, 1503, 1504, 1506, 1507]
+check(f'...and Alt+Down twice takes it two places down ({app._card_order()})',
+      app._card_order() == _co_want and app._focused_note_id == 1503)
+
+# A save does not move a card in Custom order; a new note starts at the top.
+app.open_note_in_tab(app.find_note(1502)); _ls_settle()
+app.body_text.insert('end', ' edited'); app.save_current_note(auto=True); _ls_settle()
+check(f'saving a note leaves its card where it was put ({app._card_order()})',
+      app._card_order() == _co_want)
+app.new_note(); _ls_settle()
+app.title_entry.delete(0, 'end'); app.title_entry.insert(0, 'Brand new')
+app.save_current_note(auto=True); _ls_settle()
+_co_new = app.selected_note_id
+check(f'a new note starts at the top of a Custom order ({app._card_order()[:2]})',
+      app._card_order()[0] == _co_new and app._card_order()[1:] == _co_want)
+app.notes = [n for n in app.notes if n['id'] != _co_new]
+app.save_notes(); app.new_note(); app.refresh_note_list(); _ls_settle()
+
+# Pinned notes stand above the rest, and a drag cannot cross that line --
+# the next rebuild would only undo it.
+app.find_note(1507)['pinned'] = True
+app.save_notes(); app.refresh_note_list(); _ls_settle()
+_co_order = app._card_order()
+# Where the LINE says the card will land, not only where it lands: the
+# pinned card floats above whatever the numbers say, so a drop that
+# crossed it would look right afterwards -- while the line had promised a
+# place above the pinned card that the card could never take (a mutant
+# that let it cross passed on the landing alone).
+_co_y = _co_move_to(_co_press(1506), app._card_view(1507)['y0'] + 2)
+_co_slot = app._drag['slot'] if getattr(app, '_drag', None) else 'none'
+_qa_fire(app.canvas, '<ButtonRelease-1>', x=120, y=_co_y); _ls_settle()
+check(f'a card dragged above the pinned ones is shown, and lands, first '
+      f'below them (line {_co_slot}; {app._card_order()[:3]})',
+      _co_slot == ('before', _co_order[1])
+      and app._card_order()[:2] == [1507, 1506]
+      and app._card_order()[2:] == [i for i in _co_order[1:] if i != 1506])
+_co_order = app._card_order()
+_co_y = _co_move_to(_co_press(1507), app._card_view(_co_order[-1])['y1'] - 2)
+_co_slot = app._drag['slot'] if getattr(app, '_drag', None) else 'none'
+_qa_fire(app.canvas, '<ButtonRelease-1>', x=120, y=_co_y); _ls_settle()
+check(f'a pinned card cannot be dragged down among the rest (slot {_co_slot})',
+      _co_slot is None and app._card_order() == _co_order)
+app.find_note(1507)['pinned'] = False
+app.save_notes()
+
+# Grouped: a card stays in its category's group.
+_co_fresh([{'id': 1600 + i, 'title': 'Grp %d' % i, 'body': 'b',
+            'category': 'General' if i < 3 else 'Work',
+            'created': '2026-01-01 00:%02d' % i,
+            'updated': '2026-02-01 00:%02d' % (59 - i)} for i in range(6)])
+app.group_by_category.set(True)
+app.refresh_note_list(); _ls_settle()
+_co_general = [r[1]['id'] for r in app._list_rows()
+               if r[0] == 'note' and r[1]['category'] == 'General']
+_co_work = [r[1]['id'] for r in app._list_rows()
+            if r[0] == 'note' and r[1]['category'] == 'Work']
+# The line again, for the same reason as the pinned card's: grouping
+# sorts a card back into its category whatever the numbers say.
+_co_y = _co_move_to(_co_press(1605), app._card_view(1600)['y0'] + 2)
+_co_slot = app._drag['slot'] if getattr(app, '_drag', None) else 'none'
+_qa_fire(app.canvas, '<ButtonRelease-1>', x=120, y=_co_y); _ls_settle()
+_co_rows = [(r[1]['category'], r[1]['id']) for r in app._list_rows() if r[0] == 'note']
+check(f'in a grouped list a card dragged into another group is shown, and '
+      f'lands, at its own group\'s edge (line {_co_slot}; {_co_rows})',
+      _co_slot == ('before', _co_work[0])
+      and [i for c, i in _co_rows if c == 'General'] == _co_general
+      and [i for c, i in _co_rows if c == 'Work'][0] == 1605
+      and app.find_note(1605)['category'] == 'Work')
+app.group_by_category.set(False)
+
+# Choosing Custom order for the first time starts from the order shown.
+_co_fresh(_co_notes, sort='Title Z–A')
+_co_order = app._card_order()
+app.sort_var.set('Custom order')
+app._on_sort_chosen('Custom order'); _ls_settle()
+check(f'Custom order chosen for the first time keeps the order that was '
+      f'showing ({app._card_order()})',
+      app._card_order() == _co_order and _co_file_order() == _co_order)
+
+# In selection mode a press ticks the card; the pointer moving after it
+# carries nothing.
+app._toggle_selection_mode(); _ls_settle()
+_co_order = app._card_order()
+_co_move_to(_co_press(_co_order[4]), app._card_view(_co_order[0])['y0'] + 2)
+check('in selection mode a card cannot be dragged',
+      getattr(app, '_drag', None) is None
+      and not app.canvas.find_withtag('drag_line'))
+_qa_fire(app.canvas, '<ButtonRelease-1>', x=120, y=10); _ls_settle()
+app._toggle_selection_mode(); _ls_settle()
+check('...and nothing moved', app._card_order() == _co_order)
+
+# A place is this notebook's own: a share code does not carry it, and a
+# number that is not a number never reaches the sort.
+_co_decoded = NO.decode_share_code(NO.encode_share_code(app.notes[0]))
+check('a share code does not carry a note\'s place in Custom order',
+      'order' in app.notes[0] and all('order' not in n for n in _co_decoded))
+_co_norm = [NO.normalize_note({'id': 1, 'order': v}).get('order', 'absent')
+            for v in (3, 2.5, True, '4', float('nan'), None)]
+check(f'only a real number is kept as a place ({_co_norm})',
+      _co_norm == [3, 2.5, 'absent', 'absent', 'absent', 'absent'])
+
+# The list's edge: a drag held there scrolls the list, a step at a time,
+# so a card can be taken further than the list shows -- and going down,
+# the rows drawn on demand arrive under the drag (the drawing and the drag
+# meeting, which neither knew about when it was written).
+app.__dict__.pop('DRAG_EDGE', None)
+_co_fresh([{'id': 1700 + i, 'title': 'Long %02d' % i, 'body': 'b',
+            'category': 'General', 'created': '2026-01-01 00:%02d' % i,
+            'updated': '2026-02-01 00:%02d' % (59 - i)} for i in range(45)])
+check(f'fixture: a list longer than its first drawing ({len(app._list_drawn)} '
+      f'of 45 drawn)', len(app._list_drawn) < 45)
+# Taken from well down the drawn part, so the drawn rows run out soon.
+_co_y = _co_press(1725)
+_co_top = app.canvas.canvasy(0)
+_co_drawn = len(app._list_drawn)
+_co_h = app.canvas.winfo_height()
+_co_move_to(_co_y, app.canvas.canvasy(_co_h - 3))
+_co_end = time.time() + 6
+while time.time() < _co_end and len(app._list_drawn) <= _co_drawn:
+    app.update(); time.sleep(0.02)
+_co_scrolled = app.canvas.canvasy(0) - _co_top
+_co_slot = app._drag['slot'] if getattr(app, '_drag', None) else None
+_qa_fire(app.canvas, '<ButtonRelease-1>', x=120, y=_co_h - 3); _ls_settle()
+_co_rows = [r[1]['id'] for r in app._list_rows() if r[0] == 'note']
+check(f'a drag held at the list\'s bottom edge scrolls it and the rows '
+      f'waiting are drawn under it ({_co_drawn} -> {len(app._list_drawn)} '
+      f'drawn, {_co_scrolled:.0f}px scrolled)',
+      len(app._list_drawn) > _co_drawn and _co_scrolled > 100)
+check(f'...and the card lands where the line was when it was let go '
+      f'({_co_slot})',
+      _co_slot is not None and _co_slot[0] in ('before', 'after')
+      and _co_rows.index(1725) == _co_rows.index(_co_slot[1])
+      + (-1 if _co_slot[0] == 'before' else 1)
+      and _ls_same_as_rebuild())
+app.canvas.yview_moveto(1.0); _ls_settle()
+_co_y = _co_press(_co_rows[-1])
+_co_let = app.canvas.canvasy(0)
+_co_move_to(_co_y, app.canvas.canvasy(3))
+_co_end = time.time() + 6
+while time.time() < _co_end and app.canvas.canvasy(0) > _co_let - 100:
+    app.update(); time.sleep(0.02)
+_co_up = _co_let - app.canvas.canvasy(0)
+_qa_fire(app.canvas, '<ButtonRelease-1>', x=120, y=3); _ls_settle()
+check(f'...and one held at the top edge scrolls it up ({_co_up:.0f}px)',
+      _co_up >= 100 and _ls_same_as_rebuild())
+app.sort_var.set('Recently updated')
+
+# ---------------------------------------------------------------------
 # A tick box's well must be light, because the mark in it is dark.
 #
 # Tk draws a Checkbutton's mark dark on Windows whatever the palette

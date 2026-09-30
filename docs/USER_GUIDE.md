@@ -345,8 +345,9 @@ the whole list straight back. Right-clicking the box offers Cut / Copy / Paste, 
 text field in the app.
 
 Two dropdowns sit under the box, each with its own caption so you can tell at a glance which is
-which. **Sort** offers seven orders — Recently updated, Oldest updated, Title A–Z, Title Z–A,
-Category, Calendar: soonest, Calendar: oldest. **Show** narrows the list instead of reordering it:
+which. **Sort** offers eight orders — Recently updated, Oldest updated, Title A–Z, Title Z–A,
+Category, Calendar: soonest, Calendar: oldest, and **Custom order**, the one you arrange yourself
+(below). **Show** narrows the list instead of reordering it:
 all your categories, plus **🔁 Repeating** and **📅 Dated** for the notes that live on the
 calendar. Both are remembered, so the list you left is the list you come back to; if the category
 a filter names is later deleted, the filter falls back to **All** rather than showing you nothing.
@@ -383,6 +384,22 @@ landed or a search keystroke filtered it, the ring comes back to the card you we
 
 The ring is drawn in the text colour while the keyboard is on the list, and the note you have open
 keeps its accent-coloured outline — so after walking away from the open note you can see both.
+
+#### Arranging the list by hand
+
+Drag a card up or down and let go where the line shows it will land — or, with the ring on a
+card, press **Alt+↑** or **Alt+↓** to move it one place. The list switches to **Custom order**,
+starting from the order it was showing, so nothing jumps; from then on it stays as you arrange it.
+Saving or editing a note does not move its card, and the arrangement is kept in your notes file,
+across restarts and in backups. New notes appear at the top, where you will look for them.
+
+Pinned notes stay above the rest, so a card cannot be dragged across that line; in a grouped list
+a card stays in its own group. Near the top or bottom of the list a drag scrolls it, faster the
+further you push past the edge. **Esc** puts a dragged card back where it was. While ☑ Select is
+on, a click ticks a card instead, and nothing is dragged.
+
+*Why a separate sort: dragging while the list was sorted by date or title would be undone by the
+next save. Custom order is the one sort that means "where I put it".*
 
 ![Search and sort](screenshots/search-and-sort.png)
 
@@ -747,6 +764,8 @@ keys that only mean something inside a list, in the find bar, or on the note lis
 | **Esc** | find bar | Closes the bar. |
 | **↑** / **↓** | note list | Walks from card to card, in the order the list is showing them — also straight after a click on a note. |
 | **Enter** / **Space** | note list | Opens the note — or ticks it, while ☑ Select is on. |
+| **Alt+↑** / **Alt+↓** | note list | Moves the note with the ring one place up or down (Custom order). |
+| **Esc** | note list, while dragging | Puts the dragged card back where it was. |
 | **Shift+F10** or the menu key | note list | Opens that note's own right-click menu, at the note. |
 | **Page Up** / **Page Down** | Calendar tab | Previous / next month. |
 | **Ctrl+Page Up** / **Ctrl+Page Down** | Calendar tab | Previous / next year. |

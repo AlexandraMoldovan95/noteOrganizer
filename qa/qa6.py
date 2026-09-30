@@ -1528,12 +1528,15 @@ check('and the undiscoverable rest',
 # the second.
 _QW_NOT_KEYS = {'<Button-1>', '<Button-3>', '<Button-2>', '<Enter>',
                 '<Leave>', '<FocusIn>', '<FocusOut>', '<Motion>',
-                '<MouseWheel>', '<Double-Button-1>', '<Configure>'}
+                '<MouseWheel>', '<Double-Button-1>', '<Configure>',
+                '<B1-Motion>', '<ButtonRelease-1>'}
 # Spelled the way Tk reports them back, not the way they were bound:
 # bind('<Return>') is read back as '<Key-Return>', and this check was
 # written with the binding spelling and caught its own mistake.
 _QW_KEY_NAMES = {'<Key-Return>': 'Enter', '<Key-space>': 'Space',
                  '<Key-Down>': 'Down', '<Key-Up>': 'Up',
+                 '<Alt-Key-Down>': 'Alt+Down', '<Alt-Key-Up>': 'Alt+Up',
+                 '<Key-Escape>': 'Escape',
                  '<Shift-Key-F10>': 'Shift+F10',
                  '<Key-App>': 'menu key', '<Key-Menu>': 'menu key'}
 # A check that cannot find its subject must fail rather than pass on an

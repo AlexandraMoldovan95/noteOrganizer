@@ -108,6 +108,9 @@ def drive():
         (6, "My settings file is gone, and I open the app again", _lose_the_settings),
         (7, "A note comes back from a code; I update it, then take the update back",
          _a_list_from_yesterday),
+        (8, "I drag my last note to the top, and move one down from the keyboard",
+         _a_few_more_notes),
+        (9, "I open the app again: my order is where I left it", None),
     ]
     results = []
     for number, title, before in chapters:
@@ -177,6 +180,19 @@ def _a_list_from_yesterday(work):
                                 {"text": "eggs", "done": True},
                                 {"text": "bread", "done": False}],
                   "created": "2026-09-20 09:00", "updated": "2026-09-20 09:00"})
+    io.open(path, "w", encoding="utf-8").write(json.dumps(notes, indent=2))
+
+
+def _a_few_more_notes(work):
+    """Three more notes from earlier sessions, so there is a list worth
+    arranging -- chapter 4 sent one note to the Trash, and two are left."""
+    path = os.path.join(work, "notes_data.json")
+    notes = json.load(io.open(path, encoding="utf-8"))
+    for i, title in enumerate(("Holiday plans", "Books to read", "Car service")):
+        notes.append({"id": 60 + i, "title": title, "body": "a few words",
+                      "category": "General",
+                      "created": "2026-09-2%d 09:00" % (1 + i),
+                      "updated": "2026-09-2%d 09:00" % (1 + i)})
     io.open(path, "w", encoding="utf-8").write(json.dumps(notes, indent=2))
 
 
@@ -737,8 +753,99 @@ def _all_children(widget, out=None):
     return out
 
 
+def _card_middle(app, note_id):
+    """Where a hand takes a card: its middle, in the list's own
+    coordinates, once the card is on screen."""
+    app._scroll_row_into_view(app._note_cards[note_id])
+    app.update()
+    v = app._card_view(note_id)
+    return 120, int((v["y0"] + v["y1"]) / 2 - app.canvas.canvasy(0))
+
+
+def _carry(app, from_y, to_y):
+    """The pointer moving with the button down, a few pixels at a time."""
+    step = 6 if to_y > from_y else -6
+    for y in list(range(from_y, to_y, step)) + [to_y]:
+        app.canvas.event_generate("<B1-Motion>", x=120, y=y)
+        app.update()
+
+
+ORDER_FILE = "the_order.json"
+
+
+def chapter_8():
+    """She takes the last card in her list to the top, and moves another
+    one place down from the keyboard."""
+    tk, NO, app = _chapter_setup()
+    story = Chapter()
+    app.refresh_note_list()
+    app.update()
+    before = app._card_order()
+    story.check("there is a list to arrange", len(before) >= 3, before)
+    if len(before) < 3:
+        story.save()
+        return
+    last, first = before[-1], before[0]
+    x, y = _card_middle(app, last)
+    app.canvas.event_generate("<Button-1>", x=x, y=y)
+    app.update()
+    top = app._card_view(first)
+    target = int(top["y0"] + 2 - app.canvas.canvasy(0))
+    _carry(app, y, target)
+    lifted = bool(getattr(app, "_drag", None) and app._drag.get("started")
+                  and app.canvas.find_withtag("drag_line"))
+    story.check("the card lifts and a line shows where it will land", lifted)
+    _let_it_paint(app, 0.3)
+    _photograph("10-a-card-carried-to-the-top")
+    app.canvas.event_generate("<ButtonRelease-1>", x=x, y=target)
+    app.update()
+    after = app._card_order()
+    story.check("I let go and it is first", after[:1] == [last], after)
+    story.check("...the others kept their order",
+                after[1:] == [i for i in before if i != last], after)
+    story.check("...and the list says it is in Custom order now",
+                app.sort_var.get() == "Custom order", app.sort_var.get())
+    # From the keyboard: the ring is on the card just dropped.
+    app._list_move_by_keyboard(1)
+    app.update()
+    moved = app._card_order()
+    story.check("Alt+Down takes it one place down, and the ring stays on it",
+                moved[:2] == [after[1], last] and app._focused_note_id == last,
+                moved)
+    io.open(ORDER_FILE, "w", encoding="utf-8").write(json.dumps(moved))
+    story.save()
+
+
+def chapter_9():
+    """A NEW PROCESS: the app was closed and opened again. Her order is
+    where she left it, and editing a note does not disturb it."""
+    tk, NO, app = _chapter_setup()
+    story = Chapter()
+    wanted = json.loads(io.open(ORDER_FILE, encoding="utf-8").read())
+    app.refresh_note_list()
+    app.update()
+    story.check("the list opens in Custom order", app.sort_var.get() == "Custom order",
+                app.sort_var.get())
+    story.check("...in the order I left it", app._card_order() == wanted,
+                app._card_order())
+    note = app.find_note(wanted[-1])
+    story.check("a note opens when I click it",
+                note is not None and _open_note_by_clicking(app, note.get("title")))
+    app.body_text.insert("end", "\none more line")
+    save = _button(app, "Save")
+    if save is not None:
+        save.invoke()
+    app.update()
+    story.check("saving an edit leaves every card where I put it",
+                app._card_order() == wanted, app._card_order())
+    _let_it_paint(app)
+    _photograph("11-my-order-after-a-restart")
+    story.save()
+
+
 CHAPTERS = {1: chapter_1, 2: chapter_2, 3: chapter_3, 4: chapter_4,
-            5: chapter_5, 6: chapter_6, 7: chapter_7}
+            5: chapter_5, 6: chapter_6, 7: chapter_7, 8: chapter_8,
+            9: chapter_9}
 
 
 if __name__ == "__main__":
@@ -751,7 +858,7 @@ if __name__ == "__main__":
             import traceback
             traceback.print_exc()
             io.open(RESULTS, "w", encoding="utf-8").write(json.dumps(
-                [["capitolul %d a mers pana la capat" % number, False,
+                [["chapter %d ran to the end" % number, False,
                   traceback.format_exc().strip().splitlines()[-1]]],
                 ensure_ascii=False))
         sys.exit(0)

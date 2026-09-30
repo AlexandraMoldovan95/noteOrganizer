@@ -3138,6 +3138,12 @@ class SettingsPageMixin:
                             "is showing them."),
             ("Enter  /  Space", "Open the note — or tick it, while "
                                 "☑ Select is on."),
+            ("Alt+Up  /  Alt+Down", "Move the note one place up or down. "
+                                    "The list switches to Custom order, "
+                                    "starting from the order it was "
+                                    "showing."),
+            ("Escape", "While dragging a note to a new place: put it "
+                       "back where it was."),
             ("Shift+F10", "That note's own right-click menu, opened at the "
                           "note. The menu key does the same where a "
                           "keyboard has one."),

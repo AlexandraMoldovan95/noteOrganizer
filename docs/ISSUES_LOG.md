@@ -79,6 +79,7 @@ day-to-day tracking.
 | [The theme-switch flicker, and three ways not to fix it](#the-theme-switch-flicker-and-three-ways-not-to-fix-it) | Profile before reaching for rendering tricks; the fix was stopping work nothing asked for. | 0.32.49 |
 | [The list that was drawn whole, for every pause in typing](#the-list-that-was-drawn-whole-for-every-pause-in-typing) | Measure where the time goes before trimming what is easy to count; before removing work that looks wasted, ask what it was doing for someone; when every symptom is the same cost seen from another side, remove the cost — six windows per card became none. | Unreleased |
 | [The window that crawled behind its edge](#the-window-that-crawled-behind-its-edge) | When the cost is inside the toolkit and paid per step, stop taking the step until it counts; and a smooth frame over a stale picture is a judgement for the eye, not a number. | Unreleased |
+| [The line that promised a place the card could not take](#the-line-that-promised-a-place-the-card-could-not-take) | When the screen re-sorts after an action, the end state proves nothing about what was promised during it — check the promise itself; and look at the photograph, because a green check does not see a card that is not there. | Unreleased |
 | [The Settings panels that stayed dark on a light theme](#the-settings-panels-that-stayed-dark-on-a-light-theme) | A computed colour is invisible to palette matching; derive it once, teach the theme switch. | 0.36.54 |
 | [The title box that took three and a half seconds a keystroke](#the-title-box-that-took-three-and-a-half-seconds-a-keystroke) | Measure to isolate: the app was fine, one widget was quadratic — cap its input. | 0.36.55 |
 | [The dropdown that opened on the wrong monitor](#the-dropdown-that-opened-on-the-wrong-monitor) | Position popups against the app window's own bounds, not the full virtual desktop. | 0.2.0 |
@@ -2419,6 +2420,39 @@ It now sees the layout waiting first, then waits for the pause.
 **Takeaway:** when the cost is inside the toolkit and paid per step, stop taking the step until
 it counts. And a smooth frame over a stale picture is a judgement, not a measurement — say so,
 and hand it to someone who will look.
+
+### The line that promised a place the card could not take
+
+*(Unreleased)*
+
+**What was built.** The field test asked to move a note up or down the list with the mouse.
+The list now has a sort arranged by hand, Custom order: a card is dragged, a line shows where it
+will land, and letting go puts it there — or Alt+↑/↓ moves it from the keyboard. Two rules keep
+a drop honest. A pinned note stands above the rest, and a grouped list sorts every card into its
+category, so a card may only trade places with cards on its own side of both lines.
+
+**Two checks that looked at the wrong moment.** The first versions checked where a card ended up.
+Mutants that let a card cross the pinned line, or leave its group, survived them: the drop went
+through, the list re-sorted the card back to its side, and the end state was exactly right. What
+was wrong happened *during* the drag. The line had been drawn above the pinned card, or inside
+the other group — a promise of a place the card could never take. The checks now ask where the
+line said the card would go as well as where it went, and both mutants fail.
+
+**One problem only the photograph showed.** The story that walks the feature on the real app
+passed, and its picture of a drag in progress showed the line at the top of the list and no
+card anywhere. The pointer had been carried past the list's top edge, the list had scrolled up
+under it, and the card had followed the pointer out of the canvas. It now stays at the edge it
+was carried to, in sight, while the list scrolls under it — and a check asks for that, with a
+mutant that removes it.
+
+**And one number that was guessed.** A drag near the edge scrolled the list one step every 40
+milliseconds. Worked out rather than tried, that is over a minute to take a card from the bottom
+of 300 notes to the top; the step now grows with how far past the edge the pointer is pushed.
+
+**Takeaway:** when the screen re-sorts after an action, the state it settles into proves nothing
+about what the screen promised during it — check the promise too. And look at the photograph:
+the story's checks asked whether a line appeared, and none of them could see that the card it
+belonged to had not.
 
 ### The Settings panels that stayed dark on a light theme
 

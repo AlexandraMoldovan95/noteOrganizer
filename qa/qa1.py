@@ -232,6 +232,9 @@ for opt, expected in [
     ('Title Z–A',        ['Cherry', 'Banana', 'Apple']),
     ('Category',         ['Cherry', 'Banana', 'Apple']),   # Alpha, General, Zeta
     ('Calendar: oldest', ['Apple', 'Cherry', 'Banana']),   # 01-05, 02-20, 03-10
+    # Nobody has placed these yet: newest made first, where a new note
+    # would be looked for.
+    ('Custom order',     ['Cherry', 'Apple', 'Banana']),
 ]:
     try:
         app.sort_var.set(opt)
