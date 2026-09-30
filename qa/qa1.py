@@ -9384,6 +9384,32 @@ app.notes = list(_bc_saved)
 app.save_notes()
 app.new_note(); app.update()
 
+# ---- ESCAPE LEAVES A CELL AND KEEPS WHAT WAS TYPED ----
+# The User Guide lists Escape beside Tab and a click elsewhere as the way
+# out of a cell. It closed the editor without a commit, and the typing
+# reaches the note only through one -- so a quick Escape threw the cell's
+# text away while Tab, with the same timing, kept it. Driven through the
+# editor's own binding: the focus is a precondition, forced and asserted.
+set_body('| Item | Qty |' + chr(10) + '| --- | --- |' + chr(10)
+         + '|  |  |' + chr(10) + 'after')
+app._render_table_grids()
+app.update()
+app._open_cell_editor(app._grid_at_line(1), 1, 0)
+app.update()
+_esc_entry = app._cell_editor['entry']
+_esc_entry.delete('1.0', 'end')
+_esc_entry.insert('1.0', 'Milk')
+check('Escape: the cell editor holds the keyboard (precondition)',
+      take_focus(_esc_entry))
+_esc_entry.event_generate('<Escape>')
+app.update()
+check('Escape leaves the cell', app._cell_editor is None)
+check('...and keeps what was typed in it (' + repr(
+          app.body_text.get('3.0', '3.end')) + ')',
+      core_tables.split_row(app.body_text.get('3.0', '3.end'))
+      == ['Milk', ''])
+set_body('')
+
 # ---- CLOSING SAVES SILENTLY (dead last: it destroys the app) ----
 # The quit-time "Unsaved notes" ask could only ever cover the last
 # half-second of typing; the app now trusts its own autosave and closes

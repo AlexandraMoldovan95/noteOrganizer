@@ -2930,8 +2930,13 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             pass
         entry.bind("<Return>", lambda _e: self._editor_newline())
         entry.bind("<Shift-Return>", lambda _e: self._editor_newline())
+        # Escape LEAVES the cell and keeps what was typed, exactly as Tab
+        # and a click elsewhere do -- what the User Guide promises. It
+        # used to close the editor without a commit, and the keystrokes
+        # only ever reach the text through one, so a quick Escape threw
+        # the cell's typing away.
         entry.bind("<Escape>",
-                   lambda _e: (self._cancel_cell_editor(), "break")[1])
+                   lambda _e: (self._commit_cell_editor(), "break")[1])
         entry.bind("<FocusOut>",
                    lambda _e, this=entry: self.after_idle(
                        lambda: self._maybe_close_cell_editor(this)))
@@ -2994,9 +2999,6 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             # the late window-mapping (the double-click jump's root).
             self._grid_saved_view = self._capture_grid_views()
             self._render_table_grids()
-
-    def _cancel_cell_editor(self):
-        self._close_cell_editor()
 
     def _forget_dead_cell_editor(self, entry):
         """A destroyed cell editor stops being the open one (see where
