@@ -2078,6 +2078,40 @@ else:
           and _nq.get('outer') == (False, False))
 
 # ============================================================
+# A TEMPLATE SAVED AFTER ITS SECTION WAS REBUILT
+# ============================================================
+# The editor's save redrew the list it was HANDED -- whose rows are gone
+# once the section has been rebuilt with the editor still open. The
+# template was saved, and a red "Something went wrong" said otherwise.
+# It asks the page for its list at the moment of saving now. The rebuild
+# is made the way the nav's glyph made it before it learned to ask first.
+app.templates = [NO.normalize_template({'name': 'LiveList', 'body': 'x'})]
+NO.save_templates(app.templates)
+app.toggle_settings_panel('templates'); app.update()
+_lr_errs = []
+app._edit_template(app.templates[0], app._refresh_templates_panel); app.update()
+_lr_pop = app._mini_popup
+_lr_ent = [w for w in _walk9(_lr_pop) if isinstance(w, tk.Entry)][0]
+_lr_ent.delete(0, 'end')
+_lr_ent.insert(0, 'LiveList renamed')
+_lr_confirm = _lr_pop._confirm_dismiss
+_lr_pop._confirm_dismiss = None
+app.toggle_settings_panel('templates'); app.update()
+_lr_pop._confirm_dismiss = _lr_confirm
+check('fixture: the Templates section was rebuilt with the editor still open',
+      app._mini_popup is _lr_pop and _lr_pop.winfo_exists())
+app.report_callback_exception = lambda *a: _lr_errs.append(a[1])
+try:
+    find_widget(_lr_pop, tk.Button, 'Save').invoke(); app.update()
+finally:
+    del app.report_callback_exception
+_lr_rows = [str(w.cget('text')) for w in _walk9(app.settings_templates_panel)
+            if isinstance(w, tk.Label)]
+check('...its save raises nothing, and the list shows the saved template '
+      '(%s)' % _lr_errs[:1], not _lr_errs and 'LiveList renamed' in _lr_rows)
+app._dismiss_mini_popup(); app.update()
+
+# ============================================================
 # AN IMAGE PREVIEW CLOSED AT ONCE LEAVES NOTHING ON THE WINDOW
 # ============================================================
 # The preview binds its click-outside 50 ms after it opens, so the click

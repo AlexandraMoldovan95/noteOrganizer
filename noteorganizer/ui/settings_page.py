@@ -603,6 +603,10 @@ class SettingsPageMixin:
         self._active_panel_canvas = canvas
 
         def redraw():
+            # A list this section no longer shows: rebuilt since, its rows
+            # are gone, and there is nothing to redraw.
+            if not rows.winfo_exists():
+                return
             for w in rows.winfo_children():
                 w.destroy()
             if not self.templates:
@@ -1120,7 +1124,12 @@ class SettingsPageMixin:
                     self.templates.append(new_tpl)
             save_templates(self.templates)
             self._dismiss_mini_popup()
-            redraw()
+            # The list as the page shows it NOW, looked up at this moment.
+            # The section can be rebuilt while this editor is open, and the
+            # rows `redraw` was handed are then gone: redrawing them raised,
+            # and a template that WAS saved reported "Something went wrong".
+            live = getattr(self, "_refresh_templates_panel", None) or redraw
+            live()
             self._render_statistics()
 
         btns = tk.Frame(frame, bg=self.colors["card"])
