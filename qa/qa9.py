@@ -2237,6 +2237,143 @@ for _pn_size in ('640x600', '1366x690', '1150x860'):
           == app.SIDEBAR_PANEL_BODY['import'][0])
 app.geometry('1100x850'); _pn_settle()
 
+# ============================================================
+# STATISTICS: THE SAME FIGURES, DRAWN ONCE
+# ============================================================
+# The render parsed every stamp with strptime (10,212 calls at 5,000 notes)
+# and destroyed and rebuilt every widget on each list refresh while
+# Settings was open. The canonical stamp is read as text now and the
+# widgets stay. What is shown must not move by one: the figures are held
+# against the old algorithm itself, over stamps chosen to trip a shortcut
+# -- a day that does not exist, hour 24, minute 60, single digits, a "T",
+# seconds, digits from another script, nothing at all.
+from datetime import datetime as _st_dt, date as _st_date, timedelta as _st_td
+
+
+def _st_oracle(notes):
+    """The figures as the old render computed them, strptime and all."""
+    today = _st_date.today()
+    starts = (today - _st_td(days=today.weekday()), today.replace(day=1),
+              today.replace(month=1, day=1))
+
+    def parse(raw):
+        if not isinstance(raw, str) or not raw:
+            return None
+        try:
+            return _st_dt.strptime(raw[:16], "%Y-%m-%d %H:%M").date()
+        except ValueError:
+            return None
+    rows = []
+    for field in ('created', 'updated'):
+        row = [0, 0, 0, 0]
+        for n in notes:
+            d = parse(n.get(field))
+            if d is None:
+                continue
+            row[0] += d >= starts[0]
+            row[1] += d >= starts[1]
+            row[2] += d >= starts[2]
+            row[3] += d < starts[2]
+        rows.append(row)
+    return rows
+
+
+def _st_shown():
+    """(tile caption -> figure, the Added/Updated rows) as drawn."""
+    tiles, table = app.stats_frame.winfo_children()[:2]
+    pairs = {}
+    for edge in tiles.winfo_children():
+        labels = [w for w in edge.winfo_children()[0].winfo_children()
+                  if isinstance(w, tk.Label)]
+        pairs[str(labels[1].cget('text'))] = labels[0]
+    rows = [[table.grid_slaves(row=r, column=c)[0] for c in range(1, 5)]
+            for r in (2, 3)]
+    return pairs, rows
+
+
+_st_notes = list(app.notes)
+_st_t = _st_date.today()
+_st_d = _st_t.strftime('%Y-%m-%d')
+_st_other_script = ''.join(chr(0x660 + int(ch)) if ch.isdigit() else ch
+                           for ch in _st_d + ' 10:00')
+_st_stamps = [
+    _st_d + ' 10:00', _st_t.replace(day=1).strftime('%Y-%m-%d') + ' 08:30',
+    _st_t.replace(month=1, day=1).strftime('%Y-%m-%d') + ' 00:00',
+    (_st_t.replace(month=1, day=1) - _st_td(days=1)).strftime('%Y-%m-%d') + ' 23:59',
+    '%d-%d-%d 9:05' % (_st_t.year, _st_t.month, _st_t.day),
+    '%d-02-30 10:00' % _st_t.year, _st_d + ' 24:00', _st_d + ' 10:60',
+    _st_d + 'T10:00', _st_d + ' 10:00:59', _st_other_script, 'garbage', '',
+    None, '1999-12-31 23:59', '0000-01-01 00:00']
+app.notes = []
+for _st_i, _st_stamp in enumerate(_st_stamps):
+    _st_n = NO.normalize_note({'id': 9900 + _st_i, 'title': 'Stamp %d' % _st_i,
+                               'body': 'x', 'category': 'General'})
+    _st_n['created'] = _st_stamp
+    _st_n['updated'] = _st_stamps[-1 - _st_i]
+    app.notes.append(_st_n)
+app.show_settings_page(); app.update()
+app._render_statistics(); app.update()
+_st_pairs, _st_rows = _st_shown()
+_st_got = [[int(l.cget('text')) for l in row] for row in _st_rows]
+check('the time breakdown is exactly what the old strptime render counted '
+      '(%s, expected %s)' % (_st_got, _st_oracle(app.notes)),
+      _st_got == _st_oracle(app.notes))
+check('...and the tiles too (total %s, added this week %s)'
+      % (_st_pairs['Total notes'].cget('text'),
+         _st_pairs['Added this week'].cget('text')),
+      int(_st_pairs['Total notes'].cget('text')) == len(app.notes)
+      and int(_st_pairs['Added this week'].cget('text')) == _st_oracle(app.notes)[0][0])
+# In place: the next render changes the figures on the SAME widgets.
+_st_before = {k: v for k, v in _st_pairs.items()}
+app.notes.append(NO.normalize_note({'id': 9950, 'title': 'One more', 'body': 'y',
+                                    'category': 'General'}))
+app._render_statistics(); app.update()
+_st_pairs2, _st_rows2 = _st_shown()
+check('the next render updates the figures on the same widgets, rebuilding '
+      'nothing (total now %s)' % _st_pairs2['Total notes'].cget('text'),
+      all(_st_pairs2[k] is _st_before[k] for k in _st_before)
+      and int(_st_pairs2['Total notes'].cget('text')) == len(app.notes)
+      and [[int(l.cget('text')) for l in row] for row in _st_rows2]
+      == _st_oracle(app.notes))
+# Another palette is another drawing: built again, in its colours.
+_st_theme = app.theme_name
+app.set_theme('light' if _st_theme != 'light' else 'dark'); app.update()
+app._render_statistics(); app.update()
+_st_pairs3, _st_rows3 = _st_shown()
+check('after a theme switch the next render draws it again, in the new '
+      'palette', _st_pairs3['Total notes'] is not _st_before['Total notes']
+      and str(_st_pairs3['Total notes'].cget('fg')) == app.colors['text'])
+app.set_theme(_st_theme); app.update()
+# And none of it leaves anything behind: no Tcl command per render, and none
+# per rebuild of the theme picker (each re-bound its long-lived frame).
+
+
+def _st_commands():
+    # after() registers a command per pending callback, which comes and goes
+    # by itself; those are not what this is about.
+    return len([c for c in app.tk.splitlist(app.tk.call('info', 'commands'))
+                if not str(c).endswith('callit')])
+
+
+app.update()
+_st_c0 = _st_commands()
+for _ in range(20):
+    app._render_statistics()
+_st_c1 = _st_commands()
+for _ in range(10):
+    app._refresh_theme_picker()
+app.update()
+_st_c2 = _st_commands()
+# No growth, rather than an equal count: something unrelated finishing in
+# the same stretch can take one away (measured: 2384 -> 2383), and what
+# leaked here added one per render and two per rebuild.
+check('twenty renders of Statistics leave no Tcl command behind (%d -> %d)'
+      % (_st_c0, _st_c1), _st_c1 <= _st_c0)
+check('ten rebuilds of the theme picker leave no Tcl command behind (%d -> %d)'
+      % (_st_c1, _st_c2), _st_c2 <= _st_c1)
+app.notes = list(_st_notes)
+app._render_statistics(); app.update()
+
 check('none of the blocks above raised a background error (%s)' % _bg9[:2],
       not _bg9)
 app.notes = list(_na_notes)

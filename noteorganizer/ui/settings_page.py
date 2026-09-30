@@ -321,24 +321,51 @@ class SettingsPageMixin:
             return
         if not getattr(self, "_settings_open", False):
             return
-        for w in self.stats_frame.winfo_children():
-            w.destroy()
 
         notes = self.notes
         total = len(notes)
-
-        def _parse_ts(raw):
-            if not isinstance(raw, str) or not raw:
-                return None
-            try:
-                return datetime.strptime(raw[:16], "%Y-%m-%d %H:%M")
-            except ValueError:
-                return None
 
         today = date_cls.today()
         week_start = today - timedelta(days=today.weekday())
         month_start = today.replace(day=1)
         year_start = today.replace(month=1, day=1)
+        # Days compared as "YYYY-MM-DD" text, which sorts as the dates do.
+        week_day, month_day, year_day = (week_start.isoformat(),
+                                         month_start.isoformat(),
+                                         year_start.isoformat())
+        real_days = {}
+
+        def _day(raw):
+            # Every stamp went through strptime, twice per note on every
+            # render: 10,212 calls at 5,000 notes, most of a render's 200 ms.
+            # The app writes one shape, "YYYY-MM-DD HH:MM", and that shape
+            # is read as text now -- its date checked once per distinct day
+            # and its time against the same ranges strptime allows. Any
+            # other shape still goes through strptime, so exactly the same
+            # stamps count, and the same odd ones are skipped.
+            if not isinstance(raw, str) or not raw:
+                return None
+            head = raw[:16]
+            if (len(head) == 16 and head.isascii() and head[4] == "-"
+                    and head[7] == "-" and head[10] == " " and head[13] == ":"
+                    and (head[:4] + head[5:7] + head[8:10] + head[11:13]
+                         + head[14:16]).isdigit()):
+                if int(head[11:13]) > 23 or int(head[14:16]) > 59:
+                    return None
+                day = head[:10]
+                real = real_days.get(day)
+                if real is None:
+                    try:
+                        date_cls.fromisoformat(day)
+                        real = True
+                    except ValueError:
+                        real = False
+                    real_days[day] = real
+                return day if real else None
+            try:
+                return datetime.strptime(head, "%Y-%m-%d %H:%M").date().isoformat()
+            except ValueError:
+                return None
 
         def _bucket_counts(field):
             # Cumulative from the start of each period (so "this year"
@@ -346,15 +373,14 @@ class SettingsPageMixin:
             # complement — notes not touched at all since Jan 1st.
             week = month = year = older = 0
             for n in notes:
-                ts = _parse_ts(n.get(field))
-                if not ts:
+                d = _day(n.get(field))
+                if d is None:
                     continue
-                d = ts.date()
-                if d >= week_start:
+                if d >= week_day:
                     week += 1
-                if d >= month_start:
+                if d >= month_day:
                     month += 1
-                if d >= year_start:
+                if d >= year_day:
                     year += 1
                 else:
                     older += 1
@@ -387,6 +413,66 @@ class SettingsPageMixin:
         templates_count = len(self.templates)
         checklists_count = sum(1 for n in notes if n.get("checklist"))
         deleted_count = len(self.trash)
+        tile_values = (total, added_week, len(counts), templates_count,
+                       checklists_count, deleted_count)
+        table_values = ((added_week, added_month, added_year, added_older),
+                        (updated_week, updated_month, updated_year, updated_older))
+        # --- Per-category split. Known categories first (Manage-categories
+        # order), then any leftover/stale names so nothing is silently
+        # dropped. Deliberately not clickable: this is a snapshot, not
+        # another way to filter notes -- see docs/ISSUES_LOG.md. ---
+        ordered_cats = [c for c in CATEGORY_COLORS.keys() if c in counts]
+        ordered_cats += [c for c in counts.keys() if c not in ordered_cats]
+        # Read the stamp back from settings rather than the entry module's
+        # FIRST_LAUNCH_DATE -- see _host()'s docstring for why that global
+        # can be None here. Purely a read: the stamp is written once, at
+        # startup, by get_first_launch_date().
+        since = load_settings().get("first_launch_date") or "\u2014"
+
+        # Same wheel-forwarding pattern used elsewhere in Settings (theme
+        # picker, inline panels) — without it, scrolling with the cursor
+        # over the summary text or a category chip does nothing, since
+        # those widgets have no scroll behavior of their own to fall back
+        # to. Bound on the frame once: re-binding it on every render left
+        # one more Tcl command behind each time, for good.
+        def _stats_wheel(event):
+            try:
+                self.settings_canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+            except (tk.TclError, ValueError):
+                pass
+            return "break"
+        if not getattr(self.stats_frame, "_wheel_bound", False):
+            self.stats_frame._wheel_bound = True
+            self.stats_frame.bind("<MouseWheel>", _stats_wheel)
+
+        # The widgets stay; their figures change. This destroyed and rebuilt
+        # all of them on every render -- every list refresh while Settings
+        # is open. It builds again only when what is DRAWN changes: another
+        # palette, or another set of categories to split by.
+        shape = tuple((c, CATEGORY_COLORS.get(c)) for c in ordered_cats)
+        view = getattr(self, "_stats_view", None)
+        try:
+            same_drawing = (view is not None and view["colors"] is self.colors
+                            and view["shape"] == shape
+                            and view["since"].winfo_exists())
+        except tk.TclError:
+            same_drawing = False
+        if same_drawing:
+            for lbl, value in zip(view["tiles"], tile_values):
+                lbl.configure(text=str(value))
+            for row, values in zip(view["table"], table_values):
+                for lbl, value in zip(row, values):
+                    lbl.configure(text=str(value),
+                                  fg=self.colors["text"] if value else self.colors["subtext"])
+            for lbl, cat in zip(view["cat_counts"], ordered_cats):
+                lbl.configure(text=str(counts[cat]))
+            view["since"].configure(text=f"Using Note Organizer since {since}")
+            return
+        for w in self.stats_frame.winfo_children():
+            w.destroy()
+        view = self._stats_view = {"colors": self.colors, "shape": shape,
+                                   "tiles": [], "table": [], "cat_counts": [],
+                                   "since": None}
 
         tiles = tk.Frame(self.stats_frame, bg=self.colors["bg"])
         tiles.pack(fill="x", pady=(0, 22))
@@ -397,22 +483,19 @@ class SettingsPageMixin:
         # with three; dropping to match it exactly would have deleted the
         # template, checklist and trash counts, which are real figures this
         # panel has always shown and has regression tests for.
-        for i, (value, caption) in enumerate((
-                (total, "Total notes"),
-                (added_week, "Added this week"),
-                (len(counts), "Categories"),
-                (templates_count, "Templates"),
-                (checklists_count, "With a checklist"),
-                (deleted_count, "In trash"))):
+        for i, (value, caption) in enumerate(zip(tile_values, (
+                "Total notes", "Added this week", "Categories", "Templates",
+                "With a checklist", "In trash"))):
             edge = tk.Frame(tiles, bg=self._border_color())
             edge.grid(row=i // 3, column=i % 3, sticky="nsew",
                       padx=(0 if i % 3 == 0 else 12, 0),
                       pady=(0 if i < 3 else 12, 0))
             tile = tk.Frame(edge, bg=self._surface())
             tile.pack(fill="both", expand=True, padx=1, pady=1)
-            tk.Label(tile, text=str(value), font=("Segoe UI", 20, "bold"),
-                     bg=self._surface(), fg=self.colors["text"], anchor="w"
-                     ).pack(fill="x", padx=18, pady=(16, 0))
+            figure = tk.Label(tile, text=str(value), font=("Segoe UI", 20, "bold"),
+                              bg=self._surface(), fg=self.colors["text"], anchor="w")
+            figure.pack(fill="x", padx=18, pady=(16, 0))
+            view["tiles"].append(figure)
             tk.Label(tile, text=caption, font=("Segoe UI", 9, "bold"),
                      bg=self._surface(), fg=self.colors["subtext"], anchor="w"
                      ).pack(fill="x", padx=18, pady=(3, 16))
@@ -436,25 +519,19 @@ class SettingsPageMixin:
         rule = tk.Frame(table, height=1, bg=self._border_color())
         rule.grid(row=1, column=0, columnspan=5, sticky="ew", pady=(0, 4))
 
-        for r, (caption, values) in enumerate((
-                ("Added", (added_week, added_month, added_year, added_older)),
-                ("Updated", (updated_week, updated_month, updated_year, updated_older)))):
+        for r, (caption, values) in enumerate(zip(("Added", "Updated"), table_values)):
             tk.Label(table, text=caption, font=("Segoe UI", 9), bg=self.colors["bg"],
                      fg=self.colors["subtext"], anchor="w"
                      ).grid(row=r + 2, column=0, sticky="w", pady=2)
+            row_figures = []
             for c, value in enumerate(values):
-                tk.Label(table, text=str(value), font=("Segoe UI", 10, "bold"),
-                         bg=self.colors["bg"],
-                         fg=self.colors["text"] if value else self.colors["subtext"],
-                         anchor="e"
-                         ).grid(row=r + 2, column=c + 1, sticky="ew", padx=(8, 0), pady=2)
-
-        # --- Per-category split. Known categories first (Manage-categories
-        # order), then any leftover/stale names so nothing is silently
-        # dropped. Deliberately not clickable: this is a snapshot, not
-        # another way to filter notes -- see docs/ISSUES_LOG.md. ---
-        ordered_cats = [c for c in CATEGORY_COLORS.keys() if c in counts]
-        ordered_cats += [c for c in counts.keys() if c not in ordered_cats]
+                figure = tk.Label(table, text=str(value), font=("Segoe UI", 10, "bold"),
+                                  bg=self.colors["bg"],
+                                  fg=self.colors["text"] if value else self.colors["subtext"],
+                                  anchor="e")
+                figure.grid(row=r + 2, column=c + 1, sticky="ew", padx=(8, 0), pady=2)
+                row_figures.append(figure)
+            view["table"].append(row_figures)
 
         tk.Label(self.stats_frame, text="BY CATEGORY", font=("Segoe UI", 8, "bold"),
                  bg=self.colors["card"], fg=self.colors["subtext"], anchor="w"
@@ -484,35 +561,19 @@ class SettingsPageMixin:
                 tk.Label(pill, text=cat, font=("Segoe UI", 9, "bold"),
                          bg=self._surface(), fg=self.colors["subtext"], anchor="w"
                          ).pack(side="left", fill="x", expand=True)
-                tk.Label(pill, text=str(n), font=("Consolas", 9),
-                         bg=self._surface(), fg=self.colors["text"], anchor="e"
-                         ).pack(side="right", padx=(6, 12))
+                figure = tk.Label(pill, text=str(n), font=("Consolas", 9),
+                                  bg=self._surface(), fg=self.colors["text"], anchor="e")
+                figure.pack(side="right", padx=(6, 12))
+                view["cat_counts"].append(figure)
 
-        # Read the stamp back from settings rather than the entry module's
-        # FIRST_LAUNCH_DATE -- see _host()'s docstring for why that global
-        # can be None here. Purely a read: the stamp is written once, at
-        # startup, by get_first_launch_date().
-        since = load_settings().get("first_launch_date") or "\u2014"
-        tk.Label(
+        view["since"] = tk.Label(
             self.stats_frame, text=f"Using Note Organizer since {since}",
             font=("Segoe UI", 9), bg=self.colors["bg"],
-            fg=self.colors["subtext"], anchor="w"
-        ).pack(fill="x", pady=(18, 0))
-
-
-        # Same wheel-forwarding pattern used elsewhere in Settings (theme
-        # picker, inline panels) — without it, scrolling with the cursor
-        # over the summary text or a category chip does nothing, since
-        # those widgets have no scroll behavior of their own to fall back
-        # to. Rebound every time this panel rebuilds (it's redrawn on every
-        # Settings-page open, to stay fresh).
-        def _stats_wheel(event):
-            try:
-                self.settings_canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
-            except (tk.TclError, ValueError):
-                pass
-            return "break"
-        self._bind_wheel_tree(self.stats_frame, _stats_wheel)
+            fg=self.colors["subtext"], anchor="w")
+        view["since"].pack(fill="x", pady=(18, 0))
+        # The wheel on what was just built; the frame itself is bound once.
+        for child in self.stats_frame.winfo_children():
+            self._bind_wheel_tree(child, _stats_wheel)
 
     def _build_settings_categories_panel(self, parent):
         self._settings_subtitle(
@@ -1812,7 +1873,6 @@ class SettingsPageMixin:
             except (tk.TclError, ValueError):
                 pass
             return "break"
-        self._bind_wheel_tree(parent, _theme_picker_wheel)
 
         # Re-wrap when the column's width changes. Only an actual change in
         # the number of columns rebuilds, so ordinary Configure noise -- which
@@ -1822,7 +1882,17 @@ class SettingsPageMixin:
             balanced = -(-per_group // (-(-per_group // fits)))
             if balanced != getattr(self, "_theme_picker_cols", None):
                 self._build_theme_picker(parent)
-        parent.bind("<Configure>", _rewrap)
+
+        # The column outlives every rebuild, so its own two handlers are
+        # bound once: binding them again on each rebuild -- every theme
+        # switch -- left two more Tcl commands behind each time, for good.
+        # What each rebuild creates gets the wheel afresh.
+        if not getattr(parent, "_picker_bound", False):
+            parent._picker_bound = True
+            parent.bind("<MouseWheel>", _theme_picker_wheel)
+            parent.bind("<Configure>", _rewrap)
+        for child in parent.winfo_children():
+            self._bind_wheel_tree(child, _theme_picker_wheel)
 
         self._refresh_theme_picker = lambda: self._build_theme_picker(parent)
 
