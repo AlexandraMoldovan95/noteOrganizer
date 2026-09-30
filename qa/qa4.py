@@ -1393,6 +1393,222 @@ check(f'the list losing the keyboard mid-drag puts the lifted card back '
       _bl_was and not _bl_lifted() and not app.canvas.find_withtag('drag_line')
       and _bl_drawing_ok() and app._card_order() == _bl_o)
 _qa_fire(app.canvas, '<ButtonRelease-1>', x=120, y=10); _ls_settle()
+
+# 5b. A click whose own open moves the rows under the pointer. Opening a
+# note first saves the one left behind, and under a sort by date that save
+# moves the saved card: the cards between slide, the clicked one included.
+# What the pointer is over must stay what it was over -- for the second
+# press of a double-click, and for a drag the press may start. One check
+# per mechanism, because two of them hold the double-click together.
+_bl_notes = [{'id': 1800 + i, 'title': 'Hurry %02d' % i, 'body': 'b',
+              'category': 'General', 'created': '2026-01-01 00:%02d' % i,
+              'updated': '2026-02-01 00:%02d' % (59 - i)} for i in range(12)]
+
+
+def _bl_type_in(nid):
+    """Open a note and type in it, leaving the save pending -- what the
+    next click's open will flush."""
+    app.open_note_in_tab(app.find_note(nid)); _ls_settle()
+    app.body_text.insert('end', ' typed')
+    app._schedule_autosave()
+
+
+def _bl_y_at(nid, frac):
+    v = app._card_view(nid)
+    return int(v['y0'] + (v['y1'] - v['y0']) * frac - app.canvas.canvasy(0))
+
+
+# The list keeps the clicked card under the pointer when it can scroll far
+# enough: Recently updated moves the saved card to the top, above it.
+_co_fresh(_bl_notes)
+_bl_o = app._card_order()
+_bl_h = app.canvas.winfo_height()
+_bl_type_in(_bl_o[2])
+_bl_y = _bl_y_at(_bl_o[1], 0.25)
+check(f'fixture: a list long enough to scroll, the card to click in view '
+      f'({app._list_extent()[3]:.0f}px of list, a {_bl_h}px view, the click '
+      f'at y={_bl_y})', app._list_extent()[3] > _bl_h + 200 and 0 <= _bl_y < _bl_h)
+_qa_click(app.canvas, x=120, y=_bl_y); _ls_settle()
+_bl_under = app._list_record_at(120, _bl_y)
+_bl_under = _bl_under['note']['id'] if _bl_under else None
+check(f'a click whose open saves the note left behind keeps the clicked card '
+      f'under the pointer (open {app.selected_note_id}, under the pointer '
+      f'{_bl_under}, clicked {_bl_o[1]}; the saved card went to the top: '
+      f'{app._card_order()[:1]})',
+      app.selected_note_id == _bl_o[1] and _bl_under == _bl_o[1]
+      and app._card_order()[0] == _bl_o[2])
+_qa_fire(app.canvas, '<ButtonRelease-1>', x=120, y=_bl_y); _ls_settle()
+# A second press at the same spot is the second half of a double-click (Tk
+# calls it one), and it goes to the card now under the pointer: the same.
+_qa_click(app.canvas, x=120, y=_bl_y); _ls_settle()
+_qa_fire(app.canvas, '<ButtonRelease-1>', x=120, y=_bl_y); _ls_settle()
+check(f'...so a double-click on it opens it ({app.selected_note_id})',
+      app.selected_note_id == _bl_o[1])
+
+# When the list cannot scroll far enough, the second press follows the first
+# one's aim. Oldest updated at the top of the list: the saved card goes to
+# the BOTTOM, the clicked card slides up, and a view at the top cannot
+# scroll up after it -- whatever the window's or the fonts' size.
+_co_fresh(_bl_notes, sort='Oldest updated')
+_bl_o = app._card_order()
+_bl_type_in(_bl_o[0])
+_bl_y = _bl_y_at(_bl_o[1], 0.25)
+_qa_click(app.canvas, x=120, y=_bl_y); _ls_settle()
+_bl_under = app._list_record_at(120, _bl_y)
+_bl_under = _bl_under['note']['id'] if _bl_under else None
+check(f'fixture: the clicked card slid out from under the pointer and the '
+      f'list could not follow it (open {app.selected_note_id}, under the '
+      f'pointer {_bl_under}, clicked {_bl_o[1]}, view at '
+      f'{app.canvas.canvasy(0):.0f})',
+      app.selected_note_id == _bl_o[1] and _bl_under not in (None, _bl_o[1]))
+_qa_fire(app.canvas, '<ButtonRelease-1>', x=120, y=_bl_y); _ls_settle()
+_qa_click(app.canvas, x=120, y=_bl_y); _ls_settle()
+_qa_fire(app.canvas, '<ButtonRelease-1>', x=120, y=_bl_y); _ls_settle()
+check(f'...and a double-click still opens the card it was aimed at, not the '
+      f'one that slid under the pointer ({app.selected_note_id}; under the '
+      f'pointer {_bl_under})', app.selected_note_id == _bl_o[1])
+# The aim lasts as long as a double-click can: a press made later goes where
+# it points. Tk reads a made-up event's timestamp as 0, so it calls this
+# press the second half of a double-click too -- only the aim's own clock
+# can tell the two apart (a stale aim once opened the wrong note here).
+_bl_under_now = app._list_record_at(120, _bl_y)
+_bl_under_now = _bl_under_now['note']['id'] if _bl_under_now else None
+_ls_let_restores_finish()
+_qa_click(app.canvas, x=120, y=_bl_y); _ls_settle()
+_qa_fire(app.canvas, '<ButtonRelease-1>', x=120, y=_bl_y); _ls_settle()
+check(f'...while a press a second later opens the card under the pointer '
+      f'({app.selected_note_id}; under the pointer {_bl_under_now})',
+      _bl_under_now not in (None, _bl_o[1])
+      and app.selected_note_id == _bl_under_now)
+
+# ...and a hand that slips a few pixels while that press is held drops
+# nothing. A drag armed on a card that slid away measured its grab against
+# a place the hand was not on, so the slip "dropped" the clicked card
+# before its neighbour and switched the whole list to Custom order.
+_co_fresh(_bl_notes, sort='Oldest updated')
+_bl_o = app._card_order()
+_bl_type_in(_bl_o[0])
+# The LOWER part of the card: once it has slid up, the pointer is over the
+# lower half of the card that took its place, where a drag armed anyway
+# reads "before the next one" -- a real drop, not the card's own place.
+_bl_y = _bl_y_at(_bl_o[1], 0.75)
+check(f'fixture: the lower part of the card to press is on screen (y={_bl_y} '
+      f'of {app.canvas.winfo_height()})', 0 <= _bl_y < app.canvas.winfo_height())
+_qa_click(app.canvas, x=120, y=_bl_y); _ls_settle()
+for _bl_dy in (3, 6):
+    _qa_fire(app.canvas, '<B1-Motion>', x=120, y=_bl_y + _bl_dy); app.update()
+_bl_started = bool(getattr(app, '_drag', None) and app._drag['started'])
+_qa_fire(app.canvas, '<ButtonRelease-1>', x=120, y=_bl_y + 6); _ls_settle()
+check(f'a 6px slip while pressing a card that slid away drops nothing '
+      f'(drag started: {_bl_started}; sort {app.sort_var.get()!r}; notes '
+      f'with a place: {sum(1 for n in app.notes if "order" in n)})',
+      not _bl_started and app.sort_var.get() == 'Oldest updated'
+      and not any('order' in n for n in app.notes))
+
+# A header's own press can move it too: folding the last group of a list
+# scrolled to its end shortens the list, the view clamps, and the header
+# slides down from under the pointer -- where the second press of a
+# double-click then opened the card that slid in, instead of unfolding.
+_bl_work_added = 'Work' not in NO.CATEGORY_COLORS
+NO.CATEGORY_COLORS.setdefault('Work', '#4cc9f0')
+_co_fresh([dict(n, category='General') for n in _bl_notes[:10]]
+          + [dict(n, category='Work') for n in _bl_notes[10:]])
+app.group_by_category.set(True)
+app.collapsed_groups.discard('Work')
+app.refresh_note_list(); _ls_settle()
+app._list_scrollbar_moved('moveto', '1.0'); _ls_settle()
+_ls_let_restores_finish()
+_bl_hd = app._header_view('Work')
+_bl_y = int((_bl_hd['y0'] + _bl_hd['y1']) / 2 - app.canvas.canvasy(0))
+_bl_open = app.selected_note_id
+_qa_click(app.canvas, x=200, y=_bl_y); _ls_settle()
+_bl_under = app._list_record_at(200, _bl_y)
+_bl_under = _bl_under and _bl_under['key']
+_qa_fire(app.canvas, '<ButtonRelease-1>', x=200, y=_bl_y); _ls_settle()
+check(f'fixture: folding the last group of a list scrolled to its end moves '
+      f'its header from under the pointer (folded: '
+      f'{"Work" in app.collapsed_groups}; under the pointer now {_bl_under})',
+      'Work' in app.collapsed_groups and _bl_under != ('header', 'Work'))
+_qa_click(app.canvas, x=200, y=_bl_y); _ls_settle()
+_qa_fire(app.canvas, '<ButtonRelease-1>', x=200, y=_bl_y); _ls_settle()
+check(f'...and a double-click on that header unfolds the same group again, '
+      f'opening nothing (folded: {sorted(app.collapsed_groups)}; open '
+      f'{app.selected_note_id}, was {_bl_open})',
+      'Work' not in app.collapsed_groups and app.selected_note_id == _bl_open)
+app.group_by_category.set(False)
+app.collapsed_groups.discard('Work')
+if _bl_work_added:
+    NO.CATEGORY_COLORS.pop('Work', None)
+
+# How far the HAND moved decides a drag, not how far the view did: the view
+# can move under a held button (a rebuild's restore landing late), and read
+# in canvas pixels a 1px jitter then passed for a drag.
+_co_fresh(_bl_notes)
+_bl_o = app._card_order()
+_bl_y = _co_press(_bl_o[1])
+_bl_top = app.canvas.canvasy(0)
+app._list_restore_px = None
+app._apply_list_scroll_px(_bl_top + 12); _ls_settle()
+_bl_moved = app.canvas.canvasy(0) - _bl_top
+_qa_fire(app.canvas, '<B1-Motion>', x=120, y=_bl_y + 1); app.update()
+_bl_started = bool(getattr(app, '_drag', None) and app._drag['started'])
+_qa_fire(app.canvas, '<ButtonRelease-1>', x=120, y=_bl_y + 1); _ls_settle()
+check(f'the view moving under a held button is not the hand moving: a 1px '
+      f'jitter starts no drag (the view moved {_bl_moved:.0f}px; drag '
+      f'started: {_bl_started})', _bl_moved >= 10 and not _bl_started
+      and app.sort_var.get() == 'Recently updated')
+
+# A deliberate scroll beats a rebuild's restore even before that restore
+# has started: it was queued for the next idle moment as a callback nothing
+# could cancel, and it scrolled the view back after the scroll-into-view.
+_co_fresh(_bl_notes)
+_bl_o = app._card_order()
+app._apply_list_scroll_px(40); _ls_settle()
+_bl_was = app.canvas.canvasy(0)
+app.refresh_note_list()
+app._scroll_row_into_view(app._note_cards[_bl_o[-1]])
+_bl_want = app.canvas.canvasy(0)
+_ls_let_restores_finish()
+check(f'a deliberate scroll made before a rebuild\'s restore has run beats '
+      f'it (view {app.canvas.canvasy(0):.0f}, scrolled to {_bl_want:.0f}, '
+      f'the rebuild was at {_bl_was:.0f})',
+      _bl_was > 0 and _bl_want > _bl_was + 50
+      and abs(app.canvas.canvasy(0) - _bl_want) < 2)
+
+# The reported route end to end: the emoji picker open while typing, so the
+# autosave leaves the list as it was; the list scrolled; a click on a card
+# above the edited one, whose open catches the list up with a full rebuild;
+# a 1px jitter. Nothing may move.
+_co_fresh(_bl_notes)
+app._apply_list_scroll_px(40); _ls_settle()
+app._list_restore_px = None
+_bl_top = app.canvas.canvasy(0)
+_bl_o = app._card_order()
+_bl_vis = [n for n in _bl_o if app._card_view(n)['y0'] >= _bl_top
+           and app._card_view(n)['y1'] <= _bl_top + app.canvas.winfo_height()]
+_bl_click = _bl_vis[-1] if _bl_vis else _bl_o[1]
+_bl_edit = _bl_o[_bl_o.index(_bl_click) + 2]
+app.open_note_in_tab(app.find_note(_bl_edit)); _ls_settle()
+app._show_emoji_picker(app.body_text); _ls_settle()
+app.body_text.insert('end', ' x')
+app._schedule_autosave()
+_bl_end = time.time() + 5
+while not getattr(app, '_note_list_needs_refresh', False) and time.time() < _bl_end:
+    app.update(); time.sleep(0.02)
+_bl_deferred = bool(getattr(app, '_note_list_needs_refresh', False))
+_bl_y = _bl_y_at(_bl_click, 0.2)
+_qa_click(app.canvas, x=120, y=_bl_y); _ls_settle()
+_qa_fire(app.canvas, '<B1-Motion>', x=120, y=_bl_y + 1); app.update()
+_bl_started = bool(getattr(app, '_drag', None) and app._drag['started'])
+_qa_fire(app.canvas, '<ButtonRelease-1>', x=120, y=_bl_y + 1); _ls_settle()
+_ls_let_restores_finish()
+check(f'a click that catches up a deferred rebuild, with the list scrolled, '
+      f'then a 1px jitter: nothing moves (autosave deferred the list: '
+      f'{_bl_deferred}; drag started: {_bl_started}; open '
+      f'{app.selected_note_id} of {_bl_click}; sort {app.sort_var.get()!r})',
+      _bl_deferred and not _bl_started and app.selected_note_id == _bl_click
+      and app.sort_var.get() == 'Recently updated'
+      and not any('order' in n for n in app.notes))
 app.__dict__.pop('DRAG_EDGE', None)
 
 # ---------------------------------------------------------------------

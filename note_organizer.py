@@ -1325,6 +1325,13 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         for delay in (60, 160, 360):
             self.after(delay, self._reapply_list_restore)
 
+    def _begin_list_restore(self):
+        """Start the timed restore a rebuild left in force -- unless a
+        deliberate scroll has cancelled it since (see refresh_note_list)."""
+        pending = getattr(self, "_list_restore_px", None)
+        if pending is not None and self._still_alive():
+            self._restore_list_scroll(pending)
+
     def _reapply_list_restore(self):
         """One timed beat of a still-in-force rebuild restore."""
         pending = getattr(self, "_list_restore_px", None)
@@ -13663,9 +13670,6 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 saved_list_scroll = max(0, self.canvas.canvasy(0))
         except (tk.TclError, AttributeError):
             saved_list_scroll = 0
-        if saved_list_scroll > 0:
-            self.after_idle(lambda px=saved_list_scroll:
-                            self._restore_list_scroll(px))
         # Called from everywhere note/category data changes (save, delete,
         # category rename/delete, import, ...) — piggyback the Statistics
         # panel's refresh here too, so it stays live while Settings happens
@@ -13706,6 +13710,17 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._list_pending = rows
         self._draw_list_rows(self._list_draw_target(
             rows, drawn_before, saved_list_scroll))
+        if saved_list_scroll > 0:
+            # The restore is in force from here, not from when the app is
+            # next idle. Every deliberate scroll -- the wheel, the scrollbar,
+            # the ring's scroll-into-view, a click keeping its card under the
+            # pointer -- cancels a restore by clearing _list_restore_px; a
+            # restore queued as a bare callback could not be cancelled, and
+            # scrolled the view back after them. A press measured in one view
+            # and a jitter read in the other then passed for a drag.
+            self._list_restore_px = saved_list_scroll
+            self._list_restore_until = time.monotonic() + 0.4
+            self.after_idle(self._begin_list_restore)
         # The card with the keyboard's ring is drawn with it; this repaints
         # it once the app is idle, for a rebuild that ran while the list was
         # not the thing holding the keyboard.
@@ -13732,6 +13747,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
     # normalize_note). One name, because the dropdown, the sort and the
     # move all have to mean the same option.
     SORT_CUSTOM = "Custom order"
+    LIST_DOUBLE_PRESS_S = 0.5   # how long a double-click's first press counts
     DRAG_THRESHOLD = 5          # pixels a press must travel to become a drag
     DRAG_EDGE = 28              # near the list's top or bottom, a drag scrolls
     DRAG_SCROLL_MS = 40         # ...one step this often
@@ -14177,19 +14193,20 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._drag = {"nid": rec["note"]["id"], "press_y": cy,
                       "grab_dy": cy - rec["y0"], "started": False,
                       "offset": 0, "slot": None, "line": None,
-                      "pointer_y": event.y, "scroll_job": None}
+                      "pointer_y": event.y, "press_wy": event.y,
+                      "scroll_job": None}
 
     def _list_dragged(self, event):
         """The pointer moving with the button down."""
         drag = getattr(self, "_drag", None)
         if not drag:
             return
-        try:
-            cy = self.canvas.canvasy(event.y)
-        except tk.TclError:
-            return
         if not drag["started"]:
-            if abs(cy - drag["press_y"]) < self.DRAG_THRESHOLD:
+            # How far the HAND has moved, in the widget's own pixels. Asked
+            # in canvas pixels, a view that moved under a held button -- a
+            # rebuild's restore landing after the press was measured --
+            # counted as travel, and a 1px jitter started a drag.
+            if abs(event.y - drag["press_wy"]) < self.DRAG_THRESHOLD:
                 return
             if not self._start_list_drag():
                 self._drag = None
@@ -14413,6 +14430,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         """
         cv = self.canvas
         cv.bind("<Button-1>", self._list_pressed)
+        # Tk hands the second press of a double-click to this instead of
+        # <Button-1>; it goes where the first press went.
+        cv.bind("<Double-Button-1>", self._list_double_pressed)
         cv.bind("<Button-3>", self._list_right_pressed)
         cv.bind("<Motion>", self._list_pointer_moved)
         cv.bind("<Leave>", self._list_pointer_left)
@@ -14466,28 +14486,112 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # first: forgetting the drag left its drawing, its line and its
         # pointer shape on the list, over records that had never moved.
         self._cancel_list_drag()
+        # Only the second press of a double-click may follow the first
+        # press's aim (_list_double_pressed); any other press forgets it.
+        self._list_press_aim = None
         rec = self._list_record_at(event.x, event.y)
+        if rec is not None:
+            self._list_press_row(rec, event)
+
+    def _list_double_pressed(self, event):
+        """The second press of a double-click -- Tk's own judgement of one
+        (close in time and place), which replaces <Button-1> for that press.
+
+        It goes where the first press went. The first press can open a note
+        and so save the note left behind, and under a sort by date that save
+        moves rows: the clicked card slides away and its neighbour slides
+        under the pointer. The list keeps the clicked card there when it can
+        scroll far enough (_keep_row_under_pointer); when it cannot, the
+        first press leaves its aim here, and without it the second press
+        opened the neighbour -- a double-click that opened the wrong note."""
+        self._cancel_list_drag()
+        aim = getattr(self, "_list_press_aim", None)
+        self._list_press_aim = None
+        rec = None
+        # Only for as long as a double-click can take: Tk's own judgement
+        # reads the events' timestamps, and an event made by a program
+        # carries none, so two such presses a minute apart read as one
+        # double-click -- and an aim left from long ago redirected the
+        # later press to a card nobody had just pressed.
+        if (aim is not None
+                and time.monotonic() - aim[1] <= self.LIST_DOUBLE_PRESS_S):
+            rec = self._list_row_record(aim[0])
         if rec is None:
+            rec = self._list_record_at(event.x, event.y)
+        if rec is not None:
+            self._list_press_row(rec, event)
+
+    def _list_row_record(self, key):
+        """The drawn record of the row ("note", id) or ("header", category),
+        or None when that row is not drawn."""
+        if key[0] == "note":
+            return (getattr(self, "_note_cards", None) or {}).get(key[1])
+        return (getattr(self, "_group_headers", None) or {}).get(key[1])
+
+    def _list_press_row(self, rec, event):
+        """What a press does to the row it is for (see _list_pressed)."""
+        key = rec["key"]
+        # Where the row stands on the SCREEN before the press acts. Opening
+        # a note can save the note left behind, and that save can move this
+        # card -- by a surgical redraw, or by the full rebuild a popup
+        # deferred; folding a group scrolled near the end shortens the list,
+        # and the view clamps under the header.
+        try:
+            on_screen = rec["y0"] - self.canvas.canvasy(0)
+        except tk.TclError:
             return
         if rec["kind"] == "header":
             self._toggle_group_collapsed(rec["cat"])
-            return
-        note = rec["note"]
-        nid = note["id"]
-        if self.selection_mode:
-            self._toggle_note_selected(nid, nid not in self.selected_note_ids)
-            self._paint_card_check(nid)
+            self._keep_row_under_pointer(key, on_screen)
+        else:
+            note = rec["note"]
+            nid = note["id"]
+            if self.selection_mode:
+                self._toggle_note_selected(nid, nid not in self.selected_note_ids)
+                self._paint_card_check(nid)
+                self._put_keyboard_on_card(nid)
+                return
+            # Not when the open refused to happen: Cancel on a repeating
+            # day's save question keeps the person on the day they were
+            # editing.
+            if self.open_note_in_tab(note) is False:
+                return
+            # Before the ring's scroll-into-view, which then still brings a
+            # card clicked at the list's edge fully into sight.
+            self._keep_row_under_pointer(key, on_screen)
             self._put_keyboard_on_card(nid)
+        # Asked afresh, and only of a row still under the pointer: a drag
+        # armed on a card that slid away measured its grab against a place
+        # the hand was not on, so a slip of a few pixels dropped the card
+        # before its neighbour -- and switched the whole list to Custom
+        # order. A row that could not be kept there leaves its aim for the
+        # second press of a double-click (_list_double_pressed).
+        rec = self._list_row_record(key)
+        if rec is None:
             return
-        # Not when the open refused to happen: Cancel on a repeating day's
-        # save question keeps the person on the day they were editing.
-        if self.open_note_in_tab(note) is not False:
-            self._put_keyboard_on_card(nid)
-            # Asked afresh: the open can have saved the note left behind,
-            # and that save can have moved this card.
-            rec = (getattr(self, "_note_cards", None) or {}).get(nid)
-            if rec is not None:
-                self._list_drag_arm(rec, event)
+        if self._list_record_at(event.x, event.y) is not rec:
+            self._list_press_aim = (key, time.monotonic())
+        elif rec["kind"] == "note":
+            self._list_drag_arm(rec, event)
+
+    def _keep_row_under_pointer(self, key, on_screen):
+        """Scroll the list so this row stands where it stood on the screen
+        -- `on_screen` pixels below the view's top -- as far as the list can
+        scroll. What the hand is over stays what it was over; the saved
+        note's card still goes where the sort puts it, above or below."""
+        rec = self._list_row_record(key)
+        if rec is None:
+            return
+        try:
+            top = self.canvas.canvasy(0)
+        except tk.TclError:
+            return
+        want = rec["y0"] - on_screen
+        if abs(want - top) < 1:
+            return
+        # Held like a rebuild's restore, and replacing any: this is the one
+        # place the view should be now (see _restore_list_scroll).
+        self._restore_list_scroll(max(0, want))
 
     def _list_right_pressed(self, event):
         """Right-click on a card opens that note's menu. A plain click on
