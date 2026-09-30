@@ -13695,6 +13695,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._note_cards = {}
         self._group_headers = {}
         self._list_pending = []
+        # The drawing is replaced, and every card drawn below notes afresh
+        # whether it is painted as the open note (_ring_to_paint).
+        self._open_ring_ids = set()
 
         rows = self._list_rows()
 
@@ -14850,13 +14853,28 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             return c["accent"]
         return c["card"]
 
+    def _ring_to_paint(self, note_id):
+        """_card_ring_color, for a ring about to be painted -- and a note of
+        whether the card is being painted as the open note. A card can be
+        painted so without anyone moving the outline off another: a new
+        note's first save draws its card as open, and the note before it
+        kept the outline. _update_open_highlight takes it off every card
+        noted here that is no longer the open one."""
+        painted = self.__dict__.setdefault("_open_ring_ids", set())
+        if note_id == self.selected_note_id:
+            painted.add(note_id)
+        else:
+            painted.discard(note_id)
+        return self._card_ring_color(note_id)
+
     def _paint_ring(self, note_id):
         rec = (getattr(self, "_note_cards", None) or {}).get(note_id)
         if rec is None:
+            getattr(self, "_open_ring_ids", set()).discard(note_id)
             return
         try:
             self.canvas.itemconfigure(
-                rec["items"]["ring"], outline=self._card_ring_color(note_id))
+                rec["items"]["ring"], outline=self._ring_to_paint(note_id))
         except tk.TclError:
             pass
 
@@ -15004,7 +15022,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 state="normal" if nid in self.selected_note_ids else "hidden")
         items["ring"] = cv.create_rectangle(
             x0 + 1, top + 1, x1 - 1, bottom - 1, width=self.CARD_RING,
-            outline=self._card_ring_color(nid), tags=tags)
+            outline=self._ring_to_paint(nid), tags=tags)
         rec = {"kind": "note", "key": ("note", nid), "tag": tag, "note": note,
                "y0": top, "y1": bottom, "margin": self.CARD_MARGIN,
                "items": items}
@@ -15091,7 +15109,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 cv.itemconfigure(it["title"], fill=c["text"])
                 cv.itemconfigure(it["preview"], fill=c["subtext"])
                 cv.itemconfigure(it["tags"], fill=note_color)
-                cv.itemconfigure(it["ring"], outline=self._card_ring_color(note_id))
+                cv.itemconfigure(it["ring"], outline=self._ring_to_paint(note_id))
                 if "check" in it:
                     cv.itemconfigure(it["check"], fill=c["check_well"],
                                      outline=c["subtext"])
@@ -15223,6 +15241,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._render_statistics()
         # ...and so does taking the ticks of the notes that went.
         self._prune_selection()
+        # A delete can leave the editor empty, and no card is open then.
+        self._update_open_highlight()
         return True
 
     def _redraw_saved_card(self, note_id):
@@ -15324,6 +15344,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._render_statistics()
         if getattr(self, "selection_mode", False):
             self._update_bulk_selected_label()
+        # A new note's first save makes it the open one and draws its card
+        # so; the card of the note open before it (Ctrl+N, a day on the
+        # calendar) still wears the outline, and a rebuild would have
+        # repainted it. One card redrawn repaints only itself.
+        self._update_open_highlight()
         return True
 
     def _exit_selection_mode_after_bulk_action(self):
@@ -16063,20 +16088,26 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
     def _update_open_highlight(self):
         """Move the 'currently open' ring directly to whichever card needs
-        it, without rebuilding the list -- the (at most) two cards that
-        actually changed.
+        it, without rebuilding the list -- only the cards that changed.
 
         Every place that says which note is open asks _card_ring_color,
         which also knows where the keyboard is: the colour carries the
         meaning (the thickness is on every card), and a card that is both
-        open and holding the keyboard shows the keyboard's ring."""
-        prev = getattr(self, "_last_highlighted_note_id", None)
+        open and holding the keyboard shows the keyboard's ring.
+
+        It used to repaint the one card it had last outlined itself, and a
+        card could be outlined behind its back: a new note's first save
+        draws its card as the open one, and the next note opened left that
+        card outlined too -- two "open" notes on the list, until a full
+        rebuild. So it asks the paint itself (_ring_to_paint), which notes
+        every card painted as open, and takes the outline off all of them
+        but the note that is open now."""
         current = self.selected_note_id
-        if prev == current:
-            return
-        self._paint_ring(prev)
-        self._paint_ring(current)
-        self._last_highlighted_note_id = current
+        painted = getattr(self, "_open_ring_ids", None) or set()
+        for note_id in [n for n in painted if n != current]:
+            self._paint_ring(note_id)
+        if current not in painted:
+            self._paint_ring(current)
 
     def open_note_in_tab(self, note, occurrence_date=None, flush=True):
         """Open a saved note in the editor. Only one note is open at a time — any

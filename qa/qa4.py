@@ -1790,6 +1790,72 @@ check(f'...while a first move, with no arrangement to lose, says nothing '
       and len(_co_file_order()) == len(_bl_placed))
 app._hide_toast()
 
+# 5f. One card wears the open note's outline: the open note's. A new note's
+# first save draws its card as the open one, and the outline used to be
+# moved only off the card it had last been put on by hand -- so opening
+# another note next left two "open" cards, until a full rebuild.
+
+
+def _bl_outlined():
+    """The cards whose ring says "open", read off the drawing -- with the
+    keyboard away from the list, where the colour means only that."""
+    app._list_focus_out()
+    return sorted(n for n in app._card_order()
+                  if app._card_view(n)['ring'] == app.colors['accent'])
+
+
+_co_fresh(_bl_notes[:6])
+_bl_o = app._card_order()
+app.open_note_in_tab(app.find_note(_bl_o[2])); _ls_settle()
+app.open_blank_tab(); _ls_settle()
+app.title_entry.delete(0, 'end')
+app.title_entry.insert(0, 'Fresh one')
+app.save_current_note(auto=True); _ls_settle()
+_bl_new = app.selected_note_id
+check(f'fixture: a new note\'s first save outlines its card, and only its '
+      f'card ({_bl_outlined()}, new {_bl_new})', _bl_outlined() == [_bl_new])
+app._scroll_row_into_view(app._note_cards[_bl_o[4]]); _ls_settle()
+_bl_pt = app._card_point(_bl_o[4])
+_qa_click(app.canvas, x=_bl_pt[0], y=_bl_pt[1]); _ls_settle()
+_qa_fire(app.canvas, '<ButtonRelease-1>', x=_bl_pt[0], y=_bl_pt[1]); _ls_settle()
+check(f'...and a note clicked open next takes the outline off it: one open '
+      f'card, the one open ({_bl_outlined()}, open {app.selected_note_id})',
+      app.selected_note_id == _bl_o[4] and _bl_outlined() == [_bl_o[4]])
+# Ctrl+N from an open note: the new note's first save moves the outline
+# onto it, although nothing moved it off the note before. The note is
+# opened without the keyboard, which stays on another card: taking the
+# keyboard away repaints ITS card, and on the open one that would hide
+# exactly the outline this is about.
+app.open_note_in_tab(app.find_note(_bl_o[1])); _ls_settle()
+app._shortcut_new_note(); _ls_settle()
+app.title_entry.delete(0, 'end')
+app.title_entry.insert(0, 'Made with Ctrl+N')
+app.save_current_note(auto=True); _ls_settle()
+check(f'...and after Ctrl+N, the new note\'s first save leaves one outline, '
+      f'on it ({_bl_outlined()}, open {app.selected_note_id}, the note open '
+      f'before {_bl_o[1]}; the keyboard on {app._focused_note_id})',
+      _bl_outlined() == [app.selected_note_id]
+      and app.selected_note_id not in _bl_o and app._focused_note_id != _bl_o[1])
+# Grouped, a new note's first save changes its group's count, so the whole
+# list is rebuilt rather than one card redrawn -- and the card is drawn as
+# the open one with nothing noting that it was.
+app.group_by_category.set(True)
+app.refresh_note_list(); _ls_settle()
+app.open_note_in_tab(app.find_note(_bl_o[2])); _ls_settle()
+app.open_blank_tab(); _ls_settle()
+app.title_entry.delete(0, 'end')
+app.title_entry.insert(0, 'Fresh in a group')
+app.save_current_note(auto=True); _ls_settle()
+app._scroll_row_into_view(app._note_cards[_bl_o[4]]); _ls_settle()
+_bl_pt = app._card_point(_bl_o[4])
+_qa_click(app.canvas, x=_bl_pt[0], y=_bl_pt[1]); _ls_settle()
+_qa_fire(app.canvas, '<ButtonRelease-1>', x=_bl_pt[0], y=_bl_pt[1]); _ls_settle()
+check(f'...and in a grouped list, where that save rebuilds the list, too '
+      f'({_bl_outlined()}, open {app.selected_note_id})',
+      app.selected_note_id == _bl_o[4] and _bl_outlined() == [_bl_o[4]])
+app.group_by_category.set(False)
+app.refresh_note_list(); _ls_settle()
+
 # ---------------------------------------------------------------------
 # A tick box's well must be light, because the mark in it is dark.
 #
