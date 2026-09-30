@@ -2924,6 +2924,103 @@ app.cal_year, app.cal_month = 2026, 7
 app.render_calendar(); app.update()
 app.notebook.select(app.TAB_NOTES); app.update()
 
+# ---- THE OPEN DAY FOLLOWS EVERY REDRAW OF THE CALENDAR ----
+# The day's panel was drawn from the notes when the day opened, and only
+# some routes drew it again: Undo after a delete from the panel put the
+# note back on the grid while the open list went on without it. The undos
+# redraw the month, as every change to the notes does, so render_calendar
+# now draws the open day again whenever what it shows has changed -- and
+# only then, which paging past it proves.
+_od_day = '2026-07-08'
+_od_notes = [
+    {'id': 140, 'title': 'OdDentist', 'body': 'x', 'category': 'General',
+     'date': _od_day},
+    {'id': 141, 'title': 'OdWalk', 'body': 'x', 'category': 'General',
+     'date': '2026-07-01', 'recurrence': {'freq': 'daily'}},
+]
+
+
+def _od_reset():
+    app.notes = [NO.normalize_note(dict(n)) for n in _od_notes]
+    app.save_notes()
+    app.refresh_note_list()
+    app.notebook.select(app.TAB_CALENDAR); app.update()
+    app.cal_year, app.cal_month = 2026, 7
+    app.render_calendar(); app.update()
+
+
+def _od_panel_texts():
+    return find_all_labels(app.day_panel)
+
+
+def _od_open_chip(day, index=0):
+    app.notebook.select(app.TAB_CALENDAR); app.update()
+    _at = _cd_point(day, chip=index)
+    _qa_click(app.cal_canvas, x=_at[0], y=_at[1]); app.update()
+
+
+def _od_open_day(day):
+    app.notebook.select(app.TAB_CALENDAR); app.update()
+    _at = _cd_point(day)
+    _qa_click(app.cal_canvas, x=_at[0], y=_at[1]); app.update()
+
+
+# Undo after a delete from the open note: the list shows the note again.
+_od_reset()
+_od_open_chip(_od_day, 0)
+_od_ready = app._day_panel_mode == 'note' and 'OdDentist' in _od_panel_texts()
+_od_del = find_widget(app.day_panel, tk.Button, 'Delete')
+if _od_del is not None:
+    _od_del.invoke(); app.update()
+_od_gone = not any('OdDentist' in t for t in _od_panel_texts())
+_qa_click(app.toast_action_lbl); app.update()
+check(f"Undo after a delete from the day's panel shows the note in the open "
+      f"list again, as on the grid ({_od_ready}, {_od_gone}, "
+      f"{[t for t in _od_panel_texts() if 'Od' in t]}, "
+      f"{_cd_view(_od_day)['chips']})",
+      _od_ready and _od_del is not None and _od_gone
+      and app._day_panel_mode == 'list' and app.selected_day == _od_day
+      and any('OdDentist' in t for t in _od_panel_texts())
+      and any('OdDentist' in t for t in _cd_view(_od_day)['chips']))
+
+# ...and after "this occurrence only" and its Undo, the day's series.
+_od_reset()
+app.ask_occurrence_scope = lambda *a, **k: 'occurrence'
+try:
+    _od_open_chip('2026-07-15', 0)
+    _od_ready = app._day_panel_mode == 'note' and 'OdWalk' in _od_panel_texts()
+    _od_del = find_widget(app.day_panel, tk.Button, 'Delete')
+    if _od_del is not None:
+        _od_del.invoke(); app.update()
+    _od_gone = any('No notes for this day yet.' in t for t in _od_panel_texts())
+    _qa_click(app.toast_action_lbl); app.update()
+finally:
+    del app.ask_occurrence_scope
+check(f"...and Undo after removing one day of a series shows that day's "
+      f"list with the series again ({_od_ready}, {_od_gone}, "
+      f"{[t for t in _od_panel_texts() if 'Od' in t or 'No notes' in t]})",
+      _od_ready and _od_gone and app.selected_day == '2026-07-15'
+      and any('OdWalk' in t for t in _od_panel_texts())
+      and not any('No notes for this day yet.' in t for t in _od_panel_texts()))
+
+# Paging past an open day draws nothing new in it: the same widgets stay.
+_od_reset()
+_od_open_day(_od_day)
+_od_before = list(app.day_panel.winfo_children())
+for _od_label in ('▶', '◀'):
+    _od_btn = _cal_button(_od_label)
+    if _od_btn is not None:
+        _od_btn.invoke(); app.update()
+check(f'paging the months with a day open leaves its panel as it was '
+      f'({len(_od_before)} widgets, same: '
+      f'{list(app.day_panel.winfo_children()) == _od_before})',
+      _od_before and list(app.day_panel.winfo_children()) == _od_before
+      and (app.cal_year, app.cal_month) == (2026, 7)
+      and app.selected_day == _od_day and app._day_panel_mode == 'list')
+
+app.close_day_panel()
+app.notebook.select(app.TAB_NOTES); app.update()
+
 # ============================================================
 # 7. ATTACHMENT-ONLY NOTE AUTOSAVE
 # ============================================================

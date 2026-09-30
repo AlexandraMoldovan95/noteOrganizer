@@ -63,6 +63,82 @@ from ..core.storage import (
 from ..core import tables as core_tables
 
 
+# The open day's panel is drawn from the notes at the moment it opens, and
+# render_calendar -- the one signal that the notes changed -- asks whether
+# it still says the same thing. These say what it says, so the drawing and
+# that question cannot disagree. Plain functions rather than methods: they
+# only read, and the app class's method surface is pinned by
+# tools/class_api_baseline.json.
+
+def _day_row_parts(app, base_note, date_str):
+    """One row of a day's list as it is drawn: the title (🔁 first for a
+    series), the marks after it, and the note's own colour for the stripe."""
+    note = effective_note(base_note, date_str)
+    title_text = _note_str(note, "title") or "(untitled)"
+    if is_recurring(base_note):
+        title_text = "🔁 " + title_text
+    icons = ""
+    if date_str in (base_note.get("overrides") or {}):
+        # This day was edited with "only this occurrence" — it
+        # keeps its own content and series edits don't reach it.
+        icons += "  ✎"
+    if note.get("comments"):
+        icons += "  💬"
+    if note.get("attachments"):
+        icons += f"  📎×{len(note['attachments'])}"
+    return title_text, icons, app.get_note_color(note)
+
+
+def _day_list_rows(app, day_notes, date_str):
+    return [(n, _day_row_parts(app, n, date_str)) for n in day_notes]
+
+
+def _day_list_key(rows):
+    """Everything a day's list shows, in order: which notes, and each row's
+    words and colour. Which note OBJECT too: a row's clicks act on the dict
+    it was drawn from, so a note replaced by an equal copy is drawn again."""
+    return tuple((id(n), n.get("id"), parts) for n, parts in rows)
+
+
+def _day_note_key(base_note, date_str):
+    """What the one-note view is drawn from: a change to any of it changes
+    what that view shows."""
+    note = effective_note(base_note, date_str)
+    return (base_note.get("id"), _note_str(note, "title"), _note_str(note, "body"),
+            _note_str(note, "comments"), repr(note.get("checklist")),
+            len(note.get("attachments") or []),
+            date_str in (base_note.get("overrides") or {}))
+
+
+def _redraw_open_day(app, notes_by_date, year, month):
+    """Draw the open day's panel again if the notes have changed what it
+    shows; leave it alone (its scroll, its keyboard) if they have not."""
+    mode = getattr(app, "_day_panel_mode", "empty")
+    date_str = getattr(app, "selected_day", None)
+    if mode == "empty" or not date_str:
+        return
+    shows = getattr(app, "_day_panel_shows", None) or ("", "", None, None)
+    # The month just worked out holds the day's answer when the day is in
+    # it; a day open under another month is asked for on its own.
+    if date_str[:7] == "%04d-%02d" % (year, month):
+        day_notes = notes_by_date.get(date_str, [])
+    else:
+        day_notes = app.notes_on_date(date_str)
+    if mode == "note":
+        shown_id = shows[2].get("id") if isinstance(shows[2], dict) else None
+        base = (next((n for n in day_notes if n.get("id") == shown_id), None)
+                if shows[:2] == ("note", date_str) else None)
+        if base is None:
+            # Gone from this day -- deleted, moved, or this one day of it
+            # removed: the day's list, as refresh_day_panel falls back.
+            app.show_day_list()
+        elif base is not shows[2] or _day_note_key(base, date_str) != shows[3]:
+            app.show_day_note(base, date_str)
+    elif (shows[:2] != ("list", date_str)
+          or _day_list_key(_day_list_rows(app, day_notes, date_str)) != shows[2]):
+        app.show_day_list()
+
+
 class CalendarViewMixin:
     """The calendar tab for :class:`NoteOrganizer`.
 
@@ -407,6 +483,13 @@ class CalendarViewMixin:
         # A fresh drawing has no selected-day border -- re-mark the open
         # day, if its month is on screen.
         self._update_selected_day_outline()
+        # The open day's panel is one more view of the same data, and it
+        # was drawn when the day opened: a delete's Undo put the note back
+        # on the grid and left the open list without it, a category change
+        # left its stripe in the old colour. So every route that redraws
+        # the month redraws the open day -- when what it shows has changed,
+        # and only then, so paging the months past a busy day costs nothing.
+        _redraw_open_day(self, notes_by_date, self.cal_year, self.cal_month)
         # render_calendar is the single signal "calendar data changed,
         # redraw" — every mutation (delete, restore, save, duplicate)
         # calls it. When the History register is the visible view, it is
@@ -987,6 +1070,8 @@ class CalendarViewMixin:
         sb.pack(side="right", fill="y")
 
         day_notes = self.notes_on_date(date_str)
+        rows = _day_list_rows(self, day_notes, date_str)
+        self._day_panel_shows = ("list", date_str, _day_list_key(rows), None)
         if not day_notes:
             tk.Label(inner, text="No notes for this day yet.",
                      bg=self.colors["sidebar"], fg=self.colors["subtext"],
@@ -994,9 +1079,7 @@ class CalendarViewMixin:
             self._bind_mousewheel_recursive(inner, canvas)
             return
 
-        for base_note in day_notes:
-            note = effective_note(base_note, date_str)
-            color = self.get_note_color(note)
+        for base_note, (title_text, icons, color) in rows:
             row = tk.Frame(inner, bg=self.colors["card"], cursor="hand2")
             row.pack(fill="x", pady=3)
             stripe = tk.Frame(row, bg=color, width=4)
@@ -1011,18 +1094,6 @@ class CalendarViewMixin:
             # labelled Delete appears only where a SINGLE note is open.
             # This row now does the same, and the menu bound below
             # carries six other actions besides.
-            title_text = _note_str(note, "title") or "(untitled)"
-            if is_recurring(base_note):
-                title_text = "🔁 " + title_text
-            icons = ""
-            if date_str in (base_note.get("overrides") or {}):
-                # This day was edited with "only this occurrence" — it
-                # keeps its own content and series edits don't reach it.
-                icons += "  ✎"
-            if note.get("comments"):
-                icons += "  💬"
-            if note.get("attachments"):
-                icons += f"  📎×{len(note['attachments'])}"
             lbl = tk.Label(row, text=title_text + icons, bg=self.colors["card"],
                            fg=self.colors["text"], font=("Segoe UI", 10, "bold"), anchor="w")
             lbl.pack(side="left", fill="x", expand=True, padx=10, pady=8)
@@ -1057,6 +1128,8 @@ class CalendarViewMixin:
         returns to the day's note list."""
         self._clear_day_panel()
         self._day_panel_mode = "note"
+        self._day_panel_shows = ("note", date_str, base_note,
+                                 _day_note_key(base_note, date_str))
         note = effective_note(base_note, date_str)
 
         top = tk.Frame(self.day_panel, bg=self.colors["sidebar"])
