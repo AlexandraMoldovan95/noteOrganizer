@@ -149,7 +149,10 @@ SURVEY_CHECKS = [
      "Escape backs out of the anchored popups"),
     ("C-8", lambda: "_open_note_from_grid" in CALENDAR_UI,
      "a day cell's note title opens that note"),
-    ("C-9", lambda: "_bulk_toggle_pin" in HUB and "_bind_card_keys" in HUB,
+    # The cards stopped being widgets (they are drawn on the list's canvas),
+    # so the keys moved from each card's bindings to the canvas's own.
+    ("C-9", lambda: "_bulk_toggle_pin" in HUB and re.search(
+        r'cv\.bind\("<Down>", lambda _e: self\._list_step\(1\)\)', HUB) is not None,
      "bulk Pin, and the note list answers the keyboard"),
     ("C-10", lambda: "Click a line to insert it into the note" in CALC_UI,
      "the calculator history says what clicking a line does"),

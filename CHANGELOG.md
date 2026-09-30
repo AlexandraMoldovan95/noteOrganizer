@@ -87,7 +87,8 @@ How the numbers themselves are counted is the
 *Highlights: Cancel means stay, the keyboard goes back where it was, and a button that opens
 something closes it on the next click — the everyday places where the app did something other
 than what a person just asked. And a big notebook stops making you wait: a pause in typing,
-coming back to the list and opening a picture no longer cost time for every note you have.*
+coming back to the list and opening a picture no longer cost time for every note you have, and
+the list itself is one drawing now, which a click hands to the keyboard.*
 
 ### Fixed
 
@@ -141,23 +142,36 @@ coming back to the list and opening a picture no longer cost time for every note
 
 - **A pause in typing no longer freezes the app.** Every autosave rebuilt the whole note list,
   card by card, so each pause after a burst of typing froze the window — about a second with 100
-  notes, three with 300, twelve with 1,000: longest for the people with the most notes. A save
+  notes, three with 300, fourteen with 1,000: longest for the people with the most notes. A save
   now redraws the one card that changed, moves it to where the sort puts it (the top, under
-  Recently updated), and leaves every other card alone: 75 milliseconds at 300 notes, 90 at
-  1,000. Anything it cannot be sure of — a first note in an empty list, a note changing group
-  in a grouped list — still rebuilds, because a list that quietly disagrees with your notes would
-  be worse than a slow one.
+  Recently updated), and moves the cards around it instead of redrawing them: about twenty
+  milliseconds, at 300 notes as at 1,000. Anything it cannot be sure of — a first note in an
+  empty list, a note changing group in a grouped list — still rebuilds, because a list that
+  quietly disagrees with your notes would be worse than a slow one.
 
-- **The note list draws what you can see.** Every card is several windows to the operating
-  system, and the list drew all of them on every rebuild — then paid for every one again each
-  time you came back to it from the Calendar or from Settings. It now draws the first thirty and
-  the rest as you come near them, by wheel, scrollbar or the arrow keys. Search, Select all and
-  the counts beside the category headers still mean every note on the list, drawn yet or not.
-  Measured before and after on the same machine, with 1,000 notes: starting the app went from
-  8.6 seconds to 1.9, coming back to the list from 3.4 to 0.14, closing Settings from 3.4 to
-  0.15, and a theme switch from 0.9 to 0.15. The cost of a card has not gone away, it is paid
-  when you reach it — twenty at a time as you scroll, about a fifth of a second a step — and
-  once you have scrolled through every note, coming back to the list costs what it did.
+- **The note list draws what you can see.** The list drew a card for every note on every rebuild
+  — at startup, and again for each search, new sort or Group by. It now draws the first thirty
+  and the rest as you come near them, by wheel, scrollbar or the arrow keys. Search, Select all
+  and the counts beside the category headers still mean every note on the list, drawn yet or
+  not. Measured before and after on the same machine, with 1,000 notes: starting the app went
+  from 9.1 seconds to 1.9, a theme switch from 0.9 to 0.14, and a rebuild of the list from 14
+  seconds to 9 milliseconds.
+
+- **The note list is one drawing.** Each card was six windows the operating system had to make,
+  place, paint and take down, and a big notebook showed the seams: coming back to the list from
+  the Calendar showed it being built, and a fast drag of the scrollbar tore the cards apart for a
+  moment before they caught up. A card is now a few shapes on one canvas, drawn to look as it
+  did, and the list moves as one picture. With 1,000 notes, coming back to the list takes 0.08
+  seconds instead of 3.7, however far down it has been scrolled, and closing Settings the same;
+  scrolling to the very end, drawing every card on the way, takes a third of a second.
+  Field-reported.
+
+- **A click on a note puts the keyboard on the list.** Clicking a card opened the note and left
+  the keyboard wherever it had been, so ↓ straight after a click did nothing; and walking the
+  list from the keyboard moved the ring onto cards below the window while the list stood still.
+  A click now puts the ring on the card you clicked, ↑ and ↓ move it with the list scrolling to
+  keep it in sight, and Enter opens the note it is on. The list is one Tab stop now, where Tab
+  used to step through every card before leaving it. Field-reported.
 
 - **The window stops repeating its own work for every widget in it.** Two handlers that only
   care about the window — the title bar's colours and the calendar's switch between small and
@@ -228,6 +242,21 @@ coming back to the list and opening a picture no longer cost time for every note
   thickness of its ring — which every card has worn since the keyboard's focus ring shipped —
   and now ask for its colour; and one of qa1's passed a run and failed the next, because whether
   its note fell in the first screenful depended on the second its fixture was made in.
+- The drawn list: every check that read cards as widgets now reads the drawing — what each card
+  shows, its colours and where it sits — and "the same card" means the same shapes on the
+  canvas where it meant the same widget. The comparison with a full rebuild includes where every
+  row is drawn, so a gap left by a deletion or a card drawn on top of another fails it, and it
+  names anything drawn that no row owns. New checks: a click on a header's line folds its group,
+  the pointer is a hand over a card and plain between cards, a click in Select mode ticks the card
+  on screen and in the selection, a deleted card's gap closes, a click on a note puts the
+  keyboard on the list, whose ring then walks twenty cards down with the list keeping it in view,
+  Tab crosses the list in one stop, and the scroll region spans the drawing from 0 to below its
+  last row. qa4 checks on every theme that a chosen radio's dot stands apart from its circle.
+  Fifteen mutants, each killed with the suite reaching its footer.
+- The Linux image caught what twenty green checks on Windows could not: eight checks about the
+  top of the list failed there, because Tk 8.6.16 stopped padding a rectangle's `bbox` by the
+  pixel 8.6.15 adds, and the drawing's extent had been taken from Tk. It is worked out from the
+  rows now, and a mutant that puts the top at 1 — what the image read — fails the same checks.
 
 ---
 

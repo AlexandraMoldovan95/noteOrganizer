@@ -66,7 +66,7 @@ app.group_by_category.set(True)
 app._on_toggle_group_by_category()
 app.refresh_note_list()
 app.update()
-check('grouping enabled shows category headers', find_widget(app.list_frame, tk.Frame) is not None)
+check('grouping enabled shows category headers', bool(app._group_headers))
 
 # collapse a group and verify state
 app._toggle_group_collapsed('Work')
@@ -1521,13 +1521,14 @@ check('and the undiscoverable rest',
 # promise was broken once: the note list's keys shipped in 0.81.199 and
 # nobody added their rows, so the page and the user guide both went on
 # claiming completeness they no longer had. Asking for the three names
-# would only pin THIS omission. So this asks the CARD what it binds and
-# requires every answer to be named here -- a key bound later with no row
+# would only pin THIS omission. So this asks the LIST what it binds -- the
+# cards are a drawing, and the list's canvas holds their keys -- and
+# requires every answer to be named here: a key bound later with no row
 # fails at the first check, and one that is named but not drawn fails at
 # the second.
 _QW_NOT_KEYS = {'<Button-1>', '<Button-3>', '<Button-2>', '<Enter>',
                 '<Leave>', '<FocusIn>', '<FocusOut>', '<Motion>',
-                '<MouseWheel>', '<Double-Button-1>'}
+                '<MouseWheel>', '<Double-Button-1>', '<Configure>'}
 # Spelled the way Tk reports them back, not the way they were bound:
 # bind('<Return>') is read back as '<Key-Return>', and this check was
 # written with the binding spelling and caught its own mistake.
@@ -1535,15 +1536,12 @@ _QW_KEY_NAMES = {'<Key-Return>': 'Enter', '<Key-space>': 'Space',
                  '<Key-Down>': 'Down', '<Key-Up>': 'Up',
                  '<Shift-Key-F10>': 'Shift+F10',
                  '<Key-App>': 'menu key', '<Key-Menu>': 'menu key'}
-_qw_card = next((w for w in app.list_frame.winfo_children()
-                 if getattr(w, '_card_note_id', None) is not None), None)
 # A check that cannot find its subject must fail rather than pass on an
 # empty list -- the shape of every check that has quietly stopped working.
-check('a note card is on screen to ask about', _qw_card is not None)
-_qw_bound = ([s for s in _qw_card.bind() if s not in _QW_NOT_KEYS]
-             if _qw_card is not None else [])
+check('a note card is on screen to ask about', bool(app._card_order()))
+_qw_bound = [s for s in app.canvas.bind() if s not in _QW_NOT_KEYS]
 _qw_unnamed = [s for s in _qw_bound if s not in _QW_KEY_NAMES]
-check('every key a note card binds has a name here (unnamed: %s)'
+check('every key the note list binds has a name here (unnamed: %s)'
       % _qw_unnamed, bool(_qw_bound) and _qw_unnamed == [])
 _qw_missing = [s for s in _qw_bound
                if s in _QW_KEY_NAMES and _QW_KEY_NAMES[s] not in _allQW]
@@ -2046,7 +2044,7 @@ check('...and its notes are kept, filed under General (plan 110)',
 app.hide_settings_page()
 app.refresh_note_list(); app.update()
 check('...and the grouped list shows them where they now are (plan 110)',
-      all((app._note_card_widgets.get(n['id']) or {}).get('note', {}).get('category')
+      all((app._note_cards.get(n['id']) or {}).get('note', {}).get('category')
           == 'General' for n in app.notes if n['id'] >= 4100))
 app.group_by_category.set(False)
 app.refresh_note_list(); app.update()
@@ -2242,13 +2240,8 @@ def _settle():
 
 
 def _header_text(cat):
-    head = app._group_header_widgets.get(cat)
-    if head is None:
-        return None
-    try:
-        return str(head['label'].cget('text'))
-    except tk.TclError:
-        return None
+    head = app._header_view(cat)
+    return None if head is None else str(head['label'])
 
 
 check('a grouped list builds a header per category',
@@ -2267,7 +2260,7 @@ _settle()
 app._delete_note(app.find_note(603), None)
 _settle()
 check('emptying a group takes its header away with the last note',
-      'Personal' not in app._group_header_widgets)
+      'Personal' not in app._group_headers)
 check('...and the surviving group is untouched',
       _header_text('Work') == 'Work (1)')
 
@@ -2287,15 +2280,15 @@ app.refresh_note_list()
 app.update()
 check('a collapsed group draws its header and none of its cards',
       _header_text('Work') == 'Work (2)'
-      and 611 not in app._note_card_widgets
-      and 612 not in app._note_card_widgets)
+      and 611 not in app._note_cards
+      and 612 not in app._note_cards)
 _settle()
 app._delete_note(app.find_note(611), None)
 _settle()
 check('deleting inside a COLLAPSED group still counts it down',
       _header_text('Work') == 'Work (1)')
 check('...and does not mistake "no cards drawn" for "no notes left"',
-      'Work' in app._group_header_widgets)
+      'Work' in app._group_headers)
 
 app.collapsed_groups.discard('Work')
 app.group_by_category.set(False)

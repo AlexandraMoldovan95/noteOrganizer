@@ -1231,23 +1231,26 @@ _ms_w, _ms_h = app.minsize()
 app.geometry('%dx%d' % (_ms_w, _ms_h))
 for _ in range(30):
     app.update(); time.sleep(0.02)
-_ms_cards = [w for w in app.list_frame.winfo_children()
-             if getattr(w, '_card_note_id', None) is not None]
+_ms_order = app._card_order()
+_ms_view = app._card_view(_ms_order[0]) if _ms_order else None
 _ms_new = find_widget(app, tk.Button, 'New Note')
 # Asked of where things ARE, in screen coordinates. The list's own height
 # cannot answer it: at the old 500x400 the list still reported 354px,
 # running past the bottom of the window, while the New Note button was
 # drawn over the card (measured: card 482-571, button from 487). A card
 # is visible when it ends above the first button below the list and
-# inside the window.
-_ms_card_bottom = (_ms_cards[0].winfo_rooty() + _ms_cards[0].winfo_height()
-                   if _ms_cards else 10 ** 6)
+# inside the window. The card is a drawing on the list's canvas, so its
+# place on screen is the canvas's place plus the card's own, less however
+# far the list is scrolled.
+_ms_card_bottom = (app.canvas.winfo_rooty()
+                   + int(_ms_view['y1'] - app.canvas.canvasy(0))
+                   if _ms_view else 10 ** 6)
 _ms_limit = min(_ms_new.winfo_rooty() if _ms_new is not None else 10 ** 6,
                 app.winfo_rooty() + app.winfo_height())
 check('at the smallest size the window allows, a whole note card is on screen '
       '(card ends at %d, room ends at %d)' % (_ms_card_bottom, _ms_limit),
-      bool(_ms_cards) and _ms_new is not None
-      and _ms_cards[0].winfo_height() > 1 and _ms_card_bottom <= _ms_limit)
+      _ms_view is not None and _ms_new is not None
+      and _ms_view['y1'] - _ms_view['y0'] > 1 and _ms_card_bottom <= _ms_limit)
 app.geometry('1100x850')
 for _ in range(10):
     app.update(); time.sleep(0.02)

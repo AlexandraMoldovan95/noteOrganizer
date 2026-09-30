@@ -3133,7 +3133,7 @@ class SettingsPageMixin:
             ("Escape", "Leave the cell."),
             ("Delete", "Clear the selected cells."),
         )),
-        ("Note list (Tab into it from the search box)", (
+        ("Note list (click a note, or Tab into it from the search box)", (
             ("Up  /  Down", "Walk from card to card, in the order the list "
                             "is showing them."),
             ("Enter  /  Space", "Open the note — or tick it, while "

@@ -64,16 +64,13 @@ app.notes.append({'id':1,'title':'ThemeNote','body':'x','category':'General',
                   'updated':'2026-01-01 00:00','created':'2026-01-01 00:00',
                   'checklist':[],'attachments':[]})
 app.refresh_note_list(); app.update()
-def find_card_bg(w):
-    for c in w.winfo_children():
-        try:
-            if c.cget('cursor')=='hand2' and isinstance(c, tk.Frame): return c.cget('bg')
-        except: pass
-        r=find_card_bg(c)
-        if r: return r
-before = find_card_bg(app.list_frame)
+def find_card_bg():
+    # The list is a drawing: the first drawn card's own fill.
+    order = app._card_order()
+    return str(app._card_view(order[0])['bg']) if order else None
+before = find_card_bg()
 app.set_theme('light'); app.update()
-after = find_card_bg(app.list_frame)
+after = find_card_bg()
 check('note card color updates on theme switch', before != after and after==app.colors['card'])
 
 app.set_theme('dark'); app.update()
@@ -396,7 +393,7 @@ t0=time.perf_counter()
 app.refresh_note_list()
 app.update()
 elapsed=(time.perf_counter()-t0)*1000
-_cards_built = len(getattr(app, '_note_card_widgets', {}))
+_cards_built = len(app._card_order())
 _first_draw = app.LIST_FIRST_DRAW
 # The numbers go at the END of the names: a mutant that changes the
 # constant must not change the name a runner looks for.
@@ -415,8 +412,7 @@ while app._list_pending and _perf_steps < 100:
     app.canvas.yview_moveto(1.0)
     app.update()
     _perf_steps += 1
-_perf_order = [w._card_note_id for w in app.list_frame.pack_slaves()
-               if getattr(w, '_card_note_id', None) is not None]
+_perf_order = app._card_order()
 _perf_rows = [r[1]['id'] for r in app._list_rows() if r[0] == 'note']
 check(f'scrolling to the end draws every card, in the list\'s own order '
       f'({len(_perf_order)} of 300, in {_perf_steps} steps)',
@@ -455,27 +451,27 @@ def _ls_keys():
 
 def _ls_snapshot():
     """What the drawn list shows, card by card and header by header, in
-    the order it is packed -- which is the order on screen."""
+    the order it stands on screen -- read back from the drawing, with the
+    place of each row, so a card left out of its slot shows too."""
     shown = []
-    for w in app.list_frame.pack_slaves():
-        nid = getattr(w, '_card_note_id', None)
-        if nid is not None:
-            info = app._note_card_widgets.get(nid)
-            if info is None or info.get('card') is not w:
-                # A card on screen that the registry does not know -- left
-                # behind by an update that forgot to destroy it. Recorded
-                # as a difference rather than crashing the comparison.
-                shown.append(('card nobody registered', nid))
-                continue
-            shown.append(('note', nid, str(info['title'].cget('text')),
-                          str(info['preview'].cget('text')),
-                          str(info['tags'].cget('text')),
-                          str(info['stripe'].cget('bg')),
-                          str(w.cget('highlightbackground'))))
+    for key in app._list_drawn_keys:
+        if key[0] == 'note':
+            v = app._card_view(key[1])
+            shown.append(('note', key[1], v['title'], v['preview'], v['tags'],
+                          str(v['stripe']), str(v['ring']), v['y0'], v['y1']))
         else:
-            shown.append(('header',) + tuple(
-                str(c.cget('text')) for c in w.winfo_children()
-                if isinstance(c, tk.Label)))
+            v = app._header_view(key[1])
+            shown.append(('header', key[1], v['label'], v['caret'], v['y0'], v['y1']))
+    # Anything drawn that no row owns -- left behind by an update that
+    # forgot to delete it. Recorded as a difference, never a crash.
+    owned = {rec['tag'] for rec in app._list_drawn}
+    loose = set()
+    for item in app.canvas.find_withtag('row'):
+        tags = [t for t in app.canvas.gettags(item) if t.startswith(('card', 'hdr'))]
+        if tags and tags[0] not in owned:
+            loose.add(tags[0])
+    if loose:
+        shown.append(('drawn but nobody owns it', tuple(sorted(loose))))
     return shown
 
 
@@ -511,8 +507,7 @@ def _ls_scroll_to_end():
 
 
 def _ls_card_ids():
-    return [w._card_note_id for w in app.list_frame.pack_slaves()
-            if getattr(w, '_card_note_id', None) is not None]
+    return app._card_order()
 
 
 def _ls_let_restores_finish():
@@ -655,17 +650,15 @@ _ls_last = [k for k in app._list_drawn_keys if k[0] == 'note'][-1][1]
 # its own line instead of the script dying here without a verdict.
 _ls_at = _ls_rows.index(_ls_last)
 _ls_want = _ls_rows[_ls_at + 1] if _ls_at + 1 < len(_ls_rows) else None
-# Which card the walk ASKS to take the keyboard, recorded where the
-# decision is made: focus_get() cannot be trusted while the test process
-# does not own the desktop's foreground (qa/README).
+# Which card the walk puts the ring on, recorded where the decision is
+# made: focus_get() cannot be trusted while the test process does not own
+# the desktop's foreground (qa/README).
 _ls_asked = []
-_ls_real_focus = tk.Misc.focus_set
-tk.Misc.focus_set = lambda self: _ls_asked.append(
-    getattr(self, '_card_note_id', None))
+app._put_keyboard_on_card = lambda nid: _ls_asked.append(nid)
 try:
     app._focus_card_by_offset(_ls_last, 1)
 finally:
-    tk.Misc.focus_set = _ls_real_focus
+    app.__dict__.pop('_put_keyboard_on_card', None)
 check(f'Down on the last drawn card draws on and moves to the next '
       f'(asked for {_ls_asked}, the next is {_ls_want})',
       _ls_want is not None and _ls_asked == [_ls_want])
@@ -727,12 +720,11 @@ try:
         _ls_settle()
         time.sleep(0.05)
     _ls_view = app.canvas.winfo_height()
-    _ls_box = app.canvas.bbox('all')
-    _ls_left = (_ls_box[3] if _ls_box else 0) - app.canvas.canvasy(_ls_view)
-    # The first card is the same widget however many were drawn after it.
-    _ls_first_card = ((app._note_card_widgets.get(_ls_first_key[1]) or {}).get('card')
+    _ls_left = app._list_extent()[3] - app.canvas.canvasy(_ls_view)
+    # The first card is the same drawing however many were drawn after it.
+    _ls_first_card = (app._card_view(_ls_first_key[1])
                       if _ls_first_key and _ls_first_key[0] == 'note' else None)
-    _ls_first_h = (_ls_first_card.winfo_height() + 10
+    _ls_first_h = (_ls_first_card['y1'] - _ls_first_card['y0'] + 10
                    if _ls_first_card is not None else None)
     check(f'fixture: the first draw really is shorter than the view '
           f'({_ls_first} row, {_ls_first_h}px in a {_ls_view}px view)',
@@ -744,15 +736,33 @@ try:
 finally:
     del app.LIST_FIRST_DRAW
 
+# The scroll region is the drawing as the app knows it, from 0 to below
+# its last row -- not whatever Tk's bbox makes of it. How Tk pads a
+# rectangle's bbox changed between 8.6.15 and 8.6.16, and a list that took
+# its top from there read as scrolled on the Linux image while Windows was
+# green. Asked of the canvas's own scrollregion, which is what the
+# scrollbar and every yview use, against what Tk says the rows measure
+# (a pixel either way for that same padding).
+app.canvas.yview_moveto(0); _ls_settle()
+_ls_region = [int(float(v)) for v in str(app.canvas.cget('scrollregion')).split()]
+_ls_rows_box = app.canvas.bbox('row')
+check(f'the scroll region is the drawing, from 0 to below its last row '
+      f'({_ls_region} for rows measuring {_ls_rows_box})',
+      len(_ls_region) == 4 and _ls_region[:2] == [0, 0]
+      and _ls_rows_box is not None
+      and _ls_rows_box[3] - 1 <= _ls_region[3]
+      <= _ls_rows_box[3] + app.CARD_MARGIN[1] + 1)
+check('...and at the top of the list, the top of the view is 0',
+      app.canvas.canvasy(0) == 0)
+
 # Select all covers the notes not drawn yet, and their cards arrive ticked.
 app.canvas.yview_moveto(0); _ls_settle()
 app.refresh_note_list(); _ls_settle()
 app._toggle_selection_mode(); _ls_settle()
 app._bulk_select_all(); _ls_settle()
 _ls_scroll_to_end()
-_ls_boxes = [info.get('checkbox') for info in app._note_card_widgets.values()]
-_ls_ticked = sum(1 for b in _ls_boxes if b is not None
-                 and app.getboolean(app.getvar(str(b.cget('variable')))))
+_ls_boxes = [app._card_view(n)['checked'] for n in app._card_order()]
+_ls_ticked = sum(1 for b in _ls_boxes if b)
 check(f'cards drawn after Select all arrive ticked ({_ls_ticked} of '
       f'{len(app._visible_note_ids())})',
       _ls_ticked == len(_ls_boxes) == len(app._visible_note_ids()))
@@ -772,7 +782,13 @@ app.notes = ([NO.normalize_note({'id': 1000 + i, 'title': 'Gen %03d' % i,
                                    'updated': '2026-01-01 00:00'})
                 for i in range(60)])
 app.group_by_category.set(True)
-app.canvas.yview_moveto(0); _ls_settle()
+# From the top, once the scroll restores of the Select all block above have
+# run out -- still in force, the rebuild below would keep their depth and
+# draw the Work header straight away, and the check would ask nothing.
+_ls_let_restores_finish()
+app.canvas.yview_moveto(0)
+app._list_restore_px = None
+_ls_settle()
 app.refresh_note_list(); _ls_settle()
 _ls_work_waiting = ('header', 'Work') not in app._list_drawn_keys
 app.ask_yes_no = lambda *a, **k: True
@@ -781,11 +797,69 @@ try:
 finally:
     app.ask_yes_no = _ls_real_ask
 _ls_scroll_to_end()
-_ls_work_lbl = (app._group_header_widgets.get('Work') or {}).get('label')
-_ls_work_txt = str(_ls_work_lbl.cget('text')) if _ls_work_lbl is not None else None
+_ls_work_txt = (app._header_view('Work') or {}).get('label')
 check(f'a group\'s header drawn after a deletion counts what is left '
       f'({_ls_work_txt!r}; it was waiting: {_ls_work_waiting})',
       _ls_work_waiting and _ls_work_txt == 'Work (59)')
+
+# The drawing answers the mouse the way the widgets did -- found by where
+# the pointer is, since a drawn card has no bindings of its own. Every
+# event below is a real one, generated on the list's canvas.
+_ls_let_restores_finish()
+app.canvas.yview_moveto(0)
+app._list_restore_px = None
+_ls_settle()
+app.refresh_note_list(); _ls_settle()
+
+
+def _ls_at(y0, y1):
+    """The canvas widget's own y for the middle of a drawn span."""
+    return int((y0 + y1) / 2 - app.canvas.canvasy(0))
+
+
+# A header folds its group when clicked anywhere on its line -- at x=200,
+# well clear of its words, as the header frame used to take such a click.
+_ls_hd = app._header_view('General')
+_qa_click(app.canvas, x=200, y=_ls_at(_ls_hd['y0'], _ls_hd['y1']))
+_ls_settle()
+check("a click anywhere on a header's line folds its group "
+      "(caret %r)" % (app._header_view('General') or {}).get('caret'),
+      'General' in app.collapsed_groups
+      and (app._header_view('General') or {}).get('caret') == '▶')
+_ls_hd = app._header_view('General')
+_qa_click(app.canvas, x=200, y=_ls_at(_ls_hd['y0'], _ls_hd['y1']))
+_ls_settle()
+check('...and a second click unfolds it',
+      'General' not in app.collapsed_groups)
+
+# The hand over a card, the plain pointer over the gap between two.
+_ls_o = app._card_order()
+_ls_v0 = app._card_view(_ls_o[0])
+_qa_fire(app.canvas, '<Motion>', x=120, y=_ls_at(_ls_v0['y0'], _ls_v0['y1']))
+_ls_settle()
+_ls_hand = str(app.canvas.cget('cursor'))
+_qa_fire(app.canvas, '<Motion>', x=120,
+         y=int(_ls_v0['y1'] + app.CARD_MARGIN[1] - app.canvas.canvasy(0)))
+_ls_settle()
+_ls_gap = str(app.canvas.cget('cursor'))
+check(f'the pointer is a hand over a card and plain over the gap '
+      f'({_ls_hand!r}, {_ls_gap!r})', _ls_hand == 'hand2' and _ls_gap == '')
+
+# In selection mode a click ticks the card -- drawn AND recorded -- rather
+# than opening the note.
+app._toggle_selection_mode(); _ls_settle()
+_ls_pick = app._card_order()[1]
+_ls_was = app._card_view(_ls_pick)['checked']
+_ls_open_before = app.selected_note_id
+_ls_pt = app._card_point(_ls_pick)
+_qa_click(app.canvas, x=_ls_pt[0], y=_ls_pt[1])
+_ls_settle()
+check(f'in selection mode a click ticks the card, on screen and in the '
+      f'selection (was {_ls_was}, now {app._card_view(_ls_pick)["checked"]})',
+      _ls_was is False and app._card_view(_ls_pick)['checked'] is True
+      and _ls_pick in app.selected_note_ids
+      and app.selected_note_id == _ls_open_before)
+app._toggle_selection_mode(); _ls_settle()
 
 # 3. A save redraws one card. Grouped first: an edit that stays in its
 # group, then one that changes group -- which must rebuild, because two
@@ -793,11 +867,11 @@ check(f'a group\'s header drawn after a deletion counts what is left '
 app.canvas.yview_moveto(0); _ls_settle()
 app.refresh_note_list(); _ls_settle()
 app.open_note_in_tab(app.find_note(1005)); _ls_settle()
-_ls_others = {nid: str(info['card']) for nid, info in app._note_card_widgets.items()
+_ls_others = {nid: rec['items']['bg'] for nid, rec in app._note_cards.items()
               if nid != 1005}
 app.body_text.insert('end', ' grouped edit')
 app.save_current_note(auto=True); _ls_settle()
-_ls_after = {nid: str(info['card']) for nid, info in app._note_card_widgets.items()
+_ls_after = {nid: rec['items']['bg'] for nid, rec in app._note_cards.items()
              if nid != 1005}
 check('a grouped save that stays in its group leaves every other card alone',
       _ls_others == _ls_after)
@@ -820,7 +894,7 @@ app.canvas.yview_moveto(0); _ls_settle()
 app.refresh_note_list(); _ls_settle()
 _ls_target = _ls_card_ids()[12]
 app.open_note_in_tab(app.find_note(_ls_target)); _ls_settle()
-_ls_others = {nid: str(info['card']) for nid, info in app._note_card_widgets.items()
+_ls_others = {nid: rec['items']['bg'] for nid, rec in app._note_cards.items()
               if nid != _ls_target}
 _ls_stats = {'n': 0}
 _ls_real_stats = app._render_statistics
@@ -837,7 +911,7 @@ try:
     app.save_current_note(auto=True); _ls_settle()
 finally:
     app.__dict__.pop('_render_statistics', None)
-_ls_after = {nid: str(info['card']) for nid, info in app._note_card_widgets.items()
+_ls_after = {nid: rec['items']['bg'] for nid, rec in app._note_cards.items()
              if nid != _ls_target}
 check('an autosave redraws the saved card and leaves every other card alone',
       _ls_others == _ls_after)
@@ -846,17 +920,16 @@ check(f'...puts it where the sort does -- the top '
       _ls_card_ids()[:1] == [_ls_target])
 check(f'...keeps Settings\' statistics live, as the rebuild did '
       f'({_ls_stats["n"]})', _ls_stats['n'] >= 1)
-# The moved card was MADE last and packed first. The keyboard walks the
+# The moved card was drawn last and put first. The keyboard walks the
 # order on screen, so Down from it goes to the card under it -- not off
-# the end of the order the widgets were made in.
+# the end of the order the cards were drawn in.
 _ls_screen = _ls_card_ids()
 _ls_asked = []
-tk.Misc.focus_set = lambda self: _ls_asked.append(
-    getattr(self, '_card_note_id', None))
+app._put_keyboard_on_card = lambda nid: _ls_asked.append(nid)
 try:
     app._focus_card_by_offset(_ls_target, 1)
 finally:
-    tk.Misc.focus_set = _ls_real_focus
+    app.__dict__.pop('_put_keyboard_on_card', None)
 check(f'Down from a card a save moved walks the order on screen '
       f'(asked for {_ls_asked}, under it is {_ls_screen[1:2]})',
       _ls_asked == _ls_screen[1:2])
@@ -865,7 +938,7 @@ check('...and leaves the list a full rebuild would draw',
 
 # A save that takes the note out of the search takes its card with it.
 _ls_search('Save7')
-_ls_leaving = 7 if 7 in app._note_card_widgets else None
+_ls_leaving = 7 if 7 in app._note_cards else None
 if _ls_leaving is not None:
     app.open_note_in_tab(app.find_note(_ls_leaving)); _ls_settle()
     app.title_entry.delete(0, 'end')
@@ -873,7 +946,7 @@ if _ls_leaving is not None:
     app.save_current_note(auto=True); _ls_settle()
 check(f'a save that takes a note out of the search takes its card off '
       f'(was on the list: {_ls_leaving is not None})',
-      _ls_leaving is not None and _ls_leaving not in app._note_card_widgets
+      _ls_leaving is not None and _ls_leaving not in app._note_cards
       and _ls_same_as_rebuild())
 _ls_search('')
 
@@ -881,22 +954,34 @@ _ls_search('')
 app.canvas.yview_moveto(0); _ls_settle()
 app.refresh_note_list(); _ls_settle()
 app.open_blank_tab(); _ls_settle()
-_ls_others = {nid: str(info['card']) for nid, info in app._note_card_widgets.items()}
+_ls_others = {nid: rec['items']['bg'] for nid, rec in app._note_cards.items()}
 app.title_entry.delete(0, 'end')
 app.title_entry.insert(0, 'Freshly made')
 app.save_current_note(auto=True); _ls_settle()
 _ls_new_id = app.selected_note_id
-_ls_after = {nid: str(info['card']) for nid, info in app._note_card_widgets.items()
+_ls_after = {nid: rec['items']['bg'] for nid, rec in app._note_cards.items()
              if nid != _ls_new_id}
 # Where the list's own rows put it, not "the top": two saves in the same
 # second tie on their timestamp, and a tie keeps the notebook's order.
 _ls_new_rows = [r[1]['id'] for r in app._list_rows() if r[0] == 'note']
 check('a new note\'s first save adds its card and leaves the others alone',
-      _ls_new_id in app._note_card_widgets and _ls_others == _ls_after
+      _ls_new_id in app._note_cards and _ls_others == _ls_after
       and _ls_new_id in _ls_card_ids()
       and _ls_card_ids().index(_ls_new_id) == _ls_new_rows.index(_ls_new_id))
 check('...and leaves the list a full rebuild would draw',
       _ls_same_as_rebuild())
+
+# A drawn card deleted: the rows below close up over its place -- the list
+# a full rebuild draws, compared place for place, so a gap left behind
+# shows as a difference.
+_ls_gone = _ls_card_ids()[3]
+app.ask_yes_no = lambda *a, **k: True
+try:
+    app._delete_note(app.find_note(_ls_gone), None); _ls_settle()
+finally:
+    app.ask_yes_no = _ls_real_ask
+check('deleting a drawn card closes the gap -- the list a full rebuild draws',
+      _ls_gone not in app._note_cards and _ls_same_as_rebuild())
 
 # ---------------------------------------------------------------------
 # A tick box's well must be light, because the mark in it is dark.

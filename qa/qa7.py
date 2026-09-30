@@ -63,6 +63,15 @@ def find_all_labels(w, acc=None):
         find_all_labels(c, acc)
     return acc
 
+
+def list_texts():
+    """What the note list says, top to bottom: every drawn card's title,
+    then every header's label. The list is a drawing, with no labels to
+    walk."""
+    out = [app._card_view(n)['title'] for n in app._card_order()]
+    out += [app._header_view(c)['label'] for c in app._group_headers]
+    return out
+
 os.makedirs(NO.ATTACHMENTS_DIR, exist_ok=True)
 
 # ============================================================
@@ -553,10 +562,12 @@ check(f'bulk action bar is narrower than the pre-fix sizing '
       f'({fixed_width}px vs {old_width}px reconstructed original)',
       fixed_width < old_width)
 
-card_ids_before = {nid: str(info['card']) for nid, info in app._note_card_widgets.items()}
+# A card drawn again has new canvas items: the item behind each card's
+# background says whether the list was redrawn.
+card_ids_before = {nid: rec['items']['bg'] for nid, rec in app._note_cards.items()}
 app._toggle_note_selected(10, True)
 app.update()
-card_ids_after = {nid: str(info['card']) for nid, info in app._note_card_widgets.items()}
+card_ids_after = {nid: rec['items']['bg'] for nid, rec in app._note_cards.items()}
 check('selecting a note does NOT rebuild the list (no flicker)', card_ids_before == card_ids_after)
 check('selection recorded correctly', app.selected_note_ids == {10})
 
@@ -575,7 +586,7 @@ app.notes.append({'id': 77, 'title': 'TableOnly', 'body': f'{_tbl7.CELL} alfa {_
                   'created': '2026-01-01 00:00', 'checklist': [], 'attachments': []})
 app.search_var.set(_tbl7.CELL)
 app.refresh_note_list(); app.update()
-_visible_cards = len(app._note_card_widgets)
+_visible_cards = len(app._card_order())
 app._bulk_select_all()
 check('searching table plumbing shows nothing and selects nothing',
       _visible_cards == 0 and app.selected_note_ids == set())
@@ -612,39 +623,11 @@ app.save_notes()
 app.refresh_note_list(); app.update()
 app.open_note_in_tab(app.find_note(20))
 app.update()
-# Asked of the COLOUR, not the thickness. Every card carries a two-pixel
-# ring now, because the same border does double duty: Tk paints
-# `highlightbackground` while a widget has no keyboard focus and
-# `highlightcolor` while it does, so one border says both "this is the
-# note you have open" (accent) and "this is where the keyboard is"
-# (text). Uniform thickness is what stops the list shifting by two pixels
-# as the focus walks down it -- and it means thickness no longer answers
-# the question this check is about.
-check('opened note is highlighted',
-      str(app._note_card_widgets[20]['card'].cget('highlightbackground'))
-      == str(app.colors['accent']))
-check('other note is not highlighted',
-      str(app._note_card_widgets[21]['card'].cget('highlightbackground'))
-      == str(app.colors['card']))
-
-# ============================================================
-# A NOTE'S ACTIONS ARE REACHABLE FROM THE KEYBOARD (C-9)
-# ============================================================
-# Pinning, exporting, duplicating and deleting all live in the right-click
-# menu and nowhere else, so anyone working by keyboard could reach none of
-# them. The row asked for two bindings; measured first, a card's takefocus
-# was '0' and nothing in the app ever focused one -- so the bindings would
-# have been bindings that could never fire, and the missing piece was a
-# way for a person to get there.
-_c9_card = app._note_card_widgets[20]['card']
-_c9_other = app._note_card_widgets[21]['card']
-check('a note card is in the keyboard traversal now',
-      str(_c9_card.cget('takefocus')) in ('1', 'True'))
 import time as _c9_time
 
 
 def _c9_take(widget, cap_s=4.0):
-    """FORCE the keyboard onto a card and wait until Tk agrees -- for a
+    """FORCE the keyboard onto a widget and wait until Tk agrees -- for a
     PRECONDITION only (qa/README, "Force a precondition; read back only a
     promise"). A plain focus_set() is a request the window manager may
     refuse while another program holds the desktop foreground, and this
@@ -665,11 +648,34 @@ def _c9_take(widget, cap_s=4.0):
     return False
 
 
+# Asked of the COLOUR, not the thickness. Every card carries a two-pixel
+# ring, and the one ring does double duty: the text colour where the
+# keyboard is, accent for the note that is open. So the open note's accent
+# is asked while the keyboard is somewhere else -- forced into the title
+# box first, as a precondition.
+check('fixture: the keyboard is off the list, in the title box',
+      _c9_take(app.title_entry))
+check('opened note is highlighted',
+      str(app._card_view(20)['ring']) == str(app.colors['accent']))
+check('other note is not highlighted',
+      str(app._card_view(21)['ring']) == str(app.colors['card']))
+
+# ============================================================
+# A NOTE'S ACTIONS ARE REACHABLE FROM THE KEYBOARD (C-9)
+# ============================================================
+# Pinning, exporting, duplicating and deleting all live in the right-click
+# menu and nowhere else, so anyone working by keyboard could reach none of
+# them. The list is one stop for the keyboard now -- its cards are a
+# drawing on one canvas -- and a card is "where the keyboard is" when the
+# list holds the keyboard and the app has put its ring on that card. That
+# second half is a decision the app records (_focused_note_id), so it is
+# read back directly: no focus_get(), which answers None whenever another
+# program holds the desktop foreground.
+check('the note list is in the keyboard traversal',
+      str(app.canvas.cget('takefocus')) in ('1', 'True'))
+
 # Settle every timer that can rebuild the list before anything below is
-# measured (qa/README): the waits in _c9_take can last seconds, and a
-# rebuild inside one replaced the card a check was holding -- index() of
-# the old widget then raised, and qa7 died before its footer, once, in a
-# mutant run. Cards are also looked up afresh after every wait, by note.
+# measured (qa/README).
 app._flush_autosave()
 if getattr(app, '_search_debounce_job', None) is not None:
     app.after_cancel(app._search_debounce_job)
@@ -677,44 +683,43 @@ if getattr(app, '_search_debounce_job', None) is not None:
 app.update()
 
 
-def _c9_live(note_id):
-    """The card on screen NOW for a note -- never one held across a wait."""
-    return (app._note_card_widgets.get(note_id) or {}).get('card')
-
-
 def _c9_on_note(note_id, cap_s=2.0):
-    """Poll for the keyboard on this NOTE's card, whichever widget draws it.
-    A PROMISE, so it is only polled, never forced: the handler's own
-    focus_set is asynchronous too."""
+    """Poll for the ring on this NOTE's card while the list holds the
+    keyboard. A PROMISE, so it is only polled, never forced."""
     end = _c9_time.time() + cap_s
     while _c9_time.time() < end:
         app.update(); app.update_idletasks()
-        try:
-            if getattr(app.focus_get(), '_card_note_id', None) == note_id:
-                return True
-        except (KeyError, tk.TclError):
-            pass
+        if (getattr(app, '_focused_note_id', None) == note_id
+                and getattr(app, '_keyboard_on_card', False)):
+            return True
         _c9_time.sleep(0.01)
     return False
 
 
-check('fixture: the keyboard really is on the card', _c9_take(_c9_live(20)))
-_c9_card = _c9_live(20)
+def _c9_put(note_id):
+    """PRECONDITION: the keyboard on the list, its ring on this card."""
+    took = _c9_take(app.canvas)
+    app._put_keyboard_on_card(note_id)
+    app.update(); app.update_idletasks()
+    return took and _c9_on_note(note_id)
+
+
+check('fixture: the keyboard really is on the card', _c9_put(20))
 # The ring does double duty, so a focused card must be distinguishable
 # from the open one rather than sharing its colour.
+_c9_ring = str(app._card_view(20)['ring'])
 check(f'the focus ring is a different colour from the open-note ring '
-      f'(ring={str(_c9_card.cget("highlightcolor"))!r}, '
-      f'text={str(app.colors["text"])!r}, '
+      f'(ring={_c9_ring!r}, text={str(app.colors["text"])!r}, '
       f'accent={str(app.colors["accent"])!r})',
-      str(_c9_card.cget('highlightcolor')) != str(app.colors['accent'])
-      and str(_c9_card.cget('highlightcolor')) == str(app.colors['text']))
+      _c9_ring != str(app.colors['accent'])
+      and _c9_ring == str(app.colors['text']))
 
 # The menu, from the keyboard, posted where the note is.
 _c9_posted = []
 _c9_real = NO.tk.Menu.tk_popup
 NO.tk.Menu.tk_popup = lambda _m, *a, **k: _c9_posted.append((_m, a))
 try:
-    _c9_card.event_generate('<Shift-F10>')
+    app.canvas.event_generate('<Shift-F10>')
     app.update()
     check('Shift+F10 on a focused card opens its actions menu',
           bool(_c9_posted))
@@ -734,100 +739,92 @@ try:
               and any('Duplicate' in _l for _l in _c9_labels))
         # Posted at the CARD, not at wherever the pointer happens to rest:
         # a menu that opens under the mouse when the mouse was not used is
-        # a menu nobody can see.
+        # a menu nobody can see. The card's place on screen is the canvas's
+        # place plus the card's own, less how far the list is scrolled.
+        _c9_view = app._card_view(20)
+        _c9_card_x = app.canvas.winfo_rootx()
+        _c9_card_y = app.canvas.winfo_rooty() + int(
+            _c9_view['y0'] - app.canvas.canvasy(0))
         check(f'...and it opens at the card rather than at the pointer '
               f'({_c9_at})',
               len(_c9_at) == 2
-              and abs(_c9_at[0] - _c9_card.winfo_rootx()) < 200
-              and abs(_c9_at[1] - _c9_card.winfo_rooty()) < 200)
+              and abs(_c9_at[0] - _c9_card_x) < 200
+              and abs(_c9_at[1] - _c9_card_y) < 200)
     # The dedicated menu key, by whichever name this platform knows it --
     # "App" on Windows, "Menu" on X11, and Tk raises on the other one.
     # Asked of the binding rather than by generating a key that may not
     # exist here: what the row promises is that the key IS bound wherever
     # it exists, and the Shift+F10 route above already proves the handler.
-    _c9_bound = set(_c9_card.bind())
+    _c9_bound = set(app.canvas.bind())
     check(f'the dedicated menu key is bound under a name this platform '
           f'knows ({sorted(s for s in _c9_bound if "App" in s or "Menu" in s or "F10" in s)})',
           '<Key-App>' in _c9_bound or '<Key-Menu>' in _c9_bound)
 finally:
     NO.tk.Menu.tk_popup = _c9_real
 
-# Walking the list. Asked of the order the cards are PACKED in, because
+# Walking the list. Asked of the order the cards are DRAWN in, because
 # the list is sorted, filtered and grouped -- the note after this one in
 # the file is very often not the one underneath it on screen.
-_c9_take(_c9_live(20))
-_c9_live(20).event_generate('<Down>')
+_c9_put(20)
+app.canvas.event_generate('<Down>')
 app.update(); app.update_idletasks()
-# pack_slaves is the packing order; winfo_children is the order the widgets
-# were MADE, which a saved note's card -- made last, packed where the sort
-# puts it -- no longer shares.
-_c9_ids = [w._card_note_id for w in app.list_frame.pack_slaves()
-           if getattr(w, '_card_note_id', None) is not None]
+_c9_ids = app._card_order()
 _c9_pos = _c9_ids.index(20) if 20 in _c9_ids else None
 _c9_next_id = (_c9_ids[_c9_pos + 1]
                if _c9_pos is not None and _c9_pos + 1 < len(_c9_ids) else None)
 check('Down moves the keyboard to the next card on screen',
       _c9_next_id is not None and _c9_on_note(_c9_next_id))
-if _c9_next_id is not None and _c9_live(_c9_next_id) is not None:
-    _c9_live(_c9_next_id).event_generate('<Up>')
+if _c9_next_id is not None:
+    app.canvas.event_generate('<Up>')
     app.update(); app.update_idletasks()
     check('and Up brings it back', _c9_on_note(20))
 # THE CONTROL: Up at the top must not wrap or crash -- it should simply
 # stay put, which is what a list does. An ABSENCE, so it cannot be polled
-# for: the keyboard is already on the first card, and a poll would answer
-# yes before a wrong move could land. What is asserted is the handler's
-# own decision -- no card is asked to take the keyboard -- recorded where
-# it is made. The precondition is part of the check: a key event only
-# reaches the card that has the keyboard, and one that went elsewhere
-# would record no move and read as a pass.
+# for: the ring is already on the first card, and a poll would answer yes
+# before a wrong move could land. What is asserted is the handler's own
+# decision -- no card is asked to take the ring -- recorded where it is
+# made. The precondition is part of the check: a key event only reaches
+# the widget that has the keyboard, and one that went elsewhere would
+# record no move and read as a pass.
 _c9_first_id = _c9_ids[0] if _c9_ids else None
-_c9_top_ready = (_c9_first_id is not None
-                 and _c9_take(_c9_live(_c9_first_id)))
-# Read AFTER the wait, so the widgets whose decisions are recorded are the
-# ones on screen when the key arrives.
-_c9_order = [w for w in app.list_frame.pack_slaves()
-             if getattr(w, '_card_note_id', None) is not None]
+_c9_top_ready = _c9_first_id is not None and _c9_put(_c9_first_id)
 _c9_moved = []
-for _c9_w in _c9_order:
-    _c9_w.focus_set = (lambda _w=_c9_w: _c9_moved.append(_w))
+_c9_real_put = app._put_keyboard_on_card
+app._put_keyboard_on_card = lambda nid: _c9_moved.append(nid)
 try:
-    if _c9_first_id is not None and _c9_live(_c9_first_id) is not None:
-        _c9_live(_c9_first_id).event_generate('<Up>')
+    app.canvas.event_generate('<Up>')
     app.update(); app.update_idletasks()
 finally:
-    for _c9_w in _c9_order:
-        try:
-            del _c9_w.focus_set
-        except AttributeError:
-            pass
+    app.__dict__.pop('_put_keyboard_on_card', None)
 check('Up on the first card stays there rather than wrapping',
-      _c9_top_ready and _c9_moved == [])
+      _c9_top_ready and _c9_moved == []
+      and getattr(app, '_focused_note_id', None) == _c9_first_id)
 
-# The keyboard survives a rebuild. The list is destroyed and rebuilt on a
-# save, a search keystroke, a note switch -- a focus left pointing at a
-# widget that no longer exists would make this route unusable after the
-# first thing that happens.
+# The keyboard survives a rebuild. The list is rebuilt on a search
+# keystroke, a sort, a filter -- a keyboard left pointing at something
+# that no longer exists would make this route unusable after the first
+# thing that happens. The canvas that holds the keyboard survives a
+# rebuild now; what has to come back is the ring, on the same note.
 check('fixture: the keyboard is on a known card before the rebuild',
-      _c9_take(_c9_live(20)))
+      _c9_put(20))
 app.refresh_note_list()
 app.update(); app.update_idletasks()
 check('a rebuilt list puts the keyboard back on the same note',
-      _c9_on_note(20))
+      _c9_on_note(20) and str(app._card_view(20)['ring']) == str(app.colors['text']))
 
-# THE OTHER HALF, and the one that shipped broken. The restore must not
-# fire when the keyboard was somewhere ELSE -- and the guard that decided
-# it asked focus_get(), which answers None whenever the process does not
-# own the desktop foreground. This project measured that on the Ctrl+F
-# checks; a real window hits it for a moment after any other program comes
-# to the front. So "focus_get() is None" was read as "nothing has the
-# keyboard" in exactly the case where something did, and a person typing a
-# title had the next autosave's rebuild pull the keyboard onto a card.
-app.title_entry.focus_set()
-app.update(); app.update_idletasks()
-check('fixture: the keyboard is in the title box, not on a card',
-      getattr(app.focus_get(), '_card_note_id', None) is None)
-# focus_get() made to answer None, the way a lost foreground does. Without
-# this the safe branch is the only one exercised and the bug is invisible.
+# THE OTHER HALF, and the one that once shipped broken. A rebuild must not
+# pull the keyboard ONTO the list when it was somewhere else: a person
+# typing a title had the next autosave's rebuild move the keyboard onto a
+# card, because a guard read focus_get() -- None whenever the process does
+# not own the desktop foreground -- as "nothing has the keyboard". The
+# drawn list never asks focus_get(); asserted by recording whether the
+# rebuild asks the list to take the keyboard at all, with focus_get() made
+# to answer None the way a lost foreground does.
+check('fixture: the keyboard is in the title box, not on the list',
+      _c9_take(app.title_entry))
+_c9_asked = []
+_c9_real_focus_set = app.canvas.focus_set
+app.canvas.focus_set = lambda: _c9_asked.append('focus_set')
 _c9_real_fg = app.focus_get
 app.focus_get = lambda: None
 try:
@@ -836,27 +833,23 @@ try:
         app.update(); app.update_idletasks()
 finally:
     app.focus_get = _c9_real_fg
-# Asked by the MARKER, not by identity against cards captured earlier:
-# the rebuild destroyed those, so `is` against them is False for the new
-# card that would now hold the keyboard -- a check written that way passes
-# while the theft happens. It did, in the probe that found this.
-_c9_where = app.focus_get()
+    app.canvas.__dict__.pop('focus_set', None)
 check(f'a rebuild does NOT pull the keyboard off what someone was typing '
-      f'in ({_c9_where!r})',
-      getattr(_c9_where, '_card_note_id', None) is None)
+      f'in (the list was asked to take it {len(_c9_asked)} times)',
+      _c9_asked == [])
 check('highlight color matches the theme accent',
-      app._note_card_widgets[20]['card'].cget('highlightbackground') == app.colors['accent'])
+      str(app._card_view(20)['ring']) == str(app.colors['accent']))
 
 # Settle every timer that can rebuild the list on its own before
 # measuring, and say out loud that they are settled.
 #
-# This check compares the cards' Tk paths across a note switch, and for
-# months it passed on timing rather than on its subject: the sidebar
-# search debounces with after(180, self.refresh_note_list), and the work
-# ahead of this point used to take long enough that the timer had always
-# fired already. When deleting a note stopped rebuilding the whole list
-# (185ms -> 31ms), that slack disappeared, the timer landed BETWEEN the
-# two readings, and the check went red without the switch doing anything
+# This check compares the cards across a note switch, and for months it
+# passed on timing rather than on its subject: the sidebar search
+# debounces with after(180, self.refresh_note_list), and the work ahead of
+# this point used to take long enough that the timer had always fired
+# already. When deleting a note stopped rebuilding the whole list (185ms
+# -> 31ms), that slack disappeared, the timer landed BETWEEN the two
+# readings, and the check went red without the switch doing anything
 # wrong. A check that can be decided by how fast the code above it runs
 # is not measuring what it names.
 app._flush_autosave()
@@ -867,18 +860,92 @@ app.update()
 check('nothing is queued to rebuild the list before the measurement',
       getattr(app, '_search_debounce_job', None) is None
       and getattr(app, '_autosave_job', None) is None)
-card_ids_before2 = {nid: str(info['card']) for nid, info in app._note_card_widgets.items()}
+# A card drawn again has new canvas items, so the item behind each card's
+# background says whether the list was redrawn.
+card_ids_before2 = {nid: rec['items']['bg'] for nid, rec in app._note_cards.items()}
 app.open_note_in_tab(app.find_note(21))
 app.update()
-card_ids_after2 = {nid: str(info['card']) for nid, info in app._note_card_widgets.items()}
+card_ids_after2 = {nid: rec['items']['bg'] for nid, rec in app._note_cards.items()}
 check('switching notes does NOT rebuild the list (no flicker)', card_ids_before2 == card_ids_after2)
-# Asked of the colour: every card wears a two-pixel ring now (the keyboard's
+# Asked of the colour: every card wears a two-pixel ring (the keyboard's
 # focus ring shares it), so a check of the thickness passed for any card.
 check('highlight correctly moved to the new note',
-      str(app._note_card_widgets[21]['card'].cget('highlightbackground'))
-      == app.colors['accent']
-      and str(app._note_card_widgets[20]['card'].cget('highlightbackground'))
-      != app.colors['accent'])
+      str(app._card_view(21)['ring']) == app.colors['accent']
+      and str(app._card_view(20)['ring']) != app.colors['accent'])
+
+# ---- A CLICK PUTS THE KEYBOARD ON THE LIST, AND THE LIST FOLLOWS IT ----
+# Field-reported: "I click a note in the list and press Down, and nothing
+# happens." The click opened the note and left the keyboard wherever it
+# had been -- the title box, the search box -- so Down went there. A click
+# on a card now puts the keyboard on the list with the ring on that card,
+# and the walk scrolls the list to keep the ring in view: it used to walk
+# the keyboard off the bottom of the screen and leave the list where it
+# was. The click is a real one, on the canvas at the card; what is asserted
+# is the decision it makes, recorded where it is made.
+_ck_saved = list(app.notes)
+app.notes = [{'id': 700 + i, 'title': 'Walk %02d' % i, 'body': 'x',
+              'category': 'General', 'updated': '2026-01-01 00:%02d' % (59 - i),
+              'created': '2026-01-01 00:00', 'checklist': [], 'attachments': []}
+             for i in range(40)]
+app.save_notes()
+app.new_note()
+app.canvas.yview_moveto(0)
+app._list_restore_px = None
+app.refresh_note_list(); app.update()
+_ck_order = app._card_order()
+_ck_asked = []
+_ck_real_fs = app.canvas.focus_set
+app.canvas.focus_set = lambda: (_ck_asked.append('focus'), _ck_real_fs())[1]
+try:
+    _ck_at = app._card_point(_ck_order[2])
+    _qa_click(app.canvas, x=_ck_at[0], y=_ck_at[1])
+    app.update()
+finally:
+    app.canvas.__dict__.pop('focus_set', None)
+check('a click on a card opens its note',
+      app.selected_note_id == _ck_order[2])
+check('...and puts the keyboard on the list, with the ring on that card',
+      bool(_ck_asked) and app._focused_note_id == _ck_order[2])
+# Down, as the handler bound to the list runs it, twenty times: the ring
+# walks well past the bottom of the view, and the view has to go with it.
+for _ in range(20):
+    app._list_step(1)
+app.update()
+_ck_now = app._focused_note_id
+_ck_view = app._card_view(_ck_now)
+_ck_top = app.canvas.canvasy(0)
+_ck_h = app.canvas.winfo_height()
+check(f'walking down twenty cards moves the ring there ({_ck_now})',
+      _ck_now == _ck_order[22])
+check(f'...and the list scrolls to keep the ring on screen (card '
+      f'{_ck_view["y0"]}-{_ck_view["y1"]}, view {_ck_top:.0f}-'
+      f'{_ck_top + _ck_h:.0f})',
+      _ck_view['y0'] >= _ck_top and _ck_view['y1'] <= _ck_top + _ck_h)
+# Tab: the list is ONE stop. Each card used to be a widget that took the
+# focus, so Tab stepped through every drawn card before leaving the list;
+# drawn, the list is one widget and the ring does the walking. Asked of
+# Tk's own traversal, tk_focusNext / tk_focusPrev, which is what Tab and
+# Shift+Tab run.
+_tab_w, _tab_presses = app.search_entry, 0
+for _ in range(15):
+    _tab_w = _tab_w.tk_focusNext()
+    _tab_presses += 1
+    if _tab_w is None or _tab_w is app.canvas:
+        break
+_tab_after = app.canvas.tk_focusNext()
+check(f'Tab from the search box reaches the list ({_tab_presses} presses)',
+      _tab_w is app.canvas)
+check('...the next Tab leaves it, and Shift+Tab comes back to it',
+      _tab_after is not None
+      and not str(_tab_after).startswith(str(app.canvas))
+      and _tab_after.tk_focusPrev() is app.canvas)
+app.notes = _ck_saved
+app.save_notes()
+app.canvas.yview_moveto(0)
+app._list_restore_px = None
+app.refresh_note_list(); app.update()
+# Back to the state the block below expects: note 21 open in the editor.
+app.open_note_in_tab(app.find_note(21)); app.update()
 
 # bulk category change
 app.ask_yes_no = lambda *a, **k: True
@@ -1471,8 +1538,9 @@ app.notebook.select(app.TAB_NOTES)
 app.refresh_note_list()
 app.update()
 _card_labels = None
-_card = (app._note_card_widgets.get(61) or {}).get('card')
-if _card is not None and _card.winfo_ismapped():
+# The card is a drawing on the list's canvas: right-clicked where it is.
+_card_at = app._card_point(61)
+if _card_at is not None and app.canvas.winfo_ismapped():
     _labels_q7.clear()
     tk.Menu.add_command = lambda self, **kw: _labels_q7.append(
         (kw.get('label', ''), kw.get('command')))
@@ -1480,7 +1548,7 @@ if _card is not None and _card.winfo_ismapped():
         (kw.get('label', ''), None))
     tk.Menu.tk_popup = lambda self, *a, **k: None
     try:
-        _card.event_generate('<Button-3>', x=5, y=5)
+        app.canvas.event_generate('<Button-3>', x=_card_at[0], y=_card_at[1])
         app.update()
         _card_labels = [l for l, _ in _labels_q7]
     finally:
@@ -2008,14 +2076,14 @@ app.close_day_panel(); app.update()
 # the list render AND bulk select-all, exercised through the render.
 app.filter_var.set(app.FILTER_REPEATING)
 app.refresh_note_list(); app.update()
-_vis = find_all_labels(app.list_frame)
+_vis = list_texts()
 check('the Repeating filter shows only repeating notes',
       any('SeriesVis' in t for t in _vis)
       and not any('DatedVis' in t for t in _vis)
       and not any('PlainVis' in t for t in _vis))
 app.filter_var.set(app.FILTER_DATED)
 app.refresh_note_list(); app.update()
-_vis = find_all_labels(app.list_frame)
+_vis = list_texts()
 check('the Dated filter shows only dated non-repeating notes',
       any('DatedVis' in t for t in _vis)
       and not any('SeriesVis' in t for t in _vis)
@@ -2055,7 +2123,7 @@ app.save_notes()
 app.sort_var.set('Calendar: soonest')
 app.refresh_note_list(); app.update()
 _names_q7 = ('SoonA', 'SoonB', 'SoonC', 'SoonD', 'SoonE')
-_ordered = [n for t in find_all_labels(app.list_frame)
+_ordered = [n for t in list_texts()
             for n in _names_q7 if n in t]
 # Weekly since 9 days ago -> occurrences at -9, -2, +5: the NEXT one
 # (+5) sits AFTER A's date (+1) on purpose — ranked by start date
@@ -2065,7 +2133,7 @@ check('Calendar-soonest ranks by the next relevant date from today',
 
 app.sort_var.set('Calendar: oldest')
 app.refresh_note_list(); app.update()
-_ordered = [n for t in find_all_labels(app.list_frame)
+_ordered = [n for t in list_texts()
             for n in _names_q7 if n in t]
 # Plain chronology by the note's own date: C(-10), B(start -9), D(-2),
 # A(+1), undated E at the bottom.

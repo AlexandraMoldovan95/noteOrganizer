@@ -281,9 +281,14 @@ def _open_note_by_clicking(app, title):
     app.update()
     for note in app.notes:
         if note.get("title") == title:
-            card = (app._note_card_widgets.get(note["id"]) or {}).get("card")
-            if card is not None:
-                card.event_generate("<Button-1>", x=5, y=5)
+            # The card is a drawing on the list's canvas: brought into view
+            # as a person would scroll to it, then clicked where it is.
+            rec = (getattr(app, "_note_cards", None) or {}).get(note["id"])
+            if rec is not None:
+                app._scroll_row_into_view(rec)
+                app.update()
+                x, y = app._card_point(note["id"])
+                app.canvas.event_generate("<Button-1>", x=x, y=y)
                 app.update()
                 return True
     return False

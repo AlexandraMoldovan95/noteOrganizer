@@ -846,7 +846,7 @@ app.notes = [NO.normalize_note(n) for n in app.notes]
 app.save_notes()
 app.filter_var.set('Scoala')
 app.refresh_note_list(); app.update()
-_b3_shown = set(app._note_card_widgets)
+_b3_shown = set(app._card_order())
 check('filtering by a category shows only that category (plan 77)',
       _b3_shown == {7001, 7002})
 app.filter_var.set('All')
@@ -881,11 +881,8 @@ app.refresh_note_list(); app.update()
 _b3_order = [n['title'] for n in app._visible_notes_in_order()] \
     if hasattr(app, '_visible_notes_in_order') else None
 if _b3_order is None:
-    _b3_order = []
-    for _cid, _w in app._note_card_widgets.items():
-        _b3_order.append((_w['card'].winfo_rooty(), _w['note']['title'],
-                          _w['note']['category']))
-    _b3_order = [t for _y, t, _c in sorted(_b3_order)]
+    # The cards in the order they are drawn, top to bottom.
+    _b3_order = [app.find_note(_cid)['title'] for _cid in app._card_order()]
 check('sorting A-Z orders the notes inside each group (plan 83)',
       _b3_order == ['Delta', 'Gama', 'Alfa', 'Beta']
       or _b3_order == ['Alfa', 'Beta', 'Delta', 'Gama'])

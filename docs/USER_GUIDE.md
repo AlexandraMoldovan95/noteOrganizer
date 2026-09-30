@@ -366,14 +366,18 @@ Each note's card previews its first words. A table would be pipe soup at that si
 shows only the note's plain text and the card's tag row marks the table itself — **▦ 1 table**, or
 how many the note holds — next to the comment and attachment marks.
 
-The list can be worked without a mouse. **Tab** into it and the card you land on gets a visible
-ring; **↑** and **↓** walk from card to card in the order they are actually shown — sorted,
-filtered, searched or grouped as you left them, not the order they sit in the file. **Enter** (or
-**Space**) opens the note, and **Shift+F10** — or the menu key, if your keyboard has one — opens
-that note's own right-click menu where the note is, so pinning, duplicating, exporting and
-deleting are all reachable without leaving the keyboard. If the list rebuilds underneath you,
-because a save landed or a search keystroke filtered it, the ring comes back to the card you were
-on.
+The list can be worked without a mouse. Click a note, or **Tab** into the list, and the card gets
+a visible ring; **↑** and **↓** walk from card to card in the order they are actually shown —
+sorted, filtered, searched or grouped as you left them, not the order they sit in the file — and
+the list scrolls along to keep the ring in view. **Enter** (or **Space**) opens the note, and
+**Shift+F10** — or the menu key, if your keyboard has one — opens that note's own right-click
+menu where the note is, so pinning, duplicating, exporting and deleting are all reachable without
+leaving the keyboard. The whole list is one **Tab** stop: Tab again moves on to the next thing in
+the window instead of through every card. If the list rebuilds underneath you, because a save
+landed or a search keystroke filtered it, the ring comes back to the card you were on.
+
+The ring is drawn in the text colour while the keyboard is on the list, and the note you have open
+keeps its accent-coloured outline — so after walking away from the open note you can see both.
 
 ![Search and sort](screenshots/search-and-sort.png)
 
@@ -736,7 +740,7 @@ keys that only mean something inside a list, in the find bar, or on the note lis
 | **Ctrl+Z** | in a table | Takes back one whole operation. |
 | **Enter** / **Shift+Enter** | find bar | Step forward and back through matches. |
 | **Esc** | find bar | Closes the bar. |
-| **↑** / **↓** | note list | Walks from card to card, in the order the list is showing them. |
+| **↑** / **↓** | note list | Walks from card to card, in the order the list is showing them — also straight after a click on a note. |
 | **Enter** / **Space** | note list | Opens the note — or ticks it, while ☑ Select is on. |
 | **Shift+F10** or the menu key | note list | Opens that note's own right-click menu, at the note. |
 | **Page Up** / **Page Down** | Calendar tab | Previous / next month. |

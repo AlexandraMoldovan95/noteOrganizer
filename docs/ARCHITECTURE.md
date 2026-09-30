@@ -230,12 +230,14 @@ There's a third case, added in 0.32.49: content that is normally rebuilt on refr
 **not** be rebuilt just because the palette changed. `apply_theme()` used to call
 `refresh_note_list()`, which destroyed and rebuilt every note card — about 85ms of a 121ms
 theme switch, with the list visibly emptying and refilling. Nothing about a theme switch
-changes note *data*, so `_recolor_note_cards()` now re-applies colors to the cards already on
-screen, using named widget references recorded in `_note_card_widgets` when each card is built.
+changes note *data*, so `_recolor_note_cards()` now re-applies colors to the cards already
+drawn, through the items each card's record in `_note_cards` names (the list is a drawing on
+one canvas; see [Large lists](#large-lists-draw-what-can-be-seen-the-rest-on-demand)).
 
-This is **not** the `track_theme` pattern that leaked: `_note_card_widgets` is rebuilt from
-scratch by every `refresh_note_list()`, and every update that stops short of one keeps it
-exact, so it only ever holds the cards that are drawn.
+This is **not** the `track_theme` pattern that leaked: `_note_cards` is rebuilt from scratch
+by every `refresh_note_list()`, and every update that stops short of one keeps it exact, so it
+only ever holds the cards that are drawn. And since a drawing is not a widget,
+`_recolor_stragglers()` never reaches the list at all — this is its only recolour.
 
 Two ordering rules matter here — `_recolor_note_cards()` runs *after* `_recolor_stragglers()`
 so a note's own color (recomputed from the note, not color-swapped) wins over the generic
@@ -469,32 +471,48 @@ batch, rather than rendering every entry immediately. This was enough to take th
 from ~1.8s to ~100ms with 600 entries.
 
 The main note list does the same job without a button, because it is the app's main way
-around and a button every thirty notes would be felt. Every card is several OS windows (in Tk
-on Windows every widget is one), so drawing the whole list cost time in proportion to the
-notebook — on every rebuild, and again every time the list was shown after the Calendar or
-Settings. A rebuild now draws `LIST_FIRST_DRAW` rows (30); the rest wait in `_list_pending`,
+around and a button every thirty notes would be felt — and it is **drawn**, not built of
+widgets. In Tk on Windows every widget is its own OS window; a card built of widgets was six,
+and everything the list did scaled with them: rebuilding it, showing it again after the
+Calendar or Settings, scrolling it fast (Windows moved hundreds of child windows per step, and
+the picture tore). The cards are rectangles and text on the list's one canvas now
+(`_draw_note_card`, from `_card_texts`, the one definition of what a card says), laid out in
+records that know where each row stands.
+
+On top of that, a rebuild draws `LIST_FIRST_DRAW` rows (30); the rest wait in `_list_pending`,
 and `_list_view_changed` — the canvas's `yscrollcommand`, which hears every way the view can
 move: wheel, scrollbar, a taller window, a drawn step lengthening the content — draws
 `LIST_DRAW_STEP` more whenever less than a screen of drawn list is left below the view. The
 keyboard's ↓ draws ahead of itself.
 
-Three rules keep it honest:
+Rules that keep it honest:
 
 - **One definition of what the list shows.** `_list_rows()` (built on `_notes_on_the_list()`)
   is read by the rebuild, the top-up, the one-card save and Select all. Nothing asks the
   *cards* which notes are on the list — "all" means every note the list shows, drawn yet or not.
-- **The drawn part is a prefix.** `_list_drawn_keys` followed by `_list_pending` is exactly
-  `_list_rows()`, in order. Every update short of a rebuild — a delete (`_remove_note_cards`), a
-  save (`_redraw_saved_card`) — keeps that true, and asks for a top-up itself when it leaves rows
+- **The drawn part is a prefix.** `_list_drawn` (records, in screen order) followed by
+  `_list_pending` is exactly `_list_rows()`. Every update short of a rebuild — a delete
+  (`_remove_note_cards`), a save (`_redraw_saved_card`) — keeps that true, moves the rows below
+  the change with `_reflow_list` (one repaint), and asks for a top-up itself when it leaves rows
   waiting, because the canvas reports only when something changes size.
-- **Screen order is packing order.** `list_frame.pack_slaves()`, never `winfo_children()`: a
-  saved note's card is made last and packed where the sort puts it.
+- **Screen order is the records' order.** `_card_order()`; a card has no widget to ask.
+- **The drawing's extent comes from the rows, not from Tk.** `_list_extent()` is (0, 0, width,
+  bottom of the last row), and the scrollregion, the top-up and every scroll guard below read it.
+  A drawing's `bbox` starts at its first item, four pixels down, where the old frame's started
+  at 0; and how Tk pads a rectangle's `bbox` changed between releases (8.6.15 counts a pixel
+  round one with no outline, 8.6.16 does not), so an invisible rectangle from 0 held on Windows
+  and failed on the Linux image.
+- **Input is found by position.** Mouse and keys are bound once on the canvas
+  (`_bind_list_input`); a click, a right-click or the pointer's hand asks `_list_record_at`
+  which row it is over. A click on a card also puts the keyboard on the list, with the ring on
+  that card, and the ring's walk scrolls the list to keep it in view.
 
 A rebuild keeps the depth that was drawn when the list was scrolled, so the position restored
 in pixels (below) has content to land on, and draws the card the keyboard was on. This is not
-virtualization: a card once drawn stays drawn until the next rebuild. Windowed rendering —
-recycling one screenful of cards — stays on the [ROADMAP](ROADMAP.md) for notebooks far larger
-than the thousand notes this was measured with. See
+virtualization: a card once drawn stays drawn until the next rebuild — which costs the drawing
+little, since a drawn card is a handful of canvas items rather than six windows. Windowed
+rendering stays on the [ROADMAP](ROADMAP.md) for notebooks far larger than the thousand notes
+this was measured with. See
 [The list that was drawn whole, for every pause in typing](ISSUES_LOG.md#the-list-that-was-drawn-whole-for-every-pause-in-typing).
 
 ### Scrollable canvases guard their own view

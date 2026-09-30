@@ -77,7 +77,7 @@ day-to-day tracking.
 | [The slowdown that only showed up after a long session](#the-slowdown-that-only-showed-up-after-a-long-session) | 'Slow after a while, fine at first' means unbounded growth; reproduce with a loop. | 0.4.0 |
 | [Export/import freezing the app](#exportimport-freezing-the-app) | Do file I/O on a worker thread; only the main thread touches Tkinter widgets. | 0.4.0 |
 | [The theme-switch flicker, and three ways not to fix it](#the-theme-switch-flicker-and-three-ways-not-to-fix-it) | Profile before reaching for rendering tricks; the fix was stopping work nothing asked for. | 0.32.49 |
-| [The list that was drawn whole, for every pause in typing](#the-list-that-was-drawn-whole-for-every-pause-in-typing) | Measure where the time goes before trimming what is easy to count; before removing work that looks wasted, ask what it was doing for someone; and a list that draws on demand owes every reader an answer independent of what is drawn. | Unreleased |
+| [The list that was drawn whole, for every pause in typing](#the-list-that-was-drawn-whole-for-every-pause-in-typing) | Measure where the time goes before trimming what is easy to count; before removing work that looks wasted, ask what it was doing for someone; when every symptom is the same cost seen from another side, remove the cost — six windows per card became none. | Unreleased |
 | [The Settings panels that stayed dark on a light theme](#the-settings-panels-that-stayed-dark-on-a-light-theme) | A computed colour is invisible to palette matching; derive it once, teach the theme switch. | 0.36.54 |
 | [The title box that took three and a half seconds a keystroke](#the-title-box-that-took-three-and-a-half-seconds-a-keystroke) | Measure to isolate: the app was fine, one widget was quadratic — cap its input. | 0.36.55 |
 | [The dropdown that opened on the wrong monitor](#the-dropdown-that-opened-on-the-wrong-monitor) | Position popups against the app window's own bounds, not the full virtual desktop. | 0.2.0 |
@@ -2293,10 +2293,10 @@ repeating notes:
 | Switching the theme | 194 → 136 ms | 358 → 152 ms | 887 → 150 ms |
 
 The cost of a card did not disappear; it moved to when the card is reached. Scrolling a
-1,000-note list to its end draws the rest in steps of twenty, about a fifth of a second each,
-9.4 seconds in all where it used to be nothing — and once everything is drawn, coming back to
-the list costs 3.0 seconds against 3.3 before. Only windowed rendering would change that
-(see the [ROADMAP](ROADMAP.md)).
+1,000-note list to its end drew the rest in steps of twenty, about a fifth of a second each,
+9.4 seconds in all where it used to be nothing — and once everything was drawn, coming back to
+the list cost 3.0 seconds against 3.3 before. That was still a widget list; the next paragraph
+is what changed it.
 
 **Three things that nearly slipped, each caught before it shipped.**
 
@@ -2315,6 +2315,51 @@ the list costs 3.0 seconds against 3.3 before. Only windowed rendering would cha
   made, `pack_slaves()` in the order they are packed; they agreed only while every change was a
   full rebuild. The keyboard's walk and two checks comparing the list against a rebuild had to
   learn the difference the first time a saved card was made last and packed first.
+
+**Then the field test, and the cards became a drawing.** Drawing on demand fixed what scaled
+with the notebook, and left what scaled with the cards that were drawn. The first person to use
+it said so in four ways: coming back to the list from the Calendar still showed it being built;
+a fast drag of the scrollbar tore the list and repaired it; the first regroup after a while was
+slow; and after scrolling through everything, coming back cost what it always had. Each was the
+same fact — six OS windows per card — seen from a different side: mapping them, moving them,
+destroying them. No arrangement of widgets gets under that, so the cards stopped being widgets.
+They are rectangles and text on the list's one canvas (`_draw_note_card`), laid out in records,
+found under the pointer by position, recoloured item by item. Photographed side by side with a
+widget card first, to be sure it could look the same; it does.
+
+On the drawing, at 300 notes: coming back to the list 74 ms whether one screenful or all 300 are
+drawn (the widget list: 141 ms and 794 ms), a rebuild 20 ms (320), a save 21 ms (75), a scroll
+to the end that draws all 300 in 0.09 s (2.4 s), a regroup of all 300 in 62 ms.
+
+And against 0.81.213 at 1,000 notes, in a second alternating run: a save 14.1 s → 22 ms, a
+rebuild 14.4 s → 9 ms, back to the list 3.7 s → 82 ms with one screenful drawn and 3.6 s → 81 ms
+with all of it, closing Settings 3.7 s → 83 ms, starting the app 9.1 → 1.9 s, and a scroll to
+the end that draws all 1,000 in 0.34 s. The old code's save took 12.6 s in the first run and
+14.1 s in this one — the same code on the same machine, another afternoon — which is why a
+number here is only ever compared with its own run.
+
+Two things the drawing asked for that the widgets had done unasked. A drawing's `bbox` starts at
+its first item, four pixels down, where a frame's started at 0 — so the top of the list read as
+"scrolled four pixels", every rebuild kept its old depth, and a list scrolled to its end once was
+drawn whole ever after. And the same field test found the keyboard stranded: a click opened a
+note and left the keyboard wherever it had been, so Down "did nothing", and the walk itself had
+never scrolled the list after the ring. A click puts the keyboard on the list now, and the list
+follows its ring.
+
+The first fix for the four pixels was an invisible rectangle from 0, placed one pixel in from
+each edge because Tk counts a pixel round a rectangle into its `bbox`. Twenty checks green on
+Windows; on the Linux image, qa1 and qa4 failed eight checks, every one about the list's top.
+Asked of plain Tk in both places, the same rectangle at (1, 1, 249, 199) read (0, 0, 250, 200) on
+Windows' Tk 8.6.15 and (1, 1, 249, 199) on the image's 8.6.16: the newer release stopped padding a
+rectangle with no outline. So "the top" read as 1 there, and every guard believed the list was
+scrolled. The rectangle is gone. The app knows where its rows end, and `_list_extent()` says so
+to the scrollregion, the top-up and every guard, whatever Tk thinks a rectangle measures.
+
+One measurement was a guess until a photograph caught it: the column the tick box takes in Select
+mode was drawn 17 pixels wide, and the widget card's Checkbutton had been 22 — so on the
+photograph the stripe and the text of every card in Select mode stood five pixels left of where
+they had always been. Measured on the old code and drawn at 22. The comparison tool had called
+that screen "changed" by 0.6% of its area; only looking at it said what had changed.
 
 **The preview, in the same pass.** Opening an animated GIF decoded every frame before showing
 the first: 1.3 seconds of nothing for a 60-frame animation, on every opening. The first frame is

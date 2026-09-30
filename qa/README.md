@@ -51,22 +51,22 @@ the one you happen to be editing:
 
 | Surface | Guarded in |
 |---|---|
-| Bulk-action bar / selection mode | **qa7**, **qa1** |
+| Bulk-action bar / selection mode | **qa1**, **qa3**, qa7, qa9, qa4 |
 | Theming (apply/track/toggle) | **qa1**, **qa4**, qa6 |
-| Autosave (debounce, guards, flush) | **qa8**, **qa7**, **qa1**, qa5, qa2, qa6, qa3 |
+| Autosave (debounce, guards, flush) | **qa1**, qa7, qa8, qa5, qa6, qa3, qa2, qa4 |
 | Editor page scroll/canvas | **qa1**, **qa8**, qa6 |
-| Note list (refresh, scroll guards, grouping) | **qa7**, **qa1**, qa6, qa8, qa4, qa5 |
-| Tables / drawn grids | **qa1**, qa7, qa5, qa2, qa3 |
+| Note list (refresh, scroll guards, grouping) | **qa1**, **qa4**, qa7, qa6, qa3, qa8, qa2, qa9, qa5 |
+| Tables / drawn grids | **qa1**, qa7, qa2, qa5, qa3, qa6 |
 | Find in note (Ctrl+F) / find bar | **qa1**, qa5 |
-| Templates | **qa9**, **qa1**, **qa6**, qa3, qa7, qa4 |
-| Settings panels | **qa6**, qa7, qa4, qa3 |
-| Calendar | **qa7**, qa2, qa5, qa1, qa8, qa9, qa4, qa6, qa3 |
-| Trash | **qa3**, **qa7**, qa6, qa1, qa4, qa5 |
-| Share codes | **qa3**, qa5, qa1 |
-| Export (files, backup) | **qa3**, **qa1**, qa6, qa8, qa4, qa5 |
-| Attachments | **qa7**, qa6, qa3, qa4, qa1, qa8, qa2, qa5 |
-| Recurrence / occurrences | **qa7**, **qa2**, qa8, qa5, qa3, qa4, qa1 |
-| Checklist | **qa1**, qa7, qa3, qa6, qa2, qa4, qa5, qa8, qa9 |
+| Templates | **qa9**, **qa1**, qa6, qa3, qa7, qa4 |
+| Settings panels | **qa6**, qa3, qa4, qa9, qa2, qa7, qa1 |
+| Calendar | **qa7**, qa4, qa2, qa1, qa5, qa6, qa9, qa8, qa3 |
+| Trash | **qa3**, **qa6**, qa7, qa2, qa1, qa4, qa5, qa9 |
+| Share codes | **qa3**, qa1, qa5 |
+| Export (files, backup) | **qa3**, **qa1**, qa6, qa8, qa4, qa9, qa5, qa7 |
+| Attachments | **qa7**, qa6, qa3, qa1, qa4, qa8, qa2, qa5 |
+| Recurrence / occurrences | **qa7**, **qa2**, qa3, qa1, qa8, qa5, qa4, qa6, qa9 |
+| Checklist | **qa1**, qa3, qa7, qa6, qa2, qa4, qa5, qa9, qa8 |
 | Formatting / rich text | **qa1**, qa3, qa2, qa9, qa7, qa6 |
 
 Bold = the heavy owner(s): a file carrying at least a quarter of a
@@ -421,26 +421,30 @@ A new surface joins this list the moment it ships.
   a binding, a placeholder, a validator or a menu sits between the user
   and the function, drive the outermost thing the app itself drives —
   here, the same virtual event the app's own menu sends.
-- **The note list is drawn a screenful at a time, and its screen order is
-  its packing order.** Two things every check about the list has to know.
-  `winfo_children()` lists widgets in the order they were MADE, and agreed
-  with the screen only while every change was a full rebuild; a save now
-  redraws its own card last and packs it where the sort puts it, so a
-  check that walks the list in order reads `list_frame.pack_slaves()`.
-  qa1's recolour-equals-rebuild comparison went red the first time it met
-  a moved card. And a card beyond the first `LIST_FIRST_DRAW` rows does
-  not exist until the view comes near it: a check about such a card draws
-  it first, the way scrolling would (`_draw_list_rows` until it is
-  there), and says so. Whether a note lands in the first screenful can
-  hinge on the second its fixture was made in, because Recently updated
-  sorts by that stamp — one of qa1's checks passed a run and failed the
-  next on exactly that.
+- **The note list is a drawing, drawn a screenful at a time.** Three
+  things every check about the list has to know.
 
-  The same pass found two checks asking the open note's card for its
-  ring's *thickness* — two pixels, which every card has worn since the
-  keyboard's focus ring shipped — so neither could fail. They ask for the
-  ring's colour now. A property every candidate shares cannot tell them
-  apart.
+  A card has no widgets to read. Ask the app what it drew:
+  `_card_view(id)` (texts, fills, ring, tick, where it stands),
+  `_header_view(cat)`, `_card_order()` (screen order), `_card_point(id)`
+  (where a click on it lands, for a real `<Button-1>` on `app.canvas`).
+  Whether a card was *redrawn* is the identity of its canvas items —
+  `_note_cards[id]['items']['bg']` — which a move keeps and a redraw
+  replaces, as a widget's path used to.
+
+  A card beyond the first `LIST_FIRST_DRAW` rows does not exist until the
+  view comes near it: a check about such a card draws it first, the way
+  scrolling would (`_draw_list_rows` until it is there), and says so.
+  Whether a note lands in the first screenful can hinge on the second its
+  fixture was made in, because Recently updated sorts by that stamp — one
+  of qa1's checks passed a run and failed the next on exactly that.
+
+  And the ring's colour means two things (the text colour where the list
+  holds the keyboard, accent for the open note), so a check about "the
+  open note is highlighted" first forces the keyboard somewhere else. Two
+  older checks asked for the ring's *thickness* — two pixels, which every
+  card has — and could not fail at all. A property every candidate shares
+  cannot tell them apart.
 - **A widget clipped by its window still reports its full height.** The
   check for the window's smallest size first asked whether the note
   list's `winfo_height()` could hold a card, and passed at the old,
