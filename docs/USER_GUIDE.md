@@ -346,6 +346,14 @@ all your categories, plus **🔁 Repeating** and **📅 Dated** for the notes th
 calendar. Both are remembered, so the list you left is the list you come back to; if the category
 a filter names is later deleted, the filter falls back to **All** rather than showing you nothing.
 
+A long list fills in as you scroll: the app draws the first screenful straight away and the next
+notes as you come near them, by wheel, scrollbar or the arrow keys, so the scrollbar's handle
+shrinks a little as you go. Every note is there, in order; searching, **Select all** and the
+counts beside the category headers always mean the whole list, drawn yet or not.
+
+*Why: a notebook of hundreds of notes used to make you wait for every one of them to be drawn —
+at startup, at every pause in typing, and every time you came back to the list.*
+
 To search *within* the note you already have open, press **Ctrl+F**. A small find bar appears in
 the top-right corner of the editor — inside the window, not a separate dialog. It looks through
 the note's text and its tables: type a word and every match highlights, with the current one

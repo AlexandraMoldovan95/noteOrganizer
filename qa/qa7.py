@@ -758,7 +758,10 @@ finally:
 _c9_take(_c9_live(20))
 _c9_live(20).event_generate('<Down>')
 app.update(); app.update_idletasks()
-_c9_ids = [w._card_note_id for w in app.list_frame.winfo_children()
+# pack_slaves is the packing order; winfo_children is the order the widgets
+# were MADE, which a saved note's card -- made last, packed where the sort
+# puts it -- no longer shares.
+_c9_ids = [w._card_note_id for w in app.list_frame.pack_slaves()
            if getattr(w, '_card_note_id', None) is not None]
 _c9_pos = _c9_ids.index(20) if 20 in _c9_ids else None
 _c9_next_id = (_c9_ids[_c9_pos + 1]
@@ -782,7 +785,7 @@ _c9_top_ready = (_c9_first_id is not None
                  and _c9_take(_c9_live(_c9_first_id)))
 # Read AFTER the wait, so the widgets whose decisions are recorded are the
 # ones on screen when the key arrives.
-_c9_order = [w for w in app.list_frame.winfo_children()
+_c9_order = [w for w in app.list_frame.pack_slaves()
              if getattr(w, '_card_note_id', None) is not None]
 _c9_moved = []
 for _c9_w in _c9_order:
@@ -869,7 +872,13 @@ app.open_note_in_tab(app.find_note(21))
 app.update()
 card_ids_after2 = {nid: str(info['card']) for nid, info in app._note_card_widgets.items()}
 check('switching notes does NOT rebuild the list (no flicker)', card_ids_before2 == card_ids_after2)
-check('highlight correctly moved to the new note', app._note_card_widgets[21]['card'].cget('highlightthickness') == 2)
+# Asked of the colour: every card wears a two-pixel ring now (the keyboard's
+# focus ring shares it), so a check of the thickness passed for any card.
+check('highlight correctly moved to the new note',
+      str(app._note_card_widgets[21]['card'].cget('highlightbackground'))
+      == app.colors['accent']
+      and str(app._note_card_widgets[20]['card'].cget('highlightbackground'))
+      != app.colors['accent'])
 
 # bulk category change
 app.ask_yes_no = lambda *a, **k: True
@@ -950,6 +959,103 @@ app.refresh_attachments_list(); app.update()
 app.open_attachment(0)
 app.update()
 check('corrupt image file handled gracefully, no crash', app._mini_popup is None)
+
+# ---- THE PREVIEW APPEARS AT ONCE, AND AGAIN FROM MEMORY ----
+# Every frame of an animation used to be decoded before the first was
+# shown -- 1.26 s of nothing for a 60-frame GIF, on every opening. The
+# first frame now shows at once and the rest are decoded as the animation
+# reaches them; a finished preview is remembered for the next opening, and
+# forgotten when the file changes.
+import time
+from PIL import Image as _pv_Image, ImageDraw as _pv_Draw
+import noteorganizer.ui.attachments as _pv_att
+_pv_dir = NO.ATTACHMENTS_DIR
+_pv_frames = []
+for _pv_i in range(8):
+    _pv_f = _pv_Image.new('RGB', (300, 200), (20, 20, 30))
+    _pv_Draw.Draw(_pv_f).ellipse([_pv_i * 20, 50, _pv_i * 20 + 80, 130],
+                                 fill=(230, 90, 60))
+    _pv_frames.append(_pv_f)
+_pv_gif = os.path.join(_pv_dir, 'anim_pv.gif')
+_pv_frames[0].save(_pv_gif, save_all=True, append_images=_pv_frames[1:],
+                   duration=20, loop=0)
+app._show_image_preview(_pv_gif, 'anim_pv.gif'); app.update()
+check(f'an animation shows its first frame before decoding the rest '
+      f'({len(app._image_preview_ref)} decoded when shown)',
+      len(app._image_preview_ref) == 1 and app._preview_source is not None)
+_pv_end = time.time() + 10
+while app._preview_source is not None and time.time() < _pv_end:
+    app.update(); time.sleep(0.01)
+check(f'...decodes the rest as it plays, and lets the file go at the end '
+      f'({len(app._image_preview_ref)} of 8)',
+      len(app._image_preview_ref) == 8 and app._preview_source is None)
+app._dismiss_mini_popup(); app.update()
+
+# Reopened: from memory, every frame at once, without opening the file.
+_pv_opened = []
+_pv_real_open = _pv_att.Image.open
+_pv_att.Image.open = lambda *a, **k: (_pv_opened.append(a[0]),
+                                      _pv_real_open(*a, **k))[1]
+try:
+    app._show_image_preview(_pv_gif, 'anim_pv.gif'); app.update()
+    _pv_reopen_frames = len(app._image_preview_ref)
+    app._dismiss_mini_popup(); app.update()
+    _pv_big = os.path.join(_pv_dir, 'big.png')
+    app._show_image_preview(_pv_big, 'big.png'); app.update()
+    app._dismiss_mini_popup(); app.update()
+    _pv_opened.clear()
+    app._show_image_preview(_pv_big, 'big.png'); app.update()
+    app._dismiss_mini_popup(); app.update()
+finally:
+    _pv_att.Image.open = _pv_real_open
+check(f'a preview seen before comes back from memory (animation: '
+      f'{_pv_reopen_frames} frames at once; files opened on the second '
+      f'look at a photo: {len(_pv_opened)})',
+      _pv_reopen_frames == 8 and not _pv_opened)
+
+# A file replaced under the same name is read again, not remembered.
+_pv_swap = os.path.join(_pv_dir, 'swap_pv.png')
+_pv_Image.new('RGB', (300, 200), (255, 0, 0)).save(_pv_swap)
+app._show_image_preview(_pv_swap, 'swap_pv.png'); app.update()
+_pv_w1 = app._image_preview_ref[0].width()
+app._dismiss_mini_popup(); app.update()
+_pv_Image.new('RGB', (200, 300), (0, 255, 0)).save(_pv_swap)
+_pv_later = time.time() + 5
+os.utime(_pv_swap, (_pv_later, _pv_later))
+app._show_image_preview(_pv_swap, 'swap_pv.png'); app.update()
+_pv_w2 = app._image_preview_ref[0].width()
+app._dismiss_mini_popup(); app.update()
+check(f'a file replaced under the same name is read again ({_pv_w1} -> '
+      f'{_pv_w2} wide)', _pv_w1 != _pv_w2)
+
+# Closed half-way through its first loop, the preview lets go of the file
+# -- on Windows an open file cannot be renamed or deleted.
+app._preview_cache.clear()
+app._show_image_preview(_pv_gif, 'anim_pv.gif'); app.update()
+_pv_held = app._preview_source is not None
+app._dismiss_mini_popup(); app.update()
+try:
+    os.replace(_pv_gif, _pv_gif + '.moved')
+    _pv_moved = True
+except OSError:
+    _pv_moved = False
+check(f'closing an animation mid-decode lets its file go (was reading: '
+      f'{_pv_held}, then movable: {_pv_moved})', _pv_held and _pv_moved)
+
+# A JPEG photo is decoded at the size it is shown, and still fills it.
+_pv_jpg = os.path.join(_pv_dir, 'photo_pv.jpg')
+_pv_Image.new('RGB', (3000, 2000), (40, 90, 160)).save(_pv_jpg, quality=85)
+app.update_idletasks()
+_pv_tw = max(int(app.winfo_width() * 0.7), 200)
+_pv_th = max(int(app.winfo_height() * 0.7), 200)
+app._show_image_preview(_pv_jpg, 'photo_pv.jpg'); app.update()
+_pv_pw = app._image_preview_ref[0].width()
+_pv_ph = app._image_preview_ref[0].height()
+app._dismiss_mini_popup(); app.update()
+check(f'a large JPEG fits the preview, and fills it ({_pv_pw}x{_pv_ph} in '
+      f'{_pv_tw}x{_pv_th})',
+      _pv_pw <= _pv_tw and _pv_ph <= _pv_th
+      and max(_pv_pw / _pv_tw, _pv_ph / _pv_th) > 0.95)
 
 # ---- A shortcut file is dangerous too (product review T0-8) ----
 # The warn-before-opening list covered the 1990s executables and missed

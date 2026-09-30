@@ -4011,9 +4011,14 @@ try:
     # another program's window -> popups WITHDRAW, data intact; the
     # app's own -> they come back. Never destroyed -- a half-typed
     # dialog must survive a trip to the browser.
+    # On the two window classes: the main window's and every popup's. Not
+    # bind_all any more -- Tk sends Deactivate to every widget inside a
+    # window, and bind_all ran the handler once per widget (qa4 guards
+    # that half).
     check('the foreground watch is armed from startup',
           getattr(app, '_deactivate_bound', False)
-          and bool(app.bind_all('<Deactivate>')))
+          and bool(app.bind_class(app.winfo_class(), '<Deactivate>'))
+          and bool(app.bind_class('Toplevel', '<Deactivate>')))
     _popD = app._mini_popup
     _real_ours = app._foreground_is_ours
     app._foreground_is_ours = lambda: True     # the app holds the front
@@ -5464,7 +5469,7 @@ _theme_opts = ('bg', 'fg', 'highlightbackground', 'highlightcolor')
 
 def _card_colors():
     out = []
-    def walk(w):
+    def record(w):
         row = [w.__class__.__name__]
         for o in _theme_opts:
             try:
@@ -5472,9 +5477,16 @@ def _card_colors():
             except Exception:
                 pass
         out.append(tuple(row))
+    def walk(w):
+        record(w)
         for ch in w.winfo_children():
             walk(ch)
-    walk(app.list_frame)
+    # The cards in the order they are PACKED -- the order on screen. The
+    # order they were made in differs after a save, which redraws its own
+    # card last and packs it where the sort puts it.
+    record(app.list_frame)
+    for top in app.list_frame.pack_slaves():
+        walk(top)
     return out
 
 app.new_note()
@@ -8771,8 +8783,19 @@ check('deleting the OPEN note leaves the highlight with nothing stale',
       403 not in app._note_card_widgets)
 app.open_note_in_tab(app.find_note(402))
 app.update()
+# Drawn first, the way scrolling to it would draw it: the list draws a
+# screenful and the rest as the view comes near, and whether 402 falls in
+# the first screenful depends on whether the thirty notes above were made
+# in the same second as it (the sort is by that timestamp). And asked of
+# the COLOUR: every card wears a two-pixel ring now, so a check of the
+# thickness passed for any card at all.
+while 402 not in app._note_card_widgets and app._list_pending:
+    app._draw_list_rows(app.LIST_DRAW_STEP)
+app.update()
+_sg_402 = (app._note_card_widgets.get(402) or {}).get('card')
 check('...and the next note opened still takes the border',
-      app._note_card_widgets[402]['card'].cget('highlightthickness') == 2)
+      _sg_402 is not None
+      and str(_sg_402.cget('highlightbackground')) == app.colors['accent'])
 
 # A theme switch afterwards recolours what is left, in place, and must
 # not trip over the entry that was removed.

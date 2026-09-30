@@ -234,7 +234,8 @@ changes note *data*, so `_recolor_note_cards()` now re-applies colors to the car
 screen, using named widget references recorded in `_note_card_widgets` when each card is built.
 
 This is **not** the `track_theme` pattern that leaked: `_note_card_widgets` is rebuilt from
-scratch by every `refresh_note_list()`, so it only ever holds cards currently on screen.
+scratch by every `refresh_note_list()`, and every update that stops short of one keeps it
+exact, so it only ever holds the cards that are drawn.
 
 Two ordering rules matter here — `_recolor_note_cards()` runs *after* `_recolor_stragglers()`
 so a note's own color (recomputed from the note, not color-swapped) wins over the generic
@@ -460,13 +461,41 @@ occupy an index but are skipped by character counts, and a rebuild mid-gesture d
 canvas under the mouse — each of those has burned this codebase once, and each now has a
 regression check in `qa/qa1.py` and a war story in [ISSUES_LOG.md](ISSUES_LOG.md).
 
-### Large lists: paginate, don't virtualize (yet)
+### Large lists: draw what can be seen, the rest on demand
 
 The Trash (Settings → Recently deleted) and the multi-note Share panel both cap how many rows
 they build at once (50 and 100 respectively), with a "Show more" button to reveal the next
-batch, rather than rendering every entry immediately. This was enough to take the Trash panel from ~1.8s to ~100ms with 600
-entries. The main note list doesn't do this yet — see [ROADMAP.md](ROADMAP.md) for real
-windowed virtualization, which would help further at very large note counts.
+batch, rather than rendering every entry immediately. This was enough to take the Trash panel
+from ~1.8s to ~100ms with 600 entries.
+
+The main note list does the same job without a button, because it is the app's main way
+around and a button every thirty notes would be felt. Every card is several OS windows (in Tk
+on Windows every widget is one), so drawing the whole list cost time in proportion to the
+notebook — on every rebuild, and again every time the list was shown after the Calendar or
+Settings. A rebuild now draws `LIST_FIRST_DRAW` rows (30); the rest wait in `_list_pending`,
+and `_list_view_changed` — the canvas's `yscrollcommand`, which hears every way the view can
+move: wheel, scrollbar, a taller window, a drawn step lengthening the content — draws
+`LIST_DRAW_STEP` more whenever less than a screen of drawn list is left below the view. The
+keyboard's ↓ draws ahead of itself.
+
+Three rules keep it honest:
+
+- **One definition of what the list shows.** `_list_rows()` (built on `_notes_on_the_list()`)
+  is read by the rebuild, the top-up, the one-card save and Select all. Nothing asks the
+  *cards* which notes are on the list — "all" means every note the list shows, drawn yet or not.
+- **The drawn part is a prefix.** `_list_drawn_keys` followed by `_list_pending` is exactly
+  `_list_rows()`, in order. Every update short of a rebuild — a delete (`_remove_note_cards`), a
+  save (`_redraw_saved_card`) — keeps that true, and asks for a top-up itself when it leaves rows
+  waiting, because the canvas reports only when something changes size.
+- **Screen order is packing order.** `list_frame.pack_slaves()`, never `winfo_children()`: a
+  saved note's card is made last and packed where the sort puts it.
+
+A rebuild keeps the depth that was drawn when the list was scrolled, so the position restored
+in pixels (below) has content to land on, and draws the card the keyboard was on. This is not
+virtualization: a card once drawn stays drawn until the next rebuild. Windowed rendering —
+recycling one screenful of cards — stays on the [ROADMAP](ROADMAP.md) for notebooks far larger
+than the thousand notes this was measured with. See
+[The list that was drawn whole, for every pause in typing](ISSUES_LOG.md#the-list-that-was-drawn-whole-for-every-pause-in-typing).
 
 ### Scrollable canvases guard their own view
 

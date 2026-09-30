@@ -335,6 +335,26 @@ try:
     check('what save_notes wrote is what load_notes reads back',
           [n['title'] for n in _again] == ['Kept', 'Added'])
 
+    # The file keeps its exact shape: a two-space indent, and every
+    # character written as itself rather than escaped, so a note in any
+    # script stays readable in a text editor and two saves diff cleanly.
+    # The write became one string instead of a stream of pieces, to be
+    # quicker; this is what says it still writes the same file, compared
+    # against the old way of writing it, line endings and all.
+    _shape = [{'id': 1, 'title': 'Café ☕ naïve Ω 中文 \U0001F600',
+               'body': 'a\n| x | y |\n| --- | --- |'}]
+    _storage.save_notes(_shape)
+    _old_way = os.path.join(_notes_dir, 'written_the_old_way.json')
+    with open(_old_way, 'w', encoding='utf-8') as f:
+        json.dump(_storage.mend_surrogates(_shape), f, indent=2,
+                  ensure_ascii=False)
+    with open(NO_paths.DATA_FILE, 'rb') as f:
+        _written = f.read()
+    with open(_old_way, 'rb') as f:
+        _expected = f.read()
+    check('save_notes writes the file byte for byte as it always has',
+          _written == _expected)
+
     # An upgrade must snapshot the file before this version's code rewrites it.
     _before = len([f for f in os.listdir(_notes_dir) if f.startswith('notes_data_backup_')])
     _storage.load_notes(version_change=('up', '0.1.0', '0.2.0'))

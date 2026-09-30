@@ -380,20 +380,523 @@ app.toggle_theme(); app.update()
 # 20% is a check that fires on a busy CI runner, and this project has
 # already thrown away a day to a flaky check. It catches the thing worth
 # catching, which is an accidental order-of-magnitude.
+#
+# The first half changed shape when the list stopped being drawn whole: a
+# rebuild draws LIST_FIRST_DRAW rows and the rest as the view comes near
+# them. So "the work actually happened" is asked twice -- the first draw is
+# exactly the first rows, and scrolling to the end draws every one of the
+# 300 in the list's own order. A rebuild that silently stopped building
+# cards fails both, and so does one that went back to drawing everything.
 NOTE_LIST_BUDGET_MS = 8000
 app.notes = [{'id':i,'title':f'Perf{i}','body':'x'*30,'category':'General',
              'updated':'2026-01-01 00:00','created':'2026-01-01 00:00',
              'checklist':[],'attachments':[]} for i in range(300)]
+app.canvas.yview_moveto(0); app.update()
 t0=time.perf_counter()
 app.refresh_note_list()
 app.update()
 elapsed=(time.perf_counter()-t0)*1000
 _cards_built = len(getattr(app, '_note_card_widgets', {}))
-check(f'refresh_note_list really builds every card ({_cards_built} of 300)',
-      _cards_built == 300)
+_first_draw = app.LIST_FIRST_DRAW
+# The numbers go at the END of the names: a mutant that changes the
+# constant must not change the name a runner looks for.
+check(f'a rebuild draws only the first screenful of cards straight away '
+      f'({_cards_built} of 300; LIST_FIRST_DRAW is {_first_draw})',
+      _cards_built == _first_draw < 300)
+check(f'...and holds the rest ready below them '
+      f'({len(app._list_pending)} waiting)',
+      len(app._list_pending) == 300 - _first_draw)
 check(f'...and stays inside its budget ({elapsed:.0f}ms of '
-      f'{NOTE_LIST_BUDGET_MS}ms; measured 1.2-1.6s on Windows, 0.5s on Linux)',
+      f'{NOTE_LIST_BUDGET_MS}ms; measured 1.2-1.6s on Windows, 0.5s on Linux '
+      f'when it still drew all 300)',
       elapsed < NOTE_LIST_BUDGET_MS)
+_perf_steps = 0
+while app._list_pending and _perf_steps < 100:
+    app.canvas.yview_moveto(1.0)
+    app.update()
+    _perf_steps += 1
+_perf_order = [w._card_note_id for w in app.list_frame.pack_slaves()
+               if getattr(w, '_card_note_id', None) is not None]
+_perf_rows = [r[1]['id'] for r in app._list_rows() if r[0] == 'note']
+check(f'scrolling to the end draws every card, in the list\'s own order '
+      f'({len(_perf_order)} of 300, in {_perf_steps} steps)',
+      len(_perf_order) == 300 and _perf_order == _perf_rows)
+
+# ---------------------------------------------------------------------
+# THE LIST DRAWS WHAT YOU CAN SEE
+#
+# Three promises, each with the mechanism that used to break it:
+#   1. two handlers that only care about the window -- the title bar's
+#      paint on <Map> and the calendar's width step -- no longer run once
+#      per widget. Bound with self.bind they ran 1,939 and 3,882 times for
+#      one rebuild of 300 notes. The paint listens to the window alone; the
+#      step listens to the calendar's own grid, which also hears the resize
+#      made while the calendar was hidden (the storm used to cover that);
+#   2. the list draws rows as the view comes near them: the scroll, the
+#      keyboard's walk and a list shorter than its window all draw more,
+#      and a deletion or a group's count reaches rows not drawn yet;
+#   3. a save redraws the saved note's card alone, and the list it leaves
+#      is the list a full rebuild would draw.
+# The image preview's half of the same work is in qa7.
+# ---------------------------------------------------------------------
+
+
+def _ls_settle(n=3):
+    for _ in range(n):
+        app.update()
+        app.update_idletasks()
+
+
+def _ls_keys():
+    return list(app._list_drawn_keys) + [
+        (r[0], r[1] if r[0] == 'header' else r[1]['id'])
+        for r in app._list_pending]
+
+
+def _ls_snapshot():
+    """What the drawn list shows, card by card and header by header, in
+    the order it is packed -- which is the order on screen."""
+    shown = []
+    for w in app.list_frame.pack_slaves():
+        nid = getattr(w, '_card_note_id', None)
+        if nid is not None:
+            info = app._note_card_widgets.get(nid)
+            if info is None or info.get('card') is not w:
+                # A card on screen that the registry does not know -- left
+                # behind by an update that forgot to destroy it. Recorded
+                # as a difference rather than crashing the comparison.
+                shown.append(('card nobody registered', nid))
+                continue
+            shown.append(('note', nid, str(info['title'].cget('text')),
+                          str(info['preview'].cget('text')),
+                          str(info['tags'].cget('text')),
+                          str(info['stripe'].cget('bg')),
+                          str(w.cget('highlightbackground'))))
+        else:
+            shown.append(('header',) + tuple(
+                str(c.cget('text')) for c in w.winfo_children()
+                if isinstance(c, tk.Label)))
+    return shown
+
+
+def _ls_same_as_rebuild():
+    """The list as it stands, against the list a full rebuild draws. A
+    rebuild may draw a different depth, so the drawn part is compared as
+    far as both reach, and the order of every row -- drawn or waiting --
+    in full."""
+    before, before_keys = _ls_snapshot(), _ls_keys()
+    app.refresh_note_list(); _ls_settle()
+    after, after_keys = _ls_snapshot(), _ls_keys()
+    common = min(len(before), len(after))
+    return common > 0 and before[:common] == after[:common] \
+        and before_keys == after_keys
+
+
+def _ls_search(text):
+    """Search for `text` now, not after the typing pause."""
+    app.search_var.set(text)
+    job = getattr(app, '_search_debounce_job', None)
+    if job is not None:
+        app.after_cancel(job)
+        app._search_debounce_job = None
+    app.refresh_note_list(); _ls_settle()
+
+
+def _ls_scroll_to_end():
+    steps = 0
+    while app._list_pending and steps < 100:
+        app.canvas.yview_moveto(1.0)
+        app.update()
+        steps += 1
+
+
+def _ls_card_ids():
+    return [w._card_note_id for w in app.list_frame.pack_slaves()
+            if getattr(w, '_card_note_id', None) is not None]
+
+
+def _ls_let_restores_finish():
+    """Let a rebuild's scroll restore run its course. It is queued for
+    when the app is next idle, then stays in force for 400ms and re-applies
+    itself on timers (qa/README) -- read before that, a position is the
+    restore's, not the thing under test's; left running, it lands on the
+    next check and moves ITS view."""
+    end = time.time() + 1.0
+    while time.time() < end:
+        app.update()
+        time.sleep(0.02)
+
+
+# 1. The window's own handlers. Counted on the instance, which is where
+# both bindings look them up each time they run.
+_ls_calls = {'paint': 0, 'calendar': 0}
+_ls_real_paint = app._paint_title_bar
+_ls_real_cal = app._is_calendar_visible
+
+
+def _ls_paint():
+    _ls_calls['paint'] += 1
+    return _ls_real_paint()
+
+
+def _ls_cal():
+    _ls_calls['calendar'] += 1
+    return _ls_real_cal()
+
+
+app._paint_title_bar = _ls_paint
+app._is_calendar_visible = _ls_cal
+try:
+    app.canvas.yview_moveto(0); _ls_settle()
+    _ls_calls['paint'] = _ls_calls['calendar'] = 0
+    app.refresh_note_list(); _ls_settle()
+    check(f'a list rebuild runs no window-level handler once per widget '
+          f'(title bar {_ls_calls["paint"]}, calendar step '
+          f'{_ls_calls["calendar"]}; 1,939 and 3,882 when bound with '
+          f'self.bind)', _ls_calls['paint'] == 0 and _ls_calls['calendar'] == 0)
+    # The other half: the window's OWN <Map> must still paint the title
+    # bar, which is what the binding is for -- a fresh launch otherwise
+    # keeps the system colours until a theme is switched.
+    _ls_calls['paint'] = 0
+    app.withdraw(); _ls_settle()
+    app.deiconify()
+    _ls_end = time.time() + 5
+    while _ls_calls['paint'] == 0 and time.time() < _ls_end:
+        app.update(); time.sleep(0.02)
+    check(f'...while the window\'s own <Map> still paints its title bar '
+          f'({_ls_calls["paint"]})', _ls_calls['paint'] >= 1)
+    # And the calendar still takes its width step from the window's own
+    # resize, both ways across the 1150-pixel line. On screen, which the
+    # Settings page left open by the stress test above would prevent: the
+    # step is taken only while the calendar can be seen.
+    _ls_settings_was_open = getattr(app, '_settings_open', False)
+    if _ls_settings_was_open:
+        app.hide_settings_page()
+    app.geometry('1100x850'); _ls_settle()
+    app.notebook.select(app.TAB_CALENDAR); _ls_settle()
+    app._cal_last_font_size = None
+    app.geometry('1200x850')
+    _ls_end = time.time() + 5
+    while app._cal_last_font_size != 11 and time.time() < _ls_end:
+        app.update(); time.sleep(0.02)
+    _ls_wide = app._cal_last_font_size
+    app.geometry('1100x850')
+    _ls_end = time.time() + 5
+    while app._cal_last_font_size != 9 and time.time() < _ls_end:
+        app.update(); time.sleep(0.02)
+    check(f'...and the calendar still takes its width step from the '
+          f'window\'s resize (wide {_ls_wide}, narrow '
+          f'{app._cal_last_font_size})',
+          _ls_wide == 11 and app._cal_last_font_size == 9)
+    # ...including a resize made while the calendar was NOT showing: the
+    # step is taken when it comes back. The window's own <Configure> never
+    # reports that -- bound there alone, the calendar kept its small text
+    # on a wide window. The old per-widget storm happened to cover it.
+    app.notebook.select(app.TAB_NOTES); _ls_settle()
+    app.geometry('1200x850'); _ls_settle()
+    app.notebook.select(app.TAB_CALENDAR)
+    _ls_end = time.time() + 5
+    while app._cal_last_font_size != 11 and time.time() < _ls_end:
+        app.update(); time.sleep(0.02)
+    check(f'...and takes it on coming back to a calendar the window was '
+          f'resized away from ({app._cal_last_font_size})',
+          app._cal_last_font_size == 11)
+    app.notebook.select(app.TAB_NOTES); _ls_settle()
+    app.geometry('1100x850'); _ls_settle()
+    if _ls_settings_was_open:
+        app.show_settings_page(); _ls_settle()
+finally:
+    app.__dict__.pop('_paint_title_bar', None)
+    app.__dict__.pop('_is_calendar_visible', None)
+
+# Activate/Deactivate reach every widget inside a window, so they are
+# bound on the two window classes rather than with bind_all -- which ran
+# the handler 2,132 times per Alt+Tab for a 300-note list, measured.
+check('the activation handlers are not bound on every widget',
+      not app.bind_all('<Activate>') and not app.bind_all('<Deactivate>'))
+# Asked of the REQUEST the handler makes, recorded as it is made: the watch
+# also runs on a 300ms heartbeat of its own, so a check that waited for the
+# watch to run passed with the popup's binding gone (a mutant said so).
+# Only the Deactivate handler asks for a look 150ms later.
+_ls_asked_watch = []
+_ls_real_after = app.after
+
+
+def _ls_after(ms, func=None, *args):
+    if getattr(func, '__name__', '') == '_popup_watch_step':
+        _ls_asked_watch.append(ms)
+    return _ls_real_after(ms, func, *args)
+
+
+_ls_top = tk.Toplevel(app)
+try:
+    _ls_settle()
+    _ls_top.winfo_id()
+    app.after = _ls_after
+    try:
+        # Processed before event_generate returns: every handler for it
+        # has run by the next line.
+        _ls_top.event_generate('<Deactivate>')
+    finally:
+        app.__dict__.pop('after', None)
+    check(f'...while a popup window losing the front still asks the '
+          f'foreground watch to look ({_ls_asked_watch})',
+          _ls_asked_watch == [150])
+finally:
+    _ls_top.destroy()
+    _ls_settle()
+
+# 2. Drawing as the view comes near. The 300 notes from above, from the top.
+app.canvas.yview_moveto(0); _ls_settle()
+app.refresh_note_list(); _ls_settle()
+_ls_rows = [r[1]['id'] for r in app._list_rows() if r[0] == 'note']
+_ls_last = [k for k in app._list_drawn_keys if k[0] == 'note'][-1][1]
+# None when everything is drawn already -- the check below then fails on
+# its own line instead of the script dying here without a verdict.
+_ls_at = _ls_rows.index(_ls_last)
+_ls_want = _ls_rows[_ls_at + 1] if _ls_at + 1 < len(_ls_rows) else None
+# Which card the walk ASKS to take the keyboard, recorded where the
+# decision is made: focus_get() cannot be trusted while the test process
+# does not own the desktop's foreground (qa/README).
+_ls_asked = []
+_ls_real_focus = tk.Misc.focus_set
+tk.Misc.focus_set = lambda self: _ls_asked.append(
+    getattr(self, '_card_note_id', None))
+try:
+    app._focus_card_by_offset(_ls_last, 1)
+finally:
+    tk.Misc.focus_set = _ls_real_focus
+check(f'Down on the last drawn card draws on and moves to the next '
+      f'(asked for {_ls_asked}, the next is {_ls_want})',
+      _ls_want is not None and _ls_asked == [_ls_want])
+
+# A note deleted before its card was ever drawn must never get one.
+_ls_victim = _ls_rows[200]
+_ls_real_ask = app.ask_yes_no
+app.ask_yes_no = lambda *a, **k: True
+try:
+    app._delete_note(app.find_note(_ls_victim), None); _ls_settle()
+finally:
+    app.ask_yes_no = _ls_real_ask
+_ls_scroll_to_end()
+_ls_ids = _ls_card_ids()
+check(f'a note deleted before its card was drawn never gets one '
+      f'({len(_ls_ids)} cards, victim drawn: {_ls_victim in _ls_ids})',
+      _ls_victim not in _ls_ids and len(_ls_ids) == 299)
+
+# A rebuild while scrolled keeps the depth, so the place restored in
+# pixels has content to land on.
+app.canvas.yview_moveto(0); _ls_settle()
+app.refresh_note_list(); _ls_settle()
+for _ in range(4):
+    app.canvas.yview_moveto(1.0); app.update()
+app.canvas.yview_moveto(0.6); _ls_settle()
+_ls_depth = len(app._list_drawn_keys)
+_ls_px = app.canvas.canvasy(0)
+app.refresh_note_list()
+# Read once the restore has run its course: straight after the call the
+# view has not been clamped yet, so the place would match for nothing.
+_ls_let_restores_finish()
+check(f'a rebuild while scrolled keeps the drawn depth '
+      f'({len(app._list_drawn_keys)} of {_ls_depth}) and the place '
+      f'({app.canvas.canvasy(0):.0f} of {_ls_px:.0f})',
+      _ls_px > 0 and len(app._list_drawn_keys) >= _ls_depth
+      and abs(app.canvas.canvasy(0) - _ls_px) < 30)
+
+# A first draw shorter than the window draws on by itself. From the top,
+# once the rebuild above's restore has run out -- still in force, it
+# carried the old depth into this rebuild and drew deep for a different
+# reason (a mutant said so). And the fixture asserts its own start: one
+# row, shorter in PIXELS than the view, which is what the promise is
+# about. The list shows about 140px in this window, so three cards already
+# overfilled it and a first version of this check, drawing three, asked
+# nothing at all.
+app.LIST_FIRST_DRAW = 1
+try:
+    _ls_let_restores_finish()
+    app.canvas.yview_moveto(0)
+    app._list_restore_px = None
+    _ls_settle()
+    app.refresh_note_list()
+    _ls_first = len(app._list_drawn_keys)
+    _ls_first_key = app._list_drawn_keys[0] if app._list_drawn_keys else None
+    _ls_end = time.time() + 5
+    _ls_seen = -1
+    while time.time() < _ls_end and len(app._list_drawn_keys) != _ls_seen:
+        _ls_seen = len(app._list_drawn_keys)
+        _ls_settle()
+        time.sleep(0.05)
+    _ls_view = app.canvas.winfo_height()
+    _ls_box = app.canvas.bbox('all')
+    _ls_left = (_ls_box[3] if _ls_box else 0) - app.canvas.canvasy(_ls_view)
+    # The first card is the same widget however many were drawn after it.
+    _ls_first_card = ((app._note_card_widgets.get(_ls_first_key[1]) or {}).get('card')
+                      if _ls_first_key and _ls_first_key[0] == 'note' else None)
+    _ls_first_h = (_ls_first_card.winfo_height() + 10
+                   if _ls_first_card is not None else None)
+    check(f'fixture: the first draw really is shorter than the view '
+          f'({_ls_first} row, {_ls_first_h}px in a {_ls_view}px view)',
+          _ls_first == 1 and _ls_first_h is not None and _ls_first_h < _ls_view)
+    check(f'a list drawn shorter than its window draws on until a screen '
+          f'is left below the view ({len(app._list_drawn_keys)} rows, '
+          f'{_ls_left:.0f}px below a {_ls_view}px view)',
+          len(app._list_drawn_keys) > 1 and _ls_left >= _ls_view > 1)
+finally:
+    del app.LIST_FIRST_DRAW
+
+# Select all covers the notes not drawn yet, and their cards arrive ticked.
+app.canvas.yview_moveto(0); _ls_settle()
+app.refresh_note_list(); _ls_settle()
+app._toggle_selection_mode(); _ls_settle()
+app._bulk_select_all(); _ls_settle()
+_ls_scroll_to_end()
+_ls_boxes = [info.get('checkbox') for info in app._note_card_widgets.values()]
+_ls_ticked = sum(1 for b in _ls_boxes if b is not None
+                 and app.getboolean(app.getvar(str(b.cget('variable')))))
+check(f'cards drawn after Select all arrive ticked ({_ls_ticked} of '
+      f'{len(app._visible_note_ids())})',
+      _ls_ticked == len(_ls_boxes) == len(app._visible_note_ids()))
+app._toggle_selection_mode(); _ls_settle()
+
+# Grouped: a header not drawn yet still counts only what is left. Work is
+# a default category; made certain BEFORE normalize_note, which files a
+# note under an unknown category as General.
+_ls_added_work = 'Work' not in NO.CATEGORY_COLORS
+NO.CATEGORY_COLORS.setdefault('Work', '#4cc9f0')
+app.notes = ([NO.normalize_note({'id': 1000 + i, 'title': 'Gen %03d' % i,
+                                 'body': 'b', 'category': 'General',
+                                 'updated': '2026-01-01 00:00'})
+              for i in range(60)]
+             + [NO.normalize_note({'id': 2000 + i, 'title': 'Wk %03d' % i,
+                                   'body': 'b', 'category': 'Work',
+                                   'updated': '2026-01-01 00:00'})
+                for i in range(60)])
+app.group_by_category.set(True)
+app.canvas.yview_moveto(0); _ls_settle()
+app.refresh_note_list(); _ls_settle()
+_ls_work_waiting = ('header', 'Work') not in app._list_drawn_keys
+app.ask_yes_no = lambda *a, **k: True
+try:
+    app._delete_note(app.find_note(2030), None); _ls_settle()
+finally:
+    app.ask_yes_no = _ls_real_ask
+_ls_scroll_to_end()
+_ls_work_lbl = (app._group_header_widgets.get('Work') or {}).get('label')
+_ls_work_txt = str(_ls_work_lbl.cget('text')) if _ls_work_lbl is not None else None
+check(f'a group\'s header drawn after a deletion counts what is left '
+      f'({_ls_work_txt!r}; it was waiting: {_ls_work_waiting})',
+      _ls_work_waiting and _ls_work_txt == 'Work (59)')
+
+# 3. A save redraws one card. Grouped first: an edit that stays in its
+# group, then one that changes group -- which must rebuild, because two
+# headers' counts change.
+app.canvas.yview_moveto(0); _ls_settle()
+app.refresh_note_list(); _ls_settle()
+app.open_note_in_tab(app.find_note(1005)); _ls_settle()
+_ls_others = {nid: str(info['card']) for nid, info in app._note_card_widgets.items()
+              if nid != 1005}
+app.body_text.insert('end', ' grouped edit')
+app.save_current_note(auto=True); _ls_settle()
+_ls_after = {nid: str(info['card']) for nid, info in app._note_card_widgets.items()
+             if nid != 1005}
+check('a grouped save that stays in its group leaves every other card alone',
+      _ls_others == _ls_after)
+check('...and the list it leaves is the one a full rebuild draws',
+      _ls_same_as_rebuild())
+app.category_var.set('Work')
+app.save_current_note(auto=True); _ls_settle()
+check('a grouped save that changes group leaves the list a full rebuild '
+      'draws (both counts moved)', _ls_same_as_rebuild())
+app.group_by_category.set(False)
+if _ls_added_work:
+    NO.CATEGORY_COLORS.pop('Work', None)
+
+# Ungrouped, sorted by Recently updated: the saved card goes to the top.
+app.notes = [{'id': i, 'title': f'Save{i}', 'body': 'x' * 30,
+              'category': 'General', 'updated': '2026-01-01 00:%02d' % (i % 60),
+              'created': '2026-01-01 00:00', 'checklist': [], 'attachments': []}
+             for i in range(120)]
+app.canvas.yview_moveto(0); _ls_settle()
+app.refresh_note_list(); _ls_settle()
+_ls_target = _ls_card_ids()[12]
+app.open_note_in_tab(app.find_note(_ls_target)); _ls_settle()
+_ls_others = {nid: str(info['card']) for nid, info in app._note_card_widgets.items()
+              if nid != _ls_target}
+_ls_stats = {'n': 0}
+_ls_real_stats = app._render_statistics
+
+
+def _ls_count_stats():
+    _ls_stats['n'] += 1
+    return _ls_real_stats()
+
+
+app._render_statistics = _ls_count_stats
+try:
+    app.body_text.insert('end', ' and one more line')
+    app.save_current_note(auto=True); _ls_settle()
+finally:
+    app.__dict__.pop('_render_statistics', None)
+_ls_after = {nid: str(info['card']) for nid, info in app._note_card_widgets.items()
+             if nid != _ls_target}
+check('an autosave redraws the saved card and leaves every other card alone',
+      _ls_others == _ls_after)
+check(f'...puts it where the sort does -- the top '
+      f'({_ls_card_ids()[:1]}, saved {_ls_target})',
+      _ls_card_ids()[:1] == [_ls_target])
+check(f'...keeps Settings\' statistics live, as the rebuild did '
+      f'({_ls_stats["n"]})', _ls_stats['n'] >= 1)
+# The moved card was MADE last and packed first. The keyboard walks the
+# order on screen, so Down from it goes to the card under it -- not off
+# the end of the order the widgets were made in.
+_ls_screen = _ls_card_ids()
+_ls_asked = []
+tk.Misc.focus_set = lambda self: _ls_asked.append(
+    getattr(self, '_card_note_id', None))
+try:
+    app._focus_card_by_offset(_ls_target, 1)
+finally:
+    tk.Misc.focus_set = _ls_real_focus
+check(f'Down from a card a save moved walks the order on screen '
+      f'(asked for {_ls_asked}, under it is {_ls_screen[1:2]})',
+      _ls_asked == _ls_screen[1:2])
+check('...and leaves the list a full rebuild would draw',
+      _ls_same_as_rebuild())
+
+# A save that takes the note out of the search takes its card with it.
+_ls_search('Save7')
+_ls_leaving = 7 if 7 in app._note_card_widgets else None
+if _ls_leaving is not None:
+    app.open_note_in_tab(app.find_note(_ls_leaving)); _ls_settle()
+    app.title_entry.delete(0, 'end')
+    app.title_entry.insert(0, 'Renamed away')
+    app.save_current_note(auto=True); _ls_settle()
+check(f'a save that takes a note out of the search takes its card off '
+      f'(was on the list: {_ls_leaving is not None})',
+      _ls_leaving is not None and _ls_leaving not in app._note_card_widgets
+      and _ls_same_as_rebuild())
+_ls_search('')
+
+# A brand-new note joins the list without the rest being rebuilt.
+app.canvas.yview_moveto(0); _ls_settle()
+app.refresh_note_list(); _ls_settle()
+app.open_blank_tab(); _ls_settle()
+_ls_others = {nid: str(info['card']) for nid, info in app._note_card_widgets.items()}
+app.title_entry.delete(0, 'end')
+app.title_entry.insert(0, 'Freshly made')
+app.save_current_note(auto=True); _ls_settle()
+_ls_new_id = app.selected_note_id
+_ls_after = {nid: str(info['card']) for nid, info in app._note_card_widgets.items()
+             if nid != _ls_new_id}
+# Where the list's own rows put it, not "the top": two saves in the same
+# second tie on their timestamp, and a tie keeps the notebook's order.
+_ls_new_rows = [r[1]['id'] for r in app._list_rows() if r[0] == 'note']
+check('a new note\'s first save adds its card and leaves the others alone',
+      _ls_new_id in app._note_card_widgets and _ls_others == _ls_after
+      and _ls_new_id in _ls_card_ids()
+      and _ls_card_ids().index(_ls_new_id) == _ls_new_rows.index(_ls_new_id))
+check('...and leaves the list a full rebuild would draw',
+      _ls_same_as_rebuild())
 
 # ---------------------------------------------------------------------
 # A tick box's well must be light, because the mark in it is dark.

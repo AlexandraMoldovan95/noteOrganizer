@@ -30,6 +30,7 @@ keep them working.
 import os
 import shutil
 import tkinter as tk
+from collections import OrderedDict
 from tkinter import ttk, filedialog
 from datetime import datetime
 
@@ -177,17 +178,21 @@ class AttachmentsMixin:
         canvas in the right place. Plain Tk doesn't do that compositing, so
         the image visibly jumped and resized itself every frame. Pillow
         handles this correctly and gives real per-frame timing too, instead
-        of a guessed fixed delay."""
-        try:
-            pil_img = Image.open(path)
-        except Exception:
-            self.show_warning("Can't preview this file",
-                             "This file couldn't be read as an image.")
-            return
+        of a guessed fixed delay.
 
+        Quick to appear, which it was not: every frame of an animation was
+        decoded, composited and rescaled before the first was shown -- a
+        second and a quarter of nothing for a 60-frame GIF, and again on
+        every opening. Now the first frame is shown at once and the rest
+        are decoded as the animation reaches them; a JPEG photo is decoded
+        straight at the size it will be shown rather than at full size;
+        and a preview already seen comes back from memory
+        (_cached_preview) instead of from the file."""
         self.update_idletasks()
         target_w = max(int(self.winfo_width() * 0.7), 200)
         target_h = max(int(self.winfo_height() * 0.7), 200)
+        cache_key = self._preview_cache_key(path, target_w, target_h)
+        cached = self._cached_preview(cache_key)
 
         def _scaled(frame):
             w, h = frame.size
@@ -203,24 +208,52 @@ class AttachmentsMixin:
                                      Image.LANCZOS)
             return frame
 
-        frames = []
-        delays = []
-        if getattr(pil_img, "is_animated", False):
-            for i in range(pil_img.n_frames):
-                pil_img.seek(i)
+        # The file the animation's later frames are still being read from;
+        # None for a still image or a preview that came from memory.
+        source = None
+        if cached is not None:
+            frames, delays = list(cached[0]), list(cached[1])
+        else:
+            try:
+                pil_img = Image.open(path)
+            except Exception:
+                self.show_warning("Can't preview this file",
+                                 "This file couldn't be read as an image.")
+                return
+            try:
+                animated = bool(getattr(pil_img, "is_animated", False))
+                if not animated:
+                    # A JPEG can be decoded straight at a half, a quarter or
+                    # an eighth of its size, and draft() asks for the
+                    # smallest that is still at least as big as the preview
+                    # -- _scaled() then fits it exactly, as before. Every
+                    # other format ignores the request.
+                    pil_img.draft(pil_img.mode, (target_w, target_h))
                 # Pillow composites disposal-method-aware frames onto the
                 # right canvas internally as you seek — converting to RGBA
                 # here is what actually captures that composited result,
                 # not just this frame's own raw (possibly partial) pixels.
-                frame = _scaled(pil_img.convert("RGBA"))
-                frames.append(ImageTk.PhotoImage(frame))
-                delays.append(pil_img.info.get("duration", 100) or 100)
-        else:
-            frame = _scaled(pil_img.convert("RGBA"))
-            frames = [ImageTk.PhotoImage(frame)]
-            delays = [100]
+                frames = [ImageTk.PhotoImage(_scaled(pil_img.convert("RGBA")))]
+                delays = [(pil_img.info.get("duration", 100) or 100)
+                          if animated else 100]
+            except Exception:
+                # A file that opens and then fails to decode -- truncated,
+                # say -- is the same news to the user as one that never
+                # opened at all.
+                pil_img.close()
+                self.show_warning("Can't preview this file",
+                                 "This file couldn't be read as an image.")
+                return
+            if animated:
+                source = pil_img
+            else:
+                pil_img.close()
+                self._remember_preview(cache_key, frames, delays)
 
         self._dismiss_mini_popup()
+        # After the dismiss, which closes whatever file the PREVIOUS
+        # preview was still reading from.
+        self._preview_source = source
         overlay = tk.Frame(self, bg=self.colors["bg"], highlightthickness=1,
                            highlightbackground=self.colors["accent"])
         self._image_preview_ref = frames  # keep alive — see refresh_attachments_list
@@ -247,15 +280,41 @@ class AttachmentsMixin:
         # so this attribute always exists after this function runs, not just
         # when an animation actually starts — any code checking it directly
         # (rather than via getattr with a default) can rely on that.
-        if len(frames) > 1:
+        if source is not None or len(frames) > 1:
             state = {"i": 0}
 
             def _next_frame():
                 if not img_lbl.winfo_exists():
                     return
-                state["i"] = (state["i"] + 1) % len(frames)
-                img_lbl.configure(image=frames[state["i"]])
-                self._gif_anim_job = self.after(delays[state["i"]], _next_frame)
+                nxt = state["i"] + 1
+                if nxt >= len(frames) and self._preview_source is source \
+                        and source is not None:
+                    # First time round: this frame is not decoded yet. In
+                    # order, one per tick, because Pillow composites each
+                    # frame onto the one before as it seeks.
+                    try:
+                        source.seek(nxt)
+                        frames.append(ImageTk.PhotoImage(
+                            _scaled(source.convert("RGBA"))))
+                        delays.append(source.info.get("duration", 100) or 100)
+                    except EOFError:
+                        # The last frame has been seen: from here on the
+                        # animation plays from memory, and so does the next
+                        # opening of this file.
+                        self._release_preview_source()
+                        self._remember_preview(cache_key, frames, delays)
+                        nxt = 0
+                    except Exception:
+                        # A frame that will not decode ends the animation
+                        # where it is, playing what it has, rather than
+                        # stopping the app.
+                        self._release_preview_source()
+                        nxt = 0
+                elif nxt >= len(frames):
+                    nxt = 0
+                state["i"] = nxt
+                img_lbl.configure(image=frames[nxt])
+                self._gif_anim_job = self.after(delays[nxt], _next_frame)
 
             self._gif_anim_job = self.after(delays[0], _next_frame)
 
@@ -270,6 +329,66 @@ class AttachmentsMixin:
             self._mini_popup_click_bind = self.bind(
                 "<Button-1>", self._maybe_dismiss_mini_popup, add="+")
         self.after(50, _bind_click_outside)
+
+    # How much decoded preview is kept for reopening, in bytes of pixels
+    # (four to a pixel). A photo at preview size is about two megabytes,
+    # so this holds a good many; one long animation can fill it, and one
+    # bigger than all of it is simply not kept.
+    PREVIEW_MEMORY_BYTES = 64 * 1024 * 1024
+
+    @staticmethod
+    def _preview_cache_key(path, width, height):
+        """What a remembered preview is good for: this file exactly as it
+        is now -- its size and its last change, so a file replaced under
+        the same name is read again -- shown at this size."""
+        try:
+            st = os.stat(path)
+        except OSError:
+            return None
+        return (os.path.normcase(os.path.abspath(path)), st.st_mtime_ns,
+                st.st_size, width, height)
+
+    def _cached_preview(self, key):
+        """(frames, delays) of a preview seen before, or None."""
+        cache = getattr(self, "_preview_cache", None)
+        if key is None or not cache or key not in cache:
+            return None
+        cache.move_to_end(key)
+        frames, delays, _size = cache[key]
+        return frames, delays
+
+    def _remember_preview(self, key, frames, delays):
+        """Keep a finished preview for next time, forgetting the least
+        recently shown ones once the total passes PREVIEW_MEMORY_BYTES."""
+        if key is None:
+            return
+        size = sum(f.width() * f.height() * 4 for f in frames)
+        if size > self.PREVIEW_MEMORY_BYTES:
+            return
+        cache = getattr(self, "_preview_cache", None)
+        if cache is None:
+            cache = self._preview_cache = OrderedDict()
+        cache[key] = (tuple(frames), tuple(delays), size)
+        cache.move_to_end(key)
+        total = sum(entry[2] for entry in cache.values())
+        while total > self.PREVIEW_MEMORY_BYTES and len(cache) > 1:
+            _key, forgotten = cache.popitem(last=False)
+            total -= forgotten[2]
+
+    def _release_preview_source(self):
+        """Close the file an animation was still decoding frames from.
+
+        An animation is read a frame at a time, so its file stays open
+        while it plays the first time round -- and an open file cannot be
+        deleted or replaced on Windows. Closed when the last frame has
+        been read, and when the preview goes away before that."""
+        source = getattr(self, "_preview_source", None)
+        self._preview_source = None
+        if source is not None:
+            try:
+                source.close()
+            except Exception:
+                pass
 
     def _open_externally(self, path):
         """Hand a file off to whatever program Windows has associated with

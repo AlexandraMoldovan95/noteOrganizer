@@ -52,11 +52,12 @@ Genuinely open ideas, roughly ordered by how soon they're likely to happen.
   language from `locale` at startup, checking only the visible/changed text on a debounce rather
   than every word on every keystroke, and drawing the underline through the existing rich-text tag
   system without disturbing it. Decide deliberately, with the dependency approved, when picked.
-- **Note list virtualization.** The main note list currently builds a full widget per note on
-  every refresh. Trash and the Share panel already cap what they render up front (see
-  ["Large lists: paginate, don't virtualize (yet)"](ARCHITECTURE.md#large-lists-paginate-dont-virtualize-yet));
-  doing the same for the main list — or true windowed rendering, building only the cards currently
-  scrolled into view — would help further at very large note counts (many hundreds to thousands).
+- **Note list virtualization.** The first half is done: the main list draws a screenful and the
+  rest as the view comes near it, and a save redraws one card instead of the list (see
+  ["Large lists: draw what can be seen, the rest on demand"](ARCHITECTURE.md#large-lists-draw-what-can-be-seen-the-rest-on-demand)).
+  What is left is true windowed rendering — recycling one screenful of cards, so that a list
+  scrolled to its end does not hold every card it passed. Only worth it if notebooks far beyond a
+  thousand notes turn up; measure first.
 - **An Android version.** Nothing decided yet on approach — a full rewrite with a mobile-first
   toolkit, or a port of the existing logic onto something like Kivy or BeeWare, are both on the
   table. This is a big enough undertaking that it needs its own scoping pass before any real work

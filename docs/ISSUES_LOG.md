@@ -77,6 +77,7 @@ day-to-day tracking.
 | [The slowdown that only showed up after a long session](#the-slowdown-that-only-showed-up-after-a-long-session) | 'Slow after a while, fine at first' means unbounded growth; reproduce with a loop. | 0.4.0 |
 | [Export/import freezing the app](#exportimport-freezing-the-app) | Do file I/O on a worker thread; only the main thread touches Tkinter widgets. | 0.4.0 |
 | [The theme-switch flicker, and three ways not to fix it](#the-theme-switch-flicker-and-three-ways-not-to-fix-it) | Profile before reaching for rendering tricks; the fix was stopping work nothing asked for. | 0.32.49 |
+| [The list that was drawn whole, for every pause in typing](#the-list-that-was-drawn-whole-for-every-pause-in-typing) | Measure where the time goes before trimming what is easy to count; before removing work that looks wasted, ask what it was doing for someone; and a list that draws on demand owes every reader an answer independent of what is drawn. | Unreleased |
 | [The Settings panels that stayed dark on a light theme](#the-settings-panels-that-stayed-dark-on-a-light-theme) | A computed colour is invisible to palette matching; derive it once, teach the theme switch. | 0.36.54 |
 | [The title box that took three and a half seconds a keystroke](#the-title-box-that-took-three-and-a-half-seconds-a-keystroke) | Measure to isolate: the app was fine, one widget was quadratic — cap its input. | 0.36.55 |
 | [The dropdown that opened on the wrong monitor](#the-dropdown-that-opened-on-the-wrong-monitor) | Position popups against the app window's own bounds, not the full virtual desktop. | 0.2.0 |
@@ -2236,6 +2237,98 @@ where it is drawn.
 **A real bug fell out of verifying it.** That equivalence check caught a custom note colour being repainted with the new theme's accent — `_recolor_stragglers` can't tell a themed widget from a note the user deliberately coloured the same hex. It was confirmed present on `main`, i.e. pre-existing and unrelated to the new work. Fixed by running the card recolour *after* the straggler pass and recomputing each stripe from the note's own data, so the note's colour is authoritative.
 
 **Takeaway:** three attempts were spent hiding a symptom before anyone measured where the time went; the measurement pointed straight at the fix and took less effort than any of them. When something looks like a rendering problem, profile before reaching for a rendering trick. Also worth remembering: an "additive" fix that only wraps existing behaviour can still make things worse (attempt 2), and reverting cleanly is a legitimate outcome rather than a failure. What remains is a genuine plain-Tkinter limit — one OS window per widget, each repainting as it is recoloured — not something further code can remove.
+
+### The list that was drawn whole, for every pause in typing
+
+*(Unreleased)*
+
+**Symptom:** with a few hundred notes the app froze at every pause in typing — about a second
+with 100 notes, three with 300, twelve with 1,000 — and switching back to the list from the
+Calendar or from Settings took most of a second at 300 notes and over three at 1,000. The product review had it as T1-1, "the single most likely reason a month-in
+user would stop"; deleting a note and Select all had already been taken off the full rebuild
+(`0.74.169`, `0.75.173`), and the autosave was the one frequent route still paying for it.
+
+**What the profile said, and what it did not.** One rebuild of 300 notes, under cProfile: about a
+second destroying the old cards, a seventh of a second building the new ones in Python, and 2.7
+seconds inside Tk laying them out and mapping them. Inside that last part were about two thousand
+calls of the title bar's paint and four thousand of the calendar's width check (counted: 1,939
+and 3,882 per rebuild) — handlers meant for the window,
+bound with `self.bind`, which every widget in the window hears too, because each carries its
+window's tag. Taking them off the storm took the counts to zero and the wall clock down by only
+a few per cent: outside a profiler a Python call is cheap. The cost that scaled was the cards
+themselves — six OS windows each — and the fact that all of them were made on every rebuild,
+and all of them mapped again whenever the list came back on screen. No amount of trimming the
+Python would have moved that.
+
+**The fix, in four parts.**
+
+1. **The window's own handlers hear only the window.** The title bar's paint lives on a bind tag
+   only the main window carries (`_bind_window_only`); the Alt+Tab handler moved from `bind_all`
+   to the two window classes. Tk delivers Activate to every widget in a window, so with 300
+   notes it ran 2,132 times per switch — counted by delivering the event the way Tk does — only
+   to return at its first line.
+2. **The list draws what can be seen.** A rebuild draws thirty rows and the rest wait; the
+   canvas's `yscrollcommand`, which hears every way the view can move, draws twenty more whenever
+   less than a screen is left below the view, and the keyboard's ↓ draws ahead of itself. One
+   definition of what the list shows (`_list_rows`) serves the rebuild, the top-up, the save
+   and Select all.
+3. **A save redraws its own card.** The rows are worked out again and compared with what is
+   drawn; when the only difference is the saved note, its card is redrawn and packed where the
+   sort puts it. Anything else still rebuilds.
+4. **The notebook file is written in one piece.** `json.dump` streamed the same text through
+   the file's encoder in thousands of small writes; one string and one write is twice as fast
+   here (36 → 18 ms for 1,000 notes), and a test compares the bytes with the old way of writing
+   them.
+
+**Measured** with the code before the branch and after it run in alternating rounds on the
+same machine, the same afternoon — medians, a mixed notebook of tables, checklists and
+repeating notes:
+
+| | 100 notes | 300 notes | 1,000 notes |
+|---|---|---|---|
+| A pause in typing (autosave) | 1.0 s → 74 ms | 3.2 s → 75 ms | 12.6 s → 90 ms |
+| Starting the app | 2.3 → 1.9 s | 3.4 → 1.9 s | 8.6 → 1.9 s |
+| Back to the list from the Calendar | 330 → 146 ms | 850 → 141 ms | 3.4 s → 142 ms |
+| Closing Settings | 321 → 148 ms | 843 → 146 ms | 3.4 s → 150 ms |
+| Switching the theme | 194 → 136 ms | 358 → 152 ms | 887 → 150 ms |
+
+The cost of a card did not disappear; it moved to when the card is reached. Scrolling a
+1,000-note list to its end draws the rest in steps of twenty, about a fifth of a second each,
+9.4 seconds in all where it used to be nothing — and once everything is drawn, coming back to
+the list costs 3.0 seconds against 3.3 before. Only windowed rendering would change that
+(see the [ROADMAP](ROADMAP.md)).
+
+**Three things that nearly slipped, each caught before it shipped.**
+
+- **The storm had been doing a job.** The calendar's width check was on the window with
+  `self.bind`, and the per-widget events were what noticed the window had been resized while
+  the calendar was hidden: maximise on the Notes tab, come back, and the calendar switched to
+  its larger text. Moved to the window alone, it stopped doing that — found by asking, before
+  the move was finished, what the storm had been doing for the handler rather than only what it
+  cost. It now listens to its own grid, which changes size in exactly those two cases.
+- **A card that went to wait, with nothing to ask for it.** A new note landing just below the
+  last drawn row joined the rows waiting — and the canvas reports only when something changes
+  size, which nothing had. qa1's "the list calls it (untitled)" went red. A list drawn to its
+  end now stays drawn to its end, and every update that leaves rows waiting asks for a top-up
+  itself.
+- **Made order is not screen order.** `winfo_children()` lists widgets in the order they were
+  made, `pack_slaves()` in the order they are packed; they agreed only while every change was a
+  full rebuild. The keyboard's walk and two checks comparing the list against a rebuild had to
+  learn the difference the first time a saved card was made last and packed first.
+
+**The preview, in the same pass.** Opening an animated GIF decoded every frame before showing
+the first: 1.3 seconds of nothing for a 60-frame animation, on every opening. The first frame is
+shown at once now (35 ms) and the rest are decoded as the animation reaches them; a JPEG photo
+is decoded straight at the size it will be shown; and a finished preview is remembered for the
+next opening, up to a memory limit, and forgotten when the file changes. Decoding lazily keeps
+the file open while it plays the first time round, and an open file is a lock on Windows — so
+the file is closed at the last frame and whenever the preview goes away before it.
+
+**Takeaway:** measure where the time goes before trimming what is easy to count — two thousand
+callbacks were real and worth removing, and still not the cost; the cost was how many things
+existed. Before removing work that looks wasted, ask what it was doing for someone. And a list
+that stops drawing everything owes every reader of "what is on the list" an answer that does
+not depend on what happens to be drawn.
 
 ### The Settings panels that stayed dark on a light theme
 

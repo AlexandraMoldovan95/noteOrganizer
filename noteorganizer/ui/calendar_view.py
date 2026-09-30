@@ -195,7 +195,18 @@ class CalendarViewMixin:
             if size != self._cal_last_font_size:
                 self._cal_last_font_size = size
                 self.render_calendar()
-        self.bind("<Configure>", _on_resize, add="+")
+        # On the grid's own <Configure>: the grid changes size exactly when
+        # the step can change -- the window resized while the calendar is
+        # showing, AND the calendar shown again after the window was
+        # resized somewhere else (on the Notes tab, for one -- qa4 walks
+        # it), which the window's own Configure never reports. It used to be
+        # bound on the window with self.bind, which also ran it for every
+        # widget laid out anywhere in the app -- 3,882 times for one
+        # rebuild of a 300-note list -- and that storm was what happened
+        # to cover the second case. The grid does not change size when its
+        # cells are rebuilt (it does not propagate), so this cannot feed
+        # itself.
+        self.cal_grid_frame.bind("<Configure>", _on_resize, add="+")
 
         self.bind_all("<Prior>", lambda e: self._calendar_key(e, months=-1))
         self.bind_all("<Next>", lambda e: self._calendar_key(e, months=1))

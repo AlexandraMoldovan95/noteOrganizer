@@ -86,7 +86,8 @@ How the numbers themselves are counted is the
 
 *Highlights: Cancel means stay, the keyboard goes back where it was, and a button that opens
 something closes it on the next click — the everyday places where the app did something other
-than what a person just asked.*
+than what a person just asked. And a big notebook stops making you wait: a pause in typing,
+coming back to the list and opening a picture no longer cost time for every note you have.*
 
 ### Fixed
 
@@ -138,6 +139,44 @@ than what a person just asked.*
   notes you already have left the whole unpacked backup — attachments included — in the temp
   folder. The other Cancel on that screen always cleaned up; this one does too.
 
+- **A pause in typing no longer freezes the app.** Every autosave rebuilt the whole note list,
+  card by card, so each pause after a burst of typing froze the window — about a second with 100
+  notes, three with 300, twelve with 1,000: longest for the people with the most notes. A save
+  now redraws the one card that changed, moves it to where the sort puts it (the top, under
+  Recently updated), and leaves every other card alone: 75 milliseconds at 300 notes, 90 at
+  1,000. Anything it cannot be sure of — a first note in an empty list, a note changing group
+  in a grouped list — still rebuilds, because a list that quietly disagrees with your notes would
+  be worse than a slow one.
+
+- **The note list draws what you can see.** Every card is several windows to the operating
+  system, and the list drew all of them on every rebuild — then paid for every one again each
+  time you came back to it from the Calendar or from Settings. It now draws the first thirty and
+  the rest as you come near them, by wheel, scrollbar or the arrow keys. Search, Select all and
+  the counts beside the category headers still mean every note on the list, drawn yet or not.
+  Measured before and after on the same machine, with 1,000 notes: starting the app went from
+  8.6 seconds to 1.9, coming back to the list from 3.4 to 0.14, closing Settings from 3.4 to
+  0.15, and a theme switch from 0.9 to 0.15. The cost of a card has not gone away, it is paid
+  when you reach it — twenty at a time as you scroll, about a fifth of a second a step — and
+  once you have scrolled through every note, coming back to the list costs what it did.
+
+- **The window stops repeating its own work for every widget in it.** Two handlers that only
+  care about the window — the title bar's colours and the calendar's switch between small and
+  large text — were bound so that they ran for every widget as well: about two thousand and four
+  thousand times per rebuild of a 300-note list. A third, which hides popups while another
+  program is in front, ran once per widget on every Alt+Tab. Each now runs where it belongs; the
+  calendar's switch listens to its own grid, which also catches a resize made while you were on
+  another tab.
+
+- **A picture opens at once.** Opening an animated GIF decoded every frame before showing the
+  first — over a second of nothing for a sixty-frame animation, every time. The first frame now
+  appears straight away (35 milliseconds) and the rest are decoded as it plays; a photo is decoded
+  at the size it is shown rather than at full size; and a picture opened before comes back from
+  memory, up to a limit, and is read again if the file has changed.
+
+- **Saving writes the notes file twice as fast.** The file was written in thousands of small
+  pieces; it is written in one now — 18 milliseconds instead of 36 for 1,000 notes, and the same
+  file to the byte. Every autosave paid it.
+
 ### Testing
 
 - Checks in qa7 (Cancel on six routes plus a control, shortcuts pressed from inside an open
@@ -156,6 +195,32 @@ than what a person just asked.*
   first version of this change read that as Cancel — the window refused to close. Callers now
   stop on an explicit `False` only, and a mutant restoring the looser test is caught by that
   same check.
+- qa4 gains a block for the note list. The window-level handlers are counted during a rebuild
+  (none run), each with its positive half: the window's own appearance still paints the title
+  bar, the calendar still changes its text size across 1,150 pixels — also after a resize made
+  on another tab — and a popup losing the front still asks the watch to look. Then the drawing:
+  a scroll to the end draws all 300 cards in the list's order, Down walks past the drawn part
+  (also from a card a save has moved), a note deleted before it was drawn never is, a group's
+  header drawn later counts what is left, a rebuild keeps the depth and the place, a first draw
+  shorter than its window fills it, and Select all ticks cards drawn later. And the save: one
+  card redrawn, every other card proved to be the same widget, and the list compared row by row
+  with a full rebuild — ungrouped, grouped, a note leaving the search, a brand-new note. qa7
+  gains the preview's half, and `test_data_safety` pins the notes file's exact bytes.
+  Twenty-three mutants, each killed with the suite reaching its footer.
+- The mutants caught four of those checks being weaker than their names before any of them
+  shipped: the popup check waited for a watch that also runs on its own heartbeat; the check
+  that a short list fills its window drew three cards, which already overfill that window, and
+  inherited a scroll restore still running from the check before it; a card left behind by a
+  faulty save crashed the comparison instead of failing it; and a check's name carried the very
+  number a mutant changes, so the runner could not find it. Each now asserts the request, the
+  fixture or the name it depends on.
+- Older checks that met the change: two asserted the mechanism it replaced and were rewritten on
+  the promise (qa4's "builds every card, 300 of 300", now the first draw plus a scroll to the
+  end; qa1's "the watch is armed", which read `bind_all`); three read the list in the order its
+  widgets were made and now read the order on screen; two asked the open note's card for the
+  thickness of its ring — which every card has worn since the keyboard's focus ring shipped —
+  and now ask for its colour; and one of qa1's passed a run and failed the next, because whether
+  its note fell in the first screenful depended on the second its fixture was made in.
 
 ---
 
