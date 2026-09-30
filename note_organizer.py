@@ -8062,10 +8062,26 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
     def _show_emoji_picker(self, text_widget, anchor=None):
         """Small themed popup for inserting an emoji at the current cursor
         position of whichever field opened it (title, body, comments, etc.).
-        Anchored to that field, not a separate window."""
-        self._dismiss_mini_popup()
+        Anchored to that field, not a separate window.
+
+        A field that lives INSIDE a popup -- the template editor, a rename
+        box -- gets the picker as a popup within that one, the way a
+        dropdown in the template editor does. Closing the host first, as
+        every other opener does, destroyed it and everything typed in it,
+        and left the picker at the screen's corner, aimed at a field that
+        no longer existed."""
+        host = getattr(self, "_mini_popup", None)
+        nested = host is not None and self._is_inside_popup(text_widget, host)
+        if nested:
+            self._close_nested_popup()
+        elif not self._dismiss_mini_popup_asking():
+            return
         pop = tk.Toplevel(self)
-        self._mini_popup = pop
+        if nested:
+            # Remembered where Escape and the host's own closing look.
+            self._nested_dropdown = pop
+        else:
+            self._mini_popup = pop
         pop.wm_overrideredirect(True)
         pop.configure(bg=self.colors["accent"])
         outer = tk.Frame(pop, bg=self.colors["card"], padx=8, pady=8)
@@ -8075,9 +8091,14 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         head.pack(fill="x", pady=(0, 6))
         tk.Label(head, text="Insert emoji", bg=self.colors["card"],
                  fg=self.colors["subtext"], font=("Segoe UI", 8, "bold")).pack(side="left")
-        tk.Button(head, text="✕", command=self._dismiss_mini_popup, relief="flat",
+        tk.Button(head, text="✕",
+                  command=pop.destroy if nested else self._dismiss_mini_popup,
+                  relief="flat",
                   cursor="hand2", bg=self.colors["card"], fg=self.colors["subtext"],
                   font=("Segoe UI", 9, "bold"), bd=0).pack(side="right")
+        if nested:
+            # Its own Escape closes just it, as a nested dropdown's does.
+            pop.bind("<Escape>", lambda e: pop.destroy())
 
         wrap = tk.Frame(outer, bg=self.colors["card"], height=220, width=260)
         wrap.pack()
@@ -8119,7 +8140,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 # Best-effort: nudge autosave if this field participates in it.
                 # skip_word_count avoids re-reading the whole body on every
                 # single click — that's what made rapid emoji-clicking laggy.
-                self._schedule_autosave(skip_word_count=True)
+                # A popup's field never does: its popup saves it.
+                if not nested:
+                    self._schedule_autosave(skip_word_count=True)
             except (tk.TclError, KeyError):
                 pass
             # Left open on purpose — inserting a few emojis in a row is common.

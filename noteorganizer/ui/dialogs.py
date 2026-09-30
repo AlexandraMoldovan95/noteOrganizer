@@ -472,6 +472,10 @@ class DialogsMixin:
                         pass
                     if getattr(self, "_nested_dropdown", None) is existing:
                         self._nested_dropdown = None
+                # One nested popup at a time: another one open in the same
+                # host (an emoji picker) goes, rather than being left
+                # behind untracked when this one takes the slot below.
+                self._close_nested_popup()
                 pop = tk.Toplevel(self)
                 btn._nested_popup = pop
                 # Also remembered app-wide, so the app-window Escape can
@@ -712,13 +716,21 @@ class DialogsMixin:
             try:
                 pop.update_idletasks()
                 self.update_idletasks()
-                if anchor_widget is not None:
+                if anchor_widget is not None and anchor_widget.winfo_exists():
                     anchor_widget.update_idletasks()
                     ax = anchor_widget.winfo_rootx()
                     ay = anchor_widget.winfo_rooty()
                     ah = anchor_widget.winfo_height()
-                else:
+                elif anchor_xy is not None:
                     ax, ay = anchor_xy
+                    ah = 0
+                else:
+                    # The anchor is gone. Asking it for its place raised,
+                    # the error was swallowed, and the popup was never
+                    # placed at all -- it sat at the screen's corner,
+                    # detached from the app. The window's middle instead.
+                    ax = self.winfo_rootx() + self.winfo_width() // 3
+                    ay = self.winfo_rooty() + self.winfo_height() // 3
                     ah = 0
                 pw = pop.winfo_reqwidth()
                 ph = pop.winfo_reqheight()

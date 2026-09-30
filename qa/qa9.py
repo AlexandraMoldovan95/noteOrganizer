@@ -1768,6 +1768,83 @@ else:
 app._dismiss_mini_popup(); app.update()
 
 # ============================================================
+# "INSERT EMOJI..." FROM A FIELD INSIDE A POPUP
+# ============================================================
+# Every field's right-click menu offers it, the fields inside popups too.
+# The picker began by closing the open popup -- the very one the field
+# lived in -- so the template being written vanished without a question,
+# and the picker sat at the screen's corner aimed at a field that no longer
+# existed. It opens as a popup WITHIN the host now.
+
+
+def _emoji_item(field):
+    for _m in [c for c in field.winfo_children() if isinstance(c, tk.Menu)]:
+        for _i in range(_m.index('end') + 1):
+            try:
+                if 'emoji' in str(_m.entrycget(_i, 'label')).lower():
+                    return _m, _i
+            except tk.TclError:
+                continue
+    return None, None
+
+
+app._edit_template(None, redraw=lambda: None); app.update()
+_em_host = app._mini_popup
+_em_body = [w for w in _walk9(_em_host) if isinstance(w, tk.Text)][0]
+_em_body.insert('1.0', 'Three things I am grateful for')
+_em_menu, _em_idx = _emoji_item(_em_body)
+check('fixture: the template body\'s right-click menu offers Insert emoji',
+      _em_menu is not None)
+if _em_menu is not None:
+    _em_menu.invoke(_em_idx); app.update()
+_em_pick = getattr(app, '_nested_dropdown', None)
+check('Insert emoji from the template body keeps the editor, and what is '
+      'typed in it', app._mini_popup is _em_host and _em_host.winfo_exists()
+      and 'grateful' in _em_body.get('1.0', 'end'))
+check('...and the picker opens inside it, beside the field -- within the '
+      'window, not at the screen\'s corner',
+      _em_pick is not None and _em_pick.winfo_exists()
+      and app.winfo_rootx() <= _em_pick.winfo_rootx()
+      <= app.winfo_rootx() + app.winfo_width()
+      and app.winfo_rooty() <= _em_pick.winfo_rooty()
+      <= app.winfo_rooty() + app.winfo_height())
+_em_first = app.EMOJI_GROUPS[0][1][0]
+_em_chip = (next((w for w in _walk9(_em_pick) if isinstance(w, tk.Label)
+                  and str(w.cget('text')) == _em_first), None)
+            if _em_pick is not None else None)
+if _em_chip is not None:
+    _qa_click(_em_chip); app.update()
+check('...and an emoji picked there lands in the template body',
+      _em_first in _em_body.get('1.0', 'end'))
+_em_x = (find_widget(_em_pick, tk.Button, '✕')
+         if _em_pick is not None and _em_pick.winfo_exists() else None)
+if _em_x is not None:
+    _em_x.invoke(); app.update()
+check('...its ✕ closes just the picker',
+      _em_pick is not None and not _em_pick.winfo_exists()
+      and app._mini_popup is _em_host and _em_host.winfo_exists())
+if _em_menu is not None:
+    _em_menu.invoke(_em_idx); app.update()
+_em_pick2 = getattr(app, '_nested_dropdown', None)
+app._dismiss_mini_popup(); app.update()
+check('...and the editor, closing, takes an open picker with it',
+      _em_pick2 is not None and not _em_pick2.winfo_exists())
+# The same for a rename box, the other popup with a field in it.
+_em_rename = app._show_inline_rename(app.filter_menu, 'Projects',
+                                     lambda _v: True)
+app.update()
+_em_rent = [w for w in _walk9(_em_rename) if isinstance(w, tk.Entry)][0]
+_em_menu, _em_idx = _emoji_item(_em_rent)
+if _em_menu is not None:
+    _em_menu.invoke(_em_idx); app.update()
+check('Insert emoji from a rename box keeps the box, and opens the picker '
+      'inside it', app._mini_popup is _em_rename and _em_rename.winfo_exists()
+      and _em_rent.get() == 'Projects'
+      and getattr(app, '_nested_dropdown', None) is not None
+      and app._nested_dropdown.winfo_exists())
+app._dismiss_mini_popup(); app.update()
+
+# ============================================================
 # CLOSING THE WINDOW UNDER A QUESTION
 # ============================================================
 # The X while a question waited destroyed the window under it, and nothing
