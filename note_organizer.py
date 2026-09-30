@@ -13864,8 +13864,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             want = max(want, drawn_before)
         if getattr(self, "_restore_focus_wanted", False):
             wanted = getattr(self, "_focused_note_id", None)
+            header = getattr(self, "_focused_header", None)
             for index, row in enumerate(rows):
-                if row[0] == "note" and row[1].get("id") == wanted:
+                if ((row[0] == "note" and row[1].get("id") == wanted)
+                        or (row[0] == "header" and row[1] == header)):
                     want = max(want, index + 1)
                     break
         return want
@@ -14030,6 +14032,14 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             label_x, mid, anchor="w",
             text=self._header_label_text(cat, len(notes_in_group), label_x),
             font=self.HEADER_FONT, fill=c["text"], tags=tags)
+        # The keyboard's ring, drawn the way a card's is: the header is a
+        # stop on the keyboard's walk. The header's own fill when the ring
+        # is elsewhere, which is no ring at all.
+        items["ring"] = cv.create_rectangle(
+            self.CARD_INSET_X + 1, top + 1,
+            self.LIST_DRAW_WIDTH - self.CARD_INSET_X - 1, bottom - 1,
+            width=self.CARD_RING, outline=self._header_ring_color(cat),
+            tags=tags)
         # The ids, not the cards: a collapsed group draws no cards at
         # all, and its header still has to show the right number.
         rec = {"kind": "header", "key": ("header", cat), "tag": tag,
@@ -14528,6 +14538,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         cv.bind("<Escape>", self._list_drag_escape)
         cv.bind("<Down>", lambda _e: self._list_step(1))
         cv.bind("<Up>", lambda _e: self._list_step(-1))
+        # A grouped list folds and opens from the keyboard, as a tree does.
+        cv.bind("<Left>", lambda _e: self._list_fold_by_keyboard(True))
+        cv.bind("<Right>", lambda _e: self._list_fold_by_keyboard(False))
         cv.bind("<Alt-Down>", lambda _e: self._list_move_by_keyboard(1))
         cv.bind("<Alt-Up>", lambda _e: self._list_move_by_keyboard(-1))
         cv.bind("<Return>", self._list_activate)
@@ -14720,20 +14733,50 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             pass
 
     def _list_step(self, delta):
-        """Down or Up on the list: the ring moves one card along."""
-        current = getattr(self, "_focused_note_id", None)
-        if current not in (getattr(self, "_note_cards", None) or {}):
-            order = self._card_order()
-            if order:
-                self._put_keyboard_on_card(order[0])
+        """Down or Up on the list: the ring moves one row along -- a card,
+        or the header of a group when the list is grouped."""
+        key = self._ring_row()
+        if key is None:
+            first = self._first_ring_row()
+            if first is not None:
+                self._put_keyboard_on_row(first)
             return "break"
-        self._focus_card_by_offset(current, delta)
+        self._focus_row_by_offset(key, delta)
+        return "break"
+
+    def _list_fold_by_keyboard(self, fold):
+        """Left folds, Right unfolds -- the tree list's keys, for a list
+        grouped by category. Left on a card folds its group and takes the
+        ring to the group's header; Left on an open header folds it, Right
+        on a folded one opens it. Without these (and Enter on a header) a
+        folded group could be opened only with the mouse, and a list with
+        every group folded gave the keyboard nothing at all to do."""
+        grouped = getattr(self, "group_by_category", None)
+        key = self._ring_row()
+        if key is None or grouped is None or not grouped.get():
+            return "break"
+        if key[0] == "note":
+            note = self.find_note(key[1])
+            if not fold or note is None:
+                return "break"
+            cat = self._list_group_of(note)
+            if cat not in self.collapsed_groups:
+                self._toggle_group_collapsed(cat)
+            self._put_keyboard_on_header(cat)
+            return "break"
+        if fold != (key[1] in self.collapsed_groups):
+            self._toggle_group_collapsed(key[1])
         return "break"
 
     def _list_activate(self, _event=None):
         """Enter or Space: what a click does -- open the note, or tick it
         in selection mode, where a keyboard that opened the note instead
-        would be the one route that ignores the mode."""
+        would be the one route that ignores the mode. On a header, what a
+        click on it does: fold or unfold its group."""
+        key = self._ring_row()
+        if key is not None and key[0] == "header":
+            self._toggle_group_collapsed(key[1])
+            return "break"
         rec = (getattr(self, "_note_cards", None) or {}).get(
             getattr(self, "_focused_note_id", None))
         if rec is None:
@@ -14769,16 +14812,18 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
     def _list_focus_in(self, _event=None):
         """The keyboard arrived on the list: the ring shows where it is --
-        on the card it was last on, else the open note's, else the first."""
+        on the row it was last on, else the open note's card, else the
+        first card, else (every group folded) the first header."""
         self._keyboard_on_card = True
-        cards = getattr(self, "_note_cards", None) or {}
-        if getattr(self, "_focused_note_id", None) not in cards:
-            order = self._card_order()
+        if self._ring_row() is None:
+            cards = getattr(self, "_note_cards", None) or {}
             if self.selected_note_id in cards:
-                self._focused_note_id = self.selected_note_id
-            elif order:
-                self._focused_note_id = order[0]
-        self._paint_ring(getattr(self, "_focused_note_id", None))
+                self._set_ring_row(("note", self.selected_note_id))
+            else:
+                first = self._first_ring_row()
+                if first is not None:
+                    self._set_ring_row(first)
+        self._paint_ring_row()
 
     def _list_focus_out(self, _event=None):
         """The keyboard left the list: the ring goes back to saying only
@@ -14787,23 +14832,105 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         release goes missing -- so a lifted card goes back."""
         self._cancel_list_drag()
         self._keyboard_on_card = False
-        self._paint_ring(getattr(self, "_focused_note_id", None))
+        self._paint_ring_row()
+
+    def _ring_row(self):
+        """The drawn row the keyboard's ring is on, as ("note", id) or
+        ("header", category) -- or None when that row is not drawn."""
+        cat = getattr(self, "_focused_header", None)
+        if cat is not None:
+            key = ("header", cat)
+        else:
+            key = ("note", getattr(self, "_focused_note_id", None))
+        return key if self._list_row_record(key) is not None else None
+
+    def _first_ring_row(self):
+        """Where a ring with nowhere to be goes: the first card, else --
+        a list whose every group is folded -- the first header."""
+        order = self._card_order()
+        if order:
+            return ("note", order[0])
+        keys = self._list_drawn_keys
+        return keys[0] if keys else None
+
+    def _set_ring_row(self, key):
+        """Put the ring's place on this row, without painting or scrolling:
+        on a card, _focused_note_id says which; on a header, _focused_header
+        does, and no card holds the ring."""
+        if key[0] == "header":
+            self._focused_header = key[1]
+            self._focused_note_id = None
+        else:
+            self._focused_header = None
+            self._focused_note_id = key[1]
+
+    def _paint_ring_row(self):
+        """Repaint the ring where it is, card or header."""
+        cat = getattr(self, "_focused_header", None)
+        if cat is not None:
+            self._paint_header_ring(cat)
+        else:
+            self._paint_ring(getattr(self, "_focused_note_id", None))
+
+    def _put_keyboard_on_row(self, key):
+        if key[0] == "header":
+            self._put_keyboard_on_header(key[1])
+        else:
+            self._put_keyboard_on_card(key[1])
 
     def _put_keyboard_on_card(self, note_id):
         """Give the keyboard to the list, with the ring on this card, and
         bring the card into view."""
         previous = getattr(self, "_focused_note_id", None)
-        self._focused_note_id = note_id
+        header = getattr(self, "_focused_header", None)
+        self._set_ring_row(("note", note_id))
         try:
             self.canvas.focus_set()
         except tk.TclError:
             return
+        if header is not None:
+            self._paint_header_ring(header)
         if previous != note_id:
             self._paint_ring(previous)
         self._paint_ring(note_id)
         rec = (getattr(self, "_note_cards", None) or {}).get(note_id)
         if rec is not None:
             self._scroll_row_into_view(rec)
+
+    def _put_keyboard_on_header(self, cat):
+        """The same for a category header: the ring on it, in view."""
+        previous = getattr(self, "_focused_note_id", None)
+        header = getattr(self, "_focused_header", None)
+        self._set_ring_row(("header", cat))
+        try:
+            self.canvas.focus_set()
+        except tk.TclError:
+            return
+        self._paint_ring(previous)
+        if header is not None and header != cat:
+            self._paint_header_ring(header)
+        self._paint_header_ring(cat)
+        rec = (getattr(self, "_group_headers", None) or {}).get(cat)
+        if rec is not None:
+            self._scroll_row_into_view(rec)
+
+    def _header_ring_color(self, cat):
+        """A header's ring: the text colour while the keyboard's ring is on
+        it, else the header's own fill -- no ring at all."""
+        if (cat == getattr(self, "_focused_header", None)
+                and getattr(self, "_keyboard_on_card", False)):
+            return self.colors["text"]
+        return self.colors["sidebar"]
+
+    def _paint_header_ring(self, cat):
+        rec = (getattr(self, "_group_headers", None) or {}).get(cat)
+        if rec is None:
+            return
+        try:
+            self.canvas.itemconfigure(rec["items"]["ring"],
+                                      outline=self._header_ring_color(cat))
+        except tk.TclError:
+            pass
 
     def _scroll_row_into_view(self, rec):
         """Scroll the list just far enough that this row is all on screen.
@@ -14833,27 +14960,32 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             pass
 
     def _focus_card_by_offset(self, note_id, delta):
-        """Move the ring `delta` cards along the list on screen.
+        """Move the ring `delta` rows along the list on screen, from this
+        card (see _focus_row_by_offset)."""
+        self._focus_row_by_offset(("note", note_id), delta)
 
-        Asked of the ORDER THE CARDS ARE DRAWN IN rather than of
+    def _focus_row_by_offset(self, key, delta):
+        """Move the ring `delta` rows along the list on screen -- cards, and
+        the headers of a grouped list, which are stops like the cards: the
+        keyboard folds and opens a group from its header.
+
+        Asked of the ORDER THE ROWS ARE DRAWN IN rather than of
         self.notes: the list is sorted, filtered, searched and grouped, so
         the note after this one in the file is very often not the one
         underneath it on screen.
         """
-        order = self._card_order()
-        if note_id not in order:
+        order = self._list_drawn_keys
+        if key not in order:
             return
-        target = order.index(note_id) + delta
+        target = order.index(key) + delta
         # The list is drawn a step at a time (see _draw_list_rows), and
         # the keyboard must not stop where the drawing happened to: walking
-        # off the end of what is drawn draws the next step first. A loop,
-        # because a step of a grouped list can be nothing but the headers
-        # of collapsed groups.
+        # off the end of what is drawn draws the next step first.
         while target >= len(order) and getattr(self, "_list_pending", None):
             self._draw_list_rows(self.LIST_DRAW_STEP)
-            order = self._card_order()
+            order = self._list_drawn_keys
         if 0 <= target < len(order):
-            self._put_keyboard_on_card(order[target])
+            self._put_keyboard_on_row(order[target])
 
     def _restore_card_focus(self):
         """Repaint the keyboard's ring after a rebuild.
@@ -14865,7 +14997,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         (which answers None whenever another program holds the desktop's
         foreground), whether to pull it back.
         """
-        self._paint_ring(getattr(self, "_focused_note_id", None))
+        self._paint_ring_row()
 
     def _card_ring_color(self, note_id):
         """What a card's ring says. The text colour where the keyboard is;
@@ -15147,6 +15279,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 cv.itemconfigure(it["dot"], fill=dot, outline=dot)
                 cv.itemconfigure(it["caret"], fill=c["subtext"])
                 cv.itemconfigure(it["label"], fill=c["text"])
+                cv.itemconfigure(it["ring"], outline=self._header_ring_color(cat))
             cv.itemconfigure("list_empty", fill=c["subtext"])
         except tk.TclError:
             pass
@@ -15198,6 +15331,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         gone = set(note_ids)
         focused = getattr(self, "_focused_note_id", None)
         order_before = self._card_order()
+        ringed_header = getattr(self, "_focused_header", None)
+        rows_before = self._list_drawn_keys
         kept = []
         try:
             for rec in drawn:
@@ -15261,6 +15396,15 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 place = min(order_before.index(focused), len(order) - 1)
                 self._focused_note_id = order[place]
                 self._paint_ring(self._focused_note_id)
+        # ...and a header's, when its group went with the delete: to the row
+        # now standing where the header stood.
+        if (ringed_header is not None and ringed_header not in headers
+                and ("header", ringed_header) in rows_before):
+            rows = self._list_drawn_keys
+            place = min(rows_before.index(("header", ringed_header)),
+                        len(rows) - 1)
+            self._set_ring_row(rows[place])
+            self._paint_ring_row()
         # What was taken off may have left less than a screen drawn.
         self._ask_for_top_up()
         # refresh_note_list() recomputes these on its way past, and

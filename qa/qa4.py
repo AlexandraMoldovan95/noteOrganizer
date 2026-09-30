@@ -1905,6 +1905,92 @@ app.group_by_category.set(False)
 NO.CATEGORY_COLORS.pop(_bl_long, None)
 app.refresh_note_list(); _ls_settle()
 
+# 5h. The keyboard folds and opens groups. A header is a stop on the ring's
+# walk, drawn with the ring as a card is; Enter or Space on it does what a
+# click does, Left on a card folds its group and takes the ring to the
+# header, Right opens a folded header. Without them a folded group opened
+# only to the mouse, and with every group folded -- as a person may leave
+# the list -- no key on the list did anything at all. Keys are called as
+# their bindings call them (see 4.), and the bindings are asked for too.
+_bl_work_colour = NO.CATEGORY_COLORS.get('Work')
+NO.CATEGORY_COLORS.setdefault('Work', '#4cc9f0')
+_co_fresh([dict(n, category='General') for n in _bl_notes[:2]]
+          + [dict(n, category='Work') for n in _bl_notes[2:4]])
+_bl_work_ids = [n['id'] for n in _bl_notes[2:4]]
+app.group_by_category.set(True)
+app.collapsed_groups.clear()
+app.collapsed_groups.update({'General', 'Work'})
+app.refresh_note_list(); _ls_settle()
+
+
+def _bl_ring_on_header(cat):
+    rec = app._group_headers.get(cat)
+    return (rec is not None and app._focused_header == cat
+            and app.canvas.itemcget(rec['items']['ring'], 'outline')
+            == app.colors['text'])
+
+
+check(f'fixture: every group folded, nothing but headers on the list '
+      f'({app._list_drawn_keys})',
+      app._list_drawn_keys == [('header', 'General'), ('header', 'Work')])
+app._list_focus_in(); _ls_settle()
+check(f'with every group folded, the keyboard arriving puts the ring on the '
+      f'first header, drawn as a card\'s is ({app._focused_header!r})',
+      _bl_ring_on_header('General'))
+app._list_step(1); _ls_settle()
+check(f'...Down walks it to the next header ({app._focused_header!r})',
+      _bl_ring_on_header('Work'))
+app._list_activate(); _ls_settle()
+check(f'...Enter on a header opens its group, and the ring stays on the '
+      f'header (open groups: {sorted({"General", "Work"} - app.collapsed_groups)})',
+      'Work' not in app.collapsed_groups and _bl_ring_on_header('Work'))
+app._list_step(1); _ls_settle()
+check(f'...Down from the header goes to its first card '
+      f'({app._focused_note_id}, header ring off: '
+      f'{not _bl_ring_on_header("Work")})',
+      app._focused_note_id == (app._card_order() or [None])[0]
+      and app._focused_note_id in _bl_work_ids
+      and not _bl_ring_on_header('Work'))
+app._list_fold_by_keyboard(True); _ls_settle()
+check(f'...Left on a card folds its group and takes the ring to its header '
+      f'({sorted(app.collapsed_groups)}, ring on {app._focused_header!r})',
+      'Work' in app.collapsed_groups and _bl_ring_on_header('Work'))
+app._list_fold_by_keyboard(False); _ls_settle()
+check(f'...Right on the folded header opens it again '
+      f'({sorted(app.collapsed_groups)})',
+      'Work' not in app.collapsed_groups and _bl_ring_on_header('Work'))
+app._list_fold_by_keyboard(False); _ls_settle()
+check('...and Right on an open header leaves it open',
+      'Work' not in app.collapsed_groups and _bl_ring_on_header('Work'))
+app._list_activate(); _ls_settle()
+check('...and Space (the same handler as Enter) folds it again',
+      'Work' in app.collapsed_groups and _bl_ring_on_header('Work'))
+# To a theme whose text colour differs -- a recolour that repaints the
+# same colour would prove nothing.
+_bl_theme = app.theme_name
+_bl_other = next(t for t, p in NO.THEMES.items()
+                 if p.get('text') != app.colors['text'])
+app.set_theme(_bl_other); _ls_settle()
+_bl_recoloured = _bl_ring_on_header('Work')
+app.set_theme(_bl_theme); _ls_settle()
+check(f'...the header\'s ring follows a theme switch ({_bl_other})',
+      _bl_recoloured and _bl_ring_on_header('Work'))
+app._list_focus_out(); _ls_settle()
+_bl_hdr = app._group_headers.get('Work')
+check('...and the keyboard leaving the list takes the ring off the header',
+      _bl_hdr is not None
+      and app.canvas.itemcget(_bl_hdr['items']['ring'], 'outline')
+      == app.colors['sidebar'])
+_bl_bound = set(app.canvas.bind())
+check(f'Left and Right are bound on the list '
+      f'({sorted(s for s in _bl_bound if "Left" in s or "Right" in s)})',
+      '<Key-Left>' in _bl_bound and '<Key-Right>' in _bl_bound)
+app.group_by_category.set(False)
+app.collapsed_groups.clear()
+app.refresh_note_list(); _ls_settle()
+if _bl_work_colour is None:
+    NO.CATEGORY_COLORS.pop('Work', None)
+
 # ---------------------------------------------------------------------
 # A tick box's well must be light, because the mark in it is dark.
 #
