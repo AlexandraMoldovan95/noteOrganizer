@@ -31,6 +31,7 @@ keep them working.
 
 import tkinter as tk
 from tkinter import ttk
+from types import SimpleNamespace
 
 
 class DialogsMixin:
@@ -471,6 +472,117 @@ class DialogsMixin:
             w.bind("<Button-1>", lambda e: open_list())
         return btn
 
+    def _close_nested_popup(self):
+        """Close the popup open INSIDE the open popup (a dropdown's list,
+        an emoji picker for one of its fields), if there is one."""
+        nested = getattr(self, "_nested_dropdown", None)
+        self._nested_dropdown = None
+        if nested is not None:
+            try:
+                if nested.winfo_exists():
+                    nested.destroy()
+            except tk.TclError:
+                pass
+
+    @staticmethod
+    def _is_inside_popup(widget, pop):
+        """Whether `widget` -- a widget, or the path name a window-level
+        binding is handed -- is `pop` or lies inside it."""
+        if widget is None or pop is None:
+            return False
+        path, root = str(widget), str(pop)
+        return path == root or path.startswith(root + ".")
+
+    # ---- Window-level bindings that belong to one popup ----
+    #
+    # A popup listens on the app window for two things while it is open: a
+    # click outside it (to close) and the window moving (to follow). These
+    # used to be kept in ONE attribute per kind, overwritten by every
+    # placement -- and a dropdown nested inside a popup is placed while its
+    # host is still open, so the host's ids were lost and its handlers
+    # stayed bound for good. From then on every click ran a stale
+    # click-outside that closed the dropdown the same click had just
+    # opened: after one nested list, no dropdown in the app would open.
+    #
+    # So each popup keeps its own, and they go when IT goes, by whatever
+    # route. And they are lines that NAME their popup and call one command
+    # that is never deleted: Tk expands every script for a click before it
+    # runs any of them, so unbinding a handler from a widget's own
+    # <Button-1> deleted a command the same click was still about to call
+    # -- a silent background error on every such click. A line removed
+    # after Tk read it now just calls with a popup that is no longer
+    # registered, and does nothing.
+
+    def _bind_window_for_popup(self, pop, sequence, handler):
+        """Run handler(widget_path) for `sequence` on the app window for as
+        long as `pop` is open, and never for any other popup."""
+        try:
+            if not pop.winfo_exists():
+                return None
+        except tk.TclError:
+            return None
+        cmd = getattr(self, "_popup_event_cmd", None)
+        if cmd is None:
+            cmd = self._popup_event_cmd = self.register(
+                self._on_popup_window_event)
+        self._popup_bind_serial = getattr(self, "_popup_bind_serial", 0) + 1
+        token = "p%d" % self._popup_bind_serial
+        line = "%s %s %%W" % (cmd, token)
+        self.tk.call("bind", self._w, sequence, "+" + line)
+        binds = getattr(self, "_popup_window_binds", None)
+        if binds is None:
+            binds = self._popup_window_binds = {}
+        binds[token] = (pop, sequence, line, handler)
+        if getattr(pop, "_window_bind_tokens", None) is None:
+            pop._window_bind_tokens = []
+            # A Toplevel's <Destroy> also fires for each widget inside it,
+            # so only its own counts. Asked by path: a widget Tk no longer
+            # knows arrives as its bare path name.
+            pop.bind("<Destroy>",
+                     lambda e, p=pop, path=str(pop): (
+                         self._unbind_window_for_popup(p)
+                         if str(e.widget) == path else None),
+                     add="+")
+        pop._window_bind_tokens.append(token)
+        return token
+
+    def _on_popup_window_event(self, token, widget_path=""):
+        entry = (getattr(self, "_popup_window_binds", None) or {}).get(token)
+        if entry is None:
+            return      # its popup went away while Tk held this line
+        entry[3](widget_path)
+
+    def _unbind_window_for_popup(self, pop):
+        """Take `pop`'s lines off the app window. Safe to repeat."""
+        binds = getattr(self, "_popup_window_binds", None) or {}
+        for token in getattr(pop, "_window_bind_tokens", None) or ():
+            entry = binds.pop(token, None)
+            if entry is None:
+                continue
+            sequence, line = entry[1], entry[2]
+            try:
+                script = str(self.tk.call("bind", self._w, sequence))
+                rest = "\n".join(l for l in script.split("\n") if l != line)
+                self.tk.call("bind", self._w, sequence,
+                             rest if rest.strip() else "")
+            except tk.TclError:
+                pass
+        pop._window_bind_tokens = []
+
+    def _bind_click_outside(self, pop):
+        """A click on the app window outside `pop` closes it: the open
+        popup through _dismiss_mini_popup_asking, a nested one on its own."""
+        return self._bind_window_for_popup(
+            pop, "<Button-1>",
+            lambda path, p=pop: self._click_outside_popup(p, path))
+
+    def _click_outside_popup(self, pop, widget_path):
+        if pop is getattr(self, "_mini_popup", None):
+            self._maybe_dismiss_mini_popup(SimpleNamespace(widget=widget_path))
+        elif pop is getattr(self, "_nested_dropdown", None):
+            if not self._is_inside_popup(widget_path, pop):
+                self._close_nested_popup()
+
     def _place_dropdown_popup(self, pop, anchor_widget=None, anchor_xy=None,
                               enable_click_outside=True):
         """Position a popup like a dropdown anchored to a button: directly below
@@ -564,8 +676,8 @@ class DialogsMixin:
             pending["job"] = self.after_idle(run)
 
         # Live-track the app window while this popup is open (move + resize).
-        # Cleaned up in _dismiss_mini_popup so it doesn't linger once closed.
-        self._mini_popup_configure_bind = self.bind("<Configure>", throttled_reposition, add="+")
+        # Taken off again when this popup goes, whichever way it goes.
+        self._bind_window_for_popup(pop, "<Configure>", throttled_reposition)
         # Never clobber a popup's OWN Escape: a nested dropdown binds
         # Escape→close-just-this-list before being placed, and replacing
         # that here made Escape tear down the HOST editor the list sits
@@ -587,10 +699,7 @@ class DialogsMixin:
             self._mini_popup_escape_bind = self.bind(
                 "<Escape>", self._escape_backs_out, add="+")
         if enable_click_outside:
-            self._mini_popup_click_bind = self.bind(
-                "<Button-1>", self._maybe_dismiss_mini_popup, add="+")
-        else:
-            self._mini_popup_click_bind = None
+            self._bind_click_outside(pop)
 
     def _place_mini_popup(self, pop, anchor_widget=None, anchor_xy=None):
         """Position a mini popup (inline rename, color palette, etc.) just
@@ -605,14 +714,8 @@ class DialogsMixin:
         if pop is None:
             return
         # If the click was inside the popup, keep it open.
-        w = event.widget
-        while w is not None:
-            if w is pop:
-                return
-            try:
-                w = w.master
-            except AttributeError:
-                break
+        if self._is_inside_popup(getattr(event, "widget", None), pop):
+            return
         # A popup holding real work may want a word first: its
         # _confirm_dismiss returns False to stay open (or after having
         # handled the closing itself, e.g. by saving).
@@ -769,20 +872,10 @@ class DialogsMixin:
             except tk.TclError:
                 pass
             self._mini_popup = None
-        bind_id = getattr(self, "_mini_popup_click_bind", None)
-        if bind_id is not None:
-            try:
-                self.unbind("<Button-1>", bind_id)
-            except tk.TclError:
-                pass
-            self._mini_popup_click_bind = None
-        configure_bind_id = getattr(self, "_mini_popup_configure_bind", None)
-        if configure_bind_id is not None:
-            try:
-                self.unbind("<Configure>", configure_bind_id)
-            except tk.TclError:
-                pass
-            self._mini_popup_configure_bind = None
+            # Its window-level lines went with it (its <Destroy> takes
+            # them); asked again for a popup some other route destroyed
+            # before this ran. Repeating it is harmless.
+            self._unbind_window_for_popup(pop)
         escape_bind_id = getattr(self, "_mini_popup_escape_bind", None)
         if escape_bind_id is not None:
             try:
@@ -790,8 +883,10 @@ class DialogsMixin:
             except tk.TclError:
                 pass
             self._mini_popup_escape_bind = None
-        # A nested list belongs to the popup that is going away with it.
-        self._nested_dropdown = None
+        # A nested list belongs to the popup that is going away with it --
+        # and goes WITH it: it is a window of its own, not a child of the
+        # host, so forgetting it left it floating over the app.
+        self._close_nested_popup()
         # Run any deferred work now that the popup is actually closing — e.g.
         # a full note-list/calendar rebuild, which is heavy enough to cause a
         # visible flicker if it runs WHILE a popup is open on top of it (this

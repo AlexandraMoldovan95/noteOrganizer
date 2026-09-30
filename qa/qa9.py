@@ -810,10 +810,32 @@ check('Jump-to-month popup opens', jump_popup is not None and jump_popup.winfo_e
 
 import calendar as cal_module
 current_month_name = cal_module.month_name[app.cal_month]
-month_btn = find_dropdown_by_label(jump_popup, current_month_name)
-check('month dropdown button found', month_btn is not None)
-_qa_click(month_btn)
-app.update()
+
+
+def month_dropdown(jump):
+    """The Month dropdown itself -- the frame that owns the ▾. Looked up
+    by the label, find_dropdown_by_label answers with the ROW holding the
+    dropdown, whose first label is the month too; clicking that row opens
+    nothing, and the check below passed on a click that never happened."""
+    for w in _walk_all9(jump):
+        if isinstance(w, tk.Label) and str(w.cget('text')) == '▾':
+            return w.master
+    return None
+
+
+def _walk_all9(w):
+    yield w
+    for c in w.winfo_children():
+        yield from _walk_all9(c)
+
+
+month_btn = month_dropdown(jump_popup)
+check('month dropdown button found',
+      month_btn is not None
+      and find_widget(month_btn, tk.Label, current_month_name) is not None)
+month_list = open_nested_dropdown(app, month_btn) if month_btn is not None else None
+check('fixture: the month dropdown\'s list really opened',
+      month_list is not None and month_list.winfo_exists())
 check('Jump-to-month popup stays open after opening the month dropdown',
       jump_popup.winfo_exists())
 
@@ -826,11 +848,29 @@ check('Jump-to-month popup stays open after opening the month dropdown',
 # button is a real toggle now. (The nested template-editor variant
 # deliberately keeps the old behaviour — see open_list's comment.)
 app._dismiss_mini_popup(); app.update()
-# Earlier sections destroy popups directly (bypassing _dismiss), which
-# leaves their click-outside handlers accumulated on the toplevel — and
-# a stale one dismisses OUR fresh popup on the very same synthetic
-# click. Clear the tag: each open re-installs its own handler anyway.
-app.unbind('<Button-1>')
+
+
+def _popup_window_lines(seq):
+    """The lines a popup has on the app window for `seq` right now."""
+    cmd = getattr(app, '_popup_event_cmd', None)
+    if not cmd:
+        return []
+    return [l for l in str(app.bind(seq) or '').split('\n') if cmd in l]
+
+
+# Earlier sections destroy popups directly, bypassing _dismiss_mini_popup,
+# and nested lists come and go inside them. This block used to wipe the
+# window's <Button-1> here, because their click-outside handlers stayed
+# behind and a stale one closed the next popup on the very click that
+# opened it -- the bug itself, papered over in the test. Nothing is wiped
+# now: whatever those sections left is what the person gets, and it must
+# be nothing.
+check('nothing earlier left a click-outside or a follow-the-window line on '
+      'the app window (%s, %s)' % (_popup_window_lines('<Button-1>'),
+                                   _popup_window_lines('<Configure>')),
+      not _popup_window_lines('<Button-1>')
+      and not _popup_window_lines('<Configure>')
+      and not getattr(app, '_popup_window_binds', {}))
 app.notebook.select(app.TAB_NOTES); app.update()
 _qa_click(app.filter_menu); app.update()
 check('first click opens the filter list',
@@ -860,7 +900,6 @@ app._dismiss_mini_popup(); app.update()
 # The nested case is the one this fix could most easily have broken: the
 # comment beside the per-popup binding records an attempt that made Escape
 # tear down the HOST editor instead of the list inside it.
-app.unbind('<Button-1>')
 app.notebook.select(app.TAB_NOTES); app.update()
 
 
@@ -1104,9 +1143,8 @@ _tg_buttons = [
 ]
 for _tg_label, _tg_get, _tg_setup in _tg_buttons:
     app._dismiss_mini_popup(); app.update()
-    # Stale click-outside handlers from earlier sections, cleared the way
-    # the dropdown block above does: each open installs its own.
-    app.unbind('<Button-1>')
+    # No wiping of the window's click handlers between openers: each
+    # popup takes its own away when it goes (see the dropdown block).
     if _tg_setup is not None:
         _tg_setup()
     _tg_btn = _tg_get()
@@ -1379,6 +1417,218 @@ else:
 app.geometry('1100x850')
 for _ in range(10):
     app.update(); time.sleep(0.02)
+
+
+# ============================================================
+# HELPERS FOR THE BLOCKS BELOW: real questions, answered from inside
+# ============================================================
+def _walk9(w):
+    yield w
+    for _c in w.winfo_children():
+        yield from _walk9(_c)
+
+
+def _question_button(label, title=None):
+    """A button of a themed question on screen -- of the one whose title
+    contains `title`, when given."""
+    for _f in app.place_slaves():
+        if not isinstance(_f, tk.Frame) or _f in (
+                getattr(app, 'toast_frame', None),
+                getattr(app, 'export_progress_frame', None)):
+            continue
+        _ws = list(_walk9(_f))
+        if title is not None and not any(
+                isinstance(w, tk.Label) and title in str(w.cget('text'))
+                for w in _ws):
+            continue
+        for w in _ws:
+            if isinstance(w, tk.Button) and str(w.cget('text')) == label:
+                return w
+    return None
+
+
+def _keyboard_on(widget, cap=60):
+    """Put the keyboard on `widget` -- a precondition, so it is forced --
+    and say whether it went (qa/README: force a precondition)."""
+    for _ in range(cap):
+        try:
+            app.focus_force()
+            widget.focus_force()
+            app.update()
+            if app.focus_get() is widget:
+                return True
+        except (KeyError, tk.TclError):
+            pass
+        time.sleep(0.01)
+    return False
+
+
+def _while_asking(ask, act, rescue_label, title, cap_ms=5000):
+    """Ask a REAL question with ask(), titled `title`; act() runs while it
+    waits. Still waiting after cap_ms, it is answered with `rescue_label`
+    -- chosen by each caller as the WRONG answer -- so a broken promise
+    turns into a red check instead of a hung script. By title, because a
+    question can be asked over another. Returns (answer, rescued)."""
+    state = {'rescued': False}
+
+    def rescue():
+        b = _question_button(rescue_label, title)
+        if b is not None:
+            state['rescued'] = True
+            b.invoke()
+    app.after(300, act)
+    job = app.after(cap_ms, rescue)
+    try:
+        answer = ask()
+    finally:
+        try:
+            app.after_cancel(job)
+        except (tk.TclError, ValueError):
+            pass
+    return answer, state['rescued']
+
+
+# Every background error the blocks below raise lands here. Tk reports
+# them to nobody by default, which is how the next one hid for so long.
+_bg9 = []
+app.tk.createcommand('bgerror', lambda *a: _bg9.append(' '.join(map(str, a))))
+_na_notes = list(app.notes)
+app.notes = [NO.normalize_note({'id': 9801, 'title': 'Bread recipe', 'body': 'flour',
+                                'category': 'General'}),
+             NO.normalize_note({'id': 9802, 'title': 'Holiday plans', 'body': 'sea',
+                                'category': 'General'})]
+app.save_notes()
+app.refresh_note_list()
+app.notebook.select(app.TAB_NOTES); app.update()
+app._dismiss_mini_popup(); app.update()
+
+# ============================================================
+# A LIST INSIDE A POPUP LEAVES NOTHING BEHIND ON THE WINDOW
+# ============================================================
+# The Category list in the template editor and the Month list in the
+# calendar's Jump-to-month are dropdowns INSIDE a popup. Placing one
+# overwrote the window-level click and resize ids its host had stored, so
+# the host's handlers stayed bound for good -- and from then on every
+# dropdown in the app was closed by the same click that opened it, until
+# the app was restarted. Measured as the window's own binding scripts,
+# which must come back exactly as they were.
+_na_b1 = str(app.bind('<Button-1>') or '')
+_na_cf = str(app.bind('<Configure>') or '')
+app.show_settings_page(); app.update()
+app._edit_template(None, redraw=lambda: None); app.update()
+_na_host = app._mini_popup
+_na_btn = find_dropdown_by_label(_na_host, 'General')
+_na_picked = 0
+for _na_i in range(3):
+    _na_list = open_nested_dropdown(app, _na_btn)
+    _na_opt = (find_widget(_na_list, tk.Label, 'Work')
+               if _na_list is not None else None)
+    if _na_opt is not None and pick_nested_option(app, _na_list, _na_opt):
+        _na_picked += 1
+check('fixture: the Category list inside the template editor was opened and '
+      'picked from three times (%d)' % _na_picked, _na_picked == 3)
+find_widget(_na_host, tk.Button, 'Cancel').invoke(); app.update()
+app.hide_settings_page(); app.update()
+check('...and after it closed, the window\'s click and resize handling is '
+      'exactly as before (%d/%d click lines, %d/%d resize lines)'
+      % (len(str(app.bind('<Button-1>') or '').split('\n')),
+         len(_na_b1.split('\n')),
+         len(str(app.bind('<Configure>') or '').split('\n')),
+         len(_na_cf.split('\n'))),
+      str(app.bind('<Button-1>') or '') == _na_b1
+      and str(app.bind('<Configure>') or '') == _na_cf)
+_qa_click(app.filter_menu); app.update()
+check('...so the next dropdown clicked opens (the sidebar\'s Show list)',
+      app._mini_popup is not None and app._mini_popup.winfo_exists())
+app._dismiss_mini_popup(); app.update()
+# The Month list, opened and left without a pick: its host's Cancel takes
+# it along -- it is a window of its own, and was left floating before.
+app.notebook.select(app.TAB_CALENDAR); app.update()
+app.open_month_jump(); app.update()
+_na_jump = app._mini_popup
+_na_month = month_dropdown(_na_jump)
+_na_mlist = open_nested_dropdown(app, _na_month) if _na_month else None
+check('fixture: the Month list inside Jump to month is open',
+      _na_mlist is not None and _na_mlist.winfo_exists())
+find_widget(_na_jump, tk.Button, 'Cancel').invoke(); app.update()
+check('closing Jump to month closes the Month list open inside it',
+      _na_mlist is None or not _na_mlist.winfo_exists())
+check('...and leaves the window\'s click and resize handling as it was',
+      str(app.bind('<Button-1>') or '') == _na_b1
+      and str(app.bind('<Configure>') or '') == _na_cf)
+app.notebook.select(app.TAB_NOTES); app.update()
+_qa_click(app.filter_menu); app.update()
+check('...and the next dropdown still opens',
+      app._mini_popup is not None and app._mini_popup.winfo_exists())
+app._dismiss_mini_popup(); app.update()
+
+# ============================================================
+# A WIDGET THAT CLOSES ONE POPUP TO OPEN ANOTHER RAISES NOTHING
+# ============================================================
+# Tk expands every script of a click before it runs any. A dropdown's own
+# <Button-1> closed the open list and unbound its click-outside -- which
+# deleted a command the same click was still about to call: a silent
+# "invalid command name" background error on every such click.
+del _bg9[:]
+_bg_sort = next(c for c in app.filter_menu.master.winfo_children()
+                if isinstance(c, tk.Frame) and c is not app.filter_menu)
+_qa_click(app.filter_menu); app.update()
+_bg_first = app._mini_popup
+_qa_click(_bg_sort); app.update()
+check('clicking one dropdown while another\'s list is open raises no '
+      'background error (%s)' % _bg9[:1],
+      not _bg9 and _bg_first is not None
+      and app._mini_popup is not None and app._mini_popup is not _bg_first
+      and app._mini_popup.winfo_exists())
+app._dismiss_mini_popup(); app.update()
+app.templates = [NO.normalize_template({'name': 'Weekly review', 'body': 'What went well'}),
+                 NO.normalize_template({'name': 'Meeting notes', 'body': 'Attendees'})]
+NO.save_templates(app.templates)
+app.show_settings_page(); app.update()
+app.toggle_settings_panel('templates'); app.update()
+
+
+def _pencils9():
+    return [w for w in _walk9(app.settings_templates_panel)
+            if getattr(w, '_icon_kind', None) == 'pencil']
+
+
+_qa_click(_pencils9()[0]); app.update()
+_bg_ed = app._mini_popup
+_qa_click(_pencils9()[1]); app.update()
+check('a template\'s pencil clicked while another template\'s editor is open '
+      'raises no background error (%s)' % _bg9[:1],
+      not _bg9 and _bg_ed is not None and app._mini_popup is not None
+      and app._mini_popup is not _bg_ed)
+app._dismiss_mini_popup(); app.update()
+
+# ============================================================
+# AN IMAGE PREVIEW CLOSED AT ONCE LEAVES NOTHING ON THE WINDOW
+# ============================================================
+# The preview binds its click-outside 50 ms after it opens, so the click
+# that opened it is not taken for a click outside it. Closed within those
+# 50 ms, it bound anyway -- a handler nothing would ever take off again,
+# one more on the window for every quick close.
+from PIL import Image as _pq_Image
+_pq_path = _seed_os.path.abspath('qa9_quick_preview.png')
+_pq_Image.new('RGB', (60, 40), (10, 120, 200)).save(_pq_path)
+app._dismiss_mini_popup(); app.update()
+_pq_b1 = str(app.bind('<Button-1>') or '')
+for _ in range(5):
+    app._show_image_preview(_pq_path, 'quick.png')
+    app._dismiss_mini_popup()
+    for _ in range(10):
+        app.update(); time.sleep(0.02)
+check('an image preview closed at once leaves no click handler on the window '
+      '(%d lines, %d before)' % (len(str(app.bind('<Button-1>') or '').split('\n')),
+                                 len(_pq_b1.split('\n'))),
+      str(app.bind('<Button-1>') or '') == _pq_b1)
+_seed_os.remove(_pq_path)
+
+check('none of the blocks above raised a background error (%s)' % _bg9[:2],
+      not _bg9)
+app.notes = list(_na_notes)
+app.save_notes()
 
 app.notes = list(_tg_saved_notes)
 app.templates = list(_tg_saved_templates)

@@ -322,12 +322,16 @@ class AttachmentsMixin:
         overlay.lift()
         # Click-outside-to-dismiss, matching every other in-app overlay —
         # bound on a short delay so the click that OPENED this preview isn't
-        # also immediately seen as a click "outside" it.
+        # also immediately seen as a click "outside" it. Bound for THIS
+        # preview and only while it is still the one open: closed within
+        # the delay, it used to bind anyway, a handler nothing would ever
+        # take off again -- one more on the window per quick close.
         def _bind_click_outside():
             if not self._still_alive():
                 return
-            self._mini_popup_click_bind = self.bind(
-                "<Button-1>", self._maybe_dismiss_mini_popup, add="+")
+            if getattr(self, "_mini_popup", None) is not overlay:
+                return
+            self._bind_click_outside(overlay)
         self.after(50, _bind_click_outside)
 
     # How much decoded preview is kept for reopening, in bytes of pixels
