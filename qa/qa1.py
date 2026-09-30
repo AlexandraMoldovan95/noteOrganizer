@@ -8438,6 +8438,22 @@ app.update()
 if not app.selection_mode:
     app._toggle_selection_mode()
 app.update()
+# The search_var.set('') above scheduled the search debounce -- a full
+# refresh_note_list 180 ms later, which draws every card anew -- and the
+# new note left an autosave pending. Whenever this setup ran faster than
+# the debounce, the refresh landed between the baseline and the reading
+# below and the "without rebuilding" checks went red with nothing wrong
+# (3 times in 16 loaded Windows runs, never on Linux; reproduced by
+# listing the timers still pending at the baseline). Settled and
+# asserted settled, so the reading is about the button alone.
+if getattr(app, '_search_debounce_job', None) is not None:
+    app.after_cancel(app._search_debounce_job)
+    app._search_debounce_job = None
+app._flush_autosave()
+app.update()
+check('select all: no timer left that could redraw the list (precondition)',
+      getattr(app, '_search_debounce_job', None) is None
+      and getattr(app, '_autosave_job', None) is None)
 _btn_text = lambda: str(app._bulk_select_all_btn.cget('text'))
 
 
