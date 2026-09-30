@@ -1284,6 +1284,118 @@ check(f'...and one held at the top edge scrolls it up ({_co_up:.0f}px)',
 app.sort_var.set('Recently updated')
 
 # ---------------------------------------------------------------------
+# 5. The list under a hurried hand (the break-it audit, 2026-09-30).
+#
+# Each part below is a way a person's ordinary handling of the list went
+# wrong while every single gesture, taken slowly and alone, worked: a
+# release lost to another window, a click that saved the note left behind
+# and so moved the rows under the pointer, a Select all over folded
+# groups, a tick left on a note that was deleted, an arrangement replaced
+# without a word, two cards both claiming to be open, a header too long
+# for its line, the ring out of sight, groups the keyboard could not
+# fold, and a list that stayed drawn to its end once it had been.
+# ---------------------------------------------------------------------
+
+
+def _bl_drawing_ok():
+    """Every drawn card is drawn where its record says: a card left
+    lifted, or moved without its record, shows here."""
+    bad = []
+    for rec in app._list_drawn:
+        if rec['kind'] != 'note':
+            continue
+        box = app.canvas.coords(rec['items']['bg'])
+        if not box or abs(box[1] - rec['y0']) > 0.5 or abs(box[3] - rec['y1']) > 0.5:
+            bad.append(rec['note']['id'])
+    return not bad
+
+
+def _bl_lift(nid, by=54):
+    """Press a card and carry it `by` pixels down with the button held --
+    far enough to lift it -- and return where the pointer is."""
+    y = _co_press(nid)
+    for dy in range(6, by + 1, 6):
+        _qa_fire(app.canvas, '<B1-Motion>', x=120, y=y + dy)
+        app.update()
+    return y + by
+
+
+def _bl_lifted():
+    drag = getattr(app, '_drag', None)
+    return bool(drag and drag['started'] and drag['offset']
+                and app.canvas.find_withtag('drag_line'))
+
+
+# 5a. A drag whose release never reaches the list. The release is lost
+# (another window took the pointer, say); whatever the list hears next
+# must put the lifted card back before it does anything else.
+app.DRAG_EDGE = -10000
+_co_fresh(_co_notes)
+_bl_o = app._card_order()
+_bl_lift(_bl_o[1])
+_bl_was = _bl_lifted()
+_bl_pt = app._card_point(_bl_o[0])
+_qa_click(app.canvas, x=_bl_pt[0], y=_bl_pt[1]); _ls_settle()
+check(f'a press while a card is still lifted puts it back first: no line, '
+      f'every card where its record is, no four-way pointer (lifted first: '
+      f'{_bl_was}, pointer {str(app.canvas.cget("cursor"))!r})',
+      _bl_was and not app.canvas.find_withtag('drag_line') and _bl_drawing_ok()
+      and str(app.canvas.cget('cursor')) != 'fleur')
+_qa_fire(app.canvas, '<ButtonRelease-1>', x=_bl_pt[0], y=_bl_pt[1]); _ls_settle()
+
+_bl_lift(_bl_o[2])
+check(f'...while a card is lifted, the pointer shape the list remembers is '
+      f'the one it shows ({app._list_cursor!r}, '
+      f'{str(app.canvas.cget("cursor"))!r})',
+      app._list_cursor == str(app.canvas.cget('cursor')) == 'fleur')
+# Motion with the button UP: <B1-Motion> takes every move while it is down,
+# so this one says the release went missing.
+_bl_pt = app._card_point(_bl_o[0])
+_qa_fire(app.canvas, '<Motion>', x=_bl_pt[0], y=_bl_pt[1]); _ls_settle()
+check(f'...and the pointer moving with the button up puts it back too, '
+      f'with the hand over a card again ({str(app.canvas.cget("cursor"))!r})',
+      not _bl_lifted() and not app.canvas.find_withtag('drag_line')
+      and _bl_drawing_ok() and str(app.canvas.cget('cursor')) == 'hand2')
+
+# A right-click during a drag: the drawing under the pointer is the lifted
+# card, the record there its neighbour's, so a menu would be for a note
+# nobody pointed at. First the control -- with no drag, a right-click does
+# open the menu of the card under it -- so the silence below is a decision.
+_bl_menus = []
+app.show_note_context_menu = lambda ev, note, **k: _bl_menus.append(note['id'])
+try:
+    _bl_pt = app._card_point(_bl_o[3])
+    _qa_fire(app.canvas, '<Button-3>', x=_bl_pt[0], y=_bl_pt[1]); _ls_settle()
+    _bl_control = list(_bl_menus)
+    del _bl_menus[:]
+    _bl_y = _bl_lift(_bl_o[1])
+    _bl_was = _bl_lifted()
+    # On the neighbour's record, where the lifted card is drawn: without
+    # the cancel this is the menu that opened -- for the neighbour.
+    _bl_pt = app._card_point(_bl_o[2])
+    _qa_fire(app.canvas, '<Button-3>', x=_bl_pt[0], y=_bl_pt[1]); _ls_settle()
+finally:
+    app.__dict__.pop('show_note_context_menu', None)
+check(f'a right-click during a drag cancels it and opens no menu (menus '
+      f'{_bl_menus}; with no drag it opened {_bl_control}, lifted first: '
+      f'{_bl_was})',
+      _bl_control == [_bl_o[3]] and _bl_was and _bl_menus == []
+      and not _bl_lifted() and _bl_drawing_ok())
+_qa_fire(app.canvas, '<ButtonRelease-1>', x=120, y=_bl_y); _ls_settle()
+
+# The window losing the keyboard mid-drag is how a release goes missing.
+_bl_lift(_bl_o[1])
+_bl_was = _bl_lifted()
+app.canvas.winfo_id()
+app.canvas.event_generate('<FocusOut>'); _ls_settle()
+check(f'the list losing the keyboard mid-drag puts the lifted card back '
+      f'(lifted first: {_bl_was})',
+      _bl_was and not _bl_lifted() and not app.canvas.find_withtag('drag_line')
+      and _bl_drawing_ok() and app._card_order() == _bl_o)
+_qa_fire(app.canvas, '<ButtonRelease-1>', x=120, y=10); _ls_settle()
+app.__dict__.pop('DRAG_EDGE', None)
+
+# ---------------------------------------------------------------------
 # A tick box's well must be light, because the mark in it is dark.
 #
 # Tk draws a Checkbutton's mark dark on Windows whatever the palette

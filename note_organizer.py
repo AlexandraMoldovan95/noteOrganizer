@@ -14213,6 +14213,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 self.CARD_INSET_X, -10, self.LIST_DRAW_WIDTH - self.CARD_INSET_X, -10,
                 width=3, fill=self.colors["accent"], tags=("row", "drag_line"))
             cv.configure(cursor="fleur")
+            # Said where the pointer's own shape is remembered, too: left
+            # saying "hand2", _list_pointer_moved saw nothing to change and
+            # the four-way arrow outlived the drag over every card.
+            self._list_cursor = "fleur"
         except tk.TclError:
             return False
         drag["started"] = True
@@ -14457,7 +14461,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         the keyboard comes to the list, on the card clicked, so Down and Up
         carry on from there. Nothing is returned: the window's own click
         handling (closing an open popup) still hears the click."""
-        self._drag = None
+        # A card still lifted means the release that should have dropped
+        # it never arrived (lost to another window, say). Put it back
+        # first: forgetting the drag left its drawing, its line and its
+        # pointer shape on the list, over records that had never moved.
+        self._cancel_list_drag()
         rec = self._list_record_at(event.x, event.y)
         if rec is None:
             return
@@ -14483,7 +14491,16 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
     def _list_right_pressed(self, event):
         """Right-click on a card opens that note's menu. A plain click on
-        the same card opens the note, so the menu leaves out Open / Edit."""
+        the same card opens the note, so the menu leaves out Open / Edit.
+
+        During a drag it cancels the drag and opens nothing: the card under
+        the pointer then is the lifted one's drawing, while the record there
+        is its neighbour's, so a menu would have been for a note nobody
+        pointed at."""
+        drag = getattr(self, "_drag", None)
+        if drag and drag["started"]:
+            self._cancel_list_drag()
+            return
         rec = self._list_record_at(event.x, event.y)
         if rec is None or rec["kind"] != "note":
             return
@@ -14492,6 +14509,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
     def _list_pointer_moved(self, event):
         """The hand over a row, the plain pointer over the gaps -- what each
         card and header widget's own cursor used to say."""
+        # This hears motion with the button UP (<B1-Motion> takes it while
+        # the button is down), so a card still lifted here lost its
+        # release: it goes back before anything else is decided.
+        drag = getattr(self, "_drag", None)
+        if drag and drag["started"]:
+            self._cancel_list_drag()
         want = "hand2" if self._list_record_at(event.x, event.y) else ""
         if getattr(self, "_list_cursor", None) != want:
             self._list_cursor = want
@@ -14570,7 +14593,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
     def _list_focus_out(self, _event=None):
         """The keyboard left the list: the ring goes back to saying only
-        which note is open."""
+        which note is open. A drag cannot outlive it either -- the window
+        losing the keyboard (Alt+Tab, another program) is exactly how a
+        release goes missing -- so a lifted card goes back."""
+        self._cancel_list_drag()
         self._keyboard_on_card = False
         self._paint_ring(getattr(self, "_focused_note_id", None))
 
