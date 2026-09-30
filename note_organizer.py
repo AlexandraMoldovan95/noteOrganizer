@@ -9558,6 +9558,45 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             category = "General"
         return CATEGORY_COLORS.get(category, self.colors["accent"])
 
+    # Tk's own rule for when two presses make one double-click (tkBind.c,
+    # NEARBY_MS and NEARBY_PIXELS). Kept here rather than asked of Tk,
+    # because Tk pairs two presses only when both land on the SAME widget.
+    _DOUBLE_CLICK_MS = 500
+    _DOUBLE_CLICK_PX = 5
+
+    def _second_press_of_double_click(self, event):
+        """True when *event*, a press on a button that removes its own row,
+        is the second half of a double-click.
+
+        Many people double-click every button. The first click removes the
+        row and the row below slides up into its place, so the second press
+        lands on a DIFFERENT button -- the next row's -- and removed that
+        one too, while the toast's single Undo offered back only the second
+        (the first was gone for good). Tk cannot tell: it makes a
+        double-click of two presses on one widget only. So the pairing is
+        done here, by Tk's own rule, across every such button: a press
+        within 500 ms and 5 px of the previous one is the echo of the same
+        gesture. Every call records its press. Bind it to the press, so
+        the second one never arms the button::
+
+            button.bind("<ButtonPress-1>", lambda e: "break"
+                        if self._second_press_of_double_click(e) else None,
+                        add="+")
+
+        A generated event carries no time; the clock stands in for it.
+        """
+        stamp = getattr(event, "time", 0) or int(time.monotonic() * 1000)
+        here = (stamp, getattr(event, "x_root", 0), getattr(event, "y_root", 0))
+        last = getattr(self, "_row_removal_press", None)
+        self._row_removal_press = here
+        if last is None:
+            return False
+        # Event times are milliseconds on a 32-bit clock that wraps.
+        elapsed = (here[0] - last[0]) & 0xFFFFFFFF
+        return (elapsed <= self._DOUBLE_CLICK_MS
+                and abs(here[1] - last[1]) <= self._DOUBLE_CLICK_PX
+                and abs(here[2] - last[2]) <= self._DOUBLE_CLICK_PX)
+
     # ---------- Checklist ----------
     def toggle_checklist_section(self):
         """Show or hide the checklist section under the note body."""
@@ -9822,6 +9861,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                             fg=self.colors["danger"], font=("Segoe UI", 9),
                             bd=0)
         bin_btn.pack(side="right")
+        # A double-click's second press lands on the NEXT row's bin, slid
+        # up into this one's place: it must not remove that row too.
+        bin_btn.bind("<ButtonPress-1>",
+                     lambda e: "break"
+                     if self._second_press_of_double_click(e) else None,
+                     add="+")
         return record
 
     def _restyle_checklist_label(self, lbl, done):

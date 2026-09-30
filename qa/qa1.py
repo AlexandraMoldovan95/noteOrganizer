@@ -9880,6 +9880,44 @@ check('checklist rows: with two items alike, the row left ticks the item left',
       len(_cl_box) == 1 and len(app._get_checklist()) == 1
       and app._get_checklist()[0]['done'] is True)
 
+# ---- A DOUBLE-CLICK ON A CHECKLIST BIN REMOVES ONE ITEM ----
+# Many people double-click every button. The first click removed the row
+# and the next row slid up into its place, so the second press landed on
+# THAT row's bin and removed it too -- the toast's single Undo offering
+# back only the second, the first gone for good. The second press of a
+# double-click (Tk's own rule: 500 ms, 5 px) is swallowed now, on
+# whichever bin it lands. Delivered the way a pointer delivers it --
+# Enter, press, release -- at explicit screen points and event times, so
+# the verdict never depends on this desktop's clock or where its pointer
+# rests. Each "it removed nothing more" has its control: the same press
+# later, or elsewhere, is a click of its own and removes.
+def _dc_click(widget, x_root, y_root, t):
+    _qa_fire(widget, '<Enter>')
+    _qa_fire(widget, '<ButtonPress-1>', x=5, y=5, rootx=x_root,
+             rooty=y_root, time=t)
+    _qa_fire(widget, '<ButtonRelease-1>', x=5, y=5, rootx=x_root,
+             rooty=y_root, time=t + 60)
+    app.update()
+
+
+check('double-click: fixture opens four items',
+      _cu_setup(['milk', 'eggs', 'bread', 'butter']))
+_dc_x, _dc_y = 400, 300
+_dc_click(_cu_bin(1), _dc_x, _dc_y, 100000)
+check('double-click: the first click of it removes the row under it (fixture)',
+      _cu_texts() == ['milk', 'bread', 'butter'])
+_dc_click(_cu_bin(1), _dc_x, _dc_y, 100250)
+check(f'double-click: the second press, on the row slid into place, removes '
+      f'nothing ({_cu_texts()})',
+      _cu_texts() == ['milk', 'bread', 'butter'])
+check('double-click: and the toast still offers back the one it removed',
+      'eggs' in str(app.toast_lbl.cget('text')) and app._toast_action is not None)
+_dc_click(_cu_bin(1), _dc_x, _dc_y, 100900)
+check('double-click: a click after the double-click window removes as usual',
+      _cu_texts() == ['milk', 'butter'])
+_dc_click(_cu_bin(1), _dc_x, _dc_y + 40, 101000)
+check('double-click: a quick click on a bin elsewhere is a click of its own',
+      _cu_texts() == ['milk'])
 app.notes = list(_cu_saved)
 app.save_notes()
 app.new_note(); app.update()
