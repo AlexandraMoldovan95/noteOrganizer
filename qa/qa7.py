@@ -3524,6 +3524,72 @@ app._history_toggle_btn.invoke(); app.update()
 app.close_day_panel()
 app.notebook.select(app.TAB_NOTES); app.update()
 
+# ---- WITH A DAY OPEN, A HELD DRAG OF THE EDGE WAITS FOR THE HAND ----
+# The month alone is one drawing and follows a held drag of the window's
+# edge (qa9 holds that). An open day's panel below it is widgets -- a row
+# per note, or a note's whole text -- and was laid out at every step with
+# the month: 60 ms a step for an ordinary month, 150 and more for a busy
+# one, back near the cost the drawing set out to remove. So with a day
+# open the calendar waits for the hand, as History and the other pages do.
+# The button is answered for the app and the pause is put out of reach, as
+# qa9 does; what is asked is the width the content was given.
+def _dg_width():
+    return int(float(app.main_canvas.itemcget(app._main_window_item, 'width')))
+
+
+def _dg_window():
+    return max(app.main_canvas.winfo_width(), app._main_min_width)
+
+
+app.notes = [NO.normalize_note({'id': 220, 'title': 'DragDay', 'body': 'x',
+                                'category': 'General', 'date': '2026-07-08'})]
+app.save_notes()
+app.notebook.select(app.TAB_CALENDAR); app.update()
+app.cal_year, app.cal_month = 2026, 7
+app.render_calendar(); app.update()
+_dg_held = {'now': True}
+_dg_w0, _dg_h0 = app.winfo_width(), app.winfo_height()
+app._pointer_button_held = lambda: _dg_held['now']
+app.RESIZE_PAUSE_MS = 60000
+try:
+    app.geometry('%dx%d' % (_dg_w0 - 40, _dg_h0))
+    for _ in range(5):
+        app.update_idletasks(); app.update()
+    check(f'fixture: with no day open, the month follows a held drag '
+          f'({_dg_width()} for {_dg_window()})', _dg_width() == _dg_window())
+    for _dg_open in (lambda: _od_open_day('2026-07-08'),
+                     lambda: _od_open_chip('2026-07-08', 0)):
+        _dg_open()
+        for _ in range(3):
+            app.update_idletasks(); app.update()
+        _dg_mode = app._day_panel_mode
+        _dg_before = _dg_width()
+        app.geometry('%dx%d' % (_dg_before + (30 if _dg_before < _dg_w0 else -30),
+                                _dg_h0))
+        for _ in range(5):
+            app.update_idletasks(); app.update()
+        check(f'with a day open ({_dg_mode}), a held drag waits for the hand '
+              f'(content {_dg_before} -> {_dg_width()}, the window is {_dg_window()})',
+              _dg_mode in ('list', 'note') and _dg_width() == _dg_before != _dg_window()
+              and app._resize_watch_job is not None)
+        _dg_held['now'] = False
+        _dg_end = time.time() + 5
+        while time.time() < _dg_end and _dg_width() != _dg_window():
+            app.update(); time.sleep(0.02)
+        check(f'...and letting go lays it out, the open day with it '
+              f'({_dg_width()} for {_dg_window()}, {app._day_panel_mode})',
+              _dg_width() == _dg_window() and app._day_panel_mode == _dg_mode)
+        _dg_held['now'] = True
+finally:
+    for _dg_attr in ('_pointer_button_held', 'RESIZE_PAUSE_MS'):
+        app.__dict__.pop(_dg_attr, None)
+    app.geometry('%dx%d' % (_dg_w0, _dg_h0))
+    app._lay_out_at_window_size()
+    for _ in range(5):
+        app.update_idletasks(); app.update()
+app.close_day_panel()
+app.notebook.select(app.TAB_NOTES); app.update()
+
 # ============================================================
 # 7. ATTACHMENT-ONLY NOTE AUTOSAVE
 # ============================================================

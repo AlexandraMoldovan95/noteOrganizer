@@ -10804,9 +10804,13 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         is what the field test asked for. Every other page is built of
         widgets and still costs 70 ms or more a step, so it keeps the frame
         light and catches up once the hand stops. The History register is
-        rows of widgets too, so it waits with the rest."""
+        rows of widgets too, so it waits with the rest -- and so does an
+        open day's panel below the month: a row per note, or a whole note's
+        text, laid out again at every step (60 ms a step for an ordinary
+        month, 150 and more for a busy one, measured)."""
         return (self._calendar_is_showing()
-                and not getattr(self, "_history_visible", False))
+                and not getattr(self, "_history_visible", False)
+                and getattr(self, "_day_panel_mode", "empty") == "empty")
 
     def _lay_out_at_window_size(self):
         """Give the window's content the window's size: the one place it
