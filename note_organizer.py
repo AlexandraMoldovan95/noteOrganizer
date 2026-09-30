@@ -4028,6 +4028,13 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         edit characters nobody can see or land text floating beside the
         grid. The caret is walked to the line under the table instead, so
         writing always continues from the start of a real row.
+
+        On a key press it also holds the table's edges against Tk's own
+        line-joining keys, which reach no handler of their own: Ctrl+H
+        deletes backwards as BackSpace does, and Ctrl+K at the end of a
+        line deletes its line break -- at a drawn table's edge either one
+        pulled a table row onto the prose beside it. Delete and BackSpace
+        ask the same question in their own handlers.
         """
         b = self.body_text
         try:
@@ -4041,8 +4048,56 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     b.mark_set("insert", f"{first + info['nrows']}.0")
                 except tk.TclError:
                     pass
-                return None
+                break
+        if (getattr(_event, "type", None) == tk.EventType.KeyPress
+                and getattr(_event, "state", 0) & 0x4):
+            keysym = getattr(_event, "keysym", "")
+            try:
+                at_line_end = b.compare("insert", "==", "insert lineend")
+            except tk.TclError:
+                at_line_end = False
+            if ((keysym == "h"
+                 and self._deletion_joins_table(False, selection_wins=False))
+                    or (keysym == "k" and at_line_end
+                        and self._deletion_joins_table(
+                            True, selection_wins=False))):
+                return "break"
         return None
+
+    def _deletion_joins_table(self, forward, selection_wins=True):
+        """Would a one-character deletion at the caret break a drawn table?
+
+        True when the character it takes is the line break just above a
+        drawn table, the one just below it, or anything in between. Tk's
+        own Delete and BackSpace glued the neighbouring line onto the
+        table's first or last row -- the row then read as prose, fell out
+        of the grid and was saved that way. The same boundary the caret
+        guard keeps: the table is one block, and the keys stop at its
+        edge. *selection_wins* mirrors Tk's rule for Delete and
+        BackSpace: with the caret inside a selection they delete the
+        selection instead, which is not a question about the edge.
+        """
+        b = self.body_text
+        try:
+            if (selection_wins and b.tag_ranges("sel")
+                    and b.compare("sel.first", "<=", "insert")
+                    and b.compare("insert", "<=", "sel.last")):
+                return False
+            if not forward and b.compare("insert", "==", "1.0"):
+                return False
+            at = b.index("insert" if forward else "insert-1c")
+            for info in getattr(self, "_table_grids", []):
+                first = self._grid_first_line(info)
+                if first is None:
+                    continue
+                last = first + info["nrows"] - 1
+                start = f"{first - 1}.end" if first > 1 else "1.0"
+                if (b.compare(start, "<=", at)
+                        and b.compare(at, "<=", f"{last}.end")):
+                    return True
+        except tk.TclError:
+            return False
+        return False
 
     # ---------- The table's own right-click menu ----------
 
@@ -6825,10 +6880,17 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
     def _on_body_delete_key(self, event=None):
         """Delete (and Backspace) with cells selected clears them, the way
         a spreadsheet does -- the table's text is hidden, so Tk's own
-        deletion has nothing sensible to do there anyway."""
+        deletion has nothing sensible to do there anyway.
+
+        Without cells selected, Delete at the end of the line above a
+        drawn table does nothing (see _deletion_joins_table). BackSpace
+        comes through here for the cells only and asks about its own
+        direction in _on_body_backspace."""
         sel = getattr(self, "_grid_sel", None)
         if sel is not None and self._grid_first_line(sel["info"]) is not None:
             self._grid_fill_selection(sel, "")
+            return "break"
+        if self._deletion_joins_table(True):
             return "break"
         return None
 
@@ -6838,10 +6900,14 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         Otherwise the only way out of a list is to delete the bullet one
         character at a time, which reads as the app fighting you.
         """
-        cleared = self._on_body_delete_key(event)
-        if cleared:
-            return cleared
+        sel = getattr(self, "_grid_sel", None)
+        if sel is not None and self._grid_first_line(sel["info"]) is not None:
+            return self._on_body_delete_key(event)
         self._caret_out_of_hidden()
+        # At the start of the line under a drawn table, the character
+        # before the caret is the table's own line break: nothing to take.
+        if self._deletion_joins_table(False):
+            return "break"
         index = self.body_text.index("insert")
         line_no, col = (int(p) for p in index.split("."))
         kind = self._list_kind_of(self.body_text, line_no)

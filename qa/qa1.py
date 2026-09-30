@@ -9410,6 +9410,95 @@ check('...and keeps what was typed in it (' + repr(
       == ['Milk', ''])
 set_body('')
 
+# ---- THE KEYS STOP AT A DRAWN TABLE'S EDGE ----
+# Delete at the end of the line above a table, or BackSpace at the start
+# of the line under it, took the line break between them: the prose was
+# glued onto the table's first or last row, which then read as prose,
+# fell out of the grid, and was saved that way. The table is one block --
+# the boundary the caret guard already keeps -- and the keys stop at its
+# edge. Tk's own Ctrl+H (a BackSpace) and Ctrl+K (at a line's end, a
+# Delete) join lines too and meet the same guard. Every "nothing
+# happened" below has its control: the same key one character away from
+# the edge really deletes, so the silence is about the edge, not about a
+# key that never arrived.
+_edge_body = ('Shopping for Saturday' + chr(10) + '| Item | Qty |' + chr(10)
+              + '| --- | --- |' + chr(10) + '| Milk | 2 |' + chr(10)
+              + '| Eggs | 12 |' + chr(10) + 'remember the bags')
+
+
+def _edge_press(index, sequence, body=None):
+    """Reset the note, put the caret at *index* and press *sequence* on
+    the body through Tk. Returns the text after, or None when the body
+    could not get the keyboard (the precondition, asserted by callers)."""
+    set_body(_edge_body if body is None else body)
+    app._render_table_grids()
+    app.update()
+    app.body_text.tag_remove('sel', '1.0', 'end')
+    app.body_text.mark_set('insert', index)
+    if not take_focus(app.body_text):
+        return None
+    app.body_text.event_generate(sequence)
+    app.update()
+    return app.body_text.get('1.0', 'end-1c')
+
+
+def _edge_rows():
+    info = app._grid_at_line(2)
+    return (None if info is None else
+            [info['cells'][(r, 0)]['value'] for r in range(info['data_rows'])])
+
+
+_edge_after = _edge_press('1.end', '<Delete>')
+check('table edge: the body holds the keyboard (precondition)',
+      _edge_after is not None)
+check('table edge: Delete at the end of the line above a table does nothing',
+      _edge_after == _edge_body and _edge_rows() == ['Item', 'Milk', 'Eggs'])
+_edge_after = _edge_press('1.20', '<Delete>')
+check('table edge: ...while Delete one character earlier still deletes',
+      _edge_after == _edge_body.replace('Saturday', 'Saturda', 1))
+_edge_after = _edge_press('6.0', '<BackSpace>')
+check('table edge: BackSpace at the start of the line under a table does nothing',
+      _edge_after == _edge_body and _edge_rows() == ['Item', 'Milk', 'Eggs'])
+_edge_after = _edge_press('6.1', '<BackSpace>')
+check('table edge: ...while BackSpace one character later still deletes',
+      _edge_after == _edge_body.replace('remember', 'emember', 1))
+_edge_after = _edge_press('6.0', '<Control-h>')
+check('table edge: Ctrl+H (Tk\'s BackSpace) stops at the edge too',
+      _edge_after == _edge_body)
+_edge_after = _edge_press('6.1', '<Control-h>')
+check('table edge: ...and still deletes away from it',
+      _edge_after == _edge_body.replace('remember', 'emember', 1))
+_edge_after = _edge_press('1.end', '<Control-k>')
+check('table edge: Ctrl+K at the end of the line above stops at the edge',
+      _edge_after == _edge_body)
+_edge_after = _edge_press('6.0', '<Control-k>')
+check('table edge: ...and still clears a line away from it',
+      _edge_after == _edge_body.replace('remember the bags', '', 1))
+# A selection is not a question about the edge: with the caret inside it
+# Delete takes the selection, as Tk always has.
+set_body(_edge_body)
+app._render_table_grids()
+app.update()
+app.body_text.tag_add('sel', '1.13', '1.21')
+app.body_text.mark_set('insert', '1.21')
+if take_focus(app.body_text):
+    app.body_text.event_generate('<Delete>')
+    app.update()
+check('table edge: a selection ending at the edge is still deleted whole',
+      app.body_text.get('1.0', '1.end') == 'Shopping for '
+      and _edge_rows() == ['Item', 'Milk', 'Eggs'])
+# The note that ENDS in a table: BackSpace on the writable line under it,
+# then typing -- the typing lands on its own line, not on the last row.
+_edge_end_body = _edge_body.rsplit(chr(10), 1)[0]
+_edge_after = _edge_press('end-1c', '<BackSpace>', body=_edge_end_body)
+app.body_text.insert('insert', 'and bread')
+app.update()
+_edge_lines = app.body_text.get('1.0', 'end-1c').split(chr(10))
+check('table edge: BackSpace under a note-ending table keeps the last row whole',
+      _edge_after is not None and _edge_lines[4] == '| Eggs | 12 |'
+      and _edge_lines[5] == 'and bread')
+set_body('')
+
 # ---- CLOSING SAVES SILENTLY (dead last: it destroys the app) ----
 # The quit-time "Unsaved notes" ask could only ever cover the last
 # half-second of typing; the app now trusts its own autosave and closes
