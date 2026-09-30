@@ -12,6 +12,7 @@ How the numbers themselves are counted is the
 
 | Version | Date | In one line |
 |---|---|---|
+| [0.82.232](#082232--2026-09-30) | 2026-09-30 | The calendar becomes one drawing: it follows the window's edge as you drag, changes month ten times faster, and a day's markers show on dark themes. |
 | [0.82.230](#082230--2026-09-30) | 2026-09-30 | Cancel means stay and the keyboard goes back where it was; a big notebook stops making you wait; and the note list becomes one drawing you can arrange by hand. |
 | [0.81.213](#081213--2026-09-29) | 2026-09-29 | Nothing moves or removes your notes behind your back: categories survive a lost settings file, an update can be taken back whole, and nothing is deleted on a resemblance. |
 | [0.81.202](#081202--2026-09-29) | 2026-09-29 | Two places where the app left something out: a note's card cut off the end of what it says, and the keyboard shortcuts page was missing a whole group of keys. |
@@ -83,7 +84,7 @@ How the numbers themselves are counted is the
 
 ---
 
-## [Unreleased]
+## [0.82.232] — 2026-09-30
 
 *Highlights: the calendar's month is one drawing now, as the note list became in 0.82.230 — so it
 follows the window's edge while you drag it, and moving between months stops making you wait.

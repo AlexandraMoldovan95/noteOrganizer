@@ -80,7 +80,7 @@ day-to-day tracking.
 | [The list that was drawn whole, for every pause in typing](#the-list-that-was-drawn-whole-for-every-pause-in-typing) | Measure where the time goes before trimming what is easy to count; before removing work that looks wasted, ask what it was doing for someone; when every symptom is the same cost seen from another side, remove the cost — six windows per card became none. | 0.82.230 |
 | [The window that crawled behind its edge](#the-window-that-crawled-behind-its-edge) | When the cost is inside the toolkit and paid per step, stop taking the step until it counts — then measure what the step costs when it does nothing (here, a window class style asking Windows to repaint everything); a smooth frame over a stale picture is a judgement for the eye. | 0.82.230 |
 | [The line that promised a place the card could not take](#the-line-that-promised-a-place-the-card-could-not-take) | When the screen re-sorts after an action, the end state proves nothing about what was promised during it — check the promise itself; and look at the photograph, because a green check does not see a card that is not there. | 0.82.230 |
-| [The month that was two hundred windows](#the-month-that-was-two-hundred-windows) | A fix to one screen's cost is a list of its siblings; a colour a widget took by default is a colour nobody chose; and whatever the app reads from the desktop, the person at the machine feeds every test run until a test answers it. | Unreleased |
+| [The month that was two hundred windows](#the-month-that-was-two-hundred-windows) | A fix to one screen's cost is a list of its siblings; a colour a widget took by default is a colour nobody chose; and whatever the app reads from the desktop, the person at the machine feeds every test run until a test answers it. | 0.82.232 |
 | [The Settings panels that stayed dark on a light theme](#the-settings-panels-that-stayed-dark-on-a-light-theme) | A computed colour is invisible to palette matching; derive it once, teach the theme switch. | 0.36.54 |
 | [The title box that took three and a half seconds a keystroke](#the-title-box-that-took-three-and-a-half-seconds-a-keystroke) | Measure to isolate: the app was fine, one widget was quadratic — cap its input. | 0.36.55 |
 | [The dropdown that opened on the wrong monitor](#the-dropdown-that-opened-on-the-wrong-monitor) | Position popups against the app window's own bounds, not the full virtual desktop. | 0.2.0 |
@@ -2470,7 +2470,7 @@ belonged to had not.
 
 ### The month that was two hundred windows
 
-*([Unreleased](../CHANGELOG.md#unreleased))*
+*([0.82.232](../CHANGELOG.md#082232--2026-09-30))*
 
 **Symptom:** after the window learned to wait while its edge is dragged, the field test found it
 better but not right: on the Calendar the month stood still at its old width for the whole drag
