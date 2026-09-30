@@ -1649,6 +1649,75 @@ app.collapsed_groups.clear()
 if _bl_work_added:
     NO.CATEGORY_COLORS.pop('Work', None)
 
+# 5d. A ticked note that is deleted leaves the selection. It kept its tick:
+# the bar went on counting it, and since a new note's id is the highest plus
+# one, the next note made took the freed id and arrived ticked -- trashed by
+# a Trash nobody aimed at it. Two routes, because deletes end in two places:
+# the one card taken off (_remove_note_cards), or a rebuild.
+_co_fresh(_bl_notes[:8])
+_bl_ids = sorted(n['id'] for n in app.notes)
+_bl_top, _bl_keep = _bl_ids[-1], _bl_ids[2]
+app._toggle_selection_mode(); _ls_settle()
+for _bl_n in (_bl_keep, _bl_top):
+    _bl_pt = app._card_point(_bl_n)
+    app._scroll_row_into_view(app._note_cards[_bl_n]); _ls_settle()
+    _bl_pt = app._card_point(_bl_n)
+    _qa_click(app.canvas, x=_bl_pt[0], y=_bl_pt[1]); _ls_settle()
+check(f'fixture: two notes ticked on their cards, one of them the highest id '
+      f'({sorted(app.selected_note_ids)}, {app.bulk_selected_lbl.cget("text")!r})',
+      app.selected_note_ids == {_bl_keep, _bl_top}
+      and app.bulk_selected_lbl.cget('text') == '2 selected')
+app.ask_yes_no = lambda *a, **k: True
+try:
+    app._context_delete_note(app.find_note(_bl_top)); _ls_settle()
+finally:
+    app.ask_yes_no = _ls_real_ask
+check(f'a ticked note deleted from its own menu leaves the selection, and the '
+      f'bar says so ({sorted(app.selected_note_ids)}, '
+      f'{app.bulk_selected_lbl.cget("text")!r})',
+      app.find_note(_bl_top) is None and app.selected_note_ids == {_bl_keep}
+      and app.bulk_selected_lbl.cget('text') == '1 selected')
+app.open_blank_tab(); _ls_settle()
+app.title_entry.delete(0, 'end')
+app.title_entry.insert(0, 'Brand new shopping list')
+app.save_current_note(auto=True); _ls_settle()
+_bl_new = app.selected_note_id
+_bl_view = app._card_view(_bl_new) or {}
+check(f'...so a new note that takes the freed id arrives unticked (new id '
+      f'{_bl_new}, freed {_bl_top}; ticked: {_bl_view.get("checked")}; '
+      f'selection {sorted(app.selected_note_ids)})',
+      _bl_new == _bl_top and _bl_view.get('checked') is False
+      and app.selected_note_ids == {_bl_keep})
+app._toggle_selection_mode(); _ls_settle()
+
+# The rebuild's route: a category deleted together with its notes.
+_bl_work_colour = NO.CATEGORY_COLORS.get('Work')
+NO.CATEGORY_COLORS.setdefault('Work', '#4cc9f0')
+_co_fresh([dict(n, category='Work') for n in _bl_notes[:3]]
+          + [dict(n, category='General') for n in _bl_notes[3:8]])
+_bl_work = {n['id'] for n in _bl_notes[:3]}
+_bl_gen = _bl_notes[4]['id']
+app._toggle_selection_mode(); _ls_settle()
+app.selected_note_ids = set(_bl_work) | {_bl_gen}
+app._sync_card_checkboxes(); app._update_bulk_selected_label(); _ls_settle()
+app._ask_category_deletion = lambda *a, **k: 'delete_notes'
+try:
+    app._delete_category('Work', lambda: None); _ls_settle()
+finally:
+    app.__dict__.pop('_ask_category_deletion', None)
+check(f'...and so do ticked notes that went with their category '
+      f'({sorted(app.selected_note_ids)}, '
+      f'{app.bulk_selected_lbl.cget("text")!r})',
+      not any(app.find_note(i) for i in _bl_work)
+      and app.selected_note_ids == {_bl_gen}
+      and app.bulk_selected_lbl.cget('text') == '1 selected')
+app._toggle_selection_mode(); _ls_settle()
+# The category was really deleted; one that was there before comes back.
+if _bl_work_colour is not None:
+    NO.CATEGORY_COLORS['Work'] = _bl_work_colour
+    NO.persist_categories()
+    app.refresh_category_widgets(); _ls_settle()
+
 # ---------------------------------------------------------------------
 # A tick box's well must be light, because the mark in it is dark.
 #

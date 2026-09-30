@@ -13648,6 +13648,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # rebuild below would draw the list around a card that is not
         # where it seems. The drag ends, and the card goes back first.
         self._cancel_list_drag()
+        # Every route that takes notes out of the notebook ends here or in
+        # _remove_note_cards, so the ticks of notes that are gone go here.
+        self._prune_selection()
         # The sort this list is drawn in -- what Custom order starts from
         # when it is chosen for the first time (_on_sort_chosen).
         sort_var = getattr(self, "sort_var", None)
@@ -15173,6 +15176,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # Settings may be open on them right now. Due even when no card
         # was drawn -- a note still left the notebook.
         self._render_statistics()
+        # ...and so does taking the ticks of the notes that went.
+        self._prune_selection()
         return True
 
     def _redraw_saved_card(self, note_id):
@@ -15310,6 +15315,23 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         up by walking the sidebar rather than stored separately, so it stays
         correct even if the sidebar layout changes elsewhere."""
         return self.select_toggle_btn.master
+
+    def _prune_selection(self):
+        """Keep the ticks to notes that still exist, and the bar's words
+        with them.
+
+        A note deleted from its own menu (or with its category, or as a
+        duplicate) kept its tick: the bar went on counting it, the Trash
+        question named it, and because a new note's id is the highest one
+        plus one, a note made next could take the freed id -- and arrive
+        drawn ticked, to be trashed by a Trash nobody aimed at it."""
+        chosen = getattr(self, "selected_note_ids", None)
+        if not chosen:
+            return
+        kept = chosen & {n["id"] for n in self.notes}
+        if kept != chosen:
+            self.selected_note_ids = kept
+            self._update_bulk_selected_label()
 
     def _toggle_note_selected(self, note_id, now_selected):
         if now_selected:
