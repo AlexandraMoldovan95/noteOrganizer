@@ -10616,13 +10616,14 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.refresh_weekday_buttons()
         self.on_end_mode_changed()
         self.style_notebook()
-        # Statistics is deliberately NOT re-rendered here. It destroys and
-        # rebuilds its widgets, and a theme switch changes no statistic --
-        # only the palette, which _recolor_stragglers below handles. It's on
-        # the Settings page, i.e. exactly where the user is standing when
-        # they switch themes, so rebuilding it there was visible churn for
-        # no new information. Real data changes still redraw it through
-        # refresh_note_list(), which is unchanged.
+        # Statistics is deliberately NOT re-rendered here: a theme switch
+        # changes no statistic -- only the palette, which
+        # _recolor_stragglers below handles, and the panel's next render
+        # rebuilds it in the new palette (it updates its figures in place
+        # otherwise). It's on the Settings page, i.e. exactly where the user
+        # is standing when they switch themes, so rebuilding it there was
+        # visible churn for no new information. Real data changes still
+        # redraw it through refresh_note_list(), which is unchanged.
         #
         # Same reasoning for the calendar: rebuilding every day cell is
         # pointless while the calendar isn't even on screen. That test
@@ -15356,7 +15357,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             f"Move {count} selected {noun} to the trash? "
             f"You can restore {'it' if count == 1 else 'them'} within "
             f"{trash_retention_days()} days.{warning}",
-            icon="question"
+            # Enter answers a question now, and a reflexive Enter must not
+            # be the one that deletes.
+            icon="question", default="no"
         ):
             return
         marks = [(e.get("id"), e.get("deleted_at"))
@@ -15865,8 +15868,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # Close any open popup (e.g. an emoji picker) FIRST, before flushing
         # autosave below — otherwise the autosave that follows would see a
         # popup still open and skip refreshing the note list, leaving it
-        # stale even after switching notes.
-        self._dismiss_mini_popup()
+        # stale even after switching notes. One holding typed work -- the
+        # template editor -- asks first, and choosing to keep editing keeps
+        # this note from opening: a card clicked beside a half-written
+        # template closed it without the question, the typing gone.
+        if not self._dismiss_mini_popup_asking():
+            return False
         # Navigating to a different note means we're no longer mid-creation of
         # the calendar-originated one — clear this BEFORE the flush below, so
         # that flush's save can't accidentally trigger an unwanted jump back
@@ -15907,7 +15914,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         caller that goes on to fill the editor must stop on False: the
         import did not, and loaded a recipe into the repeating note still
         on screen, whose next save wrote it over the whole series."""
-        self._dismiss_mini_popup()
+        # A popup holding typed work asks first, as in open_note_in_tab.
+        if not self._dismiss_mini_popup_asking():
+            return False
         pending_return = getattr(self, "_pending_calendar_return", None)
         self._pending_calendar_return = None
         self._update_calendar_return_button()
@@ -18439,7 +18448,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         confirm = self.ask_yes_no(
             "Delete note",
             ("Delete this entire repeating series?" if is_recurring(note)
-             else "Are you sure you want to delete this note?") + warning
+             else "Are you sure you want to delete this note?") + warning,
+            # Enter answers a question now: a reflexive one keeps the note.
+            default="no"
         )
         if confirm:
             deleted_id = note["id"]

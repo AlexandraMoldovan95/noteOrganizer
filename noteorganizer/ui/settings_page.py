@@ -3046,7 +3046,8 @@ class SettingsPageMixin:
             "Move duplicates to trash",
             f"Move {len(to_trash)} selected note(s) to the trash? "
             f"You can restore them within {trash_retention_days()} days.",
-            icon="question"
+            # Enter answers a question now: a reflexive one deletes nothing.
+            icon="question", default="no"
         ):
             return
         # Only now, after Yes, are the files merged. The merge copies each

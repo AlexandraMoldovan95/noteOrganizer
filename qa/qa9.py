@@ -1740,6 +1740,24 @@ try:
           _wa_asked == ['Save changes?']
           and 'Weekly review (my edit) (my edit)' in _wa_names()
           and app._mini_popup is not None and app._mini_popup is not _wa_pop)
+    # A note card beside a half-written template: the card's press opens
+    # the note through open_note_in_tab, which closed the popup with no
+    # question -- the template's typing gone, the note loaded behind the
+    # Settings page.
+    app.notes.append(NO.normalize_note({'id': 901, 'title': 'Card beside',
+                                        'body': 'x'}))
+    app.save_notes(); app.refresh_note_list(); app.update()
+    _wa_pop, _wa_ent = _wa_open_dirty()
+    _wa_answer(None)
+    _wa_opened = app.open_note_in_tab(app.find_note(901)); app.update()
+    check('a note opened beside a half-written template asks, once, and '
+          'Cancel keeps the template and opens nothing (%s)' % _wa_asked,
+          _wa_asked == ['Save changes?'] and _wa_opened is False
+          and _wa_pop is not None and app._mini_popup is _wa_pop
+          and (_wa_text(_wa_ent) or '').endswith('(my edit)')
+          and app.selected_note_id != 901)
+    app.notes = [n for n in app.notes if n.get('id') != 901]
+    app.save_notes()
 finally:
     app.__dict__.pop('ask_yes_no_cancel', None)
 app._dismiss_mini_popup(); app.update()
@@ -2235,7 +2253,8 @@ app.hide_settings_page(); app.update()
 # 50 ms, it bound anyway -- a handler nothing would ever take off again,
 # one more on the window for every quick close.
 from PIL import Image as _pq_Image
-_pq_path = _seed_os.path.abspath('qa9_quick_preview.png')
+import os as _pq_os   # its own: the seed block's aliases are gone
+_pq_path = _pq_os.path.abspath('qa9_quick_preview.png')
 _pq_Image.new('RGB', (60, 40), (10, 120, 200)).save(_pq_path)
 app._dismiss_mini_popup(); app.update()
 _pq_b1 = str(app.bind('<Button-1>') or '')
@@ -2248,7 +2267,7 @@ check('an image preview closed at once leaves no click handler on the window '
       '(%d lines, %d before)' % (len(str(app.bind('<Button-1>') or '').split('\n')),
                                  len(_pq_b1.split('\n'))),
       str(app.bind('<Button-1>') or '') == _pq_b1)
-_seed_os.remove(_pq_path)
+_pq_os.remove(_pq_path)
 
 # ============================================================
 # A SHORT WINDOW KEEPS THE OPEN PANEL'S OWN BUTTONS ON SCREEN

@@ -2321,6 +2321,42 @@ app.hide_settings_page(); app.update()
 app.trash = []; NO.save_trash(app.trash)
 app.notes = []; app.save_notes()
 
+# Enter answers a question now (qa9), so a confirmation whose keyboard
+# sits on Yes deletes on a reflexive Enter. The three that move notes to
+# the Trash put it on No. Answered No here, so nothing moves.
+_dn_asked = {}
+_dn_stub = app.ask_yes_no
+app.ask_yes_no = lambda *a, **k: (_dn_asked.__setitem__(a[0], k.get('default')),
+                                  False)[1]
+app.notes = [NO.normalize_note({'id': 1, 'title': 'Keep me', 'body': 'x'}),
+             NO.normalize_note({'id': 2, 'title': 'Keep me', 'body': 'x'})]
+app.save_notes()
+app._delete_note(app.find_note(1), None)
+app.selected_note_ids = {1}
+app._bulk_move_to_trash()
+app.selected_note_ids = set()
+
+
+class _DnVar:
+    def __init__(self, v):
+        self._v = v
+
+    def get(self):
+        return self._v
+
+
+_dn_group = [app.find_note(1), app.find_note(2)]
+app._cleanup_selected_duplicates(
+    [(_DnVar(False), _dn_group[0], _dn_group), (_DnVar(True), _dn_group[1], _dn_group)],
+    None, refresh=lambda: None)
+app.ask_yes_no = _dn_stub
+check('the confirmations that move notes to the Trash keep the keyboard on No (%s)'
+      % _dn_asked,
+      _dn_asked == {'Delete note': 'no', 'Move to trash': 'no',
+                    'Move duplicates to trash': 'no'}
+      and len(app.notes) == 2 and not app.trash)
+app.notes = []; app.save_notes()
+
 
 print()
 print(f"=== QA3 FAILURES: {fails if fails else 'NONE'} ===")

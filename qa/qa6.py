@@ -331,10 +331,12 @@ check('Settings pane overflows for the chip test too',
       app.settings_canvas.yview()[1] < 1.0)
 before_stats_scroll = app.settings_canvas.yview()
 # Found again, here, and not reused from before the resize. The
-# statistics panel is destroyed and rebuilt from scratch on every
-# note-list refresh while Settings is open, so a chip captured earlier
-# can name a widget that no longer exists by the time the wheel is aimed
-# at it -- "bad window path name", and the script dies rather than fails.
+# statistics panel was destroyed and rebuilt from scratch on every
+# note-list refresh while Settings was open (it updates its figures in
+# place now, and still rebuilds on a palette or category change), so a
+# chip captured earlier can name a widget that no longer exists by the
+# time the wheel is aimed at it -- "bad window path name", and the
+# script dies rather than fails.
 #
 # It was always this fragile; it only started biting when gating the
 # panel's redraw on whether Settings is open moved WHEN that rebuild

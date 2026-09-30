@@ -559,9 +559,10 @@ A new surface joins this list the moment it ships.
   a widget that no longer exists by the time it is used, and Tk answers
   "bad window path name" — which **kills the script** rather than
   failing a check, and a dead script reports no failures at all. qa6
-  held a Statistics chip across `app.geometry(...)`; the panel is
-  destroyed and rebuilt on every list refresh while Settings is open, so
-  the reference was a coin toss. It had always been one, and only began
+  held a Statistics chip across `app.geometry(...)`; the panel was then
+  destroyed and rebuilt on every list refresh while Settings was open
+  (it updates in place since 0.8x, and still rebuilds on a palette or
+  category change), so the reference was a coin toss. It had always been one, and only began
   landing wrong when gating that redraw on whether Settings is open
   moved WHEN the rebuild happens: two runs in four on Linux, none on
   Windows, none at all before the change. **Find it again immediately
