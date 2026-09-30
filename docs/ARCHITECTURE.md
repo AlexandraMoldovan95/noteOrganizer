@@ -178,15 +178,21 @@ override; editing "this and all future" (or the whole series) edits the base not
 
 ## UI layer
 
-### No native dialogs, anywhere
+### Hand-built popups, and the system's own dialog in two places
 
 Every dropdown, color picker, confirmation prompt, and date picker in this app is a hand-built
 `Toplevel` popup — never `tkinter.messagebox`, `ttk.Combobox`, or `colorchooser`. The trade-off
 is more code to maintain; what it buys is a UI that's fully themed (dark/light variants apply
-everywhere, including every dialog) and behaves consistently across the app. The single
-deliberate exception is the last-resort startup-crash dialog, which uses the plain
-standard-library messagebox precisely because it must not depend on the app's own UI having come
-up (see [ISSUES_LOG.md](ISSUES_LOG.md#a-crash-handler-that-would-have-crashed-itself)).
+everywhere, including every dialog) and behaves consistently across the app.
+
+The system's own dialogs appear in exactly two situations, both deliberate. Choosing a file or
+folder — saving an export, opening a backup, picking a folder, attaching files — uses
+`filedialog`, because the system's chooser knows the person's drives and recent places and a
+hand-built one would be worse. And the last-resort startup-crash dialog uses the plain
+standard-library messagebox, precisely because it must not depend on the app's own UI having
+come up (see [ISSUES_LOG.md](ISSUES_LOG.md#a-crash-handler-that-would-have-crashed-itself)). This
+heading used to read "No native dialogs, anywhere", which was wrong about the first while the
+code was right.
 
 The shared building block is `_place_dropdown_popup()`: given a popup and an anchor widget, it
 positions the popup against the *app's own window bounds* (not the full virtual screen — this

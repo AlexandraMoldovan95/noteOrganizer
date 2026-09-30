@@ -17732,8 +17732,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 self.refresh_note_list()
             self.render_calendar()
             # The window is a setting (Settings -> Recently deleted), so the
-            # number is read, never written: this line said "30 days" to
-            # someone who had chosen seven.
+            # number is read, never written: this line promised thirty days
+            # to someone who had chosen seven.
             self.set_status("Note moved to Trash (recoverable for "
                             f"{trash_retention_days()} days)")
             # The status line says where it went; the toast is the way

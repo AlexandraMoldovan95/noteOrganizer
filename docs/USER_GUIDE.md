@@ -729,8 +729,11 @@ for no greeting.
 
 ### Statistics
 
-A quick snapshot of your total note count and this week's activity, with a clickable chip per
-category — click one to jump straight to your notes filtered to that category.
+A read-only snapshot: your total note count; when notes were added and last updated (this week,
+this month, this year, older); how many templates, notes with a checklist and notes in the Trash
+you have; the date you started using the app; and how many notes each category holds. It is a
+snapshot, not another way in — to see one category's notes, choose it in the sidebar's **Show**
+filter.
 
 ### Keyboard shortcuts
 
