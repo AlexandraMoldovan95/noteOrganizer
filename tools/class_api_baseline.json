@@ -369,6 +369,7 @@
   "_move_note": "(self, note_id, before_id=None, after_id=None)",
   "_move_notes_to_trash": "(self, notes_to_trash)",
   "_move_to_cell": "(self, line_no, index)",
+  "_new_context_menu": "(self, **options)",
   "_note_banner": "(self, parent, text)",
   "_note_export_content": "(self, note, fmt, title)",
   "_note_passes_filter": "(self, note, selected)",

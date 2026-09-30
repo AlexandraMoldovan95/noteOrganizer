@@ -211,6 +211,31 @@ finally:
     NO.tk.Menu.tk_popup = _cal_real_popup
 check('calendar day-list delete removes the note', len(app.notes) == 0)
 
+# ---- A RIGHT-CLICK MENU DOES NOT OUTLIVE THE NEXT ONE ----
+# Every right-click builds its menu anew, and none was ever destroyed:
+# three windows more per right-click on a note, each holding the note it
+# was built for, and a theme switch that walks them all went from about
+# 80 ms to over 400. The note's menu and the day's are asked for in turn,
+# so a menu that kept its own slot would still leave one of each.
+_rm_real = NO.tk.Menu.tk_popup
+NO.tk.Menu.tk_popup = lambda _m, *a, **k: None
+_rm_note = NO.normalize_note({'id': 7301, 'title': 'Menus', 'body': 'x',
+                              'category': 'General', 'date': '2026-07-15'})
+app.notes.append(_rm_note)
+try:
+    _rm_ev = type('E', (), {'x_root': 0, 'y_root': 0})()
+    for _rm_i in range(5):
+        app.show_note_context_menu(_rm_ev, _rm_note,
+                                   occurrence_date='2026-07-15')
+        app.show_day_context_menu(_rm_ev, '2026-07-15')
+    app.update()
+    _rm_left = [w for w in app.winfo_children() if isinstance(w, tk.Menu)]
+    check('ten right-clicks on a note and on its day leave one menu behind, '
+          'not ten (%d)' % len(_rm_left), len(_rm_left) <= 1)
+finally:
+    NO.tk.Menu.tk_popup = _rm_real
+    app.notes = [n for n in app.notes if n.get('id') != 7301]
+
 # detail view + Cancel doesn't bounce
 app.notes = [{'id': 2, 'title': 'CalDetailDelete', 'body': 'x', 'category': 'General', 'date': '2026-07-15',
               'updated': '2026-01-01 00:00', 'created': '2026-01-01 00:00', 'checklist': [], 'attachments': []}]

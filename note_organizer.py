@@ -5611,7 +5611,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
     def _grid_stub_menu(self, info, event, c):
         """The only menu a hidden column can offer: bring it back."""
-        menu = tk.Menu(self, tearoff=0, bg=self.colors["card"],
+        menu = self._new_context_menu(tearoff=0, bg=self.colors["card"],
                        fg=self.colors["text"],
                        activebackground=self.colors["accent"],
                        activeforeground="#ffffff")
@@ -5639,7 +5639,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             return "break"
         r, c = hit
         cell = info["cells"][(r, c)]
-        menu = tk.Menu(self, tearoff=0, bg=self.colors["card"],
+        menu = self._new_context_menu(tearoff=0, bg=self.colors["card"],
                        fg=self.colors["text"],
                        activebackground=self.colors["accent"],
                        activeforeground="#ffffff")
@@ -16830,6 +16830,31 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
 
 
+    def _new_context_menu(self, **options):
+        """A fresh right-click menu, and the end of the previous one.
+
+        Each right-click builds its menu anew, because the entries depend
+        on what was clicked -- and none was ever destroyed. Measured over a
+        thousand right-clicks on notes: three windows and eighteen Tcl
+        commands more per click, each menu holding the note it was built
+        for, and a theme switch that walks them all slowing from about
+        80 ms to over 400.
+
+        Not destroyed as soon as tk_popup returns: on Linux it returns at
+        once, with the menu still open (measured: 1 ms, still mapped), so
+        the menu would vanish before anyone chose. Only one right-click
+        menu is ever open, so the previous one is done with by the time
+        the next is asked for. Its cascades are its children and go too.
+        """
+        old = getattr(self, "_context_menu", None)
+        if old is not None:
+            try:
+                old.destroy()
+            except tk.TclError:
+                pass
+        menu = self._context_menu = tk.Menu(self, **options)
+        return menu
+
     def show_note_context_menu(self, event, note, occurrence_date=None,
                                click_opens=False):
         """Native right-click dropdown for a note. Extensible — add items here
@@ -16845,7 +16870,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         """
         if note is None:
             return
-        menu = tk.Menu(self, tearoff=0)
+        menu = self._new_context_menu(tearoff=0)
         menu.configure(
             bg=self.colors["card"], fg=self.colors["text"],
             activebackground=self.colors["accent"], activeforeground="white",

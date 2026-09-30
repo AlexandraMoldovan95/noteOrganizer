@@ -3672,6 +3672,11 @@ try:
     _labels = _menu_entries(_posted[-1]) if _posted else []
     check('a partial selection does not offer Hide',
           'Hide column' not in _labels and 'Merge cells' in _labels)
+    # Every right-click builds its menu anew; none was ever destroyed.
+    # The hidden column's stub menu above and these three leave one.
+    _left_menus = [w for w in app.winfo_children() if isinstance(w, NO.tk.Menu)]
+    check('the table\'s right-click menus leave one menu behind, not one '
+          'each (%d)' % len(_left_menus), len(_left_menus) <= 1)
 finally:
     NO.tk.Menu.tk_popup = _real_popup
 app._grid_clear_selection()

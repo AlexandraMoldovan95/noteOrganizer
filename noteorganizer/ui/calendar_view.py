@@ -1696,7 +1696,7 @@ class CalendarViewMixin:
         """Right-click menu for a calendar day: add a note, or color the day.
         Left-click still opens the day panel; this is the separate right-click
         action."""
-        menu = tk.Menu(self, tearoff=0)
+        menu = self._new_context_menu(tearoff=0)
         menu.configure(
             bg=self.colors["card"], fg=self.colors["text"],
             activebackground=self.colors["accent"], activeforeground="white",
