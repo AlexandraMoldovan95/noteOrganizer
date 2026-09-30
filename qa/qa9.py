@@ -2112,6 +2112,41 @@ check('...its save raises nothing, and the list shows the saved template '
 app._dismiss_mini_popup(); app.update()
 
 # ============================================================
+# THE DUPLICATES SECTION REBUILT AFTER A CLEANUP KEEPS ITS TITLE
+# ============================================================
+# The cleanup rebuilt the section by calling its builder directly, which
+# skipped the heading and the resize handle: the title and the Expand
+# toggle were gone until the section was chosen again in the nav.
+app.notes = [NO.normalize_note({'id': 9811 + _i, 'title': _t, 'body': 'same',
+                                'category': 'General'})
+             for _i, _t in enumerate(['Groceries', 'Groceries', 'Groceries',
+                                      'Plan', 'Plan'])]
+app.save_notes()
+app.toggle_settings_panel('duplicates'); app.update()
+_dp_boxes = [w for w in _walk9(app.settings_duplicates_panel)
+             if isinstance(w, tk.Checkbutton)]
+if len(_dp_boxes) > 1:
+    _dp_boxes[1].invoke()
+app.ask_yes_no = lambda *a, **k: True
+try:
+    find_widget(app.settings_duplicates_panel, tk.Button,
+                'Move ticked duplicates').invoke()
+    app.update()
+finally:
+    del app.ask_yes_no
+_dp_panel = app.settings_duplicates_panel
+check('fixture: the cleanup took a copy away (%d notes left)' % len(app.notes),
+      len(app.notes) == 4)
+check('the Duplicates section rebuilt after a cleanup keeps its title and '
+      'its Expand toggle',
+      any(isinstance(w, tk.Label) and str(w.cget('text')) == 'Duplicates'
+          for w in _dp_panel.winfo_children())
+      and any(isinstance(w, tk.Button)
+              and str(w.cget('text')).startswith(('Expand', 'Collapse'))
+              for w in _walk9(_dp_panel)))
+app.hide_settings_page(); app.update()
+
+# ============================================================
 # AN IMAGE PREVIEW CLOSED AT ONCE LEAVES NOTHING ON THE WINDOW
 # ============================================================
 # The preview binds its click-outside 50 ms after it opens, so the click

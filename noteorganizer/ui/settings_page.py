@@ -1702,15 +1702,13 @@ class SettingsPageMixin:
                   ).pack(fill="x", padx=12, pady=(4, 10), ipady=6)
 
     def _reopen_dup_panel(self):
-        """Rebuild the duplicates panel in place after a cleanup."""
-        panel = getattr(self, "settings_duplicates_panel", None)
-        if panel is None:
+        """Rebuild the duplicates panel in place after a cleanup -- the way
+        the nav builds it. Calling the builder directly skipped the section's
+        heading and its resize handle: after a cleanup the section lost its
+        title and its Expand toggle until it was chosen again."""
+        if getattr(self, "settings_duplicates_panel", None) is None:
             return
-        for w in panel.winfo_children():
-            w.destroy()
-        self._build_settings_duplicates_panel(panel)
-        if not self._is_placed(panel):
-            panel.pack(fill="x", padx=16, pady=(0, 12))
+        self.toggle_settings_panel("duplicates")
 
     def _build_theme_picker(self, parent):
         """The theme swatches for the current mode, as in the reference design.
