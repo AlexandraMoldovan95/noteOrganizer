@@ -111,6 +111,27 @@ def _day_note_key(base_note, date_str):
             date_str in (base_note.get("overrides") or {}))
 
 
+def _notes_on_day(app, date_str):
+    """The notes on one day, as the drawn month holds them when it can.
+
+    render_calendar has already asked every note which days of the month
+    it lands on; hovering a day or opening its list asked all of them
+    again, for one day (14 ms at 5,000 notes, at every hover). The month's
+    answer is used when it is the day's month and nothing has changed
+    since it was worked out: no render pending, no refresh deferred, the
+    same list of notes, as many of them. Anything else asks the notes.
+    """
+    data = getattr(app, "_cal_month_data", None)
+    if (data is not None
+            and not getattr(app, "_calendar_needs_render", False)
+            and not getattr(app, "_note_list_needs_refresh", False)
+            and data.get("notes") is app.notes
+            and data.get("count") == len(app.notes)
+            and date_str[:7] == "%04d-%02d" % (data["year"], data["month"])):
+        return list(data["notes_by_date"].get(date_str, []))
+    return app.notes_on_date(date_str)
+
+
 def _fit_title(app, label, head, title, tail, font):
     """Show head + title + tail in `label`, shortening only the TITLE, with
     an ellipsis, to the label's own width. What follows a title -- a day
@@ -536,6 +557,8 @@ class CalendarViewMixin:
             "year": self.cal_year, "month": self.cal_month,
             "notes_by_date": notes_by_date,
             "weeks": weeks,
+            # Which notes it was worked out from (see _notes_on_day).
+            "notes": self.notes, "count": len(self.notes),
         }
         self._draw_calendar_grid()
         # A fresh drawing has no selected-day border -- re-mark the open
@@ -995,7 +1018,7 @@ class CalendarViewMixin:
         if getattr(self, "_context_menu_open", False):
             return
         self.hide_day_tooltip()
-        day_notes = self.notes_on_date(date_str)
+        day_notes = _notes_on_day(self, date_str)
         if not day_notes:
             return
 
@@ -1162,7 +1185,7 @@ class CalendarViewMixin:
         canvas.pack(side="left", fill="both", expand=True)
         sb.pack(side="right", fill="y")
 
-        day_notes = self.notes_on_date(date_str)
+        day_notes = _notes_on_day(self, date_str)
         rows = _day_list_rows(self, day_notes, date_str)
         self._day_panel_shows = ("list", date_str, _day_list_key(rows), None)
         if not day_notes:

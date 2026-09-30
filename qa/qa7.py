@@ -3683,6 +3683,33 @@ check(f'...and Show more still brings the same rows as a fresh register '
       _hm_show is not None and any('KeptLong' in t for t in _hm_more)
       and _hm_more == _hm_fresh())
 
+# ---- A DAY'S NOTES COME FROM THE MONTH ALREADY WORKED OUT ----
+# The month's drawing already knows which notes land on each day; hovering
+# a day and opening it asked every note again (14 ms at 5,000 notes, at
+# every hover). The drawn month's answer is used while it is current.
+app._history_toggle_btn.invoke(); app.update()
+app.cal_year, app.cal_month = 2026, 3
+app.render_calendar(); app.update()
+_nd_day = '2026-03-02'
+_nd_calls = []
+_nd_real = app.notes_on_date
+app.notes_on_date = lambda d: (_nd_calls.append(d), _nd_real(d))[1]
+_nd_tips = []
+try:
+    _at = _cd_point(_nd_day)
+    _qa_fire(app.cal_canvas, '<Motion>', x=_at[0], y=_at[1]); app.update()
+    _nd_tips = find_all_labels(app._day_tooltip) if getattr(app, '_day_tooltip', None) else []
+    app.hide_day_tooltip()
+    _od_open_day(_nd_day)
+finally:
+    del app.notes_on_date
+_nd_want = [n['title'] for n in app.notes_on_date(_nd_day)]
+check(f"hovering and opening a day of the drawn month ask no note again "
+      f"({_nd_calls}), and show the day's notes ({_nd_want})",
+      not _nd_calls and _nd_want
+      and all(any(t in s for s in _nd_tips) for t in _nd_want)
+      and all(any(t in s for s in _od_panel_texts()) for t in _nd_want))
+
 app.close_day_panel()
 app.cal_year, app.cal_month = 2026, 7
 app.render_calendar(); app.update()
