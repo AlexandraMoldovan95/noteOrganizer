@@ -9805,6 +9805,85 @@ check('list undo: Ctrl+Z after a renumbering Enter keeps the note\'s bold '
       and _cs_styles() == [('bold', 'bold')])
 set_body('')
 
+# ---- A CHECKLIST CHANGE TOUCHES ONE ROW, AND A CLOSED LIST BUILDS NONE ----
+# Adding or removing ONE item destroyed and rebuilt every row -- four
+# widgets each, and a new font per label: 0.3 s at 50 items, over 2 s at
+# 200. And every note with a checklist built all its rows on opening, for
+# a section a note switch always leaves closed. The rows are built when
+# the section opens now, and a change touches only its own row. Asked of
+# the widgets themselves: the rows that should stay are the SAME widgets
+# afterwards, which is what a rebuild cannot fake.
+def _cl_rows():
+    return [str(_w) for _w in app.checklist_items_frame.winfo_children()
+            if isinstance(_w, tk.Frame)]
+
+
+def _cl_texts():
+    return [str(_c.cget('text'))
+            for _r in app.checklist_items_frame.winfo_children()
+            if isinstance(_r, tk.Frame)
+            for _c in _r.winfo_children() if isinstance(_c, tk.Label)]
+
+
+check('checklist rows: fixture opens three items',
+      _cu_setup(['milk', 'eggs', 'bread']))
+_cl_0 = _cl_rows()
+app.checklist_add_var.set('butter')
+app._add_checklist_item()
+app.update()
+_cl_1 = _cl_rows()
+check('checklist rows: adding an item builds ONE row and keeps the others',
+      _cl_1[:3] == _cl_0 and len(_cl_1) == 4
+      and _cl_texts() == ['milk', 'eggs', 'bread', 'butter'])
+_cu_press(1)
+check('checklist rows: removing an item takes only its own row',
+      _cl_rows() == [_cl_1[0], _cl_1[2], _cl_1[3]]
+      and _cl_texts() == ['milk', 'bread', 'butter'])
+app._toast_action()
+app.update()
+_cl_2 = _cl_rows()
+check('checklist rows: the Undo puts that one row back in its place',
+      _cl_texts() == ['milk', 'eggs', 'bread', 'butter']
+      and _cl_2[0] == _cl_1[0] and _cl_2[2:] == [_cl_1[2], _cl_1[3]])
+app.toggle_checklist_section()
+app.toggle_checklist_section()
+app.update()
+check('checklist rows: closing and reopening the same list rebuilds nothing',
+      _cl_rows() == _cl_2)
+# Another note's checklist, then back: loading closes the section, and a
+# closed section gets no rows at all until it is opened.
+app.open_note_in_tab(app.find_note(9101))
+app.update()
+app.open_note_in_tab(app.find_note(9100))
+app.update()
+check('checklist rows: a note opened with the section closed builds no rows '
+      f'({_cl_texts()})',
+      not app._checklist_open
+      and not ({'milk', 'eggs', 'bread', 'butter'} & set(_cl_texts())))
+app.toggle_checklist_section()
+app.update()
+check('checklist rows: opening the section builds them',
+      _cl_texts() == ['milk', 'eggs', 'bread', 'butter'])
+# Two items that read the same are two items: removing the second must
+# leave the row standing tied to the item left in the list, or its tick
+# box writes to a dict nothing saves any more.
+check('checklist rows: fixture with two items reading the same',
+      _cu_setup(['milk', 'milk']))
+_cu_press(1)
+_cl_box = [_c for _r in app.checklist_items_frame.winfo_children()
+           if isinstance(_r, tk.Frame)
+           for _c in _r.winfo_children() if isinstance(_c, tk.Checkbutton)]
+if len(_cl_box) == 1:
+    _cl_box[0].invoke()
+    app.update()
+check('checklist rows: with two items alike, the row left ticks the item left',
+      len(_cl_box) == 1 and len(app._get_checklist()) == 1
+      and app._get_checklist()[0]['done'] is True)
+
+app.notes = list(_cu_saved)
+app.save_notes()
+app.new_note(); app.update()
+
 # ---- CLOSING SAVES SILENTLY (dead last: it destroys the app) ----
 # The quit-time "Unsaved notes" ask could only ever cover the last
 # half-second of typing; the app now trusts its own autosave and closes

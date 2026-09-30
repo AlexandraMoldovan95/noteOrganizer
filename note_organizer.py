@@ -491,6 +491,24 @@ def _undo_hidden(method):
     return wrapped
 
 
+def _checklist_rows_current(drawn, items, theme):
+    """True when the checklist rows on screen were drawn from exactly this
+    list -- the same item objects, in this order, still saying what each
+    item says -- and in this theme.
+
+    Only then may a change touch one row instead of redrawing them all:
+    every row's tick box and bin close over its own item, so a row left
+    standing beside a DIFFERENT item would tick or remove the wrong one.
+    *drawn* is the record _render_checklist_items keeps, or None.
+    """
+    return (drawn is not None and drawn["items"] is items
+            and drawn["theme"] == theme
+            and len(drawn["rows"]) == len(items)
+            and all(rec[0] is item
+                    and rec[2] == (item.get("text", ""), bool(item.get("done")))
+                    for rec, item in zip(drawn["rows"], items)))
+
+
 
 class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     DialogsMixin, SettingsPageMixin, tk.Tk):
@@ -9558,7 +9576,14 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                                         after=self.checklist_btn)
             self._checklist_open = True
             self.checklist_btn.config(text="☑ Checklist  ▲")
-            self._render_checklist_items()
+            # The rows are built on opening (see _render_checklist_items);
+            # rows already drawn from this very list need no rebuild.
+            if _checklist_rows_current(getattr(self, "_checklist_drawn", None),
+                                       self._get_checklist(),
+                                       getattr(self, "theme_name", None)):
+                self._update_checklist_progress()
+            else:
+                self._render_checklist_items()
 
     def _match_checklist_to_calculator(self):
         """Size the checklist list area so the whole box matches the
@@ -9694,8 +9719,22 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         return self._working_checklist
 
     def _render_checklist_items(self):
-        """Redraw the checklist rows from the working list."""
+        """Redraw the checklist rows from the working list -- while the
+        section is OPEN. Closed, no row is built: a note switch collapses
+        the section anyway, and each row is four widgets (a frame, a tick
+        box, a label, a bin), so building them for a closed section was
+        pure cost -- a 50-item note paid ~200 widgets on every open.
+        toggle_checklist_section builds them the moment it opens. The
+        rows drawn are recorded (see _checklist_rows_current), so a
+        change can touch the one row it concerns instead of all of them.
+        """
         if not hasattr(self, "checklist_items_frame"):
+            return
+        self._update_checklist_progress()
+        if not getattr(self, "_checklist_open", False):
+            # What stands in the closed frame no longer matches the list;
+            # the next open redraws it.
+            self._checklist_drawn = None
             return
         for w in self.checklist_items_frame.winfo_children():
             w.destroy()
@@ -9704,17 +9743,22 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             tk.Label(self.checklist_items_frame, text="No items yet — add one below.",
                      bg=self.colors["card"], fg=self.colors["subtext"],
                      font=("Segoe UI", 9), anchor="w").pack(fill="x", padx=4, pady=6)
-        for idx, item in enumerate(items):
-            self._build_checklist_row(idx, item)
-        self._update_checklist_progress()
+        self._checklist_drawn = {
+            "items": items, "theme": getattr(self, "theme_name", None),
+            "rows": [self._build_checklist_row(idx, item)
+                     for idx, item in enumerate(items)]}
 
     def _build_checklist_row(self, idx, item):
+        """One row, packed at the end. Returns its record for the drawn
+        list: ``[item, row frame, (text, done) as drawn]``."""
         row = tk.Frame(self.checklist_items_frame, bg=self.colors["card"])
         row.pack(fill="x", pady=1)
+        record = [item, row, (item.get("text", ""), bool(item.get("done")))]
         var = tk.IntVar(value=1 if item.get("done") else 0)
 
         def on_toggle():
             item["done"] = bool(var.get())
+            record[2] = (item.get("text", ""), item["done"])
             self._update_checklist_progress()
             self._restyle_checklist_label(lbl, item["done"])
             self._schedule_autosave()
@@ -9736,17 +9780,29 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         def delete():
             items = self._get_checklist()
             # The index is read from the list now rather than taken from
-            # the idx this row was built with. Every route that changes
-            # the list re-renders, so today the two always agree -- but
-            # the pair handed to the undo has to be a position IN THIS
-            # LIST, and reading it here says so instead of depending on
-            # that invariant holding for whoever edits next.
-            try:
-                index = items.index(item)
-            except ValueError:
+            # the idx this row was built with: the pair handed to the undo
+            # has to be a position IN THIS LIST. Found by IDENTITY --
+            # list.index() finds the first EQUAL item, and two items reading
+            # the same are two items; now that a delete takes away only its
+            # own row, the wrong one would leave this row standing, tied to
+            # an item no longer in the list.
+            index = next((i for i, it in enumerate(items) if it is item),
+                         None)
+            if index is None:
                 return
+            drawn = getattr(self, "_checklist_drawn", None)
+            in_step = (getattr(self, "_checklist_open", False)
+                       and _checklist_rows_current(
+                           drawn, items, getattr(self, "theme_name", None)))
             items.pop(index)
-            self._render_checklist_items()
+            if in_step and items:
+                # This row goes, the others stay: rebuilding every row
+                # took over two seconds at 200 items.
+                drawn["rows"].pop(index)
+                row.destroy()
+                self._update_checklist_progress()
+            else:
+                self._render_checklist_items()
             self._schedule_autosave()
             # The one thing that could be taken off a note with no way
             # back at all: Ctrl+Z reaches the Text widgets (edit_undo),
@@ -9761,18 +9817,31 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 f"Removed “{label}”" if label else "Checklist item removed",
                 action=lambda: self._undo_checklist_delete(items, index, item))
 
-        tk.Button(row, text="🗑", command=delete, relief="flat", cursor="hand2",
-                  bg=self.colors["card"], fg=self.colors["danger"],
-                  font=("Segoe UI", 9), bd=0).pack(side="right")
+        bin_btn = tk.Button(row, text="🗑", command=delete, relief="flat",
+                            cursor="hand2", bg=self.colors["card"],
+                            fg=self.colors["danger"], font=("Segoe UI", 9),
+                            bd=0)
+        bin_btn.pack(side="right")
+        return record
 
     def _restyle_checklist_label(self, lbl, done):
-        """Dim + strike-through style for completed items (overstrike font)."""
+        """Dim + strike-through style for completed items (overstrike font).
+
+        Two fonts shared by every row, made once from the first label's
+        font -- a new Font per call was one more Tk font object for every
+        row built and every tick."""
+        fg = self.colors["subtext"] if done else self.colors["text"]
         try:
-            f = tkfont.Font(font=lbl.cget("font"))
-            f.configure(overstrike=1 if done else 0)
-            lbl.configure(font=f, fg=self.colors["subtext"] if done else self.colors["text"])
+            fonts = getattr(self, "_checklist_fonts", None)
+            if fonts is None:
+                plain = tkfont.Font(font=lbl.cget("font"))
+                plain.configure(overstrike=0)
+                struck = tkfont.Font(font=lbl.cget("font"))
+                struck.configure(overstrike=1)
+                fonts = self._checklist_fonts = (plain, struck)
+            lbl.configure(font=fonts[1] if done else fonts[0], fg=fg)
         except Exception:
-            lbl.configure(fg=self.colors["subtext"] if done else self.colors["text"])
+            lbl.configure(fg=fg)
 
     def _take_pending_checklist_item(self):
         """Add what sits typed in the checklist's add box to this note's list,
@@ -9792,9 +9861,25 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         text = self.checklist_add_var.get().strip()
         if not text:
             return
-        self._get_checklist().append({"text": text, "done": False})
+        items = self._get_checklist()
+        drawn = getattr(self, "_checklist_drawn", None)
+        in_step = (getattr(self, "_checklist_open", False)
+                   and _checklist_rows_current(
+                       drawn, items, getattr(self, "theme_name", None)))
+        item = {"text": text, "done": False}
+        items.append(item)
         self.checklist_add_var.set("")
-        self._render_checklist_items()
+        if in_step:
+            # One new row, not the whole list again: rebuilding every row
+            # took over two seconds per add at 200 items.
+            if not drawn["rows"]:
+                for w in self.checklist_items_frame.winfo_children():
+                    w.destroy()          # the "No items yet" line
+            drawn["rows"].append(self._build_checklist_row(len(items) - 1,
+                                                           item))
+            self._update_checklist_progress()
+        else:
+            self._render_checklist_items()
         self._schedule_autosave()
         try:
             self.checklist_add_entry.focus_set()
@@ -17827,8 +17912,26 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # a promise. No clamping written here: list.insert already treats
         # an index past the end as "at the end", and a min() in front of
         # it would be code no test could ever make matter.
+        drawn = getattr(self, "_checklist_drawn", None)
+        in_step = (getattr(self, "_checklist_open", False)
+                   and _checklist_rows_current(
+                       drawn, items, getattr(self, "theme_name", None)))
         items.insert(index, item)
-        self._render_checklist_items()
+        if in_step and drawn["rows"]:
+            # The one row back where it was, the others untouched.
+            at = min(index, len(drawn["rows"]))
+            record = self._build_checklist_row(at, item)
+            if at < len(drawn["rows"]):
+                after = drawn["rows"][at][1]
+                record[1].pack_configure(before=after)
+                # The stacking order too, not only the packing: Tab walks
+                # the tick boxes in it, and winfo_children() lists the rows
+                # in it -- a row put back in the middle was reached last.
+                record[1].lower(after)
+            drawn["rows"].insert(at, record)
+            self._update_checklist_progress()
+        else:
+            self._render_checklist_items()
         self._schedule_autosave()
         self.set_status("Checklist item put back")
 
