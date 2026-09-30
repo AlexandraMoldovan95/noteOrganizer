@@ -490,7 +490,11 @@ class DialogsMixin:
                     self._dismiss_mini_popup()
                     btn._dd_popup = None
                     return
-                self._dismiss_mini_popup()
+                # A popup holding typed work asks first. Kept open, the
+                # click stops here -- "break", or the window's own
+                # click-outside would ask the same question again.
+                if not self._dismiss_mini_popup_asking():
+                    return "break"
                 pop = tk.Toplevel(self)
                 self._mini_popup = pop
                 btn._dd_popup = pop
@@ -767,9 +771,10 @@ class DialogsMixin:
         # Never clobber a popup's OWN Escape: a nested dropdown binds
         # Escape→close-just-this-list before being placed, and replacing
         # that here made Escape tear down the HOST editor the list sits
-        # inside instead of the list itself.
+        # inside instead of the list itself. Innermost first, like the
+        # window's own Escape below, and asking where there is work.
         if not pop.bind("<Escape>"):
-            pop.bind("<Escape>", lambda e: self._dismiss_mini_popup())
+            pop.bind("<Escape>", lambda e: self._escape_backs_out())
         # ...and that binding could never fire. These popups are borderless
         # and take no keyboard focus, so Tk delivers a keypress to whatever
         # DOES hold it — the app window, which had no Escape binding at all
@@ -802,13 +807,50 @@ class DialogsMixin:
         # If the click was inside the popup, keep it open.
         if self._is_inside_popup(getattr(event, "widget", None), pop):
             return
-        # A popup holding real work may want a word first: its
-        # _confirm_dismiss returns False to stay open (or after having
-        # handled the closing itself, e.g. by saving).
-        confirm = getattr(pop, "_confirm_dismiss", None)
-        if confirm is not None and not confirm():
-            return
+        self._dismiss_mini_popup_asking()
+
+    def _dismiss_mini_popup_asking(self, holding_work_only=False):
+        """Close the open popup the way a person closing it means it: one
+        holding typed work -- the template editor -- asks first, through its
+        _confirm_dismiss. Every close a PERSON makes comes through here: a
+        click outside, Escape, a widget that opens something in its place,
+        leaving the page it sits on, closing the window. Programmatic closes
+        (after a save, an explicit Cancel) call _dismiss_mini_popup.
+
+        Returns True when no popup is left open, False when it stays: the
+        person chose to keep editing, or the save they asked for could not
+        happen. With `holding_work_only`, a popup with nothing to lose is
+        left alone rather than closed -- for callers that are not about
+        popups at all (a shortcut, a Settings section, the window closing).
+
+        A widget's own <Button-1> runs before the window's click-outside,
+        so a widget opening something in the popup's place closed it
+        without the question -- the template half written, gone. Such a
+        widget calls this first, and on False returns "break": otherwise
+        the window's click-outside, still to run for the same click, asks
+        the same question a second time.
+        """
+        pop = getattr(self, "_mini_popup", None)
+        confirm = getattr(pop, "_confirm_dismiss", None) if pop is not None else None
+        if callable(confirm):
+            try:
+                alive = bool(pop.winfo_exists())
+            except tk.TclError:
+                alive = False
+            # A question on screen already has the floor -- its own
+            # "Save changes?", for one -- so nothing closes under it.
+            if alive and (self._a_dialog_is_asking() or not confirm()):
+                # False: stay open -- or "I saved and closed myself".
+                # Only a popup still on screen is someone's unfinished work.
+                try:
+                    if pop.winfo_exists():
+                        return False
+                except tk.TclError:
+                    pass
+        elif holding_work_only:
+            return True
         self._dismiss_mini_popup()
+        return True
 
     def _foreground_is_ours(self):
         """Is the OS foreground window one of this app's windows?
@@ -922,7 +964,14 @@ class DialogsMixin:
         answered. Widget-level Escapes (the find bar, an inline rename
         entry) already return "break" of their own, so they never reach
         this at all.
+
+        And nothing at all while a question is on screen: its own Escape
+        answers it. Closing the popup here too meant Escape on the template
+        editor's "Save changes?" threw away the template it was asking
+        about.
         """
+        if self._a_dialog_is_asking():
+            return
         nested = getattr(self, "_nested_dropdown", None)
         if nested is not None:
             self._nested_dropdown = None
@@ -933,7 +982,7 @@ class DialogsMixin:
             except tk.TclError:
                 pass
         if getattr(self, "_mini_popup", None) is not None:
-            self._dismiss_mini_popup()
+            self._dismiss_mini_popup_asking()
 
     def _dismiss_mini_popup(self):
         gif_job = getattr(self, "_gif_anim_job", None)

@@ -602,8 +602,10 @@ def _fake_ask(*a, **k):
     return _fake_ask.answer
 
 
-_real_ask9 = app.ask_yes_no
-app.ask_yes_no = _fake_ask
+# "Save changes?" is three answers now -- Cancel (None), No, Yes -- so it
+# is asked through ask_yes_no_cancel. Answering it through ask_yes_no, as
+# this block did, would leave the real question on screen for nobody.
+app.ask_yes_no_cancel = _fake_ask
 _tplC = NO.normalize_template({
     'name': 'ConfTest', 'title': 'x', 'body': 'body',
     'category': 'General', 'checklist': [],
@@ -653,8 +655,28 @@ check('Yes with an empty name keeps the dialog open for fixing',
       app._mini_popup is not None)
 app._dismiss_mini_popup()
 app.update()
+
+# Cancel -- and Escape, which answers Cancel -- keeps editing: the editor
+# stays open with what was typed, and nothing is saved. As Yes/No the
+# question had no such answer, and Escape took No.
+_fake_ask.answer = None
+del _asks[:]
+app._edit_template(app.templates[-1], lambda: None)
+app.update()
+_popCancel = app._mini_popup
+_entC = _entries_in_order9(_popCancel)
+_entC[0].delete(0, 'end')
+_entC[0].insert(0, 'KeptTyping')
+app._maybe_dismiss_mini_popup(_outside)
+app.update()
+check('Cancel on "Save changes?" keeps the editor open, with what was typed',
+      _asks == ['Save changes?'] and app._mini_popup is _popCancel
+      and _popCancel.winfo_exists() and _entC[0].get() == 'KeptTyping'
+      and app.templates[-1]['name'] == 'ConfTest2')
+app._dismiss_mini_popup()
+app.update()
 app.templates.remove(app.templates[-1])
-app.ask_yes_no = _real_ask9
+del app.ask_yes_no_cancel
 
 # ============================================================
 # THE TEMPLATE EDITOR'S DELETE IS A DRAWN GLYPH (C-21)
@@ -1192,11 +1214,11 @@ app.show_settings_page(); app.update()
 app._edit_template(None, redraw=lambda: None); app.update()
 _tg_tpl = app._mini_popup
 find_widget(_tg_tpl, tk.Entry).insert(0, 'Half written')
-app.ask_yes_no = lambda *a, **k: (_tg_asked.append(a[0]), False)[1]  # No
+app.ask_yes_no_cancel = lambda *a, **k: (_tg_asked.append(a[0]), False)[1]  # No
 try:
     app._shortcut_find(); app.update()
 finally:
-    del app.ask_yes_no
+    del app.ask_yes_no_cancel
 check('a half-written template is asked about before a shortcut takes it away',
       _tg_asked == ['Save changes?'])
 check('...and after the answer the shortcut still does its job',
@@ -1210,11 +1232,11 @@ app.show_settings_page(); app.update()
 app._edit_template(None, redraw=lambda: None); app.update()
 find_widget(app._mini_popup, tk.Text).insert('1.0', 'kept by answering yes')
 _tg_count = len(app.templates)
-app.ask_yes_no = lambda *a, **k: True                              # Yes, save
+app.ask_yes_no_cancel = lambda *a, **k: True                       # Yes, save
 try:
     app._shortcut_new_note(); app.update()
 finally:
-    del app.ask_yes_no
+    del app.ask_yes_no_cancel
 check('...answering Yes saves the template, then the shortcut carries on',
       len(app.templates) == _tg_count + 1 and not app._settings_open)
 # ...and a save that cannot happen (the name cleared) leaves the editor
@@ -1224,14 +1246,26 @@ app._edit_template(None, redraw=lambda: None); app.update()
 _tg_tpl2 = app._mini_popup
 find_widget(_tg_tpl2, tk.Entry).delete(0, 'end')
 find_widget(_tg_tpl2, tk.Text).insert('1.0', 'a body, and no name')
-app.ask_yes_no = lambda *a, **k: True                              # Yes, save
+app.ask_yes_no_cancel = lambda *a, **k: True                       # Yes, save
 try:
     app._shortcut_new_note(); app.update()
 finally:
-    del app.ask_yes_no
+    del app.ask_yes_no_cancel
 check('...while a save that cannot happen keeps the editor, and Settings, open',
       app._settings_open and _tg_tpl2.winfo_exists()
       and app._mini_popup is _tg_tpl2)
+# ...and Cancel -- the third answer, Escape's -- keeps both as well, with
+# nothing saved: the shortcut honours all three.
+find_widget(_tg_tpl2, tk.Entry).insert(0, 'Named now')
+_tg_count = len(app.templates)
+app.ask_yes_no_cancel = lambda *a, **k: None                       # Cancel
+try:
+    app._shortcut_new_note(); app.update()
+finally:
+    del app.ask_yes_no_cancel
+check('...and Cancel keeps the editor and Settings, saving nothing',
+      app._settings_open and _tg_tpl2.winfo_exists()
+      and app._mini_popup is _tg_tpl2 and len(app.templates) == _tg_count)
 app._dismiss_mini_popup(); app.update()
 app.hide_settings_page(); app.update()
 app.notebook.select(app.TAB_NOTES); app.update()
@@ -1603,6 +1637,137 @@ check('a template\'s pencil clicked while another template\'s editor is open '
 app._dismiss_mini_popup(); app.update()
 
 # ============================================================
+# A WIDGET THAT OPENS SOMETHING IN A POPUP'S PLACE ASKS FIRST
+# ============================================================
+# The window's click-outside is what asks "Save changes?", and a widget's
+# own <Button-1> runs before it -- so another template's pencil, the arrow
+# of "Back to Notes", a Settings glyph and a sidebar dropdown each closed
+# the template editor without the question, the typing gone. Asked once,
+# too: kept open, the click stops there, or the click-outside asks again.
+_wa_asked = []
+
+
+def _wa_answer(value):
+    del _wa_asked[:]
+    app.ask_yes_no_cancel = lambda *a, **k: (_wa_asked.append(a[0]), value)[1]
+
+
+def _wa_open_dirty():
+    app._dismiss_mini_popup(); app.update()
+    _qa_click(_pencils9()[0]); app.update()
+    _pop = app._mini_popup
+    _ent = [w for w in _walk9(_pop) if isinstance(w, tk.Entry)][0]
+    _ent.insert('end', ' (my edit)')
+    return _pop, _ent
+
+
+def _wa_names():
+    return [t.get('name') for t in NO.load_templates()]
+
+
+try:
+    _wa_pop, _wa_ent = _wa_open_dirty()
+    _wa_answer(None)
+    _qa_click(_pencils9()[1]); app.update()
+    check('another template\'s pencil asks about the half-written one, once, '
+          'and Cancel keeps it (%s)' % _wa_asked,
+          _wa_asked == ['Save changes?'] and app._mini_popup is _wa_pop
+          and _wa_pop.winfo_exists() and _wa_ent.get() == 'Weekly review (my edit)')
+    _wa_answer(True)
+    _qa_click(_pencils9()[1]); app.update()
+    _wa_now = ([w for w in _walk9(app._mini_popup) if isinstance(w, tk.Entry)][0].get()
+               if app._mini_popup is not None else None)
+    check('...and Yes saves it, then opens the one clicked (%s, %r)'
+          % (_wa_names(), _wa_now),
+          _wa_asked == ['Save changes?'] and 'Weekly review (my edit)' in _wa_names()
+          and _wa_now == 'Meeting notes')
+    _wa_back = next(c for w in _walk9(app.settings_nav)
+                    if isinstance(w, tk.Button)
+                    and str(w.cget('text')) == 'Back to Notes'
+                    for c in w.master.winfo_children()
+                    if isinstance(c, tk.Canvas))
+    _wa_pop, _wa_ent = _wa_open_dirty()
+    _wa_answer(None)
+    _qa_click(_wa_back); app.update()
+    check('the arrow of "Back to Notes" asks, once, and Cancel stays on '
+          'Settings with the editor (%s)' % _wa_asked,
+          _wa_asked == ['Save changes?'] and app._settings_open
+          and app._mini_popup is _wa_pop and _wa_pop.winfo_exists())
+    _wa_answer(False)
+    _qa_click(_wa_back); app.update()
+    check('...and No leaves Settings without saving (%s)' % _wa_names(),
+          _wa_asked == ['Save changes?'] and not app._settings_open
+          and app._mini_popup is None
+          and 'Weekly review (my edit) (my edit)' not in _wa_names())
+    app.show_settings_page(); app.update()
+    app.toggle_settings_panel('templates'); app.update()
+    _wa_pop, _wa_ent = _wa_open_dirty()
+    _wa_answer(None)
+    _qa_click(app._settings_nav_icons['trash']); app.update()
+    check('a Settings section chosen by its glyph asks, once, and Cancel '
+          'stays on Templates with the editor (%s)' % _wa_asked,
+          _wa_asked == ['Save changes?']
+          and app._settings_selected_section == 'templates'
+          and app._mini_popup is _wa_pop and _wa_pop.winfo_exists())
+    _wa_answer(None)
+    _qa_click(app.filter_menu); app.update()
+    check('a sidebar dropdown clicked beside a half-written template asks, '
+          'once, and Cancel opens nothing (%s)' % _wa_asked,
+          _wa_asked == ['Save changes?'] and app._mini_popup is _wa_pop)
+    _wa_answer(True)
+    _qa_click(app.filter_menu); app.update()
+    check('...and Yes saves the template, then opens the list (%s)' % _wa_names(),
+          _wa_asked == ['Save changes?']
+          and 'Weekly review (my edit) (my edit)' in _wa_names()
+          and app._mini_popup is not None and app._mini_popup is not _wa_pop)
+finally:
+    app.__dict__.pop('ask_yes_no_cancel', None)
+app._dismiss_mini_popup(); app.update()
+
+# ============================================================
+# ESCAPE ON "SAVE CHANGES?" KEEPS EDITING
+# ============================================================
+# The question was Yes/No, and Escape answers the first button: No. The
+# key that means "never mind" threw the typed template away -- and the
+# window's own Escape closed the editor under the question as well.
+# Pressed where a person's key lands: on the question's focused button.
+app.toggle_settings_panel('templates'); app.update()
+_es_pop, _es_ent = _wa_open_dirty()
+_es_seen = {}
+
+
+def _es_press():
+    _b = _question_button('Yes', 'Save changes?')
+    _es_seen['keyboard'] = _b is not None and _keyboard_on(_b)
+    if _es_seen['keyboard']:
+        _b.event_generate('<Escape>')
+
+
+def _es_rescue():
+    _b = _question_button('No', 'Save changes?')
+    if _b is not None:
+        _es_seen['rescued'] = True
+        _b.invoke()
+
+
+app.after(300, _es_press)
+_es_job = app.after(5000, _es_rescue)
+app._maybe_dismiss_mini_popup(_outside)      # a click outside: asks, for real
+app.after_cancel(_es_job)
+app.update()
+if _es_seen.get('keyboard') is False:
+    check('escape on the question: SKIPPED -- the keyboard never reached it', True)
+    print('      (Escape on "Save changes?" unverified in this run: no focus)')
+else:
+    check('Escape on "Save changes?" keeps the editor open, with what was typed, '
+          'and saves nothing (%s)' % _es_seen,
+          not _es_seen.get('rescued') and app._mini_popup is _es_pop
+          and _es_pop.winfo_exists() and _es_ent.get().endswith('(my edit)')
+          and not any(n.endswith('(my edit) (my edit) (my edit)')
+                      for n in _wa_names()))
+app._dismiss_mini_popup(); app.update()
+
+# ============================================================
 # CLOSING THE WINDOW UNDER A QUESTION
 # ============================================================
 # The X while a question waited destroyed the window under it, and nothing
@@ -1697,6 +1862,66 @@ check('a question whose window is destroyed under it ends its wait with its '
       'safe answer (%r; unstuck by hand: %s)' % (_cl_answer2, bool(_cl_unstuck)),
       _cl_answer2 is False and not _cl_unstuck)
 app.update()
+
+# ============================================================
+# CLOSING THE WINDOW WITH A TEMPLATE HALF WRITTEN; CTRL+S IN ITS EDITOR
+# ============================================================
+# The close flushed only the note editor and destroyed the window: the
+# template being typed was lost with no question, and Ctrl+S in its editor
+# saved the note hidden behind Settings instead, or nothing. The close
+# asks now, as a click outside does, and Cancel keeps the window open.
+# _flush_autosave is answered False so the close stops right after the
+# question, the window left standing either way.
+app.templates = [NO.normalize_template({'name': 'CloseTest', 'body': 'first line'})]
+NO.save_templates(app.templates)
+app.show_settings_page(); app.update()
+app.toggle_settings_panel('templates'); app.update()
+app._edit_template(app.templates[0], redraw=lambda: None); app.update()
+_cw_pop = app._mini_popup
+_cw_body = [w for w in _walk9(_cw_pop) if isinstance(w, tk.Text)][0]
+_cw_body.insert('end', '\nsecond line')
+_cw_asked, _cw_flushed, _cw_destroyed = [], [], []
+
+
+def _cw_disk_body():
+    return next((t.get('body') or '' for t in NO.load_templates()
+                 if t.get('name') == 'CloseTest'), '')
+
+
+app.destroy = lambda: _cw_destroyed.append(1)
+app._flush_autosave = lambda *a, **k: (_cw_flushed.append(1), False)[1]
+try:
+    app.ask_yes_no_cancel = lambda *a, **k: (_cw_asked.append(a[0]), None)[1]
+    app.on_app_close(); app.update()
+    check('closing with a template half written asks, and Cancel keeps the '
+          'window and the editor (%s)' % _cw_asked,
+          _cw_asked == ['Save changes?'] and not _cw_flushed
+          and not _cw_destroyed and app._mini_popup is _cw_pop
+          and 'second line' in _cw_body.get('1.0', 'end'))
+    app.ask_yes_no_cancel = lambda *a, **k: (_cw_asked.append(a[0]), True)[1]
+    app.on_app_close(); app.update()
+    check('...and Yes saves the template before the close goes on (%r)'
+          % _cw_disk_body(),
+          'second line' in _cw_disk_body() and _cw_flushed
+          and not _cw_destroyed)
+finally:
+    for _cw_name in ('destroy', '_flush_autosave', 'ask_yes_no_cancel'):
+        app.__dict__.pop(_cw_name, None)
+app._dismiss_mini_popup(); app.update()
+app._edit_template(app.templates[0], redraw=lambda: None); app.update()
+_cs_pop = app._mini_popup
+_cs_body = [w for w in _walk9(_cs_pop) if isinstance(w, tk.Text)][0]
+_cs_body.insert('end', '\nthird line')
+if _keyboard_on(_cs_body):
+    _cs_body.event_generate('<Control-s>')
+    app.update()
+    check('Ctrl+S with the keyboard in the template editor saves the template '
+          '(%r)' % _cw_disk_body(), 'third line' in _cw_disk_body())
+else:
+    check('ctrl+s in the template editor: SKIPPED -- the keyboard never '
+          'reached it', True)
+    print('      (Ctrl+S in the template editor unverified in this run: no focus)')
+app._dismiss_mini_popup(); app.update()
 
 # ============================================================
 # ENTER ANSWERS A QUESTION WITH THE BUTTON THAT HOLDS THE KEYBOARD

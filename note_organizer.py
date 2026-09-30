@@ -15898,25 +15898,13 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         went nowhere. Worse, with a template half-written in its editor and
         the Calendar tab underneath, that tab change dismissed the editor
         directly -- the template gone without the question a click outside
-        it asks.
+        it asks. It gets the same three answers everywhere: Cancel (or
+        Escape) keeps editing, No discards, Yes saves.
         """
-        pop = getattr(self, "_mini_popup", None)
-        confirm = getattr(pop, "_confirm_dismiss", None) if pop is not None else None
-        if confirm is not None:
-            try:
-                alive = bool(pop.winfo_exists())
-            except tk.TclError:
-                alive = False
-            if alive and not confirm():
-                # False means "stay open" -- or "I saved and closed myself".
-                # Only a popup still on screen is someone's unfinished work.
-                try:
-                    if pop.winfo_exists():
-                        return False
-                except tk.TclError:
-                    pass
+        if not self._dismiss_mini_popup_asking(holding_work_only=True):
+            return False
         if getattr(self, "_settings_open", False):
-            self.hide_settings_page()
+            return self.hide_settings_page() is not False
         return True
 
     def _shortcut_new_note(self, event=None):
@@ -15940,6 +15928,17 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         warning a global shortcut would otherwise trigger from anywhere
         (same emptiness test the autosave uses)."""
         if self._a_dialog_is_asking():
+            return "break"
+        # Typing in a popup that saves -- the template editor -- Ctrl+S is
+        # that popup's own Save. It used to save the note hidden behind the
+        # Settings page instead, or nothing, and say nothing either way.
+        # Asked of the key's own widget: that is where the keystroke went.
+        pop = getattr(self, "_mini_popup", None)
+        save_popup = (getattr(pop, "_save_from_keyboard", None)
+                      if pop is not None else None)
+        if (save_popup is not None and event is not None
+                and self._is_inside_popup(getattr(event, "widget", None), pop)):
+            save_popup()
             return "break"
         try:
             st = self.capture_editor_state()
@@ -18353,15 +18352,19 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         edited day: it used to close anyway and discard the edit, which
         is the opposite of what Cancel means anywhere else.
 
-        One thing comes before any of that. A question on screen owns the
+        Two things come before any of that. A question on screen owns the
         window until it is answered, as a modal question does on Windows:
         the close is refused and the question brought to the front.
         Closing under it destroyed the window while the question still
         waited, and the process lived on with no window, holding the
         notebook lock -- every later launch was refused as "already
-        open"."""
+        open". And a popup holding typed work (the template editor) has
+        its say, as it does on a click outside it; Cancel keeps the
+        window open there too."""
         if self._a_dialog_is_asking():
             self._bring_question_forward()
+            return
+        if not self._dismiss_mini_popup_asking(holding_work_only=True):
             return
         if self._flush_autosave() is False:
             return

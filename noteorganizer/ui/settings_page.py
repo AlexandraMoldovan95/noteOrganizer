@@ -131,6 +131,13 @@ class SettingsPageMixin:
         if target is None:
             return
 
+        # Leaving a section -- or rebuilding the one on screen -- takes a
+        # popup holding typed work with it (the template editor lives in
+        # Templates). It has its say first, as it does on a click outside
+        # it. Returns False when the person stays on it.
+        if not self._dismiss_mini_popup_asking(holding_work_only=True):
+            return False
+
         for key, (panel, _b, _e) in sections.items():
             if panel is not None and self._is_placed(panel):
                 panel.pack_forget()
@@ -649,8 +656,15 @@ class SettingsPageMixin:
         self._icon_button(row, "trash", delete, danger=True, bg_key="sidebar"
                           ).pack(side="right", padx=(1, 6))
         edit_btn = self._icon_button(row, "pencil", bg_key="sidebar")
-        edit_btn.bind("<Button-1>",
-                      lambda _e: self._edit_template(tpl, redraw, edit_btn))
+
+        def edit(_e=None):
+            # Another template's editor, half written, stayed open: this
+            # click is spent, and must not reach the window's click-outside
+            # to ask the same question twice.
+            if self._edit_template(tpl, redraw, edit_btn) is False:
+                return "break"
+
+        edit_btn.bind("<Button-1>", edit)
         edit_btn.pack(side="right", padx=1)
 
     def _draw_template_table_preview(self, canvas, body_text):
@@ -763,11 +777,18 @@ class SettingsPageMixin:
 
     def _edit_template(self, tpl, redraw, anchor_widget=None):
         """Open a small editor (inline window) to create or edit a template's
-        name, title, body, comments and category."""
+        name, title, body, comments and category. Returns False when it
+        could not: the editor already open holds typed work and the person
+        chose to keep it."""
         is_new = tpl is None
         data = normalize_template(tpl or {})
 
-        self._dismiss_mini_popup()
+        # The editor already open -- another template's -- has its say
+        # first. A pencil acts on its own press, before the window's
+        # click-outside ever runs, so it used to close that editor without
+        # the question and the half-written template was simply gone.
+        if not self._dismiss_mini_popup_asking():
+            return False
         pop = tk.Toplevel(self)
         self._mini_popup = pop
         pop.wm_overrideredirect(True)
@@ -1128,19 +1149,26 @@ class SettingsPageMixin:
                 return True               # nothing changed: just close
             confirm_state["asking"] = True
             try:
-                wants_save = self.ask_yes_no(
+                # Three answers, not two. Asked as Yes/No, Escape -- the
+                # key for "never mind" -- answered No and threw the typed
+                # work away. Cancel is first, so Escape takes it.
+                choice = self.ask_yes_no_cancel(
                     "Save changes?",
                     "You changed this template. Save the changes "
                     "before closing?", icon="question", default="yes")
             finally:
                 confirm_state["asking"] = False
-            if wants_save:
+            if choice is None:
+                return False              # Cancel or Escape: keep editing
+            if choice:
                 save()                    # dismisses itself on success
                 # A failed save (no name) keeps the dialog for fixing.
                 return False
-            return True
+            return True                   # No: close without saving
 
         pop._confirm_dismiss = confirm_dismiss
+        # Ctrl+S while the keyboard is in this editor (_shortcut_save_now).
+        pop._save_from_keyboard = save
         if anchor_widget is not None and anchor_widget.winfo_exists():
             self._place_dropdown_popup(pop, anchor_widget)
         else:
@@ -1148,9 +1176,9 @@ class SettingsPageMixin:
                 pop, None,
                 anchor_xy=(self.winfo_rootx() + self.winfo_width() // 2,
                           self.winfo_rooty() + self.winfo_height() // 3))
-        pop.bind("<Escape>",
-                 lambda e: (self._dismiss_mini_popup()
-                            if confirm_dismiss() else None))
+        # Innermost first (an open Category list, an emoji picker), then
+        # this editor -- asking, when something was typed.
+        pop.bind("<Escape>", lambda e: self._escape_backs_out())
 
     def _build_trash_row(self, parent, entry, redraw, on_tick=None):
         row = tk.Frame(parent, bg=self.colors["card"])
@@ -1797,8 +1825,9 @@ class SettingsPageMixin:
         where self.settings_page is created."""
         # A popup anchored to the page being swapped out would keep
         # floating over the new one -- the Settings dropdown was still on
-        # screen back in the editor.
-        self._dismiss_mini_popup()
+        # screen back in the editor. Asking first if it holds typed work.
+        if not self._dismiss_mini_popup_asking():
+            return
         self._catch_up_deferred_refresh()
         self.notebook.pack_forget()
         # Stated, not inferred. Whether the notebook is on screen is
@@ -1824,8 +1853,13 @@ class SettingsPageMixin:
         self._render_statistics()
 
     def hide_settings_page(self):
-        """Return from Settings to the Notes/Calendar notebook."""
-        self._dismiss_mini_popup()
+        """Return from Settings to the Notes/Calendar notebook. Returns False
+        when the person stays: the template editor was open with typed work
+        and they chose to keep it. The arrow beside "Back to Notes" acts on
+        its own press, before the window's click-outside ever runs, so this
+        is where that question has to be asked."""
+        if not self._dismiss_mini_popup_asking():
+            return False
         self.settings_page.pack_forget()
         self.notebook.pack(fill="both", expand=True)
         self._settings_open = False
@@ -1844,6 +1878,7 @@ class SettingsPageMixin:
         # "not showing", deferring again and leaving exactly the
         # staleness this was added to prevent.
         self._catch_up_deferred_refresh()
+        return True
 
     # ---------- Settings tab ----------
     # One row per section: nav order, the builder that fills the pane, and
@@ -2000,7 +2035,10 @@ class SettingsPageMixin:
                          activebackground="card", activeforeground="text")
         back_lbl.pack(side="left", fill="x", expand=True)
         for w in (back_row, back_ico):
-            w.bind("<Button-1>", lambda _e: self.hide_settings_page())
+            # "break" when the person stayed (a half-written template):
+            # the window's click-outside must not ask them a second time.
+            w.bind("<Button-1>",
+                   lambda _e: None if self.hide_settings_page() else "break")
 
         def _back_hover(on, _ws=(back_row, back_ico, back_lbl)):
             c = self.colors["card"] if on else self.colors["sidebar"]
@@ -2147,8 +2185,12 @@ class SettingsPageMixin:
                          cursor="hand2")
         icon.pack(side="left", padx=(9, 0))
         # The glyph is decoration; the button beside it is the control, so
-        # clicking the glyph has to reach the same place.
-        icon.bind("<Button-1>", lambda _e, k=key: self.toggle_settings_panel(k))
+        # clicking the glyph has to reach the same place. "break" when the
+        # person stayed with a half-written template, so the same click's
+        # window-level click-outside does not ask them again.
+        icon.bind("<Button-1>",
+                  lambda _e, k=key: (None if self.toggle_settings_panel(k)
+                                     is not False else "break"))
 
         btn = tk.Button(
             row, text=label, anchor="w", relief="flat",
