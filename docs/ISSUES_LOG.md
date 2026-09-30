@@ -39,7 +39,7 @@ day-to-day tracking.
 | [The undo that guarded the wrong state](#the-undo-that-guarded-the-wrong-state) | An undo must test for the state its own action produced, not the one it means to restore; and sweep for what else reaches the same loss. | 0.75.181 |
 | [The binding that could never fire](#the-binding-that-could-never-fire) | A binding is not an answer to "does this key work" — ask where the key goes; and a probe whose finding is an absence needs a control that produces the presence. | 0.75.183 |
 | [Eleven decisions about your notes, made from half the evidence](#eleven-decisions-about-your-notes-made-from-half-the-evidence) | When two files must agree, rebuild the weaker from the stronger; an automatic removal asks the strictest question there is; a dialog's promise is part of the mechanism. | 0.81.213 |
-| [The Cancel that went ahead anyway](#the-cancel-that-went-ahead-anyway) | A function that can be told "no" must say so to its caller; a modal dialog holds the mouse only unless the keyboard is held too; bind the end of a widget-level record to the widget's own end. | Unreleased |
+| [The Cancel that went ahead anyway](#the-cancel-that-went-ahead-anyway) | A function that can be told "no" must say so to its caller; a modal dialog holds the mouse only unless the keyboard is held too; bind the end of a widget-level record to the widget's own end. | 0.82.230 |
 | [The paste that landed on top of the placeholder](#the-paste-that-landed-on-top-of-the-placeholder) | `bind()` replaces where `add="+"` accumulates, so a widget's own binding silently displaces a shared helper's; and a virtual event outranks the physical one beside it in the same bindtag. | 0.75.185 |
 | [The sweep that stopped at the edge of the Settings page](#the-sweep-that-stopped-at-the-edge-of-the-settings-page) | A fix's sibling sweep must name the surfaces it did not visit; a cap in characters is not a width; and text that wraps for the first time inherits every multi-line default the widget was hiding. | 0.81.202 |
 | [The seven small rows, four of which were not what they said](#the-seven-small-rows-four-of-which-were-not-what-they-said) | A suggested fix is a hypothesis about the code — four of seven were wrong about scope, premise or mechanism, each found by a grep; and a check asserting `not in` against a name the code would never write cannot fail. | 0.76.192 |
@@ -77,9 +77,9 @@ day-to-day tracking.
 | [The slowdown that only showed up after a long session](#the-slowdown-that-only-showed-up-after-a-long-session) | 'Slow after a while, fine at first' means unbounded growth; reproduce with a loop. | 0.4.0 |
 | [Export/import freezing the app](#exportimport-freezing-the-app) | Do file I/O on a worker thread; only the main thread touches Tkinter widgets. | 0.4.0 |
 | [The theme-switch flicker, and three ways not to fix it](#the-theme-switch-flicker-and-three-ways-not-to-fix-it) | Profile before reaching for rendering tricks; the fix was stopping work nothing asked for. | 0.32.49 |
-| [The list that was drawn whole, for every pause in typing](#the-list-that-was-drawn-whole-for-every-pause-in-typing) | Measure where the time goes before trimming what is easy to count; before removing work that looks wasted, ask what it was doing for someone; when every symptom is the same cost seen from another side, remove the cost — six windows per card became none. | Unreleased |
-| [The window that crawled behind its edge](#the-window-that-crawled-behind-its-edge) | When the cost is inside the toolkit and paid per step, stop taking the step until it counts; and a smooth frame over a stale picture is a judgement for the eye, not a number. | Unreleased |
-| [The line that promised a place the card could not take](#the-line-that-promised-a-place-the-card-could-not-take) | When the screen re-sorts after an action, the end state proves nothing about what was promised during it — check the promise itself; and look at the photograph, because a green check does not see a card that is not there. | Unreleased |
+| [The list that was drawn whole, for every pause in typing](#the-list-that-was-drawn-whole-for-every-pause-in-typing) | Measure where the time goes before trimming what is easy to count; before removing work that looks wasted, ask what it was doing for someone; when every symptom is the same cost seen from another side, remove the cost — six windows per card became none. | 0.82.230 |
+| [The window that crawled behind its edge](#the-window-that-crawled-behind-its-edge) | When the cost is inside the toolkit and paid per step, stop taking the step until it counts; and a smooth frame over a stale picture is a judgement for the eye, not a number. | 0.82.230 |
+| [The line that promised a place the card could not take](#the-line-that-promised-a-place-the-card-could-not-take) | When the screen re-sorts after an action, the end state proves nothing about what was promised during it — check the promise itself; and look at the photograph, because a green check does not see a card that is not there. | 0.82.230 |
 | [The Settings panels that stayed dark on a light theme](#the-settings-panels-that-stayed-dark-on-a-light-theme) | A computed colour is invisible to palette matching; derive it once, teach the theme switch. | 0.36.54 |
 | [The title box that took three and a half seconds a keystroke](#the-title-box-that-took-three-and-a-half-seconds-a-keystroke) | Measure to isolate: the app was fine, one widget was quadratic — cap its input. | 0.36.55 |
 | [The dropdown that opened on the wrong monitor](#the-dropdown-that-opened-on-the-wrong-monitor) | Position popups against the app window's own bounds, not the full virtual desktop. | 0.2.0 |
@@ -1302,7 +1302,7 @@ check written for it.
 
 ### The Cancel that went ahead anyway
 
-*([Unreleased](../CHANGELOG.md#unreleased))*
+*([0.82.230](../CHANGELOG.md#082230--2026-09-30))*
 
 **The same "try to break it" audit found seven places where the app did
 something other than what a person had just asked — each small, each met
@@ -2242,7 +2242,7 @@ where it is drawn.
 
 ### The list that was drawn whole, for every pause in typing
 
-*(Unreleased)*
+*([0.82.230](../CHANGELOG.md#082230--2026-09-30))*
 
 **Symptom:** with a few hundred notes the app froze at every pause in typing — about a second
 with 100 notes, three with 300, twelve with 1,000 — and switching back to the list from the
@@ -2379,7 +2379,7 @@ not depend on what happens to be drawn.
 
 ### The window that crawled behind its edge
 
-*(Unreleased)*
+*([0.82.230](../CHANGELOG.md#082230--2026-09-30))*
 
 **Symptom:** dragging the window's edge to make it wider or narrower moved in jerks, the
 Calendar most of all — the edge fell behind the pointer and caught up in steps. Field-reported,
@@ -2423,7 +2423,7 @@ and hand it to someone who will look.
 
 ### The line that promised a place the card could not take
 
-*(Unreleased)*
+*([0.82.230](../CHANGELOG.md#082230--2026-09-30))*
 
 **What was built.** The field test asked to move a note up or down the list with the mouse.
 The list now has a sort arranged by hand, Custom order: a card is dragged, a line shows where it

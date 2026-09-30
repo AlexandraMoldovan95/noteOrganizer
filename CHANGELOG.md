@@ -12,6 +12,7 @@ How the numbers themselves are counted is the
 
 | Version | Date | In one line |
 |---|---|---|
+| [0.82.230](#082230--2026-09-30) | 2026-09-30 | Cancel means stay and the keyboard goes back where it was; a big notebook stops making you wait; and the note list becomes one drawing you can arrange by hand. |
 | [0.81.213](#081213--2026-09-29) | 2026-09-29 | Nothing moves or removes your notes behind your back: categories survive a lost settings file, an update can be taken back whole, and nothing is deleted on a resemblance. |
 | [0.81.202](#081202--2026-09-29) | 2026-09-29 | Two places where the app left something out: a note's card cut off the end of what it says, and the keyboard shortcuts page was missing a whole group of keys. |
 | [0.81.200](#081200--2026-09-29) | 2026-09-29 | The note list stops pulling the keyboard away from what you were typing in. |
@@ -82,7 +83,7 @@ How the numbers themselves are counted is the
 
 ---
 
-## [Unreleased]
+## [0.82.230] — 2026-09-30
 
 *Highlights: Cancel means stay, the keyboard goes back where it was, and a button that opens
 something closes it on the next click — the everyday places where the app did something other
