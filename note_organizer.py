@@ -12092,13 +12092,21 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.rec_end_mode_var = tk.StringVar(value="never")
 
         def _end_radio(value, text):
+            # The well is the CARD colour, which is the opposite of what the
+            # tick boxes need -- measured, not assumed. Tk on Windows paints
+            # a selected radio's dot in the button's own foreground colour
+            # (a tick box's mark is dark whatever the palette says), and the
+            # foreground is the text colour, light on every dark theme. On
+            # the light check_well that dot was invisible: whichever of the
+            # three was chosen, all three looked unchosen. card stands well
+            # apart from the text colour on every theme, light or dark.
             rb = tk.Radiobutton(
                 end_row, text=text, value=value, variable=self.rec_end_mode_var,
                 font=("Segoe UI", 9), relief="flat", cursor="hand2",
                 command=self.on_end_mode_changed,
-                selectcolor=self.colors["check_well"]
+                selectcolor=self.colors["card"]
             )
-            self.track_theme(rb, bg="bg", fg="text", activebackground="bg", activeforeground="text", selectcolor="check_well")
+            self.track_theme(rb, bg="bg", fg="text", activebackground="bg", activeforeground="text", selectcolor="card")
             rb.pack(side="left", padx=2)
             return rb
 

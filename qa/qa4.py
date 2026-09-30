@@ -340,7 +340,7 @@ check('the caret follows the theme in body, title and comments',
 check('checklist checkbox wells stay readable across a theme switch',
       _dark2[1] and _light2[1])
 check('recurrence radios still have their well tracked, so it cannot go stale',
-      any(isinstance(w, tk.Radiobutton) and m.get('selectcolor') == 'check_well'
+      any(isinstance(w, tk.Radiobutton) and m.get('selectcolor') == 'card'
           for w, m in app.themed_widgets))
 _back2 = _find_btn_text(app.settings_page, 'Back to Notes') \
     if hasattr(app, 'settings_page') else None
@@ -912,6 +912,14 @@ check('...and leaves the list a full rebuild would draw',
 # not because the theme is one thing or the other. So the check is about
 # luminance, not about which theme is loaded -- a future palette that
 # picks a dark well fails here rather than in somebody's screenshot.
+#
+# A RADIO is the exception, and the same trap the other way round. Tk on
+# Windows paints a selected radio's dot in the button's own foreground
+# colour -- measured: a red foreground gave a red dot and nothing else
+# did -- so on a dark theme the light text colour went onto the light
+# well and the dot vanished. Field-reported: "the bullets stay white,
+# the user cannot see which one is chosen". A radio's well has to stand
+# apart from its OWN foreground, which card does on every theme.
 # ---------------------------------------------------------------------
 
 
@@ -961,11 +969,12 @@ def _inspect_wells(route):
     toggles = _every_toggle(app)
     check('there are tick boxes on screen to inspect (%s)' % route,
           len(toggles) >= 3)
-    borrowed, dark = [], []
+    borrowed, dark, dot_lost, radios = [], [], [], 0
     for widget in toggles:
         try:
             well = str(widget.cget('selectcolor')).lower()
             behind = str(widget.cget('bg')).lower()
+            ink = str(widget.cget('fg')).lower()
         except tk.TclError:
             continue
         # The promise is not "it equals check_well" -- a literal written
@@ -974,11 +983,23 @@ def _inspect_wells(route):
         # twelve times over.
         if well == behind:
             borrowed.append(str(widget))
-        if (_luminance(well) or 1) <= 0.75:
+        if isinstance(widget, tk.Radiobutton):
+            # A radio is the other way round, measured on Windows: its dot
+            # is painted in the button's OWN foreground colour, so what
+            # matters is that the well stands apart from that. This check
+            # used to hold radios to the light well too -- the rule that
+            # made the dot vanish on every dark theme.
+            radios += 1
+            if abs((_luminance(well) or 0) - (_luminance(ink) or 0)) < 0.5:
+                dot_lost.append(str(widget))
+        elif (_luminance(well) or 1) <= 0.75:
             dark.append(str(widget))
     check('no tick box borrows the colour of the surface behind it (%s)'
           % route, not borrowed)
     check('every tick box on screen has a light well (%s)' % route, not dark)
+    check('every radio\'s well stands apart from the colour its dot is '
+          'painted in (%s; %d radios)' % (route, radios),
+          radios >= 3 and not dot_lost)
 
 
 # Both routes, because both build the boxes and the fix had to reach
@@ -990,6 +1011,26 @@ _inspect_wells('added to the cards in place')
 app.refresh_note_list()
 app.update()
 _inspect_wells('built with the cards')
+
+# ...and a radio on EVERY theme: its dot vanished only where the text
+# colour is light, which is every dark theme and none of the light ones,
+# so a check run on whichever theme happened to be loaded could pass.
+_rw_lost = []
+_rw_before = app.theme_name
+for _rw_theme in NO.THEMES:
+    app.set_theme(_rw_theme)
+    app.update()
+    for _rw in _every_toggle(app):
+        if not isinstance(_rw, tk.Radiobutton):
+            continue
+        _rw_well = str(_rw.cget('selectcolor'))
+        _rw_ink = str(_rw.cget('fg'))
+        if abs((_luminance(_rw_well) or 0) - (_luminance(_rw_ink) or 0)) < 0.5:
+            _rw_lost.append('%s/%s' % (_rw_theme, _rw.cget('text')))
+app.set_theme(_rw_before)
+app.update()
+check('on every theme, a chosen radio\'s dot stands out from its well '
+      '(%s)' % (', '.join(_rw_lost) or 'every theme'), not _rw_lost)
 
 app.hide_settings_page()
 app.update()

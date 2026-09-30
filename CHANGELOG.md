@@ -177,6 +177,13 @@ coming back to the list and opening a picture no longer cost time for every note
   pieces; it is written in one now — 18 milliseconds instead of 36 for 1,000 notes, and the same
   file to the byte. Every autosave paid it.
 
+- **The chosen "Ends" option of a repeating note shows which one it is.** The dot marking Never,
+  On date or After was painted in the text colour on a near-white circle, so on every dark theme
+  the chosen option looked exactly like the other two — the choice worked, and nothing on screen
+  said so. Measured: Tk on Windows paints a radio's dot in the button's own text colour, unlike a
+  tick box's mark, which is always dark; the circle had been given the tick boxes' rule. It takes
+  the card colour now, which stands apart from the text on every theme. Field-reported.
+
 ### Testing
 
 - Checks in qa7 (Cancel on six routes plus a control, shortcuts pressed from inside an open
