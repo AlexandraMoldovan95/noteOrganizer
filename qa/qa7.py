@@ -3166,6 +3166,45 @@ app.set_theme(_od_theme_was); app.update()
 app.close_day_panel()
 app.notebook.select(app.TAB_NOTES); app.update()
 
+
+class _CalKey:
+    """What a page key reaches through bind_all: the bound handler, with the
+    widget that holds the keyboard as the event's widget. A generated key
+    goes to the focus, which a test process does not own (qa/README)."""
+    widget = None
+
+
+_CalKey.widget = app.cal_canvas
+
+# ---- A MONTH CHANGED UNDER THE POINTER TAKES ITS PREVIEW WITH IT ----
+# Resting on a title shows its preview; PgDn changed the month under the
+# still pointer and the preview of July's note stayed over August's 12th,
+# and over the gaps and the weekday names too -- the redraw forgot the
+# hover without taking its preview down.
+app.notes = [NO.normalize_note({
+    'id': 150, 'title': 'TipDentist', 'body': 'Bring the card',
+    'category': 'General', 'date': '2026-07-08'})]
+app.save_notes()
+app.notebook.select(app.TAB_CALENDAR); app.update()
+app.cal_year, app.cal_month = 2026, 7
+app.render_calendar(); app.update()
+_tp_at = _cd_point('2026-07-08', chip=0)
+_qa_fire(app.cal_canvas, '<Motion>', x=_tp_at[0], y=_tp_at[1]); app.update()
+_tp_tip = getattr(app, '_day_tooltip', None)
+_tp_up = _tp_tip is not None and bool(_tp_tip.winfo_exists())
+app._calendar_key(_CalKey(), months=1); app.update()
+check(f"PgDn under a note's preview takes the preview down with its month "
+      f"(up before: {_tp_up}, month {app.cal_year}-{app.cal_month:02d}, "
+      f"after: {getattr(app, '_day_tooltip', None)})",
+      _tp_up and (app.cal_year, app.cal_month) == (2026, 8)
+      and getattr(app, '_day_tooltip', None) is None
+      and not (_tp_tip.winfo_exists() if _tp_tip is not None else False))
+app.hide_day_tooltip()
+app.cal_year, app.cal_month = 2026, 7
+app.render_calendar(); app.update()
+
+app.notebook.select(app.TAB_NOTES); app.update()
+
 # ============================================================
 # 7. ATTACHMENT-ONLY NOTE AUTOSAVE
 # ============================================================

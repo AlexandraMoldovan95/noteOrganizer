@@ -534,7 +534,13 @@ class CalendarViewMixin:
         cv = self.cal_canvas
         cv.delete("cal")
         self._cal_cells = {}
+        # The hover is forgotten with the drawing it was about, and so is
+        # the preview it put up. Nothing else would take that down: the
+        # pointer has not moved (PgDn changed the month under it), and over
+        # a gap or the weekday names "nothing under the pointer" matched
+        # the forgotten "nothing", so July's preview sat over August.
         self._cal_hover_key = None
+        self.hide_day_tooltip()
         data = getattr(self, "_cal_month_data", None)
         if data is None:
             return
