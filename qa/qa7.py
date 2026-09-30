@@ -2685,6 +2685,137 @@ check('the History button sits at the far right of the header',
 app.notebook.select(app.TAB_NOTES); app.update()
 
 # ============================================================
+# 6g. THE CALENDAR AFTER THE "BREAK IT" AUDIT
+# ============================================================
+
+# ---- A HISTORY ROW NEVER RE-DATES THE NOTE IN THE EDITOR ----
+# A row's landing ended with the tail of _add_note_for_date -- the new
+# note's date prefill, left behind by an insertion -- so it wrote the row's
+# date into whatever note the editor held, and the next flush saved it
+# without a word: a dated note moved to the row's day, a series moved its
+# start (and its weekday), an undated note landed on the calendar. The
+# landing check above runs after the notes were replaced, when the editor's
+# note no longer exists and the flush has nothing to save, so it could
+# never see it. A person's route: a note open in the editor (the app
+# reopens the last one at startup), Calendar -> History -> a row, then on
+# as usual: another note opened, or the window closed.
+_hr_notes = [
+    {'id': 120, 'title': 'Dentist', 'body': 'x', 'category': 'General',
+     'date': '2026-03-10'},
+    {'id': 121, 'title': 'Holiday flight', 'body': 'x', 'category': 'General',
+     'date': '2025-11-20'},
+    {'id': 122, 'title': 'Daily walk', 'body': 'x', 'category': 'General',
+     'date': '2026-07-01', 'recurrence': {'freq': 'daily'}},
+    {'id': 123, 'title': 'Groceries', 'body': 'x', 'category': 'General'},
+]
+_hr_asked = []
+
+
+def _hr_reset():
+    app.notes = [NO.normalize_note(dict(n)) for n in _hr_notes]
+    app.save_notes()
+    app.refresh_note_list(); app.update()
+
+
+def _hr_disk_date(note_id):
+    with _seed_io.open(NO.DATA_FILE, encoding='utf-8') as _hr_fh:
+        for _hr_n in _seed_json.load(_hr_fh):
+            if _hr_n.get('id') == note_id:
+                return _hr_n.get('date', '')
+    return None
+
+
+def _hr_open_from_the_list(note_id, date_str):
+    app.notebook.select(app.TAB_NOTES); app.update()
+    app.open_note_in_tab(app.find_note(note_id)); app.update()
+    return (app.selected_note_id == note_id
+            and app.date_entry.get() == date_str)
+
+
+def _hr_open_one_day_of_the_walk():
+    """One day of the series, opened as a person opens it: its title in the
+    month, then the panel's "Open in editor"."""
+    app.notebook.select(app.TAB_CALENDAR); app.update()
+    app.cal_year, app.cal_month = 2026, 7
+    app.render_calendar(); app.update()
+    _hr_at = _cd_point('2026-07-10', chip=0)
+    _qa_click(app.cal_canvas, x=_hr_at[0], y=_hr_at[1]); app.update()
+    _hr_btn = find_widget(app.day_panel, tk.Button, 'Open in editor')
+    if _hr_btn is not None:
+        _hr_btn.invoke(); app.update()
+    return (app.selected_note_id == 122
+            and app.current_occurrence_date == '2026-07-10'
+            and app.date_entry.get() == '2026-07-01')
+
+
+def _hr_click_the_row(title):
+    """Calendar -> History -> the row, clicked where a person clicks it."""
+    app.notebook.select(app.TAB_CALENDAR); app.update()
+    if not app._history_visible:
+        app._history_toggle_btn.invoke(); app.update()
+    for _hr_row in app._history_rows.winfo_children():
+        for _hr_lbl in _hr_row.winfo_children():
+            if (isinstance(_hr_lbl, tk.Label)
+                    and title in str(_hr_lbl.cget('text'))):
+                _qa_click(_hr_lbl); app.update()
+                return True
+    return False
+
+
+def _hr_close_the_window():
+    """on_app_close with destroy stood in for, as the Cancel checks below
+    do, so the rest of the file still has a window."""
+    _hr_closed = []
+    app.destroy = lambda: _hr_closed.append(1)
+    try:
+        app.on_app_close(); app.update()
+    finally:
+        del app.destroy
+    return bool(_hr_closed)
+
+
+# Answered and recorded, never shown: with nothing edited, nothing may ask.
+app.ask_occurrence_scope = lambda *a, **k: (_hr_asked.append(a), 'series')[1]
+try:
+    for _hr_what, _hr_open, _hr_id, _hr_date, _hr_other in (
+            ('a dated note', lambda: _hr_open_from_the_list(120, '2026-03-10'),
+             120, '2026-03-10', 123),
+            ('one day of a series', _hr_open_one_day_of_the_walk,
+             122, '2026-07-01', 123),
+            ('an undated note', lambda: _hr_open_from_the_list(123, 'YYYY-MM-DD'),
+             123, '', 120)):
+        for _hr_then in ('another note is opened', 'the window is closed'):
+            _hr_reset()
+            del _hr_asked[:]
+            _hr_ready = _hr_open()
+            _hr_clicked = _hr_click_the_row('Holiday flight')
+            _hr_landed = (app.selected_day == '2025-11-20'
+                          and app._day_panel_mode == 'note')
+            _hr_field = app.date_entry.get()
+            if _hr_then == 'another note is opened':
+                app.notebook.select(app.TAB_NOTES); app.update()
+                app.open_note_in_tab(app.find_note(_hr_other)); app.update()
+                _hr_went = app.selected_note_id == _hr_other
+            else:
+                _hr_went = _hr_close_the_window()
+            _hr_stored = _hr_disk_date(_hr_id)
+            check(f'fixture: {_hr_what} is in the editor, its History row click '
+                  f'lands on the row\'s day, and {_hr_then} ({_hr_ready}, '
+                  f'{_hr_clicked}, {app.selected_day}, {_hr_went})',
+                  _hr_ready and _hr_clicked and _hr_landed and _hr_went)
+            check(f'a History row leaves the date of {_hr_what} in the editor '
+                  f'alone, and on disk once {_hr_then} (field {_hr_field!r}, '
+                  f'disk {_hr_stored!r}, questions {len(_hr_asked)})',
+                  _hr_field == (_hr_date or 'YYYY-MM-DD')
+                  and _hr_stored == _hr_date and not _hr_asked)
+finally:
+    del app.ask_occurrence_scope
+if app._history_visible:
+    app._hide_calendar_history()
+app.close_day_panel()
+app.notebook.select(app.TAB_NOTES); app.update()
+
+# ============================================================
 # 7. ATTACHMENT-ONLY NOTE AUTOSAVE
 # ============================================================
 tmp_file = os.path.join(tempfile.gettempdir(), 'qa7_attach_only.txt')

@@ -1448,7 +1448,14 @@ class CalendarViewMixin:
 
     def _history_open_day(self, note, date_str):
         """Back to the grid, on that exact month, with the day panel
-        showing this note's preview — the chosen landing for a row click."""
+        showing this note's preview — the chosen landing for a row click.
+
+        A landing only navigates; it never writes into the editor. The
+        tail of _add_note_for_date -- the new note's date prefill -- was
+        once left here by an insertion, and it wrote the row's date into
+        whatever note the editor held, which the next flush then saved:
+        clicking a row silently re-dated another note, or moved a series.
+        """
         d = parse_date(date_str)
         self._hide_calendar_history()
         if d is not None:
@@ -1456,11 +1463,6 @@ class CalendarViewMixin:
             self.render_calendar()
         self.open_day_popup(date_str)
         self.show_day_note(note, date_str)
-        self.date_entry.delete(0, "end")
-        self.date_entry.insert(0, date_str)
-        self.date_entry.config(fg=self.colors["text"])
-        self.title_entry.focus()
-        self._update_calendar_return_button()
 
     def show_day_context_menu(self, event, date_str):
         """Right-click menu for a calendar day: add a note, or color the day.
