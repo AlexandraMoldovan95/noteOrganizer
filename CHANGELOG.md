@@ -213,11 +213,13 @@ arrange by hand.*
 
 - **Dragging the window's edge follows the mouse.** Every step of a drag handed the window's
   content its new size at once, and laying it out cost more than a step lasts — a quarter of a
-  second on the Calendar, a sixth on the editor — so the edge crawled behind the pointer. While
-  the button holds the edge, the content now waits and is laid out once, when the drag pauses or
-  the button is let go; a step of the drag costs a quarter to a third of what it did. Maximising,
-  a snap to the side of the screen and the keyboard lay the window out at once, as before.
-  Field-reported.
+  second on the Calendar, a sixth on the editor — so the edge crawled behind the pointer. Two
+  changes. While the button holds the edge, the content waits and is laid out once, when the
+  drag pauses or the button is let go. And Windows no longer repaints the whole window at every
+  step: Tk asks it to, and then redraws each widget itself anyway. A step of the drag now costs
+  10 milliseconds on the Calendar instead of 264, and a layout half of what it did (128 instead
+  of 264 on the Calendar, 75 instead of 145 on the editor). Maximising, a snap to the side of the
+  screen and the keyboard lay the window out at once, as before. Field-reported, twice.
 
 ### Testing
 
@@ -280,9 +282,12 @@ arrange by hand.*
   rows now, and a mutant that puts the top at 1 — what the image read — fails the same checks.
 - qa9 drives a held drag of the window's edge, answering the mouse button for the app because a
   script cannot hold it: the layout waits, the release lays it out, so does a pause, and a resize
-  with no button held is laid out at once. Four mutants, each killed with the suite reaching its
-  footer — after the one for the pause survived the first version of its check, whose wait
-  began before the window had changed size and so was over before it started.
+  with no button held is laid out at once. It also asks Windows for the style of Tk's two window
+  classes, which must no longer carry the whole-window repaint. Five mutants, each killed with
+  the suite reaching its footer — after the one for the pause survived the first version of its
+  check, whose wait began before the window had changed size and so was over before it started.
+  Before the repaint change was made, the window was photographed with and without it, mid-drag
+  and at a new size, on the Calendar and the editor: the same to the pixel.
 - Custom order, in qa4 with real pointer events on the list: a drag up and a drag down land where
   the line was, the list switches to Custom order starting from what it showed, the file holds
   the order and no note's "updated" moves; a shaky click is not a drag; Escape and a rebuild

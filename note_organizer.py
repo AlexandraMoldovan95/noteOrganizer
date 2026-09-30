@@ -552,6 +552,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # the list. One paint costs next to nothing; two thousand of them
         # did not. See _bind_window_only.
         self._bind_window_only("<Map>", lambda _e: self._paint_title_bar())
+        # On <Map> for the same reason: before the window is mapped,
+        # wm_frame() names a different window. See _stop_whole_repaints.
+        self._bind_window_only("<Map>", lambda _e: self._stop_whole_repaints())
 
         self.theme_name = self.load_theme_setting()
         self.colors = THEMES[self.theme_name]
@@ -690,6 +693,56 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if self._WINDOW_ONLY_TAG not in tags:
             self.bindtags((tags[0], self._WINDOW_ONLY_TAG) + tuple(tags[1:]))
         return self.bind_class(self._WINDOW_ONLY_TAG, sequence, func, add="+")
+
+    # The two window classes Tk registers on Windows, and the class styles
+    # that make Windows repaint a window WHOLE whenever its size changes.
+    _TK_WINDOW_CLASSES = ("TkTopLevel", "TkChild")
+    _CS_WHOLE_REPAINT = 0x0001 | 0x0002         # CS_VREDRAW | CS_HREDRAW
+
+    def _stop_whole_repaints(self):
+        """Stop Windows repainting every window whole on each size change.
+
+        Tk registers its window classes with CS_HREDRAW and CS_VREDRAW, so
+        every change of size -- each step of a drag of the window's edge --
+        invalidated the main window whole, and everything on screen was
+        painted again: measured, 72 ms a step on the Calendar with its
+        content not even being laid out. Tk does not need it. Its widgets
+        redraw themselves when their own size changes (every one handles
+        ConfigureNotify), so the class styles only paid for the same paint
+        twice. Taken off both classes, a held step measured 10 ms, a step
+        laid out live 120 instead of 264, the editor 65 instead of 145 --
+        and the window photographed before and after, mid-drag and at a new
+        size, was the same to the pixel.
+
+        On <Map>, because before the window is mapped wm_frame() names a
+        different window (see _paint_title_bar). Only Tk's own two classes
+        are touched, asked by name. Windows only; anywhere else, or if the
+        question fails, nothing changes and the window paints as it did.
+        """
+        if not sys.platform.startswith("win"):
+            return
+        try:
+            import ctypes
+            user32 = ctypes.windll.user32
+            get_style = user32.GetClassLongPtrW
+            set_style = user32.SetClassLongPtrW
+            get_style.restype = set_style.restype = ctypes.c_size_t
+            get_style.argtypes = [ctypes.c_void_p, ctypes.c_int]
+            set_style.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_size_t]
+            gcl_style = -26
+            name = ctypes.create_unicode_buffer(64)
+            windows = [int(self.wm_frame(), 16), self.winfo_id()]
+            if getattr(self, "main_canvas", None) is not None:
+                windows.append(self.main_canvas.winfo_id())   # measured: TkChild
+            for hwnd in windows:
+                user32.GetClassNameW(ctypes.c_void_p(hwnd), name, 64)
+                if name.value not in self._TK_WINDOW_CLASSES:
+                    continue
+                style = get_style(hwnd, gcl_style)
+                if style & self._CS_WHOLE_REPAINT:
+                    set_style(hwnd, gcl_style, style & ~self._CS_WHOLE_REPAINT)
+        except Exception:                             # noqa: BLE001
+            self._log_swallowed("window class repaint styles")
 
     def _paint_title_bar(self):
         """Ask Windows to draw the title bar in the current theme.

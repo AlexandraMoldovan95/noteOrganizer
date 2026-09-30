@@ -78,7 +78,7 @@ day-to-day tracking.
 | [Export/import freezing the app](#exportimport-freezing-the-app) | Do file I/O on a worker thread; only the main thread touches Tkinter widgets. | 0.4.0 |
 | [The theme-switch flicker, and three ways not to fix it](#the-theme-switch-flicker-and-three-ways-not-to-fix-it) | Profile before reaching for rendering tricks; the fix was stopping work nothing asked for. | 0.32.49 |
 | [The list that was drawn whole, for every pause in typing](#the-list-that-was-drawn-whole-for-every-pause-in-typing) | Measure where the time goes before trimming what is easy to count; before removing work that looks wasted, ask what it was doing for someone; when every symptom is the same cost seen from another side, remove the cost — six windows per card became none. | 0.82.230 |
-| [The window that crawled behind its edge](#the-window-that-crawled-behind-its-edge) | When the cost is inside the toolkit and paid per step, stop taking the step until it counts; and a smooth frame over a stale picture is a judgement for the eye, not a number. | 0.82.230 |
+| [The window that crawled behind its edge](#the-window-that-crawled-behind-its-edge) | When the cost is inside the toolkit and paid per step, stop taking the step until it counts — then measure what the step costs when it does nothing (here, a window class style asking Windows to repaint everything); a smooth frame over a stale picture is a judgement for the eye. | 0.82.230 |
 | [The line that promised a place the card could not take](#the-line-that-promised-a-place-the-card-could-not-take) | When the screen re-sorts after an action, the end state proves nothing about what was promised during it — check the promise itself; and look at the photograph, because a green check does not see a card that is not there. | 0.82.230 |
 | [The Settings panels that stayed dark on a light theme](#the-settings-panels-that-stayed-dark-on-a-light-theme) | A computed colour is invisible to palette matching; derive it once, teach the theme switch. | 0.36.54 |
 | [The title box that took three and a half seconds a keystroke](#the-title-box-that-took-three-and-a-half-seconds-a-keystroke) | Measure to isolate: the app was fine, one widget was quadratic — cap its input. | 0.36.55 |
@@ -2406,11 +2406,23 @@ the same size given at once: identical. Photographed mid-drag, the Calendar keep
 — cut off at the right when the window shrinks, an empty strip when it grows — and at the
 release it fits the window again.
 
-What a held step still costs is Windows repainting what is on screen while the window changes
+What a held step still cost was Windows repainting what is on screen while the window changes
 size. With the content hidden for the drag a step measured 13 ms — and the window would show
-nothing until the button was let go. Whether a quicker edge is worth an empty window is a
-question for the eye rather than the stopwatch, so it went to the field test instead of being
-decided here.
+nothing until the button was let go. That trade went to the field test instead of being decided
+here.
+
+**The field test answered first.** Still heavy: the page "rebuilds slowly", and her screenshot
+showed black strips where the window had grown faster than it was painted. So the 70 ms of a
+step that lays nothing out was taken apart. Holding repaints off during the layout
+(`WM_SETREDRAW`) made a live step slower, not faster — 299 ms against 258 — because nearly all
+of it (246 ms) was the painting that follows the layout, not the layout. What Windows repaints
+on a change of size is decided by the window CLASS: Tk registers `TkTopLevel` and `TkChild` with
+`CS_HREDRAW | CS_VREDRAW`, which tell Windows to invalidate the whole window every time its size
+changes. Taken off the child class alone, a held step went from 91 to 60 ms; off both, 9 ms.
+Tk has no use for them — each of its widgets redraws itself when its own size changes — so the
+styles only paid for the same paint twice. A live step fell with them: 264 → 128 ms on the
+Calendar, 145 → 75 on the editor. Photographed before and after the change, mid-drag and at a
+new size: the same to the pixel.
 
 **One check that asked nothing.** The first version of "a pause in a held drag lays it out"
 passed with the pause taken out of the code: its wait began before the window had changed
@@ -2418,8 +2430,9 @@ size, when the content's width and the window's still agreed, so it was over bef
 It now sees the layout waiting first, then waits for the pause.
 
 **Takeaway:** when the cost is inside the toolkit and paid per step, stop taking the step until
-it counts. And a smooth frame over a stale picture is a judgement, not a measurement — say so,
-and hand it to someone who will look.
+it counts — and then measure what the step costs when it does nothing, because that part is not
+the work, it is overhead someone asked for. A smooth frame over a stale picture is a judgement,
+not a measurement: say so, and hand it to someone who will look.
 
 ### The line that promised a place the card could not take
 

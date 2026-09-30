@@ -1333,6 +1333,28 @@ finally:
     for _rz_attr in ('_pointer_button_held', 'RESIZE_PAUSE_MS', 'RESIZE_WATCH_MS'):
         app.__dict__.pop(_rz_attr, None)
     app._lay_out_at_window_size()
+
+# Tk's window classes come with CS_HREDRAW and CS_VREDRAW, which made
+# Windows repaint the whole window on every change of size -- 72 ms a step
+# of a drag with nothing even laid out, 10 without. Asked of Windows
+# itself, on the classes of the real window and of a widget in it.
+if sys.platform.startswith('win'):
+    import ctypes as _ws_ct
+    _ws_u = _ws_ct.windll.user32
+    _ws_u.GetClassLongPtrW.restype = _ws_ct.c_size_t
+    _ws_u.GetClassLongPtrW.argtypes = [_ws_ct.c_void_p, _ws_ct.c_int]
+    _ws_styles = {}
+    for _ws_h in (int(app.wm_frame(), 16), app.main_canvas.winfo_id()):
+        _ws_n = _ws_ct.create_unicode_buffer(64)
+        _ws_u.GetClassNameW(_ws_ct.c_void_p(_ws_h), _ws_n, 64)
+        _ws_styles[_ws_n.value] = _ws_u.GetClassLongPtrW(_ws_h, -26)
+    check('Windows no longer repaints the whole window on every change of size '
+          '(%s)' % {k: hex(v) for k, v in _ws_styles.items()},
+          set(_ws_styles) == {'TkTopLevel', 'TkChild'}
+          and all(not (v & 0x3) for v in _ws_styles.values()))
+else:
+    check('elsewhere the repaint styles are left alone, and asking does not fail',
+          app._stop_whole_repaints() is None)
 app.geometry('1100x850')
 for _ in range(10):
     app.update(); time.sleep(0.02)

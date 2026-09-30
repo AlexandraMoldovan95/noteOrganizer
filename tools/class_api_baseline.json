@@ -493,6 +493,7 @@
   "_start_io_worker": "(self, target)",
   "_start_list_drag": "(self)",
   "_still_alive": "(self)",
+  "_stop_whole_repaints": "(self)",
   "_styles_display_to_raw": "(self, display_value, display_styles)",
   "_surface": "(self, kind='card')",
   "_sync_active_tab": "(self)",

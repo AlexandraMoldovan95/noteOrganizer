@@ -582,10 +582,14 @@ hands it over once, when the drag pauses for `RESIZE_PAUSE_MS` or a watch every
 keyboard — it is handed over at once, as it always was. Anywhere but Windows, or if the question
 fails, the answer is "not held", which is the old behaviour.
 
-What a held step still costs (about 70 ms on the Calendar) is Windows repainting what is on
-screen while the window changes size. Hiding the content for the drag measured 13 ms a step
-and shows an empty window until the release; that trade is for the eye, and is left to the
-field test. See
+A held step still cost about 70 ms on the Calendar, and that turned out to be a class style.
+Tk registers its two window classes, `TkTopLevel` and `TkChild`, with `CS_HREDRAW` and
+`CS_VREDRAW`, so Windows invalidates a window whole whenever its size changes, and everything
+on screen was painted again at every step. Tk does not need that: each of its widgets redraws
+itself when its own size changes. `_stop_whole_repaints` takes the two styles off both classes
+when the window is first mapped (Windows only, by class name). After it, a held step costs
+about 10 ms and a step laid out live about half of what it did. Photographed with and without,
+mid-drag and at a new size, the window is the same to the pixel. See
 [The window that crawled behind its edge](ISSUES_LOG.md#the-window-that-crawled-behind-its-edge).
 
 ## Background work: exporting and importing
