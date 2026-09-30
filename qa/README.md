@@ -365,15 +365,24 @@ A new surface joins this list the moment it ships.
   developer's machine can never reproduce.
 - **`winfo_ismapped()` is False for a moment after packing, and code that
   asks it will skip the widget you just packed.** `toggle_settings_panel`
-  hides whichever section is showing by looping over the panels and
+  hid whichever section was showing by looping over the panels and
   unpacking the mapped one. Called straight after `show_settings_page()`
-  with no `update()` between, the previous section is packed but not yet
-  mapped, the loop skips it, and BOTH sections end up on screen — a
+  with no `update()` between, the previous section was packed but not yet
+  mapped, the loop skipped it, and BOTH sections ended up on screen — a
   reference photograph came out with Recently deleted stacked under a nav
-  reading Templates. A person never hits this, because a click always
-  arrives after Tk has drawn. A script does. **Put an `update()` between
-  showing a thing and selecting within it**, and the same applies to any
-  check reading `winfo_ismapped` to decide what is on screen. Sibling of
+  reading Templates. This rule once said a person never hits it, because a
+  click always arrives after Tk has drawn. A person did, through the other
+  half of the same answer: Tk also says "not mapped" for as long as a
+  widget's PAGE is hidden, so a note opened from the Calendar found the last
+  note's Restore previous still in place (0.82.233). The app asks
+  `_is_placed()` for every show/hide decision now, and
+  `tools/check_one_definition.py` fails on a new `winfo_ismapped()` outside
+  the three functions that mean the screen. In a CHECK, reading
+  `winfo_ismapped` still answers "is it on the screen", which is sometimes
+  the question — but **put an `update()` between showing a thing and
+  asserting what is drawn**. And look at a reference picture as the thing
+  its name says: scenes 04 and 05 of `story_look` had shown two stacked
+  sections since their first reference, accepted five times. Sibling of
   the chip that looked clickable, in the Issues Log.
 - **A check about an ABSENCE must name the thing that would actually be
   there.** `check('the comments box is deliberately not persisted',

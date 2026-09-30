@@ -2593,6 +2593,64 @@ app._persist_day_emoji()
 app.cal_year, app.cal_month = 2026, 7
 app.render_calendar(); app.update()
 
+# ---- WHAT SHOULD BE HIDDEN STAYS HIDDEN ----
+# Show/hide decisions asked Tk whether a widget was MAPPED -- on the screen
+# -- and a widget is not, for as long as its page is hidden. The editor
+# sleeps while the Calendar is showing, so a note opened from there with
+# "Open in editor" found the last note's Restore previous, title counter
+# and share code still in place: "hide it if it shows" had read them as
+# hidden already, and they woke up with the page. A person's route: the
+# note with all three open, the Calendar, a day, the other note's "Open in
+# editor". The same switch made from the list, where the editor never
+# sleeps, is the control.
+_hp_day = '2026-07-21'
+app.notes = [NO.normalize_note(n) for n in (
+    {'id': 101, 'title': 'L' * (app.TITLE_MAX_LEN - 3), 'body': 'updated',
+     'category': 'General', '_prev': {'body': 'as it was before the update'}},
+    {'id': 102, 'title': 'Nothing to restore', 'body': 'x',
+     'category': 'General', 'date': _hp_day},
+)]
+app.save_notes()
+
+
+def _hp_placed():
+    return {'restore': app._is_placed(app.restore_prev_btn),
+            'counter': app._is_placed(app.title_count_lbl),
+            'code': app._is_placed(app.editor_code_area)}
+
+
+def _hp_open_the_long_note_with_its_code():
+    app.notebook.select(app.TAB_NOTES); app.update()
+    app.open_note_in_tab(app.find_note(101)); app.update()
+    app.share_current_note_as_code(); app.update()
+    return _hp_placed()
+
+
+_hp_before = _hp_open_the_long_note_with_its_code()
+app.notebook.select(app.TAB_CALENDAR); app.update()
+app.cal_year, app.cal_month = 2026, 7
+app.render_calendar(); app.update()
+app.open_day_popup(_hp_day); app.update()
+app.show_day_note(app.find_note(102), _hp_day); app.update()
+_hp_btn = find_widget(app.day_panel, tk.Button, 'Open in editor')
+if _hp_btn is not None:
+    _hp_btn.invoke()
+for _ in range(3):
+    app.update_idletasks(); app.update()
+_hp_after = _hp_placed()
+check(f"a note opened from the calendar does not keep the last note's "
+      f"Restore previous, title counter or share code "
+      f"({_hp_before} -> {_hp_after})",
+      _hp_btn is not None and app.selected_note_id == 102
+      and all(_hp_before.values()) and not any(_hp_after.values()))
+_hp_before = _hp_open_the_long_note_with_its_code()
+app.open_note_in_tab(app.find_note(102)); app.update()
+check(f'...as the same switch made from the list never did ({_hp_placed()})',
+      all(_hp_before.values()) and not any(_hp_placed().values()))
+# Back to the calendar with no day open, as the blocks below expect.
+app.close_day_panel()
+app.notebook.select(app.TAB_CALENDAR); app.update()
+
 # ---- The bounded-series hybrid in History (field confusion: a "10
 # times" group opened to nothing) — a small bounded series lists ALL
 # its occurrences, ✎ only on edited ones; a childless live series has

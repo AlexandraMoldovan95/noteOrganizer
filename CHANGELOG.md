@@ -84,6 +84,37 @@ How the numbers themselves are counted is the
 
 ---
 
+## [Unreleased]
+
+*Highlights: a button that should have gone stays gone. Opening a note from the Calendar no
+longer brings along the last note's "Restore previous", title counter or share code.*
+
+### Fixed
+
+- **What should be hidden stays hidden.** The app decided whether to show or hide a button, a
+  counter or a panel by asking whether it was on the screen — which it is not, for as long as its
+  page is hidden. So a note opened from the Calendar with "Open in editor" found the last note's
+  "↩ Restore previous" still in place, pressing it did nothing, since this note had nothing to
+  restore; the last note's title counter could stay beside a short title, and its share code left
+  an empty strip. Every such decision now asks whether the widget has its place in the layout,
+  which does not change while a page is hidden.
+
+### Testing
+
+- qa7 walks the route a person takes — a note with an earlier version, its code and a long title
+  open; the Calendar; another note's "Open in editor" — and checks that Restore previous, the title
+  counter and the share code are all gone, with the same switch from the list as the control. The
+  travel story gains a chapter that does the same on the real app and photographs it. qa6 opens
+  Settings and chooses a section at once, which a script does and a person does not, and finds one
+  section, not two. Five mutants, each killed with the suite reaching its footer, and one on the
+  story; `tools/check_one_definition.py` gains a rule that fails on `winfo_ismapped()` outside the
+  three functions that mean the screen, proved on two sites no runtime check reaches.
+- Two of `story_look`'s reference pictures were wrong: scenes 04 and 05 open Settings and choose a
+  section in one breath, and since their first reference they had shown two sections stacked. The
+  fix changed them to the one section each scene names, and the corrected pictures are accepted.
+
+---
+
 ## [0.82.232] — 2026-09-30
 
 *Highlights: the calendar's month is one drawing now, as the note list became in 0.82.230 — so it

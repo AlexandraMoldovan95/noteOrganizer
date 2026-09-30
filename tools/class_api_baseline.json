@@ -305,6 +305,7 @@
   "_insert_table": "(self, rows, columns)",
   "_insert_title": "(self, text)",
   "_is_calendar_visible": "(self)",
+  "_is_placed": "(self, widget)",
   "_keep_filter_valid": "(self)",
   "_kind_from": "(icon, kind, fallback)",
   "_lay_out_at_window_size": "(self)",

@@ -131,7 +131,7 @@ class SettingsPageMixin:
             return
 
         for key, (panel, _b, _e) in sections.items():
-            if panel is not None and panel.winfo_ismapped():
+            if panel is not None and self._is_placed(panel):
                 panel.pack_forget()
 
         if not eager:
@@ -882,10 +882,10 @@ class SettingsPageMixin:
                     body_txt.insert("end", "\n")
                 if "tblhide" in body_txt.tag_names("insert"):
                     body_txt.mark_set("insert", "end")
-            if blocks and not preview_row.winfo_ismapped():
+            if blocks and not self._is_placed(preview_row):
                 preview_lbl.pack(fill="x", pady=(4, 0))
                 preview_row.pack(anchor="w", pady=(0, 2))
-            elif not blocks and preview_row.winfo_ismapped():
+            elif not blocks and self._is_placed(preview_row):
                 preview_lbl.pack_forget()
                 preview_row.pack_forget()
             if blocks and getattr(preview_canvas, "_preview_overflows",
@@ -1397,10 +1397,10 @@ class SettingsPageMixin:
                     restore_btn.configure(
                         text="↩ Restore %d selected" % len(picked),
                         state="normal")
-                    if not restore_btn.winfo_ismapped():
+                    if not self._is_placed(restore_btn):
                         restore_btn.pack(fill="x", padx=12, pady=(6, 0),
                                          ipady=4, before=empty_holder)
-                elif restore_btn.winfo_ismapped():
+                elif self._is_placed(restore_btn):
                     restore_btn.pack_forget()
             except tk.TclError:
                 pass
@@ -1643,7 +1643,7 @@ class SettingsPageMixin:
         for w in panel.winfo_children():
             w.destroy()
         self._build_settings_duplicates_panel(panel)
-        if not panel.winfo_ismapped():
+        if not self._is_placed(panel):
             panel.pack(fill="x", padx=16, pady=(0, 12))
 
     def _build_theme_picker(self, parent):

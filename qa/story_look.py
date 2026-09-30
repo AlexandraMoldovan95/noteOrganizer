@@ -112,12 +112,15 @@ app.templates.append(NO.normalize_template({
     'checklist': [{'text': 'read last week', 'done': False},
                   {'text': 'pick three things', 'done': False}]}))
 app.show_settings_page()
-# update() between the two, and it is load-bearing: toggle_settings_panel
-# unpacks the section that was showing by asking winfo_ismapped(), which Tk
-# answers False until it has processed the geometry. Called back to back, the
-# previous section is still packed and unmapped, the unpack loop skips it, and
-# the picture comes out with two sections stacked -- Recently deleted above a
-# nav reading Templates, which is what the first version of this shot showed.
+# update() between the two. It used to be load-bearing: toggle_settings_panel
+# unpacked the section that was showing by asking winfo_ismapped(), which Tk
+# answers False until it has drawn it, so back to back the previous section
+# was skipped and two stacked -- Recently deleted above a nav reading
+# Templates, which is what the first version of this shot showed. The app
+# asks whether a section has its place now (_is_placed), so back to back is
+# safe; scenes 04 and 05 above, which never had this update(), had been
+# photographing two stacked sections since their first reference, and were
+# accepted five times without anyone seeing it (0.82.233).
 app.update()
 app.toggle_settings_panel('templates')
 app.update()

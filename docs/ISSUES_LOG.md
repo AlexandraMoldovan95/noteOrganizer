@@ -48,6 +48,7 @@ day-to-day tracking.
 | [The panel that lost its content depending on how you got there](#the-panel-that-lost-its-content-depending-on-how-you-got-there) | Recalculate layout on Tk's `<Map>` event, not after a guessed delay. | 0.3.0 |
 | [The scroll that stopped twice, for two different reasons](#the-scroll-that-stopped-twice-for-two-different-reasons) | Same symptom, unrelated causes — check neighbouring areas instead of assuming one fix covers all. | 0.28.38 |
 | [The chip that looked clickable, and the fix that looked like it worked](#the-chip-that-looked-clickable-and-the-fix-that-looked-like-it-worked) | Tk doesn't update winfo_ismapped synchronously; when the work is cheap, skip the visibility optimization. | 0.28.38 |
+| [The button that woke up with its page](#the-button-that-woke-up-with-its-page) | "Is it placed?" is not "is it on the screen?" — they part exactly when a page is hidden; and a reference picture is a claim about what is right, so look at it as the thing its name says. | Unreleased |
 | [The DPI fix that made things worse](#the-dpi-fix-that-made-things-worse) | An unverifiable fix is a gamble — flag the uncertainty up front, revert without shame. | 0.30.38 |
 | [The module that existed twice](#the-module-that-existed-twice) | 'All tests pass' only reassures if the suite can represent the failing case. | 0.32.51 |
 | [The bullet that had no bullet in it](#the-bullet-that-had-no-bullet-in-it) | Text inserted between same-tagged characters inherits the tag; content, not presentation tags, decides state. | 0.34.51 |
@@ -1421,6 +1422,42 @@ check happened to set it first. It is read with a default now.
 **Fix that actually stuck:** Removed the visibility guard entirely. `_render_statistics()` now runs unconditionally whenever `refresh_note_list()` runs, and whenever a template is added/edited/deleted. It only ever draws a handful of small widgets — genuinely cheap to redraw every time — so there's no real cost to just always doing it, and no Tk mapping-timing subtlety left to get wrong.
 
 **Takeaway:** A visibility check that "looks like the right optimization" is worth being suspicious of when it depends on exact widget-mapping timing — Tk doesn't guarantee `winfo_ismapped()` reflects a `pack()` call synchronously, and a test suite that forces `update_idletasks()` at every step can hide exactly this kind of bug, passing cleanly while the real app still misbehaves. When the underlying work is cheap, skipping the optimization entirely can be the more robust choice.
+
+### The button that woke up with its page
+
+*([Unreleased](../CHANGELOG.md#unreleased))*
+
+**Symptom:** a note updated from a share code keeps its earlier version, and the editor offers
+"↩ Restore previous". Open another note from the Calendar, with its day's "Open in editor", and
+the button was still there although that note had nothing to restore — pressing it did nothing.
+The same switch made from the note list hid it.
+
+**What was happening.** Fourteen places decide whether to show or hide a button, a counter or a
+panel, and each asked Tk `winfo_ismapped()` — "is it on the screen?" — when what they meant was
+"does it have its place in the layout?". The answers differ in two ordinary moments: until Tk
+first draws a widget after it was packed (the half the story above met in 0.28.38), and for as
+long as the page holding it is hidden, because Tk unmaps every child of a hidden container and
+maps them again when it comes back. From the Calendar the editor is still asleep when the note
+loads, so "hide it if it shows" read Restore previous as hidden already, left it in the layout,
+and it woke up with the page. The title counter did the same, and so did the share code's area,
+as an empty strip.
+
+**The fix.** One question, one answer: `_is_placed()` asks the geometry manager, which does not
+change while a page sleeps, and every show/hide decision asks it. The three places that really
+mean the screen — a tooltip, a click on the Settings page, the calendar's keys — keep
+`winfo_ismapped()`, and are named in `tools/check_one_definition.py`, which now fails on any other
+use.
+
+**The reference pictures had the bug in them.** The fix changed two of `story_look`'s reference
+photographs, and it was the references that were wrong. Scenes 04 and 05 open Settings and choose
+a section in one breath, and since their first reference, on 2026-09-15, they had shown two
+sections stacked — General above Recently deleted — under a nav naming one. They were accepted five
+times. The tool reported "unchanged" each time, truthfully: it compares a picture with the last
+one, and cannot know the last one was wrong.
+
+**Takeaway:** ask the question you mean — "is it placed?" is not "is it on the screen?", and they
+part exactly when a page is hidden. And a reference picture is a claim about what is right: look
+at it as the thing its name says, not only at whether it moved.
 
 ### The DPI fix that made things worse
 

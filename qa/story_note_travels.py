@@ -115,6 +115,8 @@ def drive():
          _a_busy_month),
         (11, "I open the app again: the calendar is as I left it, and fits a narrower window",
          None),
+        (12, "From a note with an earlier version, I open another from the calendar",
+         _a_note_updated_from_a_code),
     ]
     results = []
     for number, title, before in chapters:
@@ -212,6 +214,18 @@ def _a_busy_month(work):
         notes.append({"id": 70 + i, "title": title, "body": "a few words",
                       "category": "General", "date": "%s-%02d" % (month, day),
                       "created": "2026-09-25 09:00", "updated": "2026-09-25 09:00"})
+    io.open(path, "w", encoding="utf-8").write(json.dumps(notes, indent=2))
+
+
+def _a_note_updated_from_a_code(work):
+    """A note updated from a share code in an earlier session: it keeps the
+    version from before the update, so the editor offers Restore previous."""
+    path = os.path.join(work, "notes_data.json")
+    notes = json.load(io.open(path, encoding="utf-8"))
+    notes.append({"id": 80, "title": "Recipe from a friend", "body": "her version",
+                  "category": "General", "created": "2026-09-26 09:00",
+                  "updated": "2026-09-26 09:00",
+                  "_prev": {"body": "my own version"}})
     io.open(path, "w", encoding="utf-8").write(json.dumps(notes, indent=2))
 
 
@@ -1051,9 +1065,45 @@ def chapter_11():
     story.save()
 
 
+def chapter_12():
+    """She has a note open that was updated from a code, so the editor
+    offers Restore previous. She goes to the Calendar, opens a note there by
+    its title and presses Open in editor. That note has nothing to restore,
+    and the button must not have come along with her."""
+    tk, NO, app = _chapter_setup()
+    from _qa_support import click
+    story = Chapter()
+    story.check("the note with an earlier version opens, offering Restore previous",
+                _open_note_by_clicking(app, "Recipe from a friend")
+                and app._is_placed(app.restore_prev_btn))
+    busy = _this_month(12)
+    app.notebook.select(app.TAB_CALENDAR)
+    _let_it_paint(app, 0.3)
+    rec = app._cal_cells.get(busy)
+    note = rec["chips"][0][0] if rec and rec["chips"] else None
+    point = app._cal_point(busy, chip=0) if note else None
+    if point is not None:
+        click(app.cal_canvas, x=point[0], y=point[1])
+        app.update()
+    open_in_editor = _button(app.day_panel, "Open in editor")
+    if open_in_editor is not None:
+        open_in_editor.invoke()
+    _let_it_paint(app)
+    on_notes = app.notebook.index(app.notebook.select()) == app.TAB_NOTES
+    story.check("Open in editor takes me to that note in the editor",
+                note is not None and open_in_editor is not None and on_notes
+                and app.selected_note_id == note["id"],
+                (note and note.get("title"), app.selected_note_id, on_notes))
+    story.check("...and Restore previous did not come along: it has nothing to restore",
+                not app._is_placed(app.restore_prev_btn)
+                and not app.restore_prev_btn.winfo_ismapped())
+    _photograph("15-a-note-opened-from-the-calendar")
+    story.save()
+
+
 CHAPTERS = {1: chapter_1, 2: chapter_2, 3: chapter_3, 4: chapter_4,
             5: chapter_5, 6: chapter_6, 7: chapter_7, 8: chapter_8,
-            9: chapter_9, 10: chapter_10, 11: chapter_11}
+            9: chapter_9, 10: chapter_10, 11: chapter_11, 12: chapter_12}
 
 
 if __name__ == "__main__":

@@ -569,6 +569,18 @@ A deliberate wheel or scrollbar move cancels the pending restore: the user alway
 machinery. Any new scrollable canvas whose content gets rebuilt should either reuse this family
 or consciously argue why it can't suffer the same two failures.
 
+### Showing and hiding asks the layout, not the screen
+
+Every "show this if it is not showing" and "hide this if it is" — Restore previous, the title
+counter, the share code, the Settings sections, the day panel and the rest — asks `_is_placed()`:
+does the widget have its place in the layout (`winfo_manager()`)? Never `winfo_ismapped()`, which
+asks whether it is on the screen and says no for a placed widget until Tk first draws it, and for
+as long as its page is hidden. A hide that asked the screen skipped a sleeping widget, which woke
+up with its page; a show that asked it packed a placed widget again, moving it to the end of its
+container. `tools/check_one_definition.py` fails on `winfo_ismapped()` outside the three places
+that mean the screen (a tooltip, a click on the Settings page, the calendar's keys). See
+[The button that woke up with its page](ISSUES_LOG.md#the-button-that-woke-up-with-its-page).
+
 ### A drag of the window's edge waits for the hand
 
 The whole window sits in one frame inside `main_canvas`, and every size the window takes is

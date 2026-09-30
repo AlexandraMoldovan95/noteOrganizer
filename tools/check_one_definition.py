@@ -36,6 +36,13 @@ being whatever happened to be written.
 This gate is deliberately narrow. It does not try to find every possible
 duplicate judgement; it pins the three that have actually cost this
 project data, and gains a rule the next time one costs it another.
+
+One rule is not about a note. "Does this widget have its place in the
+layout?" was answered at fourteen show/hide sites with winfo_ismapped(),
+which answers a different question -- is it on the screen right now -- and
+says no for a widget whose page is merely hidden. A button that should
+have gone stayed, woken up with its page (0.82.233). The same shape as
+the rest: one question, answered by hand, the wrong way, everywhere.
 """
 
 import ast
@@ -151,6 +158,31 @@ RULES = [
             r"[\"']body[\"']\]\s*\.strip\(\)\s*[!=]=|"
             r"[!=]=\s*\w+\[[\"']body[\"']\]\s*\.strip\(\)"),
         allowed={},
+        window=1,
+    ),
+    Rule(
+        question="does this widget have its place in the layout?",
+        owner="_is_placed",
+        # winfo_ismapped() called anywhere. It answers whether the widget
+        # is on the SCREEN -- no for a widget until Tk first draws it after
+        # packing, and no for as long as the page holding it is hidden --
+        # so a show/hide decision reading it skipped a widget that was
+        # only asleep (Restore previous stayed on a note with nothing to
+        # restore, opened from the Calendar). A leading dot, so the
+        # comments that name it do not count.
+        pattern=re.compile(r"\.winfo_ismapped\(\)"),
+        allowed={
+            "_show_tooltip":
+                "asks the screen question on purpose: a tooltip is only "
+                "worth showing for a widget that is on the screen",
+            "_clear_settings_field_focus":
+                "runs on a click, and a click only lands on a page Tk has "
+                "already drawn, so the screen answer is settled",
+            "_is_calendar_visible":
+                "asked by a key press and by the grid's own resize, both of "
+                "which arrive after the page is drawn; a caller that runs "
+                "before Tk goes idle asks _calendar_is_showing instead",
+        },
         window=1,
     ),
 ]

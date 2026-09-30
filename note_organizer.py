@@ -914,9 +914,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if btn is None:
             return                      # called while the row is being built
         if self._search_query():
-            if not btn.winfo_ismapped():
+            if not self._is_placed(btn):
                 btn.pack(side="right", padx=(0, 6))
-        elif btn.winfo_ismapped():
+        elif self._is_placed(btn):
             btn.pack_forget()
 
     def _clear_search(self):
@@ -966,7 +966,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if self._title_is_placeholder():
             used = 0
         if used < self.TITLE_MAX_LEN - self.TITLE_COUNT_FROM:
-            if self.title_count_lbl.winfo_ismapped():
+            if self._is_placed(self.title_count_lbl):
                 self.title_count_lbl.pack_forget()
             return
         self.title_count_lbl.config(
@@ -974,7 +974,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             fg=self.colors["danger"] if used >= self.TITLE_MAX_LEN
             else self.colors["subtext"],
         )
-        if not self.title_count_lbl.winfo_ismapped():
+        if not self._is_placed(self.title_count_lbl):
             # Before the category button, which is packed to the right first,
             # so the counter sits between the title and it rather than past
             # the edge of the row.
@@ -1143,6 +1143,27 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         existence check itself needs a guard, not just what comes after it."""
         try:
             return bool(self.winfo_exists())
+        except tk.TclError:
+            return False
+
+    def _is_placed(self, widget):
+        """Whether a widget has its place in the layout -- packed, gridded
+        or placed -- which is what every "show it" / "hide it" decision
+        means to ask.
+
+        Not winfo_ismapped(). That asks whether the widget is on the SCREEN,
+        and Tk answers no for a widget that has its place in two ordinary
+        moments: until Tk first draws it after it was packed, and for as
+        long as the page holding it is hidden -- Tk unmaps every child of a
+        hidden container and maps them again when it comes back. So "hide
+        it if it shows" skipped a widget that was only asleep, and it woke
+        up with its page: Restore previous stayed on a note with nothing to
+        restore, opened from the Calendar. And "show it if it does not" packed
+        again a widget that already had a place, which moves it to the end
+        of its container. tools/check_one_definition.py keeps
+        winfo_ismapped() out of these decisions."""
+        try:
+            return bool(widget.winfo_manager())
         except tk.TclError:
             return False
 
@@ -7845,10 +7866,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.import_box.focus()
 
     def toggle_import_panel(self):
-        if self.import_panel.winfo_ismapped():
+        if self._is_placed(self.import_panel):
             self.import_panel.pack_forget()
         else:
-            if self.share_panel.winfo_ismapped():
+            if self._is_placed(self.share_panel):
                 self.share_panel.pack_forget()
             self.import_panel.pack(fill="x", padx=8, pady=(0, 8))
             self.import_box.focus()
@@ -8148,10 +8169,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                                   fg=self.colors["success"])
 
     def toggle_share_panel(self):
-        if self.share_panel.winfo_ismapped():
+        if self._is_placed(self.share_panel):
             self.share_panel.pack_forget()
         else:
-            if self.import_panel.winfo_ismapped():
+            if self._is_placed(self.import_panel):
                 self.import_panel.pack_forget()
             self._build_share_panel()
             self.share_panel.pack(fill="x", padx=8, pady=(0, 8))
@@ -8542,7 +8563,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # Render inline in the editor's code area.
         for w in self.editor_code_area.winfo_children():
             w.destroy()
-        if not self.editor_code_area.winfo_ismapped():
+        if not self._is_placed(self.editor_code_area):
             self.editor_code_area.pack(fill="x", padx=30, pady=(0, 20))
         self._render_editor_code(code, had_attachments)
 
@@ -8584,7 +8605,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if area is None:
             return
         try:
-            if area.winfo_ismapped():
+            if self._is_placed(area):
                 area.pack_forget()
             for w in area.winfo_children():
                 w.destroy()
@@ -11779,7 +11800,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         auto-scroll down to it — clicking a date used to yank the view down
         every time, which was disruptive if you were just glancing at the
         month. Scroll down yourself when you're ready to see it."""
-        if not self.day_panel.winfo_ismapped():
+        if not self._is_placed(self.day_panel):
             self.day_panel.pack(side="bottom", fill="x", padx=30, pady=(0, 20))
 
     def close_day_panel(self):
@@ -11872,7 +11893,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if not hasattr(self, "calendar_return_btn") or not hasattr(self, "editor_top_row"):
             return
         if getattr(self, "_pending_calendar_return", None):
-            if not self.calendar_return_btn.winfo_ismapped():
+            if not self._is_placed(self.calendar_return_btn):
                 self.calendar_return_btn.pack(fill="x", padx=30, pady=(14, 0),
                                               anchor="w", before=self.editor_top_row)
         else:
@@ -11909,7 +11930,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     text += f" · {n_over} days keep their own edits (✎)"
         if text:
             self.occurrence_banner.config(text=text)
-            if not self.occurrence_banner.winfo_ismapped():
+            if not self._is_placed(self.occurrence_banner):
                 self.occurrence_banner.pack(fill="x", padx=30, pady=(6, 0),
                                             before=self.editor_top_row)
         else:
@@ -16447,10 +16468,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             return
         note = self.find_note(self.selected_note_id) if self.selected_note_id else None
         has_prev = bool(note and note.get("_prev"))
-        if has_prev and not self.restore_prev_btn.winfo_ismapped():
+        if has_prev and not self._is_placed(self.restore_prev_btn):
             self.restore_prev_btn.grid(row=2, column=0, columnspan=3, sticky="w",
                                        padx=(0, 8), pady=(0, 6), ipadx=10, ipady=5)
-        elif not has_prev and self.restore_prev_btn.winfo_ismapped():
+        elif not has_prev and self._is_placed(self.restore_prev_btn):
             self.restore_prev_btn.grid_forget()
 
     # What "↩ Restore previous" can bring back beyond the text, in the

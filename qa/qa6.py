@@ -2179,6 +2179,29 @@ NO.save_trash(app.trash)
 app.notebook.select(app.TAB_NOTES)
 app.new_note(); app.update()
 
+# ---------------------------------------------------------------------
+# Opening Settings and choosing a section in one breath shows ONE section.
+#
+# Choosing a section hides the others first, and asked each whether it
+# was on the screen. A section Settings has only just packed is not, until
+# Tk next draws, so it was left in place and two sections stacked on the
+# page -- which is how a reference photograph once came out with Recently
+# deleted under a nav reading Templates. It is asked whether it has its
+# place now, and the answer does not depend on the drawing.
+# ---------------------------------------------------------------------
+app.show_settings_page(); app.update()
+app.toggle_settings_panel('appearance'); app.update()
+app.hide_settings_page(); app.update()
+app.show_settings_page()                   # packs Appearance again...
+app.toggle_settings_panel('trash')         # ...and at once asks for another
+app.update()
+_one_placed = [key for key, _label, _b, _e in app.SETTINGS_SECTIONS
+               if getattr(app, 'settings_%s_panel' % key, None) is not None
+               and app._is_placed(getattr(app, 'settings_%s_panel' % key))]
+check(f'opening Settings and choosing a section at once shows that one '
+      f'section only ({_one_placed})', _one_placed == ['trash'])
+app.hide_settings_page(); app.update()
+
 
 # ---------------------------------------------------------------------
 # Grouping x the surgical card removal.
