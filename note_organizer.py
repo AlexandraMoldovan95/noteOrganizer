@@ -5062,7 +5062,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
     @_undo_atom
     def _grid_paste_cells(self, info, r, c):
         """Copied cells land as a block starting at the clicked cell,
-        growing the table downward when they need more rows."""
+        growing the table downward when they need more rows, and
+        rightward when they need more columns."""
         matrix = getattr(self, "_grid_cell_clip", None)
         try:
             raw = self.clipboard_get()
@@ -5121,9 +5122,17 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             return
         first, nrows, ncols = context
         rows, aligns, sep_cols, sep_at = self._grid_block_parts(first, nrows)
+        # Columns grow the way rows always have: four columns copied from a
+        # spreadsheet into a two-column table used to lose the last two
+        # without a word. Tables carry no column cap (a pasted TSV table,
+        # an inserted or appended column never had one), so nothing here
+        # is clipped; the separator gains its columns in the rewrite.
+        width = max([ncols] + [c + len(line) for line in matrix])
+        for row in rows:
+            row.extend([""] * (width - len(row)))
         while r + len(matrix) > len(rows):
-            rows.append([""] * ncols)
-            aligns.append([core_tables.ALIGN_LEFT] * ncols)
+            rows.append([""] * width)
+            aligns.append([core_tables.ALIGN_LEFT] * width)
         for dr, source_row in enumerate(matrix):
             for dc, value in enumerate(source_row):
                 if c + dc < len(rows[r + dr]):

@@ -9604,6 +9604,43 @@ check(f'carried styles: pasting into another cell keeps them ({_cs_styles()})',
       _cs_styles() == _cs_want
       and core_tables.split_row(app.body_text.get('3.0', '3.end'))[2] == 'z')
 
+# ---- CELLS PASTED WIDER THAN THE TABLE GROW IT ----
+# Four columns copied from a spreadsheet into a two-column table: the rows
+# grew to fit, the two extra columns were dropped without a word. Columns
+# grow now exactly as rows always did (no table has a column cap, so
+# nothing is clipped). Pasted through the cell editor's own Ctrl+V.
+set_body('| Name | Phone |' + chr(10) + '| --- | --- |' + chr(10) + '|  |  |')
+app._render_table_grids()
+app.update()
+_pw_tsv = (chr(9).join(['Ana', '0722 111 222', 'Bucharest', 'ana@example.com'])
+           + chr(10)
+           + chr(9).join(['Dan', '0733 444 555', 'Cluj', 'dan@example.com']))
+_stub_clipboard(text=_pw_tsv)
+app._grid_cell_clip = None
+app.clipboard_get = lambda **k: _pw_tsv
+try:
+    app._open_cell_editor(app._grid_at_line(1), 1, 0)
+    app.update()
+    check('wide paste: the cell editor holds the keyboard (precondition)',
+          take_focus(app._cell_editor['entry']))
+    app._cell_editor['entry'].event_generate('<Control-v>')
+    app.update()
+finally:
+    del app.clipboard_get
+NO.clipboard.read_html, NO.clipboard.read_text, NO.clipboard.write = \
+    _cs_saved_clip
+_pw_rows = [core_tables.split_row(_l)
+            for _l in app.body_text.get('1.0', 'end-1c').split(chr(10))
+            if core_tables.is_table_row(_l)
+            and not core_tables.is_separator_row(_l)]
+check(f'wide paste: four columns into a two-column table grow it to four ({_pw_rows})',
+      _pw_rows == [['Name', 'Phone', '', ''],
+                   ['Ana', '0722 111 222', 'Bucharest', 'ana@example.com'],
+                   ['Dan', '0733 444 555', 'Cluj', 'dan@example.com']])
+check('wide paste: and the drawn grid has the four columns',
+      (app._grid_at_line(1) or {}).get('ncols') == 4)
+set_body('')
+
 # ---- CLOSING SAVES SILENTLY (dead last: it destroys the app) ----
 # The quit-time "Unsaved notes" ask could only ever cover the last
 # half-second of typing; the app now trusts its own autosave and closes
