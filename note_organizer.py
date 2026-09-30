@@ -13707,8 +13707,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 msg = "No notes match your search or filter."
             else:
                 msg = "No notes yet.\nClick '+ New Note' to start!"
+            # Kept inside the list's width, like every other text on it:
+            # a message that fits here can run off the edge in another
+            # font or at another scaling.
             self.canvas.create_text(
                 13, 23, anchor="nw", text=msg, font=("Segoe UI", 10),
+                width=self.LIST_DRAW_WIDTH - 2 * 13,
                 fill=self.colors["subtext"], tags=("row", "list_empty"))
             self._list_extent_changed()
             return
@@ -13762,6 +13766,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
     CARD_MARGIN = (5, 5)        # above and below each card
     HEADER_MARGIN = (6, 2)      # above and below each category header
     HEADER_HEIGHT = 22
+    HEADER_FONT = ("Segoe UI", 9, "bold")
     CARD_INSET_X = 2            # between the list's edge and a card's
     CARD_RING = 2               # the ring: open note, keyboard, or nothing
     CARD_STRIPE = 5             # the note's colour down the left edge
@@ -14020,18 +14025,40 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             23, mid, anchor="w", text=("▶" if collapsed else "▼"),
             font=("Segoe UI", 8), fill=c["subtext"], tags=tags)
         caret_right = cv.bbox(items["caret"])[2]
+        label_x = caret_right + 10
         items["label"] = cv.create_text(
-            caret_right + 10, mid, anchor="w",
-            text=f"{cat} ({len(notes_in_group)})",
-            font=("Segoe UI", 9, "bold"), fill=c["text"], tags=tags)
+            label_x, mid, anchor="w",
+            text=self._header_label_text(cat, len(notes_in_group), label_x),
+            font=self.HEADER_FONT, fill=c["text"], tags=tags)
         # The ids, not the cards: a collapsed group draws no cards at
         # all, and its header still has to show the right number.
         rec = {"kind": "header", "key": ("header", cat), "tag": tag,
                "cat": cat, "ids": [n["id"] for n in notes_in_group],
                "collapsed": collapsed, "y0": top, "y1": bottom,
-               "margin": self.HEADER_MARGIN, "items": items}
+               "margin": self.HEADER_MARGIN, "items": items,
+               "label_x": label_x}
         self._group_headers[cat] = rec
         return rec
+
+    def _header_label_text(self, cat, count, left):
+        """What a category header says -- the category and how many notes it
+        holds -- fitted between `left` and the edge the card texts keep to.
+
+        The count always shows: on a folded group it is all the header says
+        about the group's size. A name too long for the line gives way to
+        an ellipsis first. Drawn whole, a long name (up to 80 characters is
+        allowed) ran past the list's edge and took the count with it."""
+        font = getattr(self, "_header_font", None)
+        if font is None:
+            # A Font object, not the tuple: _ellipsize measures a tuple
+            # with its family and size only, and this one is bold.
+            font = self._header_font = tkfont.Font(
+                family=self.HEADER_FONT[0], size=self.HEADER_FONT[1],
+                weight=self.HEADER_FONT[2])
+        tail = f" ({count})"
+        right = self.LIST_DRAW_WIDTH - self.CARD_INSET_X - self.CARD_PAD[0]
+        room = max(1, right - left - font.measure(tail))
+        return self._ellipsize(cat, font, room) + tail
 
     def _sort_notes(self, notes, choice=None):
         """Sort the list in place according to the chosen sort option -- or
@@ -15195,7 +15222,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 if rec["ids"]:
                     self.canvas.itemconfigure(
                         rec["items"]["label"],
-                        text=f"{rec['cat']} ({len(rec['ids'])})")
+                        text=self._header_label_text(
+                            rec["cat"], len(rec["ids"]), rec["label_x"]))
                     still_drawn.append(rec)
                 else:
                     self.canvas.delete(rec["tag"])

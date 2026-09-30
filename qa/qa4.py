@@ -1856,6 +1856,55 @@ check(f'...and in a grouped list, where that save rebuilds the list, too '
 app.group_by_category.set(False)
 app.refresh_note_list(); _ls_settle()
 
+# 5g. Every text on the list stays inside it. A category may be named with
+# up to 80 characters, and its header drew name and count as one line with
+# no width: the name ran past the list's edge and took the count -- all a
+# folded group says about its size -- with it.
+_bl_long = "Kids' school forms and permission slips 2026"
+_bl_edge = app.LIST_DRAW_WIDTH - app.CARD_INSET_X
+NO.CATEGORY_COLORS[_bl_long] = '#f4a261'
+_co_fresh([dict(n, category=_bl_long) for n in _bl_notes[:3]]
+          + [dict(n, category='General') for n in _bl_notes[3:6]])
+app.group_by_category.set(True)
+app.collapsed_groups.clear()
+app.refresh_note_list(); _ls_settle()
+
+
+def _bl_header_fits(cat, count):
+    rec = app._group_headers.get(cat)
+    if rec is None:
+        return False, None
+    box = app.canvas.bbox(rec['items']['label'])
+    text = app.canvas.itemcget(rec['items']['label'], 'text')
+    return (box is not None and box[2] <= _bl_edge
+            and text.endswith(' (%d)' % count)), (text, box and box[2])
+
+
+_bl_ok, _bl_seen = _bl_header_fits(_bl_long, 3)
+check(f'a header with a long name keeps its count inside the list, the name '
+      f'shortened first ({_bl_seen}; the edge is {_bl_edge})', _bl_ok)
+# The count changes without a rebuild when a note is deleted from the group.
+app.ask_yes_no = lambda *a, **k: True
+try:
+    app._delete_note(app.find_note(_bl_notes[0]['id']), None); _ls_settle()
+finally:
+    app.ask_yes_no = _ls_real_ask
+_bl_ok, _bl_seen = _bl_header_fits(_bl_long, 2)
+check(f'...and so does the count a delete brings down in place ({_bl_seen})',
+      _bl_ok)
+_bl_short = (app._header_view('General') or {}).get('label')
+check(f'...while a name that fits is drawn whole, as before ({_bl_short!r})',
+      _bl_short == 'General (3)')
+# And the one text the list draws when it has no rows at all.
+_ls_search('zzz-no-such-note')
+_bl_box = app.canvas.bbox('list_empty')
+check(f'...and the empty list\'s message stays inside it too ({_bl_box})',
+      _bl_box is not None and _bl_box[2] <= _bl_edge)
+_ls_search('')
+app.group_by_category.set(False)
+NO.CATEGORY_COLORS.pop(_bl_long, None)
+app.refresh_note_list(); _ls_settle()
+
 # ---------------------------------------------------------------------
 # A tick box's well must be light, because the mark in it is dark.
 #
