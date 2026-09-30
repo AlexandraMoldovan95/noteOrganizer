@@ -48,7 +48,7 @@ day-to-day tracking.
 | [The panel that lost its content depending on how you got there](#the-panel-that-lost-its-content-depending-on-how-you-got-there) | Recalculate layout on Tk's `<Map>` event, not after a guessed delay. | 0.3.0 |
 | [The scroll that stopped twice, for two different reasons](#the-scroll-that-stopped-twice-for-two-different-reasons) | Same symptom, unrelated causes — check neighbouring areas instead of assuming one fix covers all. | 0.28.38 |
 | [The chip that looked clickable, and the fix that looked like it worked](#the-chip-that-looked-clickable-and-the-fix-that-looked-like-it-worked) | Tk doesn't update winfo_ismapped synchronously; when the work is cheap, skip the visibility optimization. | 0.28.38 |
-| [The button that woke up with its page](#the-button-that-woke-up-with-its-page) | "Is it placed?" is not "is it on the screen?" — they part exactly when a page is hidden; and a reference picture is a claim about what is right, so look at it as the thing its name says. | Unreleased |
+| [The button that woke up with its page](#the-button-that-woke-up-with-its-page) | "Is it placed?" is not "is it on the screen?" — they part exactly when a page is hidden; and a reference picture is a claim about what is right, so look at it as the thing its name says. | 0.82.233 |
 | [The DPI fix that made things worse](#the-dpi-fix-that-made-things-worse) | An unverifiable fix is a gamble — flag the uncertainty up front, revert without shame. | 0.30.38 |
 | [The module that existed twice](#the-module-that-existed-twice) | 'All tests pass' only reassures if the suite can represent the failing case. | 0.32.51 |
 | [The bullet that had no bullet in it](#the-bullet-that-had-no-bullet-in-it) | Text inserted between same-tagged characters inherits the tag; content, not presentation tags, decides state. | 0.34.51 |
@@ -1425,7 +1425,7 @@ check happened to set it first. It is read with a default now.
 
 ### The button that woke up with its page
 
-*([Unreleased](../CHANGELOG.md#unreleased))*
+*([0.82.233](../CHANGELOG.md#082233--2026-09-30))*
 
 **Symptom:** a note updated from a share code keeps its earlier version, and the editor offers
 "↩ Restore previous". Open another note from the Calendar, with its day's "Open in editor", and

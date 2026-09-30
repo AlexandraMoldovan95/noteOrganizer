@@ -12,6 +12,7 @@ How the numbers themselves are counted is the
 
 | Version | Date | In one line |
 |---|---|---|
+| [0.82.233](#082233--2026-09-30) | 2026-09-30 | A note opened from the Calendar no longer brings along the last note's Restore previous, title counter or share code. |
 | [0.82.232](#082232--2026-09-30) | 2026-09-30 | The calendar becomes one drawing: it follows the window's edge as you drag, changes month ten times faster, and a day's markers show on dark themes. |
 | [0.82.230](#082230--2026-09-30) | 2026-09-30 | Cancel means stay and the keyboard goes back where it was; a big notebook stops making you wait; and the note list becomes one drawing you can arrange by hand. |
 | [0.81.213](#081213--2026-09-29) | 2026-09-29 | Nothing moves or removes your notes behind your back: categories survive a lost settings file, an update can be taken back whole, and nothing is deleted on a resemblance. |
@@ -84,7 +85,7 @@ How the numbers themselves are counted is the
 
 ---
 
-## [Unreleased]
+## [0.82.233] — 2026-09-30
 
 *Highlights: a button that should have gone stays gone. Opening a note from the Calendar no
 longer brings along the last note's "Restore previous", title counter or share code.*
