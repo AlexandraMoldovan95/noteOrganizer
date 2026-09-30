@@ -13805,7 +13805,20 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         agreed, which is exactly what copies stop doing.
         """
         query = self._search_query()
-        shown = [n for n in self.notes if self._query_matches_note(query, n)]
+        if not query:
+            shown = list(self.notes)
+        else:
+            # The same rule as _query_matches_note, over texts kept from the
+            # last scan: a keystroke used to lowercase every body and parse
+            # every table again (70 ms a pause at 5,000 notes).
+            shown = [n for n in self.notes
+                     if self._query_in_texts(query, self._cached_search_texts(n))]
+            cache = self.__dict__.setdefault("_search_text_cache", {})
+            if len(cache) > len(self.notes) + 64:
+                # Notes deleted since: their entries go.
+                alive = {n.get("id") for n in self.notes}
+                for gone in [k for k in cache if k not in alive]:
+                    del cache[gone]
         # Category/type filter (from the dropdown). "All" shows everything.
         chosen_category = getattr(self, "filter_var", None)
         if chosen_category is not None:
@@ -15767,7 +15780,22 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         while Select all matched the raw body — so "Select all visible"
         quietly selected notes the filter had hidden, and bulk actions
         hit them. Every field is coerced to a string first, so a
-        missing/None field from older data can't crash the render."""
+        missing/None field from older data can't crash the render.
+
+        Nothing typed matches every note, and is answered without reading
+        one: every rebuild, every autosave's one-card redraw and every tick
+        in Select mode used to lowercase every body and parse every table
+        in the notebook to find that an empty query is in all of them."""
+        if not query:
+            return True
+        return NoteOrganizer._query_in_texts(
+            query, NoteOrganizer._search_texts(note))
+
+    @staticmethod
+    def _search_texts(note):
+        """What the sidebar search looks through in a note: its title, its
+        body as text -- a table's plumbing stripped -- and its comments,
+        lowercased (see _query_matches_note)."""
         def _txt(value):
             return value.lower() if isinstance(value, str) else ""
 
@@ -15776,9 +15804,26 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             body_txt = core_tables.content_text(body).lower()
         else:
             body_txt = _txt(body)
-        return (query in _txt(note.get("title"))
-                or query in body_txt
-                or query in _txt(note.get("comments")))
+        return (_txt(note.get("title")), body_txt, _txt(note.get("comments")))
+
+    @staticmethod
+    def _query_in_texts(query, texts):
+        """The search's one rule, for texts from _search_texts."""
+        return any(query in text for text in texts)
+
+    def _cached_search_texts(self, note):
+        """_search_texts, kept for each note until one of the three fields
+        is replaced. Asked of the field objects themselves: a save writes
+        new strings, and the cache holds on to the old ones, so an old one's
+        identity cannot be reused by a new string while it is compared."""
+        cache = self.__dict__.setdefault("_search_text_cache", {})
+        fields = (note.get("title"), note.get("body"), note.get("comments"))
+        hit = cache.get(note.get("id"))
+        if (hit is None or hit[0][0] is not fields[0]
+                or hit[0][1] is not fields[1] or hit[0][2] is not fields[2]):
+            hit = (fields, self._search_texts(note))
+            cache[note.get("id")] = hit
+        return hit[1]
 
     def _visible_note_ids(self):
         """The notes the list is showing right now, by id.

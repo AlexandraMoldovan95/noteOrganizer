@@ -2204,6 +2204,55 @@ check(f'...and a band holding an item the list never drew moves its rows one '
       f'{_bl_v["y0"] + 10:.0f}; every card where its record is: '
       f'{_bl_drawing_ok()})',
       abs(_bl_where[1] - (_bl_v['y0'] + 10)) < 0.5 and _bl_drawing_ok())
+# The search: nothing typed reads no note's text; a first search reads each
+# note's once, the next keystroke none; a note saved since is read again.
+_bl_reads = []
+_bl_asked = []
+_bl_real_texts = app._search_texts
+_bl_real_cached = app._cached_search_texts
+app._search_texts = lambda note: (_bl_reads.append(note['id']),
+                                  _bl_real_texts(note))[1]
+# The cache is asked too: a note read before this check (the fixture's own
+# rebuilds) answers from it, and would hide an empty query that still walked
+# every note.
+app._cached_search_texts = lambda note: (_bl_asked.append(note['id']),
+                                         _bl_real_cached(note))[1]
+try:
+    _ls_search('')
+    _bl_empty = len(_bl_reads) + len(_bl_asked)
+    del _bl_reads[:]
+    _ls_search('quick 0')
+    _bl_first = len(_bl_reads)
+    del _bl_reads[:]
+    _ls_search('quick 00')
+    _bl_again = len(_bl_reads)
+    _bl_found = sorted(app._card_order())
+    _bl_note = app.find_note(_bl_many[50]['id'])
+    app.open_note_in_tab(_bl_note); _ls_settle()
+    app.title_entry.delete(0, 'end')
+    app.title_entry.insert(0, 'Quick 00x renamed')
+    # Counted across the save AND the next search: with a search active,
+    # the save's own one-card redraw is what reads the note again.
+    del _bl_reads[:]
+    app.save_current_note(auto=True); _ls_settle()
+    _ls_search('quick 00x')
+    _bl_after_save = list(_bl_reads)
+    _bl_found_saved = app._card_order()
+finally:
+    app.__dict__.pop('_search_texts', None)
+    app.__dict__.pop('_cached_search_texts', None)
+    _ls_search('')
+check(f'a rebuild with nothing typed reads no note\'s text, nor asks the cache '
+      f'for any ({_bl_empty} read or asked)', _bl_empty == 0)
+check(f'...a first search reads each note\'s text once, the next keystroke '
+      f'none ({_bl_first} then {_bl_again} of {len(app.notes)}; found '
+      f'{len(_bl_found)})',
+      _bl_first == len(app.notes) and _bl_again == 0
+      and _bl_found == sorted(2100 + i for i in range(10)))
+check(f'...and a note saved since is read again -- it alone -- and found by '
+      f'its new words (read {_bl_after_save}; found {_bl_found_saved})',
+      _bl_after_save == [_bl_note['id']]
+      and _bl_found_saved == [_bl_note['id']])
 
 # ---------------------------------------------------------------------
 # A tick box's well must be light, because the mark in it is dark.
