@@ -2815,6 +2815,115 @@ if app._history_visible:
 app.close_day_panel()
 app.notebook.select(app.TAB_NOTES); app.update()
 
+
+def _cal_button(text):
+    """A header button by its exact label ('▶' is inside '▶▶' too)."""
+    _stack = [app.notebook]
+    while _stack:
+        _w = _stack.pop()
+        if isinstance(_w, tk.Button) and str(_w.cget('text')) == text:
+            return _w
+        _stack.extend(_w.winfo_children())
+    return None
+
+
+# ---- DECEMBER 9999 DRAWS, WHATEVER REPEATS ----
+# The month picker and the arrows both go up to year 9999, and the walk
+# over a repeating note's days took its next step before comparing it with
+# the horizon: from 9999-12-31 that step is past the last date there is.
+# With any daily, weekly or monthly note the month raised instead of
+# drawing -- December's title over November's days, a click on them
+# opening November -- and History raised on a "10 times" series dated in
+# the 9900s. Reached here by the real ▶, with an error recorder standing
+# where the crash toast would be.
+_eot_errors = []
+app.report_callback_exception = (
+    lambda _t, _v, _tb: _eot_errors.append('%s: %s' % (_t.__name__, _v)))
+try:
+    app.notes = [NO.normalize_note(n) for n in (
+        {'id': 130, 'title': 'EotDaily', 'body': 'x', 'category': 'General',
+         'date': '2026-01-01', 'recurrence': {'freq': 'daily'}},
+        {'id': 131, 'title': 'EotFriday', 'body': 'x', 'category': 'General',
+         'date': '2026-01-09', 'recurrence': {'freq': 'weekly'}},
+        {'id': 132, 'title': 'EotWeekend', 'body': 'x', 'category': 'General',
+         'date': '2026-01-03',
+         'recurrence': {'freq': 'weekly', 'weekdays': [5, 6]}},
+        {'id': 133, 'title': 'EotMonthEnd', 'body': 'x', 'category': 'General',
+         'date': '2026-01-31', 'recurrence': {'freq': 'monthly'}},
+        {'id': 134, 'title': 'EotYearly', 'body': 'x', 'category': 'General',
+         'date': '2026-12-31', 'recurrence': {'freq': 'yearly'}},
+        {'id': 135, 'title': 'EotTenTimes', 'body': 'x', 'category': 'General',
+         'date': '9950-06-01',
+         'recurrence': {'freq': 'monthly', 'count': 10}},
+    )]
+    app.save_notes()
+    app.notebook.select(app.TAB_CALENDAR); app.update()
+    app.cal_year, app.cal_month = 9999, 11
+    app.render_calendar(); app.update()
+    _eot_next = _cal_button('▶')
+    if _eot_next is not None:
+        _eot_next.invoke(); app.update()
+    _eot_days = sorted(app._cal_cells)
+    _eot_by_date = (app._cal_month_data or {}).get('notes_by_date', {})
+
+    def _eot_titles(day):
+        return [n['title'] for n in _eot_by_date.get(day, [])]
+
+    check(f'▶ into December 9999 draws December under its own title '
+          f'({app.cal_month_lbl.cget("text")!r}, {_eot_days[:1]}..{_eot_days[-1:]}, '
+          f'errors {_eot_errors})',
+          _eot_next is not None and not _eot_errors
+          and app.cal_month_lbl.cget('text') == 'December 9999  ⌄'
+          and _eot_days == ['9999-12-%02d' % d for d in range(1, 32)])
+    check(f"...with every repeating note on its days, to the very last one "
+          f"({_eot_titles('9999-12-31')}, {_eot_titles('9999-12-26')})",
+          _eot_titles('9999-12-31')
+          == ['EotDaily', 'EotFriday', 'EotMonthEnd', 'EotYearly']
+          and _eot_titles('9999-12-25') == ['EotDaily', 'EotWeekend']
+          and _eot_titles('9999-12-26') == ['EotDaily', 'EotWeekend'])
+    if _eot_next is not None:
+        _eot_next.invoke(); app.update()
+    check(f'...and ▶ on the last month stays there, quietly ({_eot_errors})',
+          not _eot_errors and (app.cal_year, app.cal_month) == (9999, 12)
+          and app.cal_month_lbl.cget('text') == 'December 9999  ⌄')
+    app._history_toggle_btn.invoke(); app.update()
+    _eot_rows = find_all_labels(app._history_rows)
+    check(f'History opens with a "10 times" series dated in the 9900s '
+          f'({[t for t in _eot_rows if "Eot" in t][:3]}, errors {_eot_errors})',
+          not _eot_errors
+          and any('EotTenTimes' in t and '10 occurrences' in t for t in _eot_rows))
+    app._history_toggle_btn.invoke(); app.update()
+
+    # Should a month's notes ever fail to be worked out, the title stays
+    # with the days drawn under it: the month is worked out first, and only
+    # then are the title and the month's record changed.
+    import noteorganizer.ui.calendar_view as _eot_cv
+    _eot_real_expand = _eot_cv.expand_occurrences
+
+    def _eot_broken_expand(*_a, **_k):
+        raise ValueError('a month that cannot be worked out')
+
+    del _eot_errors[:]
+    _eot_cv.expand_occurrences = _eot_broken_expand
+    try:
+        _eot_prev = _cal_button('◀')
+        if _eot_prev is not None:
+            _eot_prev.invoke(); app.update()
+    finally:
+        _eot_cv.expand_occurrences = _eot_real_expand
+    _eot_title = str(app.cal_month_lbl.cget('text'))
+    _eot_drawn = sorted(app._cal_cells)
+    check(f'...and when a month cannot be worked out, the title still names '
+          f'the days drawn under it ({_eot_title!r}, {_eot_drawn[:1]}, '
+          f'{len(_eot_errors)} error)',
+          len(_eot_errors) == 1 and _eot_title == 'December 9999  ⌄'
+          and _eot_drawn[:1] == ['9999-12-01'])
+finally:
+    del app.report_callback_exception
+app.cal_year, app.cal_month = 2026, 7
+app.render_calendar(); app.update()
+app.notebook.select(app.TAB_NOTES); app.update()
+
 # ============================================================
 # 7. ATTACHMENT-ONLY NOTE AUTOSAVE
 # ============================================================

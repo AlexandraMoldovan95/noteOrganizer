@@ -374,13 +374,12 @@ class CalendarViewMixin:
             self._calendar_needs_render = True
             return
 
-        month_name = cal_module.month_name[self.cal_month]
-        # The caret is the only hint that this opens a jump dialog, so it
-        # replaces the instruction text that used to sit under the header.
-        self.cal_month_lbl.config(text=f"{month_name} {self.cal_year}  ⌄")
-
         # Expand every note's occurrences across the visible month only.
         # Recurring notes are stored once; their dates are computed here.
+        # Worked out BEFORE the title and the month's record change: when
+        # this raised (it did, for December 9999), the new title went up
+        # over the old month's days, and a click opened a day of the month
+        # the title said was gone.
         month_start = date_cls(self.cal_year, self.cal_month, 1)
         month_end = date_cls(
             self.cal_year, self.cal_month,
@@ -390,13 +389,19 @@ class CalendarViewMixin:
         for n in self.notes:
             for occurrence in expand_occurrences(n, month_start, month_end):
                 notes_by_date.setdefault(occurrence, []).append(n)
+        weeks = cal_module.monthcalendar(self.cal_year, self.cal_month)
+
+        month_name = cal_module.month_name[self.cal_month]
+        # The caret is the only hint that this opens a jump dialog, so it
+        # replaces the instruction text that used to sit under the header.
+        self.cal_month_lbl.config(text=f"{month_name} {self.cal_year}  ⌄")
 
         # What the month shows, kept so a change of size can draw it again
         # without working the occurrences out again.
         self._cal_month_data = {
             "year": self.cal_year, "month": self.cal_month,
             "notes_by_date": notes_by_date,
-            "weeks": cal_module.monthcalendar(self.cal_year, self.cal_month),
+            "weeks": weeks,
         }
         self._draw_calendar_grid()
         # A fresh drawing has no selected-day border -- re-mark the open

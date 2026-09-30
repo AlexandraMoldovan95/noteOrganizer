@@ -327,6 +327,11 @@ def expand_occurrences(note, range_start, range_end):
             guard += 1
             if not take(current):
                 break
+            # Measured before stepping, because the step past the horizon
+            # is the one a date may be unable to take: from 9999-12-31 it
+            # raised OverflowError, and December 9999 failed to draw.
+            if horizon - current < step:
+                break
             current += step
 
     elif rec["freq"] == "weekly":
@@ -345,12 +350,16 @@ def expand_occurrences(note, range_start, range_end):
         while week_start <= horizon and guard < MAX_OCCURRENCES and not stop:
             guard += 1
             for weekday in weekdays:
-                candidate = week_start + timedelta(days=weekday)
-                if candidate > horizon:
+                # Measured from the week's Monday rather than added to it:
+                # the last week of 9999 has no Saturday or Sunday to add.
+                if (horizon - week_start).days < weekday:
                     continue
+                candidate = week_start + timedelta(days=weekday)
                 if not take(candidate):
                     stop = True
                     break
+            if horizon - week_start < week_step:
+                break
             week_start += week_step
 
     elif rec["freq"] == "monthly":
@@ -365,7 +374,9 @@ def expand_occurrences(note, range_start, range_end):
         while guard < MAX_OCCURRENCES and not stop:
             guard += 1
             year, month = _shift_month(anchor.year, anchor.month, step_index * interval)
-            if date_cls(year, month, 1) > horizon:
+            # Compared as numbers, not as a date: the month after December
+            # 9999 has no first day to build ("year 10000 is out of range").
+            if (year, month) > (horizon.year, horizon.month):
                 break
             # Resolved first, THEN counted: under "clamp", days 29, 30 and
             # 31 all land on Feb 28 -- which is exactly what someone who
@@ -490,8 +501,13 @@ def history_entries(notes, query="", year_bucket="All", today=None):
             occ_days = None
             if anchor is not None:
                 if 0 < rec["count"] <= 50:
-                    occ_days = expand_occurrences(
-                        note, anchor, anchor + timedelta(days=36600))
+                    # A century is room for fifty of anything -- up to the
+                    # last day a date can hold, which a series dated in the
+                    # 9900s reaches first (the sum itself overflowed).
+                    far = (anchor + timedelta(days=36600)
+                           if (date_cls.max - anchor).days >= 36600
+                           else date_cls.max)
+                    occ_days = expand_occurrences(note, anchor, far)
                 elif rec["end"]:
                     end_d = parse_date(rec["end"])
                     if end_d is not None:
