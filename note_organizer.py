@@ -8248,8 +8248,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         Only when the room runs out, then: the panel's scrolling middle
         gives up rows down to a comfortable few, the zone's other buttons
         step aside while the panel is open -- Settings, then the other
-        panel's button, then New Note -- and last the middle goes down to
-        one row. It is worked out from the sizes things ask for, not from
+        panel's button, then New Note -- the middle goes down to one row,
+        and last the panel's own button steps aside too (its Close still
+        closes it). It is worked out from the sizes things ask for, not from
         what is drawn, and everything comes back when the panel closes or
         the window grows. Measured: 640x600 and 1366x690 both hold the
         panels whole; at 1150x860 nothing changes at all."""
@@ -8316,15 +8317,20 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 give(comfortable)
             new_b, import_b, share_b, settings_b = (b for b, _kw in buttons)
             own = import_b if which == "import" else share_b
-            for b in (settings_b, share_b, import_b, new_b):
+            other = share_b if which == "import" else import_b
+            for b in (settings_b, other, new_b):
                 if over <= 0:
                     break
-                if b is own:
-                    continue
                 hidden.add(b)
                 over -= height(b, dict(buttons)[b])
             if over > 0:
                 give(least)
+            if over > 0:
+                # The very last resort: the panel's own button. Its Close
+                # still closes it (measured: the selection bar open above
+                # Share with a code, at 1366x690 in the Linux fonts).
+                hidden.add(own)
+                over -= height(own, dict(buttons)[own])
         # Apply only what changes, the zone's order kept: a button coming
         # back goes in front of the next one still packed.
         order = [b for b, _kw in buttons] + ([panel] if panel is not None else [])
@@ -11619,8 +11625,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._sidebar_zone_buttons = [(new_btn, new_kw), (import_btn, import_kw),
                                       (share_multi_btn, share_kw),
                                       (settings_btn, settings_kw)]
-        # A window made shorter (or taller) with a panel open fits it again.
+        # A window made shorter (or taller) with a panel open fits it again --
+        # and so does the zone given less room by something above it, like
+        # the selection bar appearing, which leaves the sidebar's size alone.
         self.sidebar.bind("<Configure>", self._fit_sidebar_panel, add="+")
+        bottom_zone.bind("<Configure>", self._fit_sidebar_panel, add="+")
 
         # --- Sidebar collapse toggle (thin strip on the sidebar's edge) ---
         # Stays visible whether the sidebar is shown or hidden, so the user can

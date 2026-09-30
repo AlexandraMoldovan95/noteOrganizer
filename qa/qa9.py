@@ -2279,6 +2279,27 @@ for _pn_size in ('640x600', '1366x690', '1150x860'):
           [s for s in app._sidebar_bottom.pack_slaves() if s in _pn_zone] == _pn_zone
           and int(app.import_box.cget('height'))
           == app.SIDEBAR_PANEL_BODY['import'][0])
+# The selection bar opening above an open panel takes room without the
+# sidebar changing size; the zone is given less, and fits again.
+app.geometry('1366x690'); _pn_settle()
+app.toggle_share_panel(); _pn_settle()
+for _pn_id in [n['id'] for n in app.notes][:1]:
+    app._share_vars[_pn_id].set(True)
+find_widget(app.share_panel, tk.Button, 'Generate code').invoke(); _pn_settle()
+if not app.selection_mode:
+    app._toggle_selection_mode()
+_pn_settle()
+_pn_share = (_pn_buttons(app.share_panel, ('Generate code', 'Close'))
+             + [w for w in _walk9(app.share_code_area)
+                if isinstance(w, (tk.Button, tk.Text))])
+check('1366x690 with the selection bar open above it: Share\'s buttons and '
+      'code are still on screen (%s)'
+      % [str(w) for w in _pn_share if not _pn_whole(w)][:3],
+      app._is_placed(app.bulk_action_bar) and len(_pn_share) >= 5
+      and all(_pn_whole(w) for w in _pn_share))
+if app.selection_mode:
+    app._toggle_selection_mode()
+app.toggle_share_panel(); _pn_settle()
 app.geometry('1100x850'); _pn_settle()
 
 # ============================================================
