@@ -762,3 +762,21 @@ A new surface joins this list the moment it ships.
   leaked mock: qa7 once saved-and-restored an always-`'occurrence'`
   scope prompt this way, and the leak silently shadowed the real
   method for the rest of the run.
+- **Whatever the app asks the desktop, a test answers for it.** Two such
+  questions exist: who owns the foreground (popups hide when it is not
+  the app) and whether the mouse's primary button is down (the window's
+  resize freeze lays nothing out while it is — the PHYSICAL button,
+  anywhere on the desktop). The second was not pinned when it arrived,
+  and the travel story went red while a person was clicking in another
+  program: the app started as if its edge were being dragged, its note
+  list was still unlaid — one pixel tall, never mapped — the story's
+  clicks on a card were dropped, and chapter 3 reported a share code left
+  on screen after a switch that never happened. Reproduced by answering
+  "held" for the app; one run in two failed exactly so. `_qa_pin(NO)`
+  (`pin_the_desktop`) now answers both, for every script and story that
+  calls it; the three tools that build the window themselves pin the
+  button too. A check ABOUT the freeze answers the button on the
+  instance (qa9 does), and the real question stays reachable as
+  `_desktop_pointer_button_held`. And a story's click now fails where it
+  missed — `_open_note_by_clicking` is true only if that note opened —
+  instead of three lines later, blaming the app.

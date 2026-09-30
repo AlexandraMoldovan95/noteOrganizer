@@ -22,12 +22,27 @@ the five clicks had ever been delivered.
 
 The rules that close it
 -----------------------
-``pin_popup_visibility(NO)``
-    A test process cannot own the OS foreground, so popup visibility must
-    not depend on it. Patches the class, not an instance, so every app the
-    script builds — including ones built later — is deterministic, and a
-    new qa script needs one line rather than remembering to repeat it.
-    The hide/restore behaviour keeps its real coverage: qa1 drives
+``pin_the_desktop(NO)`` (also still spelled ``pin_popup_visibility``)
+    The app asks the desktop two questions, and a test must not hear the
+    answers of whoever is using the machine while it runs.
+
+    Who owns the OS foreground: a test process cannot own it, so popup
+    visibility must not depend on it.
+
+    Whether the mouse's primary button is down: the window's resize
+    freeze asks Windows, anywhere on the desktop, and lays nothing out
+    while it is. A click held in another program at the wrong moment left
+    the travel story's app with its note list still unlaid -- one pixel
+    tall, never mapped -- so its clicks on a card were dropped, and the
+    story reported a share code "still on screen" after a switch that had
+    never happened. Pinned to "not held"; qa9 answers it for the app where
+    a check is about the freeze, and asks the real question through
+    ``_desktop_pointer_button_held``.
+
+    Patches the class, not an instance, so every app the script builds —
+    including ones built later — is deterministic, and a new qa script
+    needs one line rather than remembering to repeat it. The popup
+    hide/restore behaviour keeps its real coverage: qa1 drives
     ``_popup_watch_step()`` directly with both answers stubbed on the
     instance, which shadows this and asserts both outcomes.
 
@@ -88,9 +103,21 @@ class EventNotDelivered(AssertionError):
 ClickNotDelivered = EventNotDelivered
 
 
-def pin_popup_visibility(NO):
-    """Make popup visibility independent of who owns the OS foreground."""
-    NO.NoteOrganizer._foreground_is_ours = lambda self: True
+def pin_the_desktop(NO):
+    """Make the app's two questions about the desktop -- who owns the
+    foreground, whether the mouse button is down -- answer the same way
+    whoever is using the machine. See the module docstring."""
+    cls = NO.NoteOrganizer
+    cls._foreground_is_ours = lambda self: True
+    real = getattr(cls, "_pointer_button_held", None)
+    if real is not None and not hasattr(cls, "_desktop_pointer_button_held"):
+        cls._desktop_pointer_button_held = real
+    cls._pointer_button_held = lambda self: False
+
+
+# The original name, from when the foreground was the only answer pinned;
+# kept so every script that calls it, and anything that names it, stays true.
+pin_popup_visibility = pin_the_desktop
 
 
 # Pointer events, with any modifier prefixes (<Double-Button-1>,

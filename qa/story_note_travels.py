@@ -311,7 +311,12 @@ def _dialog_titles(app):
 
 
 def _open_note_by_clicking(app, title):
-    """Click the note's card in the list, the way a person opens a note."""
+    """Click the note's card in the list, the way a person opens a note.
+    True only if that note is then the one open: a click that never landed
+    must fail HERE, where it names the step, and not three lines later as
+    something the app got wrong -- chapter 3 once reported a share code
+    left on screen after a switch its click had never made."""
+    from _qa_support import click
     app.refresh_note_list()
     app.update()
     for note in app.notes:
@@ -323,9 +328,9 @@ def _open_note_by_clicking(app, title):
                 app._scroll_row_into_view(rec)
                 app.update()
                 x, y = app._card_point(note["id"])
-                app.canvas.event_generate("<Button-1>", x=x, y=y)
+                click(app.canvas, x=x, y=y)
                 app.update()
-                return True
+                return app.selected_note_id == note["id"]
     return False
 
 
@@ -496,7 +501,8 @@ def chapter_3():
     tk, NO, app = _chapter_setup()
     story = Chapter()
 
-    _open_note_by_clicking(app, "Shopping")
+    story.check("the note opens when I click it",
+                _open_note_by_clicking(app, "Shopping"))
     generate = _button(app, "Generate code")
     if generate is not None:
         generate.invoke()
@@ -504,7 +510,8 @@ def chapter_3():
     story.check("the code on screen belongs to the note I am on",
                 app.editor_code_area.winfo_ismapped())
 
-    _open_note_by_clicking(app, "Bread recipe")
+    story.check("...and the next one opens when I click it",
+                _open_note_by_clicking(app, "Bread recipe"))
     _photograph("4-after-moving-to-another-note")
     story.check("the code is NOT still on screen at the next note",
                 not app.editor_code_area.winfo_ismapped(),

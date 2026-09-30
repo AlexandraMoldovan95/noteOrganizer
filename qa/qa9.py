@@ -1272,9 +1272,13 @@ def _rz_window():
     return max(app.main_canvas.winfo_width(), app._main_min_width)
 
 
+# Asked of the real method: the suite pins the answer to "not held" for
+# every app it builds (_qa_support.pin_the_desktop), because a click held
+# in another program while the tests run would otherwise freeze layouts.
+_rz_real = NO.NoteOrganizer._desktop_pointer_button_held
 check('the mouse button can be asked, and says no when nobody holds it',
-      app._pointer_button_held() in (False, True)
-      and (sys.platform.startswith('win') or app._pointer_button_held() is False))
+      _rz_real(app) in (False, True)
+      and (sys.platform.startswith('win') or _rz_real(app) is False))
 _rz_held = {'now': True}
 app._pointer_button_held = lambda: _rz_held['now']
 # The pause must not land by accident between two steps of the check.

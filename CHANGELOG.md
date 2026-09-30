@@ -133,6 +133,14 @@ Drawing it also found a colour nobody had chosen: a day's markers were black on 
   a title previewed on hover and a narrower window drawn to fit. Three calendar bugs were put back
   one at a time — black markers, a title's click opening the day, a new width never drawn — and the
   story went red on each, naming its step.
+- The test harness answers the mouse button for the app. The window's resize freeze asks Windows
+  whether the button is down anywhere on the desktop, and the travel story went red while a person
+  was clicking in another program: its app started as if its edge were being dragged, the note
+  list was not laid out yet, a click on a card was dropped, and a later step blamed the app for a
+  share code left on screen. Reproduced by answering "held" for the app. `_qa_support` now pins the
+  button as it pinned who owns the foreground, for every qa script and story; the three tools that
+  build the window themselves pin it too; and the story's click fails at the click when its note
+  did not open.
 
 ---
 

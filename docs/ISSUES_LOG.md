@@ -80,7 +80,7 @@ day-to-day tracking.
 | [The list that was drawn whole, for every pause in typing](#the-list-that-was-drawn-whole-for-every-pause-in-typing) | Measure where the time goes before trimming what is easy to count; before removing work that looks wasted, ask what it was doing for someone; when every symptom is the same cost seen from another side, remove the cost — six windows per card became none. | 0.82.230 |
 | [The window that crawled behind its edge](#the-window-that-crawled-behind-its-edge) | When the cost is inside the toolkit and paid per step, stop taking the step until it counts — then measure what the step costs when it does nothing (here, a window class style asking Windows to repaint everything); a smooth frame over a stale picture is a judgement for the eye. | 0.82.230 |
 | [The line that promised a place the card could not take](#the-line-that-promised-a-place-the-card-could-not-take) | When the screen re-sorts after an action, the end state proves nothing about what was promised during it — check the promise itself; and look at the photograph, because a green check does not see a card that is not there. | 0.82.230 |
-| [The month that was two hundred windows](#the-month-that-was-two-hundred-windows) | A fix to one screen's cost is a list of its siblings; and a colour a widget took by default is a colour nobody chose. | Unreleased |
+| [The month that was two hundred windows](#the-month-that-was-two-hundred-windows) | A fix to one screen's cost is a list of its siblings; a colour a widget took by default is a colour nobody chose; and whatever the app reads from the desktop, the person at the machine feeds every test run until a test answers it. | Unreleased |
 | [The Settings panels that stayed dark on a light theme](#the-settings-panels-that-stayed-dark-on-a-light-theme) | A computed colour is invisible to palette matching; derive it once, teach the theme switch. | 0.36.54 |
 | [The title box that took three and a half seconds a keystroke](#the-title-box-that-took-three-and-a-half-seconds-a-keystroke) | Measure to isolate: the app was fine, one widget was quadratic — cap its input. | 0.36.55 |
 | [The dropdown that opened on the wrong monitor](#the-dropdown-that-opened-on-the-wrong-monitor) | Position popups against the app window's own bounds, not the full virtual desktop. | 0.2.0 |
@@ -2498,9 +2498,22 @@ never named one: their label took the system default, black, on every theme, so 
 emoji all but disappeared. Nobody had asked for black — it was simply what a widget does when
 nobody says. They take the day's own text colour now.
 
+**One red that was not the app's.** Walking the travel story to prove this, chapter 3 went red on
+a share code "still on screen" after a note switch — code nobody had touched, green minutes
+before. The story's photograph showed the whole desktop, and on it the person at the machine,
+busy in another program. The window's resize freeze asks Windows whether the mouse button is down
+anywhere on the desktop: a click held elsewhere as the story's app started made it wait, as if
+its own edge were being dragged; the note list was still unlaid, one pixel tall, never mapped;
+the story's click on a card was dropped without a word; and the next step blamed the app.
+Answering "held" for the app reproduced it, one run in two. The test harness already pinned the
+one other thing the app asks the desktop — who owns the foreground — and now pins the button
+too, for every script and story; and a story's click fails at the click when its note did not
+open. See [qa/README](../qa/README.md#house-rules-for-new-checks).
+
 **Takeaway:** when one screen's cost turns out to be its widgets, the other screens built the
 same way are its siblings — the list's fix was a list of candidates, and the month was on it. A
-colour a widget took by default is a colour nobody chose.
+colour a widget took by default is a colour nobody chose. And an input the app reads from the
+desktop is an input the person at the machine is feeding every test run, until a test answers it.
 
 ### The Settings panels that stayed dark on a light theme
 

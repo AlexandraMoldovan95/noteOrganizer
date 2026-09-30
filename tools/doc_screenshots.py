@@ -78,6 +78,12 @@ if hasattr(NO.NoteOrganizer, '_popup_watch_step'):
     _pinned = True
 if not _pinned:
     print('WARNING: no popup guard found -- popups may close while shooting')
+# The window's resize freeze asks Windows whether the mouse button is down,
+# anywhere on the desktop, and lays nothing out while it is: a click held in
+# another program during a run would photograph a page not laid out yet.
+# The qa suite pins the same answer (_qa_support's pin_the_desktop).
+if hasattr(NO.NoteOrganizer, '_pointer_button_held'):
+    NO.NoteOrganizer._pointer_button_held = lambda self: False
 
 app = NO.NoteOrganizer()
 app.show_info = lambda *a, **k: True
