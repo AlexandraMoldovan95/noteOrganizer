@@ -60,6 +60,7 @@ from ..core.storage import (
     save_setting,
     save_settings,
 )
+from ..core.themes import contrasting_fg
 from ..core import tables as core_tables
 
 
@@ -418,13 +419,26 @@ class CalendarViewMixin:
         markers = self.day_emoji.get(date_str) or []
         if not markers:
             return
-        badge_text = "".join(markers[:3])
-        if len(markers) > 3:
-            badge_text += f"+{len(markers) - 3}"
+        font = self._cal_font(("Segoe UI Emoji", 10))[0]
+        right = rec["x1"] - self.CAL_CELL_PAD - self.CAL_LABEL_INSET
+        # The corner shares its row with the day's number, centred above it:
+        # three markers at the default window's cell width printed over the
+        # number (the widget grid's opaque badge hid it instead). So the
+        # badge keeps to the room right of the number, and the markers that
+        # do not fit there are counted: "⭐+2" rather than a covered "15".
+        number = cv.bbox(rec["items"]["day"]) if "day" in rec["items"] else None
+        room = right - (number[2] + 4) if number else right - rec["x0"]
+        badge_text = f"+{len(markers)}"
+        for shown in range(min(3, len(markers)), 0, -1):
+            text = "".join(markers[:shown])
+            if len(markers) > shown:
+                text += f"+{len(markers) - shown}"
+            if font.measure(text) <= room:
+                badge_text = text
+                break
         rec["items"]["badge"] = cv.create_text(
-            rec["x1"] - self.CAL_CELL_PAD - self.CAL_LABEL_INSET,
-            rec["y0"] + self.CAL_CELL_PAD + self.CAL_LABEL_INSET,
-            anchor="ne", text=badge_text, font=("Segoe UI Emoji", 10),
+            right, rec["y0"] + self.CAL_CELL_PAD + self.CAL_LABEL_INSET,
+            anchor="ne", text=badge_text, font=font,
             fill=rec["fg"], tags=("cal", rec["tag"]))
 
     def _refresh_day_badge(self, date_str):
@@ -631,9 +645,11 @@ class CalendarViewMixin:
         tag = "calday" + date_str
         tags = ("cal", tag)
         day_color = self.day_colors.get(date_str)
-        # White on a painted day, so the text does not sit on a mismatched
-        # patch; the theme's own colours otherwise.
-        fg = "#ffffff" if day_color else c["text"]
+        # On a painted day, whichever of near-black and white reads on that
+        # paint -- always white made the number, titles and markers all but
+        # vanish on the palette's yellows and light teals (1.3:1). The
+        # theme's own colours otherwise.
+        fg = contrasting_fg(day_color) if day_color else c["text"]
         items = {}
         chips = []
         y = 0
@@ -657,11 +673,23 @@ class CalendarViewMixin:
                     colours.append(colour)
             dot_w = dot_font.measure("●") + 2 * inset   # each dot's Label
             step = dot_w + 2                            # ...and padx 1 either side
-            left = (w - step * len(colours)) // 2 + 1
+            # As many dots as the cell holds, the last place saying "and
+            # more" when the colours outnumber them. The widget grid clipped
+            # a row of dots at its cell's edge; a drawing clips nothing, and
+            # a day of eight colours spilled its dots into the next days.
+            fits = max(2, (w - 4) // step)
+            shown = colours if len(colours) <= fits else colours[:fits - 1]
+            places = len(shown) + (len(shown) < len(colours))
+            left = (w - step * places) // 2 + 1
             items["dots"] = [
                 cv.create_text(left + i * step + dot_w / 2.0, y + inset, anchor="n",
                                text="●", font=dot_font, fill=colour, tags=tags)
-                for i, colour in enumerate(colours)]
+                for i, colour in enumerate(shown)]
+            if len(shown) < len(colours):
+                items["more_dots"] = cv.create_text(
+                    left + len(shown) * step + dot_w / 2.0, y + inset, anchor="n",
+                    text="+", font=dot_font,
+                    fill=(fg if day_color else c["subtext"]), tags=tags)
             y += dot_ls + 2 * inset + 2                 # pady (0, 2)
 
             # Up to two titles at a readable size (bigger in a wide
@@ -832,6 +860,7 @@ class CalendarViewMixin:
             "badge": text(it.get("badge")),
             "badge_fill": cv.itemcget(it["badge"], "fill") if "badge" in it else "",
             "dots": [cv.itemcget(d, "fill") for d in it.get("dots", [])],
+            "more_dots": text(it.get("more_dots")),
             "chips": [text(t) for t in it.get("chips", [])],
             "chip_fill": [cv.itemcget(t, "fill") for t in it.get("chips", [])],
             "more": text(it.get("more")),

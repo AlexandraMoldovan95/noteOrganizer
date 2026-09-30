@@ -2376,6 +2376,13 @@ def _cd_point(date_str, chip=None):
         return (-50, -50)
 
 
+def _cd_badge_ok(badge, marks):
+    """A day's corner shows its first markers -- at most three, and only as
+    many as fit beside the day's number -- and counts the rest ("⭐+2")."""
+    return badge in {''.join(marks[:k]) + (f'+{len(marks) - k}' if len(marks) > k else '')
+                     for k in range(0, min(3, len(marks)) + 1)}
+
+
 _cell = _cd_view('2026-07-15')
 check('opening a day draws the accent outline on its cell',
       _cell['selected_width'] == 2
@@ -2428,8 +2435,11 @@ _cd17 = _cd_view('2026-07-17')
 check('a painted day wears its colour, with its text in white',
       _cd17['bg'] == '#e76f51' and _cd17['day_fill'] == '#ffffff'
       and _cd17['chip_fill'] == ['#ffffff'])
-check(f'four markers show as three and "+1" ({_cd17["badge"]!r})',
-      _cd17['badge'] == ''.join(_cd_markers4[:3]) + '+1')
+# At most three, and only as many as fit beside the day's number -- the
+# rest counted (6g holds the cap at a width where all three fit).
+check(f'four markers show as the first that fit, the rest counted '
+      f'({_cd17["badge"]!r})', _cd_badge_ok(_cd17['badge'], _cd_markers4)
+      and _cd17['badge'] != ''.join(_cd_markers4))
 # The markers were drawn in a Label's default colour -- black -- so on a
 # dark theme's day they all but disappeared. The day's own text colour.
 _cd11 = _cd_view('2026-07-11')
@@ -3336,7 +3346,7 @@ check(f"...and its Undo puts the three back, on disk and in the day's corner "
       f"({_cd_view(_mk_day)['badge']!r})",
       app.day_emoji.get(_mk_day) == _mk_three
       and NO.load_settings().get('day_emoji', {}).get(_mk_day) == _mk_three
-      and _cd_view(_mk_day)['badge'] == ''.join(_mk_three))
+      and _cd_badge_ok(_cd_view(_mk_day)['badge'], _mk_three))
 # The control: saved unchanged, nothing was lost and nothing is offered.
 app._hide_toast()
 _mk_popup_save(clear_first=False)
@@ -3345,6 +3355,110 @@ check(f"...while saving it unchanged offers nothing ({app._toast_action})",
 app.day_emoji = {}
 app._persist_day_emoji()
 app._hide_toast()
+app.notebook.select(app.TAB_NOTES); app.update()
+
+# ---- A DAY DRAWS INSIDE ITSELF, ITS NUMBER UNCOVERED, READABLE ON ITS PAINT ----
+# Three things the drawing got wrong where the widget grid had hidden them.
+# A day of many colours drew its dots across the gap into the next days (a
+# Frame had clipped them). Three markers printed over the day's number at
+# the default window's width (an opaque Label had covered it). And a day
+# painted yellow or light teal drew its number, titles and markers in white
+# (1.3:1). Read from the canvas at the smallest window, either side of the
+# 1,150-pixel text step, and wide: every item's box against its cell.
+from noteorganizer.core.themes import contrasting_fg as _dr_contrasting_fg
+_dr_colours = list(dict.fromkeys(NO.PRESET_NOTE_COLORS))[:12]
+_dr_marks = [e for e, _c in app.DAY_MARKER_EMOJIS[:4]]
+app.notes = [NO.normalize_note({
+    'id': 180 + i, 'title': f'Colour{i}', 'body': 'x', 'category': 'General',
+    'date': '2026-08-12', 'color': col}) for i, col in enumerate(_dr_colours)]
+app.notes += [NO.normalize_note({
+    'id': 195 + i, 'title': f'Painted{i}', 'body': 'x', 'category': 'General',
+    'date': d}) for i, d in enumerate(('2026-08-14', '2026-08-18', '2026-08-19'))]
+app.save_notes()
+app.day_emoji = {'2026-08-14': list(_dr_marks), '2026-08-15': list(_dr_marks[:3]),
+                 '2026-08-18': list(_dr_marks[:3])}
+app._persist_day_emoji()
+app.day_colors = {'2026-08-14': '#e76f51', '2026-08-18': '#fee440',
+                  '2026-08-19': '#00f5d4'}
+app._persist_day_colors()
+app.notebook.select(app.TAB_CALENDAR); app.update()
+app.cal_year, app.cal_month = 2026, 8
+app.render_calendar(); app.update()
+
+
+_dr_w0, _dr_h0 = app.winfo_width(), app.winfo_height()
+try:
+    for _dr_geom in ('640x700', '1149x850', '1150x850', '1400x850'):
+        app.geometry(_dr_geom)
+        for _ in range(6):
+            app.update(); _t7.sleep(0.02)
+        _dr_cv = app.cal_canvas
+        _dr_out, _dr_cover = [], []
+        for _dr_d, _dr_rec in app._cal_cells.items():
+            for _dr_item in _dr_cv.find_withtag(_dr_rec['tag']):
+                _dr_b = _dr_cv.bbox(_dr_item)
+                if _dr_b and not (_dr_rec['x0'] - 1 <= _dr_b[0] and _dr_b[2] <= _dr_rec['x1'] + 1
+                                  and _dr_rec['y0'] - 1 <= _dr_b[1]
+                                  and _dr_b[3] <= _dr_rec['y1'] + 1):
+                    _dr_out.append(_dr_d)
+            _dr_it = _dr_rec['items']
+            if 'badge' in _dr_it:
+                _b1, _b2 = _dr_cv.bbox(_dr_it['badge']), _dr_cv.bbox(_dr_it['day'])
+                if _b1[0] < _b2[2] and _b2[0] < _b1[2] and _b1[1] < _b2[3] and _b2[1] < _b1[3]:
+                    _dr_cover.append(_dr_d)
+        _dr_busy = _cd_view('2026-08-12')
+        _dr_cell = _dr_busy['box'][2] - _dr_busy['box'][0]
+        check(f'{_dr_geom} (cell {_dr_cell}px): everything a day draws sits inside '
+              f'its own cell ({sorted(set(_dr_out))})', not _dr_out)
+        check(f'{_dr_geom}: no marker covers its day\'s number ({_dr_cover}; '
+              f'{_cd_view("2026-08-15")["badge"]!r}, {_cd_view("2026-08-14")["badge"]!r})',
+              not _dr_cover
+              and _cd_badge_ok(_cd_view('2026-08-15')['badge'], _dr_marks[:3])
+              and _cd_badge_ok(_cd_view('2026-08-14')['badge'], _dr_marks))
+        check(f'{_dr_geom}: a day of twelve colours shows the dots that fit, in '
+              f'order, and "+" for the rest ({len(_dr_busy["dots"])} dots, '
+              f'{_dr_busy["more_dots"]!r})',
+              _dr_busy['dots'] == _dr_colours[:len(_dr_busy['dots'])]
+              and (_dr_busy['more_dots'] == '+') == (len(_dr_busy['dots']) < 12))
+    # Wide, where the room is not what limits: still three at most.
+    check(f'with room to spare, four markers show as three and "+1" '
+          f'({_cd_view("2026-08-14")["badge"]!r})',
+          _cd_view('2026-08-14')['badge'] == ''.join(_dr_marks[:3]) + '+1')
+finally:
+    app.geometry('%dx%d' % (_dr_w0, _dr_h0))
+    for _ in range(6):
+        app.update(); _t7.sleep(0.02)
+
+
+def _dr_contrast(a, b):
+    def lum(h):
+        h = h.lstrip('#')
+        chans = [int(h[i:i + 2], 16) / 255 for i in (0, 2, 4)]
+        lin = [c / 12.92 if c <= 0.03928 else ((c + 0.055) / 1.055) ** 2.4 for c in chans]
+        return 0.2126 * lin[0] + 0.7152 * lin[1] + 0.0722 * lin[2]
+    hi, lo = sorted((lum(a), lum(b)), reverse=True)
+    return (hi + 0.05) / (lo + 0.05)
+
+
+# The two paints the audit measured at 1.28:1 and 1.40:1 must read now; the
+# darker one keeps white, as the older check above holds for its July day.
+for _dr_d, _dr_paint, _dr_least in (('2026-08-18', '#fee440', 4.5),
+                                    ('2026-08-19', '#00f5d4', 4.5),
+                                    ('2026-08-14', '#e76f51', 3.0)):
+    _dr_v = _cd_view(_dr_d)
+    _dr_want = _dr_contrasting_fg(_dr_paint)
+    _dr_fills = {_dr_v['day_fill']} | set(_dr_v['chip_fill']) | (
+        {_dr_v['badge_fill']} if _dr_v['badge'] else set())
+    check(f"a day painted {_dr_paint} draws its number, titles and markers in the "
+          f"colour that reads on it ({_dr_fills}, "
+          f"{_dr_contrast(_dr_paint, _dr_v['day_fill']):.2f}:1)",
+          _dr_v['bg'] == _dr_paint and _dr_fills == {_dr_want}
+          and _dr_contrast(_dr_paint, _dr_v['day_fill']) >= _dr_least)
+app.day_emoji, app.day_colors = {}, {}
+app._persist_day_emoji()
+app._persist_day_colors()
+app.cal_year, app.cal_month = 2026, 7
+app.render_calendar(); app.update()
 app.notebook.select(app.TAB_NOTES); app.update()
 
 # ============================================================
