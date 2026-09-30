@@ -1329,6 +1329,41 @@ try:
     check(f'a resize with no button held is laid out at once '
           f'({_rz_width()} for {_rz_window()})',
           _rz_width() == _rz_window())
+    # The calendar's month is one drawing, quick enough to follow the drag
+    # (under 40 ms a step), so with it showing a held step is laid out at
+    # once -- and the month drawn to the new width. The History register is
+    # rows of widgets, and waits with the other pages. Both timers are
+    # still out of reach, so neither can stand in for "at once".
+    app.notebook.select(app.TAB_CALENDAR)
+    for _ in range(5):
+        app.update_idletasks(); app.update()
+    _rz_held['now'] = True
+    app.geometry('1080x850')
+    for _ in range(5):
+        app.update_idletasks(); app.update()
+    _rz_cal_right = max((r['x1'] for r in app._cal_cells.values()), default=0)
+    check(f'with the calendar showing, a held drag is laid out at every step '
+          f'({_rz_width()} for {_rz_window()}; the month drawn to '
+          f'{_rz_cal_right} of {app.cal_canvas.winfo_width()})',
+          _rz_width() == _rz_window()
+          and abs(_rz_cal_right
+                  - (app.cal_canvas.winfo_width() - app.CAL_CELL_PAD)) <= 1)
+    app._toggle_calendar_history()
+    for _ in range(5):
+        app.update_idletasks(); app.update()
+    _rz_before = _rz_width()
+    app.geometry('1140x850')
+    for _ in range(5):
+        app.update_idletasks(); app.update()
+    check(f'...but the History register waits for the drag, like the other '
+          f'pages ({_rz_before} kept, the window is {_rz_window()})',
+          app._history_visible and _rz_width() == _rz_before != _rz_window())
+    app._toggle_calendar_history()
+    _rz_held['now'] = False
+    app._lay_out_at_window_size()
+    app.notebook.select(app.TAB_NOTES)
+    for _ in range(5):
+        app.update_idletasks(); app.update()
 finally:
     for _rz_attr in ('_pointer_button_held', 'RESIZE_PAUSE_MS', 'RESIZE_WATCH_MS'):
         app.__dict__.pop(_rz_attr, None)

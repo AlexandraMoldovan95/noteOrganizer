@@ -83,6 +83,59 @@ How the numbers themselves are counted is the
 
 ---
 
+## [Unreleased]
+
+*Highlights: the calendar's month is one drawing now, as the note list became in 0.82.230 — so it
+follows the window's edge while you drag it, and moving between months stops making you wait.
+Drawing it also found a colour nobody had chosen: a day's markers were black on every theme.*
+
+### Fixed
+
+- **The calendar is one drawing, and follows the window's edge.** The month was built of
+  widgets — a frame for every day, a label for its number and for each dot and note title — 216
+  windows for a month holding 46 notes, each made, placed and painted by the operating system.
+  Since 0.82.230 the window has waited while its edge is held, which kept the edge with the
+  pointer, but the month stood still at its old width for the whole drag and then caught up in
+  one jump. The month is now shapes and text on one canvas, drawn to look as it did, and a step
+  of the drag costs a quarter of what it did — 38 milliseconds instead of 162 — so with the
+  calendar on screen the month is drawn again at every step and keeps the window's width all the
+  way. Moving to the next month takes 25 milliseconds instead of 295, and opening the Calendar
+  tab after a change 33 instead of 275. The other pages still wait for the drag to pause, as in
+  0.82.230. Field-reported.
+
+- **A day's markers show on dark themes.** The emoji marking a day were drawn in the system's
+  default text colour — black — whatever the theme, so on the dark themes' day cells they all
+  but disappeared. They take the day's own text colour now: the theme's, or white on a painted
+  day, like the day's number beside them.
+
+### Testing
+
+- qa7 reads the drawn month back: one canvas and no widget per day; a busy day's dots (one per
+  colour), two titles and "+1 more"; a painted day's colour with white text; four markers shown
+  as three and "+1", in the day's text colour; week rows all as tall as the busiest day needs,
+  with everything a day draws inside its own cell; a new width drawn to fit without the notes
+  being worked out again, the open day keeping its outline; hovering — a title previews its
+  note, the rest of a busy day summarises it, an empty day says nothing, a hand over a day and
+  the plain pointer between days; a click on a day opens its list; saved markers change that one
+  corner without the month being drawn again; today's bar on today alone; and a theme switch
+  draws the month in the new colours, also one made in Settings. qa9: with the calendar showing,
+  a held drag is laid out at every step and the month drawn to the new width, while the History
+  register waits like the other pages. The checks in qa1, qa2, qa6 and qa7 that read the grid's
+  widgets read the drawing now — qa2's click and right-click land on the canvas where the title
+  is. Twenty-eight mutants, each killed with the suite reaching its footer. One survived its first
+  aim: qa1 opens the calendar for the first time just then, and a first showing is drawn by the
+  canvas's first resize whatever render does, so a render that drew nothing passed; qa6 and qa7,
+  which change a month already on screen, kill it. It also crashed qa7 before its footer, so the
+  calendar reads there now fail, rather than stop the suite, when the month on screen is not the
+  one they expect.
+- The travel story gains two chapters: a day marked and another painted through their right-click
+  menus, a note opened by its title; then the app closed and opened again, both days as they were,
+  a title previewed on hover and a narrower window drawn to fit. Three calendar bugs were put back
+  one at a time — black markers, a title's click opening the day, a new width never drawn — and the
+  story went red on each, naming its step.
+
+---
+
 ## [0.82.230] — 2026-09-30
 
 *Highlights: Cancel means stay, the keyboard goes back where it was, and a button that opens

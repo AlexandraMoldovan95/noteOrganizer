@@ -25,7 +25,7 @@ there, never scroll past.
 | `qa4` | theming, stress tests, leak regression — and the note list drawn a screenful at a time, with a save redrawing one card |
 | `qa5` | corrupt data, edge cases |
 | `qa6` | grouping, settings, attachments, multi-feature combinations |
-| `qa7` | calendar delete, the calendar History register, multi-select, image preview, autosave & memory fixes |
+| `qa7` | calendar delete, the month drawn on one canvas, the calendar History register, multi-select, image preview, autosave & memory fixes |
 | `qa8` | search debounce, background-timer robustness |
 | `qa9` | the nested-dropdown-inside-popup fix |
 
@@ -56,11 +56,11 @@ the one you happen to be editing:
 | Autosave (debounce, guards, flush) | **qa1**, qa7, qa8, qa5, qa6, qa3, qa2, qa4 |
 | Editor page scroll/canvas | **qa1**, **qa8**, qa6 |
 | Note list (refresh, scroll guards, grouping) | **qa4**, qa1, qa7, qa6, qa3, qa8, qa2, qa9, qa5 |
-| Tables / drawn grids | **qa1**, qa7, qa2, qa5, qa3, qa6 |
+| Tables / drawn grids | **qa1**, qa7, qa5, qa3 |
 | Find in note (Ctrl+F) / find bar | **qa1**, qa5 |
 | Templates | **qa9**, **qa1**, qa6, qa3, qa7, qa4 |
-| Settings panels | **qa6**, qa3, qa4, qa9, qa2, qa7, qa1 |
-| Calendar | **qa7**, qa4, qa2, qa1, qa5, qa6, qa9, qa8, qa3 |
+| Settings panels | **qa6**, qa3, qa4, qa9, qa7, qa2, qa1 |
+| Calendar | **qa7**, qa4, qa2, qa1, qa9, qa5, qa6, qa8, qa3 |
 | Trash | **qa3**, **qa6**, qa7, qa2, qa1, qa4, qa5, qa9 |
 | Share codes | **qa3**, qa1, qa4, qa5 |
 | Export (files, backup) | **qa3**, **qa1**, qa6, qa8, qa4, qa9, qa5, qa7 |

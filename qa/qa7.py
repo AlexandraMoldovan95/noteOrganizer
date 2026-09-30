@@ -1696,14 +1696,9 @@ def _cc_disk():
 
 def _cc_cell_bg():
     """What the calendar cell is painted -- so the undo is proved on the
-    screen, not only in the store."""
-    _cc_cell = getattr(app, '_cal_cell_widgets', {}).get(_CC_DAY)
-    if _cc_cell is None:
-        return None
-    try:
-        return str(_cc_cell.cget('bg'))
-    except tk.TclError:
-        return None
+    screen, not only in the store. Read from the month's drawing."""
+    _cc_view = app._cal_cell_view(_CC_DAY)
+    return _cc_view['bg'] if _cc_view else None
 
 
 _cc_toasts = []
@@ -2362,22 +2357,241 @@ app.save_notes()
 app.cal_year, app.cal_month = 2026, 7
 app.render_calendar(); app.update()
 app.open_day_popup('2026-07-15'); app.update()
-_cell = app._cal_cell_widgets.get('2026-07-15')
+
+# Read from the month's drawing: a cell is shapes on its canvas now, and
+# its outline is a rectangle drawn over its edge. A day that is not drawn
+# -- a stale month left on screen -- reads as a view every check here
+# fails on, so the suite reports it instead of stopping at a TypeError
+# before its footer (a mutant that stopped drawing did exactly that).
+_CD_NONE = {'box': (0, 0, 0, 0), 'bg': '', 'day': '', 'day_fill': '',
+            'today': False, 'badge': '', 'badge_fill': '', 'dots': [],
+            'chips': [], 'chip_fill': [], 'more': '', 'selected_width': -1,
+            'selected_colour': ''}
+
+
+def _cd_view(date_str):
+    return app._cal_cell_view(date_str) or _CD_NONE
+
+
+def _cd_point(date_str, chip=None):
+    """Where to point at a day or one of its titles; off the grid when
+    it is not drawn, so a click there lands on nothing."""
+    try:
+        return app._cal_point(date_str, chip=chip) or (-50, -50)
+    except (IndexError, KeyError):
+        return (-50, -50)
+
+
+_cell = _cd_view('2026-07-15')
 check('opening a day draws the accent outline on its cell',
-      _cell is not None and int(str(_cell.cget('highlightthickness'))) == 2
-      and str(_cell.cget('highlightbackground')) == app.colors['accent'])
-_other = app._cal_cell_widgets.get('2026-07-10')
+      _cell['selected_width'] == 2
+      and _cell['selected_colour'] == app.colors['accent'])
 check('the other days carry no outline',
-      _other is not None
-      and int(str(_other.cget('highlightthickness'))) == 0)
+      _cd_view('2026-07-10')['selected_width'] == 0)
 app.render_calendar(); app.update()
-_cell = app._cal_cell_widgets.get('2026-07-15')
 check('the outline survives a grid re-render',
-      int(str(_cell.cget('highlightthickness'))) == 2)
+      _cd_view('2026-07-15')['selected_width'] == 2)
 app.close_day_panel(); app.update()
-_cell = app._cal_cell_widgets.get('2026-07-15')
 check('closing the panel clears the outline',
-      int(str(_cell.cget('highlightthickness'))) == 0)
+      _cd_view('2026-07-15')['selected_width'] == 0)
+
+# ---- THE MONTH IS ONE DRAWING ----
+# The grid was built of widgets -- a Frame per day, a Label per number, dot
+# and title, a Frame per divider: 216 windows for a month holding 46 notes,
+# each placed and painted again at every step of a window resize.
+# It is shapes and text on one canvas now, laid out as the widgets were
+# (measured on them), and these checks read the drawing back.
+_cd_markers4 = [e for e, _c in app.DAY_MARKER_EMOJIS[:4]]
+_cd_markers2 = [e for e, _c in app.DAY_MARKER_EMOJIS[:2]]
+app.notes = [
+    {'id': 95, 'title': 'Dentist appointment at the clinic', 'body': 'x',
+     'category': 'General', 'date': '2026-07-08'},
+    {'id': 96, 'title': 'Short', 'body': 'x', 'category': 'General',
+     'date': '2026-07-08'},
+    {'id': 97, 'title': 'Third', 'body': 'x', 'category': 'General',
+     'date': '2026-07-08', 'color': '#2a9d8f'},
+    {'id': 98, 'title': 'Alone', 'body': 'x', 'category': 'General',
+     'date': '2026-07-17'},
+]
+app.notes = [NO.normalize_note(n) for n in app.notes]
+app.save_notes()
+app.day_colors = {'2026-07-17': '#e76f51'}
+app._persist_day_colors()
+app.day_emoji = {'2026-07-17': list(_cd_markers4), '2026-07-11': list(_cd_markers2)}
+app._persist_day_emoji()
+app.cal_year, app.cal_month = 2026, 7
+app.render_calendar(); app.update()
+check('the month is one drawing: the grid holds one canvas, and no widget per day',
+      app.cal_grid_frame.winfo_children() == [app.cal_canvas]
+      and len(app._cal_cells) == 31)
+_cd8 = _cd_view('2026-07-08')
+check(f'a busy day shows a dot per colour, two titles and "+1 more" '
+      f'({_cd8["dots"]}, {_cd8["chips"]}, {_cd8["more"]!r})',
+      len(_cd8['dots']) == 2 and _cd8['dots'][1] == '#2a9d8f'
+      and len(_cd8['chips']) == 2
+      and _cd8['chips'][1] == 'Short' and _cd8['more'] == '+1 more')
+_cd17 = _cd_view('2026-07-17')
+check('a painted day wears its colour, with its text in white',
+      _cd17['bg'] == '#e76f51' and _cd17['day_fill'] == '#ffffff'
+      and _cd17['chip_fill'] == ['#ffffff'])
+check(f'four markers show as three and "+1" ({_cd17["badge"]!r})',
+      _cd17['badge'] == ''.join(_cd_markers4[:3]) + '+1')
+# The markers were drawn in a Label's default colour -- black -- so on a
+# dark theme's day they all but disappeared. The day's own text colour.
+_cd11 = _cd_view('2026-07-11')
+check(f"a day's markers are drawn in its own text colour, not black "
+      f"({_cd11['badge_fill']}, {_cd17['badge_fill']})",
+      _cd11['badge_fill'] == app.colors['text']
+      and _cd17['badge_fill'] == '#ffffff')
+# Rows are as tall as the busiest day needs, as the widget grid's were
+# (its rows asked their cells), and all alike.
+_cd_heights = sorted({_cd_view(d)['box'][3] - _cd_view(d)['box'][1]
+                      for d in app._cal_cells})
+check(f'every week row is as tall as the busiest day needs, and all alike '
+      f'({_cd_heights})', len(_cd_heights) == 1 and _cd_heights[0] > 84)
+# Every day's number, dots and titles sit inside its own cell.
+_cd_outside = []
+for _cd_d, _cd_rec in app._cal_cells.items():
+    _cd_x0, _cd_y0, _cd_x1, _cd_y1 = _cd_rec['x0'], _cd_rec['y0'], _cd_rec['x1'], _cd_rec['y1']
+    for _cd_item in app.cal_canvas.find_withtag(_cd_rec['tag']):
+        _cd_b = app.cal_canvas.bbox(_cd_item)
+        if _cd_b and not (_cd_x0 - 1 <= _cd_b[0] and _cd_b[2] <= _cd_x1 + 1
+                          and _cd_y0 - 1 <= _cd_b[1] and _cd_b[3] <= _cd_y1 + 1):
+            _cd_outside.append(_cd_d)
+check(f'everything a day draws sits inside its own cell ({sorted(set(_cd_outside))})',
+      not _cd_outside)
+
+# A new width lays the month out again from what was worked out -- the
+# notes are not gone through again for a change of size -- and the open
+# day keeps its outline through it.
+app.open_day_popup('2026-07-08'); app.update()
+_cd_renders = []
+_cd_real_render = app.render_calendar
+app.render_calendar = lambda: (_cd_renders.append(1), _cd_real_render())[1]
+try:
+    _cd_w = app.winfo_width()
+    _cd_new = _cd_w + (60 if _cd_w >= 1150 else -60)
+    app.geometry('%dx%d' % (_cd_new, app.winfo_height()))
+    for _ in range(5):
+        app.update(); time.sleep(0.02)
+    _cd_right = max((r['x1'] for r in app._cal_cells.values()), default=0)
+    check(f'a new width draws the month to fit it '
+          f'(right edge {_cd_right}, canvas {app.cal_canvas.winfo_width()})',
+          abs(_cd_right - (app.cal_canvas.winfo_width() - app.CAL_CELL_PAD)) <= 1)
+    check(f'...without working the notes out again ({len(_cd_renders)} renders)',
+          not _cd_renders)
+    check('...and the open day keeps its outline',
+          _cd_view('2026-07-08')['selected_width'] == 2)
+finally:
+    app.__dict__.pop('render_calendar', None)
+    app.geometry('%dx%d' % (_cd_w, app.winfo_height()))
+    for _ in range(5):
+        app.update(); time.sleep(0.02)
+app.close_day_panel(); app.update()
+
+# Hovering: a title previews its note, the rest of a busy day summarises
+# the day, an empty day says nothing; the hand over a day, the plain
+# pointer over the gap between two. Real <Motion> events on the canvas,
+# the answers recorded where the app gives them.
+_cd_hover = []
+app.show_note_hover_preview = lambda n, d: _cd_hover.append(('note', n['id'], d))
+app.show_day_summary_tooltip = lambda d: _cd_hover.append(('day', d))
+try:
+    for _cd_at in (_cd_point('2026-07-08', chip=0), _cd_point('2026-07-08'),
+                   _cd_point('2026-07-09')):
+        _qa_fire(app.cal_canvas, '<Motion>', x=_cd_at[0], y=_cd_at[1])
+        app.update()
+    _cd_hand = str(app.cal_canvas.cget('cursor'))
+    _cd8_box = _cd_view('2026-07-08')['box']
+    _qa_fire(app.cal_canvas, '<Motion>', x=_cd8_box[2] + app.CAL_CELL_PAD,
+             y=(_cd8_box[1] + _cd8_box[3]) // 2)
+    app.update()
+    _cd_plain = str(app.cal_canvas.cget('cursor'))
+finally:
+    for _cd_attr in ('show_note_hover_preview', 'show_day_summary_tooltip'):
+        app.__dict__.pop(_cd_attr, None)
+    app.hide_day_tooltip()
+check(f'hovering a title previews that note, the rest of a busy day '
+      f'summarises it, an empty day says nothing ({_cd_hover})',
+      _cd_hover == [('note', 95, '2026-07-08'), ('day', '2026-07-08')])
+check(f'...and the pointer is a hand over a day and plain between days '
+      f'({_cd_hand!r}, {_cd_plain!r})', _cd_hand == 'hand2' and _cd_plain == '')
+
+# A click on a day's cell, away from its titles, opens the day.
+_cd_at = _cd_point('2026-07-08')
+_qa_click(app.cal_canvas, x=_cd_at[0], y=_cd_at[1])
+app.update()
+check('a click on a day opens its list, not one of its notes',
+      app.selected_day == '2026-07-08' and app._day_panel_mode == 'list')
+app.close_day_panel(); app.update()
+
+# Markers saved from the popup change that one day's corner, without the
+# month being drawn again.
+_cd_renders = []
+app.render_calendar = lambda: (_cd_renders.append(1), _cd_real_render())[1]
+try:
+    app._mark_day_emoji('2026-07-12'); app.update()
+    _cd_pop = app._mini_popup
+
+    def _cd_labels(w, acc):
+        for ch in w.winfo_children():
+            if isinstance(ch, tk.Label):
+                acc.append(ch)
+            _cd_labels(ch, acc)
+        return acc
+
+    _cd_pick = [w for w in _cd_labels(_cd_pop, [])
+                if str(w.cget('text')) in _cd_markers2][:2]
+    for _cd_w_chip in _cd_pick:
+        _qa_click(_cd_w_chip)
+        app.update()
+    _cd_save = find_widget(_cd_pop, tk.Button, 'Save')
+    if _cd_save is not None:
+        _cd_save.invoke()
+        app.update()
+finally:
+    app.__dict__.pop('render_calendar', None)
+check(f"saved markers show in that day's corner, without a redraw of the "
+      f"month ({_cd_view('2026-07-12')['badge']!r}, "
+      f"{len(_cd_renders)} renders)",
+      len(_cd_pick) == 2 and not _cd_renders
+      and _cd_view('2026-07-12')['badge'] == ''.join(_cd_markers2))
+
+# Today wears the accent bar, and only today.
+app.go_to_today(); app.update()
+_cd_today = __import__('datetime').date.today().strftime('%Y-%m-%d')
+check('today wears the accent bar, and only today',
+      _cd_view(_cd_today)['today']
+      and sum(1 for d in app._cal_cells if _cd_view(d)['today']) == 1)
+
+# Everything in the drawing is painted in the colours of the moment it was
+# drawn, so a theme switch has to draw the month again: with the calendar
+# on screen, and from Settings, where the switch is made with the month out
+# of sight and caught up on the way back.
+app.cal_year, app.cal_month = 2026, 7
+app.render_calendar(); app.update()
+_cd_theme_was = app.theme_name
+app.set_theme('light' if _cd_theme_was != 'light' else 'dark'); app.update()
+_cd_v = _cd_view('2026-07-09')
+check(f'a theme switch draws the month in the new colours '
+      f'({_cd_v["bg"]}, {_cd_v["day_fill"]})',
+      _cd_v['bg'] == app.colors['card'] and _cd_v['day_fill'] == app.colors['text']
+      and _cd_v['chip_fill'] == [] and _cd_view('2026-07-08')['chip_fill']
+      == [app.colors['text']] * 2)
+app.show_settings_page(); app.update()
+app.set_theme(_cd_theme_was); app.update()
+app.hide_settings_page(); app.update()
+_cd_v = _cd_view('2026-07-09')
+check(f'...and one made in Settings is drawn on the way back '
+      f'({_cd_v["bg"]}, {_cd_v["day_fill"]})',
+      app.theme_name == _cd_theme_was
+      and _cd_v['bg'] == app.colors['card'] and _cd_v['day_fill'] == app.colors['text'])
+app.day_colors = {}
+app._persist_day_colors()
+app.day_emoji = {}
+app._persist_day_emoji()
+app.cal_year, app.cal_month = 2026, 7
+app.render_calendar(); app.update()
 
 # ---- The bounded-series hybrid in History (field confusion: a "10
 # times" group opened to nothing) — a small bounded series lists ALL

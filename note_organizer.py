@@ -10180,10 +10180,23 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
     def _on_main_canvas_configure(self, event):
         self._main_size_wanted = (max(event.width, self._main_min_width),
                                   event.height)
-        if self._pointer_button_held():
+        if self._pointer_button_held() and not self._page_follows_the_drag():
             self._wait_for_resize_to_settle()
             return
         self._lay_out_at_window_size()
+
+    def _page_follows_the_drag(self):
+        """Whether the page on screen is laid out at every step of a held
+        drag, rather than when the drag pauses or ends.
+
+        The calendar's month is drawn on one canvas, and a step of the drag
+        costs it under 40 ms there -- quick enough to follow the mouse, which
+        is what the field test asked for. Every other page is built of
+        widgets and still costs 70 ms or more a step, so it keeps the frame
+        light and catches up once the hand stops. The History register is
+        rows of widgets too, so it waits with the rest."""
+        return (self._calendar_is_showing()
+                and not getattr(self, "_history_visible", False))
 
     def _lay_out_at_window_size(self):
         """Give the window's content the window's size: the one place it

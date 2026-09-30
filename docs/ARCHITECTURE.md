@@ -209,9 +209,11 @@ destructive confirms must do the same.
 right colors to it. This is for **persistent** widgets — ones built once at startup and never
 destroyed (the sidebar, the main buttons, the tab bar).
 
-For content that gets **destroyed and rebuilt** on every refresh — note cards, calendar cells,
-the attachments list, anything inside a Settings section panel — widgets are colored with plain
-`.configure(bg=self.colors[...])` calls instead. Since this content is always rebuilt fresh, it
+For content that gets **destroyed and rebuilt** on every refresh — the attachments list, the
+History register's rows, anything inside a Settings section panel — widgets are colored with
+plain `.configure(bg=self.colors[...])` calls instead. (The note list and the calendar's month
+are not widgets any more but drawings, whose items take their colours when drawn: the list is
+recoloured in place, below, and the month is drawn again.) Since this content is always rebuilt fresh, it
 never needs live tracking; using `track_theme` here just means every rebuilt widget's tracking
 registration outlives the widget itself. That was an actual bug this codebase had for a while
 (see [CHANGELOG.md](../CHANGELOG.md) 0.4.0) — a growing, unbounded list of registrations for
@@ -591,6 +593,44 @@ when the window is first mapped (Windows only, by class name). After it, a held 
 about 10 ms and a step laid out live about half of what it did. Photographed with and without,
 mid-drag and at a new size, the window is the same to the pixel. See
 [The window that crawled behind its edge](ISSUES_LOG.md#the-window-that-crawled-behind-its-edge).
+
+One page does not wait. The Calendar's month is a drawing (next section), and a step of the drag
+costs it under 40 ms, so `_page_follows_the_drag` has a held drag laid out at every step while
+the month is on screen. Every other page is built of widgets and waits for the hand; so does
+the calendar's History register, which is rows of widgets too.
+
+### The calendar's month is one drawing
+
+The month grid was built the way the note list used to be: a frame per day, a label for its
+number, one for each dot and each note title, a frame per divider — 216 widgets for a month
+holding 46 notes, each of them an OS window on Windows. `_draw_calendar_grid` draws the same
+cells as rectangles and text on one canvas, `cal_canvas`, laid out from measurements of the
+widget grid it replaced: seven columns at floor(i × width / 7), a row of weekday names, week
+rows all as tall as the busiest day needs and never under 90, and the paddings pack used inside
+a cell. A day's content is drawn at the origin first (`_draw_cal_cell_content`), because the row
+height depends on the tallest day, and moved into place once that is known.
+
+The rules that keep the list honest keep this one too:
+
+- **Records, not widgets.** `_cal_cells` holds each drawn day: its box, its items and the boxes
+  of its note titles. `_cal_cell_view` reads a day back from the drawing — what it says, its
+  colours, its outline — which is what checks ask now that a day has no widget.
+- **Input is found by position.** Click, right-click and hover are bound once on the canvas, and
+  `_cal_hit` answers whether the pointer is over a note's title — that note: open it, its menu,
+  its preview — or the rest of a day: the day's list, the day's menu, its titles-only summary.
+- **A new width draws; it does not render.** `render_calendar` works out which notes fall on
+  which day and keeps the answer (`_cal_month_data`). A change of size draws again from it
+  (`_cal_canvas_configured`) without expanding a single occurrence. Crossing the 1,150-pixel
+  step between small and large titles is the one resize that renders.
+- **Colours are taken when drawn.** Nothing tracks a drawn item's colour, so a theme switch
+  draws the month again: `apply_theme` asks for a render like every other change, and one made
+  while the calendar is hidden is caught up when it is shown.
+
+The grid's frame is given the month's height, as the widget grid's rows gave it, so one busy day
+still makes every week taller and the calendar area scrolls. Measured on that 46-note month: the
+next month in 25 ms instead of 295, the Calendar tab after a change in 33 instead of 275, a step
+of a window resize in 38 instead of 162. See
+[The month that was two hundred windows](ISSUES_LOG.md#the-month-that-was-two-hundred-windows).
 
 ## Background work: exporting and importing
 

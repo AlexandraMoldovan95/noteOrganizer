@@ -52,7 +52,8 @@ under `%APPDATA%\NoteOrganizer` (worth knowing if you ever go looking for your n
 The window can be made as small as 640 by 600 pixels. While you drag its edge, the page inside
 keeps its size — cut off at the edge, or with an empty strip beside it — and settles to fit the
 moment you pause or let go. Laying the whole page out at every step of the drag is what made
-the edge lag behind the mouse.
+the edge lag behind the mouse. The Calendar's month is the exception: it is quick enough to
+redraw that it follows the edge as you drag.
 
 ![Main window](screenshots/main-window.png)
 
@@ -586,7 +587,8 @@ You can also mark the day itself, independent of any note on it — right-click 
 - **🏷 Mark this day…** puts emoji on it — a birthday, a trip, a payday. **Up to three**, and the
   picker says so: once you have three, the ones you have not picked go flat and a line reads
   "Three is the most a day can show — unpick one to choose another", rather than the fourth click
-  simply doing nothing. The day's cell shows them as a small badge in the corner.
+  simply doing nothing. The day's cell shows them as a small badge in the corner, in the same
+  colour as the day's number.
 
 Both can be cleared from the same menu, and both clears offer an **Undo** in the banner.
 

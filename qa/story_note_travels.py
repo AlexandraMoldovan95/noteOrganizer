@@ -111,6 +111,10 @@ def drive():
         (8, "I drag my last note to the top, and move one down from the keyboard",
          _a_few_more_notes),
         (9, "I open the app again: my order is where I left it", None),
+        (10, "On the calendar I mark a day, paint another and open a note by its title",
+         _a_busy_month),
+        (11, "I open the app again: the calendar is as I left it, and fits a narrower window",
+         None),
     ]
     results = []
     for number, title, before in chapters:
@@ -193,6 +197,21 @@ def _a_few_more_notes(work):
                       "category": "General",
                       "created": "2026-09-2%d 09:00" % (1 + i),
                       "updated": "2026-09-2%d 09:00" % (1 + i)})
+    io.open(path, "w", encoding="utf-8").write(json.dumps(notes, indent=2))
+
+
+def _a_busy_month(work):
+    """Notes on days of the month the calendar opens on: three on the 12th
+    -- more than a day shows by name -- and one on the 20th."""
+    from datetime import date
+    month = date.today().strftime("%Y-%m")
+    path = os.path.join(work, "notes_data.json")
+    notes = json.load(io.open(path, encoding="utf-8"))
+    for i, (day, title) in enumerate(((12, "Dentist at ten"), (12, "Call the bank"),
+                                      (12, "Pick up the parcel"), (20, "Team lunch"))):
+        notes.append({"id": 70 + i, "title": title, "body": "a few words",
+                      "category": "General", "date": "%s-%02d" % (month, day),
+                      "created": "2026-09-25 09:00", "updated": "2026-09-25 09:00"})
     io.open(path, "w", encoding="utf-8").write(json.dumps(notes, indent=2))
 
 
@@ -843,9 +862,191 @@ def chapter_9():
     story.save()
 
 
+CALENDAR_FILE = "the_calendar.json"
+
+
+def _this_month(day):
+    from datetime import date
+    return "%s-%02d" % (date.today().strftime("%Y-%m"), day)
+
+
+def _day_menu_entry(app, date_str, label):
+    """Right-click a day of the month and press the menu entry that says
+    `label`. The menu is the app's own, caught as it opens: a real popup
+    menu holds the process until someone closes it."""
+    import tkinter as tk
+    from _qa_support import fire
+    point = app._cal_point(date_str)
+    if point is None:
+        return False
+    posted = []
+    real = tk.Menu.tk_popup
+    tk.Menu.tk_popup = lambda menu, *a, **k: posted.append(menu)
+    try:
+        fire(app.cal_canvas, "<Button-3>", x=point[0], y=point[1])
+        app.update()
+    finally:
+        tk.Menu.tk_popup = real
+    if not posted:
+        return False
+    menu = posted[-1]
+    for index in range(menu.index("end") + 1):
+        try:
+            if label in str(menu.entrycget(index, "label")):
+                menu.invoke(index)
+                app.update()
+                return True
+        except tk.TclError:
+            continue
+    return False
+
+
+def _mark_the_day(app, date_str, how_many):
+    """Mark this day…, the first `how_many` markers clicked, then Save."""
+    import tkinter as tk
+    from _qa_support import click
+    if not _day_menu_entry(app, date_str, "Mark this day"):
+        return None
+    pop = getattr(app, "_mini_popup", None)
+    if pop is None or not pop.winfo_exists():
+        return None
+    wanted = [emoji for emoji, _colour in app.DAY_MARKER_EMOJIS[:how_many]]
+    for chip in [w for w in _all_children(pop) if isinstance(w, tk.Label)
+                 and str(w.cget("text")) in wanted]:
+        click(chip)
+        app.update()
+    save = _button(pop, "Save")
+    if save is None:
+        return None
+    save.invoke()
+    app.update()
+    return "".join(wanted)
+
+
+def _paint_the_day(app, date_str):
+    """Color this day…, and the palette's first colour."""
+    import tkinter as tk
+    from _qa_support import click
+    if not _day_menu_entry(app, date_str, "Color this day"):
+        return None
+    pop = getattr(app, "_mini_popup", None)
+    swatches = ([w for w in _all_children(pop) if isinstance(w, tk.Canvas)
+                 and str(w.cget("cursor")) == "hand2"]
+                if pop is not None and pop.winfo_exists() else [])
+    if not swatches:
+        return None
+    click(swatches[0])
+    app.update()
+    return app.day_colors.get(date_str)
+
+
+def chapter_10():
+    """She opens the calendar, marks one day and paints another, and opens
+    a note on a busy day by clicking its title."""
+    tk, NO, app = _chapter_setup()
+    from _qa_support import click
+    story = Chapter()
+    plain, painted, busy = _this_month(9), _this_month(20), _this_month(12)
+    app.notebook.select(app.TAB_CALENDAR)
+    _let_it_paint(app, 0.3)
+    view = app._cal_cell_view(busy) or {}
+    story.check("the calendar opens on this month, with the busy day's titles "
+                "and how many more", len(view.get("chips", [])) == 2
+                and view.get("more") == "+1 more", view)
+
+    markers = _mark_the_day(app, plain, 2)
+    view = app._cal_cell_view(plain) or {}
+    story.check("the day I marked shows the markers I picked, in its corner",
+                markers is not None and view.get("badge") == markers,
+                (markers, view.get("badge")))
+    story.check("...drawn in the day's own text colour, not black",
+                view.get("badge_fill") == app.colors["text"],
+                (view.get("badge_fill"), app.colors["text"], app.theme_name))
+
+    colour = _paint_the_day(app, painted)
+    view = app._cal_cell_view(painted) or {}
+    story.check("the day I painted wears the colour",
+                colour is not None and view.get("bg") == colour, (colour, view.get("bg")))
+    markers_painted = _mark_the_day(app, painted, 1)
+    view = app._cal_cell_view(painted) or {}
+    story.check("...and its marker is white, like its number and its title",
+                markers_painted is not None and view.get("badge") == markers_painted
+                and view.get("badge_fill") == view.get("day_fill") == "#ffffff",
+                view)
+
+    rec = app._cal_cells.get(busy)
+    title = str(rec["chips"][0][0].get("title")) if rec and rec["chips"] else ""
+    point = app._cal_point(busy, chip=0) if title else None
+    if point is not None:
+        click(app.cal_canvas, x=point[0], y=point[1])
+        app.update()
+    shown = [str(w.cget("text")) for w in _all_children(app.day_panel)
+             if isinstance(w, tk.Label)]
+    story.check("clicking a title opens that note in the day panel",
+                bool(title) and app._day_panel_mode == "note" and title in shown,
+                (title, app._day_panel_mode, shown[:4]))
+    _let_it_paint(app)
+    _photograph("12-the-calendar-marked-painted-and-a-note-open")
+    io.open(CALENDAR_FILE, "w", encoding="utf-8").write(json.dumps(
+        {"plain": plain, "painted": painted, "busy": busy, "markers": markers,
+         "markers_painted": markers_painted, "colour": colour}, ensure_ascii=False))
+    story.save()
+
+
+def chapter_11():
+    """A NEW PROCESS: the app was closed and opened again. The marked and
+    the painted day are as she left them, a title still previews its note,
+    and a narrower window draws the month to fit."""
+    tk, NO, app = _chapter_setup()
+    from _qa_support import fire
+    story = Chapter()
+    left = json.loads(io.open(CALENDAR_FILE, encoding="utf-8").read())
+    app.notebook.select(app.TAB_CALENDAR)
+    _let_it_paint(app, 0.3)
+    view = app._cal_cell_view(left["plain"]) or {}
+    story.check("the marked day still shows its markers, in its text colour",
+                view.get("badge") == left["markers"]
+                and view.get("badge_fill") == app.colors["text"], view)
+    view = app._cal_cell_view(left["painted"]) or {}
+    story.check("the painted day kept its colour, and its white marker",
+                view.get("bg") == left["colour"]
+                and view.get("badge") == left["markers_painted"]
+                and view.get("badge_fill") == "#ffffff", view)
+    _let_it_paint(app)
+    _photograph("13-the-calendar-after-a-restart")
+
+    # The preview opens beside the REAL pointer, wherever it is on the
+    # desktop, and a real move of it closes the preview again -- so it is
+    # checked here, and not photographed.
+    rec = app._cal_cells.get(left["busy"])
+    title = str(rec["chips"][0][0].get("title")) if rec and rec["chips"] else ""
+    point = app._cal_point(left["busy"], chip=0) if title else None
+    if point is not None:
+        fire(app.cal_canvas, "<Motion>", x=point[0], y=point[1])
+        app.update()
+    tip = getattr(app, "_day_tooltip", None)
+    said = ([str(w.cget("text")) for w in _all_children(tip) if isinstance(w, tk.Label)]
+            if tip is not None and tip.winfo_exists() else [])
+    story.check("hovering a title previews that note", bool(title)
+                and any(title in text for text in said), (title, said[:3]))
+    fire(app.cal_canvas, "<Leave>")
+    app.update()
+
+    # Narrower all at once, as a snap to the side of the screen does: a
+    # script cannot hold the window's edge, which qa9 answers for instead.
+    app.geometry("980x860")
+    _let_it_paint(app, 0.5)
+    right = max((r["x1"] for r in app._cal_cells.values()), default=0)
+    story.check("a narrower window draws the month to fit it",
+                abs(right - (app.cal_canvas.winfo_width() - app.CAL_CELL_PAD)) <= 1,
+                (right, app.cal_canvas.winfo_width()))
+    _photograph("14-the-month-in-a-narrower-window")
+    story.save()
+
+
 CHAPTERS = {1: chapter_1, 2: chapter_2, 3: chapter_3, 4: chapter_4,
             5: chapter_5, 6: chapter_6, 7: chapter_7, 8: chapter_8,
-            9: chapter_9}
+            9: chapter_9, 10: chapter_10, 11: chapter_11}
 
 
 if __name__ == "__main__":

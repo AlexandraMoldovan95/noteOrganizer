@@ -5542,12 +5542,15 @@ app._catch_up_deferred_refresh()
 app.update()
 check('a transition that does not show the calendar leaves it deferred',
       getattr(app, '_calendar_needs_render', False) is True)
+# Forget whatever an earlier render drew, so the check below can only be
+# answered by the catch-up itself.
+app._cal_cells = {}
 app.notebook.select(app.TAB_CALENDAR)
 app.update()
 check('the deferred calendar rebuild is caught up when the tab is opened',
       getattr(app, '_calendar_needs_render', False) is False)
 check('...and the month really was drawn, not merely marked done',
-      len(app.cal_grid_frame.winfo_children()) > 0)
+      len(getattr(app, '_cal_cells', {})) > 0)
 app.notebook.select(app.TAB_NOTES)
 app.update()
 

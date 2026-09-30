@@ -2124,22 +2124,9 @@ _cal_day = '2026-08-14'
 
 
 def _calendar_says(text):
-    """Is `text` drawn anywhere in the month grid on screen right now?"""
-    found = []
-
-    def walk(w):
-        try:
-            value = str(w.cget('text'))
-        except tk.TclError:
-            value = ''
-        if text in value:
-            found.append(w)
-        for kid in w.winfo_children():
-            walk(kid)
-
-    if hasattr(app, 'cal_grid_frame'):
-        walk(app.cal_grid_frame)
-    return bool(found)
+    """Is `text` drawn anywhere in the month grid on screen right now? The
+    month is text on one canvas, so it is asked of the drawing."""
+    return any(text in t for t in app._cal_texts())
 
 
 app.hide_settings_page(); app.update()
