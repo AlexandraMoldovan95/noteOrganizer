@@ -1270,7 +1270,13 @@ check(f'...and the card lands where the line was when it was let go '
       and _co_rows.index(1725) == _co_rows.index(_co_slot[1])
       + (-1 if _co_slot[0] == 'before' else 1)
       and _ls_same_as_rebuild())
-app.canvas.yview_moveto(1.0); _ls_settle()
+# To the end the way the scrollbar goes there: a deliberate move that beats
+# the restore the rebuild above left in force (qa/README). A bare
+# yview_moveto did not, so the restore could pull the view back up in the
+# middle of this measurement -- counted as the edge scrolling when it
+# landed after the press, and costing the drag its card when it landed
+# before the click (0px, seen once under a mutant elsewhere).
+app._list_scrollbar_moved('moveto', '1.0'); _ls_settle()
 _co_y = _co_press(_co_rows[-1])
 _co_let = app.canvas.canvasy(0)
 _co_move_to(_co_y, app.canvas.canvasy(3))
@@ -1990,6 +1996,130 @@ app.collapsed_groups.clear()
 app.refresh_note_list(); _ls_settle()
 if _bl_work_colour is None:
     NO.CATEGORY_COLORS.pop('Work', None)
+
+# 5i. The ring stays where the person can see it. It could sit on a card
+# 900px above the view: Tab brought the keyboard back to a list the wheel
+# had scrolled away, Enter then opened a note nobody could see, the menu
+# key posted its menu off the screen, and pinning the ringed card from its
+# menu sent it to the top while the view stayed put.
+_co_fresh(_bl_notes)
+_bl_o = app._card_order()
+_bl_menus = []
+
+
+def _bl_seen(nid):
+    rec = app._note_cards.get(nid)
+    return app._row_on_screen(rec) if rec else 'not drawn'
+
+
+def _bl_scroll_away(px):
+    """The wheel, while the keyboard is elsewhere or still on the list:
+    a deliberate scroll, which beats any restore."""
+    app._list_restore_px = None
+    app._apply_list_scroll_px(px); _ls_settle()
+
+
+app._put_keyboard_on_card(_bl_o[0]); _ls_settle()
+app._list_focus_out(); _ls_settle()
+_bl_scroll_away(700)
+_bl_top = app.canvas.canvasy(0)
+check(f'fixture: the ring\'s card scrolled out of sight ({_bl_seen(_bl_o[0])}, '
+      f'view at {_bl_top:.0f})', _bl_seen(_bl_o[0]) == 'none' and _bl_top > 300)
+app._list_focus_in(); _ls_settle()
+check(f'Tab into a list scrolled away from the ring puts the ring on a card in '
+      f'sight and leaves the view alone (ring on {app._focused_note_id}: '
+      f'{_bl_seen(app._focused_note_id)}; view {app.canvas.canvasy(0):.0f})',
+      _bl_seen(app._focused_note_id) == 'all'
+      and abs(app.canvas.canvasy(0) - _bl_top) < 1
+      and app._card_view(_bl_o[0])['ring'] != app.colors['text'])
+# Half in sight: it stays on its card, and the card comes into view.
+_bl_v = app._card_view(_bl_o[5])
+app._put_keyboard_on_card(_bl_o[5]); _ls_settle()
+app._list_focus_out(); _ls_settle()
+_bl_scroll_away(_bl_v['y0'] + 30)
+_bl_was = _bl_seen(_bl_o[5])
+app._list_focus_in(); _ls_settle()
+check(f'...and a ring half in sight stays on its card, which comes into view '
+      f'(was {_bl_was}, now {_bl_seen(_bl_o[5])}; ring on {app._focused_note_id})',
+      _bl_was == 'part' and _bl_seen(_bl_o[5]) == 'all'
+      and app._focused_note_id == _bl_o[5])
+# The keys that act on the ring bring it back first, when the wheel has
+# scrolled it away while the keyboard stayed on the list.
+app.show_note_context_menu = lambda ev, note, **k: _bl_menus.append(
+    (ev.y_root, note['id']))
+try:
+    app._put_keyboard_on_card(_bl_o[1]); _ls_settle()
+    _bl_scroll_away(700)
+    _bl_was = _bl_seen(_bl_o[1])
+    app._list_open_menu(); _ls_settle()
+finally:
+    app.__dict__.pop('show_note_context_menu', None)
+_bl_lo = app.canvas.winfo_rooty()
+_bl_hi = _bl_lo + app.canvas.winfo_height()
+check(f'the menu key on a ring scrolled out of sight opens the note\'s menu at '
+      f'its card, in view ({_bl_menus}; card {_bl_seen(_bl_o[1])}, was '
+      f'{_bl_was}; the list spans {_bl_lo}-{_bl_hi})',
+      _bl_was == 'none' and len(_bl_menus) == 1 and _bl_menus[0][1] == _bl_o[1]
+      and _bl_lo <= _bl_menus[0][0] <= _bl_hi and _bl_seen(_bl_o[1]) == 'all')
+app._put_keyboard_on_card(_bl_o[2]); _ls_settle()
+_bl_scroll_away(700)
+app._list_activate(); _ls_settle()
+check(f'...and Enter on it opens the note with its card in view (open '
+      f'{app.selected_note_id}, card {_bl_seen(_bl_o[2])})',
+      app.selected_note_id == _bl_o[2] and _bl_seen(_bl_o[2]) == 'all')
+# A rebuild that moves the ringed card out of sight: pinned from its menu,
+# the card goes to the top, and the view goes with it.
+_bl_scroll_away(500)
+_bl_mid = next(n for n in _bl_o if _bl_seen(n) == 'all')
+app._put_keyboard_on_card(_bl_mid); _ls_settle()
+# The keyboard on the list, as <FocusIn> records it -- the ring is only
+# shown, and only followed, while it is (qa/README on focus).
+app._list_focus_in(); _ls_settle()
+_bl_kb = app._keyboard_on_card
+app.toggle_pin(app.find_note(_bl_mid)); _ls_settle()
+_ls_let_restores_finish()
+check(f'pinning the ringed card from its menu keeps the ring in sight '
+      f'(keyboard on the list: {_bl_kb}; card first: '
+      f'{app._card_order()[:1] == [_bl_mid]}; {_bl_seen(_bl_mid)}; view '
+      f'{app.canvas.canvasy(0):.0f})',
+      _bl_kb and app._card_order()[:1] == [_bl_mid]
+      and _bl_seen(_bl_mid) == 'all' and app._focused_note_id == _bl_mid)
+app.toggle_pin(app.find_note(_bl_mid)); _ls_settle()
+# The menu's place is kept to the list even for a card taller than the
+# view, which no scroll can show whole: the smallest window, a full card,
+# its top scrolled out of sight -- brought back into view top first, its
+# bottom (where the menu opens) is below the list.
+app.geometry('1100x600'); _ls_settle()
+_bl_tall = {'id': 1990, 'title': 'A title long enough to wrap over two lines',
+            'body': 'x ' * 40, 'category': 'General', 'comments': 'c',
+            'date': '2026-09-01', 'created': '2026-01-01 00:00',
+            'updated': '2026-02-01 00:00',
+            'recurrence': {'freq': 'weekly', 'interval': 1, 'weekdays': [],
+                           'end': ''},
+            'checklist': [{'text': 'a', 'done': True}, {'text': 'b', 'done': False}],
+            'attachments': [{'filename': 'f.txt', 'stored_as': 'f.txt'}]}
+_co_fresh([_bl_tall] + _bl_notes[:3])
+_bl_card = app._card_view(1990)
+_bl_view_h = app.canvas.winfo_height()
+app._put_keyboard_on_card(1990); _ls_settle()
+_bl_scroll_away(_bl_card['y0'] + 30)
+_bl_cut = app.canvas.canvasy(0) > _bl_card['y0']
+_bl_menus = []
+app.show_note_context_menu = lambda ev, note, **k: _bl_menus.append(
+    (ev.y_root, note['id']))
+try:
+    app._list_open_menu(); _ls_settle()
+finally:
+    app.__dict__.pop('show_note_context_menu', None)
+_bl_lo = app.canvas.winfo_rooty()
+_bl_hi = _bl_lo + app.canvas.winfo_height()
+check(f'...and a card taller than the view still gets its menu inside the '
+      f'list (card {_bl_card["y1"] - _bl_card["y0"]}px in a {_bl_view_h}px '
+      f'view, its top cut off: {_bl_cut}; menu at {_bl_menus}, the list '
+      f'spans {_bl_lo}-{_bl_hi})',
+      _bl_card['y1'] - _bl_card['y0'] > _bl_view_h and _bl_cut
+      and len(_bl_menus) == 1 and _bl_lo <= _bl_menus[0][0] <= _bl_hi)
+app.geometry('1100x850'); _ls_settle()
 
 # ---------------------------------------------------------------------
 # A tick box's well must be light, because the mark in it is dark.
