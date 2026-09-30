@@ -9852,7 +9852,8 @@ _cu_press(1)
 check('checklist rows: removing an item takes only its own row',
       _cl_rows() == [_cl_1[0], _cl_1[2], _cl_1[3]]
       and _cl_texts() == ['milk', 'bread', 'butter'])
-app._toast_action()
+if app._toast_action is not None:
+    app._toast_action()
 app.update()
 _cl_2 = _cl_rows()
 check('checklist rows: the Undo puts that one row back in its place',
@@ -9905,6 +9906,11 @@ check('checklist rows: with two items alike, the row left ticks the item left',
 # rests. Each "it removed nothing more" has its control: the same press
 # later, or elsewhere, is a click of its own and removes.
 def _dc_click(widget, x_root, y_root, t):
+    # No bin where one should be (a row too many already gone) is for the
+    # checks below to report by what the list holds -- never a crash that
+    # ends the script before its FAILURES line.
+    if widget is None:
+        return
     _qa_fire(widget, '<Enter>')
     _qa_fire(widget, '<ButtonPress-1>', x=5, y=5, rootx=x_root,
              rooty=y_root, time=t)
@@ -9970,25 +9976,28 @@ try:
 finally:
     del app._grid_draw_cell_text
 _one_info = app._grid_at_line(1)
+_one_cells = len(_one_info['cells']) if _one_info is not None else -1
 check(f'one pass: every cell\'s text is drawn once '
-      f'({_one_draws["n"]} draws for {len(_one_info["cells"])} cells)',
-      _one_info is not None and _one_draws['n'] == len(_one_info['cells']))
+      f'({_one_draws["n"]} draws for {_one_cells} cells)',
+      _one_draws['n'] == _one_cells)
 
 
 def _one_fill(r, c, hex_):
+    if _one_info is None or (r, c) not in _one_info['cells']:
+        return None
     _surface = (NO.inset_surface(app.colors) if r == 0 else app.colors['card'])
-    return (str(_one_info['canvas'].itemcget(_one_info['cells'][(r, c)]['rect'],
-                                             'fill'))
-            == app._blend_hex(hex_, _surface, 0.45))
+    _fill = str(_one_info['canvas'].itemcget(
+        _one_info['cells'][(r, c)]['rect'], 'fill'))
+    return _fill if hex_ is None else _fill == app._blend_hex(hex_, _surface,
+                                                              0.45)
 
 
 check('one pass: a highlighted header, text cell and EMPTY cell are washed '
       'in it',
-      _one_fill(0, 0, '#ffe066') and _one_fill(1, 0, '#a0e7e5')
-      and _one_fill(1, 1, '#c8f7c5'))
+      _one_fill(0, 0, '#ffe066') is True and _one_fill(1, 0, '#a0e7e5') is True
+      and _one_fill(1, 1, '#c8f7c5') is True)
 check('one pass: and a plain cell keeps its surface',
-      str(_one_info['canvas'].itemcget(_one_info['cells'][(2, 1)]['rect'],
-                                       'fill')) == app.colors['card'])
+      _one_fill(2, 1, None) == app.colors['card'])
 # The UTF-16 width is counted by the codec now instead of per character;
 # the answer must be the rule Tk keeps -- an astral character two units,
 # anything else (a lone surrogate half included) one.
