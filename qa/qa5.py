@@ -635,6 +635,69 @@ for _tw_i in range(_tw_n):
 check('the theme registry lets go of widgets that no longer exist, unswitched',
       len(app.themed_widgets) < _tw_start + _tw_n // 2)
 
+# A superscript digit passes str.isdigit() and then fails int(): the
+# month-jump's year and a monthly repeat's days raised instead of giving
+# their own answer. isdecimal() is exactly what int() reads.
+_sd_errors = []
+_sd_real_report = app.report_callback_exception
+app.report_callback_exception = lambda *a: _sd_errors.append(a[1])
+app.notebook.select(app.TAB_CALENDAR); app.update()
+app.open_month_jump(); app.update()
+_sd_pop = app._mini_popup
+
+
+def _sd_widgets(w, cls):
+    out = []
+    for c in w.winfo_children():
+        if isinstance(c, cls):
+            out.append(c)
+        out.extend(_sd_widgets(c, cls))
+    return out
+
+
+_sd_entry = _sd_widgets(_sd_pop, tk.Entry)[0] if _sd_pop else None
+_sd_go = next((b for b in _sd_widgets(_sd_pop, tk.Button)
+               if str(b.cget('text')) == 'Go'), None) if _sd_pop else None
+if _sd_entry is not None and _sd_go is not None:
+    _sd_entry.delete(0, 'end'); _sd_entry.insert(0, '2026²')
+    _sd_go.invoke(); app.update()
+_sd_said = [str(l.cget('text')) for l in _sd_widgets(_sd_pop, tk.Label)] if _sd_pop else []
+check('a superscript in the month-jump year gets the picker\'s own message',
+      not _sd_errors and any('between 1 and 9999' in t for t in _sd_said))
+app._dismiss_mini_popup(); app.update()
+app.rec_freq_var.set(NO.FREQ_LABELS['monthly']); app.on_recurrence_changed()
+app.rec_monthdays_var.set('3², 15')
+try:
+    _sd_rule = app.read_recurrence_from_ui()
+except ValueError:
+    _sd_rule = None
+check('...and in a monthly repeat\'s days it is skipped, the rest read',
+      _sd_rule is not None and _sd_rule['month_days'] == [15])
+app.report_callback_exception = _sd_real_report
+app.new_note(); app.update()
+app.notebook.select(app.TAB_NOTES); app.update()
+
+# "Restore previous" can bring back a date and a repeat, both drawn on the
+# calendar -- the one note-writing route that never redrew it.
+_rp_drawn = []
+_rp_real_render = app.render_calendar
+app.notes = [NO.normalize_note({'id': 7, 'title': 'Moved', 'body': 'x',
+                                'date': '2026-10-05'})]
+app.notes[0]['_prev'] = {'title': 'Moved', 'body': 'x', 'formatting': [],
+                         'paragraphs': [], 'comments': '', 'date': '2026-10-20'}
+app.save_notes()
+app.open_note_in_tab(app.notes[0]); app.update()
+_rp_yes = app.ask_yes_no
+app.ask_yes_no = lambda *a, **k: True
+app.render_calendar = lambda *a, **k: (_rp_drawn.append(1), _rp_real_render(*a, **k))[1]
+app.restore_previous_version(); app.update()
+app.render_calendar = _rp_real_render
+app.ask_yes_no = _rp_yes
+check('Restore previous brings the date back and redraws the calendar',
+      app.find_note(7)['date'] == '2026-10-20' and _rp_drawn)
+app.new_note(); app.update()
+app.notes = []; app.save_notes()
+
 print(f"=== QA5 FAILURES: {fails if fails else 'NONE'} ===")
 
 sys.exit(1 if fails else 0)

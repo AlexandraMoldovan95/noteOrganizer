@@ -144,7 +144,7 @@ jobs:
         # so the module still imports), and a method lost, duplicated or
         # re-signatured while being moved between files.
         run: |
-          python tools/check_undefined_names.py note_organizer.py noteorganizer/core/*.py noteorganizer/ui/*.py
+          python tools/check_undefined_names.py note_organizer.py noteorganizer/core/*.py noteorganizer/ui/*.py qa/*.py test_*.py tools/*.py
           python tools/check_class_api.py
           python tools/check_one_definition.py
           python tools/check_english.py

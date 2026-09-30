@@ -1937,9 +1937,9 @@ check('answering the question completes the trip',
 del app.ask_occurrence_scope
 app.close_day_panel(); app.update()
 
-# Deleting ends the calendar trip on BOTH cleanup arms — a pending that
-# outlived a delete once made a later, unrelated Save yank the user
-# onto a stale calendar day.
+# Deleting the open note ends the calendar trip — a pending that outlived
+# a delete which REPLACED the editor once made a later, unrelated Save
+# yank the user onto a stale calendar day.
 app._ctx_open(app.find_note(61), None, return_day='2026-07-15'); app.update()
 app.ask_yes_no = lambda *a, **k: True
 app.delete_current_note(); app.update()
@@ -1954,9 +1954,17 @@ app.save_notes(); app.refresh_note_list(); app.update()
 app._ctx_open(app.find_note(60), '2026-07-18', return_day='2026-07-18')
 app.update()
 app._context_delete_note(app.find_note(63)); app.update()
-check('deleting another note ends the trip too (tab-restore arm)',
-      not app._pending_calendar_return
-      and not app.calendar_return_btn.winfo_ismapped())
+# Deleting ANOTHER note used to end the trip as a side effect: the
+# delete reloaded the editor from the copy taken when it was opened
+# (the "tab-restore arm"), which also cleared the way back. That reload
+# put older versions back over newer ones and is gone -- the editor now
+# stays exactly as it was, still on this day, so the way back to the
+# calendar still means what it did. Nothing about it is stale.
+check('deleting another note leaves the open day and its way back alone',
+      app.selected_note_id == 60
+      and app.current_occurrence_date == '2026-07-18'
+      and bool(app._pending_calendar_return)
+      and app._is_placed(app.calendar_return_btn))
 
 # Un-repeating via a series save retires the day banner — an occurrence
 # view of a note that no longer repeats would be a lying label.
@@ -2740,8 +2748,11 @@ def _hr_reset():
 
 
 def _hr_disk_date(note_id):
-    with _seed_io.open(NO.DATA_FILE, encoding='utf-8') as _hr_fh:
-        for _hr_n in _seed_json.load(_hr_fh):
+    # Its own imports: the io/json aliases this first borrowed came from
+    # the copied seed block, which is one call to _qa_support now.
+    import io as _hr_io, json as _hr_json
+    with _hr_io.open(NO.DATA_FILE, encoding='utf-8') as _hr_fh:
+        for _hr_n in _hr_json.load(_hr_fh):
             if _hr_n.get('id') == note_id:
                 return _hr_n.get('date', '')
     return None

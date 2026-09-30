@@ -16,8 +16,9 @@ push, that one is the real verdict you run before asking for one.
 
 WHAT IT RUNS
 ------------
-1. ``check_undefined_names`` over the entry point and the core package --
-   names used but never defined or imported (the moved-code classic).
+1. ``check_undefined_names`` over the entry point, the core and ui
+   packages, the qa scripts, the unit suites and the tools -- names used
+   but never defined or imported (the moved-code classic).
 2. ``check_class_api`` -- the app class's method surface against its
    recorded baseline, so an added, lost or re-signatured method is a
    deliberate, recorded act rather than a surprise.
@@ -67,6 +68,17 @@ def main():
                     for f in sorted(os.listdir(
                         os.path.join(ROOT, "noteorganizer", layer)))
                     if f.endswith(".py")]
+    # The qa scripts, the unit suites and the tools as well: a qa check
+    # once used two names from a block that had been replaced, and died
+    # halfway through a full run with a NameError this finds at once.
+    scanned += [os.path.join("qa", f)
+                for f in sorted(os.listdir(os.path.join(ROOT, "qa")))
+                if f.endswith(".py")]
+    scanned += sorted(f for f in os.listdir(ROOT)
+                      if f.startswith("test_") and f.endswith(".py"))
+    scanned += [os.path.join("tools", f)
+                for f in sorted(os.listdir(os.path.join(ROOT, "tools")))
+                if f.endswith(".py")]
     _run_gate("names resolve",
               [os.path.join("tools", "check_undefined_names.py"),
                "note_organizer.py"] + scanned)

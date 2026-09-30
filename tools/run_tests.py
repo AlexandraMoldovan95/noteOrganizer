@@ -71,10 +71,17 @@ STATIC = [
     # INVOKER's cwd, so run from anywhere but the repo root this gate
     # silently checked fewer files. And ui/*.py is scanned too — ~5200
     # lines of mixins used to be outside the gate in all three homes.
+    # The qa scripts, the unit suites and the tools too: a qa check once
+    # borrowed two names from the copied seed block, and when the block
+    # became one call the script died halfway with a NameError -- found by
+    # a full run minutes later, where this gate finds it in two seconds.
     ("names resolve", [sys.executable, os.path.join("tools", "check_undefined_names.py"),
                        "note_organizer.py"]
      + sorted(glob.glob(os.path.join(ROOT, "noteorganizer", "core", "*.py")))
-     + sorted(glob.glob(os.path.join(ROOT, "noteorganizer", "ui", "*.py")))),
+     + sorted(glob.glob(os.path.join(ROOT, "noteorganizer", "ui", "*.py")))
+     + sorted(glob.glob(os.path.join(ROOT, "qa", "*.py")))
+     + sorted(glob.glob(os.path.join(ROOT, "test_*.py")))
+     + sorted(glob.glob(os.path.join(ROOT, "tools", "*.py")))),
     ("class surface unchanged", [sys.executable,
                                  os.path.join("tools", "check_class_api.py")]),
     # The third gate, added 2026-09-11: a question the app asks in

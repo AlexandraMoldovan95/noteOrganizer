@@ -12338,7 +12338,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
         def _go(event=None):
             raw = year_var.get().strip()
-            if not raw.isdigit() or not 1 <= int(raw) <= 9999:
+            # isdecimal(), not isdigit(): isdigit() also passes "2026²",
+            # which int() then refuses with a ValueError instead of this
+            # message. isdecimal() is exactly what int() reads -- so
+            # "٢٠٢٦" and a full-width "２０２６" still work (the
+            # calculator learned this first, core/calculator.py).
+            if not raw.isdecimal() or not 1 <= int(raw) <= 9999:
                 error_lbl.config(text="Enter a year between 1 and 9999")
                 return
             self.cal_year = int(raw)
@@ -13042,7 +13047,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if freq == "monthly":
             for chunk in self.rec_monthdays_var.get().replace(";", ",").split(","):
                 chunk = chunk.strip()
-                if chunk.isdigit() and 1 <= int(chunk) <= 31:
+                # isdecimal(): "3²" passed isdigit() and crashed int() on
+                # every read of the rule, saves included (see _go above).
+                if chunk.isdecimal() and 1 <= int(chunk) <= 31:
                     month_days.append(int(chunk))
 
         policy = "clamp" if self.rec_policy_var.get() == "Use the last day" else "skip"
@@ -17413,6 +17420,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # user to see; this makes them the note's official state).
         self.load_note(note, occurrence_date=self.current_occurrence_date)
         self.refresh_note_list()
+        # The rescue copy can bring back a date, a repeat, a colour, a
+        # category and a series' days -- all of them drawn on the calendar,
+        # which this was the one note-writing route never to redraw.
+        self.render_calendar()
         self.set_status(
             "Restored the previous version of the whole note"
             if viewing_occurrence else "Restored the previous version")
