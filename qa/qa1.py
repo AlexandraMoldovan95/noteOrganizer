@@ -9641,6 +9641,170 @@ check('wide paste: and the drawn grid has the four columns',
       (app._grid_at_line(1) or {}).get('ncols') == 4)
 set_body('')
 
+# ---- CTRL+Z TAKES BACK A STYLE CHANGE, AND ONLY IT ----
+# Tk's undo stack holds text, never a tag. Bolding a word left nothing
+# on it, so Ctrl+Z skipped the bold and took back the last burst of
+# typing instead (and the autosave stored that); Ctrl+Y brought the
+# typing back without the bold. A formatting journal beside Tk's stack
+# now takes the style back first, and the typing on later presses, in
+# order. Every sibling formatting action -- a colour, a size, a centred
+# line, an indented paragraph, a styled cell -- is checked the same way.
+# Keys through Tk: the body's focus is a precondition, forced and asserted.
+def _uf_key(sequence):
+    if not take_focus(app.body_text):
+        return False
+    app.body_text.event_generate(sequence)
+    app.update()
+    return True
+
+
+def _uf_setup(body, typed=''):
+    """A note holding *body*, with *typed* then typed at its end as one
+    burst and the pause after it -- the boundary an autosave leaves."""
+    set_body(body)
+    app._reset_text_undo()
+    app.body_text.mark_set('insert', 'end-1c')
+    for _ch in typed:
+        app.body_text.insert('insert', _ch)
+    app._flush_table_grids()
+
+
+def _uf_select(word):
+    _at = app.body_text.search(word, '1.0', 'end')
+    app.body_text.tag_remove('sel', '1.0', 'end')
+    app.body_text.tag_add('sel', _at, f'{_at}+{len(word)}c')
+    app.body_text.mark_set('insert', f'{_at}+{len(word)}c')
+
+
+_uf_typed = 'the meeting moved to Friday'
+_uf_full = 'Dear Ana,' + chr(10) + _uf_typed
+_uf_setup('Dear Ana,' + chr(10), _uf_typed)
+_uf_select('Friday')
+check('style undo: the body holds the keyboard (precondition)',
+      _uf_key('<Control-b>'))
+check('style undo: Ctrl+B made the word bold (fixture)',
+      _cs_styles() == [('bold', 'Friday')])
+_uf_key('<Control-z>')
+check('style undo: Ctrl+Z right after a bold takes back the bold ONLY '
+      f'({app.body_text.get("1.0", "end-1c")!r}, {_cs_styles()})',
+      app.body_text.get('1.0', 'end-1c') == _uf_full and _cs_styles() == [])
+_uf_key('<Control-y>')
+check(f'style undo: Ctrl+Y gives the bold back ({_cs_styles()})',
+      app.body_text.get('1.0', 'end-1c') == _uf_full
+      and _cs_styles() == [('bold', 'Friday')])
+_uf_key('<Control-z>')
+_uf_key('<Control-z>')
+check('style undo: the typing goes on the NEXT press, in order '
+      f'({app.body_text.get("1.0", "end-1c")!r})',
+      app.body_text.get('1.0', 'end-1c') == 'Dear Ana,' + chr(10))
+_uf_key('<Control-y>')
+_uf_key('<Control-y>')
+check(f'style undo: two Ctrl+Y bring the typing AND the bold back ({_cs_styles()})',
+      app.body_text.get('1.0', 'end-1c') == _uf_full
+      and _cs_styles() == [('bold', 'Friday')])
+# Typing AFTER the style is undone first; the style on the press after.
+_uf_setup('Dear Ana,' + chr(10), _uf_typed)
+_uf_select('Friday')
+_uf_key('<Control-b>')
+app.body_text.tag_remove('sel', '1.0', 'end')
+app.body_text.mark_set('insert', 'end-1c')
+app.body_text.edit_separator()
+app.body_text.insert('insert', ' at ten')
+_uf_key('<Control-z>')
+check('style undo: typing after the bold is taken back first '
+      f'({app.body_text.get("1.0", "end-1c")!r}, {_cs_styles()})',
+      app.body_text.get('1.0', 'end-1c') == _uf_full
+      and _cs_styles() == [('bold', 'Friday')])
+_uf_key('<Control-z>')
+check(f'style undo: ...and the bold on the press after it ({_cs_styles()})',
+      app.body_text.get('1.0', 'end-1c') == _uf_full and _cs_styles() == [])
+
+# The siblings: every other action that changes formatting and no text.
+for _uf_name, _uf_do, _uf_read, _uf_before in (
+        ('a text colour',
+         lambda: app._apply_body_color('text_color', '#e63946'),
+         _cs_styles, []),
+        ('a font size',
+         lambda: app._apply_body_font('font_size', 14),
+         _cs_styles, []),
+        ('a centred line',
+         lambda: app._set_paragraph_align('center'),
+         lambda: app._paragraph_align_of(app.body_text, 2), 'left'),
+        ('an indented plain paragraph',
+         lambda: app._change_paragraph_indent(+1),
+         lambda: app._paragraph_indent_of(app.body_text, 2), 0)):
+    _uf_setup('Dear Ana,' + chr(10), _uf_typed)
+    _uf_select('Friday')
+    _uf_do()
+    app.update()
+    _uf_changed = _uf_read()
+    _uf_key('<Control-z>')
+    check(f'style undo: Ctrl+Z takes back {_uf_name} and keeps the typing '
+          f'({_uf_changed!r} -> {_uf_read()!r})',
+          _uf_changed != _uf_before and _uf_read() == _uf_before
+          and app.body_text.get('1.0', 'end-1c') == _uf_full)
+# A styled cell is the same kind of step.
+_uf_info = _cs_setup()
+app._reset_text_undo()
+app._grid_apply_style(_uf_info, (2, 0, 2, 0), 'bold')
+app.update()
+_uf_bold = _cs_styles()
+_uf_key('<Control-z>')
+check(f'style undo: Ctrl+Z takes back a cell made bold ({_uf_bold} -> {_cs_styles()})',
+      ('bold', 'Eggs') in _uf_bold and _cs_styles() == _cs_want)
+
+# ---- CTRL+Z AFTER A TABLE OPERATION BRINGS THE TABLE'S STYLES BACK ----
+# Tk re-inserts the text an undo puts back without its tags, so every
+# table operation's Ctrl+Z returned the cells bare. The journal lays the
+# styles the table had back on the text Tk restores -- and Ctrl+Y lays
+# the operation's own ones back on the way forward.
+for _ut_name, _ut_do in (
+        ('clearing a cell with Delete',
+         lambda i: (app._grid_select_range(i, (1, 2), (1, 2)),
+                    app._on_body_delete_key())),
+        ('dropping a checkbox',
+         lambda i: app._grid_set_marker(i, 2, 2, core_tables.CHECKBOX_EMPTY)),
+        ('deleting the bold row',
+         lambda i: app._grid_delete_row(i, 1)),
+        ('inserting a column',
+         lambda i: app._grid_insert_col(i, 0))):
+    _ut_info = _cs_setup()
+    app._reset_text_undo()
+    _ut_text0 = app.body_text.get('1.0', 'end-1c')
+    _ut_do(_ut_info)
+    app.update()
+    _ut_text1, _ut_styles1 = app.body_text.get('1.0', 'end-1c'), _cs_styles()
+    _uf_key('<Control-z>')
+    check(f'table undo: Ctrl+Z after {_ut_name} brings the text AND the '
+          f'styles back ({_cs_styles()})',
+          app.body_text.get('1.0', 'end-1c') == _ut_text0
+          and _cs_styles() == _cs_want)
+    _uf_key('<Control-y>')
+    check(f'table undo: ...and Ctrl+Y redoes {_ut_name} with its styles '
+          f'({_cs_styles()})',
+          app.body_text.get('1.0', 'end-1c') == _ut_text1
+          and _cs_styles() == _ut_styles1)
+
+# The whole-body rewrite that renumbers a list is the same mechanism: Tk
+# put the old body back bare, every style in the note gone with one press.
+set_body('1. one' + chr(10) + '2. two' + chr(10) + 'bold words')
+app._apply_formatting(app.body_text, [
+    {'start': len('1. one\n2. two\n'), 'end': len('1. one\n2. two\nbold'),
+     'style': 'bold'}])
+app.update()
+app._reset_text_undo()
+app.body_text.mark_set('insert', '1.end')
+_ut_before = app.body_text.get('1.0', 'end-1c')
+app._on_body_return(None)
+app.update()
+_uf_key('<Control-z>')
+_uf_key('<Control-z>')
+check('list undo: Ctrl+Z after a renumbering Enter keeps the note\'s bold '
+      f'({_cs_styles()})',
+      app.body_text.get('1.0', 'end-1c') == _ut_before
+      and _cs_styles() == [('bold', 'bold')])
+set_body('')
+
 # ---- CLOSING SAVES SILENTLY (dead last: it destroys the app) ----
 # The quit-time "Unsaved notes" ask could only ever cover the last
 # half-second of typing; the app now trusts its own autosave and closes

@@ -3925,7 +3925,19 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         Every other value is in the text already -- each commit wrote it --
         so capture, autosave and the dirty poll only need the one editor
         flushed, without closing it under the user's typing.
+
+        With no cell open there is nothing to flush, and the commit's undo
+        unit -- which notes the note's formatting (_undo_atom_begin) -- is
+        not worth opening on every autosave and every dirty poll. The one
+        thing it always left behind stays: an undo boundary, which is what
+        makes Ctrl+Z take typing back one pause at a time.
         """
+        if not getattr(self, "_cell_editor", None):
+            try:
+                self.body_text.edit_separator()
+            except (tk.TclError, AttributeError):
+                pass
+            return False
         return self._commit_cell_editor(close=False)
 
     @_undo_atom
@@ -5404,6 +5416,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                                     editor["r"], editor["c"])
         return None
 
+    @_undo_atom
     def _grid_apply_style(self, info, box, kind, value=None):
         """One toolbar action, over every selected cell's text.
 
@@ -5823,6 +5836,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 return align
         return "left"
 
+    @_undo_atom
     def _set_paragraph_align(self, align):
         """Align the selected lines left, centre or right.
 
@@ -7396,6 +7410,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         """Black or near-white, whichever reads better against hex_color."""
         return core_contrasting_fg(hex_color)
 
+    @_undo_atom
     def _toggle_body_style(self, style):
         """Bold/Italic/Underline/Strikethrough toolbar + right-click handler.
 
@@ -7468,6 +7483,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._refresh_format_buttons()
         self._schedule_autosave()
 
+    @_undo_atom
     def _apply_body_color(self, kind, hex_color):
         """Text-color/highlight-color picker handler. kind is "text_color"
         or "highlight"; hex_color is the chosen color, or None to clear it.
@@ -7526,6 +7542,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._refresh_format_buttons()
         self._schedule_autosave()
 
+    @_undo_atom
     def _apply_body_font(self, style, value):
         """Font size / family picker handler.
 
@@ -12902,13 +12919,61 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
     def _reset_text_undo(self):
         """Clear undo history on both editors — called after loading a note so
-        Ctrl+Z can't undo back into a previous note's content."""
+        Ctrl+Z can't undo back into a previous note's content. The body's
+        formatting journal goes with it (see _body_undo_redo): it is only
+        ever read beside the stack it was written next to."""
         for w in (getattr(self, "body_text", None), getattr(self, "comments_text", None)):
             if w is not None:
                 try:
                     w.edit_reset()
                 except tk.TclError:
                     pass
+        self._fmt_undo, self._fmt_redo = [], []
+
+    # How many steps back the formatting journal reaches. Each step holds
+    # two snapshots as tuples (a few kB for an ordinary note); the cap
+    # keeps a long session on a heavily styled note from growing without
+    # bound. Past it, Ctrl+Z still walks Tk's own text stack.
+    _FMT_JOURNAL_DEPTH = 100
+
+    def _fmt_state(self):
+        """The body as far as undo has to know it: the text's signature,
+        its character formatting and its paragraph formatting -- the two
+        things Tk's undo stack never records. Tuples, so two snapshots
+        compare cheaply and a kept one holds little memory. Measured on
+        the heaviest note the perf probes build (86k characters, 279
+        spans): about 2 ms."""
+        b = self.body_text
+        text = b.get("1.0", "end-1c")
+        spans = tuple((s["start"], s["end"], s["style"], s.get("value"))
+                      for s in self._extract_formatting(b))
+        paras = tuple(tuple(sorted(p.items()))
+                      for p in self._extract_paragraphs(b))
+        return (len(text), hash(text)), spans, paras
+
+    def _fmt_restore(self, state, current=None):
+        """Lay a snapshot's formatting back on the text it was taken from
+        -- the caller has matched the text's signature. Tags only; the
+        text is never touched. The grids come down first: a span counts
+        characters, and a drawn table's window would shift every span
+        after it by one. The caller draws them again."""
+        _sig, spans, paras = state
+        if current is None:
+            current = self._fmt_state()
+        if current[1:] == (spans, paras):
+            return False
+        b = self.body_text
+        self._teardown_table_grids()
+        for tag in b.tag_names():
+            if (is_format_tag(tag) or tag.startswith("para_")
+                    or tag in ("align_center", "align_right")):
+                b.tag_remove(tag, "1.0", "end")
+        self._apply_formatting(b, [
+            dict({"start": s, "end": e, "style": style},
+                 **({} if value is None else {"value": value}))
+            for s, e, style, value in spans])
+        self._apply_paragraphs(b, [dict(p) for p in paras])
+        return True
 
     def _can_edit_undo(self, widget):
         try:
@@ -12924,7 +12989,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
     def _undo_atom_begin(self):
         """Open one undo unit on the body (see the _undo_atom decorator).
-        Re-entrant: nested opens keep the outermost unit."""
+        Re-entrant: nested opens keep the outermost unit. The outermost
+        open also notes the body's formatting, so the unit's Ctrl+Z can
+        put back what Tk's text-only stack cannot (see _body_undo_redo)."""
         depth = getattr(self, "_undo_atom_depth", 0)
         self._undo_atom_depth = depth + 1
         if depth == 0 and hasattr(self, "body_text"):
@@ -12932,6 +12999,15 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 self.body_text.edit_separator()
                 self.body_text.configure(autoseparators=False)
             except tk.TclError:
+                pass
+            self._fmt_atom_before = None
+            try:
+                # Only while the body records undo: an edit made inside
+                # _undo_hidden leaves no step on Tk's stack to pair with.
+                if self.body_text.tk.getboolean(
+                        self.body_text.cget("undo")):
+                    self._fmt_atom_before = self._fmt_state()
+            except (tk.TclError, ValueError):
                 pass
 
     def _undo_atom_end(self):
@@ -12943,6 +13019,25 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 self.body_text.edit_separator()
             except tk.TclError:
                 pass
+            before = getattr(self, "_fmt_atom_before", None)
+            self._fmt_atom_before = None
+            if before is None:
+                return
+            try:
+                after = self._fmt_state()
+            except (tk.TclError, ValueError):
+                return
+            if after == before:
+                return
+            # A unit that changed the text is a step on Tk's stack as well;
+            # one that changed only formatting is a step on this one alone.
+            journal = getattr(self, "_fmt_undo", None)
+            if journal is None:
+                journal = self._fmt_undo = []
+            journal.append({"text": after[0] != before[0],
+                            "before": before, "after": after})
+            del journal[:-self._FMT_JOURNAL_DEPTH]
+            self._fmt_redo = []
 
     def _body_undo_redo(self, action):
         """Ctrl+Z / Ctrl+Y on the note body.
@@ -12952,20 +13047,68 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         the OLD cells over the new text (the drawing itself is kept off
         the stack by _undo_hidden). So every step resyncs the line tags
         and redraws the grids from the text that undo produced.
+
+        And Tk's stack holds TEXT, never a tag. Making a word bold left
+        nothing on it, so Ctrl+Z skipped the bold and took back the last
+        burst of typing instead; and text Tk puts back comes back bare,
+        so undoing a table operation returned the cells without their
+        bold and colours. A formatting journal beside Tk's stack fills
+        both gaps: every undo unit (_undo_atom) notes the formatting
+        before and after it. A step that changed formatting only is taken
+        back here, without Tk, when the text is exactly what it was then;
+        a step Tk takes back gets its formatting laid again once Tk lands
+        on the text the step started from. Matching on the text itself,
+        never on a count of steps, is what keeps the two stacks in step:
+        a snapshot is only ever laid on the very text it was taken from.
+        A unit nothing noted (typing) is noted on its way back, so Ctrl+Y
+        returns its styles too.
         """
         b = self.body_text
         # A still-open cell editor holds uncommitted text; commit it so
         # the undo works against what the note actually says.
         if getattr(self, "_cell_editor", None):
             self._commit_cell_editor()
-        can = (self._can_edit_undo if action == "undo"
-               else self._can_edit_redo)(b)
-        if not can:
-            return "break"
-        try:
-            (b.edit_undo if action == "undo" else b.edit_redo)()
-        except tk.TclError:
-            return "break"
+        undo = action == "undo"
+        if getattr(self, "_fmt_undo", None) is None:
+            self._fmt_undo = []
+        if getattr(self, "_fmt_redo", None) is None:
+            self._fmt_redo = []
+        mine, other = ((self._fmt_undo, self._fmt_redo) if undo
+                       else (self._fmt_redo, self._fmt_undo))
+        now = self._fmt_state()
+        top = mine[-1] if mine else None
+        if top is not None and not top["text"] and top["before"][0] == now[0]:
+            # A formatting-only step, taken on exactly this text: it is
+            # this whole key press, and Tk's stack is not touched.
+            mine.pop()
+            other.append(top)
+            self._fmt_restore(top["before"] if undo else top["after"], now)
+        else:
+            can = (self._can_edit_undo if undo else self._can_edit_redo)(b)
+            if not can:
+                return "break"
+            try:
+                (b.edit_undo if undo else b.edit_redo)()
+            except tk.TclError:
+                return "break"
+            text = b.get("1.0", "end-1c")
+            landed = (len(text), hash(text))
+            came, went = ("after", "before") if undo else ("before", "after")
+            step = None
+            for i in range(len(mine) - 1, -1, -1):
+                if (mine[i]["text"] and mine[i][came][0] == now[0]
+                        and mine[i][went][0] == landed):
+                    step = mine.pop(i)
+                    break
+            if step is None:
+                step = {"text": True, came: now, went: self._fmt_state()}
+            else:
+                # The side left behind is noted as it really was, for the
+                # press that comes back to it.
+                step[came] = now
+                self._fmt_restore(step[went])
+            other.append(step)
+            del other[:-self._FMT_JOURNAL_DEPTH]
         self._body_follow_caret = True
         self._resync_list_tags()
         if (getattr(self, "_table_grids", None)
