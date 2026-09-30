@@ -3710,6 +3710,54 @@ check(f"hovering and opening a day of the drawn month ask no note again "
       and all(any(t in s for s in _nd_tips) for t in _nd_want)
       and all(any(t in s for s in _od_panel_texts()) for t in _nd_want))
 
+# ---- RE-DRAWING HISTORY OR A DAY LEAVES NOTHING BEHIND ----
+# Both bound their long-lived frame again at every redraw -- History its
+# wheel, the day panel its right-click -- and Tkinter never deletes the
+# command a binding replaces: one more Tcl command per render, for as long
+# as the app ran. The day panel's binding also outlived its note: back on
+# the day's list, a right-click on the panel's bare edge offered the last
+# note's menu.
+def _lb_commands():
+    return len(app.tk.splitlist(app.tk.call('info', 'commands')))
+
+
+app._history_toggle_btn.invoke(); app.update()
+for _ in range(3):
+    app._render_calendar_history(); app.update()
+_lb_before = _lb_commands()
+for _ in range(20):
+    app._render_calendar_history(); app.update()
+_lb_history = _lb_commands() - _lb_before
+app._history_toggle_btn.invoke(); app.update()
+_od_open_day(_nd_day)
+_lb_note = app.notes_on_date(_nd_day)[0]
+for _ in range(3):
+    app.show_day_note(_lb_note, _nd_day); app.show_day_list(); app.update()
+_lb_before = _lb_commands()
+for _ in range(20):
+    app.show_day_note(_lb_note, _nd_day); app.show_day_list(); app.update()
+_lb_day = _lb_commands() - _lb_before
+# Fewer than five, not zero: a timer of the app's own that fires or is set
+# during the loop moves the count by one or two either way; the leak was
+# one per redraw, twenty here.
+check(f'twenty History renders and twenty day views leave no Tcl command '
+      f'behind ({_lb_history}, {_lb_day})', _lb_history < 5 and _lb_day < 5)
+_lb_menus = []
+app.show_note_context_menu = lambda e, n, **k: _lb_menus.append((n['id'], k))
+try:
+    app.show_day_note(_lb_note, _nd_day); app.update()
+    _qa_fire(app.day_panel, '<Button-3>', x=3, y=3, rootx=200, rooty=200)
+    app.update()
+    _lb_in_note = list(_lb_menus)
+    app.show_day_list(); app.update()
+    _qa_fire(app.day_panel, '<Button-3>', x=3, y=3, rootx=200, rooty=200)
+    app.update()
+finally:
+    del app.show_note_context_menu
+check(f"the panel's edge offers the open note's menu, and none once back on "
+      f"the day's list ({_lb_in_note}, {_lb_menus[len(_lb_in_note):]})",
+      _lb_in_note == [(_lb_note['id'], {'occurrence_date': _nd_day})]
+      and _lb_menus == _lb_in_note)
 app.close_day_panel()
 app.cal_year, app.cal_month = 2026, 7
 app.render_calendar(); app.update()

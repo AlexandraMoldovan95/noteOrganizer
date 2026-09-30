@@ -285,6 +285,19 @@ class CalendarViewMixin:
         self.selected_day = None          # "YYYY-MM-DD" currently shown
         self._day_panel_mode = "empty"    # empty | list | note
 
+        # The panel outlives every note shown in it, so its right-click is
+        # bound once and asks what the panel shows. show_day_note bound it
+        # anew each time -- one more Tcl command at every note opened -- and
+        # the binding outlived the note: back on the day's list, a
+        # right-click on the panel's bare edge offered the menu of the last
+        # note opened.
+        def _panel_menu(event):
+            shows = getattr(self, "_day_panel_shows", None)
+            if self._day_panel_mode == "note" and shows and shows[0] == "note":
+                self.show_note_context_menu(event, shows[2],
+                                            occurrence_date=shows[1])
+        self.day_panel.bind("<Button-3>", _panel_menu)
+
         # History view state. The frame itself is persistent (built once,
         # track_theme); its ROWS are rebuilt on every render and colour
         # themselves with plain .configure — the two theming patterns,
@@ -1288,7 +1301,8 @@ class CalendarViewMixin:
             self.show_note_context_menu(event, base_note,
                                         occurrence_date=date_str)
 
-        for widget in (self.day_panel, top, title_lbl):
+        # The panel's own edge is bound once, in build_calendar_tab.
+        for widget in (top, title_lbl):
             widget.bind("<Button-3>", _panel_menu)
 
         # The preview is a QUICK LOOK, not the editor: it shows the note's
@@ -1482,6 +1496,10 @@ class CalendarViewMixin:
         self._history_rows = tk.Frame(self.history_frame)
         self.track_theme(self._history_rows, bg="bg")
         self._history_rows.pack(fill="both", expand=True)
+        # The frame outlives every render, so its wheel is bound here, once;
+        # each render binds only the rows it makes (see there).
+        self._bind_mousewheel_recursive(self._history_rows,
+                                        self.cal_scroll_canvas)
 
     def _history_set_bucket(self, bucket):
         self._history_bucket = bucket
@@ -1639,8 +1657,11 @@ class CalendarViewMixin:
                 command=self._history_show_more)
             more.pack(fill="x", pady=(6, 2))
 
-        self._bind_mousewheel_recursive(self._history_rows,
-                                        self.cal_scroll_canvas)
+        # The rows are new; the frame holding them is bound once, where it
+        # is built -- binding it again here left one more Tcl command
+        # behind at every render, for as long as the app ran.
+        for row in self._history_rows.winfo_children():
+            self._bind_mousewheel_recursive(row, self.cal_scroll_canvas)
 
     def _history_toggle_group(self, note_id):
         if note_id in self._history_expanded:
