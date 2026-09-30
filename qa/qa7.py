@@ -2359,8 +2359,8 @@ app.open_day_popup('2026-07-15'); app.update()
 # before its footer (a mutant that stopped drawing did exactly that).
 _CD_NONE = {'box': (0, 0, 0, 0), 'bg': '', 'day': '', 'day_fill': '',
             'today': False, 'badge': '', 'badge_fill': '', 'dots': [],
-            'chips': [], 'chip_fill': [], 'more': '', 'selected_width': -1,
-            'selected_colour': ''}
+            'more_dots': '', 'chips': [], 'chip_fill': [], 'more': '',
+            'selected_width': -1, 'selected_colour': ''}
 
 
 def _cd_view(date_str):
