@@ -3203,6 +3203,38 @@ app.hide_day_tooltip()
 app.cal_year, app.cal_month = 2026, 7
 app.render_calendar(); app.update()
 
+# ---- WHILE HISTORY COVERS THE MONTH, THE PAGE KEYS PAGE HISTORY ----
+# PgUp/PgDn/Home asked only whether the Calendar tab was showing, so under
+# the register they moved the hidden month -- three PgDn from July came
+# back to October -- and the register itself did not move.
+app.notes = [NO.normalize_note({
+    'id': 160 + i, 'title': f'PageKey{i}', 'body': 'x', 'category': 'General',
+    'date': '2026-03-%02d' % (i % 28 + 1)}) for i in range(45)]
+app.save_notes()
+app.notebook.select(app.TAB_CALENDAR); app.update()
+app.cal_year, app.cal_month = 2026, 7
+app.render_calendar(); app.update()
+app._history_toggle_btn.invoke(); app.update()
+app.cal_scroll_canvas.yview_moveto(0); app.update()
+_hk_top = app.cal_scroll_canvas.yview()
+check(f'fixture: the register is longer than its view ({_hk_top})',
+      app._history_visible and _hk_top[0] == 0.0 and _hk_top[1] < 1.0)
+for _ in range(3):
+    app._calendar_key(_CalKey(), months=1); app.update()
+_hk_paged = app.cal_scroll_canvas.yview()
+check(f'PgDn under History pages the register and leaves the hidden month '
+      f'alone ({_hk_top} -> {_hk_paged}, {app.cal_year}-{app.cal_month:02d})',
+      (app.cal_year, app.cal_month) == (2026, 7) and _hk_paged[0] > _hk_top[0])
+app._calendar_key(_CalKey(), today=True); app.update()
+_hk_home = app.cal_scroll_canvas.yview()
+check(f'...Home goes to its top, not to today ({_hk_home}, '
+      f'{app.cal_year}-{app.cal_month:02d})',
+      _hk_home[0] == 0.0 and (app.cal_year, app.cal_month) == (2026, 7))
+app._history_toggle_btn.invoke(); app.update()
+check(f'...and the grid comes back on the month it left '
+      f'({app.cal_month_lbl.cget("text")!r})',
+      not app._history_visible and app.cal_month_lbl.cget('text') == 'July 2026  ⌄')
+
 app.notebook.select(app.TAB_NOTES); app.update()
 
 # ============================================================

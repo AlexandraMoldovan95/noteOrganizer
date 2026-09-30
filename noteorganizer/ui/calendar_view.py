@@ -349,6 +349,19 @@ class CalendarViewMixin:
         if any(isinstance(w, typing_widgets) for w in (source, focused)):
             return
 
+        if getattr(self, "_history_visible", False):
+            # The register covers the month: the keys page the register, and
+            # Home goes to its top. They used to move the hidden month, which
+            # showed on the way back -- three PgDn from July came back October.
+            view = self.cal_scroll_canvas
+            if today:
+                view.yview_moveto(0)
+            else:
+                first, last = view.yview()
+                if not (first <= 0.0 and last >= 1.0):
+                    view.yview_scroll(1 if (months or years) > 0 else -1, "pages")
+            return "break"
+
         if today:
             self.go_to_today()
         else:
