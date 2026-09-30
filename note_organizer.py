@@ -13792,6 +13792,14 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                          if self._note_passes_filter(n, selected)]
         return shown
 
+    @staticmethod
+    def _list_group_of(note):
+        """The group a note's card stands in when the list is grouped: its
+        category, or General for a note with none. One answer for the rows
+        themselves and for every question asked about them -- which group a
+        card may be dragged within, and which notes a folded group hides."""
+        return note.get("category") or "General"
+
     def _list_rows(self):
         """Every row the note list shows, in screen order, before any of
         them is drawn.
@@ -13818,7 +13826,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             return [("note", note) for note in shown]
         groups = {}
         for note in shown:
-            groups.setdefault(note.get("category") or "General", []).append(note)
+            groups.setdefault(self._list_group_of(note), []).append(note)
         # Known categories first (in their defined order), then any leftover
         # (stale/deleted) category names so nothing gets silently dropped.
         ordered = [c for c in CATEGORY_COLORS.keys() if c in groups]
@@ -14127,8 +14135,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             return False
         grouped = getattr(self, "group_by_category", None)
         if grouped is not None and grouped.get():
-            return ((a.get("category") or "General")
-                    == (b.get("category") or "General"))
+            return self._list_group_of(a) == self._list_group_of(b)
         return True
 
     def _move_note(self, note_id, before_id=None, after_id=None):
@@ -15373,8 +15380,18 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
         Asked of the notes, not of the cards: the list draws a step at a
         time, and "all" means every note it shows, drawn yet or not.
+
+        A folded group shows its header and none of its notes, so they are
+        not on the list -- the same fold _list_rows applies. Asked only of
+        the search and the filter, Select all ticked every note of every
+        folded group, and bulk Trash took notes the person could not see.
         """
-        return {n["id"] for n in self._notes_on_the_list()}
+        shown = self._notes_on_the_list()
+        grouped = getattr(self, "group_by_category", None)
+        folded = getattr(self, "collapsed_groups", None)
+        if grouped is not None and grouped.get() and folded:
+            shown = [n for n in shown if self._list_group_of(n) not in folded]
+        return {n["id"] for n in shown}
 
     def _bulk_select_all(self):
         """Select every note the list is showing — or, if they are all

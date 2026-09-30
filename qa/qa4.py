@@ -1611,6 +1611,44 @@ check(f'a click that catches up a deferred rebuild, with the list scrolled, '
       and not any('order' in n for n in app.notes))
 app.__dict__.pop('DRAG_EDGE', None)
 
+# 5c. Select all ticks exactly what the list shows (USER_GUIDE), and a
+# folded group shows its header, not its notes. Asked only of the search and
+# the filter, Select all ticked the five notes folded away too, and bulk
+# Trash took them. Pressed on the bar's own button, as a person presses it.
+_bl_work_added = 'Work' not in NO.CATEGORY_COLORS
+NO.CATEGORY_COLORS.setdefault('Work', '#4cc9f0')
+_co_fresh([dict(n, category='Work') for n in _bl_notes[:5]]
+          + [dict(n, category='General') for n in _bl_notes[5:9]])
+_bl_general = {n['id'] for n in _bl_notes[5:9]}
+app.group_by_category.set(True)
+app.collapsed_groups.clear()
+app.collapsed_groups.add('Work')
+app.refresh_note_list(); _ls_settle()
+check(f'fixture: a grouped list with Work folded shows only the General '
+      f'cards ({app._card_order()}; Work header '
+      f'{(app._header_view("Work") or {}).get("label")!r})',
+      set(app._card_order()) == _bl_general
+      and (app._header_view('Work') or {}).get('caret') == '▶')
+app._toggle_selection_mode(); _ls_settle()
+app._bulk_select_all_btn.invoke(); _ls_settle()
+check(f'Select all over a folded group ticks only the notes the list shows '
+      f'({sorted(app.selected_note_ids)}; label '
+      f'{app.bulk_selected_lbl.cget("text")!r}, button '
+      f'{app._bulk_select_all_btn.cget("text")!r})',
+      app.selected_note_ids == _bl_general
+      and app.bulk_selected_lbl.cget('text') == '4 selected'
+      and app._bulk_select_all_btn.cget('text') == 'Unselect all')
+app._toggle_group_collapsed('Work'); _ls_settle()
+check(f'...and unfolding the group puts unticked notes on show, so the button '
+      f'offers Select all again ({app._bulk_select_all_btn.cget("text")!r})',
+      app._bulk_select_all_btn.cget('text') == 'Select all'
+      and app.selected_note_ids == _bl_general)
+app._toggle_selection_mode(); _ls_settle()
+app.group_by_category.set(False)
+app.collapsed_groups.clear()
+if _bl_work_added:
+    NO.CATEGORY_COLORS.pop('Work', None)
+
 # ---------------------------------------------------------------------
 # A tick box's well must be light, because the mark in it is dark.
 #
