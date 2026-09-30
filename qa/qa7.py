@@ -3235,6 +3235,63 @@ check(f'...and the grid comes back on the month it left '
       f'({app.cal_month_lbl.cget("text")!r})',
       not app._history_visible and app.cal_month_lbl.cget('text') == 'July 2026  ⌄')
 
+# ---- THE REMINDER BAR LANDS ON TODAY, ON SCREEN ----
+# The "notes for today" bar sits above every page. Its click selected the
+# Calendar tab and opened today's list under whichever month was showing,
+# with no day outlined; from Settings, it opened the day behind Settings,
+# where nothing showed; and under History, below the register.
+import datetime as _rm_dt
+_rm_d = _rm_dt.date.today()
+_rm_today = _rm_d.strftime('%Y-%m-%d')
+_rm_away = (_rm_d.year - 1, _rm_d.month)          # a month that is not today's
+app.notes = [NO.normalize_note(n) for n in (
+    {'id': 170, 'title': 'RemindToday', 'body': 'x', 'category': 'General',
+     'date': _rm_today},
+    {'id': 171, 'title': 'RemindAway', 'body': 'x', 'category': 'General',
+     'date': '%04d-%02d-03' % _rm_away})]
+app.save_notes()
+app._render_reminder_bar(1, _rm_today); app.update()
+_rm_lbl = find_widget(app.reminder_bar, tk.Label, 'You have')
+
+
+def _rm_landed():
+    return (app.notebook.winfo_ismapped()
+            and app.notebook.index(app.notebook.select()) == app.TAB_CALENDAR
+            and not app._history_visible
+            and (app.cal_year, app.cal_month) == (_rm_d.year, _rm_d.month)
+            and app.selected_day == _rm_today and app._day_panel_mode == 'list'
+            and _cd_view(_rm_today)['selected_width'] == 2)
+
+
+def _rm_elsewhere():
+    app.close_day_panel()
+    app.notebook.select(app.TAB_CALENDAR); app.update()
+    app.cal_year, app.cal_month = _rm_away
+    app.render_calendar(); app.update()
+
+
+check('fixture: the reminder bar shows its line', _rm_lbl is not None)
+_rm_elsewhere()
+if _rm_lbl is not None:
+    _qa_click(_rm_lbl); app.update()
+check(f"the reminder's click shows today on its own month, outlined "
+      f"({app.cal_year}-{app.cal_month:02d}, {app.selected_day})", _rm_landed())
+_rm_elsewhere()
+app.show_settings_page(); app.update()
+if _rm_lbl is not None:
+    _qa_click(_rm_lbl); app.update()
+check(f"...clicked over Settings, it leaves Settings to show it "
+      f"(Settings open: {app._settings_open})",
+      not app._settings_open and _rm_landed())
+_rm_elsewhere()
+app._history_toggle_btn.invoke(); app.update()
+if _rm_lbl is not None:
+    _qa_click(_rm_lbl); app.update()
+check(f"...and clicked over History, it brings the month back to show it "
+      f"(History open: {app._history_visible})", _rm_landed())
+app.dismiss_reminder()
+app.close_day_panel(); app.update()
+
 app.notebook.select(app.TAB_NOTES); app.update()
 
 # ============================================================

@@ -900,7 +900,21 @@ class CalendarViewMixin:
         close.bind("<Button-1>", lambda e: self.dismiss_reminder())
 
     def _open_today_from_reminder(self, today):
+        """The bar's click lands on the day it names, on screen: on its own
+        month, from Settings too. The bar sits above every page, and this
+        used to open the day behind Settings, where nothing showed, or
+        under whichever month was shown, with no day outlined."""
+        # Settings is left the way Ctrl+N leaves it; a popup holding typed
+        # work may ask to stay, and then the click does nothing.
+        if not self._leave_settings_for_the_editor():
+            return
         self.notebook.select(self.TAB_CALENDAR)
+        if getattr(self, "_history_visible", False):
+            self._hide_calendar_history()
+        d = parse_date(today)
+        if d is not None:
+            self.cal_year, self.cal_month = d.year, d.month
+        self.render_calendar()
         self.open_day_popup(today)
 
     def dismiss_reminder(self):
