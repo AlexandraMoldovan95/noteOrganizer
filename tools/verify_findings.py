@@ -83,10 +83,14 @@ TIER_CHECKS = [
      ".lnk and its family are in the warn list"),
 
     ("T1-1", lambda: False, None),
-    ("T1-2", lambda: re.search(r"def render_calendar.*?\n(.{0,400})", HUB, re.S)
-     and ("_calendar_is_showing" in HUB or "_is_calendar_visible" in HUB)
-     and re.search(r"def render_calendar\b.*?(_calendar_is_showing|"
-                   r"_is_calendar_visible)", HUB, re.S) is not None,
+    # render_calendar moved to ui/calendar_view.py with the module split;
+    # asked of the hub alone, this row read "still open" for a fix that
+    # was in the code all along. The guard must come before the rebuild,
+    # inside the method, wherever the method lives.
+    ("T1-2", lambda: re.search(
+        r"def render_calendar\(self\):(?:(?!\n    def ).)*?"
+        r"if not self\._calendar_is_showing\(\):", CALENDAR_UI + HUB, re.S)
+     is not None,
      "render_calendar checks visibility before working"),
     ("T1-3", lambda: "json.dumps(" in STORAGE and "json.dump(" not in STORAGE,
      "the write builds one string"),
