@@ -8189,6 +8189,19 @@ check('checklist undo: with no offer up, the autosave banner still shows',
 check('checklist undo: fixture ready for the error case',
       _cu_setup(['milk', 'bread']))
 _cu_press(0)
+# The delete schedules its own autosave, and its reassurance banner
+# yields only to a live OFFER -- so, landing after the error banner, it
+# replaces it. Left pending, that timer fired inside the update() below
+# whenever the machine was slow, and this check went red twice under a
+# loaded desktop with nothing wrong with what it asks. Settled first, and
+# asserted settled, so the reading is about its own promise. (That a
+# "Note updated" can cover an error at all is its own question, reported
+# with the audit's editor fixes.)
+app._flush_autosave()
+app.update()
+check('checklist undo: the delete\'s own save is settled before the error '
+      '(precondition)', getattr(app, '_autosave_job', None) is None
+      and app._toast_action is not None)
 app._show_toast('a failure the user must see', kind='error')
 app.update()
 check('checklist undo: an error is never held back by a live offer',
