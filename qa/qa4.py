@@ -1853,6 +1853,11 @@ check(f'...and a note clicked open next takes the outline off it: one open '
 # exactly the outline this is about.
 app.open_note_in_tab(app.find_note(_bl_o[1])); _ls_settle()
 app._shortcut_new_note(); _ls_settle()
+# Before that save no note is open, so no card is: new_note() is where
+# Ctrl+N, a calendar day's "Add note" and Use template all pass.
+check(f'...and Ctrl+N takes the outline off the note it leaves, before the '
+      f'new one is saved ({_bl_outlined()}, the note open before {_bl_o[1]})',
+      app.selected_note_id is None and _bl_outlined() == [])
 app.title_entry.delete(0, 'end')
 app.title_entry.insert(0, 'Made with Ctrl+N')
 app.save_current_note(auto=True); _ls_settle()

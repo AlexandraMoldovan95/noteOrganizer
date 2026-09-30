@@ -15960,8 +15960,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # Cancel on a day's save question stops the delete here.
         if self._flush_autosave() is False:
             return
-        count = len(self.selected_note_ids)
         to_trash = [n for n in self.notes if n["id"] in self.selected_note_ids]
+        # Counted from the notes that will move, not from the ticks: the
+        # two agree now that a deleted note leaves the selection, and the
+        # question should never name more notes than it moves.
+        count = len(to_trash)
         attachment_count = sum(len(n.get("attachments") or []) for n in to_trash)
         warning = self._series_warning(to_trash)
         if attachment_count:
@@ -17304,6 +17307,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # _add_note_for_date re-arms its own pending right after this.
         self._pending_calendar_return = None
         self._update_calendar_return_button()
+        # No note is open now, so no card wears the "open" outline: Ctrl+N,
+        # a calendar day's "Add note" and Use template came through here
+        # and left it on the card they left until the new note's first save.
+        self._update_open_highlight()
 
     def load_note(self, note, occurrence_date=None):
         """Open a note. If occurrence_date is given, the note is being opened

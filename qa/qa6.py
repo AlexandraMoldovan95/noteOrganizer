@@ -1519,6 +1519,7 @@ _QW_NOT_KEYS = {'<Button-1>', '<Button-3>', '<Button-2>', '<Enter>',
 # written with the binding spelling and caught its own mistake.
 _QW_KEY_NAMES = {'<Key-Return>': 'Enter', '<Key-space>': 'Space',
                  '<Key-Down>': 'Down', '<Key-Up>': 'Up',
+                 '<Key-Left>': 'Left', '<Key-Right>': 'Right',
                  '<Alt-Key-Down>': 'Alt+Down', '<Alt-Key-Up>': 'Alt+Up',
                  '<Key-Escape>': 'Escape',
                  '<Shift-Key-F10>': 'Shift+F10',

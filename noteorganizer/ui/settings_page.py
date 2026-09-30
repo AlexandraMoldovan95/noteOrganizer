@@ -3372,9 +3372,14 @@ class SettingsPageMixin:
         )),
         ("Note list (click a note, or Tab into it from the search box)", (
             ("Up  /  Down", "Walk from card to card, in the order the list "
-                            "is showing them."),
+                            "is showing them — over the category headers "
+                            "too, when the list is grouped."),
             ("Enter  /  Space", "Open the note — or tick it, while "
-                                "☑ Select is on."),
+                                "☑ Select is on. On a category header: "
+                                "fold or open its group."),
+            ("Left  /  Right", "In a list grouped by category: Left folds "
+                               "the group (from a note or its header), Right "
+                               "opens a folded one."),
             ("Alt+Up  /  Alt+Down", "Move the note one place up or down. "
                                     "The list switches to Custom order, "
                                     "starting from the order it was "
