@@ -1762,6 +1762,55 @@ finally:
     app.__dict__.pop('ask_yes_no_cancel', None)
 app._dismiss_mini_popup(); app.update()
 
+# A double-click on a bin in the template editor's checklist removes one
+# item. The row below slid up under the pointer and the second press took
+# it too -- the note checklist's hazard (qa1), and the same guard.
+from _qa_support import fire as _tb_fire
+app.templates.append(NO.normalize_template({'name': 'Tri', 'checklist': [
+    {'text': 'a', 'done': False}, {'text': 'b', 'done': False},
+    {'text': 'c', 'done': False}]}))
+NO.save_templates(app.templates)
+app._edit_template(app.templates[-1], app._refresh_templates_panel,
+                   _pencils9()[0])
+app.update()
+_tb_pop = app._mini_popup
+
+
+def _tb_items():
+    if _tb_pop is None or not _tb_pop.winfo_exists():
+        return None
+    return [str(w.cget('text')) for w in _walk9(_tb_pop)
+            if isinstance(w, tk.Label) and str(w.cget('text')) in ('a', 'b', 'c')]
+
+
+def _tb_press(t):
+    bins = ([w for w in _walk9(_tb_pop) if isinstance(w, tk.Canvas)
+             and getattr(w, '_icon_kind', None) == 'trash']
+            if _tb_pop is not None and _tb_pop.winfo_exists() else [])
+    if bins:
+        _tb_fire(bins[0], '<Button-1>', x=5, y=5, rootx=500, rooty=400, time=t)
+        app.update()
+
+
+_tb_bg = len(_bg9)
+_tb_press(300000)
+check('fixture: a press on a template checklist bin removes its item (%s)'
+      % _tb_items(), _tb_items() == ['b', 'c'])
+# The bin redraws its own row, so the click destroys the very canvas it
+# landed on -- and the tooltip's hide, queued behind the bin's handler,
+# was a command of that canvas: "invalid command name", in silence.
+check('a press on a bin that redraws its own row raises no background error '
+      '(%s)' % _bg9[_tb_bg:][:1], len(_bg9) == _tb_bg)
+_tb_press(300250)
+check('a double-click on a template checklist bin removes one item, not the '
+      'next (%s)' % _tb_items(), _tb_items() == ['b', 'c'])
+_tb_press(301500)
+check('...while a press of its own, later, still removes (%s)' % _tb_items(),
+      _tb_items() == ['c'])
+app._dismiss_mini_popup(); app.update()
+app.templates = [t for t in app.templates if t.get('name') != 'Tri']
+NO.save_templates(app.templates)
+
 # ============================================================
 # ESCAPE ON "SAVE CHANGES?" KEEPS EDITING
 # ============================================================

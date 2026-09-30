@@ -6428,8 +6428,19 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     add="+")
         widget.bind("<Leave>", lambda e: self._hide_tooltip(), add="+")
         # Clicking should get on with the job, not leave a label hanging over
-        # the result of it.
-        widget.bind("<Button-1>", lambda e: self._hide_tooltip(), add="+")
+        # the result of it. Through ONE command registered on the window,
+        # not a lambda of the widget's own: Tk expands every script bound to
+        # a click before running any, and a click whose own handler destroys
+        # the widget -- a bin that redraws its row -- deleted this one while
+        # it was still queued. "invalid command name", in silence, on every
+        # such click (the popups' bind lines had the same lesson).
+        hide = getattr(self, "_hide_tooltip_command", None)
+        if hide is None:
+            hide = self._hide_tooltip_command = self.register(self._hide_tooltip)
+        # The "+" is spelled into the script: given a string, tkinter's
+        # bind ignores add="+" and REPLACES the widget's other click
+        # handlers -- measured, it took every icon's own action with it.
+        widget.bind("<Button-1>", "+" + hide)
 
     def _schedule_tooltip(self, widget, title, detail):
         """Wait a moment before showing, so sweeping across the toolbar on

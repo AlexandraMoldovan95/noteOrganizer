@@ -316,7 +316,7 @@
   "_history_set_bucket": "(self, bucket)",
   "_history_show_more": "(self)",
   "_history_toggle_group": "(self, note_id)",
-  "_icon_button": "(self, parent, kind, command=None, danger=False, bg_key='card', tip=None)",
+  "_icon_button": "(self, parent, kind, command=None, danger=False, bg_key='card', tip=None, removes_row=False)",
   "_icon_files": "(self)",
   "_insert_emoji_from_toolbar": "(self)",
   "_insert_table": "(self, rows, columns)",

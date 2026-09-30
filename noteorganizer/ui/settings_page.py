@@ -1096,7 +1096,8 @@ class SettingsPageMixin:
                 # bg_key as the row it sits in, and no track_theme, because
                 # render_tpl_checklist() rebuilds these rows.
                 self._icon_button(row, "trash", do_del, danger=True,
-                                  bg_key="sidebar").pack(side="right")
+                                  bg_key="sidebar", removes_row=True
+                                  ).pack(side="right")
 
         render_tpl_checklist()
 
@@ -2594,8 +2595,14 @@ class SettingsPageMixin:
     }
 
     def _icon_button(self, parent, kind, command=None, danger=False,
-                     bg_key="card", tip=None):
+                     bg_key="card", tip=None, removes_row=False):
         """A small drawn-glyph button for a list row.
+
+        ``removes_row`` is for a button that takes its own row away with no
+        question in between: the row below slides up under the pointer, so
+        the second press of a double-click would take that one too. It is
+        ignored, by the rule the checklist bin follows
+        (_second_press_of_double_click).
 
         Replaces the emoji these rows used to use. Emoji are fixed-colour
         bitmaps, so a red wastebasket stayed the same shade of red on all
@@ -2627,7 +2634,12 @@ class SettingsPageMixin:
 
         paint(base)
         if command is not None:
-            c.bind("<Button-1>", lambda _e: command())
+            def _press(event):
+                if removes_row and self._second_press_of_double_click(event):
+                    return "break"
+                command()
+
+            c.bind("<Button-1>", _press)
             hot = self.colors["danger"] if danger else self.colors["text"]
             rest_bg = self.colors[bg_key]
             hover_bg = (self._blend(rest_bg, self.colors["danger"], 0.16) if danger
