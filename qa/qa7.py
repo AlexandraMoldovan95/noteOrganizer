@@ -1028,10 +1028,18 @@ for _pv_i in range(8):
 _pv_gif = os.path.join(_pv_dir, 'anim_pv.gif')
 _pv_frames[0].save(_pv_gif, save_all=True, append_images=_pv_frames[1:],
                    duration=20, loop=0)
-app._show_image_preview(_pv_gif, 'anim_pv.gif'); app.update()
+# Read the moment the preview is built, before any update(): a frame is
+# decoded on each 20 ms tick, and an update() slower than that -- any
+# loaded machine -- ran ticks first and reported "2 (or 3) decoded when
+# shown" about an app that had decoded one. Measured on the untouched
+# base commit, red under load and green alone.
+app._show_image_preview(_pv_gif, 'anim_pv.gif')
+_pv_decoded_when_shown = len(app._image_preview_ref)
+_pv_reading_when_shown = app._preview_source is not None
+app.update()
 check(f'an animation shows its first frame before decoding the rest '
-      f'({len(app._image_preview_ref)} decoded when shown)',
-      len(app._image_preview_ref) == 1 and app._preview_source is not None)
+      f'({_pv_decoded_when_shown} decoded when shown)',
+      _pv_decoded_when_shown == 1 and _pv_reading_when_shown)
 _pv_end = time.time() + 10
 while app._preview_source is not None and time.time() < _pv_end:
     app.update(); time.sleep(0.01)
@@ -1080,7 +1088,10 @@ check(f'a file replaced under the same name is read again ({_pv_w1} -> '
 # Closed half-way through its first loop, the preview lets go of the file
 # -- on Windows an open file cannot be renamed or deleted.
 app._preview_cache.clear()
-app._show_image_preview(_pv_gif, 'anim_pv.gif'); app.update()
+# Closed before any update(), for the reason above: eight 20 ms ticks decode
+# the whole file and let it go by themselves, and a slow enough update()
+# ran all of them -- after which this proved nothing about closing.
+app._show_image_preview(_pv_gif, 'anim_pv.gif')
 _pv_held = app._preview_source is not None
 app._dismiss_mini_popup(); app.update()
 try:
