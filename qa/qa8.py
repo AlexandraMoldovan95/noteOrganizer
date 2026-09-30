@@ -467,6 +467,21 @@ check('a flush-time save failure leaves a trace',
       '(swallowed: flush: save_current_note' in _swl_end
       and 'flush save probe' in _swl_end)
 
+# The autosave's "Note updated" is only reassurance, and it yields to what
+# matters more: an Undo offer, and now an error. A failed action followed
+# within the save delay by an autosave had its "something went wrong"
+# covered by a green tick, and the one message that mattered was gone.
+_tw_app = app13
+_tw_app._show_toast("Something went wrong with that", kind="error")
+_tw_app._show_toast("Note updated", yield_to_action=True)
+_tw_app.update()
+check('an error banner is not covered by the autosave\'s reassurance',
+      str(_tw_app.toast_lbl.cget('text')).endswith('Something went wrong with that'))
+_tw_app._show_toast("A later, deliberate message")
+_tw_app.update()
+check('...while a message that does not yield still replaces it',
+      str(_tw_app.toast_lbl.cget('text')).endswith('A later, deliberate message'))
+
 print()
 print(f"=== QA8 FAILURES: {fails if fails else 'NONE'} ===")
 

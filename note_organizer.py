@@ -18409,13 +18409,17 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         """
         if not hasattr(self, "toast_frame"):
             return
-        if (yield_to_action and getattr(self, "_toast_action", None) is not None
-                and getattr(self, "_toast_hide_job", None) is not None):
+        if (yield_to_action and getattr(self, "_toast_hide_job", None) is not None
+                and (getattr(self, "_toast_action", None) is not None
+                     or getattr(self, "_toast_kind", None) == "error")):
             # An offer is on screen right now and has been neither taken
             # nor expired — both of those clear _toast_action, so this
             # cannot mistake a stale one for a live offer. Nothing is
             # lost by staying quiet: every caller that yields also writes
-            # the same news to the status line.
+            # the same news to the status line. An error on screen is
+            # yielded to as well: the autosave that follows a failed
+            # action within its delay covered "something went wrong" with
+            # "Note updated", and the one message that mattered was gone.
             return
         color = {"success": self.colors["success"],
                  "info": self.colors["accent"],
@@ -18426,6 +18430,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # Undo would have read as a job well done.
         mark = {"success": "✓", "info": "i", "error": "!"}.get(kind, "✓")
         self._toast_action = action
+        self._toast_kind = kind
         try:
             self.toast_frame.configure(bg=color)
             self.toast_lbl.configure(text=f"{mark}  {text}", bg=color, fg="white")

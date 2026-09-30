@@ -1252,9 +1252,17 @@ class SettingsPageMixin:
         tk.Button(row, text="Delete", command=delete_forever, relief="flat",
                   cursor="hand2", bg=self.colors["danger"], fg="white",
                   font=("Segoe UI", 8, "bold")).pack(side="right", padx=(2, 8), ipadx=4, ipady=1)
-        tk.Button(row, text="Restore", command=restore, relief="flat",
-                  cursor="hand2", bg=self.colors["accent"], fg="white",
-                  font=("Segoe UI", 8, "bold")).pack(side="right", padx=2, ipadx=4, ipady=1)
+        restore_btn = tk.Button(row, text="Restore", command=restore, relief="flat",
+                                cursor="hand2", bg=self.colors["accent"], fg="white",
+                                font=("Segoe UI", 8, "bold"))
+        restore_btn.pack(side="right", padx=2, ipadx=4, ipady=1)
+        # A double-click's second press lands on the row that slid up into
+        # this one's place when the first restore redrew the list -- and
+        # restored that note too. The checklist bin's hazard, and its guard.
+        restore_btn.bind(
+            "<ButtonPress-1>",
+            lambda e: "break" if self._second_press_of_double_click(e) else None,
+            add="+")
         # The text last, on what the buttons left. Reported from the
         # field once a series row grew a "repeats ..." line: the buttons
         # were squeezed to slivers. A row can afford a shortened title;

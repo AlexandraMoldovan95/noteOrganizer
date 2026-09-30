@@ -278,6 +278,13 @@ _probe_btn.destroy(); _probe_dd.destroy(); _probe_txt.destroy(); app.update()
 # dark<->light switch, the main editor included; the recurrence radios'
 # selectcolor and the checklist rows' wells stayed on the old palette;
 # Back to Notes pressed in the old theme's colours.
+# Checklist rows are built while the section is OPEN (a closed section
+# builds none since the checklist learned to touch one row at a time);
+# open it, as a person must to reach the box that adds an item, and put it
+# back after the check.
+_cl_was_open = app._checklist_open
+if not _cl_was_open:
+    app.toggle_checklist_section()
 app.checklist_add_var.set('bifa')
 app._add_checklist_item()
 app.update()
@@ -318,6 +325,8 @@ check('the caret follows the theme in body, title and comments',
       _dark2[0] and _light2[0])
 check('checklist checkbox wells stay readable across a theme switch',
       _dark2[1] and _light2[1])
+if not _cl_was_open and app._checklist_open:
+    app.toggle_checklist_section()
 check('recurrence radios still have their well tracked, so it cannot go stale',
       any(isinstance(w, tk.Radiobutton) and m.get('selectcolor') == 'card'
           for w, m in app.themed_widgets))
@@ -367,6 +376,12 @@ app.toggle_theme(); app.update()
 # 300 in the list's own order. A rebuild that silently stopped building
 # cards fails both, and so does one that went back to drawing everything.
 NOTE_LIST_BUDGET_MS = 8000
+# A clean editor first. Whatever an earlier block left in it (the checklist
+# item above, on a note from an older fixture) is otherwise saved by a late
+# autosave INTO this fixture -- a 301st note, and the counts below read one
+# card too many whenever the timer lost the race. Every real delete route
+# saves the editor first; the checks here call _delete_note directly.
+app.new_note(); app.update()
 app.notes = [{'id':i,'title':f'Perf{i}','body':'x'*30,'category':'General',
              'updated':'2026-01-01 00:00','created':'2026-01-01 00:00',
              'checklist':[],'attachments':[]} for i in range(300)]
@@ -646,6 +661,8 @@ check(f'Down on the last drawn card draws on and moves to the next '
       _ls_want is not None and _ls_asked == [_ls_want])
 
 # A note deleted before its card was ever drawn must never get one.
+check(f'fixture: the list holds exactly the 300 notes it was given '
+      f'({len(app.notes)})', len(app.notes) == 300)
 _ls_victim = _ls_rows[200]
 _ls_real_ask = app.ask_yes_no
 app.ask_yes_no = lambda *a, **k: True

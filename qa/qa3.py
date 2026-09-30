@@ -2282,6 +2282,45 @@ os.remove(_ri_zip)
 app._import_state = None
 app.notes = []; app.save_notes()
 
+# A double-click on a Trash row's Restore restores that one note. The
+# second press used to land on the row that slid up into its place when
+# the first redrew the list, and restored that note too -- the checklist
+# bin's hazard (qa1), and the same guard. Delivered as a pointer delivers
+# it, at explicit screen points and times.
+from _qa_support import fire as _dc_fire
+app.trash = [
+    dict(NO.normalize_note({'id': 1, 'title': 'Newer', 'body': 'x'}),
+         deleted_at='2026-09-30 11:00:00'),
+    dict(NO.normalize_note({'id': 2, 'title': 'Older', 'body': 'y'}),
+         deleted_at='2026-09-30 10:00:00')]
+NO.save_trash(app.trash)
+app.show_settings_page(); app.toggle_settings_panel('trash'); app.update()
+
+
+def _dc_restore(t, x=400, y=300):
+    rows = _trash_rows()
+    btn = find_btn(rows[0], 'Restore') if rows else None
+    if btn is None:
+        return
+    _dc_fire(btn, '<Enter>')
+    _dc_fire(btn, '<ButtonPress-1>', x=5, y=5, rootx=x, rooty=y, time=t)
+    _dc_fire(btn, '<ButtonRelease-1>', x=5, y=5, rootx=x, rooty=y, time=t + 60)
+    app.update()
+
+
+_dc_restore(200000)
+check('fixture: the first click of a double-click restores the top row',
+      [n['title'] for n in app.notes] == ['Newer'])
+_dc_restore(200250)
+check('a double-click on a Trash row restores one note, not the next one too',
+      [n['title'] for n in app.notes] == ['Newer'] and len(app.trash) == 1)
+_dc_restore(201500)
+check('...while a click of its own, later, still restores',
+      sorted(n['title'] for n in app.notes) == ['Newer', 'Older'])
+app.hide_settings_page(); app.update()
+app.trash = []; NO.save_trash(app.trash)
+app.notes = []; app.save_notes()
+
 
 print()
 print(f"=== QA3 FAILURES: {fails if fails else 'NONE'} ===")
