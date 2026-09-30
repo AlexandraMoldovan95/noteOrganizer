@@ -3111,6 +3111,47 @@ check(f"...and its Undo puts the old colour back on both "
 if app.selection_mode:
     app._toggle_selection_mode()
 
+# ---- A THEME SWITCH LEAVES EACH NOTE ITS OWN COLOUR ----
+# The straggler pass swaps any colour equal to another theme's palette
+# entry, and cannot tell a note's own colour from one: the open day's
+# stripes in the colours the theme being left also uses -- its accent
+# (General's), its danger (Urgent's), its success -- came back as the new
+# theme's. The list is drawn again from the notes after that pass, as the
+# note list's cards are.
+_od_theme_was = app.theme_name
+app.set_theme('dark'); app.update()
+_od_dark, _od_ocean = NO.THEMES['dark'], NO.THEMES['dark_ocean']
+app.notes = [NO.normalize_note(n) for n in (
+    {'id': 142, 'title': 'OdGeneral', 'body': 'x', 'category': 'General',
+     'date': '2026-07-09'},
+    {'id': 143, 'title': 'OdUrgent', 'body': 'x', 'category': 'Urgent',
+     'date': '2026-07-09'},
+    {'id': 144, 'title': 'OdOwn', 'body': 'x', 'category': 'General',
+     'date': '2026-07-09', 'color': _od_dark['success']},
+)]
+app.save_notes()
+app.refresh_note_list()
+_od_open_day('2026-07-09')
+_od_want = [app.get_note_color(n) for n in app.notes]
+check(f'fixture: the stripes wear colours the dark theme also uses, which '
+      f'Ocean Blue does not ({_od_stripes()})',
+      _od_stripes() == _od_want
+      and _od_want == [_od_dark['accent'], _od_dark['danger'], _od_dark['success']]
+      and all(_od_dark[k] != _od_ocean[k] for k in ('accent', 'danger', 'success')))
+app.show_settings_page(); app.update()
+app.set_theme('dark_ocean'); app.update()
+app.hide_settings_page(); app.update()
+check(f"a theme switched in Settings leaves the open day's stripes in the "
+      f"notes' own colours ({_od_stripes()})",
+      app.theme_name == 'dark_ocean' and _od_stripes() == _od_want)
+app.set_theme('dark'); app.update()
+app.notebook.select(app.TAB_NOTES); app.update()
+app.editor_theme_btn.invoke(); app.update()
+app.notebook.select(app.TAB_CALENDAR); app.update()
+check(f"...and so does the sun/moon above a note ({app.theme_name}, "
+      f"{_od_stripes()})",
+      app.theme_name != 'dark' and _od_stripes() == _od_want)
+app.set_theme(_od_theme_was); app.update()
 app.close_day_panel()
 app.notebook.select(app.TAB_NOTES); app.update()
 

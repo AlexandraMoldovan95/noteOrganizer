@@ -10621,6 +10621,15 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             walk(self)
         except tk.TclError:
             pass
+        # An open day's list paints each row's stripe in its note's own
+        # colour, and the walk above cannot tell that from a palette's:
+        # General's #7c5cff is the dark and light accent, Urgent's #ff5c7c
+        # the dark theme's danger, so they were swapped for the new theme's.
+        # Drawn again from the notes, as _recolor_note_cards does for the
+        # note list -- also while Settings hides it, so that it is right
+        # when it shows. (The one-note view has no colour of its own.)
+        if getattr(self, "_day_panel_mode", "empty") == "list":
+            self.show_day_list()
 
     def _refresh_placeholder_colors(self):
         # self._placeholders only ever grows (add_placeholder() appends,
