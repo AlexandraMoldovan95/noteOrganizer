@@ -1653,12 +1653,27 @@ def _wa_answer(value):
 
 
 def _wa_open_dirty():
+    """The first template's editor, with typing in it. Opened the way its
+    pencil opens it but called directly: it is the fixture, not the click
+    under test -- and a broken click-outside must turn the checks below
+    red, not take the script down with a missing editor."""
     app._dismiss_mini_popup(); app.update()
-    _qa_click(_pencils9()[0]); app.update()
+    app._edit_template(app.templates[0], app._refresh_templates_panel,
+                       _pencils9()[0])
+    app.update()
     _pop = app._mini_popup
+    if _pop is None or not _pop.winfo_exists():
+        return None, None
     _ent = [w for w in _walk9(_pop) if isinstance(w, tk.Entry)][0]
     _ent.insert('end', ' (my edit)')
     return _pop, _ent
+
+
+def _wa_text(entry):
+    try:
+        return entry.get() if entry is not None else None
+    except tk.TclError:
+        return None
 
 
 def _wa_names():
@@ -1671,11 +1686,13 @@ try:
     _qa_click(_pencils9()[1]); app.update()
     check('another template\'s pencil asks about the half-written one, once, '
           'and Cancel keeps it (%s)' % _wa_asked,
-          _wa_asked == ['Save changes?'] and app._mini_popup is _wa_pop
-          and _wa_pop.winfo_exists() and _wa_ent.get() == 'Weekly review (my edit)')
+          _wa_asked == ['Save changes?'] and _wa_pop is not None
+          and app._mini_popup is _wa_pop and _wa_pop.winfo_exists()
+          and _wa_text(_wa_ent) == 'Weekly review (my edit)')
     _wa_answer(True)
     _qa_click(_pencils9()[1]); app.update()
-    _wa_now = ([w for w in _walk9(app._mini_popup) if isinstance(w, tk.Entry)][0].get()
+    _wa_now = (_wa_text(next((w for w in _walk9(app._mini_popup)
+                              if isinstance(w, tk.Entry)), None))
                if app._mini_popup is not None else None)
     check('...and Yes saves it, then opens the one clicked (%s, %r)'
           % (_wa_names(), _wa_now),
@@ -1692,7 +1709,8 @@ try:
     check('the arrow of "Back to Notes" asks, once, and Cancel stays on '
           'Settings with the editor (%s)' % _wa_asked,
           _wa_asked == ['Save changes?'] and app._settings_open
-          and app._mini_popup is _wa_pop and _wa_pop.winfo_exists())
+          and _wa_pop is not None and app._mini_popup is _wa_pop
+          and _wa_pop.winfo_exists())
     _wa_answer(False)
     _qa_click(_wa_back); app.update()
     check('...and No leaves Settings without saving (%s)' % _wa_names(),
@@ -1708,12 +1726,14 @@ try:
           'stays on Templates with the editor (%s)' % _wa_asked,
           _wa_asked == ['Save changes?']
           and app._settings_selected_section == 'templates'
-          and app._mini_popup is _wa_pop and _wa_pop.winfo_exists())
+          and _wa_pop is not None and app._mini_popup is _wa_pop
+          and _wa_pop.winfo_exists())
     _wa_answer(None)
     _qa_click(app.filter_menu); app.update()
     check('a sidebar dropdown clicked beside a half-written template asks, '
           'once, and Cancel opens nothing (%s)' % _wa_asked,
-          _wa_asked == ['Save changes?'] and app._mini_popup is _wa_pop)
+          _wa_asked == ['Save changes?'] and _wa_pop is not None
+          and app._mini_popup is _wa_pop)
     _wa_answer(True)
     _qa_click(app.filter_menu); app.update()
     check('...and Yes saves the template, then opens the list (%s)' % _wa_names(),
@@ -1761,8 +1781,9 @@ if _es_seen.get('keyboard') is False:
 else:
     check('Escape on "Save changes?" keeps the editor open, with what was typed, '
           'and saves nothing (%s)' % _es_seen,
-          not _es_seen.get('rescued') and app._mini_popup is _es_pop
-          and _es_pop.winfo_exists() and _es_ent.get().endswith('(my edit)')
+          not _es_seen.get('rescued') and _es_pop is not None
+          and app._mini_popup is _es_pop and _es_pop.winfo_exists()
+          and (_wa_text(_es_ent) or '').endswith('(my edit)')
           and not any(n.endswith('(my edit) (my edit) (my edit)')
                       for n in _wa_names()))
 app._dismiss_mini_popup(); app.update()
@@ -1792,15 +1813,39 @@ app._edit_template(None, redraw=lambda: None); app.update()
 _em_host = app._mini_popup
 _em_body = [w for w in _walk9(_em_host) if isinstance(w, tk.Text)][0]
 _em_body.insert('1.0', 'Three things I am grateful for')
+# Nothing here should ask anything; if something does, it is answered
+# Cancel and recorded, rather than left on screen for nobody.
+_em_asked = []
+app.ask_yes_no_cancel = lambda *a, **k: (_em_asked.append(a[0]), None)[1]
 _em_menu, _em_idx = _emoji_item(_em_body)
 check('fixture: the template body\'s right-click menu offers Insert emoji',
       _em_menu is not None)
-if _em_menu is not None:
-    _em_menu.invoke(_em_idx); app.update()
+
+
+def _em_choose(menu, idx):
+    """Choose "Insert emoji..." -- guarded: in a broken world the field
+    and its menu can be gone, and that must be a red check, not a crash."""
+    try:
+        if menu is not None:
+            menu.invoke(idx)
+            app.update()
+    except tk.TclError:
+        pass
+
+
+def _em_text(w):
+    try:
+        return w.get('1.0', 'end') if isinstance(w, tk.Text) else w.get()
+    except tk.TclError:
+        return ''
+
+
+_em_choose(_em_menu, _em_idx)
 _em_pick = getattr(app, '_nested_dropdown', None)
 check('Insert emoji from the template body keeps the editor, and what is '
-      'typed in it', app._mini_popup is _em_host and _em_host.winfo_exists()
-      and 'grateful' in _em_body.get('1.0', 'end'))
+      'typed in it, asking nothing (%s)' % _em_asked,
+      app._mini_popup is _em_host and _em_host.winfo_exists()
+      and 'grateful' in _em_text(_em_body) and not _em_asked)
 check('...and the picker opens inside it, beside the field -- within the '
       'window, not at the screen\'s corner',
       _em_pick is not None and _em_pick.winfo_exists()
@@ -1811,11 +1856,11 @@ check('...and the picker opens inside it, beside the field -- within the '
 _em_first = app.EMOJI_GROUPS[0][1][0]
 _em_chip = (next((w for w in _walk9(_em_pick) if isinstance(w, tk.Label)
                   and str(w.cget('text')) == _em_first), None)
-            if _em_pick is not None else None)
+            if _em_pick is not None and _em_pick.winfo_exists() else None)
 if _em_chip is not None:
     _qa_click(_em_chip); app.update()
 check('...and an emoji picked there lands in the template body',
-      _em_first in _em_body.get('1.0', 'end'))
+      _em_first in _em_text(_em_body))
 _em_x = (find_widget(_em_pick, tk.Button, '✕')
          if _em_pick is not None and _em_pick.winfo_exists() else None)
 if _em_x is not None:
@@ -1823,8 +1868,7 @@ if _em_x is not None:
 check('...its ✕ closes just the picker',
       _em_pick is not None and not _em_pick.winfo_exists()
       and app._mini_popup is _em_host and _em_host.winfo_exists())
-if _em_menu is not None:
-    _em_menu.invoke(_em_idx); app.update()
+_em_choose(_em_menu, _em_idx)
 _em_pick2 = getattr(app, '_nested_dropdown', None)
 app._dismiss_mini_popup(); app.update()
 check('...and the editor, closing, takes an open picker with it',
@@ -1835,14 +1879,14 @@ _em_rename = app._show_inline_rename(app.filter_menu, 'Projects',
 app.update()
 _em_rent = [w for w in _walk9(_em_rename) if isinstance(w, tk.Entry)][0]
 _em_menu, _em_idx = _emoji_item(_em_rent)
-if _em_menu is not None:
-    _em_menu.invoke(_em_idx); app.update()
+_em_choose(_em_menu, _em_idx)
 check('Insert emoji from a rename box keeps the box, and opens the picker '
       'inside it', app._mini_popup is _em_rename and _em_rename.winfo_exists()
-      and _em_rent.get() == 'Projects'
+      and _em_text(_em_rent) == 'Projects'
       and getattr(app, '_nested_dropdown', None) is not None
       and app._nested_dropdown.winfo_exists())
 app._dismiss_mini_popup(); app.update()
+del app.ask_yes_no_cancel
 
 # ============================================================
 # CLOSING THE WINDOW UNDER A QUESTION
