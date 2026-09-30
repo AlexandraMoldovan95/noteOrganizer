@@ -1764,10 +1764,14 @@ def _es_press():
 
 
 def _es_rescue():
+    # Keeps answering while any "Save changes?" is left: with the guards
+    # against a second ask broken, Escape stacks another question on the
+    # first, and one answer would leave the script waiting on the other.
     _b = _question_button('No', 'Save changes?')
     if _b is not None:
         _es_seen['rescued'] = True
         _b.invoke()
+        app.after(1000, _es_rescue)
 
 
 app.after(300, _es_press)
@@ -2120,6 +2124,39 @@ else:
           'it asking (%s)' % _nq,
           _nq.get('inner') == (False, False) and _nq.get('outer_still_there')
           and _nq.get('outer') == (False, False))
+# Escape is where "the last one only" really bites: it answers whatever
+# holds the keyboard, and the two questions' Escapes were both bound on the
+# window -- one press answered both, the outer one with its safe answer
+# before the person ever saw it. The outer is answered Yes afterwards here,
+# and must come back Yes.
+_nx = {}
+
+
+def _nx_outer_act():
+    def _nx_inner_act():
+        _b = _question_button('No', 'Inner escape')
+        _nx['keyboard'] = _b is not None and _keyboard_on(_b)
+        if _nx['keyboard']:
+            _b.event_generate('<Escape>')
+    _nx['inner'] = _while_asking(
+        lambda: app.ask_yes_no('Inner escape', 'Asked over another.',
+                               default='no'),
+        _nx_inner_act, 'Yes', 'Inner escape')
+    app.update()
+    _b = _question_button('Yes', 'Outer escape')
+    if _b is not None:
+        _b.invoke()
+
+
+_nx['outer'] = _while_asking(
+    lambda: app.ask_yes_no('Outer escape', 'Asked first.', default='no'),
+    _nx_outer_act, 'No', 'Outer escape', cap_ms=15000)
+if _nx.get('keyboard') is False:
+    check('escape on nested questions: SKIPPED -- no keyboard', True)
+else:
+    check('one Escape answers the question asked last only: the one under it '
+          'is still the person\'s to answer (%s)' % _nx,
+          _nx.get('inner') == (False, False) and _nx.get('outer') == (True, False))
 
 # ============================================================
 # A TEMPLATE SAVED AFTER ITS SECTION WAS REBUILT
