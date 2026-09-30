@@ -13692,8 +13692,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if (self._restore_focus_wanted and ring is not None
                 and self._row_on_screen(self._list_row_record(ring)) == "all"):
             self._ring_follow = True
-        # How deep the list was drawn, asked before the drawing goes.
-        drawn_before = len(getattr(self, "_list_drawn", None) or ())
+        # How deep the list must be drawn again, asked before the drawing
+        # goes: as deep as the view needs, not as deep as it once went.
+        drawn_before = self._list_depth_for(saved_list_scroll)
         self.canvas.delete("row")
         # One record per drawn row, in the order the rows stand on screen,
         # and the same records by note id and by category -- what every
@@ -13755,6 +13756,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
     # within a screen of the end of what is drawn. See _draw_list_rows.
     LIST_FIRST_DRAW = 30
     LIST_DRAW_STEP = 20
+    # Where a card redrawn by a save is drawn before the reflow puts it in
+    # its place: above the list, where no row ever stands (_reflow_list).
+    LIST_OUT_OF_THE_WAY = -100000
 
     # The list is drawn on its canvas: every card is rectangles and text,
     # not widgets. These reproduce the widget cards they replaced, to the
@@ -13863,9 +13867,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
         A screenful and some to spare, as a rule. But a rebuild must not
         take the list out from under the person using it: when it was
-        scrolled, the old depth is drawn again, so the position restored
-        in pixels has content to land on; and when the keyboard was on a
-        card, that card is drawn, so the ring has somewhere to be.
+        scrolled, as many rows are drawn again as reached a screen below
+        the view (`drawn_before`, measured by _list_depth_for on the drawing
+        being replaced), so the position restored in pixels has content to
+        land on; and when the keyboard was on a card, that card is drawn,
+        so the ring has somewhere to be.
         """
         want = self.LIST_FIRST_DRAW
         if scrolled_px > 0:
@@ -13879,6 +13885,31 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     want = max(want, index + 1)
                     break
         return want
+
+    def _list_depth_for(self, scrolled_px):
+        """How many of the drawn rows it takes to reach a screen below a
+        view scrolled `scrolled_px` down -- asked of the drawing a rebuild is
+        about to replace, whose rows the new one mostly shares.
+
+        A rebuild used to draw again every row drawn before whenever the list
+        was scrolled at all: after one trip to the end of 1,000 notes and
+        back near the top, every pin, Select mode, grouping and search drew
+        all 1,000 (90-360 ms against 12-52 at the top). The restore needs
+        the rows down to the view's bottom; one screen more is what the
+        top-up keeps below the view anyway, so a wheel turn finds rows."""
+        drawn = getattr(self, "_list_drawn", None) or ()
+        if scrolled_px <= 0 or not drawn:
+            return 0
+        try:
+            bottom = scrolled_px + 2 * self.canvas.winfo_height()
+        except tk.TclError:
+            return len(drawn)
+        depth = 0
+        for rec in drawn:
+            depth += 1
+            if rec["y0"] >= bottom:
+                break
+        return depth
 
     def _draw_list_rows(self, count):
         """Draw the next `count` waiting rows, below what is already drawn.
@@ -13958,19 +13989,51 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
     def _reflow_list(self, start=0):
         """Move every drawn row from `start` on to its place below the row
         before it. Rows keep their own heights; only where they stand
-        changes, by moving their items -- one repaint for the lot."""
+        changes, by moving their items -- one repaint for the lot.
+
+        Rows that move by the same amount move together, in one tagged move
+        of the band they stand in. A canvas finds a tag by walking every
+        item it holds, so moving each row by its own tag cost rows times
+        items: 2.6 s to close the gap one delete left in a list drawn to the
+        end of 5,000 notes, and a first autosave of a note far down paid the
+        same. A band is tagged by what lies wholly inside it, before any
+        band moves, and trusted only if it holds exactly its rows' items;
+        otherwise those rows move one by one, as they always did."""
         drawn = self._list_drawn
         y = 0
         if start > 0:
             y = drawn[start - 1]["y1"] + drawn[start - 1]["margin"][1]
-        for rec in drawn[start:]:
-            top = y + rec["margin"][0]
-            dy = top - rec["y0"]
+        runs = []                       # [dy, first row, last row]
+        for i in range(start, len(drawn)):
+            rec = drawn[i]
+            dy = y + rec["margin"][0] - rec["y0"]
             if dy:
-                self.canvas.move(rec["tag"], 0, dy)
-                rec["y0"] += dy
-                rec["y1"] += dy
-            y = rec["y1"] + rec["margin"][1]
+                if runs and runs[-1][0] == dy and runs[-1][2] == i - 1:
+                    runs[-1][2] = i
+                else:
+                    runs.append([dy, i, i])
+            y = rec["y1"] + dy + rec["margin"][1]
+        cv = self.canvas
+        bands = []
+        for n, (dy, first, last) in enumerate(runs):
+            tag = "reflow%d" % n
+            # Rows stand at least 7px apart (their margins); three pixels
+            # either side is room for how Tk pads a bbox, and no more.
+            cv.addtag_enclosed(tag, -10, drawn[first]["y0"] - 3,
+                               self.LIST_DRAW_WIDTH + 10, drawn[last]["y1"] + 3)
+            owned = sum(len(drawn[i]["items"]) for i in range(first, last + 1))
+            bands.append((tag, dy, first, last,
+                          len(cv.find_withtag(tag)) == owned))
+        for tag, dy, first, last, whole in bands:
+            if whole:
+                cv.move(tag, 0, dy)
+            else:
+                for i in range(first, last + 1):
+                    cv.move(drawn[i]["tag"], 0, dy)
+            cv.dtag(tag)
+            for i in range(first, last + 1):
+                drawn[i]["y0"] += dy
+                drawn[i]["y1"] += dy
         self._list_extent_changed()
 
     def _list_view_changed(self, first, last):
@@ -15578,10 +15641,14 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 cards.pop(note_id, None)
                 self.canvas.delete(old["tag"])
             if drawn_now:
-                # Drawn anywhere and put in its place by the reflow below,
-                # which slides every row between the old place and the new
-                # one -- the drawing changes in one repaint.
-                drawn.insert(new_at, self._draw_note_card(rows[new_at][1], 0))
+                # Drawn out of the way and put in its place by the reflow
+                # below, which slides every row between the old place and
+                # the new one -- the drawing changes in one repaint. Out of
+                # the way, not at the top: the reflow moves rows as bands,
+                # and a card drawn over them made the band it landed in hold
+                # items that were not its rows', so every row moved alone.
+                drawn.insert(new_at, self._draw_note_card(
+                    rows[new_at][1], self.LIST_OUT_OF_THE_WAY))
         except tk.TclError:
             return False
         starts = [i for i in (old_at, new_at if drawn_now else None) if i is not None]

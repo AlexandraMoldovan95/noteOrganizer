@@ -676,24 +676,43 @@ check(f'a note deleted before its card was drawn never gets one '
       f'({len(_ls_ids)} cards, victim drawn: {_ls_victim in _ls_ids})',
       _ls_victim not in _ls_ids and len(_ls_ids) == 299)
 
-# A rebuild while scrolled keeps the depth, so the place restored in
-# pixels has content to land on.
+# A rebuild while scrolled draws as deep as the view needs -- down to a
+# screen below it -- so the place restored in pixels has content to land
+# on. It used to draw again every row drawn before, which is the next check.
 app.canvas.yview_moveto(0); _ls_settle()
 app.refresh_note_list(); _ls_settle()
 for _ in range(4):
     app.canvas.yview_moveto(1.0); app.update()
 app.canvas.yview_moveto(0.6); _ls_settle()
-_ls_depth = len(app._list_drawn_keys)
 _ls_px = app.canvas.canvasy(0)
 app.refresh_note_list()
 # Read once the restore has run its course: straight after the call the
 # view has not been clamped yet, so the place would match for nothing.
 _ls_let_restores_finish()
-check(f'a rebuild while scrolled keeps the drawn depth '
-      f'({len(app._list_drawn_keys)} of {_ls_depth}) and the place '
-      f'({app.canvas.canvasy(0):.0f} of {_ls_px:.0f})',
-      _ls_px > 0 and len(app._list_drawn_keys) >= _ls_depth
-      and abs(app.canvas.canvasy(0) - _ls_px) < 30)
+_ls_view_h = app.canvas.winfo_height()
+check(f'a rebuild while scrolled keeps the place '
+      f'({app.canvas.canvasy(0):.0f} of {_ls_px:.0f}) with rows drawn below '
+      f'it ({app._list_end_y():.0f}px drawn, the view ends at '
+      f'{app.canvas.canvasy(0) + _ls_view_h:.0f})',
+      _ls_px > 0 and abs(app.canvas.canvasy(0) - _ls_px) < 30
+      and (app._list_end_y() >= app.canvas.canvasy(0) + _ls_view_h
+           or not app._list_pending))
+# ...and no deeper than that. One trip to the end of the list draws every
+# row; back near the top, a rebuild drew all of them again from then on --
+# every pin, Select mode, grouping or search paying for 1,000 rows where
+# the top of the list costs 30.
+_ls_scroll_to_end()
+_ls_all = len(app._list_drawn_keys)
+app._list_restore_px = None
+app._apply_list_scroll_px(109); _ls_settle()
+app.refresh_note_list()
+_ls_let_restores_finish()
+check(f'after one trip to the end of the list, a rebuild near the top draws '
+      f'a screenful again, not the {_ls_all} rows the trip drew '
+      f'({len(app._list_drawn_keys)} drawn; view at {app.canvas.canvasy(0):.0f})',
+      _ls_all >= 290
+      and len(app._list_drawn_keys) <= app.LIST_FIRST_DRAW + app.LIST_DRAW_STEP
+      and abs(app.canvas.canvasy(0) - 109) < 2)
 
 # A first draw shorter than the window draws on by itself. From the top,
 # once the rebuild above's restore has run out -- still in force, it
@@ -2120,6 +2139,71 @@ check(f'...and a card taller than the view still gets its menu inside the '
       _bl_card['y1'] - _bl_card['y0'] > _bl_view_h and _bl_cut
       and len(_bl_menus) == 1 and _bl_lo <= _bl_menus[0][0] <= _bl_hi)
 app.geometry('1100x850'); _ls_settle()
+
+# 5j. The list stays quick however far it has been scrolled, and whatever
+# is typed. Asked of the WORK done, never of a stopwatch (qa/README): a
+# canvas finds a tag by walking every item it holds, so closing the gap a
+# delete left by moving each row by its own tag cost rows times items -- 2.6 s
+# in a list drawn to the end of 5,000 notes; and every rebuild scanned the
+# whole notebook's text to find that an empty search matches everything.
+_bl_many = [{'id': 2100 + i, 'title': 'Quick %03d' % i, 'body': 'b %d' % i,
+             'category': 'General', 'created': '2026-01-01 00:00',
+             'updated': '2026-02-%02d 00:%02d' % (1 + i // 60, i % 60)}
+            for i in range(120)]
+_co_fresh(_bl_many)
+_ls_scroll_to_end()
+_bl_moves = []
+_bl_real_move = app.canvas.move
+app.canvas.move = lambda *a: (_bl_moves.append(a[0]), _bl_real_move(*a))[1]
+_bl_o = app._card_order()
+app.ask_yes_no = lambda *a, **k: True
+try:
+    app._delete_note(app.find_note(_bl_o[3]), None); _ls_settle()
+finally:
+    app.ask_yes_no = _ls_real_ask
+    app.canvas.__dict__.pop('move', None)
+check(f'a delete in a list drawn to its end closes the gap with one move of '
+      f'the rows below, not one per row ({len(_bl_moves)} canvas moves for '
+      f'{len(_bl_o) - 4} rows)',
+      len(_bl_o) == 120 and 1 <= len(_bl_moves) <= 2
+      and _ls_same_as_rebuild())
+# A save that takes a card from far down to the top slides every row above
+# its old place -- one band too.
+_ls_scroll_to_end()
+_bl_o = app._card_order()
+app.open_note_in_tab(app.find_note(_bl_o[100])); _ls_settle()
+app.body_text.insert('end', ' moved up')
+_bl_moves = []
+app.canvas.move = lambda *a: (_bl_moves.append(a[0]), _bl_real_move(*a))[1]
+try:
+    app.save_current_note(auto=True); _ls_settle()
+finally:
+    app.canvas.__dict__.pop('move', None)
+check(f'...and a save that takes a card from the 101st place to the top slides '
+      f'the hundred above it with one move ({len(_bl_moves)} canvas moves; '
+      f'now first: {app._card_order()[:1] == [_bl_o[100]]})',
+      app._card_order()[:1] == [_bl_o[100]] and 1 <= len(_bl_moves) <= 2
+      and _ls_same_as_rebuild())
+# The band is trusted only if it holds exactly its rows' items: anything
+# else inside it -- an item the list never drew -- sends those rows back to
+# moving one by one, and the stranger stays where it was.
+_ls_scroll_to_end()
+_bl_o = app._card_order()
+_bl_v = app._card_view(_bl_o[60])
+_bl_stranger = app.canvas.create_rectangle(
+    100, _bl_v['y0'] + 10, 110, _bl_v['y0'] + 20, outline='')
+app.ask_yes_no = lambda *a, **k: True
+try:
+    app._delete_note(app.find_note(_bl_o[2]), None); _ls_settle()
+finally:
+    app.ask_yes_no = _ls_real_ask
+_bl_where = app.canvas.coords(_bl_stranger)
+app.canvas.delete(_bl_stranger)
+check(f'...and a band holding an item the list never drew moves its rows one '
+      f'by one, leaving that item where it was ({_bl_where[1]:.0f}, was '
+      f'{_bl_v["y0"] + 10:.0f}; every card where its record is: '
+      f'{_bl_drawing_ok()})',
+      abs(_bl_where[1] - (_bl_v['y0'] + 10)) < 0.5 and _bl_drawing_ok())
 
 # ---------------------------------------------------------------------
 # A tick box's well must be light, because the mark in it is dark.
