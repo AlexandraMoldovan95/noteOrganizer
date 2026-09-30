@@ -8227,6 +8227,122 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 self.share_panel.pack_forget()
             self.import_panel.pack(fill="x", padx=8, pady=(0, 8))
             self.import_box.focus()
+        self._fit_sidebar_panel()
+
+    # How far an open panel's scrolling middle gives when the window is
+    # short: (natural, comfortable, least) -- pixels of Share's list of
+    # notes, lines of Import's paste box.
+    SIDEBAR_PANEL_BODY = {"share": (130, 56, 28), "import": (4, 2, 1)}
+
+    def _fit_sidebar_panel(self, _event=None):
+        """Keep the open panel's own buttons -- and a generated code -- on
+        screen in a short window.
+
+        The bottom zone is packed before the note list, so the list gives
+        up its height first. At the smallest window that is not enough:
+        the sidebar's fixed parts leave the panel about a hundred pixels,
+        Import needs 157 and Share with its code 329, and pack took the
+        difference off the bottom of the zone -- the panel's own buttons,
+        then the code itself, so "Generate code" seemed to do nothing.
+
+        Only when the room runs out, then: the panel's scrolling middle
+        gives up rows down to a comfortable few, the zone's other buttons
+        step aside while the panel is open -- Settings, then the other
+        panel's button, then New Note -- and last the middle goes down to
+        one row. It is worked out from the sizes things ask for, not from
+        what is drawn, and everything comes back when the panel closes or
+        the window grows. Measured: 640x600 and 1366x690 both hold the
+        panels whole; at 1150x860 nothing changes at all."""
+        zone = getattr(self, "_sidebar_bottom", None)
+        buttons = getattr(self, "_sidebar_zone_buttons", None)
+        if zone is None or not buttons or getattr(self, "_fitting_sidebar", False):
+            return
+        if self._is_placed(self.share_panel):
+            panel, which = self.share_panel, "share"
+        elif self._is_placed(self.import_panel):
+            panel, which = self.import_panel, "import"
+        else:
+            panel, which = None, None
+        wrap = getattr(self, "_share_list_wrap", None)
+        try:
+            natural_state = (
+                all(self._is_placed(b) for b, _kw in buttons)
+                and int(self.import_box.cget("height")) == self.SIDEBAR_PANEL_BODY["import"][0]
+                and (wrap is None or not wrap.winfo_exists()
+                     or int(wrap.cget("height")) == self.SIDEBAR_PANEL_BODY["share"][0]))
+        except tk.TclError:
+            return
+        if panel is None and natural_state:
+            return                      # the everyday case: nothing to do
+        self._fitting_sidebar = True
+        try:
+            self._fit_sidebar_panel_now(zone, buttons, panel, which, wrap)
+        except tk.TclError:
+            pass
+        finally:
+            self._fitting_sidebar = False
+
+    def _fit_sidebar_panel_now(self, zone, buttons, panel, which, wrap):
+        def height(w, kw):
+            pady = kw.get("pady", 0)
+            pad = sum(pady) if isinstance(pady, (tuple, list)) else 2 * int(pady)
+            return w.winfo_reqheight() + 2 * int(kw.get("ipady", 0)) + pad
+
+        hidden = set()
+        body = {"share": self.SIDEBAR_PANEL_BODY["share"][0],
+                "import": self.SIDEBAR_PANEL_BODY["import"][0]}
+        room = self.sidebar.winfo_height()
+        if panel is not None and room > 1:
+            self.update_idletasks()
+            unit = (1 if which == "share" else tkfont.Font(
+                font=self.import_box.cget("font")).metrics("linespace"))
+            natural, comfortable, least = self.SIDEBAR_PANEL_BODY[which]
+            now = int((wrap if which == "share" else self.import_box).cget("height"))
+            list_host = self.canvas.master
+            top = sum(height(s, s.pack_info()) for s in self.sidebar.pack_slaves()
+                      if s is not zone and s is not list_host)
+            want = (sum(height(b, kw) for b, kw in buttons)
+                    + panel.winfo_reqheight() + (natural - now) * unit
+                    + height(panel, panel.pack_info()) - panel.winfo_reqheight())
+            over = top + want - room
+
+            def give(to):
+                nonlocal over
+                units = min(max(0, -(-over // unit)), body[which] - to)
+                body[which] -= units
+                over -= units * unit
+
+            if over > 0:
+                give(comfortable)
+            new_b, import_b, share_b, settings_b = (b for b, _kw in buttons)
+            own = import_b if which == "import" else share_b
+            for b in (settings_b, share_b, import_b, new_b):
+                if over <= 0:
+                    break
+                if b is own:
+                    continue
+                hidden.add(b)
+                over -= height(b, dict(buttons)[b])
+            if over > 0:
+                give(least)
+        # Apply only what changes, the zone's order kept: a button coming
+        # back goes in front of the next one still packed.
+        order = [b for b, _kw in buttons] + ([panel] if panel is not None else [])
+        for i, (b, kw) in enumerate(buttons):
+            if b in hidden:
+                if self._is_placed(b):
+                    b.pack_forget()
+            elif not self._is_placed(b):
+                nxt = next((w for w in order[i + 1:] if self._is_placed(w)), None)
+                if nxt is not None:
+                    b.pack(before=nxt, **kw)
+                else:
+                    b.pack(**kw)
+        if int(self.import_box.cget("height")) != body["import"]:
+            self.import_box.configure(height=body["import"])
+        if wrap is not None and wrap.winfo_exists() \
+                and int(wrap.cget("height")) != body["share"]:
+            wrap.configure(height=body["share"])
 
     def _take_known_notes(self, incoming, source):
         """Ask once about the notes in a batch we already have.
@@ -8609,6 +8725,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 self.import_panel.pack_forget()
             self._build_share_panel()
             self.share_panel.pack(fill="x", padx=8, pady=(0, 8))
+        self._fit_sidebar_panel()
 
     def _build_share_panel(self):
         """Inline multi-note share: checkboxes to pick notes, then a generated
@@ -8641,9 +8758,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # Scrollable checklist (a notebook can have many notes). Fixed height so
         # it never grows the whole panel off-screen; the scrollbar handles the
         # overflow.
-        list_wrap = tk.Frame(p, bg=self.colors["sidebar"], height=130)
+        list_wrap = tk.Frame(p, bg=self.colors["sidebar"],
+                             height=self.SIDEBAR_PANEL_BODY["share"][0])
         list_wrap.pack(fill="x", padx=6, pady=(0, 2))
         list_wrap.pack_propagate(False)
+        # What gives up rows first when the window is short (_fit_sidebar_panel).
+        self._share_list_wrap = list_wrap
         canvas = tk.Canvas(list_wrap, bg=self.colors["sidebar"], highlightthickness=0)
         sb = ttk.Scrollbar(list_wrap, orient="vertical", command=canvas.yview)
         inner = tk.Frame(canvas, bg=self.colors["sidebar"])
@@ -8771,6 +8891,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         had_attachments = any(n.get("attachments") for n in chosen)
         code = encode_share_code(chosen)
         self._render_inline_code(self.share_code_area, code, len(chosen), had_attachments)
+        # The code needs room of its own; in a short window it is made here.
+        self._fit_sidebar_panel()
 
     def _clear_inline_code(self, area):
         """Take a generated share code off the panel it was drawn on.
@@ -8793,6 +8915,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         def clear():
             for w in area.winfo_children():
                 w.destroy()
+            # The room the code took is given back (_fit_sidebar_panel).
+            self._fit_sidebar_panel()
         self.after_idle(clear)
 
     def _render_inline_code(self, parent, code, count, had_attachments):
@@ -11454,14 +11578,18 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             fg="white", relief="flat", font=("Segoe UI", 11, "bold"), cursor="hand2"
         )
         self.track_theme(new_btn, bg="accent", activebackground="accent_hover")
-        new_btn.pack(fill="x", padx=15, pady=(10, 4), ipady=8)
+        # Each button's packing is kept (_fit_sidebar_panel packs a button
+        # back exactly as it was after it stepped aside for an open panel).
+        new_kw = dict(fill="x", padx=15, pady=(10, 4), ipady=8)
+        new_btn.pack(**new_kw)
 
         import_btn = tk.Button(
             bottom_zone, text="📥 Import code", command=self.toggle_import_panel,
             relief="flat", font=("Segoe UI", 10, "bold"), cursor="hand2"
         )
         self.track_theme(import_btn, bg="card", fg="text")
-        import_btn.pack(fill="x", padx=15, pady=(0, 4), ipady=5)
+        import_kw = dict(fill="x", padx=15, pady=(0, 4), ipady=5)
+        import_btn.pack(**import_kw)
 
         # Inline import panel — expands under the button instead of a pop-up.
         self.import_panel = tk.Frame(bottom_zone)
@@ -11474,7 +11602,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             relief="flat", font=("Segoe UI", 10, "bold"), cursor="hand2"
         )
         self.track_theme(share_multi_btn, bg="card", fg="text")
-        share_multi_btn.pack(fill="x", padx=15, pady=(0, 12), ipady=5)
+        share_kw = dict(fill="x", padx=15, pady=(0, 12), ipady=5)
+        share_multi_btn.pack(**share_kw)
 
         # Inline share panel — pick notes, get a code, all without a pop-up.
         self.share_panel = tk.Frame(bottom_zone)
@@ -11485,7 +11614,13 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             relief="flat", font=("Segoe UI", 10, "bold"), cursor="hand2"
         )
         self.track_theme(settings_btn, bg="card", fg="text")
-        settings_btn.pack(fill="x", padx=15, pady=(0, 12), ipady=5)
+        settings_kw = dict(fill="x", padx=15, pady=(0, 12), ipady=5)
+        settings_btn.pack(**settings_kw)
+        self._sidebar_zone_buttons = [(new_btn, new_kw), (import_btn, import_kw),
+                                      (share_multi_btn, share_kw),
+                                      (settings_btn, settings_kw)]
+        # A window made shorter (or taller) with a panel open fits it again.
+        self.sidebar.bind("<Configure>", self._fit_sidebar_panel, add="+")
 
         # --- Sidebar collapse toggle (thin strip on the sidebar's edge) ---
         # Stays visible whether the sidebar is shown or hidden, so the user can

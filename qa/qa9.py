@@ -2169,6 +2169,74 @@ check('an image preview closed at once leaves no click handler on the window '
       str(app.bind('<Button-1>') or '') == _pq_b1)
 _seed_os.remove(_pq_path)
 
+# ============================================================
+# A SHORT WINDOW KEEPS THE OPEN PANEL'S OWN BUTTONS ON SCREEN
+# ============================================================
+# "Import code" and "Share notes" open in the sidebar's bottom zone, which
+# the note list gives its height to -- and at the smallest window (and a
+# maximised one on a 1366x768 laptop) that was not enough: pack took the
+# difference off the bottom, the panel's own buttons first, and Share's
+# generated code never appeared at all. Asked of where things ARE on the
+# screen (qa/README: a clipped widget still reports its full height).
+app.hide_settings_page(); app.update()
+app.notebook.select(app.TAB_NOTES); app.update()
+
+
+def _pn_settle():
+    for _ in range(15):
+        app.update(); time.sleep(0.02)
+
+
+def _pn_whole(w):
+    """w is drawn whole inside the window."""
+    app.update_idletasks()
+    _top = w.winfo_rooty()
+    return (w.winfo_ismapped() and w.winfo_height() > 1
+            and _top >= app.winfo_rooty()
+            and _top + w.winfo_height() <= app.winfo_rooty() + app.winfo_height())
+
+
+def _pn_buttons(panel, labels):
+    return [w for w in _walk9(panel) if isinstance(w, tk.Button)
+            and str(w.cget('text')).strip() in labels]
+
+
+_pn_zone = [b for b, _kw in app._sidebar_zone_buttons]
+for _pn_size in ('640x600', '1366x690', '1150x860'):
+    app.geometry(_pn_size); _pn_settle()
+    app.toggle_import_panel(); _pn_settle()
+    _pn_imp = _pn_buttons(app.import_panel, ('Import', 'Clear', 'Close'))
+    check('%s: the Import panel\'s own buttons are on screen (%s)'
+          % (_pn_size, [str(b.cget('text')) for b in _pn_imp if not _pn_whole(b)]),
+          len(_pn_imp) == 3 and all(_pn_whole(b) for b in _pn_imp)
+          and _pn_whole(app.import_box))
+    app.toggle_import_panel(); _pn_settle()
+    app.toggle_share_panel(); _pn_settle()
+    _pn_ids = [n['id'] for n in app.notes][:1]
+    for _pn_id in _pn_ids:
+        app._share_vars[_pn_id].set(True)
+    find_widget(app.share_panel, tk.Button, 'Generate code').invoke(); _pn_settle()
+    _pn_share = (_pn_buttons(app.share_panel, ('Generate code', 'Close'))
+                 + [w for w in _walk9(app.share_code_area)
+                    if isinstance(w, (tk.Button, tk.Text))])
+    check('%s: Share\'s own buttons and its generated code are on screen (%s)'
+          % (_pn_size, [str(w) for w in _pn_share if not _pn_whole(w)][:3]),
+          _pn_ids and len(_pn_share) >= 5 and all(_pn_whole(w) for w in _pn_share))
+    if _pn_size == '1150x860':
+        # With room, nothing steps aside and nothing shrinks.
+        check('1150x860: with room, the zone keeps all four buttons and the '
+              'list of notes its full height',
+              all(app._is_placed(b) for b in _pn_zone)
+              and int(app._share_list_wrap.cget('height'))
+              == app.SIDEBAR_PANEL_BODY['share'][0])
+    app.toggle_share_panel(); _pn_settle()
+    check('%s: closing the panel brings every button of the zone back, in '
+          'order, and the paste box its full size' % _pn_size,
+          [s for s in app._sidebar_bottom.pack_slaves() if s in _pn_zone] == _pn_zone
+          and int(app.import_box.cget('height'))
+          == app.SIDEBAR_PANEL_BODY['import'][0])
+app.geometry('1100x850'); _pn_settle()
+
 check('none of the blocks above raised a background error (%s)' % _bg9[:2],
       not _bg9)
 app.notes = list(_na_notes)
