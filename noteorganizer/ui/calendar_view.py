@@ -116,16 +116,26 @@ def _fit_title(app, label, head, title, tail, font):
     an ellipsis, to the label's own width. What follows a title -- a day
     row's ✎ 💬 📎, a History group's "· 20 occurrences · 1 edited (✎)" --
     is what the label's edge used to cut first. The width is the label's
-    own (it is stretched by its row), read each time it changes."""
+    own (it is stretched by its row), read each time it changes. A line
+    that fits costs one measure, when the row is made."""
+    whole = head + title + tail
+    label.configure(text=whole, font=font)
+    inset = 2 * sum(int(str(label.cget(o))) for o in
+                    ("borderwidth", "padx", "highlightthickness"))
+    needs = font.measure(whole)
+    showing = [whole]
+
     def fit(event=None):
         width = label.winfo_width() if event is None else event.width
-        inset = 2 * sum(int(str(label.cget(o))) for o in
-                        ("borderwidth", "padx", "highlightthickness"))
-        room = width - inset - font.measure(head) - font.measure(tail)
-        shown = app._ellipsize(title, font, room) if room > 0 else "…"
-        if str(label.cget("text")) != head + shown + tail:
-            label.configure(text=head + shown + tail)
-    label.configure(text=head + title + tail, font=font)
+        if width - inset >= needs:
+            text = whole
+        else:
+            room = width - inset - font.measure(head) - font.measure(tail)
+            text = head + (app._ellipsize(title, font, room)
+                           if room > 0 else "…") + tail
+        if text != showing[0]:
+            showing[0] = text
+            label.configure(text=text)
     label.bind("<Configure>", fit, add="+")
 
 
@@ -266,6 +276,9 @@ class CalendarViewMixin:
         self._history_expanded = set()   # note ids the user opened
         self._history_shown = 50         # top-level rows rendered so far
         self._history_search_job = None
+        # What each series costs to work out, kept by history_entries while
+        # the register is open, so a search keystroke only filters.
+        self._history_memo = {}
 
         # Grid gets a comfortable minimum height so cells never shrink to
         # unusable slivers; if the window is smaller, the scrollbar kicks in.
@@ -1387,6 +1400,9 @@ class CalendarViewMixin:
     def _show_calendar_history(self):
         if not self._history_built:
             self._build_history_ui()
+        # A fresh memo each time the register opens: its keys are what each
+        # answer was worked out from, so it is never wrong, only bigger.
+        self._history_memo = {}
         self.close_day_panel()
         self.cal_grid_frame.pack_forget()
         self._history_visible = True
@@ -1484,7 +1500,8 @@ class CalendarViewMixin:
 
         query = self._history_query()
         entries = history_entries(self.notes, query=query,
-                                  year_bucket=self._history_bucket)
+                                  year_bucket=self._history_bucket,
+                                  memo=self._history_memo)
 
         if not entries:
             lbl = tk.Label(self._history_rows,
@@ -1513,9 +1530,14 @@ class CalendarViewMixin:
                     w.bind("<Button-3>", context_cmd)
             return row
 
+        # Each row's note, found once for the whole render rather than by a
+        # walk of every note per row; the first of an id, as find_note has.
+        by_id = {}
+        for n in self.notes:
+            by_id.setdefault(n.get("id"), n)
         shown = entries[:self._history_shown]
         for entry in shown:
-            note = self.find_note(entry["note_id"])
+            note = by_id.get(entry["note_id"])
             if note is None:
                 continue
             if entry["kind"] == "note":

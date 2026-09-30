@@ -3590,6 +3590,104 @@ finally:
 app.close_day_panel()
 app.notebook.select(app.TAB_NOTES); app.update()
 
+# ---- HISTORY KEEPS WHAT A SERIES COSTS; IT NEVER KEEPS A STALE ANSWER ----
+# History worked every bounded series out again at each search pause (300-
+# 400 ms at 1,000-5,000 notes). It now keeps what does not depend on the
+# query -- a series' days, its label, its next day -- under exactly what
+# they are worked out from, while the register is open. The promise that
+# must not move: the rows, their order, their counts and "Show more" are
+# what a register opened afresh would show, also after a series changes
+# under the kept answers.
+app.notes = [NO.normalize_note(n) for n in (
+    [{'id': 230, 'title': 'KeptSeries', 'body': 'x', 'category': 'General',
+      'date': '2026-06-01', 'recurrence': {'freq': 'daily', 'count': 10}},
+     {'id': 231, 'title': 'KeptLong', 'body': 'x', 'category': 'General',
+      'date': '2026-01-05', 'recurrence': {'freq': 'weekly', 'end': '2029-01-01'}}]
+    + [{'id': 240 + i, 'title': f'KeptDated{i}', 'body': 'x',
+        'category': 'General', 'date': '2026-03-%02d' % (i % 28 + 1)}
+       for i in range(55)])]
+app.save_notes()
+app.notebook.select(app.TAB_CALENDAR); app.update()
+app._history_toggle_btn.invoke(); app.update()
+# A page of fifty, as a search or a year chip leaves it (the Show-more
+# check above left it at a hundred).
+app._history_shown = 50
+app._render_calendar_history(); app.update()
+
+
+def _hm_rows():
+    return find_all_labels(app._history_rows) + [
+        str(b.cget('text')) for b in app._history_rows.winfo_children()
+        if isinstance(b, tk.Button)]
+
+
+def _hm_fresh():
+    """The same view, from a memo nobody has used."""
+    app._history_memo = {}
+    app._render_calendar_history(); app.update()
+    return _hm_rows()
+
+
+_hm_kept = _hm_rows()
+check(f'fixture: History shows the ten-day series, 50 rows and Show more '
+      f'({[t for t in _hm_kept if "KeptSeries" in t]}, {_hm_kept[-1]!r})',
+      any('KeptSeries' in t and '10 occurrences' in t for t in _hm_kept)
+      and _hm_kept[-1].startswith('Show more (7 left)'))
+for _hm_q in ('Kept', 'KeptD', ''):
+    app._history_search_var.set(_hm_q)
+    app._render_calendar_history(); app.update()
+_hm_kept = _hm_rows()
+check('with its kept answers, History lists what a fresh register lists',
+      _hm_kept == _hm_fresh())
+# A series changes under the kept answers: one of its days deleted through
+# a day row's own menu ("this occurrence only"), with the search running.
+app._history_search_var.set('KeptSeries')
+app._render_calendar_history(); app.update()
+app._history_toggle_group(230); app.update()
+_hm_caught = []
+_hm_real_add, _hm_real_pop = tk.Menu.add_command, tk.Menu.tk_popup
+tk.Menu.add_command = lambda self, **kw: _hm_caught.append(
+    (str(kw.get('label', '')), kw.get('command')))
+tk.Menu.tk_popup = lambda self, *a, **k: None
+try:
+    _hm_row = _lt_label(app._history_rows, '2026-06-05')
+    if _hm_row is not None:
+        _qa_fire(_hm_row, '<Button-3>', x=5, y=5, rootx=200, rooty=200)
+        app.update()
+finally:
+    tk.Menu.add_command = _hm_real_add
+    tk.Menu.tk_popup = _hm_real_pop
+_hm_delete = next((c for l, c in _hm_caught if 'Delete' in l), None)
+app.ask_occurrence_scope = lambda *a, **k: 'occurrence'
+try:
+    if _hm_delete is not None:
+        _hm_delete(); app.update()
+finally:
+    del app.ask_occurrence_scope
+_hm_after = _hm_rows()
+check(f'...and after one of a series\' days is deleted under them, the count '
+      f'follows ({[t for t in _hm_after if "KeptSeries" in t]})',
+      _hm_delete is not None
+      and '2026-06-05' in (app.find_note(230).get('exceptions') or [])
+      and any('KeptSeries' in t and '9 occurrences' in t for t in _hm_after)
+      and not any('2026-06-05' in t for t in _hm_after)
+      and _hm_after == _hm_fresh())
+app._history_search_var.set('')
+app._render_calendar_history(); app.update()
+_hm_show = find_widget(app._history_rows, tk.Button, 'Show more')
+if _hm_show is not None:
+    _hm_show.invoke(); app.update()
+_hm_more = _hm_rows()
+check(f'...and Show more still brings the same rows as a fresh register '
+      f'({len(_hm_more)} rows)',
+      _hm_show is not None and any('KeptLong' in t for t in _hm_more)
+      and _hm_more == _hm_fresh())
+
+app.close_day_panel()
+app.cal_year, app.cal_month = 2026, 7
+app.render_calendar(); app.update()
+app.notebook.select(app.TAB_NOTES); app.update()
+
 # ============================================================
 # 7. ATTACHMENT-ONLY NOTE AUTOSAVE
 # ============================================================
