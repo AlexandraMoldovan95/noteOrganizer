@@ -451,6 +451,27 @@ def parse_font_tag(name):
     return None
 
 
+def is_format_tag(name):
+    """True for a Tk tag that carries CHARACTER formatting.
+
+    A plain style, a colour (``text_color_``/``highlight_`` and a valid
+    hex), or a composite font -- exactly the tags the editor reads back as
+    the note's spans. The one answer for code that has to move or restore
+    formatting tag by tag instead of through the span list; a tag list
+    written out by hand at each such place is how a new kind of tag gets
+    carried by one of them and silently dropped by the next.
+    """
+    if not isinstance(name, str):
+        return False
+    if name in KNOWN_FORMAT_STYLES:
+        return True
+    for style in COLOR_FORMAT_STYLES:
+        prefix = style + "_"
+        if name.startswith(prefix):
+            return _is_valid_hex_color("#" + name[len(prefix):])
+    return parse_font_tag(name) is not None
+
+
 # ---- Bullet and numbered lists ----
 #
 # A list line carries its marker in the body text: "• milk", "1. milk". The

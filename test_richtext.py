@@ -557,6 +557,26 @@ check("a cell's line break arrives as the cell break marker, not a space",
       _tbl.LINE_BREAK in _t and "a" + _tbl.LINE_BREAK + "b"
       in _t.replace(" ", ""))
 
+# ---- One answer to "is this Tk tag character formatting?" ----
+# The table rewrite carries these tags cell by cell and the undo journal
+# clears and re-lays them; both ask this one function, so a new kind of
+# format tag cannot be carried by one and dropped by the other.
+from noteorganizer.core.formatting import (is_format_tag, font_tag_for,
+                                           color_tag_name)
+check("the plain styles are format tags",
+      all(is_format_tag(t) for t in
+          ("bold", "italic", "bold_italic", "underline", "strike")))
+check("a colour tag with a real hex is a format tag",
+      is_format_tag(color_tag_name("text_color", "#E63946"))
+      and is_format_tag(color_tag_name("highlight", "#ffe066")))
+check("a composite font tag is a format tag",
+      is_format_tag(font_tag_for(True, False, 14, "Georgia")))
+check("paragraph, table and selection tags are not",
+      not any(is_format_tag(t) for t in
+              ("para_bullet_1", "align_center", "table_hidden", "sel",
+               "text_color_nothex", "highlight_", "font_Nope_99_10",
+               None, 5)))
+
 print()
 print(f"FAILURES: {fails if fails else 'none'}")
 

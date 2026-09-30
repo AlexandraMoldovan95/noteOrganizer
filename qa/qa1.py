@@ -9499,6 +9499,111 @@ check('table edge: BackSpace under a note-ending table keeps the last row whole'
       and _edge_lines[5] == 'and bread')
 set_body('')
 
+# ---- A TABLE OPERATION LEAVES EVERY CELL IT DID NOT TOUCH AS IT WAS ----
+# Clearing ONE cell with Delete, dropping a checkbox, deleting a row,
+# pasting cells: each rewrote the table's whole text, and every bold word
+# and colour in the table died with it -- "the accepted cost of
+# reshaping", said the rewrite, while clearing a cell reshapes nothing.
+# The styles are carried cell by cell now, and the ops that MOVE cells (a
+# row or column in or out, copies at an edge) carry them to where the
+# cell went. Asked of the store (the spans a save writes) and, for the
+# moved cells, of the drawing too.
+_cs_body = ('| Item | Qty | Done |' + chr(10) + '| --- | --- | --- |' + chr(10)
+            + '| Milk | 2 | x |' + chr(10) + '| Eggs | 12 | y |')
+
+
+def _cs_setup():
+    set_body(_cs_body)
+    _m, _q = _cs_body.index('Milk'), _cs_body.index('12')
+    app._apply_formatting(app.body_text, [
+        {'start': _m, 'end': _m + 4, 'style': 'bold'},
+        {'start': _q, 'end': _q + 2, 'style': 'text_color',
+         'value': '#e63946'}])
+    app._render_table_grids()
+    app.update()
+    return app._grid_at_line(1)
+
+
+def _cs_styles():
+    _b = app.body_text.get('1.0', 'end-1c')
+    return sorted((s['style'], _b[s['start']:s['end']])
+                  for s in app._extract_formatting(app.body_text))
+
+
+def _cs_paint(r, c):
+    _i = app._grid_at_line(1)
+    return None if _i is None else app._grid_cell_paint(_i, r, c)
+
+
+_cs_want = [('bold', 'Milk'), ('text_color', '12')]
+_cs_info = _cs_setup()
+check('carried styles: the fixture carries the bold and the red',
+      _cs_styles() == _cs_want)
+app._grid_select_range(_cs_info, (1, 2), (1, 2))
+app._on_body_delete_key()
+app.update()
+check('carried styles: clearing ANOTHER cell with Delete keeps them '
+      f'({_cs_styles()})',
+      _cs_styles() == _cs_want and 'x' not in app.body_text.get('3.0', '3.end'))
+_cs_info = _cs_setup()
+app._grid_set_marker(_cs_info, 2, 2, core_tables.CHECKBOX_EMPTY)
+app.update()
+check(f'carried styles: dropping a checkbox elsewhere keeps them ({_cs_styles()})',
+      _cs_styles() == _cs_want)
+_cs_info = _cs_setup()
+app._grid_insert_row(_cs_info, 3)
+app.update()
+app._grid_delete_row(app._grid_at_line(1), 3)
+app.update()
+check(f'carried styles: adding and deleting an empty row keeps them ({_cs_styles()})',
+      _cs_styles() == _cs_want)
+_cs_info = _cs_setup()
+app._grid_delete_row(_cs_info, 1)
+app.update()
+check('carried styles: deleting the bold row moves the red up with its row '
+      f'({_cs_styles()})',
+      _cs_styles() == [('text_color', '12')]
+      and (_cs_paint(1, 1) or {}).get('fg') == '#e63946')
+_cs_info = _cs_setup()
+app._grid_insert_col(_cs_info, 0)
+app.update()
+check('carried styles: a column inserted in front moves both styles right '
+      f'({_cs_styles()})',
+      _cs_styles() == _cs_want and (_cs_paint(1, 1) or {}).get('bold')
+      and (_cs_paint(2, 2) or {}).get('fg') == '#e63946')
+_cs_info = _cs_setup()
+app._grid_delete_col(_cs_info, 0)
+app.update()
+check('carried styles: deleting the first column moves the red left '
+      f'({_cs_styles()})',
+      _cs_styles() == [('text_color', '12')]
+      and (_cs_paint(2, 0) or {}).get('fg') == '#e63946')
+_cs_info = _cs_setup()
+app._grid_append_rows(_cs_info, 1, 1)
+app.update()
+check(f'carried styles: a row copied to the bottom brings its bold ({_cs_styles()})',
+      _cs_styles() == [('bold', 'Milk'), ('bold', 'Milk'), ('text_color', '12')])
+_cs_info = _cs_setup()
+app._grid_append_cols(_cs_info, 1, 1)
+app.update()
+check(f'carried styles: a column copied to the edge brings its red ({_cs_styles()})',
+      _cs_styles() == [('bold', 'Milk'), ('text_color', '12'),
+                       ('text_color', '12')])
+_cs_saved_clip = (NO.clipboard.read_html, NO.clipboard.read_text,
+                  NO.clipboard.write)
+_cs_info = _cs_setup()
+_stub_clipboard(text='z')
+app._grid_cell_clip = None
+app.clipboard_get = lambda **k: 'z'
+try:
+    app._grid_paste_cells(_cs_info, 1, 2)
+    app.update()
+finally:
+    del app.clipboard_get
+check(f'carried styles: pasting into another cell keeps them ({_cs_styles()})',
+      _cs_styles() == _cs_want
+      and core_tables.split_row(app.body_text.get('3.0', '3.end'))[2] == 'z')
+
 # ---- CLOSING SAVES SILENTLY (dead last: it destroys the app) ----
 # The quit-time "Unsaved notes" ask could only ever cover the last
 # half-second of typing; the app now trusts its own autosave and closes

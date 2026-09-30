@@ -210,6 +210,7 @@ from noteorganizer.core.formatting import (
     MAX_INDENT,
     MAX_FORMATTING_SPANS,
     parse_font_tag,
+    is_format_tag,
     resolve_font_runs,
     clamp_spans_per_line,
     MAX_SPANS_PER_LINE,
@@ -4180,17 +4181,25 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 for n in range(first, first + nrows)]
 
     def _grid_replace_block(self, first, old_nrows, rows, aligns=None,
-                            sep_cols=None):
+                            sep_cols=None, source=None):
         """Wholesale rewrite for the structural ops that reshape columns.
 
-        Character formatting inside the table does not survive these ops --
-        the accepted cost of reshaping; plain cell text does, which is what
-        a table almost always holds.
+        The text is rewritten whole, but no cell the operation did not
+        touch may change: each cell's styles are read off the old block
+        first and laid back on the cell they belong to afterwards. It used
+        to be "the accepted cost of reshaping" -- and the same rewrite
+        served clearing one cell with Delete, dropping one checkbox and
+        deleting one row, so a bold word anywhere in the table died for an
+        edit three cells away. *source* maps a new (row, column) to the
+        old one it came from, for the ops that move cells (an inserted or
+        deleted row or column, copies appended at an edge); the identity
+        otherwise. See _grid_lay_cell_styles for what a changed cell keeps.
         """
         b = self.body_text
         # The rewrite deletes the tagged text, and the table's position on
         # the page would go with it -- read it first, put it back after.
         table_align = self._grid_table_align_of(first)
+        carried = self._grid_read_cell_styles(first, old_nrows)
         b.delete(f"{first}.0", f"{first + old_nrows - 1}.end")
         lines = core_tables.format_table(rows, aligns)
         if sep_cols is not None and lines:
@@ -4203,9 +4212,115 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             ) + core_tables.CELL
             lines = [lines[0], sep_line] + lines[1:]
         b.insert(f"{first}.0", "\n".join(lines))
+        self._grid_lay_cell_styles(first, lines, carried, source)
         if table_align in ("center", "right"):
             for n in range(first, first + len(lines)):
                 b.tag_add(f"align_{table_align}", f"{n}.0", f"{n}.end")
+
+    def _grid_read_cell_styles(self, first, nrows):
+        """Every data cell's styles, read off the block's tags before a
+        rewrite deletes them: ``{(row, col): {"value", "runs", "pad_bg",
+        "paint_bg"}}``.
+
+        *runs* are the character-format tags on the cell's text, as
+        ``(tag, start, end)`` in the value's own characters. *pad_bg* is a
+        CELL-level highlight -- one reaching into the padding, where the
+        table's highlight action puts it. *paint_bg* is the colour the
+        drawing washes the whole cell with (the highlight on its first
+        character, or on its padding when empty; see _grid_cell_paint),
+        which is what a person sees as "a coloured cell". Read range by
+        range, not character by character: a table of hundreds of cells
+        is a few dozen Tk calls this way.
+        """
+        b = self.body_text
+        block = [b.get(f"{n}.0", f"{n}.end")
+                 for n in range(first, first + nrows)]
+        sep_at = core_tables.separator_index(block)
+        data = [i for i in range(len(block)) if i != sep_at]
+        runs = {i: [] for i in data}
+        top, bottom = f"{first}.0", f"{first + nrows - 1}.end"
+        for tag in b.tag_names():
+            if not is_format_tag(tag):
+                continue
+            ranges = b.tag_ranges(tag)
+            for k in range(0, len(ranges) - 1, 2):
+                s, e = str(ranges[k]), str(ranges[k + 1])
+                if b.compare(e, "<=", top) or b.compare(s, ">=", bottom):
+                    continue
+                s_line, s_col = (int(p) for p in s.split("."))
+                e_line, e_col = (int(p) for p in e.split("."))
+                for n in range(max(s_line, first),
+                               min(e_line, first + nrows - 1) + 1):
+                    i = n - first
+                    if i not in runs:
+                        continue
+                    line = block[i]
+                    a = self._py_col(line, s_col) if n == s_line else 0
+                    z = self._py_col(line, e_col) if n == e_line else len(line)
+                    if z > a:
+                        runs[i].append((tag, a, z))
+        cells = {}
+        for r, i in enumerate(data):
+            line = block[i]
+            pipes = core_tables.pipe_positions(line)
+            for c, (s, e) in enumerate(core_tables.cell_bounds(line)):
+                lo = pipes[c] + 1 if c < len(pipes) else s
+                hi = pipes[c + 1] if c + 1 < len(pipes) else e
+                paint_at = s if e > s else lo
+                rec = {"value": line[s:e], "runs": [], "pad_bg": None,
+                       "paint_bg": None}
+                for tag, a, z in runs[i]:
+                    if not (a < hi and z > lo):
+                        continue
+                    if a < e and z > s:
+                        rec["runs"].append((tag, max(a, s) - s,
+                                            min(z, e) - s))
+                    if tag.startswith("highlight_"):
+                        if a < s or z > e or s == e:
+                            rec["pad_bg"] = tag
+                        if a <= paint_at < z:
+                            rec["paint_bg"] = tag
+                cells[(r, c)] = rec
+        return cells
+
+    def _grid_lay_cell_styles(self, first, lines, carried, source=None):
+        """Lay the styles _grid_read_cell_styles read back on the cells of
+        the freshly written *lines*.
+
+        A cell whose text is exactly what it was gets every style back,
+        where it was on that text, and its cell-level highlight over its
+        new padding. A cell the operation CHANGED keeps only the colour it
+        was drawn with, over the whole cell: its character styles
+        described text that is no longer there, while a coloured cell is
+        still the same cell (a dropped checkbox or a cleared cell keeps
+        its colour, as the fill always promised).
+        """
+        b = self.body_text
+        sep_at = core_tables.separator_index(lines)
+        r = -1
+        for i, line in enumerate(lines):
+            if i == sep_at:
+                continue
+            r += 1
+            line_no = first + i
+            pipes = core_tables.pipe_positions(line)
+            for c, (s, e) in enumerate(core_tables.cell_bounds(line)):
+                src = source(r, c) if source is not None else (r, c)
+                rec = carried.get(src) if src is not None else None
+                if rec is None:
+                    continue
+                same = line[s:e] == rec["value"]
+                wash = rec["pad_bg"] if same else rec["paint_bg"]
+                if wash and c + 1 < len(pipes):
+                    b.tag_add(wash,
+                              f"{line_no}.{self._tk_col(line, pipes[c] + 1)}",
+                              f"{line_no}.{self._tk_col(line, pipes[c + 1])}")
+                if not same:
+                    continue
+                for tag, a, z in rec["runs"]:
+                    b.tag_add(tag,
+                              f"{line_no}.{self._tk_col(line, s + a)}",
+                              f"{line_no}.{self._tk_col(line, s + z)}")
 
     def _dissolve_orphan_markers(self, rows):
         _spans, covered = core_tables.merge_map(rows)
@@ -4249,7 +4364,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if sep_cols is not None:
             sep_cols.insert(min(at, len(sep_cols)),
                             {"width": None, "align": None, "hidden": False})
-        self._grid_replace_block(first, nrows, rows, aligns, sep_cols)
+        self._grid_replace_block(
+            first, nrows, rows, aligns, sep_cols,
+            source=lambda r, c: ((r, c) if c < at
+                                 else (r, c - 1) if c > at else None))
         self._grid_after_op(first)
 
     @_undo_atom
@@ -4268,7 +4386,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         del rows[r]
         del aligns[r]
         rows = self._dissolve_orphan_markers(rows)
-        self._grid_replace_block(first, nrows, rows, aligns, sep_cols)
+        gone = r
+        self._grid_replace_block(
+            first, nrows, rows, aligns, sep_cols,
+            source=lambda rr, c: (rr if rr < gone else rr + 1, c))
         self._grid_after_op(first)
 
     @_undo_atom
@@ -4285,12 +4406,14 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             return
         first, nrows, ncols = context
         rows, aligns, sep_cols, _sep_at = self._grid_block_parts(first, nrows)
+        source = None
         if ncols <= 2:
             for row in rows:
                 if c < len(row):
                     row[c] = ""
             rows = self._dissolve_orphan_markers(rows)
         else:
+            source = (lambda r, cc: (r, cc if cc < c else cc + 1))
             spans, _covered = core_tables.merge_map(rows)
             for (ar, ac), (rs, cs) in spans.items():
                 if ac <= c < ac + cs:
@@ -4307,7 +4430,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             if sep_cols is not None and c < len(sep_cols):
                 del sep_cols[c]
             rows = self._dissolve_orphan_markers(rows)
-        self._grid_replace_block(first, nrows, rows, aligns, sep_cols)
+        self._grid_replace_block(first, nrows, rows, aligns, sep_cols,
+                                 source=source)
         self._grid_after_op(first)
 
     @_undo_atom
@@ -4455,6 +4579,15 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             return
         first, nrows, _ncols = context
         rows, aligns, sep_cols, _sep_at = self._grid_block_parts(first, nrows)
+        # The copies carry their originals' styles: "text and all".
+        old_len = [len(row) for row in rows]
+
+        def source(r, c):
+            if c < old_len[r]:
+                return (r, c)
+            k = c - old_len[r]
+            return (r, c0 + k) if k <= c1 - c0 else None
+
         for row in rows:
             copied = [row[c] if c < len(row) else ""
                       for c in range(c0, c1 + 1)]
@@ -4473,7 +4606,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                                   "hidden": False}
                             for c in range(c0, c1 + 1))
         rows = self._dissolve_orphan_markers(rows)
-        self._grid_replace_block(first, nrows, rows, aligns, sep_cols)
+        self._grid_replace_block(first, nrows, rows, aligns, sep_cols,
+                                 source=source)
         self._grid_after_op(first)
 
     @_undo_atom
@@ -4495,10 +4629,14 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if copied_rows:
             copied_rows[0] = ["" if v == core_tables.MERGE_UP else v
                               for v in copied_rows[0]]
+        n_old = len(rows)
         rows.extend(copied_rows)
         aligns.extend(copied_aligns)
         rows = self._dissolve_orphan_markers(rows)
-        self._grid_replace_block(first, nrows, rows, aligns, sep_cols)
+        # The copies carry their originals' styles, as the columns' do.
+        self._grid_replace_block(
+            first, nrows, rows, aligns, sep_cols,
+            source=lambda r, c: (r, c) if r < n_old else (r0 + r - n_old, c))
         self._grid_after_op(first)
 
     @_undo_atom
@@ -4761,16 +4899,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
     def _grid_fill_selection(self, sel, value, align=None):
         info = sel["info"]
         r0, c0, r1, c1 = sel["box"]
-        # The wholesale rewrite below takes every tag with it -- fair for
-        # the text styles a fill overwrites anyway, but a CELL-level
-        # highlight describes the cell, not the text, and inserting a
-        # checkbox into a coloured cell stripped the colour. Remember
-        # each cell's highlight before, re-dress the cells after.
-        cell_bgs = {}
-        for (r, c) in list(info.get("cells", {})):
-            bg = self._grid_cell_paint(info, r, c).get("bg")
-            if bg:
-                cell_bgs[(r, c)] = bg
+        # The rewrite keeps every other cell exactly as it was and a
+        # filled cell's colour -- a CELL-level highlight describes the
+        # cell, not the text (see _grid_lay_cell_styles).
         context = self._grid_op_context(info)
         if not context:
             return
@@ -4785,17 +4916,6 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                         aligns[r][c] = align
         self._grid_replace_block(first, nrows, rows, aligns, sep_cols)
         self._grid_after_op(first)
-        if cell_bgs:
-            fresh = self._grid_at_line(first)
-            if fresh is not None:
-                for (r, c), bg in cell_bgs.items():
-                    span = self._grid_cell_text_range(
-                        fresh, r, c, pad_ok=True, full=True)
-                    if span:
-                        tag = self._ensure_color_tag(
-                            self.body_text, "highlight", bg)
-                        self.body_text.tag_add(tag, span[0], span[1])
-                self._grid_restyle(fresh)
 
     @_undo_atom
     def _grid_toggle_checkbox(self, info, r, c):
