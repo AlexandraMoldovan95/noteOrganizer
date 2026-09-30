@@ -7882,7 +7882,11 @@ check('...and reopens with every character of it',
 check('...without taking longer than a person would wait (%.1fs)' % _fc_elapsed,
       _fc_elapsed < 5.0)
 
-# 66: a repeat with no date is refused, and the reason names the date.
+# 66: a repeat with no date cannot be stored, and the reason names the
+# date -- but the note's words are not refused along with it. One field
+# the app cannot read used to veto the whole save, and on the automatic
+# routes that veto threw the typing away; now the words are saved, the
+# repeat is left out, and the warning says why.
 _fc_warned = []
 app.show_warning = lambda *a, **k: (_fc_warned.append(a), True)[1]
 app.new_note()
@@ -7892,12 +7896,14 @@ app.body_text.insert('1.0', 'something')
 app.rec_freq_var.set(NO.FREQ_LABELS['daily'])
 app.on_recurrence_changed()
 app.date_entry.delete(0, 'end')
-_fc_before = len(app.notes)
 app.save_current_note(auto=False)
 app.update()
 app.show_warning = _fc_real_warning
-check('a repeating note with no start date is refused (plan 66)',
-      len(app.notes) == _fc_before)
+_fc_rep = next((n for n in app.notes if n['title'] == 'Repetitiva'), None)
+check('a repeating note with no start date keeps its words (plan 66)',
+      _fc_rep is not None and _fc_rep['body'].strip() == 'something')
+check('...but not a repeat it has no start date for',
+      _fc_rep is not None and not _fc_rep['recurrence']['freq'])
 check('...and the warning says a start date is what is missing',
       any('start date' in str(a[1]).lower() or 'start date' in str(a[0]).lower()
           for a in _fc_warned))

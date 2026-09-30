@@ -239,6 +239,7 @@ from noteorganizer.core.storage import (
     load_trash,
     save_trash,
     _delete_attachment_files,
+    attachment_names_in,
     copy_attachment_file,
     purge_expired_trash,
     # The same question the purge acts on, asked without acting: what a
@@ -256,6 +257,7 @@ from noteorganizer.core.storage import (
     move_notes_to_trash as core_move_to_trash,
     days_left_in_trash as core_days_left_in_trash,
     restore_from_trash as core_restore_from_trash,
+    restore_many_from_trash as core_restore_many_from_trash,
 )
 
 
@@ -345,6 +347,7 @@ from noteorganizer.core.model import (
     find_by_uid,
     split_by_identity,
     apply_shared_update,
+    shared_update_changes,
     UPDATABLE_FROM_SHARED,
     UPDATABLE_FROM_BACKUP,
     PREV_TEXT_FIELDS,
@@ -1043,12 +1046,17 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 self.update_word_count()
             except Exception:
                 self._log_swallowed("autosave: schedule-time word count")
+        self._cancel_pending_autosave()
+        self._autosave_job = self.after(500, self._autosave_now)
+
+    def _cancel_pending_autosave(self):
+        """Drop a scheduled autosave, if one is waiting."""
         if getattr(self, "_autosave_job", None) is not None:
             try:
                 self.after_cancel(self._autosave_job)
             except (tk.TclError, ValueError):
                 pass
-        self._autosave_job = self.after(500, self._autosave_now)
+            self._autosave_job = None
 
     def _log_swallowed(self, where):
         """A guarded spot chose to carry on — leave the trace the bare
@@ -1649,17 +1657,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 self.show_error("Export failed",
                                f"Couldn't create the backup file:\n{state['error']}")
             else:
-                # Remember when the last successful export happened -- the
-                # Backup panel shows it, since an export is the only copy
-                # of the notes outside the app's own folder.
-                stamp = datetime.now().strftime("%Y-%m-%d %H:%M")
-                save_setting("last_export_at", stamp)
-                lbl = getattr(self, "last_export_lbl", None)
-                if lbl is not None:
-                    try:
-                        lbl.config(text=f"Last exported: {stamp}")
-                    except tk.TclError:
-                        pass
+                self._remember_finished_export()
                 self.show_info(
                     "Export complete",
                     f"Your notes, settings, and attachments were saved to:\n"
@@ -1669,6 +1667,52 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 )
             return
         self._export_poll_job = self.after(100, self._poll_export_progress)
+
+    def _remember_finished_export(self):
+        """Record the moment a backup export succeeded -- the Backup panel
+        shows it, since an export is the only copy of the notes outside
+        the app's own folder."""
+        stamp = datetime.now().strftime("%Y-%m-%d %H:%M")
+        save_setting("last_export_at", stamp)
+        lbl = getattr(self, "last_export_lbl", None)
+        if lbl is not None:
+            try:
+                lbl.config(text=f"Last exported: {stamp}")
+            except tk.TclError:
+                pass
+
+    def _settle_background_work_at_close(self):
+        """Finish what the main thread does once a backup's worker is done
+        -- at close, where the timer that would have done it never runs.
+
+        An export that finished is recorded as the last one. An import
+        whose worker finished, but whose notes were never merged, is dropped
+        whole: the unpacked backup leaves the temp folder, and the files it
+        copied into attachments -- which no note points at yet -- leave that
+        folder. The close used to wait for the worker and quit, leaving both
+        behind (forty orphaned files in one run) and the export unrecorded.
+        Merging instead would mean asking the import's questions in a window
+        that is closing.
+        """
+        state = self._export_state
+        if state is not None and state.get("done") and not state.get("error"):
+            self._remember_finished_export()
+            self._export_state = None
+        state = self._import_state
+        if state is None or not state.get("done"):
+            # Still running past the wait's cap: leave it alone.
+            return
+        self._import_state = None
+        if state.get("temp_dir"):
+            shutil.rmtree(state["temp_dir"], ignore_errors=True)
+        in_use = attachment_names_in(self.notes + self.trash)
+        for name in state.get("copied") or []:
+            if name in in_use or os.path.basename(name) != name:
+                continue
+            try:
+                os.remove(os.path.join(ATTACHMENTS_DIR, name))
+            except OSError:
+                pass
 
     # ---------- Share codes ----------
     def _add_paste_menu(self, text_widget, extra_items=None):
@@ -7875,11 +7919,20 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self.import_box.focus()
 
     def _take_known_notes(self, incoming, source):
-        """Ask once about the notes in a batch we already have, then act.
+        """Ask once about the notes in a batch we already have.
 
-        Returns ``(proceed, remaining)``: *remaining* is what the caller
-        should go on to import as new notes, and *proceed* is False when
-        the user cancelled.
+        Returns ``(proceed, remaining, updates, unchanged)``: *remaining*
+        is what the caller should go on to import as new notes, *proceed*
+        is False when the user cancelled, *updates* is what "Update" agreed
+        to, and *unchanged* counts the notes that arrived exactly as they
+        are here and need nothing at all.
+
+        The updates are NOT applied here. The caller applies them with
+        _apply_known_updates once the last question of its import is
+        answered: applied here, a Cancel on the question that follows (the
+        duplicate check) left the notes already replaced in memory, with
+        nothing on screen saying so, and the next unrelated save wrote them
+        to disk.
 
         Both bulk routes -- a share code carrying several notes and a
         restored backup -- come through here, so the two cannot drift
@@ -7893,8 +7946,15 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         it is attrition.
         """
         known, fresh = split_by_identity(self.notes, incoming)
+        # A note that arrives exactly as it is here needs nothing: not an
+        # update (see shared_update_changes for what that used to cost),
+        # and not a second copy either.
+        differing = [(mine, theirs) for mine, theirs in known
+                     if self._known_note_differs(mine, theirs, source)]
+        unchanged = len(known) - len(differing)
+        known = differing
         if not known:
-            return True, incoming
+            return True, fresh, [], unchanged
         count = len(known)
         plural = "" if count == 1 else "s"
         if fresh:
@@ -7914,6 +7974,16 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 f"undone with \u201c\u21a9 Restore previous\u201d.\n"
                 f"Adding leaves both versions, so you can compare them."
             )
+        # "Edited elsewhere" reads as "newer", and a backup from last month
+        # is edited elsewhere too. Updating from it trades this device's
+        # newer text for older text, so the question says so. (A backup's
+        # notes carry when they were last saved; a share code does not.)
+        older = 0 if source != "backup" else sum(
+            1 for mine, theirs in known
+            if str(theirs.get("updated") or "") < str(mine.get("updated") or ""))
+        if older:
+            who = "It is" if count == 1 else f"{older} of them are"
+            message += f"\n\n{who} OLDER than the copy on this device."
         choice = self._themed_dialog(
             f"{count} note{plural} you already have",
             message,
@@ -7923,25 +7993,16 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                      (f"Update the {count}", "update")],
         )
         if choice is None or choice == "cancel":
-            return False, []
+            return False, [], [], unchanged
         if choice == "update":
             # Same order as the single-note route, for the same reason:
-            # the editor's unsaved work is saved before it is replaced,
-            # and the editor is then brought onto the new version -- or
-            # its next save puts the old one back. Cancel on the day's
-            # save question cancels the import: going on would replace
-            # the very edit the person just declined to let go of.
+            # the editor's unsaved work is saved before anything replaces
+            # it. Cancel on the day's save question cancels the import:
+            # going on would replace the very edit the person just
+            # declined to let go of.
             if self._flush_autosave() is False:
-                return False, []
-            fields = (UPDATABLE_FROM_BACKUP if source == "backup"
-                      else UPDATABLE_FROM_SHARED)
-            for mine, theirs in known:
-                apply_shared_update(mine, theirs, fields)
-                if source == "backup":
-                    self._adopt_backup_attachments(mine, theirs)
-            self._editor_follows_external_change(
-                {n.get("id") for n, _ in known})
-            return True, fresh
+                return False, [], [], unchanged
+            return True, fresh, known, unchanged
         # "add": the copies go on as new notes, without the identity they
         # arrived with -- two notes wearing one uid is the collision this
         # whole field exists to prevent.
@@ -7950,7 +8011,49 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             copy = dict(theirs)
             copy.pop("uid", None)
             stripped.append(copy)
-        return True, fresh + stripped
+        return True, fresh + stripped, [], unchanged
+
+    def _apply_known_updates(self, updates, source):
+        """Apply what "Update" agreed to in _take_known_notes; returns how
+        many notes changed. The editor is then brought onto the new
+        version of any note it holds -- or its next save puts the old
+        version straight back."""
+        fields = (UPDATABLE_FROM_BACKUP if source == "backup"
+                  else UPDATABLE_FROM_SHARED)
+        for mine, theirs in updates:
+            apply_shared_update(mine, theirs, fields)
+            if source == "backup":
+                self._adopt_backup_attachments(mine, theirs)
+        if updates:
+            self._editor_follows_external_change(
+                {n.get("id") for n, _ in updates})
+        return len(updates)
+
+    def _dup_keys_after(self, updates):
+        """The duplicate-check keys of the notebook as it will be once
+        *updates* (from _take_known_notes) are applied. They are applied
+        only after the duplicate question is answered, but that question
+        is about the notebook the import will leave behind."""
+        replaced = {id(mine) for mine, _ in updates}
+        return ({_dup_key(n) for n in self.notes if id(n) not in replaced}
+                | {_dup_key(normalize_note(theirs)) for _, theirs in updates})
+
+    def _known_note_differs(self, mine, theirs, source):
+        """Whether importing *theirs* over *mine* would change anything: a
+        field the route may update, or -- from a backup, whose files are
+        added and never swapped -- a file this device's copy lacks."""
+        fields = (UPDATABLE_FROM_BACKUP if source == "backup"
+                  else UPDATABLE_FROM_SHARED)
+        if shared_update_changes(mine, theirs, fields):
+            return True
+        return source == "backup" and bool(self._files_to_adopt(mine, theirs))
+
+    def _files_to_adopt(self, mine, theirs):
+        """The attachments a backup's copy of a note has and *mine* lacks."""
+        have = {a.get("stored_as") for a in mine.get("attachments") or []
+                if isinstance(a, dict)}
+        return [att for att in normalize_note(dict(theirs)).get("attachments") or []
+                if att.get("stored_as") and att.get("stored_as") not in have]
 
     def _adopt_backup_attachments(self, mine, theirs):
         """Add the files a backup's copy of a note has and this one lacks.
@@ -7966,15 +8069,14 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         """
         have = {a.get("stored_as") for a in mine.get("attachments") or []
                 if isinstance(a, dict)}
-        incoming = normalize_note(dict(theirs)).get("attachments") or []
         claimed = {a.get("stored_as")
                    for n in (self.notes + self.trash)
                    if isinstance(n, dict) and n is not mine
                    for a in (n.get("attachments") or [])
                    if isinstance(a, dict)}
-        for att in incoming:
+        for att in self._files_to_adopt(mine, theirs):
             name = att.get("stored_as")
-            if not name or name in have:
+            if name in have:
                 continue
             if len(mine.setdefault("attachments", [])) >= MAX_ATTACHMENTS:
                 break
@@ -8029,6 +8131,15 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             # different precisely because it was edited, so it would say
             # "new note" and quietly leave two copies behind.
             mine = find_by_uid(self.notes, normalize_note(incoming).get("uid"))
+            if mine is not None and not self._known_note_differs(
+                    mine, incoming, "code"):
+                # The code holds this note exactly as it is here. "The two
+                # differ" was said without comparing, and Update then
+                # replaced the rescue copy with a duplicate of the note.
+                self.import_status.config(
+                    text="This note is already here, exactly as in the code.",
+                    fg=self.colors["success"])
+                return
             if mine is not None:
                 choice = self._themed_dialog(
                     "Same note, a different version",
@@ -8072,14 +8183,14 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 # save it as a new note.
                 #
                 # Dropping the uid here is belt and braces, and honestly
-                # so: the editor carries fields, not a uid, so the saved
-                # copy is minted a fresh identity whether or not this
-                # line runs — a mutant that removes it survives the whole
-                # suite. It stays because it puts the intent where the
-                # decision is made, instead of resting on a property of a
-                # function three calls away that nobody would think to
-                # preserve. The BULK route two branches down has no such
-                # accident and is covered by a check that does bite.
+                # so: the review editor carries an arriving identity only
+                # when no note here wears it, and this one does, so the
+                # saved copy is minted a fresh identity whether or not
+                # this line runs. It stays because it puts the intent
+                # where the decision is made, instead of resting on a
+                # check two calls away. The BULK route two branches down
+                # has no second guard and is covered by a check that
+                # does bite.
                 incoming = dict(incoming)
                 incoming.pop("uid", None)
                 valid = [incoming]
@@ -8095,27 +8206,34 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 )
                 if choice is None or choice == "cancel":
                     return
-            self.import_box.delete("1.0", "end")
-            self.toggle_import_panel()
             # Passed DOWN rather than set here: _open_imported_note_in_editor
             # ends by setting its own status, so a set_status at this point
             # was overwritten one frame later and the user never saw that
             # their note had been trimmed. Dead code with a ledger row
             # claiming it shipped.
-            self._open_imported_note_in_editor(incoming, trimmed=bool(oversized))
+            if self._open_imported_note_in_editor(
+                    incoming, trimmed=bool(oversized)) is False:
+                # Cancel on a repeating day's save question: that day stays
+                # in the editor, and the code stays in the box to try again.
+                return
+            self.import_box.delete("1.0", "end")
+            self.toggle_import_panel()
             return
         # Identity first: notes this batch says we already have.
-        proceed, valid = self._take_known_notes(valid, "code")
+        proceed, valid, updates, unchanged = self._take_known_notes(valid, "code")
         if not proceed:
             return
         if not valid:
-            self.save_notes()
+            updated = self._apply_known_updates(updates, "code")
+            if updated:
+                self.save_notes()
             self.import_box.delete("1.0", "end")
             self.toggle_import_panel()
             self.refresh_note_list()
             self.render_calendar()
             self.set_status("Notes updated from the code "
-                            "— ↩ Restore previous undoes each one")
+                            "— ↩ Restore previous undoes each one" if updated
+                            else "Everything in this code is already here, unchanged")
             return
         next_id = max([n["id"] for n in self.notes], default=0) + 1
         # Check each incoming note against what's already here — same
@@ -8123,7 +8241,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # everything. Importing the same share code twice (or a code that
         # overlaps with notes you already kept) used to silently create
         # duplicates with no way to tell beforehand.
-        existing_keys = {_dup_key(n) for n in self.notes}
+        existing_keys = self._dup_keys_after(updates)
         fresh = [sn for sn in valid if _dup_key(normalize_note(sn)) not in existing_keys]
         dupe_count = len(valid) - len(fresh)
         to_import = valid
@@ -8151,6 +8269,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 return
             if choice == "skip":
                 to_import = fresh
+        # Every question is answered: only now do the updates happen.
+        updated = self._apply_known_updates(updates, "code")
         added = 0
         for sn in to_import:
             note = normalize_note(sn)
@@ -8165,8 +8285,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         skipped_note = f" ({dupe_count} duplicate(s) skipped)" if dupe_count and to_import is not valid else ""
         oversize_note = (f" — {oversized} oversized note(s) trimmed to safe limits"
                          if oversized else "")
-        self.import_status.config(text=f"Added {added} notes ✓{skipped_note}{oversize_note}",
-                                  fg=self.colors["success"])
+        known_note = ((f", updated {updated}" if updated else "")
+                      + (f", {unchanged} already here" if unchanged else ""))
+        self.import_status.config(
+            text=f"Added {added} notes{known_note} ✓{skipped_note}{oversize_note}",
+            fg=self.colors["success"])
 
     def toggle_share_panel(self):
         if self._is_placed(self.share_panel):
@@ -8542,6 +8665,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # formatting, the paragraphs and the checklist that a code from
         # the multi-note Share panel (which passes whole notes) carried.
         note = {k: st.get(k) for k in SHAREABLE_FIELDS if st.get(k) is not None}
+        # The date and repeat a save would store, not the raw field: a code
+        # that carried "30.09.2026" delivered a date no save could keep,
+        # and every edit to the note that arrived was lost on the far end.
+        note["date"], note["recurrence"], _left_out = self._date_and_repeat_to_store()
         # The identity is the one shareable field that is NOT editor
         # content: it belongs to the note this editor has open, and
         # capture_editor_state has no reason to hold it. Building the
@@ -8660,7 +8787,19 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         this stays a NEW note (no selected_note_id) so Save creates a fresh one."""
         note = normalize_note(shared_note)
         self.notebook.select(self.TAB_NOTES)
-        self.open_blank_tab()    # gives a clean new-note editor state
+        # A clean new-note editor -- unless the person chose to stay on a
+        # repeating day's edit, and then nothing here may touch the editor.
+        if self.open_blank_tab() is False:
+            return False
+        # The identity it arrived with goes into its first save, unless a
+        # note here already wears it. This editor used to drop it, so a
+        # note sent out, edited elsewhere and sent back arrived as a
+        # stranger and became a second copy. Read from what arrived, not
+        # from `note`: normalize_note mints an identity for a note that
+        # carries none, and "Add as a new note" removes it on purpose.
+        uid = str(shared_note.get("uid") or "").strip()
+        self._arrived_uid = (uid if uid and find_by_uid(self.notes, uid) is None
+                             else "")
 
         self.title_entry.delete(0, "end")
         title = note.get("title", "")
@@ -8676,13 +8815,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.comments_text.delete("1.0", "end")
         self.comments_text.insert("1.0", note.get("comments", ""))
 
-        self.date_entry.delete(0, "end")
-        if note.get("date"):
-            self.date_entry.insert(0, note["date"])
-            self.date_entry.config(fg=self.colors["text"])
-        else:
-            self.date_entry.insert(0, "YYYY-MM-DD")
-            self.date_entry.config(fg=self.colors["subtext"])
+        self._show_date_in_field(note.get("date"))
 
         cat = note.get("category", "General")
         self.category_var.set(cat if cat in CATEGORY_COLORS else "General")
@@ -8728,6 +8861,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 f"{MAX_SPANS_PER_LINE} of them on any one line).\n\n"
                 "Nothing of yours was touched — this is only about what "
                 "arrived. Review it before saving.")
+        return True
 
     def import_data(self):
         """Import a previously exported .zip. Notes are MERGED into your
@@ -8751,16 +8885,21 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
         confirm = self.ask_yes_no(
             "Import notes",
-            "This will ADD the notes from that backup to your current list "
-            "(your existing notes won't be changed or removed).\n\n"
+            "This will ADD the notes from that backup to your current list. "
+            "Nothing you have is removed, and a note you already have is "
+            "only replaced if you choose to update it.\n\n"
             "Continue?"
         )
         if not confirm:
             return
 
+        # "copied": the files the worker put in the attachments folder, so
+        # an import the window closes on can take them back out again (see
+        # _settle_background_work_at_close).
         self._import_state = {"phase": "extracting", "current": 0, "total": 1,
                               "done": False, "error": None,
-                              "temp_dir": None, "imported_notes": None}
+                              "temp_dir": None, "imported_notes": None,
+                              "copied": []}
         self.export_progress_bar.configure(maximum=1, value=0)
         self.export_progress_lbl.config(text="Importing… reading backup")
         self.export_progress_frame.place(relx=0.5, rely=1.0, anchor="s", y=-14)
@@ -8857,6 +8996,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                                 shutil.copy2(
                                     os.path.join(imported_attachments_dir, filename), part)
                                 os.replace(part, dest)
+                                state["copied"].append(filename)
                             except (IOError, OSError):
                                 try:
                                     os.remove(part)
@@ -8962,7 +9102,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             added_names.clear()
 
         # Identity first, exactly as the share-code route asks it.
-        proceed, valid_notes = self._take_known_notes(valid_notes, "backup")
+        proceed, valid_notes, updates, unchanged = self._take_known_notes(
+            valid_notes, "backup")
         if not proceed:
             _undo_category_merge()
             # The extracted backup goes with it, as it does when the
@@ -8970,7 +9111,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             # whole unpacked zip in the temp folder.
             shutil.rmtree(temp_dir, ignore_errors=True)
             return
-        existing_keys = {_dup_key(n) for n in self.notes}
+        existing_keys = self._dup_keys_after(updates)
         fresh = [n for n in valid_notes if _dup_key(normalize_note(n)) not in existing_keys]
         dupe_count = len(valid_notes) - len(fresh)
         to_import = valid_notes
@@ -9008,6 +9149,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if added_categories:
             persist_categories()
             self.refresh_category_widgets()
+        # ...and only now are the notes you already have updated. Before
+        # the claimed-file scan below, because an update can bring files in.
+        updated = self._apply_known_updates(updates, "backup")
 
         # Calendar day colours and emoji markers ride the backup's
         # settings.json exactly like categories do, and used to be dropped
@@ -9155,9 +9299,19 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 f"not be added (a name over {MAX_CATEGORY_NAME} characters, "
                 f"or more than {MAX_CATEGORIES} categories in all), so the "
                 "notes filed under them are in General.")
+        # The notes it updated and the ones it found unchanged are counted
+        # too: "Added 0 note(s)" after an update read as "nothing
+        # happened", and invited the second import that used to destroy
+        # this device's newer text.
+        known_note = ""
+        if updated:
+            known_note += (f" Updated {updated} note(s) you already had "
+                           "(“↩ Restore previous” undoes each one).")
+        if unchanged:
+            known_note += f" {unchanged} note(s) were already here, unchanged."
         self.show_info("Import complete",
                        f"Added {len(to_import)} note(s) from the backup."
-                       f"{skipped_note}{extras_note}")
+                       f"{known_note}{skipped_note}{extras_note}")
 
     # ---------- Theme helpers ----------
     def get_note_color(self, note):
@@ -9405,6 +9559,20 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             lbl.configure(font=f, fg=self.colors["subtext"] if done else self.colors["text"])
         except Exception:
             lbl.configure(fg=self.colors["subtext"] if done else self.colors["text"])
+
+    def _take_pending_checklist_item(self):
+        """Add what sits typed in the checklist's add box to this note's list,
+        as leaving the note requires (see _flush_autosave). Unlike the Add
+        button it leaves the keyboard where it is: the person is on their
+        way somewhere else."""
+        var = getattr(self, "checklist_add_var", None)
+        text = var.get().strip() if var is not None else ""
+        if not text:
+            return
+        self._get_checklist().append({"text": text, "done": False})
+        var.set("")
+        if hasattr(self, "checklist_items_frame"):
+            self._render_checklist_items()
 
     def _add_checklist_item(self):
         text = self.checklist_add_var.get().strip()
@@ -9806,8 +9974,23 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
     def track_theme(self, widget, **option_map):
         self.themed_widgets.append((widget, option_map))
+        # A section rebuilt on every visit registers its widgets again each
+        # time, and only a theme switch dropped the dead ones: a session
+        # that never switched theme kept every widget it ever drew (339 ->
+        # 809 entries over 175 Settings visits, measured). Pruned whenever
+        # the registry has doubled since the last prune -- a constant cost
+        # per call, averaged.
+        if len(self.themed_widgets) >= 2 * getattr(self, "_themed_pruned_at", 256):
+            self._prune_themed_widgets()
         widget.configure(**{opt: self.colors[key] for opt, key in option_map.items()})
         return widget
+
+    def _prune_themed_widgets(self):
+        """Drop the registry's entries for widgets that no longer exist."""
+        self.themed_widgets = [
+            (w, m) for w, m in self.themed_widgets
+            if self._widget_alive(w)]
+        self._themed_pruned_at = max(256, len(self.themed_widgets))
 
 
     def toggle_theme(self):
@@ -9853,9 +10036,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # kept the destroyed ones forever — the note-card leak class, at
         # the registry level (each dead entry cost a caught TclError on
         # every switch, growing without bound).
-        self.themed_widgets = [
-            (w, m) for w, m in self.themed_widgets
-            if self._widget_alive(w)]
+        self._prune_themed_widgets()
         for widget, option_map in self.themed_widgets:
             try:
                 widget.configure(**{opt: self.colors[key] for opt, key in option_map.items()})
@@ -10538,6 +10719,15 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # relying on that ordering is how this breaks when someone reorders
         # these lines.
         self._refresh_search_clear()
+        # ...and it scheduled a list rebuild for a search nobody typed: a
+        # second full rebuild at every startup, on top of the one the
+        # launch runs anyway (~55 ms at 5,000 notes, measured).
+        if self._search_debounce_job is not None:
+            try:
+                self.after_cancel(self._search_debounce_job)
+            except (tk.TclError, ValueError):
+                pass
+            self._search_debounce_job = None
 
         # Sort + category filter row
         # Captions for the two controls below, because both are labelled with
@@ -12020,9 +12210,20 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._place_dropdown_popup(popup, self.color_swatch_btn)
 
     def clear_note_date(self):
+        self._show_date_in_field("")
+
+    def _show_date_in_field(self, value):
+        """Put a date in the note's date field -- or, for none, the grey
+        YYYY-MM-DD placeholder. The one way the editor fills that field, so
+        the text and its colour cannot come apart between the routes that
+        load, restore, import or put back a note's date."""
         self.date_entry.delete(0, "end")
-        self.date_entry.insert(0, "YYYY-MM-DD")
-        self.date_entry.config(fg=self.colors["subtext"])
+        if value:
+            self.date_entry.insert(0, value)
+            self.date_entry.config(fg=self.colors["text"])
+        else:
+            self.date_entry.insert(0, "YYYY-MM-DD")
+            self.date_entry.config(fg=self.colors["subtext"])
 
     def open_date_picker(self, target_entry=None, anchor_widget=None):
         """Small calendar dropdown for picking a date, anchored to whichever
@@ -14423,6 +14624,13 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if not self.selected_note_ids:
             self.show_info("Nothing selected", "Tick one or more notes first.")
             return
+        # Save what the editor holds first, as the single delete from a
+        # note's menu does: the note on screen may be one of the ticked
+        # ones, and its unsaved typing belongs in the Trash copy (and in
+        # what Undo brings back), not in an editor about to be cleared.
+        # Cancel on a day's save question stops the delete here.
+        if self._flush_autosave() is False:
+            return
         count = len(self.selected_note_ids)
         to_trash = [n for n in self.notes if n["id"] in self.selected_note_ids]
         attachment_count = sum(len(n.get("attachments") or []) for n in to_trash)
@@ -14455,9 +14663,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if not self.open_tabs:
             self.active_tab_index = None
             self.new_note()
-        else:
-            self.active_tab_index = None
-            self.switch_to_tab(min(0, len(self.open_tabs) - 1))
+        # Otherwise the editor holds a note that was not trashed, and it
+        # stays as it is -- see _delete_note for what "switching" to it
+        # from its stored copy used to cost.
         self._sync_editor_snapshot()
         self._exit_selection_mode_after_bulk_action()
         self.render_calendar()
@@ -14733,13 +14941,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.comments_text.insert("1.0", st["comments"])
         self.category_var.set(st["category"])
 
-        self.date_entry.delete(0, "end")
-        if st["date"]:
-            self.date_entry.insert(0, st["date"])
-            self.date_entry.config(fg=self.colors["text"])
-        else:
-            self.date_entry.insert(0, "YYYY-MM-DD")
-            self.date_entry.config(fg=self.colors["subtext"])
+        self._show_date_in_field(st["date"])
 
         self.current_note_color = st["color"]
         self._update_color_swatch()
@@ -14838,12 +15040,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             # stripped comparison here made every whitespace-only edit read
             # as "no change" — so the autosave, the flush and the dirty dot
             # all ignored exactly the characters the save had just learned
-            # to keep. Titles and comments are STORED stripped, so their
-            # stripped comparison is the honest one.
+            # to keep. The comments now follow the body's rule, stored as
+            # typed, so they compare unstripped too. Titles are STORED
+            # stripped, so their stripped comparison is the honest one.
             if not (st["title"].strip() == shown["title"].strip()
                     and st["body"] == shown["body"]
-                    and st["comments"].strip()
-                    == shown.get("comments", "").strip()
+                    and st["comments"] == (shown.get("comments") or "")
                     and st["category"] == shown["category"]
                     and st["color"] == shown.get("color", "")):
                 return False
@@ -14877,7 +15079,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 # this comparison, a tag-only change read as "nothing new"
                 # and the autosave quietly skipped it.
                 or st.get("paragraphs", []) != note.get("paragraphs", [])
-                or st["comments"].strip() != shown.get("comments", "").strip()
+                or st["comments"] != (shown.get("comments") or "")
                 or st["category"] != shown["category"]
                 or st["color"] != shown.get("color", "")
                 or st.get("checklist", []) != note.get("checklist", [])):
@@ -14983,7 +15185,13 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
     def open_blank_tab(self):
         """Start a brand-new empty note, replacing whatever was open (after
-        auto-saving any unsaved work in it)."""
+        auto-saving any unsaved work in it).
+
+        Returns False when the person chose to stay (Cancel on a repeating
+        day's question), True otherwise -- as open_note_in_tab does. A
+        caller that goes on to fill the editor must stop on False: the
+        import did not, and loaded a recipe into the repeating note still
+        on screen, whose next save wrote it over the whole series."""
         self._dismiss_mini_popup()
         pending_return = getattr(self, "_pending_calendar_return", None)
         self._pending_calendar_return = None
@@ -14993,7 +15201,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             # Cancel means stay, exactly as in open_note_in_tab.
             self._pending_calendar_return = pending_return
             self._update_calendar_return_button()
-            return
+            return False
         self.new_note()
         self._tab_counter += 1
         self.open_tabs = [{"key": self._tab_counter, "state": self.capture_editor_state()}]
@@ -15021,12 +15229,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         anything falsy: a return added later without a value, or a test
         standing in for this method, must not turn into a window that
         will not close."""
-        if getattr(self, "_autosave_job", None) is not None:
-            try:
-                self.after_cancel(self._autosave_job)
-            except (tk.TclError, ValueError):
-                pass
-            self._autosave_job = None
+        self._cancel_pending_autosave()
         if self.selected_note_id is None and not self.open_tabs:
             return True
         # selected_note_id can end up stale — pointing at a note that no
@@ -15041,6 +15244,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # for something the user didn't directly ask to happen.
         if self.selected_note_id is not None and self.find_note(self.selected_note_id) is None:
             return True
+        # A checklist item typed but not yet added is typing like any other:
+        # it goes into the note it was typed for, before that note is left.
+        # It used to stay in the box and be added to whichever note came next.
+        self._take_pending_checklist_item()
         try:
             st = self.capture_editor_state()
         except Exception:
@@ -15061,6 +15268,29 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             # note-switch or close, is exactly "stopped saving in
             # complete silence" — leave the trace.
             self._log_swallowed("flush: save_current_note")
+        # A date or repeat the save could not store exists only on the
+        # screen now, and every caller of this is about to replace the
+        # screen. Asked, not decided: going back to fix it is the safe
+        # answer, so it is what Escape and Enter give.
+        try:
+            left_out = self._date_and_repeat_to_store()[2]
+        except Exception:
+            self._log_swallowed("flush: date and repeat check")
+            left_out = []
+        if left_out:
+            if not self._themed_dialog(
+                    "Part of this note isn't saved",
+                    self._left_out_message(left_out),
+                    kind="warning",
+                    buttons=[("Go back and fix it", False),
+                             ("Continue without it", True)],
+                    default="Go back and fix it"):
+                return False
+            self._put_back_stored_date_and_repeat()
+            # Putting the repeat back writes its fields, and their traces
+            # schedule an autosave; this method's promise is that no late
+            # timer is left to fire into whatever replaces the editor.
+            self._cancel_pending_autosave()
         return True
 
     def switch_to_tab(self, index):
@@ -15683,6 +15913,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
     def new_note(self):
         self.selected_note_id = None
         self.current_occurrence_date = None
+        # Whatever was under review from a share code is no longer here.
+        self._arrived_uid = ""
         self.title_entry.delete(0, "end")
         self.title_entry.config(fg=self.colors["text"])
         # Clearing the field does not go through _insert_title, so the
@@ -15698,6 +15930,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.refresh_attachments_list()
         self.write_recurrence_to_ui({})
         self._working_checklist = []
+        # The add box belongs to the note that was open; what was typed in
+        # it was saved there on the way out, or dropped with that note.
+        if hasattr(self, "checklist_add_var"):
+            self.checklist_add_var.set("")
         if hasattr(self, "checklist_items_frame"):
             self._render_checklist_items()
         self._sync_checklist_open_state()
@@ -15730,6 +15966,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         override for that day is shown instead of the base content."""
         self.selected_note_id = note["id"]
         self.current_occurrence_date = occurrence_date if is_recurring(note) else None
+        # A saved note has its own identity; one that was under review from
+        # a share code is no longer in the editor.
+        self._arrived_uid = ""
 
         shown = effective_note(note, occurrence_date) if occurrence_date else note
 
@@ -15761,13 +16000,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.comments_text.insert("1.0", shown.get("comments", ""))
         self.category_var.set(shown["category"])
 
-        self.date_entry.delete(0, "end")
-        if note.get("date"):
-            self.date_entry.insert(0, note["date"])
-            self.date_entry.config(fg=self.colors["text"])
-        else:
-            self.date_entry.insert(0, "YYYY-MM-DD")
-            self.date_entry.config(fg=self.colors["subtext"])
+        self._show_date_in_field(note.get("date"))
 
         self.current_note_color = shown.get("color", "")
         self._update_color_swatch()
@@ -15778,6 +16011,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             {"text": it.get("text", ""), "done": bool(it.get("done"))}
             for it in note.get("checklist", []) if isinstance(it, dict)
         ]
+        # An item half-typed for the note that was open does not follow it
+        # here (see new_note).
+        if hasattr(self, "checklist_add_var"):
+            self.checklist_add_var.set("")
         if hasattr(self, "checklist_items_frame"):
             self._render_checklist_items()
         self._sync_checklist_open_state()
@@ -16412,7 +16649,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             if choice is None:
                 return
             if choice:
-                self.save_current_note()
+                # Cancel on a repeating day's save question means stay:
+                # nothing saved, so nothing duplicated either.
+                if self.save_current_note() is self._SAVE_CANCELLED:
+                    return
                 note = self.find_note(self.selected_note_id)
 
         clone = self.duplicate_note(note)
@@ -16431,7 +16671,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
     def rename_category_everywhere(self, old_name, new_name):
         """Rewrite every reference to a category when it is renamed."""
-        core_rename_category(self.notes, old_name, new_name)
+        self._refile_category_everywhere(old_name, new_name, renamed=True)
 
     def reassign_category_everywhere(self, old_name, new_name):
         """Move every note from one category to another.
@@ -16441,7 +16681,47 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         renaming a category, the other is a category being deleted and its
         notes being kept.
         """
+        self._refile_category_everywhere(old_name, new_name, renamed=False)
+
+    def _refile_category_everywhere(self, old_name, new_name, renamed):
+        """Every holder of a category's name, moved to another name.
+
+        The notes used to be the only holder rewritten, and every other one
+        went on using the old name. The editor's own category box fell back
+        to General, so the next save filed the open note there. Templates
+        and the Trash kept a category that no longer existed, and a note
+        restored from the Trash brought it back. A folded group unfolded,
+        and its old name stayed folded in the settings for good. Every
+        holder is here, so the next one is added here or visibly not at all.
+
+        A rename carries the list's state with it -- the fold, the filter,
+        the open note's box. A deletion (``renamed=False``) only lets go of
+        the old name: General does not become folded, or the list filtered,
+        because a deleted category was.
+        """
         core_rename_category(self.notes, old_name, new_name)
+        trashed = [e for e in self.trash if isinstance(e, dict)]
+        if core_count_in_category(trashed, old_name):
+            core_rename_category(trashed, old_name, new_name)
+            save_trash(self.trash)
+        moved_templates = False
+        for tpl in self.templates:
+            if isinstance(tpl, dict) and tpl.get("category") == old_name:
+                tpl["category"] = new_name
+                moved_templates = True
+        if moved_templates:
+            save_templates(self.templates)
+        if old_name in self.collapsed_groups:
+            self.collapsed_groups.discard(old_name)
+            if renamed:
+                self.collapsed_groups.add(new_name)
+            save_setting("collapsed_groups", sorted(self.collapsed_groups))
+        if renamed:
+            if self.category_var.get() == old_name:
+                self.category_var.set(new_name)
+            var = getattr(self, "filter_var", None)
+            if var is not None and var.get() == old_name:
+                var.set(new_name)
 
     def refresh_category_widgets(self):
         """Push the current category set into the editor dropdown and the
@@ -16595,6 +16875,76 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.update_word_count()
         self._update_restore_button()
 
+    def _date_and_repeat_to_store(self):
+        """What a save can store from the date and repeat fields, and what
+        it has to leave out: ``(date, rule, left_out)``.
+
+        One field the app cannot read used to veto the WHOLE save, and the
+        automatic routes -- a pause in typing, another note, Ctrl+N,
+        closing the window -- took that refusal for success and replaced
+        the editor. A date typed as 30/09/2026, the way many people write
+        it, quietly cost every word typed after it. Now a field that cannot
+        be stored keeps the value the note already had, everything else is
+        saved, and ``left_out`` says what was not, in words for the person.
+
+        Three things can be left out: a date that is not a date (the field
+        reads YYYY-MM-DD), a repeat's end date that is not one, and a repeat
+        with no start date to hang on. The save and the question asked on
+        the way out of the note both ask here, so they cannot disagree about
+        what stayed behind.
+        """
+        note = (self.find_note(self.selected_note_id)
+                if self.selected_note_id is not None else None)
+        kept_date = (note or {}).get("date") or ""
+        kept_rule = normalize_recurrence((note or {}).get("recurrence"))
+        left_out = []
+
+        typed = self.date_entry.get().strip()
+        if typed == "YYYY-MM-DD":
+            typed = ""
+        date_value = typed
+        if typed and not parse_date(typed):
+            left_out.append(f"the date “{typed}” "
+                            "(dates are written like 2026-09-30)")
+            date_value = kept_date
+
+        rule = self.read_recurrence_from_ui()
+        end_typed = (self.rec_end_date_var.get().strip()
+                     if self.rec_end_mode_var.get() == "on" else "")
+        if rule["freq"] and end_typed and not parse_date(end_typed):
+            left_out.append(f"the repeat's end date “{end_typed}” "
+                            "(dates are written like 2026-12-31)")
+            rule = normalize_recurrence(dict(
+                rule, end=kept_rule["end"], count=kept_rule["count"]))
+
+        if rule["freq"] and not parse_date(date_value):
+            if parse_date(kept_date):
+                # Most often the date was cleared on the way to typing a
+                # new one: the series keeps the day it already starts on.
+                left_out.append("the cleared date (a repeating note needs "
+                                f"a start date, so it still starts {kept_date})")
+                date_value = kept_date
+            else:
+                left_out.append("the repeat (a repeating note needs a "
+                                "start date)")
+                rule = normalize_recurrence({})
+        return date_value, rule, left_out
+
+    def _left_out_message(self, left_out,
+                          lead="Everything else in this note is saved, but not:"):
+        """The words for what a save could not store (see
+        _date_and_repeat_to_store) -- one list, whoever is asking."""
+        return lead + "\n\n" + "\n".join(f"• {item}" for item in left_out)
+
+    def _put_back_stored_date_and_repeat(self):
+        """Show the date and repeat the note has on disk, over whatever the
+        save had to leave out -- what "Continue without it" means, so the
+        editor agrees with the note again and nothing reads as unsaved."""
+        note = (self.find_note(self.selected_note_id)
+                if self.selected_note_id is not None else None)
+        self._show_date_in_field((note or {}).get("date"))
+        self.write_recurrence_to_ui((note or {}).get("recurrence"))
+
     # What save_current_note returns when the person pressed Cancel on the
     # occurrence-scope question -- the one outcome a caller that is about
     # to replace the editor must not carry on past.
@@ -16622,33 +16972,23 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # above, and went with it.
         formatting = self._extract_formatting(self.body_text)
         paragraphs = self._extract_paragraphs(self.body_text)
-        comments = self.comments_text.get("1.0", "end").strip()
+        # As typed, less the one newline Tk keeps at the end -- the body's
+        # rule (see above). A .strip() here ate a pasted code block's first
+        # indent and every trailing blank line on each save, long after the
+        # body had stopped doing it.
+        comments = self.comments_text.get("1.0", "end-1c")
         category = self.category_var.get()
 
-        date_raw = self.date_entry.get().strip()
-        date_value = ""
-        if date_raw and date_raw != "YYYY-MM-DD":
-            if parse_date(date_raw):
-                date_value = date_raw
-            else:
-                # Autosave fires while the user may still be mid-keystroke
-                # typing a date (e.g. "2026-1"), which is legitimately
-                # incomplete rather than wrong — only the explicit Save
-                # button should interrupt with a warning here. Autosave just
-                # quietly skips this round and tries again once the field
-                # holds a complete, valid date (or is cleared).
-                if not auto:
-                    self.show_warning(
-                        "Invalid date",
-                        "Date should be in YYYY-MM-DD format (e.g. 2026-07-20), or left empty."
-                    )
-                return
+        # A date or repeat the app cannot read is left out and keeps what
+        # the note already had; it no longer stops the rest from saving.
+        # Autosave fires while someone may still be mid-keystroke on a
+        # date ("2026-1"), so the automatic routes stay quiet about it --
+        # the status line says it, the explicit Save says it out loud, and
+        # leaving the note asks (_flush_autosave).
+        date_value, recurrence, left_out = self._date_and_repeat_to_store()
 
         has_attachments = bool(self.current_attachments)
         has_checklist_items = bool(self._get_checklist())
-        # Read early so the emptiness test below can count a repeat rule as
-        # content — a pure UI read, safe to hoist above the guard.
-        recurrence = self.read_recurrence_from_ui()
         # The date and the repeat rule count as content ONLY on an
         # explicit Save. That is what "a bare dated reminder is
         # deliberate" actually means, and the first version of this
@@ -16662,7 +17002,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # excludes the date for the same reason; this keeps the two in
         # step while leaving the deliberate gesture its meaning.
         deliberate_only = (date_value or recurrence["freq"]) and not auto
-        if (not title and not body.strip() and not comments
+        if (not title and not body.strip() and not comments.strip()
                 and not has_attachments and not has_checklist_items
                 and not deliberate_only):
             # The guard exists to stop a stray "+ New Note" click becoming
@@ -16679,25 +17019,19 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             already_saved = (self.selected_note_id is not None
                              and self.find_note(self.selected_note_id) is not None)
             if not already_saved:
-                # Same contract as the invalid-date guard above: a
-                # background autosave must never interrupt with a dialog —
-                # skip quietly and leave the warning to the Save button.
+                # A background autosave must never interrupt with a
+                # dialog — skip quietly and leave the warning to the Save
+                # button. There, a date or repeat that could not be read
+                # is the real reason nothing was saved, not an empty note.
                 if not auto:
-                    self.show_warning("Empty note", "Write something before saving!")
+                    if left_out:
+                        self.show_warning(
+                            "Nothing saved yet",
+                            self._left_out_message(
+                                left_out, lead="This note can't be saved with:"))
+                    else:
+                        self.show_warning("Empty note", "Write something before saving!")
                 return
-
-        if recurrence["freq"] and not date_value:
-            # Same reasoning as the invalid-date case above: don't interrupt
-            # an automatic autosave for a state the user may still be
-            # actively editing toward (e.g. clearing the date on a
-            # recurring note before typing a new one).
-            if not auto:
-                self.show_warning(
-                    "Repeating note needs a start date",
-                    "A repeating note uses its date as the day the series starts.\n\n"
-                    "Set a date, or change Repeat back to 'Does not repeat'."
-                )
-            return
 
         if recurrence["freq"] == "weekly" and not recurrence["weekdays"]:
             # Empty selection is legal — it means "the same weekday as the
@@ -16708,8 +17042,17 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
         if self.selected_note_id is None:
             new_id = max([n["id"] for n in self.notes], default=0) + 1
+            # A note under review from a share code keeps the identity it
+            # arrived with (see _open_imported_note_in_editor) -- checked
+            # again here, since another import may have brought that very
+            # note in meanwhile, and two notes never wear one identity.
+            arrived_uid = getattr(self, "_arrived_uid", "") or ""
+            if arrived_uid and find_by_uid(self.notes, arrived_uid) is not None:
+                arrived_uid = ""
+            self._arrived_uid = ""
             self.notes.append(normalize_note({
                 "id": new_id,
+                "uid": arrived_uid,
                 "title": title,
                 "body": body,
                 "formatting": formatting,
@@ -16744,6 +17087,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             # pressed under the question used to clear the day, and the
             # answer then wrote the edit under a key of None.
             occurrence_date = self.current_occurrence_date
+            # Whether "The entire series" was the person's answer or the
+            # save's own conclusion: they mean different writes below.
+            asked = False
             if is_recurring(note) and occurrence_date:
                 # Only ask when the answer could actually change anything.
                 # An override carries OVERRIDABLE_FIELDS and nothing else,
@@ -16759,7 +17105,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 overridable_changed = (
                     title.strip() != (shown_now.get("title") or "").strip()
                     or body != (shown_now.get("body") or "")
-                    or comments.strip() != (shown_now.get("comments") or "").strip()
+                    or comments != (shown_now.get("comments") or "")
                     or category != shown_now.get("category")
                     or self.current_note_color != (shown_now.get("color") or ""))
                 if overridable_changed:
@@ -16771,6 +17117,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                         # edit was NOT saved, or it replaces the editor and
                         # the edit is gone without a word.
                         return self._SAVE_CANCELLED
+                    asked = True
+            # The day on screen has text of its own: the editor's words are
+            # that day's, not the series'.
+            own_day = (occurrence_date is not None and is_recurring(note)
+                       and occurrence_date in (note.get("overrides") or {}))
 
             if scope == "occurrence":
                 # Only content is overridden. Date, recurrence rule and
@@ -16791,6 +17142,26 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 }
                 note["updated"] = now
                 self.set_status(("Auto-saved " if auto else "Saved ") + f"{occurrence_date} only")
+                if auto:
+                    self._show_toast("Note updated", yield_to_action=True)
+            elif own_day and not asked:
+                # Only a series-owned field changed -- a ticked checklist
+                # item, an attachment, the repeat rule -- while looking at a
+                # day with text of its own, so nobody was asked. The whole
+                # editor used to be written to the series here: one day's
+                # words replaced every day's, and the series' formatting was
+                # wiped, since a day's own text carries none. Only what
+                # belongs to the series is written; its text, and this
+                # day's, stay as they were.
+                note["date"] = date_value
+                note["attachments"] = self.current_attachments
+                note["recurrence"] = recurrence
+                note["checklist"] = [dict(it) for it in self._get_checklist()]
+                note["updated"] = now
+                if not recurrence["freq"]:
+                    note["exceptions"] = []
+                    note["overrides"] = {}
+                self.set_status(("Auto-saved " if auto else "Saved at ") + now)
                 if auto:
                     self._show_toast("Note updated", yield_to_action=True)
             else:
@@ -16814,7 +17185,16 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 # reset by the note switch that persisted it. The case
                 # that most needs the safety net had none.
                 emptied = old_len > 0 and new_len == 0
-                if emptied or (removed > 40 and (big_fraction or big_absolute)):
+                # A day with text of its own, saved to "The entire series"
+                # by the person's own answer: that day's words become every
+                # day's words. The series' own text is replaced wholesale by
+                # something typed on one day, so it keeps a rescue copy
+                # whatever the lengths say.
+                series_text_replaced = own_day and (
+                    title.strip() != (note.get("title") or "").strip()
+                    or body != (note.get("body") or ""))
+                if (emptied or series_text_replaced
+                        or (removed > 40 and (big_fraction or big_absolute))):
                     note["_prev"] = {
                         "title": note.get("title", ""),
                         "body": note.get("body", ""),
@@ -16822,6 +17202,13 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                         "paragraphs": note.get("paragraphs", []),
                         "comments": note.get("comments", ""),
                     }
+                if own_day:
+                    # ...and the day's own copy goes: it now says what the
+                    # series says. Kept, it made the day read as unsaved
+                    # forever -- the editor showed the series' new text,
+                    # the day still held its old one -- so every way out
+                    # of the note asked the same question again.
+                    note["overrides"].pop(occurrence_date, None)
                 note["title"] = title
                 note["body"] = body
                 note["formatting"] = formatting
@@ -16882,6 +17269,17 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # If the calendar day panel is showing, reflect the edit there too.
         if getattr(self, "_day_panel_mode", "empty") != "empty":
             self.refresh_day_panel()
+        # What the save had to leave out is still on screen, waiting to be
+        # fixed. The status line says so on every route and the explicit
+        # Save says it out loud -- which is also why that Save does not
+        # send anyone back to the calendar with a date still to fix.
+        if left_out:
+            self.set_status(("Auto-saved " if auto else "Saved at ") + now
+                            + " — except " + "; ".join(left_out))
+            if not auto:
+                self.show_warning("Part of this note isn't saved",
+                                  self._left_out_message(left_out))
+                return
         # Only an explicit Save click sends you back, and only on the
         # quick add-a-note-for-a-day flow — when the user opened an
         # EXISTING note from the calendar, Save must not yank them out
@@ -16894,17 +17292,49 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
     # ---------- Trash / recently deleted ----------
     def _restore_from_trash(self, entry):
-        """Bring a trashed note back, then redraw what shows it.
+        """Bring a trashed note back, then redraw what shows it."""
+        self._restore_trash_entries([entry])
 
-        The data half is in core/storage.py. A note whose category was
-        deleted meanwhile comes back under "General" -- normalize_note
-        guarantees that, so nothing here needs to re-check it.
+    def _restore_trash_entries(self, entries):
+        """Bring trashed notes back -- one, or a batch -- then redraw once.
+        Returns the notes that came back.
+
+        The data half is in core/storage.py (restore_many_from_trash). A
+        note whose category was deleted meanwhile comes back under
+        "General" -- normalize_note guarantees that, so nothing here needs
+        to re-check it.
+
+        One pass, one write of each file, one redraw, whatever the count:
+        a batch used to come back one note at a time, each with its own
+        write of the whole trash file, and an Undo of a thousand notes
+        froze the app for over half a minute. The notes are written FIRST:
+        if that write fails, the notes are still in the trash file -- a
+        duplicate at worst, where the old order could leave a note in
+        neither file.
         """
-        self.notes, self.trash = core_restore_from_trash(
-            self.notes, self.trash, entry)
-        self.save_notes()
+        self.notes, self.trash, restored = core_restore_many_from_trash(
+            self.notes, self.trash, entries)
+        if not restored:
+            return restored
+        if self.save_notes():
+            save_trash(self.trash)
         self.refresh_note_list()
         self.render_calendar()
+        return restored
+
+    def _refresh_open_trash_panel(self):
+        """Redraw Settings -> Recently deleted if it is the section on
+        screen: its rows hold the entries they were drawn for, and a
+        restore made from outside the panel leaves them stale."""
+        redraw = getattr(self, "_trash_panel_redraw", None)
+        if (redraw is None or not getattr(self, "_settings_open", False)
+                or getattr(self, "_settings_selected_section", None) != "trash"):
+            return
+        try:
+            redraw()
+        except tk.TclError:
+            # The panel was rebuilt or torn down since this was recorded.
+            self._trash_panel_redraw = None
 
     def _undo_trash(self, marks):
         """Put back the notes the toast's Undo was offered for.
@@ -16922,18 +17352,13 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         it sat in the trash), so what comes back is identified by where
         it lands -- appended -- and never by the id that went in.
         """
-        restored = []
-        for note_id, stamp in marks:
-            entry = next((e for e in self.trash
-                          if isinstance(e, dict) and e.get("id") == note_id
-                          and e.get("deleted_at") == stamp), None)
-            if entry is None:
-                continue
-            before = len(self.notes)
-            self.notes, self.trash = core_restore_from_trash(
-                self.notes, self.trash, entry)
-            if len(self.notes) > before:
-                restored.append(self.notes[-1])
+        # A set of the marks, looked up in one pass over the trash: finding
+        # each one with its own scan made a bulk Undo quadratic as well.
+        wanted = set(marks)
+        entries = [e for e in self.trash
+                   if isinstance(e, dict)
+                   and (e.get("id"), e.get("deleted_at")) in wanted]
+        restored = self._restore_trash_entries(entries)
 
         if not restored:
             # Emptied, purged, or already put back -- a second click on a
@@ -16941,10 +17366,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             # note is simply not where the click expected it.
             self._show_toast("Nothing left to put back", kind="info")
             return
-
-        self.save_notes()
-        self.refresh_note_list()
-        self.render_calendar()
+        # The toast floats over Settings too, and the Trash's rows are the
+        # one view of the trash that does not redraw itself.
+        self._refresh_open_trash_panel()
 
         if len(restored) == 1:
             # Back in front of whoever asked for it: the click meant "I
@@ -17068,13 +17492,17 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._schedule_autosave()
         self.set_status("Checklist item put back")
 
-    def _undo_occurrence_delete(self, note_id, date_str):
+    def _undo_occurrence_delete(self, note_id, date_str, own_edit=None):
         """Put back the one day a repeating note was removed from.
 
         This half has no other way home. Deleting a single occurrence
         writes the date into the note's `exceptions`, and nothing in the
         app takes it out again -- so without this the choice was
         permanent, made from a dialog offering no hint that it was.
+
+        `own_edit` is the day's own title and text the delete took with
+        it, if the day had any: the day comes back as it was, not showing
+        the series' text in its place.
         """
         note = self.find_note(note_id)
         if note is None:
@@ -17086,6 +17514,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             return
         exceptions.discard(date_str)
         note["exceptions"] = sorted(exceptions)
+        # Its own edit goes back with it -- unless the day somehow has one
+        # again already, which is newer than the one this Undo remembers.
+        if own_edit and date_str not in (note.get("overrides") or {}):
+            note.setdefault("overrides", {})[date_str] = dict(own_edit)
         note["updated"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         self.save_notes()
         self.refresh_note_list()
@@ -17206,6 +17638,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if note is None:
             self.show_info("Nothing to delete", "No note is selected.")
             return
+        # The typing not yet saved goes with the note, so the Trash copy
+        # and the toast's Undo give back what was on screen -- the same
+        # first step as a delete from the note's menu.
+        if self._flush_autosave() is False:
+            return
         self._delete_note(note, self.current_occurrence_date)
 
     def _delete_note(self, note, occurrence_date):
@@ -17230,7 +17667,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 exceptions = set(note.get("exceptions") or [])
                 exceptions.add(occurrence_date)
                 note["exceptions"] = sorted(exceptions)
-                note["overrides"].pop(occurrence_date, None)
+                # Kept for the Undo below: the day's own title and text
+                # went with it, and the Undo used to bring back the day
+                # showing the series' text instead -- the edit gone for good.
+                own_edit = note["overrides"].pop(occurrence_date, None)
                 note["updated"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 self.save_notes()
                 if (self.selected_note_id == note["id"]
@@ -17247,8 +17687,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 # again. The toast is not a convenience here.
                 self._show_toast(
                     "Occurrence removed",
-                    action=lambda nid=note["id"], day=occurrence_date:
-                        self._undo_occurrence_delete(nid, day))
+                    action=lambda nid=note["id"], day=occurrence_date,
+                    edit=own_edit: self._undo_occurrence_delete(nid, day, edit))
                 return
 
         attachment_count = len(note.get("attachments") or [])
@@ -17276,9 +17716,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             if not self.open_tabs:
                 self.active_tab_index = None
                 self.new_note()
-            else:
-                self.active_tab_index = None
-                self.switch_to_tab(min(0, len(self.open_tabs) - 1))
+            # Otherwise the editor holds some OTHER note, and it stays
+            # exactly as it is. This used to "switch" to the one tab left
+            # -- the note already on screen -- restoring it from the copy
+            # taken when it was opened. Anything saved since (a Restore
+            # previous, a day's edit) was put back to that older version,
+            # and the next switch wrote the old text over the new.
             self._sync_editor_snapshot()
             # Take the one card off rather than rebuilding all of them.
             # Falls back to the full rebuild whenever the surgical path
@@ -17288,7 +17731,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             if not self._remove_note_cards([deleted_id]):
                 self.refresh_note_list()
             self.render_calendar()
-            self.set_status("Note moved to Trash (recoverable for 30 days)")
+            # The window is a setting (Settings -> Recently deleted), so the
+            # number is read, never written: this line said "30 days" to
+            # someone who had chosen seven.
+            self.set_status("Note moved to Trash (recoverable for "
+                            f"{trash_retention_days()} days)")
             # The status line says where it went; the toast is the way
             # back. Settings -> Recently deleted was the only route home
             # until now, and it asks you to know the trash exists.
@@ -17346,8 +17793,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 self._log_swallowed("close: per-tab final save")
                 continue
         # A backup export/import may still be writing on its worker thread;
-        # destroy() would kill it mid-file. Wait (capped) for it to finish.
+        # destroy() would kill it mid-file. Wait (capped) for it to finish,
+        # then do what its completion would have done on the main thread.
         self._wait_for_io_workers()
+        self._settle_background_work_at_close()
         self.destroy()
 
     def set_status(self, text):

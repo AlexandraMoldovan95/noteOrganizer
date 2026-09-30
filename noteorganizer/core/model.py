@@ -252,8 +252,13 @@ def apply_shared_update(note, incoming, fields=UPDATABLE_FROM_SHARED):
     normalised before anything is copied out of it. *fields* is what it
     may replace: UPDATABLE_FROM_SHARED for a share code,
     UPDATABLE_FROM_BACKUP for a backup.
+
+    An update that would change nothing leaves the note alone -- see
+    shared_update_changes for why that is not a nicety.
     """
     fresh = normalize_note(dict(incoming))
+    if not shared_update_changes(note, fresh, fields):
+        return note
     prev = {
         "title": note.get("title") or "",
         "body": note.get("body") or "",
@@ -269,6 +274,22 @@ def apply_shared_update(note, incoming, fields=UPDATABLE_FROM_SHARED):
         note[field] = copy.deepcopy(fresh[field])
     note["updated"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     return note
+
+
+def shared_update_changes(note, incoming, fields=UPDATABLE_FROM_SHARED):
+    """Whether updating *note* from *incoming* would change any of *fields*.
+
+    An update that changes nothing is not harmless. It rewrites the rescue
+    copy ("↩ Restore previous") with a duplicate of what is already there,
+    so the note's one earlier version is gone. Importing the same backup
+    twice did exactly that: the first import kept this device's newer text
+    as the rescue copy, the second replaced it with the backup's own, and
+    the newer text was in no file at all -- after messages ("Added 0
+    notes") that invited the second import.
+    """
+    fresh = normalize_note(dict(incoming))
+    return any(note.get(field, NOTE_DEFAULTS.get(field)) != fresh[field]
+               for field in fields)
 
 
 def split_by_identity(notes, incoming):
@@ -422,6 +443,16 @@ def normalize_note(note):
                 v = sanitize_color(v)
                 if not v:
                     continue
+            if k == "category" and v not in CATEGORY_COLORS:
+                # The rule the note's own category follows above: a name
+                # the categories no longer hold is filed under General.
+                # Kept as it was, one day of a series restored from the
+                # Trash carried a deleted category back in, and the next
+                # launch re-created it as having "gone missing from the
+                # settings". (At load the names the notes use are adopted
+                # first, on the raw file, so this never re-files a
+                # category that is merely missing from settings.json.)
+                v = "General"
             if k == "body":
                 # The same canonicalisation the base body gets. An
                 # override is shown in the same editor, so the renderer

@@ -66,6 +66,7 @@ from ..core.storage import (
     # that will actually go.
     trash_entries_past_window,
     _delete_attachment_files,
+    attachment_names_in,
     copy_attachment_file,
     get_setting,
     save_setting,
@@ -1219,21 +1220,34 @@ class SettingsPageMixin:
         # the same helper reads it without any adapting.
         self._attach_dup_preview(left, entry)
 
+        # The row holds the entry it was drawn for, and the toast's Undo
+        # can take that entry out of the Trash while the row is still on
+        # screen. Acted on anyway, Restore put back a second copy of a note
+        # already back, and Delete destroyed the file that note showed.
+        def still_in_trash():
+            return any(e is entry for e in self.trash)
+
         def restore():
-            self._restore_from_trash(entry)
+            if still_in_trash():
+                self._restore_from_trash(entry)
             redraw()
 
         def delete_forever():
+            if not still_in_trash():
+                redraw()
+                return
             if self.ask_yes_no(
                 "Delete permanently",
                 f"Permanently delete “{title}”? This can't be undone."
                 + self._series_warning([entry]),
                 icon="warning", default="no"
-            ):
-                _delete_attachment_files([entry])
+            ) and still_in_trash():
+                _delete_attachment_files(
+                    [entry], spare=attachment_names_in(
+                        self.notes + [e for e in self.trash if e is not entry]))
                 self.trash = [e for e in self.trash if e is not entry]
                 save_trash(self.trash)
-                redraw()
+            redraw()
 
         tk.Button(row, text="Delete", command=delete_forever, relief="flat",
                   cursor="hand2", bg=self.colors["danger"], fg="white",
@@ -1412,9 +1426,9 @@ class SettingsPageMixin:
             # No confirmation: this is the recovering direction. The app asks
             # in proportion to how recoverable an action is, and putting a
             # note back is undone by deleting it again -- which is the button
-            # right beside it.
-            for entry in picked:
-                self._restore_from_trash(entry)
+            # right beside it. One batch: note by note, each restore wrote
+            # both files and rebuilt the list and the statistics again.
+            self._restore_trash_entries(picked)
             for entry in picked:
                 self._trash_sel.pop(entry.get("id"), None)
             self.set_status("Restored %d note%s"
@@ -1458,7 +1472,8 @@ class SettingsPageMixin:
                 "This can't be undone." + self._series_warning(self.trash),
                 icon="warning", default="no"
             ):
-                _delete_attachment_files(self.trash)
+                _delete_attachment_files(
+                    self.trash, spare=attachment_names_in(self.notes))
                 self.trash = []
                 save_trash(self.trash)
                 shown_count["n"] = PAGE_SIZE
@@ -1481,6 +1496,12 @@ class SettingsPageMixin:
         empty_holder = self._settings_big_button(
             parent, "Empty trash", empty_trash, kind="danger")
         empty_holder.pack(fill="x", padx=12, pady=(4, 10), ipady=5)
+        # How a change made outside this panel -- the toast's Undo -- gets
+        # its rows redrawn while the panel is on screen (see
+        # _refresh_open_trash_panel). The rows were rebuilt only when the
+        # section was opened, so they went on offering entries that had
+        # already left the Trash.
+        self._trash_panel_redraw = redraw
         redraw()
 
     def _build_settings_duplicates_panel(self, parent):
@@ -2723,7 +2744,12 @@ class SettingsPageMixin:
                 if refusal:
                     self.show_warning("Can't rename it to that", refusal)
                     return False
-                CATEGORY_COLORS[new] = CATEGORY_COLORS.pop(name)
+                # Renamed where it stands: pop-and-insert moved the
+                # category to the end of the list's groups.
+                in_order = [(new if key == name else key, colour)
+                            for key, colour in CATEGORY_COLORS.items()]
+                CATEGORY_COLORS.clear()
+                CATEGORY_COLORS.update(in_order)
                 self.rename_category_everywhere(name, new)
                 persist_categories()
                 self.save_notes()
@@ -2754,13 +2780,23 @@ class SettingsPageMixin:
                                        f"Delete “{name}”? It has no notes.",
                                        icon="warning", default="no"):
                 return
+            # No notes, but templates, the Trash and a folded group can
+            # still hold the name -- and a note restored from the Trash
+            # would bring the category straight back.
+            self.reassign_category_everywhere(name, PROTECTED_CATEGORY)
             CATEGORY_COLORS.pop(name, None)
             persist_categories()
             redraw()
             self.refresh_category_widgets()
             return
 
-        # Notes exist — ask what happens to them.
+        # Notes exist. What the editor holds is saved first, as every delete
+        # route does: the note on screen may be about to go to the Trash,
+        # and its unsaved typing belongs in the Trash copy, not in an
+        # editor about to be cleared. Cancel on a day's question stops here.
+        if self._flush_autosave() is False:
+            return
+        # Ask what happens to them.
         choice = self._ask_category_deletion(name, count)
         if choice is None:
             return
@@ -2778,6 +2814,10 @@ class SettingsPageMixin:
                 for d in list(overrides):
                     if overrides[d].get("category") == name:
                         del overrides[d]
+            # The notes just trashed, the templates and a folded group
+            # still hold the name; restoring one of those notes would bring
+            # the category back.
+            self.reassign_category_everywhere(name, PROTECTED_CATEGORY)
 
         CATEGORY_COLORS.pop(name, None)
         persist_categories()
@@ -2822,42 +2862,26 @@ class SettingsPageMixin:
             if var.get():
                 by_group[gid]["remove"].append(note)
 
+        plan = []   # (the first survivor or None, the notes removed)
         to_trash = []
         for info in by_group.values():
-            group = info["group"]
             remove = info["remove"]
             if not remove:
                 continue
-            survivors = [n for n in group if n not in remove]
-            if survivors:
-                # Merge removed notes' attachments into the first survivor.
-                # The removed note keeps its own references and goes to the
-                # trash, whose later purge deletes its files — so the
-                # survivor must get its OWN copy of each merged file, not a
-                # reference to the same one on disk (otherwise the one
-                # attachment the merge exists to preserve is exactly what
-                # the purge destroys). Same fix as duplicate_note.
-                kept = survivors[0]
-                merged_attach = list(kept.get("attachments", []))
-                seen_attach = {a.get("stored_as") for a in merged_attach}
-                for note in remove:
-                    for a in note.get("attachments", []):
-                        if a.get("stored_as") in seen_attach:
-                            continue
-                        seen_attach.add(a.get("stored_as"))
-                        new_name = copy_attachment_file(a.get("stored_as"))
-                        if new_name:
-                            merged_attach.append(dict(a, stored_as=new_name))
-                        # If the copy can't be made, skip it rather than
-                        # alias a file the purge will delete out from under
-                        # the survivor.
-                kept["attachments"] = merged_attach
+            survivors = [n for n in info["group"] if n not in remove]
+            plan.append((survivors[0] if survivors else None, remove))
             to_trash.extend(remove)
 
         if not to_trash:
             self.show_info(
                 "Nothing selected",
                 "Tick the duplicates you want to remove first.")
+            return
+        # What the editor holds is saved first, as every delete route does:
+        # the note on screen may be one of these copies, and its unsaved
+        # typing belongs in the Trash copy, not in an editor about to be
+        # cleared. Cancel on a day's question stops here.
+        if self._flush_autosave() is False:
             return
         if not self.ask_yes_no(
             "Move duplicates to trash",
@@ -2866,10 +2890,51 @@ class SettingsPageMixin:
             icon="question"
         ):
             return
+        # Only now, after Yes, are the files merged. The merge copies each
+        # file, and it used to run before the question: "No" still gave
+        # the kept note new files, and every retry made another copy.
+        grew = set()
+        for kept, remove in plan:
+            if kept is None:
+                continue
+            # Merge removed notes' attachments into the first survivor.
+            # The removed note keeps its own references and goes to the
+            # trash, whose later purge deletes its files — so the
+            # survivor must get its OWN copy of each merged file, not a
+            # reference to the same one on disk (otherwise the one
+            # attachment the merge exists to preserve is exactly what
+            # the purge destroys). Same fix as duplicate_note.
+            merged_attach = list(kept.get("attachments", []))
+            seen_attach = {a.get("stored_as") for a in merged_attach}
+            for note in remove:
+                for a in note.get("attachments", []):
+                    if a.get("stored_as") in seen_attach:
+                        continue
+                    seen_attach.add(a.get("stored_as"))
+                    new_name = copy_attachment_file(a.get("stored_as"))
+                    if new_name:
+                        merged_attach.append(dict(a, stored_as=new_name))
+                    # If the copy can't be made, skip it rather than
+                    # alias a file the purge will delete out from under
+                    # the survivor.
+            if merged_attach != list(kept.get("attachments", [])):
+                kept["attachments"] = merged_attach
+                grew.add(kept.get("id"))
         trash_ids = {id(n) for n in to_trash}
         self._move_notes_to_trash(to_trash)
         self.notes = [n for n in self.notes if id(n) not in trash_ids]
         self.save_notes()
+        # The editor is told, as after every change made behind it: a copy
+        # it held went to the Trash (it starts fresh, as every delete route
+        # does), or a kept copy it holds gained files (it moves onto that
+        # version -- its next save used to write the old list back, and the
+        # merged file was left belonging to nobody).
+        if (self.selected_note_id is not None
+                and self.find_note(self.selected_note_id) is None):
+            self.new_note()
+            self._sync_editor_snapshot()
+        else:
+            self._editor_follows_external_change(grew)
         self.refresh_note_list()
         self.render_calendar()
         if announce:

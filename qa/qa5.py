@@ -510,6 +510,131 @@ check('the calendar survives rendering the month the garbage aimed at',
 if _built5g:
     app5g.destroy()
 
+# ---- A FIELD THE APP CANNOT READ NO LONGER COSTS THE REST OF THE NOTE ----
+# One unreadable field vetoed the whole save, and the automatic routes took
+# the veto for success and replaced the editor: a date typed as 30/09/2026,
+# the way many people write it, quietly cost every word typed after it.
+app.new_note(); app.update()
+app.notes = [NO.normalize_note({'id': 1, 'title': 'Shopping', 'body': 'milk',
+                                'date': '2026-09-01'})]
+app.save_notes()
+app.open_note_in_tab(app.notes[0]); app.update()
+app.body_text.insert('end', '\neggs')
+app.date_entry.delete(0, 'end'); app.date_entry.insert(0, '30/09/2026')
+app._autosave_now(); app.update()
+check('a pause after an unreadable date still saves the words',
+      app.find_note(1)['body'].rstrip('\n').endswith('eggs'))
+check('...keeping the date the note already had',
+      app.find_note(1)['date'] == '2026-09-01')
+check('...and the status line says what was left out',
+      '30/09/2026' in str(app.status_lbl.cget('text')))
+_real_dlg5 = app._themed_dialog
+_asked5 = []
+app._themed_dialog = lambda *a, **k: (_asked5.append(a[0]), False)[1]
+check('leaving asks first -- and "Go back and fix it" stays on the note',
+      app._flush_autosave() is False and len(_asked5) == 1
+      and app.date_entry.get() == '30/09/2026')
+app._themed_dialog = lambda *a, **k: True
+check('..."Continue without it" goes on',
+      app._flush_autosave() is True)
+app._themed_dialog = _real_dlg5
+check('...showing the date the note keeps, so nothing reads as unsaved',
+      app.date_entry.get() == '2026-09-01'
+      and app.editor_state_matches_saved(app.capture_editor_state()))
+# A code made in the editor carries what a save would keep: one carrying
+# "30.09.2026" delivered a date no save could store, and every edit to the
+# note that arrived was lost on the far end.
+app.date_entry.delete(0, 'end'); app.date_entry.insert(0, '30.09.2026')
+app.share_current_note_as_code(); app.update()
+_code_w5 = [w for w in app.editor_code_area.winfo_children()
+            if isinstance(w, tk.Text)]
+_payload5 = NO.decode_share_code(_code_w5[0].get('1.0', 'end-1c')) if _code_w5 else []
+_shared5 = ((_payload5['notes'] if isinstance(_payload5, dict) else _payload5)
+            or [{}])[0]
+check('a code made in the editor carries the date a save would keep',
+      _shared5.get('date') == '2026-09-01')
+app._show_date_in_field('2026-09-01')
+# The repeat's end date, typed day-first, was dropped without a word and
+# the series stored as never-ending while the field still showed the date.
+app.rec_freq_var.set(NO.FREQ_LABELS['weekly'])
+app.on_recurrence_changed()
+app.rec_end_mode_var.set('on')
+app.rec_end_date_var.set('31/12/2026')
+app._autosave_now(); app.update()
+check('a repeat whose end date cannot be read saves without that end',
+      app.find_note(1)['recurrence']['freq'] == 'weekly'
+      and app.find_note(1)['recurrence']['end'] == '')
+check('...and says so instead of storing "never ends" in silence',
+      any('end date' in item for item in app._date_and_repeat_to_store()[2]))
+app.new_note(); app.update()
+# A repeating note whose date is cleared -- on the way to typing a new one
+# -- keeps the day it starts on, and the words typed meanwhile are saved.
+app.notes = [NO.normalize_note({'id': 2, 'title': 'Yoga', 'body': 'stretch',
+                                'date': '2026-09-01',
+                                'recurrence': {'freq': 'weekly'}})]
+app.save_notes()
+app.open_note_in_tab(app.notes[0]); app.update()
+app.body_text.insert('end', '\nbring the mat')
+app.date_entry.delete(0, 'end')
+app._autosave_now(); app.update()
+check('clearing a series date keeps its start while the words are saved',
+      app.find_note(2)['date'] == '2026-09-01'
+      and app.find_note(2)['recurrence']['freq'] == 'weekly'
+      and 'bring the mat' in app.find_note(2)['body'])
+app.new_note(); app.update()
+app.notes = []; app.save_notes()
+
+# Comments keep their shape: the save stripped them, so a pasted code
+# block lost its first indent and every trailing blank line on each save
+# -- long after the body had stopped doing it to the text above.
+app.notes = [NO.normalize_note({'id': 3, 'title': 'Snippet', 'body': 'x'})]
+app.save_notes()
+app.open_note_in_tab(app.notes[0]); app.update()
+app.comments_text.insert('1.0', '    for x in items:\n        print(x)\n\n')
+app._flush_autosave(); app.update()
+check('comments keep their first indent and trailing blank lines on save',
+      app.find_note(3)['comments'] == '    for x in items:\n        print(x)\n\n')
+app.new_note(); app.update()
+app.load_note(app.find_note(3)); app.update()
+check('...and reopen exactly as typed, reading as saved',
+      app.comments_text.get('1.0', 'end-1c')
+      == '    for x in items:\n        print(x)\n\n'
+      and app.editor_state_matches_saved(app.capture_editor_state()))
+app.comments_text.insert('end', '\n')
+check('...so adding only a blank line is an edit the autosave sees',
+      not app.editor_state_matches_saved(app.capture_editor_state()))
+app.new_note(); app.update()
+
+# A checklist item typed but not yet added goes into the note it was typed
+# for: it stayed in the box and was added to whichever note opened next.
+app.notes = [NO.normalize_note({'id': 4, 'title': 'Groceries', 'body': 'x',
+                                'checklist': [{'text': 'milk', 'done': False}]}),
+             NO.normalize_note({'id': 5, 'title': 'Gym', 'body': 'y'})]
+app.save_notes()
+app.open_note_in_tab(app.find_note(4)); app.update()
+app.checklist_add_var.set('eggs')
+app.open_note_in_tab(app.find_note(5)); app.update()
+check('a half-typed checklist item is saved into the note it was typed for',
+      [it['text'] for it in app.find_note(4)['checklist']] == ['milk', 'eggs'])
+check('...and does not follow into the next note',
+      app.checklist_add_var.get() == '' and not app.find_note(5)['checklist'])
+app.new_note(); app.update()
+app.notes = []; app.save_notes()
+
+# The theme registry lets go of dead widgets without waiting for a theme
+# switch: a session that never switched kept every widget it ever drew.
+_tw_start = len(app.themed_widgets)
+# Enough to cross the registry's pruning point whatever it holds now: it
+# prunes when it has doubled since the last prune, so this many cannot
+# all be added without one happening.
+_tw_n = 2 * max(256, _tw_start) + 10
+for _tw_i in range(_tw_n):
+    _tw = tk.Frame(app)
+    app.track_theme(_tw, bg='bg')
+    _tw.destroy()
+check('the theme registry lets go of widgets that no longer exist, unswitched',
+      len(app.themed_widgets) < _tw_start + _tw_n // 2)
+
 print(f"=== QA5 FAILURES: {fails if fails else 'NONE'} ===")
 
 sys.exit(1 if fails else 0)

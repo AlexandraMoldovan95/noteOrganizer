@@ -1661,6 +1661,33 @@ check('recolouring through the swatch palette stores the clicked colour',
       _CC6.get('Proiecte') == _want6
       and NO.get_setting('categories', {}).get('Proiecte') == _want6)
 
+# What a rename carries besides the notes: the note open in the editor,
+# the templates, the Trash, a folded group, and its place among the
+# groups. Only the notes were renamed -- the editor's box fell back to
+# General and the next save filed the open note there, and a note
+# restored from the Trash brought the old name back.
+_rn_kept6 = (list(app.notes), list(app.trash), list(app.templates),
+             set(app.collapsed_groups))
+app.new_note(); app.update()
+app.notes = [NO.normalize_note({'id': 1, 'title': 'Budget', 'body': 'x',
+                                'category': 'Proiecte'})]
+app.save_notes()
+app.open_note_in_tab(app.notes[0]); app.update()
+app.templates = [NO.normalize_template({'name': 'Weekly', 'category': 'Proiecte'})]
+NO.save_templates(app.templates)
+app.trash = [dict(NO.normalize_note({'id': 2, 'title': 'Old', 'body': 'x',
+                                     'category': 'Proiecte'}),
+                  deleted_at='2026-09-30 10:00:00')]
+NO.save_trash(app.trash)
+app.collapsed_groups = {'Proiecte'}
+# A category AFTER the renamed one: added last, 'Proiecte' was already at
+# the end, so "moved to the end" and "kept its place" read the same and the
+# place check could not fail (a mutant restoring the move survived it).
+_CC6['ZAfterProiecte'] = '#556677'
+_rn_order6 = list(_CC6)
+check('fixture: the category about to be renamed is not the last one',
+      _rn_order6.index('Proiecte') < len(_rn_order6) - 1)
+
 # Rename through the pencil's inline editor.
 _prow = _row_of6(_catf, 'Proiecte')
 # children order = creation order: the pencil canvas is created before
@@ -1683,6 +1710,25 @@ if _ipop is not None and _ipop.winfo_exists():
     _renamed = 'ProiecteX' in _CC6 and 'Proiecte' not in _CC6
 check('renaming through the inline editor moves the category',
       _renamed and 'ProiecteX' in NO.get_setting('categories', {}))
+check('...the note open in the editor goes with it',
+      app.category_var.get() == 'ProiecteX')
+app._flush_autosave(); app.update()
+check('...so its next save does not file it under General',
+      app.find_note(1)['category'] == 'ProiecteX')
+check('...templates and the Trash go with it too',
+      app.templates[0]['category'] == 'ProiecteX'
+      and app.trash[0]['category'] == 'ProiecteX')
+check('...a folded group stays folded, under its new name',
+      app.collapsed_groups == {'ProiecteX'}
+      and NO.get_setting('collapsed_groups', []) == ['ProiecteX'])
+check('...and the category keeps its place among the groups',
+      list(_CC6).index('ProiecteX') == _rn_order6.index('Proiecte'))
+app.new_note(); app.update()
+_CC6.pop('ZAfterProiecte', None)
+NO.persist_categories()
+app.notes, app.trash, app.templates, app.collapsed_groups = _rn_kept6
+app.save_notes(); NO.save_trash(app.trash); NO.save_templates(app.templates)
+NO.save_setting('collapsed_groups', sorted(app.collapsed_groups))
 
 # ---- Add and Rename refuse what the loader will not keep ----
 # Both doors took any length, and load_categories drops a name over the
@@ -2015,6 +2061,15 @@ app.notes = [NO.normalize_note({'id': 4100 + i, 'title': 'In temporara %d' % i,
                                 'body': 'x', 'category': 'Temporara'})
              for i in range(3)]
 app.save_notes()
+# The Trash holds the name too: a series deleted earlier, one day of it
+# filed under the category. Left alone, restoring it brought the category
+# back at the next launch, announced as "gone missing from the settings".
+app.trash = [dict(NO.normalize_note({
+    'id': 4200, 'title': 'Old series', 'body': 'x', 'category': 'Temporara',
+    'date': '2026-09-01', 'recurrence': {'freq': 'weekly'},
+    'overrides': {'2026-09-08': {'body': 'moved', 'category': 'Temporara'}}}),
+    deleted_at='2026-09-30 10:00:00')]
+NO.save_trash(app.trash)
 app.group_by_category.set(True)
 app.refresh_note_list(); app.update()
 app._themed_dialog = lambda *a, **k: 'move'      # keep the notes
@@ -2026,6 +2081,23 @@ check('deleting a category takes it off the list (plan 110)',
       'Temporara' not in NO.CATEGORY_COLORS)
 check('...and its notes are kept, filed under General (plan 110)',
       all(n['category'] == 'General' for n in app.notes if n['id'] >= 4100))
+check('...and the Trash lets go of the name too, day by day',
+      app.trash[0]['category'] == 'General'
+      and app.trash[0]['overrides']['2026-09-08']['category'] == 'General')
+# An entry trashed before that -- by an older version, still naming a
+# category that no longer exists -- comes back filed somewhere real.
+_old_series6 = dict(NO.normalize_note({
+    'id': 4201, 'title': 'Older series', 'body': 'x', 'date': '2026-09-01',
+    'recurrence': {'freq': 'weekly'}}), deleted_at='2026-09-30 10:00:00')
+_old_series6['overrides'] = {'2026-09-08': {'body': 'moved',
+                                            'category': 'Temporara'}}
+app.trash.append(_old_series6)
+app._restore_from_trash(_old_series6); app.update()
+check('...so a day filed under a deleted category comes back under General',
+      app.notes[-1]['overrides']['2026-09-08']['category'] == 'General')
+app.notes = [n for n in app.notes if n.get('title') != 'Older series']
+app.save_notes()
+app.trash = []; NO.save_trash(app.trash)
 app.hide_settings_page()
 app.refresh_note_list(); app.update()
 check('...and the grouped list shows them where they now are (plan 110)',
@@ -2349,6 +2421,73 @@ app.notes = []
 app.trash = []
 app.save_notes()
 NO.save_trash(app.trash)
+app.new_note(); app.update()
+
+# ---- THE DUPLICATES CLEAN-UP MERGES ON YES, AND TELLS THE EDITOR ----
+# It merged the files BEFORE asking (so "No" still gave the kept copy new
+# files, one more per retry), never saved what the editor held (typing in
+# the copy it trashed was in no file), and never told the editor, whose
+# next save wrote the kept copy's old file list back.
+class _DupVar6:
+    def __init__(self, v):
+        self._v = v
+
+    def get(self):
+        return self._v
+
+
+def _dup_setup6():
+    fname = '20260930100000000000_dupmerge.txt'
+    os.makedirs(NO.ATTACHMENTS_DIR, exist_ok=True)
+    with open(os.path.join(NO.ATTACHMENTS_DIR, fname), 'w') as fh:
+        fh.write('m')
+    kept = NO.normalize_note({'id': 1, 'title': 'Dup', 'body': 'same'})
+    gone = NO.normalize_note({'id': 2, 'title': 'Dup', 'body': 'same',
+                              'attachments': [{'name': 'm.txt',
+                                               'stored_as': fname}]})
+    app.new_note(); app.update()
+    app.notes = [kept, gone]
+    app.trash = []
+    app.save_notes(); NO.save_trash(app.trash)
+    return kept, gone, [(_DupVar6(False), kept, [kept, gone]),
+                        (_DupVar6(True), gone, [kept, gone])]
+
+
+_dup_yes6 = app.ask_yes_no
+_kept6, _gone6, _dv6 = _dup_setup6()
+_files_before6 = sorted(os.listdir(NO.ATTACHMENTS_DIR))
+app.ask_yes_no = lambda *a, **k: False
+app._cleanup_selected_duplicates(_dv6, None, refresh=lambda: None)
+app.ask_yes_no = _dup_yes6
+check('answering No to the duplicates clean-up merges nothing',
+      _kept6['attachments'] == []
+      and sorted(os.listdir(NO.ATTACHMENTS_DIR)) == _files_before6)
+
+_kept6, _gone6, _dv6 = _dup_setup6()
+app.open_note_in_tab(_kept6); app.update()
+app.ask_yes_no = lambda *a, **k: True
+app._cleanup_selected_duplicates(_dv6, None, refresh=lambda: None)
+app.ask_yes_no = _dup_yes6
+app.update()
+check('...Yes gives the kept copy the merged file, in the editor too',
+      len(app.current_attachments) == 1)
+app._flush_autosave(); app.update()
+check('...so its next save keeps the file instead of writing the old list back',
+      len(app.find_note(1)['attachments']) == 1)
+
+_kept6, _gone6, _dv6 = _dup_setup6()
+app.open_note_in_tab(_gone6); app.update()
+app.body_text.insert('end', '\naction: Ana sends the figures')
+app.ask_yes_no = lambda *a, **k: True
+app._cleanup_selected_duplicates(_dv6, None, refresh=lambda: None)
+app.ask_yes_no = _dup_yes6
+app.update()
+check('...and the copy open in the editor goes to the Trash with its typing',
+      any('Ana sends the figures' in e.get('body', '') for e in app.trash))
+check('...leaving a fresh editor, not the trashed copy',
+      app.selected_note_id is None)
+app.notes = []; app.trash = []
+app.save_notes(); NO.save_trash(app.trash)
 app.new_note(); app.update()
 
 
