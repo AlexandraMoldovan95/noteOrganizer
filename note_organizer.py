@@ -14149,14 +14149,33 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         starts from the order it was showing -- the one the person just
         moved a card in -- and the move is made there. Every note gets its
         place again, in one pass, so a number never has to fit between two
-        others. A move is not an edit: nothing's "updated" changes."""
+        others. A move is not an edit: nothing's "updated" changes.
+
+        Starting from the order shown replaces any arrangement made by hand
+        earlier, so when there was one, the toast says so and offers it
+        back (_undo_custom_order). It used to go without a word: one
+        Alt+Down while looking at the list by title, and the arrangement
+        was gone from the notes file."""
         note = self.find_note(note_id)
         anchor = self.find_note(before_id if before_id is not None else after_id)
         if note is None or anchor is None or anchor is note:
             return False
+        replaced = None
         if self.sort_var.get() != self.SORT_CUSTOM:
-            self._place_notes_as_sorted(self.sort_var.get())
+            sort_before = self.sort_var.get()
+            # What every note carried, held by the note itself: an id freed
+            # by a delete while the toast is up can name a new note by then.
+            marks = [(n, "order" in n, n.get("order")) for n in self.notes]
+            placed = [n for n in self.notes if "order" in n]
+            was = [id(n) for n in sorted(placed, key=lambda n: n["order"])]
+            self._place_notes_as_sorted(sort_before)
             self.sort_var.set(self.SORT_CUSTOM)
+            # Replaced only if the notes placed by hand no longer stand in
+            # the order they were put in; a renumbering that keeps it is
+            # not a loss, and says nothing.
+            now = [id(n) for n in sorted(placed, key=lambda n: n["order"])]
+            if was != now:
+                replaced = (marks, sort_before)
         everything = list(self.notes)
         self._sort_notes(everything, choice=self.SORT_CUSTOM)
         everything.remove(note)
@@ -14166,7 +14185,33 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             each["order"] = place
         self.save_notes()
         self.refresh_note_list()
+        if replaced is not None:
+            self._show_toast(
+                f"Custom order started again from {replaced[1]}",
+                action=lambda: self._undo_custom_order(*replaced))
         return True
+
+    def _undo_custom_order(self, marks, sort_before):
+        """Put back the arrangement a move replaced, and the sort the move
+        was made in (see _move_note) -- the moves made on top of the new
+        one since go with it, because they were made on the replacement.
+
+        Notes are named by the dicts themselves, so a note made since keeps
+        whatever place it has, and one deleted since is simply not there to
+        put back."""
+        present = {id(n) for n in self.notes}
+        for note, had, old in marks:
+            if id(note) not in present:
+                continue
+            if had:
+                note["order"] = old
+            else:
+                note.pop("order", None)
+        self.save_notes()
+        self.sort_var.set(sort_before)
+        self.refresh_note_list()
+        self.set_status(f"Put back your Custom order; the list is sorted by "
+                        f"{sort_before} again")
 
     def _list_move_by_keyboard(self, delta):
         """Alt+Up or Alt+Down: the card with the ring moves one place, and

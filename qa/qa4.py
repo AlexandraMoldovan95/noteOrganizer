@@ -1718,6 +1718,78 @@ if _bl_work_colour is not None:
     NO.persist_categories()
     app.refresh_category_widgets(); _ls_settle()
 
+# 5e. An arrangement made by hand is never replaced without a word. A move
+# made while the list is sorted another way still starts Custom order from
+# the order shown (as documented), but when notes already had places, the
+# toast says the old arrangement went and offers it back. It used to go in
+# silence: one Alt+Down while looking at the list by title, and the
+# arrangement was gone from the notes file.
+_bl_fruit = ['Zebra', 'Apple', 'Mango', 'Banana', 'Kiwi', 'Cherry', 'Lemon',
+             'Grape']
+_bl_hand = ['Lemon', 'Apple', 'Zebra', 'Grape', 'Kiwi', 'Banana', 'Cherry',
+            'Mango']
+_bl_placed = [{'id': 1900 + i, 'title': t + ' note', 'body': 'b',
+               'category': 'General', 'created': '2026-01-01 00:%02d' % i,
+               'updated': '2026-02-01 00:%02d' % i, 'order': _bl_hand.index(t)}
+              for i, t in enumerate(_bl_fruit)]
+_bl_hand_ids = [1900 + _bl_fruit.index(t) for t in _bl_hand]
+
+
+def _bl_names():
+    return [app.find_note(i)['title'].split()[0] for i in app._card_order()]
+
+
+def _bl_sort(value):
+    """Choose a sort the way the dropdown does."""
+    app.sort_var.set(value)
+    app._on_sort_chosen(value); _ls_settle()
+
+
+_co_fresh(_bl_placed, sort='Custom order')
+check(f'fixture: a Custom order arranged by hand ({_bl_names()})',
+      _bl_names() == _bl_hand and _co_file_order() == _bl_hand_ids)
+_bl_sort('Title A–Z')
+app._hide_toast()
+app._put_keyboard_on_card(app._card_order()[0]); _ls_settle()
+app._list_move_by_keyboard(1); _ls_settle()
+_bl_said = app.toast_lbl.cget('text')
+check(f'a move in another sort that replaces an arrangement made by hand says '
+      f'so and offers it back ({_bl_said!r}; sort now {app.sort_var.get()!r})',
+      app.sort_var.get() == 'Custom order' and app._toast_action is not None
+      and 'Title A–Z' in _bl_said)
+_qa_click(app.toast_action_lbl); _ls_settle()
+check(f'...and Undo on the toast puts back the arrangement and the sort, in '
+      f'the notes file too (sort {app.sort_var.get()!r}; file order '
+      f'{_co_file_order() == _bl_hand_ids})',
+      app.sort_var.get() == 'Title A–Z' and _co_file_order() == _bl_hand_ids)
+_bl_sort('Custom order')
+check(f'...so choosing Custom order again shows it as it was made '
+      f'({_bl_names()})', _bl_names() == _bl_hand)
+# Moves made on top of the replacement go with it: they were made on it.
+_bl_sort('Title A–Z')
+app._hide_toast()
+app._put_keyboard_on_card(app._card_order()[0]); _ls_settle()
+app._list_move_by_keyboard(1); _ls_settle()
+app._list_move_by_keyboard(1); _ls_settle()
+_qa_click(app.toast_action_lbl); _ls_settle()
+_bl_sort('Custom order')
+check(f'...also after more moves made in the new order before Undo '
+      f'({_bl_names()})',
+      _bl_names() == _bl_hand and _co_file_order() == _bl_hand_ids)
+# Nothing to replace, nothing said: the first move ever still starts Custom
+# order from the order shown, quietly, as it always did.
+_co_fresh([{k: v for k, v in n.items() if k != 'order'} for n in _bl_placed],
+          sort='Title A–Z')
+app._hide_toast()
+app._put_keyboard_on_card(app._card_order()[0]); _ls_settle()
+app._list_move_by_keyboard(1); _ls_settle()
+check(f'...while a first move, with no arrangement to lose, says nothing '
+      f'(sort {app.sort_var.get()!r}, an offer on screen: '
+      f'{app._toast_action is not None})',
+      app.sort_var.get() == 'Custom order' and app._toast_action is None
+      and len(_co_file_order()) == len(_bl_placed))
+app._hide_toast()
+
 # ---------------------------------------------------------------------
 # A tick box's well must be light, because the mark in it is dark.
 #
