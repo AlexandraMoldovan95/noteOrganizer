@@ -3461,6 +3461,69 @@ app.cal_year, app.cal_month = 2026, 7
 app.render_calendar(); app.update()
 app.notebook.select(app.TAB_NOTES); app.update()
 
+# ---- A LONG TITLE GIVES WAY; THE MARKS AFTER IT STAY ----
+# A day's list row and a History row put their marks AFTER the title -- ✎
+# 💬 📎 on the day, "· 20 occurrences · 1 edited (✎)" in History -- in one
+# label, and a long title (the app allows TITLE_MAX_LEN characters) pushed
+# them past the label's edge, which is where the cut fell. Only the title
+# gives way now, with an ellipsis, at the label's own width.
+_lt_title = ('Quarterly planning with the whole regional team about the budget '
+             * 4)[:app.TITLE_MAX_LEN].strip()
+app.notes = [NO.normalize_note({
+    'id': 210, 'title': _lt_title, 'body': 'x', 'category': 'General',
+    'date': '2026-07-01', 'comments': 'c',
+    'recurrence': {'freq': 'daily', 'count': 20},
+    'attachments': [{'filename': 'plan.pdf', 'stored_as': 'x_plan.pdf'}],
+    'overrides': {'2026-07-10': {'title': _lt_title, 'body': 'edited',
+                                 'comments': 'note to self',
+                                 'category': 'General', 'color': ''}}}),
+    NO.normalize_note({'id': 211, 'title': 'Short one', 'body': 'x',
+                       'category': 'General', 'date': '2026-07-10'})]
+app.save_notes()
+app.notebook.select(app.TAB_CALENDAR); app.update()
+app.cal_year, app.cal_month = 2026, 7
+app.render_calendar(); app.update()
+_od_open_day('2026-07-10')
+for _ in range(3):
+    app.update_idletasks(); app.update()
+
+
+def _lt_label(root, needle):
+    _stack = [root]
+    while _stack:
+        _w = _stack.pop(0)
+        if isinstance(_w, tk.Label) and needle in str(_w.cget('text')):
+            return _w
+        _stack.extend(_w.winfo_children())
+    return None
+
+
+_lt_row = _lt_label(app.day_panel, _lt_title[:20])
+_lt_short = _lt_label(app.day_panel, 'Short one')
+_lt_text = str(_lt_row.cget('text')) if _lt_row is not None else ''
+check(f"a long title in a day's list gives way and its marks stay in view "
+      f"(...{_lt_text[-28:]!r}, needs {_lt_row.winfo_reqwidth() if _lt_row else 0} "
+      f"of {_lt_row.winfo_width() if _lt_row else 0}px)",
+      _lt_row is not None and _lt_text.endswith('…  ✎  💬  📎×1')
+      and _lt_text.startswith('🔁 Quarterly')
+      and _lt_row.winfo_reqwidth() <= _lt_row.winfo_width())
+check(f"...while a short one is shown whole ({_lt_short.cget('text') if _lt_short else None!r})",
+      _lt_short is not None and str(_lt_short.cget('text')) == 'Short one')
+app._history_toggle_btn.invoke(); app.update()
+for _ in range(3):
+    app.update_idletasks(); app.update()
+_lt_hist = _lt_label(app._history_rows, _lt_title[:20])
+_lt_htext = str(_lt_hist.cget('text')) if _lt_hist is not None else ''
+check(f"...and in History, the group's counts stay in view "
+      f"(...{_lt_htext[-45:]!r}, needs {_lt_hist.winfo_reqwidth() if _lt_hist else 0} "
+      f"of {_lt_hist.winfo_width() if _lt_hist else 0}px)",
+      _lt_hist is not None and '…' in _lt_htext
+      and _lt_htext.endswith(' · 20 occurrences · 1 edited (✎)')
+      and _lt_hist.winfo_reqwidth() <= _lt_hist.winfo_width())
+app._history_toggle_btn.invoke(); app.update()
+app.close_day_panel()
+app.notebook.select(app.TAB_NOTES); app.update()
+
 # ============================================================
 # 7. ATTACHMENT-ONLY NOTE AUTOSAVE
 # ============================================================

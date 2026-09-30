@@ -111,6 +111,24 @@ def _day_note_key(base_note, date_str):
             date_str in (base_note.get("overrides") or {}))
 
 
+def _fit_title(app, label, head, title, tail, font):
+    """Show head + title + tail in `label`, shortening only the TITLE, with
+    an ellipsis, to the label's own width. What follows a title -- a day
+    row's ✎ 💬 📎, a History group's "· 20 occurrences · 1 edited (✎)" --
+    is what the label's edge used to cut first. The width is the label's
+    own (it is stretched by its row), read each time it changes."""
+    def fit(event=None):
+        width = label.winfo_width() if event is None else event.width
+        inset = 2 * sum(int(str(label.cget(o))) for o in
+                        ("borderwidth", "padx", "highlightthickness"))
+        room = width - inset - font.measure(head) - font.measure(tail)
+        shown = app._ellipsize(title, font, room) if room > 0 else "…"
+        if str(label.cget("text")) != head + shown + tail:
+            label.configure(text=head + shown + tail)
+    label.configure(text=head + title + tail, font=font)
+    label.bind("<Configure>", fit, add="+")
+
+
 def _redraw_open_day(app, notes_by_date, year, month):
     """Draw the open day's panel again if the notes have changed what it
     shows; leave it alone (its scroll, its keyboard) if they have not."""
@@ -1156,8 +1174,10 @@ class CalendarViewMixin:
             # labelled Delete appears only where a SINGLE note is open.
             # This row now does the same, and the menu bound below
             # carries six other actions besides.
-            lbl = tk.Label(row, text=title_text + icons, bg=self.colors["card"],
-                           fg=self.colors["text"], font=("Segoe UI", 10, "bold"), anchor="w")
+            lbl = tk.Label(row, bg=self.colors["card"], fg=self.colors["text"],
+                           anchor="w")
+            _fit_title(self, lbl, "", title_text, icons,
+                       self._cal_font(("Segoe UI", 10, "bold"))[0])
             lbl.pack(side="left", fill="x", expand=True, padx=10, pady=8)
 
             def _open(e, n=base_note, d=date_str):
@@ -1477,13 +1497,15 @@ class CalendarViewMixin:
             lbl.pack(pady=20)
             return
 
-        def one_row(parent, text, fg, command, context_cmd=None, indent=0,
+        def one_row(parent, parts, fg, command, context_cmd=None, indent=0,
                     bold=False):
+            """`parts` is (before the title, the title, after it): only the
+            title gives way when the row is too narrow for all three."""
             row = tk.Frame(parent, bg=self.colors["card"], cursor="hand2")
             row.pack(fill="x", pady=1, padx=(indent, 0))
-            lbl = tk.Label(row, text=text, anchor="w",
-                           font=("Segoe UI", 9, "bold" if bold else "normal"),
-                           bg=self.colors["card"], fg=fg)
+            lbl = tk.Label(row, anchor="w", bg=self.colors["card"], fg=fg)
+            _fit_title(self, lbl, *parts, self._cal_font(
+                ("Segoe UI", 9, "bold" if bold else "normal"))[0])
             lbl.pack(side="left", fill="x", expand=True, padx=10, ipady=4)
             for w in (row, lbl):
                 w.bind("<Button-1>", lambda e: command())
@@ -1499,7 +1521,7 @@ class CalendarViewMixin:
             if entry["kind"] == "note":
                 one_row(
                     self._history_rows,
-                    f"📅 {entry['date']}   {entry['title'] or '(untitled)'}",
+                    (f"📅 {entry['date']}   ", entry['title'] or '(untitled)', ""),
                     self.colors["text"],
                     lambda n=note, d=entry["date"]: self._history_open_day(n, d),
                     context_cmd=lambda e, n=note, d=entry["date"]:
@@ -1531,8 +1553,8 @@ class CalendarViewMixin:
                                self._history_open_day(n, d) if d else None)
                 one_row(
                     self._history_rows,
-                    f"{glyph} 🔁 {entry['title'] or '(untitled)'} · "
-                    f"{entry['freq_label']}{suffix}",
+                    (f"{glyph} 🔁 ", entry['title'] or '(untitled)',
+                     f" · {entry['freq_label']}{suffix}"),
                     self.colors["accent"],
                     row_cmd,
                     context_cmd=lambda e, n=note:
@@ -1543,8 +1565,8 @@ class CalendarViewMixin:
                         mark = "✎" if child.get("edited") else "•"
                         one_row(
                             self._history_rows,
-                            f"{mark} {child['date']}   "
-                            f"{child['title'] or '(untitled)'}",
+                            (f"{mark} {child['date']}   ",
+                             child['title'] or '(untitled)', ""),
                             self.colors["text"],
                             lambda n=note, d=child["date"]:
                                 self._history_open_day(n, d),
