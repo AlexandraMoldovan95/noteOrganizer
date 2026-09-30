@@ -15276,6 +15276,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self.save_notes()
             self._editor_follows_external_change(touched)
             self._exit_selection_mode_after_bulk_action()
+            # The calendar draws a note with no colour of its own in its
+            # category's -- its dots, and an open day's stripes.
+            self.render_calendar()
             self.set_status(f"Moved {count} note(s) to \u201c{cat}\u201d")
             # This was the one action in the bar that changed stored data
             # with neither a question nor a way back, while the button
@@ -16823,6 +16826,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.save_notes()
         self._editor_follows_external_change({real["id"]})
         self.refresh_note_list()
+        # A note with no colour of its own is drawn in its category's, as
+        # a dot on its days and a stripe in an open day's list.
+        self.render_calendar()
         title = (real.get("title") or "").strip() or "Untitled note"
         self.set_status("Moved “%s” to “%s”"
                         % (_truncate(title, 30), category))
@@ -17962,11 +17968,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.save_notes()
         self._editor_follows_external_change({n["id"] for n in restored})
         self.refresh_note_list()
-        # No render_calendar() here, unlike _undo_trash: nothing the
-        # calendar draws comes from a note's category -- calendar_view.py
-        # does not read CATEGORY_COLORS at all -- and no note appears or
-        # disappears from a date. A delete changes which notes exist; this
-        # only changes how they are filed.
+        # The calendar draws a note with no colour of its own in its
+        # category's (get_note_color falls back to CATEGORY_COLORS): its
+        # dots, and an open day's stripes. A comment here once said the
+        # calendar never read a category, and the dots stayed in the
+        # colour the undo had just taken back.
+        self.render_calendar()
         if homeless:
             self.set_status(
                 f"Put back {len(restored)} note(s); {homeless} could not go "

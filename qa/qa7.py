@@ -3018,6 +3018,99 @@ check(f'paging the months with a day open leaves its panel as it was '
       and (app.cal_year, app.cal_month) == (2026, 7)
       and app.selected_day == _od_day and app._day_panel_mode == 'list')
 
+# ---- A CATEGORY CHANGE REPAINTS THE CALENDAR ----
+# A note with no colour of its own is drawn in its category's. Three routes
+# change a category and never asked the calendar to redraw -- a title's own
+# menu, the selection bar, and that change's Undo, beside which a comment
+# said the calendar never reads a category -- so the dots and an open
+# day's stripe stayed in the old colour until the month was paged.
+# A category whose colour is not General's, so a stale dot can be told
+# from a fresh one.
+_od_cat = next(c for c, col in NO.CATEGORY_COLORS.items()
+               if c != 'General' and col != NO.CATEGORY_COLORS['General'])
+_od_gen, _od_new = NO.CATEGORY_COLORS['General'], NO.CATEGORY_COLORS[_od_cat]
+
+
+def _od_stripes():
+    """The open list's stripes, row by row: the 4-pixel frame in each row."""
+    out, level = [], [app.day_panel]
+    while level:
+        nxt = []
+        for w in level:
+            for c in w.winfo_children():
+                if isinstance(c, tk.Frame):
+                    try:
+                        if int(str(c.cget('width'))) == 4:
+                            out.append(str(c.cget('bg')))
+                    except (tk.TclError, ValueError):
+                        pass
+                nxt.append(c)
+        level = nxt
+    return out
+
+
+_od_reset()
+_od_open_day(_od_day)
+_od_caught = []
+_od_real_add, _od_real_pop = tk.Menu.add_command, tk.Menu.tk_popup
+tk.Menu.add_command = lambda self, **kw: _od_caught.append(
+    (str(kw.get('label', '')), kw.get('command')))
+tk.Menu.tk_popup = lambda self, *a, **k: None
+try:
+    _at = _cd_point(_od_day, chip=0)
+    _qa_fire(app.cal_canvas, '<Button-3>', x=_at[0], y=_at[1],
+             rootx=app.cal_canvas.winfo_rootx() + _at[0],
+             rooty=app.cal_canvas.winfo_rooty() + _at[1])
+    app.update()
+finally:
+    tk.Menu.add_command = _od_real_add
+    tk.Menu.tk_popup = _od_real_pop
+_od_move = next((c for l, c in _od_caught if l.strip() == _od_cat), None)
+if _od_move is not None:
+    _od_move(); app.update()
+check(f"a category moved from a title's menu recolours its dot and the open "
+      f"list's stripe ({_od_cat}: {_cd_view(_od_day)['dots']}, {_od_stripes()})",
+      _od_move is not None and app.find_note(140)['category'] == _od_cat
+      and _cd_view(_od_day)['dots'] == [_od_new, _od_gen]
+      and _od_stripes() == [_od_new, _od_gen])
+
+# From the selection bar, with the day open; then that change's Undo.
+_od_reset()
+_od_open_day(_od_day)
+app.notebook.select(app.TAB_NOTES); app.update()
+app._toggle_selection_mode()
+app._toggle_note_selected(140, True)
+app.update()
+app._bulk_change_category()
+app.update()
+_od_lbl = find_widget(app._mini_popup, tk.Label, _od_cat)
+for _ in range(60):
+    if app.find_note(140)['category'] == _od_cat:
+        break
+    try:
+        if _od_lbl is not None and _od_lbl.winfo_exists():
+            _qa_click(_od_lbl)
+    except tk.TclError:
+        pass
+    app.update()
+    _t7.sleep(0.02)
+_od_undo = app._toast_action
+app.notebook.select(app.TAB_CALENDAR); app.update()
+check(f"a category moved from the selection bar shows on the calendar and in "
+      f"the open list ({_cd_view(_od_day)['dots']}, {_od_stripes()})",
+      app.find_note(140)['category'] == _od_cat
+      and _cd_view(_od_day)['dots'] == [_od_new, _od_gen]
+      and _od_stripes() == [_od_new, _od_gen])
+if _od_undo is not None:
+    _od_undo(); app.update()
+check(f"...and its Undo puts the old colour back on both "
+      f"({_cd_view(_od_day)['dots']}, {_od_stripes()})",
+      _od_undo is not None and app.find_note(140)['category'] == 'General'
+      and _cd_view(_od_day)['dots'] == [_od_gen]
+      and _od_stripes() == [_od_gen, _od_gen])
+if app.selection_mode:
+    app._toggle_selection_mode()
+
 app.close_day_panel()
 app.notebook.select(app.TAB_NOTES); app.update()
 
