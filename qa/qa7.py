@@ -1631,9 +1631,10 @@ check('a note that does not repeat still just says Delete',
 # recoverability, and a question in front of every colour change would
 # cost more than the loss. So the loss stopped being permanent.
 #
-# The marker POPUP is deliberately untouched -- it works on a copy, writes
-# only on Save and discards on ✕ -- and a check below holds that, so a
-# later "consistency" pass does not helpfully break it.
+# The marker POPUP's picking is deliberately untouched -- it works on a
+# copy, writes only on Save and discards on ✕ -- and a check below holds
+# that, so a later "consistency" pass does not helpfully break it. (Its
+# Save with nothing left, the fourth door to the loss, has the Undo: 6g.)
 _cc_saved_colors = dict(app.day_colors)
 _cc_saved_emoji = dict(app.day_emoji)
 _CC_COLOUR = '#cc4444'
@@ -1837,8 +1838,8 @@ check('clear day: Undo does not overwrite a marker chosen in between',
 check('clear day: ...and says the day is occupied',
       any('has markers again' in _t and _k == 'info' for _t, _k in _cc_toasts))
 
-# The popup was already safe. Hold that, so a later consistency pass does
-# not helpfully give it an undo it does not need.
+# The popup's picking was already safe. Hold that, so a later consistency
+# pass does not helpfully give its chips an undo they do not need.
 _cc_seed()
 app._mark_day_emoji(_CC_DAY, _types_q7.SimpleNamespace(x_root=200, y_root=200))
 app.update()
@@ -3292,6 +3293,58 @@ check(f"...and clicked over History, it brings the month back to show it "
 app.dismiss_reminder()
 app.close_day_panel(); app.update()
 
+# ---- SAVING THE MARKER POPUP EMPTY OFFERS THE WAY BACK ----
+# The menu's "Clear day markers" offers Undo on its toast, and so does the
+# palette's "No color" for a day's colour. The marker popup's Clear, then
+# Save, discards the same markers by a fourth door, and it said nothing and
+# kept nothing. Picking chips and ✕ still write nothing (held above).
+_mk_day = '2026-07-14'
+_mk_three = [e for e, _c in app.DAY_MARKER_EMOJIS[:3]]
+app.day_emoji = {_mk_day: list(_mk_three)}
+app._persist_day_emoji()
+app.notebook.select(app.TAB_CALENDAR); app.update()
+app.cal_year, app.cal_month = 2026, 7
+app.render_calendar(); app.update()
+app._hide_toast()
+
+
+def _mk_popup_save(clear_first):
+    app._mark_day_emoji(_mk_day, _types_q7.SimpleNamespace(x_root=200, y_root=200))
+    app.update()
+    _mk_pop = app._mini_popup
+    if clear_first:
+        _mk_clear = find_widget(_mk_pop, tk.Button, 'Clear')
+        if _mk_clear is not None:
+            _mk_clear.invoke(); app.update()
+    _mk_save = find_widget(_mk_pop, tk.Button, 'Save')
+    if _mk_save is not None:
+        _mk_save.invoke(); app.update()
+
+
+_mk_popup_save(clear_first=True)
+_mk_offer = app._toast_action
+check(f"the marker popup saved empty clears the day and offers Undo on "
+      f"its toast ({app.day_emoji.get(_mk_day)}, "
+      f"{str(app.toast_lbl.cget('text'))!r})",
+      _mk_day not in app.day_emoji
+      and NO.load_settings().get('day_emoji', {}).get(_mk_day) is None
+      and _mk_offer is not None
+      and 'Day markers cleared' in str(app.toast_lbl.cget('text')))
+if _mk_offer is not None:
+    _mk_offer(); app.update()
+check(f"...and its Undo puts the three back, on disk and in the day's corner "
+      f"({_cd_view(_mk_day)['badge']!r})",
+      app.day_emoji.get(_mk_day) == _mk_three
+      and NO.load_settings().get('day_emoji', {}).get(_mk_day) == _mk_three
+      and _cd_view(_mk_day)['badge'] == ''.join(_mk_three))
+# The control: saved unchanged, nothing was lost and nothing is offered.
+app._hide_toast()
+_mk_popup_save(clear_first=False)
+check(f"...while saving it unchanged offers nothing ({app._toast_action})",
+      app._toast_action is None and app.day_emoji.get(_mk_day) == _mk_three)
+app.day_emoji = {}
+app._persist_day_emoji()
+app._hide_toast()
 app.notebook.select(app.TAB_NOTES); app.update()
 
 # ============================================================

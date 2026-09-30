@@ -1681,11 +1681,12 @@ class CalendarViewMixin:
     def _undo_day_clear(self, date_str, kind, value):
         """Put back a day's colour, or its markers, after a clear.
 
-        Three routes discarded a day's decoration and none of them asked:
+        Four routes discarded a day's decoration and none of them asked:
         the two "Clear day …" menu entries, which sit directly under the
-        entries that CREATE the same thing, and the palette's own "No
-        color". A mis-aim by one menu row turned "change this" into
-        "discard it", permanently. No confirmation added, deliberately —
+        entries that CREATE the same thing, the palette's own "No color",
+        and the marker popup saved empty (Clear, then Save). A mis-aim by
+        one menu row turned "change this" into "discard it", permanently.
+        No confirmation added, deliberately —
         the app's rule is that a destructive action is confirmed in
         proportion to how recoverable it is, and a question in front of
         every colour change would cost more than the loss it guards. So
@@ -1713,8 +1714,9 @@ class CalendarViewMixin:
         # be clobbered; found by probing rather than by review.
         #
         # No guard on an empty `value`: every caller establishes it, the
-        # two clears by returning early and the palette by asking. A branch
-        # nothing can reach is a branch no check can defend.
+        # two clears by returning early, the palette and the marker popup
+        # by asking. A branch nothing can reach is a branch no check can
+        # defend.
         if store.get(date_str):
             self._show_toast(occupied, kind="info")
             return
@@ -1852,6 +1854,7 @@ class CalendarViewMixin:
             refresh_all_cells()
 
         def save_and_close():
+            had = list(self.day_emoji.get(date_str) or [])
             if pending:
                 self.day_emoji[date_str] = list(pending)
             else:
@@ -1864,6 +1867,13 @@ class CalendarViewMixin:
             # every day cell) to cause a visible flicker right after the
             # popup closes.
             self._refresh_day_badge(date_str)
+            # Saved empty over markers that were there: the same loss as the
+            # menu's "Clear day markers", by a fourth door, so the same way
+            # back. Picking and un-picking chips, and ✕, still write nothing.
+            if had and not pending:
+                self._show_toast(
+                    "Day markers cleared",
+                    action=lambda: self._undo_day_clear(date_str, "markers", had))
 
         btn_row = tk.Frame(outer, bg=self.colors["card"])
         btn_row.pack(fill="x", pady=(8, 0))
