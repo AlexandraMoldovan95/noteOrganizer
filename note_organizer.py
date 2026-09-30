@@ -2207,18 +2207,34 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             cache[font] = tkfont.Font(family=font[0], size=font[1])
         return cache[font]
 
+    def _measure_text(self, font, text):
+        """``_measuring_font(font).measure(text)``, remembered per font and
+        text. Opening a 60-row table asked Tk for 1,563 widths -- a third
+        of the open -- over a few hundred distinct strings. The grid's
+        fonts are never reconfigured in place (a new size or family makes
+        new Font objects, see _grid_fonts), so a remembered width cannot
+        go stale; the store is dropped whole if it ever grows large."""
+        font = self._measuring_font(font)
+        cache = getattr(self, "_measure_text_cache", None)
+        if cache is None or len(cache) > 50000:
+            cache = self._measure_text_cache = {}
+        key = (str(font), text)
+        width = cache.get(key)
+        if width is None:
+            width = cache[key] = font.measure(text)
+        return width
+
     def _ellipsize(self, value, font, max_px):
         """The drawing clips, the text never does: a value wider than its
         column is drawn shortened with an ellipsis, while the note's own
         text keeps every character."""
-        font = self._measuring_font(font)
-        if max_px <= 0 or font.measure(value) <= max_px:
+        if max_px <= 0 or self._measure_text(font, value) <= max_px:
             return value
         ellipsis = "\u2026"
         lo, hi = 0, len(value)
         while lo < hi:
             mid = (lo + hi + 1) // 2
-            if font.measure(value[:mid] + ellipsis) <= max_px:
+            if self._measure_text(font, value[:mid] + ellipsis) <= max_px:
                 lo = mid
             else:
                 hi = mid - 1
@@ -2240,14 +2256,16 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         start, end = bounds[c]
         if start >= end:
             return []
-        base = self._col_base(line_no)
+        # The column walks along with the characters -- counting each one's
+        # UTF-16 width from the line's start again made this quadratic.
+        col = self._col_base(line_no) + self._tk_col(line, start)
         out = []
-        for i in range(end - start):
-            col = base + self._tk_col(line, start + i)
+        for ch in line[start:end]:
             try:
                 tags = set(self.body_text.tag_names(f"{line_no}.{col}"))
             except tk.TclError:
                 tags = set()
+            col += 2 if ord(ch) > 0xFFFF else 1
             st = {"bold": bool(tags & {"bold", "bold_italic"}),
                   "italic": bool(tags & {"italic", "bold_italic"}),
                   "underline": "underline" in tags,
@@ -2321,7 +2339,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             laid, used = [], 0
             for key, txt in runs:
                 font = self._grid_run_font(key, header)
-                width = self._measuring_font(font).measure(txt)
+                width = self._measure_text(font, txt)
                 if used + width <= budget:
                     laid.append((txt, font, key[4]))
                     used += width
@@ -2329,7 +2347,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     shown = self._ellipsize(txt, font, budget - used)
                     if shown:
                         laid.append((shown, font, key[4]))
-                        used += self._measuring_font(font).measure(shown)
+                        used += self._measure_text(font, shown)
                     break
             if align == core_tables.ALIGN_CENTER:
                 x = cell["x"] + (cell["w"] - used) / 2
@@ -2342,7 +2360,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 items.append(canvas.create_text(
                     x, y_mid, anchor="w", font=font,
                     fill=fg or self.colors["text"], text=txt))
-                x += self._measuring_font(font).measure(txt)
+                x += self._measure_text(font, txt)
         return items
 
     def _grid_redraw_cell_text(self, info, r, c):
@@ -3407,7 +3425,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 # A multi-line cell is as wide as its WIDEST line, not as
                 # wide as its raw text with the break markers in it.
                 col_w[c] = max(col_w[c], max(
-                    (font.measure(seg)
+                    (self._measure_text(font, seg)
                      for seg in core_tables.cell_display_lines(value)),
                     default=0) + 2 * pad_x)
         col_x = [0]
@@ -3436,6 +3454,33 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         canvas.pack(side="top", anchor="w")
         cells = {}
         rule = hairline(self.colors)
+
+        def wash(line_no, line, c, styles):
+            """The highlight a cell's rectangle is washed with -- the tag on
+            its first character, or on its padding when it is empty: the
+            same question _grid_cell_paint asks of a grid already built."""
+            if styles:
+                return styles[0]["bg"]
+            pipes = core_tables.pipe_positions(line)
+            if c + 1 >= len(pipes) or pipes[c] + 1 >= pipes[c + 1]:
+                return None
+            try:
+                tags = self.body_text.tag_names(
+                    f"{line_no}.{self._tk_col(line, pipes[c] + 1)}")
+            except tk.TclError:
+                return None
+            bg = None
+            for t in tags:
+                if t.startswith("highlight_"):
+                    bg = "#" + t[len("highlight_"):]
+            return bg
+
+        # Each cell is drawn ONCE, with its own styles. The build used to
+        # draw every cell plain and then _grid_restyle drew every one
+        # again, reading all its tags a second time -- half of opening a
+        # big table. The rectangles go down first and the text after
+        # them, the stacking that second pass left behind.
+        texts = []
         for r, row in enumerate(rows):
             for c in range(len(widths)):
                 if (r, c) in covered:
@@ -3445,13 +3490,23 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 w = col_x[min(c + col_span, len(col_w))] - x
                 h = row_y[min(r + row_span, len(rows))] - y
                 value = row[c] if c < len(row) else ""
+                surface = (inset_surface(self.colors) if r == 0
+                           else self.colors["card"])
+                if c in hidden_cols:
+                    canvas.create_rectangle(x, y, x + w, y + h,
+                                            fill=surface, outline=rule)
+                    continue
+                line_no = first + row_off[r]
+                line = block[row_off[r]]
+                styles = self._cell_value_styles(line_no, line, c)
+                bg = wash(line_no, line, c, styles)
+                # The saved colour stays pure; only the DRAWING blends it
+                # toward the cell's surface (see _grid_restyle).
                 rect = canvas.create_rectangle(
                     x, y, x + w, y + h,
-                    fill=(inset_surface(self.colors) if r == 0
-                          else self.colors["card"]),
+                    fill=(self._blend_hex(bg, surface, 0.45) if bg
+                          else surface),
                     outline=rule)
-                if c in hidden_cols:
-                    continue
                 align = (aligns_matrix[r][c]
                          if r < len(aligns_matrix)
                          and c < len(aligns_matrix[r])
@@ -3459,13 +3514,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 cell = {"value": value, "rect": rect, "texts": [],
                         "x": x, "y": y, "w": w, "h": h,
                         "rs": row_span, "cs": col_span}
-                line_no = first + row_off[r]
-                line = block[row_off[r]]
-                styles = self._cell_value_styles(line_no, line, c)
-                cell["texts"] = self._grid_draw_cell_text(
-                    canvas, cell, value, styles, align, r == 0,
-                    pad_x, row_h)
                 cells[(r, c)] = cell
+                texts.append((cell, value, styles, align, r == 0))
+        for cell, value, styles, align, header in texts:
+            cell["texts"] = self._grid_draw_cell_text(
+                canvas, cell, value, styles, align, header, pad_x, row_h)
         mark = f"table_grid_{id(host)}"
         b.mark_set(mark, f"{first}.0")
         b.mark_gravity(mark, "left")
@@ -3486,9 +3539,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         canvas.bind("<Double-Button-1>",
                     lambda e, i=info: self._grid_double(i, e))
         # Saved formatting is already on the text as tags by the time a
-        # grid is built (load applies formatting first), so painting from
-        # tags here shows it from the first frame.
-        self._grid_restyle(info)
+        # grid is built (load applies formatting first), so the one pass
+        # above painted it from the first frame.
         for widget in (host, canvas):
             widget.bind("<MouseWheel>", self._forward_grid_wheel)
             widget.bind("<Shift-MouseWheel>",
@@ -3755,9 +3807,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
         Tk counts UTF-16 units, so an astral character -- every emoji past
         the basic plane -- is two steps, and advancing by Python's len()
-        parks the caret inside the character just inserted.
+        parks the caret inside the character just inserted. Counted by
+        the codec rather than character by character (the same answer,
+        a lone surrogate half counting one): opening a 60-row table
+        walked 131,000 characters through a generator here.
         """
-        return sum(2 if ord(ch) > 0xFFFF else 1 for ch in text)
+        return len(text.encode("utf-16-le", "surrogatepass")) // 2
 
     @classmethod
     def _tk_col(cls, line, char_col):

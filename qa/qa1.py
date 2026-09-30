@@ -9922,6 +9922,71 @@ app.notes = list(_cu_saved)
 app.save_notes()
 app.new_note(); app.update()
 
+# ---- A TABLE IS DRAWN ONCE ----
+# Building a grid drew every cell plain and then _grid_restyle drew every
+# one again, reading all its tags a second time -- half of opening a
+# 60-row table. Each cell's text is drawn once now, and its rectangle
+# takes its highlight in that same pass: asked of the rectangle's own
+# fill, for a highlighted header, a highlighted cell with text and a
+# highlighted EMPTY cell (whose colour lives on its padding).
+set_body('| Head | Other |' + chr(10) + '| --- | --- |' + chr(10)
+         + '| text |  |' + chr(10) + '| more | x |')
+_one_hl = [('| Head | Other |', 0, '#ffe066'), ('| text |  |', 0, '#a0e7e5'),
+           ('| text |  |', 1, '#c8f7c5')]
+_one_body = app.body_text.get('1.0', 'end-1c')
+_one_spans = []
+for _row, _ci, _hex in _one_hl:
+    _at = _one_body.index(_row)
+    _pp = [_i for _i, _ch in enumerate(_row) if _ch == '|']
+    _one_spans.append({'start': _at + _pp[_ci] + 1, 'end': _at + _pp[_ci + 1],
+                       'style': 'highlight', 'value': _hex})
+app._apply_formatting(app.body_text, _one_spans)
+_one_draws = {'n': 0}
+_one_real_draw = app._grid_draw_cell_text
+
+
+def _one_counting_draw(*a, **k):
+    _one_draws['n'] += 1
+    return _one_real_draw(*a, **k)
+
+
+app._grid_draw_cell_text = _one_counting_draw
+try:
+    app._render_table_grids()
+    app.update()
+finally:
+    del app._grid_draw_cell_text
+_one_info = app._grid_at_line(1)
+check(f'one pass: every cell\'s text is drawn once '
+      f'({_one_draws["n"]} draws for {len(_one_info["cells"])} cells)',
+      _one_info is not None and _one_draws['n'] == len(_one_info['cells']))
+
+
+def _one_fill(r, c, hex_):
+    _surface = (NO.inset_surface(app.colors) if r == 0 else app.colors['card'])
+    return (str(_one_info['canvas'].itemcget(_one_info['cells'][(r, c)]['rect'],
+                                             'fill'))
+            == app._blend_hex(hex_, _surface, 0.45))
+
+
+check('one pass: a highlighted header, text cell and EMPTY cell are washed '
+      'in it',
+      _one_fill(0, 0, '#ffe066') and _one_fill(1, 0, '#a0e7e5')
+      and _one_fill(1, 1, '#c8f7c5'))
+check('one pass: and a plain cell keeps its surface',
+      str(_one_info['canvas'].itemcget(_one_info['cells'][(2, 1)]['rect'],
+                                       'fill')) == app.colors['card'])
+# The UTF-16 width is counted by the codec now instead of per character;
+# the answer must be the rule Tk keeps -- an astral character two units,
+# anything else (a lone surrogate half included) one.
+check('one pass: the UTF-16 count is still the one Tk keeps',
+      all(NO.NoteOrganizer._tk_units(_s)
+          == sum(2 if ord(_ch) > 0xFFFF else 1 for _ch in _s)
+          for _s in ('', 'abc', 'a' + chr(0x1F600) + 'b', chr(0xD83D),
+                     chr(0x65E5) + chr(0x672C),
+                     chr(0x1F468) + chr(0x200D) + chr(0x1F469) + ' ok')))
+set_body('')
+
 # ---- CLOSING SAVES SILENTLY (dead last: it destroys the app) ----
 # The quit-time "Unsaved notes" ask could only ever cover the last
 # half-second of typing; the app now trusts its own autosave and closes
