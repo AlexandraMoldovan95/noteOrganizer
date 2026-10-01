@@ -255,12 +255,34 @@ def preserve_corrupt_file(path):
     migration code below needs it too, and paths cannot import storage
     back. storage re-exports it as its own ``_preserve_corrupt``.
 
+    The same bytes are kept aside once. A file the app cannot use is read
+    again at every launch until something rewrites it -- a Trash nobody
+    touches, a templates file -- and each launch kept one more identical
+    copy, never deleted.
+
     Returns:
-        The copy's path, or None if even the copy failed.
+        The copy's path (an earlier one holding the same bytes, if there is
+        one), or None if even the copy failed.
     """
     stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     root, ext = os.path.splitext(path)
-    backup_path = f"{root}_corrupt_{stamp}{ext or '.json'}"
+    ext = ext or ".json"
+    try:
+        with open(path, "rb") as fh:
+            held = fh.read()
+        folder = os.path.dirname(path) or "."
+        prefix = os.path.basename(root) + "_corrupt_"
+        for name in sorted(os.listdir(folder)):
+            if not (name.startswith(prefix) and name.endswith(ext)):
+                continue
+            kept = os.path.join(folder, name)
+            if os.path.getsize(kept) == len(held):
+                with open(kept, "rb") as fh:
+                    if fh.read() == held:
+                        return kept
+    except (IOError, OSError):
+        pass
+    backup_path = f"{root}_corrupt_{stamp}{ext}"
     try:
         shutil.copy2(path, backup_path)
         return backup_path

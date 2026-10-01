@@ -937,6 +937,22 @@ check("a trash.json holding junk beside its notes loads the notes alone "
 check("...and keeps the file's bytes aside first",
       any(open(os.path.join(_paths.APP_DIR, p), encoding="utf-8").read() == _JUNK
           for p in os.listdir(_paths.APP_DIR) if p.startswith("trash_corrupt_")))
+# Read again at the next launch, with nothing having rewritten the file:
+# each launch kept one more copy of the same bytes, never deleted. Kept
+# once is enough. The copy above is dated as an earlier launch would have
+# left it -- copies are stamped to the second, and a test runs in one.
+def _junk_copies():
+    return [p for p in os.listdir(_paths.APP_DIR)
+            if p.startswith("trash_corrupt_")
+            and open(os.path.join(_paths.APP_DIR, p), encoding="utf-8").read() == _JUNK]
+
+
+for _jk in _junk_copies()[:1]:
+    os.replace(os.path.join(_paths.APP_DIR, _jk),
+               os.path.join(_paths.APP_DIR, "trash_corrupt_20000101_000000.json"))
+_storage.load_trash()
+check("...once: the next launch reading the same file keeps no second copy "
+      "(%s)" % _junk_copies(), len(_junk_copies()) == 1)
 
 # ---- The reclaim migration preserves a corrupt settings.json ----
 # run_migrations used to clobber an unreadable settings file with the
