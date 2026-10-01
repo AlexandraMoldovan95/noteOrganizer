@@ -507,8 +507,20 @@ app._themed_dialog = _real_dlg_id
 # A single imported note opens in the editor UNSAVED, by design -- the
 # user reviews it, then saves. The promise lands at the save, so the
 # check follows it there.
+#
+# Which note the editor holds, not whether a save has happened yet: the
+# autosave that follows an import (_open_imported_note_in_editor says
+# so) can create the copy inside the update() above on a loaded machine,
+# and "selected_note_id is None" then went red with nothing wrong --
+# seen during a mutant run, reproduced by pausing past the debounce.
+# Either answer keeps the promise: unsaved, or saved as a note of its
+# own holding the copy's text; never the old note.
+_add_sel = app.capture_editor_state().get('selected_note_id')
 check('choosing Add opens the copy as a NEW note, not over the old one',
-      app.capture_editor_state().get('selected_note_id') is None)
+      _add_sel != _ident_note['id']
+      and (_add_sel is None
+           or (app.find_note(_add_sel) or {}).get('body', '').rstrip('\n')
+           == 'alta varianta'))
 app.save_current_note(auto=False)
 app.update()
 check('...and once saved it is a second note',
