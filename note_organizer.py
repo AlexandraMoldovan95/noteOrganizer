@@ -14950,7 +14950,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if replaced is not None:
             # Kept beyond the toast, which the next offer replaces: choosing
             # Custom order asks whether to bring it back (_on_sort_chosen).
-            self._replaced_custom_order = replaced
+            # The arrangement made by hand is the one kept: a second move
+            # in a sorted view "replaced" the first replacement, and its
+            # marks took the place of the hand-made order's, which then had
+            # no way back at all. That move's toast still offers its own.
+            if getattr(self, "_replaced_custom_order", None) is None:
+                self._replaced_custom_order = replaced
             self._show_toast(
                 f"Custom order started again from {replaced[1]}",
                 action=lambda: self._undo_custom_order(*replaced))
@@ -14960,7 +14965,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         """Put back the arrangement a move replaced, and the sort the move
         was made in (see _move_note) -- the moves made on top of the new
         one since go with it, because they were made on the replacement."""
-        self._replaced_custom_order = None
+        # The offer kept for the session ends here only if it is this
+        # toast's own; a later move's toast puts back that move's.
+        kept = getattr(self, "_replaced_custom_order", None)
+        if kept is not None and kept[0] is marks:
+            self._replaced_custom_order = None
         self._put_back_custom_order(marks)
         self.save_notes()
         self.sort_var.set(sort_before)

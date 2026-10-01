@@ -1979,6 +1979,42 @@ del _bl_questions[:]
 _bl_sort('Custom order')
 check(f'...asked once: choosing Custom order again asks nothing (asked '
       f'{[q[0] for q in _bl_questions]})', not _bl_questions)
+# A second move made in a sorted view counted the first move's order as an
+# arrangement made by hand: its marks took the offer's place, and the
+# arrangement really made by hand had no way back at all -- choosing
+# Custom order asked nothing.
+_co_fresh(_bl_placed, sort='Custom order')
+for _bl_i in range(2):
+    _bl_sort('Title A–Z')
+    app._hide_toast()
+    app._put_keyboard_on_card(app._card_order()[0]); _ls_settle()
+    app._list_move_by_keyboard(1); _ls_settle()
+app._hide_toast()
+del _bl_questions[:]
+_bl_answer[0] = True
+_bl_sort('Custom order')
+check(f'...and after two moves made in a sorted view, choosing Custom order '
+      f'offers back the arrangement made by hand, and Yes brings it (asked '
+      f'{[q[0] for q in _bl_questions]}; now {_bl_names()})',
+      len(_bl_questions) == 1 and _bl_names() == _bl_hand
+      and _bl_file_names() == _bl_hand)
+# The second move's own Undo puts back what that move replaced -- the first
+# replacement -- and leaves the offer of the arrangement made by hand.
+_co_fresh(_bl_placed, sort='Custom order')
+for _bl_i in range(2):
+    _bl_sort('Title A–Z')
+    app._hide_toast()
+    app._put_keyboard_on_card(app._card_order()[0]); _ls_settle()
+    app._list_move_by_keyboard(1); _ls_settle()
+_qa_click(app.toast_action_lbl); _ls_settle()
+_bl_after_undo = app.sort_var.get()
+del _bl_questions[:]
+_bl_sort('Custom order')
+check(f'...also when the second move\'s Undo was taken first (sort after it '
+      f'{_bl_after_undo!r}; asked {[q[0] for q in _bl_questions]}; now '
+      f'{_bl_names()})',
+      _bl_after_undo == 'Title A–Z' and len(_bl_questions) == 1
+      and _bl_names() == _bl_hand)
 # No: the list stays as the replacement left it, and the question does not
 # come back.
 _bl_sort('Title A–Z')
