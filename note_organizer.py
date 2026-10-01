@@ -18641,8 +18641,15 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             typed = ""
         date_value = typed
         if typed and not parse_date(typed):
-            left_out.append(f"the date “{typed}” "
-                            "(dates are written like 2026-09-30)")
+            # Exactly the date the note already has is not left out,
+            # readable or not: nothing new is being lost. A note can arrive
+            # holding a date the app cannot read (a share code or a backup
+            # keeps a one-off note's date as it came), and it asked "Part
+            # of this note isn't saved" every time it was left -- untouched
+            # -- while "Continue without it" put back that same date.
+            if typed != kept_date.strip():
+                left_out.append(f"the date “{typed}” "
+                                "(dates are written like 2026-09-30)")
             date_value = kept_date
 
         rule = self.read_recurrence_from_ui()

@@ -698,6 +698,37 @@ check('Restore previous brings the date back and redraws the calendar',
 app.new_note(); app.update()
 app.notes = []; app.save_notes()
 
+# ---- THE DATE A NOTE ALREADY HAS IS NOT "LEFT OUT" ----
+# A share code or a backup keeps a one-off note's date as it came, so a
+# note can hold "30.09.2026". Opened and left untouched, it asked "Part of
+# this note isn't saved" at every exit -- the window's close included --
+# and "Continue without it" put back that same date for the next time.
+_bd_real_dlg = app._themed_dialog
+app.notes = [NO.normalize_note({'id': 1, 'title': 'Arrived', 'body': 'x',
+                                'date': '30.09.2026'}),
+             NO.normalize_note({'id': 2, 'title': 'Other', 'body': 'y'})]
+app.save_notes()
+app.open_note_in_tab(app.find_note(1)); app.update()
+check('fixture: a note holding a date the app cannot read, shown as it is',
+      app.find_note(1)['date'] == '30.09.2026'
+      and not NO.parse_date('30.09.2026')
+      and app.date_entry.get() == '30.09.2026')
+_bd_asked = []
+app._themed_dialog = lambda *a, **k: (_bd_asked.append(a[0]), True)[1]
+app.open_note_in_tab(app.find_note(2)); app.update()
+app._themed_dialog = _bd_real_dlg
+check(f'leaving it untouched asks nothing ({_bd_asked})',
+      _bd_asked == [] and app.selected_note_id == 2)
+check('...and the note keeps the date it came with',
+      app.find_note(1)['date'] == '30.09.2026')
+app.open_note_in_tab(app.find_note(1)); app.update()
+app.date_entry.delete(0, 'end'); app.date_entry.insert(0, '01.10.2026')
+check('...while a different unreadable date typed there is still left out',
+      any('01.10.2026' in item for item in app._date_and_repeat_to_store()[2]))
+app._show_date_in_field('30.09.2026')
+app.new_note(); app.update()
+app.notes = []; app.save_notes()
+
 # ---- TURNING THE REPEAT OFF ON A DAY WITH ITS OWN TEXT KEEPS THAT TEXT ----
 # Only the repeat changed, so nobody was asked; the note kept the series'
 # text, and the day's -- the text on screen a moment before -- went with
