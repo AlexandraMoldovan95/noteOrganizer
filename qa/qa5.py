@@ -865,48 +865,115 @@ NO.CATEGORY_COLORS.pop('Temp5nl', None)
 app.notes = []; app.trash = []
 app.save_notes(); NO.save_trash(app.trash)
 
-# ---- TURNING THE REPEAT OFF ON A DAY WITH ITS OWN TEXT KEEPS THAT TEXT ----
-# Only the repeat changed, so nobody was asked; the note kept the series'
-# text, and the day's -- the text on screen a moment before -- went with
-# the per-day edits, in no file and without a word. It is the rescue copy
-# now, as the series' text is when the day's replaces it.
+# ---- TURNING A REPEAT OFF KEEPS EVERY DAY'S OWN TEXT ----
+# A repeat turned off takes every day's own edits with it, and nobody is
+# asked (only a series field changed). The day on screen used to be kept
+# alone, as the note's next text; every other day's was in no file, and
+# turned off from the series view, not even that one. Pressed Save first,
+# the editor went on showing the day's text as the note's, and leaving
+# wrote it over the series' -- which was then in no file. The note as it
+# was, repeat and days included, is the rescue copy now, and Restore
+# previous brings the series back whole.
 _ro_real_dlg = app._themed_dialog
-app.notes = [
-    NO.normalize_note({'id': 1, 'title': 'Standup', 'body': 'SERIES TEXT',
-                       'formatting': [{'start': 0, 'end': 6, 'style': 'bold'}],
-                       'date': '2026-09-07', 'recurrence': {'freq': 'weekly'},
-                       'overrides': {'2026-09-14': {
-                           'title': 'Standup (moved)',
-                           'body': 'DAY TEXT: room 9'}}}),
-    NO.normalize_note({'id': 2, 'title': 'Other', 'body': 'y'})]
-app.save_notes()
+_ro_yes = app.ask_yes_no
+
+
+def _ro_fixture():
+    app.new_note(); app.update()
+    app.notes = [
+        NO.normalize_note({'id': 1, 'title': 'Standup', 'body': 'SERIES TEXT',
+                           'formatting': [{'start': 0, 'end': 6, 'style': 'bold'}],
+                           'date': '2026-09-07', 'recurrence': {'freq': 'weekly'},
+                           'overrides': {
+                               '2026-09-14': {'title': 'Standup (moved)',
+                                              'body': 'DAY TEXT: room 9'},
+                               '2026-09-21': {'body': 'DAY 21: decisions'}}}),
+        NO.normalize_note({'id': 2, 'title': 'Other', 'body': 'y'})]
+    app.save_notes()
+
+
+def _ro_off(day, save_first=False):
+    """Turn note 1's repeat off on *day* (None: the series view), maybe
+    press Save, then open note 2. Returns the questions asked and what the
+    editor showed after the Save."""
+    app.open_note_in_tab(app.find_note(1), occurrence_date=day); app.update()
+    app.rec_freq_var.set(NO.FREQ_LABELS[''])
+    app.on_recurrence_changed(); app.update()
+    asked, seen = [], None
+    app._themed_dialog = lambda *a, **k: (asked.append(a[0]), True)[1]
+    if save_first:
+        app.save_current_note(); app.update()
+        seen = (app.body_text.get('1.0', 'end-1c').rstrip('\n'),
+                app.current_occurrence_date,
+                app.editor_state_matches_saved(app.capture_editor_state()),
+                str(app.status_lbl.cget('text')))
+    app.open_note_in_tab(app.find_note(2)); app.update()
+    app._themed_dialog = _ro_real_dlg
+    return asked, seen
+
+
+def _ro_restored():
+    """Restore previous on note 1, answered Yes: what the note is then."""
+    app.open_note_in_tab(app.find_note(1)); app.update()
+    app.ask_yes_no = lambda *a, **k: True
+    app.restore_previous_version(); app.update()
+    app.ask_yes_no = _ro_yes
+    n = app.find_note(1)
+    return (n['body'].rstrip('\n'), n['recurrence']['freq'],
+            NO.effective_note(n, '2026-09-14').get('body'),
+            NO.effective_note(n, '2026-09-21').get('body'),
+            [f.get('style') for f in n.get('formatting') or []])
+
+
+_RO_WHOLE = ('SERIES TEXT', 'weekly', 'DAY TEXT: room 9', 'DAY 21: decisions',
+             ['bold'])
+_ro_fixture()
 app.open_note_in_tab(app.find_note(1), occurrence_date='2026-09-14'); app.update()
 check('fixture: the day on screen shows its own text',
       app.body_text.get('1.0', 'end-1c') == 'DAY TEXT: room 9'
       and app.current_occurrence_date == '2026-09-14')
-app.rec_freq_var.set(NO.FREQ_LABELS[''])
-app.on_recurrence_changed(); app.update()
-_ro_asked = []
-app._themed_dialog = lambda *a, **k: (_ro_asked.append(a[0]), True)[1]
-app.open_note_in_tab(app.find_note(2)); app.update()
-app._themed_dialog = _ro_real_dlg
+_ro_asked, _ = _ro_off('2026-09-14')
 _ro = app.find_note(1)
 check(f'fixture: only the repeat changed, so nothing was asked ({_ro_asked}), '
       'and the note no longer repeats, keeping the series\' text',
       _ro_asked == [] and not _ro['recurrence']['freq']
       and _ro['body'].rstrip('\n') == 'SERIES TEXT' and _ro['overrides'] == {})
-check("turning the repeat off on a day with its own text keeps that text "
-      f"as the rescue copy ({(_ro.get('_prev') or {}).get('body')!r})",
-      (_ro.get('_prev') or {}).get('title') == 'Standup (moved)'
-      and (_ro.get('_prev') or {}).get('body') == 'DAY TEXT: room 9')
-app.open_note_in_tab(_ro); app.update()
-_ro_yes = app.ask_yes_no
-app.ask_yes_no = lambda *a, **k: True
-app.restore_previous_version(); app.update()
-app.ask_yes_no = _ro_yes
-check('...which Restore previous brings back',
-      app.find_note(1)['body'].rstrip('\n') == 'DAY TEXT: room 9'
-      and app.find_note(1)['title'] == 'Standup (moved)')
+check("turning the repeat off on a day keeps the note as it was -- its repeat "
+      "and every day's own text -- as the rescue copy "
+      f"({sorted(((_ro.get('_prev') or {}).get('overrides') or {}))})",
+      ((_ro.get('_prev') or {}).get('recurrence') or {}).get('freq') == 'weekly'
+      and sorted(((_ro.get('_prev') or {}).get('overrides') or {}))
+      == ['2026-09-14', '2026-09-21'])
+_ro_back = _ro_restored()
+check(f'...which Restore previous brings back whole: the series, its bold and '
+      f'each day\'s own text ({_ro_back})', _ro_back == _RO_WHOLE)
+# Saved first, then left: the editor shows the note it saved.
+_ro_fixture()
+_ro_asked, _ro_seen = _ro_off('2026-09-14', save_first=True)
+check(f'Save on a day whose repeat was just turned off shows the note it '
+      f'saved, reading as saved, and says where the days went ({_ro_seen})',
+      _ro_seen is not None and _ro_seen[0] == 'SERIES TEXT'
+      and _ro_seen[1] is None and _ro_seen[2]
+      and 'Restore previous' in _ro_seen[3])
+import json as _json5r
+with open('notes_data.json', encoding='utf-8') as _f5r:
+    _ro_disk = [n for n in _json5r.load(_f5r) if n.get('id') == 1]
+check(f'...and leaving it keeps the series\' text and its bold on disk '
+      f'({[(n.get("body"), n.get("formatting")) for n in _ro_disk]})',
+      len(_ro_disk) == 1 and _ro_disk[0]['body'].rstrip('\n') == 'SERIES TEXT'
+      and [f.get('style') for f in _ro_disk[0].get('formatting') or []] == ['bold'])
+_ro_back = _ro_restored()
+check(f'...and Restore previous brings the series back whole ({_ro_back})',
+      _ro_back == _RO_WHOLE)
+# Turned off from the series view: the days' own text is kept too.
+_ro_fixture()
+app.open_note_in_tab(app.find_note(1)); app.update()
+app.rec_freq_var.set(NO.FREQ_LABELS[''])
+app.on_recurrence_changed(); app.update()
+app.save_current_note(); app.update()
+_ro_back = _ro_restored()
+check(f'turned off from the series view, every day\'s own text is kept and '
+      f'comes back with Restore previous ({_ro_back})', _ro_back == _RO_WHOLE)
 # A day whose words ARE the series' -- its own colour only -- loses no
 # text, and the rescue copy the note already holds is not replaced by a
 # copy of what the note says.
@@ -930,6 +997,48 @@ check(f'...while a day differing only in its colour keeps the rescue copy '
       f'the note had ({_ro_asked})',
       _ro_asked == [] and not app.find_note(1)['recurrence']['freq']
       and (app.find_note(1).get('_prev') or {}).get('body') == 'AN OLDER VERSION')
+
+# ---- "THIS OCCURRENCE ONLY" KEEPS WHAT A DAY CANNOT HOLD ----
+# The day's text goes to the day; a file attached and a tick made in the
+# same visit belong to the series -- a day has nowhere to keep either --
+# and were dropped: the file stayed in the folder with no note, the tick
+# was undone, and the editor's snapshot called it saved.
+import tkinter.filedialog as _fd5
+import tempfile as _tmp5
+import os as _os5
+_oc_file = _os5.path.join(_tmp5.gettempdir(), 'qa5_handout.txt')
+with open(_oc_file, 'w', encoding='utf-8') as _f5o:
+    _f5o.write('handout')
+app.new_note(); app.update()
+app.notes = [
+    NO.normalize_note({'id': 1, 'title': 'Weekly', 'body': 'series text',
+                       'date': '2026-09-07', 'recurrence': {'freq': 'weekly'},
+                       'checklist': [{'text': 'agenda', 'done': False}]}),
+    NO.normalize_note({'id': 2, 'title': 'Other', 'body': 'y'})]
+app.save_notes()
+app.open_note_in_tab(app.find_note(1), occurrence_date='2026-09-14'); app.update()
+app.body_text.insert('end-1c', ' -- notes for this day')
+_oc_real_pick = _fd5.askopenfilenames
+_fd5.askopenfilenames = lambda **k: (_oc_file,)
+app.add_attachment(); app.update()
+_fd5.askopenfilenames = _oc_real_pick
+app._working_checklist[0]['done'] = True     # what the tick's box does
+_oc_real_scope = app.ask_occurrence_scope
+app.ask_occurrence_scope = lambda *a, **k: 'occurrence'
+app.open_note_in_tab(app.find_note(2)); app.update()
+app.ask_occurrence_scope = _oc_real_scope
+_oc = app.find_note(1)
+_oc_files = [a.get('stored_as') for a in _oc.get('attachments') or []]
+check(f'"This occurrence only" writes the day\'s text to the day '
+      f'({(_oc.get("overrides") or {}).get("2026-09-14", {}).get("body")!r})',
+      'notes for this day' in
+      ((_oc.get('overrides') or {}).get('2026-09-14', {}).get('body') or ''))
+check(f'...and keeps the file attached in the same visit, on the series, its '
+      f'file in the folder ({_oc_files})',
+      len(_oc_files) == 1 and _os5.path.exists(
+          _os5.path.join(NO.ATTACHMENTS_DIR, _oc_files[0] or '')))
+check(f'...and the tick made in the same visit ({_oc.get("checklist")})',
+      [it.get('done') for it in _oc.get('checklist') or []] == [True])
 app.new_note(); app.update()
 app.notes = []; app.save_notes()
 

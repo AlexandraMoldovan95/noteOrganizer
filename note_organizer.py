@@ -19066,6 +19066,63 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
     # to replace the editor must not carry on past.
     _SAVE_CANCELLED = object()
 
+    # Said wherever a save turns a repeat off and the rescue copy takes the
+    # days' own text.
+    _REPEAT_OFF_KEPT = (" — the repeat is off; ↩ Restore previous brings it "
+                        "back with every day's own text")
+
+    def _repeat_off_loses_days(self, note, recurrence):
+        """Whether a save writing *recurrence* turns *note*'s repeat off
+        while a day of it holds text of its own -- which goes with the
+        repeat. A day differing only in its colour or category loses no
+        text."""
+        if not is_recurring(note) or recurrence.get("freq"):
+            return False
+        for day in (note.get("overrides") or {}):
+            shown = effective_note(note, day)
+            if any((shown.get(key) or "") != (note.get(key) or "")
+                   for key in ("title", "body", "comments")):
+                return True
+        return False
+
+    @staticmethod
+    def _whole_note_rescue_copy(note):
+        """*note* as it is -- its text, and the date, repeat and days a
+        save is about to take away -- as the rescue copy "↩ Restore
+        previous" puts back whole (_PREV_EXTRA_LABELS)."""
+        prev = {
+            "title": note.get("title") or "",
+            "body": note.get("body") or "",
+            "formatting": copy.deepcopy(note.get("formatting") or []),
+            "paragraphs": copy.deepcopy(note.get("paragraphs") or []),
+            "comments": note.get("comments") or "",
+        }
+        for key in ("date", "recurrence", "exceptions", "overrides"):
+            prev[key] = copy.deepcopy(note.get(key))
+        return prev
+
+    def _write_series_owned(self, note, date_value, recurrence):
+        """After a save on one day of *note*, write what the editor holds
+        that belongs to the whole series -- its date, its repeat, its
+        attachments and its checklist. A day has nowhere to keep them.
+
+        A repeat turned off takes every day's own edits with it. When a
+        day had text of its own, the note as it was becomes the rescue
+        copy first, repeat and days included. Only the day on screen used
+        to be kept, and every other day's text was in no file. Returns
+        whether that happened."""
+        rescued = self._repeat_off_loses_days(note, recurrence)
+        if rescued:
+            note["_prev"] = self._whole_note_rescue_copy(note)
+        if not recurrence["freq"]:
+            note["exceptions"] = []
+            note["overrides"] = {}
+        note["date"] = date_value
+        note["attachments"] = self.current_attachments
+        note["recurrence"] = recurrence
+        note["checklist"] = [dict(it) for it in self._get_checklist()]
+        return rescued
+
     def save_current_note(self, auto=False):
         title = self.title_entry.get().strip()
         if title == "Note title...":
@@ -19155,6 +19212,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             pass
 
         now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        reload_from_note = False
 
         if self.selected_note_id is None:
             new_id = max([n["id"] for n in self.notes], default=0) + 1
@@ -19272,7 +19330,18 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     patch["color"] = ""
                 note.setdefault("overrides", {})[occurrence_date] = patch
                 note["updated"] = now
-                self.set_status(("Auto-saved " if auto else "Saved ") + f"{occurrence_date} only")
+                # What else the editor changed in this visit is the
+                # series': a day has nowhere to keep a file, a tick, a date
+                # or a repeat. They were dropped here -- an attached file
+                # left in the folder with no note, a removed one still
+                # listed with its file gone, a tick undone -- and the
+                # editor's snapshot then called the drop saved.
+                if self._write_series_owned(note, date_value, recurrence):
+                    self.set_status(("Auto-saved " if auto else "Saved at ") + now
+                                    + self._REPEAT_OFF_KEPT)
+                else:
+                    self.set_status(("Auto-saved " if auto else "Saved ")
+                                    + f"{occurrence_date} only")
                 if auto:
                     self._show_toast("Note updated", yield_to_action=True)
             elif own_day and not asked:
@@ -19284,42 +19353,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 # wiped, since a day's own text carries none. Only what
                 # belongs to the series is written; its text, and this
                 # day's, stay as they were.
-                if not recurrence["freq"]:
-                    # The repeat is being turned off, and with it go the
-                    # per-day edits -- the one on screen among them. The
-                    # note keeps the series' text, so the day's, which the
-                    # person was looking at, becomes the rescue copy that
-                    # "↩ Restore previous" brings back, as the series'
-                    # text does when the day's replaces it below. It used
-                    # to go with the rest: in no file, and without a word.
-                    # A day whose words are the series' (its own colour or
-                    # category only) loses no text, and a copy of what the
-                    # note already says must not replace a rescue copy
-                    # that holds something.
-                    day = effective_note(note, occurrence_date)
-                    if any((day.get(key) or "") != (note.get(key) or "")
-                           for key in ("title", "body", "comments")):
-                        same_body = day.get("body") == note.get("body")
-                        note["_prev"] = {
-                            "title": day.get("title") or "",
-                            "body": day.get("body") or "",
-                            # A day's own text carries no styling; the
-                            # series' text, shown unchanged on that day,
-                            # keeps its own.
-                            "formatting": (note.get("formatting") or []
-                                           if same_body else []),
-                            "paragraphs": (note.get("paragraphs") or []
-                                           if same_body else []),
-                            "comments": day.get("comments") or "",
-                        }
-                    note["exceptions"] = []
-                    note["overrides"] = {}
-                note["date"] = date_value
-                note["attachments"] = self.current_attachments
-                note["recurrence"] = recurrence
-                note["checklist"] = [dict(it) for it in self._get_checklist()]
+                rescued = self._write_series_owned(note, date_value, recurrence)
                 note["updated"] = now
-                self.set_status(("Auto-saved " if auto else "Saved at ") + now)
+                self.set_status(("Auto-saved " if auto else "Saved at ") + now
+                                + (self._REPEAT_OFF_KEPT if rescued else ""))
                 if auto:
                     self._show_toast("Note updated", yield_to_action=True)
             else:
@@ -19351,7 +19388,13 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 series_text_replaced = own_day and (
                     title.strip() != (note.get("title") or "").strip()
                     or body != (note.get("body") or ""))
-                if (emptied or series_text_replaced
+                # The repeat going off takes every day's own text with it
+                # (below): kept whole, with the repeat and the days, so
+                # Restore previous brings the series back as it was.
+                days_lost = self._repeat_off_loses_days(note, recurrence)
+                if days_lost:
+                    note["_prev"] = self._whole_note_rescue_copy(note)
+                elif (emptied or series_text_replaced
                         or (removed > 40 and (big_fraction or big_absolute))):
                     note["_prev"] = {
                         "title": note.get("title", ""),
@@ -19381,17 +19424,25 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 note["updated"] = now
                 if not recurrence["freq"]:
                     # No longer repeating: leftover per-occurrence data would
-                    # be invisible clutter, so drop it.
+                    # be invisible clutter, so drop it -- a day's own text
+                    # only once the rescue copy above holds it.
                     note["exceptions"] = []
                     note["overrides"] = {}
-                self.set_status(("Auto-saved " if auto else "Saved at ") + now)
+                self.set_status(("Auto-saved " if auto else "Saved at ") + now
+                                + (self._REPEAT_OFF_KEPT if days_lost else ""))
                 if auto:
                     self._show_toast("Note updated", yield_to_action=True)
             # A series save can have just removed the recurrence — an
             # occurrence view of a note that no longer repeats is a lie
-            # the day banner must not keep telling.
+            # the day banner must not keep telling. And what the editor
+            # shows is that day's, not the note's: the note keeps the
+            # series' text. Left on screen, the day's text read as an
+            # unsaved edit of the note, and the next save -- leaving the
+            # note -- wrote it over the series' text, which was then in no
+            # file. The editor is filled from the note below.
             if self.current_occurrence_date and not is_recurring(note):
                 self.current_occurrence_date = None
+                reload_from_note = occurrence_date is not None
         # Recurrence or override counts may have just changed either way.
         self._update_occurrence_banner()
 
@@ -19424,6 +19475,20 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._sync_active_tab()
         self._sync_editor_snapshot()
         self._update_restore_button()
+        if reload_from_note:
+            # The editor stood for a day, and stands for the note now (see
+            # above). Only fields the save just wrote were changed in this
+            # visit, so nothing typed is lost -- except a checklist item
+            # half-typed in its box, which loading a note clears.
+            # The save's own words stay: loading writes the note's dates
+            # over the status line, and the line says where the days went.
+            said = str(self.status_lbl.cget("text"))
+            pending_item = (self.checklist_add_var.get()
+                            if hasattr(self, "checklist_add_var") else "")
+            self.load_note(self.find_note(self.selected_note_id))
+            if pending_item:
+                self.checklist_add_var.set(pending_item)
+            self.set_status(said)
         # If the calendar day panel is showing, reflect the edit there too.
         if getattr(self, "_day_panel_mode", "empty") != "empty":
             self.refresh_day_panel()
