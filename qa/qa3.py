@@ -2439,6 +2439,95 @@ check('...and the day reads as saved afterwards, not as an edit forever',
 app.open_blank_tab(); app.update()
 app.notes = []; app.save_notes()
 
+# ---- A BACKUP IMPORT THAT TAKES NOTHING LEAVES NO FILES BEHIND ----
+# The worker copies a backup's files before anything is asked. Only the
+# window's close removed them when the notes were never merged; Cancel on
+# any of the import's questions, and skipping duplicates, left each file
+# in the attachments folder belonging to nobody.
+import shutil as _ic_shutil
+
+
+def _ic_path(name):
+    return os.path.join(NO.ATTACHMENTS_DIR, name)
+
+
+def _ic_import(notes, files, answer):
+    """Import a backup holding `notes` and the attachment `files`,
+    answering the import's own questions with `answer`."""
+    src = tempfile.mkdtemp(prefix='qa3_ic_')
+    os.makedirs(os.path.join(src, 'attachments'))
+    for name in files:
+        with open(os.path.join(src, 'attachments', name), 'w') as fh:
+            fh.write('from the backup')
+    with open(os.path.join(src, 'notes_data.json'), 'w') as fh:
+        json.dump(notes, fh)
+    zpath = os.path.join(tempfile.gettempdir(), 'qa3_import_takes_nothing.zip')
+    if os.path.exists(zpath):
+        os.remove(zpath)
+    with zipfile.ZipFile(zpath, 'w') as zf:
+        zf.write(os.path.join(src, 'notes_data.json'), 'notes_data.json')
+        for name in files:
+            zf.write(os.path.join(src, 'attachments', name), 'attachments/' + name)
+    _ic_shutil.rmtree(src, ignore_errors=True)
+    asked = []
+    real = app._themed_dialog
+    app._themed_dialog = lambda *a, **k: (asked.append(a[0]), answer)[1]
+    fd.askopenfilename = lambda **k: zpath
+    app.import_data()
+    t0 = time.time()
+    while app._import_state is not None and time.time() - t0 < 8:
+        app.update()
+    app._themed_dialog = real
+    os.remove(zpath)
+    return asked
+
+
+app.open_blank_tab(); app.update()
+app.notes = [NO.normalize_note({'id': 1, 'title': 'Groceries', 'body': 'milk'})]
+app.trash = []
+app.save_notes(); NO.save_trash(app.trash)
+os.makedirs(NO.ATTACHMENTS_DIR, exist_ok=True)
+_ic_names = ['qa3_ic_dup.txt', 'qa3_ic_known.txt', 'qa3_ic_skip.txt',
+             'qa3_ic_fresh.txt']
+check('fixture: none of the backup files is in the attachments folder yet',
+      not any(os.path.exists(_ic_path(n)) for n in _ic_names))
+_ic_asked = _ic_import(
+    [{'title': 'Groceries', 'body': 'milk',
+      'attachments': [{'name': 'r.txt', 'stored_as': 'qa3_ic_dup.txt'}]}],
+    ['qa3_ic_dup.txt'], 'cancel')
+check(f'Cancel on "all notes already imported" leaves no file no note owns '
+      f'({_ic_asked})',
+      any('already imported' in t for t in _ic_asked)
+      and not os.path.exists(_ic_path('qa3_ic_dup.txt')))
+_ic_asked = _ic_import(
+    [{'uid': app.find_note(1)['uid'], 'title': 'Groceries',
+      'body': 'milk and eggs',
+      'attachments': [{'name': 'k.txt', 'stored_as': 'qa3_ic_known.txt'}]}],
+    ['qa3_ic_known.txt'], 'cancel')
+check(f'...nor Cancel on "notes you already have" ({_ic_asked})',
+      any('already have' in t for t in _ic_asked)
+      and not os.path.exists(_ic_path('qa3_ic_known.txt'))
+      and app.find_note(1)['body'].rstrip('\n') == 'milk')
+_ic_asked = _ic_import(
+    [{'title': 'Groceries', 'body': 'milk',
+      'attachments': [{'name': 's.txt', 'stored_as': 'qa3_ic_skip.txt'}]},
+     {'title': 'Fresh', 'body': 'new',
+      'attachments': [{'name': 'f.txt', 'stored_as': 'qa3_ic_fresh.txt'}]}],
+    ['qa3_ic_skip.txt', 'qa3_ic_fresh.txt'], 'skip')
+_ic_fresh = [n for n in app.notes if n.get('title') == 'Fresh']
+check(f'...nor skipping the duplicates: their files go ({_ic_asked})',
+      any('Possible duplicates' in t for t in _ic_asked)
+      and not os.path.exists(_ic_path('qa3_ic_skip.txt')))
+check('...while the note imported keeps its own file, on disk',
+      len(_ic_fresh) == 1
+      and [a.get('stored_as') for a in _ic_fresh[0].get('attachments') or []]
+      == ['qa3_ic_fresh.txt']
+      and os.path.exists(_ic_path('qa3_ic_fresh.txt')))
+for _ic_name in _ic_names:
+    if os.path.exists(_ic_path(_ic_name)):
+        os.remove(_ic_path(_ic_name))
+app.notes = []; app.save_notes()
+
 
 print()
 print(f"=== QA3 FAILURES: {fails if fails else 'NONE'} ===")

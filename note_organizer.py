@@ -1742,6 +1742,20 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._import_state = None
         if state.get("temp_dir"):
             shutil.rmtree(state["temp_dir"], ignore_errors=True)
+        self._drop_unclaimed_import_files(state)
+
+    def _drop_unclaimed_import_files(self, state):
+        """Remove the files a backup import copied into attachments that no
+        note and no Trash entry uses.
+
+        The worker copies a backup's files before anything is asked, so
+        every way out of an import that did not take them all -- Cancel on
+        any of its questions, an error, skipping duplicates, the window
+        closing -- leaves files that belong to nobody. Only the close did
+        this; each Cancel left one copy per distinct backup behind, out of
+        sight. A file a note or a Trash entry points at is never touched,
+        and neither is anything the import did not copy itself.
+        """
         in_use = attachment_names_in(self.notes + self.trash)
         for name in state.get("copied") or []:
             if name in in_use or os.path.basename(name) != name:
@@ -9522,6 +9536,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         temp_dir = state["temp_dir"]
 
         if state["error"]:
+            # A worker that failed partway may have copied files already.
+            self._drop_unclaimed_import_files(state)
             self.show_error("Import failed", state["error"])
             if temp_dir:
                 shutil.rmtree(temp_dir, ignore_errors=True)
@@ -9585,8 +9601,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             _undo_category_merge()
             # The extracted backup goes with it, as it does when the
             # duplicate question below is cancelled; this exit left the
-            # whole unpacked zip in the temp folder.
+            # whole unpacked zip in the temp folder. The files the worker
+            # copied go too: nothing was imported to own them.
             shutil.rmtree(temp_dir, ignore_errors=True)
+            self._drop_unclaimed_import_files(state)
             return
         existing_keys = self._dup_keys_after(updates)
         fresh = [n for n in valid_notes if _dup_key(normalize_note(n)) not in existing_keys]
@@ -9615,6 +9633,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             if choice is None or choice == "cancel":
                 _undo_category_merge()
                 shutil.rmtree(temp_dir, ignore_errors=True)
+                self._drop_unclaimed_import_files(state)
                 return
             if choice == "skip":
                 to_import = fresh
@@ -9756,6 +9775,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.refresh_note_list()
         self.render_calendar()
         shutil.rmtree(temp_dir, ignore_errors=True)
+        # The skipped duplicates' files were copied too, and nothing owns
+        # them now.
+        self._drop_unclaimed_import_files(state)
 
         skipped_note = f" ({dupe_count} duplicate(s) skipped)" if dupe_count and to_import is not valid_notes else ""
         extras_note = ""
