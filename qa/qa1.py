@@ -10463,6 +10463,22 @@ check(f'table undo: Ctrl+Z twice past a row inserted in a narrow table, then '
       f'survives ({[s == w for s, w in zip(_rd_seen, (_rd_typed, _rd_body, _rd_typed, _rd_row))]})',
       _rd_row != _rd_typed
       and _rd_seen == [_rd_typed, _rd_body, _rd_typed, _rd_row])
+# Every draw of a table bound its callbacks on the grid, and deleting the
+# grid's window took the widget away inside Tk but not in tkinter: each
+# redraw left ten Tcl commands and a frame behind, for good.
+set_body(_rd_body)
+app._render_table_grids()
+app.update()
+_lk_base = (len(app.tk.call('info', 'commands')), len(app.body_text.children))
+for _lk_i in range(30):
+    app._render_table_grids()
+app.update()
+_lk_grew = (len(app.tk.call('info', 'commands')) - _lk_base[0],
+            len(app.body_text.children) - _lk_base[1])
+check(f'a table drawn again 30 times leaves no Tcl command or frame behind '
+      f'(commands, frames grown: {_lk_grew})',
+      _lk_grew[0] <= 2 and _lk_grew[1] <= 0
+      and app._grid_at_line(2) is not None)
 set_body('')
 
 # ---- CTRL+Z AFTER A TABLE OPERATION BRINGS THE TABLE'S STYLES BACK ----

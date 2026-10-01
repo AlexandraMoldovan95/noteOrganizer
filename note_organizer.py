@@ -2245,10 +2245,17 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             try:
                 self.body_text.delete(self.body_text.index(info["frame"]))
             except tk.TclError:
-                try:
-                    info["frame"].destroy()
-                except tk.TclError:
-                    pass
+                pass
+            # Deleting the character destroys the widget inside Tk, but
+            # not tkinter's record of it: the callbacks each draw binds on
+            # the grid stayed registered as Tcl commands, and the frame
+            # stayed among the body's children with every cell it held --
+            # ten commands more at every redraw, for as long as the app
+            # ran. tkinter's destroy() lets both go.
+            try:
+                info["frame"].destroy()
+            except tk.TclError:
+                pass
             try:
                 self.body_text.mark_unset(info["mark"])
             except tk.TclError:
