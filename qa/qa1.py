@@ -9949,6 +9949,27 @@ try:
     check(f'caps lock: ...and so does <<Undo>> ({_ck_calls}, {_cs_styles()})',
           _ck_calls == ['undo'] and _cs_styles() == []
           and app.body_text.get('1.0', 'end-1c') == _uf_full)
+    # The comments box, the same turn of the letter: Ctrl+Shift+Z under
+    # Caps Lock arrives as a lower-case z, which its plain Ctrl+Z binding
+    # answered -- an undo where a redo was asked for.
+    _ck_cm = app.comments_text
+    _ck_cm.delete('1.0', 'end')
+    _ck_cm.edit_reset()
+    _ck_cm.insert('end', 'first')
+    _ck_cm.edit_separator()
+    _ck_cm.insert('end', ' second')
+    _ck_cm.edit_separator()
+    _ck_cm.edit_undo()
+    _ck_cm_ok = _ck_z is not None and take_focus(_ck_cm)
+    if _ck_cm_ok:
+        _ck_cm.event_generate('<KeyPress>', keycode=_ck_z, state=0x7)
+        _ck_cm.event_generate('<KeyRelease>', keycode=_ck_z, state=0x7)
+        app.update()
+    check(f'caps lock: Ctrl+Shift+Z in the comments box redoes, not undoes '
+          f'({_ck_cm.get("1.0", "end-1c")!r}, keyboard there: {_ck_cm_ok})',
+          _ck_cm_ok and _ck_cm.get('1.0', 'end-1c') == 'first second')
+    _ck_cm.delete('1.0', 'end')
+    _ck_cm.edit_reset()
 finally:
     app.body_text.bindtags(_ck_tags)
     del app._body_undo_redo

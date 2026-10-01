@@ -12608,6 +12608,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                  if self._can_edit_redo(w) else "break")
         _tw.bind("<Control-Shift-Z>", lambda e, w=_tw: (w.edit_redo(), "break")[1]
                  if self._can_edit_redo(w) else "break")
+        # Caps Lock turns the letter over here too: Ctrl+Shift+Z arrives as
+        # a lower-case z and undid instead of redoing, as in the body.
+        _tw.bind("<Control-Shift-z>", lambda e, w=_tw: (w.edit_redo(), "break")[1]
+                 if self._can_edit_redo(w) else "break")
 
         # Attachments section
         attach_header = tk.Frame(self.editor)
