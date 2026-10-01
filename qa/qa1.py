@@ -9862,18 +9862,20 @@ check(f'style undo: Ctrl+Z takes back a cell made bold ({_uf_bold} -> {_cs_style
 # code is read off a throwaway entry, so the same lines run on X11. A spy
 # counts the presses that reach the journal, a tag ahead of the body's
 # own records what Tk made of each press.
-def _ck_code(keysym):
+def _ck_codes(*keysyms):
     _ent = tk.Entry(app)
     _ent.place(x=0, y=0)
-    _got = []
-    _ent.bind('<KeyPress>', lambda e: (_got.append(e.keycode), 'break')[1])
+    _got = {}
+    _ent.bind('<KeyPress>',
+              lambda e: (_got.setdefault(e.keysym, e.keycode), 'break')[1])
     try:
         if take_focus(_ent):
-            _ent.event_generate(f'<KeyPress-{keysym}>')
-            app.update()
+            for _k in keysyms:
+                _ent.event_generate(f'<KeyPress-{_k}>')
+                app.update()
     finally:
         _ent.destroy()
-    return _got[0] if _got else None
+    return [_got.get(_k) for _k in keysyms]
 
 
 _ck_calls, _ck_seen = [], []
@@ -9897,7 +9899,9 @@ app.body_text.bindtags(('QaKeySeen',) + tuple(_ck_tags))
 app._body_undo_redo = lambda action: (_ck_calls.append(action),
                                       _ck_real(action))[1]
 try:
-    _ck_z, _ck_y = _ck_code('z'), _ck_code('y')
+    _ck_z, _ck_y = _ck_codes('z', 'y')
+    check(f'caps lock: the keyboard codes of Z and Y were read ({_ck_z}, {_ck_y}) '
+          '(precondition)', _ck_z is not None and _ck_y is not None)
     _uf_setup('Dear Ana,' + chr(10), _uf_typed)
     _uf_select('Friday')
     _uf_key('<Control-b>')
@@ -9910,10 +9914,17 @@ try:
           f'{_cs_styles()})',
           _ck_calls == ['undo'] and _cs_styles() == []
           and app.body_text.get('1.0', 'end-1c') == _uf_full)
-    _ck_press(_ck_y, 0x6)
-    check(f'caps lock: Ctrl+Y gives the bold back ({_ck_calls}, {_cs_styles()})',
-          _ck_calls == ['redo'] and _cs_styles() == [('bold', 'Friday')]
-          and app.body_text.get('1.0', 'end-1c') == _uf_full)
+    # Ctrl+Y under Caps Lock is a spelling of <<Redo>> on Windows only: X11's
+    # <<Redo>> is Ctrl+Shift+Z alone, and there the press reaches nothing.
+    if '<Control-Lock-Key-Y>' in app.tk.call('event', 'info', '<<Redo>>'):
+        _ck_press(_ck_y, 0x6)
+        check(f'caps lock: Ctrl+Y gives the bold back ({_ck_seen}, '
+              f'{_ck_calls}, {_cs_styles()})',
+              _ck_calls == ['redo'] and _cs_styles() == [('bold', 'Friday')]
+              and app.body_text.get('1.0', 'end-1c') == _uf_full)
+    else:
+        _ck_real('redo')
+        app.update()
     # Shift as well turns it back into a lower-case z, which the plain
     # Ctrl+Z binding answered: Ctrl+Shift+Z undid instead of redoing.
     _ck_press(_ck_z, 0x6)
