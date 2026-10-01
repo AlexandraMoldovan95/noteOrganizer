@@ -10347,6 +10347,27 @@ finally:
     app.tk.deletecommand('::qa1_clip')
     NO.clipboard.read_text, NO.clipboard.read_html, NO.clipboard.write = _kp_real
 
+# A spreadsheet's cells pasted over selected text: the table takes the
+# selection's place, as every other paste does. The selected text used to
+# stay, and the table landed under its line.
+_nd_setup()
+_uf_select('Friday')
+_ts_real = (NO.clipboard.read_text, NO.clipboard.read_html)
+NO.clipboard.read_text = lambda: 'Day\tTime' + chr(10) + 'Mon\t10:00'
+NO.clipboard.read_html = lambda: None
+try:
+    _ts_done = app._on_body_paste()
+    app.update()
+finally:
+    NO.clipboard.read_text, NO.clipboard.read_html = _ts_real
+_ts_after = app.body_text.get('1.0', 'end-1c')
+_uf_key('<Control-z>')
+check(f'a spreadsheet\'s cells pasted over selected text replace it, and '
+      f'Ctrl+Z gives the word back bold ({_ts_after!r} -> {_cs_styles()})',
+      _ts_done == 'break' and 'Friday' not in _ts_after and '| Day' in _ts_after
+      and app.body_text.get('1.0', 'end-1c') == _uf_full
+      and _cs_styles() == [('bold', 'Friday')])
+
 # ---- CTRL+Z PUTS A TABLE'S FIRST LINE BACK EXACTLY ----
 # A drawn table's first line holds the grid's window at column 0, and Tk
 # records an edit by its index. Operations that take the grids down, edit,

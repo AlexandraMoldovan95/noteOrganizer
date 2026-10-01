@@ -6468,7 +6468,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         raw = raw.replace("\r\n", "\n").replace("\r", "\n")
         b = self.body_text
         try:
-            here = b.get("insert linestart", "insert lineend")
+            selected = b.index("sel.first")
+        except tk.TclError:
+            selected = None
+        try:
+            here = b.get(f"{selected or 'insert'} linestart",
+                         f"{selected or 'insert'} lineend")
         except tk.TclError:
             return False
         if core_tables.is_table_row(here):
@@ -6501,6 +6506,21 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         clip_place = None
         if raw == getattr(self, "_grid_cell_clip_text", None):
             clip_place = getattr(self, "_grid_cell_clip_place", None)
+        if selected is not None:
+            # Pasted over a selection, the table takes its place, as every
+            # other paste here does: the selected text used to stay, the
+            # table landing under its line. Within this undo unit, so one
+            # Ctrl+Z brings the selection back with its styles -- and with
+            # the grids down first, as any edit that can reach a drawn
+            # table's text is made (the selection may run through one).
+            self._teardown_table_grids()
+            try:
+                start = b.index("sel.first")
+                b.delete("sel.first", "sel.last")
+                b.mark_set("insert", start)
+                here = b.get("insert linestart", "insert lineend")
+            except tk.TclError:
+                pass
         prefix = "" if not here.strip() else "\n"
         if not here.strip():
             # Pasting ONTO an empty line directly under a table would
