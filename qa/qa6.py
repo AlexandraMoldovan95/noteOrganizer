@@ -2083,6 +2083,58 @@ app.trash = []
 app.notes = []
 app.save_notes(); NO.save_trash(app.trash)
 
+# Every redraw of Recently deleted bound a new handler on the frame that
+# holds its rows -- a frame that outlives the redraw -- and Tk keeps a
+# command for each one: one more per Restore, Delete, page or toast Undo
+# while the panel was open, for good. The Categories list did the same
+# on every rename, recolour and delete.
+def _lk_cmds():
+    return len(app.tk.splitlist(app.tk.call('info', 'commands')))
+
+
+app.trash = [{'id': 6100 + i, 'title': 'Leak %d' % i, 'body': 'x',
+              'category': 'General',
+              'deleted_at': '2026-03-%02d 00:00:00' % (i + 1)} for i in range(3)]
+NO.save_trash(app.trash)
+app.show_settings_page(); app.update()
+app.toggle_settings_panel('trash'); app.update()
+_lk_redraw = app._trash_panel_redraw
+_lk_redraw(); app.update()
+_lk_before = _lk_cmds()
+for _lk_i in range(30):
+    _lk_redraw()
+app.update()
+_lk_after = _lk_cmds()
+check(f'redrawing Recently deleted 30 times leaves no Tcl command behind '
+      f'({_lk_before} -> {_lk_after})', _lk_after - _lk_before < 5)
+_lk_canvas = app._active_panel_canvas
+_lk_items = _lk_canvas.find_all()
+_lk_rows = (_lk_canvas.nametowidget(_lk_canvas.itemcget(_lk_items[0], 'window'))
+            if _lk_items else None)
+check('...while the wheel still reaches the list and every row in it',
+      _lk_rows is not None and bool(_lk_rows.bind('<MouseWheel>'))
+      and len(_lk_rows.winfo_children()) >= 3
+      and all(r.bind('<MouseWheel>') for r in _lk_rows.winfo_children()))
+app.trash = []; NO.save_trash(app.trash)
+# The Categories list: its redraw is the one each row is handed.
+_lk_cat_redraws = []
+_lk_real_cat_row = app._build_category_row
+app._build_category_row = lambda parent, name, redraw: (
+    _lk_cat_redraws.append(redraw), _lk_real_cat_row(parent, name, redraw))[1]
+app.toggle_settings_panel('categories'); app.update()
+del app._build_category_row
+if _lk_cat_redraws:
+    _lk_cat_redraws[-1](); app.update()
+    _lk_before = _lk_cmds()
+    for _lk_i in range(30):
+        _lk_cat_redraws[-1]()
+    app.update()
+    _lk_after = _lk_cmds()
+check(f'redrawing the Categories list 30 times leaves no Tcl command behind '
+      f'({_lk_before} -> {_lk_after})',
+      bool(_lk_cat_redraws) and _lk_after - _lk_before < 5)
+app.hide_settings_page(); app.update()
+
 # 107: the wheel over an empty Trash panel must reach the page beneath
 # it. A fully-shown list has nothing of its own to scroll, and trapping
 # the wheel there is a scroll that silently does nothing.

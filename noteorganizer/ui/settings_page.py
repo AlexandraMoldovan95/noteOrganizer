@@ -614,6 +614,13 @@ class SettingsPageMixin:
         canvas.pack(side="left", fill="both", expand=True)
         self._active_panel_canvas = canvas
 
+        # The frame outlives every redraw: it gets the wheel once, here, and
+        # each redraw gives it only to the rows it builds. Re-binding the
+        # frame itself left a Tcl command behind per rename, recolour and
+        # delete (see the Trash panel).
+        wheel = lambda e: self._panel_or_page_wheel(canvas, e)  # noqa: E731
+        rows_frame.bind("<MouseWheel>", wheel)
+
         def redraw():
             for w in rows_frame.winfo_children():
                 w.destroy()
@@ -621,7 +628,8 @@ class SettingsPageMixin:
                 if i:
                     self._row_divider(rows_frame)
                 self._build_category_row(rows_frame, name, redraw)
-            self._bind_wheel_tree(rows_frame, lambda e: self._panel_or_page_wheel(canvas, e))
+            for child in rows_frame.winfo_children():
+                self._bind_wheel_tree(child, wheel)
         redraw()
 
         # Add-new row
@@ -1562,13 +1570,25 @@ class SettingsPageMixin:
             shown_count["n"] = max(PAGE_SIZE, shown_count["n"])
             redraw()
 
+        # The frame holding the rows outlives every redraw, so it gets the
+        # wheel once, here; each redraw gives it only to what it builds.
+        # Binding a fresh handler on the frame itself every time left one
+        # more Tcl command behind per redraw, for good -- every Restore,
+        # Delete, page and toast Undo while the panel was on screen.
+        wheel = lambda e: self._panel_or_page_wheel(canvas, e)  # noqa: E731
+        rows.bind("<MouseWheel>", wheel)
+
+        def wheel_on_rows():
+            for child in rows.winfo_children():
+                self._bind_wheel_tree(child, wheel)
+
         def redraw():
             for w in rows.winfo_children():
                 w.destroy()
             if not self.trash:
                 tk.Label(rows, text="Trash is empty.", bg=self.colors["card"],
                          fg=self.colors["subtext"], font=("Segoe UI", 10)).pack(pady=20)
-                self._bind_wheel_tree(rows, lambda e: self._panel_or_page_wheel(canvas, e))
+                wheel_on_rows()
                 return
             ordered = sorted(self.trash, key=lambda e: e.get("deleted_at", ""), reverse=True)
             visible = ordered[:shown_count["n"]]
@@ -1585,7 +1605,7 @@ class SettingsPageMixin:
                           command=show_more, relief="flat", cursor="hand2",
                           bg=self.colors["sidebar"], fg=self.colors["text"],
                           font=("Segoe UI", 8)).pack(fill="x", pady=(6, 2), ipady=4)
-            self._bind_wheel_tree(rows, lambda e: self._panel_or_page_wheel(canvas, e))
+            wheel_on_rows()
             refresh_restore_btn()
 
         def empty_trash():
