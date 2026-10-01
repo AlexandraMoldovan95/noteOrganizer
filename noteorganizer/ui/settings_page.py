@@ -752,6 +752,14 @@ class SettingsPageMixin:
             own = pop is not None and getattr(pop, "edited_template", None) is tpl
             if not own and not self._dismiss_mini_popup_asking():
                 return "break"
+            # The editor's save can have replaced this very template -- its
+            # name taken, "Replace" answered Yes. There is nothing left for
+            # this bin to delete: asked anyway, Yes deleted nothing and the
+            # template saved under that name stayed.
+            if not any(t is tpl for t in self.templates):
+                self.set_status(f"“{name}” was replaced by the template "
+                                "you saved")
+                return "break"
             # Honest about the stakes: notes go to the Trash and can come
             # back for the whole retention window -- templates do not.
             if self.ask_yes_no(

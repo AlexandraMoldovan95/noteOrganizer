@@ -1838,6 +1838,28 @@ try:
           'then deletes its own (%s; on disk %s)' % (_tb_asked, _wa_names()),
           _tb_asked == ['Save changes?', 'Delete template']
           and _wa_names() == ['Weekly review (my edit)'])
+    # ...and when that save replaced the very template whose bin was
+    # pressed -- a new template given its name, "Template name taken"
+    # answered Replace -- the bin asked "Delete ... for good?" about a
+    # template already gone, and its Yes deleted nothing.
+    _tb_fixture()
+    app._dismiss_mini_popup(); app.update()
+    app._edit_template(None, app._refresh_templates_panel, _bins9()[1])
+    app.update()
+    _tr_pop = app._mini_popup
+    _tr_ent = (next((w for w in _walk9(_tr_pop) if isinstance(w, tk.Entry)), None)
+               if _tr_pop is not None else None)
+    if _tr_ent is not None:
+        _tr_ent.delete(0, 'end')
+        _tr_ent.insert(0, 'Meeting notes')
+    _tb_answers(True, True)
+    _qa_click(_bins9()[1]); app.update()
+    check('a template\'s bin after the editor\'s save replaced that very '
+          'template asks nothing more about it (%s; on disk %s)'
+          % (_tb_asked, _wa_names()),
+          _tr_ent is not None
+          and _tb_asked == ['Save changes?', 'Template name taken']
+          and _wa_names() == ['Weekly review', 'Meeting notes'])
 finally:
     app.__dict__.pop('ask_yes_no', None)
     app.__dict__.pop('ask_yes_no_cancel', None)
