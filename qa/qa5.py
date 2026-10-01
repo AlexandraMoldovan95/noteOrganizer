@@ -729,6 +729,119 @@ app._show_date_in_field('30.09.2026')
 app.new_note(); app.update()
 app.notes = []; app.save_notes()
 
+# ---- A ROUTE THAT KEEPS THE EDITOR DOES NOT ASK THE LEAVING QUESTION ----
+# The question about a date the save could not store is for the way OUT
+# of a note. Asked by a route that leaves the editor where it is --
+# deleting or moving ANOTHER note, an import updating others -- "Continue"
+# reset the date in a note that stayed open, and "Go back" silently
+# cancelled an action that was about something else.
+_nl_real_dlg = app._themed_dialog
+_nl_real_yes = app.ask_yes_no
+NO.CATEGORY_COLORS['Temp5nl'] = '#33aa77'
+_nl_asked = []
+
+
+def _nl_dialog(*a, **k):
+    _nl_asked.append(a[0])
+    if 'already have' in a[0]:
+        return 'update'
+    if a[0] == 'Delete category':
+        return 'move'
+    return True
+
+
+def _nl_setup():
+    app.new_note(); app.update()
+    app.notes = [
+        NO.normalize_note({'id': 1, 'title': 'Open one', 'body': 'x',
+                           'date': '2026-09-01'}),
+        NO.normalize_note({'id': 2, 'title': 'Other', 'body': 'same',
+                           'category': 'Temp5nl', 'updated': '2026-09-01 08:00:00'}),
+        NO.normalize_note({'id': 3, 'title': 'Other', 'body': 'same',
+                           'category': 'Temp5nl'})]
+    app.trash = []
+    app.save_notes(); NO.save_trash(app.trash)
+    app.open_note_in_tab(app.find_note(1)); app.update()
+    app.date_entry.delete(0, 'end'); app.date_entry.insert(0, '14/10/2026')
+    _nl_asked.clear()
+    app._themed_dialog = _nl_dialog
+    app.ask_yes_no = lambda *a, **k: (_nl_asked.append(a[0]), True)[1]
+
+
+class _NlVar:
+    def __init__(self, v):
+        self._v = v
+
+    def get(self):
+        return self._v
+
+
+def _nl_update_code():
+    other = dict(app.find_note(2), body='edited elsewhere')
+    return app._take_known_notes([other], 'code')
+
+
+_nl_routes = [
+    ('deleting another note from its menu',
+     lambda: app._context_delete_note(app.find_note(2))),
+    ('moving other ticked notes to the Trash',
+     lambda: (setattr(app, 'selected_note_ids', {2}),
+              app._bulk_move_to_trash())),
+    ("undoing another note's category move",
+     lambda: (app.find_note(2).__setitem__('category', 'General'),
+              app._undo_bulk_category([(2, 'Temp5nl', '2026-09-01 08:00:00')],
+                                      'General'))),
+    ("an import's Update of another note", _nl_update_code),
+    ('cleaning up duplicates of another note',
+     lambda: app._cleanup_selected_duplicates(
+         [(_NlVar(False), app.find_note(2), [app.find_note(2), app.find_note(3)]),
+          (_NlVar(True), app.find_note(3), [app.find_note(2), app.find_note(3)])],
+         None, refresh=lambda: None)),
+    ("deleting another note's category",
+     lambda: app._delete_category('Temp5nl', lambda: None)),
+]
+for _nl_label, _nl_action in _nl_routes:
+    _nl_setup()
+    try:
+        _nl_action()
+        app.update()
+        _nl_error = None
+    except Exception as _nl_e:
+        _nl_error = _nl_e
+    app._themed_dialog = _nl_real_dlg
+    app.ask_yes_no = _nl_real_yes
+    app.selected_note_ids = set()
+    NO.CATEGORY_COLORS['Temp5nl'] = '#33aa77'
+    check(f'{_nl_label} does not ask about the open note\'s date ({_nl_asked}, '
+          f'{_nl_error!r})',
+          _nl_error is None and "Part of this note isn't saved" not in _nl_asked
+          and app.selected_note_id == 1
+          and app.date_entry.get() == '14/10/2026')
+# The asymmetry: deleting the note ON SCREEN still asks, and "Go back and
+# fix it" keeps it -- and so does a ticked note on screen.
+for _nl_label, _nl_action in [
+        ('deleting the note on screen',
+         lambda: app._context_delete_note(app.find_note(1))),
+        ('moving the ticked note on screen to the Trash',
+         lambda: (setattr(app, 'selected_note_ids', {1}),
+                  app._bulk_move_to_trash()))]:
+    _nl_setup()
+    app._themed_dialog = lambda *a, **k: (_nl_asked.append(a[0]), False)[1]
+    _nl_action(); app.update()
+    app._themed_dialog = _nl_real_dlg
+    app.ask_yes_no = _nl_real_yes
+    app.selected_note_ids = set()
+    check(f'...while {_nl_label} still asks first, and Go back keeps it '
+          f'({_nl_asked})',
+          _nl_asked == ["Part of this note isn't saved"]
+          and app.find_note(1) is not None
+          and app.date_entry.get() == '14/10/2026')
+app._show_date_in_field('2026-09-01')
+app.new_note(); app.update()
+NO.CATEGORY_COLORS.pop('Temp5nl', None)
+app.notes = []; app.trash = []
+app.save_notes(); NO.save_trash(app.trash)
+
 # ---- TURNING THE REPEAT OFF ON A DAY WITH ITS OWN TEXT KEEPS THAT TEXT ----
 # Only the repeat changed, so nobody was asked; the note kept the series'
 # text, and the day's -- the text on screen a moment before -- went with

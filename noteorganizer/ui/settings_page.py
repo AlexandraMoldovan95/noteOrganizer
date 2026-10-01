@@ -2984,7 +2984,14 @@ class SettingsPageMixin:
         # route does: the note on screen may be about to go to the Trash,
         # and its unsaved typing belongs in the Trash copy, not in an
         # editor about to be cleared. Cancel on a day's question stops here.
-        if self._flush_autosave() is False:
+        # The question about a date the save could not store is asked only
+        # when the note on screen is filed here -- the one case where the
+        # editor may be cleared; any other note stays open, date and all.
+        shown = (self.find_note(self.selected_note_id)
+                 if self.selected_note_id is not None else None)
+        leaving = (self.category_var.get() == name
+                   or (shown is not None and shown.get("category") == name))
+        if self._flush_autosave(leaving=leaving) is False:
             return
         # Ask what happens to them. Only a note FILED here can go to the
         # Trash; a repeating note with just a day filed here is counted
@@ -3095,8 +3102,15 @@ class SettingsPageMixin:
         # What the editor holds is saved first, as every delete route does:
         # the note on screen may be one of these copies, and its unsaved
         # typing belongs in the Trash copy, not in an editor about to be
-        # cleared. Cancel on a day's question stops here.
-        if self._flush_autosave() is False:
+        # cleared. Cancel on a day's question stops here. A date the save
+        # could not store is asked about only when the editor is about to
+        # be cleared or reloaded -- a copy going, or a kept copy gaining
+        # files (see the end); any other note stays open, date and all.
+        affected = ({n.get("id") for n in to_trash}
+                    | {kept.get("id") for kept, _remove in plan
+                       if kept is not None})
+        if self._flush_autosave(
+                leaving=self.selected_note_id in affected) is False:
             return
         if not self.ask_yes_no(
             "Move duplicates to trash",

@@ -8468,7 +8468,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             # it. Cancel on the day's save question cancels the import:
             # going on would replace the very edit the person just
             # declined to let go of.
-            if self._flush_autosave() is False:
+            if self._flush_autosave(leaving=self.selected_note_id in {
+                    mine.get("id") for mine, _theirs in known}) is False:
                 return False, [], [], unchanged
             return True, fresh, known, unchanged
         # "add": the copies go on as new notes, without the identity they
@@ -16291,7 +16292,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # ones, and its unsaved typing belongs in the Trash copy (and in
         # what Undo brings back), not in an editor about to be cleared.
         # Cancel on a day's save question stops the delete here.
-        if self._flush_autosave() is False:
+        if self._flush_autosave(
+                leaving=self.selected_note_id in self.selected_note_ids) is False:
             return
         to_trash = [n for n in self.notes if n["id"] in self.selected_note_ids]
         # Counted from the notes that will move, not from the ticks: the
@@ -16908,7 +16910,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # open_note_in_tab, not a full rebuild.
         self._update_open_highlight()
 
-    def _flush_autosave(self):
+    def _flush_autosave(self, leaving=True):
         """Cancel any pending debounced auto-save and, if the current editor has
         real unsaved changes, save them right now. Called before switching notes
         or closing so a late timer can't fire into the wrong note.
@@ -16920,6 +16922,15 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         means "take me back", in this dialog as in every other. They used
         to carry on regardless, and Cancel quietly threw the day's edit
         away.
+
+        ``leaving`` says whether the caller is about to replace the editor.
+        A route that saves on its way to changing something ELSE -- deleting
+        or moving another note, an import updating notes the editor does
+        not hold -- passes False: the editor stays as it is, so a date the
+        save could not store stays on screen to be fixed, and the question
+        about it belongs to the way out of the note. Asked on those routes,
+        "Continue" reset a date in a note that stayed open, and "Go back"
+        silently cancelled the delete nobody had asked about.
 
         Callers stop on an explicit False only (``is False``), never on
         anything falsy: a return added later without a value, or a test
@@ -16965,9 +16976,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             # complete silence" — leave the trace.
             self._log_swallowed("flush: save_current_note")
         # A date or repeat the save could not store exists only on the
-        # screen now, and every caller of this is about to replace the
+        # screen now, and a caller that is leaving is about to replace the
         # screen. Asked, not decided: going back to fix it is the safe
         # answer, so it is what Escape and Enter give.
+        if not leaving:
+            return True
         try:
             left_out = self._date_and_repeat_to_store()[2]
         except Exception:
@@ -18147,7 +18160,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # selected_note_id, so the list re-render after the delete shows the
         # editor's latest content rather than a stale preview. Cancel on a
         # day's save question stops the delete before it asks anything.
-        if self._flush_autosave() is False:
+        if self._flush_autosave(
+                leaving=(note or {}).get("id") == self.selected_note_id) is False:
             return
         # The target travels as a parameter — never by repointing the
         # editor's selection at it. An earlier version did exactly that,
@@ -19201,7 +19215,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # typed into while the toast was up: save that under the category
         # it was typed against, then move the note, then bring the editor
         # onto the result -- the same order the change itself uses.
-        if self._flush_autosave() is False:
+        if self._flush_autosave(leaving=self.selected_note_id in {
+                mark[0] for mark in marks}) is False:
             return  # Cancel on a day's save question: the undo waits
         restored = []
         homeless = 0
