@@ -2209,6 +2209,49 @@ check(f'...and a band holding an item the list never drew moves its rows one '
       f'{_bl_v["y0"] + 10:.0f}; every card where its record is: '
       f'{_bl_drawing_ok()})',
       abs(_bl_where[1] - (_bl_v['y0'] + 10)) < 0.5 and _bl_drawing_ok())
+# In Select mode every unticked card's tick mark is drawn HIDDEN, and Tk's
+# search for what lies inside a band skips hidden items: each band came up
+# short and moved its rows one by one (4.7 s for a delete at 5,000 notes).
+# One card ticked, so the band holds both kinds of mark.
+app._toggle_selection_mode(); _ls_settle()
+_ls_scroll_to_end()
+_bl_o = app._card_order()
+app._toggle_note_selected(_bl_o[40], True)
+app._paint_card_check(_bl_o[40])
+
+
+def _bl_marks_stray():
+    """The cards whose tick box or mark is not inside the card -- shown or
+    hidden, a mark left behind by a move shows here."""
+    bad = []
+    for rec in app._list_drawn:
+        it = rec['items']
+        for key in ('check', 'mark'):
+            if key not in it:
+                continue
+            ys = app.canvas.coords(it[key])[1::2]
+            if not ys or min(ys) < rec['y0'] or max(ys) > rec['y1']:
+                bad.append((rec['note']['id'], key))
+    return bad
+
+
+_bl_moves = []
+app.canvas.move = lambda *a: (_bl_moves.append(a[0]), _bl_real_move(*a))[1]
+app.ask_yes_no = lambda *a, **k: True
+try:
+    app._delete_note(app.find_note(_bl_o[3]), None); _ls_settle()
+finally:
+    app.ask_yes_no = _ls_real_ask
+    app.canvas.__dict__.pop('move', None)
+_bl_stray = _bl_marks_stray()
+_bl_ticked = app._card_view(_bl_o[40])['checked']
+check(f'...and in Select mode too, the unticked cards\' hidden tick marks '
+      f'travelling with their cards ({len(_bl_moves)} canvas moves for '
+      f'{len(_bl_o) - 4} rows; marks out of their cards: {_bl_stray[:4]}; '
+      f'the ticked card still ticked: {_bl_ticked})',
+      1 <= len(_bl_moves) <= 2 and not _bl_stray and _bl_ticked
+      and _bl_drawing_ok() and not app.canvas.find_withtag('reflow0'))
+app._toggle_selection_mode(); _ls_settle()
 # The search: nothing typed reads no note's text; a first search reads each
 # note's once, the next keystroke none; a note saved since is read again.
 _bl_reads = []

@@ -14182,7 +14182,13 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         end of 5,000 notes, and a first autosave of a note far down paid the
         same. A band is tagged by what lies wholly inside it, before any
         band moves, and trusted only if it holds exactly its rows' items;
-        otherwise those rows move one by one, as they always did."""
+        otherwise those rows move one by one, as they always did.
+
+        Tk's search for what lies inside skips hidden items, and in Select
+        mode every unticked card's tick mark is one: every band came up a
+        mark short per card and moved row by row -- 4.7 s for a delete at
+        5,000 notes. The marks join their band by id (a lookup, not a walk
+        of the canvas), so they travel with their cards."""
         drawn = self._list_drawn
         y = 0
         if start > 0:
@@ -14205,6 +14211,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             # either side is room for how Tk pads a bbox, and no more.
             cv.addtag_enclosed(tag, -10, drawn[first]["y0"] - 3,
                                self.LIST_DRAW_WIDTH + 10, drawn[last]["y1"] + 3)
+            for i in range(first, last + 1):
+                mark = drawn[i]["items"].get("mark")
+                if mark is not None:
+                    cv.addtag_withtag(tag, mark)
             owned = sum(len(drawn[i]["items"]) for i in range(first, last + 1))
             bands.append((tag, dy, first, last,
                           len(cv.find_withtag(tag)) == owned))
