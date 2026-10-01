@@ -2967,8 +2967,12 @@ class SettingsPageMixin:
         # editor about to be cleared. Cancel on a day's question stops here.
         if self._flush_autosave() is False:
             return
-        # Ask what happens to them.
-        choice = self._ask_category_deletion(name, count)
+        # Ask what happens to them. Only a note FILED here can go to the
+        # Trash; a repeating note with just a day filed here is counted
+        # apart, because that day moves to General whatever the answer.
+        filed = sum(1 for n in self.notes if n.get("category") == name)
+        choice = self._ask_category_deletion(name, filed,
+                                             days_only=count - filed)
         if choice is None:
             return
         if choice == "move":
@@ -2979,15 +2983,13 @@ class SettingsPageMixin:
             self._move_notes_to_trash(doomed)
             self.notes = [n for n in self.notes
                           if n.get("category") != name]
-            # Also strip overrides that point at the dead category.
-            for n in self.notes:
-                overrides = n.get("overrides") or {}
-                for d in list(overrides):
-                    if overrides[d].get("category") == name:
-                        del overrides[d]
+            # A day of a series that stays, filed here on its own, is
+            # re-filed under General by the call below -- never deleted.
+            # It used to be deleted outright: the day's own title and text
+            # were in neither file, under a button promising "restorable".
             # The notes just trashed, the templates and a folded group
-            # still hold the name; restoring one of those notes would bring
-            # the category back.
+            # still hold the name too; restoring one of those notes would
+            # bring the category back.
             self.reassign_category_everywhere(name, PROTECTED_CATEGORY)
 
         CATEGORY_COLORS.pop(name, None)
@@ -3000,12 +3002,35 @@ class SettingsPageMixin:
         if self.selected_note_id and not self.find_note(self.selected_note_id):
             self.new_note()
 
-    def _ask_category_deletion(self, name, count):
+    def _ask_category_deletion(self, name, count, days_only=0):
         """Returns 'move', 'delete_notes', or None (cancel). Uses the in-app
-        themed dialog overlay (not a separate window)."""
+        themed dialog overlay (not a separate window).
+
+        `count` notes are filed under the category; `days_only` more are
+        repeating notes with only a day of theirs filed there. Those days
+        move to General whichever way this is answered -- a series never
+        goes to the Trash for one of its days -- so the question names
+        them apart rather than counting them among the notes it trashes."""
+        days = ""
+        if days_only:
+            days = (f"{days_only} repeating note(s) have a day filed under "
+                    f"“{name}”; those days move to “{PROTECTED_CATEGORY}” "
+                    "either way.")
+        if not count:
+            # Nothing here can go to the Trash, so there is nothing to
+            # choose between: only whether the category goes. Enter keeps
+            # it, as on the question asked of an empty category.
+            return self._themed_dialog(
+                "Delete category",
+                f"Delete “{name}”? No note is filed under it. {days}",
+                kind="warning",
+                buttons=[("Cancel", None),
+                         ("Delete the category", "move", "danger")],
+                default="Cancel")
         return self._themed_dialog(
             "Delete category",
-            f"“{name}” has {count} note(s). What should happen to them?",
+            f"“{name}” has {count} note(s). What should happen to them?"
+            + (f"\n\n{days}" if days else ""),
             kind="warning",
             # "delete_notes" does NOT destroy anything -- it calls
             # _move_notes_to_trash, so the notes are restorable for the full

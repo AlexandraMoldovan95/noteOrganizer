@@ -460,7 +460,7 @@ check('stats show the category before it is deleted',
       category_in_stats('TempStatsCat'))
 
 app.ask_yes_no = lambda *a, **k: True
-app._ask_category_deletion = lambda name, count: "move"
+app._ask_category_deletion = lambda name, count, days_only=0: "move"
 app._delete_category('TempStatsCat', redraw=lambda: None)
 app.update()
 check('stats no longer show the deleted category, without reopening Settings',
@@ -2553,6 +2553,61 @@ check('...leaving a fresh editor, not the trashed copy',
 app.notes = []; app.trash = []
 app.save_notes(); NO.save_trash(app.trash)
 app.new_note(); app.update()
+
+# ---- DELETING A CATEGORY NEVER DELETES A DAY'S OWN TEXT ----
+# "Delete the notes too (restorable for N days)" trashed the notes filed
+# under the category and then deleted, outright, every day of a series
+# that was filed there on its own: the day's title and text were in
+# neither file. The question had counted that series among the notes.
+NO.CATEGORY_COLORS['Home6d'] = '#22aa66'
+# The real question this time: an earlier section answers it with a stub.
+app.__dict__.pop('_ask_category_deletion', None)
+app.notes = [
+    NO.normalize_note({'id': 1, 'title': 'Standup', 'body': 'series text',
+                       'date': '2026-09-07', 'recurrence': {'freq': 'weekly'},
+                       'overrides': {'2026-09-14': {
+                           'title': 'Standup at home', 'body': 'DAY TEXT',
+                           'category': 'Home6d'}}}),
+    NO.normalize_note({'id': 2, 'title': 'Groceries', 'body': 'milk',
+                       'category': 'Home6d'})]
+app.trash = []
+app.save_notes(); NO.save_trash(app.trash)
+_cd_asked = []
+_cd_real_dlg = app._themed_dialog
+app._themed_dialog = lambda *a, **k: (
+    _cd_asked.append((a[0], a[1], [b[0] for b in k.get('buttons') or []])),
+    'delete_notes')[1]
+app._delete_category('Home6d', lambda: None); app.update()
+app._themed_dialog = _cd_real_dlg
+_cd_day = ((app.find_note(1) or {}).get('overrides') or {}).get('2026-09-14', {})
+check("deleting a category with its notes keeps a series' own day filed there, "
+      f"re-filed under General ({_cd_day})",
+      _cd_day.get('body') == 'DAY TEXT' and _cd_day.get('category') == 'General')
+check('...while the note filed there goes to the Trash, restorable',
+      [e.get('title') for e in app.trash] == ['Groceries']
+      and app.find_note(2) is None)
+check(f'...and the question counts only that note, naming the day apart '
+      f'({_cd_asked and _cd_asked[0][1]!r})',
+      len(_cd_asked) == 1 and '1 note(s)' in _cd_asked[0][1]
+      and 'have a day filed under' in _cd_asked[0][1])
+# Held by a day alone, there is no note to trash, so nothing offers to.
+NO.CATEGORY_COLORS['Away6d'] = '#aa6622'
+app.find_note(1)['overrides']['2026-09-21'] = {'body': 'away', 'category': 'Away6d'}
+app.save_notes()
+_cd_asked.clear()
+app._themed_dialog = lambda *a, **k: (
+    _cd_asked.append((a[0], a[1], [b[0] for b in k.get('buttons') or []])),
+    'move')[1]
+app._delete_category('Away6d', lambda: None); app.update()
+app._themed_dialog = _cd_real_dlg
+check(f'a category only a day is filed under offers no "delete the notes" '
+      f'({_cd_asked and _cd_asked[0][2]})',
+      len(_cd_asked) == 1
+      and not any('Delete the notes' in b for b in _cd_asked[0][2])
+      and 'Away6d' not in NO.CATEGORY_COLORS
+      and app.find_note(1)['overrides']['2026-09-21'].get('category') == 'General')
+app.notes = []; app.trash = []
+app.save_notes(); NO.save_trash(app.trash)
 
 
 print()
