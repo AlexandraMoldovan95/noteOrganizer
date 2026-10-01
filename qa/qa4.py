@@ -2536,6 +2536,39 @@ check(f'...and so it does after a wheel turn that left the card in sight '
       f'{_bl_seen(app._focused_note_id)})',
       _bl_wheel_seen == (2017, 'all') and _bl_away == (True, 'none')
       and app._focused_note_id == 2017 and _bl_seen(2017) == 'all')
+# A wheel turn made while the ring's card is not drawn at all -- a save
+# carried it below the rows the list drew -- is the person scrolling away
+# from it too. It was not noted, and the keyboard's return drew every row
+# down to the card and pulled the view there.
+_bl_many = [{'id': 3000 + i, 'title': 'Many %03d' % i, 'body': 'b',
+             'category': 'General', 'created': '2026-01-01 00:00',
+             'updated': '2026-02-01 %02d:%02d' % (i // 60, i % 60)}
+            for i in range(120)]
+_co_fresh(_bl_many, sort='Oldest updated')
+_bl_nid = app._card_order()[4]
+_bl_pt = app._card_point(_bl_nid)
+_qa_click(app.canvas, x=_bl_pt[0], y=_bl_pt[1]); _ls_settle()
+_qa_fire(app.canvas, '<ButtonRelease-1>', x=_bl_pt[0], y=_bl_pt[1]); _ls_settle()
+_ls_let_restores_finish()
+app._list_focus_out(); _ls_settle()
+app.body_text.insert('end', ' typed')
+app.save_current_note(auto=True); _ls_settle()
+_ls_let_restores_finish()
+_bl_undrawn = _bl_seen(_bl_nid)
+for _bl_d in (-120, -120):
+    _qa_fire(app.canvas, '<MouseWheel>', delta=_bl_d)
+    app.update()
+_ls_settle()
+_bl_top = app.canvas.canvasy(0)
+app._list_focus_in(); _ls_settle()
+check(f'...while a wheel turn made with the ring\'s card not drawn leaves the '
+      f'view where the person put it, the ring on a card in sight (the card '
+      f'was {_bl_undrawn}; view {_bl_top:.0f} -> {app.canvas.canvasy(0):.0f}; '
+      f'ring on {app._focused_note_id}: {_bl_seen(app._focused_note_id)})',
+      _bl_undrawn == 'not drawn' and _bl_top > 0
+      and abs(app.canvas.canvasy(0) - _bl_top) < 1
+      and app._focused_note_id != _bl_nid
+      and _bl_seen(app._focused_note_id) == 'all')
 # A search keystroke: the notes above the card filtered away, the view kept.
 _co_fresh(_bl_alpha)
 _bl_scroll_away(app._card_view(2017)['y0'] - 20)

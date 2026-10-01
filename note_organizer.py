@@ -1480,8 +1480,14 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         of sight (see _list_scrolled_by_hand)? A row the list has not drawn
         is out of sight too."""
         self._hand_scroll_check = None
-        key = self._ring_row()
-        if key is None:
+        # The ring's row whether drawn or not: _ring_row answers None for
+        # one not drawn, and a scroll that left such a row was taken for no
+        # scroll at all -- the keyboard's return then drew every row down
+        # to it and pulled the view away from where the person had put it.
+        cat = getattr(self, "_focused_header", None)
+        key = (("header", cat) if cat is not None
+               else ("note", getattr(self, "_focused_note_id", None)))
+        if key[1] is None:
             return
         rec = self._list_row_record(key)
         self._list_hand_scrolled = (rec is None
