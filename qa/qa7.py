@@ -3490,6 +3490,20 @@ for _dr_d, _dr_paint, _dr_least in (('2026-08-18', '#fee440', 4.5),
           f"{_dr_contrast(_dr_paint, _dr_v['day_fill']):.2f}:1)",
           _dr_v['bg'] == _dr_paint and _dr_fills == {_dr_want}
           and _dr_contrast(_dr_paint, _dr_v['day_fill']) >= _dr_least)
+# A colour the drawing cannot work out -- #abc, which the colour gate now
+# gives back long, planted here past the gate -- draws its text white, as
+# every painted day did before it learned contrast. Raising in the middle
+# of the month's drawing left the month half drawn and unclickable.
+app.day_colors = dict(app.day_colors, **{'2026-08-20': '#abc'})
+_dr_err = None
+try:
+    app.render_calendar(); app.update()
+except Exception as _dr_exc:   # noqa: BLE001 -- the check reports it
+    _dr_err = repr(_dr_exc)
+check(f'a day colour the drawing cannot work out leaves the month drawn '
+      f'({len(app._cal_cells)} days, {_dr_err})',
+      _dr_err is None and len(app._cal_cells) == 31
+      and _cd_view('2026-08-20')['day_fill'] == '#ffffff')
 app.day_emoji, app.day_colors = {}, {}
 app._persist_day_emoji()
 app._persist_day_colors()

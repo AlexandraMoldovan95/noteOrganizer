@@ -283,8 +283,15 @@ def contrasting_fg(hex_color):
     This exists because the text-colour and highlight buttons show a swatch
     of the active colour as their own background, and the letter on top has
     to stay legible against any colour in the palette on any of the themes.
+
+    A colour it cannot read gets white, the answer every painted calendar
+    day had before it learned contrast: raising here, in the middle of the
+    month's drawing, left the month half drawn and unclickable.
     """
-    h = hex_color.lstrip("#")
-    r, g, b = (int(h[i:i + 2], 16) for i in (0, 2, 4))
+    try:
+        h = hex_color.lstrip("#")
+        r, g, b = (int(h[i:i + 2], 16) for i in (0, 2, 4))
+    except (AttributeError, ValueError):
+        return "#ffffff"
     luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255
     return "#1a1a1a" if luminance > 0.6 else "#ffffff"

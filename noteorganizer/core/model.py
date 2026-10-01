@@ -137,9 +137,17 @@ def sanitize_color(value, default=""):
     TclError on garbage. Because a note is SAVED before it is first
     drawn, one bad colour used to mean a crash on every launch after:
     the T0-7 brick, on a different field. Only #rgb/#rrggbb pass; the
-    app itself never writes anything else."""
+    app itself never writes anything else.
+
+    And #rgb comes back as #rrggbb, the same colour: every reader that
+    works a colour out by hand -- a painted day's text contrast, the
+    blends, a chip's darker hover -- reads six digits, and a #abc day
+    colour from a hand-edited file stopped its whole month drawing."""
     if isinstance(value, str) and _HEX_COLOR.match(value.strip()):
-        return value.strip()
+        value = value.strip()
+        if len(value) == 4:
+            value = "#" + "".join(ch * 2 for ch in value[1:])
+        return value
     return default
 
 

@@ -1372,8 +1372,12 @@ finally:
 # field, the category import and the calendar day map.
 from noteorganizer.core.model import sanitize_color as _sc
 check("sanitize_color passes real colours and both hex widths",
-      _sc("#A1B2C3") == "#A1B2C3" and _sc("#abc") == "#abc"
-      and _sc(" #ff0000 ") == "#ff0000")
+      _sc("#A1B2C3") == "#A1B2C3" and _sc(" #ff0000 ") == "#ff0000")
+# ...and the short one comes back long: every reader that works a colour
+# out by hand reads six digits, and a #abc day colour from a hand-edited
+# settings.json stopped its whole month drawing.
+check("sanitize_color gives #rgb back as #rrggbb, the same colour (%r)"
+      % _sc("#abc"), _sc("#abc") == "#aabbcc" and _sc("#F0a") == "#FF00aa")
 check("sanitize_color refuses everything Tk would choke on",
       _sc("#zzz123") == "" and _sc("red)") == "" and _sc(123) == ""
       and _sc(None) == "" and _sc("#12345") == ""
