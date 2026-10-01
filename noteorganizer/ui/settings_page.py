@@ -690,6 +690,13 @@ class SettingsPageMixin:
         canvas.pack(side="left", fill="both", expand=True)
         self._active_panel_canvas = canvas
 
+        # The frame outlives every redraw: it gets the wheel once, here, and
+        # each redraw gives it only to the rows it builds -- as the Trash and
+        # Categories panels do. Re-binding the frame itself left a Tcl
+        # command behind at every save, delete and rename of a template.
+        wheel = lambda e: self._panel_or_page_wheel(canvas, e)  # noqa: E731
+        rows.bind("<MouseWheel>", wheel)
+
         def redraw():
             # A list this section no longer shows: rebuilt since, its rows
             # are gone, and there is nothing to redraw.
@@ -708,7 +715,8 @@ class SettingsPageMixin:
                     if i:
                         self._row_divider(rows)
                     self._build_template_row(rows, tpl, redraw)
-            self._bind_wheel_tree(rows, lambda e: self._panel_or_page_wheel(canvas, e))
+            for child in rows.winfo_children():
+                self._bind_wheel_tree(child, wheel)
         redraw()
         self._refresh_templates_panel = redraw
 
@@ -1321,6 +1329,11 @@ class SettingsPageMixin:
                  font=("Segoe UI", 10, "bold"), anchor="w").pack(fill="x")
         # Show when it was deleted and how long remains.
         meta = entry.get("deleted_at", "")
+        if not isinstance(meta, str):
+            # Only a hand-edited trash.json gets here (the backup import
+            # keeps text only): the date is unknown, and slicing a number
+            # below raised and kept the whole panel from opening.
+            meta = ""
         remaining = self._days_left_in_trash(meta)
         sub = f"deleted {meta[:10]}" if meta else "deleted"
         if remaining is not None:
@@ -1590,7 +1603,10 @@ class SettingsPageMixin:
                          fg=self.colors["subtext"], font=("Segoe UI", 10)).pack(pady=20)
                 wheel_on_rows()
                 return
-            ordered = sorted(self.trash, key=lambda e: e.get("deleted_at", ""), reverse=True)
+            # str(): a hand-edited trash.json can hold a number or a list
+            # beside the dates, and sorting them together raised.
+            ordered = sorted(self.trash, key=lambda e: str(e.get("deleted_at", "")),
+                             reverse=True)
             visible = ordered[:shown_count["n"]]
             for entry in visible:
                 self._build_trash_row(rows, entry, redraw,

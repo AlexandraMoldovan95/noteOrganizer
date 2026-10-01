@@ -2116,6 +2116,41 @@ check('...while the wheel still reaches the list and every row in it',
       and len(_lk_rows.winfo_children()) >= 3
       and all(r.bind('<MouseWheel>') for r in _lk_rows.winfo_children()))
 app.trash = []; NO.save_trash(app.trash)
+# A hand-edited trash.json can hold a deleted_at that is not text (the
+# backup import keeps text only): sorting it beside the dates, and showing
+# it, raised, and Recently deleted did not open at all.
+app.trash = [{'id': 6200, 'title': 'Odd number', 'body': 'x', 'category': 'General',
+              'deleted_at': 5},
+             {'id': 6201, 'title': 'Odd list', 'body': 'x', 'category': 'General',
+              'deleted_at': [2026, 3, 1]},
+             {'id': 6202, 'title': 'Plain date', 'body': 'x', 'category': 'General',
+              'deleted_at': '2026-03-01 00:00:00'}]
+_od_err = None
+try:
+    app._trash_panel_redraw(); app.update()
+except Exception as _od_exc:   # noqa: BLE001 -- the check reports it
+    _od_err = repr(_od_exc)
+_od_canvas = app._active_panel_canvas
+_od_items = _od_canvas.find_all()
+_od_rows = (_od_canvas.nametowidget(_od_canvas.itemcget(_od_items[0], 'window'))
+            if _od_items else None)
+
+
+def _od_texts(w):
+    out = []
+    for c in w.winfo_children():
+        if isinstance(c, tk.Label):
+            out.append(str(c.cget('text')))
+        out.extend(_od_texts(c))
+    return out
+
+
+_od_shown = [t for t in (_od_texts(_od_rows) if _od_rows is not None else [])
+             if t in ('Odd number', 'Odd list', 'Plain date')]
+check(f'a deleted_at that is not text still lets Recently deleted draw every '
+      f'row ({_od_err}, {sorted(_od_shown)})',
+      _od_err is None and sorted(_od_shown) == ['Odd list', 'Odd number', 'Plain date'])
+app.trash = []; NO.save_trash(app.trash)
 # The Categories list: its redraw is the one each row is handed.
 _lk_cat_redraws = []
 _lk_real_cat_row = app._build_category_row
@@ -2133,6 +2168,24 @@ if _lk_cat_redraws:
 check(f'redrawing the Categories list 30 times leaves no Tcl command behind '
       f'({_lk_before} -> {_lk_after})',
       bool(_lk_cat_redraws) and _lk_after - _lk_before < 5)
+# The Templates list, the same shape: redrawn at every save, delete and
+# rename of a template.
+_lk_tpl_saved = list(app.templates)
+app.templates = [NO.normalize_template({'name': 'Leak tpl %d' % i, 'body': 'x'})
+                 for i in range(3)]
+app.toggle_settings_panel('templates'); app.update()
+_lk_tpl_redraw = getattr(app, '_refresh_templates_panel', None)
+if _lk_tpl_redraw is not None:
+    _lk_tpl_redraw(); app.update()
+    _lk_before = _lk_cmds()
+    for _lk_i in range(30):
+        _lk_tpl_redraw()
+    app.update()
+    _lk_after = _lk_cmds()
+check(f'redrawing the Templates list 30 times leaves no Tcl command behind '
+      f'({_lk_before} -> {_lk_after})',
+      _lk_tpl_redraw is not None and _lk_after - _lk_before < 5)
+app.templates = _lk_tpl_saved
 app.hide_settings_page(); app.update()
 
 # 107: the wheel over an empty Trash panel must reach the page beneath

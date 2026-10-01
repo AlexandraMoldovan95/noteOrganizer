@@ -799,7 +799,30 @@ _nl_routes = [
          None, refresh=lambda: None)),
     ("deleting another note's category",
      lambda: app._delete_category('Temp5nl', lambda: None)),
+    ('moving another note to a category from its menu',
+     lambda: app._ctx_move_to_category(app.find_note(2), 'General')),
+    ('moving other ticked notes to a category from the bar',
+     lambda: _nl_bar_category({2})),
 ]
+
+
+def _nl_bar_category(ids):
+    """The selection bar's Category: tick, open its list, click General."""
+    app.selected_note_ids = set(ids)
+    app._bulk_change_category()
+    app.update()
+    _pop = getattr(app, '_mini_popup', None)
+    _todo = [_pop] if _pop is not None else []
+    while _todo:
+        _w = _todo.pop()
+        if isinstance(_w, tk.Label) and str(_w.cget('text')).strip() == 'General':
+            _qa_click(_w)
+            app.update()
+            return
+        _todo.extend(_w.winfo_children())
+    raise RuntimeError('the bar\'s category list offered no General')
+
+
 for _nl_label, _nl_action in _nl_routes:
     _nl_setup()
     try:

@@ -16414,7 +16414,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             # describing a state that no longer exists by the time the
             # user answers.
             touched = set(self.selected_note_ids)
-            if self._flush_autosave() is False:
+            # Leaving only if the note on screen is one of those moving.
+            if self._flush_autosave(
+                    leaving=self.selected_note_id in touched) is False:
                 return  # Cancel on a day's save question: nothing moves
             to_move = [n for n in self.notes if n["id"] in touched]
             if not to_move:
@@ -18046,7 +18048,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             return
         if real.get("category") == category:
             return
-        if self._flush_autosave() is False:
+        # The editor stays where it is unless it holds this very note, so
+        # its own unreadable date is no question for this move to ask.
+        if self._flush_autosave(
+                leaving=real["id"] == self.selected_note_id) is False:
             return  # Cancel on a day's save question: nothing moves
         # Re-read after the flush: the note object above was fetched before
         # anything the editor was holding reached the store.
