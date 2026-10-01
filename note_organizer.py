@@ -4460,6 +4460,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         described text that is no longer there, while a coloured cell is
         still the same cell (a dropped checkbox or a cleared cell keeps
         its colour, as the fill always promised).
+
+        A merge's cell is the exception: *source* gives it as
+        ``(anchor, joined)``, the cells whose text it holds in reading
+        order, and while it reads exactly as their texts joined by a space
+        each piece's styles go back on that piece, where it now sits.
         """
         b = self.body_text
         sep_at = core_tables.separator_index(lines)
@@ -4472,6 +4477,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             pipes = core_tables.pipe_positions(line)
             for c, (s, e) in enumerate(core_tables.cell_bounds(line)):
                 src = source(r, c) if source is not None else (r, c)
+                joined = ()
+                if src is not None and isinstance(src[0], tuple):
+                    src, joined = src
                 rec = carried.get(src) if src is not None else None
                 if rec is None:
                     continue
@@ -4482,6 +4490,18 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                               f"{line_no}.{self._tk_col(line, pipes[c] + 1)}",
                               f"{line_no}.{self._tk_col(line, pipes[c + 1])}")
                 if not same:
+                    parts = [carried.get(k) for k in joined]
+                    if not (parts and all(parts) and line[s:e] == " ".join(
+                            p["value"] for p in parts)):
+                        continue
+                    offset = 0
+                    for part in parts:
+                        for tag, a, z in part["runs"]:
+                            lo = self._tk_col(line, s + offset + a)
+                            hi = self._tk_col(line, s + offset + z)
+                            b.tag_add(tag, f"{line_no}.{lo}",
+                                      f"{line_no}.{hi}")
+                        offset += len(part["value"]) + 1
                     continue
                 for tag, a, z in rec["runs"]:
                     b.tag_add(tag,
@@ -5207,13 +5227,14 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # moves into the merged cell, joined in reading order. Merging "A"
         # with an empty neighbour used to keep whichever cell was the
         # anchor -- and lose the text when the anchor was the empty one.
-        pieces = []
+        pieces, piece_cells = [], []
         for r in range(r0, min(r1 + 1, len(rows))):
             for c in range(c0, min(c1 + 1, len(rows[r]))):
                 value = rows[r][c]
                 if value and value not in (core_tables.MERGE_LEFT,
                                            core_tables.MERGE_UP):
                     pieces.append(value)
+                    piece_cells.append((r, c))
         rows[r0][c0] = " ".join(pieces)
         for r in range(r0, min(r1 + 1, len(rows))):
             for c in range(c0, min(c1 + 1, len(rows[r]))):
@@ -5222,7 +5243,13 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 rows[r][c] = (core_tables.MERGE_LEFT if r == r0
                               else (core_tables.MERGE_UP if c == c0
                                     else core_tables.MERGE_LEFT))
-        self._grid_replace_block(first, nrows, rows, aligns, sep_cols)
+        # Nor their styles: the merged cell names the cells it joined, so
+        # each piece's bold and colours land on that piece inside it (see
+        # _grid_lay_cell_styles). A merged cell used to come out plain.
+        merged = ((r0, c0), tuple(piece_cells))
+        self._grid_replace_block(
+            first, nrows, rows, aligns, sep_cols,
+            source=lambda r, c: merged if (r, c) == (r0, c0) else (r, c))
         self._grid_after_op(first)
 
     @_undo_atom

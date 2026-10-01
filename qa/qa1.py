@@ -9690,6 +9690,19 @@ finally:
 check(f'carried styles: pasting into another cell keeps them ({_cs_styles()})',
       _cs_styles() == _cs_want
       and core_tables.split_row(app.body_text.get('3.0', '3.end'))[2] == 'z')
+# A merge moves every cell's text into the merged cell ("nothing the merge
+# swallows is thrown away") and dropped every style that text carried.
+# The red '12' joins 'Eggs' at an offset, so it proves where the style
+# lands, not only that one survived.
+_cs_info = _cs_setup()
+app._grid_merge_selection({'info': _cs_info, 'box': (2, 0, 2, 1)})
+app.update()
+check('carried styles: merging the red 12 into its row\'s first cell keeps '
+      f'it red, on the 12 ({_cs_styles()}, '
+      f'{core_tables.split_row(app.body_text.get("4.0", "4.end"))})',
+      _cs_styles() == _cs_want
+      and core_tables.split_row(app.body_text.get('4.0', '4.end'))[0]
+      == 'Eggs 12')
 
 # ---- CELLS PASTED WIDER THAN THE TABLE GROW IT ----
 # Four columns copied from a spreadsheet into a two-column table: the rows
