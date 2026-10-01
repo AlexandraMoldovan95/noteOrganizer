@@ -1039,6 +1039,72 @@ check(f'...and keeps the file attached in the same visit, on the series, its '
           _os5.path.join(NO.ATTACHMENTS_DIR, _oc_files[0] or '')))
 check(f'...and the tick made in the same visit ({_oc.get("checklist")})',
       [it.get('done') for it in _oc.get('checklist') or []] == [True])
+# ...but not a date or a repeat changed in that visit: they are the
+# series', and written for one day they moved the whole series -- every
+# day's own text, the one just saved among them, then sat on a day the
+# series no longer had. They stay as they were, the question says so, and
+# the editor shows them again.
+import datetime as _dt5m
+app.new_note(); app.update()
+app.notes = [
+    NO.normalize_note({'id': 1, 'title': 'Standup', 'body': 'series',
+                       'date': '2026-09-07', 'recurrence': {'freq': 'weekly'},
+                       'overrides': {'2026-09-14': {'body': 'DAY 14'}}}),
+    NO.normalize_note({'id': 2, 'title': 'Other', 'body': 'y'})]
+app.save_notes()
+app.open_note_in_tab(app.find_note(1), occurrence_date='2026-09-21'); app.update()
+app.body_text.insert('end-1c', ' -- moved to Tuesday')
+app._show_date_in_field('2026-09-22')
+_mv_said = []
+_mv_real_dlg = app._themed_dialog
+app._themed_dialog = lambda *a, **k: (_mv_said.append(a[1] if len(a) > 1 else ''),
+                                      'occurrence')[1]
+app.save_current_note(); app.update()
+app._themed_dialog = _mv_real_dlg
+_mv = app.find_note(1)
+_mv_days = NO.expand_occurrences(_mv, _dt5m.date(2026, 9, 1), _dt5m.date(2026, 9, 30))
+check(f'"This occurrence only" with the date changed too keeps the series '
+      f'where it was, every day\'s own text on a day it has (start '
+      f'{_mv.get("date")}; occurrences {_mv_days}; days with own text '
+      f'{sorted(_mv.get("overrides") or {})})',
+      _mv.get('date') == '2026-09-07'
+      and '2026-09-14' in _mv_days and '2026-09-21' in _mv_days
+      and 'moved to Tuesday' in ((_mv.get('overrides') or {})
+                                 .get('2026-09-21', {}).get('body') or ''))
+check(f'...the question says so, and the editor shows the series\' date again '
+      f'(date field {app.date_entry.get()!r}; status {app.status_lbl.cget("text")!r})',
+      len(_mv_said) == 1 and 'keeps them as they are' in _mv_said[0]
+      and app.date_entry.get() == '2026-09-07'
+      and "stay the whole series'" in str(app.status_lbl.cget('text')))
+# The repeat turned off on a day, and a date typed the app cannot read:
+# the save fills the editor from the note it left (above), and that wrote
+# the stored date over the typed one -- leaving then asked nothing, and
+# the typed date was gone.
+app.new_note(); app.update()
+app.notes = [
+    NO.normalize_note({'id': 1, 'title': 'Weekly', 'body': 'series',
+                       'date': '2026-09-07', 'recurrence': {'freq': 'weekly'}}),
+    NO.normalize_note({'id': 2, 'title': 'Other', 'body': 'y'})]
+app.save_notes()
+app.open_note_in_tab(app.find_note(1), occurrence_date='2026-09-14'); app.update()
+app.rec_freq_var.set(NO.FREQ_LABELS[''])
+app.on_recurrence_changed(); app.update()
+app.date_entry.delete(0, 'end')
+app.date_entry.insert(0, '30/09/2026')
+_lr_asked = []
+app._themed_dialog = lambda *a, **k: (_lr_asked.append(a[0]), False)[1]
+_lr_left = app.open_note_in_tab(app.find_note(2)); app.update()
+app._themed_dialog = _mv_real_dlg
+check(f'turning the repeat off on a day with a date the app cannot read '
+      f'still asks before leaving, and Go back keeps the typed date (asked '
+      f'{_lr_asked}; left: {_lr_left}; date field {app.date_entry.get()!r})',
+      "Part of this note isn't saved" in _lr_asked and _lr_left is False
+      and app.date_entry.get() == '30/09/2026'
+      and app.selected_note_id == 1)
+# "Continue without it", as the person would answer at last: the editor
+# agrees with the note again, and nothing below is asked about it.
+app._put_back_stored_date_and_repeat()
+app._cancel_pending_autosave()
 app.new_note(); app.update()
 app.notes = []; app.save_notes()
 
