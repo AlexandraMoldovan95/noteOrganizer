@@ -9787,6 +9787,140 @@ _uf_key('<Control-z>')
 check(f'style undo: Ctrl+Z takes back a cell made bold ({_uf_bold} -> {_cs_styles()})',
       ('bold', 'Eggs') in _uf_bold and _cs_styles() == _cs_want)
 
+# ---- CTRL+Z GIVES BACK WHAT TK'S OWN DELETES TOOK, WITH ITS FORMATTING ----
+# Delete, BackSpace, typing over a selection and Cut are Tk's own
+# bindings, and Tk's stack holds no tag: Ctrl+Z gave the text back plain,
+# the bold gone. A tag ahead of the body's bindings notes the formatting
+# first (_note_styled_delete). <<Clear>> stands for Cut -- the same
+# delete, without writing to the clipboard of the machine running this.
+def _nd_setup():
+    """'Friday' bold in a note just opened: on the text, not on any stack."""
+    _uf_setup('Dear Ana,' + chr(10), _uf_typed)
+    _uf_select('Friday')
+    _uf_key('<Control-b>')
+    app._reset_text_undo()
+    app.body_text.tag_remove('sel', '1.0', 'end')
+
+
+def _nd_clear():
+    app.body_text.event_generate('<<Clear>>')
+    app.update()
+    return True
+
+
+_nd_real_read_text = NO.clipboard.read_text
+for _nd_name, _nd_do in (
+        ('Delete', lambda: _uf_key('<KeyPress-Delete>')),
+        ('BackSpace', lambda: _uf_key('<KeyPress-BackSpace>')),
+        ('typing over it', lambda: _uf_key('<KeyPress-x>')),
+        ('Cut (as Clear)', _nd_clear),
+        ('Paste without formatting', lambda: (app._paste_plain(), app.update(), True)[-1])):
+    _nd_setup()
+    check(f'native delete: the fixture holds a bold word on no stack ({_cs_styles()})',
+          _cs_styles() == [('bold', 'Friday')] and not app._fmt_undo)
+    _uf_select('Friday')
+    NO.clipboard.read_text = lambda: 'Monday'
+    try:
+        _nd_done = _nd_do()
+    finally:
+        NO.clipboard.read_text = _nd_real_read_text
+    _nd_gone = 'Friday' not in app.body_text.get('1.0', 'end-1c')
+    _uf_key('<Control-z>')
+    check(f'native delete: {_nd_name} over a bold word, then Ctrl+Z, gives the '
+          f'word back bold (deleted: {_nd_done and _nd_gone}; '
+          f'{app.body_text.get("1.0", "end-1c")!r}, {_cs_styles()})',
+          _nd_done and _nd_gone
+          and app.body_text.get('1.0', 'end-1c') == _uf_full
+          and _cs_styles() == [('bold', 'Friday')])
+    _uf_key('<Control-y>')
+    check(f'native delete: ...and Ctrl+Y takes it away again ({_cs_styles()})',
+          'Friday' not in app.body_text.get('1.0', 'end-1c')
+          and ('bold', 'Friday') not in _cs_styles())
+
+# BackSpace held through the word: one Ctrl+Z, as Tk merges the run --
+# and where the run leaves the bold for plain text, two, each laying the
+# formatting it took back on the text it restores.
+_nd_setup()
+app.body_text.mark_set('insert', 'end-1c')
+for _nd_i in range(len('Friday')):
+    _uf_key('<KeyPress-BackSpace>')
+_nd_after_run = app.body_text.get('1.0', 'end-1c')
+_uf_key('<Control-z>')
+check(f'native delete: six BackSpaces through a bold word are one Ctrl+Z, '
+      f'bold again ({_nd_after_run!r} -> {_cs_styles()})',
+      _nd_after_run == 'Dear Ana,' + chr(10) + 'the meeting moved to '
+      and app.body_text.get('1.0', 'end-1c') == _uf_full
+      and _cs_styles() == [('bold', 'Friday')])
+_nd_setup()
+app.body_text.mark_set('insert', 'end-1c')
+for _nd_i in range(len(' to Friday')):
+    _uf_key('<KeyPress-BackSpace>')
+_uf_key('<Control-z>')
+_nd_first = (app.body_text.get('1.0', 'end-1c'), _cs_styles())
+_uf_key('<Control-z>')
+check(f'native delete: BackSpace from a bold word into plain text: the '
+      f'plain part comes back first, then the word, bold ({_nd_first} -> '
+      f'{_cs_styles()})',
+      _nd_first == ('Dear Ana,' + chr(10) + 'the meeting moved to ', [])
+      and app.body_text.get('1.0', 'end-1c') == _uf_full
+      and _cs_styles() == [('bold', 'Friday')])
+# Undo reached without a key (any caller of _body_undo_redo) closes the
+# run the same way the key's own press does.
+_nd_setup()
+_uf_select('Friday')
+_uf_key('<KeyPress-Delete>')
+app._body_undo_redo('undo')
+check(f'native delete: Undo called without a key gives the bold word back '
+      f'too ({_cs_styles()})',
+      app.body_text.get('1.0', 'end-1c') == _uf_full
+      and _cs_styles() == [('bold', 'Friday')])
+# A toolbar operation right after the delete is a step of its own, taken
+# back first: the run closes where the operation's unit opens.
+_nd_setup()
+_uf_select('Friday')
+_uf_key('<KeyPress-Delete>')
+_uf_select('Dear')
+app._toggle_body_style('bold')
+app.update()
+_uf_key('<Control-z>')
+_nd_first = (app.body_text.get('1.0', 'end-1c'), _cs_styles())
+_uf_key('<Control-z>')
+check(f'native delete: a toolbar bold after the delete is taken back first, '
+      f'then the word comes back bold ({_nd_first} -> {_cs_styles()})',
+      _nd_first == ('Dear Ana,' + chr(10) + 'the meeting moved to ', [])
+      and app.body_text.get('1.0', 'end-1c') == _uf_full
+      and _cs_styles() == [('bold', 'Friday')])
+# The other way round: plain text first, then the bold word. Tk would
+# merge the two into one unit, and the formatting noted at the bold
+# word's edge would never meet the text that unit restores.
+_nd_setup()
+app.body_text.mark_set('insert', 'end-1c')
+app.body_text.insert('insert', ' at ten')
+app.body_text.edit_separator()
+for _nd_i in range(len('Friday at ten')):
+    _uf_key('<KeyPress-BackSpace>')
+_uf_key('<Control-z>')
+_nd_first = (app.body_text.get('1.0', 'end-1c'), _cs_styles())
+_uf_key('<Control-z>')
+check(f'native delete: BackSpace from plain text into a bold word: the word '
+      f'comes back bold first, then the plain part ({_nd_first} -> '
+      f'{app.body_text.get("1.0", "end-1c")!r})',
+      _nd_first == (_uf_full, [('bold', 'Friday')])
+      and app.body_text.get('1.0', 'end-1c') == _uf_full + ' at ten'
+      and _cs_styles() == [('bold', 'Friday')])
+# Plain text is left to Tk entirely: no step of ours, no separator, and
+# not even the look at the formatting that a step would cost.
+_uf_setup('Dear Ana,' + chr(10), _uf_typed)
+app.body_text.mark_set('insert', 'end-1c')
+for _nd_i in range(3):
+    _uf_key('<KeyPress-BackSpace>')
+_nd_open = getattr(app, '_styled_delete_run', None)
+_uf_key('<Control-z>')
+check(f'native delete: BackSpace through plain text notes nothing and is '
+      f'still one Ctrl+Z ({app.body_text.get("1.0", "end-1c")!r}, '
+      f'a step opened: {_nd_open is not None})',
+      _nd_open is None and app.body_text.get('1.0', 'end-1c') == _uf_full)
+
 # ---- CTRL+Z AFTER A TABLE OPERATION BRINGS THE TABLE'S STYLES BACK ----
 # Tk re-inserts the text an undo puts back without its tags, so every
 # table operation's Ctrl+Z returned the cells bare. The journal lays the

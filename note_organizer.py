@@ -6272,11 +6272,15 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._schedule_autosave()
         return True
 
+    @_undo_atom
     def _paste_plain(self, event=None):
         """Paste the clipboard's text with none of its formatting.
 
         The escape hatch for pasting from a web page into a note without
-        dragging its styling along.
+        dragging its styling along. One undo unit, as every other paste
+        is: it deletes the selection by hand, and outside a unit Ctrl+Z
+        took the paste back in two steps and returned the selection with
+        none of the formatting it had.
         """
         text = clipboard.read_text()
         if text is None:
@@ -12140,6 +12144,17 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.body_text.bind("<Return>", self._on_body_return)
         self.body_text.bind("<BackSpace>", self._on_body_backspace)
         self.body_text.bind("<Delete>", self._on_body_delete_key)
+        # Ahead of every other binding the body has: Tk's own deletes --
+        # Delete, BackSpace, typing over a selection, Cut -- put no tag on
+        # the undo stack, so Ctrl+Z brought styled text back plain. This
+        # notes the formatting first (see _note_styled_delete).
+        self.bind_class(self._STYLED_DELETE_TAG, "<KeyPress>",
+                        self._note_styled_delete)
+        for virtual in ("<<Cut>>", "<<Clear>>", "<<Paste>>"):
+            self.bind_class(self._STYLED_DELETE_TAG, virtual,
+                            self._note_styled_delete)
+        self.body_text.bindtags(
+            (self._STYLED_DELETE_TAG,) + tuple(self.body_text.bindtags()))
         self.body_text.bind("<<Paste>>", self._on_body_paste, add="+")
         self.body_text.bind("<<Copy>>", self._copy_formatted, add="+")
         # Ctrl+Shift+V is the usual way to ask for the text without its
@@ -13320,6 +13335,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 except tk.TclError:
                     pass
         self._fmt_undo, self._fmt_redo = [], []
+        self._styled_delete_run = None
 
     # How many steps back the formatting journal reaches. Each step holds
     # two snapshots as tuples (a few kB for an ordinary note); the cap
@@ -13384,6 +13400,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         open also notes the body's formatting, so the unit's Ctrl+Z can
         put back what Tk's text-only stack cannot (see _body_undo_redo)."""
         depth = getattr(self, "_undo_atom_depth", 0)
+        if depth == 0:
+            # A run of Tk's own deletes ends where an operation of the
+            # app's begins, as Tk's own unit does at the separator below.
+            self._close_styled_delete_run()
         self._undo_atom_depth = depth + 1
         if depth == 0 and hasattr(self, "body_text"):
             try:
@@ -13430,6 +13450,143 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             del journal[:-self._FMT_JOURNAL_DEPTH]
             self._fmt_redo = []
 
+    # The bindtag put first on the note body, so it sees every key and
+    # every Cut, Clear and Paste before the body's own bindings do.
+    _STYLED_DELETE_TAG = "NoteBodyStyledDelete"
+
+    def _note_styled_delete(self, event):
+        """Note the formatting before Tk deletes styled text by its own hand.
+
+        Delete, BackSpace, typing over a selection and Cut are Tk's own
+        bindings; no undo unit of the app's wraps them, so nothing noted
+        the bold, colours and paragraph formatting they took, and Ctrl+Z
+        brought the text back plain. Before such a delete reaches text that
+        carries formatting, this notes the body's formatting and starts a
+        step of its own on Tk's stack; the step becomes a journal entry
+        (_close_styled_delete_run) once something other than the same
+        delete comes along, and _body_undo_redo lays it back on the text
+        Tk restores.
+
+        A run of BackSpaces (or Deletes) stays ONE step, because Tk merges
+        contiguous deletes into one unit: undo granularity is Tk's, as it
+        always was. Measured before this was written: typing over a
+        selection, Cut and Paste are one unit each, five BackSpaces are
+        one, and a separator from a tag ahead of the Text class splits
+        them where it is put. Text with no formatting is left entirely to
+        Tk -- not even a separator.
+        """
+        b = self.body_text
+        try:
+            if not b.tk.getboolean(b.cget("undo")):
+                return None
+        except (tk.TclError, ValueError):
+            return None
+        doomed, kind = self._native_delete_range(event)
+        styled = (doomed is not None
+                  and self._range_carries_formatting(*doomed))
+        run = getattr(self, "_styled_delete_run", None)
+        if run is not None:
+            if (styled and kind in ("back", "del") and kind == run["kind"]
+                    and b.compare("insert", "==", run["at"])):
+                run["at"] = doomed[0]
+                return None
+            self._close_styled_delete_run()
+        if styled:
+            try:
+                b.edit_separator()
+                self._styled_delete_run = {"before": self._fmt_state(),
+                                           "kind": kind, "at": doomed[0]}
+            except (tk.TclError, ValueError):
+                self._styled_delete_run = None
+        return None
+
+    def _native_delete_range(self, event):
+        """(start, end) of what Tk's own binding for `event` will delete
+        from the body, and which kind of delete it is -- or (None, None).
+        Selected cells are the app's own path (_on_body_delete_key)."""
+        b = self.body_text
+        if getattr(self, "_grid_sel", None) is not None:
+            return None, None
+        try:
+            sel = (b.index("sel.first"), b.index("sel.last"))
+        except tk.TclError:
+            sel = None
+        if getattr(event.type, "name", str(event.type)) == "VirtualEvent":
+            return (sel, "replace") if sel else (None, None)
+        keysym = getattr(event, "keysym", "")
+        try:
+            if keysym == "BackSpace":
+                if sel:
+                    return sel, "back"
+                if b.compare("insert", "==", "1.0"):
+                    return None, None
+                return (b.index("insert-1c"), b.index("insert")), "back"
+            if keysym == "Delete":
+                if sel:
+                    return sel, "del"
+                if b.compare("insert", ">=", "end-1c"):
+                    return None, None
+                return (b.index("insert"), b.index("insert+1c")), "del"
+        except tk.TclError:
+            return None, None
+        if not sel:
+            return None, None
+        char = getattr(event, "char", "") or ""
+        state = getattr(event, "state", 0)
+        if not isinstance(state, int):
+            state = 0
+        control, alt = bool(state & 0x4), bool(state & 0x20000)
+        # Control+Alt is AltGr on Windows, which types a character.
+        typed = (char.isprintable() and char != ""
+                 and (not control or alt))
+        if typed or keysym in ("Return", "KP_Enter", "Tab"):
+            return sel, "replace"
+        return None, None
+
+    def _range_carries_formatting(self, start, end):
+        """Does any character formatting or paragraph formatting touch the
+        text from `start` to `end`? The tags at its first character, and
+        any that begin inside it."""
+        b = self.body_text
+
+        def counts(tag):
+            return (is_format_tag(tag) or tag.startswith("para_")
+                    or tag in ("align_center", "align_right"))
+        try:
+            if any(counts(t) for t in b.tag_names(start)):
+                return True
+            # One character -- every BackSpace and Delete -- is answered by
+            # its own tags; only a selection pays for a look at them all.
+            if b.compare(end, "<=", f"{start}+1c"):
+                return False
+            return any(b.tag_nextrange(t, start, end)
+                       for t in b.tag_names() if counts(t))
+        except tk.TclError:
+            return False
+
+    def _close_styled_delete_run(self):
+        """Turn an open run of Tk's own deletes into a journal step: the
+        formatting before it and after it, with a separator after it on
+        Tk's stack too, so the step and Tk's unit end in the same place.
+        A run that deleted nothing (a guard broke the key) leaves no step."""
+        run = getattr(self, "_styled_delete_run", None)
+        self._styled_delete_run = None
+        if run is None or not hasattr(self, "body_text"):
+            return
+        try:
+            self.body_text.edit_separator()
+            after = self._fmt_state()
+        except (tk.TclError, ValueError):
+            return
+        if after[0] == run["before"][0]:
+            return
+        journal = getattr(self, "_fmt_undo", None)
+        if journal is None:
+            journal = self._fmt_undo = []
+        journal.append({"text": True, "before": run["before"], "after": after})
+        del journal[:-self._FMT_JOURNAL_DEPTH]
+        self._fmt_redo = []
+
     def _body_undo_redo(self, action):
         """Ctrl+Z / Ctrl+Y on the note body.
 
@@ -13459,6 +13616,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # the undo works against what the note actually says.
         if getattr(self, "_cell_editor", None):
             self._commit_cell_editor()
+        # A run of Tk's own deletes still open is a step now, so this
+        # press can take it back with its formatting.
+        self._close_styled_delete_run()
         undo = action == "undo"
         if getattr(self, "_fmt_undo", None) is None:
             self._fmt_undo = []
