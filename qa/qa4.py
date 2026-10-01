@@ -1890,6 +1890,18 @@ def _bl_sort(value):
     app._on_sort_chosen(value); _ls_settle()
 
 
+def _bl_file_names():
+    """The notes file's Custom order, by the first word of each title: a
+    note brought back from the Trash returns under a new id."""
+    return [app.find_note(i)['title'].split()[0] for i in _co_file_order()]
+
+
+# Every question a sort asks in this block is answered here and written
+# down: a real one would wait for a person who is not there.
+_bl_questions = []
+_bl_answer = [False]
+app.ask_yes_no = lambda title, message, **k: (
+    _bl_questions.append((title, message)), _bl_answer[0])[1]
 _co_fresh(_bl_placed, sort='Custom order')
 check(f'fixture: a Custom order arranged by hand ({_bl_names()})',
       _bl_names() == _bl_hand and _co_file_order() == _bl_hand_ids)
@@ -1908,8 +1920,10 @@ check(f'...and Undo on the toast puts back the arrangement and the sort, in '
       f'{_co_file_order() == _bl_hand_ids})',
       app.sort_var.get() == 'Title A–Z' and _co_file_order() == _bl_hand_ids)
 _bl_sort('Custom order')
-check(f'...so choosing Custom order again shows it as it was made '
-      f'({_bl_names()})', _bl_names() == _bl_hand)
+check(f'...so choosing Custom order again shows it as it was made, and asks '
+      f'nothing -- Undo already put it back ({_bl_names()}; asked '
+      f'{[q[0] for q in _bl_questions]})',
+      _bl_names() == _bl_hand and not _bl_questions)
 # Moves made on top of the replacement go with it: they were made on it.
 _bl_sort('Title A–Z')
 app._hide_toast()
@@ -1933,6 +1947,83 @@ check(f'...while a first move, with no arrangement to lose, says nothing '
       f'{app._toast_action is not None})',
       app.sort_var.get() == 'Custom order' and app._toast_action is None
       and len(_co_file_order()) == len(_bl_placed))
+app._hide_toast()
+# The offer outlives its toast. The app shows one toast at a time, and the
+# next one with an Undo -- a delete's, within the offer's eight seconds --
+# took its place: the arrangement made by hand then had no way back at all.
+# It is kept for the session, and choosing Custom order asks, once, whether
+# to bring it back.
+_co_fresh(_bl_placed, sort='Custom order')
+_bl_sort('Title A–Z')
+app._hide_toast()
+app._put_keyboard_on_card(app._card_order()[0]); _ls_settle()
+app._list_move_by_keyboard(1); _ls_settle()
+_bl_answer[0] = True
+app._context_delete_note(next(n for n in app.notes
+                              if n['title'].startswith('Zebra'))); _ls_settle()
+_bl_said = app.toast_lbl.cget('text')
+# The delete's own Undo: the note comes back from the Trash, a new dict.
+_qa_click(app.toast_action_lbl); _ls_settle()
+del _bl_questions[:]
+_bl_sort('Custom order')
+_bl_asked = list(_bl_questions)
+check(f'...and when a later toast took the offer\'s place, choosing Custom '
+      f'order asks to bring the arrangement back, naming the sort that '
+      f'replaced it, and Yes does -- the note deleted and restored meanwhile '
+      f'too (the toast then: {_bl_said!r}; asked {[q[0] for q in _bl_asked]}; '
+      f'now {_bl_names()}, in the file {_bl_file_names()})',
+      'Trash' in _bl_said and len(_bl_asked) == 1
+      and 'Title A–Z' in _bl_asked[0][1]
+      and _bl_names() == _bl_hand and _bl_file_names() == _bl_hand)
+del _bl_questions[:]
+_bl_sort('Custom order')
+check(f'...asked once: choosing Custom order again asks nothing (asked '
+      f'{[q[0] for q in _bl_questions]})', not _bl_questions)
+# No: the list stays as the replacement left it, and the question does not
+# come back.
+_bl_sort('Title A–Z')
+app._hide_toast()
+app._put_keyboard_on_card(app._card_order()[0]); _ls_settle()
+app._list_move_by_keyboard(1); _ls_settle()
+_bl_replacement = _bl_names()
+app._hide_toast()
+_bl_sort('Recently updated')
+del _bl_questions[:]
+_bl_answer[0] = False
+_bl_sort('Custom order')
+_bl_no = (len(_bl_questions), _bl_names() == _bl_replacement)
+del _bl_questions[:]
+_bl_sort('Custom order')
+check(f'...while No leaves the list as the move left it and is not asked '
+      f'again (asked {_bl_no[0]}, list as the move left it: {_bl_no[1]}; '
+      f'asked after: {len(_bl_questions)})',
+      _bl_no == (1, True) and not _bl_questions
+      and _bl_replacement != _bl_hand)
+# An offer the toast's Undo has taken is gone for good. Right after Undo the
+# old arrangement IS the list's, so there is nothing to offer -- but here
+# the arrangement made by hand is alphabetical, so a later move made while
+# sorted Title A–Z replaces nothing, and a stale offer would then try to
+# undo that move the next time Custom order is chosen.
+_bl_abc = sorted(_bl_fruit)
+_co_fresh([dict(n, order=_bl_abc.index(n['title'].split()[0]))
+           for n in _bl_placed], sort='Custom order')
+_bl_sort('Title Z–A')
+app._hide_toast()
+app._put_keyboard_on_card(app._card_order()[0]); _ls_settle()
+app._list_move_by_keyboard(1); _ls_settle()
+_qa_click(app.toast_action_lbl); _ls_settle()
+_bl_sort('Title A–Z')
+app._put_keyboard_on_card(app._card_order()[0]); _ls_settle()
+app._list_move_by_keyboard(1); _ls_settle()
+_bl_moved = _bl_names()
+del _bl_questions[:]
+_bl_sort('Custom order')
+check(f'...and an offer Undo has taken does not come back over a move made '
+      f'since (asked {[q[0] for q in _bl_questions]}; the move kept: '
+      f'{_bl_names() == _bl_moved}, {_bl_moved[:3]})',
+      not _bl_questions and _bl_names() == _bl_moved
+      and _bl_moved[:2] == ['Banana', 'Apple'])
+app.ask_yes_no = _ls_real_ask
 app._hide_toast()
 
 # 5f. One card wears the open note's outline: the open note's. A new note's

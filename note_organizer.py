@@ -14425,7 +14425,32 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
     def _on_sort_chosen(self, value):
         """The Sort dropdown's choice. Custom order chosen before anything
         was ever placed starts from the order the list was showing, rather
-        than from an order nobody has seen."""
+        than from an order nobody has seen.
+
+        And Custom order chosen after a move replaced an arrangement made by
+        hand (see _move_note) asks, once, whether to bring that arrangement
+        back. Its toast offered it for eight seconds, and the next toast
+        with an Undo -- a delete's, say -- took the offer's place: the
+        arrangement then had no way back at all. Kept for the session, it
+        is offered where the person goes looking for it."""
+        replaced = getattr(self, "_replaced_custom_order", None)
+        if value == self.SORT_CUSTOM and replaced is not None:
+            self._replaced_custom_order = None
+            marks, sort_before = replaced
+            if (self._put_back_custom_order(marks, dry_run=True)
+                    and self.ask_yes_no(
+                        "Bring back your Custom order?",
+                        f"Moving a note while the list was sorted by "
+                        f"{sort_before} started Custom order again from that "
+                        f"sort, and the arrangement you had made by hand was "
+                        f"replaced.\n\n"
+                        f"Bring back the arrangement you made by hand? Moves "
+                        f"made since then will be undone. With No, the list "
+                        f"stays as it is now, and this is not asked again.",
+                        icon="question")):
+                self._put_back_custom_order(marks)
+                self.save_notes()
+                self.set_status("Put back your Custom order")
         if (value == self.SORT_CUSTOM
                 and not any("order" in n for n in self.notes)):
             before = getattr(self, "_sort_shown", None)
@@ -14500,6 +14525,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.save_notes()
         self.refresh_note_list()
         if replaced is not None:
+            # Kept beyond the toast, which the next offer replaces: choosing
+            # Custom order asks whether to bring it back (_on_sort_chosen).
+            self._replaced_custom_order = replaced
             self._show_toast(
                 f"Custom order started again from {replaced[1]}",
                 action=lambda: self._undo_custom_order(*replaced))
@@ -14508,24 +14536,44 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
     def _undo_custom_order(self, marks, sort_before):
         """Put back the arrangement a move replaced, and the sort the move
         was made in (see _move_note) -- the moves made on top of the new
-        one since go with it, because they were made on the replacement.
-
-        Notes are named by the dicts themselves, so a note made since keeps
-        whatever place it has, and one deleted since is simply not there to
-        put back."""
-        present = {id(n) for n in self.notes}
-        for note, had, old in marks:
-            if id(note) not in present:
-                continue
-            if had:
-                note["order"] = old
-            else:
-                note.pop("order", None)
+        one since go with it, because they were made on the replacement."""
+        self._replaced_custom_order = None
+        self._put_back_custom_order(marks)
         self.save_notes()
         self.sort_var.set(sort_before)
         self.refresh_note_list()
         self.set_status(f"Put back your Custom order; the list is sorted by "
                         f"{sort_before} again")
+
+    def _put_back_custom_order(self, marks, dry_run=False):
+        """Give every note in `marks` -- (note, had a place, the place), as
+        _move_note took them -- the place it had, or its having none; with
+        dry_run, only count. Returns how many notes' places change.
+
+        A note is found by the dict itself or by its uid. A note deleted and
+        brought back from the Trash since is a new dict with the same uid,
+        and its place comes back with the rest; held by the dict alone, it
+        stayed where the replacement had put it. A note made since keeps
+        whatever place it has, and one still in the Trash is not there."""
+        present = {id(n) for n in self.notes}
+        by_uid = {n.get("uid"): n for n in self.notes if n.get("uid")}
+        changed = 0
+        for note, had, old in marks:
+            target = note if id(note) in present else by_uid.get(
+                note.get("uid") or None)
+            if target is None:
+                continue
+            if ("order" in target) == had and (not had
+                                               or target["order"] == old):
+                continue
+            changed += 1
+            if dry_run:
+                continue
+            if had:
+                target["order"] = old
+            else:
+                target.pop("order", None)
+        return changed
 
     def _list_move_by_keyboard(self, delta):
         """Alt+Up or Alt+Down: the card with the ring moves one place, and
