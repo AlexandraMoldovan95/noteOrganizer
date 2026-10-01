@@ -260,7 +260,11 @@ class CalendarViewMixin:
         self.cal_scroll_canvas = tk.Canvas(scroll_host, highlightthickness=0, bg=self.colors["bg"])
         self.track_theme(self.cal_scroll_canvas, bg="bg")
         cal_sb = ttk.Scrollbar(scroll_host, orient="vertical", command=self.cal_scroll_canvas.yview)
-        self.cal_scroll_canvas.configure(yscrollcommand=cal_sb.set)
+
+        def _cal_view_moved(first, last, _set=cal_sb.set):
+            _set(first, last)
+            self._cal_scroll_moved(first)
+        self.cal_scroll_canvas.configure(yscrollcommand=_cal_view_moved)
         cal_sb.pack(side="right", fill="y")
         self.cal_scroll_canvas.pack(side="left", fill="both", expand=True)
 
@@ -893,6 +897,19 @@ class CalendarViewMixin:
             self.show_note_hover_preview(hit[2], hit[1])
         elif self._cal_cells[hit[1]]["has_notes"]:
             self.show_day_summary_tooltip(hit[1])
+
+    def _cal_scroll_moved(self, first):
+        """The calendar's scroll area moved: the days slid under a pointer
+        that stayed still, so a preview describes what is no longer under
+        it. The wheel scrolls without a redraw, and only a redraw used to
+        take a preview down (_draw_calendar_grid) -- PgDn's fix, which the
+        wheel never reached. Only the top of the view counts: content that
+        grows or shrinks below leaves every day where it was."""
+        if first == getattr(self, "_cal_scroll_first", None):
+            return
+        self._cal_scroll_first = first
+        self._cal_hover_key = None
+        self.hide_day_tooltip()
 
     def _cal_pointer_left(self, _event=None):
         self._cal_hover_key = None

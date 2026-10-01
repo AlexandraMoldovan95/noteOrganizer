@@ -88,6 +88,7 @@
   "_cal_pointer_moved": "(self, event)",
   "_cal_pressed": "(self, event)",
   "_cal_right_pressed": "(self, event)",
+  "_cal_scroll_moved": "(self, first)",
   "_cal_texts": "(self)",
   "_calc_clear_history": "(self)",
   "_calc_insert_formula": "(self, formula)",

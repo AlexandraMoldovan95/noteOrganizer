@@ -3283,6 +3283,34 @@ app.hide_day_tooltip()
 app.cal_year, app.cal_month = 2026, 7
 app.render_calendar(); app.update()
 
+# ---- ...AND SO DOES THE WHEEL ----
+# The wheel scrolls the calendar's area under the same still pointer, with
+# no redraw -- and only a redraw took the preview down: the preview of the
+# 8th stayed up over the 22nd. The area's own movement takes it down now.
+_wp_geom = app.winfo_geometry()
+try:
+    app.geometry('1150x600'); app.update()
+    app.open_day_popup('2026-07-29'); app.update()
+    app.cal_scroll_canvas.yview_moveto(0); app.update()
+    _wp_at = _cd_point('2026-07-08', chip=0)
+    _qa_fire(app.cal_canvas, '<Motion>', x=_wp_at[0], y=_wp_at[1]); app.update()
+    _wp_tip = getattr(app, '_day_tooltip', None)
+    _wp_up = _wp_tip is not None and bool(_wp_tip.winfo_exists())
+    _wp_before = app.cal_scroll_canvas.yview()[0]
+    _qa_fire(app.cal_canvas, '<MouseWheel>', x=_wp_at[0], y=_wp_at[1],
+             delta=-360)
+    app.update()
+    _wp_after = app.cal_scroll_canvas.yview()[0]
+    check(f"the wheel under a note's preview takes the preview down with the "
+          f"days it moved (up before: {_wp_up}, view {_wp_before:.2f} -> "
+          f"{_wp_after:.2f}, after: {getattr(app, '_day_tooltip', None)})",
+          _wp_up and _wp_after > _wp_before
+          and getattr(app, '_day_tooltip', None) is None)
+finally:
+    app.hide_day_tooltip()
+    app.close_day_panel()
+    app.geometry(_wp_geom); app.update()
+
 # ---- WHILE HISTORY COVERS THE MONTH, THE PAGE KEYS PAGE HISTORY ----
 # PgUp/PgDn/Home asked only whether the Calendar tab was showing, so under
 # the register they moved the hidden month -- three PgDn from July came
