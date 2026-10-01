@@ -67,12 +67,20 @@ class AttachmentsMixin:
                 "one to add another, or split this into two notes.")
             return
         if len(filepaths) > room:
+            # The note the question is about, held across the answer: the
+            # editor can move on while a question waits, and the files
+            # would then land in whichever note is open by then.
+            asked_about = (getattr(self, "selected_note_id", None),
+                           self.current_attachments)
             if not self.ask_yes_no(
                     "More files than this note can hold",
                     f"A note can keep {MAX_ATTACHMENTS} attached files, and "
                     f"there is room for {room} more.\n\n"
                     f"Attach the first {room} and leave the rest?",
                     icon="warning", default="no"):
+                return
+            if asked_about != (getattr(self, "selected_note_id", None),
+                               self.current_attachments):
                 return
             filepaths = filepaths[:room]
         added_any = False
@@ -95,6 +103,7 @@ class AttachmentsMixin:
         if not (0 <= index < len(self.current_attachments)):
             return
         target = self.current_attachments[index]
+        note_id = getattr(self, "selected_note_id", None)
         # This deletes the STORED FILE, permanently — the one destructive
         # gesture the audit's confirm sweep missed (it bypassed the
         # dialogs entirely, so no sweep of ask_yes_no callers could see
@@ -106,6 +115,18 @@ class AttachmentsMixin:
                 "note?\n\nThe stored copy is deleted with it — this can't "
                 "be undone.",
                 icon="warning", default="no"):
+            return
+        # The file asked about, found again: while the question waited the
+        # editor could move on to another note, and the index would then
+        # name ANOTHER attachment -- of another note -- whose stored file
+        # this deletes for good. Gone or moved on means nothing is removed.
+        if getattr(self, "selected_note_id", None) != note_id:
+            return
+        stored = target.get("stored_as")
+        index = next((i for i, a in enumerate(self.current_attachments)
+                      if a is target
+                      or (stored and a.get("stored_as") == stored)), None)
+        if index is None:
             return
         removed = self.current_attachments.pop(index)
         _delete_attachment_files([{"attachments": [removed]}])

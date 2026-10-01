@@ -644,6 +644,43 @@ check('the confirm asks with the warning glyph and No pre-selected',
 check('remove_attachment clears the list', len(app.current_attachments) == 0)
 check('remove_attachment deletes the file from disk', not os.path.isfile(stored_path))
 
+# The file asked about is the file removed. While the question waited, the
+# editor could move on to another note; the index then named THAT note's
+# attachment, whose stored file went for good.
+_mv_files = []
+for _mv_name in ('mv_a.txt', 'mv_b.txt'):
+    _mv_path = os.path.join(NO.ATTACHMENTS_DIR, _mv_name)
+    with open(_mv_path, 'w') as _mv_f:
+        _mv_f.write('keep me')
+    _mv_files.append(_mv_path)
+app.current_attachments = [{'filename': 'mine.txt', 'stored_as': 'mv_a.txt'}]
+_mv_other = [{'filename': 'theirs.txt', 'stored_as': 'mv_b.txt'}]
+_mv_note_before = app.selected_note_id
+
+
+def _mv_answer(*a, **k):
+    # Another note opens under the waiting question, then the answer: Yes.
+    app.selected_note_id = (_mv_note_before or 0) + 999
+    app.current_attachments = list(_mv_other)
+    return True
+
+
+app.ask_yes_no = _mv_answer
+try:
+    app.remove_attachment(0)
+    app.update()
+finally:
+    app.ask_yes_no = _orig_ask_att
+    app.selected_note_id = _mv_note_before
+check('a Yes given after the editor moved on removes nothing: the other '
+      'note\'s file stays on disk and in its list (%s)' % app.current_attachments,
+      os.path.isfile(_mv_files[1]) and app.current_attachments == _mv_other
+      and os.path.isfile(_mv_files[0]))
+app.current_attachments = []
+for _mv_path in _mv_files:
+    if os.path.isfile(_mv_path):
+        os.remove(_mv_path)
+
 # ---- COMBINATIONS ----
 
 # Template + Checklist + Category together
@@ -1831,6 +1868,30 @@ finally:
     app.ask_yes_no = _real_ask6
 check('answering Yes attaches exactly what fits, no more',
       len(app.current_attachments) == _cap6)
+# ...and to the note it asked about: a Yes given after the editor moved on
+# to another note attaches nothing to the note that opened meanwhile.
+app.current_attachments = app.current_attachments[:_cap6 - 1]
+app.refresh_attachments_list(); app.update()
+_ad_note_before = app.selected_note_id
+_ad_other = []
+
+
+def _ad_answer(*a, **k):
+    app.selected_note_id = (_ad_note_before or 0) + 999
+    app.current_attachments = _ad_other
+    return True
+
+
+app.ask_yes_no = _ad_answer
+fd.askopenfilenames = lambda **k: (tmp_file, tmp_file, tmp_file)
+try:
+    app.add_attachment()
+    app.update()
+finally:
+    app.ask_yes_no = _real_ask6
+    app.selected_note_id = _ad_note_before
+check('a Yes given after the editor moved on attaches nothing to the note '
+      'that opened meanwhile (%d)' % len(_ad_other), _ad_other == [])
 app.current_attachments = []
 app.refresh_attachments_list()
 app.new_note(); app.update()
