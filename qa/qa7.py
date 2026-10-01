@@ -2085,13 +2085,46 @@ check('the reset entry appears exactly where an override exists',
 # crash the suite mid-run — the footer rule.)
 _reset_cmd = next((c for l, c in _with_ov if 'Reset this day' in l), None)
 app.ask_yes_no = lambda *a, **k: True
-if _reset_cmd is not None:
-    _reset_cmd(); app.update()
-check('reset drops the override and the day shows series content',
-      _reset_cmd is not None
-      and '2026-07-15' not in (app.find_note(64).get('overrides') or {})
-      and NO.effective_note(app.find_note(64),
-                            '2026-07-15')['body'] == 'series body')
+# Who reaches for the Repeat control: an insertion once left "Make this
+# repeat"'s last lines at the end of the reset, so the reset said "Set a
+# repeat frequency" about a series and sent the keyboard to the hidden
+# editor, while "Make this repeat" -- which promises both -- did neither.
+_rs_focus = []
+app.rec_freq_menu.focus_set = lambda: _rs_focus.append('rec_freq_menu')
+try:
+    if _reset_cmd is not None:
+        _reset_cmd(); app.update()
+    _rs_status = app.status_lbl.cget('text')
+    _rs_reset_focus = list(_rs_focus)
+    check('reset drops the override and the day shows series content',
+          _reset_cmd is not None
+          and '2026-07-15' not in (app.find_note(64).get('overrides') or {})
+          and NO.effective_note(app.find_note(64),
+                                '2026-07-15')['body'] == 'series body')
+    check(f'...and says so, leaving the keyboard where it was ({_rs_status!r}, '
+          f'{_rs_reset_focus})',
+          _rs_status == 'This day follows the series again'
+          and _rs_reset_focus == [])
+    _rs_focus.clear()
+    app.notes.append(NO.normalize_note({
+        'id': 7302, 'title': 'Plain dated', 'body': 'x',
+        'category': 'General', 'date': '2026-07-20'}))
+    app.save_notes()
+    app._ctx_make_recurring(app.find_note(7302), return_day='2026-07-20')
+    app.update()
+    check(f'"Make this repeat" puts the keyboard on the Repeat control, as it '
+          f'promises ({app.status_lbl.cget("text")!r}, {_rs_focus})',
+          _rs_focus == ['rec_freq_menu']
+          and app.status_lbl.cget('text')
+          == 'Set a repeat frequency to make this note recurring')
+finally:
+    del app.rec_freq_menu.focus_set
+    app._pending_calendar_return = None
+    app._update_calendar_return_button()
+    app.notes = [n for n in app.notes if n.get('id') != 7302]
+    app.save_notes()
+    app.new_note()
+    app.notebook.select(app.TAB_CALENDAR); app.update()
 app.close_day_panel(); app.update()
 
 # The sidebar filter isolates calendar notes — one judgment, used by

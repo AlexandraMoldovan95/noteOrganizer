@@ -17913,6 +17913,16 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 "date_str": return_day, "origin": "edit",
             }
             self._update_calendar_return_button()
+        # Nudge focus toward the recurrence dropdown so it's obvious what to do.
+        # (These lines sat at the end of _reset_occurrence_override instead,
+        # left there by an insertion: the reset's status said "Set a repeat
+        # frequency" about a note that already repeats and sent the keyboard
+        # to the hidden editor, while this, which promises both, did neither.)
+        try:
+            self.rec_freq_menu.focus_set()
+        except (AttributeError, tk.TclError):
+            pass
+        self.set_status("Set a repeat frequency to make this note recurring")
 
     def _reset_occurrence_override(self, note, occurrence_date):
         """Drop one day's separate edits so it follows the series again.
@@ -17942,12 +17952,6 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.render_calendar()
         self.refresh_day_panel()
         self.set_status("This day follows the series again")
-        # Nudge focus toward the recurrence dropdown so it's obvious what to do.
-        try:
-            self.rec_freq_menu.focus_set()
-        except (AttributeError, tk.TclError):
-            pass
-        self.set_status("Set a repeat frequency to make this note recurring")
 
     def _context_delete_note(self, note, occurrence_date=None):
         """Delete triggered from the right-click menu. Routes through the normal
