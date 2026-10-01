@@ -14931,6 +14931,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if note is None or anchor is None or anchor is note:
             return False
         replaced = None
+        if (self.sort_var.get() == self.SORT_CUSTOM
+                and getattr(self, "_replaced_custom_order", None) is not None):
+            # A move made by hand in Custom order while an offer is kept:
+            # the arrangement on screen is now one made by hand too (see
+            # below, where the next replacement is kept).
+            self._custom_moved_since_kept = True
         if self.sort_var.get() != self.SORT_CUSTOM:
             sort_before = self.sort_var.get()
             # What every note carried, held by the note itself: an id freed
@@ -14962,8 +14968,13 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             # in a sorted view "replaced" the first replacement, and its
             # marks took the place of the hand-made order's, which then had
             # no way back at all. That move's toast still offers its own.
-            if getattr(self, "_replaced_custom_order", None) is None:
+            # But moves made by hand on that replacement make IT the newest
+            # arrangement made by hand, and the one a later move replaces is
+            # then the one kept: offered the older one, the newer was lost.
+            if (getattr(self, "_replaced_custom_order", None) is None
+                    or getattr(self, "_custom_moved_since_kept", False)):
                 self._replaced_custom_order = replaced
+                self._custom_moved_since_kept = False
             self._show_toast(
                 f"Custom order started again from {replaced[1]}",
                 action=lambda: self._undo_custom_order(*replaced))

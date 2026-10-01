@@ -2044,6 +2044,33 @@ check(f'...also when the second move\'s Undo was taken first (sort after it '
       f'{_bl_names()})',
       _bl_after_undo == 'Title A–Z' and len(_bl_questions) == 1
       and _bl_names() == _bl_hand)
+# Moves made by hand in Custom order after a sorted-view move make the
+# list an arrangement made by hand again; a second sorted-view move then
+# replaces THAT one, and it is the one offered back. The older offer was
+# kept instead, and the newer arrangement had no way back.
+_co_fresh(_bl_placed, sort='Custom order')
+_bl_sort('Title A–Z')
+app._hide_toast()
+app._put_keyboard_on_card(app._card_order()[0]); _ls_settle()
+app._list_move_by_keyboard(1); _ls_settle()
+app._hide_toast()
+app._put_keyboard_on_card(app._card_order()[3]); _ls_settle()
+app._list_move_by_keyboard(-1); _ls_settle()
+app._list_move_by_keyboard(-1); _ls_settle()
+_bl_newer = _bl_names()
+_bl_sort('Title A–Z')
+app._hide_toast()
+app._put_keyboard_on_card(app._card_order()[0]); _ls_settle()
+app._list_move_by_keyboard(1); _ls_settle()
+app._hide_toast()
+del _bl_questions[:]
+_bl_answer[0] = True
+_bl_sort('Custom order')
+check(f'...and when the replaced order was rearranged by hand in between, '
+      f'the newer arrangement is the one offered back (asked '
+      f'{[q[0] for q in _bl_questions]}; now {_bl_names()}; newer {_bl_newer})',
+      len(_bl_questions) == 1 and _bl_names() == _bl_newer
+      and _bl_newer != _bl_hand)
 # No: the list stays as the replacement left it, and the question does not
 # come back.
 _bl_sort('Title A–Z')
