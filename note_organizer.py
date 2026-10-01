@@ -15045,9 +15045,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                       "pointer_y": event.y, "press_wy": event.y,
                       "scroll_job": None,
                       # Pressed in the open list, an edge may scroll at
-                      # once; pressed at an edge, only once the pointer
-                      # has left it or stayed there a moment.
-                      "edge_free": self._list_edge_depth(event.y) is None,
+                      # once; pressed at an edge -- or a slip away from
+                      # one -- only once the pointer has left it or stayed
+                      # there a moment.
+                      "edge_free": not self._list_near_edge(event.y),
                       "edge_since": None, "edge_beats": 0}
 
     def _list_dragged(self, event):
@@ -15175,6 +15176,16 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             return y - (height - self.DRAG_EDGE), 1
         return None
 
+    def _list_near_edge(self, y):
+        """Whether widget y is at the list's top or bottom edge, or a slip
+        away from it. A press a pixel or three outside the edge counted as
+        one in the open list, so a hand that slipped into the edge
+        scrolled the list at once and dropped the card a place away; the
+        same press a few pixels further in waited, as a slip should."""
+        slip = 2 * self.DRAG_THRESHOLD
+        return any(self._list_edge_depth(y + d) is not None
+                   for d in (0, -slip, slip))
+
     def _scroll_list_drag_near_edge(self):
         """Near the top or bottom of the list a drag scrolls it, one step
         at a time while the pointer stays there -- or a card could never
@@ -15194,8 +15205,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             return
         if self._list_edge_depth(drag["pointer_y"]) is None:
             # Out in the open list: an edge reached from here scrolls
-            # without waiting, from its slowest step again.
-            drag["edge_free"] = True
+            # without waiting, from its slowest step again -- once the
+            # pointer is clear of the edge, not a slip away from it.
+            if not self._list_near_edge(drag["pointer_y"]):
+                drag["edge_free"] = True
             drag["edge_since"] = None
             drag["edge_beats"] = 0
             if drag["scroll_job"] is not None:

@@ -1393,6 +1393,35 @@ check(f'a click whose hand slips 6px on a card at the list\'s bottom or top '
       and app.sort_var.get() == 'Recently updated'
       and not any('order' in n for n in app.notes)
       and app._card_order() == _co_order)
+# A press a pixel or three OUTSIDE the edge counted as one in the open
+# list: the same slip into the edge then scrolled the list at once, and a
+# slow click dropped the card a place away. A slip away from the edge
+# waits as one at it does.
+_co_out = None
+for _co_d in (1, 2, 3):
+    _co_yy = app.canvas.winfo_height() - app.DRAG_EDGE - _co_d
+    _co_rec = app._list_record_at(120, _co_yy)
+    if _co_rec is not None and _co_rec['kind'] == 'note':
+        _co_out = _co_yy
+        break
+check(f'fixture: a card lies a few pixels outside the list\'s bottom edge '
+      f'(at y {_co_out})', _co_out is not None)
+app.DRAG_EDGE_DWELL_MS = 10 ** 9
+try:
+    _co_outside = _co_edge_slip(_co_out, 7) if _co_out is not None else None
+    # A slip that passes first through the strip just outside the edge is
+    # not the pointer having been out in the open list either.
+    _co_far = (_co_edge_slip(_co_out - 6, 12) if _co_out is not None
+               and app._list_record_at(120, _co_out - 6) is not None else None)
+finally:
+    app.__dict__.pop('DRAG_EDGE_DWELL_MS', None)
+check(f'...and a click there whose hand slips 7px into the edge scrolls '
+      f'nothing and drops nothing, nor one pressed 6px further in that slips '
+      f'12px (started, moved, slot {_co_outside}; {_co_far}; sort '
+      f'{app.sort_var.get()!r})',
+      _co_outside == (True, 0, None) and _co_far == (True, 0, None)
+      and app.sort_var.get() == 'Recently updated'
+      and not any('order' in n for n in app.notes))
 # ...while one held there scrolls the list after all: a card at the edge
 # can still be taken further than the list shows. Waited for, not timed.
 _co_y = _co_press_at(app.canvas.winfo_height() - 10)
