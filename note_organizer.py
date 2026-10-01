@@ -13955,6 +13955,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
     DRAG_THRESHOLD = 5          # pixels a press must travel to become a drag
     DRAG_EDGE = 28              # near the list's top or bottom, a drag scrolls
     DRAG_SCROLL_MS = 40         # ...one step this often
+    DRAG_EDGE_DWELL_MS = 400    # ...a drag that began there, once held this long
+    DRAG_SCROLL_RAMP = 10       # ...its steps growing to full over these beats
 
     LIST_DRAW_WIDTH = 250       # the list's width, as the old frame's was
     CARD_MARGIN = (5, 5)        # above and below each card
@@ -14561,7 +14563,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                       "grab_dy": cy - rec["y0"], "started": False,
                       "offset": 0, "slot": None, "line": None,
                       "pointer_y": event.y, "press_wy": event.y,
-                      "scroll_job": None}
+                      "scroll_job": None,
+                      # Pressed in the open list, an edge may scroll at
+                      # once; pressed at an edge, only once the pointer
+                      # has left it or stayed there a moment.
+                      "edge_free": self._list_edge_depth(event.y) is None,
+                      "edge_since": None, "edge_beats": 0}
 
     def _list_dragged(self, event):
         """The pointer moving with the button down."""
@@ -14674,45 +14681,91 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             return None
         return slot
 
-    def _scroll_list_drag_near_edge(self):
-        """Near the top or bottom of the list a drag scrolls it, one step
-        at a time while the pointer stays there -- or a card could never
-        be taken further than the list shows."""
-        drag = getattr(self, "_drag", None)
-        if not drag or not drag["started"]:
-            return
+    def _list_edge_depth(self, y):
+        """How far a pointer at widget y is inside the list's top or bottom
+        edge, and which way a drag there scrolls the list: (depth, -1 or 1),
+        or None in the open list between the two."""
         try:
             height = self.canvas.winfo_height()
         except tk.TclError:
-            return
-        y = drag["pointer_y"]
+            return None
         if y < self.DRAG_EDGE:
-            depth, direction = self.DRAG_EDGE - y, -1
-        elif y > height - self.DRAG_EDGE:
-            depth, direction = y - (height - self.DRAG_EDGE), 1
-        else:
+            return self.DRAG_EDGE - y, -1
+        if y > height - self.DRAG_EDGE:
+            return y - (height - self.DRAG_EDGE), 1
+        return None
+
+    def _scroll_list_drag_near_edge(self):
+        """Near the top or bottom of the list a drag scrolls it, one step
+        at a time while the pointer stays there -- or a card could never
+        be taken further than the list shows.
+
+        Not at once for a drag that BEGAN there. The card cut by the list's
+        edge is the one a hand most often clicks, and a click whose hand
+        slips five pixels starts a drag: it scrolled the list under the
+        held card from the first beat, and the release dropped the card one
+        to three places away -- the list switched to Custom order, or a
+        hand-made one changed without a word. Such a drag waits until the
+        pointer has been out in the open list, or has stayed at the edge
+        for DRAG_EDGE_DWELL_MS; and every arrival at an edge starts slowly
+        (_list_drag_scroll_step)."""
+        drag = getattr(self, "_drag", None)
+        if not drag or not drag["started"]:
+            return
+        if self._list_edge_depth(drag["pointer_y"]) is None:
+            # Out in the open list: an edge reached from here scrolls
+            # without waiting, from its slowest step again.
+            drag["edge_free"] = True
+            drag["edge_since"] = None
+            drag["edge_beats"] = 0
             if drag["scroll_job"] is not None:
                 self.after_cancel(drag["scroll_job"])
                 drag["scroll_job"] = None
             return
-        # Faster the further the pointer is pushed past the edge: a step a
-        # beat at the edge itself, ten beyond it. At one step a beat, taking
-        # a card from the bottom of 300 notes to the top took over a minute.
-        step = direction * min(10, 1 + int(depth) // 8)
+        if drag["edge_since"] is None:
+            drag["edge_since"] = time.monotonic()
         if drag["scroll_job"] is None:
-            drag["scroll_job"] = self.after(self.DRAG_SCROLL_MS,
-                                            lambda: self._list_drag_scroll_step(step))
+            delay = self.DRAG_SCROLL_MS
+            if not drag["edge_free"]:
+                waited = (time.monotonic() - drag["edge_since"]) * 1000
+                delay = max(delay, int(self.DRAG_EDGE_DWELL_MS - waited) + 1)
+            drag["scroll_job"] = self.after(delay, self._list_drag_scroll_step)
 
-    def _list_drag_scroll_step(self, step):
+    def _list_drag_scroll_step(self):
+        """One beat of a drag's scrolling at the list's edge.
+
+        Faster the further the pointer is pushed past the edge: a tenth of
+        the view a beat at the edge itself, the whole view beyond it -- at
+        one tenth a beat, taking a card from the bottom of 300 notes to the
+        top took over a minute. But the first beats at an edge take a part
+        of that, growing to all of it over DRAG_SCROLL_RAMP beats: at the
+        full step from the first beat, an edge reached a moment before the
+        release had already carried the list a card or two along."""
         drag = getattr(self, "_drag", None)
         if not drag or not drag["started"]:
             return
         drag["scroll_job"] = None
-        self._list_scrolled_by_hand()
+        edge = self._list_edge_depth(drag["pointer_y"])
+        if edge is None:
+            return
+        if not drag["edge_free"]:
+            if ((time.monotonic() - drag["edge_since"]) * 1000
+                    < self.DRAG_EDGE_DWELL_MS):
+                # Still a hand that slipped, as far as anyone can tell.
+                self._scroll_list_drag_near_edge()
+                return
+            drag["edge_free"] = True
+        depth, direction = edge
+        drag["edge_beats"] += 1
         try:
-            self.canvas.yview_scroll(step, "units")
+            unit = self.canvas.winfo_height() / 10.0
+            top = self.canvas.canvasy(0)
         except tk.TclError:
             return
+        step = min(10, 1 + int(depth) // 8) * unit * min(
+            1.0, drag["edge_beats"] / float(self.DRAG_SCROLL_RAMP))
+        self._list_scrolled_by_hand()
+        self._apply_list_scroll_px(top + direction * max(1, round(step)))
         self._follow_list_drag()
         self._scroll_list_drag_near_edge()
 

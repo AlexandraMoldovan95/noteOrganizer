@@ -1272,8 +1272,13 @@ _co_top = app.canvas.canvasy(0)
 _co_drawn = len(app._list_drawn)
 _co_h = app.canvas.winfo_height()
 _co_move_to(_co_y, app.canvas.canvasy(_co_h - 3))
+# Held until the state promised: the list scrolled well down AND the rows
+# that were waiting drawn. Waiting for the rows alone measured how fast the
+# scroll STARTS, which it now does slowly on purpose (see the edge-slip
+# checks below): the first rows arrived after 84px.
 _co_end = time.time() + 6
-while time.time() < _co_end and len(app._list_drawn) <= _co_drawn:
+while time.time() < _co_end and (len(app._list_drawn) <= _co_drawn
+                                 or app.canvas.canvasy(0) - _co_top <= 100):
     app.update(); time.sleep(0.02)
 _co_scrolled = app.canvas.canvasy(0) - _co_top
 _co_slot = app._drag['slot'] if getattr(app, '_drag', None) else None
@@ -1306,6 +1311,121 @@ _co_up = _co_let - app.canvas.canvasy(0)
 _qa_fire(app.canvas, '<ButtonRelease-1>', x=120, y=3); _ls_settle()
 check(f'...and one held at the top edge scrolls it up ({_co_up:.0f}px)',
       _co_up >= 100 and _ls_same_as_rebuild())
+
+
+# A press AT an edge is not a drag carried there. The card the list's edge
+# cuts is the one a hand most often clicks, and a click whose hand slips
+# five pixels starts a drag: it scrolled the list under the held card from
+# the very first beat, and the release dropped the card a place or three
+# away -- the list in Custom order, or a hand-made one changed silently. A
+# drag that begins at an edge scrolls only once it has been out in the open
+# list, or has stayed at the edge a while; and any arrival at an edge starts
+# slowly. The beats are driven here by hand, the timers cancelled, so no
+# stopwatch decides what a beat did.
+def _co_cancel_beat():
+    drag = app._drag
+    if drag['scroll_job'] is not None:
+        app.after_cancel(drag['scroll_job'])
+        drag['scroll_job'] = None
+
+
+def _co_beat():
+    """One beat of the edge scroll, as its timer would run it; returns how
+    far it moved the view. The drag's own timer is cancelled before and
+    after, so only these beats move anything."""
+    _co_cancel_beat()
+    top = app.canvas.canvasy(0)
+    app._list_drag_scroll_step()
+    _co_cancel_beat()
+    app.update_idletasks()
+    return app.canvas.canvasy(0) - top
+
+
+def _co_press_at(y):
+    """A press on the card at (or a few pixels from) widget y; returns
+    where. Measured AFTER it: a press brings a card the edge cuts into view
+    itself, which is not the edge scrolling."""
+    for yy in [y] + [y + d for d in range(-6, 7) if d]:
+        rec = app._list_record_at(120, yy)
+        if rec is not None and rec['kind'] == 'note':
+            y = yy
+            break
+    _qa_click(app.canvas, x=120, y=y); _ls_settle()
+    return y
+
+
+def _co_edge_slip(y, dy):
+    """A press on the card at widget y and a slip of dy pixels with the
+    button held, then a beat; returns (drag started, view moved, slot)."""
+    y = _co_press_at(y)
+    top = app.canvas.canvasy(0)
+    _qa_fire(app.canvas, '<B1-Motion>', x=120, y=y + dy // 2); app.update()
+    _qa_fire(app.canvas, '<B1-Motion>', x=120, y=y + dy); app.update()
+    drag = getattr(app, '_drag', None)
+    started = bool(drag and drag['started'])
+    if started:
+        _co_beat()
+    slot = drag['slot'] if drag else None
+    moved = app.canvas.canvasy(0) - top
+    _qa_fire(app.canvas, '<ButtonRelease-1>', x=120, y=y + dy); _ls_settle()
+    return started, moved, slot
+
+
+_co_edge_notes = [{'id': 1750 + i, 'title': 'Edge %02d' % i, 'body': 'b',
+                   'category': 'General', 'created': '2026-01-01 00:%02d' % i,
+                   'updated': '2026-02-01 00:%02d' % (59 - i)}
+                  for i in range(14)]
+_co_fresh(_co_edge_notes)
+app._list_scrollbar_moved('moveto', '0.3'); _ls_settle()
+_co_order = app._card_order()
+# However long the hold: what is asked is whether a beat may scroll yet.
+app.DRAG_EDGE_DWELL_MS = 10 ** 9
+try:
+    _co_bottom = _co_edge_slip(app.canvas.winfo_height() - 10, 6)
+    _co_top = _co_edge_slip(10, -6)
+finally:
+    app.__dict__.pop('DRAG_EDGE_DWELL_MS', None)
+check(f'a click whose hand slips 6px on a card at the list\'s bottom or top '
+      f'edge scrolls nothing and drops nothing (bottom: started, moved, slot '
+      f'{_co_bottom}; top {_co_top}; sort {app.sort_var.get()!r}, notes with '
+      f'a place: {sum(1 for n in app.notes if "order" in n)})',
+      _co_bottom == (True, 0, None) and _co_top == (True, 0, None)
+      and app.sort_var.get() == 'Recently updated'
+      and not any('order' in n for n in app.notes)
+      and app._card_order() == _co_order)
+# ...while one held there scrolls the list after all: a card at the edge
+# can still be taken further than the list shows. Waited for, not timed.
+_co_y = _co_press_at(app.canvas.winfo_height() - 10)
+_co_top0 = app.canvas.canvasy(0)
+_qa_fire(app.canvas, '<B1-Motion>', x=120, y=_co_y + 6); app.update()
+_co_end = time.time() + 6
+while time.time() < _co_end and app.canvas.canvasy(0) == _co_top0:
+    app.update(); time.sleep(0.02)
+_co_held = app.canvas.canvasy(0) - _co_top0
+app._list_drag_escape()
+_qa_fire(app.canvas, '<ButtonRelease-1>', x=120, y=_co_y + 6); _ls_settle()
+check(f'...while a drag held at the edge it began on scrolls the list after a '
+      f'moment ({_co_held:.0f}px)', _co_held > 0
+      and app._card_order() == _co_order)
+# Arriving at the edge from the open list, the first beat is a part of the
+# full step, and the steps grow to it.
+_co_fresh([dict(n, id=2300 + i, title='Ramp %02d' % i)
+           for i, n in enumerate(_co_edge_notes * 3)])
+_co_h = app.canvas.winfo_height()
+_co_y = _co_press(2301)
+for _co_to in range(_co_y, _co_h - 30, 6):
+    _qa_fire(app.canvas, '<B1-Motion>', x=120, y=_co_to); app.update()
+_qa_fire(app.canvas, '<B1-Motion>', x=120, y=_co_h - 3)
+_co_steps = [_co_beat() for _ in range(12)]
+_co_full = min(10, 1 + (_co_h - 3 - (_co_h - app.DRAG_EDGE)) // 8) * _co_h / 10.0
+app._list_drag_escape()
+_qa_fire(app.canvas, '<ButtonRelease-1>', x=120, y=_co_h - 3); _ls_settle()
+check(f'...and arriving at an edge from the open list, the scroll starts with '
+      f'a part of its step and grows to all of it ({[round(s) for s in _co_steps]}'
+      f'; the full step {_co_full:.0f}px)',
+      0 < _co_steps[0] <= _co_full / 5
+      and all(b >= a for a, b in zip(_co_steps, _co_steps[1:]))
+      and abs(_co_steps[-1] - _co_full) <= 1.5)
 app.sort_var.set('Recently updated')
 
 # ---------------------------------------------------------------------
