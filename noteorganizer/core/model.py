@@ -855,17 +855,38 @@ def count_notes_in_category(notes, name):
 
 
 def rename_category_everywhere(notes, old_name, new_name):
-    """Rewrite every reference to a category, in base notes and overrides.
+    """Rewrite every reference to a category, in base notes and overrides --
+    and in each note's rescue copy, which "↩ Restore previous" puts back.
 
     Used both for a real rename and for moving notes out of a category that
     is being deleted -- the operation is the same either way.
+
+    The rescue copy an update leaves (see apply_shared_update) holds the
+    category and the per-day edits it replaced. Left out, a restore after
+    a rename filed the note under General and its day under the old name,
+    which the next launch then brought back as a category of its own.
+
+    Returns how many notes held the name, so a caller knows whether there
+    is anything to write.
     """
+    held = 0
     for n in notes:
-        if n.get("category") == old_name:
-            n["category"] = new_name
-        for patch in (n.get("overrides") or {}).values():
-            if patch.get("category") == old_name:
-                patch["category"] = new_name
+        found = False
+        for holder in (n, n.get("_prev")):
+            if not isinstance(holder, dict):
+                continue
+            if holder.get("category") == old_name:
+                holder["category"] = new_name
+                found = True
+            # Trash entries are kept as the file held them, unshaped.
+            overrides = holder.get("overrides")
+            for patch in (overrides.values() if isinstance(overrides, dict)
+                          else ()):
+                if isinstance(patch, dict) and patch.get("category") == old_name:
+                    patch["category"] = new_name
+                    found = True
+        held += found
+    return held
 
 
 def notes_on_date(notes, date_str):

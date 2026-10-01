@@ -18432,10 +18432,13 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         the old name: General does not become folded, or the list filtered,
         because a deleted category was.
         """
+        # The core rewrite reaches each note's rescue copy as well ("↩
+        # Restore previous" puts its category and days back), and says how
+        # many held the name -- a Trash entry can hold it there alone,
+        # where counting the notes in the category would not see it.
         core_rename_category(self.notes, old_name, new_name)
         trashed = [e for e in self.trash if isinstance(e, dict)]
-        if core_count_in_category(trashed, old_name):
-            core_rename_category(trashed, old_name, new_name)
+        if core_rename_category(trashed, old_name, new_name):
             save_trash(self.trash)
         moved_templates = False
         for tpl in self.templates:
@@ -18589,6 +18592,13 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 note[key] = copy.deepcopy(prev[key])
         if note.get("category") not in CATEGORY_COLORS:
             note["category"] = "General"
+        # The days it brings back follow the same rule: a day filed under
+        # a category that is gone came back under that dead name, and the
+        # next launch re-created the category from it.
+        for patch in (note.get("overrides") or {}).values():
+            if (isinstance(patch, dict) and "category" in patch
+                    and patch["category"] not in CATEGORY_COLORS):
+                patch["category"] = "General"
         note.pop("_prev", None)
         # Seconds included, matching what save_current_note stamps: the
         # minute-resolution version sorted a just-restored note BELOW

@@ -2657,6 +2657,77 @@ check(f'a category only a day is filed under offers no "delete the notes" '
 app.notes = []; app.trash = []
 app.save_notes(); NO.save_trash(app.trash)
 
+# ---- A CATEGORY RENAME REACHES THE RESCUE COPY ----
+# "↩ Restore previous" after an update puts back the category and the
+# per-day edits the update replaced. A rename rewrote every other holder
+# of the name but not those: the restore filed the note under General and
+# its day under the dead name, which the next launch re-created. And a
+# Trash entry holding the name only there was never rewritten at all.
+NO.CATEGORY_COLORS['Work6r'] = '#3366cc'
+_rn_note = NO.normalize_note({'id': 1, 'title': 'Plan', 'body': 'new text',
+                              'category': 'Work6r', 'date': '2026-09-07',
+                              'recurrence': {'freq': 'weekly'}})
+_rn_note['_prev'] = {'title': 'Plan', 'body': 'old text', 'formatting': [],
+                     'paragraphs': [], 'comments': '', 'category': 'Work6r',
+                     'overrides': {'2026-09-14': {'title': 'Plan, day',
+                                                  'category': 'Work6r'}}}
+_rn_entry = dict(NO.normalize_note({'id': 9, 'title': 'Old', 'body': 'x'}),
+                 deleted_at='2026-09-20 10:00:00')
+_rn_entry['_prev'] = {'title': 'Old', 'body': 'y', 'formatting': [],
+                      'paragraphs': [], 'comments': '', 'category': 'Work6r'}
+app.notes = [_rn_note]
+app.trash = [_rn_entry]
+app.save_notes(); NO.save_trash(app.trash)
+# The Settings rename's own steps (do_rename).
+NO.CATEGORY_COLORS['Office6r'] = NO.CATEGORY_COLORS.pop('Work6r')
+app.rename_category_everywhere('Work6r', 'Office6r')
+NO.persist_categories(); app.save_notes()
+_rn_prev = app.find_note(1)['_prev']
+check(f"a rename reaches a note's rescue copy and its days "
+      f"({_rn_prev.get('category')}, "
+      f"{_rn_prev['overrides']['2026-09-14'].get('category')})",
+      _rn_prev.get('category') == 'Office6r'
+      and _rn_prev['overrides']['2026-09-14'].get('category') == 'Office6r')
+_rn_disk = [e for e in NO.load_trash() if e.get('title') == 'Old']
+check('...and a Trash entry holding the name only in its rescue copy, on disk',
+      len(_rn_disk) == 1
+      and (_rn_disk[0].get('_prev') or {}).get('category') == 'Office6r')
+app.open_note_in_tab(app.find_note(1)); app.update()
+_rn_yes = app.ask_yes_no
+app.ask_yes_no = lambda *a, **k: True
+app.restore_previous_version(); app.update()
+app.ask_yes_no = _rn_yes
+_rn_back = app.find_note(1)
+check(f'...so Restore previous files the note and its day under the new name '
+      f'({_rn_back.get("category")}, '
+      f'{(_rn_back.get("overrides") or {}).get("2026-09-14", {}).get("category")})',
+      _rn_back.get('category') == 'Office6r'
+      and (_rn_back.get('overrides') or {}).get('2026-09-14', {}).get('category')
+      == 'Office6r')
+# Whatever left a dead name in a rescue copy, the restore files the day
+# the way the note itself is filed: under General.
+app.new_note(); app.update()
+_rn_note = NO.normalize_note({'id': 2, 'title': 'Gone', 'body': 'now',
+                              'date': '2026-09-07',
+                              'recurrence': {'freq': 'weekly'}})
+_rn_note['_prev'] = {'title': 'Gone', 'body': 'then', 'formatting': [],
+                     'paragraphs': [], 'comments': '',
+                     'overrides': {'2026-09-14': {'body': 'that day',
+                                                  'category': 'NoSuchCat6r'}}}
+app.notes = [_rn_note]; app.save_notes()
+app.open_note_in_tab(app.find_note(2)); app.update()
+app.ask_yes_no = lambda *a, **k: True
+app.restore_previous_version(); app.update()
+app.ask_yes_no = _rn_yes
+check('...and a day restored under a category that is gone comes back under General',
+      (app.find_note(2).get('overrides') or {}).get('2026-09-14', {}).get('category')
+      == 'General')
+app.new_note(); app.update()
+NO.CATEGORY_COLORS.pop('Office6r', None); NO.CATEGORY_COLORS.pop('Home6d', None)
+NO.persist_categories()
+app.notes = []; app.trash = []
+app.save_notes(); NO.save_trash(app.trash)
+
 
 print()
 print(f"=== QA6 FAILURES: {fails if fails else 'NONE'} ===")
