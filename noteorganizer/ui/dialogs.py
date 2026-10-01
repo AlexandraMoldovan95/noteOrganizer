@@ -260,6 +260,18 @@ class DialogsMixin:
                 border.grab_release()
             except tk.TclError:
                 pass
+            # Tk has ONE grab. A question asked inside this one's wait -- a
+            # timer's "Export complete" over a waiting "Move to trash?" --
+            # took it, and its release above left none: the question still
+            # on screen, and the app under it taking clicks (a note ticked
+            # there was removed with no Trash copy). The question asked
+            # before it, still waiting, gets the grab back.
+            still_asking = getattr(self, "_asking_dialogs", None) or []
+            if still_asking:
+                try:
+                    still_asking[-1]["border"].grab_set()
+                except tk.TclError:
+                    pass
             for seq, bind_id in [("<Escape>", esc_bind)] + enter_binds:
                 try:
                     self.unbind(seq, bind_id)

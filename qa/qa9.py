@@ -2610,6 +2610,114 @@ finally:
     app.save_notes()
 app.hide_settings_page(); app.update()
 
+# ============================================================
+# A QUESTION ASKED INSIDE ANOTHER GIVES THE GRAB BACK; YES ACTS ON WHAT IT NAMED
+# ============================================================
+# Tk has one grab. The export's own timer showed "Export complete" over a
+# waiting question, took the grab, and released it on OK -- leaving the
+# question still on screen and the app under it taking clicks. Under the
+# selection bar's "Move to trash" a note ticked there was then removed with
+# no Trash copy: the answer read the ticks again instead of acting on the
+# notes its question had named.
+import json as _ng_json
+import os as _ng_os
+_ng_info = app.__dict__.pop('show_info', None)
+_ng = {}
+
+
+def _ng_outer_act():
+    _ng['outer'] = app._asking_dialogs[-1]['border'] if app._asking_dialogs else None
+    app._export_state = {'current': 1, 'total': 1, 'done': True, 'error': None,
+                         'save_path': _ng_os.path.abspath('qa9_export.zip')}
+    _ng['inner'] = _while_asking(
+        app._poll_export_progress,
+        lambda: _question_button('OK', 'Export complete').invoke(),
+        'OK', 'Export complete')
+    _ng['grab_after'] = app.grab_current()
+    _b = _question_button('No', 'Outer waits')
+    if _b is not None:
+        _b.invoke()
+
+
+try:
+    _ng['answer'] = _while_asking(
+        lambda: app.ask_yes_no('Outer waits', 'Asked first.', default='no'),
+        _ng_outer_act, 'Yes', 'Outer waits', cap_ms=15000)
+    check('a question asked inside another ("Export complete" from the export\'s '
+          'timer), once answered, gives the grab back to the one still waiting '
+          '(%s)' % {k: str(v) for k, v in _ng.items()},
+          _ng.get('outer') is not None and _ng.get('grab_after') is _ng['outer']
+          and _ng.get('inner') == (None, False)
+          and _ng.get('answer') == (False, False))
+finally:
+    if _ng_info is not None:
+        app.show_info = _ng_info
+    for _ng_f in ('qa9_export.zip',):
+        if _ng_os.path.exists(_ng_f):
+            _ng_os.remove(_ng_f)
+
+# The answer itself, whatever reached the ticks while it waited: one tick
+# added under the question and the named one taken away. Yes moves the
+# named note to the Trash, and the other stays in the notebook.
+_bt_saved = list(app.notes)
+app.notes = [NO.normalize_note({'id': 9861 + _i, 'title': _t, 'body': 'b'})
+             for _i, _t in enumerate(['Keep me', 'Trash me', 'Ticked later'])]
+app.save_notes(); app.new_note(); app.refresh_note_list(); app.update()
+if not app.selection_mode:
+    app._toggle_selection_mode()
+app._toggle_note_selected(9862, True); app.update()
+_bt_trash_before = len(app.trash)
+
+
+def _bt_act():
+    app._toggle_note_selected(9863, True)
+    app._toggle_note_selected(9862, False)
+    _b = _question_button('Yes', 'Move to trash')
+    if _b is not None:
+        _b.invoke()
+
+
+_bt_answer = _while_asking(app._bulk_move_to_trash, _bt_act, 'No', 'Move to trash')
+_bt_notes = sorted(n['id'] for n in app.notes)
+_bt_trashed = [e.get('id') for e in app.trash[_bt_trash_before:]]
+with open('notes_data.json', encoding='utf-8') as _bt_f:
+    _bt_disk = sorted(n.get('id') for n in _ng_json.load(_bt_f))
+check('Yes to "Move to trash" moves the note it named, and only it -- a tick '
+      'added while it waited stays in the notebook, nothing is lost '
+      '(notes %s, trashed %s, on disk %s)' % (_bt_notes, _bt_trashed, _bt_disk),
+      _bt_answer == (None, False) and _bt_notes == [9861, 9863]
+      and _bt_trashed == [9862] and _bt_disk == [9861, 9863])
+if app.selection_mode:
+    app._toggle_selection_mode()
+# The open note's sibling: "Save them before duplicating?" answered Yes
+# duplicates the note it asked about, not whichever one the editor holds
+# by the time of the answer.
+app.notes = [NO.normalize_note({'id': 9871, 'title': 'Original', 'body': 'o'}),
+             NO.normalize_note({'id': 9872, 'title': 'Other', 'body': 'p'})]
+app.save_notes(); app.refresh_note_list()
+app.open_note_in_tab(app.find_note(9871)); app.update()
+app.body_text.insert('end', ' more')
+_du = {}
+
+
+def _du_act():
+    _du['opened'] = app.open_note_in_tab(app.find_note(9872))
+    app.update()
+    _b = _question_button('Yes', 'Unsaved changes')
+    if _b is not None:
+        _b.invoke()
+
+
+_du_answer = _while_asking(app.duplicate_current_note, _du_act, 'Cancel',
+                           'Unsaved changes')
+_du_titles = sorted(n.get('title') for n in app.notes)
+check('Yes to "Save them before duplicating?" duplicates the note it asked '
+      'about, even when another was opened while it waited (%s)' % _du_titles,
+      _du.get('opened') and not _du_answer[1]
+      and _du_titles == sorted(['Original', 'Other', 'Original (copy)']))
+app.notes = _bt_saved
+app.save_notes(); app.new_note(); app.refresh_note_list(); app.update()
+
 check('none of the blocks above raised a background error (%s)' % _bg9[:2],
       not _bg9)
 app.notes = list(_na_notes)

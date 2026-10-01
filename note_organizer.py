@@ -16141,9 +16141,18 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             icon="question", default="no"
         ):
             return
+        # Yes acts on exactly the notes the question named, and the ticks
+        # are not read again. Read after the answer, a tick added while the
+        # question waited (a timer's question over it took its grab, and a
+        # click went through) was removed from the notebook with no Trash
+        # copy, and a tick taken away was trashed and kept. A named note
+        # that left the notebook meanwhile is not trashed a second time.
+        named = {n["id"] for n in to_trash}
+        to_trash = [n for n in self.notes if n["id"] in named]
+        count = len(to_trash)
         marks = [(e.get("id"), e.get("deleted_at"))
                  for e in self._move_notes_to_trash(to_trash)]
-        self.notes = [n for n in self.notes if n["id"] not in self.selected_note_ids]
+        self.notes = [n for n in self.notes if n["id"] not in named]
         self.save_notes()
         # If the note currently open in the editor was among the ones just
         # trashed, the editor (and any tab pointing at it) is now referring
@@ -16153,7 +16162,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # still trying to save changes against the now-gone note. Same
         # cleanup delete_current_note() already does for a single delete.
         self.open_tabs = [t for t in self.open_tabs
-                          if t["state"]["selected_note_id"] not in self.selected_note_ids]
+                          if t["state"]["selected_note_id"] not in named]
         if not self.open_tabs:
             self.active_tab_index = None
             self.new_note()
@@ -18197,7 +18206,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 # nothing saved, so nothing duplicated either.
                 if self.save_current_note() is self._SAVE_CANCELLED:
                     return
-                note = self.find_note(self.selected_note_id)
+                # The note the question was about, saved: not whichever one
+                # the editor holds after the answer.
+                note = self.find_note(note["id"])
 
         clone = self.duplicate_note(note)
         # Open the fresh copy so the user can edit it right away.
