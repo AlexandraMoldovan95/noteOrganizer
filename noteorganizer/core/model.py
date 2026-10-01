@@ -294,10 +294,17 @@ def shared_update_changes(note, incoming, fields=UPDATABLE_FROM_SHARED):
     as the rescue copy, the second replaced it with the backup's own, and
     the newer text was in no file at all -- after messages ("Added 0
     notes") that invited the second import.
+
+    Both sides are compared in the shape a load gives them. The note here
+    is the copy in memory, which can still hold what the editor wrote
+    raw -- a day's edit carried an empty colour that normalize_note drops
+    -- while *incoming* has been through normalize_note. Compared as they
+    were, a backup holding this very note read as "edited elsewhere"
+    until the next restart, and Update spent the rescue copy on it.
     """
     fresh = normalize_note(dict(incoming))
-    return any(note.get(field, NOTE_DEFAULTS.get(field)) != fresh[field]
-               for field in fields)
+    mine = normalize_note(dict(note))
+    return any(mine[field] != fresh[field] for field in fields)
 
 
 def split_by_identity(notes, incoming):
@@ -322,6 +329,55 @@ def split_by_identity(notes, incoming):
         else:
             known.append((mine, note))
     return known, fresh
+
+
+def clean_override(patch):
+    """One day's edit of a repeating note, in the shape a load gives it.
+
+    normalize_note runs every stored override through this, and the save
+    that writes a day's edit runs it too, so the edit held in memory is
+    the edit a restart reads back. Written raw, it kept an empty colour
+    the load then dropped, and the two copies of one note compared as
+    different until the next launch.
+
+    An override carries "color" like the base note does -- and like the
+    base note's, it ends inside a Tk configure() when the day is drawn.
+    isinstance(v, str) let "#nope" through, so a single per-day colour
+    from a share code, a backup or a hand-edited file could raise during
+    the startup calendar render: the same make-the-app-unopenable class
+    the note's own colour was closed for, through the one door that fix
+    did not cover. Dropping the bad value (rather than the whole
+    override) keeps the day's text edit intact.
+    """
+    out = {}
+    for k, v in patch.items():
+        if k not in OVERRIDABLE_FIELDS or not isinstance(v, str):
+            continue
+        if k == "color":
+            v = sanitize_color(v)
+            if not v:
+                continue
+        if k == "category" and v not in CATEGORY_COLORS:
+            # The rule the note's own category follows in normalize_note:
+            # a name the categories no longer hold is filed under General.
+            # Kept as it was, one day of a series restored from the Trash
+            # carried a deleted category back in, and the next launch
+            # re-created it as having "gone missing from the settings".
+            # (At load the names the notes use are adopted first, on the
+            # raw file, so this never re-files a category that is merely
+            # missing from settings.json.)
+            v = "General"
+        if k == "body":
+            # The same canonicalisation the base body gets. An override is
+            # shown in the same editor, so the renderer adds the same line
+            # under a trailing table -- and without this the day's stored
+            # text is one newline short of what is on screen, which made a
+            # per-day edit ending in a table read as unsaved FOREVER: a
+            # save-scope question on every note switch and at close, for
+            # an edit nobody made.
+            v = with_caret_line(v)
+        out[k] = v
+    return out
 
 
 def normalize_note(note):
@@ -434,48 +490,9 @@ def normalize_note(note):
     # around to indent a line that no longer exists.
     clean["paragraphs"] = normalize_paragraphs(
         clean["paragraphs"], len(clean["body"].split("\n")))
-    # An override carries "color" like the base note does -- and like the
-    # base note's, it ends inside a Tk configure() when the day is drawn.
-    # isinstance(v, str) let "#nope" through, so a single per-day colour
-    # from a share code, a backup or a hand-edited file could raise
-    # during the startup calendar render: the same make-the-app-
-    # unopenable class the note's own colour was closed for, through the
-    # one door that fix did not cover. Dropping the bad value (rather
-    # than the whole override) keeps the day's text edit intact.
-    def _clean_override(patch):
-        out = {}
-        for k, v in patch.items():
-            if k not in OVERRIDABLE_FIELDS or not isinstance(v, str):
-                continue
-            if k == "color":
-                v = sanitize_color(v)
-                if not v:
-                    continue
-            if k == "category" and v not in CATEGORY_COLORS:
-                # The rule the note's own category follows above: a name
-                # the categories no longer hold is filed under General.
-                # Kept as it was, one day of a series restored from the
-                # Trash carried a deleted category back in, and the next
-                # launch re-created it as having "gone missing from the
-                # settings". (At load the names the notes use are adopted
-                # first, on the raw file, so this never re-files a
-                # category that is merely missing from settings.json.)
-                v = "General"
-            if k == "body":
-                # The same canonicalisation the base body gets. An
-                # override is shown in the same editor, so the renderer
-                # adds the same line under a trailing table -- and
-                # without this the day's stored text is one newline
-                # short of what is on screen, which made a per-day edit
-                # ending in a table read as unsaved FOREVER: a save-scope
-                # question on every note switch and at close, for an
-                # edit nobody made.
-                v = with_caret_line(v)
-            out[k] = v
-        return out
 
     clean["overrides"] = {
-        d: _clean_override(patch)
+        d: clean_override(patch)
         for d, patch in clean["overrides"].items()
         if isinstance(d, str) and parse_date(d) and isinstance(patch, dict)
     }

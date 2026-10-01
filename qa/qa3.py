@@ -2357,6 +2357,88 @@ check('the confirmations that move notes to the Trash keep the keyboard on No (%
       and len(app.notes) == 2 and not app.trash)
 app.notes = []; app.save_notes()
 
+# ---- A DAY'S EDIT SAVED THIS SESSION IS NOT "EDITED ELSEWHERE" ----
+# The occurrence save wrote the day's edit raw -- with an empty colour the
+# load drops -- and the import compared that raw copy with the backup's
+# normalised one. A backup holding this very note asked "already here,
+# edited elsewhere", and Update spent the note's rescue copy on nothing.
+app.open_blank_tab(); app.update()
+app.trash = []; NO.save_trash(app.trash)
+_ie_note = NO.normalize_note({'id': 1, 'title': 'Weekly', 'body': 'every monday',
+                              'date': '2026-09-07',
+                              'recurrence': {'freq': 'weekly'}})
+_ie_note['_prev'] = {'title': 'Weekly', 'body': 'THE ORIGINAL LONG TEXT',
+                     'formatting': [], 'paragraphs': [], 'comments': ''}
+app.notes = [_ie_note]; app.save_notes()
+app.open_note_in_tab(app.find_note(1), occurrence_date='2026-09-14'); app.update()
+app.title_entry.delete(0, 'end'); app._insert_title('Weekly (moved to 10:00)')
+_ie_scope = app.ask_occurrence_scope
+app.ask_occurrence_scope = lambda *a, **k: 'occurrence'
+app._flush_autosave(); app.update()
+app.ask_occurrence_scope = _ie_scope
+_ie_mem = app.find_note(1)
+check("fixture: the edit is saved as that day's own",
+      (_ie_mem['overrides'].get('2026-09-14') or {}).get('title')
+      == 'Weekly (moved to 10:00)')
+check(f"a day's edit held in memory is the edit a restart reads back "
+      f"({_ie_mem['overrides']})",
+      _ie_mem['overrides']
+      == NO.normalize_note(json.loads(json.dumps(_ie_mem)))['overrides'])
+_ie_raw = dict(_ie_mem, overrides={'2026-09-14': dict(
+    _ie_mem['overrides']['2026-09-14'], color='')})
+check('...and an import compares a raw copy in memory like with like',
+      not NO.shared_update_changes(_ie_raw, json.loads(json.dumps(_ie_raw)),
+                                   NO.UPDATABLE_FROM_BACKUP))
+_iezip = os.path.join(tempfile.gettempdir(), 'qa3_identical_backup.zip')
+if os.path.exists(_iezip):
+    os.remove(_iezip)
+fd.asksaveasfilename = lambda **k: _iezip
+app.export_data()
+t0 = time.time()
+while app._export_state is not None and time.time() - t0 < 5:
+    app.update()
+_ie_asked = []
+_ie_real_dlg = app._themed_dialog
+app._themed_dialog = lambda *a, **k: (_ie_asked.append(a[0]), 'update')[1]
+fd.askopenfilename = lambda **k: _iezip
+app.import_data()
+t0 = time.time()
+while app._import_state is not None and time.time() - t0 < 8:
+    app.update()
+app._themed_dialog = _ie_real_dlg
+check(f'importing a backup holding that note exactly as it is asks nothing '
+      f'({_ie_asked})', not any('already have' in t for t in _ie_asked))
+check('...and the rescue copy is untouched',
+      len(app.notes) == 1
+      and (app.find_note(1).get('_prev') or {}).get('body')
+      == 'THE ORIGINAL LONG TEXT')
+if os.path.exists(_iezip):
+    os.remove(_iezip)
+# The one colour kept raw: "Reset to category" on a day of a COLOURED
+# series. The stored form cannot hold it, and written as a load shapes it
+# the editor's empty colour never matched the day's again -- an unsaved
+# edit, and a question, at every exit.
+app.open_blank_tab(); app.update()
+app.notes = [NO.normalize_note({'id': 2, 'title': 'Coloured', 'body': 'x',
+                                'color': '#cc3366', 'date': '2026-09-07',
+                                'recurrence': {'freq': 'weekly'}})]
+app.save_notes()
+app.open_note_in_tab(app.find_note(2), occurrence_date='2026-09-14'); app.update()
+app.open_color_picker(); app.update()
+_ie_reset = find_btn(app._mini_popup, 'Reset to category') if app._mini_popup else None
+if _ie_reset is not None:
+    _ie_reset.invoke(); app.update()
+app.ask_occurrence_scope = lambda *a, **k: 'occurrence'
+app._flush_autosave(); app.update()
+app.ask_occurrence_scope = _ie_scope
+check('fixture: the day of a coloured series had its colour reset and saved',
+      _ie_reset is not None and app.current_note_color == ''
+      and '2026-09-14' in app.find_note(2)['overrides'])
+check('...and the day reads as saved afterwards, not as an edit forever',
+      app.editor_state_matches_saved(app.capture_editor_state()))
+app.open_blank_tab(); app.update()
+app.notes = []; app.save_notes()
+
 
 print()
 print(f"=== QA3 FAILURES: {fails if fails else 'NONE'} ===")

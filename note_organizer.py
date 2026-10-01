@@ -18870,13 +18870,28 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 # note's, so the base note's formatting spans wouldn't
                 # necessarily land on the right characters. An occurrence
                 # with its own overridden text shows as plain text.
-                note.setdefault("overrides", {})[occurrence_date] = {
+                #
+                # Shaped as a load shapes it (clean_override), so the copy
+                # in memory is the copy a restart reads back: written raw,
+                # an empty colour stayed here and was dropped from the
+                # file's copy, and an import comparing the two found this
+                # very note "edited elsewhere". One exception: a colour
+                # cleared on a day of a COLOURED series stays empty. The
+                # stored form cannot keep that choice -- the next load
+                # gives the day the series' colour again -- but dropping it
+                # now would leave the editor's empty colour unequal to the
+                # day's forever, asking about an unsaved edit at every exit.
+                from noteorganizer.core.model import clean_override
+                patch = clean_override({
                     "title": title,
                     "body": body,
                     "comments": comments,
                     "category": category,
                     "color": self.current_note_color,
-                }
+                })
+                if not self.current_note_color and note.get("color"):
+                    patch["color"] = ""
+                note.setdefault("overrides", {})[occurrence_date] = patch
                 note["updated"] = now
                 self.set_status(("Auto-saved " if auto else "Saved ") + f"{occurrence_date} only")
                 if auto:
