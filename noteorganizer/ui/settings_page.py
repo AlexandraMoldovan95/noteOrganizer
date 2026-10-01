@@ -109,6 +109,25 @@ def _host():
     return note_organizer
 
 
+def _trash_tick_key(entry):
+    """Which trash entry a tick in Settings -> Recently deleted belongs to.
+
+    Not the id alone: a note's id is only its place in notes_data.json, and
+    it is handed out again once the note is deleted -- so two entries could
+    share one, and ticking either row ticked both and restored both. When
+    the note was deleted tells them apart, as it does for the toast's Undo;
+    its uid as well, for two deletes inside one second.
+    """
+    key = (entry.get("id"), entry.get("deleted_at"), entry.get("uid"))
+    try:
+        hash(key)
+    except TypeError:
+        # The trash file is read as it was written, and a hand-edited one
+        # can hold a list where a value goes; a dict key must be hashable.
+        key = tuple(repr(part) for part in key)
+    return key
+
+
 class SettingsPageMixin:
     """The Settings page for :class:`NoteOrganizer`.
 
@@ -1263,7 +1282,7 @@ class SettingsPageMixin:
         # because redraw() destroys every row -- paging, restoring or
         # deleting anything would otherwise clear what you had ticked. The
         # Duplicates panel below does the same thing with its own list.
-        key = entry.get("id")
+        key = _trash_tick_key(entry)
         var = self._trash_sel.get(key)
         if var is None:
             var = tk.IntVar(value=0)
@@ -1508,8 +1527,8 @@ class SettingsPageMixin:
             twice: the ticks outlive individual rows on purpose.
             """
             return [e for e in self.trash
-                    if self._trash_sel.get(e.get("id"))
-                    and self._trash_sel[e.get("id")].get()]
+                    if self._trash_sel.get(_trash_tick_key(e))
+                    and self._trash_sel[_trash_tick_key(e)].get()]
 
         def refresh_restore_btn():
             picked = ticked_entries()
@@ -1537,7 +1556,7 @@ class SettingsPageMixin:
             # both files and rebuilt the list and the statistics again.
             self._restore_trash_entries(picked)
             for entry in picked:
-                self._trash_sel.pop(entry.get("id"), None)
+                self._trash_sel.pop(_trash_tick_key(entry), None)
             self.set_status("Restored %d note%s"
                             % (len(picked), "" if len(picked) == 1 else "s"))
             shown_count["n"] = max(PAGE_SIZE, shown_count["n"])

@@ -2005,8 +2005,11 @@ check('the ticks live on the panel, not on the rows that get destroyed',
 # 5002. The first version of this hardcoded that guess and failed on a
 # correct app -- which is the whole reason to ask the state rather than
 # predict it.
-_c14_picked = sorted(k for k, v in app._trash_sel.items() if v.get())
-_c14_left = sorted(e['id'] for e in app.trash if e['id'] not in _c14_picked)
+# The ticks are keyed by the entry's identity in the trash, not by its id
+# alone (two entries can share an id -- see the check further down).
+from noteorganizer.ui.settings_page import _trash_tick_key as _c14_key
+_c14_picked = {k for k, v in app._trash_sel.items() if v.get()}
+_c14_left = sorted(e['id'] for e in app.trash if _c14_key(e) not in _c14_picked)
 # Identified by BODY, not by id, and that is not a workaround: restoring
 # deliberately assigns a fresh id, because the trashed note's own may have
 # been reused by a note created after it was deleted -- core/storage says
@@ -2014,7 +2017,7 @@ _c14_left = sorted(e['id'] for e in app.trash if e['id'] not in _c14_picked)
 # is the situation this row is about, so the body is the only thing that
 # tells them apart -- exactly what the new hover preview shows a person.
 _c14_want_bodies = sorted(e['body'] for e in app.trash
-                          if e['id'] in _c14_picked)
+                          if _c14_key(e) in _c14_picked)
 _c14_restore.invoke()
 app.update()
 check('restoring the ticked notes brings back exactly those two',
@@ -2034,6 +2037,51 @@ check('Empty trash is still there, and still wears the danger weight',
 app.trash = []
 app.notes = []
 app.save_notes()
+
+# Two Trash entries can share an id: a note's id is only its place in the
+# notes file, handed out again after a delete -- delete the newest note,
+# write another, delete that too. Keyed by the id alone, ticking one row
+# ticked both, and "Restore selected" brought back a note nobody picked.
+app.trash = [
+    {'id': 2, 'title': 'Old draft', 'body': 'the old one', 'category': 'General',
+     'deleted_at': '2026-09-20 10:00:00', 'uid': 'qa6-old-draft'},
+    {'id': 2, 'title': 'Second draft', 'body': 'the new one',
+     'category': 'General', 'deleted_at': '2026-09-21 10:00:00',
+     'uid': 'qa6-second-draft'}]
+NO.save_trash(app.trash)
+app.show_settings_page(); app.update()
+app.toggle_settings_panel('trash'); app.update()
+_sid_ticks = _c14_widgets(app.settings_trash_panel, tk.Checkbutton)
+check(f'fixture: two Trash rows sharing an id, a tick each ({len(_sid_ticks)})',
+      len(_sid_ticks) == 2)
+
+
+def _sid_ticked():
+    return [int(app.getvar(str(t.cget('variable')))) for t in _sid_ticks]
+
+
+_sid_picked = None
+if len(_sid_ticks) == 2:
+    _sid_titles = [str(l.cget('text'))
+                   for l in _c14_widgets(_sid_ticks[0].master, tk.Label)]
+    _sid_picked = next((t for t in ('Old draft', 'Second draft')
+                        if any(t in s for s in _sid_titles)), None)
+    _sid_ticks[0].invoke(); app.update()
+_sid_btn = _c14_button('selected')
+check(f'ticking one of two rows that share an id ticks only that row '
+      f'({_sid_ticked()}, {_sid_btn and str(_sid_btn.cget("text"))!r})',
+      _sid_ticked() == [1, 0] and _sid_btn is not None
+      and '1 selected' in str(_sid_btn.cget('text')))
+if _sid_btn is not None:
+    _sid_btn.invoke(); app.update()
+check(f'...and Restore selected brings back only the ticked note ({_sid_picked})',
+      _sid_picked is not None
+      and [n['title'] for n in app.notes] == [_sid_picked]
+      and [e['title'] for e in app.trash]
+      == [t for t in ('Old draft', 'Second draft') if t != _sid_picked])
+app.trash = []
+app.notes = []
+app.save_notes(); NO.save_trash(app.trash)
 
 # 107: the wheel over an empty Trash panel must reach the page beneath
 # it. A fully-shown list has nothing of its own to scroll, and trapping
