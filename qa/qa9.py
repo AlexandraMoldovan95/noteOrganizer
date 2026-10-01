@@ -1762,6 +1762,60 @@ finally:
     app.__dict__.pop('ask_yes_no_cancel', None)
 app._dismiss_mini_popup(); app.update()
 
+# The same, pressed where a person presses: the card itself, a double-click
+# on it, and the reminder bar's text. Each one asked through its own press,
+# and kept open, let the click go on to the window's click-outside -- which
+# asked "Save changes?" a second time, where "No" threw away the template
+# just kept. One press, one question. (Answers are stubbed and return at
+# once, so a double-click's second press asks again: two, not four.)
+app.hide_settings_page(); app.update()
+app._render_reminder_bar(1, time.strftime('%Y-%m-%d')); app.update()
+app.show_settings_page(); app.update()
+app.toggle_settings_panel('templates'); app.update()
+app.notes.append(NO.normalize_note({'id': 902, 'title': 'Card pressed', 'body': 'x'}))
+app.save_notes(); app.refresh_note_list(); app.update()
+try:
+    _cp_rec = app._note_cards.get(902)
+    _cp_y = (int(_cp_rec['y0'] - app.canvas.canvasy(0) + 12)
+             if _cp_rec is not None else None)
+    check('fixture: the note\'s card is drawn beside the Settings page',
+          _cp_y is not None)
+    for _cp_name, _cp_times, _cp_want in (('a press on a note card', (None,), 1),
+                                          ('a double-click on it',
+                                           (700000, 700120), 2)):
+        _wa_pop, _wa_ent = _wa_open_dirty()
+        _wa_answer(None)
+        for _cp_t in _cp_times:
+            if _cp_y is not None:
+                _cp_kw = {} if _cp_t is None else {'time': _cp_t}
+                _qa_click(app.canvas, x=40, y=_cp_y, **_cp_kw)
+                app.update()
+        check('%s beside a half-written template asks once per press, and Cancel '
+              'keeps the template and opens nothing (%s)' % (_cp_name, _wa_asked),
+              len(_wa_asked) == _cp_want and set(_wa_asked) == {'Save changes?'}
+              and _wa_pop is not None and app._mini_popup is _wa_pop
+              and (_wa_text(_wa_ent) or '').endswith('(my edit)')
+              and app.selected_note_id != 902)
+    _cp_msg = next((w for w in app.reminder_bar.winfo_children()
+                    if isinstance(w, tk.Label) and 'for today' in str(w.cget('text'))),
+                   None)
+    _wa_pop, _wa_ent = _wa_open_dirty()
+    _wa_answer(None)
+    if _cp_msg is not None:
+        _qa_click(_cp_msg); app.update()
+    check('a press on the reminder bar\'s text beside a half-written template '
+          'asks once, and Cancel stays on Settings with it (%s)' % _wa_asked,
+          _cp_msg is not None and _wa_asked == ['Save changes?']
+          and app._settings_open and _wa_pop is not None
+          and app._mini_popup is _wa_pop
+          and (_wa_text(_wa_ent) or '').endswith('(my edit)'))
+finally:
+    app.__dict__.pop('ask_yes_no_cancel', None)
+    app._dismiss_mini_popup(); app.update()
+    app.dismiss_reminder()
+    app.notes = [n for n in app.notes if n.get('id') != 902]
+    app.save_notes(); app.refresh_note_list(); app.update()
+
 # A double-click on a bin in the template editor's checklist removes one
 # item. The row below slid up under the pointer and the second press took
 # it too -- the note checklist's hazard (qa1), and the same guard.

@@ -14821,8 +14821,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         note -- or ticks it, in selection mode, where opening would defeat
         the point of picking several without leaving the list. Either way
         the keyboard comes to the list, on the card clicked, so Down and Up
-        carry on from there. Nothing is returned: the window's own click
-        handling (closing an open popup) still hears the click."""
+        carry on from there. The window's own click handling (closing an
+        open popup) still hears the click -- unless the note's opening was
+        refused ("break", see _list_press_row)."""
         # A card still lifted means the release that should have dropped
         # it never arrived (lost to another window, say). Put it back
         # first: forgetting the drag left its drawing, its line and its
@@ -14833,7 +14834,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._list_press_aim = None
         rec = self._list_record_at(event.x, event.y)
         if rec is not None:
-            self._list_press_row(rec, event)
+            return self._list_press_row(rec, event)
+        return None
 
     def _list_double_pressed(self, event):
         """The second press of a double-click -- Tk's own judgement of one
@@ -14861,7 +14863,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if rec is None:
             rec = self._list_record_at(event.x, event.y)
         if rec is not None:
-            self._list_press_row(rec, event)
+            return self._list_press_row(rec, event)
+        return None
 
     def _list_row_record(self, key):
         """The drawn record of the row ("note", id) or ("header", category),
@@ -14895,9 +14898,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 return
             # Not when the open refused to happen: Cancel on a repeating
             # day's save question keeps the person on the day they were
-            # editing.
+            # editing -- or on the template they were writing, whose
+            # "Save changes?" was the question. "break" then: the window's
+            # click-outside, still to run for this same press, would ask
+            # it a second time, and "No" there threw the template away.
             if self.open_note_in_tab(note) is False:
-                return
+                return "break"
             # Before the ring's scroll-into-view, which then still brings a
             # card clicked at the list's edge fully into sight.
             self._keep_row_under_pointer(key, on_screen)

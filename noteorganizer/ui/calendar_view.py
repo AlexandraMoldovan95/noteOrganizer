@@ -1004,8 +1004,13 @@ class CalendarViewMixin:
             anchor="w", cursor="hand2"
         )
         msg.pack(side="left", padx=14, pady=6)
-        # Clicking the text jumps to today's notes in the calendar.
-        msg.bind("<Button-1>", lambda e: self._open_today_from_reminder(today))
+        # Clicking the text jumps to today's notes in the calendar. Kept on
+        # a half-written template ("Save changes?" answered Cancel), the
+        # click stops here: the window's click-outside, still to run for
+        # it, would ask the same question again.
+        msg.bind("<Button-1>",
+                 lambda e: ("break" if self._open_today_from_reminder(today)
+                            is False else None))
 
         close = tk.Label(self.reminder_bar, text="✕", bg=self.colors["accent"],
                          fg="white", font=("Segoe UI", 10, "bold"), cursor="hand2")
@@ -1016,11 +1021,12 @@ class CalendarViewMixin:
         """The bar's click lands on the day it names, on screen: on its own
         month, from Settings too. The bar sits above every page, and this
         used to open the day behind Settings, where nothing showed, or
-        under whichever month was shown, with no day outlined."""
+        under whichever month was shown, with no day outlined. Returns
+        False when the person stayed where they were."""
         # Settings is left the way Ctrl+N leaves it; a popup holding typed
         # work may ask to stay, and then the click does nothing.
         if not self._leave_settings_for_the_editor():
-            return
+            return False
         self.notebook.select(self.TAB_CALENDAR)
         if getattr(self, "_history_visible", False):
             self._hide_calendar_history()
