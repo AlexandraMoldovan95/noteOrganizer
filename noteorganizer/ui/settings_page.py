@@ -3016,6 +3016,9 @@ class SettingsPageMixin:
         # Ask what happens to them. Only a note FILED here can go to the
         # Trash; a repeating note with just a day filed here is counted
         # apart, because that day moves to General whatever the answer.
+        # Both counted now, after the save above: it can have just filed
+        # the note on screen here, or taken it out.
+        count = self.count_notes_in_category(name)
         filed = sum(1 for n in self.notes if n.get("category") == name)
         choice = self._ask_category_deletion(name, filed,
                                              days_only=count - filed)

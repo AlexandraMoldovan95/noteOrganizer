@@ -2706,6 +2706,29 @@ check(f'a category only a day is filed under offers no "delete the notes" '
       and not any('Delete the notes' in b for b in _cd_asked[0][2])
       and 'Away6d' not in NO.CATEGORY_COLORS
       and app.find_note(1)['overrides']['2026-09-21'].get('category') == 'General')
+# Counted after the open note is saved: that save can file it under the
+# category being deleted, and a count taken before it named "-1
+# repeating note(s)".
+NO.CATEGORY_COLORS['Late6d'] = '#6622aa'
+app.notes = [NO.normalize_note({'id': 1, 'title': 'Filed just now', 'body': 'x'}),
+             NO.normalize_note({'id': 2, 'title': 'Filed before', 'body': 'y',
+                                'category': 'Late6d'})]
+app.save_notes()
+app.open_note_in_tab(app.find_note(1)); app.update()
+app.category_var.set('Late6d')
+_cd_asked.clear()
+app._themed_dialog = lambda *a, **k: (
+    _cd_asked.append((a[0], a[1], [b[0] for b in k.get('buttons') or []])),
+    None)[1]
+app._delete_category('Late6d', lambda: None); app.update()
+app._themed_dialog = _cd_real_dlg
+check(f'...and it counts the notes as they are once the open note is saved '
+      f'({_cd_asked and _cd_asked[0][1]!r})',
+      len(_cd_asked) == 1 and '2 note(s)' in _cd_asked[0][1]
+      and 'repeating' not in _cd_asked[0][1]
+      and app.find_note(1)['category'] == 'Late6d')
+app.new_note(); app.update()
+NO.CATEGORY_COLORS.pop('Late6d', None); NO.persist_categories()
 app.notes = []; app.trash = []
 app.save_notes(); NO.save_trash(app.trash)
 
