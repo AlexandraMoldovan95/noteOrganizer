@@ -558,7 +558,11 @@ class DialogsMixin:
                     on_change(v)
 
                 for w in widgets:
-                    w.bind("<Button-1>", lambda e, v=opt: pick(v))
+                    # "break": the pick destroys the popup this row lives
+                    # in, and Tk has already read every script of this
+                    # click -- a later one naming the popup's commands
+                    # would call them dead (the rename box's Escape did).
+                    w.bind("<Button-1>", lambda e, v=opt: (pick(v), "break")[1])
                     if not is_cur:
                         w.bind("<Enter>", lambda e, r=row, ws=widgets:
                                [x.configure(bg=self.colors["sidebar"]) for x in ws])

@@ -2772,6 +2772,28 @@ check('Yes to "Save them before duplicating?" duplicates the note it asked '
 app.notes = _bt_saved
 app.save_notes(); app.new_note(); app.refresh_note_list(); app.update()
 
+# ============================================================
+# ESCAPE AND ENTER IN A RENAME BOX RAISE NOTHING
+# ============================================================
+# The box's entry closed the box on Escape and let the key go on: Tk had
+# already read the box's own <Escape> script, whose command the close had
+# just deleted -- a silent "invalid command name" on every Escape.
+for _rb_key, _rb_name in (('Escape', 'Escape'), ('Return', 'Enter')):
+    _rb_pop = app._show_inline_rename(app.filter_menu, 'Projects', lambda _v: True)
+    app.update()
+    _rb_ent = [w for w in _walk9(_rb_pop) if isinstance(w, tk.Entry)][0]
+    _rb_bg = len(_bg9)
+    if _keyboard_on(_rb_ent):
+        _rb_ent.event_generate('<%s>' % _rb_key)
+        app.update()
+        check('%s in a rename box closes it and raises no background error (%s)'
+              % (_rb_name, _bg9[_rb_bg:][:1]),
+              not _rb_pop.winfo_exists() and len(_bg9) == _rb_bg)
+    else:
+        check('%s in a rename box: SKIPPED -- the keyboard never reached it'
+              % _rb_name, True)
+    app._dismiss_mini_popup(); app.update()
+
 check('none of the blocks above raised a background error (%s)' % _bg9[:2],
       not _bg9)
 app.notes = list(_na_notes)

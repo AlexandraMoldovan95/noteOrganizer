@@ -6898,8 +6898,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                                 bg=inset_surface(self.colors))
                 cell.grid(row=r, column=c, padx=1, pady=1)
                 cell.bind("<Enter>", lambda e, r=r, c=c: highlight(r, c))
+                # "break": this destroys the popup the cell is in (see
+                # _show_inline_rename).
                 cell.bind("<Button-1>", lambda e, r=r, c=c: (
-                    self._dismiss_mini_popup(), self._insert_table(r, c)))
+                    self._dismiss_mini_popup(), self._insert_table(r, c),
+                    "break")[2])
                 cells[(r, c)] = cell
         grid.bind("<Leave>", leave)
 
@@ -10384,8 +10387,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                   cursor="hand2", bg=self.colors["sidebar"], fg=self.colors["text"],
                   font=("Segoe UI", 8, "bold")).pack(side="left", ipadx=4, ipady=2)
 
-        entry.bind("<Return>", lambda e: save())
-        entry.bind("<Escape>", lambda e: self._dismiss_mini_popup())
+        # "break" on both: each can destroy the box, and Tk has already
+        # read every script of the key -- the box's own <Escape> among them
+        # (_place_dropdown_popup). Escape here called that dead command: a
+        # silent "invalid command name" on every Escape in a rename box.
+        entry.bind("<Return>", lambda e: (save(), "break")[1])
+        entry.bind("<Escape>", lambda e: (self._dismiss_mini_popup(), "break")[1])
 
         self._place_mini_popup(pop, anchor_widget)
         # Focus the entry after placing (safe now — no grab).
@@ -10434,7 +10441,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 cell.create_text(13, 13, text="✓", fill="white",
                                  font=("Segoe UI", 11, "bold"))
             cell.grid(row=r, column=c, padx=3, pady=3)
-            cell.bind("<Button-1>", lambda e, col=color: pick(col))
+            # "break": the pick destroys this popup (see _show_inline_rename).
+            cell.bind("<Button-1>", lambda e, col=color: (pick(col), "break")[1])
 
         if allow_reset:
             tk.Button(frame, text=reset_label,
@@ -10500,7 +10508,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 self._dismiss_mini_popup()
 
             for w in (row, dot, lbl):
-                w.bind("<Button-1>", lambda e, c=cat: pick(c))
+                # "break": the pick destroys this popup (see
+                # _show_inline_rename).
+                w.bind("<Button-1>", lambda e, c=cat: (pick(c), "break")[1])
                 w.bind("<Enter>", lambda e, r=row, d=dot, l=lbl:
                        (r.configure(bg=self.colors["sidebar"]),
                         d.configure(bg=self.colors["sidebar"]),
@@ -12552,7 +12562,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self.render_calendar()
             self._dismiss_mini_popup()
 
-        year_entry.bind("<Return>", _go)
+        # "break": a good year destroys this popup (see _show_inline_rename).
+        year_entry.bind("<Return>", lambda e: (_go(), "break")[1])
 
         btn_row = tk.Frame(frame, bg=self.colors["card"])
         btn_row.pack(fill="x", padx=16, pady=(10, 14))
@@ -16282,7 +16293,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                           font=("Segoe UI", 9), anchor="w")
             lbl.pack(side="left", fill="x", expand=True, padx=(0, 10), pady=5)
             for w in (row, dot, lbl):
-                w.bind("<Button-1>", lambda e, c=cat: apply_category(c))
+                # "break": this destroys the popup the row is in (see
+                # _show_inline_rename).
+                w.bind("<Button-1>",
+                       lambda e, c=cat: (apply_category(c), "break")[1])
 
         # A way out that says so. Every row here refiles every ticked note,
         # and until now the only way to leave without picking one was to
@@ -16317,9 +16331,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                            anchor="w")
             lbl.pack(side="left", fill="x", expand=True, padx=10, pady=5)
             for w in (row, lbl):
+                # "break": this destroys the popup the row is in (see
+                # _show_inline_rename).
                 w.bind("<Button-1>",
                        lambda e, f=fmt: (self._dismiss_mini_popup(),
-                                         self._bulk_export_run(f)))
+                                         self._bulk_export_run(f), "break")[2])
         self._bulk_popup_cancel(frame)
         self._place_dropdown_popup(pop, self._bulk_export_btn)
 
