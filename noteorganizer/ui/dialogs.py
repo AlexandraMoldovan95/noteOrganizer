@@ -224,6 +224,22 @@ class DialogsMixin:
             if i == focus_index:
                 b.focus_set()
 
+        # Tab walks the question's own answers and comes back round, as a
+        # Windows message box does. The grab holds the pointer only, and
+        # Tab walked on out of the card: into the note under the question,
+        # where typing landed, and onto the note list, whose Shift+F10 menu
+        # holds Delete. The order is the one Tab always took. Shift+Tab is
+        # <<PrevWindow>> too: on X11 it arrives as ISO_Left_Tab.
+        def cycle(button, step):
+            i = dialog_buttons.index(button)
+            dialog_buttons[(i + step) % len(dialog_buttons)].focus_set()
+            return "break"
+
+        for b in dialog_buttons:
+            b.bind("<Tab>", lambda e, b=b: cycle(b, 1))
+            for seq in ("<Shift-Tab>", "<<PrevWindow>>"):
+                b.bind(seq, lambda e, b=b: cycle(b, -1))
+
         # Escape = the "safe" (first) value, usually cancel/no.
         safe_val = buttons[0][1] if len(buttons) > 1 else buttons[-1][1]
         asking = {"border": border, "buttons": dialog_buttons,
@@ -244,8 +260,8 @@ class DialogsMixin:
             # the default, and it did nothing at all: a tk.Button answers
             # Space and the mouse, and nothing bound Return. The button
             # holding the keyboard is what Enter presses. A key typed into
-            # some other field (Tab can walk out of the card) is that
-            # field's own business.
+            # some other field (Tab stays in the card now, but a timer can
+            # still move the keyboard) is that field's own business.
             if not innermost():
                 return
             w = getattr(event, "widget", None)

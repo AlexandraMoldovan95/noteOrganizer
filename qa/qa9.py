@@ -2297,6 +2297,63 @@ else:
     check('one Escape answers the question asked last only: the one under it '
           'is still the person\'s to answer (%s)' % _nx,
           _nx.get('inner') == (False, False) and _nx.get('outer') == (True, False))
+# Tab walks the question's own answers and comes back round, as a Windows
+# message box does. A grab holds the pointer only: Tab walked on out of
+# the card, into the note under the question -- where typing landed --
+# and onto the note list, whose Shift+F10 menu holds Delete. Shift+Tab
+# walks back; on X11 it arrives as ISO_Left_Tab, the key a person's
+# Shift+Tab really makes there. Where the keyboard went is read from the
+# window's own record, and the app is given the keyboard back before
+# every key, so a busy desktop cannot pass for a Tab that walked out.
+_tb = {}
+_tb_back = 'Shift-Tab' if sys.platform.startswith('win') else 'ISO_Left_Tab'
+
+
+def _tb_holder():
+    try:
+        return app.nametowidget(app.tk.call('focus', '-lastfor', app._w))
+    except (KeyError, tk.TclError):
+        return None
+
+
+def _tb_act():
+    _own = {_l: _question_button(_l, 'Q-tab') for _l in ('Cancel', 'No', 'Yes')}
+    _names = {_w: _l for _l, _w in _own.items()}
+    _tb['keyboard'] = (_own['Cancel'] is not None
+                       and _keyboard_on(_own['Cancel']))
+    _stops = []
+    for _key in ['Tab'] * 4 + [_tb_back] * 4:
+        if not _tb['keyboard']:
+            return
+        _cur = _tb_holder()
+        if _cur is None or not _keyboard_on(_cur):
+            _tb['keyboard'] = False
+            return
+        try:
+            _cur.event_generate('<%s>' % _key)
+        except tk.TclError as _e:
+            _stops.append('%s: %s' % (_key, _e))
+            break
+        app.update()
+        _w = _tb_holder()
+        _stops.append(_names.get(_w, repr(_w)))
+    _tb['stops'] = _stops
+    _own['No'].invoke()
+
+
+_tb['answer'] = _while_asking(
+    lambda: app.ask_yes_no_cancel('Q-tab', 'Tab stays among these.'),
+    _tb_act, 'Yes', 'Q-tab')
+if _tb.get('keyboard') is False:
+    check('tab inside a question: SKIPPED -- the keyboard never reached it',
+          True)
+else:
+    check('Tab walks a question\'s own answers and comes back round, and '
+          'Shift+Tab walks back -- never out into the note under it (%s)'
+          % _tb,
+          _tb.get('stops') == ['No', 'Yes', 'Cancel', 'No',
+                               'Cancel', 'Yes', 'No', 'Cancel']
+          and _tb.get('answer') == (False, False))
 
 # ============================================================
 # A TEMPLATE SAVED AFTER ITS SECTION WAS REBUILT
