@@ -138,20 +138,52 @@ class DialogsMixin:
         border = tk.Frame(self, bg=accent, highlightthickness=0)
         border.place(relx=0.5, rely=0.42, anchor="center")
         card = tk.Frame(border, bg=self.colors["card"])
-        card.pack(padx=2, pady=2)
+        card.pack(padx=2, pady=2, fill="both", expand=True)
+
+        # The answers first, against the bottom. When the card is given less
+        # height than it asks for, pack takes the shortfall from what was
+        # packed LAST -- the message, which then scrolls (fit, below) -- so
+        # no length of message can push a button out of the window. A
+        # startup notice joining four messages drew its only button below a
+        # 600px window, with the X refused while it asked.
+        btn_row = tk.Frame(card, bg=self.colors["card"])
+        btn_row.pack(side="bottom", fill="x", padx=20, pady=(0, 16))
 
         head = tk.Frame(card, bg=self.colors["card"])
-        head.pack(fill="x", padx=20, pady=(16, 6))
+        head.pack(side="top", fill="x", padx=20, pady=(16, 6))
         tk.Label(head, text=f"{icon}  {title}", bg=self.colors["card"],
                  fg=self.colors["text"], font=("Segoe UI", 12, "bold"),
                  anchor="w").pack(side="left")
 
-        tk.Label(card, text=message, bg=self.colors["card"], fg=self.colors["subtext"],
-                 font=("Segoe UI", 10), wraplength=380, justify="left", anchor="w"
-                 ).pack(fill="x", padx=20, pady=(0, 16))
+        # The message in a viewport: as tall as the text, or as tall as the
+        # window leaves room for, and then it scrolls.
+        msg_box = tk.Frame(card, bg=self.colors["card"])
+        msg_box.pack(side="top", fill="both", expand=True, padx=20, pady=(0, 16))
+        msg_view = tk.Canvas(msg_box, bg=self.colors["card"],
+                             highlightthickness=0, bd=0)
+        msg_lbl = tk.Label(msg_view, text=message, bg=self.colors["card"],
+                           fg=self.colors["subtext"], font=("Segoe UI", 10),
+                           wraplength=380, justify="left", anchor="w")
+        msg_view.create_window(0, 0, window=msg_lbl, anchor="nw")
+        msg_bar = ttk.Scrollbar(msg_box, orient="vertical",
+                                command=msg_view.yview)
+        msg_view.configure(yscrollcommand=msg_bar.set)
+        msg_view.pack(side="left", fill="both", expand=True)
 
-        btn_row = tk.Frame(card, bg=self.colors["card"])
-        btn_row.pack(fill="x", padx=20, pady=(0, 16))
+        def scroll_message(amount, what):
+            try:
+                msg_view.yview_scroll(amount, what)
+            except tk.TclError:
+                pass
+            return "break"
+
+        def wheel(event):
+            up = getattr(event, "delta", 0) > 0 or getattr(event, "num", None) == 4
+            return scroll_message(-1 if up else 1, "units")
+
+        for w in (msg_view, msg_lbl):
+            for seq in ("<MouseWheel>", "<Button-4>", "<Button-5>"):
+                w.bind(seq, wheel)
 
         def choose(val):
             # The first answer is the answer: the <Destroy> safety net
@@ -182,6 +214,12 @@ class DialogsMixin:
                 bg=btn_color, fg=fg_color,
                 activebackground=btn_color, activeforeground=fg_color)
             b.pack(side="right", padx=(8, 0), ipadx=12, ipady=4)
+            # The keyboard reads a message too long for the window: the
+            # arrows and Page keys scroll it from the button holding focus.
+            for seq, amount, what in (("<Up>", -1, "units"), ("<Down>", 1, "units"),
+                                      ("<Prior>", -1, "pages"),
+                                      ("<Next>", 1, "pages")):
+                b.bind(seq, lambda e, a=amount, k=what: scroll_message(a, k))
             dialog_buttons.append(b)
             if i == focus_index:
                 b.focus_set()
@@ -226,6 +264,91 @@ class DialogsMixin:
         # refused as "already open". on_app_close refuses the close while
         # a question asks; this is the net under every other route.
         border.bind("<Destroy>", lambda e: choose(safe_val), add="+")
+
+        # The card inside the window, its answers on screen, whatever the
+        # message's length and the window's size: placed at 0.42 of the
+        # height as it always was when it fits; otherwise the message's
+        # viewport gives way, and a row of buttons wider than the window
+        # stands one under another. Asked again when the window is resized
+        # while the question waits.
+        margin = 12
+        layout = {"natural_w": None, "stacked": False, "job": None,
+                  "size": None}
+
+        def stack_buttons(stacked):
+            if layout["stacked"] == stacked:
+                return
+            layout["stacked"] = stacked
+            for b in dialog_buttons:
+                b.pack_forget()
+            if stacked:
+                # Top to bottom in the order they read left to right.
+                for b in reversed(dialog_buttons):
+                    b.pack(side="top", fill="x", pady=(0, 6), ipadx=12, ipady=4)
+            else:
+                for b in dialog_buttons:
+                    b.pack(side="right", padx=(8, 0), ipadx=12, ipady=4)
+
+        def fit():
+            layout["job"] = None
+            try:
+                if not border.winfo_exists():
+                    return
+                win_w, win_h = self.winfo_width(), self.winfo_height()
+                if win_w < 100 or win_h < 100:
+                    return          # not laid out yet, or minimised
+                layout["size"] = (win_w, win_h)
+                # Where the person had scrolled to, kept: the viewport is
+                # measured at the text's full height below, which puts the
+                # view back at the top.
+                scrolled_to = msg_view.yview()[0]
+                lbl_w = msg_lbl.winfo_reqwidth()
+                lbl_h = msg_lbl.winfo_reqheight()
+                msg_view.configure(width=lbl_w, height=lbl_h,
+                                   scrollregion=(0, 0, lbl_w, lbl_h))
+                msg_bar.pack_forget()
+                border.place_configure(height="")
+                if layout["natural_w"] is None:
+                    self.update_idletasks()
+                    layout["natural_w"] = border.winfo_reqwidth()
+                stack_buttons(layout["natural_w"] > win_w - 2 * margin)
+                self.update_idletasks()
+                natural_h = border.winfo_reqheight()
+                room = win_h - 2 * margin
+                height = natural_h
+                if natural_h > room:
+                    msg_view.configure(height=max(48, lbl_h - (natural_h - room)))
+                    msg_bar.pack(side="right", fill="y", before=msg_view)
+                    height = room
+                    # Given, not asked for: if the arithmetic above is ever
+                    # short, pack squeezes the message, never the buttons.
+                    border.place_configure(height=height)
+                centre = max(margin + height / 2,
+                             min(0.42 * win_h, win_h - margin - height / 2))
+                border.place_configure(relx=0.5, rely=0, y=int(centre),
+                                       anchor="center")
+                self.update_idletasks()
+                msg_view.yview_moveto(scrolled_to)
+            except tk.TclError:
+                pass
+
+        def refit_later(widget_path):
+            # The window's own <Configure>, and only a change of size: a move
+            # (or a restack) leaves everything where it is.
+            if widget_path != str(self) or layout["job"] is not None:
+                return
+            try:
+                if (self.winfo_width(), self.winfo_height()) == layout["size"]:
+                    return
+            except tk.TclError:
+                return
+            try:
+                layout["job"] = self.after_idle(fit)
+            except tk.TclError:
+                pass
+
+        fit()
+        self._bind_window_for_popup(border, "<Configure>", refit_later)
 
         # Modal, but the background stays fully visible (we don't cover it). A
         # local grab on the dialog frame routes input to the dialog only; because

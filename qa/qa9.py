@@ -2794,6 +2794,139 @@ for _rb_key, _rb_name in (('Escape', 'Escape'), ('Return', 'Enter')):
               % _rb_name, True)
     app._dismiss_mini_popup(); app.update()
 
+# ============================================================
+# A QUESTION'S CARD FITS THE WINDOW, ITS BUTTONS ON SCREEN
+# ============================================================
+# The card was placed at 0.42 of the window's height with no limit: the
+# startup notice joining four messages put its title above a 600px window
+# and its only button below it, with the X refused while it asked. And
+# the category question's three buttons ran off both sides at 640px.
+_fq_saved = (NO.VERSION_CHANGE, NO.STORAGE_WARNING, NO.MIGRATION_INFO,
+             NO.PURGED_DIRS, app._corrupt_notes_report, app._categories_adopted,
+             app._cleanup_report, app._version_backup_path)
+_fq_base = 'C:\\Users\\Alexandra\\AppData\\Roaming\\NoteOrganizer'
+NO.VERSION_CHANGE = ('up', '0.81.202', '0.82.233')
+NO.STORAGE_WARNING = None
+NO.MIGRATION_INFO = None
+NO.PURGED_DIRS = ['C:\\Users\\Alexandra\\Desktop\\NoteOrganizer',
+                  'C:\\Users\\Alexandra\\Documents\\NoteOrganizer']
+app._corrupt_notes_report = _fq_base + '\\notes_data.unreadable_2026-10-01_09-14-03.json'
+app._categories_adopted = ['Groceries and errands', 'Work - Project Atlas',
+                           "Kids' school", 'Recipes to try', 'Health',
+                           'Travel 2027', 'Books', 'Garden', 'Car', 'Taxes']
+app._cleanup_report = None
+app._version_backup_path = _fq_base + '\\backups\\notes_before_0.82.233.json'
+_fq_info = app.__dict__.pop('show_info', None)
+
+
+def _fq_card(title):
+    _b = _question_button('OK', title) or _question_button('Cancel', title)
+    while _b is not None and _b.master is not app:
+        _b = _b.master
+    return _b
+
+
+def _fq_inside(w):
+    app.update_idletasks()
+    return (w.winfo_rooty() >= app.winfo_rooty()
+            and w.winfo_rooty() + w.winfo_height()
+            <= app.winfo_rooty() + app.winfo_height()
+            and w.winfo_rootx() >= app.winfo_rootx()
+            and w.winfo_rootx() + w.winfo_width()
+            <= app.winfo_rootx() + app.winfo_width())
+
+
+try:
+    for _fq_size in ('640x600', '1366x690'):
+        app.geometry(_fq_size); _pn_settle()
+        _fq = {}
+
+        def _fq_act():
+            _card = _fq_card('your notes')
+            _ok = _question_button('OK', 'your notes')
+            _view = ([w for w in _walk9(_card) if isinstance(w, tk.Canvas)]
+                     if _card is not None else [])
+            _fq['card'] = _card is not None and _fq_inside(_card)
+            _fq['ok'] = _ok is not None and _fq_inside(_ok)
+            _fq['default'] = (_ok is not None and app._asking_dialogs
+                              and app._asking_dialogs[-1]['default'] is _ok)
+            if _view:
+                _view[0].yview_moveto(1.0); app.update()
+                _fq['scrolls_to_end'] = _view[0].yview()[1] == 1.0
+                _fq['scrolled'] = _view[0].yview()[0] > 0
+            if _ok is not None:
+                _ok.invoke()
+
+        _fq_res = _while_asking(app.announce_startup_changes, _fq_act, 'OK',
+                                'your notes')
+        check('%s: the four-message startup notice fits the window, title and OK '
+              'on screen, its message scrolling to its end, OK still the default '
+              '(%s)' % (_fq_size, _fq),
+              _fq.get('card') and _fq.get('ok') and _fq.get('default')
+              and _fq.get('scrolls_to_end') and _fq.get('scrolled')
+              and not _fq_res[1])
+    # A question that fits sits where it always did: centred at 0.42 of the
+    # window's height, nothing scrolling.
+    app.geometry('1100x850'); _pn_settle()
+    _fq_plain = {}
+
+    def _fq_plain_act():
+        _card = _fq_card('Plain question')
+        app.update_idletasks()
+        _fq_plain['centre'] = ((_card.winfo_rooty() - app.winfo_rooty()
+                                + _card.winfo_height() / 2) / app.winfo_height()
+                               if _card is not None else None)
+        _fq_plain['bars'] = len([w for w in _walk9(_card)
+                                 if isinstance(w, ttk.Scrollbar)
+                                 and w.winfo_ismapped()]) if _card else None
+        _question_button('OK', 'Plain question').invoke()
+
+    from tkinter import ttk
+    _while_asking(lambda: app.show_info('Plain question', 'Short.'),
+                  _fq_plain_act, 'OK', 'Plain question')
+    check('a question that fits sits where it always did, at 0.42 of the height, '
+          'with no scrollbar (%s)' % _fq_plain,
+          _fq_plain.get('centre') is not None
+          and abs(_fq_plain['centre'] - 0.42) < 0.01 and _fq_plain.get('bars') == 0)
+    # The widest buttons in the app, at the narrowest window, and a window
+    # shrunk while a long question waits.
+    app.geometry('640x600'); _pn_settle()
+    _fq_wide = {}
+
+    def _fq_wide_act():
+        _btns = [w for w in _walk9(_fq_card('Delete category'))
+                 if isinstance(w, tk.Button)]
+        _fq_wide['inside'] = [str(b.cget('text'))[:12] for b in _btns
+                              if _fq_inside(b)]
+        _question_button('Cancel', 'Delete category').invoke()
+
+    _while_asking(lambda: app._ask_category_deletion('Groceries and errands', 12),
+                  _fq_wide_act, 'Cancel', 'Delete category')
+    check('640x600: all three buttons of the category question are inside the '
+          'window (%s)' % _fq_wide.get('inside'),
+          len(_fq_wide.get('inside') or []) == 3)
+    app.geometry('1366x900'); _pn_settle()
+    _fq_shrunk = {}
+
+    def _fq_shrink_act():
+        app.geometry('640x600'); _pn_settle()
+        _ok = _question_button('OK', 'your notes')
+        _fq_shrunk['ok'] = _ok is not None and _fq_inside(_ok)
+        _fq_shrunk['card'] = _fq_inside(_fq_card('your notes'))
+        if _ok is not None:
+            _ok.invoke()
+
+    _while_asking(app.announce_startup_changes, _fq_shrink_act, 'OK', 'your notes')
+    check('the window shrunk while the long notice waits: it still fits, OK on '
+          'screen (%s)' % _fq_shrunk, _fq_shrunk.get('ok') and _fq_shrunk.get('card'))
+finally:
+    if _fq_info is not None:
+        app.show_info = _fq_info
+    (NO.VERSION_CHANGE, NO.STORAGE_WARNING, NO.MIGRATION_INFO, NO.PURGED_DIRS,
+     app._corrupt_notes_report, app._categories_adopted, app._cleanup_report,
+     app._version_backup_path) = _fq_saved
+    app.geometry('1100x850'); _pn_settle()
+
 check('none of the blocks above raised a background error (%s)' % _bg9[:2],
       not _bg9)
 app.notes = list(_na_notes)
