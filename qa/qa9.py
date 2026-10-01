@@ -372,12 +372,26 @@ def _walkTG(w):
         _walkTG(ch)
 _walkTG(_popG)
 _bodyG = max(_txtsG, key=lambda t: len(t.get('1.0', 'end')))
-_bodyG.focus_force()
-for _ in range(60):
-    app.update(); app.update_idletasks()
-    if app.focus_get() is _bodyG:
-        break
-    time.sleep(0.01)
+
+
+def _focus_body9(why):
+    """A synthetic key goes to whichever window holds the keyboard, not to
+    the widget it names: on a busy desktop the body can lose it between
+    two checks, and the key's handler then never runs -- one check failed
+    so, and two more could pass without their mechanism having run at all.
+    So the keyboard is forced back before every key, and that it arrived
+    is checked, by name, as the precondition it is."""
+    _bodyG.focus_force()
+    for _ in range(60):
+        app.update(); app.update_idletasks()
+        if app.focus_get() is _bodyG:
+            break
+        time.sleep(0.01)
+    check('fixture: the template body holds the keyboard before %s' % why,
+          app.focus_get() is _bodyG)
+
+
+_focus_body9('a key typed into hidden table text')
 _bodyG.mark_set('insert', '1.0')
 app.update()
 # The guard runs on KeyPress; the class inserts at whatever caret the
@@ -393,6 +407,7 @@ check('typing with the caret in hidden table text herds it to visible',
 _bodyG.mark_set('insert', '4.0')
 app.update()
 _beforeG = _bodyG.get('1.0', 'end-1c')
+_focus_body9('a BackSpace at the visible edge')
 _bodyG.event_generate('<BackSpace>')
 app.update()
 check('backspace at the visible edge refuses to eat the hidden table',
@@ -407,6 +422,8 @@ app.update()
 _lastG = int(_bodyG.index('end-1c').split('.')[0])
 _bodyG.mark_set('insert', '%d.2' % _lastG)
 app.update()
+_focus_body9('the keystroke whose refresh must not move the caret')
+_bodyG.mark_set('insert', '%d.2' % _lastG)
 _bodyG.event_generate('<KeyRelease>', keysym='M')
 for _ in range(3):
     app.update()
@@ -424,6 +441,7 @@ _hidBefore = len(_bodyG.tag_ranges('tblhide'))
 _tkerrs9 = []
 _origRep9 = app.report_callback_exception
 app.report_callback_exception = lambda *a, **k: _tkerrs9.append(1)
+_focus_body9('the keystroke whose preview draw fails')
 _bodyG.event_generate('<KeyRelease>', keysym='q')
 app.update()
 app.update()
@@ -437,6 +455,7 @@ check('a failing preview draw is contained, hiding intact',
 # ---- THE PREVIEW DRAWS A CELL'S <br> LINES AS LINES ----
 _bodyG.delete('1.0', 'end')
 _bodyG.insert('1.0', '| Cap | Doi |\n| unu<br>doi | x |')
+_focus_body9('the keystroke that redraws the <br> preview')
 _bodyG.event_generate('<KeyRelease>', keysym='q')
 for _ in range(3):
     app.update()
