@@ -9531,6 +9531,59 @@ _edge_lines = app.body_text.get('1.0', 'end-1c').split(chr(10))
 check('table edge: BackSpace under a note-ending table keeps the last row whole',
       _edge_after is not None and _edge_lines[4] == '| Eggs | 12 |'
       and _edge_lines[5] == 'and bread')
+# Tk's own Ctrl+T swaps the two characters around the caret; at the edge
+# one of them was the table's line break, and the last row became
+# "| Eggs | 12 |r". A swap removes no line, so even the empty line under
+# a table (where BackSpace may go, below) holds it: the swap there was the
+# last row's closing pipe and its line break.
+_edge_after = _edge_press('6.0', '<Control-t>')
+check('table edge: Ctrl+T (Tk\'s transpose) at the start of the line under '
+      f'a table does nothing ({_edge_after!r})',
+      _edge_after == _edge_body and _edge_rows() == ['Item', 'Milk', 'Eggs'])
+_edge_after = _edge_press('6.3', '<Control-t>')
+check('table edge: ...while Ctrl+T in the prose under it still transposes',
+      _edge_after == _edge_body.replace('remember', 'reemmber', 1))
+_edge_after = _edge_press('1.end', '<Control-t>')
+check('table edge: ...and so does Ctrl+T at the end of the line above it',
+      _edge_after == _edge_body.replace('Saturday', 'Saturdya', 1)
+      and _edge_rows() == ['Item', 'Milk', 'Eggs'])
+_edge_gap_below = _edge_body.replace('| Eggs | 12 |' + chr(10),
+                                     '| Eggs | 12 |' + chr(10) + chr(10), 1)
+_edge_after = _edge_press('6.0', '<Control-t>', body=_edge_gap_below)
+check('table edge: Ctrl+T on the empty line under a table does nothing '
+      f'({_edge_after!r})',
+      _edge_after == _edge_gap_below
+      and _edge_rows() == ['Item', 'Milk', 'Eggs'])
+_edge_after = _edge_press('end-1c', '<Control-t>', body=_edge_end_body)
+check('table edge: Ctrl+T on the writable line under a note-ending table '
+      f'keeps the last row whole ({_edge_after!r})',
+      _edge_after is not None
+      and _edge_after.split(chr(10))[4] == '| Eggs | 12 |'
+      and _edge_rows() == ['Item', 'Milk', 'Eggs'])
+# An EMPTY line beside a table joins nothing onto a row when it goes, and
+# the edge guard refused it anyway: Delete on the empty line above, or
+# BackSpace on the empty line below, did nothing. It goes now -- but not
+# the empty line BETWEEN two tables (they would merge into one block),
+# and not the writable line the renderer keeps under a note-ending table
+# (checked just above).
+_edge_gap_above = _edge_body.replace('Saturday' + chr(10),
+                                     'Saturday' + chr(10) + chr(10), 1)
+_edge_after = _edge_press('2.0', '<Delete>', body=_edge_gap_above)
+check('table edge: Delete on the empty line above a table removes it '
+      f'({_edge_after!r})',
+      _edge_after == _edge_body and _edge_rows() == ['Item', 'Milk', 'Eggs'])
+_edge_after = _edge_press('6.0', '<BackSpace>', body=_edge_gap_below)
+check('table edge: BackSpace on the empty line under a table removes it '
+      f'({_edge_after!r})',
+      _edge_after == _edge_body and _edge_rows() == ['Item', 'Milk', 'Eggs'])
+_edge_two = ('| A | B |' + chr(10) + '| --- | --- |' + chr(10) + '| a1 | b1 |'
+             + chr(10) + chr(10) + '| C | D |' + chr(10) + '| --- | --- |'
+             + chr(10) + '| c1 | d1 |' + chr(10) + 'end')
+for _edge_key in ('<Delete>', '<BackSpace>'):
+    _edge_after = _edge_press('4.0', _edge_key, body=_edge_two)
+    check(f'table edge: {_edge_key} on the empty line between two tables '
+          f'does nothing ({_edge_after!r}, {len(app._table_grids)} grids)',
+          _edge_after == _edge_two and len(app._table_grids) == 2)
 set_body('')
 
 # ---- A TABLE OPERATION LEAVES EVERY CELL IT DID NOT TOUCH AS IT WAS ----

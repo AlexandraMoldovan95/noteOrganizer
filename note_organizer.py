@@ -509,6 +509,29 @@ def _checklist_rows_current(drawn, items, theme):
                     for rec, item in zip(drawn["rows"], items)))
 
 
+def _table_edge_holds(app, index):
+    """Does a drawn table's edge hold the body character at *index*?
+
+    The edge is the line break just above the table, everything in it,
+    and the line break just below it: moving or removing any of those
+    glues prose onto a row, which then reads as prose, falls out of the
+    grid and is saved that way. The one place this boundary is written
+    down -- the deletion keys (_deletion_joins_table) and Tk's Ctrl+T both
+    ask it. May raise tk.TclError for a bad index; callers catch it.
+    """
+    b = app.body_text
+    for info in getattr(app, "_table_grids", []):
+        first = app._grid_first_line(info)
+        if first is None:
+            continue
+        last = first + info["nrows"] - 1
+        start = f"{first - 1}.end" if first > 1 else "1.0"
+        if (b.compare(start, "<=", index)
+                and b.compare(index, "<=", f"{last}.end")):
+            return True
+    return False
+
+
 
 class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     DialogsMixin, SettingsPageMixin, tk.Tk):
@@ -4180,6 +4203,23 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                         and self._deletion_joins_table(
                             True, selection_wins=False))):
                 return "break"
+            if keysym == "t":
+                # Tk's Ctrl+T swaps the two characters around the caret
+                # (the two before it at a line's end). At a table's edge
+                # one of them is the table's line break, which moves: the
+                # last row became "| Eggs | 12 |r" and dropped out of the
+                # grid. A swap removes no line, so the empty-line leniency
+                # of _deletion_joins_table does not apply: any character
+                # the edge holds stops it. (Under Caps Lock alone the keysym
+                # is "T", which no Tk binding answers; with Shift as well
+                # it is "t" again and lands here.)
+                at = "insert" if at_line_end else "insert+1c"
+                try:
+                    pair = (b.index(f"{at}-2c"), b.index(f"{at}-1c"))
+                    if any(_table_edge_holds(self, i) for i in pair):
+                        return "break"
+                except tk.TclError:
+                    pass
         return None
 
     def _deletion_joins_table(self, forward, selection_wins=True):
@@ -4194,6 +4234,13 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         edge. *selection_wins* mirrors Tk's rule for Delete and
         BackSpace: with the caret inside a selection they delete the
         selection instead, which is not a question about the edge.
+
+        Except where the caret's own line is EMPTY: taking its line break
+        removes that line and glues nothing onto a row (Delete on the
+        empty line above a table, BackSpace on the one below), so it goes
+        -- unless the line beyond it is a table row, which would merge two
+        tables into one block, or there is no line beyond it, which is the
+        writable line the renderer keeps under a note-ending table.
         """
         b = self.body_text
         try:
@@ -4204,18 +4251,20 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             if not forward and b.compare("insert", "==", "1.0"):
                 return False
             at = b.index("insert" if forward else "insert-1c")
-            for info in getattr(self, "_table_grids", []):
-                first = self._grid_first_line(info)
-                if first is None:
-                    continue
-                last = first + info["nrows"] - 1
-                start = f"{first - 1}.end" if first > 1 else "1.0"
-                if (b.compare(start, "<=", at)
-                        and b.compare(at, "<=", f"{last}.end")):
-                    return True
-        except tk.TclError:
+            if not _table_edge_holds(self, at):
+                return False
+            if b.compare("insert linestart", "==", "insert lineend"):
+                line = int(b.index("insert").split(".")[0])
+                far = line - 1 if forward else line + 1
+                total = int(b.index("end-1c").split(".")[0])
+                if far < 1:
+                    return False
+                if far <= total and not is_table_row(
+                        b.get(f"{far}.0", f"{far}.end")):
+                    return False
+            return True
+        except (tk.TclError, ValueError):
             return False
-        return False
 
     # ---------- The table's own right-click menu ----------
 
