@@ -9992,22 +9992,28 @@ def _jc_configure(*a, **k):
     return _jc_real_configure(*a, **k)
 
 
+# Each record is read the moment the action returns, before anything runs
+# the event loop: an autosave firing in an update() commits an open cell
+# through a unit of its own, and on a slow run its pairs joined the record
+# (a full-suite run on Linux read four).
 app.body_text.configure = _jc_configure
 try:
     _jc_setup()
     _uf_select('trip')
     del _jc_seps[:]
     app._toggle_body_style('bold')
+    _jc_seen = list(_jc_seps)
     app.update()
     check('journal: a bold lays no configure on the body, which re-lays out '
-          f'the whole note ({_jc_seps}, {_cs_styles()})',
-          _jc_seps == [] and ('bold', 'trip') in _cs_styles())
+          f'the whole note ({_jc_seen}, {_cs_styles()})',
+          _jc_seen == [] and ('bold', 'trip') in _cs_styles())
     _jc_info = _jc_setup()
     del _jc_seps[:]
     app._grid_insert_row(_jc_info, 1)
+    _jc_seen = list(_jc_seps)
     app.update()
-    check(f'journal: ...while a table operation still groups its edits ({_jc_seps})',
-          _jc_seps == [False, True])
+    check(f'journal: ...while a table operation still groups its edits ({_jc_seen})',
+          _jc_seen == [False, True])
     # A tags-only action that reaches a text edit after all -- the toolbar's
     # Italic with a cell open commits the typing in it first -- groups it.
     _jc_info = _jc_setup()
@@ -10016,11 +10022,12 @@ try:
     app._cell_editor['entry'].insert('end', '5')
     del _jc_seps[:]
     app._toggle_body_style('italic')
+    _jc_seen = list(_jc_seps)
     app.update()
     check('journal: a tags-only action that commits an open cell groups that '
-          f'edit ({_jc_seps}, '
+          f'edit ({_jc_seen}, '
           f'{core_tables.split_row(app.body_text.get("4.0", "4.end"))})',
-          _jc_seps == [False, True]
+          _jc_seen == [False, True]
           and core_tables.split_row(app.body_text.get('4.0', '4.end'))[1]
           == '25')
     app._commit_cell_editor()
