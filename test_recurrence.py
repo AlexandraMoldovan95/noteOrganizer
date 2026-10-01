@@ -245,8 +245,8 @@ check('"2 years ago" is its own bucket, not part of Older',
 # is_recurring on a note that never went through normalize_note.
 #
 # Live notes are normalised on load, so this question was always asked of
-# a well-formed dict. Trash entries are not -- load_trash() returns
-# whatever the file held -- so the first caller to ask a TRASHED note
+# a well-formed dict. Trash entries are not -- load_trash() returns each
+# entry as the file held it -- so the first caller to ask a TRASHED note
 # whether it repeats met whatever a hand-edit, an older format or a
 # crafted backup had left in the field. A string there is truthy, and
 # .get() on a string raises: the whole Trash panel went down with it.

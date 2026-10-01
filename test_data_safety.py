@@ -922,6 +922,22 @@ check("a wrong-shape trash.json is preserved before falling back",
           for p in os.listdir(_paths.APP_DIR)
           if p.startswith("trash_corrupt_")))
 
+# Junk beside real entries -- a hand edit -- kept Recently deleted from
+# opening at all: the panel asks every entry .get(). Only notes come in,
+# and the file's bytes are kept aside first.
+_JUNK = '[{"id": 7, "title": "real"}, "junk", null]'
+with open(_paths.TRASH_FILE, "w", encoding="utf-8") as _f:
+    _f.write(_JUNK)
+_trJ = _storage.load_trash()
+# Read whatever came back, junk included: a check that raised on the very
+# failure it is there to see would stop the suite instead of naming it.
+check("a trash.json holding junk beside its notes loads the notes alone "
+      "(%r)" % (_trJ,),
+      [e.get("title") if isinstance(e, dict) else e for e in _trJ] == ["real"])
+check("...and keeps the file's bytes aside first",
+      any(open(os.path.join(_paths.APP_DIR, p), encoding="utf-8").read() == _JUNK
+          for p in os.listdir(_paths.APP_DIR) if p.startswith("trash_corrupt_")))
+
 # ---- The reclaim migration preserves a corrupt settings.json ----
 # run_migrations used to clobber an unreadable settings file with the
 # %APPDATA% copy, no trace kept — and its marker write was the last

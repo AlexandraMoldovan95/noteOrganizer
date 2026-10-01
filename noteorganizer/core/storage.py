@@ -177,13 +177,23 @@ def save_templates(templates):
 
 def load_trash():
     """Read the trashed notes list. Malformed/missing -> empty list, never
-    crashes; a malformed file is preserved aside first."""
+    crashes; a malformed file is preserved aside first.
+
+    Only entries that are notes (dicts) come in. A hand-edited file holding
+    a string or a null beside them kept Settings -> Recently deleted from
+    opening at all, so the real notes beside the junk could not be restored.
+    The file is preserved aside before anything is left out, as when it
+    cannot be read; the entries themselves are kept as the file held them
+    (normalize_note does not run on the way out of the Trash)."""
     if os.path.exists(paths.TRASH_FILE):
         try:
             with open(paths.TRASH_FILE, "r", encoding="utf-8") as f:
                 data = json.load(f)
             if isinstance(data, list):
-                return data
+                kept = [e for e in data if isinstance(e, dict)]
+                if len(kept) != len(data):
+                    _preserve_corrupt(paths.TRASH_FILE)
+                return kept
         except (json.JSONDecodeError, IOError, OSError):
             pass
         # Reached only when the file exists but held nothing usable —

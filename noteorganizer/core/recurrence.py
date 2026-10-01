@@ -217,8 +217,8 @@ def is_recurring(note):
     note that has been through :func:`normalize_note` and fatal for one
     that has not: a ``recurrence`` holding a string is truthy, and
     ``.get`` on a string raises. Live notes are normalised on load;
-    TRASH entries are not -- ``load_trash`` returns whatever the file
-    held -- so the first caller to ask a trashed note whether it repeats
+    TRASH entries are not -- ``load_trash`` returns each entry as the file
+    held it -- so the first caller to ask a trashed note whether it repeats
     would have taken the whole Trash panel down with it. Found by a
     check written for exactly that, the day such a caller appeared.
     """
