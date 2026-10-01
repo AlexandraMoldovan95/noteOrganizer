@@ -10274,6 +10274,79 @@ check(f'native delete: a pause in a run through a bold word -- each part '
       and app.body_text.get('1.0', 'end-1c') == _uf_full
       and _cs_styles() == [('bold', 'Friday')])
 
+# The keys a person presses. Ctrl+X and Ctrl+V reach the bindtag's Cut and
+# Paste as the key's own press, not as a virtual event, and were read as
+# no delete at all; the menu's Paste tried the app's own paste routes
+# first, and their undo units ended the run before Tk's paste deleted
+# anything; Tk's own Ctrl+H, Ctrl+K and Ctrl+T were unknown to it. Each
+# gave the bold back plain. Tcl's clipboard is replaced in this process
+# for the block, so the machine's own clipboard is never read or written.
+_kp_clip = {'data': 'Monday'}
+
+
+def _kp_clipboard(*args):
+    args = [str(a) for a in args]
+    if args and args[0] == 'clear':
+        _kp_clip['data'] = ''
+    elif args and args[0] == 'append':
+        _kp_clip['data'] += args[-1]
+    elif args and args[0] == 'get':
+        return _kp_clip['data']
+    return ''
+
+
+_kp_real = (NO.clipboard.read_text, NO.clipboard.read_html, NO.clipboard.write)
+app.tk.eval('rename clipboard ::_qa1_real_clipboard')
+app.tk.createcommand('clipboard', _kp_clipboard)
+app.tk.eval('rename ::tk::GetSelection ::tk::_qa1_real_GetSelection')
+app.tk.createcommand('::qa1_clip', lambda: _kp_clip['data'])
+app.tk.eval('proc ::tk::GetSelection {w {sel PRIMARY}} {'
+            ' if {$sel eq "CLIPBOARD"} {return [::qa1_clip]};'
+            ' return [::tk::_qa1_real_GetSelection $w $sel] }')
+NO.clipboard.read_text = lambda: _kp_clip['data']
+NO.clipboard.read_html = lambda: None
+NO.clipboard.write = lambda *a, **k: True
+
+
+def _kp_at(index):
+    app.body_text.tag_remove('sel', '1.0', 'end')
+    app.body_text.mark_set('insert', index)
+
+
+try:
+    for _kp_name, _kp_do in (
+            ('Ctrl+X', lambda: (_uf_select('Friday'),
+                                _uf_key('<Control-KeyPress-x>'))),
+            ('Ctrl+V', lambda: (_uf_select('Friday'),
+                                _uf_key('<Control-KeyPress-v>'))),
+            ("the menu's Paste", lambda: (
+                _uf_select('Friday'), take_focus(app.body_text),
+                app.body_text.event_generate('<<Paste>>'), app.update())),
+            ('Ctrl+H six times', lambda: (
+                _kp_at('end-1c'),
+                [_uf_key('<Control-KeyPress-h>') for _i in range(6)])),
+            ('Ctrl+K before it', lambda: (_kp_at('2.21'),
+                                          _uf_key('<Control-KeyPress-k>'))),
+            ("Ctrl+T at the word's end", lambda: (
+                _kp_at('end-1c'), _uf_key('<Control-KeyPress-t>')))):
+        _nd_setup()
+        _kp_clip['data'] = 'Monday'
+        _kp_do()
+        _kp_after = app.body_text.get('1.0', 'end-1c')
+        _uf_key('<Control-z>')
+        check(f'native delete: {_kp_name} over a bold word, then Ctrl+Z, gives '
+              f'the word back bold ({_kp_after!r} -> {_cs_styles()})',
+              _kp_after != _uf_full
+              and app.body_text.get('1.0', 'end-1c') == _uf_full
+              and _cs_styles() == [('bold', 'Friday')])
+finally:
+    app.tk.deletecommand('clipboard')
+    app.tk.eval('rename ::_qa1_real_clipboard clipboard')
+    app.tk.eval('rename ::tk::GetSelection {}')
+    app.tk.eval('rename ::tk::_qa1_real_GetSelection ::tk::GetSelection')
+    app.tk.deletecommand('::qa1_clip')
+    NO.clipboard.read_text, NO.clipboard.read_html, NO.clipboard.write = _kp_real
+
 # ---- CTRL+Z PUTS A TABLE'S FIRST LINE BACK EXACTLY ----
 # A drawn table's first line holds the grid's window at column 0, and Tk
 # records an edit by its index. Operations that take the grids down, edit,

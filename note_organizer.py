@@ -6325,6 +6325,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # too, so the paste falls through to the TSV route anyway.
         own = getattr(self, "_grid_cell_clip_text", None)
         own_copy = bool(own) and clipboard.read_text() == own
+        # The run of Tk's own deletes opened for this paste (it replaces a
+        # styled selection: _note_styled_delete). Each route tried below is
+        # an undo unit of its own, and opening one ends any run -- here
+        # before Tk had deleted anything, so the run ended empty, and the
+        # selection Tk's paste then replaced came back plain on Ctrl+Z.
+        run = getattr(self, "_styled_delete_run", None)
         if own_copy:
             if self._paste_tsv_as_table():
                 return "break"
@@ -6336,6 +6342,15 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             return "break"
         if self._paste_pipe_text_on_own_lines():
             return "break"
+        # None of them took it, and Tk's paste is the delete the run was
+        # opened for -- given back while the text is still what the run
+        # noted.
+        if run is not None:
+            try:
+                if self._fmt_state()[0] == run["before"][0]:
+                    self._styled_delete_run = run
+            except (tk.TclError, ValueError):
+                pass
         # Plain paste: Tk inserts the text after this returns, so the list
         # tags can only be brought back into step once that has happened.
         self._body_follow_caret = True
@@ -12371,9 +12386,13 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # notes the formatting first (see _note_styled_delete).
         self.bind_class(self._STYLED_DELETE_TAG, "<KeyPress>",
                         self._note_styled_delete)
+        # Each virtual binding says what it is: a key that means Cut or
+        # Paste (Ctrl+X, Ctrl+V) arrives as that key's own press, and read
+        # as a key, Ctrl+X was no delete at all -- the bold it cut came
+        # back plain on Ctrl+Z. Only the menu's Cut was a virtual event.
         for virtual in ("<<Cut>>", "<<Clear>>", "<<Paste>>"):
             self.bind_class(self._STYLED_DELETE_TAG, virtual,
-                            self._note_styled_delete)
+                            lambda e: self._note_styled_delete(e, virtual=True))
         self.body_text.bindtags(
             (self._STYLED_DELETE_TAG,) + tuple(self.body_text.bindtags()))
         self.body_text.bind("<<Paste>>", self._on_body_paste, add="+")
@@ -13792,7 +13811,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
     # every Cut, Clear and Paste before the body's own bindings do.
     _STYLED_DELETE_TAG = "NoteBodyStyledDelete"
 
-    def _note_styled_delete(self, event):
+    def _note_styled_delete(self, event, virtual=False):
         """Note the formatting before Tk deletes styled text by its own hand.
 
         Delete, BackSpace, typing over a selection and Cut are Tk's own
@@ -13819,7 +13838,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 return None
         except (tk.TclError, ValueError):
             return None
-        doomed, kind = self._native_delete_range(event)
+        doomed, kind = self._native_delete_range(event, virtual)
         styled = (doomed is not None
                   and self._range_carries_formatting(*doomed))
         run = getattr(self, "_styled_delete_run", None)
@@ -13838,10 +13857,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 self._styled_delete_run = None
         return None
 
-    def _native_delete_range(self, event):
+    def _native_delete_range(self, event, virtual=False):
         """(start, end) of what Tk's own binding for `event` will delete
         from the body, and which kind of delete it is -- or (None, None).
-        Selected cells are the app's own path (_on_body_delete_key)."""
+        Selected cells are the app's own path (_on_body_delete_key).
+        *virtual*: the event is Cut, Clear or Paste, by whatever key."""
         b = self.body_text
         if getattr(self, "_grid_sel", None) is not None:
             return None, None
@@ -13849,10 +13869,20 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             sel = (b.index("sel.first"), b.index("sel.last"))
         except tk.TclError:
             sel = None
-        if getattr(event.type, "name", str(event.type)) == "VirtualEvent":
+        if virtual or getattr(event.type, "name", str(event.type)) == "VirtualEvent":
             return (sel, "replace") if sel else (None, None)
         keysym = getattr(event, "keysym", "")
+        state = getattr(event, "state", 0)
+        if not isinstance(state, int):
+            state = 0
+        control, alt = bool(state & 0x4), bool(state & 0x20000)
         try:
+            if control and not alt and keysym in ("h", "k", "t"):
+                # Tk's own Ctrl+H (one character back), Ctrl+K (to the
+                # line's end, or its line break) and Ctrl+T (swap the two
+                # characters at the caret), which read a selection as
+                # nothing. Their bold came back plain on Ctrl+Z.
+                return self._tk_control_delete_range(keysym)
             if keysym == "BackSpace":
                 if sel:
                     return sel, "back"
@@ -13870,16 +13900,34 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if not sel:
             return None, None
         char = getattr(event, "char", "") or ""
-        state = getattr(event, "state", 0)
-        if not isinstance(state, int):
-            state = 0
-        control, alt = bool(state & 0x4), bool(state & 0x20000)
         # Control+Alt is AltGr on Windows, which types a character.
         typed = (char.isprintable() and char != ""
                  and (not control or alt))
         if typed or keysym in ("Return", "KP_Enter", "Tab"):
             return sel, "replace"
         return None, None
+
+    def _tk_control_delete_range(self, keysym):
+        """What Tk's own Ctrl+H, Ctrl+K or Ctrl+T will take from the body
+        (text.tcl's bindings, on every platform), and which kind of delete
+        it is: a run of Ctrl+H is a run of BackSpaces, of Ctrl+K a run of
+        Deletes, and a swap replaces the two characters it moves."""
+        b = self.body_text
+        if keysym == "h":
+            if b.compare("insert", "==", "1.0"):
+                return None, None
+            return (b.index("insert-1c"), b.index("insert")), "back"
+        if keysym == "k":
+            if b.compare("insert", "==", "insert lineend"):
+                if b.compare("insert", ">=", "end-1c"):
+                    return None, None
+                return (b.index("insert"), b.index("insert+1c")), "del"
+            return (b.index("insert"), b.index("insert lineend")), "del"
+        pos = ("insert" if b.compare("insert", "==", "insert lineend")
+               else "insert+1c")
+        if b.compare(f"{pos}-1c", "==", "1.0"):
+            return None, None
+        return (b.index(f"{pos}-2c"), b.index(pos)), "replace"
 
     def _range_carries_formatting(self, start, end):
         """Does any character formatting or paragraph formatting touch the
