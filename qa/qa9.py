@@ -1781,6 +1781,68 @@ finally:
     app.__dict__.pop('ask_yes_no_cancel', None)
 app._dismiss_mini_popup(); app.update()
 
+# A template's bin beside a half-written template. The bin's own press
+# asked "Delete ... for good?", and the window's click-outside then asked
+# "Save changes?" for the same press -- whose Yes wrote back the very
+# template just deleted. Its own template half-written in the editor: the
+# delete question is the only one, and covers the edit. Another
+# template's editor has its say first, as the pencil lets it.
+_tb_asked = []
+
+
+def _bins9():
+    return [w for w in _walk9(app.settings_templates_panel)
+            if getattr(w, '_icon_kind', None) == 'trash']
+
+
+def _tb_answers(yes_no, save_changes):
+    del _tb_asked[:]
+    app.ask_yes_no = lambda *a, **k: (_tb_asked.append(a[0]), yes_no)[1]
+    app.ask_yes_no_cancel = lambda *a, **k: (_tb_asked.append(a[0]),
+                                             save_changes)[1]
+
+
+def _tb_fixture():
+    app._dismiss_mini_popup(); app.update()
+    app.templates = [NO.normalize_template({'name': 'Weekly review',
+                                            'body': 'What went well'}),
+                     NO.normalize_template({'name': 'Meeting notes',
+                                            'body': 'Agenda'})]
+    NO.save_templates(app.templates)
+    app._refresh_templates_panel(); app.update()
+    return _wa_open_dirty()
+
+
+try:
+    _tb_pop, _tb_ent = _tb_fixture()
+    check('fixture: two templates with a bin each, the first half-written in '
+          'its editor (%d bins)' % len(_bins9()),
+          len(_bins9()) == 2 and _tb_pop is not None)
+    _tb_answers(False, True)
+    _qa_click(_bins9()[0]); app.update()
+    check('the bin of the template open half-written asks one question, and '
+          'No keeps the editor with its edit (%s)' % _tb_asked,
+          _tb_asked == ['Delete template'] and app._mini_popup is _tb_pop
+          and (_wa_text(_tb_ent) or '').endswith('(my edit)')
+          and 'Weekly review' in _wa_names())
+    _tb_answers(True, True)
+    _qa_click(_bins9()[0]); app.update()
+    check('...and Yes deletes it for good, the editor and its edit with it '
+          '(%s; on disk %s)' % (_tb_asked, _wa_names()),
+          _tb_asked == ['Delete template'] and app._mini_popup is None
+          and _wa_names() == ['Meeting notes'])
+    _tb_pop, _tb_ent = _tb_fixture()
+    _tb_answers(True, True)
+    _qa_click(_bins9()[1]); app.update()
+    check('another template\'s bin lets the half-written one be saved first, '
+          'then deletes its own (%s; on disk %s)' % (_tb_asked, _wa_names()),
+          _tb_asked == ['Save changes?', 'Delete template']
+          and _wa_names() == ['Weekly review (my edit)'])
+finally:
+    app.__dict__.pop('ask_yes_no', None)
+    app.__dict__.pop('ask_yes_no_cancel', None)
+app._dismiss_mini_popup(); app.update()
+
 # The same, pressed where a person presses: the card itself, a double-click
 # on it, and the reminder bar's text. Each one asked through its own press,
 # and kept open, let the click go on to the window's click-outside -- which

@@ -741,6 +741,17 @@ class SettingsPageMixin:
                  ).pack(side="left", fill="x", expand=True, padx=6, pady=8)
 
         def delete():
+            # The window's click-outside used to answer this press too,
+            # after the delete: the editor's "Save changes?" came second,
+            # and its Yes wrote back the very template just deleted "for
+            # good". Now the press is answered here alone. This template
+            # open in the editor: the delete question covers its unsaved
+            # edit, and is the only one. Another template's editor has its
+            # say first, as the pencil beside this bin lets it.
+            pop = getattr(self, "_mini_popup", None)
+            own = pop is not None and getattr(pop, "edited_template", None) is tpl
+            if not own and not self._dismiss_mini_popup_asking():
+                return "break"
             # Honest about the stakes: notes go to the Trash and can come
             # back for the whole retention window -- templates do not.
             if self.ask_yes_no(
@@ -748,10 +759,13 @@ class SettingsPageMixin:
                     f"Delete the template “{name}” for good?\n\n"
                     "Templates don't go to the Trash — this can't be undone.",
                     icon="warning", default="no"):
+                if own:
+                    self._dismiss_mini_popup()
                 self.templates = [t for t in self.templates if t is not tpl]
                 save_templates(self.templates)
                 redraw()
                 self._render_statistics()
+            return "break"
 
         self._icon_button(row, "trash", delete, danger=True, bg_key="sidebar"
                           ).pack(side="right", padx=(1, 6))
@@ -891,6 +905,8 @@ class SettingsPageMixin:
             return False
         pop = tk.Toplevel(self)
         self._mini_popup = pop
+        # Which template it edits (None for a new one), for that row's bin.
+        pop.edited_template = tpl
         pop.wm_overrideredirect(True)
         pop.configure(bg=self.colors["accent"])
         frame = tk.Frame(pop, bg=self.colors["card"], padx=12, pady=12)
@@ -2699,7 +2715,9 @@ class SettingsPageMixin:
             def _press(event):
                 if removes_row and self._second_press_of_double_click(event):
                     return "break"
-                command()
+                # A command that has answered the press says "break", so
+                # the window's click-outside does not answer it again.
+                return command()
 
             c.bind("<Button-1>", _press)
             hot = self.colors["danger"] if danger else self.colors["text"]
