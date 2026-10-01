@@ -790,3 +790,39 @@ A new surface joins this list the moment it ships.
   `_desktop_pointer_button_held`. And a story's click now fails where it
   missed — `_open_note_by_clicking` is true only if that note opened —
   instead of three lines later, blaming the app.
+- **A block that swaps `app.notes` under a live editor resets the
+  editor first.** A pending autosave saves what the editor holds into
+  whatever notebook is in place when it fires: qa4 once grew to 301
+  notes in four runs of five because an unsaved note from the block
+  before landed in its fixture. `app.new_note()` before the swap, and a
+  fixture check that counts the notes.
+- **A fixture check states the premise the real check needs.** The
+  rename's "keeps its place" check could not fail while the renamed
+  category was already the last one — renaming it to the end changed
+  nothing. The fixture now adds a category after it, and a check says
+  so before the real one runs.
+- **A mutant must compile.** Removing the only statement of a block
+  leaves an IndentationError, and the run proves nothing — it read
+  NO-RUN twice here before the session's runner learned to compile the
+  mutated file first and refuse it at once. Put `pass` where the
+  statement was.
+- **A photograph can lie about stacking.** The screenshot helpers pin
+  the main window topmost for the grab, which changes what is on top of
+  what: a question photographed "under" a popup was, by Windows' own
+  `WindowFromPoint` (`winfo_containing`), on top at every button.
+  Judge stacking by asking Windows, never from a photo.
+- **"invalid command name … ("after" script)" on stderr after a
+  restart simulation is harness noise.** qa1, qa5 and qa8 destroy an app
+  and build another in the same process; Tcl's notifier is per thread,
+  so the next app's event loop fires the old one's timers. The app is
+  not affected (closing it ends the process). Any OTHER background error
+  is real — capture `bgerror` in a check, as qa9 does, because Tk
+  reports it to nobody by default.
+- **Generated events carry time 0.** Tk pairs two presses into a
+  `<Double-Button-1>` by time and place, so any two generated presses at
+  one spot are a double-click to Tk. A check about single clicks spaces
+  them in place or passes `time=`; a check about double-clicks passes
+  both times explicitly.
+- **The names gate reads the qa scripts and the unit suites too.** A
+  name borrowed from a removed block (a seed's `os`, `io`) fails the
+  gate the moment the script is read, instead of halfway through a run.
