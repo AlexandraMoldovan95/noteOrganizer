@@ -439,7 +439,7 @@ from noteorganizer.core.themes import (
 )
 
 
-def _undo_atom(method):
+def _undo_atom(method=None, *, tags_only=False, only_if=None):
     """One table operation = ONE undo unit.
 
     A commit, a resize, a fill are each a burst of small inserts and
@@ -447,15 +447,94 @@ def _undo_atom(method):
     undoing a cell edit could stop halfway -- the old value gone, the
     padding collapsed. The wrapper opens a unit, runs the operation,
     closes the unit; nested wrapped calls keep the outermost unit.
+
+    *tags_only* is for an action that lays tags and inserts or deletes no
+    text -- a bold, a colour, an alignment. Its unit leaves Tk's
+    autoseparators alone: turning them off and on is a configure, and
+    Tk re-lays out every line of the note on any configure (measured at
+    150-200 ms on a long note) -- for an action that puts nothing on Tk's
+    stack to group. Should it reach a text edit after all (an open cell
+    committed first), that inner unit turns them off there.
+
+    *only_if* opens the unit only when it answers true for the instance;
+    otherwise the method runs bare -- for a call that is often a no-op.
     """
+    if method is None:
+        return lambda m: _undo_atom(m, tags_only=tags_only, only_if=only_if)
+
     @functools.wraps(method)
     def wrapped(self, *args, **kwargs):
+        if only_if is not None and not only_if(self):
+            return method(self, *args, **kwargs)
+        # Read and cleared by the open it is meant for.
+        self._undo_atom_tags_only = tags_only
         self._undo_atom_begin()
         try:
             return method(self, *args, **kwargs)
         finally:
             self._undo_atom_end()
     return wrapped
+
+
+def _fmt_journal_tag(name):
+    """Is this a tag the formatting journal keeps? Character formatting
+    and the paragraph tags (indent, alignment): what Tk's undo stack never
+    records. The one list -- the snapshot, the restore and the look-ahead
+    for Tk's own deletes all ask it."""
+    return (is_format_tag(name) or name.startswith("para_")
+            or name in ("align_center", "align_right"))
+
+
+# One round trip for a whole snapshot: where the embedded windows sit, then
+# one "tag ranges" string per tag, in the order asked. Tag names travel as
+# a real Tcl list, so a font family with a space in it is still one name.
+_FMT_RANGES_TCL = """proc ::noteorg_fmt_ranges {w tags} {
+    set out [list [join [lmap name [$w window names] {$w index $name}]]]
+    foreach t $tags { lappend out [join [$w tag ranges $t]] }
+    return [join $out "\\n"]
+}"""
+
+
+def _fmt_pairs(ranges):
+    """A "tag ranges" string as a set of (start, end) index pairs."""
+    tokens = ranges.split()
+    return set(zip(tokens[0::2], tokens[1::2]))
+
+
+def _fmt_move_ranges(ranges, src, dst):
+    """*ranges*, read with embedded windows at *src*, as they read with the
+    windows at *dst* instead.
+
+    A drawn table's window is a character to Tk's indices: every column
+    after it on its line counts one more than in the text without it. Tk's
+    undo puts a table's text back without its window, so a snapshot taken
+    with the grids drawn is moved to wherever the windows are now (none,
+    or a stale one) before it is compared or laid. Each index is taken to
+    its column in the text without windows, then past the windows of
+    *dst* on its line.
+    """
+    def by_line(windows):
+        out = {}
+        for w in windows:
+            line, _, col = w.partition(".")
+            out.setdefault(line, []).append(int(col))
+        for cols in out.values():
+            cols.sort()
+        return out
+
+    old, new = by_line(src), by_line(dst)
+    moved = []
+    for index in ranges.split():
+        line, _, col = index.partition(".")
+        if line in old or line in new:
+            c = int(col)
+            c -= sum(1 for w in old.get(line, ()) if w < c)
+            for w in new.get(line, ()):
+                if w <= c:
+                    c += 1
+            index = f"{line}.{c}"
+        moved.append(index)
+    return " ".join(moved)
 
 
 def _undo_hidden(method):
@@ -3136,7 +3215,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             pass
         self._commit_cell_editor()
 
-    @_undo_atom
+    # Opening a cell and every table operation commit first, mostly with no
+    # cell open: such a call is a no-op, and its unit noted the note's
+    # formatting twice for nothing.
+    @_undo_atom(only_if=lambda self: getattr(self, "_cell_editor", None))
     def _commit_cell_editor(self, close=True):
         """The editor's value reaches the hidden text, then the drawing.
 
@@ -5597,7 +5679,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                                     editor["r"], editor["c"])
         return None
 
-    @_undo_atom
+    @_undo_atom(tags_only=True)
     def _grid_apply_style(self, info, box, kind, value=None):
         """One toolbar action, over every selected cell's text.
 
@@ -6017,7 +6099,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 return align
         return "left"
 
-    @_undo_atom
+    @_undo_atom(tags_only=True)
     def _set_paragraph_align(self, align):
         """Align the selected lines left, centre or right.
 
@@ -7609,7 +7691,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         """Black or near-white, whichever reads better against hex_color."""
         return core_contrasting_fg(hex_color)
 
-    @_undo_atom
+    @_undo_atom(tags_only=True)
     def _toggle_body_style(self, style):
         """Bold/Italic/Underline/Strikethrough toolbar + right-click handler.
 
@@ -7682,7 +7764,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._refresh_format_buttons()
         self._schedule_autosave()
 
-    @_undo_atom
+    @_undo_atom(tags_only=True)
     def _apply_body_color(self, kind, hex_color):
         """Text-color/highlight-color picker handler. kind is "text_color"
         or "highlight"; hex_color is the chosen color, or None to clear it.
@@ -7741,7 +7823,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._refresh_format_buttons()
         self._schedule_autosave()
 
-    @_undo_atom
+    @_undo_atom(tags_only=True)
     def _apply_body_font(self, style, value):
         """Font size / family picker handler.
 
@@ -13473,51 +13555,90 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     pass
         self._fmt_undo, self._fmt_redo = [], []
         self._styled_delete_run = None
+        self._fmt_last_state = None
 
     # How many steps back the formatting journal reaches. Each step holds
-    # two snapshots as tuples (a few kB for an ordinary note); the cap
-    # keeps a long session on a heavily styled note from growing without
-    # bound. Past it, Ctrl+Z still walks Tk's own text stack.
+    # two snapshots, which share every tag's string with the snapshot
+    # before them where it did not change (see _fmt_state) -- so a step
+    # costs about what it changed; the cap keeps a long session from
+    # growing without bound anyway. Past it, Ctrl+Z still walks Tk's own
+    # text stack.
     _FMT_JOURNAL_DEPTH = 100
 
     def _fmt_state(self):
         """The body as far as undo has to know it: the text's signature,
-        its character formatting and its paragraph formatting -- the two
-        things Tk's undo stack never records. Tuples, so two snapshots
-        compare cheaply and a kept one holds little memory. Measured on
-        the heaviest note the perf probes build (86k characters, 279
-        spans): about 2 ms."""
+        where the embedded windows sit, and the ranges of every formatting
+        and paragraph tag -- the things Tk's undo stack never records.
+
+        Taken as Tk reports it, one string of line.col ranges per tag:
+        no character offsets to work out, which is what made the span list
+        cost 64 ms a snapshot at 8,000 styled words (measured: 5.7 ms this
+        way). A string equal to the last snapshot's for the same tag is
+        that string object, and an unchanged snapshot is the last one, so
+        the steps of a long session share what they did not change -- a
+        step held two full copies of the note's formatting, and 100 cell
+        edits on a heavily styled note grew the app by 60 MB."""
         b = self.body_text
         text = b.get("1.0", "end-1c")
-        spans = tuple((s["start"], s["end"], s["style"], s.get("value"))
-                      for s in self._extract_formatting(b))
-        paras = tuple(tuple(sorted(p.items()))
-                      for p in self._extract_paragraphs(b))
-        return (len(text), hash(text)), spans, paras
+        tags = sorted(t for t in b.tag_names() if _fmt_journal_tag(t))
+        if not getattr(self, "_fmt_ranges_proc", False):
+            b.tk.eval(_FMT_RANGES_TCL)
+            self._fmt_ranges_proc = True
+        lines = str(b.tk.call("::noteorg_fmt_ranges", b._w,
+                              tuple(tags))).split("\n")
+        state = ((len(text), hash(text)), tuple(lines[0].split()),
+                 tuple((t, s) for t, s in zip(tags, lines[1:]) if s))
+        last = getattr(self, "_fmt_last_state", None)
+        if last is not None:
+            if last == state:
+                return last
+            old = dict(last[2])
+            state = (state[0], state[1],
+                     tuple((t, old[t] if old.get(t) == s else s)
+                           for t, s in state[2]))
+        self._fmt_last_state = state
+        return state
 
     def _fmt_restore(self, state, current=None):
         """Lay a snapshot's formatting back on the text it was taken from
         -- the caller has matched the text's signature. Tags only; the
-        text is never touched. The grids come down first: a span counts
-        characters, and a drawn table's window would shift every span
-        after it by one. The caller draws them again."""
-        _sig, spans, paras = state
+        text is never touched.
+
+        Only what differs is touched: tag by tag, the ranges the body has
+        and the snapshot does not are removed, and the ones the snapshot
+        has and the body does not are added. Taking back one bold used to
+        tear the grids down, strip every tag in the note and lay every
+        span again -- seconds on a heavily styled note, for one word.
+        Where the drawn tables' windows sit elsewhere than when the
+        snapshot was taken (Tk's undo put a table's text back without
+        one), its ranges are moved to them first (_fmt_move_ranges).
+        Returns the (start, end) pairs it touched -- empty when nothing
+        differed."""
         if current is None:
             current = self._fmt_state()
-        if current[1:] == (spans, paras):
-            return False
+        _sig, windows, ranges = state
+        if current[1:] == (windows, ranges):
+            return []
+        want = dict(ranges)
+        if windows != current[1]:
+            want = {t: _fmt_move_ranges(s, windows, current[1])
+                    for t, s in want.items()}
+        have = dict(current[2])
         b = self.body_text
-        self._teardown_table_grids()
-        for tag in b.tag_names():
-            if (is_format_tag(tag) or tag.startswith("para_")
-                    or tag in ("align_center", "align_right")):
-                b.tag_remove(tag, "1.0", "end")
-        self._apply_formatting(b, [
-            dict({"start": s, "end": e, "style": style},
-                 **({} if value is None else {"value": value}))
-            for s, e, style, value in spans])
-        self._apply_paragraphs(b, [dict(p) for p in paras])
-        return True
+        touched = []
+        for tag in set(want) | set(have):
+            wanted, held = want.get(tag, ""), have.get(tag, "")
+            if wanted == held:
+                continue
+            wanted, held = _fmt_pairs(wanted), _fmt_pairs(held)
+            drop = [i for pair in held - wanted for i in pair]
+            put = [i for pair in wanted - held for i in pair]
+            if drop:
+                b.tk.call(b._w, "tag", "remove", tag, *drop)
+            if put:
+                b.tk.call(b._w, "tag", "add", tag, *put)
+            touched.extend(held ^ wanted)
+        return touched
 
     def _can_edit_undo(self, widget):
         try:
@@ -13537,15 +13658,20 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         open also notes the body's formatting, so the unit's Ctrl+Z can
         put back what Tk's text-only stack cannot (see _body_undo_redo)."""
         depth = getattr(self, "_undo_atom_depth", 0)
+        # A tags-only open (the decorator's flag) is for this call alone.
+        tags_only = getattr(self, "_undo_atom_tags_only", False)
+        self._undo_atom_tags_only = False
         if depth == 0:
             # A run of Tk's own deletes ends where an operation of the
             # app's begins, as Tk's own unit does at the separator below.
             self._close_styled_delete_run()
         self._undo_atom_depth = depth + 1
-        if depth == 0 and hasattr(self, "body_text"):
+        if not hasattr(self, "body_text"):
+            return
+        if depth == 0:
+            self._undo_atom_grouping = False
             try:
                 self.body_text.edit_separator()
-                self.body_text.configure(autoseparators=False)
             except tk.TclError:
                 pass
             self._fmt_atom_before = None
@@ -13557,16 +13683,28 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     self._fmt_atom_before = self._fmt_state()
             except (tk.TclError, ValueError):
                 pass
+        # Grouping Tk's edits into one step costs a configure, which
+        # re-lays out the whole note: paid once per unit, and only by a
+        # unit that may edit text -- a tags-only unit pays it only when a
+        # text unit opens inside it.
+        if not tags_only and not getattr(self, "_undo_atom_grouping", False):
+            try:
+                self.body_text.configure(autoseparators=False)
+                self._undo_atom_grouping = True
+            except tk.TclError:
+                pass
 
     def _undo_atom_end(self):
         depth = max(0, getattr(self, "_undo_atom_depth", 1) - 1)
         self._undo_atom_depth = depth
         if depth == 0 and hasattr(self, "body_text"):
             try:
-                self.body_text.configure(autoseparators=True)
+                if getattr(self, "_undo_atom_grouping", False):
+                    self.body_text.configure(autoseparators=True)
                 self.body_text.edit_separator()
             except tk.TclError:
                 pass
+            self._undo_atom_grouping = False
             before = getattr(self, "_fmt_atom_before", None)
             self._fmt_atom_before = None
             if before is None:
@@ -13685,19 +13823,15 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         text from `start` to `end`? The tags at its first character, and
         any that begin inside it."""
         b = self.body_text
-
-        def counts(tag):
-            return (is_format_tag(tag) or tag.startswith("para_")
-                    or tag in ("align_center", "align_right"))
         try:
-            if any(counts(t) for t in b.tag_names(start)):
+            if any(_fmt_journal_tag(t) for t in b.tag_names(start)):
                 return True
             # One character -- every BackSpace and Delete -- is answered by
             # its own tags; only a selection pays for a look at them all.
             if b.compare(end, "<=", f"{start}+1c"):
                 return False
             return any(b.tag_nextrange(t, start, end)
-                       for t in b.tag_names() if counts(t))
+                       for t in b.tag_names() if _fmt_journal_tag(t))
         except tk.TclError:
             return False
 
@@ -13765,12 +13899,27 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                        else (self._fmt_redo, self._fmt_undo))
         now = self._fmt_state()
         top = mine[-1] if mine else None
+        redraw = True
         if top is not None and not top["text"] and top["before"][0] == now[0]:
             # A formatting-only step, taken on exactly this text: it is
             # this whole key press, and Tk's stack is not touched.
             mine.pop()
             other.append(top)
-            self._fmt_restore(top["before"] if undo else top["after"], now)
+            target = top["before"] if undo else top["after"]
+            touched = self._fmt_restore(target, now)
+            # The drawn tables only need drawing again when the step
+            # restyled one of their cells (or the windows had moved): a
+            # bold taken back in the prose redrew every table in the note.
+            redraw = target[1] != now[1]
+            for info in getattr(self, "_table_grids", []):
+                first = self._grid_first_line(info)
+                last = None if first is None else first + info["nrows"] - 1
+                if redraw or first is None or any(
+                        int(lo.split(".")[0]) <= last
+                        and int(hi.split(".")[0]) >= first
+                        for lo, hi in touched):
+                    redraw = True
+                    break
         else:
             can = (self._can_edit_undo if undo else self._can_edit_redo)(b)
             if not can:
@@ -13799,8 +13948,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             del other[:-self._FMT_JOURNAL_DEPTH]
         self._body_follow_caret = True
         self._resync_list_tags()
-        if (getattr(self, "_table_grids", None)
-                or core_tables.find_blocks(b.get("1.0", "end-1c"))):
+        grids = getattr(self, "_table_grids", None)
+        if ((grids and redraw) or (not grids and core_tables.find_blocks(
+                b.get("1.0", "end-1c")))):
             self._render_table_grids()
         self._refresh_format_buttons()
         self._schedule_autosave()

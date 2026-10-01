@@ -9942,6 +9942,140 @@ finally:
     app.body_text.bindtags(_ck_tags)
     del app._body_undo_redo
 
+# ---- THE JOURNAL COSTS WHAT A STEP CHANGED, NOT WHAT THE NOTE HOLDS ----
+# Every unit configured the body (autoseparators off, then on), and Tk
+# re-lays out every line of the note on any configure: a bold on a long
+# note went from 46 to 266 ms. Every unit kept two full copies of the
+# note's formatting (+60 MB over 100 cell edits on a heavily styled
+# note), a cell click with no cell open took both copies for nothing, and
+# Ctrl+Z of one bold stripped and re-laid every style in the note and
+# redrew every table -- seconds. Asked of the mechanism, never of a clock:
+# what the body was asked to do, which widgets survived, what is shared.
+_jc_body = ('Plan the trip' + chr(10) + '| Item | Qty |' + chr(10)
+            + '| --- | --- |' + chr(10) + '| Milk | 2 |' + chr(10)
+            + 'pack the bags')
+
+
+def _jc_setup():
+    set_body(_jc_body)
+    _m = _jc_body.index('Milk')
+    app._apply_formatting(app.body_text,
+                          [{'start': _m, 'end': _m + 4, 'style': 'bold'}])
+    app._render_table_grids()
+    app.update()
+    app._reset_text_undo()
+    return app._grid_at_line(2)
+
+
+def _jc_frame():
+    return str(app._table_grids[0]['frame']) if app._table_grids else None
+
+
+_jc_seps = []
+_jc_real_configure = app.body_text.configure
+
+
+def _jc_configure(*a, **k):
+    if 'autoseparators' in k:
+        _jc_seps.append(k['autoseparators'])
+    return _jc_real_configure(*a, **k)
+
+
+app.body_text.configure = _jc_configure
+try:
+    _jc_setup()
+    _uf_select('trip')
+    del _jc_seps[:]
+    app._toggle_body_style('bold')
+    app.update()
+    check('journal: a bold lays no configure on the body, which re-lays out '
+          f'the whole note ({_jc_seps}, {_cs_styles()})',
+          _jc_seps == [] and ('bold', 'trip') in _cs_styles())
+    _jc_info = _jc_setup()
+    del _jc_seps[:]
+    app._grid_insert_row(_jc_info, 1)
+    app.update()
+    check(f'journal: ...while a table operation still groups its edits ({_jc_seps})',
+          _jc_seps == [False, True])
+    # A tags-only action that reaches a text edit after all -- the toolbar's
+    # Italic with a cell open commits the typing in it first -- groups it.
+    _jc_info = _jc_setup()
+    app._open_cell_editor(_jc_info, 1, 1)
+    app.update()
+    app._cell_editor['entry'].insert('end', '5')
+    del _jc_seps[:]
+    app._toggle_body_style('italic')
+    app.update()
+    check('journal: a tags-only action that commits an open cell groups that '
+          f'edit ({_jc_seps}, '
+          f'{core_tables.split_row(app.body_text.get("4.0", "4.end"))})',
+          _jc_seps == [False, True]
+          and core_tables.split_row(app.body_text.get('4.0', '4.end'))[1]
+          == '25')
+    app._commit_cell_editor()
+    app.update()
+finally:
+    del app.body_text.configure
+# Ctrl+Z of a bold in the prose touches that word: the table and its own
+# bold stay as they are -- the same drawn grid, not a rebuilt one.
+_jc_setup()
+_uf_select('trip')
+app._toggle_body_style('bold')
+app.update()
+app.body_text.tag_remove('sel', '1.0', 'end')
+_jc_before = _jc_frame()
+_uf_key('<Control-z>')
+check('journal: Ctrl+Z of a bold in the prose leaves the drawn table '
+      f'standing ({_jc_before} -> {_jc_frame()}, {_cs_styles()})',
+      _jc_before is not None and _jc_frame() == _jc_before
+      and _cs_styles() == [('bold', 'Milk')])
+_uf_key('<Control-y>')
+check(f'journal: ...and Ctrl+Y lays it again ({_cs_styles()})',
+      _cs_styles() == [('bold', 'Milk'), ('bold', 'trip')]
+      and _jc_frame() == _jc_before)
+# A step that restyled a cell does redraw: the drawing shows the cell.
+_jc_info = _jc_setup()
+app._grid_apply_style(_jc_info, (1, 0, 1, 0), 'bold')
+app.update()
+_jc_before = _jc_frame()
+_uf_key('<Control-z>')
+check('journal: Ctrl+Z of a cell made plain draws the table again '
+      f'({_jc_before} -> {_jc_frame()}, {_cs_styles()})',
+      _jc_frame() is not None and _jc_frame() != _jc_before
+      and _cs_styles() == [('bold', 'Milk')])
+# Steps share what they did not change: the snapshot after one step IS
+# the one before the next, and a tag the step left alone is the same
+# string in both of its snapshots.
+_jc_setup()
+for _jc_word, _jc_style in (('trip', 'bold'), ('pack', 'italic'),
+                            ('bags', 'underline')):
+    _uf_select(_jc_word)
+    app._toggle_body_style(_jc_style)
+    app.update()
+_jc_steps = list(app._fmt_undo)
+_jc_bold = [dict(_s[_side][2]).get('bold') for _s in _jc_steps[1:]
+            for _side in ('before', 'after')]
+check(f'journal: three styles in a row are three steps sharing their '
+      f'snapshots ({len(_jc_steps)} steps)',
+      len(_jc_steps) == 3
+      and _jc_steps[0]['after'] is _jc_steps[1]['before']
+      and _jc_steps[1]['after'] is _jc_steps[2]['before']
+      and _jc_bold[0] is not None
+      and all(_b is _jc_bold[0] for _b in _jc_bold))
+# A commit with no cell open -- every cell click and table operation
+# starts with one -- notes nothing.
+_jc_setup()
+_jc_notes = []
+app._fmt_state = lambda: (_jc_notes.append(1),
+                          type(app)._fmt_state(app))[1]
+try:
+    app._commit_cell_editor()
+finally:
+    del app._fmt_state
+check(f'journal: a commit with no cell open takes no snapshot ({len(_jc_notes)})',
+      app._cell_editor is None and _jc_notes == [])
+set_body('')
+
 # ---- CTRL+Z GIVES BACK WHAT TK'S OWN DELETES TOOK, WITH ITS FORMATTING ----
 # Delete, BackSpace, typing over a selection and Cut are Tk's own
 # bindings, and Tk's stack holds no tag: Ctrl+Z gave the text back plain,
