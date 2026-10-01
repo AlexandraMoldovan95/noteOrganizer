@@ -13994,6 +13994,13 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         returns its styles too.
         """
         b = self.body_text
+        # A table is tidied when the caret leaves it (_align_table_on_
+        # leaving), and undo moves the caret without the person moving it.
+        # The release of this very key, or of the next Ctrl+Z, found the
+        # caret "leaving" a table the undo had put it in, and padded its
+        # narrow columns as a new recorded edit -- which wipes the redo
+        # history: Ctrl+Y could no longer bring back what was undone.
+        self._last_caret_line = None
         # A still-open cell editor holds uncommitted text; commit it so
         # the undo works against what the note actually says.
         if getattr(self, "_cell_editor", None):

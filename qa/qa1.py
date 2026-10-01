@@ -10422,6 +10422,47 @@ check(f'table undo: a header cell still being edited when the toolbar '
       and [c.strip() for c in _tu_first.strip('|').split('|')]
       == ['Food', 'Qty', 'Note']
       and app.body_text.get('1.0', 'end-1c') == _tu_t0)
+# Walking back past a table operation on a table narrower than the app
+# pads (pasted Markdown keeps its columns until the caret leaves): the
+# release of an undo key found the caret "leaving" the table the undo had
+# put it in, and padded it as a new recorded edit -- which wiped the redo
+# history, so Ctrl+Y brought nothing back.
+_rd_body = ('Plan the trip' + chr(10) + '| Item | Qty |' + chr(10)
+            + '| --- | --- |' + chr(10) + '| Milk | 2 |' + chr(10)
+            + '| Eggs | 12 |' + chr(10) + 'pack the bags')
+
+
+def _rd_press(keysym):
+    """A Control key as the keyboard sends it: its press, then its release."""
+    if not take_focus(app.body_text):
+        return False
+    app.body_text.event_generate(f'<Control-KeyPress-{keysym}>')
+    app.body_text.event_generate(f'<Control-KeyRelease-{keysym}>')
+    app.update()
+    return True
+
+
+set_body(_rd_body)
+app._render_table_grids()
+app.update()
+app._reset_text_undo()
+app._cancel_pending_autosave()
+app.body_text.mark_set('insert', 'end-1c')
+app.body_text.insert('insert', ' hello')
+app._flush_table_grids()            # the pause an autosave leaves
+_rd_typed = app.body_text.get('1.0', 'end-1c')
+app._grid_insert_row(app._grid_at_line(2), 2)
+app.update()
+_rd_row = app.body_text.get('1.0', 'end-1c')
+_rd_seen = []
+for _rd_k in ('z', 'z', 'y', 'y'):
+    _rd_press(_rd_k)
+    _rd_seen.append(app.body_text.get('1.0', 'end-1c'))
+check(f'table undo: Ctrl+Z twice past a row inserted in a narrow table, then '
+      f'Ctrl+Y twice, lands on each state exactly -- the redo history '
+      f'survives ({[s == w for s, w in zip(_rd_seen, (_rd_typed, _rd_body, _rd_typed, _rd_row))]})',
+      _rd_row != _rd_typed
+      and _rd_seen == [_rd_typed, _rd_body, _rd_typed, _rd_row])
 set_body('')
 
 # ---- CTRL+Z AFTER A TABLE OPERATION BRINGS THE TABLE'S STYLES BACK ----
