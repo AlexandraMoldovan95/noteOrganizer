@@ -13720,9 +13720,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     return "break"
             except (tk.TclError, ValueError):
                 pass
-            # A deliberate scroll beats a rebuild's still-pending restore.
+            # A deliberate scroll beats a rebuild's still-pending restore,
+            # and the list hears that the person scrolled it: the keyboard
+            # coming back then starts in view, not back at the ring.
             if canvas is getattr(self, "canvas", None):
-                self._list_restore_px = None
+                self._list_scrolled_by_hand()
             canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
             return "break"
 
