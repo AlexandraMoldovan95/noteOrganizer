@@ -18888,34 +18888,41 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         else:
             question = ("Bring back the earlier version of this note's text? "
                         "The current text will be replaced.")
+        occurrence = self.current_occurrence_date
         if not self.ask_yes_no(
             "Restore previous version", question + extra,
             icon="warning", default="no"
         ):
             return
-        # Put the previous content back into the editor and save it. Clear
-        # any pending style first — the insert hook that applies pending
-        # styles doesn't know this insert is a restore rather than typing,
-        # so a stale pending style at this point would silently tag it.
-        self._pending_styles = set()
-        self._pending_text_color = None
-        self._pending_font_size = None
-        self._pending_font_family = None
-        self._pending_highlight_color = None
-        self.title_entry.delete(0, "end")
-        self._insert_title(prev.get("title", ""))
-        self.title_entry.config(fg=self.colors["text"])
-        self.body_text.delete("1.0", "end")
-        self.body_text.insert("1.0", prev.get("body", ""))
-        self._apply_formatting(self.body_text, prev.get("formatting", []))
-        self._apply_paragraphs(self.body_text, prev.get("paragraphs", []))
-        # Mirror restore_editor_state's tail: this was the one body-loader
-        # that skipped the redraw, so a restored table came back as raw
-        # pipe rows and the word count kept describing the replaced text.
-        self._render_table_grids()
-        self._refresh_format_buttons()
-        self.comments_text.delete("1.0", "end")
-        self.comments_text.insert("1.0", prev.get("comments", ""))
+        # The note the question named is the note restored -- and the
+        # editor is filled only if it still holds that note. While the
+        # question waited the editor could move on; filling it then put
+        # the old text into ANOTHER note, which its next save kept.
+        in_editor = self.selected_note_id == note["id"]
+        if in_editor:
+            # Put the previous content back into the editor and save it.
+            # Clear any pending style first — the insert hook that applies
+            # pending styles doesn't know this insert is a restore rather
+            # than typing, so a stale pending style here would tag it.
+            self._pending_styles = set()
+            self._pending_text_color = None
+            self._pending_font_size = None
+            self._pending_font_family = None
+            self._pending_highlight_color = None
+            self.title_entry.delete(0, "end")
+            self._insert_title(prev.get("title", ""))
+            self.title_entry.config(fg=self.colors["text"])
+            self.body_text.delete("1.0", "end")
+            self.body_text.insert("1.0", prev.get("body", ""))
+            self._apply_formatting(self.body_text, prev.get("formatting", []))
+            self._apply_paragraphs(self.body_text, prev.get("paragraphs", []))
+            # Mirror restore_editor_state's tail: this was the one body-
+            # loader that skipped the redraw, so a restored table came back
+            # as raw pipe rows and the word count described the old text.
+            self._render_table_grids()
+            self._refresh_format_buttons()
+            self.comments_text.delete("1.0", "end")
+            self.comments_text.insert("1.0", prev.get("comments", ""))
         # Written straight onto the NOTE, not routed through the editor's
         # save. The rescue copy belongs to the note, and the save path
         # asks a scope question on a repeating note: answering "this
@@ -18964,7 +18971,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # Reload from the note so the editor and the dirty machinery agree
         # with what is now on disk (the widgets above were filled for the
         # user to see; this makes them the note's official state).
-        self.load_note(note, occurrence_date=self.current_occurrence_date)
+        if in_editor:
+            self.load_note(note, occurrence_date=occurrence)
         self.refresh_note_list()
         # The rescue copy can bring back a date, a repeat, a colour, a
         # category and a series' days -- all of them drawn on the calendar,

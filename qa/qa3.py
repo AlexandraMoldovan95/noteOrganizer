@@ -1813,6 +1813,42 @@ if _sr_empty is not None:
 check('emptying the trash counts the series in it',
       '2 of them are repeating series' in _sr_said.get('msg', ''))
 
+# Yes deletes the entries the question counted, and only them. Read after
+# the answer, a note that reached the Trash while the question waited was
+# deleted for good with the rest -- by the one question in the app that
+# cannot be undone. It stays in the Trash now.
+_et_now = time.strftime('%Y-%m-%d %H:%M:%S')
+app.trash = [{'id': 940, 'title': 'Counted', 'body': 'b',
+              'category': 'General', 'deleted_at': _et_now}]
+NO.save_trash(app.trash)
+app.toggle_settings_panel('trash')
+app.toggle_settings_panel('trash')
+app.update()
+_et_stub = app.ask_yes_no
+
+
+def _et_yes(t, m, **k):
+    _sr_said['msg'] = m
+    app.trash.append({'id': 941, 'title': 'Arrived while asking', 'body': 'b',
+                      'category': 'General', 'deleted_at': _et_now})
+    return True
+
+
+app.ask_yes_no = _et_yes
+_et_btn = find_btn(app.settings_trash_panel, 'Empty trash')
+if _et_btn is not None:
+    _et_btn.invoke()
+    app.update()
+app.ask_yes_no = _et_stub
+check('Empty trash deletes the notes its question counted, and keeps one '
+      'that reached the Trash while it waited (%s, on disk %s, %r)'
+      % ([e.get('title') for e in app.trash],
+         [e.get('title') for e in NO.load_trash()], _sr_said.get('msg')),
+      _et_btn is not None
+      and [e.get('title') for e in app.trash] == ['Arrived while asking']
+      and [e.get('title') for e in NO.load_trash()] == ['Arrived while asking']
+      and 'all 1 note ' in _sr_said.get('msg', ''))
+
 # A corrupt recurrence must not break the sentence -- the trash holds
 # whatever was on disk, and normalize_note does not run on the way out.
 app.trash = [

@@ -2784,6 +2784,38 @@ app.new_note(); app.update()
 NO.CATEGORY_COLORS.pop('Late6d', None); NO.persist_categories()
 app.notes = []; app.trash = []
 app.save_notes(); NO.save_trash(app.trash)
+# Yes trashes the notes the question counted, and only them. Read after
+# the answer, a note filed under the category while the question waited
+# (a timer's question took its grab, and a click went through) went to
+# the Trash too -- one more than the question said. It goes to General.
+NO.CATEGORY_COLORS['Wait6d'] = '#2266aa'
+app.notes = [NO.normalize_note({'id': 1, 'title': 'Counted', 'body': 'x',
+                                'category': 'Wait6d'}),
+             NO.normalize_note({'id': 2, 'title': 'Filed while asking',
+                                'body': 'y'})]
+app.save_notes()
+_cd_asked.clear()
+
+
+def _cd_filed_while_asking(*a, **k):
+    _cd_asked.append((a[0], a[1], [b[0] for b in k.get('buttons') or []]))
+    app.find_note(2)['category'] = 'Wait6d'
+    return 'delete_notes'
+
+
+app._themed_dialog = _cd_filed_while_asking
+app._delete_category('Wait6d', lambda: None); app.update()
+app._themed_dialog = _cd_real_dlg
+_cd_late = (app.find_note(2) or {}).get('category')
+check(f'Yes to deleting a category\'s notes trashes the notes its question '
+      f'counted, and only them -- one filed there while it waited goes to '
+      f'General ({[e.get("title") for e in app.trash]}, {_cd_late}, '
+      f'{_cd_asked and _cd_asked[0][1]!r})',
+      [e.get('title') for e in app.trash] == ['Counted']
+      and _cd_late == 'General'
+      and len(_cd_asked) == 1 and '1 note(s)' in _cd_asked[0][1])
+app.notes = []; app.trash = []
+app.save_notes(); NO.save_trash(app.trash)
 
 # ---- A CATEGORY RENAME REACHES THE RESCUE COPY ----
 # "↩ Restore previous" after an update puts back the category and the
@@ -2850,6 +2882,38 @@ app.ask_yes_no = _rn_yes
 check('...and a day restored under a category that is gone comes back under General',
       (app.find_note(2).get('overrides') or {}).get('2026-09-14', {}).get('category')
       == 'General')
+# The note the question named is the note restored, and the editor is
+# filled only while it still holds that note. Moved on to another note
+# while the question waited, the editor took the rescue copy's text into
+# THAT note, which its next save kept.
+app.new_note(); app.update()
+_rv_a = NO.normalize_note({'id': 3, 'title': 'Asked about', 'body': 'new'})
+_rv_a['_prev'] = {'title': 'Asked about', 'body': 'old words',
+                  'formatting': [], 'paragraphs': [], 'comments': ''}
+app.notes = [_rv_a, NO.normalize_note({'id': 4, 'title': 'Opened meanwhile',
+                                       'body': 'its own words'})]
+app.save_notes()
+app.open_note_in_tab(app.find_note(3)); app.update()
+
+
+def _rv_moved_on(*a, **k):
+    app.open_note_in_tab(app.find_note(4)); app.update()
+    return True
+
+
+app.ask_yes_no = _rv_moved_on
+app.restore_previous_version(); app.update()
+app.ask_yes_no = _rn_yes
+app._flush_autosave(); app.update()
+_rv_kept = (app.find_note(4) or {}).get('body', '')
+check(f'Restore previous, answered after the editor moved to another note, '
+      f'restores the note it asked about and leaves the open one alone '
+      f'({(app.find_note(3) or {}).get("body")!r}, {_rv_kept!r}, '
+      f'editor on {app.selected_note_id})',
+      (app.find_note(3) or {}).get('body', '').startswith('old words')
+      and _rv_kept.startswith('its own words')
+      and app.selected_note_id == 4
+      and 'old words' not in app.body_text.get('1.0', 'end-1c'))
 app.new_note(); app.update()
 NO.CATEGORY_COLORS.pop('Office6r', None); NO.CATEGORY_COLORS.pop('Home6d', None)
 NO.persist_categories()

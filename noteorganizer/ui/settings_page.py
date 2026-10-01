@@ -1627,16 +1627,23 @@ class SettingsPageMixin:
         def empty_trash():
             if not self.trash:
                 return
+            # The entries the question counts are the entries deleted: a
+            # note that reaches the Trash while it waits was never asked
+            # about, and goes nowhere but the Trash.
+            named = list(self.trash)
             if self.ask_yes_no(
                 "Empty trash",
-                f"Permanently delete all {len(self.trash)} "
-                f"{'note' if len(self.trash) == 1 else 'notes'} in the trash? "
-                "This can't be undone." + self._series_warning(self.trash),
+                f"Permanently delete all {len(named)} "
+                f"{'note' if len(named) == 1 else 'notes'} in the trash? "
+                "This can't be undone." + self._series_warning(named),
                 icon="warning", default="no"
             ):
+                named_ids = {id(e) for e in named}
+                gone = [e for e in self.trash if id(e) in named_ids]
+                kept = [e for e in self.trash if id(e) not in named_ids]
                 _delete_attachment_files(
-                    self.trash, spare=attachment_names_in(self.notes))
-                self.trash = []
+                    gone, spare=attachment_names_in(list(self.notes) + kept))
+                self.trash = kept
                 save_trash(self.trash)
                 shown_count["n"] = PAGE_SIZE
                 redraw()
@@ -3035,19 +3042,26 @@ class SettingsPageMixin:
         # Both counted now, after the save above: it can have just filed
         # the note on screen here, or taken it out.
         count = self.count_notes_in_category(name)
-        filed = sum(1 for n in self.notes if n.get("category") == name)
-        choice = self._ask_category_deletion(name, filed,
-                                             days_only=count - filed)
+        named = {n["id"] for n in self.notes if n.get("category") == name}
+        choice = self._ask_category_deletion(name, len(named),
+                                             days_only=count - len(named))
         if choice is None:
             return
         if choice == "move":
             self.reassign_category_everywhere(name, PROTECTED_CATEGORY)
         elif choice == "delete_notes":
             # Move the affected notes to trash rather than destroying them.
-            doomed = [n for n in self.notes if n.get("category") == name]
+            # Only the notes the question counted, and only while they are
+            # still filed here. Read after the answer, a note filed here
+            # while the question waited (a timer's question took its grab,
+            # and a click went through) went to the Trash too -- one more
+            # than the question said. It goes to General now, with the
+            # rest of the category's traces below.
+            doomed = [n for n in self.notes
+                      if n["id"] in named and n.get("category") == name]
+            gone = {n["id"] for n in doomed}
             self._move_notes_to_trash(doomed)
-            self.notes = [n for n in self.notes
-                          if n.get("category") != name]
+            self.notes = [n for n in self.notes if n["id"] not in gone]
             # A day of a series that stays, filed here on its own, is
             # re-filed under General by the call below -- never deleted.
             # It used to be deleted outright: the day's own title and text
