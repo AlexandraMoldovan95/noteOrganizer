@@ -9787,6 +9787,95 @@ _uf_key('<Control-z>')
 check(f'style undo: Ctrl+Z takes back a cell made bold ({_uf_bold} -> {_cs_styles()})',
       ('bold', 'Eggs') in _uf_bold and _cs_styles() == _cs_want)
 
+# Caps Lock turns the letter over: Tk reads Ctrl+Z as an upper-case Z,
+# which no letter binding of the body matched, so Tk's own <<Undo>>
+# walked its stack behind the journal's back -- the bold went with the
+# typing. Pressed the way the keyboard sends it: the key's code with
+# Control and Lock held (a generated <Control-Lock-Z> pattern is not
+# faithful on Windows, where Tk adds Shift to reach an upper-case Z). The
+# code is read off a throwaway entry, so the same lines run on X11. A spy
+# counts the presses that reach the journal, a tag ahead of the body's
+# own records what Tk made of each press.
+def _ck_code(keysym):
+    _ent = tk.Entry(app)
+    _ent.place(x=0, y=0)
+    _got = []
+    _ent.bind('<KeyPress>', lambda e: (_got.append(e.keycode), 'break')[1])
+    try:
+        if take_focus(_ent):
+            _ent.event_generate(f'<KeyPress-{keysym}>')
+            app.update()
+    finally:
+        _ent.destroy()
+    return _got[0] if _got else None
+
+
+_ck_calls, _ck_seen = [], []
+_ck_real = app._body_undo_redo
+_ck_tags = app.body_text.bindtags()
+
+
+def _ck_press(code, state):
+    del _ck_calls[:], _ck_seen[:]
+    if code is None or not take_focus(app.body_text):
+        return False
+    app.body_text.event_generate('<KeyPress>', keycode=code, state=state)
+    app.body_text.event_generate('<KeyRelease>', keycode=code, state=state)
+    app.update()
+    return True
+
+
+app.bind_class('QaKeySeen', '<KeyPress>',
+               lambda e: _ck_seen.append((e.keysym, e.state & 0x7)))
+app.body_text.bindtags(('QaKeySeen',) + tuple(_ck_tags))
+app._body_undo_redo = lambda action: (_ck_calls.append(action),
+                                      _ck_real(action))[1]
+try:
+    _ck_z, _ck_y = _ck_code('z'), _ck_code('y')
+    _uf_setup('Dear Ana,' + chr(10), _uf_typed)
+    _uf_select('Friday')
+    _uf_key('<Control-b>')
+    check('caps lock: the body holds the keyboard (precondition)',
+          _ck_press(_ck_z, 0x6))
+    check(f'caps lock: the press reads as Ctrl+Z under Caps Lock ({_ck_seen}) '
+          '(precondition)', _ck_seen[:1] == [('Z', 0x6)])
+    check('caps lock: Ctrl+Z takes back the bold ONLY, through the journal, '
+          f'once ({_ck_calls}, {app.body_text.get("1.0", "end-1c")!r}, '
+          f'{_cs_styles()})',
+          _ck_calls == ['undo'] and _cs_styles() == []
+          and app.body_text.get('1.0', 'end-1c') == _uf_full)
+    _ck_press(_ck_y, 0x6)
+    check(f'caps lock: Ctrl+Y gives the bold back ({_ck_calls}, {_cs_styles()})',
+          _ck_calls == ['redo'] and _cs_styles() == [('bold', 'Friday')]
+          and app.body_text.get('1.0', 'end-1c') == _uf_full)
+    # Shift as well turns it back into a lower-case z, which the plain
+    # Ctrl+Z binding answered: Ctrl+Shift+Z undid instead of redoing.
+    _ck_press(_ck_z, 0x6)
+    _ck_press(_ck_z, 0x7)
+    check('caps lock: Ctrl+Shift+Z is still a redo '
+          f'({_ck_seen}, {_ck_calls}, {_cs_styles()})',
+          _ck_calls == ['redo'] and _cs_styles() == [('bold', 'Friday')])
+    # Without Caps Lock a press matches a letter AND the virtual event: it
+    # still runs once (Tk runs the most specific binding of the tag).
+    _ck_press(_ck_z, 0x4)
+    check(f'caps lock: a plain Ctrl+Z still undoes exactly once ({_ck_calls})',
+          _ck_calls == ['undo'] and _cs_styles() == [])
+    del _ck_calls[:]
+    app.body_text.event_generate('<<Redo>>')
+    app.update()
+    check(f'caps lock: Tk\'s <<Redo>> reaches the journal ({_ck_calls}, '
+          f'{_cs_styles()})',
+          _ck_calls == ['redo'] and _cs_styles() == [('bold', 'Friday')])
+    del _ck_calls[:]
+    app.body_text.event_generate('<<Undo>>')
+    app.update()
+    check(f'caps lock: ...and so does <<Undo>> ({_ck_calls}, {_cs_styles()})',
+          _ck_calls == ['undo'] and _cs_styles() == []
+          and app.body_text.get('1.0', 'end-1c') == _uf_full)
+finally:
+    app.body_text.bindtags(_ck_tags)
+    del app._body_undo_redo
+
 # ---- CTRL+Z GIVES BACK WHAT TK'S OWN DELETES TOOK, WITH ITS FORMATTING ----
 # Delete, BackSpace, typing over a selection and Cut are Tk's own
 # bindings, and Tk's stack holds no tag: Ctrl+Z gave the text back plain,

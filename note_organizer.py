@@ -12408,6 +12408,22 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                             lambda e: self._body_undo_redo("redo"))
         self.body_text.bind("<Control-Shift-Z>",
                             lambda e: self._body_undo_redo("redo"))
+        # Caps Lock turns the letter over: Tk reads Ctrl+Z as an upper-case
+        # Z and Ctrl+Shift+Z as a lower-case z. No letter above matched the
+        # first, so Tk's own <<Undo>> walked its stack behind the journal's
+        # back -- the bold went with the last typing, a table came back
+        # with no grid -- and the second ran as an undo. The body answers
+        # the virtual events as well, in every spelling Tk maps to them
+        # (Caps Lock included); the letters stay for the ones the virtual
+        # events lack (Ctrl+Shift+Z on Windows, Ctrl+Y on X11). Tk runs one
+        # binding per tag, the most specific, so a key matching a letter
+        # and a virtual event at once still undoes once.
+        self.body_text.bind("<Control-Shift-z>",
+                            lambda e: self._body_undo_redo("redo"))
+        self.body_text.bind("<<Undo>>",
+                            lambda e: self._body_undo_redo("undo"))
+        self.body_text.bind("<<Redo>>",
+                            lambda e: self._body_undo_redo("redo"))
         _tw = self.comments_text
         _tw.bind("<Control-z>", lambda e, w=_tw: (w.edit_undo(), "break")[1]
                  if self._can_edit_undo(w) else "break")
