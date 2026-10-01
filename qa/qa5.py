@@ -698,6 +698,74 @@ check('Restore previous brings the date back and redraws the calendar',
 app.new_note(); app.update()
 app.notes = []; app.save_notes()
 
+# ---- TURNING THE REPEAT OFF ON A DAY WITH ITS OWN TEXT KEEPS THAT TEXT ----
+# Only the repeat changed, so nobody was asked; the note kept the series'
+# text, and the day's -- the text on screen a moment before -- went with
+# the per-day edits, in no file and without a word. It is the rescue copy
+# now, as the series' text is when the day's replaces it.
+_ro_real_dlg = app._themed_dialog
+app.notes = [
+    NO.normalize_note({'id': 1, 'title': 'Standup', 'body': 'SERIES TEXT',
+                       'formatting': [{'start': 0, 'end': 6, 'style': 'bold'}],
+                       'date': '2026-09-07', 'recurrence': {'freq': 'weekly'},
+                       'overrides': {'2026-09-14': {
+                           'title': 'Standup (moved)',
+                           'body': 'DAY TEXT: room 9'}}}),
+    NO.normalize_note({'id': 2, 'title': 'Other', 'body': 'y'})]
+app.save_notes()
+app.open_note_in_tab(app.find_note(1), occurrence_date='2026-09-14'); app.update()
+check('fixture: the day on screen shows its own text',
+      app.body_text.get('1.0', 'end-1c') == 'DAY TEXT: room 9'
+      and app.current_occurrence_date == '2026-09-14')
+app.rec_freq_var.set(NO.FREQ_LABELS[''])
+app.on_recurrence_changed(); app.update()
+_ro_asked = []
+app._themed_dialog = lambda *a, **k: (_ro_asked.append(a[0]), True)[1]
+app.open_note_in_tab(app.find_note(2)); app.update()
+app._themed_dialog = _ro_real_dlg
+_ro = app.find_note(1)
+check(f'fixture: only the repeat changed, so nothing was asked ({_ro_asked}), '
+      'and the note no longer repeats, keeping the series\' text',
+      _ro_asked == [] and not _ro['recurrence']['freq']
+      and _ro['body'].rstrip('\n') == 'SERIES TEXT' and _ro['overrides'] == {})
+check("turning the repeat off on a day with its own text keeps that text "
+      f"as the rescue copy ({(_ro.get('_prev') or {}).get('body')!r})",
+      (_ro.get('_prev') or {}).get('title') == 'Standup (moved)'
+      and (_ro.get('_prev') or {}).get('body') == 'DAY TEXT: room 9')
+app.open_note_in_tab(_ro); app.update()
+_ro_yes = app.ask_yes_no
+app.ask_yes_no = lambda *a, **k: True
+app.restore_previous_version(); app.update()
+app.ask_yes_no = _ro_yes
+check('...which Restore previous brings back',
+      app.find_note(1)['body'].rstrip('\n') == 'DAY TEXT: room 9'
+      and app.find_note(1)['title'] == 'Standup (moved)')
+# A day whose words ARE the series' -- its own colour only -- loses no
+# text, and the rescue copy the note already holds is not replaced by a
+# copy of what the note says.
+app.new_note(); app.update()
+app.notes = [
+    NO.normalize_note({'id': 1, 'title': 'Standup', 'body': 'SERIES TEXT',
+                       'date': '2026-09-07', 'recurrence': {'freq': 'weekly'},
+                       'overrides': {'2026-09-14': {'color': '#00aa00'}}}),
+    NO.normalize_note({'id': 2, 'title': 'Other', 'body': 'y'})]
+app.notes[0]['_prev'] = {'title': 'Standup', 'body': 'AN OLDER VERSION',
+                         'formatting': [], 'paragraphs': [], 'comments': ''}
+app.save_notes()
+app.open_note_in_tab(app.find_note(1), occurrence_date='2026-09-14'); app.update()
+app.rec_freq_var.set(NO.FREQ_LABELS[''])
+app.on_recurrence_changed(); app.update()
+_ro_asked = []
+app._themed_dialog = lambda *a, **k: (_ro_asked.append(a[0]), True)[1]
+app.open_note_in_tab(app.find_note(2)); app.update()
+app._themed_dialog = _ro_real_dlg
+check(f'...while a day differing only in its colour keeps the rescue copy '
+      f'the note had ({_ro_asked})',
+      _ro_asked == [] and not app.find_note(1)['recurrence']['freq']
+      and (app.find_note(1).get('_prev') or {}).get('body') == 'AN OLDER VERSION')
+app.new_note(); app.update()
+app.notes = []; app.save_notes()
+
 print(f"=== QA5 FAILURES: {fails if fails else 'NONE'} ===")
 
 sys.exit(1 if fails else 0)

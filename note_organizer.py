@@ -18890,14 +18890,41 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 # wiped, since a day's own text carries none. Only what
                 # belongs to the series is written; its text, and this
                 # day's, stay as they were.
+                if not recurrence["freq"]:
+                    # The repeat is being turned off, and with it go the
+                    # per-day edits -- the one on screen among them. The
+                    # note keeps the series' text, so the day's, which the
+                    # person was looking at, becomes the rescue copy that
+                    # "↩ Restore previous" brings back, as the series'
+                    # text does when the day's replaces it below. It used
+                    # to go with the rest: in no file, and without a word.
+                    # A day whose words are the series' (its own colour or
+                    # category only) loses no text, and a copy of what the
+                    # note already says must not replace a rescue copy
+                    # that holds something.
+                    day = effective_note(note, occurrence_date)
+                    if any((day.get(key) or "") != (note.get(key) or "")
+                           for key in ("title", "body", "comments")):
+                        same_body = day.get("body") == note.get("body")
+                        note["_prev"] = {
+                            "title": day.get("title") or "",
+                            "body": day.get("body") or "",
+                            # A day's own text carries no styling; the
+                            # series' text, shown unchanged on that day,
+                            # keeps its own.
+                            "formatting": (note.get("formatting") or []
+                                           if same_body else []),
+                            "paragraphs": (note.get("paragraphs") or []
+                                           if same_body else []),
+                            "comments": day.get("comments") or "",
+                        }
+                    note["exceptions"] = []
+                    note["overrides"] = {}
                 note["date"] = date_value
                 note["attachments"] = self.current_attachments
                 note["recurrence"] = recurrence
                 note["checklist"] = [dict(it) for it in self._get_checklist()]
                 note["updated"] = now
-                if not recurrence["freq"]:
-                    note["exceptions"] = []
-                    note["overrides"] = {}
                 self.set_status(("Auto-saved " if auto else "Saved at ") + now)
                 if auto:
                     self._show_toast("Note updated", yield_to_action=True)
