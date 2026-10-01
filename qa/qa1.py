@@ -10101,11 +10101,17 @@ set_body('')
 # first (_note_styled_delete). <<Clear>> stands for Cut -- the same
 # delete, without writing to the clipboard of the machine running this.
 def _nd_setup():
-    """'Friday' bold in a note just opened: on the text, not on any stack."""
+    """'Friday' bold in a note just opened: on the text, not on any stack.
+
+    No autosave is left pending: its boundary ends a run of deletes (on
+    purpose -- see the check about a pause below), and one firing in the
+    middle of a check's key run, on a loaded machine, would split the run
+    the check is about."""
     _uf_setup('Dear Ana,' + chr(10), _uf_typed)
     _uf_select('Friday')
     _uf_key('<Control-b>')
     app._reset_text_undo()
+    app._cancel_pending_autosave()
     app.body_text.tag_remove('sel', '1.0', 'end')
 
 
@@ -10227,6 +10233,25 @@ check(f'native delete: BackSpace through plain text notes nothing and is '
       f'still one Ctrl+Z ({app.body_text.get("1.0", "end-1c")!r}, '
       f'a step opened: {_nd_open is not None})',
       _nd_open is None and app.body_text.get('1.0', 'end-1c') == _uf_full)
+# A pause in the middle of the run: the autosave's boundary (one pause, one
+# Ctrl+Z, as Tk does for typing) split Tk's unit under the run's single
+# step, and both halves came back plain. Each half is a step of its own now.
+_nd_setup()
+app.body_text.mark_set('insert', 'end-1c')
+for _nd_i in range(3):
+    _uf_key('<KeyPress-BackSpace>')
+app._flush_table_grids()            # what an autosave does at a pause
+for _nd_i in range(3):
+    _uf_key('<KeyPress-BackSpace>')
+_uf_key('<Control-z>')
+_nd_first = (app.body_text.get('1.0', 'end-1c'), _cs_styles())
+_uf_key('<Control-z>')
+check(f'native delete: a pause in a run through a bold word -- each part '
+      f'comes back on its own Ctrl+Z, bold ({_nd_first} -> {_cs_styles()})',
+      _nd_first == ('Dear Ana,' + chr(10) + 'the meeting moved to Fri',
+                    [('bold', 'Fri')])
+      and app.body_text.get('1.0', 'end-1c') == _uf_full
+      and _cs_styles() == [('bold', 'Friday')])
 
 # ---- CTRL+Z AFTER A TABLE OPERATION BRINGS THE TABLE'S STYLES BACK ----
 # Tk re-inserts the text an undo puts back without its tags, so every

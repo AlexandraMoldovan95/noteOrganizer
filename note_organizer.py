@@ -4143,6 +4143,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         makes Ctrl+Z take typing back one pause at a time.
         """
         if not getattr(self, "_cell_editor", None):
+            # A run of Tk's own deletes of styled text ends at this
+            # boundary too: the separator would split Tk's unit under the
+            # run's one journal step, and after a pause in the middle of
+            # BackSpacing through a bold word, Ctrl+Z gave it back plain.
+            self._close_styled_delete_run()
             try:
                 self.body_text.edit_separator()
             except (tk.TclError, AttributeError):
