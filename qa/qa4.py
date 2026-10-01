@@ -2037,10 +2037,13 @@ def _bl_seen(nid):
 
 
 def _bl_scroll_away(px):
-    """The wheel, while the keyboard is elsewhere or still on the list:
-    a deliberate scroll, which beats any restore."""
-    app._list_restore_px = None
-    app._apply_list_scroll_px(px); _ls_settle()
+    """The person scrolling the list, while the keyboard is elsewhere or
+    still on the list -- the scrollbar's way: a deliberate scroll, which
+    beats any restore. A bare yview_moveto stood in for it once, and once
+    the list learned to tell the person's scrolls from its own moves
+    (5k), that stand-in was the list's own move."""
+    app._list_scrollbar_moved('moveto', str(px / float(app._list_extent()[3])))
+    _ls_settle()
 
 
 app._put_keyboard_on_card(_bl_o[0]); _ls_settle()
@@ -2056,6 +2059,24 @@ check(f'Tab into a list scrolled away from the ring puts the ring on a card in '
       _bl_seen(app._focused_note_id) == 'all'
       and abs(app.canvas.canvasy(0) - _bl_top) < 1
       and app._card_view(_bl_o[0])['ring'] != app.colors['text'])
+# The wheel is the person's own scroll as much as the scrollbar is. It is
+# bound by the sidebar's _bind_mousewheel_recursive, which has to say so
+# through _list_scrolled_by_hand, as the scrollbar does.
+app._put_keyboard_on_card(_bl_o[0]); _ls_settle()
+app._list_focus_out(); _ls_settle()
+for _ in range(15):
+    _qa_fire(app.canvas, '<MouseWheel>', delta=-120)
+    app.update()
+_bl_top = app.canvas.canvasy(0)
+_bl_was = _bl_seen(_bl_o[0])
+app._list_focus_in(); _ls_settle()
+check(f'...and so does one the wheel scrolled away (the ring\'s card was '
+      f'{_bl_was}; ring now on {app._focused_note_id}: '
+      f'{_bl_seen(app._focused_note_id)}; view {app.canvas.canvasy(0):.0f}, '
+      f'left at {_bl_top:.0f})',
+      _bl_was == 'none' and app._focused_note_id != _bl_o[0]
+      and _bl_seen(app._focused_note_id) == 'all'
+      and abs(app.canvas.canvasy(0) - _bl_top) < 1)
 # Half in sight: it stays on its card, and the card comes into view.
 _bl_v = app._card_view(_bl_o[5])
 app._put_keyboard_on_card(_bl_o[5]); _ls_settle()
@@ -2144,6 +2165,80 @@ check(f'...and a card taller than the view still gets its menu inside the '
       _bl_card['y1'] - _bl_card['y0'] > _bl_view_h and _bl_cut
       and len(_bl_menus) == 1 and _bl_lo <= _bl_menus[0][0] <= _bl_hi)
 app.geometry('1100x850'); _ls_settle()
+
+# 5k. ...but the LIST moving the ring's card away is not the person
+# scrolling away from it. With the keyboard elsewhere, a save takes the card
+# to the top of a list sorted by date, a search keystroke filters away the
+# notes above it -- and the keyboard coming back gave the ring to the first
+# card in view: another note, which Enter then opened instead of the one
+# being edited. The ring stays on its card, and the card comes into view.
+_bl_alpha = [{'id': 2000 + i, 'title': 'Alpha %02d' % i,
+              'body': 'b %d' % i + (' zeta' if i >= 15 else ''),
+              'category': 'General', 'created': '2026-01-01 00:00',
+              'updated': '2026-02-01 00:%02d' % (59 - i)} for i in range(40)]
+_co_fresh(_bl_alpha)
+_bl_scroll_away(app._card_view(2017)['y0'] - 20)
+_bl_pt = app._card_point(2017)
+_qa_click(app.canvas, x=_bl_pt[0], y=_bl_pt[1]); _ls_settle()
+_qa_fire(app.canvas, '<ButtonRelease-1>', x=_bl_pt[0], y=_bl_pt[1]); _ls_settle()
+# A small scroll of the person's own that leaves the card in sight: the
+# keyboard arriving after it finds the ring where it was, and from then on
+# that scroll no longer counts as having scrolled away from it.
+_bl_scroll_away(app.canvas.canvasy(0) + 10)
+app._list_focus_in(); _ls_settle()
+_ls_let_restores_finish()
+_bl_opened = (app.selected_note_id, app._focused_note_id, _bl_seen(2017))
+# Into the editor, and typing there saves: the card goes to the top.
+app._list_focus_out(); _ls_settle()
+app.body_text.insert('end', ' typed')
+app.save_current_note(auto=True); _ls_settle()
+_ls_let_restores_finish()
+_bl_away = (app._card_order()[:1] == [2017], _bl_seen(2017))
+check(f'fixture: a card clicked deep in the list goes to the top, out of '
+      f'sight, when its note is saved from the editor (opened, ring, seen: '
+      f'{_bl_opened}; first, seen: {_bl_away})',
+      _bl_opened == (2017, 2017, 'all') and _bl_away == (True, 'none'))
+app._list_focus_in(); _ls_settle()
+_bl_back = (app._focused_note_id, _bl_seen(2017),
+            app._card_view(2017)['ring'] == app.colors['text'])
+app._list_activate(); _ls_settle()
+check(f'the keyboard coming back after a save took its card out of sight '
+      f'puts the ring back on that card, in view (ring, seen, drawn: '
+      f'{_bl_back}) -- so Enter opens the note being edited (open '
+      f'{app.selected_note_id})',
+      _bl_back == (2017, 'all', True) and app.selected_note_id == 2017)
+# A search keystroke: the notes above the card filtered away, the view kept.
+_co_fresh(_bl_alpha)
+_bl_scroll_away(app._card_view(2017)['y0'] - 20)
+app._put_keyboard_on_card(2017); _ls_settle()
+app._list_focus_in(); _ls_settle()
+app._list_focus_out(); _ls_settle()
+_ls_search('zeta'); _ls_let_restores_finish()
+_bl_away = _bl_seen(2017)
+app._list_focus_in(); _ls_settle()
+check(f'...and after a search keystroke filtered away the notes above it '
+      f'(was {_bl_away}; ring on {app._focused_note_id}: '
+      f'{_bl_seen(app._focused_note_id)})',
+      _bl_away == 'none' and app._focused_note_id == 2017
+      and _bl_seen(2017) == 'all')
+app._list_focus_out(); _ls_settle()
+_ls_search('')
+# A sort chosen meanwhile can take the card past what the rebuild drew: a
+# list rebuilt while the keyboard is elsewhere draws what the view needs.
+_co_fresh(_bl_alpha)
+app._put_keyboard_on_card(2005); _ls_settle()
+app._list_focus_in(); _ls_settle()
+app._list_focus_out(); _ls_settle()
+_bl_sort('Oldest updated')
+_bl_drawn = 2005 in app._note_cards
+app._list_focus_in(); _ls_settle()
+check(f'...and after a sort chosen meanwhile took it past what the list had '
+      f'drawn (drawn before: {_bl_drawn}; ring on {app._focused_note_id}: '
+      f'{_bl_seen(app._focused_note_id)})',
+      not _bl_drawn and app._focused_note_id == 2005
+      and _bl_seen(2005) == 'all')
+app._list_focus_out(); _ls_settle()
+app.sort_var.set('Recently updated')
 
 # 5j. The list stays quick however far it has been scrolled, and whatever
 # is typed. Asked of the WORK done, never of a stopwatch (qa/README): a

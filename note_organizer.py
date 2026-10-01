@@ -1345,11 +1345,22 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
     def _list_scrollbar_moved(self, *args):
         """The list scrollbar's command: a deliberate drag beats a
         rebuild's still-pending restore, then scrolls as normal."""
-        self._list_restore_px = None
+        self._list_scrolled_by_hand()
         try:
             self.canvas.yview(*args)
         except tk.TclError:
             pass
+
+    def _list_scrolled_by_hand(self):
+        """The person is scrolling the list -- the wheel, the scrollbar, a
+        drag held at its edge. A deliberate move beats a rebuild's
+        still-pending restore; and a ring it takes out of sight was left
+        there on purpose, so the keyboard coming back puts the ring on a
+        card in view rather than scrolling back to it (_list_focus_in).
+        Only the person's own scrolls say this: a save or a search that
+        moves the ringed card away has the card brought back instead."""
+        self._list_restore_px = None
+        self._list_hand_scrolled = True
 
     def _toggle_group_collapsed(self, category):
         if category in self.collapsed_groups:
@@ -14061,13 +14072,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if scrolled_px > 0:
             want = max(want, drawn_before)
         if getattr(self, "_restore_focus_wanted", False):
-            wanted = getattr(self, "_focused_note_id", None)
-            header = getattr(self, "_focused_header", None)
-            for index, row in enumerate(rows):
-                if ((row[0] == "note" and row[1].get("id") == wanted)
-                        or (row[0] == "header" and row[1] == header)):
-                    want = max(want, index + 1)
-                    break
+            index = self._ring_index_in(rows)
+            if index is not None:
+                want = max(want, index + 1)
         return want
 
     def _list_depth_for(self, scrolled_px):
@@ -14701,8 +14708,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if not drag or not drag["started"]:
             return
         drag["scroll_job"] = None
-        # A deliberate move beats a rebuild's still-pending restore.
-        self._list_restore_px = None
+        self._list_scrolled_by_hand()
         try:
             self.canvas.yview_scroll(step, "units")
         except tk.TclError:
@@ -15092,13 +15098,24 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         on the row it was last on, else the open note's card, else the
         first card, else (every group folded) the first header.
 
-        Always where the person can see it. The list may have been scrolled
-        with the wheel since the ring was last placed, and a ring left 900px
-        above the view had Enter open a note nobody could see and the menu
-        key post its menu off the screen. A row out of sight gives the ring
-        to the first row the view shows; one half in sight is scrolled in."""
+        Always where the person can see it: a ring left 900px above the
+        view had Enter open a note nobody could see and the menu key post
+        its menu off the screen. What took the ring's row out of sight
+        decides how. If the person scrolled the list away from it, the ring
+        goes to the first row the view shows, and the view stays where they
+        put it. If the list moved the row while the keyboard was elsewhere
+        -- a save took the card to the top, a search keystroke filtered the
+        notes above it -- the ring stays on its row and the row is brought
+        into view: given to the first row in view, it sat on another note,
+        and Enter opened that one. A row half in sight is scrolled in."""
         self._keyboard_on_card = True
-        if self._ring_row() is None:
+        by_hand = getattr(self, "_list_hand_scrolled", False)
+        own = self._ring_row()
+        if own is None and not by_hand:
+            # Not drawn: a rebuild made while the keyboard was elsewhere
+            # draws no further than the view needs.
+            own = self._draw_down_to_ring()
+        if own is None:
             cards = getattr(self, "_note_cards", None) or {}
             if self.selected_note_id in cards:
                 self._set_ring_row(("note", self.selected_note_id))
@@ -15110,15 +15127,36 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if key is not None:
             rec = self._list_row_record(key)
             seen = self._row_on_screen(rec)
-            if seen == "none":
+            if seen == "none" and (by_hand or key != own):
                 shown = self._rows_on_screen()
                 if shown:
                     self._set_ring_row(shown[0])
                     # The row it left, repainted now that it is not there.
                     self._paint_row(key)
-            elif seen == "part":
+            elif seen != "all":
                 self._scroll_row_into_view(rec)
+        self._list_hand_scrolled = False
         self._paint_ring_row()
+
+    def _ring_index_in(self, rows):
+        """Where the ring's row stands among `rows` (as _list_rows gives
+        them, drawn or waiting), or None when it is not among them."""
+        wanted = getattr(self, "_focused_note_id", None)
+        header = getattr(self, "_focused_header", None)
+        for index, row in enumerate(rows):
+            if ((row[0] == "note" and row[1].get("id") == wanted)
+                    or (row[0] == "header" and row[1] == header)):
+                return index
+        return None
+
+    def _draw_down_to_ring(self):
+        """Draw the waiting rows down to the ring's, when the list still
+        shows it, and return its key -- else None."""
+        index = self._ring_index_in(getattr(self, "_list_pending", None) or ())
+        if index is None:
+            return None
+        self._draw_list_rows(index + 1)
+        return self._ring_row()
 
     def _row_on_screen(self, rec):
         """How much of a drawn row the view shows: "all", "part" or "none"."""
@@ -15153,6 +15191,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             rec = self._list_row_record(key)
             if self._row_on_screen(rec) != "all":
                 self._scroll_row_into_view(rec)
+            # In sight again: a scroll made before this no longer counts.
+            self._list_hand_scrolled = False
 
     def _list_focus_out(self, _event=None):
         """The keyboard left the list: the ring goes back to saying only
@@ -15232,6 +15272,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         rec = (getattr(self, "_note_cards", None) or {}).get(note_id)
         if rec is not None:
             self._scroll_row_into_view(rec)
+            # The ring is where the person can see it, and was put there.
+            self._list_hand_scrolled = False
 
     def _put_keyboard_on_header(self, cat):
         """The same for a category header: the ring on it, in view."""
@@ -15249,6 +15291,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         rec = (getattr(self, "_group_headers", None) or {}).get(cat)
         if rec is not None:
             self._scroll_row_into_view(rec)
+            self._list_hand_scrolled = False
 
     def _header_ring_color(self, cat):
         """A header's ring: the text colour while the keyboard's ring is on
