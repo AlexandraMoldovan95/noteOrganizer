@@ -2219,8 +2219,22 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         """1 when a grid window occupies column 0 of this line, else 0."""
         return 1 if self._grid_at_line(line_no) is not None else 0
 
-    @_undo_hidden
     def _teardown_table_grids(self):
+        """Take every drawn table down to its text (_remove_grid_windows).
+
+        Inside an undo unit, the edits recorded so far were made with the
+        grids up and those that follow will be made with them down -- and
+        Tk records each edit by its index, while a drawn table's first line
+        holds the grid's window at column 0. So the unit is told first
+        (_undo_atom_grids_coming_down), with Tk still recording: a
+        separator inserted once the recording is off would be ignored."""
+        if (getattr(self, "_table_grids", None)
+                and getattr(self, "_undo_atom_depth", 0) > 0):
+            self._undo_atom_grids_coming_down()
+        self._remove_grid_windows()
+
+    @_undo_hidden
+    def _remove_grid_windows(self):
         for info in getattr(self, "_table_grids", []):
             # Deleting the window's character is what actually removes it
             # from the text. Destroying the widget alone leaves the slot
@@ -13674,6 +13688,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if not hasattr(self, "body_text"):
             return
         if depth == 0:
+            # What this unit records is recorded with the tables drawn,
+            # until it takes them down (_undo_atom_grids_coming_down).
+            self._atom_part_grids_down = False
             self._undo_atom_grouping = False
             try:
                 self.body_text.edit_separator()
@@ -13722,13 +13739,50 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 return
             # A unit that changed the text is a step on Tk's stack as well;
             # one that changed only formatting is a step on this one alone.
-            journal = getattr(self, "_fmt_undo", None)
-            if journal is None:
-                journal = self._fmt_undo = []
-            journal.append({"text": after[0] != before[0],
-                            "before": before, "after": after})
-            del journal[:-self._FMT_JOURNAL_DEPTH]
-            self._fmt_redo = []
+            self._push_atom_step(before, after)
+
+    def _push_atom_step(self, before, after):
+        """One journal step for (the part of) a unit that ran from
+        *before* to *after*, marked with whether its text edits were
+        recorded with the tables taken down."""
+        journal = getattr(self, "_fmt_undo", None)
+        if journal is None:
+            journal = self._fmt_undo = []
+        journal.append({"text": after[0] != before[0],
+                        "before": before, "after": after,
+                        "grids_down": getattr(self, "_atom_part_grids_down", False)})
+        del journal[:-self._FMT_JOURNAL_DEPTH]
+        self._fmt_redo = []
+
+    def _undo_atom_grids_coming_down(self):
+        """An open unit is about to take the drawn tables down.
+
+        Tk records every edit by its index, and a drawn table's first line
+        holds the grid's window at column 0: an edit recorded with the
+        grids down landed one column off when Ctrl+Z replayed it with them
+        drawn -- centring a cell, inserting a row below or autofitting a
+        column, then Ctrl+Z, gave the header back as "| Ite  | Qt  |".
+        _body_undo_redo takes the grids down first for a step marked so.
+
+        A unit that already edited the text with the grids drawn -- a cell
+        committed before a table operation -- would hold both kinds of edit
+        in one step, right in neither state. What it did so far becomes a
+        step of its own, ended on Tk's stack by a separator, and the part
+        that follows is the part marked as recorded with the grids down."""
+        before = getattr(self, "_fmt_atom_before", None)
+        if before is not None:
+            try:
+                now = self._fmt_state()
+            except (tk.TclError, ValueError):
+                now = None
+            if now is not None and now[0] != before[0]:
+                self._push_atom_step(before, now)
+                try:
+                    self.body_text.edit_separator()
+                except tk.TclError:
+                    pass
+                self._fmt_atom_before = now
+        self._atom_part_grids_down = True
 
     # The bindtag put first on the note body, so it sees every key and
     # every Cut, Clear and Paste before the body's own bindings do.
@@ -13929,13 +13983,21 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             can = (self._can_edit_undo if undo else self._can_edit_redo)(b)
             if not can:
                 return "break"
+            came, went = ("after", "before") if undo else ("before", "after")
+            # Tk replays a step in the state it was recorded in: a step
+            # recorded with the tables taken down is replayed with them
+            # down (see _undo_atom_grids_coming_down). They are drawn again
+            # below, as after every step.
+            pending = next((s for s in reversed(mine)
+                            if s["text"] and s[came][0] == now[0]), None)
+            if pending is not None and pending.get("grids_down"):
+                self._teardown_table_grids()
             try:
                 (b.edit_undo if undo else b.edit_redo)()
             except tk.TclError:
                 return "break"
             text = b.get("1.0", "end-1c")
             landed = (len(text), hash(text))
-            came, went = ("after", "before") if undo else ("before", "after")
             step = None
             for i in range(len(mine) - 1, -1, -1):
                 if (mine[i]["text"] and mine[i][came][0] == now[0]

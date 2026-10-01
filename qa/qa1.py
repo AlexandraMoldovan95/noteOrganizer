@@ -10253,6 +10253,83 @@ check(f'native delete: a pause in a run through a bold word -- each part '
       and app.body_text.get('1.0', 'end-1c') == _uf_full
       and _cs_styles() == [('bold', 'Friday')])
 
+# ---- CTRL+Z PUTS A TABLE'S FIRST LINE BACK EXACTLY ----
+# A drawn table's first line holds the grid's window at column 0, and Tk
+# records an edit by its index. Operations that take the grids down, edit,
+# and draw them again recorded their edits one column off from where
+# Ctrl+Z replayed them with the grids drawn: centring a cell, inserting a
+# row below or autofitting a column, then Ctrl+Z, gave the header back as
+# "| Ite  | Qt  |". A step recorded with the grids down is replayed with
+# them down now (_undo_atom_grids_coming_down).
+_tu_body = ('Plan the trip' + chr(10) + '| Item | Qty | Note |' + chr(10)
+            + '| --- | --- | --- |' + chr(10) + '| Milk | 2 | x |' + chr(10)
+            + '| Eggs | 12 | y |' + chr(10) + 'pack the bags')
+
+
+def _tu_fresh():
+    set_body(_tu_body)
+    app._render_table_grids()
+    app.update()
+    app._reset_text_undo()
+    app._cancel_pending_autosave()
+    return app._grid_at_line(2)
+
+
+for _tu_name, _tu_do in (
+        ('centring a header cell',
+         lambda i: (app._grid_select_range(i, (0, 0), (0, 0)),
+                    app._set_paragraph_align('center'))),
+        ('centring a data cell',
+         lambda i: (app._grid_select_range(i, (1, 1), (1, 1)),
+                    app._set_paragraph_align('center'))),
+        ('inserting a row below', lambda i: app._grid_insert_row(i, 2)),
+        ('autofitting a column', lambda i: app._grid_autofit_col(i, 0)),
+        ('inserting a column at the left', lambda i: app._grid_insert_col(i, 0)),
+        ('merging two header cells',
+         lambda i: (app._grid_select_range(i, (0, 0), (0, 1)),
+                    app._grid_merge_selection(app._grid_sel)))):
+    _tu_info = _tu_fresh()
+    _tu_t0 = app.body_text.get('1.0', 'end-1c')
+    _tu_do(_tu_info)
+    app.update()
+    _tu_t1 = app.body_text.get('1.0', 'end-1c')
+    app._body_undo_redo('undo'); app.update()
+    _tu_t2 = app.body_text.get('1.0', 'end-1c')
+    app._body_undo_redo('redo'); app.update()
+    _tu_t3 = app.body_text.get('1.0', 'end-1c')
+    check(f'table undo: {_tu_name}, then Ctrl+Z, puts the table back exactly, '
+          f'and Ctrl+Y the operation ({_tu_t2.split(chr(10))[1]!r}, '
+          f'{_tu_t3.split(chr(10))[1]!r})',
+          _tu_t1 != _tu_t0 and _tu_t2 == _tu_t0 and _tu_t3 == _tu_t1
+          and app._grid_at_line(2) is not None)
+# One step held a header cell's commit -- made with the grid drawn -- AND
+# the toolbar's centre that followed, made with it down: right in neither
+# state. The commit is a step of its own now, so the first Ctrl+Z takes
+# back the centre and leaves the word whole, the second the word.
+_tu_info = _tu_fresh()
+_tu_t0 = app.body_text.get('1.0', 'end-1c')
+app._open_cell_editor(_tu_info, 0, 0)
+app.update()
+_tu_ed = getattr(app, '_cell_editor', None)
+if _tu_ed is not None:
+    _tu_ed['entry'].delete('1.0', 'end')
+    _tu_ed['entry'].insert('1.0', 'Food')
+_tu_info = app._grid_at_line(2)
+app._grid_select_range(_tu_info, (0, 0), (0, 0))
+app._set_paragraph_align('center')
+app.update()
+app._body_undo_redo('undo'); app.update()
+_tu_first = app.body_text.get('1.0', 'end-1c').split(chr(10))[1]
+app._body_undo_redo('undo'); app.update()
+check(f'table undo: a header cell still being edited when the toolbar '
+      f'centres it comes back in two whole steps ({_tu_first!r}, then '
+      f'{app.body_text.get("1.0", "end-1c").split(chr(10))[1]!r})',
+      _tu_ed is not None
+      and [c.strip() for c in _tu_first.strip('|').split('|')]
+      == ['Food', 'Qty', 'Note']
+      and app.body_text.get('1.0', 'end-1c') == _tu_t0)
+set_body('')
+
 # ---- CTRL+Z AFTER A TABLE OPERATION BRINGS THE TABLE'S STYLES BACK ----
 # Tk re-inserts the text an undo puts back without its tags, so every
 # table operation's Ctrl+Z returned the cells bare. The journal lays the
