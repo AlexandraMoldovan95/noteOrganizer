@@ -2418,6 +2418,32 @@ check(f'the keyboard coming back after a save took its card out of sight '
       f'{_bl_back}) -- so Enter opens the note being edited (open '
       f'{app.selected_note_id})',
       _bl_back == (2017, 'all', True) and app.selected_note_id == 2017)
+# A wheel turn that leaves the card in sight is no scroll away from it.
+# Every notch said it was -- even one that moved nothing -- and after a
+# save took the card away, the ring went to another note.
+_co_fresh(_bl_alpha)
+_bl_scroll_away(app._card_view(2017)['y0'] - 20)
+_bl_pt = app._card_point(2017)
+_qa_click(app.canvas, x=_bl_pt[0], y=_bl_pt[1]); _ls_settle()
+_qa_fire(app.canvas, '<ButtonRelease-1>', x=_bl_pt[0], y=_bl_pt[1]); _ls_settle()
+_ls_let_restores_finish()
+app._list_focus_out(); _ls_settle()
+for _bl_d in (-120, 120):
+    _qa_fire(app.canvas, '<MouseWheel>', delta=_bl_d)
+    app.update()
+_ls_settle()
+_bl_wheel_seen = (app.selected_note_id, _bl_seen(2017))
+app.body_text.insert('end', ' typed')
+app.save_current_note(auto=True); _ls_settle()
+_ls_let_restores_finish()
+_bl_away = (app._card_order()[:1] == [2017], _bl_seen(2017))
+app._list_focus_in(); _ls_settle()
+check(f'...and so it does after a wheel turn that left the card in sight '
+      f'(open, seen after the wheel: {_bl_wheel_seen}; first, seen after the '
+      f'save: {_bl_away}; ring now on {app._focused_note_id}: '
+      f'{_bl_seen(app._focused_note_id)})',
+      _bl_wheel_seen == (2017, 'all') and _bl_away == (True, 'none')
+      and app._focused_note_id == 2017 and _bl_seen(2017) == 'all')
 # A search keystroke: the notes above the card filtered away, the view kept.
 _co_fresh(_bl_alpha)
 _bl_scroll_away(app._card_view(2017)['y0'] - 20)

@@ -1460,9 +1460,32 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         there on purpose, so the keyboard coming back puts the ring on a
         card in view rather than scrolling back to it (_list_focus_in).
         Only the person's own scrolls say this: a save or a search that
-        moves the ringed card away has the card brought back instead."""
+        moves the ringed card away has the card brought back instead.
+
+        And only a scroll that leaves the ring's row out of sight, read
+        once the view has moved. Every wheel notch said so, even one that
+        kept the card in view or moved nothing at the list's end: the next
+        save that took the card away put the ring on another note, and
+        Enter opened that one."""
         self._list_restore_px = None
-        self._list_hand_scrolled = True
+        if getattr(self, "_hand_scroll_check", None) is None:
+            try:
+                self._hand_scroll_check = self.after_idle(
+                    self._note_hand_scroll)
+            except tk.TclError:
+                self._hand_scroll_check = None
+
+    def _note_hand_scroll(self):
+        """After a scroll of the person's: did it leave the ring's row out
+        of sight (see _list_scrolled_by_hand)? A row the list has not drawn
+        is out of sight too."""
+        self._hand_scroll_check = None
+        key = self._ring_row()
+        if key is None:
+            return
+        rec = self._list_row_record(key)
+        self._list_hand_scrolled = (rec is None
+                                    or self._row_on_screen(rec) == "none")
 
     def _toggle_group_collapsed(self, category):
         if category in self.collapsed_groups:
