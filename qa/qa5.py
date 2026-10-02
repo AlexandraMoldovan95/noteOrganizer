@@ -2221,6 +2221,43 @@ check(f'a delete asks about what is stored: a waiting turn-off is not made '
       and _rn_dl.get('category: move') == (_RN_SERIES, 1, '', 0)
       and _rn_dl.get('duplicates: No') == (_RN_SERIES, 1, '', 0)
       and _rn_dl.get('duplicates: Yes') == (_RN_SERIES, 1, '', 1))
+# The duplicates clean-up fills the editor from the kept copy again and
+# carries a waiting turn-off across -- but the reload's own repeat cleared
+# the record of a big delete's rescue copy, and on leaving the turn-off's
+# copy replaced it: the deleted text was in no file.
+app.new_note(); app.update()
+app.notes = [
+    NO.normalize_note({'id': 1, 'title': 'Weekly', 'body': _RN_LONG,
+                       'date': '2026-09-07', 'recurrence': {'freq': 'weekly'},
+                       'overrides': {'2026-09-14': {'body': 'DAY 14'}},
+                       'exceptions': ['2026-09-28']}),
+    NO.normalize_note({'id': 2, 'title': 'Other', 'body': 'y'}),
+    NO.normalize_note({'id': 3, 'title': 'Weekly', 'body': 'short',
+                       'attachments': [{'name': 'h.txt',
+                                        'stored_as': _rn_fname}]})]
+app.save_notes()
+app.open_note_in_tab(app.find_note(1)); app.update()
+app._cancel_pending_autosave()
+_rn_ok = _rn_pick(NO.FREQ_LABELS[''])
+app.body_text.delete('1.0', 'end')
+app.body_text.insert('1.0', 'short')
+app._autosave_now(); app.update()
+app.ask_yes_no = lambda *a, **k: True
+try:
+    app._cleanup_selected_duplicates(
+        [(_NlVar(False), app.find_note(1), [app.find_note(1), app.find_note(3)]),
+         (_NlVar(True), app.find_note(3), [app.find_note(1), app.find_note(3)])],
+        None, refresh=lambda: None)
+    app.update()
+finally:
+    app.ask_yes_no = _ro_yes
+_rn_ok = _rn_ok and app.selected_freq_key() == ''
+app.open_note_in_tab(app.find_note(2)); app.update()
+_rn_dk = (_rn_prev().get('body') == _RN_LONG,
+          (_rn_prev().get('recurrence') or {}).get('freq'))
+check(f'a turn-off carried across the duplicates clean-up keeps the text a '
+      f'big delete rescued ({_rn_ok}; {_rn_dk})',
+      _rn_ok and _rn_dk == (True, 'weekly'))
 
 # Restore previous with a big delete still waiting for its autosave: the
 # autosave ran while the question waited and made a new rescue copy of the

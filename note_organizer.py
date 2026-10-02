@@ -20461,6 +20461,13 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                          and boxes["end_mode"] == ending else {})
             if boxes:
                 carried["repeat"] = boxes
+                # A turn-off goes across with its record of the rescue copy a
+                # save made while it waited (_turn_off_rescue_copy): the
+                # reload's own repeat ends the wait (on_recurrence_changed),
+                # the put-back begins it again, and without the record the
+                # turn-off's copy replaced that one, its text in no file.
+                if not freq and getattr(self, "_held_text_rescue", None) is not None:
+                    carried["held_rescue"] = self._held_text_rescue
         return carried
 
     # The box each of _unreadable_repeat_fields' values is typed in, as
@@ -20495,6 +20502,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self.on_recurrence_changed()
         else:
             self.update_recurrence_summary()
+        if "held_rescue" in carried:
+            self._held_text_rescue = carried["held_rescue"]
 
     def _left_out_message(self, left_out,
                           lead="Everything else in this note is saved, but not:"):
