@@ -55,6 +55,13 @@ moment you pause or let go. Laying the whole page out at every step of the drag 
 the edge lag behind the mouse. The Calendar's month is the exception: it is quick enough to
 redraw that it follows the edge as you drag.
 
+When the app asks you something — "Move to trash?", "Save changes?" — the question appears over
+the window, and the app waits for your answer. **Enter** presses the highlighted button — on a
+question about something you cannot take back, that is the safe one; **Escape** gives the safe
+answer (No, Cancel); **Tab** and **Shift+Tab** move between the question's own buttons. While
+it waits, the rest of the window stands still, and closing the window brings the question
+forward instead. Your answer acts on exactly what the question named.
+
 ![Main window](screenshots/main-window.png)
 
 ---
@@ -86,6 +93,14 @@ that needs an answer — "this occurrence or the whole series?" — and the app 
 on its own while you type. Your edits wait in the editor, and the question comes when *you* act:
 pressing Save, switching notes, or closing the app. Answer it and the edit is saved where you
 chose; cancel it and the edit stays only as long as you stay on that view.
+
+A field the app cannot read never costs you the rest of the note. A date written as 30/09/2026
+(the field reads `YYYY-MM-DD`), a repeat's end date written the same way, a repeat's **Every**
+or **After … times** box holding something other than a whole number, or a repeat with no start
+date is **left out**: the note keeps that field's last good value, everything else saves, and
+the status line says what was left out. When you then leave the note, you are asked —
+**Go back and fix it** (what Enter and Escape choose) or **Continue without it**, which puts the
+stored value back on screen.
 
 The writing area starts at twelve lines. **Expand**, underneath it, makes it roughly twice as tall
 for a long note, and **Collapse** puts it back — the note itself is unaffected either way, only
@@ -160,6 +175,12 @@ buttons work.
   *Why: if a note used a font the person you send it to doesn't have, their computer would quietly
   swap in a different one and nothing would say so.*
 
+**Ctrl+Z** takes formatting back like typing: a bold, a colour, a size or an alignment is one
+step of its own, and **Ctrl+Y** (or **Ctrl+Shift+Z**) puts it back. Deleting styled text —
+Delete, Backspace, typing over a selection, Cut — and pressing Ctrl+Z brings the words back
+with their styles; a run of Backspaces is one step, as for plain text. Caps Lock changes none
+of these keys.
+
 **To make everything bigger**, don't format each note — go to **Settings → Appearance** and set
 **Editor font** and **Text size**. That is the size notes start at; anything you set from the
 toolbar overrides it just for that text. This is the setting to reach for if the default is simply
@@ -225,7 +246,7 @@ A table works the way a spreadsheet has taught your hands to expect:
 | **Tab** | Moves to the next cell, and is one way to leave the cell you are typing in. On the very last cell it adds a fresh row, so a whole table can be filled without touching the mouse. |
 | **Shift+Tab** | Goes back to the previous cell. |
 | **Enter** (or **Shift+Enter**) | Starts a new line *inside* the cell — the whole row grows to fit, on screen the moment you press it, so nothing below is ever covered. Stored as Markdown's own `<br>`, so export still round-trips. |
-| **Escape** | Leaves the cell (clicking anywhere else works too). |
+| **Escape** | Leaves the cell and keeps what you typed in it (clicking anywhere else works too). |
 | **Delete** | Clears the selected block of cells. |
 | **Ctrl+A** | Selects the whole cell. |
 
@@ -265,6 +286,19 @@ A table works the way a spreadsheet has taught your hands to expect:
   unhiding brings it straight back.
 - **Ctrl+Z understands tables**: one undo takes back one whole operation — a cell edit, a resize,
   a fill, a dropped checkbox — never half of one, and the drawn table follows the text every step.
+  The table comes back exactly as it was, its bold, colours and highlights included.
+- **A table keeps its edge.** Delete or Backspace beside a table stops at it rather than gluing
+  the next line onto a row; an *empty* line just above or below a table still deletes as
+  usual. Cells pasted wider than the table add the columns they need.
+- **Selecting towards a table stops at it first.** Shift+Down on the line above a table (or
+  Shift+Up from the line below, or Shift+Right at the end of the line above) selects up to the
+  table's edge and stops there, so what you type next replaces just your line. Press the same
+  key again and the selection crosses the table, taking it whole. A table inside a selection
+  shows no highlight of its own, so check what you selected before typing over it. A mouse drag
+  that starts just beside a table starts at the table's edge instead.
+- **Pasted table rows stay a table of their own.** Rows pasted onto the line above a table, or
+  the empty line between two, keep a blank line from it — whether they come from Ctrl+V,
+  Ctrl+Shift+V, or a table copied from another program.
 - The **formatting toolbar works inside tables** too: select cells and Bold, colours and
   highlights apply to them whole.
 - With a cell *open*, the toolbar styles just the part you selected inside it — a single word,
@@ -380,8 +414,15 @@ the list scrolls along to keep the ring in view. **Enter** (or **Space**) opens 
 **Shift+F10** — or the menu key, if your keyboard has one — opens that note's own right-click
 menu where the note is, so pinning, duplicating, exporting and deleting are all reachable without
 leaving the keyboard. The whole list is one **Tab** stop: Tab again moves on to the next thing in
-the window instead of through every card. If the list rebuilds underneath you, because a save
-landed or a search keystroke filtered it, the ring comes back to the card you were on.
+the window instead of through every card. If the list moves underneath you — a save takes the
+edited note's card to the top, a search keystroke filters the notes above it away — the ring
+comes back to the card you were on, brought into view. Only when you scrolled away from it
+yourself (wheel, scrollbar, a drag held at the edge) does it start again from the first card in
+view.
+
+In a list grouped by category, the headers are stops on the ↑/↓ walk too. **Enter** or
+**Space** on a header folds or opens its group, as a click does; **←** folds the group the ring
+is in and puts the ring on its header, and **→** opens a folded group.
 
 The ring is drawn in the text colour while the keyboard is on the list, and the note you have open
 keeps its accent-coloured outline — so after walking away from the open note you can see both.
@@ -391,13 +432,19 @@ keeps its accent-coloured outline — so after walking away from the open note y
 Drag a card up or down and let go where the line shows it will land — or, with the ring on a
 card, press **Alt+↑** or **Alt+↓** to move it one place. The list switches to **Custom order**,
 starting from the order it was showing, so nothing jumps; from then on it stays as you arrange it.
+If you already had a Custom order, a move made while the list is sorted another way starts it
+again from the order shown — and the message that says so offers **Undo**. Once that message
+has gone, the next time you choose **Custom order** from Sort, the app asks, once, whether to
+bring your arrangement back.
 Saving or editing a note does not move its card, and the arrangement is kept in your notes file,
 across restarts and in backups. New notes appear at the top, where you will look for them.
 
 Pinned notes stay above the rest, so a card cannot be dragged across that line; in a grouped list
-a card stays in its own group. Near the top or bottom of the list a drag scrolls it, faster the
-further you push past the edge. **Esc** puts a dragged card back where it was. While ☑ Select is
-on, a click ticks a card instead, and nothing is dragged.
+a card stays in its own group. Near the top or bottom of the list a drag scrolls it, starting
+slowly and faster the further you push past the edge. A drag that starts on a card the edge cuts
+waits until you move into the list, or hold at the edge a moment, so a click whose hand slips a
+little never carries the card away. **Esc** puts a dragged card back where it was. While
+☑ Select is on, a click ticks a card instead, and nothing is dragged.
 
 *Why a separate sort: dragging while the list was sorted by date or title would be undone by the
 next save. Custom order is the one sort that means "where I put it".*
@@ -419,8 +466,13 @@ remembered.
 - **Move a note to another category** from its own right-click menu (**🗂 Move to category**),
   without opening it — the same list of categories the editor offers.
 - **Categories** act as folders — create, rename, recolour, or delete them from Settings →
-  Categories. Deleting a category with notes in it asks where to move them first; nothing is ever
-  silently lost. A name can be up to 80 characters, and you can have up to 200 categories. If the
+  Categories. Renaming one keeps its place in the list and its folded group, and reaches every
+  note, repeating day, template and Trash entry filed under it. Deleting a category with notes in
+  it asks what should happen to them: move them to General, or move them to the Trash with the
+  category — just the notes the question counted, restorable like any other delete. A day of a
+  repeating note filed there on its own moves to General either way; the series itself never
+  goes to the Trash for one of its days. A name can be up to 80 characters, and you can have up
+  to 200 categories. If the
   settings file is ever lost, the categories your notes are filed under come back on the next
   start, with default colours, and the app says which ones.
 
@@ -471,6 +523,7 @@ selector at the top of the same panel offers 7 to 90 days, and a change applies 
 startup's cleanup. Restore individual notes, delete them permanently one at a time, or empty the
 whole trash at once. With a lot of deleted notes, the list loads the most recent batch first, with
 a button to reveal more — so it stays quick to open no matter how much has accumulated there.
+Deleting permanently never removes an attached file that a note still uses.
 
 Each row also carries a tick box, so getting a batch back is one gesture rather than forty: tick
 what you want and an **↩ Restore N selected** button appears at the foot of the panel, just above
@@ -521,7 +574,23 @@ series edit appears everywhere except there. The app now says this out loud wher
 the editor shows a line above the title — "🔁 This note repeats — edits here apply to every day ·
 1 day keeps its own edits (✎)" — and in the calendar, such a day carries a ✎ mark in the day list
 and an "✎ edited for this day" chip in the preview. To make a day follow the series again,
-right-click it in the calendar and choose **↺ Reset this day to the series content**.
+right-click it in the calendar and choose **↺ Reset this day to the series content**. It does
+what its question says: the day's own edits go, and so does a date or repeat changed there and
+not saved yet. Only a value the app cannot read stays on screen, to be fixed.
+
+Files you attach and items you tick while looking at one day belong to the whole series — a day
+has nowhere else to keep them — so they are saved to the series even when you answer **This
+occurrence only**; only the day's title, text, comments, category and colour stay the day's.
+The date and the repeat belong to the series too, but a day saved on its own never moves it:
+with **This occurrence only** they stay as they were (the question says so when you changed
+them), and **The entire series** is the answer that moves the series.
+
+Turning the repeat off ("Does not repeat") ends every day's own edits along with the series —
+but none of their text is lost. When any day had text of its own, the note as it was, repeat and
+days included, becomes its rescue copy, and **↩ Restore previous** brings the repeating note back
+whole. On such a series the turn-off itself is saved when you leave the note or press Save: until
+then everything else you change goes on saving, the status line says the turn-off waits, and
+picking the repeat again puts the series back as it was.
 
 The small symbols on a repeating note's card in the list mean: `✎N` — N days edited separately,
 `✕N` — N occurrences deleted individually. The sidebar's filter dropdown also offers
@@ -590,7 +659,8 @@ You can also mark the day itself, independent of any note on it — right-click 
   simply doing nothing. The day's cell shows them as a small badge in the corner, in the same
   colour as the day's number.
 
-Both can be cleared from the same menu, and both clears offer an **Undo** in the banner.
+Both can be cleared from the same menu, and both clears offer an **Undo** in the banner — as
+does saving the marker picker with nothing picked.
 
 ![Calendar day colouring](screenshots/calendar-day-color.png)
 
@@ -695,6 +765,12 @@ brings everything the backup's copy carries: its text and checklist, its skipped
 per-day edits, its pin, and any files attached on the other device. Files already attached here
 stay attached; an update only ever adds them. **↩ Restore previous** takes the rest back.
 
+A note the backup holds exactly as you have it is left alone — neither updated nor added again —
+so importing the same backup twice changes nothing, and the result says how many notes were
+already here. If the backup's copy is **older** than yours (a backup from last month, say), the
+question says so before you choose to update. Every question is asked before anything changes:
+**Cancel** at any of them leaves your notes, files and Trash exactly as they were.
+
 ![Import backup](screenshots/import-backup.png)
 
 ### If the data file itself ever breaks
@@ -760,21 +836,25 @@ keys that only mean something inside a list, in the find bar, or on the note lis
 | **Tab** / **Shift+Tab** | in a list | Pushes an item one level in / pulls it back out. |
 | **Tab** / **Shift+Tab** | in a table | Moves to the next / previous cell; Tab on the very last cell adds a fresh row. |
 | **Enter** / **Shift+Enter** | in a table | Starts a new line inside the cell. |
-| **Escape** | in a table | Leaves the cell. |
+| **Escape** | in a table | Leaves the cell, keeping what you typed. |
 | **Ctrl+A** | in a table | Selects the whole cell. |
 | **Ctrl+C** / **Ctrl+V** | in a table | Copies the selected cells / pastes them in the same shape. |
 | **Delete** | in a table | Clears the selected cells. |
 | **Ctrl+Z** | in a table | Takes back one whole operation. |
 | **Enter** / **Shift+Enter** | find bar | Step forward and back through matches. |
 | **Esc** | find bar | Closes the bar. |
-| **↑** / **↓** | note list | Walks from card to card, in the order the list is showing them — also straight after a click on a note. |
-| **Enter** / **Space** | note list | Opens the note — or ticks it, while ☑ Select is on. |
+| **↑** / **↓** | note list | Walks from card to card, in the order the list is showing them — also straight after a click on a note. In a grouped list the category headers are stops too. |
+| **Enter** / **Space** | note list | Opens the note — or ticks it, while ☑ Select is on. On a category header, folds or opens its group. |
+| **←** / **→** | note list, grouped | **←** folds the group the ring is in and moves the ring to its header; **→** opens a folded group. |
 | **Alt+↑** / **Alt+↓** | note list | Moves the note with the ring one place up or down (Custom order). |
 | **Esc** | note list, while dragging | Puts the dragged card back where it was. |
 | **Shift+F10** or the menu key | note list | Opens that note's own right-click menu, at the note. |
 | **Page Up** / **Page Down** | Calendar tab | Previous / next month. |
 | **Ctrl+Page Up** / **Ctrl+Page Down** | Calendar tab | Previous / next year. |
 | **Home** | Calendar tab | Jumps back to today. |
+| **Enter** | a question | Presses the highlighted button. |
+| **Esc** | a question | Gives the safe answer (No, Cancel). |
+| **Tab** / **Shift+Tab** | a question | Moves between the question's own buttons, and comes back round. |
 
 ### Appearance
 

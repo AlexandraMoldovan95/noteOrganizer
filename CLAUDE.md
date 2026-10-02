@@ -10,7 +10,7 @@ calls, no accounts, no database.
   app was a single file by design for most of its life; it now lives as a
   `core/` layer (data and rules; **must never import tkinter**) and a `ui/`
   layer of mixin classes — fourteen `core/` modules and five `ui/` mixins —
-  with `note_organizer.py` (~16,200 lines) remaining the entry point and
+  with `note_organizer.py` (~22,300 lines) remaining the entry point and
   the genuinely shared UI hub, by measurement rather than by neglect (see
   `docs/ARCHITECTURE.md`'s call-graph case study for why the split stopped
   where it did). The entry file re-exports whatever has moved, so
@@ -48,8 +48,8 @@ calls, no accounts, no database.
   password protection, or seed-based functionality anywhere in the app.
 - **Testing:** the `test_*.py` files are standalone unit-style suites —
   `test_recurrence.py`, `test_calculator.py`, `test_data_safety.py`,
-  `test_richtext.py` and `test_tables.py` need no GUI;
-  `test_entry_module_identity.py` builds a window. `qa/qa1.py`–`qa9.py` are
+  `test_richtext.py`, `test_tables.py` and `test_note_identity.py` need
+  no GUI; `test_entry_module_identity.py` builds a window. `qa/qa1.py`–`qa9.py` are
   headless GUI tests, each starting from a clean data directory. All of them
   run automatically via `.github/workflows/tests.yml` on every pull request
   and on every push to `main` — on
@@ -281,7 +281,7 @@ is the LAST line of defence, not permission to run tests in place.
 The safest way is to let `tools/run_tests.py` do it for you: it makes a
 fresh temp folder far outside the project, copies in `note_organizer.py`,
 the `noteorganizer/` package and the tests, runs everything (units +
-qa1–qa9, plus the two static gates CI runs) there, and deletes the folder
+qa1–qa9, plus the four static gates CI runs) there, and deletes the folder
 afterward — the project's own files are only ever read (`py
 tools/run_tests.py`, or `py tools/run_tests.py qa6` for one script). The
 manual ritual below is the fallback, and the reason that tool exists.

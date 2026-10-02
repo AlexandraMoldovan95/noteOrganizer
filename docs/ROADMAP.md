@@ -222,10 +222,10 @@ bindings), and template deletion saying plainly that it skips the Trash and can'
 ### Splitting the UI into modules
 
 Done, and stopped deliberately rather than out of steam. The data-and-rules layer went first —
-thirteen modules under `noteorganizer/core/`, none importing tkinter — and five UI areas now live
+fourteen modules under `noteorganizer/core/`, none importing tkinter — and five UI areas now live
 in `noteorganizer/ui/` as mixins: the calculator panel, the Settings page, the dialogs and popups,
 the calendar, and attachments. All the pure logic went down into `core/` first.
-`note_organizer.py` is about 13,250 lines — it dipped when the extractions landed and has grown
+`note_organizer.py` is about 22,300 lines — it dipped when the extractions landed and has grown
 again through the rich-text, tables and field-testing work, but the pure logic behind all of that
 went into `core/` rather than into it, which is the point: the entry file is a UI hub, not a junk
 drawer.
@@ -431,9 +431,10 @@ bug being chased.
 - *Omitted-close-tag HTML* — pasted HTML that legally omits `</li>`/`</p>` still bleeds inline
   styles to the end of the document; every real clipboard serializer closes its tags, which is
   why this stays an edge note rather than a parser rewrite.
-- *Nested-dropdown bind bookkeeping* — opening a dropdown nested inside a popup overwrites the
-  host popup's stored Configure/click bind ids; the binds leak on a later dismiss. Harmless in
-  practice (rebound on the next open), recorded so the cleanup lands with any future popup work.
+- *Nested-dropdown bind bookkeeping* — **settled by the break-it rounds (2026-10).** It was not
+  harmless: the host's leaked click-outside handler closed every later dropdown on the click that
+  opened it, until a restart. Each popup now keeps its own window-level lines, removed by any
+  route out. See [the story](ISSUES_LOG.md#the-click-that-deleted-its-own-next-command).
 - *Theme-registry pruning cadence* — dead tracked widgets are pruned at each theme switch; a
   session that never switches themes still accumulates them (Python-side memory only).
 - *`visual_scenes` burst errors* — a failed burst propagates loudly (nonzero exit) but is not
@@ -450,3 +451,44 @@ bug being chased.
 - *Zip-import overlap has no end-to-end test* — the re-import-your-own-backup attachment remap
   is unit-covered through its shared helper and review-verified end to end; a full GUI round-trip
   check remains worth writing.
+
+**Break-it residuals (2026-10)** — nineteen rounds of agents tried to break the app (see the
+[Changelog](../CHANGELOG.md)); what they measured and the fixes deliberately left is recorded
+here. None is a bug being chased; each has a reason.
+
+- *A view left deep in a very long list* — a rebuild still draws every row above the view
+  (about 1–1.3 s at 5,000 notes for Select mode, Undo or a restore), because the drawing is a
+  prefix of the rows by design. The keyboard coming back to the list joins it: when the ring's
+  card was carried far below what the list had drawn (grouping turned on, the sort changed), Tab
+  draws every row down to it — 0.5–0.7 s at 5,000 notes — so that Enter opens the note being
+  edited, and later rebuilds stay that deep. Putting the ring on a card in view instead would be
+  quick and would open the wrong note, which is the bug the drawing exists to prevent. Windowed
+  drawing would end the whole class; it is a change of shape, not a fix.
+- *A calendar day holding a hundred notes* — opening its list takes 1–2 s: the list is rows of
+  widgets, before and after the rounds alike.
+- *Settings → Duplicates searches on every visit* — the drawing is a page at a time now, but the
+  search for groups still runs whenever the section opens.
+- *Table operations on a very long note* — a style change no longer re-lays out the note, but an
+  operation that edits a table's text still turns Tk's grouping off and on, and pays one full
+  layout for it.
+- *The smallest window* — at 640×600 with the selection bar AND a share code open, "Copy code" is
+  cut off by 41 px; the code itself can still be selected and copied.
+- *X11 only* — Meta+D, Meta+BackSpace and Meta+Delete (Tk's word deletes, which Windows does not
+  have) are not held at a table's edge.
+- *A day's own text on a day the series no longer has* — changing a series' start date or its
+  rule can leave a day's own text (saved "only this occurrence") on a date the new schedule never
+  reaches. It stays in the file, so nothing is lost, but the calendar no longer shows it. Older
+  than the rounds; whether to move it, ask, or keep it findable is a product decision, on the
+  owner's list.
+- *Note ids* — an id freed by a delete can be given to the next new note (ids are max + 1). Every
+  holder of an id across a delete was checked and acts on the note it means; the one left is a
+  keyboard ring that can land on the new note, which is a cursor, not an action.
+- *A category move's Undo after a rename* — renaming the category the notes were moved into, or
+  deleting the one they came from, while the Undo is on offer makes the Undo say "Nothing left
+  to put back" with the notes still moved. Nothing is lost; whether the Undo should follow the
+  rename or be withdrawn with it is a product decision, on the owner's list.
+- *Formatting edges seen and not chased* — picking the default size with nothing selected
+  inside a 20 pt run types 20 pt while the status line says the size is back to the default;
+  Ctrl+B on the whole of a note of 8,000 styled words takes 0.6–0.8 s (the toolbar's reading of
+  the selection, a character at a time); a table cell's own size or font is not refitted when
+  its bold changes, invisible while the grid is drawn. Seen by the last round, not measured further.

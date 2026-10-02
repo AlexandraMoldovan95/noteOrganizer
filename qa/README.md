@@ -1,7 +1,7 @@
 # The qa suite — read me before touching a guarded surface
 
-Nine scripts, ~1,070 checks (the six unit suites beside them bring the
-whole run to ~1,540), all driving the real app headlessly (Xvfb on
+Nine scripts, ~2,700 checks (the seven unit suites beside them bring the
+whole run to ~3,400), all driving the real app headlessly (Xvfb on
 Linux CI, real Windows Tk on the Windows CI job and every dev machine).
 The manual half of the QA story sits beside them:
 `NoteOrganizer_TestPlan.xlsx`, the structured test plan for scenarios
@@ -313,6 +313,30 @@ A new surface joins this list the moment it ships.
   assert it is clear**: without that the check passes on a job left over
   from something earlier in the same script, which is exactly how one of
   these survived the mutant that deleted the binding it guards.
+- **A job attribute answers only for the timer it tracks — ask Tcl which
+  timers wait.** A held-BackSpace check went red on the Linux runner
+  alone: an autosave fired between two presses and split the run the
+  check measured. Its fixture had cancelled the pending save and asserted
+  `_autosave_job is None` — true, while another save waited. The app's
+  callback cleared its own job on entry, so every direct
+  `_autosave_now()` in these scripts left a timer running untracked, and
+  each one, firing, untracked the next: 28 in one qa1 run, counted by
+  wrapping `after`. The app cancels now instead of forgetting; a check
+  that needs no timer waiting asks `waiting_timers(app, name)` from
+  `_qa_support`, which reads Tcl's own `after info`, and **never sets a
+  job to None without cancelling its timer** —
+  `_cancel_pending_autosave()` does both.
+
+  Two more things from the same hunt. **A burst of keys is not a
+  pause**: a check about a run of keys holds the autosave for the burst
+  (`_nd_burst` in qa1), because the check's own slowness between presses
+  is not the person's, and a pause gets an explicit check of its own.
+  And **a check's output folder is its own**: the bulk export names its
+  files after what the folder already holds, and a fixed `qa_export_out`
+  filled by an earlier run in the same place turned the second run red —
+  it is a fresh `mkdtemp` now. Both flakes reproduced on demand before
+  either was fixed: a 0.7s wait between the presses, and three runs in
+  one folder.
 - **Never decide from `focus_get()` whether something has the keyboard.**
   It answers `None` whenever the process does not own the desktop
   foreground — already measured here on the Ctrl+F checks, and true of a
@@ -826,6 +850,19 @@ A new surface joins this list the moment it ships.
 - **The names gate reads the qa scripts and the unit suites too.** A
   name borrowed from a removed block (a seed's `os`, `io`) fails the
   gate the moment the script is read, instead of halfway through a run.
+- **A check reads the broken state it exists to catch without raising.**
+  test_data_safety's junk-in-the-Trash check asked every entry `.get()`
+  — and under its own mutant the entries were the junk, so the script
+  died with a traceback and the mutant read NO-RUN instead of KILLED.
+  Read what comes back the way the bug would leave it.
+- **Press the key a person presses.** The styled-delete checks generated
+  `<<Cut>>`, the menu's way, and passed while Ctrl+X itself — which
+  reaches a virtual binding as the key's own press — gave the bold back
+  plain. Generate the key with its modifier (`<Control-KeyPress-x>`),
+  and its release too when a `<KeyRelease>` binding is part of the
+  story. Anything a key would do to the machine's clipboard is kept in
+  the process: rename Tcl's `clipboard` and `::tk::GetSelection` for the
+  block and put them back in a `finally`, as qa1 does.
 - **The machine's clipboard is out of the suite's reach.** It is shared
   with every program on the machine: one holding it open for an instant
   made a paste read nothing, and qa1's copy-and-paste check went red three
@@ -834,3 +871,14 @@ A new surface joins this list the moment it ships.
   gives every app a script builds a stand-in kept in the process
   (`_qa_support.CLIPBOARD`), so no check can race another program, and a
   run no longer writes over the owner's clipboard while she works.
+- **A run says when the keyboard was real.** The clipboard, the
+  foreground and the mouse button are answered for the suite; the
+  keyboard cannot be — a key pressed on the machine while a script's
+  window holds the focus reaches the app under test. A qa5 check went red
+  once in sixteen runs and never in twenty-five repeats, while the
+  break-it agents' probes caught a person's keys arriving in their
+  windows. `pin_the_desktop` now notes every key event whose time is not
+  0 (generated events carry time 0) and prints `REAL KEYS: N key
+  event(s) …` at exit. A red in a run that printed it is reproduced in a
+  run that did not before it is believed or dismissed; a red in a run
+  that did not print it is never blamed on the keyboard.

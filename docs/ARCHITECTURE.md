@@ -70,7 +70,7 @@ that have moved, so existing callers — including the ~270 `note_organizer.<nam
 across the QA scripts — keep working untouched. That's deliberate: it means each extraction is
 a pure move that leaves the whole test suite green, rather than a rewrite.
 
-What remains in the file is ~16,200 lines of genuinely shared surface. It grew again through
+What remains in the file is ~22,300 lines of genuinely shared surface. It grew again through
 the rich-text and tables work even as the pure logic behind those features went into `core/`.
 
 ### How it got here
@@ -119,6 +119,10 @@ emptied (0.66.104). And a **failed write is never silent** (0.71.125): every sav
 the one channel it has without importing tkinter — the `storage.on_write_failure` callback the
 app registers at startup, which shows an error toast naming the file.
 
+Restoring from the Trash writes the notes first and the trash second, once each for any number of
+notes (`restore_many_from_trash` writes nothing itself): a failed notes write then leaves the note
+still in the trash file, where the old order could leave it in neither.
+
 ### Defensive normalization
 
 `normalize_note()` is the single choke point every note passes through before it's trusted
@@ -161,7 +165,9 @@ An anti-bomb ceiling is not a performance promise, and the two should not be
 confused: what makes a heavily styled note open quickly is
 `_char_offsets` reading every span's offsets in one pass instead of re-reading
 the note once per range end — 14.2 s of a 15.5 s startup, measured, before that
-changed.
+changed — and `_offset_indices` laying them back the same way, in one walk:
+each span end used to be a walk from the top of the note, and Enter in a
+numbered list, which lays every span again, took 3.4 s at 8,000 styled words.
 
 ### Recurrence model
 
@@ -175,6 +181,35 @@ interval, specific weekdays/month-days, an end condition) plus two small maps:
 actual dates — everything else (calendar rendering, list previews) asks it for occurrences
 within a window rather than re-deriving the logic. Editing "just this occurrence" writes an
 override; editing "this and all future" (or the whole series) edits the base note directly.
+
+### An import asks first, and acts after
+
+An import that meets notes this device already has (a share code or a backup) asks every
+question before it changes anything: `_take_known_notes` hands back the updates "Update" agreed
+to, and the caller applies them (`_apply_known_updates`) only after its last question — the
+duplicate check — is answered. A note that arrives exactly as it is here is neither an update nor
+a copy (`shared_update_changes`): an update that changes nothing would still overwrite the rescue
+copy that "↩ Restore previous" reads. The duplicate check is asked about the notebook as it will
+be (`_dup_keys_after`), since the updates are not applied yet when it runs.
+
+### A name lives in more than one place
+
+A category's name is held by the notes (and their per-day overrides), the Trash, the templates,
+the folded groups, the list's filter and the editor's own category box. A rename and a deletion
+both move every holder in one method, `_refile_category_everywhere`; a rename also carries the
+fold, the filter and the open note's box, and keeps the category's place in the order. A day of a
+restored series filed under a category that no longer exists comes back under General, the rule
+the note's own category has always followed.
+
+### Colours: one form past the gate
+
+`sanitize_color` admits `#rgb` and `#rrggbb` on every door a colour can arrive through (a day
+colour in settings.json, a restored backup, a note's or a day's colour, a category's), and gives
+`#rgb` back as `#rrggbb` — the same colour, in the only form the app itself writes. Every reader
+that works a colour out by hand (the painted day's text contrast, the blends, a chip's darker
+hover) then reads six digits; `contrasting_fg` also answers white for anything it cannot read,
+so a future door cannot freeze the calendar's month. Formatting colours have their own gate,
+which accepts six digits only.
 
 ## UI layer
 
@@ -208,6 +243,49 @@ glyph) and `default=` (which button keyboard focus — and therefore Enter — l
 always returns the safe first option), and every irreversible confirm in the app passes
 `icon="warning", default="no"` so a reflexive Enter can never fire the destructive choice. New
 destructive confirms must do the same.
+
+A question waits in a nested event loop, so the app goes on running under it, and the question
+has to hold three things for that not to matter. **The pointer:** a grab on the card; when a
+question asked inside another ends (a timer's "Export complete" over a waiting "Move to
+trash?"), the grab goes back to the one still waiting (`_asking_dialogs`), because Tk has one
+grab and its release leaves none. **The keyboard:** Tab and Shift+Tab walk the question's own
+buttons and come back round, as a Windows message box does (Shift+Tab is `<<PrevWindow>>` too,
+for X11's ISO_Left_Tab); Enter presses the focused button, Escape the first (safe) one, and only
+the innermost question hears either; the app's global shortcuts stand still while any question
+asks (`_a_dialog_is_asking`), and the window's close is refused, bringing the question forward.
+**The subject:** every confirmation acts on what its question named, captured before asking —
+the notes, the Trash entries, the attachment, the note being restored — and checks each is still
+there; something that arrived during the wait was never asked about, and is left alone.
+
+### The window-level lines a popup adds
+
+A popup that needs the app window's own events (a click outside it, a resize, Escape) adds lines
+to the window's bindings through `_bind_window_for_popup`, and each popup keeps its own list of
+the lines it added, removed by `_unbind_window_for_popup` when the popup goes — by any route,
+through its own `<Destroy>`. Every line names its popup and calls one command that is never
+deleted, `_on_popup_window_event`, which looks the popup up and does nothing if it is gone. Two
+Tk rules make this the shape: Tk expands every script of an event before it runs any, so
+unbinding a handler from inside the same event deleted a command that event was still about to
+call (a silent "invalid command name"); and one stored binding id per kind, as before, let a list
+opened inside a popup overwrite its host's id, so the host's handler stayed bound for good and
+every later dropdown was closed by the click that opened it. The same reasoning gives the
+tooltip one hide command registered on the window (`_hide_tooltip_command`), appended to each
+widget's click with the "+" written into the script — given a string, tkinter's `bind()` ignores
+`add="+"` and replaces the widget's other click handlers.
+
+A widget's own `<Button-1>` runs before the window's click-outside line for the same press. So
+a widget whose press answers it — asks a question, or opens something in the popup's place —
+returns `"break"`, and the click-outside does not answer the press a second time. When it did,
+the questions came twice, and a template's bin beside its own half-written editor deleted the
+template "for good" and then had the editor's "Save changes?" write it back.
+
+### Right-click menus: one at a time
+
+Each right-click builds its menu anew (`_new_context_menu`), and destroys the previous one first.
+It is not destroyed when `tk_popup` returns: on Windows that call blocks until the menu is
+dismissed, but on Linux it returns at once with the menu still open (measured in the CI image),
+so destroying it there would make it vanish. Only one right-click menu is ever open, so the
+previous one is done with when the next is asked for.
 
 ### Theme tracking — two different patterns, on purpose
 
@@ -286,6 +364,29 @@ taken from their own tags rather than saved twice. Because a composite tag is sp
 bold boundary inside it, extraction also **merges touching identical spans** — otherwise one
 size across a paragraph reads back as several pieces, gets written that way, and splits further
 on the next save.
+
+The composite carries the weight and slant, so a change to bold or italic under it is drawn
+only once the composite is fitted again. Ctrl+B and Ctrl+I swap the composites inside the
+selection for ones with the new weight (`_weigh_font_tags`); typed and pasted letters are
+refitted (`_fit_font_tags`) by stretches over which their tags stay the same, keeping the size
+or font they did not pick — and leaving one plain font tag where typing or a paste laid bold
+and italic on the same letters. Before they were, the toolbar and the save said bold while the
+text stayed drawn as before until the note was opened again — and laying every composite in
+the note again instead cost a long note set in a font 250 ms per Ctrl+B; fitting a character at
+a time cost a long paste two to three times that. For the same reason, bold and italic over the
+same letters are folded into one `bold_italic` span in `normalize_formatting()`, the list given
+back in the order the editor reads spans in (in any other, an untouched note read as unsaved).
+`resolve_font_runs()` works its stretches out in one sweep over the boundaries: checking every
+span at every boundary made one size in a note of 8,000 styled words cost 1.7 s at every open
+and every Enter in a numbered list.
+
+Text put in between two pieces of one size or font that differ only in weight — right after a
+bold word inside a bigger heading — wears neither piece's composite, since Tk passes a tag on
+only to text inserted between two characters that both wear it. Every road in asks one helper,
+`_take_run_between()`, for the run's size and font: the typing, a formatted paste, Ctrl+Shift+V,
+the emoji picker, the calculator, and Tk's own paste, settled after idle between two marks
+because Tk inserts after the handlers return. Fixed on the typing alone first, the same finding
+came back from the pastes a round later.
 
 #### Line styles: `paragraphs`
 
@@ -461,7 +562,11 @@ the same space the saved body string lives in — because Tk's `count("chars")` 
 units (an emoji is two) while its `+Nc` index arithmetic counts characters, and extracting with
 one against spans applied with the other made every emoji-bearing note re-save itself, one
 character further, on every launch — see
-[The version that updated itself](ISSUES_LOG.md#the-version-that-updated-itself).
+[The version that updated itself](ISSUES_LOG.md#the-version-that-updated-itself). The same
+`+Nc` counts a drawn table's window as a character, which the saved offsets never do, so the
+walk that lays spans back hops again over every window it passes: a font size set under a
+table landed one character early per table above it until it did — see
+[The character only the drawn tables had](ISSUES_LOG.md#the-character-only-the-drawn-tables-had).
 
 The grid is rebuilt (never patched) at settled moments — load, paste, leaving the block, a
 structural edit — and every editing gesture writes through to the hidden text first, so the
@@ -470,6 +575,83 @@ tested: Tk counts text columns in UTF-16 units (an emoji is two of them), embedd
 occupy an index but are skipped by character counts, and a rebuild mid-gesture destroys the
 canvas under the mouse — each of those has burned this codebase once, and each now has a
 regression check in `qa/qa1.py` and a war story in [ISSUES_LOG.md](ISSUES_LOG.md).
+
+The caret never rests on a drawn table's hidden text: a guard (`_caret_out_of_hidden`) walks it
+to the line under the table. A selection is the one case where that is not enough, because a
+selection has two ends and the guard moved only one: it now keeps the caret with the selection's
+moving end (`_selection_end_at_table`). A first press towards a table stops at its near edge, so
+no selection takes a table in unasked — a grid shows no selection of its own — and a second press
+at that edge crosses it, so the keyboard can still select across a table; a mouse drag stops at
+the edge it came from. See
+[The selection the caret left behind](ISSUES_LOG.md#the-selection-the-caret-left-behind).
+
+### Undo: Tk's stack for the text, a journal beside it for the formatting
+
+Tk's undo stack holds text, never a tag. A journal beside it (`_fmt_undo` / `_fmt_redo`) notes
+the body's formatting before and after every undo unit of the app's (`_undo_atom`), and
+`_body_undo_redo` lays a snapshot back only on the very text it was taken from — matched by the
+text's signature, never by counting steps. Tk's own deletes (Delete, BackSpace, typing over a
+selection, Cut) are no unit of the app's, so a bindtag put first on the body,
+`NoteBodyStyledDelete`, sees each key before the body's own bindings and the Text class do: when
+one is about to delete text that carries formatting, `_note_styled_delete` notes the formatting
+and starts a step with a separator; a run of BackSpaces stays open (Tk merges contiguous deletes
+into one unit) and closes at the first other event, at an app undo unit, at the autosave's
+boundary, or at the next Ctrl+Z / Ctrl+Y. Plain text is left to Tk entirely.
+
+Three details keep every route inside that net. The tag's `<<Cut>>`, `<<Clear>>` and `<<Paste>>`
+bindings say they are virtual (`virtual=True`): a key that means Cut or Paste reaches them as the
+key's own press, and read by its type, Ctrl+X was a control character typed over nothing. A
+paste that falls through to Tk's own gives the run back (`_on_body_paste`): the app's paste routes
+are undo units, and opening one ends any run before Tk has deleted anything. And Tk's own Ctrl+H,
+Ctrl+K and Ctrl+T, bound by text.tcl on every platform, are worked out as text.tcl works them
+(`_tk_control_delete_range`).
+
+What a step costs is what it changed, not what the note holds. A snapshot (`_fmt_state`) is the
+text's signature, the embedded windows' positions, and each journal tag's ranges as Tk's own
+`line.col` string — all read in one Tcl round trip (`_FMT_RANGES_TCL`); a tag's string equal to
+the previous snapshot's is that same object, so steps share what they did not change.
+`_fmt_restore` removes and adds only the ranges that differ, tag by tag, and moves a snapshot's
+indices past a table's window where Tk's undo put the table's text back without it. The five
+actions that only restyle (`_toggle_body_style`, `_apply_body_color`, `_apply_body_font`,
+`_set_paragraph_align`, `_grid_apply_style`) open a tags-only unit, which leaves Tk's
+autoseparators alone: any configure makes Tk lay out every line of the note again. The tags the
+journal keeps are written down once, in `_fmt_journal_tag`.
+
+Tables add one rule. A drawn table's first line holds its grid's window at column 0, and Tk
+records every edit by its index, so a step is replayed in the state it was recorded in. When a
+unit takes the grids down (`_teardown_table_grids`), it is told first
+(`_undo_atom_grids_coming_down`): what it did so far becomes a step of its own, ended by a
+separator on Tk's stack, and the rest of the unit is a step marked `grids_down`. A unit that
+begins with no table drawn is marked so from its start, and split where it goes on to write into
+a drawn table's first line with the window there (`_note_edit_with_window`); a unit that lines
+up a table not yet drawn is marked too (`_mark_unit_window_free`). A step no unit of the app's
+noted — typing, Tk's own deletes and paste — never touches a drawn table's line, because the
+caret guard keeps the caret off them, so it is replayed with the tables down, as is a run of
+Tk's styled deletes the app notes. Past the journal's 100 full steps a text step stays as a
+stub (`_trim_fmt_journal`): its text's signature on each side and how it was recorded. Stubs are
+not capped, because Tk's own stack is not (`maxundo=-1`); a dropped step read as typing and was
+replayed in the wrong state. `_body_undo_redo` takes the grids down before Tk replays a step so
+marked, and draws them again after every step. It also forgets the line the caret was last seen on: a table is tidied when the
+caret leaves it (`_align_table_on_leaving`, at every key's release), the tidy is a recorded edit,
+and a recorded edit empties every redo stack — so the caret an undo moves must never read as the
+person leaving a table. The grids themselves are destroyed through tkinter when taken down
+(`_remove_grid_windows`): deleting their window's character ends the widget inside Tk only, and
+left its callbacks registered for good.
+
+One line of a note can be the drawing's rather than the person's: the empty line put under a
+table that ends the note, so the caret guard has somewhere to put the caret
+(`_add_line_under_last_table`). The drawing is `_undo_hidden`, so Tk never records that line, and
+Tk's idea of the text is one line shorter than the note. While nothing has changed the text
+since, the app holds the line (`_undo_tail_held`): the journal counts the note without it, and
+the next Ctrl+Z or Ctrl+Y takes it out before Tk replays a step (`_drop_undo_tail`). Left in, a
+redone Enter doubled it, and every step after that read as typing. What says "nothing changed"
+is Tk's own modified flag, reset when the line is drawn: every insert and delete sets it,
+recorded or not, and a redraw leaves it as it found it. A position cannot say it: a word typed
+on the line and erased leaves the same text, but Tk now holds steps on that line, and an earlier
+version that followed the line with a mark took it out from under them — the word came back
+glued to the table's last row. Once the text changes, the line is the note's for good
+(`_settle_undo_tail`): every state the journal noted before then counts one more line break at
+its end (`_undo_sig_is`), because that is how Tk will give each of those texts back.
 
 ### Large lists: draw what can be seen, the rest on demand
 
@@ -650,6 +832,12 @@ next month in 25 ms instead of 295, the Calendar tab after a change in 33 instea
 of a window resize in 38 instead of 162. See
 [The month that was two hundred windows](ISSUES_LOG.md#the-month-that-was-two-hundred-windows).
 
+The calendar forgets its hover and takes a preview down whenever the days move under a pointer
+that stayed still: at every redraw (`_draw_calendar_grid`), and whenever the top of the scroll
+area's view changes (`_cal_scroll_moved`, called from the area's `yscrollcommand`) — so the
+wheel, the scrollbar and a History landing all count, and content that only grows or shrinks
+below does not.
+
 ## Background work: exporting and importing
 
 Full backup export/import (`.zip`, including attachments) runs on a `threading.Thread`, not the
@@ -673,6 +861,13 @@ replaces an existing file the user cares about writes beside it and `os.replace`
 only when whole (the backup zip and the single-note export both do); and only one
 export/import runs at a time — a second click is refused with a status line, not queued.
 
+A worker's completion is main-thread work, so closing the window has to do it: `on_app_close`
+waits for the workers and then runs `_settle_background_work_at_close`. A finished export is
+recorded as the last one; a finished import that was never merged is dropped whole — the unpacked
+backup leaves the temp folder, and the files the worker copied in (it records them) leave the
+attachments folder unless a note uses them. Merging at close would mean asking the import's
+questions in a window that is closing.
+
 ## Autosave
 
 Typing pauses trigger a debounced autosave; switching notes (or tabs) flushes any pending
@@ -680,10 +875,32 @@ change immediately first, so nothing written is ever lost to a note switch. Auto
 skips refreshing the note list while a popup is open (deferring the refresh until the popup
 closes) to avoid the sidebar visibly flickering underneath an open dropdown.
 
+A debounced callback cancels a waiting timer; it never just forgets one. `_autosave_now` used to
+set its job to None on entry, assuming it was the timer that job tracked. Run any other way while
+a timer waited, it left that timer running with nothing tracking it, and each stray timer, firing,
+did the same to the next. It now cancels whatever waits (`_cancel_pending_autosave`); the
+Calendar's History render does the same; and the find bar's rescan clears its job only from its
+own timer (`_find_debounce_fire`), since a waiting rescan may carry a reveal the direct one does
+not. See [The save that forgot the next one](ISSUES_LOG.md#the-save-that-forgot-the-next-one).
+
 The spine's guards are deliberately quiet (a background path must never interrupt typing), but
 never silent: every swallowed exception — including a save failing at note-switch or close —
 appends one trace per spot per session to `crash_log.txt` via `_log_swallowed` (0.71.134), so
 a persistent bug can no longer stop saving with nothing anywhere to diagnose.
+
+A save never lets one field veto the rest. A date the app cannot read, a repeat with no start
+date, a repeat's end date typed day-first, or a repeat's "Every" / "After … times" that is not a
+whole number is *left out*: it keeps the note's last good value, everything else is saved, and
+the status line says what was left out. (Read as 1, as the widgets used to read it, "After abc
+times" ended a series after its first day.) Leaving the note — another note, Ctrl+N, a delete,
+closing the window — asks "Go back and fix it" or "Continue without it", and "Continue" puts the
+stored values back on screen so the editor agrees with the note again. The save and the question
+ask one judgement, `_date_and_repeat_to_store`, so they cannot disagree about what stayed behind.
+A save whose only difference from the note was a field it left out changes nothing the note
+stores, so it keeps the note's "updated" stamp (`_stored_signature`): otherwise every way out of
+a note with an unreadable date on screen moved it up "Recently updated". Before 0.83.XXX the save returned nothing for such a field, and every automatic route read
+that as success and replaced the editor — see
+[One unreadable field, and every word typed after it](ISSUES_LOG.md#one-unreadable-field-and-every-word-typed-after-it).
 
 ## Testing
 
@@ -707,12 +924,14 @@ copy of the entry module.
 
 ### The hermetic seed
 
-Every automated qa script opens with a *hermetic seed*: before `note_organizer` is even
-imported (its data migrations run at import time), the script writes an empty `notes_data.json`
-and the migration marker, and refuses outright to run beside a file holding real notes. Without
-this, a test's empty folder invited the app's own first-run migration to adopt the developer's
-real notebook from `%APPDATA%` — and checks then passed or failed depending on what the owner
-had done in the app that day.
+Every automated qa script opens with a *hermetic seed*, `qa/_qa_support.hermetic_seed` — one
+definition, where there used to be nine copies of it. Before `note_organizer` is even imported
+(its data migrations run at import time) it writes an empty `notes_data.json` and the migration
+marker, so a test's empty folder cannot invite the first-run migration to adopt the developer's
+real notebook from `%APPDATA%`. And it fails closed: it refuses to run unless a scratch run was
+declared (`NOTEORG_SCRATCH=1`, set only by `tools/run_tests.py` and the CI workflow), and beside
+any `notes_data.json` it cannot prove empty — one that holds notes, or one it cannot read. The
+copies it replaced read an unreadable notebook as empty and overwrote it.
 
 Manual QA lives as a structured spreadsheet in `qa/` (`NoteOrganizer_TestPlan.xlsx`). See
 [ISSUES_LOG.md](ISSUES_LOG.md) for notable bugs these checks caught (and a few they didn't,
@@ -774,7 +993,7 @@ After dialogs, the calendar and attachments, nothing else clears the bar. The ed
 module hiding inside the class — moving any of the shared surface into a file would relocate
 the tangle rather than remove it.
 
-The entry file has grown well past that measurement since — ~16,200 lines now — but the growth
+The entry file has grown well past that measurement since — ~22,300 lines now — but the growth
 is the rich-text and tables UI, which is more of exactly this shared surface, not a new
 extractable module.
 
