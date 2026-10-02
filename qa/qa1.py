@@ -6248,6 +6248,64 @@ check(f'Delete, BackSpace, Ctrl+B, Ctrl+Z and a paste without its styling '
       all(_ok and _r == ['1.0', '1.6'] for _n, _ok, _t, _r in _tyK)
       and [_t for _n, _ok, _t, _r in _tyK][3:]
       == ['Prices: here', 'Prices: here', 'Prices:: here'])
+
+
+# Keys pressed over each other -- the next letter down before the last is
+# up, as fast typing goes, or a key held until it repeats: each press set
+# the marks again, the first release found two fresh plain letters, and the
+# style stayed behind. What a key typed is settled at the next key's press.
+def _ty_down(keysym, ch):
+    """A typing key's press alone, the character put in by hand when the
+    synthetic press typed nothing (see _ty_key)."""
+    _w = app.body_text
+    _before = _w.get('1.0', 'end-1c')
+    _w.event_generate('<KeyPress>', keysym=keysym)
+    if _w.get('1.0', 'end-1c') == _before:
+        _w.insert('insert', ch)
+
+
+_tyR = []
+for _ty_how in ('rollover', 'held'):
+    set_body('Prices: here' + chr(10) + 'second line')
+    _b.tag_add('bold', '1.0', '1.6')
+    _b.mark_set('insert', '1.6')
+    _ty_ok = take_focus(_b)
+    if _ty_how == 'rollover':
+        _ty_down('x', 'x')
+        _ty_down('y', 'y')
+        _b.event_generate('<KeyRelease>', keysym='x')
+        _b.event_generate('<KeyRelease>', keysym='y')
+    else:
+        for _ in range(3):
+            _ty_down('x', 'x')
+        _b.event_generate('<KeyRelease>', keysym='x')
+    app.update()
+    _tyR.append((_ty_how, _ty_ok, _b.get('1.0', '1.end'),
+                 [str(i) for i in _b.tag_ranges('bold')]))
+check(f'letters pressed over each other, or a held key, after a styled word '
+      f'wear its style ({_tyR})',
+      _tyR == [('rollover', True, 'Pricesxy: here', ['1.0', '1.8']),
+               ('held', True, 'Pricesxxx: here', ['1.0', '1.9'])])
+# A key that types nothing, after a table typed by hand: its release tidies
+# the table it left, and the padding goes in where the press set its marks
+# -- read as typed, the character before the caret, on the line the key
+# went to, took the style of the one before it.
+set_body('Intro' + chr(10) + '| Item name | Qty |' + chr(10) + '| --- | --- |'
+         + chr(10) + '| Te | 2 |' + chr(10) + 'P: tail')
+_b.tag_add('bold', '5.0', '5.1')
+_b.mark_set('insert', '4.4')
+app._last_caret_line = None
+_tyT = _ty_key('a', 'a')
+_tyT = take_focus(_b) and _tyT
+_b.event_generate('<KeyPress-Down>')
+_b.mark_set('insert', '5.2')
+_b.event_generate('<KeyRelease-Down>')
+app.update()
+_tyT_rows = _b.get('2.0', '4.end').split(chr(10))
+check(f'a key that types nothing spreads no style after the table it left '
+      f'is tidied (bold {_b.tag_ranges("bold")}; rows {_tyT_rows})',
+      _tyT and [str(i) for i in _b.tag_ranges('bold')] == ['5.0', '5.1']
+      and len({len(r) for r in _tyT_rows}) == 1)
 set_body('')
 
 # ---- FIELD ROUND 4 ----
@@ -10911,6 +10969,38 @@ try:
           f'({_sm_edge})',
           all(_s == ('1.0', '1.7') and _t and _c and _u
               for _s, _t, _c, _u in _sm_edge))
+    # A paste pressed as a person presses it -- Ctrl or Shift first, a key
+    # that may type -- never wears the word's style: Ctrl+V and Shift+Insert
+    # are <<Paste>> in the bindtag that notes every key, and a virtual event
+    # outranks <KeyPress> there, so their press went unnoted and the paste
+    # landed in the run Ctrl had opened. Nor does Tk's own Ctrl+O, which
+    # puts a line break where the caret stands and stays before it.
+    _sm_keys = []
+    for _sm_name, _sm_do in (
+            ('Ctrl+V', lambda: _own_key('<Control-KeyPress-v>',
+                                        '<Control-KeyRelease-v>',
+                                        ('Control_L',))),
+            ('Shift+Insert', lambda: _own_key('<Shift-KeyPress-Insert>',
+                                              '<Shift-KeyRelease-Insert>',
+                                              ('Shift_L',))),
+            ('Ctrl+O', lambda: _own_key('<Control-KeyPress-o>',
+                                        '<Control-KeyRelease-o>',
+                                        ('Control_L',)))):
+        _sm_fresh('1.6' if _sm_name != 'Ctrl+O' else '1.7',
+                  'Prices: here' + chr(10) + 'second line')
+        app.body_text.tag_add('bold', '1.0', '1.6')
+        _sm_clip['data'] = '!'
+        _sm_ok = _sm_do()
+        _sm_keys.append((_sm_name, _sm_ok, app.body_text.get('1.0', '1.end'),
+                         [str(i) for i in app.body_text.tag_ranges('bold')]))
+    _sm_clip['data'] = _sm_tsv
+    check(f'a paste pressed after its Ctrl or Shift, and Ctrl+O, spread no '
+          f'style ({_sm_keys})',
+          [(_n, _ok, _r) for _n, _ok, _t, _r in _sm_keys]
+          == [('Ctrl+V', True, ['1.0', '1.6']),
+              ('Shift+Insert', True, ['1.0', '1.6']),
+              ('Ctrl+O', True, ['1.0', '1.6'])]
+          and _sm_keys[0][2] == 'Prices!: here')
 finally:
     app.tk.eval('rename ::tk::GetSelection {}')
     app.tk.eval('rename ::tk::_qa1_sm_GetSelection ::tk::GetSelection')
