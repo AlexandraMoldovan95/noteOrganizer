@@ -11323,6 +11323,48 @@ try:
           f'paste of the same words ({_in})',
           _in == [('Insert', True, ['1.0', '1.6'], 'Prices: here'),
                   ('Shift+Insert', True, ['1.0', '1.6'], 'Prices: here')])
+    # A word pasted into a table row still being typed: the row stays a row
+    # being typed, the caret after the word, as after a letter typed there.
+    # The paste drew it, the caret guard put the caret under the table, and
+    # the next letter went to the line below -- by every paste route.
+    _pr = []
+    _pr_keys = {' ': 'space', '|': 'bar', '-': 'minus'}
+    for _pr_route in ('Ctrl+V', 'Ctrl+Shift+V', 'menu', 'rich'):
+        set_body('Intro' + chr(10) + chr(10) + 'end line')
+        app._reset_text_undo()
+        app.body_text.mark_set('insert', '2.0')
+        app._last_caret_line = None
+        for _pr_ch in '| Item name | Qty |':
+            _ty_key(_pr_keys.get(_pr_ch, _pr_ch), _pr_ch)
+        for _ in range(13):
+            _sm_press('<KeyPress-Left>')
+        _sm_clip['data'] = 'XY'
+        if _pr_route in ('Ctrl+V', 'rich'):
+            # The rich route: the word as a web page puts it on the
+            # clipboard, HTML beside the text.
+            if _pr_route == 'rich':
+                NO.clipboard.read_html = lambda: '<span>XY</span>'
+            try:
+                _own_key('<Control-KeyPress-v>', '<Control-KeyRelease-v>',
+                         ('Control_L',))
+            finally:
+                NO.clipboard.read_html = lambda: None
+        elif _pr_route == 'Ctrl+Shift+V':
+            _own_key('<Control-Shift-KeyPress-V>',
+                     '<Control-Shift-KeyRelease-V>',
+                     ('Control_L', 'Shift_L'))
+        else:
+            take_focus(app.body_text)
+            app.body_text.event_generate('<<Paste>>')
+            app.update()
+        app.update()
+        _pr_drawn = app._grid_at_line(2) is not None
+        _ty_key('Z', 'Z')
+        _pr.append((_pr_route, _pr_drawn, app.body_text.get('2.0', '2.end')))
+    _sm_clip['data'] = _sm_tsv
+    check(f'a word pasted into a table row being typed stays in it, and the '
+          f'next letter follows it ({_pr})',
+          all(not d and t == '| ItemXYZ name | Qty |' for _r, d, t in _pr))
 finally:
     app.tk.eval('rename ::tk::GetSelection {}')
     app.tk.eval('rename ::tk::_qa1_sm_GetSelection ::tk::GetSelection')
