@@ -720,6 +720,31 @@ _flat = _nn_att({"id": 1, "title": "x", "attachments": [
     "not-a-dict"]})
 check("normalize_note reduces every attachment stored_as to a bare name",
       [a["stored_as"] for a in _flat["attachments"]] == ["evil.exe", "z"])
+# A record with no stored name takes its display name as the stored one --
+# taken as it was, a filename of "../../x" kept the very path the rule
+# above removes. A name that flattens to nothing names no file at all.
+_side = _nn_att({"id": 1, "title": "x", "attachments": [
+    {"filename": "../../side.exe"}, {"filename": ".."},
+    {"filename": "C:\\Windows\\w.txt", "stored_as": 7}]})
+check("a record with no stored name takes the display name, flattened (%s)"
+      % [a.get("stored_as") for a in _side["attachments"]],
+      [a["stored_as"] for a in _side["attachments"]] == ["side.exe", "w.txt"])
+# The two names are all a record is. Copied whole, a crafted record kept
+# whatever else it carried, and a value nested a few hundred deep made
+# Duplicate (a deep copy of the note) fail with "Something went wrong".
+_nest = []
+for _ in range(900):
+    _nest = [_nest]
+_extra = _nn_att({"id": 1, "title": "x", "attachments": [
+    {"filename": "a.txt", "stored_as": "a.txt", "smuggled": _nest}]})
+check("an attachment record keeps its two names and nothing else",
+      _extra["attachments"] == [{"filename": "a.txt", "stored_as": "a.txt"}])
+import copy as _copy_att
+try:
+    _copy_ok = _copy_att.deepcopy(_extra) == _extra
+except RecursionError:
+    _copy_ok = False
+check("so a note carrying one can still be duplicated", _copy_ok)
 # Defensive: under a mutant that breaks the guard the outsider is gone,
 # and a bare remove would crash the run before its footer. The checks
 # already recorded their verdicts; this only lets the suite finish.

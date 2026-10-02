@@ -380,6 +380,18 @@ def clean_override(patch):
     return out
 
 
+def _bare_file_name(name):
+    """*name* as the app stores an attachment: one bare file name.
+
+    basename flattens a smuggled path ("../../x", "C:\\...", a UNC root);
+    the rstrip removes trailing dots and spaces, which Windows itself strips
+    when opening a file -- so "invoice.lnk. " names invoice.lnk on disk while
+    reading as extension-less to the warn-before-opening gate. Normalised
+    here, the name the gate inspects and the file the OS opens can never
+    disagree."""
+    return os.path.basename(name.replace("\\", "/")).rstrip(". ")
+
+
 def normalize_note(note):
     """Guarantee every note has every field, with the right type. Older notes
     were saved before 'comments', 'date', 'color' and 'attachments' existed,
@@ -534,16 +546,14 @@ def normalize_note(note):
     for att in clean.get("attachments", []):
         if not isinstance(att, dict):
             continue
-        item = dict(att)
+        # The two names are all a record is -- the app writes nothing else,
+        # and nothing reads anything else. Copied whole, a crafted record
+        # carried whatever else it held into every save, and a value nested
+        # a few hundred deep made Duplicate fail on the note.
+        item = {key: att[key] for key in ("filename", "stored_as") if key in att}
         stored = item.get("stored_as")
         if isinstance(stored, str) and stored:
-            # basename flattens smuggled paths; the rstrip removes
-            # trailing dots/spaces, which Windows itself strips when
-            # opening a file — so "invoice.lnk. " names invoice.lnk on
-            # disk while reading as extension-less to the warn-before-
-            # opening gate. Normalised here, the name the gate inspects
-            # and the file the OS opens can never disagree.
-            stored = os.path.basename(stored.replace("\\", "/")).rstrip(". ")
+            stored = _bare_file_name(stored)
             item["stored_as"] = stored
         else:
             stored = ""
@@ -559,7 +569,13 @@ def normalize_note(note):
             continue
         item["filename"] = display
         if not isinstance(item.get("stored_as"), str) or not item["stored_as"]:
-            item["stored_as"] = display
+            # The display name stands in for the stored one -- flattened the
+            # same way: taken as it was, a crafted record with no stored_as
+            # and a filename of "../../x" kept the path the rule above exists
+            # to remove (the guards at the open and delete sinks still held).
+            item["stored_as"] = _bare_file_name(display)
+            if not item["stored_as"]:
+                continue
         attachments.append(item)
         if len(attachments) >= MAX_ATTACHMENTS:
             # Same class as the checklist cap above: an unbounded list a
