@@ -4346,19 +4346,35 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         b = self.body_text
         try:
             sel_first, sel_last = b.index("sel.first"), b.index("sel.last")
-            insert = b.index("insert")
         except tk.TclError:
             return False
         top = f"{first}.0"
         above = b.index(f"{top} -1c")
         below = b.index(f"{first + nrows}.0")
-        if (b.compare(insert, "==", sel_last)
-                and b.compare(sel_first, "<", top)):
-            direction, edge, past = "down", above, below
-        elif (b.compare(insert, "==", sel_first)
+        if (getattr(self, "_sel_crossed_table", None) == (first, "up")
+                and b.compare(sel_first, "<=", top)
                 and b.compare(sel_last, ">=", below)):
+            # An upward crossing of a table on the note's first line, just
+            # made: there is no line above it, so the caret is left on it.
+            # Left as it is -- read as a first press, it dropped the table
+            # out of what the next key acts on, so a letter kept the table
+            # while Delete took it.
+            return True
+        # Which end moved is read off the selection's ends against the
+        # table, never off an exact match with the caret: leaving one table
+        # draws the next one again, and its window, put back at the very
+        # index the selection ends on, pushes the caret one column on.
+        if b.compare(sel_first, "<", top) and b.compare(sel_last, ">=", top):
+            direction, edge, past = "down", above, below
+        elif (b.compare(sel_last, ">=", below)
+                and b.compare(sel_first, "<", below)):
             direction, edge, past = "up", below, above
         else:
+            if (b.compare(top, "<=", sel_first)
+                    and b.compare(sel_last, "<", below)):
+                # Both ends on the table's hidden text: nothing anyone could
+                # see choosing, and a cut would have taken rows apart.
+                b.tag_remove("sel", sel_first, sel_last)
             return False
         keyed = getattr(event, "type", None) in (tk.EventType.KeyPress,
                                                  tk.EventType.KeyRelease)
@@ -4371,6 +4387,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     b.tag_add("sel", past, sel_last)
                 b.mark_set("insert", past)
                 self._sel_held_at_table = None
+                self._sel_crossed_table = (first, direction)
                 return True
             if direction == "down":
                 b.tag_remove("sel", edge, sel_last)
@@ -4382,6 +4399,40 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._sel_held_at_table = ((first, direction, edge) if keyed
                                    else None)
         return True
+
+    def _selection_ends_off_tables(self):
+        """A selection end left on a drawn table's hidden text, with the
+        caret elsewhere, goes to the table's edge facing the other end.
+
+        A mouse press beside a drawn table, right of the grid, lands on the
+        end of its last row's hidden text. Dragged down, the selection began
+        inside that row, and the next key glued the row onto the paragraph
+        under it ("| Tea | 2 |er") -- out of the table. Dragged up, it took
+        the whole table in, unasked. The caret guard looked only at the end
+        the drag finished on."""
+        b = self.body_text
+        for info in getattr(self, "_table_grids", []):
+            first = self._grid_first_line(info)
+            if first is None:
+                continue
+            try:
+                start, end = b.index("sel.first"), b.index("sel.last")
+            except tk.TclError:
+                return
+            top = f"{first}.0"
+            below = b.index(f"{first + info['nrows']}.0")
+
+            def on_table(index):
+                return (b.compare(top, "<=", index)
+                        and b.compare(index, "<", below))
+
+            try:
+                if on_table(start) and not on_table(end):
+                    b.tag_remove("sel", start, below)
+                elif on_table(end) and not on_table(start):
+                    b.tag_remove("sel", b.index(f"{top} -1c"), end)
+            except tk.TclError:
+                return
 
     def _caret_out_of_hidden(self, _event=None):
         """Keep the caret off a rendered table's lines entirely.
@@ -4417,6 +4468,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     except tk.TclError:
                         pass
                 break
+        if not met:
+            self._selection_ends_off_tables()
+            self._sel_crossed_table = None
         if not met and held is not None:
             # The stop at a table's edge is remembered only while the caret
             # stays there; any other move forgets it.
@@ -6502,14 +6556,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         line -- '|   | [x] |fig2...' in the field report -- and the
         caption onto the last one. Tk's default paste is right for
         prose; pipe rows only mean something at a line start, so they
-        get the newlines that keep them rows. Selection replacement is
-        left to the default handler -- this path only runs caret-only.
+        get the newlines that keep them rows -- and a blank line from a
+        table they would touch (_rows_gap).
         """
-        try:
-            if self.body_text.tag_ranges("sel"):
-                return False
-        except tk.TclError:
-            return False
         raw = clipboard.read_text()
         if raw is None:
             try:
@@ -6526,6 +6575,16 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 or core_tables.is_table_row(lines[-1])):
             return False
         b = self.body_text
+        if b.tag_ranges("sel"):
+            # Over a selection the rows take its place, as cells do; left to
+            # Tk, a line selected above a table was replaced by rows that
+            # then joined that table. Inside this undo unit, the grids down
+            # first: the selection may reach a drawn table's text.
+            self._teardown_table_grids()
+            try:
+                b.delete("sel.first", "sel.last")
+            except tk.TclError:
+                pass
         before = b.get("insert linestart", "insert")
         after = b.get("insert", "insert lineend")
         text = raw.strip("\n")
@@ -6533,7 +6592,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             text = "\n" + text
         if core_tables.is_table_row(lines[-1]) and after.strip():
             text = text + "\n"
-        b.insert("insert", text)
+        lead, trail = self._rows_gap(text)
+        b.insert("insert", lead + text + trail)
         self._body_follow_caret = True
         self._resync_list_tags()
         self._render_table_grids()
@@ -6604,13 +6664,6 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         rows = [line.split("\t") for line in raw.strip("\n").split("\n")]
         ncols = max(len(row) for row in rows)
         rows = [row + [""] * (ncols - len(row)) for row in rows]
-        # The separator is laid out with the rows, as the tidy lays it out
-        # (_align_table_block): built narrower, it was padded by the tidy at
-        # the key's release, a recorded edit of its own outside this undo
-        # unit -- the first Ctrl+Z after the paste changed nothing on screen.
-        rows = [rows[0], ["---"] * ncols] + rows[1:]
-        aligns = [[core_tables.ALIGN_LEFT] * ncols for _ in rows]
-        lines = core_tables.format_table(rows, aligns)
         # Our own copy remembers the source columns' set widths -- a
         # duplicated table comes back at the SAME widths, not shrunk
         # to the default. Text from elsewhere gets the plain rule.
@@ -6621,11 +6674,18 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             while len(clip_widths) < ncols:
                 clip_widths.append({"width": None, "align": None,
                                     "hidden": False})
-        if clip_widths:
-            lines[1] = core_tables.CELL + core_tables.CELL.join(
-                " " + cell + " "
-                for cell in core_tables.make_separator(clip_widths)
-            ) + core_tables.CELL
+        # The separator is laid out with the rows, as the tidy lays it out
+        # (_align_table_block): built narrower, it was padded by the tidy --
+        # at the key's release, or once the caret had been in the table and
+        # left -- a recorded edit of its own, and the first Ctrl+Z after
+        # the paste changed nothing on screen. Its dashes are its own all
+        # the same: they carry each column's set width, and the padding
+        # beside them is spaces.
+        separator = (core_tables.make_separator(clip_widths) if clip_widths
+                     else ["---"] * ncols)
+        rows = [rows[0], separator] + rows[1:]
+        aligns = [[core_tables.ALIGN_LEFT] * ncols for _ in rows]
+        lines = core_tables.format_table(rows, aligns)
         clip_place = None
         if raw == getattr(self, "_grid_cell_clip_text", None):
             clip_place = getattr(self, "_grid_cell_clip_place", None)
@@ -6710,7 +6770,36 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self.body_text.delete("sel.first", "sel.last")
         except tk.TclError:
             pass
-        self.body_text.insert("insert", text)
+        lead, trail = self._rows_gap(text)
+        self.body_text.insert("insert", lead + text + trail)
+
+    def _rows_gap(self, text):
+        """What *text*, about to go in at the caret, needs before and after
+        it so table rows at its edges stay a table of their own: a blank
+        line between them and a table on the next or the previous line.
+
+        Pasted onto the line above a drawn table, or the empty line between,
+        rows joined that table -- its header read as a data row and its
+        separator as a row of dashes, the grid one misshapen table. Only
+        the spreadsheet paste kept a gap; every paste route asks here now."""
+        b = self.body_text
+        lines = text.split("\n")
+        lead = trail = ""
+        try:
+            before = b.get("insert linestart", "insert")
+            after = b.get("insert", "insert lineend")
+            here = int(b.index("insert").split(".")[0])
+            above = b.get(f"{here - 1}.0", f"{here - 1}.end") if here > 1 else ""
+            below = b.get(f"{here + 1}.0", f"{here + 1}.end")
+        except (tk.TclError, ValueError):
+            return lead, trail
+        if (core_tables.is_table_row(lines[-1]) and not after.strip()
+                and core_tables.is_table_row(below)):
+            trail = "\n"
+        if (core_tables.is_table_row(lines[0]) and not before.strip()
+                and core_tables.is_table_row(above)):
+            lead = "\n"
+        return lead, trail
 
     @_undo_atom
     def _paste_formatted(self):
@@ -6734,12 +6823,18 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self.body_text.delete("sel.first", "sel.last")
         except tk.TclError:
             pass
+        # A blank line between table rows it brings and a table it would
+        # touch (_rows_gap) -- the one before goes in first, so the offsets
+        # below still count from where the text itself begins.
+        lead, trail = self._rows_gap(text)
+        if lead:
+            self.body_text.insert("insert", lead)
         # Where it lands, before inserting: everything after this point
         # shifts, and Tk moves its own tags along with the text, so only
         # what arrives needs placing.
         at = self._char_offset(self.body_text, self.body_text.index("insert"))
         line = int(self.body_text.index("insert").split(".")[0]) - 1
-        self.body_text.insert("insert", text)
+        self.body_text.insert("insert", text + trail)
 
         self._apply_formatting(
             self.body_text,

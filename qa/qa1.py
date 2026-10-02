@@ -10603,11 +10603,120 @@ try:
           f'with a table, give a drawn table ({_sm_text!r})',
           chr(9) not in _sm_text and _sm_text.startswith('| Day')
           and app._grid_at_line(1) is not None)
+    # Two drawn tables a line apart. Leaving the first draws the second
+    # again, and its window, put back at the very index the selection ends
+    # on, pushed the caret one column on: the guard missed an exact match,
+    # and the third Shift+Down left the selection holding the second
+    # table's line break, with the caret under that table.
+    _sm_two = ('top' + chr(10) + '| Item | Qty |' + chr(10) + '| --- | --- |'
+               + chr(10) + '| Tea | 2 |' + chr(10) + 'mid' + chr(10)
+               + '| Day | Time |' + chr(10) + '| --- | --- |' + chr(10)
+               + '| Mon | 10 |' + chr(10) + 'end')
+    _sm_fresh('1.0', _sm_two)
+    for _sm_i in range(3):
+        _sm_press('<Shift-KeyPress-Down>')
+    check(f'selection x table: with two tables a line apart, the third '
+          f'Shift+Down stops at the second table\'s edge ({_sm_where()})',
+          _sm_where() == (('1.0', '5.3'), '5.3'))
+    # A table on the note's first line: an upward crossing leaves the caret
+    # on it, and the next key's guard read that as a first press, dropping
+    # the table out of the selection -- a letter kept it, Delete took it.
+    _sm_fresh('4.3', '| Item | Qty |' + chr(10) + '| --- | --- |' + chr(10)
+              + '| Tea | 2 |' + chr(10) + 'after' + chr(10) + 'more')
+    _sm_press('<Shift-KeyPress-Up>')
+    _sm_press('<Shift-KeyPress-Up>')
+    _sm_crossed = _sm_where()
+    _sm_press('<KeyPress-x>')
+    check(f'selection x table: a first-line table crossed with Shift+Up stays '
+          f'in what the next key acts on ({_sm_crossed}; '
+          f'{app.body_text.get("1.0", "end-1c")!r})',
+          _sm_crossed == (('1.0', '4.3'), '1.0')
+          and app.body_text.get('1.0', 'end-1c') == 'xer' + chr(10) + 'more')
+    # Table rows pasted as text onto the line above a table, or the empty
+    # line between, joined it: its header read as a data row. Every paste
+    # route leaves a blank line now -- Ctrl+V's own, over the line Shift+Down
+    # selected too, Ctrl+Shift+V, and a rich paste from another program.
+    _sm_rows = '| Day | Time |' + chr(10) + '| --- | --- |' + chr(10) + '| Mon | 10 |'
+    _sm_kept = []
+    for _sm_how in ('caret', 'selected', 'plain', 'rich'):
+        _sm_fresh('1.7')
+        if _sm_how == 'selected':
+            app.body_text.mark_set('insert', '1.0')
+            _sm_press('<Shift-KeyPress-Down>')
+        _sm_clip['data'] = _sm_rows
+        if _sm_how == 'plain':
+            app._paste_plain()
+            app.update()
+        elif _sm_how == 'rich':
+            NO.clipboard.read_html = lambda: (
+                '<table><tr><th>Day</th><th>Time</th></tr>'
+                '<tr><td>Mon</td><td>10</td></tr></table>')
+            try:
+                app._on_body_paste()
+                app.update()
+            finally:
+                NO.clipboard.read_html = lambda: None
+        else:
+            _sm_press('<Control-KeyPress-v>')
+        _sm_kept.append((_sm_how, _sm_table_kept()))
+    _sm_clip['data'] = _sm_tsv
+    check(f'selection x table: table rows pasted onto the line above a table '
+          f'stay a table of their own, by every route ({_sm_kept})',
+          all(_k for _h, _k in _sm_kept))
 finally:
     app.tk.eval('rename ::tk::GetSelection {}')
     app.tk.eval('rename ::tk::_qa1_sm_GetSelection ::tk::GetSelection')
     app.tk.deletecommand('::qa1_sm_clip')
     NO.clipboard.read_text, NO.clipboard.read_html = _sm_real
+# A mouse press beside a drawn table lands on its last row's hidden text.
+# Dragged down, the selection began inside that row, and the next key glued
+# the row onto the paragraph under it; dragged up, it took the whole table.
+# The end left on a table goes to the table's edge facing the other end.
+_sm_fresh('5.3')
+app.body_text.tag_add('sel', '4.end', '5.3')
+_qa_fire(app.body_text, '<ButtonRelease-1>', x=2, y=2)
+app.update()
+_sm_down = _sm_where()
+_sm_fresh('1.3')
+app.body_text.tag_add('sel', '1.3', '4.end')
+_qa_fire(app.body_text, '<ButtonRelease-1>', x=2, y=2)
+app.update()
+_sm_up = _sm_where()
+_sm_fresh('3.2')
+app.body_text.tag_add('sel', '2.3', '3.2')
+_qa_fire(app.body_text, '<ButtonRelease-1>', x=2, y=2)
+app.update()
+check(f'selection x table: a drag that starts beside a table leaves the '
+      f'table out, either way ({_sm_down}; {_sm_up}), and one inside a '
+      f'table\'s hidden text selects nothing ({_sm_where()})',
+      _sm_down == (('5.0', '5.3'), '5.3') and _sm_up == (('1.3', '1.7'), '1.3')
+      and _sm_where()[0] is None)
+# Our own copied cells: the separator from the copied widths went in
+# narrower than its rows, and the tidy padded it as an undo step of its
+# own once the caret had been in and out of the table.
+_sm_fresh('6.0')
+app._grid_cell_clip_text = _sm_tsv
+app._grid_cell_clip_widths = [{'width': 12, 'align': None, 'hidden': False},
+                              {'width': None, 'align': None, 'hidden': False}]
+app._grid_cell_clip_place = None
+try:
+    app._paste_tsv_as_table(_sm_tsv)
+    app.update()
+finally:
+    app._grid_cell_clip_text = None
+    app._grid_cell_clip_widths = None
+_sm_all = app.body_text.get('1.0', 'end-1c')
+_sm_last = core_tables.find_blocks(_sm_all)[-1]
+_sm_block = _sm_all.split(chr(10))[_sm_last[0]:_sm_last[1] + 1]
+_sm_aligns = [core_tables.cell_alignments(_l) for _l in _sm_block]
+_sm_widths = core_tables.layout_widths(
+    [core_tables.split_row(_l) for _l in _sm_block], _sm_aligns)
+check(f'selection x table: our own copied cells come back laid out as the '
+      f'tidy lays them out, the copied width kept ({_sm_block})',
+      len(_sm_block) == 3 and not any(
+          core_tables.pad_ops(_l, _sm_widths, _a)
+          for _l, _a in zip(_sm_block, _sm_aligns))
+      and (core_tables.parse_separator(_sm_block[1])[0] or {}).get('width') == 12)
 # The paste itself never puts cells into a table's line, however the
 # selection was made: one that holds a table's line break keeps the break.
 _sm_fresh('1.0')
