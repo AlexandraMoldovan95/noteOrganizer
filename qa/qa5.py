@@ -1795,6 +1795,38 @@ check(f'a day saved on its own keeps its own words in the status line '
       f'({_rn_first!r} -> {_rn_second!r})',
       'except' in _rn_first and '2026-09-14 only' in _rn_second)
 
+# Every key in the date field redraws the repeat's summary beside the
+# field's own autosave, and each key read the whole body for its word count
+# twice: the summary changes no word of it. On a note that repeats and on
+# one that does not (the summary's two ways out).
+_rn_counted = []
+for _rn_repeats in (True, False):
+    if _rn_repeats:
+        _rn_series(interval=2)
+    else:
+        app.new_note(); app.update()
+        app.notes = [NO.normalize_note({'id': 1, 'title': 'Plain',
+                                        'body': 'x', 'date': '2026-09-07'})]
+        app.save_notes()
+        app.open_note_in_tab(app.find_note(1)); app.update()
+    _rn_n = {'n': 0}
+    _rn_count_real = app.update_word_count
+
+    def _rn_counting():
+        _rn_n['n'] += 1
+        return _rn_count_real()
+
+    app.update_word_count = _rn_counting
+    try:
+        _rn_key_ok = _rn_date_key('2026-09-07', '7')
+    finally:
+        del app.update_word_count
+    app._cancel_pending_autosave()
+    _rn_counted.append((_rn_key_ok, _rn_n['n']))
+check(f'a key in the date field counts the note\'s words once '
+      f'({_rn_counted})',
+      _rn_counted == [(True, 1), (True, 1)])
+
 
 # Restore previous with a big delete still waiting for its autosave: the
 # autosave ran while the question waited and made a new rescue copy of the

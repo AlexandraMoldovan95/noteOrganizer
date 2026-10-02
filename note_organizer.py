@@ -14112,7 +14112,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         rec = self.read_recurrence_from_ui()
         if not rec["freq"]:
             self.rec_summary_lbl.config(text="")
-            self._schedule_autosave()
+            self._schedule_autosave(skip_word_count=True)
             return
         problems = self._unreadable_repeat_fields(rec["freq"])
         anchor = self.date_entry.get().strip()
@@ -14168,7 +14168,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # Recurrence settings (frequency, weekdays, interval, end condition)
         # didn't autosave before — this is the single choke point every one of
         # those changes passes through, so hooking it here covers them all.
-        self._schedule_autosave()
+        # None of them changes a word of the body, so the count is not read
+        # again: every key in the date field redraws this summary, beside its
+        # own autosave, and each key read the whole body twice (loading a
+        # note counts its words itself).
+        self._schedule_autosave(skip_word_count=True)
 
     # ---------- Occurrence scope prompt ----------
     def ask_occurrence_scope(self, action_word, occurrence_date,
