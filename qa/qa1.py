@@ -5691,8 +5691,13 @@ _exp_note = NO.normalize_note({
     'comments': 'a comment', 'category': 'General',
     'checklist': [{'text': 'done already', 'done': True},
                   {'text': 'to do <more>', 'done': False}]})
-_exp_dir = os.path.abspath('qa_export_out')
-os.makedirs(_exp_dir, exist_ok=True)
+# A folder of its own on every run. The bulk export below names its files
+# after what the folder already holds (" (2)" beside an existing file), so
+# a fixed folder kept from an earlier run in the same place made this run
+# read that run's files as its own: the second of three runs in one folder
+# went red with nothing wrong in the app.
+import tempfile as _tmpX
+_exp_dir = _tmpX.mkdtemp(prefix='qa_export_out_', dir=os.getcwd())
 _toastsX = []
 _origToastX = app._show_toast
 app._show_toast = lambda text, kind='success': _toastsX.append(text)
@@ -6574,7 +6579,9 @@ app.update()
 app._flush_autosave(); app.update()
 check('fixture: the stored date is the old one',
       app.find_note(_idD).get('date') == '2020-01-01')
-app._autosave_job = None
+# Cancelled, never just forgotten: a job set to None leaves its timer
+# scheduled with nothing tracking it (see _nd_burst).
+app._cancel_pending_autosave()
 check('fixture: no autosave is pending before the date is pasted',
       not getattr(app, '_autosave_job', None))
 app.clipboard_clear(); app.clipboard_append('2026-10-05'); app.update()
@@ -7966,7 +7973,7 @@ app.on_end_mode_changed()
 app.update()
 check('fixture: choosing "On date" enables it',
       str(app.rec_end_date_entry.cget('state')) == 'normal')
-app._autosave_job = None
+app._cancel_pending_autosave()
 check('fixture: no autosave is pending before the paste',
       not getattr(app, '_autosave_job', None))
 app.clipboard_clear(); app.clipboard_append('2027-03-01'); app.update()
@@ -10184,6 +10191,40 @@ def _nd_clear():
     return True
 
 
+def _nd_burst(press, count):
+    """*count* presses of a key, each with its release, as one burst: what
+    a person sends holding the key down, or tapping it quickly.
+
+    A burst has no pause in it, and a pause is what the 500ms autosave
+    measures -- its boundary ends a run of deletes on purpose (the pause
+    check below). Two things made one here anyway, on a loaded machine:
+    an autosave left waiting from earlier in this script with nothing
+    tracking it (its job set to None instead of cancelled -- see
+    _autosave_now), and each press's own wait for the keyboard outlasting
+    a release's autosave. Either fired between two presses and split the
+    run the check is about ('Fr' came back alone on Linux; a 0.7s wait
+    between presses does it on any machine). So a burst starts with no
+    autosave waiting at all -- asked of Tcl, not of the job the app
+    tracks -- and holds the autosave for its length: its target is
+    replaced, which is what a timer captures when it is SCHEDULED. The
+    dirty poll ends a run too; with one tab it captures nothing."""
+    release = press.replace('KeyPress', 'KeyRelease')
+    app._cancel_pending_autosave()
+    _waiting = _qa_waiting(app, '_autosave_now')
+    check(f'native delete: a burst of {press} starts with no autosave '
+          f'waiting, tracked or not, and one tab (fixture: {_waiting})',
+          not _waiting and len(app.open_tabs) <= 1)
+    app._autosave_now = lambda: None
+    try:
+        for _ in range(count):
+            _uf_key(press)
+            app.body_text.event_generate(release)
+            app.update()
+    finally:
+        del app._autosave_now
+        app._cancel_pending_autosave()
+
+
 _nd_real_read_text = NO.clipboard.read_text
 for _nd_name, _nd_do in (
         ('Delete', lambda: _uf_key('<KeyPress-Delete>')),
@@ -10218,8 +10259,7 @@ for _nd_name, _nd_do in (
 # formatting it took back on the text it restores.
 _nd_setup()
 app.body_text.mark_set('insert', 'end-1c')
-for _nd_i in range(len('Friday')):
-    _uf_key('<KeyPress-BackSpace>')
+_nd_burst('<KeyPress-BackSpace>', len('Friday'))
 _nd_after_run = app.body_text.get('1.0', 'end-1c')
 _uf_key('<Control-z>')
 check(f'native delete: six BackSpaces through a bold word are one Ctrl+Z, '
@@ -10229,8 +10269,7 @@ check(f'native delete: six BackSpaces through a bold word are one Ctrl+Z, '
       and _cs_styles() == [('bold', 'Friday')])
 _nd_setup()
 app.body_text.mark_set('insert', 'end-1c')
-for _nd_i in range(len(' to Friday')):
-    _uf_key('<KeyPress-BackSpace>')
+_nd_burst('<KeyPress-BackSpace>', len(' to Friday'))
 _uf_key('<Control-z>')
 _nd_first = (app.body_text.get('1.0', 'end-1c'), _cs_styles())
 _uf_key('<Control-z>')
@@ -10273,8 +10312,7 @@ _nd_setup()
 app.body_text.mark_set('insert', 'end-1c')
 app.body_text.insert('insert', ' at ten')
 app.body_text.edit_separator()
-for _nd_i in range(len('Friday at ten')):
-    _uf_key('<KeyPress-BackSpace>')
+_nd_burst('<KeyPress-BackSpace>', len('Friday at ten'))
 _uf_key('<Control-z>')
 _nd_first = (app.body_text.get('1.0', 'end-1c'), _cs_styles())
 _uf_key('<Control-z>')
@@ -10288,8 +10326,7 @@ check(f'native delete: BackSpace from plain text into a bold word: the word '
 # not even the look at the formatting that a step would cost.
 _uf_setup('Dear Ana,' + chr(10), _uf_typed)
 app.body_text.mark_set('insert', 'end-1c')
-for _nd_i in range(3):
-    _uf_key('<KeyPress-BackSpace>')
+_nd_burst('<KeyPress-BackSpace>', 3)
 _nd_open = getattr(app, '_styled_delete_run', None)
 _uf_key('<Control-z>')
 check(f'native delete: BackSpace through plain text notes nothing and is '
@@ -10301,11 +10338,9 @@ check(f'native delete: BackSpace through plain text notes nothing and is '
 # step, and both halves came back plain. Each half is a step of its own now.
 _nd_setup()
 app.body_text.mark_set('insert', 'end-1c')
-for _nd_i in range(3):
-    _uf_key('<KeyPress-BackSpace>')
+_nd_burst('<KeyPress-BackSpace>', 3)
 app._flush_table_grids()            # what an autosave does at a pause
-for _nd_i in range(3):
-    _uf_key('<KeyPress-BackSpace>')
+_nd_burst('<KeyPress-BackSpace>', 3)
 _uf_key('<Control-z>')
 _nd_first = (app.body_text.get('1.0', 'end-1c'), _cs_styles())
 _uf_key('<Control-z>')
@@ -10366,7 +10401,7 @@ try:
                 app.body_text.event_generate('<<Paste>>'), app.update())),
             ('Ctrl+H six times', lambda: (
                 _kp_at('end-1c'),
-                [_uf_key('<Control-KeyPress-h>') for _i in range(6)])),
+                _nd_burst('<Control-KeyPress-h>', 6))),
             ('Ctrl+K before it', lambda: (_kp_at('2.21'),
                                           _uf_key('<Control-KeyPress-k>'))),
             ("Ctrl+T at the word's end", lambda: (
