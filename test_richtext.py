@@ -281,13 +281,15 @@ for label, text, paras in KIND_CHANGES:
     check(f"a list changing kind starts a new list: {label}",
           back_text == text and back_paras == paras and valid(markup))
 
-# Styles must survive the trip, though bold+italic may come back as two
-# spans where it went out as one -- the note format allows both.
+# Styles must survive the trip. Bold+italic went out as one span and came
+# back as two, bold and italic -- which the note format allows, but as two
+# Tk tags that both set the font they do not compose, and the text was
+# drawn italic alone. It comes back as the one span it went out as.
 markup = note_to_html("abc", [{"start": 0, "end": 3, "style": "bold_italic"}])
 _t, _s, _p = html_to_note(markup)
-check("bold_italic survives as bold and italic over the same characters",
-      sorted(s["style"] for s in _s) == ["bold", "italic"]
-      and all(s["start"] == 0 and s["end"] == 3 for s in _s))
+check("bold_italic survives the trip as bold_italic over the same characters",
+      [(s["style"], s["start"], s["end"]) for s in _s]
+      == [("bold_italic", 0, 3)])
 
 # --- reflow_wrapped: rejoining what a column broke --------------------------
 # A PDF hands over its own line breaks. Keeping them gives narrow ragged text;
@@ -677,6 +679,24 @@ def _lines_run_in(fn, *args):
         _sys.settrace(None)
     return ran[0]
 
+
+# Bold and italic over the same letters are one bold_italic span: as two Tk
+# tags that both set the font they do not compose, and italic won -- bold
+# italic pasted from a web page or the app's own copy was drawn italic.
+def _styles(spans):
+    return sorted((s["start"], s["end"], s["style"])
+                  for s in normalize_formatting(spans))
+
+
+check("overlapping bold and italic become bold, bold_italic and italic",
+      _styles([{"start": 0, "end": 5, "style": "bold"},
+               {"start": 3, "end": 8, "style": "italic"}])
+      == [(0, 3, "bold"), (3, 5, "bold_italic"), (5, 8, "italic")])
+_apart = [{"start": 0, "end": 3, "style": "bold"},
+          {"start": 5, "end": 8, "style": "italic"},
+          {"start": 1, "end": 2, "style": "underline"}]
+check("bold and italic that do not overlap are left exactly as they were",
+      normalize_formatting(_apart) == _apart)
 
 _n = 600
 _many = [{"start": 3 * i, "end": 3 * i + 2,

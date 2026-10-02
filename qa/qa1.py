@@ -6335,6 +6335,22 @@ _bs_typed = _ty_key('space', ' ') and _ty_key('b', 'b')
 _bs_edge = [_drawn(i)[0] for i in ('1.9', '1.10')]
 check(f'text typed at a bold word\'s edge inside a bigger heading keeps the '
       f'heading\'s size ({_bs_edge})', _bs_typed and _bs_edge == [20, 20])
+# Bold and italic on the same letters -- a bold italic word pasted, or a note
+# saved that way -- were two tags that both set the font, and italic won.
+set_body('')
+_stub_clipboard(html='<p><b><i>BI</i></b> plain</p>')
+app._on_body_paste()
+app.update()
+_bs_bi = _drawn('1.0')
+set_body('one two')
+app._apply_formatting(app.body_text,
+                      [{'start': 4, 'end': 7, 'style': 'bold'},
+                       {'start': 4, 'end': 7, 'style': 'italic'}])
+app.update()
+_bs_bi_loaded = _drawn('1.5')
+check(f'bold italic, pasted or opened, is drawn bold and italic '
+      f'({_bs_bi}, {_bs_bi_loaded})',
+      _bs_bi[1:] == ('bold', 'italic') and _bs_bi_loaded[1:] == ('bold', 'italic'))
 # Ctrl+B on one word in a long note set in a font lays the composites of
 # that word, not of the note: laid across the note, it took 250 ms at 8,000
 # styled words. Counted, not timed: the body's "tag add" and "tag remove".

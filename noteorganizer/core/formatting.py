@@ -233,7 +233,45 @@ def normalize_formatting(value):
             # choke point every route passes through, generous enough
             # that no real document ever reaches it.
             break
-    return spans
+    return _fold_bold_with_italic(spans)[:MAX_FORMATTING_SPANS]
+
+
+def _fold_bold_with_italic(spans):
+    """Where a bold span and an italic span cover the same characters, one
+    bold_italic span there instead: the two are Tk tags that both set the
+    font, which do not compose, and italic -- made after bold -- won. Bold
+    italic text pasted from a web page, or from the app's own copy (which
+    writes it as <i><b>), was drawn italic alone, on every open, while the
+    toolbar lit Bold and the note saved it bold.
+
+    One sweep over the two styles' ends, and the list as it was when
+    nothing overlaps."""
+    marks = sorted((s[edge], s["style"], step)
+                   for s in spans if s["style"] in ("bold", "italic")
+                   for edge, step in (("start", 1), ("end", -1)))
+    held = {"bold": 0, "italic": 0}
+    pieces, overlap, i = [], False, 0
+    while i < len(marks):
+        at = marks[i][0]
+        while i < len(marks) and marks[i][0] == at:
+            held[marks[i][1]] += marks[i][2]
+            i += 1
+        if i == len(marks):
+            break
+        style = ("bold_italic" if held["bold"] and held["italic"]
+                 else "bold" if held["bold"] else
+                 "italic" if held["italic"] else None)
+        overlap = overlap or style == "bold_italic"
+        if style is None:
+            continue
+        if (pieces and pieces[-1]["end"] == at
+                and pieces[-1]["style"] == style):
+            pieces[-1]["end"] = marks[i][0]
+        else:
+            pieces.append({"start": at, "end": marks[i][0], "style": style})
+    if not overlap:
+        return spans
+    return [s for s in spans if s["style"] not in ("bold", "italic")] + pieces
 
 
 # ---- Naming the tags the editor applies ----
