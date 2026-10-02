@@ -492,6 +492,12 @@ def _stored_signature(note):
                       sort_keys=True, ensure_ascii=False, default=str)
 
 
+def _is_month_day(chunk):
+    """One of a monthly repeat's days, as the box holds it: 1 to 31."""
+    # isdecimal(): "3²" passed isdigit() and crashed int().
+    return chunk.isdecimal() and 1 <= int(chunk) <= 31
+
+
 def _whole_number(text):
     """Is this a repeat's count or interval the app can store: a whole
     number of at least 1, as int() reads it."""
@@ -13788,9 +13794,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if freq == "monthly":
             for chunk in self.rec_monthdays_var.get().replace(";", ",").split(","):
                 chunk = chunk.strip()
-                # isdecimal(): "3²" passed isdigit() and crashed int() on
-                # every read of the rule, saves included (see _go above).
-                if chunk.isdecimal() and 1 <= int(chunk) <= 31:
+                # _is_month_day's isdecimal(): "3²" passed isdigit() and
+                # crashed int() on every read of the rule, saves included.
+                if _is_month_day(chunk):
                     month_days.append(int(chunk))
 
         policy = "clamp" if self.rec_policy_var.get() == "Use the last day" else "skip"
@@ -13840,10 +13846,23 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self.rec_summary_lbl.config(text="")
             self._schedule_autosave()
             return
+        problems = self._unreadable_repeat_numbers(rec["freq"])
+        if problems:
+            # The rule the save would keep, never the one the boxes read as:
+            # an unreadable "Every" or "After … times" read as 1 previewed a
+            # rule neither typed nor stored.
+            kept = self._date_and_repeat_to_store()[1]
+            if kept["freq"]:
+                rec = kept
         preview = describe_recurrence({"recurrence": rec})
         anchor = self.date_entry.get().strip()
         if not parse_date(anchor):
             preview += "   ⚠ needs a start date"
+        for field, typed in problems:
+            preview += ("   ⚠ " + {"every": f"“Every {typed}”",
+                                   "after": f"“After {typed} times”",
+                                   "days": f"day(s) “{typed}”"}[field]
+                        + " is not understood, so it stays as it was")
         self.rec_summary_lbl.config(text=preview)
         # Recurrence settings (frequency, weekdays, interval, end condition)
         # didn't autosave before — this is the single choke point every one of
@@ -19513,21 +19532,24 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # "After abc times" ended the series after its first day -- every
         # later day, its own text included, fell off the calendar -- and a
         # box emptied on the way to a new number did the same at the next
-        # autosave; "Every x" made the series repeat every time instead.
-        if rule["freq"]:
-            every = self.rec_interval_var.get().strip()
-            if not _whole_number(every):
-                left_out.append(f"the repeat's “Every {every}” "
+        # autosave; "Every x" made the series repeat every time instead, and
+        # a monthly "15th" was no day at all, the series on its start's.
+        for field, typed in self._unreadable_repeat_numbers(rule["freq"]):
+            if field == "every":
+                left_out.append(f"the repeat's “Every {typed}” "
                                 "(write a whole number, like 2)")
                 rule = normalize_recurrence(dict(
                     rule, interval=kept_rule["interval"]))
-            if self.rec_end_mode_var.get() == "after":
-                times = self.rec_count_var.get().strip()
-                if not _whole_number(times):
-                    left_out.append(f"the repeat's “After {times} times” "
-                                    "(write a whole number, like 10)")
-                    rule = normalize_recurrence(dict(
-                        rule, end=kept_rule["end"], count=kept_rule["count"]))
+            elif field == "after":
+                left_out.append(f"the repeat's “After {typed} times” "
+                                "(write a whole number, like 10)")
+                rule = normalize_recurrence(dict(
+                    rule, end=kept_rule["end"], count=kept_rule["count"]))
+            else:
+                left_out.append(f"the repeat's day(s) “{typed}” "
+                                "(write days of the month, like 1, 15)")
+                rule = normalize_recurrence(dict(
+                    rule, month_days=kept_rule["month_days"]))
 
         if rule["freq"] and not parse_date(date_value):
             if parse_date(kept_date):
@@ -19541,6 +19563,30 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                                 "start date)")
                 rule = normalize_recurrence({})
         return date_value, rule, left_out
+
+    def _unreadable_repeat_numbers(self, freq):
+        """The repeat's typed numbers the app cannot store, as (field,
+        typed): "every" (its interval), "after" (its count, when it ends
+        after N times) and "days" (a monthly repeat's days, any one of them
+        not a day of the month; a wholly blank box is legal -- it means the
+        start date's day). The one judgement the save and its question
+        (_date_and_repeat_to_store) and the summary line ask."""
+        problems = []
+        if not freq:
+            return problems
+        every = self.rec_interval_var.get().strip()
+        if not _whole_number(every):
+            problems.append(("every", every))
+        if self.rec_end_mode_var.get() == "after":
+            times = self.rec_count_var.get().strip()
+            if not _whole_number(times):
+                problems.append(("after", times))
+        if freq == "monthly":
+            days = self.rec_monthdays_var.get()
+            chunks = [c.strip() for c in days.replace(";", ",").split(",")]
+            if any(c and not _is_month_day(c) for c in chunks):
+                problems.append(("days", days.strip()))
+        return problems
 
     def _left_out_date_on_screen(self):
         """The date field's text when a save would leave it out (see

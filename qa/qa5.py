@@ -1440,6 +1440,34 @@ check(f'...and keeps a date the save had to leave out on screen, to be '
 app._put_back_stored_date_and_repeat()
 app._cancel_pending_autosave()
 
+# The summary under the repeat previews what the save will keep: it read
+# the boxes as the old reader did, an unreadable "Every" as 1 -- a rule
+# neither typed nor stored.
+_rn_series(interval=2, count=10)
+app.rec_interval_var.set('x'); app.update()
+_rn_said = str(app.rec_summary_lbl.cget('text'))
+app._put_back_stored_date_and_repeat()
+app._cancel_pending_autosave()
+check(f'the repeat\'s summary shows the rule the save keeps, and says the '
+      f'box is not understood ({_rn_said!r})',
+      _rn_said.startswith('Every 2 weeks') and '“Every x”' in _rn_said)
+# A monthly repeat's day the app cannot read is left out too: "15th" saved
+# as no day at all, and the series moved to its start date's day.
+_rn_warned = []
+app.show_warning = lambda t, m='', **k: (_rn_warned.append(m), True)[1]
+try:
+    _rn_series(freq='monthly', month_days=[15])
+    app.rec_monthdays_var.set('15th'); app.update()
+    app.save_current_note(); app.update()
+finally:
+    app.show_warning = _rn_warn_stub
+_rn_days = app.find_note(1)['recurrence'].get('month_days')
+app._put_back_stored_date_and_repeat()
+app._cancel_pending_autosave()
+check(f'a monthly repeat\'s day the app cannot read is left out, and said so '
+      f'(days {_rn_days}; said {_rn_warned[:1]})',
+      _rn_days == [15] and _rn_warned and 'day(s) “15th”' in _rn_warned[0])
+
 app.new_note(); app.update()
 app.notes = []; app.save_notes()
 
