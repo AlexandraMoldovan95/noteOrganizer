@@ -6310,6 +6310,56 @@ app._pending_font_size = None
 app._pending_styles = set()
 check(f'a size picked with nothing selected draws at that size inside a run '
       f'of another ({_bs_pend})', _bs_pend[0] == 16)
+# ...and keeps the run's font: laid in place of the composite the letters
+# inherited, the size took Georgia away with it, saved without it.
+_sized_line(style='font_family', value='Georgia')
+app.body_text.mark_set('insert', '1.6')
+app._apply_body_font('font_size', 16)
+for _bs_ch in 'NEW':
+    type_char(_bs_ch)
+app._pending_font_size = None
+app._pending_styles = set()
+_bs_spans = app._extract_formatting(app.body_text)
+# Every letter typed, not only the first: the first takes the run's
+# composite from both its neighbours, the next ones from no one.
+_bs_both = [sorted((s['style'], s.get('value')) for s in _bs_spans
+                   if s['start'] <= at < s['end']) for at in (6, 7, 8)]
+check(f'a size picked inside a run set in a font keeps the font on every '
+      f'letter typed ({_bs_both})',
+      _bs_both == [[('font_family', 'Georgia'), ('font_size', 16)]] * 3)
+# Ctrl+B on one word in a long note set in a font lays the composites of
+# that word, not of the note: laid across the note, it took 250 ms at 8,000
+# styled words. Counted, not timed: the body's "tag add" and "tag remove".
+_bs_words = ['word%d' % i for i in range(400)]
+set_body(' '.join(_bs_words))
+app._apply_formatting(app.body_text, [
+    {'start': 0, 'end': len(' '.join(_bs_words)), 'style': 'font_family',
+     'value': 'Georgia'}] + [
+    {'start': 7 * i, 'end': 7 * i + 4, 'style': 'bold'} for i in range(0, 400, 3)])
+app.update()
+_bs_at = app.body_text.search('word200', '1.0', 'end')
+select(_bs_at, f'{_bs_at}+7c')
+_bs_calls = [0]
+
+
+def _bs_trace(command, *_op):
+    if ' tag add ' in command or ' tag remove ' in command:
+        _bs_calls[0] += 1
+
+
+app.tk.createcommand('qa_tag_trace', _bs_trace)
+app.tk.call('trace', 'add', 'execution', app.body_text._w, 'enter',
+            'qa_tag_trace')
+try:
+    app._toggle_body_style('bold')
+finally:
+    app.tk.call('trace', 'remove', 'execution', app.body_text._w, 'enter',
+                'qa_tag_trace')
+    app.tk.deletecommand('qa_tag_trace')
+clear_selection()
+check(f'Ctrl+B on one word of a long note set in a font lays that word\'s '
+      f'composites only ({_bs_calls[0]} tag changes; drawn {_drawn(_bs_at)})',
+      _bs_calls[0] <= 20 and _drawn(_bs_at)[1] == 'bold')
 set_body('')
 
 # On every line, not only the last, and over a selection: a first test of
