@@ -8339,6 +8339,32 @@ check(f'checklist undo: Undo after Restore previous puts the item back '
       f'({_cu_texts()}; restored {app.find_note(9100).get("body")!r})',
       _cu_texts() == ['milk', 'eggs']
       and 'older body' in app.find_note(9100).get('body', ''))
+# ...but not after a reload that brought ANOTHER checklist -- a rescue copy
+# that holds its own, as an import's Update leaves one: the item it brought
+# back as a new entry was put back again beside it, and stored twice.
+check('checklist undo: fixture ready for a rescue copy with its own checklist',
+      _cu_setup(['milk', 'eggs', 'bread'],
+                extra={'_prev': {'title': 'Shopping', 'body': 'an older body',
+                                 'formatting': [], 'paragraphs': [],
+                                 'comments': '',
+                                 'checklist': [
+                                     {'text': 'milk', 'done': False},
+                                     {'text': 'eggs', 'done': False}]}}))
+_cu_press(1)
+_cu_undo = app._toast_action
+app.ask_yes_no = lambda *a, **k: True
+try:
+    app.restore_previous_version()
+    app.update()
+finally:
+    app.ask_yes_no = _cu_real_ask
+_cu_undo()
+app.update()
+_cu_kept = [i.get('text') for i in app.find_note(9100).get('checklist') or []]
+check(f'checklist undo: ...and after Restore previous brings back its own '
+      f'checklist, the Undo stores nothing twice ({_cu_texts()}; stored '
+      f'{_cu_kept})',
+      _cu_texts() == ['milk', 'eggs'] and _cu_kept == ['milk', 'eggs'])
 
 # Any alphabet, and a day of a repeating note.
 check('checklist undo: fixture ready for the astral item',

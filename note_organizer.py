@@ -18497,10 +18497,14 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         override for that day is shown instead of the base content."""
         # The same note loaded again over itself -- Restore previous, Reset
         # this day, a save's own reload, a change made behind the editor --
-        # is the same editing session: the checklist keeps its list, so the
-        # Undo just offered for a deleted item still has somewhere to put it
-        # back (_undo_checklist_delete knows the list by identity, and said
-        # "That note is no longer open" with the note on screen).
+        # is the same editing session when it brings back the checklist the
+        # editor holds: the list keeps its identity, so the Undo just offered
+        # for a deleted item still has somewhere to put it back
+        # (_undo_checklist_delete knows the list by identity, and said "That
+        # note is no longer open" with the note on screen). A reload that
+        # brings ANOTHER checklist -- a rescue copy's own, an import's
+        # Update -- starts a new list: the item it brought back as a new
+        # entry was put back again beside it, and stored twice.
         day = occurrence_date if is_recurring(note) else None
         kept_checklist = (getattr(self, "_working_checklist", None)
                           if (self.selected_note_id == note.get("id")
@@ -18553,7 +18557,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             {"text": it.get("text", ""), "done": bool(it.get("done"))}
             for it in note.get("checklist", []) if isinstance(it, dict)
         ]
-        if kept_checklist is not None:
+        if kept_checklist is not None and kept_checklist == fresh:
             kept_checklist[:] = fresh
             self._working_checklist = kept_checklist
         else:
