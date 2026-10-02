@@ -13545,9 +13545,28 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         freq_menu.pack(side="left", padx=(8, 10))
         self.rec_freq_menu = freq_menu
 
-        self.rec_summary_lbl = tk.Label(freq_row, text="", font=("Segoe UI", 8, "italic"))
+        self.rec_summary_lbl = tk.Label(freq_row, text="", font=("Segoe UI", 8, "italic"),
+                                        justify="left")
         self.track_theme(self.rec_summary_lbl, bg="bg", fg="accent")
         self.rec_summary_lbl.pack(side="left")
+
+        def _wrap_summary(_event=None):
+            # The summary wraps inside what its row leaves it rather than
+            # running out of the row: a long rule, or the warning naming the
+            # boxes not understood, was cut off at its end. Counted from the
+            # widths the row's other widgets ask for, which are known before
+            # the packer has placed anything, less the label's own padding
+            # (the wrap is the text's width, not the label's).
+            lbl = self.rec_summary_lbl
+            try:
+                inner = 2 * sum(int(str(lbl.cget(o))) for o in
+                                ("padx", "borderwidth", "highlightthickness"))
+                room = (freq_row.winfo_width() - freq_label.winfo_reqwidth()
+                        - freq_menu.winfo_reqwidth() - 18 - inner)
+                lbl.configure(wraplength=max(room, 120))
+            except (tk.TclError, ValueError):
+                pass
+        freq_row.bind("<Configure>", _wrap_summary, add="+")
 
         # --- Everything below is hidden unless a frequency is chosen ---
         # The frame is packed once, here, so it always keeps its slot in the
@@ -13883,23 +13902,37 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self.rec_summary_lbl.config(text="")
             self._schedule_autosave()
             return
-        problems = self._unreadable_repeat_numbers(rec["freq"])
-        if problems:
-            # The rule the save would keep, never the one the boxes read as:
-            # an unreadable "Every" or "After … times" read as 1 previewed a
-            # rule neither typed nor stored.
-            kept = self._date_and_repeat_to_store()[1]
-            if kept["freq"]:
+        problems = self._unreadable_repeat_fields(rec["freq"])
+        anchor = self.date_entry.get().strip()
+        if anchor == "YYYY-MM-DD":
+            anchor = ""
+        kept_date = ""
+        if problems or not parse_date(anchor):
+            # What the save would keep, never what the boxes read as: an
+            # unreadable "Every" or "After … times" read as 1, and an
+            # unreadable end date as none, previewed a rule neither typed
+            # nor stored.
+            kept_date, kept, _left_out = self._date_and_repeat_to_store()
+            if problems and kept["freq"]:
                 rec = kept
         preview = describe_recurrence({"recurrence": rec})
-        anchor = self.date_entry.get().strip()
+        unread = [{"end": "the end date “%s”",
+                   "every": "“Every %s”",
+                   "after": "“After %s times”",
+                   "days": "day(s) “%s”"}[field] % _truncate(typed, 16)
+                  for field, typed in problems]
         if not parse_date(anchor):
-            preview += "   ⚠ needs a start date"
-        for field, typed in problems:
-            preview += ("   ⚠ " + {"every": f"“Every {typed}”",
-                                   "after": f"“After {typed} times”",
-                                   "days": f"day(s) “{typed}”"}[field]
-                        + " is not understood, so it stays as it was")
+            if anchor and parse_date(kept_date or ""):
+                # The series keeps the start it has; "needs a start date"
+                # said it had none.
+                unread.insert(0, "the date “%s”" % _truncate(anchor, 16))
+            else:
+                preview += "   ⚠ needs a start date"
+        if unread:
+            # One warning, however many boxes it names: one per box ran
+            # past the end of the row.
+            preview += ("   ⚠ Not understood, so kept as saved: "
+                        + ", ".join(unread))
         self.rec_summary_lbl.config(text=preview)
         # Recurrence settings (frequency, weekdays, interval, end condition)
         # didn't autosave before — this is the single choke point every one of
@@ -18984,14 +19017,14 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             return
         showing = (self.selected_note_id == note["id"]
                    and self.current_occurrence_date == occurrence_date)
-        typed_date = None
+        carried = {}
         if showing:
             # The day's own edits go; the files and the checklist on screen
             # are the series', and the reload below would fill the editor
             # from a note that never had them (see restore_previous_version).
             self._take_pending_checklist_item()
             self._write_series_owned(note, None, None, schedule=False)
-            typed_date = self._left_out_date_on_screen()
+            carried = self._left_out_on_screen()
         note["overrides"].pop(occurrence_date, None)
         note["updated"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         self.save_notes()
@@ -18999,8 +19032,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # series content replaces the dropped override on screen too.
         if showing:
             self.load_note(note, occurrence_date)
-            if typed_date is not None:
-                self._show_date_in_field(typed_date)
+            self._put_back_left_out(carried)
         self.refresh_note_list()
         self.render_calendar()
         self.refresh_day_panel()
@@ -19432,10 +19464,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # question waited the editor could move on; filling it then put
         # the old text into ANOTHER note, which its next save kept.
         in_editor = self.selected_note_id == note["id"]
-        # A date the save had to leave out is carried across the reload
-        # below, unless the rescue copy brings back its own date.
-        typed_date = (self._left_out_date_on_screen()
-                      if in_editor and "date" not in prev else None)
+        # A date or repeat value the save had to leave out is carried across
+        # the reload below, unless the rescue copy brings back its own.
+        carried = (self._left_out_on_screen(date="date" not in prev,
+                                            repeat="recurrence" not in prev)
+                   if in_editor else {})
         if in_editor:
             # The editor's files and checklist are the note's, and the
             # rescue copy is of its text: stored first, or the reload below
@@ -19519,8 +19552,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # user to see; this makes them the note's official state).
         if in_editor:
             self.load_note(note, occurrence_date=occurrence)
-            if typed_date is not None:
-                self._show_date_in_field(typed_date)
+            self._put_back_left_out(carried)
         self.refresh_note_list()
         # The rescue copy can bring back a date, a repeat, a colour, a
         # category and a series' days -- all of them drawn on the calendar,
@@ -19544,11 +19576,13 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         be stored keeps the value the note already had, everything else is
         saved, and ``left_out`` says what was not, in words for the person.
 
-        Three things can be left out: a date that is not a date (the field
-        reads YYYY-MM-DD), a repeat's end date that is not one, and a repeat
-        with no start date to hang on. The save and the question asked on
-        the way out of the note both ask here, so they cannot disagree about
-        what stayed behind.
+        What can be left out: a date that is not a date (the field reads
+        YYYY-MM-DD), any repeat value the app cannot read
+        (_unreadable_repeat_fields: its end date, "Every", "After … times", a
+        monthly repeat's days), and a repeat with no start date to hang on.
+        The save, the question asked on the way out of the note, the
+        repeat's summary line and the reloads that carry what is typed all
+        ask here, so they cannot disagree about what stayed behind.
         """
         note = (self.find_note(self.selected_note_id)
                 if self.selected_note_id is not None else None)
@@ -19573,22 +19607,19 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             date_value = kept_date
 
         rule = self.read_recurrence_from_ui()
-        end_typed = (self.rec_end_date_var.get().strip()
-                     if self.rec_end_mode_var.get() == "on" else "")
-        if rule["freq"] and end_typed and not parse_date(end_typed):
-            left_out.append(f"the repeat's end date “{end_typed}” "
-                            "(dates are written like 2026-12-31)")
-            rule = normalize_recurrence(dict(
-                rule, end=kept_rule["end"], count=kept_rule["count"]))
-
-        # A number the app cannot read is left out as a date is. Read as 1,
-        # "After abc times" ended the series after its first day -- every
-        # later day, its own text included, fell off the calendar -- and a
-        # box emptied on the way to a new number did the same at the next
-        # autosave; "Every x" made the series repeat every time instead, and
-        # a monthly "15th" was no day at all, the series on its start's.
-        for field, typed in self._unreadable_repeat_numbers(rule["freq"]):
-            if field == "every":
+        # A repeat value the app cannot read is left out as a date is. Read
+        # as 1, "After abc times" ended the series after its first day --
+        # every later day, its own text included, fell off the calendar --
+        # and a box emptied on the way to a new number did the same at the
+        # next autosave; "Every x" made the series repeat every time instead,
+        # and a monthly "15th" was no day at all, the series on its start's.
+        for field, typed in self._unreadable_repeat_fields(rule["freq"]):
+            if field == "end":
+                left_out.append(f"the repeat's end date “{typed}” "
+                                "(dates are written like 2026-12-31)")
+                rule = normalize_recurrence(dict(
+                    rule, end=kept_rule["end"], count=kept_rule["count"]))
+            elif field == "every":
                 left_out.append(f"the repeat's “Every {typed}” "
                                 "(write a whole number, like 2)")
                 rule = normalize_recurrence(dict(
@@ -19617,20 +19648,29 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 rule = normalize_recurrence({})
         return date_value, rule, left_out
 
-    def _unreadable_repeat_numbers(self, freq):
-        """The repeat's typed numbers the app cannot store, as (field,
-        typed): "every" (its interval), "after" (its count, when it ends
-        after N times) and "days" (a monthly repeat's days, any one of them
-        not a day of the month; a wholly blank box is legal -- it means the
-        start date's day). The one judgement the save and its question
-        (_date_and_repeat_to_store) and the summary line ask."""
+    def _unreadable_repeat_fields(self, freq):
+        """The repeat's typed values the app cannot store, as (field,
+        typed): "end" (its end date, when it ends on a date; an empty box
+        means it never ends), "every" (its interval), "after" (its count,
+        when it ends after N times) and "days" (a monthly repeat's days, any
+        one of them not a day of the month; a wholly blank box is legal --
+        it means the start date's day). The one judgement the save and its
+        question (_date_and_repeat_to_store), the summary line and the
+        reloads that carry what is typed (_left_out_on_screen) ask. The end
+        date was judged apart, so the summary line knew nothing of it and
+        previewed a series with no end."""
         problems = []
         if not freq:
             return problems
+        mode = self.rec_end_mode_var.get()
+        if mode == "on":
+            end = self.rec_end_date_var.get().strip()
+            if end and not parse_date(end):
+                problems.append(("end", end))
         every = self.rec_interval_var.get().strip()
         if not _whole_number(every):
             problems.append(("every", every))
-        if self.rec_end_mode_var.get() == "after":
+        if mode == "after":
             times = self.rec_count_var.get().strip()
             if not _whole_number(times):
                 problems.append(("after", times))
@@ -19641,28 +19681,73 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 problems.append(("days", days.strip()))
         return problems
 
-    def _left_out_date_on_screen(self):
-        """The date field's text when a save would leave it out (see
-        _date_and_repeat_to_store) -- else None.
+    def _left_out_on_screen(self, date=True, repeat=True):
+        """What the date and repeat fields hold that a save would leave out
+        (see _date_and_repeat_to_store), to carry across a reload: the date
+        field's text, and the repeat's fields as typed -- each only when
+        some of it is left out; {} when nothing is.
 
         A route that fills the editor from the note as stored -- Restore
-        previous, Reset this day -- wrote the stored date over such a date
-        in silence, the one thing on screen no file held. It is carried
-        across the reload instead, as a save's own reload carries it, and
-        stays there to be fixed; leaving the note then asks. Not asked
-        before the route: a half-typed date must never block a restore
-        (qa7 pins that promise)."""
+        previous, Reset this day -- wrote the stored date and repeat over
+        such values in silence, the one thing on screen no file held. They
+        are carried across the reload instead, as a save's own reload
+        carries them, and stay there to be fixed; leaving the note then
+        asks. Not asked before the route: a half-typed date must never
+        block a restore (qa7 pins that promise). The repeat goes whole: its
+        fields only mean something together. With *date* or *repeat* False
+        the reload brings back its own (a rescue copy that holds it)."""
         try:
-            date_value, _rule, left_out = self._date_and_repeat_to_store()
+            date_value, rule, left_out = self._date_and_repeat_to_store()
         except Exception:
             self._log_swallowed("reload: date and repeat check")
-            return None
+            return {}
+        if not left_out:
+            return {}
+        carried = {}
         typed = self.date_entry.get().strip()
         if typed == "YYYY-MM-DD":
             typed = ""
-        if left_out and typed != (date_value or ""):
-            return typed
-        return None
+        if date and typed != (date_value or ""):
+            carried["date"] = typed
+        freq = self.selected_freq_key()
+        # Left out: a value it cannot read, or the whole repeat, for want of
+        # a start date.
+        if repeat and freq and (self._unreadable_repeat_fields(freq)
+                                or not rule["freq"]):
+            carried["repeat"] = {
+                "freq": self.rec_freq_var.get(),
+                "interval": self.rec_interval_var.get(),
+                "weekdays": list(self.rec_weekday_state),
+                "month_days": self.rec_monthdays_var.get(),
+                "policy": self.rec_policy_var.get(),
+                "end_mode": self.rec_end_mode_var.get(),
+                "end": self.rec_end_date_var.get(),
+                "count": self.rec_count_var.get(),
+            }
+        return carried
+
+    def _put_back_left_out(self, carried):
+        """Show again what _left_out_on_screen carried across a reload; the
+        summary line then says what is not understood, and leaving asks."""
+        if not carried:
+            return
+        if "date" in carried:
+            self._show_date_in_field(carried["date"])
+        rep = carried.get("repeat")
+        if rep:
+            self.rec_freq_var.set(rep["freq"])
+            self.rec_interval_var.set(rep["interval"])
+            self.rec_weekday_state = list(rep["weekdays"])
+            self.rec_monthdays_var.set(rep["month_days"])
+            self.rec_policy_var.set(rep["policy"])
+            self.rec_end_mode_var.set(rep["end_mode"])
+            self.rec_end_date_var.set(rep["end"])
+            self.rec_count_var.set(rep["count"])
+            self.refresh_weekday_buttons()
+            self.on_end_mode_changed()
+            self.on_recurrence_changed()
+        else:
+            self.update_recurrence_summary()
 
     def _left_out_message(self, left_out,
                           lead="Everything else in this note is saved, but not:"):
@@ -20154,21 +20239,20 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             # above). Only fields the save just wrote were changed in this
             # visit, so nothing typed is lost -- except what loading a note
             # puts its own values over: a checklist item half-typed in its
-            # box, and a date the save had to leave out. That date wrote the
-            # stored one over itself, so leaving asked nothing and the typed
-            # date was gone. Both are carried across.
+            # box, and a date or repeat the save had to leave out. That date
+            # wrote the stored one over itself, so leaving asked nothing and
+            # the typed date was gone. Both are carried across, the left-out
+            # values as Restore previous carries them (_left_out_on_screen).
             # The save's own words stay: loading writes the note's dates
             # over the status line, and the line says where the days went.
             said = str(self.status_lbl.cget("text"))
             pending_item = (self.checklist_add_var.get()
                             if hasattr(self, "checklist_add_var") else "")
-            typed_date = self.date_entry.get()
+            carried = self._left_out_on_screen() if left_out else {}
             self.load_note(self.find_note(self.selected_note_id))
             if pending_item:
                 self.checklist_add_var.set(pending_item)
-            if left_out:
-                self._show_date_in_field(
-                    "" if typed_date == "YYYY-MM-DD" else typed_date)
+            self._put_back_left_out(carried)
             self.set_status(said)
             # Loading wrote the repeat's fields, and their traces asked for
             # an autosave. With a left-out date carried back, the editor

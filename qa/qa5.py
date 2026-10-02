@@ -1468,6 +1468,97 @@ check(f'a monthly repeat\'s day the app cannot read is left out, and said so '
       f'(days {_rn_days}; said {_rn_warned[:1]})',
       _rn_days == [15] and _rn_warned and 'day(s) “15th”' in _rn_warned[0])
 
+# The end date is a typed repeat value too. Judged apart from the others,
+# an unreadable one left the summary previewing a series with no end, and
+# no warning, while the save kept "until 2026-12-31".
+_rn_series(interval=2, end='2026-12-31')
+app.rec_end_date_var.set('31/12/2027'); app.update()
+_rn_said = str(app.rec_summary_lbl.cget('text'))
+app._put_back_stored_date_and_repeat()
+app._cancel_pending_autosave()
+check(f'the repeat\'s summary keeps the end date the save keeps, and names '
+      f'the one it does not understand ({_rn_said!r})',
+      _rn_said.startswith('Every 2 weeks, until 2026-12-31')
+      and 'the end date “31/12/2027”' in _rn_said)
+# ...and a start date it cannot read is named: "needs a start date" said the
+# series had none, while the save keeps the one it starts on.
+_rn_series(interval=2)
+app.date_entry.delete(0, 'end')
+app.date_entry.insert(0, '30/09/2026')
+app.update_recurrence_summary(); app.update()
+_rn_said = str(app.rec_summary_lbl.cget('text'))
+app._put_back_stored_date_and_repeat()
+app._cancel_pending_autosave()
+check(f'...and names a start date it does not understand, instead of saying '
+      f'the series needs one ({_rn_said!r})',
+      'the date “30/09/2026”' in _rn_said
+      and 'needs a start date' not in _rn_said)
+# The warning wraps inside what its row leaves it instead of running past
+# the row's end, where a long one was cut off. In a window narrow enough
+# that it has to: the premise is asserted (more than one line), or a wide
+# window would let the check pass with no wrapping at all.
+_rn_geom = app.geometry()
+app.geometry('1000x760'); app.update()
+_rn_series(freq='monthly', month_days=[15], end='2026-12-31')
+app.rec_end_date_var.set('31/12/2027')
+app.rec_interval_var.set('every other one')
+app.rec_monthdays_var.set('the fifteenth')
+app.update()
+_rn_lbl = app.rec_summary_lbl
+_rn_room = int(str(_rn_lbl.cget('wraplength')) or 0)
+_rn_line = int(app.tk.call('font', 'metrics', _rn_lbl.cget('font'),
+                           '-linespace'))
+_rn_lines = _rn_lbl.winfo_reqheight() // max(_rn_line, 1)
+_rn_fits = (_rn_lbl.winfo_x() + _rn_lbl.winfo_reqwidth()
+            <= _rn_lbl.master.winfo_width())
+_rn_said = str(_rn_lbl.cget('text'))
+app._put_back_stored_date_and_repeat()
+app._cancel_pending_autosave()
+app.geometry(_rn_geom); app.update()
+check(f'...and wraps inside its row, however many boxes it names (wraps at '
+      f'{_rn_room} px into {_rn_lines} lines; fits {_rn_fits}; {_rn_said!r})',
+      _rn_room > 0 and _rn_lines >= 2 and _rn_fits
+      and 'day(s) “the fifteenth”' in _rn_said)
+
+# What the save had to leave out of the repeat is carried across Restore
+# previous and "Reset this day" as the date is: the reload wrote the stored
+# rule over it in silence, and leaving then asked nothing.
+_rn_series(interval=2, end='2026-12-31')
+app.notes[0]['_prev'] = {'title': 'Weekly', 'body': 'older series text',
+                         'formatting': [], 'paragraphs': [], 'comments': ''}
+app.save_notes()
+app.rec_end_date_var.set('31/12/2027'); app.update()
+app.ask_yes_no = lambda *a, **k: True
+try:
+    app.restore_previous_version(); app.update()
+finally:
+    app.ask_yes_no = _ro_yes
+_rn_box = app.rec_end_date_var.get()
+_rn_left = app._date_and_repeat_to_store()[2]
+app._put_back_stored_date_and_repeat()
+app._cancel_pending_autosave()
+check(f'Restore previous keeps a repeat value the save had to leave out on '
+      f'screen, to be fixed (end date box {_rn_box!r}; left out {_rn_left})',
+      _rn_box == '31/12/2027' and bool(_rn_left)
+      and app.find_note(1)['recurrence'].get('end') == '2026-12-31'
+      and app.find_note(1).get('body', '').startswith('older series text'))
+_rr_day()
+app.rec_interval_var.set('3x'); app.update()
+app.ask_yes_no = lambda *a, **k: True
+try:
+    app._reset_occurrence_override(app.find_note(1), '2026-09-14')
+    app.update()
+finally:
+    app.ask_yes_no = _ro_yes
+_rn_box = app.rec_interval_var.get()
+_rn_left = app._date_and_repeat_to_store()[2]
+app._put_back_stored_date_and_repeat()
+app._cancel_pending_autosave()
+check(f'...and so does "Reset this day" (Every box {_rn_box!r}; left out '
+      f'{_rn_left})',
+      _rn_box == '3x' and bool(_rn_left)
+      and '2026-09-14' not in (app.find_note(1).get('overrides') or {}))
+
 app.new_note(); app.update()
 app.notes = []; app.save_notes()
 
