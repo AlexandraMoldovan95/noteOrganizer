@@ -14667,6 +14667,20 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         Tk -- not even a separator.
         """
         b = self.body_text
+        if (not virtual and getattr(event, "keysym", "") == "Insert"
+                and not (getattr(event, "state", 0) & 0x5)):
+            # Tk's own Insert pastes the selection over itself, and the
+            # selection's text leaves out a drawn table's hidden rows: over
+            # a selection holding a table, the table went. Insert does
+            # nothing there.
+            try:
+                if (b.compare("sel.first", "<=", "insert")
+                        and b.compare("insert", "<=", "sel.last")
+                        and b.tag_nextrange(self.TABLE_HIDE_TAG,
+                                            "sel.first", "sel.last")):
+                    return "break"
+            except tk.TclError:
+                pass
         try:
             if not b.tk.getboolean(b.cget("undo")):
                 return None

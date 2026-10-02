@@ -11576,6 +11576,23 @@ try:
           f'back and forth exactly ({_tb_tail}; '
           f'{_tb_after.split(chr(10))[1:2]})',
           _tb_tail and 'Names' in _tb_edited and _tb_after == _tb_edited)
+    # Insert over a selection holding a drawn table: Tk pastes the
+    # selection's text over it, and that text leaves out the table's hidden
+    # rows -- the table went. Insert does nothing there.
+    set_body('Intro word here' + chr(10) + '| Name | Qty |' + chr(10)
+             + '| --- | --- |' + chr(10) + '| Tea | 2 |' + chr(10) + chr(10)
+             + 'end line')
+    app._render_table_grids()
+    app.update()
+    app._reset_text_undo()
+    _it_start = app.body_text.get('1.0', 'end-1c')
+    app.body_text.tag_add('sel', '1.6', '5.0')
+    app.body_text.mark_set('insert', '5.0')
+    _it_ok = _own_key('<KeyPress-Insert>', '<KeyRelease-Insert>')
+    app.body_text.tag_remove('sel', '1.0', 'end')
+    check('Insert over a selection holding a drawn table keeps the table',
+          _it_ok and app.body_text.get('1.0', 'end-1c') == _it_start
+          and app._grid_at_line(2) is not None)
 finally:
     app.tk.eval('rename ::tk::GetSelection {}')
     app.tk.eval('rename ::tk::_qa1_sm_GetSelection ::tk::GetSelection')
