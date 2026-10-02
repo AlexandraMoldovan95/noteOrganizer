@@ -2169,6 +2169,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if not block:
             return False
         first, last = block
+        if self._grid_at_line(first) is None:
+            # Not drawn: recorded with no window, replayed with none.
+            self._mark_unit_window_free()
         lines = [self.body_text.get(f"{n}.0", f"{n}.end")
                  for n in range(first, last + 1)]
         aligns = [core_tables.cell_alignments(line) for line in lines]
@@ -2190,6 +2193,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     line, widths,
                     aligns[offset] if offset < len(aligns) else None):
                 changed = True
+                if base:
+                    self._note_edit_with_window()
                 # Ops come right-to-left, so the prefix each one converts
                 # against is still the snapshot the offsets were computed
                 # from. The deltas themselves are spaces -- one unit each.
@@ -3399,6 +3404,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 sfx += 1
             t_a = base + self._tk_col(line, start + p)
             t_b = base + self._tk_col(line, end - sfx)
+            if base:
+                self._note_edit_with_window()
             if t_b > t_a:
                 b.delete(f"{line_no}.{t_a}", f"{line_no}.{t_b}")
             mid = value[p:len(value) - sfx]
@@ -14157,6 +14164,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             # What this unit records is recorded with the tables drawn,
             # until it takes them down (_undo_atom_grids_coming_down).
             self._atom_part_grids_down = False
+            # Whether it has edited a drawn table's first line with the
+            # grid's window there (see _mark_unit_window_free).
+            self._atom_edited_with_window = False
             self._undo_atom_grouping = False
             try:
                 self.body_text.edit_separator()
@@ -14249,6 +14259,34 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     pass
                 self._fmt_atom_before = now
         self._atom_part_grids_down = True
+        self._atom_edited_with_window = False
+
+    def _mark_unit_window_free(self):
+        """The open unit is about to edit a table that is not drawn -- one
+        typed by hand, tidied as the caret leaves it or as a paste does.
+        Its edits are recorded with no window on the table's first line,
+        and the drawing that follows puts one there: replayed with it drawn,
+        Ctrl+Z took back the padding a column off and the header lost a
+        letter ("| Item name | Qt  |"). Marked as recorded with the grids
+        down, so _body_undo_redo takes them down first. A unit that has
+        already edited a drawn table's first line with its window there (a
+        cell written, a drawn table aligned) is split there, as
+        _undo_atom_grids_coming_down does; any other edit lands the same
+        with the grids down or up, and the unit is marked whole, unsplit."""
+        if getattr(self, "_undo_atom_depth", 0) <= 0:
+            return
+        if getattr(self, "_atom_part_grids_down", False):
+            return
+        if not getattr(self, "_atom_edited_with_window", False):
+            self._atom_part_grids_down = True
+            return
+        self._undo_atom_grids_coming_down()
+
+    def _note_edit_with_window(self):
+        """An edit of a drawn table's first line, its grid's window there,
+        inside an open unit (see _mark_unit_window_free)."""
+        if getattr(self, "_undo_atom_depth", 0) > 0:
+            self._atom_edited_with_window = True
 
     # The bindtag put first on the note body, so it sees every key and
     # every Cut, Clear and Paste before the body's own bindings do.
@@ -14492,7 +14530,15 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             # below, as after every step.
             pending = next((s for s in reversed(mine)
                             if s["text"] and s[came][0] == now[0]), None)
-            if pending is not None and pending.get("grids_down"):
+            # A step no unit of the app's noted -- typing, Tk's own deletes
+            # and paste -- never touches a drawn table's line (the caret
+            # guard keeps the caret off them), so the only windows that
+            # matter to its replay are those of tables drawn SINCE it was
+            # recorded: a table typed by hand, then left. Its rows were typed
+            # with no window on the table's first line, and replayed with one
+            # there they landed a column off ("| Item name | Qt  |"). Such a
+            # step is replayed with the tables down, like a unit marked so.
+            if pending is None or pending.get("grids_down"):
                 self._teardown_table_grids()
             try:
                 (b.edit_undo if undo else b.edit_redo)()
@@ -14507,7 +14553,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     step = mine.pop(i)
                     break
             if step is None:
-                step = {"text": True, came: now, went: self._fmt_state()}
+                # Replayed with the tables down (above), and so replayed
+                # back the other way.
+                step = {"text": True, came: now, went: self._fmt_state(),
+                        "grids_down": pending is None or bool(
+                            pending.get("grids_down"))}
             else:
                 # The side left behind is noted as it really was, for the
                 # press that comes back to it.

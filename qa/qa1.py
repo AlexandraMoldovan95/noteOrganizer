@@ -11001,6 +11001,31 @@ try:
               ('Shift+Insert', True, ['1.0', '1.6']),
               ('Ctrl+O', True, ['1.0', '1.6'])]
           and _sm_keys[0][2] == 'Prices!: here')
+    # Ctrl+Z and Ctrl+Y after a table typed by hand is left: its rows were
+    # typed with no window on its first line, and replayed with the drawn
+    # grid's window there they landed a column off -- the header lost a
+    # letter ("| Item name | Qy  |"), and Ctrl+Y lost more.
+    set_body('Intro' + chr(10) + '| Item name | Qt |' + chr(10)
+             + '| --- | --- |' + chr(10) + '| Tea | 2 |' + chr(10)
+             + 'end line')
+    app._reset_text_undo()
+    app._cancel_pending_autosave()
+    app.body_text.mark_set('insert', '2.16')
+    app._last_caret_line = None
+    _sm_start = app.body_text.get('1.0', 'end-1c')
+    _sm_ok = _ty_key('y', 'y')
+    _sm_typed = app.body_text.get('1.0', 'end-1c')
+    for _ in range(3):
+        _sm_ok = _sm_press('<KeyPress-Down>') and _sm_ok
+    _sm_left = app.body_text.get('1.0', 'end-1c')
+    _sm_walk = []
+    for _sm_k in ('<Control-z>', '<Control-z>', '<Control-y>', '<Control-y>'):
+        _uf_key(_sm_k)
+        _sm_walk.append(app.body_text.get('1.0', 'end-1c'))
+    check(f'a table typed by hand and left walks back and forth exactly on '
+          f'Ctrl+Z and Ctrl+Y ({[w.split(chr(10))[1] for w in _sm_walk]})',
+          _sm_ok and _sm_left != _sm_typed
+          and _sm_walk == [_sm_typed, _sm_start, _sm_typed, _sm_left])
 finally:
     app.tk.eval('rename ::tk::GetSelection {}')
     app.tk.eval('rename ::tk::_qa1_sm_GetSelection ::tk::GetSelection')
