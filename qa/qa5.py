@@ -1398,6 +1398,48 @@ check(f'a save that only met a field it had to leave out keeps the note\'s '
       f'({_rn_moved})',
       _rn_kept == '2026-01-01 00:00:00' and _rn_moved != '2026-01-01 00:00:00')
 
+# Restore previous keeps what is on screen alone: an item typed in the
+# checklist's box goes in, as leaving takes it in, and a date the save had
+# to leave out stays on screen to be fixed -- the reload emptied the box and
+# wrote the stored date over the typed one in silence. Not asked about
+# first: a half-typed date must never block a restore (qa7).
+_rn_series()
+app.notes[0]['_prev'] = {'title': 'Weekly', 'body': 'older series text',
+                         'formatting': [], 'paragraphs': [], 'comments': ''}
+app.save_notes()
+app.checklist_add_var.set('half typed item')
+app.ask_yes_no = lambda *a, **k: True
+try:
+    app.restore_previous_version(); app.update()
+finally:
+    app.ask_yes_no = _ro_yes
+check(f'Restore previous keeps an item typed in the checklist\'s box '
+      f'({[i.get("text") for i in app.find_note(1).get("checklist") or []]})',
+      [i.get('text') for i in app.find_note(1).get('checklist') or []]
+      == ['half typed item'])
+_rn_series()
+app.notes[0]['_prev'] = {'title': 'Weekly', 'body': 'older series text',
+                         'formatting': [], 'paragraphs': [], 'comments': ''}
+app.save_notes()
+app.date_entry.delete(0, 'end')
+app.date_entry.insert(0, '30/09/2026')
+_rn_asked = []
+app.ask_yes_no = lambda *a, **k: True
+app._themed_dialog = lambda *a, **k: (_rn_asked.append(a[0]), True)[1]
+try:
+    app.restore_previous_version(); app.update()
+finally:
+    app.ask_yes_no = _ro_yes
+    app._themed_dialog = _mv_real_dlg
+check(f'...and keeps a date the save had to leave out on screen, to be '
+      f'fixed, asking nothing (asked {_rn_asked}; body '
+      f'{app.find_note(1).get("body")!r}; date field {app.date_entry.get()!r})',
+      _rn_asked == []
+      and app.find_note(1).get('body', '').startswith('older series text')
+      and app.date_entry.get() == '30/09/2026')
+app._put_back_stored_date_and_repeat()
+app._cancel_pending_autosave()
+
 app.new_note(); app.update()
 app.notes = []; app.save_notes()
 

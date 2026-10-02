@@ -8315,6 +8315,30 @@ _cu_undo()
 app.update()
 check('checklist undo: Undo after a template leaves the template list alone',
       _cu_texts() == ['from the template'])
+# Restore previous fills the editor from the same note again, and loading
+# it gave the checklist a new list: the Undo just offered said "That note is
+# no longer open" with the note on screen, and the item could not come
+# back. The same note loaded over itself keeps its list.
+check('checklist undo: fixture ready for Restore previous',
+      _cu_setup(['milk', 'eggs'],
+                extra={'_prev': {'title': 'Shopping', 'body': 'an older body',
+                                 'formatting': [], 'paragraphs': [],
+                                 'comments': ''}}))
+_cu_press(1)
+_cu_undo = app._toast_action
+_cu_real_ask = app.ask_yes_no
+app.ask_yes_no = lambda *a, **k: True
+try:
+    app.restore_previous_version()
+    app.update()
+finally:
+    app.ask_yes_no = _cu_real_ask
+_cu_undo()
+app.update()
+check(f'checklist undo: Undo after Restore previous puts the item back '
+      f'({_cu_texts()}; restored {app.find_note(9100).get("body")!r})',
+      _cu_texts() == ['milk', 'eggs']
+      and 'older body' in app.find_note(9100).get('body', ''))
 
 # Any alphabet, and a day of a repeating note.
 check('checklist undo: fixture ready for the astral item',

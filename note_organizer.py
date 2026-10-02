@@ -18427,8 +18427,19 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         """Open a note. If occurrence_date is given, the note is being opened
         from one specific day of a repeating series, and any per-occurrence
         override for that day is shown instead of the base content."""
+        # The same note loaded again over itself -- Restore previous, Reset
+        # this day, a save's own reload, a change made behind the editor --
+        # is the same editing session: the checklist keeps its list, so the
+        # Undo just offered for a deleted item still has somewhere to put it
+        # back (_undo_checklist_delete knows the list by identity, and said
+        # "That note is no longer open" with the note on screen).
+        day = occurrence_date if is_recurring(note) else None
+        kept_checklist = (getattr(self, "_working_checklist", None)
+                          if (self.selected_note_id == note.get("id")
+                              and self.current_occurrence_date == day)
+                          else None)
         self.selected_note_id = note["id"]
-        self.current_occurrence_date = occurrence_date if is_recurring(note) else None
+        self.current_occurrence_date = day
         # A saved note has its own identity; one that was under review from
         # a share code is no longer in the editor.
         self._arrived_uid = ""
@@ -18470,10 +18481,15 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.current_attachments = list(note.get("attachments", []))
         self.refresh_attachments_list()
         # Checklist: work on a copy so edits aren't committed until save.
-        self._working_checklist = [
+        fresh = [
             {"text": it.get("text", ""), "done": bool(it.get("done"))}
             for it in note.get("checklist", []) if isinstance(it, dict)
         ]
+        if kept_checklist is not None:
+            kept_checklist[:] = fresh
+            self._working_checklist = kept_checklist
+        else:
+            self._working_checklist = fresh
         # An item half-typed for the note that was open does not follow it
         # here (see new_note).
         if hasattr(self, "checklist_add_var"):
@@ -18896,11 +18912,14 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             return
         showing = (self.selected_note_id == note["id"]
                    and self.current_occurrence_date == occurrence_date)
+        typed_date = None
         if showing:
             # The day's own edits go; the files and the checklist on screen
             # are the series', and the reload below would fill the editor
             # from a note that never had them (see restore_previous_version).
+            self._take_pending_checklist_item()
             self._write_series_owned(note, None, None, schedule=False)
+            typed_date = self._left_out_date_on_screen()
         note["overrides"].pop(occurrence_date, None)
         note["updated"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         self.save_notes()
@@ -18908,6 +18927,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # series content replaces the dropped override on screen too.
         if showing:
             self.load_note(note, occurrence_date)
+            if typed_date is not None:
+                self._show_date_in_field(typed_date)
         self.refresh_note_list()
         self.render_calendar()
         self.refresh_day_panel()
@@ -19339,13 +19360,19 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # question waited the editor could move on; filling it then put
         # the old text into ANOTHER note, which its next save kept.
         in_editor = self.selected_note_id == note["id"]
+        # A date the save had to leave out is carried across the reload
+        # below, unless the rescue copy brings back its own date.
+        typed_date = (self._left_out_date_on_screen()
+                      if in_editor and "date" not in prev else None)
         if in_editor:
             # The editor's files and checklist are the note's, and the
             # rescue copy is of its text: stored first, or the reload below
             # filled the editor from a note that never had them -- a file
             # attached on a day after its save was left with no note, and a
             # removed one came back listed with its stored copy deleted. A
-            # rescue copy that holds them still wins, applied after.
+            # rescue copy that holds them still wins, applied after. An item
+            # typed in the checklist's box goes in first, as leaving does.
+            self._take_pending_checklist_item()
             self._write_series_owned(note, None, None, schedule=False)
             # Put the previous content back into the editor and save it.
             # Clear any pending style first — the insert hook that applies
@@ -19420,6 +19447,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # user to see; this makes them the note's official state).
         if in_editor:
             self.load_note(note, occurrence_date=occurrence)
+            if typed_date is not None:
+                self._show_date_in_field(typed_date)
         self.refresh_note_list()
         # The rescue copy can bring back a date, a repeat, a colour, a
         # category and a series' days -- all of them drawn on the calendar,
@@ -19512,6 +19541,29 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                                 "start date)")
                 rule = normalize_recurrence({})
         return date_value, rule, left_out
+
+    def _left_out_date_on_screen(self):
+        """The date field's text when a save would leave it out (see
+        _date_and_repeat_to_store) -- else None.
+
+        A route that fills the editor from the note as stored -- Restore
+        previous, Reset this day -- wrote the stored date over such a date
+        in silence, the one thing on screen no file held. It is carried
+        across the reload instead, as a save's own reload carries it, and
+        stays there to be fixed; leaving the note then asks. Not asked
+        before the route: a half-typed date must never block a restore
+        (qa7 pins that promise)."""
+        try:
+            date_value, _rule, left_out = self._date_and_repeat_to_store()
+        except Exception:
+            self._log_swallowed("reload: date and repeat check")
+            return None
+        typed = self.date_entry.get().strip()
+        if typed == "YYYY-MM-DD":
+            typed = ""
+        if left_out and typed != (date_value or ""):
+            return typed
+        return None
 
     def _left_out_message(self, left_out,
                           lead="Everything else in this note is saved, but not:"):
