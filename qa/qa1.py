@@ -10687,11 +10687,97 @@ try:
     check(f'selection x table: table rows pasted onto the line above a table '
           f'stay a table of their own, by every route ({_sm_kept})',
           all(_k for _h, _k in _sm_kept))
+    # ...and on lines of their own: after a caption, Ctrl+Shift+V and a
+    # table from another program glued the first row onto the caption's
+    # line, where it stopped being a row.
+    _sm_own = []
+    for _sm_how in ('plain', 'rich'):
+        _sm_fresh('1.7', 'Prices:' + chr(10) + 'after' + chr(10) + 'more')
+        _sm_clip['data'] = _sm_rows
+        if _sm_how == 'plain':
+            app._paste_plain()
+            app.update()
+        else:
+            NO.clipboard.read_html = lambda: (
+                '<table><tr><th>Day</th><th>Time</th></tr>'
+                '<tr><td>Mon</td><td>10</td></tr></table>')
+            try:
+                app._on_body_paste()
+                app.update()
+            finally:
+                NO.clipboard.read_html = lambda: None
+        _sm_lines = app.body_text.get('1.0', 'end-1c').split(chr(10))
+        _sm_own.append((_sm_how, _sm_lines[0],
+                        core_tables.is_table_row(_sm_lines[1])))
+    _sm_clip['data'] = _sm_tsv
+    check(f'selection x table: rows pasted after a caption start a line of '
+          f'their own, by Ctrl+Shift+V and from another program ({_sm_own})',
+          all(_first == 'Prices:' and _row for _h, _first, _row in _sm_own))
+    # A paste with no selection, in a note that already holds a drawn
+    # table: the drawing at the end of the paste's unit split it, and the
+    # first Ctrl+Z took back only where the windows sat -- nothing on screen.
+    _sm_under = ('Prices:' + chr(10) + '| Item | Qty |' + chr(10)
+                 + '| --- | --- |' + chr(10) + '| Tea | 2 |' + chr(10)
+                 + chr(10) + 'more')
+    _sm_undone = []
+    for _sm_what in (_sm_rows, _sm_tsv, 'rich'):
+        _sm_fresh('5.0', _sm_under)
+        if _sm_what == 'rich':
+            # A table: prose under a table moves no grid, so the drawing
+            # leaves nothing to split the unit on.
+            NO.clipboard.read_html = lambda: (
+                '<table><tr><th>Day</th><th>Time</th></tr>'
+                '<tr><td>Mon</td><td>10</td></tr></table>')
+            try:
+                app._on_body_paste()
+                app.update()
+            finally:
+                NO.clipboard.read_html = lambda: None
+        else:
+            _sm_clip['data'] = _sm_what
+            _sm_press('<Control-KeyPress-v>')
+        _sm_pasted = app.body_text.get('1.0', 'end-1c')
+        _uf_key('<Control-z>')
+        _sm_undone.append((_sm_pasted != _sm_under,
+                           app.body_text.get('1.0', 'end-1c') == _sm_under))
+    _sm_clip['data'] = _sm_tsv
+    check(f'selection x table: rows, cells or rich text pasted under a drawn '
+          f'table are one Ctrl+Z ({_sm_undone})',
+          _sm_undone == [(True, True), (True, True), (True, True)])
 finally:
     app.tk.eval('rename ::tk::GetSelection {}')
     app.tk.eval('rename ::tk::_qa1_sm_GetSelection ::tk::GetSelection')
     app.tk.deletecommand('::qa1_sm_clip')
     NO.clipboard.read_text, NO.clipboard.read_html = _sm_real
+# A drag from beside one table to beside another: the end the caret was not
+# at stayed on the first table's hidden text -- the guard ran only when the
+# caret was off every table -- and Delete or a paste, which run no guard of
+# their own, glued a row or merged the two tables.
+_sm_twos = []
+for _sm_from, _sm_to in (('4.end', '8.end'), ('8.end', '4.end')):
+    _sm_fresh(_sm_to, _sm_two)
+    _sm_a = app.body_text.index(_sm_from)
+    _sm_b = app.body_text.index(_sm_to)
+    if app.body_text.compare(_sm_a, '>', _sm_b):
+        _sm_a, _sm_b = _sm_b, _sm_a
+    app.body_text.tag_add('sel', _sm_a, _sm_b)
+    _qa_fire(app.body_text, '<ButtonRelease-1>', x=2, y=2)
+    app.update()
+    _sm_twos.append(_sm_where()[0])
+check(f'selection x table: a drag from beside one table to beside another '
+      f'selects only the line between, either way ({_sm_twos})',
+      _sm_twos == [('5.0', '5.3'), ('5.0', '5.3')])
+# Select all in a note that begins with a table: its start, at the table's
+# top, read as "on the table", and the table was cut out of the selection.
+_sm_fresh('4.3', '| Item | Qty |' + chr(10) + '| --- | --- |' + chr(10)
+          + '| Tea | 2 |' + chr(10) + 'after' + chr(10) + 'more')
+take_focus(app.body_text)
+app.body_text.event_generate('<<SelectAll>>')
+app.body_text.event_generate('<KeyRelease-a>')
+app.update()
+check(f'selection x table: select all in a note that begins with a table '
+      f'keeps the table ({_sm_where()[0]})',
+      _sm_where()[0] is not None and _sm_where()[0][0] == '1.0')
 # A mouse press beside a drawn table lands on its last row's hidden text.
 # Dragged down, the selection began inside that row, and the next key glued
 # the row onto the paragraph under it; dragged up, it took the whole table.

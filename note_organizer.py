@@ -4427,15 +4427,19 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 return
             top = f"{first}.0"
             below = b.index(f"{first + info['nrows']}.0")
-
-            def on_table(index):
-                return (b.compare(top, "<=", index)
-                        and b.compare(index, "<", below))
-
+            # A start exactly at the table's top is its edge, not a point on
+            # it: Ctrl+A in a note that begins with a table starts there,
+            # and read as "on the table" it was cut down to what follows.
+            # An END at the top is on it -- that end holds the line break
+            # above the table, the shape a first press is stopped from.
+            start_on = (b.compare(top, "<", start)
+                        and b.compare(start, "<", below))
+            end_on = (b.compare(top, "<=", end)
+                      and b.compare(end, "<", below))
             try:
-                if on_table(start) and not on_table(end):
+                if start_on and not end_on:
                     b.tag_remove("sel", start, below)
-                elif on_table(end) and not on_table(start):
+                elif end_on and not start_on:
                     b.tag_remove("sel", b.index(f"{top} -1c"), end)
             except tk.TclError:
                 return
@@ -4474,8 +4478,13 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     except tk.TclError:
                         pass
                 break
+        # Every time, not only when the caret is off the tables: a drag from
+        # beside one table to beside another put the caret's end at the
+        # second table's edge and left the start on the first one's hidden
+        # text, so Delete or a paste -- which run no guard of their own --
+        # glued a row or merged the two tables.
+        self._selection_ends_off_tables()
         if not met:
-            self._selection_ends_off_tables()
             self._sel_crossed_table = None
         if not met and held is not None:
             # The stop at a table's edge is remembered only while the caret
@@ -6581,23 +6590,19 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 or core_tables.is_table_row(lines[-1])):
             return False
         b = self.body_text
+        # The grids down before anything is written (see
+        # _paste_tsv_as_table): torn down by the drawing below, inside this
+        # unit, they split it, and the first Ctrl+Z changed nothing.
+        self._teardown_table_grids()
         if b.tag_ranges("sel"):
             # Over a selection the rows take its place, as cells do; left to
             # Tk, a line selected above a table was replaced by rows that
-            # then joined that table. Inside this undo unit, the grids down
-            # first: the selection may reach a drawn table's text.
-            self._teardown_table_grids()
+            # then joined that table.
             try:
                 b.delete("sel.first", "sel.last")
             except tk.TclError:
                 pass
-        before = b.get("insert linestart", "insert")
-        after = b.get("insert", "insert lineend")
         text = raw.strip("\n")
-        if core_tables.is_table_row(lines[0]) and before.strip():
-            text = "\n" + text
-        if core_tables.is_table_row(lines[-1]) and after.strip():
-            text = text + "\n"
         lead, trail = self._rows_gap(text)
         b.insert("insert", lead + text + trail)
         self._body_follow_caret = True
@@ -6695,14 +6700,16 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         clip_place = None
         if raw == getattr(self, "_grid_cell_clip_text", None):
             clip_place = getattr(self, "_grid_cell_clip_place", None)
+        # The grids come down before anything is written, selection or not:
+        # torn down by the drawing at the end, inside this unit, they split
+        # it -- the paste one step, where the windows sit another on top --
+        # and the first Ctrl+Z changed nothing on screen.
+        self._teardown_table_grids()
         if selected is not None:
             # Pasted over a selection, the table takes its place, as every
             # other paste here does: the selected text used to stay, the
             # table landing under its line. Within this undo unit, so one
-            # Ctrl+Z brings the selection back with its styles -- and with
-            # the grids down first, as any edit that can reach a drawn
-            # table's text is made (the selection may run through one).
-            self._teardown_table_grids()
+            # Ctrl+Z brings the selection back with its styles.
             try:
                 start = b.index("sel.first")
                 b.delete("sel.first", "sel.last")
@@ -6781,13 +6788,17 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
     def _rows_gap(self, text):
         """What *text*, about to go in at the caret, needs before and after
-        it so table rows at its edges stay a table of their own: a blank
-        line between them and a table on the next or the previous line.
+        it so table rows at its edges stay a table of their own: lines of
+        their own, and a blank line between them and a table on the next or
+        the previous line.
 
         Pasted onto the line above a drawn table, or the empty line between,
         rows joined that table -- its header read as a data row and its
-        separator as a row of dashes, the grid one misshapen table. Only
-        the spreadsheet paste kept a gap; every paste route asks here now."""
+        separator as a row of dashes, the grid one misshapen table. Pasted
+        after a caption (Ctrl+Shift+V, or a table from another program),
+        the first row was glued onto the caption's line and stopped being a
+        row. Only Ctrl+V's own route and the spreadsheet paste kept either
+        rule; every paste route asks here now."""
         b = self.body_text
         lines = text.split("\n")
         lead = trail = ""
@@ -6799,12 +6810,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             below = b.get(f"{here + 1}.0", f"{here + 1}.end")
         except (tk.TclError, ValueError):
             return lead, trail
-        if (core_tables.is_table_row(lines[-1]) and not after.strip()
-                and core_tables.is_table_row(below)):
-            trail = "\n"
-        if (core_tables.is_table_row(lines[0]) and not before.strip()
-                and core_tables.is_table_row(above)):
-            lead = "\n"
+        if core_tables.is_table_row(lines[-1]):
+            if after.strip() or core_tables.is_table_row(below):
+                trail = "\n"
+        if core_tables.is_table_row(lines[0]):
+            if before.strip() or core_tables.is_table_row(above):
+                lead = "\n"
         return lead, trail
 
     @_undo_atom
@@ -6825,6 +6836,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if not spans and not paragraphs:
             text = reflow_wrapped(text)
 
+        # The grids down before anything is written (see
+        # _paste_tsv_as_table): the drawing at the end of this unit would
+        # split it, and the first Ctrl+Z would change nothing.
+        self._teardown_table_grids()
         try:
             self.body_text.delete("sel.first", "sel.last")
         except tk.TclError:
