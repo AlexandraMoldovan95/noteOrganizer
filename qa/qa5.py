@@ -2394,6 +2394,34 @@ app._cancel_pending_autosave()
 check(f'the deleted day of a series whose turn-off was taken back keeps no '
       f'text of its own in the note ({_rn_kd})',
       _rn_ok and _rn_kd == ([], False))
+# The open series' banner counts its days' own edits as they are: a day
+# deleted, put back or reset from the Calendar left the old count over the
+# editor until the next save.
+_rn_bn = []
+_rn_day_fresh()
+_rn_bn.append('1 day keeps' in _rn_banner())
+_rn_day_delete()
+_rn_bn.append('own edits' in _rn_banner())
+_rn_day_fresh()
+_rn_ok = _rn_pick(NO.FREQ_LABELS[''])
+_rn_day_delete()
+app._undo_occurrence_delete(1, '2026-09-14', {'body': 'DAY 14'}); app.update()
+_rn_bn.append('1 day keeps' in _rn_banner())
+app._put_back_stored_date_and_repeat()
+app._cancel_pending_autosave()
+_rn_day_fresh()
+app.ask_yes_no = lambda *a, **k: True
+try:
+    app._reset_occurrence_override(app.find_note(1), '2026-09-14')
+    app.update()
+finally:
+    app.ask_yes_no = _ro_yes
+_rn_bn.append('own edits' in _rn_banner())
+app._cancel_pending_autosave()
+check(f'an open series\' banner counts its days\' own edits after a day is '
+      f'deleted, put back or reset ({_rn_bn})',
+      _rn_ok and _rn_bn == [True, False, True, False])
+
 # Restore previous with a big delete still waiting for its autosave: the
 # autosave ran while the question waited and made a new rescue copy of the
 # words just deleted, which the restore -- of the copy read before the

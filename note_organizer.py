@@ -19728,6 +19728,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if showing:
             self.load_note(note, occurrence_date)
             self._put_back_schedule(carried)
+        elif self.selected_note_id == note["id"]:
+            # The series on screen counts its days' own edits in its
+            # banner, which went on counting this one.
+            self._update_occurrence_banner()
         self.refresh_note_list()
         self.render_calendar()
         self.refresh_day_panel()
@@ -21409,6 +21413,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # back turned the whole series off, that day with it.
         if not (self.selected_note_id == note_id and self._repeat_off_waits()):
             self.open_note_in_tab(note, occurrence_date=date_str)
+        else:
+            # The series stays on screen, its days changed under it.
+            self._update_occurrence_banner()
         self.set_status("Put that day back")
 
     def _attach_dup_preview(self, widget, note):
