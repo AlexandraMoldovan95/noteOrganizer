@@ -2165,6 +2165,19 @@ app.save_current_note(); app.update()
 check('...but never one a note here already wears',
       len({n.get('uid') for n in app.notes}) == 2)
 app.new_note(); app.update()
+# Ctrl+Z starts from the note as it arrived, as after every other load. The
+# import was the first step on Tk's undo stack: Ctrl+Z took the whole body
+# back, and the autosave then stored the imported note empty.
+app._open_imported_note_in_editor({'title': 'Shopping',
+                                   'body': 'List for Saturday'})
+app.update()
+check(f'an imported note gives Ctrl+Z nothing to take back '
+      f'({app._can_edit_undo(app.body_text)}; '
+      f'{app.body_text.get("1.0", "end-1c")!r})',
+      not app._can_edit_undo(app.body_text)
+      and app.body_text.get('1.0', 'end-1c').startswith('List for Saturday'))
+app._cancel_pending_autosave()
+app.new_note(); app.update()
 
 # A batch comes back from the Trash in one pass: each file written once,
 # the notes first. Note by note, every restore rewrote the whole trash

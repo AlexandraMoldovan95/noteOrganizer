@@ -10205,6 +10205,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self._sync_checklist_open_state()
 
         self.update_word_count()
+        # Ctrl+Z starts from the note as it arrived, as after every other
+        # load: the import itself was the first step on Tk's stack, and
+        # Ctrl+Z took the whole body back -- which the autosave then stored,
+        # the imported note saved empty.
+        self._reset_text_undo()
         self.set_status(
             "Imported from code — trimmed to the app's size limits; review, "
             "then Save to keep it" if trimmed
