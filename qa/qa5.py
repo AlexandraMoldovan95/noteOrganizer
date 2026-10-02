@@ -2403,6 +2403,31 @@ app._cancel_pending_autosave()
 check(f'the deleted day of a series whose turn-off was taken back keeps no '
       f'text of its own in the note ({_rn_kd})',
       _rn_ok and _rn_kd == ([], False))
+# The Undo of the only day a waiting turn-off waited for leaves the turn-off
+# waiting: read after the day went back, nothing waited, the Undo opened the
+# day, and leaving the series made the turn-off -- "Put that day back", the
+# series gone from the calendar.
+app.new_note(); app.update()
+app.notes = [
+    NO.normalize_note({'id': 1, 'title': 'Plain', 'body': 'series text',
+                       'date': '2026-09-07', 'recurrence': {'freq': 'weekly'}}),
+    NO.normalize_note({'id': 2, 'title': 'Other', 'body': 'y'})]
+app.save_notes()
+app.open_note_in_tab(app.find_note(1)); app.update()
+app._cancel_pending_autosave()
+_rn_day_delete()
+_rn_ok = _rn_pick(NO.FREQ_LABELS[''])
+# No autosave left to fire meanwhile: the turn-off waits on what the note
+# holds, not on a timer.
+app._cancel_pending_autosave()
+app._run_toast_action(); app.update()
+app._cancel_pending_autosave()
+_rn_pl = ((app.find_note(1).get('recurrence') or {}).get('freq'),
+          app.find_note(1).get('exceptions'), app.selected_note_id,
+          app.current_occurrence_date)
+check(f'the Undo of the only day a turn-off waited for does not make the '
+      f'turn-off ({_rn_pl})',
+      _rn_ok and _rn_pl == ('weekly', [], 1, None))
 # The open series' banner counts its days' own edits as they are: a day
 # deleted, put back or reset from the Calendar left the old count over the
 # editor until the next save.

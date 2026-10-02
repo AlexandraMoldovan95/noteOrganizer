@@ -21459,6 +21459,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if note is None:
             self._show_toast("That note is no longer here", kind="info")
             return
+        # Read before the day goes back: with this very series on screen and
+        # its repeat's turn-off waiting, opening the day leaves the note, and
+        # leaving makes the turn-off. Read after, a day that was the only one
+        # removed left the turn-off nothing to wait for, and the Undo made
+        # it -- "Put that day back", with the series gone from the calendar.
+        waits = self.selected_note_id == note_id and self._repeat_off_waits()
         prev = note.get("_prev") or {}
         in_copy = bool((prev.get("recurrence") or {}).get("freq")
                        and date_str in (prev.get("exceptions") or []))
@@ -21504,7 +21510,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # very series on screen and its repeat's turn-off waiting, leaving
         # made the turn-off (_flush_autosave): the Undo that put the day
         # back turned the whole series off, that day with it.
-        if not (self.selected_note_id == note_id and self._repeat_off_waits()):
+        if not waits:
             self.open_note_in_tab(note, occurrence_date=date_str)
         else:
             # The series stays on screen, its days changed under it.
