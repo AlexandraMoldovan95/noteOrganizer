@@ -20065,6 +20065,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 if self.selected_note_id is not None else None)
         self._show_date_in_field((note or {}).get("date"))
         self.write_recurrence_to_ui((note or {}).get("recurrence"))
+        # Nothing is left out now: a status line still naming a value goes
+        # back to the save's own words, here rather than at the next
+        # autosave tick, which a route that stays (the delete answered No,
+        # Back to Calendar) cancels.
+        self._say_nothing_is_left_out()
 
     # What save_current_note returns when the person pressed Cancel on the
     # occurrence-scope question -- the one outcome a caller that is about

@@ -1709,6 +1709,21 @@ app.rec_freq_var.set(NO.FREQ_LABELS[''])
 app.on_recurrence_changed()
 app._cancel_pending_autosave()
 
+# "Continue without it" on a route that keeps the note open puts the stored
+# date back and cancels the autosave -- the tick that put the status line
+# right -- so the line went on saying the date was not saved.
+_rn_series(interval=2)
+app.date_entry.delete(0, 'end')
+app.date_entry.insert(0, '07/09/2026')
+app.save_current_note(auto=True); app.update()
+_rn_said_before = str(app.status_lbl.cget('text'))
+app._put_back_stored_date_and_repeat()
+app._cancel_pending_autosave()
+_rn_said_after = str(app.status_lbl.cget('text'))
+check(f'putting the stored date back puts the status line right at once '
+      f'({_rn_said_before!r} -> {_rn_said_after!r})',
+      'except the date' in _rn_said_before and 'except' not in _rn_said_after)
+
 app.new_note(); app.update()
 app.notes = []; app.save_notes()
 
