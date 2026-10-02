@@ -8336,8 +8336,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 b.tag_add(want, lo, hi)
 
     def _fit_font_tags(self, start, end, like=None, size=None, family=None):
-        """Give each of the few characters from *start* to *end* -- just
-        typed or pasted -- the composite font tag its own bold and italic
+        """Give each of the characters from *start* to *end* -- just typed
+        or pasted -- the composite font tag its own bold and italic
         call for, with the size and family of the composite it wears, or
         else of the one at *like*: the character it was typed onto. A *size*
         or *family* given -- one picked before typing -- takes the place of
@@ -8349,38 +8349,62 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         weight, one glued onto a bold word at a heading's end lost the
         heading's size, and a size picked before typing inside a run set in
         Georgia took Georgia away with the composite it replaced -- each
-        saved that way. Per character, so it costs what was typed; a stretch
-        no composite touches is left at once."""
+        saved that way.
+
+        Bold and italic laid over the same letters as two plain tags become
+        bold_italic here too: the two both set the font and do not compose,
+        and italic -- made after bold -- won. Letters typed after a bold word
+        with Italic turned on, or bold pasted inside an italic word, were
+        drawn italic alone while the toolbar lit both.
+
+        By stretches: wherever none of the tags that decide the font starts
+        or stops, every character wears the same ones. Fitted a character at
+        a time, a long paste into a note set in a font cost two to three
+        times what laying the whole note again had."""
         b = self.body_text
         source = None
         if like is not None:
             source = next((parse_font_tag(t) for t in b.tag_names(like)
                            if parse_font_tag(t)), None)
-        elif size is None and family is None:
-            worn = [t for t in b.tag_names() if parse_font_tag(t)]
-            if not any(t in b.tag_names(start)
-                       or b.tag_nextrange(t, start, end) for t in worn):
-                return
-        index = b.index(start)
-        while b.compare(index, "<", end):
-            after = b.index(f"{index}+1c")
-            names = b.tag_names(index)
+        start, end = b.index(start), b.index(end)
+        if not b.compare(start, "<", end):
+            return
+        # In the order the text holds them, so the stretches come out in it.
+        points = [start]
+        for _key, tag, index in b.dump(start, end, tag=True):
+            if ((tag in self._FONT_STYLES or parse_font_tag(tag))
+                    and index != points[-1]):
+                points.append(index)
+        if points[-1] != end:
+            points.append(end)
+        for lo, hi in zip(points, points[1:]):
+            names = b.tag_names(lo)
+            plain = [t for t in names if t in self._FONT_STYLES]
+            is_bold = "bold" in plain or "bold_italic" in plain
+            is_italic = "italic" in plain or "bold_italic" in plain
+            one = self._font_tag_for(is_bold, is_italic)
+            if plain != ([one] if one else []):
+                for t in plain:
+                    if t != one:
+                        b.tag_remove(t, lo, hi)
+                if one:
+                    b.tag_add(one, lo, hi)
             worn = [t for t in names if parse_font_tag(t)]
             # The last wears the highest priority: the one Tk draws.
             found = parse_font_tag(worn[-1]) if worn else source
             if found is None and (size is not None or family is not None):
                 found = (False, False, None, None)
-            if found is not None:
-                tag = self._ensure_font_tag(
-                    b, "bold" in names or "bold_italic" in names,
-                    "italic" in names or "bold_italic" in names,
-                    size if size is not None else found[2],
-                    family if family is not None else found[3])
-                for t in worn:
-                    if t != tag:
-                        b.tag_remove(t, index, after)
-                b.tag_add(tag, index, after)
-            index = after
+            if found is None:
+                continue
+            tag = self._ensure_font_tag(
+                b, is_bold, is_italic,
+                size if size is not None else found[2],
+                family if family is not None else found[3])
+            for t in worn:
+                if t != tag:
+                    b.tag_remove(t, lo, hi)
+            if tag and parse_font_tag(tag):
+                b.tag_add(tag, lo, hi)
 
     @staticmethod
     def _char_offsets(text_widget, indices):

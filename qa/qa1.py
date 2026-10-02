@@ -6384,6 +6384,62 @@ clear_selection()
 check(f'Ctrl+B on one word of a long note set in a font lays that word\'s '
       f'composites only ({_bs_calls[0]} tag changes; drawn {_drawn(_bs_at)})',
       _bs_calls[0] <= 20 and _drawn(_bs_at)[1] == 'bold')
+# Bold and italic laid over the same letters by typing or a paste -- Italic
+# turned on after a bold word and letters typed glued onto it, or bold
+# pasted inside an italic word -- were two tags that both set the font:
+# drawn italic alone while the toolbar lit both, until the note was opened
+# again.
+clear_selection()
+set_body('one two three')
+app.body_text.tag_add('bold', '1.4', '1.7')
+app.body_text.mark_set('insert', '1.7')
+app._toggle_body_style('italic')
+_bs_typed = _ty_key('X', 'X') and _ty_key('Y', 'Y')
+app._pending_styles = set()
+_bs_fold = {'typed after a bold word, Italic on': _drawn('1.8')}
+set_body('one two three')
+app.body_text.tag_add('italic', '1.4', '1.7')
+app.body_text.mark_set('insert', '1.5')
+_stub_clipboard(html='<p><b>XY</b></p>')
+app._on_body_paste()
+app.update()
+_bs_fold['bold pasted inside an italic word'] = _drawn('1.6')
+check(f'bold and italic laid over the same letters by typing or a paste are '
+      f'drawn bold and italic at once ({_bs_fold})',
+      _bs_typed and all(d[1:] == ('bold', 'italic') for d in _bs_fold.values()))
+# A long paste is fitted by stretches where its tags stay the same, not a
+# character at a time: each character cost an index, a reading of its tags
+# and a tag laid, and a long paste into a note set in a font took two to
+# three times what laying the whole note again had. Counted, not timed: the
+# body's "tag names".
+_bs_long = 'word ' * 400
+set_body(_bs_long)
+app._apply_formatting(app.body_text, [
+    {'start': 0, 'end': len(_bs_long), 'style': 'font_family',
+     'value': 'Georgia'}] + [
+    {'start': 50 * i, 'end': 50 * i + 4, 'style': 'bold'} for i in range(10)])
+app.update()
+_bs_reads = [0]
+
+
+def _bs_read_trace(command, *_op):
+    if ' tag names ' in command:
+        _bs_reads[0] += 1
+
+
+app.tk.createcommand('qa_read_trace', _bs_read_trace)
+app.tk.call('trace', 'add', 'execution', app.body_text._w, 'enter',
+            'qa_read_trace')
+try:
+    app._fit_font_tags('1.0', 'end-1c')
+finally:
+    app.tk.call('trace', 'remove', 'execution', app.body_text._w, 'enter',
+                'qa_read_trace')
+    app.tk.deletecommand('qa_read_trace')
+check(f'a long paste is fitted by stretches, not a character at a time '
+      f'({_bs_reads[0]} tag readings for {len(_bs_long)} characters in 21 '
+      f'stretches; drawn {_drawn("1.0")})',
+      _bs_reads[0] <= 60 and _drawn('1.0')[1] == 'bold')
 set_body('')
 
 # On every line, not only the last, and over a selection: a first test of
