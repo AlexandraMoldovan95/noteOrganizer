@@ -6327,6 +6327,14 @@ _bs_both = [sorted((s['style'], s.get('value')) for s in _bs_spans
 check(f'a size picked inside a run set in a font keeps the font on every '
       f'letter typed ({_bs_both})',
       _bs_both == [[('font_family', 'Georgia'), ('font_size', 16)]] * 3)
+# Typed right after a bold word inside a bigger heading -- a space and a
+# word -- the text wore neither side's composite and came out at 12 pt.
+_sized_line({'start': 4, 'end': 9, 'style': 'bold'})
+app.body_text.mark_set('insert', '1.9')
+_bs_typed = _ty_key('space', ' ') and _ty_key('b', 'b')
+_bs_edge = [_drawn(i)[0] for i in ('1.9', '1.10')]
+check(f'text typed at a bold word\'s edge inside a bigger heading keeps the '
+      f'heading\'s size ({_bs_edge})', _bs_typed and _bs_edge == [20, 20])
 # Ctrl+B on one word in a long note set in a font lays the composites of
 # that word, not of the note: laid across the note, it took 250 ms at 8,000
 # styled words. Counted, not timed: the body's "tag add" and "tag remove".

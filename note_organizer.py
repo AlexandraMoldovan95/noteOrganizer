@@ -4567,6 +4567,16 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     and b.compare(start, ">", "1.0")):
                 return
             prev = b.index(f"{start} -1c")
+            # Typed between two pieces of one size or font that differ only
+            # in weight -- right after or before a bold word inside a bigger
+            # heading -- the text wore neither piece's composite (Tk passes
+            # on only what both sides wear) and came out at the base size,
+            # saved so. It takes the run's size and font, with its own
+            # weight, whatever was typed.
+            sides = [[parse_font_tag(t) for t in b.tag_names(i)
+                      if parse_font_tag(t)] for i in (prev, end)]
+            if all(sides) and sides[0][-1][2:] == sides[1][-1][2:]:
+                self._fit_font_tags(start, end, like=prev)
             if not b.get(prev).strip():
                 return
             gap = b.search(r"\s", start, stopindex=end, regexp=True)
