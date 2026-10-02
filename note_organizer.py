@@ -19465,9 +19465,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     or self.current_note_color != (shown_now.get("color") or ""))
                 # The date and the repeat are the series' own, and a day
                 # saved on its own leaves them as they are: the question
-                # says so when this visit changed either.
-                schedule_changed = (
-                    date_value != (note.get("date") or "")
+                # says so when this visit changed either -- a date typed in
+                # a form the app cannot read among them, which is left out
+                # and so never differs from the stored one by value.
+                schedule_changed = bool(
+                    left_out
+                    or date_value != (note.get("date") or "")
                     or normalize_recurrence(recurrence)
                     != normalize_recurrence(note.get("recurrence")))
                 if overridable_changed:
@@ -19530,6 +19533,15 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 self._write_series_owned(note, date_value, recurrence,
                                          schedule=False)
                 put_back_schedule = schedule_changed
+                # Nothing of the schedule is stored by this save, so
+                # nothing of it was left out: the question said the date
+                # and the repeat stay the series', and the editor shows
+                # the series' again below. Kept on screen as a field "to
+                # fix", a changed date or repeat made the editor differ
+                # from the note, and the next save -- asking nothing,
+                # since the day's text was already saved -- wrote it to
+                # the whole series: the series moved, or stopped repeating.
+                left_out = []
                 self.set_status(("Auto-saved " if auto else "Saved ")
                                 + f"{occurrence_date} only"
                                 + (" — the date and the repeat stay the "
@@ -19667,10 +19679,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self.render_calendar()
             self._note_list_needs_refresh = False
         # "This occurrence only" left the series' date and repeat as they
-        # were: the editor shows them again, so it agrees with the note --
-        # unless the save had to leave a field out, which stays on screen to
-        # be fixed (below).
-        if put_back_schedule and not left_out:
+        # were: the editor shows them again, so it agrees with the note.
+        if put_back_schedule:
             self._put_back_stored_date_and_repeat()
             self._cancel_pending_autosave()
         # The saved note now matches disk; update this tab's snapshot so its
@@ -19699,6 +19709,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 self._show_date_in_field(
                     "" if typed_date == "YYYY-MM-DD" else typed_date)
             self.set_status(said)
+            # Loading wrote the repeat's fields, and their traces asked for
+            # an autosave. With a left-out date carried back, the editor
+            # differs from the note, so half a second later that autosave
+            # saved again -- storing exactly what was just stored -- and its
+            # status line dropped the words that say where the days went.
+            self._cancel_pending_autosave()
         # If the calendar day panel is showing, reflect the edit there too.
         if getattr(self, "_day_panel_mode", "empty") != "empty":
             self.refresh_day_panel()

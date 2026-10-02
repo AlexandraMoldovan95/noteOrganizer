@@ -14,6 +14,7 @@ import note_organizer as NO, tkinter as tk
 # Windows foreground -- which a test process never owns. See
 # qa/_qa_support.py; _qa_click refuses to click into the void.
 from _qa_support import click as _qa_click, pin_popup_visibility as _qa_pin
+from _qa_support import waiting_timers as _qa_waiting
 _qa_pin(NO)
 fails=[]
 def check(name, cond):
@@ -1106,6 +1107,127 @@ check(f'turning the repeat off on a day with a date the app cannot read '
 app._put_back_stored_date_and_repeat()
 app._cancel_pending_autosave()
 
+
+# "This occurrence only" with a field the save had to leave out: the
+# put-back of the series' date and repeat was skipped, the changed values
+# stayed on screen "to be fixed", and the next leave or Save -- asking
+# nothing, the day's text being saved already -- wrote them to the whole
+# series: it stopped repeating, or moved, and its days fell off the
+# calendar. Nothing of the schedule is stored by such a save, so nothing
+# of it is left out.
+def _lo_day(changes):
+    """A weekly series with its own text on 09-14; on its day 09-21, the
+    text typed and *changes* made, then Save answered "This occurrence
+    only". Returns every question asked, as (title, message)."""
+    app.new_note(); app.update()
+    app.notes = [
+        NO.normalize_note({'id': 1, 'title': 'Standup', 'body': 'series',
+                           'date': '2026-09-07', 'recurrence': {'freq': 'weekly'},
+                           'overrides': {'2026-09-14': {'body': 'DAY 14'}}}),
+        NO.normalize_note({'id': 2, 'title': 'Other', 'body': 'y'})]
+    app.save_notes()
+    app.open_note_in_tab(app.find_note(1), occurrence_date='2026-09-21')
+    app.update()
+    app.body_text.insert('end-1c', ' -- only this week')
+    changes()
+    asked = []
+    app._themed_dialog = lambda *a, **k: (
+        asked.append((a[0], a[1] if len(a) > 1 else '')), 'occurrence')[1]
+    _lo_warn_stub = app.show_warning
+    app.show_warning = lambda *a, **k: (asked.append((a[0], '')), True)[1]
+    try:
+        app.save_current_note(); app.update()
+    finally:
+        app._themed_dialog = _mv_real_dlg
+        app.show_warning = _lo_warn_stub
+    return asked
+
+
+def _lo_series():
+    n = app.find_note(1)
+    days = NO.expand_occurrences(n, _dt5m.date(2026, 9, 1),
+                                 _dt5m.date(2026, 9, 30))
+    return (n.get('date'), (n.get('recurrence') or {}).get('freq'),
+            '2026-09-14' in days and '2026-09-21' in days,
+            'only this week' in ((n.get('overrides') or {})
+                                 .get('2026-09-21', {}).get('body') or ''))
+
+
+def _lo_repeat_off_and_bad_date():
+    app.rec_freq_var.set(NO.FREQ_LABELS[''])
+    app.on_recurrence_changed(); app.update()
+    app.date_entry.delete(0, 'end')
+    app.date_entry.insert(0, '30/09/2026')
+
+
+_lo_asked = _lo_day(_lo_repeat_off_and_bad_date)
+_lo_saved = _lo_series()
+_lo_shown = (app.date_entry.get(), app.rec_freq_var.get())
+_lo_said = str(app.status_lbl.cget('text'))
+_lo_leave = []
+app._themed_dialog = lambda *a, **k: (_lo_leave.append(a[0]), True)[1]
+try:
+    app.open_note_in_tab(app.find_note(2)); app.update()
+finally:
+    app._themed_dialog = _mv_real_dlg
+check(f'"This occurrence only" with the repeat off and a date the app cannot '
+      f'read keeps the series, asks only the one question -- no warning that '
+      f'something was not saved -- and shows the series\' date and repeat '
+      f'again (asked {[q[0] for q in _lo_asked]}; saved {_lo_saved}; shown '
+      f'{_lo_shown}; status {_lo_said!r})',
+      len(_lo_asked) == 1 and 'keeps them as they are' in _lo_asked[0][1]
+      and _lo_saved == ('2026-09-07', 'weekly', True, True)
+      and _lo_shown == ('2026-09-07', NO.FREQ_LABELS['weekly'])
+      and "stay the whole series'" in _lo_said and 'except' not in _lo_said)
+check(f'...and leaving afterwards asks nothing and moves nothing (asked '
+      f'{_lo_leave}; {_lo_series()})',
+      _lo_leave == [] and _lo_series() == ('2026-09-07', 'weekly', True, True))
+
+
+def _lo_bad_date_only():
+    app.date_entry.delete(0, 'end')
+    app.date_entry.insert(0, '22/09/2026')
+
+
+_lo_asked = _lo_day(_lo_bad_date_only)
+check(f'...also when the only change to the schedule is a date the app cannot '
+      f'read: the question says the date stays the series\', and the field '
+      f'shows it again (asked {_lo_asked}; field {app.date_entry.get()!r})',
+      len(_lo_asked) == 1 and 'keeps them as they are' in _lo_asked[0][1]
+      and app.date_entry.get() == '2026-09-07'
+      and _lo_series() == ('2026-09-07', 'weekly', True, True))
+
+# The reload after a day turned its repeat off, with a date it had to leave
+# out: loading the note wrote the repeat's fields, whose traces asked for an
+# autosave; the typed date carried back kept the editor unsaved, so half a
+# second later that autosave saved again and its status line dropped the
+# words saying where the days went.
+app.new_note(); app.update()
+app.notes = [
+    NO.normalize_note({'id': 1, 'title': 'Standup', 'body': 'series',
+                       'date': '2026-09-07', 'recurrence': {'freq': 'weekly'},
+                       'overrides': {'2026-09-14': {'body': 'DAY 14'}}}),
+    NO.normalize_note({'id': 2, 'title': 'Other', 'body': 'y'})]
+app.save_notes()
+app.open_note_in_tab(app.find_note(1), occurrence_date='2026-09-14'); app.update()
+_lo_repeat_off_and_bad_date()
+app._themed_dialog = lambda *a, **k: True
+try:
+    app.save_current_note()
+finally:
+    app._themed_dialog = _mv_real_dlg
+_lo_said = str(app.status_lbl.cget('text'))
+_lo_waiting = _qa_waiting(app, '_autosave_now')
+app.update(); import time as _t5lo; _t5lo.sleep(0.7); app.update()
+check(f'a day that turned its repeat off with a date left out keeps both '
+      f'notices in the status line: no autosave is left to say it again '
+      f'(waiting {_lo_waiting}; then {_lo_said!r}; after a pause '
+      f'{app.status_lbl.cget("text")!r})',
+      not _lo_waiting and 'Restore previous' in _lo_said
+      and 'except the date' in _lo_said
+      and str(app.status_lbl.cget('text')) == _lo_said)
+app._put_back_stored_date_and_repeat()
+app._cancel_pending_autosave()
 
 # A file attached after a day was saved "This occurrence only": the save
 # stored the editor's own list in the note, so the attach changed the note
