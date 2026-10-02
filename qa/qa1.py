@@ -10445,6 +10445,197 @@ check(f'a spreadsheet\'s cells pasted over selected text replace it, and '
       and app.body_text.get('1.0', 'end-1c') == _uf_full
       and _cs_styles() == [('bold', 'Friday')])
 
+# ---- A SELECTION MEETS A DRAWN TABLE ----
+# The caret guard walks the caret under a drawn table, and it left the
+# selection's moving end behind. Shift+Down on the line above a table
+# selected that line and the table's own line break, caret under the table:
+# a letter went in under the table with the line still selected, a paste
+# glued its text to the next line, and cells pasted went INTO the table.
+# Shift+Up from under a table selected all of it, invisibly -- a grid shows
+# no selection -- and the next letter deleted it. A first press now stops at
+# the table's edge with the caret; a second press crosses, as before.
+_sm_body = ('Prices:' + chr(10) + '| Item | Qty |' + chr(10)
+            + '| --- | --- |' + chr(10) + '| Tea | 2 |' + chr(10) + 'after'
+            + chr(10) + 'more')
+_sm_tsv = 'Day\tTime' + chr(10) + 'Mon\t10:00'
+
+
+def _sm_fresh(caret, body=None):
+    set_body(_sm_body if body is None else body)
+    app._render_table_grids()
+    app.update()
+    app._reset_text_undo()
+    app._cancel_pending_autosave()
+    app.body_text.tag_remove('sel', '1.0', 'end')
+    app.body_text.mark_set('insert', caret)
+    app._sel_held_at_table = None
+    app._last_caret_line = None
+
+
+def _sm_press(seq):
+    """A key pressed and released, as a person does, on the body."""
+    if not take_focus(app.body_text):
+        return False
+    app.body_text.event_generate(seq)
+    app.body_text.event_generate(seq.replace('KeyPress', 'KeyRelease'))
+    app.update()
+    return True
+
+
+def _sm_where():
+    try:
+        sel = (app.body_text.index('sel.first'),
+               app.body_text.index('sel.last'))
+    except tk.TclError:
+        sel = None
+    return sel, app.body_text.index('insert')
+
+
+def _sm_table_kept():
+    """The old table stands whole, rows and all, as its own block."""
+    text = app.body_text.get('1.0', 'end-1c')
+    lines = text.split(chr(10))
+    want = ['|Item|Qty|', '|---|---|', '|Tea|2|']
+    return any([r.replace(' ', '') for r in lines[a:b + 1]] == want
+               for a, b in core_tables.find_blocks(text))
+
+
+_sm_clip = {'data': _sm_tsv}
+_sm_real = (NO.clipboard.read_text, NO.clipboard.read_html)
+app.tk.eval('rename ::tk::GetSelection ::tk::_qa1_sm_GetSelection')
+app.tk.createcommand('::qa1_sm_clip', lambda: _sm_clip['data'])
+app.tk.eval('proc ::tk::GetSelection {w {sel PRIMARY}} {'
+            ' if {$sel eq "CLIPBOARD"} {return [::qa1_sm_clip]};'
+            ' return [::tk::_qa1_sm_GetSelection $w $sel] }')
+NO.clipboard.read_text = lambda: _sm_clip['data']
+NO.clipboard.read_html = lambda: None
+try:
+    _sm_fresh('1.0')
+    _sm_press('<Shift-KeyPress-Down>')
+    _sm_one = _sm_where()
+    _sm_press('<KeyPress-x>')
+    check(f'selection x table: Shift+Down on the line above a table stops at '
+          f'its edge, with the caret ({_sm_one}), and a letter replaces the '
+          f'line, the table kept '
+          f'({app.body_text.get("1.0", "2.0")!r}, kept {_sm_table_kept()})',
+          _sm_one == (('1.0', '1.7'), '1.7')
+          and app.body_text.get('1.0', '2.0') == 'x' + chr(10)
+          and _sm_table_kept())
+    _sm_fresh('1.0')
+    _sm_press('<Shift-KeyPress-Down>')
+    _sm_press('<Shift-KeyPress-Down>')
+    check(f'selection x table: ...and a second Shift+Down crosses the table, '
+          f'the caret with the selection ({_sm_where()})',
+          _sm_where() == (('1.0', '5.0'), '5.0'))
+    _sm_fresh('5.0')
+    _sm_press('<Shift-KeyPress-Up>')
+    _sm_up = _sm_where()
+    _sm_press('<KeyPress-x>')
+    check(f'selection x table: Shift+Up from under a table stops at its edge '
+          f'({_sm_up}), so a letter typed then deletes nothing of it (kept '
+          f'{_sm_table_kept()}, {app.body_text.get("5.0", "5.end")!r})',
+          _sm_up == (None, '5.0') and _sm_table_kept()
+          and app.body_text.get('5.0', '5.end') == 'xafter')
+    _sm_fresh('5.0')
+    _sm_press('<Shift-KeyPress-Up>')
+    _sm_press('<Shift-KeyPress-Up>')
+    check(f'selection x table: ...and a second Shift+Up crosses it '
+          f'({_sm_where()})', _sm_where() == (('1.7', '5.0'), '1.7'))
+    _sm_fresh('1.5')
+    for _sm_i in range(3):
+        _sm_press('<Shift-KeyPress-Right>')
+    _sm_right = _sm_where()
+    _sm_press('<Shift-KeyPress-Right>')
+    check(f'selection x table: Shift+Right stops at the end of the line above '
+          f'a table ({_sm_right}), then crosses ({_sm_where()})',
+          _sm_right == (('1.5', '1.7'), '1.7')
+          and _sm_where() == (('1.5', '5.0'), '5.0'))
+    # The mouse has no second press: a drag that ends on a table stops at
+    # the edge it came from.
+    _sm_fresh('1.0')
+    app.body_text.tag_add('sel', '1.0', '2.0')
+    app.body_text.mark_set('insert', '2.0')
+    _qa_fire(app.body_text, '<ButtonRelease-1>', x=2, y=2)
+    app.update()
+    check(f'selection x table: a drag ending on a table stops at its edge '
+          f'({_sm_where()}; a crossing armed: '
+          f'{app._sel_held_at_table is not None})',
+          _sm_where() == (('1.0', '1.7'), '1.7')
+          and app._sel_held_at_table is None)
+    # Cells pasted over the line Shift+Down selected take its place; the old
+    # table stands, one Ctrl+Z gives the line back and one Ctrl+Y the paste.
+    _sm_fresh('1.0')
+    _sm_press('<Shift-KeyPress-Down>')
+    _sm_press('<Control-KeyPress-v>')
+    _sm_pasted = app.body_text.get('1.0', 'end-1c')
+    _uf_key('<Control-z>')
+    _sm_undone = app.body_text.get('1.0', 'end-1c')
+    _uf_key('<Control-y>')
+    check(f'selection x table: cells pasted over the line Shift+Down selected '
+          f'stand above the old table, which is kept whole, and one Ctrl+Z / '
+          f'one Ctrl+Y undo and redo the paste ({_sm_pasted!r})',
+          _sm_pasted.startswith('| Day') and _sm_table_kept() is True
+          and _sm_undone == _sm_body
+          and app.body_text.get('1.0', 'end-1c') == _sm_pasted)
+    # A whole line replaced by cells: the first Ctrl+Z took back only the
+    # padding the tidy gave the new table at the key's release.
+    _sm_fresh('1.0', 'one line' + chr(10) + 'two line' + chr(10) + 'three')
+    _sm_press('<Shift-KeyPress-End>')
+    _sm_press('<Control-KeyPress-v>')
+    _sm_pasted = app.body_text.get('1.0', 'end-1c')
+    _uf_key('<Control-z>')
+    check(f'selection x table: cells pasted over a whole line are one Ctrl+Z '
+          f'({app.body_text.get("1.0", "end-1c")!r})',
+          _sm_pasted.startswith('| Day')
+          and app.body_text.get('1.0', 'end-1c')
+          == 'one line' + chr(10) + 'two line' + chr(10) + 'three')
+    # Ctrl+A in a note that starts with a table: the paste read the first
+    # selected line, a table row, as "inside a table" and left the cells to
+    # Tk as raw tabs.
+    _sm_fresh('end-1c', '| Item | Qty |' + chr(10) + '| --- | --- |' + chr(10)
+              + '| Tea | 2 |' + chr(10) + 'notes after the table')
+    take_focus(app.body_text)
+    app.body_text.event_generate('<<SelectAll>>')
+    app.update()
+    _sm_press('<Control-KeyPress-v>')
+    _sm_text = app.body_text.get('1.0', 'end-1c')
+    check(f'selection x table: Ctrl+A then cells pasted, in a note that starts '
+          f'with a table, give a drawn table ({_sm_text!r})',
+          chr(9) not in _sm_text and _sm_text.startswith('| Day')
+          and app._grid_at_line(1) is not None)
+finally:
+    app.tk.eval('rename ::tk::GetSelection {}')
+    app.tk.eval('rename ::tk::_qa1_sm_GetSelection ::tk::GetSelection')
+    app.tk.deletecommand('::qa1_sm_clip')
+    NO.clipboard.read_text, NO.clipboard.read_html = _sm_real
+# The paste itself never puts cells into a table's line, however the
+# selection was made: one that holds a table's line break keeps the break.
+_sm_fresh('1.0')
+app.body_text.tag_add('sel', '1.0', '2.0')
+# The line a key's release recorded before the paste: the selection's end.
+app._last_caret_line = 2
+app._paste_tsv_as_table(_sm_tsv)
+app.update()
+check(f'selection x table: a selection holding a table\'s line break leaves '
+      f'the break, and the table, where they were (kept {_sm_table_kept()}; '
+      f'{app.body_text.get("1.0", "end-1c")!r})',
+      _sm_table_kept()
+      and app.body_text.get('1.0', 'end-1c').startswith('| Day'))
+# ...laid out as the tidy would leave it, and the caret's last line
+# forgotten: the release of the paste's own key is not the caret leaving a
+# table, and read as one it tidied a table as an undo step of its own.
+_sm_lines = app.body_text.get('1.0', 'end-1c').split(chr(10))[:3]
+_sm_aligns = [core_tables.cell_alignments(_l) for _l in _sm_lines]
+_sm_widths = core_tables.layout_widths(
+    [core_tables.split_row(_l) for _l in _sm_lines], _sm_aligns)
+_sm_ops = [core_tables.pad_ops(_l, _sm_widths, _a)
+           for _l, _a in zip(_sm_lines, _sm_aligns)]
+check(f'selection x table: pasted cells are laid out as the tidy lays them '
+      f'out, and the caret\'s last line is forgotten ({_sm_lines}; '
+      f'{app._last_caret_line})',
+      not any(_sm_ops) and app._last_caret_line is None)
+set_body('')
+
 # ---- CTRL+Z PUTS A TABLE'S FIRST LINE BACK EXACTLY ----
 # A drawn table's first line holds the grid's window at column 0, and Tk
 # records an edit by its index. Operations that take the grids down, edit,

@@ -4305,6 +4305,68 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         except (tk.TclError, ValueError):
             pass
 
+    def _selection_end_at_table(self, first, nrows, event):
+        """The moving end of a selection has landed on a drawn table's lines:
+        keep the caret with it, at the table's near edge, and on the next
+        press at that edge carry both past the table. True when the caret
+        was placed here; False leaves the caret guard to walk it under the
+        table as for a plain caret.
+
+        Walked under the table alone, the caret left the selection's end
+        behind. Shift+Down on the line above a table selected that line and
+        the table's own line break, with the caret below the table: a letter
+        typed then went in under the table with the line still selected; a
+        paste deleted the line and put its text under the table, glued to
+        the next line; cells pasted there went INTO the table. Shift+Up from
+        under a table selected every row of it, invisibly -- a grid shows no
+        selection -- and the caret, walked back under it, could not go
+        further up: the next letter typed deleted the whole table.
+
+        A first press stops at the edge, so a selection never takes a table
+        in without a second press saying so; that second press crosses it,
+        as before, so the keyboard can still select across a table. The
+        mouse has no second press: a drag ending on a table stops at the
+        edge it came from."""
+        b = self.body_text
+        try:
+            sel_first, sel_last = b.index("sel.first"), b.index("sel.last")
+            insert = b.index("insert")
+        except tk.TclError:
+            return False
+        top = f"{first}.0"
+        above = b.index(f"{top} -1c")
+        below = b.index(f"{first + nrows}.0")
+        if (b.compare(insert, "==", sel_last)
+                and b.compare(sel_first, "<", top)):
+            direction, edge, past = "down", above, below
+        elif (b.compare(insert, "==", sel_first)
+                and b.compare(sel_last, ">=", below)):
+            direction, edge, past = "up", below, above
+        else:
+            return False
+        keyed = getattr(event, "type", None) in (tk.EventType.KeyPress,
+                                                 tk.EventType.KeyRelease)
+        held = getattr(self, "_sel_held_at_table", None)
+        try:
+            if keyed and held is not None and held[:2] == (first, direction):
+                if direction == "down":
+                    b.tag_add("sel", sel_first, past)
+                else:
+                    b.tag_add("sel", past, sel_last)
+                b.mark_set("insert", past)
+                self._sel_held_at_table = None
+                return True
+            if direction == "down":
+                b.tag_remove("sel", edge, sel_last)
+            else:
+                b.tag_remove("sel", sel_first, edge)
+            b.mark_set("insert", edge)
+        except tk.TclError:
+            return False
+        self._sel_held_at_table = ((first, direction, edge) if keyed
+                                   else None)
+        return True
+
     def _caret_out_of_hidden(self, _event=None):
         """Keep the caret off a rendered table's lines entirely.
 
@@ -4326,14 +4388,27 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             line_no = int(b.index("insert").split(".")[0])
         except (tk.TclError, ValueError):
             return None
+        held = getattr(self, "_sel_held_at_table", None)
+        met = False
         for info in getattr(self, "_table_grids", []):
             first = self._grid_first_line(info)
             if first is not None and first <= line_no < first + info["nrows"]:
-                try:
-                    b.mark_set("insert", f"{first + info['nrows']}.0")
-                except tk.TclError:
-                    pass
+                met = True
+                if not self._selection_end_at_table(first, info["nrows"],
+                                                    _event):
+                    try:
+                        b.mark_set("insert", f"{first + info['nrows']}.0")
+                    except tk.TclError:
+                        pass
                 break
+        if not met and held is not None:
+            # The stop at a table's edge is remembered only while the caret
+            # stays there; any other move forgets it.
+            try:
+                if b.compare("insert", "!=", held[2]):
+                    self._sel_held_at_table = None
+            except tk.TclError:
+                self._sel_held_at_table = None
         if (getattr(_event, "type", None) == tk.EventType.KeyPress
                 and getattr(_event, "state", 0) & 0x4):
             keysym = getattr(_event, "keysym", "")
@@ -6476,20 +6551,48 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         b = self.body_text
         try:
             selected = b.index("sel.first")
+            # A selection that ends where a table begins holds that
+            # table's own line break (Shift+Down from the line above). The
+            # break stays: deleted with the rest, it left the caret on the
+            # table's first row, and the new rows went in under that row,
+            # cutting the old table's header from its body.
+            last = b.index("sel.last")
+            if (b.compare(last, "==", f"{last} linestart")
+                    and b.compare(selected, "<", last)
+                    and core_tables.is_table_row(
+                        b.get(last, f"{last} lineend"))):
+                b.tag_remove("sel", f"{last} -1c", last)
+                if not b.tag_ranges("sel"):
+                    # Only the break was selected: paste where it stood.
+                    b.mark_set("insert", f"{last} -1c")
+                    selected = None
         except tk.TclError:
             selected = None
         try:
             here = b.get(f"{selected or 'insert'} linestart",
                          f"{selected or 'insert'} lineend")
+            # Over a selection, the paste lands on what is left of its
+            # lines once the selection is gone. Read off the first line
+            # alone, Ctrl+A in a note that starts with a table read as
+            # "inside a table", and the cells went in as raw tabs.
+            remains = (here if selected is None else
+                       b.get("sel.first linestart", "sel.first")
+                       + b.get("sel.last", "sel.last lineend"))
         except tk.TclError:
             return False
-        if core_tables.is_table_row(here):
+        if (core_tables.is_table_row(here)
+                and core_tables.is_table_row(remains)):
             # Inside a table, pasting cells is the grid's business (the
             # cell-selection branch above); don't nest pipes into pipes.
             return False
         rows = [line.split("\t") for line in raw.strip("\n").split("\n")]
         ncols = max(len(row) for row in rows)
         rows = [row + [""] * (ncols - len(row)) for row in rows]
+        # The separator is laid out with the rows, as the tidy lays it out
+        # (_align_table_block): built narrower, it was padded by the tidy at
+        # the key's release, a recorded edit of its own outside this undo
+        # unit -- the first Ctrl+Z after the paste changed nothing on screen.
+        rows = [rows[0], ["---"] * ncols] + rows[1:]
         aligns = [[core_tables.ALIGN_LEFT] * ncols for _ in rows]
         lines = core_tables.format_table(rows, aligns)
         # Our own copy remembers the source columns' set widths -- a
@@ -6503,13 +6606,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 clip_widths.append({"width": None, "align": None,
                                     "hidden": False})
         if clip_widths:
-            sep = core_tables.CELL + core_tables.CELL.join(
+            lines[1] = core_tables.CELL + core_tables.CELL.join(
                 " " + cell + " "
                 for cell in core_tables.make_separator(clip_widths)
             ) + core_tables.CELL
-        else:
-            sep = ("|" + "|".join([" --- "] * ncols) + "|")
-        lines = [lines[0], sep] + lines[1:]
         clip_place = None
         if raw == getattr(self, "_grid_cell_clip_text", None):
             clip_place = getattr(self, "_grid_cell_clip_place", None)
@@ -6550,6 +6650,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._resync_list_tags()
         self._render_table_grids()
         self._schedule_autosave()
+        # The paste moved the caret and the lines under it; the release of
+        # its own key is not the person leaving a table (see
+        # _body_undo_redo), and read as one it tidied a table as a recorded
+        # edit outside this unit.
+        self._last_caret_line = None
         return True
 
     @_undo_atom
