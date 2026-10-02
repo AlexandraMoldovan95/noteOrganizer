@@ -10880,6 +10880,37 @@ try:
     check(f'selection x table: rows, cells or rich text pasted under a drawn '
           f'table are one Ctrl+Z ({_sm_undone})',
           _sm_undone == [(True, True), (True, True), (True, True)])
+    # After a first Shift+Down stopped at the table's edge: its release had
+    # noted the table's line Tk moved the caret to, and the next key's
+    # release "left" that table and padded it -- outside that key's undo
+    # unit, so a letter, a Delete or a paste over the selection took two
+    # Ctrl+Z, the first changing nothing on screen.
+    _sm_edge = []
+    for _sm_what in ('letter', 'delete', _sm_rows, 'just words', 'plain'):
+        _sm_fresh('1.0')
+        _sm_press('<Shift-KeyPress-Down>')
+        _sm_sel = _sm_where()[0]
+        if _sm_what == 'letter':
+            _sm_typed = _ty_key('Z', 'Z')
+        elif _sm_what == 'delete':
+            _sm_typed = _own_key('<Delete>', '<KeyRelease-Delete>')
+        elif _sm_what == 'plain':
+            # Ctrl+Shift+V, the paste without its styling.
+            _sm_clip['data'] = _sm_rows
+            _sm_typed = _sm_press('<Control-Shift-KeyPress-V>')
+        else:
+            _sm_clip['data'] = _sm_what
+            _sm_typed = _sm_press('<Control-KeyPress-v>')
+        _sm_done = app.body_text.get('1.0', 'end-1c')
+        _uf_key('<Control-z>')
+        _sm_edge.append((_sm_sel, _sm_typed, _sm_done != _sm_body,
+                         app.body_text.get('1.0', 'end-1c') == _sm_body))
+    _sm_clip['data'] = _sm_tsv
+    check(f'selection x table: after a first Shift+Down stops at a table, a '
+          f'letter, a Delete or a paste over the selection is one Ctrl+Z '
+          f'({_sm_edge})',
+          all(_s == ('1.0', '1.7') and _t and _c and _u
+              for _s, _t, _c, _u in _sm_edge))
 finally:
     app.tk.eval('rename ::tk::GetSelection {}')
     app.tk.eval('rename ::tk::_qa1_sm_GetSelection ::tk::GetSelection')

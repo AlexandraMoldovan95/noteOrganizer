@@ -4532,6 +4532,17 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # text, so Delete or a paste -- which run no guard of their own --
         # glued a row or merged the two tables.
         self._selection_ends_off_tables()
+        if met:
+            # The caret never rests on a drawn table: it was where this left
+            # it. _align_table_on_leaving, which runs first, had noted the
+            # table's line Tk moved it to, and the next key's release "left"
+            # that table and padded it -- an edit of its own, outside that
+            # key's undo unit: after a first Shift+Down stopped at a table, a
+            # letter or a Delete over the selection took two Ctrl+Z.
+            try:
+                self._last_caret_line = int(b.index("insert").split(".")[0])
+            except (tk.TclError, ValueError):
+                pass
         if not met:
             self._sel_crossed_table = None
         if not met and held is not None:
@@ -6563,6 +6574,13 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 self._grid_paste_cells(sel["info"],
                                        sel["box"][0], sel["box"][1])
                 return "break"
+        # A paste moves the caret and the lines under it, by every route
+        # below and by Tk's own: the release of its key is not the person
+        # leaving a table (as for _paste_tsv_as_table and _body_undo_redo).
+        # Read as one, it padded the pasted rows -- or the table they had
+        # pushed down -- as an edit outside the paste's undo unit, and the
+        # first Ctrl+Z changed nothing on screen.
+        self._last_caret_line = None
         # Our own cell copy puts an HTML table on the clipboard for Word's
         # sake, and on Windows the rich-paste route saw it FIRST -- so
         # pasting a copied table back into a note took the generic HTML
@@ -6822,6 +6840,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.after_idle(self._resync_list_tags)
         self.after_idle(self._render_table_grids)
         self._schedule_autosave()
+        # Not the person leaving a table, either (see _on_body_paste).
+        self._last_caret_line = None
         return "break"
 
     def _replace_selection_with(self, text):
