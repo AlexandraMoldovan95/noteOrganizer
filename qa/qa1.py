@@ -6112,32 +6112,142 @@ check('the checkbox palette writes surgically: value set, caret and '
 set_body('')
 
 # Letters glued onto a coloured word wear its colours; after a space, not.
+def _ty_key(keysym, ch):
+    """A typing key pressed and released on the body, as a person does.
+    The press notes where typing starts (_note_typing_key), and a release
+    with no press of its own spreads no style. A synthetic key's %A does
+    not reliably insert (with real focus on Windows it does), so the
+    character goes in by hand only when the press typed nothing -- over the
+    selection the caret is in, as Tk's class binding puts it."""
+    _w = app.body_text
+    if not take_focus(_w):
+        return False
+    _before = _w.get('1.0', 'end-1c')
+    _w.event_generate('<KeyPress>', keysym=keysym)
+    if _w.get('1.0', 'end-1c') == _before:
+        try:
+            if (_w.compare('sel.first', '<=', 'insert')
+                    and _w.compare('insert', '<=', 'sel.last')):
+                _w.delete('sel.first', 'sel.last')
+        except tk.TclError:
+            pass
+        _w.insert('insert', ch)
+    _w.event_generate('<KeyRelease>', keysym=keysym)
+    app.update()
+    return True
+
+
 set_body('cuvant ')
 _b = app.body_text
 app._ensure_color_tag(_b, 'highlight', '#ffff00')
 app._ensure_color_tag(_b, 'text_color', '#e63946')
 _b.tag_add('highlight_ffff00', '1.0', '1.6')
 _b.tag_add('text_color_e63946', '1.0', '1.6')
-take_focus(_b)
 _b.mark_set('insert', '1.6')
-# Insert + KeyRelease, WITHOUT a synthetic KeyPress: with real focus
-# on Windows the generated KeyPress itself types the character too
-# (the class binding inserts), and the doubled letter becomes the
-# untagged neighbour the handler then reads.
-_b.insert('insert', 'X')
-_b.event_generate('<KeyRelease>', keysym='X')
-app.update()
+_tyX = _ty_key('X', 'X')
 _tagsXH = sorted(t for t in _b.tag_names('1.6')
                  if 'color' in t or 'highlight' in t)
 _b.mark_set('insert', '1.end')
-_b.insert('insert', ' Y')
-_b.event_generate('<KeyRelease>', keysym='Y')
-app.update()
+_tyY = _ty_key('space', ' ') and _ty_key('Y', 'Y')
 _tagsYH = [t for t in _b.tag_names('1.end-1c')
            if 'color' in t or 'highlight' in t]
 check('letters glued onto a coloured word inherit colour AND highlight',
-      len(_tagsXH) == 2)
-check('but a word started after a space stays plain', _tagsYH == [])
+      _tyX and len(_tagsXH) == 2)
+check('but a word started after a space stays plain', _tyY and _tagsYH == [])
+set_body('')
+
+# On every line, not only the last, and over a selection: a first test of
+# "the key typed something" compared where the text ENDED, which an edit
+# above the last line never moves -- typing after a styled word spread
+# nothing on any other line, nor over the end of a styled word selected.
+set_body('Prices: here' + chr(10) + 'Total due' + chr(10) + 'end line')
+app._ensure_color_tag(_b, 'text_color', '#d32f2f')
+_b.tag_add('bold', '1.0', '1.6')
+_b.tag_add('text_color_d32f2f', '2.0', '2.5')
+_b.mark_set('insert', '1.6')
+_tyL = _ty_key('x', 'x') and _ty_key('y', 'y')
+_b.mark_set('insert', '2.5')
+_tyL = _ty_key('z', 'z') and _tyL
+check(f'typing after a styled word spreads its style on every line, not '
+      f'only the last (bold {_b.tag_ranges("bold")}; red '
+      f'{_b.tag_ranges("text_color_d32f2f")})',
+      _tyL
+      and [str(i) for i in _b.tag_ranges('bold')] == ['1.0', '1.8']
+      and [str(i) for i in _b.tag_ranges('text_color_d32f2f')]
+      == ['2.0', '2.6'])
+_tyO = []
+for _ty_from, _ty_caret in (('1.4', '1.6'), ('1.4', '1.4')):
+    set_body('Prices: here' + chr(10) + 'more')
+    _b.tag_add('bold', '1.0', '1.6')
+    _b.tag_add('sel', _ty_from, '1.6')
+    _b.mark_set('insert', _ty_caret)
+    _ty_ok = all(_ty_key(_k, _k) for _k in 'ing')
+    _tyO.append((_ty_ok, _b.get('1.0', '1.end'),
+                 [str(i) for i in _b.tag_ranges('bold')]))
+check(f'typing over the end of a styled word, selected either way, keeps '
+      f'its style ({_tyO})',
+      all(_ok and _t == 'Pricing: here' and _r == ['1.0', '1.7']
+          for _ok, _t, _r in _tyO))
+
+
+# A key with a binding of its own types nothing to spread a style over:
+# Delete, BackSpace, Ctrl+B, Ctrl+Z and a paste without its styling each
+# turned the plain ":" glued to a bold word bold (no press of a typing key
+# noted them, and the release read the two characters left of the caret).
+# Pressed as a person presses them: a modifier goes down first, as a key of
+# its own -- one with no binding here, so it reads as a key that may type.
+def _own_key(press, release, mods=()):
+    if not take_focus(app.body_text):
+        return False
+    for _m in mods:
+        app.body_text.event_generate('<KeyPress-%s>' % _m)
+    app.body_text.event_generate(press)
+    app.body_text.event_generate(release)
+    for _m in reversed(mods):
+        app.body_text.event_generate('<KeyRelease-%s>' % _m)
+    app.update()
+    return True
+
+
+_ty_real_read = NO.clipboard.read_text
+_tyK = []
+try:
+    NO.clipboard.read_text = lambda: ':'
+    for _ty_name, _ty_caret, _ty_do in (
+            ('Delete', '1.7',
+             lambda: _own_key('<Delete>', '<KeyRelease-Delete>')),
+            ('BackSpace', '1.8',
+             lambda: _own_key('<BackSpace>', '<KeyRelease-BackSpace>')),
+            ('Ctrl+B', '1.7',
+             lambda: _own_key('<Control-b>', '<Control-KeyRelease-b>',
+                              ('Control_L',))),
+            ('typing, then Ctrl+Z', '1.7',
+             lambda: (_ty_key('x', 'x')
+                      and _own_key('<Control-z>', '<Control-KeyRelease-z>',
+                                   ('Control_L',)))),
+            ('BackSpace, then Ctrl+Z', '1.7',
+             lambda: (_own_key('<BackSpace>', '<KeyRelease-BackSpace>')
+                      and _own_key('<Control-z>', '<Control-KeyRelease-z>',
+                                   ('Control_L',)))),
+            ('Ctrl+Shift+V', '1.6',
+             lambda: _own_key('<Control-Shift-KeyPress-V>',
+                              '<Control-Shift-KeyRelease-V>',
+                              ('Control_L', 'Shift_L')))):
+        set_body('Prices: here')
+        _b.tag_add('bold', '1.0', '1.6')
+        _b.mark_set('insert', _ty_caret)
+        app._reset_text_undo()
+        _ty_ok = _ty_do()
+        app._pending_styles = set()
+        _tyK.append((_ty_name, _ty_ok, _b.get('1.0', '1.end'),
+                     [str(i) for i in _b.tag_ranges('bold')]))
+finally:
+    NO.clipboard.read_text = _ty_real_read
+check(f'Delete, BackSpace, Ctrl+B, Ctrl+Z and a paste without its styling '
+      f'spread no style onto a plain colon ({_tyK})',
+      all(_ok and _r == ['1.0', '1.6'] for _n, _ok, _t, _r in _tyK)
+      and [_t for _n, _ok, _t, _r in _tyK][3:]
+      == ['Prices: here', 'Prices: here', 'Prices:: here'])
 set_body('')
 
 # ---- FIELD ROUND 4 ----

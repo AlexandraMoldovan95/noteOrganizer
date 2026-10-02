@@ -4274,18 +4274,23 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         """
         b = self.body_text
         try:
-            # Only a key that typed something: the text grew and the caret
-            # went on. Every release used to count -- an arrow key, or the
-            # caret guard's own stop at a table under "Prices:", put the
-            # caret after a plain ":" glued to a bold word, and the colon
-            # turned bold with nothing typed.
-            # Read once and dropped: a release with no press of its own
-            # (a generated one) is read off the buffer, as before.
-            at_press = getattr(self, "_text_at_press", None)
-            self._text_at_press = None
-            if at_press is not None and (
-                    b.compare("end-1c", "==", at_press[0])
-                    or b.compare("insert", "<=", at_press[1])):
+            # Only a key pressed here that typed something here: text went in
+            # between the marks its press set at the caret (_note_typing_key).
+            # Every release used to count -- an arrow key, or the caret
+            # guard's own stop at a table under "Prices:", put the caret
+            # after a plain ":" glued to a bold word, and the colon turned
+            # bold with nothing typed; so did Delete, BackSpace, Ctrl+B,
+            # Ctrl+Z and a paste without its styling, keys with a binding of
+            # their own that no press of a typing key notes. A first answer
+            # compared where the text ENDED: an edit above the last line
+            # never moves that, so typing after a styled word spread nothing
+            # on any other line, nor over a selection. A release with no
+            # press here at all (a Tab that brought the keyboard in) spreads
+            # nothing either. Read once and dropped.
+            down = getattr(self, "_key_down", None)
+            self._key_down = None
+            if down != "typing" or not b.compare(
+                    self._TYPED_FROM, "<", self._TYPED_TO):
                 return
             typed = b.index("insert-1c")
             prev = b.index("insert-2c")
@@ -4311,6 +4316,36 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     b.tag_add(tag, typed, "insert")
         except tk.TclError:
             pass
+
+    # Two marks around what a key types (see _extend_word_styles_on_typing):
+    # text inserted at the caret goes after the first and before the second.
+    _TYPED_FROM = "typedFrom"
+    _TYPED_TO = "typedTo"
+
+    def _note_key_down(self, _event=None):
+        """Any key going down in the body. Until the body's own <KeyPress>
+        says it may type (_note_typing_key), it is a key with a binding of
+        its own -- Delete, BackSpace, Ctrl+B, Ctrl+Z, a paste -- which types
+        nothing a word's style should spread over."""
+        self._key_down = "own"
+
+    def _note_typing_key(self, _event=None):
+        """A key with no binding of its own in the body -- every key that
+        types -- going down: two marks at the caret, the first staying put,
+        the second carried along by whatever goes in there. What the key
+        types lands between them, after the selection it replaces is gone;
+        a key that types nothing leaves them together. Tk runs one binding
+        per tag, the most specific, so this never runs for the keys
+        _note_key_down speaks for."""
+        b = self.body_text
+        try:
+            b.mark_set(self._TYPED_FROM, "insert")
+            b.mark_gravity(self._TYPED_FROM, "left")
+            b.mark_set(self._TYPED_TO, "insert")
+            b.mark_gravity(self._TYPED_TO, "right")
+        except tk.TclError:
+            return
+        self._key_down = "typing"
 
     def _reassert_line_alignment(self, _event=None):
         """Keep the caret's line wearing its own alignment while it is
@@ -12699,6 +12734,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # notes the formatting first (see _note_styled_delete).
         self.bind_class(self._STYLED_DELETE_TAG, "<KeyPress>",
                         self._note_styled_delete)
+        # Every key is noted going down, its own binding or none; the body's
+        # <KeyPress> then speaks for the keys that type (see
+        # _extend_word_styles_on_typing).
+        self.bind_class(self._STYLED_DELETE_TAG, "<KeyPress>",
+                        self._note_key_down, add="+")
         # Each virtual binding says what it is: a key that means Cut or
         # Paste (Ctrl+X, Ctrl+V) arrives as that key's own press, and read
         # as a key, Ctrl+X was no delete at all -- the bold it cut came
@@ -12751,15 +12791,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                             add="+")
         self.body_text.bind("<KeyRelease>", self._extend_word_styles_on_typing,
                             add="+")
-        # Where the text ended and the caret stood when the key went down:
-        # the release asks whether the key typed anything (see
-        # _extend_word_styles_on_typing).
-        self.body_text.bind(
-            "<KeyPress>",
-            lambda e: setattr(self, "_text_at_press",
-                              (self.body_text.index("end-1c"),
-                               self.body_text.index("insert"))),
-            add="+")
+        # What the key did, read at its release (see
+        # _extend_word_styles_on_typing): a key with no binding of its own
+        # here -- the keys that type -- sets two marks at the caret, and
+        # what it types lands between them.
+        self.body_text.bind("<KeyPress>", self._note_typing_key, add="+")
         # KeyRelease alone re-centred the line one frame LATE -- the
         # character appears left-justified for a blink, then snaps to the
         # middle. An idle callback scheduled at KeyPress runs right after
