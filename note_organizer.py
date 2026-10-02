@@ -14194,6 +14194,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         """Show only the controls that apply to the chosen frequency. All rows
         are re-packed in a fixed order so nothing drifts to the bottom."""
         freq = self.selected_freq_key()
+        if freq:
+            # A repeat picked again ends the wait of its turn-off: a rescue
+            # copy a held save made meanwhile is a delete's own copy from now
+            # on, and a later turn-off's copy is the note as it stands
+            # (_turn_off_rescue_copy).
+            self._held_text_rescue = None
 
         rows = (self.rec_interval_row, self.rec_weekday_row, self.rec_monthday_row,
                 self.rec_policy_row, self.rec_end_row)
@@ -20308,9 +20314,19 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # back without them. Held, it is left out as a value the app cannot
         # read is: everything else is saved with the note's own repeat, and
         # the status line says what waits. Leaving the note or Save makes it.
+        # A date typed with it waits too: the held save keeps the series
+        # repeating, and a new start date moves every day of a series that
+        # repeats -- a one-off typed on a Thursday moved a Monday series to
+        # Thursdays, and the rescue copy the turn-off made later held the
+        # moved series, a day's own text on no day.
         if getattr(self, "_holding_repeat_off", False) and self._repeat_off_waits():
-            left_out.append("turning the repeat off (saved when you leave the "
-                            "note or press Save)")
+            what = "turning the repeat off"
+            if date_value != kept_date:
+                what += (f" and the date “{date_value}”" if date_value
+                         else " and clearing the date")
+                date_value = kept_date
+            left_out.append(what + " (saved when you leave the note or "
+                            "press Save)")
             rule = kept_rule
         return date_value, rule, left_out
 
@@ -20516,6 +20532,29 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         }
         for key in ("date", "recurrence", "exceptions", "overrides"):
             prev[key] = copy.deepcopy(note.get(key))
+        return prev
+
+    # The text fields a rescue copy of text alone holds.
+    _RESCUE_TEXT_KEYS = ("title", "body", "formatting", "paragraphs", "comments")
+
+    def _turn_off_rescue_copy(self, note):
+        """The rescue copy a repeat's turn-off makes: *note* whole, its
+        repeat and days included (_whole_note_rescue_copy) -- with the text
+        of a rescue copy a save made while that turn-off waited, if the note
+        still holds it.
+
+        A held save stores everything but the turn-off, a big delete among
+        it, with its own copy of the text it took away. The turn-off came
+        first in what the person did, but it is saved last, and its copy,
+        taken from the note the held saves left, replaced the delete's: the
+        deleted text was in no file. The copy is known by identity, so it
+        is never taken for one an earlier visit made."""
+        prev = self._whole_note_rescue_copy(note)
+        held = getattr(self, "_held_text_rescue", None)
+        self._held_text_rescue = None
+        if held is not None and note.get("_prev") is held:
+            for key in self._RESCUE_TEXT_KEYS:
+                prev[key] = copy.deepcopy(held.get(key))
         return prev
 
     def _write_series_owned(self, note, date_value, recurrence, schedule=True):
@@ -20852,7 +20891,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 days_lost = repeat_off_kept = self._repeat_off_loses_days(
                     note, recurrence)
                 if days_lost:
-                    note["_prev"] = self._whole_note_rescue_copy(note)
+                    note["_prev"] = self._turn_off_rescue_copy(note)
                 elif (emptied or series_text_replaced
                         or (removed > 40 and (big_fraction or big_absolute))):
                     note["_prev"] = {
@@ -20862,6 +20901,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                         "paragraphs": note.get("paragraphs", []),
                         "comments": note.get("comments", ""),
                     }
+                    # Made while a turn-off waits: the turn-off's own copy
+                    # keeps this text when it is made (_turn_off_rescue_copy).
+                    if (getattr(self, "_holding_repeat_off", False)
+                            and self._repeat_off_waits()):
+                        self._held_text_rescue = note["_prev"]
                 if own_day:
                     # ...and the day's own copy goes: it now says what the
                     # series says. Kept, it made the day read as unsaved

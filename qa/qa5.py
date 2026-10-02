@@ -2033,6 +2033,76 @@ check(f'the status line names what is left out as it stands, a waiting '
       and 'turning the repeat off' in _rn_said[1]
       and 'except' not in _rn_said[2])
 
+
+# What waits with a turn-off, and what a delete or an Undo makes of it.
+def _rn_fresh(body='series text'):
+    app.new_note(); app.update()
+    app.notes = [
+        NO.normalize_note({'id': 1, 'title': 'Weekly', 'body': body,
+                           'date': '2026-09-07', 'recurrence': {'freq': 'weekly'},
+                           'overrides': {'2026-09-14': {'body': 'DAY 14'}},
+                           'exceptions': ['2026-09-28']}),
+        NO.normalize_note({'id': 2, 'title': 'Other', 'body': 'y'})]
+    app.save_notes()
+    app.open_note_in_tab(app.find_note(1)); app.update()
+    app._cancel_pending_autosave()
+
+
+def _rn_prev():
+    return (app.find_note(1) or {}).get('_prev') or {}
+
+
+_RN_SERIES = ('weekly', ['2026-09-14'], ['2026-09-28'])
+# A date typed with the turn-off waits with it. Saved alone, it moved the
+# series, still repeating, to the new weekday -- a day's own text on no day
+# -- and the rescue copy the turn-off made later held the moved series.
+_rn_fresh()
+_rn_ok = _rn_pick(NO.FREQ_LABELS[''])
+app.date_entry.delete(0, 'end'); app.date_entry.insert(0, '2026-09-10')
+app._autosave_now(); app.update()
+_rn_dw = [((app.find_note(1) or {}).get('date'), _rn_days()[0],
+           '2026-09-10' in str(app.status_lbl.cget('text')))]
+app.open_note_in_tab(app.find_note(2)); app.update()
+_rn_dw.append(((app.find_note(1) or {}).get('date'), _rn_days()[0],
+               _rn_prev().get('date'),
+               (_rn_prev().get('recurrence') or {}).get('freq')))
+check(f'a date typed with a waiting turn-off waits with it, and the rescue '
+      f'copy holds the series where it was ({_rn_dw})',
+      _rn_ok and _rn_dw == [('2026-09-07', 'weekly', True),
+                            ('2026-09-10', '', '2026-09-07', 'weekly')])
+# A big delete made while the turn-off waits keeps its text when the
+# turn-off is made: the turn-off's whole-note copy, taken from the note the
+# held saves left, replaced the delete's, and the text was in no file.
+_RN_LONG = ' '.join(['LONG SERIES TEXT'] * 20)
+_rn_fresh(_RN_LONG)
+_rn_ok = _rn_pick(NO.FREQ_LABELS[''])
+app.body_text.delete('1.0', 'end')
+app.body_text.insert('1.0', 'short')
+app._autosave_now(); app.update()
+app.open_note_in_tab(app.find_note(2)); app.update()
+_rn_bd = ((app.find_note(1) or {}).get('body'), _rn_days()[0],
+          _rn_prev().get('body') == _RN_LONG,
+          (_rn_prev().get('recurrence') or {}).get('freq'),
+          sorted(_rn_prev().get('overrides') or {}))
+check(f'a big delete made while a turn-off waits keeps its text in the '
+      f'rescue copy the turn-off makes ({_rn_bd})',
+      _rn_ok and _rn_bd == ('short', '', True, 'weekly', ['2026-09-14']))
+# ...within that wait only: with the repeat picked again in between, a later
+# turn-off's copy is the note as it stands, as after any big delete followed
+# by a turn-off -- not the text from before a delete the person had kept.
+_rn_fresh(_RN_LONG)
+_rn_ok = _rn_pick(NO.FREQ_LABELS[''])
+app.body_text.delete('1.0', 'end')
+app.body_text.insert('1.0', 'short')
+app._autosave_now(); app.update()
+_rn_ok = _rn_pick(NO.FREQ_LABELS['weekly']) and _rn_ok
+app._autosave_now(); app.update()
+_rn_ok = _rn_pick(NO.FREQ_LABELS['']) and _rn_ok
+app.open_note_in_tab(app.find_note(2)); app.update()
+_rn_bd = (_rn_prev().get('body'), (_rn_prev().get('recurrence') or {}).get('freq'))
+check(f'...and only within that wait: a turn-off made after the repeat was '
+      f'picked again keeps the note as it stands ({_rn_bd})',
+      _rn_ok and _rn_bd == ('short', 'weekly'))
 # Restore previous with a big delete still waiting for its autosave: the
 # autosave ran while the question waited and made a new rescue copy of the
 # words just deleted, which the restore -- of the copy read before the
