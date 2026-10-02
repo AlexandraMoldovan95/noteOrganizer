@@ -577,6 +577,118 @@ check("paragraph, table and selection tags are not",
                "text_color_nothex", "highlight_", "font_Nope_99_10",
                None, 5)))
 
+# ---- Where a composite font tag goes, worked out in one sweep ----
+# resolve_font_runs checked every span at every span boundary: one font
+# size in a note of 8,000 styled words cost 1.7 s at every open, every
+# Enter in a numbered list and every font change. The sweep must give the
+# very runs the old way gave -- this is the old way, kept as the oracle.
+import random as _random
+import sys as _sys
+from noteorganizer.core.formatting import (resolve_font_runs,
+                                           normalize_formatting,
+                                           FONT_FAMILIES, FONT_SIZES,
+                                           FONT_VALUE_STYLES)
+
+
+def _runs_checked_one_by_one(spans, text_length):
+    spans = normalize_formatting(spans)
+    affects = {"bold", "italic", "bold_italic"} | FONT_VALUE_STYLES
+    relevant = [s for s in spans if s["style"] in affects]
+    if not any(s["style"] in FONT_VALUE_STYLES for s in relevant):
+        return []
+    marks = {0, text_length}
+    for s in relevant:
+        marks.update((s["start"], s["end"]))
+    points = sorted(m for m in marks if 0 <= m <= text_length)
+    runs = []
+    for a, z in zip(points, points[1:]):
+        bold = italic = False
+        size = family = None
+        for s in relevant:
+            if s["start"] > a or s["end"] < z:
+                continue
+            if s["style"] == "bold":
+                bold = True
+            elif s["style"] == "italic":
+                italic = True
+            elif s["style"] == "bold_italic":
+                bold = italic = True
+            elif s["style"] == "font_size":
+                size = s["value"]
+            else:
+                family = s["value"]
+        if size is not None or family is not None:
+            runs.append((a, z, bold, italic, size, family))
+    merged = []
+    for run in runs:
+        if merged and merged[-1][1] == run[0] and merged[-1][2:] == run[2:]:
+            merged[-1] = (merged[-1][0], run[1]) + run[2:]
+        else:
+            merged.append(run)
+    return merged
+
+
+def _random_spans(rng, length):
+    spans = []
+    for _ in range(rng.randint(0, 14)):
+        a = rng.randint(0, length + 3)
+        z = a + rng.randint(1, 12)
+        style = rng.choice(("bold", "italic", "bold_italic", "underline",
+                            "font_size", "font_family", "font_size"))
+        span = {"start": a, "end": z, "style": style}
+        if style == "font_size":
+            span["value"] = rng.choice(FONT_SIZES)
+        elif style == "font_family":
+            span["value"] = rng.choice(FONT_FAMILIES)
+        spans.append(span)
+    return spans
+
+
+_rng = _random.Random(20261002)
+_differ = []
+for _case in range(4000):
+    _len = _rng.randint(0, 30)
+    _sp = _random_spans(_rng, _len)
+    if resolve_font_runs(_sp, _len) != _runs_checked_one_by_one(_sp, _len):
+        _differ.append((_sp, _len))
+check(f"the sweep gives the runs every span checked in turn gave, on 4,000 "
+      f"random notes -- overlapping sizes and families, bold_italic, spans "
+      f"past the end ({len(_differ)} differ)", not _differ)
+
+
+def _lines_run_in(fn, *args):
+    """How many lines of *fn* itself ran: the work it does, counted rather
+    than timed, so a slow machine cannot fail it and a fast one cannot
+    hide a loop inside a loop."""
+    ran = [0]
+
+    def inside(frame, event, arg):
+        if event == "line":
+            ran[0] += 1
+        return inside
+
+    def calls(frame, event, arg):
+        return inside if frame.f_code is fn.__code__ else None
+
+    _sys.settrace(calls)
+    try:
+        fn(*args)
+    finally:
+        _sys.settrace(None)
+    return ran[0]
+
+
+_n = 600
+_many = [{"start": 3 * i, "end": 3 * i + 2,
+          "style": ("bold", "italic")[i % 2]} for i in range(_n)]
+_many.append({"start": 0, "end": 3 * _n, "style": "font_size", "value": 20})
+_lines = _lines_run_in(resolve_font_runs, _many, 3 * _n)
+# About 46 lines a word now; checking every span at every boundary ran
+# about 3,600 a word (2.2 million in all), measured.
+check(f"working out the runs of {_n} styled words and one size takes work in "
+      f"step with the words, not with their square ({_lines} lines ran)",
+      _lines <= 120 * _n)
+
 print()
 print(f"FAILURES: {fails if fails else 'none'}")
 
