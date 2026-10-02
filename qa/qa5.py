@@ -2604,6 +2604,38 @@ check(f'Cancel on the question a day\'s Undo asks first keeps the Undo on '
       f'offer ({_rn_stay}; then {_rn_then})',
       _rn_ok and _rn_stay == (True, 'TYPED', [])
       and _rn_then == ('TYPED', 'DAY 14'))
+# ...and the category move's Undo the same: where each note came from is kept
+# nowhere else.
+NO.CATEGORY_COLORS['TempMove5'] = '#336699'
+_rn_day_fresh()
+app.find_note(1)['category'] = 'TempMove5'
+app.save_notes()
+# Brought along, as the move itself does: left showing the old category, the
+# editor's next save would put it back.
+app._editor_follows_external_change({1})
+app.open_note_in_tab(app.find_note(1), occurrence_date='2026-09-14')
+app.update()
+app.body_text.delete('1.0', 'end')
+app.body_text.insert('1.0', 'TYPED')
+app._cancel_pending_autosave()
+_rn_mark = [(1, 'General', '2026-09-01 08:00:00', app.find_note(1).get('uid'))]
+app.ask_occurrence_scope = lambda *a, **k: None
+try:
+    app._undo_bulk_category(_rn_mark, 'TempMove5'); app.update()
+finally:
+    app.ask_occurrence_scope = _oc_real_scope
+_rn_cstay = (app._toast_action is not None, app.find_note(1)['category'])
+app.ask_occurrence_scope = lambda *a, **k: 'occurrence'
+try:
+    app._run_toast_action(); app.update()
+finally:
+    app.ask_occurrence_scope = _oc_real_scope
+app._cancel_pending_autosave()
+_rn_cthen = app.find_note(1)['category']
+NO.CATEGORY_COLORS.pop('TempMove5', None)
+check(f'Cancel on the question a category move\'s Undo asks first keeps the '
+      f'Undo on offer ({_rn_cstay}; then {_rn_cthen})',
+      _rn_cstay == (True, 'TempMove5') and _rn_cthen == 'General')
 # The calendar is asked whether the series has the day whatever the branch:
 # with the rule changed since the delete, the day still among the skipped
 # ones, the Undo put it back -- and opened it, its own text on it -- on a
@@ -2640,6 +2672,19 @@ _rn_back = (str(app.status_lbl.cget('text')), app.selected_note_id,
 check(f'the Undo of a day finds its series after it came back from the Trash '
       f'under a new number ({_rn_back})',
       _rn_back == ('Put that day back', 7, 'DAY 14'))
+NO.CATEGORY_COLORS['TempMove5'] = '#336699'
+app.new_note(); app.update()
+app.notes = [NO.normalize_note({'id': 3, 'title': 'Restored', 'body': 'r',
+                                'category': 'TempMove5', 'uid': 'u-restored'})]
+app.save_notes()
+app._undo_bulk_category([(2, 'General', '2026-09-01 08:00:00', 'u-restored')],
+                        'TempMove5')
+app.update()
+_rn_moved_back = app.find_note(3)['category']
+NO.CATEGORY_COLORS.pop('TempMove5', None)
+check(f'the Undo of a category move finds a note after it came back from the '
+      f'Trash under a new number ({_rn_moved_back})',
+      _rn_moved_back == 'General')
 
 # Restore previous with a big delete still waiting for its autosave: the
 # autosave ran while the question waited and made a new rescue copy of the

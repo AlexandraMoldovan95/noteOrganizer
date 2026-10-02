@@ -21434,8 +21434,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
     def _undo_bulk_category(self, marks, applied):
         """Put each note back in the category it was moved out of.
 
-        `marks` carry one (id, category, updated) per note rather than one
-        old value for the batch, because the ticked notes can sit in
+        `marks` carry one (id, category, updated, uid) per note rather than
+        one old value for the batch, because the ticked notes can sit in
         several categories at once -- which is the case a bulk change
         exists for, and therefore the case its undo has to get right.
 
@@ -21451,23 +21451,28 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         the top of a "Recently updated" list on account of a change the
         user just said they did not want.
         """
+        # Each note by its identity when the mark has it (_note_for_undo).
+        notes = [self._note_for_undo(mark[0], mark[3] if len(mark) > 3 else None)
+                 for mark in marks]
         # The editor may be holding one of these notes and may have been
         # typed into while the toast was up: save that under the category
         # it was typed against, then move the note, then bring the editor
         # onto the result -- the same order the change itself uses.
         if self._flush_autosave(leaving=self.selected_note_id in {
-                mark[0] for mark in marks}) is False:
-            return  # Cancel on a day's save question: the undo waits
+                note["id"] for note in notes if note is not None}) is False:
+            # Cancel on a day's save question means stay -- and the offer
+            # stays with it: where each note came from is kept nowhere else.
+            count = len(marks)
+            self._show_toast(
+                f"Moved {count} {'note' if count == 1 else 'notes'} to "
+                f"\u201c{applied}\u201d",
+                action=lambda: self._undo_bulk_category(marks, applied))
+            return
         restored = []
         homeless = 0
-        for mark in marks:
-            note_id, old_category, old_updated = mark[:3]
-            note = self.find_note(note_id)
-            # The note's identity too, when the mark has it: an id freed by
-            # a delete goes to the next new note, which is not this one.
-            if (note is None or note.get("category") != applied
-                    or (len(mark) > 3 and mark[3]
-                        and note.get("uid") != mark[3])):
+        for mark, note in zip(marks, notes):
+            old_category, old_updated = mark[1:3]
+            if note is None or note.get("category") != applied:
                 continue
             if old_category not in CATEGORY_COLORS:
                 # Renamed or deleted while the toast was up. There is
