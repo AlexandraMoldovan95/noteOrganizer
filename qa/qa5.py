@@ -2542,6 +2542,104 @@ app._cancel_pending_autosave()
 check(f'an open series\' banner counts its days\' own edits after a day is '
       f'deleted, put back or reset ({_rn_bn})',
       _rn_ok and _rn_bn == [True, False, True, False])
+# The Undo of a day clicked with THAT day open -- a repeat picked anew has it
+# again, the series' text on it -- saves the editor before it writes the
+# day, and opens it without a second save. Saved after, the editor's view
+# read as an edit, asked "What should Save apply to?", and every answer but
+# Cancel wrote the series' text over the day's own.
+_rn_day_fresh()
+_rn_ok = _rn_pick(NO.FREQ_LABELS[''])
+_rn_day_delete()
+app.save_current_note(); app.update()
+_rn_ok = _rn_pick(NO.FREQ_LABELS['weekly']) and _rn_ok
+app.save_current_note(); app.update()
+app.open_note_in_tab(app.find_note(1), occurrence_date='2026-09-14')
+app.update()
+app._cancel_pending_autosave()
+_rn_asked = []
+app.ask_occurrence_scope = lambda *a, **k: (_rn_asked.append(a), 'occurrence')[1]
+try:
+    app._run_toast_action(); app.update()
+finally:
+    app.ask_occurrence_scope = _oc_real_scope
+app._cancel_pending_autosave()
+_rn_op = (_rn_asked, app.current_occurrence_date,
+          app.body_text.get('1.0', 'end-1c'),
+          ((app.find_note(1).get('overrides') or {}).get('2026-09-14')
+           or {}).get('body'))
+check(f'the Undo of a day clicked with that very day open asks nothing and '
+      f'shows the day\'s own text ({_rn_op})',
+      _rn_ok and _rn_op == ([], '2026-09-14', 'DAY 14', 'DAY 14'))
+# Cancel on the question that save asks -- the day typed into -- means stay,
+# and the Undo stays on offer: the day's own text is kept nowhere else.
+_rn_day_fresh()
+_rn_ok = _rn_pick(NO.FREQ_LABELS[''])
+_rn_day_delete()
+app.save_current_note(); app.update()
+_rn_ok = _rn_pick(NO.FREQ_LABELS['weekly']) and _rn_ok
+app.save_current_note(); app.update()
+app.open_note_in_tab(app.find_note(1), occurrence_date='2026-09-14')
+app.update()
+app.body_text.delete('1.0', 'end')
+app.body_text.insert('1.0', 'TYPED')
+app._cancel_pending_autosave()
+app.ask_occurrence_scope = lambda *a, **k: None
+try:
+    app._run_toast_action(); app.update()
+finally:
+    app.ask_occurrence_scope = _oc_real_scope
+app._cancel_pending_autosave()
+_rn_stay = (app._toast_action is not None, app.body_text.get('1.0', 'end-1c'),
+            sorted(app.find_note(1).get('overrides') or {}))
+app.ask_occurrence_scope = lambda *a, **k: 'series'
+try:
+    app._run_toast_action(); app.update()
+finally:
+    app.ask_occurrence_scope = _oc_real_scope
+app._cancel_pending_autosave()
+_rn_then = (app.find_note(1)['body'],
+            ((app.find_note(1).get('overrides') or {}).get('2026-09-14')
+             or {}).get('body'))
+check(f'Cancel on the question a day\'s Undo asks first keeps the Undo on '
+      f'offer ({_rn_stay}; then {_rn_then})',
+      _rn_ok and _rn_stay == (True, 'TYPED', [])
+      and _rn_then == ('TYPED', 'DAY 14'))
+# The calendar is asked whether the series has the day whatever the branch:
+# with the rule changed since the delete, the day still among the skipped
+# ones, the Undo put it back -- and opened it, its own text on it -- on a
+# day no calendar showed.
+_rn_day_fresh()
+_rn_day_delete()
+_rn_ok = _rn_pick(NO.FREQ_LABELS['monthly'])
+app.save_current_note(); app.update()
+app._run_toast_action(); app.update()
+app._cancel_pending_autosave()
+_rn_rule = (str(app.toast_lbl.cget('text')),
+            sorted(app.find_note(1).get('overrides') or {}),
+            app.find_note(1).get('exceptions'))
+check(f'the Undo of a day whose series\' rule changed since says it can\'t '
+      f'come back, and writes nothing ({_rn_rule})',
+      _rn_ok and 'no longer has that day' in _rn_rule[0]
+      and _rn_rule[1:] == ([], ['2026-09-14', '2026-09-28']))
+# The Undo finds its note by identity, not by number: a note restored from the
+# Trash comes back under a new number, and looked up by the old one the day's
+# Undo said "That note is no longer here" -- the note in the list. (The
+# category move's Undo found nothing to put back: below.)
+_rn_day_fresh()
+_rn_uid = app.find_note(1).get('uid')
+app.find_note(1)['overrides'].pop('2026-09-14')
+app.find_note(1)['exceptions'] = ['2026-09-14', '2026-09-28']
+app.find_note(1)['id'] = 7
+app.open_note_in_tab(app.find_note(2)); app.update()
+app._undo_occurrence_delete(1, '2026-09-14', {'body': 'DAY 14'}, _rn_uid)
+app.update()
+app._cancel_pending_autosave()
+_rn_back = (str(app.status_lbl.cget('text')), app.selected_note_id,
+            ((app.find_note(7).get('overrides') or {}).get('2026-09-14')
+             or {}).get('body'))
+check(f'the Undo of a day finds its series after it came back from the Trash '
+      f'under a new number ({_rn_back})',
+      _rn_back == ('Put that day back', 7, 'DAY 14'))
 
 # Restore previous with a big delete still waiting for its autosave: the
 # autosave ran while the question waited and made a new rescue copy of the
