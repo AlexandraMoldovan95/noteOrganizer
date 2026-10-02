@@ -11414,6 +11414,65 @@ try:
           f'back and forth exactly (headers no step had: {_wp_odd})',
           _wp_drawn and 'ItemXY' in _wp_end and not _wp_odd
           and _wp_back == _wp_start and _wp_fwd == _wp_end)
+    # ...and into a later row of a table typed by hand: its header was drawn
+    # as the caret left it, the row being typed sits under the grid, and the
+    # paste drew it too -- the next letter went under the table.
+    _lr = []
+    for _lr_route in ('Ctrl+V', 'menu'):
+        set_body('Intro' + chr(10) + chr(10) + chr(10) + 'end line')
+        app._reset_text_undo()
+        app.body_text.mark_set('insert', '2.0')
+        app._last_caret_line = None
+        for _lr_line in ('| Item name | Qty |', '| --- | --- |'):
+            for _lr_ch in _lr_line:
+                _ty_key(_pr_keys.get(_lr_ch, _lr_ch), _lr_ch)
+            _ty_key('Return', chr(10))
+        for _lr_ch in '| Tea | 2 |':
+            _ty_key(_pr_keys.get(_lr_ch, _lr_ch), _lr_ch)
+        for _ in range(3):
+            _sm_press('<KeyPress-Left>')
+        _lr_header = app._grid_at_line(2) is not None
+        _sm_clip['data'] = 'XY'
+        if _lr_route == 'Ctrl+V':
+            _own_key('<Control-KeyPress-v>', '<Control-KeyRelease-v>',
+                     ('Control_L',))
+        else:
+            take_focus(app.body_text)
+            app.body_text.event_generate('<<Paste>>')
+            app.update()
+        app.update()
+        _ty_key('Z', 'Z')
+        _lr.append((_lr_route, _lr_header, app.body_text.get('4.0', '4.end'),
+                    app._grid_at_line(2) is not None
+                    and app._grid_at_line(4) is None))
+    # ...or a row typed straight above a drawn table, which joins it: the
+    # table under the row is drawn as it was.
+    set_body('Intro' + chr(10) + chr(10) + '| Item | Qty |' + chr(10)
+             + '| --- | --- |' + chr(10) + '| Tea | 2 |' + chr(10) + chr(10)
+             + 'end line')
+    app._render_table_grids()
+    app.update()
+    app._reset_text_undo()
+    app.body_text.mark_set('insert', '2.0')
+    app._last_caret_line = None
+    for _lr_ch in '| New | Row |':
+        _ty_key(_pr_keys.get(_lr_ch, _lr_ch), _lr_ch)
+    for _ in range(3):
+        _sm_press('<KeyPress-Left>')
+    _sm_clip['data'] = 'XY'
+    _own_key('<Control-KeyPress-v>', '<Control-KeyRelease-v>', ('Control_L',))
+    app.update()
+    _ty_key('Z', 'Z')
+    _lr.append(('above', app._grid_at_line(3) is not None,
+                app.body_text.get('2.0', '2.end'),
+                app._grid_at_line(2) is None))
+    _sm_clip['data'] = _sm_tsv
+    check(f'...and into a later row of one, under its drawn header, or a row '
+          f'typed above one ({_lr})',
+          [(r, h, t, d) for r, h, t, d in _lr]
+          == [('Ctrl+V', True, '| Tea | XYZ2 |', True),
+              ('menu', True, '| Tea | XYZ2 |', True),
+              ('above', True, '| New | RoXYZw |', True)])
     # A table at the very end of a note gets a line under it from the
     # drawing, which Tk never records. Ctrl+Z back past the Enter that made
     # the person's own line there, then Ctrl+Y, doubled that line, and from

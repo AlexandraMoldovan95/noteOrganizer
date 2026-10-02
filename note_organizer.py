@@ -2464,10 +2464,18 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     pass
         self.body_text.tag_configure(self.TABLE_HIDE_TAG, elide=True)
         text = self.body_text.get("1.0", "end-1c")
-        blocks = [(first0, last0)
-                  for first0, last0 in core_tables.find_blocks(text)
-                  if keep_typed is None
-                  or not first0 + 1 <= keep_typed <= last0 + 1]
+        blocks = []
+        for first0, last0 in core_tables.find_blocks(text):
+            if keep_typed is None or not first0 + 1 <= keep_typed <= last0 + 1:
+                blocks.append((first0, last0))
+                continue
+            # The row being typed stays text; the rows on either side of it,
+            # drawn before the paste, are drawn as they were.
+            kept0 = keep_typed - 1
+            if kept0 > first0:
+                blocks.append((first0, kept0 - 1))
+            if kept0 < last0:
+                blocks.append((kept0 + 1, last0))
         for first0, last0 in blocks:
             self._build_table_grid(first0 + 1, last0 + 1)
         # There is always a line under the last table, or the caret guard
@@ -6811,15 +6819,22 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
     _PASTE_FROM_TABLE = "pasteFromTable"
 
     def _note_raw_table_at_caret(self):
-        """The table being typed -- not yet drawn -- that the caret stands
-        in, as a mark at its first line; None when there is none."""
+        """The table being typed that the caret stands in -- its row not yet
+        drawn -- as a mark at its first line; None when there is none. Asked
+        of the caret's own row: a table typed by hand is drawn row by row as
+        the caret leaves each, so the row being typed sits under a drawn
+        header, and asking whether the table's first line was drawn found
+        none being typed past its first row."""
         b = self.body_text
         try:
             here = int(b.index("insert").split(".")[0])
         except (tk.TclError, ValueError):
             return None
         block = self._table_block_at(here)
-        if block is None or self._grid_at_line(block[0]) is not None:
+        if block is None or any(
+                first is not None and first <= here < first + info["nrows"]
+                for info in getattr(self, "_table_grids", [])
+                for first in (self._grid_first_line(info),)):
             return None
         b.mark_set(self._PASTE_FROM_TABLE, f"{block[0]}.0")
         b.mark_gravity(self._PASTE_FROM_TABLE, "right")
