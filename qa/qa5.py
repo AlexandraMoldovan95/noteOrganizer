@@ -2293,8 +2293,9 @@ check(f'"Continue without it" on a delete names the turn-off it takes back '
 # The Undo of a day's delete after a waiting turn-off was made (leaving the
 # note within the Undo's seconds) said "That day is already back" and did
 # nothing; the day's own text was in no file -- the turn-off had not seen
-# it, so it made no rescue copy. The day's text stays in the note while
-# the turn-off waits, and the Undo puts the day back in the rescue copy.
+# it, so it made no rescue copy. The Undo, clicked as a person clicks it,
+# puts the day back into the series it was given, where Restore previous
+# keeps it.
 app.new_note(); app.update()
 app.notes = [
     NO.normalize_note({'id': 1, 'title': 'Weekly', 'body': 'series text',
@@ -2314,7 +2315,7 @@ finally:
     app.ask_occurrence_scope = _oc_real_scope
 app.open_note_in_tab(app.find_note(2)); app.update()
 _rn_ok = _rn_ok and _rn_days()[0] == ''
-app._undo_occurrence_delete(1, '2026-09-14', {'body': 'DAY 14'}); app.update()
+app._run_toast_action(); app.update()
 _rn_ug = [str(app.status_lbl.cget('text')),
           sorted(_rn_prev().get('exceptions') or []),
           ((_rn_prev().get('overrides') or {}).get('2026-09-14') or {}).get('body')]
@@ -2362,12 +2363,12 @@ def _rn_banner():
 # The other order: a day deleted with the repeat on, and the repeat turned
 # off within its Undo's seconds. The turn-off saw no day of its own left,
 # made no copy, and the Undo had nothing to bring the day back in -- its
-# own text in no file. The Undo still on offer is counted now.
+# own text in no file. The Undo holds the series as the delete left it.
 _rn_day_fresh()
 _rn_day_delete()
 _rn_ok = _rn_pick(NO.FREQ_LABELS[''])
 app.open_note_in_tab(app.find_note(2)); app.update()
-app._undo_occurrence_delete(1, '2026-09-14', {'body': 'DAY 14'}); app.update()
+app._run_toast_action(); app.update()
 _rn_ro = [str(app.status_lbl.cget('text')),
           ((_rn_prev().get('overrides') or {}).get('2026-09-14') or {}).get('body')]
 # ...and with the repeat picked anew and saved before the Undo, the day goes
@@ -2379,7 +2380,7 @@ _rn_day_delete()
 app.save_current_note(); app.update()
 _rn_ok = _rn_pick(NO.FREQ_LABELS['weekly']) and _rn_ok
 app.save_current_note(); app.update()
-app._undo_occurrence_delete(1, '2026-09-14', {'body': 'DAY 14'}); app.update()
+app._run_toast_action(); app.update()
 app._cancel_pending_autosave()
 _rn_ro += [str(app.status_lbl.cget('text')),
            sorted(_rn_prev().get('exceptions') or []),
@@ -2403,6 +2404,69 @@ app._cancel_pending_autosave()
 check(f'the deleted day of a series whose turn-off was taken back keeps no '
       f'text of its own in the note ({_rn_kd})',
       _rn_ok and _rn_kd == ([], False))
+# A turn-off made while a deleted day's Undo is on offer makes no rescue copy
+# of its own: it takes nothing of the day, whose text is with the Undo.
+# Counted, it made one anyway -- for an Undo that might never be clicked, or
+# that died with the window -- and it replaced the note's own copy: a big
+# delete's words in no file. The Undo, clicked, puts the day into a copy
+# that keeps them.
+_rn_long = 'LONG SERIES TEXT the person wrote ' * 6
+_rn_day_fresh()
+app.new_note(); app.update()
+app.find_note(1)['body'] = _rn_long
+app.save_notes()
+app.open_note_in_tab(app.find_note(1)); app.update()
+app._cancel_pending_autosave()
+_rn_ok = app.body_text.get('1.0', 'end-1c') == _rn_long
+app.body_text.delete('1.0', 'end'); app.body_text.insert('1.0', 'short')
+app._autosave_now(); app.update()
+_rn_cp = [_rn_prev().get('body') == _rn_long]
+_rn_day_delete()
+_rn_ok = _rn_pick(NO.FREQ_LABELS['']) and _rn_ok
+app.save_current_note(); app.update()
+_rn_cp.append(_rn_prev().get('body') == _rn_long)
+app._run_toast_action(); app.update()
+app._cancel_pending_autosave()
+_rn_cp += [_rn_prev().get('body') == _rn_long,
+           (_rn_prev().get('recurrence') or {}).get('freq'),
+           ((_rn_prev().get('overrides') or {}).get('2026-09-14') or {}).get('body')]
+check(f'a turn-off made while a deleted day\'s Undo is on offer keeps the '
+      f'note\'s older rescue copy, and the Undo puts the day into it ({_rn_cp})',
+      _rn_ok and _rn_cp == [True, True, True, 'weekly', 'DAY 14'])
+# ...and when another day's text made the turn-off keep a copy of its own,
+# the Undo puts the day into that copy, beside the other day's text.
+_rn_day_fresh()
+app.find_note(1)['overrides']['2026-09-21'] = {'body': 'DAY 21'}
+app.save_notes()
+_rn_day_delete()
+_rn_ok = _rn_pick(NO.FREQ_LABELS[''])
+app.save_current_note(); app.update()
+app._run_toast_action(); app.update()
+app._cancel_pending_autosave()
+_rn_both = sorted((d, (o or {}).get('body')) for d, o in
+                  (_rn_prev().get('overrides') or {}).items())
+check(f'the Undo puts the day into the copy a turn-off kept for another day\'s '
+      f'text ({_rn_both})',
+      _rn_ok and _rn_both == [('2026-09-14', 'DAY 14'), ('2026-09-21', 'DAY 21')]
+      and sorted(_rn_prev().get('exceptions') or []) == ['2026-09-28'])
+# The Undo of a day, clicked with another note in the editor, opens its own
+# note: the words point at a Restore previous button, and the one on screen
+# was the other note's -- pressing it replaced THAT note's text.
+_rn_day_fresh()
+app.find_note(2)['_prev'] = {'title': 'Other', 'body': 'OLDER OTHER TEXT',
+                             'formatting': [], 'paragraphs': [],
+                             'comments': ''}
+app.save_notes()
+_rn_day_delete()
+_rn_ok = _rn_pick(NO.FREQ_LABELS[''])
+app.open_note_in_tab(app.find_note(2)); app.update()
+app._run_toast_action(); app.update()
+app._cancel_pending_autosave()
+_rn_on = (app.selected_note_id, 'Restore previous' in str(app.status_lbl.cget('text')),
+          app.find_note(2)['body'], app.find_note(2)['_prev']['body'])
+check(f'the Undo of a day clicked with another note open opens its own note '
+      f'({_rn_on})',
+      _rn_ok and _rn_on == (1, True, 'y', 'OLDER OTHER TEXT'))
 # The Undo of the only day a waiting turn-off waited for leaves the turn-off
 # waiting: read after the day went back, nothing waited, the Undo opened the
 # day, and leaving the series made the turn-off -- "Put that day back", the
