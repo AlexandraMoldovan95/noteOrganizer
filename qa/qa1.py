@@ -6942,6 +6942,33 @@ _body_after = app.body_text.get('1.0', 'end-1c')
 check('Enter that renumbers a list above a table keeps the table drawn',
       len(app.body_text.window_names()) == 1
       and len(core_tables.find_blocks(_body_after)) == 1)
+# ...and every Ctrl+Z and Ctrl+Y after it changes something. The rewrite is
+# split where the tables come down, and their drawing again was left as a
+# journal step of its own: in any note with a drawn table, the first Ctrl+Z
+# after a renumber changed nothing on screen, and so did the last Ctrl+Y.
+set_body('1. one' + chr(10) + '2. two' + chr(10) + '| A | B |'
+         + chr(10) + '| --- | --- |' + chr(10) + '| x | y |')
+app._render_table_grids()
+app.update()
+app._reset_text_undo()
+app.body_text.mark_set('insert', '1.end')
+_rw_start = app.body_text.get('1.0', 'end-1c')
+if take_focus(app.body_text):
+    app._on_body_return(None)
+    app.update()
+_rw_after = app.body_text.get('1.0', 'end-1c')
+_rw_seen = []
+for _rw_k in ('undo', 'undo', 'redo', 'redo'):
+    _rw_was = app.body_text.get('1.0', 'end-1c')
+    app._body_undo_redo(_rw_k)
+    app.update()
+    _rw_seen.append(app.body_text.get('1.0', 'end-1c') != _rw_was)
+    if len(_rw_seen) == 2:
+        _rw_back = app.body_text.get('1.0', 'end-1c') == _rw_start
+check(f'every Ctrl+Z and Ctrl+Y after a renumber beside a drawn table '
+      f'changes something ({_rw_seen})',
+      _rw_after != _rw_start and _rw_seen == [True, True, True, True]
+      and _rw_back and app.body_text.get('1.0', 'end-1c') == _rw_after)
 
 # The whole-body renumber rewrite (delete-all + reinsert) on the key
 # path is ONE undo unit: one Ctrl+Z after such an Enter must never leave

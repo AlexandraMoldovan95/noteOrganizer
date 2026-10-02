@@ -14635,11 +14635,25 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
     def _push_atom_step(self, before, after):
         """One journal step for (the part of) a unit that ran from
         *before* to *after*, marked with whether its text edits were
-        recorded with the tables taken down."""
+        recorded with the tables taken down.
+
+        A part in which only the drawn tables moved -- the same text, the
+        same formatting once the windows are accounted for -- is no step:
+        a unit that rewrites the body (a list renumbered) or inserts a
+        table beside a drawn one is split where the tables come down, and
+        its drawing again was left as a step of its own, which the first
+        Ctrl+Z took back with nothing changing on screen (and the last
+        Ctrl+Y). Tk holds no step for it either: no text changed."""
         journal = getattr(self, "_fmt_undo", None)
         if journal is None:
             journal = self._fmt_undo = []
         text = after[0] != before[0]
+        if (not text and before[1] != after[1]
+                and len(before) > 2 and len(after) > 2
+                and {t: _fmt_pairs(_fmt_move_ranges(s, before[1], after[1]))
+                     for t, s in before[2]}
+                == {t: _fmt_pairs(s) for t, s in after[2]}):
+            return
         journal.append({"text": text,
                         "before": before, "after": after,
                         "grids_down": getattr(self, "_atom_part_grids_down", False)})
