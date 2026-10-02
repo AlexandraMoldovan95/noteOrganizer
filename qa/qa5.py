@@ -1599,6 +1599,35 @@ app._cancel_pending_autosave()
 check(f'...and so is a start date typed on the day, which leaving would have '
       f'moved the whole series to ({_rn_reset_date!r})',
       _rn_reset_date == '2026-09-07')
+# ...and a box it cannot read keeps only itself: the whole repeat was
+# carried for its sake, a weekday ticked beside it with it, and leaving
+# saved that weekday to the series. Typed with another frequency, the box
+# goes with the change it was typed for.
+_rn_beside = []
+for _rn_change in ('weekday', 'freq'):
+    _rr_day()
+    if _rn_change == 'weekday':
+        app.rec_weekday_state = [i == 2 for i in range(7)]
+        app.refresh_weekday_buttons()
+    else:
+        app.rec_freq_var.set(NO.FREQ_LABELS['monthly'])
+        app.on_recurrence_changed()
+    app.rec_interval_var.set('2x'); app.update()
+    app.ask_yes_no = lambda *a, **k: True
+    try:
+        app._reset_occurrence_override(app.find_note(1), '2026-09-14')
+        app.update()
+    finally:
+        app.ask_yes_no = _ro_yes
+    _rn_beside.append((_rn_change, app.selected_freq_key(),
+                       app.rec_interval_var.get(),
+                       [i for i, on in enumerate(app.rec_weekday_state) if on]))
+    app._put_back_stored_date_and_repeat()
+    app._cancel_pending_autosave()
+check(f'...and a box it cannot read keeps only itself, never a readable '
+      f'change beside it ({_rn_beside})',
+      _rn_beside == [('weekday', 'weekly', '2x', []),
+                     ('freq', 'weekly', '1', [])])
 
 # The status line names a left-out value until it is put right -- also when
 # it is put right to what the note already stores, which leaves nothing to

@@ -20073,7 +20073,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         Reset this day says the day's own edits will be discarded, and a
         readable start date it kept was saved on leaving -- moving the whole
         series without a question, another day's own text with it. A value
-        no save can store moves nothing, and leaving asks about it.
+        no save can store moves nothing, and leaving asks about it; of the
+        repeat, that is its unreadable boxes alone, over the note's rule.
         """
         try:
             date_value, rule, left_out = self._date_and_repeat_to_store()
@@ -20093,13 +20094,13 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                          != (note.get("date") or ""))):
             carried["date"] = typed
         freq = self.selected_freq_key()
+        unreadable = self._unreadable_repeat_fields(freq)
+        stored = normalize_recurrence(note.get("recurrence"))
         # A value it cannot read, the whole repeat left out for want of a
         # start date, or (with *unsaved*) a rule not saved yet.
-        if repeat and (self._unreadable_repeat_fields(freq)
-                       or (freq and not rule["freq"])
-                       or (unsaved and rule != normalize_recurrence(
-                           note.get("recurrence")))):
-            carried["repeat"] = {
+        if repeat and (unreadable or (freq and not rule["freq"])
+                       or (unsaved and rule != stored)):
+            boxes = {
                 "freq": self.rec_freq_var.get(),
                 "interval": self.rec_interval_var.get(),
                 "weekdays": list(self.rec_weekday_state),
@@ -20109,26 +20110,50 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 "end": self.rec_end_date_var.get(),
                 "count": self.rec_count_var.get(),
             }
+            if not unsaved:
+                # Only the boxes no save can store, over the note's own rule
+                # -- which the reload writes back -- and none at all when
+                # they were typed for another rule than the note's (another
+                # frequency, another ending): they go with that change.
+                # Carried whole, one unreadable box kept every readable
+                # change beside it, and leaving saved them to the series.
+                ending = ("after" if stored["count"]
+                          else "on" if stored["end"] else "never")
+                boxes = ({self._REPEAT_BOX[field]: boxes[self._REPEAT_BOX[field]]
+                          for field, _typed in unreadable}
+                         if freq == stored["freq"]
+                         and boxes["end_mode"] == ending else {})
+            if boxes:
+                carried["repeat"] = boxes
         return carried
+
+    # The box each of _unreadable_repeat_fields' values is typed in, as
+    # _schedule_to_carry names it.
+    _REPEAT_BOX = {"every": "interval", "after": "count", "end": "end",
+                   "days": "month_days"}
 
     def _put_back_schedule(self, carried):
         """Show again what _schedule_to_carry carried across a reload; the
         summary line then says what is not understood, and leaving asks or
-        saves."""
+        saves. A repeat carried in part -- the boxes no save can store --
+        lands on the rule the reload wrote, the rest of it left as is."""
         if not carried:
             return
         if "date" in carried:
             self._show_date_in_field(carried["date"])
         rep = carried.get("repeat")
         if rep:
-            self.rec_freq_var.set(rep["freq"])
-            self.rec_interval_var.set(rep["interval"])
-            self.rec_weekday_state = list(rep["weekdays"])
-            self.rec_monthdays_var.set(rep["month_days"])
-            self.rec_policy_var.set(rep["policy"])
-            self.rec_end_mode_var.set(rep["end_mode"])
-            self.rec_end_date_var.set(rep["end"])
-            self.rec_count_var.set(rep["count"])
+            for key, var in (("freq", self.rec_freq_var),
+                             ("interval", self.rec_interval_var),
+                             ("month_days", self.rec_monthdays_var),
+                             ("policy", self.rec_policy_var),
+                             ("end_mode", self.rec_end_mode_var),
+                             ("end", self.rec_end_date_var),
+                             ("count", self.rec_count_var)):
+                if key in rep:
+                    var.set(rep[key])
+            if "weekdays" in rep:
+                self.rec_weekday_state = list(rep["weekdays"])
             self.refresh_weekday_buttons()
             self.on_end_mode_changed()
             self.on_recurrence_changed()
