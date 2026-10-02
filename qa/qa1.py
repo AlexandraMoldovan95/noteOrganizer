@@ -6306,6 +6306,30 @@ check(f'a key that types nothing spreads no style after the table it left '
       f'is tidied (bold {_b.tag_ranges("bold")}; rows {_tyT_rows})',
       _tyT and [str(i) for i in _b.tag_ranges('bold')] == ['5.0', '5.1']
       and len({len(r) for r in _tyT_rows}) == 1)
+# Tk's own Ctrl+T swaps the two letters at the caret, and the Insert key
+# pastes the selection: neither is typing, and a run opened for them gave
+# the swapped letters -- or the pasted words -- the word's style.
+set_body('Pricesab here' + chr(10) + 'second line')
+_b.tag_add('bold', '1.0', '1.6')
+_b.mark_set('insert', '1.7')
+_tyCT = _own_key('<Control-KeyPress-t>', '<Control-KeyRelease-t>',
+                 ('Control_L',))
+_tyCT = (_tyCT, _b.get('1.0', '1.end'),
+         [str(i) for i in _b.tag_ranges('bold')])
+set_body('Prices: here' + chr(10) + 'second line')
+_b.tag_add('bold', '1.0', '1.6')
+_b.mark_set('insert', '1.6')
+app.title_entry.delete(0, 'end')
+app.title_entry.insert(0, 'Fresh words')
+app.title_entry.selection_range(0, 'end')
+_tyIns = _own_key('<KeyPress-Insert>', '<KeyRelease-Insert>')
+_tyIns = (_tyIns, _b.get('1.0', '1.end'),
+          [str(i) for i in _b.tag_ranges('bold')])
+app.title_entry.selection_clear()
+app.title_entry.delete(0, 'end')
+check(f'Ctrl+T and the Insert key spread no style ({_tyCT}; {_tyIns})',
+      _tyCT == (True, 'Pricesba here', ['1.0', '1.6'])
+      and _tyIns == (True, 'PricesFresh words: here', ['1.0', '1.6']))
 set_body('')
 
 # ---- FIELD ROUND 4 ----

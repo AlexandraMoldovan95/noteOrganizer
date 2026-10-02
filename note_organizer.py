@@ -4321,7 +4321,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         predecessor has just been given."""
         self._spread_typed_run()
 
-    def _note_typing_key(self, _event=None):
+    def _note_typing_key(self, event=None):
         """A key with no binding of its own in the body -- every key that
         types -- going down: two marks at the caret, the first staying put,
         the second carried along by whatever goes in there. What the key
@@ -4329,7 +4329,17 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         Tk runs one binding per tag, the most specific, so this never runs
         for a key with a binding of its own (Delete, BackSpace, Ctrl+B,
         Ctrl+Z, a paste). The run is settled at the key's release, or at
-        the next key's press, whichever comes first (_spread_typed_run)."""
+        the next key's press, whichever comes first (_spread_typed_run).
+
+        A key with Control held, and no Alt, types nothing: Text's own
+        <Control-Key> does nothing, and Tk's Ctrl+T swaps the two letters at
+        the caret and Ctrl+O puts a line break there -- the swapped letters
+        took the word's style. Control with Alt is AltGr on Windows, which
+        types. Insert pastes the selection: a paste, never typing."""
+        state = getattr(event, "state", 0)
+        if ((state & 0x4 and not state & 0x20000)
+                or getattr(event, "keysym", "") == "Insert"):
+            return
         b = self.body_text
         try:
             b.mark_set(self._TYPED_FROM, "insert")
