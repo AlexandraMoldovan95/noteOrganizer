@@ -101,6 +101,14 @@ app=NO.NoteOrganizer(); app._poll_active_dirty=lambda:None
 app.show_info=lambda *a,**k: True
 app.show_warning=lambda *a,**k: True
 app.geometry('1100x850'); app.update()
+# Every copy and paste below goes through the suite's own clipboard: the
+# machine's is shared with every program on it, and with its owner.
+check('fixture: the clipboard is a stand-in kept in this process',
+      bool(app.tk.call('info', 'commands', '::_qa_machine_clipboard'))
+      and 'qa_clipboard_selection' in app.tk.eval(
+          'info body ::tk::GetSelection')
+      and (sys.platform != 'win32'
+           or NO.clipboard.write.__name__ == '_write_clipboard'))
 
 # ---- BASIC NOTE CRUD ----
 app.new_note()
@@ -5982,44 +5990,17 @@ app._grid_copy_selection({'info': _infoG, 'box': (0, 0, 1, 1)})
 app._grid_clear_selection()
 app.body_text.mark_set('insert', '4.0')
 app.update()
-
-
-def _clipboard_holds_cells(attempts=100):
-    """Wait until the copied cells are really ON the clipboard.
-
-    This check went red twice on a developer machine while Linux stayed
-    green, and the cause is not the tables. The clipboard is a SHARED OS
-    RESOURCE: core/clipboard.read_text() opens the Windows clipboard and
-    returns None -- silently -- when another process is holding it open,
-    and the Tk fallback beneath it goes through the same clipboard and
-    raises for the same reason. Any program on the machine touching the
-    clipboard in that instant made the paste a no-op, and the check
-    reported it as "no second table".
-
-    So the fixture is waited for and then ASSERTED, rather than assumed:
-    a transient hiccup becomes a short wait, and a clipboard that never
-    delivers fails under its own name instead of blaming the tables.
-    """
-    for _ in range(attempts):
-        try:
-            raw = NO.clipboard.read_text()
-        except Exception:
-            raw = None
-        if raw is None:
-            try:
-                raw = app.body_text.clipboard_get()
-            except tk.TclError:
-                raw = None
-        if raw and '\t' in raw:
-            return raw
-        app.update()
-        time.sleep(0.01)
-    return None
-
-
-_clipG = _clipboard_holds_cells()
+# The clipboard here is the suite's stand-in, never the machine's
+# (_qa_support.pin_the_desktop). On the machine's, this check went red three
+# times on a developer machine while Linux stayed green: another program
+# holding the clipboard open for an instant made the paste read nothing,
+# and a wait for one good read only moved the race to the paste's own.
+try:
+    _clipG = NO.clipboard.read_text() or app.body_text.clipboard_get()
+except tk.TclError:
+    _clipG = None
 check('fixture: the copied cells really reached the clipboard',
-      _clipG is not None)
+      bool(_clipG) and '\t' in _clipG)
 _okG = app._paste_tsv_as_table()
 app.update()
 _bodyG = app.body_text.get('1.0', 'end-1c')

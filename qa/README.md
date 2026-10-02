@@ -826,3 +826,11 @@ A new surface joins this list the moment it ships.
 - **The names gate reads the qa scripts and the unit suites too.** A
   name borrowed from a removed block (a seed's `os`, `io`) fails the
   gate the moment the script is read, instead of halfway through a run.
+- **The machine's clipboard is out of the suite's reach.** It is shared
+  with every program on the machine: one holding it open for an instant
+  made a paste read nothing, and qa1's copy-and-paste check went red three
+  times on a developer machine while Linux stayed green — a wait for one
+  good read only moved the race to the paste's own read. `pin_the_desktop`
+  gives every app a script builds a stand-in kept in the process
+  (`_qa_support.CLIPBOARD`), so no check can race another program, and a
+  run no longer writes over the owner's clipboard while she works.

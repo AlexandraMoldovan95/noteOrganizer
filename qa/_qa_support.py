@@ -23,8 +23,9 @@ the five clicks had ever been delivered.
 The rules that close it
 -----------------------
 ``pin_the_desktop(NO)`` (also still spelled ``pin_popup_visibility``)
-    The app asks the desktop two questions, and a test must not hear the
-    answers of whoever is using the machine while it runs.
+    The app asks the desktop two questions, and shares one thing with it;
+    a test must not hear the answers of whoever is using the machine while
+    it runs, nor share anything with them.
 
     Who owns the OS foreground: a test process cannot own it, so popup
     visibility must not depend on it.
@@ -38,6 +39,18 @@ The rules that close it
     never happened. Pinned to "not held"; qa9 answers it for the app where
     a check is about the freeze, and asks the real question through
     ``_desktop_pointer_button_held``.
+
+    The clipboard: a stand-in kept in this process (``CLIPBOARD``) for
+    every app the script builds -- Tcl's ``clipboard`` command, Tk's
+    CLIPBOARD selection (which Text's and Entry's own paste read), and,
+    on Windows, the app's own clipboard module. The machine's clipboard is
+    shared with every program on it: one holding it open for an instant
+    made a paste read nothing, and qa1's copy-and-paste check went red
+    three times on a developer machine while Linux stayed green. Waiting
+    until one read succeeded only moved the race to the paste's own read.
+    And a run wrote over the owner's clipboard while she worked. Off
+    Windows the app's module already reads nothing and writes nothing, so
+    it is left as it is: the app's fallback to Tk is what runs there.
 
     Patches the class, not an instance, so every app the script builds —
     including ones built later — is deterministic, and a new qa script
@@ -177,13 +190,77 @@ ClickNotDelivered = EventNotDelivered
 def pin_the_desktop(NO):
     """Make the app's two questions about the desktop -- who owns the
     foreground, whether the mouse button is down -- answer the same way
-    whoever is using the machine. See the module docstring."""
+    whoever is using the machine, and give every app the script builds a
+    clipboard of the script's own. See the module docstring."""
     cls = NO.NoteOrganizer
     cls._foreground_is_ours = lambda self: True
     real = getattr(cls, "_pointer_button_held", None)
     if real is not None and not hasattr(cls, "_desktop_pointer_button_held"):
         cls._desktop_pointer_button_held = real
     cls._pointer_button_held = lambda self: False
+    if not getattr(cls, "_qa_keeps_the_clipboard", False):
+        built = cls.__init__
+
+        def __init__(self, *args, **kwargs):
+            built(self, *args, **kwargs)
+            _keep_the_clipboard(self)
+
+        cls.__init__ = __init__
+        cls._qa_keeps_the_clipboard = True
+    if sys.platform == "win32":
+        module = NO.clipboard
+        module.read_text = lambda: CLIPBOARD["text"]
+        module.read_html = lambda: CLIPBOARD["html"]
+        module.write = _write_clipboard
+
+
+# The clipboard every app the script builds shares, as apps on one machine
+# share the machine's: None until something is put there. "tk" says whether
+# Tk last claimed it (see _clipboard_command).
+CLIPBOARD = {"text": None, "html": None, "tk": False}
+
+
+def _write_clipboard(text, html=None):
+    """The app's clipboard.write, on Windows: plain text and, when given,
+    the HTML beside it, as the machine's clipboard holds both."""
+    CLIPBOARD.update(text=text, html=html, tk=False)
+    return True
+
+
+def _clipboard_command(*args):
+    """Tcl's ``clipboard``: clear, append and get, any options (-displayof,
+    -format, -type, --) read past. As Tk's own: an append claims the
+    clipboard, clearing it first when another writer held it, and replaces
+    every format, so the HTML goes; an empty clipboard refuses a get."""
+    args = [str(a) for a in args]
+    if args and args[0] == "clear":
+        CLIPBOARD.update(text="", html=None, tk=True)
+    elif args and args[0] == "append":
+        held = CLIPBOARD["text"] if CLIPBOARD["tk"] else ""
+        CLIPBOARD.update(text=(held or "") + args[-1], html=None, tk=True)
+    elif args and args[0] == "get":
+        return _clipboard_selection()
+    return ""
+
+
+def _clipboard_selection():
+    if CLIPBOARD["text"] is None:
+        raise tk.TclError("CLIPBOARD selection doesn't exist")
+    return CLIPBOARD["text"]
+
+
+def _keep_the_clipboard(app):
+    """Put the stand-in in place of the machine's clipboard for *app*'s
+    interpreter. Tk's Text and Entry paste through ::tk::GetSelection, so
+    only its CLIPBOARD answer is replaced; PRIMARY stays Tk's own."""
+    tcl = app.tk
+    tcl.eval("rename clipboard ::_qa_machine_clipboard")
+    tcl.createcommand("clipboard", _clipboard_command)
+    tcl.eval("rename ::tk::GetSelection ::tk::_qa_machine_GetSelection")
+    tcl.createcommand("::qa_clipboard_selection", _clipboard_selection)
+    tcl.eval("proc ::tk::GetSelection {w {sel PRIMARY}} {"
+             " if {$sel eq \"CLIPBOARD\"} {return [::qa_clipboard_selection]};"
+             " return [::tk::_qa_machine_GetSelection $w $sel] }")
 
 
 # The original name, from when the foreground was the only answer pinned;
