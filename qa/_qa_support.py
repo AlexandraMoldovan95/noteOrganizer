@@ -52,6 +52,11 @@ The rules that close it
     Windows the app's module already reads nothing and writes nothing, so
     it is left as it is: the app's fallback to Tk is what runs there.
 
+    The keyboard cannot be pinned: a test app can hold the focus while
+    someone types. Every key a keyboard sends is noted instead
+    (``REAL_KEYS``) and said when the run ends, so a red that came from
+    someone typing names itself rather than reading as a flake.
+
     Patches the class, not an instance, so every app the script builds —
     including ones built later — is deterministic, and a new qa script
     needs one line rather than remembering to repeat it. The popup
@@ -116,6 +121,7 @@ different questions, and a check that wants the second asserts it itself
     did that in a relay through a whole qa1 run.
 """
 
+import atexit
 import io
 import json
 import os
@@ -190,8 +196,9 @@ ClickNotDelivered = EventNotDelivered
 def pin_the_desktop(NO):
     """Make the app's two questions about the desktop -- who owns the
     foreground, whether the mouse button is down -- answer the same way
-    whoever is using the machine, and give every app the script builds a
-    clipboard of the script's own. See the module docstring."""
+    whoever is using the machine, give every app the script builds a
+    clipboard of the script's own, and note every key a keyboard sends it
+    (_note_real_keys). See the module docstring."""
     cls = NO.NoteOrganizer
     cls._foreground_is_ours = lambda self: True
     real = getattr(cls, "_pointer_button_held", None)
@@ -204,6 +211,7 @@ def pin_the_desktop(NO):
         def __init__(self, *args, **kwargs):
             built(self, *args, **kwargs)
             _keep_the_clipboard(self)
+            _note_real_keys(self)
 
         cls.__init__ = __init__
         cls._qa_keeps_the_clipboard = True
@@ -261,6 +269,40 @@ def _keep_the_clipboard(app):
     tcl.eval("proc ::tk::GetSelection {w {sel PRIMARY}} {"
              " if {$sel eq \"CLIPBOARD\"} {return [::qa_clipboard_selection]};"
              " return [::tk::_qa_machine_GetSelection $w $sel] }")
+
+
+# Keys that came from a keyboard -- whoever is at the machine -- and not from
+# the script: a generated key carries time 0, a real one the clock. Nothing
+# keeps them out, since the test app can hold the keyboard while someone
+# types; so they are noted, and said once the run ends. Twice a check went
+# red once in dozens of runs on a developer machine, with the editor changed
+# between two reads, and nothing could say whether a key had reached it.
+REAL_KEYS = []
+
+
+def _note_real_keys(app):
+    """Note every key event a keyboard sends *app* (REAL_KEYS). Bound on the
+    'all' tag beside whatever the app binds there, and never breaking: a key
+    a binding before it breaks off goes unseen, so this can only add to what
+    a red says, never change what the app does."""
+    def note(event, sequence):
+        try:
+            when = int(event.time)
+        except (TypeError, ValueError):
+            return
+        if when:
+            if not REAL_KEYS:
+                atexit.register(_say_real_keys)
+            REAL_KEYS.append((sequence, str(getattr(event, "keysym", "?"))))
+    for sequence in ("<KeyPress>", "<KeyRelease>"):
+        app.bind_all(sequence, lambda e, s=sequence: note(e, s), add="+")
+
+
+def _say_real_keys():
+    print("REAL KEYS: %d key event(s) came from the keyboard while this "
+          "script ran -- someone typed on this machine, and a red in this "
+          "run may be theirs: %s" % (len(REAL_KEYS), REAL_KEYS[:12]),
+          flush=True)
 
 
 # The original name, from when the foreground was the only answer pinned;
