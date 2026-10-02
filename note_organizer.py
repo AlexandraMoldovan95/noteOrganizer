@@ -19250,7 +19250,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             # from a note that never had them (see restore_previous_version).
             self._take_pending_checklist_item()
             self._write_series_owned(note, None, None, schedule=False)
-            carried = self._left_out_on_screen()
+            carried = self._schedule_to_carry()
         note["overrides"].pop(occurrence_date, None)
         note["updated"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         self.save_notes()
@@ -19258,7 +19258,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # series content replaces the dropped override on screen too.
         if showing:
             self.load_note(note, occurrence_date)
-            self._put_back_left_out(carried)
+            self._put_back_schedule(carried)
         self.refresh_note_list()
         self.render_calendar()
         self.refresh_day_panel()
@@ -19690,10 +19690,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # question waited the editor could move on; filling it then put
         # the old text into ANOTHER note, which its next save kept.
         in_editor = self.selected_note_id == note["id"]
-        # A date or repeat value the save had to leave out is carried across
-        # the reload below, unless the rescue copy brings back its own.
-        carried = (self._left_out_on_screen(date="date" not in prev,
-                                            repeat="recurrence" not in prev)
+        # A date or repeat value the note does not store -- left out, or not
+        # saved yet -- is carried across the reload below, unless the
+        # rescue copy brings back its own.
+        carried = (self._schedule_to_carry(date="date" not in prev,
+                                           repeat="recurrence" not in prev)
                    if in_editor else {})
         if in_editor:
             # The editor's files and checklist are the note's, and the
@@ -19778,7 +19779,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # user to see; this makes them the note's official state).
         if in_editor:
             self.load_note(note, occurrence_date=occurrence)
-            self._put_back_left_out(carried)
+            self._put_back_schedule(carried)
         self.refresh_note_list()
         # The rescue copy can bring back a date, a repeat, a colour, a
         # category and a series' days -- all of them drawn on the calendar,
@@ -19882,7 +19883,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         one of them not a day of the month; a wholly blank box is legal --
         it means the start date's day). The one judgement the save and its
         question (_date_and_repeat_to_store), the summary line and the
-        reloads that carry what is typed (_left_out_on_screen) ask. The end
+        reloads that carry what is typed (_schedule_to_carry) ask. The end
         date was judged apart, so the summary line knew nothing of it and
         previewed a series with no end."""
         problems = []
@@ -19907,39 +19908,49 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 problems.append(("days", days.strip()))
         return problems
 
-    def _left_out_on_screen(self, date=True, repeat=True):
-        """What the date and repeat fields hold that a save would leave out
-        (see _date_and_repeat_to_store), to carry across a reload: the date
-        field's text, and the repeat's fields as typed -- each only when
-        some of it is left out; {} when nothing is.
+    def _schedule_to_carry(self, date=True, repeat=True):
+        """What the date and repeat fields hold that the note does not
+        store, to carry across a reload: the date field's text, and the
+        repeat's fields as typed -- each only when it differs from what the
+        note holds, because a save would leave it out (see
+        _date_and_repeat_to_store) or because it is not saved yet; {} when
+        both agree with the note.
 
         A route that fills the editor from the note as stored -- Restore
         previous, Reset this day -- wrote the stored date and repeat over
         such values in silence, the one thing on screen no file held. They
         are carried across the reload instead, as a save's own reload
-        carries them, and stay there to be fixed; leaving the note then
-        asks. Not asked before the route: a half-typed date must never
-        block a restore (qa7 pins that promise). The repeat goes whole: its
-        fields only mean something together. With *date* or *repeat* False
-        the reload brings back its own (a rescue copy that holds it)."""
+        carries them, and stay there to be fixed or saved; leaving the note
+        then asks, or saves them. Not asked before the route: a half-typed
+        date must never block a restore (qa7 pins that promise). Not only
+        what a save leaves out: a day of a series never autosaves, and a
+        readable "Every 3" typed there was lost -- or kept, when an
+        unreadable box happened to sit beside it. The repeat goes whole:
+        its fields only mean something together. With *date* or *repeat*
+        False the reload brings back its own (a rescue copy that holds it).
+        """
         try:
             date_value, rule, left_out = self._date_and_repeat_to_store()
         except Exception:
             self._log_swallowed("reload: date and repeat check")
             return {}
-        if not left_out:
+        note = (self.find_note(self.selected_note_id)
+                if self.selected_note_id is not None else None)
+        if note is None:
             return {}
         carried = {}
         typed = self.date_entry.get().strip()
         if typed == "YYYY-MM-DD":
             typed = ""
-        if date and typed != (date_value or ""):
+        if date and (typed != (date_value or "")
+                     or (date_value or "") != (note.get("date") or "")):
             carried["date"] = typed
         freq = self.selected_freq_key()
-        # Left out: a value it cannot read, or the whole repeat, for want of
-        # a start date.
-        if repeat and freq and (self._unreadable_repeat_fields(freq)
-                                or not rule["freq"]):
+        # A value it cannot read, the whole repeat left out for want of a
+        # start date, or a rule not saved yet.
+        if repeat and (self._unreadable_repeat_fields(freq)
+                       or (freq and not rule["freq"])
+                       or rule != normalize_recurrence(note.get("recurrence"))):
             carried["repeat"] = {
                 "freq": self.rec_freq_var.get(),
                 "interval": self.rec_interval_var.get(),
@@ -19952,9 +19963,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             }
         return carried
 
-    def _put_back_left_out(self, carried):
-        """Show again what _left_out_on_screen carried across a reload; the
-        summary line then says what is not understood, and leaving asks."""
+    def _put_back_schedule(self, carried):
+        """Show again what _schedule_to_carry carried across a reload; the
+        summary line then says what is not understood, and leaving asks or
+        saves."""
         if not carried:
             return
         if "date" in carried:
@@ -20468,17 +20480,17 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             # box, and a date or repeat the save had to leave out. That date
             # wrote the stored one over itself, so leaving asked nothing and
             # the typed date was gone. Both are carried across, the left-out
-            # values as Restore previous carries them (_left_out_on_screen).
+            # values as Restore previous carries them (_schedule_to_carry).
             # The save's own words stay: loading writes the note's dates
             # over the status line, and the line says where the days went.
             said = str(self.status_lbl.cget("text"))
             pending_item = (self.checklist_add_var.get()
                             if hasattr(self, "checklist_add_var") else "")
-            carried = self._left_out_on_screen() if left_out else {}
+            carried = self._schedule_to_carry() if left_out else {}
             self.load_note(self.find_note(self.selected_note_id))
             if pending_item:
                 self.checklist_add_var.set(pending_item)
-            self._put_back_left_out(carried)
+            self._put_back_schedule(carried)
             self.set_status(said)
             # Loading wrote the repeat's fields, and their traces asked for
             # an autosave. With a left-out date carried back, the editor

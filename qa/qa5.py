@@ -1558,6 +1558,30 @@ check(f'...and so does "Reset this day" (Every box {_rn_box!r}; left out '
       f'{_rn_left})',
       _rn_box == '3x' and bool(_rn_left)
       and '2026-09-14' not in (app.find_note(1).get('overrides') or {}))
+# Not only what a save leaves out: a day of a series never autosaves, and a
+# readable "Every 3" typed there went with the reload -- or stayed, when an
+# unreadable box happened to sit beside it.
+_rn_kept_ok = []
+for _rn_route in ('reset', 'restore'):
+    _rr_day()
+    app.rec_interval_var.set('3'); app.update()
+    app.ask_yes_no = lambda *a, **k: True
+    try:
+        if _rn_route == 'reset':
+            app._reset_occurrence_override(app.find_note(1), '2026-09-14')
+        else:
+            app.restore_previous_version()
+        app.update()
+    finally:
+        app.ask_yes_no = _ro_yes
+    _rn_kept_ok.append((_rn_route, app.rec_interval_var.get(),
+                        app._date_and_repeat_to_store()[1].get('interval')))
+    app._put_back_stored_date_and_repeat()
+    app._cancel_pending_autosave()
+check(f'...and a readable change typed on a day, not saved yet, stays on '
+      f'screen through both, to be saved ({_rn_kept_ok})',
+      _rn_kept_ok == [('reset', '3', 3), ('restore', '3', 3)])
+
 
 app.new_note(); app.update()
 app.notes = []; app.save_notes()
