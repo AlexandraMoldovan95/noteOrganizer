@@ -898,7 +898,7 @@ stored values back on screen so the editor agrees with the note again. The save 
 ask one judgement, `_date_and_repeat_to_store`, so they cannot disagree about what stayed behind.
 A save whose only difference from the note was a field it left out changes nothing the note
 stores, so it keeps the note's "updated" stamp (`_stored_signature`): otherwise every way out of
-a note with an unreadable date on screen moved it up "Recently updated". Before 0.83.XXX the save returned nothing for such a field, and every automatic route read
+a note with an unreadable date on screen moved it up "Recently updated". Before 0.83.335 the save returned nothing for such a field, and every automatic route read
 that as success and replaced the editor — see
 [One unreadable field, and every word typed after it](ISSUES_LOG.md#one-unreadable-field-and-every-word-typed-after-it).
 

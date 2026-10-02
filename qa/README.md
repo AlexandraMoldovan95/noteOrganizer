@@ -585,7 +585,7 @@ A new surface joins this list the moment it ships.
   failing a check, and a dead script reports no failures at all. qa6
   held a Statistics chip across `app.geometry(...)`; the panel was then
   destroyed and rebuilt on every list refresh while Settings was open
-  (it updates in place since 0.8x, and still rebuilds on a palette or
+  (it updates in place since 0.83.335, and still rebuilds on a palette or
   category change), so the reference was a coin toss. It had always been one, and only began
   landing wrong when gating that redraw on whether Settings is open
   moved WHEN the rebuild happens: two runs in four on Linux, none on
