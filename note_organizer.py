@@ -19715,6 +19715,14 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         """Bring back the rescue copy: the text a drastic shortening
         replaced, or everything an update from a share code or backup
         replaced."""
+        # An edit still waiting for its autosave is saved first. Left
+        # pending, the autosave ran while the question below waited, and a
+        # big delete made a new rescue copy of the words it took -- which the
+        # restore, of the copy read before the question, then dropped: the
+        # deleted words were in no file. Saved first, that copy is the one
+        # the question offers. _autosave_now cancels the timer it replaces.
+        if getattr(self, "_autosave_job", None) is not None:
+            self._autosave_now()
         note = self.find_note(self.selected_note_id) if self.selected_note_id else None
         if not (note and note.get("_prev")):
             return

@@ -1724,6 +1724,42 @@ check(f'putting the stored date back puts the status line right at once '
       f'({_rn_said_before!r} -> {_rn_said_after!r})',
       'except the date' in _rn_said_before and 'except' not in _rn_said_after)
 
+# Restore previous with a big delete still waiting for its autosave: the
+# autosave ran while the question waited and made a new rescue copy of the
+# words just deleted, which the restore -- of the copy read before the
+# question -- then dropped. The pending save runs first now, and its copy
+# is the one restored.
+app.new_note(); app.update()
+app.notes = [NO.normalize_note({
+    'id': 1, 'title': 'Long', 'body': 'CURRENT TEXT, the words just deleted '
+    'by the person, many of them, enough to count as a big change'})]
+app.notes[0]['_prev'] = {'title': 'Long', 'body': 'OLDEST TEXT',
+                         'formatting': [], 'paragraphs': [], 'comments': ''}
+app.save_notes()
+app.open_note_in_tab(app.find_note(1)); app.update()
+app.body_text.delete('1.0', 'end')
+app.body_text.insert('1.0', 'x')
+# The autosave waiting, as after any edit -- due far off, so what the check
+# below reads is whether the restore cancelled its timer, not whether a slow
+# machine let it fire meanwhile.
+app._autosave_job = app.after(60000, app._autosave_now)
+_rn_job = app._autosave_job
+app.ask_yes_no = lambda *a, **k: True
+try:
+    app.restore_previous_version(); app.update()
+finally:
+    app.ask_yes_no = _ro_yes
+# The save it ran first was a timer's: cancelled, not just forgotten, or it
+# fires again after the restore.
+_rn_left = _rn_job in app.tk.splitlist(app.tk.call('after', 'info'))
+app.after_cancel(_rn_job)
+app._cancel_pending_autosave()
+_rn_body = app.find_note(1).get('body', '')
+check(f'Restore previous right after a big delete brings the deleted words '
+      f'back, and leaves no autosave timer behind ({_rn_body[:40]!r}; '
+      f'left: {_rn_left})',
+      'the words just deleted' in _rn_body and not _rn_left)
+
 app.new_note(); app.update()
 app.notes = []; app.save_notes()
 
