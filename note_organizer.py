@@ -1271,6 +1271,24 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             note = self.find_note(self.selected_note_id)
             if note is not None and is_recurring(note):
                 return
+        # Nor does a timer turn off the repeat of a series whose days hold
+        # edits of their own -- their own text, a day removed. That save
+        # moves them all into the rescue copy, and a "Does not repeat"
+        # picked by mistake and put right a second later brought the series
+        # back without them. Leaving the note, or Save, commits it; until
+        # then the editor holds it, and the status line says so -- and gives
+        # its line back once the repeat is picked again.
+        said = getattr(self, "_status_off_waits", None)
+        if self._repeat_off_waits():
+            if said is None:
+                said = str(self.status_lbl.cget("text"))
+            self.set_status("Not saved yet: with its repeat turned off, "
+                            "this note is saved when you leave it or press "
+                            "Save")
+            self._status_off_waits = said
+            return
+        if said is not None:
+            self.set_status(said)
         try:
             st = self.capture_editor_state()
         except Exception:
@@ -1294,6 +1312,16 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # Reuse the normal save path, but mark it as automatic so the status
         # message is gentle rather than a loud "Saved!".
         self.save_current_note(auto=True)
+
+    def _repeat_off_waits(self):
+        """Whether the editor turns off the repeat of a series whose days
+        hold edits of their own -- a save a timer never makes (see
+        _autosave_now)."""
+        if self.selected_note_id is None or self.selected_freq_key():
+            return False
+        note = self.find_note(self.selected_note_id)
+        return bool(note is not None and is_recurring(note)
+                    and (note.get("overrides") or note.get("exceptions")))
 
     def _say_nothing_is_left_out(self):
         """Put the status line right once nothing is left out any more.
@@ -21322,7 +21350,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # _say_nothing_is_left_out only while it is still the line on
         # screen: any other words over it end that. Kept past them, the
         # put-right wrote an earlier save's words over a later save's own.
+        # So with the words a line saying the repeat's turn-off waits gives
+        # back (_autosave_now).
         self._status_names_left_out = None
+        self._status_off_waits = None
         self.status_lbl.config(text=text)
 
     def _on_data_write_failure(self, path, exc):

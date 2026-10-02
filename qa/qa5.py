@@ -1854,6 +1854,84 @@ check(f'a repeat turned off from its dropdown saves itself like any edit '
       f'({len(_rn_rows)} row; freq {_rn_off_freq!r}; waiting '
       f'{_rn_off_waiting})',
       _rn_rows and _rn_off_freq == '' and bool(_rn_off_waiting))
+# ...but not by a timer, on a series whose days hold edits of their own: its
+# save moves them all into the rescue copy, and "Does not repeat" picked by
+# mistake, put right a second later, brought the series back without them.
+# Leaving the note commits it, with the rescue copy, as before.
+app.new_note(); app.update()
+app.notes = [
+    NO.normalize_note({'id': 1, 'title': 'Weekly', 'body': 'series text',
+                       'date': '2026-09-07', 'recurrence': {'freq': 'weekly'},
+                       'overrides': {'2026-09-14': {'body': 'DAY 14'}},
+                       'exceptions': ['2026-09-28']}),
+    NO.normalize_note({'id': 2, 'title': 'Other', 'body': 'y'})]
+app.save_notes()
+app.open_note_in_tab(app.find_note(1)); app.update()
+app._cancel_pending_autosave()
+
+
+def _rn_pick(label):
+    _qa_click(app.rec_freq_menu); app.update()
+    rows = ([w for w in _rn_walk(app._mini_popup)
+             if isinstance(w, tk.Label) and str(w.cget('text')) == label]
+            if app._mini_popup is not None else [])
+    if rows:
+        _qa_click(rows[0]); app.update()
+    return bool(rows)
+
+
+def _rn_days():
+    n = app.find_note(1)
+    return ((n.get('recurrence') or {}).get('freq'),
+            sorted(n.get('overrides') or {}), list(n.get('exceptions') or []))
+
+
+_rn_ok = _rn_pick(NO.FREQ_LABELS[''])
+app._autosave_now(); app.update()
+_rn_waits = str(app.status_lbl.cget('text'))
+_rn_mid = _rn_days()
+_rn_ok = _rn_pick(NO.FREQ_LABELS['weekly']) and _rn_ok
+app._autosave_now(); app.update()
+_rn_after = _rn_days()
+_rn_back_said = str(app.status_lbl.cget('text'))
+_rn_ok = _rn_pick(NO.FREQ_LABELS['']) and _rn_ok
+app._flush_autosave(); app.update()
+_rn_left = _rn_days()
+_rn_rescue = sorted((app.find_note(1).get('_prev') or {}).get('overrides') or {})
+# The save's own words stay: the words kept for after the wait went with
+# the line they belonged to.
+app._autosave_now(); app.update()
+_rn_left_said = str(app.status_lbl.cget('text'))
+app._cancel_pending_autosave()
+# A series whose only day of its own is a removed one waits too: turned off,
+# the removed day came back on the calendar once the repeat was picked
+# again.
+app.new_note(); app.update()
+app.notes = [
+    NO.normalize_note({'id': 1, 'title': 'Weekly', 'body': 'series text',
+                       'date': '2026-09-07', 'recurrence': {'freq': 'weekly'},
+                       'exceptions': ['2026-09-28']}),
+    NO.normalize_note({'id': 2, 'title': 'Other', 'body': 'y'})]
+app.save_notes()
+app.open_note_in_tab(app.find_note(1)); app.update()
+app._cancel_pending_autosave()
+_rn_ok = _rn_pick(NO.FREQ_LABELS['']) and _rn_ok
+app._autosave_now(); app.update()
+_rn_removed = _rn_days()
+_rn_ok = _rn_pick(NO.FREQ_LABELS['weekly']) and _rn_ok
+app._autosave_now(); app.update()
+_rn_removed_after = _rn_days()
+app._cancel_pending_autosave()
+check(f'"Does not repeat" put right before leaving keeps a series\' own days, '
+      f'and leaving commits it with its rescue copy ({_rn_mid}; {_rn_after}; '
+      f'{_rn_left}; rescue {_rn_rescue}; {_rn_waits!r}; {_rn_left_said!r}; '
+      f'{_rn_removed}; {_rn_removed_after})',
+      _rn_ok and 'Not saved yet' in _rn_waits
+      and 'Not saved yet' not in _rn_back_said
+      and _rn_mid == _rn_after == ('weekly', ['2026-09-14'], ['2026-09-28'])
+      and _rn_left[0] == '' and _rn_rescue == ['2026-09-14']
+      and 'the repeat is off' in _rn_left_said
+      and _rn_removed == _rn_removed_after == ('weekly', [], ['2026-09-28']))
 
 # Restore previous with a big delete still waiting for its autosave: the
 # autosave ran while the question waited and made a new rescue copy of the
