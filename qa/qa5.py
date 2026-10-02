@@ -2103,6 +2103,125 @@ _rn_bd = (_rn_prev().get('body'), (_rn_prev().get('recurrence') or {}).get('freq
 check(f'...and only within that wait: a turn-off made after the repeat was '
       f'picked again keeps the note as it stands ({_rn_bd})',
       _rn_ok and _rn_bd == ('short', 'weekly'))
+# The Undo of one day's delete leaves the series view be: it opened the day,
+# which left the series and made its waiting turn-off -- the day just put
+# back went with every other.
+_rn_fresh()
+_rn_ok = _rn_pick(NO.FREQ_LABELS[''])
+app.ask_occurrence_scope = lambda *a, **k: 'occurrence'
+try:
+    app._context_delete_note(app.find_note(1), occurrence_date='2026-09-21')
+    app.update()
+finally:
+    app.ask_occurrence_scope = _oc_real_scope
+_rn_un = ['2026-09-21' in ((app.find_note(1) or {}).get('exceptions') or [])]
+app._undo_occurrence_delete(1, '2026-09-21', None); app.update()
+_rn_un += [_rn_days(), app.selected_note_id, app.current_occurrence_date,
+           app.selected_freq_key()]
+check(f'the Undo of a day deleted while a turn-off waits puts the day back '
+      f'and leaves the turn-off waiting ({_rn_un})',
+      _rn_ok and _rn_un == [True, _RN_SERIES, 1, None, ''])
+# A delete saves the editor before its question, and that save made a
+# waiting turn-off: the day on screen, deleted after "Does not repeat" was
+# picked on it, then asked to delete the whole note, and Yes trashed it; a
+# Delete or Move to trash answered No kept a turn-off nobody had saved.
+_rn_dl = {}
+_rn_fresh()
+app.open_note_in_tab(app.find_note(1), occurrence_date='2026-09-21')
+app.update()
+app._cancel_pending_autosave()
+_rn_ok = _rn_pick(NO.FREQ_LABELS[''])
+_rn_asked = []
+app.ask_occurrence_scope = lambda *a, **k: (_rn_asked.append('scope'),
+                                            'occurrence')[1]
+app.ask_yes_no = lambda *a, **k: (_rn_asked.append('yes/no'), True)[1]
+try:
+    app._context_delete_note(app.find_note(1), occurrence_date='2026-09-21')
+    app.update()
+finally:
+    app.ask_occurrence_scope = _oc_real_scope
+    app.ask_yes_no = _ro_yes
+_rn_dl['day on screen'] = (_rn_asked, _rn_days())
+for _rn_route in ('Delete', 'Move to trash'):
+    _rn_fresh()
+    _rn_ok = _rn_pick(NO.FREQ_LABELS['']) and _rn_ok
+    app.ask_yes_no = lambda *a, **k: False
+    try:
+        if _rn_route == 'Delete':
+            app.delete_current_note()
+        else:
+            app.selected_note_ids = {1}
+            app._bulk_move_to_trash()
+        app.update()
+    finally:
+        app.ask_yes_no = _ro_yes
+        app.selected_note_ids = set()
+    _rn_dl['No: ' + _rn_route] = (_rn_days(), app.selected_freq_key())
+app._put_back_stored_date_and_repeat()
+app._cancel_pending_autosave()
+# ...and so with Settings' deletes: the open note's category, answered
+# Cancel or "move to General", and its duplicates, answered No -- or Yes
+# with the note on screen the copy that is kept and gains a file, which
+# fills the editor from the note again and carries the turn-off across.
+_rn_fname = '20261002160000000000_hold5.txt'
+_os5.makedirs(NO.ATTACHMENTS_DIR, exist_ok=True)
+with open(_os5.path.join(NO.ATTACHMENTS_DIR, _rn_fname), 'w') as _rn_fh:
+    _rn_fh.write('h')
+for _rn_route in ('category: Cancel', 'category: move', 'duplicates: No',
+                  'duplicates: Yes'):
+    # The category exists before the note filed under it, every time: the
+    # "move" answer deletes it.
+    NO.CATEGORY_COLORS['TempHold5'] = '#336699'
+    app.new_note(); app.update()
+    app.notes = [
+        NO.normalize_note({'id': 1, 'title': 'Weekly', 'body': 'series text',
+                           'category': 'TempHold5', 'date': '2026-09-07',
+                           'recurrence': {'freq': 'weekly'},
+                           'overrides': {'2026-09-14': {'body': 'DAY 14'}},
+                           'exceptions': ['2026-09-28']}),
+        NO.normalize_note({'id': 2, 'title': 'Other', 'body': 'y'}),
+        NO.normalize_note({'id': 3, 'title': 'Weekly', 'body': 'series text',
+                           'attachments': [{'name': 'h.txt',
+                                            'stored_as': _rn_fname}]})]
+    app.save_notes()
+    app.open_note_in_tab(app.find_note(1)); app.update()
+    app._cancel_pending_autosave()
+    _rn_ok = _rn_pick(NO.FREQ_LABELS['']) and _rn_ok
+    _rn_dups = [(_NlVar(False), app.find_note(1),
+                 [app.find_note(1), app.find_note(3)]),
+                (_NlVar(True), app.find_note(3),
+                 [app.find_note(1), app.find_note(3)])]
+    app._ask_category_deletion = (
+        lambda *a, **k: None if _rn_route == 'category: Cancel' else 'move')
+    app.ask_yes_no = lambda *a, **k: _rn_route == 'duplicates: Yes'
+    try:
+        if _rn_route.startswith('category'):
+            app._delete_category('TempHold5', lambda: None)
+        else:
+            app._cleanup_selected_duplicates(_rn_dups, None,
+                                             refresh=lambda: None)
+        app.update()
+    finally:
+        app.__dict__.pop('_ask_category_deletion', None)
+        app.ask_yes_no = _ro_yes
+    _rn_dl[_rn_route] = (_rn_days(), app.selected_note_id,
+                         app.selected_freq_key(),
+                         len((app.find_note(1) or {}).get('attachments') or []))
+    app._put_back_stored_date_and_repeat()
+    app._cancel_pending_autosave()
+NO.CATEGORY_COLORS.pop('TempHold5', None)
+check(f'a delete asks about what is stored: a waiting turn-off is not made '
+      f'before its question ({_rn_dl})',
+      _rn_ok
+      and _rn_dl.get('day on screen') == (
+          ['scope'], ('weekly', ['2026-09-14'], ['2026-09-21', '2026-09-28']))
+      and _rn_dl.get('No: Delete') == (_RN_SERIES, '')
+      and _rn_dl.get('No: Move to trash') == (_RN_SERIES, '')
+      and _rn_dl.get('category: Cancel') == (_RN_SERIES, 1, '', 0)
+      and _rn_dl.get('category: move') == (_RN_SERIES, 1, '', 0)
+      and _rn_dl.get('duplicates: No') == (_RN_SERIES, 1, '', 0)
+      and _rn_dl.get('duplicates: Yes') == (_RN_SERIES, 1, '', 1))
+
 # Restore previous with a big delete still waiting for its autosave: the
 # autosave ran while the question waited and made a new rescue copy of the
 # words just deleted, which the restore -- of the copy read before the

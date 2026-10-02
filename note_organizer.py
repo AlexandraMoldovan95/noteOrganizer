@@ -17763,9 +17763,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # note's menu does: the note on screen may be one of the ticked
         # ones, and its unsaved typing belongs in the Trash copy (and in
         # what Undo brings back), not in an editor about to be cleared.
-        # Cancel on a day's save question stops the delete here.
+        # Cancel on a day's save question stops the delete here. A repeat's
+        # turn-off is held back for the question (see _context_delete_note).
         if self._flush_autosave(
-                leaving=self.selected_note_id in self.selected_note_ids) is False:
+                leaving=self.selected_note_id in self.selected_note_ids,
+                hold_repeat_off=True) is False:
             return
         to_trash = [n for n in self.notes if n["id"] in self.selected_note_ids]
         # Counted from the notes that will move, not from the ticks: the
@@ -18384,7 +18386,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # open_note_in_tab, not a full rebuild.
         self._update_open_highlight()
 
-    def _flush_autosave(self, leaving=True):
+    def _flush_autosave(self, leaving=True, hold_repeat_off=None):
         """Cancel any pending debounced auto-save and, if the current editor has
         real unsaved changes, save them right now. Called before switching notes
         or closing so a late timer can't fire into the wrong note.
@@ -18409,7 +18411,15 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         Callers stop on an explicit False only (``is False``), never on
         anything falsy: a return added later without a value, or a test
         standing in for this method, must not turn into a window that
-        will not close."""
+        will not close.
+
+        A save that is not leaving holds a repeat's turn-off back (see
+        _date_and_repeat_to_store), and so does one a delete makes before
+        its question (*hold_repeat_off*), leaving or not: the answer may be
+        No, and the turn-off was made all the same -- or it made a series a
+        one-off before the question about deleting one of its days, which
+        then offered to delete the whole note. A note deleted takes the
+        turn-off with it; one kept keeps it waiting."""
         self._cancel_pending_autosave()
         if self.selected_note_id is None and not self.open_tabs:
             return True
@@ -18447,7 +18457,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 # series' days into the rescue copy unasked, the note still
                 # open (see _date_and_repeat_to_store).
                 held = getattr(self, "_holding_repeat_off", False)
-                self._holding_repeat_off = held or not leaving
+                self._holding_repeat_off = held or (
+                    not leaving if hold_repeat_off is None else hold_repeat_off)
                 try:
                     if self.save_current_note(auto=True) is self._SAVE_CANCELLED:
                         return False
@@ -19691,13 +19702,15 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # editor's latest content rather than a stale preview. Cancel on a
         # day's save question stops the delete before it asks anything.
         # Only deleting the note on screen -- or the very day it shows --
-        # replaces the editor; one other day of it leaves the editor be, and
-        # a repeat's turn-off waiting there is not made for it (the day
-        # delete then asked to delete the whole note).
+        # replaces the editor; one other day of it leaves the editor be. A
+        # repeat's turn-off waiting there is not made for the delete either
+        # way: made first, it turned the series into a one-off, and the
+        # question then offered to delete the whole note instead of a day
+        # (and a No kept a turn-off nobody had saved).
         leaving = ((note or {}).get("id") == self.selected_note_id
                    and (occurrence_date is None
                         or occurrence_date == self.current_occurrence_date))
-        if self._flush_autosave(leaving=leaving) is False:
+        if self._flush_autosave(leaving=leaving, hold_repeat_off=True) is False:
             return
         # The target travels as a parameter — never by repointing the
         # editor's selection at it. An earlier version did exactly that,
@@ -21303,7 +21316,13 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.save_notes()
         self.refresh_note_list()
         self.render_calendar()
-        self.open_note_in_tab(note, occurrence_date=date_str)
+        # The day is back on the calendar either way. Opening it replaces
+        # the editor, which is leaving the note it holds -- and with this
+        # very series on screen and its repeat's turn-off waiting, leaving
+        # made the turn-off (_flush_autosave): the Undo that put the day
+        # back turned the whole series off, that day with it.
+        if not (self.selected_note_id == note_id and self._repeat_off_waits()):
+            self.open_note_in_tab(note, occurrence_date=date_str)
         self.set_status("Put that day back")
 
     def _attach_dup_preview(self, widget, note):
@@ -21421,8 +21440,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             return
         # The typing not yet saved goes with the note, so the Trash copy
         # and the toast's Undo give back what was on screen -- the same
-        # first step as a delete from the note's menu.
-        if self._flush_autosave() is False:
+        # first step as a delete from the note's menu, a repeat's turn-off
+        # held back the same way (see _context_delete_note).
+        if self._flush_autosave(hold_repeat_off=True) is False:
             return
         self._delete_note(note, self.current_occurrence_date)
 

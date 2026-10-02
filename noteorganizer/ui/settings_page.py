@@ -3056,11 +3056,13 @@ class SettingsPageMixin:
         # The question about a date the save could not store is asked only
         # when the note on screen is filed here -- the one case where the
         # editor may be cleared; any other note stays open, date and all.
+        # A repeat's turn-off waiting there is held back for the question:
+        # a No made it all the same (see _context_delete_note).
         shown = (self.find_note(self.selected_note_id)
                  if self.selected_note_id is not None else None)
         leaving = (self.category_var.get() == name
                    or (shown is not None and shown.get("category") == name))
-        if self._flush_autosave(leaving=leaving) is False:
+        if self._flush_autosave(leaving=leaving, hold_repeat_off=True) is False:
             return
         # Ask what happens to them. Only a note FILED here can go to the
         # Trash; a repeating note with just a day filed here is counted
@@ -3188,8 +3190,11 @@ class SettingsPageMixin:
         affected = ({n.get("id") for n in to_trash}
                     | {kept.get("id") for kept, _remove in plan
                        if kept is not None})
+        # A repeat's turn-off waiting there is held back for the question:
+        # a No made it all the same (see _context_delete_note).
         if self._flush_autosave(
-                leaving=self.selected_note_id in affected) is False:
+                leaving=self.selected_note_id in affected,
+                hold_repeat_off=True) is False:
             return
         if not self.ask_yes_no(
             "Move duplicates to trash",
@@ -3243,7 +3248,13 @@ class SettingsPageMixin:
             self.new_note()
             self._sync_editor_snapshot()
         else:
+            # A repeat's turn-off held back for the question goes across the
+            # reload, still waiting: the merge changed the kept copy's
+            # files, never its date or repeat.
+            carried = (self._schedule_to_carry()
+                       if self.selected_note_id in grew else {})
             self._editor_follows_external_change(grew)
+            self._put_back_schedule(carried)
         self.refresh_note_list()
         self.render_calendar()
         if announce:
