@@ -1251,6 +1251,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # uses for the same reason.
         if self.selected_note_id is not None and self.find_note(self.selected_note_id) is None:
             return
+        # Before any early return below -- a day of a series never saves
+        # here, and an editor that matches the note has nothing to save.
+        self._say_nothing_is_left_out()
         # Catch the word count up now, in case rapid edits (e.g. inserting
         # several emojis in a row) skipped recomputing it on every click.
         try:
@@ -1291,6 +1294,26 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # Reuse the normal save path, but mark it as automatic so the status
         # message is gentle rather than a loud "Saved!".
         self.save_current_note(auto=True)
+
+    def _say_nothing_is_left_out(self):
+        """Put the status line right once nothing is left out any more.
+
+        Only a save writes "-- except the date ..." and only a save rewrote
+        it: a value put back to what the note already stores leaves nothing
+        to save, and the line went on naming it as not saved while leaving
+        asked nothing. The save's own words, without the except, come back
+        (kept by save_current_note)."""
+        said = getattr(self, "_status_names_left_out", None)
+        if not said:
+            return
+        try:
+            left_out = self._date_and_repeat_to_store()[2]
+        except Exception:
+            self._log_swallowed("autosave: left-out status check")
+            return
+        if not left_out:
+            self._status_names_left_out = None
+            self.set_status(said)
 
     def _still_alive(self):
         """True if the app window is still around and usable. Checked before
@@ -18726,6 +18749,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._sync_calculator_open_state()
         self.title_entry.focus()
         self.set_status("New note — not yet saved")
+        self._status_names_left_out = None
         self.update_word_count()
         self._pending_styles = set()
         self._pending_text_color = None
@@ -18771,6 +18795,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                           else None)
         self.selected_note_id = note["id"]
         self.current_occurrence_date = day
+        # A new note's status line names nothing left out (see
+        # _say_nothing_is_left_out).
+        self._status_names_left_out = None
         # A saved note has its own identity; one that was under review from
         # a share code is no longer in the editor.
         self._arrived_uid = ""
@@ -20504,7 +20531,13 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # What the save had to leave out is still on screen, waiting to be
         # fixed. The status line says so on every route and the explicit
         # Save says it out loud -- which is also why that Save does not
-        # send anyone back to the calendar with a date still to fix.
+        # send anyone back to the calendar with a date still to fix. Its
+        # words without the "except" are kept for the moment the value is
+        # put right with nothing left to save (_say_nothing_is_left_out).
+        self._status_names_left_out = (
+            ("Auto-saved " if auto else "Saved at ") + now
+            + (self._REPEAT_OFF_KEPT if repeat_off_kept else "")
+            if left_out else None)
         if left_out:
             self.set_status(("Auto-saved " if auto else "Saved at ") + now
                             + " — except " + "; ".join(left_out)

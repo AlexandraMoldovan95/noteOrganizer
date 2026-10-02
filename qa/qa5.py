@@ -1582,6 +1582,25 @@ check(f'...and a readable change typed on a day, not saved yet, stays on '
       f'screen through both, to be saved ({_rn_kept_ok})',
       _rn_kept_ok == [('reset', '3', 3), ('restore', '3', 3)])
 
+# The status line names a left-out value until it is put right -- also when
+# it is put right to what the note already stores, which leaves nothing to
+# save: only a save rewrote the line, and it went on saying "except".
+_rn_series(interval=2)
+app.date_entry.delete(0, 'end')
+app.date_entry.insert(0, '07/09/2026')
+app.save_current_note(auto=True); app.update()
+_rn_said_bad = str(app.status_lbl.cget('text'))
+app.date_entry.delete(0, 'end')
+app.date_entry.insert(0, '2026-09-07')
+app._autosave_now(); app.update()
+_rn_said_fixed = str(app.status_lbl.cget('text'))
+app._cancel_pending_autosave()
+check(f'the status line stops naming a left-out date once it is put back to '
+      f'the one stored ({_rn_said_bad!r} -> {_rn_said_fixed!r})',
+      'except the date' in _rn_said_bad
+      and 'except' not in _rn_said_fixed
+      and _rn_said_fixed.startswith('Auto-saved'))
+
 
 app.new_note(); app.update()
 app.notes = []; app.save_notes()
