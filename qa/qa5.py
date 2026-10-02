@@ -1827,6 +1827,33 @@ check(f'a key in the date field counts the note\'s words once '
       f'({_rn_counted})',
       _rn_counted == [(True, 1), (True, 1)])
 
+# "Does not repeat" picked from the repeat's dropdown asked for no save: the
+# summary asks for one when there is a repeat to describe, and there is none
+# to describe then.
+_rn_series(interval=2)
+app._cancel_pending_autosave()
+
+
+def _rn_walk(w):
+    yield w
+    for _c in w.winfo_children():
+        yield from _rn_walk(_c)
+
+
+_qa_click(app.rec_freq_menu); app.update()
+_rn_rows = ([w for w in _rn_walk(app._mini_popup)
+             if isinstance(w, tk.Label)
+             and str(w.cget('text')) == NO.FREQ_LABELS['']]
+            if app._mini_popup is not None else [])
+if _rn_rows:
+    _qa_click(_rn_rows[0]); app.update()
+_rn_off_freq = app.selected_freq_key()
+_rn_off_waiting = _qa_waiting(app, '_autosave_now')
+app._cancel_pending_autosave()
+check(f'a repeat turned off from its dropdown saves itself like any edit '
+      f'({len(_rn_rows)} row; freq {_rn_off_freq!r}; waiting '
+      f'{_rn_off_waiting})',
+      _rn_rows and _rn_off_freq == '' and bool(_rn_off_waiting))
 
 # Restore previous with a big delete still waiting for its autosave: the
 # autosave ran while the question waited and made a new rescue copy of the

@@ -13753,7 +13753,13 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         freq_menu = self._build_themed_dropdown(
             freq_row, self.rec_freq_var,
             [FREQ_LABELS[k] for k in ("", "daily", "weekly", "monthly", "yearly")],
-            on_change=lambda v: self.on_recurrence_changed(), width_chars=14)
+            # A frequency picked is an edit, saved like any other. The
+            # summary asks for the save when there is a repeat to describe;
+            # "Does not repeat" draws none, so it asked for nothing, and
+            # turning a repeat off waited for the note to be left.
+            on_change=lambda v: (self.on_recurrence_changed(),
+                                 self._schedule_autosave(skip_word_count=True)),
+            width_chars=14)
         freq_menu.pack(side="left", padx=(8, 10))
         self.rec_freq_menu = freq_menu
 
