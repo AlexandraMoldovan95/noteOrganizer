@@ -6592,8 +6592,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # leaving a table (as for _paste_tsv_as_table and _body_undo_redo).
         # Read as one, it padded the pasted rows -- or the table they had
         # pushed down -- as an edit outside the paste's undo unit, and the
-        # first Ctrl+Z changed nothing on screen.
+        # first Ctrl+Z changed nothing on screen. A table being typed that
+        # the paste really leaves is tidied by the paste, inside its unit.
         self._last_caret_line = None
+        self._paste_from_table = self._note_raw_table_at_caret()
         # Our own cell copy puts an HTML table on the clipboard for Word's
         # sake, and on Windows the rich-paste route saw it FIRST -- so
         # pasting a copied table back into a note took the generic HTML
@@ -6623,6 +6625,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if not own_copy and self._paste_tsv_as_table():
             return "break"
         if self._paste_pipe_text_on_own_lines():
+            return "break"
+        # In a table being typed the plain paste is made here, so the table
+        # it leaves is tidied inside the same unit (Tk's own lands after this
+        # returns, outside any unit of the app's).
+        if (getattr(self, "_paste_from_table", None)
+                and self._paste_text_leaving_table()):
             return "break"
         # None of them took it, and Tk's paste is the delete the run was
         # opened for -- given back while the text is still what the run
@@ -6684,6 +6692,81 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         text = raw.strip("\n")
         lead, trail = self._rows_gap(text)
         b.insert("insert", lead + text + trail)
+        self._tidy_table_paste_left()
+        self._body_follow_caret = True
+        self._resync_list_tags()
+        self._render_table_grids()
+        self._schedule_autosave()
+        return True
+
+    # Where a table being typed began when a paste started (see
+    # _tidy_table_paste_left).
+    _PASTE_FROM_TABLE = "pasteFromTable"
+
+    def _note_raw_table_at_caret(self):
+        """The table being typed -- not yet drawn -- that the caret stands
+        in, as a mark at its first line; None when there is none."""
+        b = self.body_text
+        try:
+            here = int(b.index("insert").split(".")[0])
+        except (tk.TclError, ValueError):
+            return None
+        block = self._table_block_at(here)
+        if block is None or self._grid_at_line(block[0]) is not None:
+            return None
+        b.mark_set(self._PASTE_FROM_TABLE, f"{block[0]}.0")
+        b.mark_gravity(self._PASTE_FROM_TABLE, "right")
+        self._paste_caret_line = here
+        return self._PASTE_FROM_TABLE
+
+    def _tidy_table_paste_left(self):
+        """Tidy the table being typed that a paste took the caret out of,
+        inside the paste's own undo unit, as leaving it by any key tidies it
+        (_align_table_on_leaving). A paste's release no longer reads as
+        leaving a table -- that padded tables the caret was never in, as an
+        edit of its own -- so a table a paste did leave was drawn and never
+        tidied, its saved pipe text left with ragged columns."""
+        mark = getattr(self, "_paste_from_table", None)
+        self._paste_from_table = None
+        if not mark:
+            return
+        b = self.body_text
+        try:
+            first = int(b.index(mark).split(".")[0])
+            b.mark_unset(mark)
+            here = int(b.index("insert").split(".")[0])
+        except (tk.TclError, ValueError):
+            return
+        if here == getattr(self, "_paste_caret_line", None):
+            # Still on the line it was pasted on, as after a letter typed
+            # there: the table is tidied once the caret leaves that line.
+            return
+        block = self._table_block_at(first)
+        if block is not None and not block[0] <= here <= block[1]:
+            self._align_table_block(block[0])
+
+    @_undo_atom
+    def _paste_text_leaving_table(self):
+        """Tk's plain paste, made by the app when the caret stands in a
+        table being typed, so the table the paste takes the caret out of is
+        tidied in the same undo unit (_tidy_table_paste_left)."""
+        text = clipboard.read_text()
+        if text is None:
+            try:
+                text = self.body_text.clipboard_get()
+            except tk.TclError:
+                self._paste_from_table = None
+                return False
+        b = self.body_text
+        # The grids down before anything is written (see
+        # _paste_tsv_as_table): the drawing at the end would split the unit.
+        self._teardown_table_grids()
+        try:
+            b.delete("sel.first", "sel.last")
+        except tk.TclError:
+            pass
+        b.insert("insert", text.replace("\r\n", "\n").replace("\r", "\n"))
+        self._tidy_table_paste_left()
         self._body_follow_caret = True
         self._resync_list_tags()
         self._render_table_grids()
@@ -6814,6 +6897,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             first_new = ins_line + (1 if prefix else 0)
             for n in range(first_new, first_new + len(lines)):
                 b.tag_add(f"align_{clip_place}", f"{n}.0", f"{n}.end")
+        self._tidy_table_paste_left()
         self._body_follow_caret = True
         self._resync_list_tags()
         self._render_table_grids()
@@ -6848,7 +6932,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # A PDF's line breaks are where its column ended, not where the
         # writer did. Rejoined before the markers are stripped, because that
         # decision reads the line structure and refuses to touch a list.
+        self._paste_from_table = self._note_raw_table_at_caret()
         self._replace_selection_with(strip_list_markers(reflow_wrapped(text)))
+        self._tidy_table_paste_left()
         self._body_follow_caret = True
         self.after_idle(self._resync_list_tags)
         self.after_idle(self._render_table_grids)
@@ -6948,6 +7034,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # A pasted list starts its own numbering at one; renumbering makes
         # it continue whatever it was dropped into.
         self._renumber_lists()
+        self._tidy_table_paste_left()
         # A whole-body pass, which this is the case the cheap per-line one
         # is not for: a paste can bring in many lines at once, and the tags
         # derived from what those lines say -- a list's margin, a table's

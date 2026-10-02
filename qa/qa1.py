@@ -11001,6 +11001,41 @@ try:
               ('Shift+Insert', True, ['1.0', '1.6']),
               ('Ctrl+O', True, ['1.0', '1.6'])]
           and _sm_keys[0][2] == 'Prices!: here')
+    # A table typed by hand, left by a paste: the paste's release no longer
+    # reads as leaving a table, so the table was drawn and never tidied --
+    # its saved pipe text ragged. The paste tidies it, in its own undo unit.
+    _sm_raw = ('Intro' + chr(10) + '| Item name | Qty |' + chr(10)
+               + '| --- | --- |' + chr(10) + '| Tea | 2 |' + chr(10)
+               + 'end line')
+    set_body(_sm_raw)
+    app._reset_text_undo()
+    app._cancel_pending_autosave()
+    app.body_text.mark_set('insert', '4.end')
+    app._last_caret_line = None
+    _sm_clip['data'] = chr(10) + 'After the table'
+    _sm_ok = _own_key('<Control-KeyPress-v>', '<Control-KeyRelease-v>',
+                      ('Control_L',))
+    _sm_rows4 = app.body_text.get('1.0', 'end-1c').split(chr(10))
+    _sm_tidy = (_sm_ok and _sm_rows4[4] == 'After the table'
+                and len({len(r) for r in _sm_rows4[1:4]}) == 1)
+    _uf_key('<Control-z>')
+    _sm_back = app.body_text.get('1.0', 'end-1c') == _sm_raw
+    # A paste that leaves the caret on its own line is a letter typed there:
+    # the table is tidied when the caret leaves that line, not by the paste.
+    set_body(_sm_raw)
+    app._reset_text_undo()
+    app.body_text.mark_set('insert', '4.end')
+    app._last_caret_line = None
+    _sm_clip['data'] = '!'
+    _sm_ok2 = _own_key('<Control-KeyPress-v>', '<Control-KeyRelease-v>',
+                       ('Control_L',))
+    _sm_stay = app.body_text.get('2.0', '2.end')
+    _sm_clip['data'] = _sm_tsv
+    check(f'a table being typed that a paste leaves is tidied, and one Ctrl+Z '
+          f'takes the paste back; a paste that stays on its line leaves it '
+          f'for the caret to leave ({_sm_rows4[1:5]}; {_sm_stay!r})',
+          _sm_tidy and _sm_back and _sm_ok2
+          and _sm_stay == '| Item name | Qty |')
     # Ctrl+Z and Ctrl+Y after a table typed by hand is left: its rows were
     # typed with no window on its first line, and replayed with the drawn
     # grid's window there they landed a column off -- the header lost a
