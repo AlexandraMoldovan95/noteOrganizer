@@ -11740,6 +11740,48 @@ try:
     check(f'a table deleted at a note\'s end comes back exactly on Ctrl+Z, '
           f'and goes again on Ctrl+Y ({_tl_dt})',
           all(ok and back and fwd for _h, ok, back, fwd in _tl_dt))
+    # The theme switched, or the font size changed, with a table row still
+    # being typed: the redraw drew the row, and the next letter typed went
+    # under the table.
+    _tl_kr = []
+    for _tl_by in ('theme', 'font size'):
+        for _tl_kind in ('typed', 'pasted'):
+            set_body('Intro' + chr(10) + chr(10) + chr(10) + 'end line')
+            app._reset_text_undo()
+            app.body_text.mark_set('insert', '2.0')
+            app._last_caret_line = None
+            for _tl_i, _tl_row in enumerate(('| Item name | Qty |',
+                                             '| --- | --- |', '| Tea | 2 |')):
+                for _tl_ch in _tl_row:
+                    _ty_key(_pr_keys.get(_tl_ch, _tl_ch), _tl_ch)
+                if _tl_i < 2:
+                    _ty_key('Return', chr(10))
+            for _ in range(3):
+                _sm_press('<KeyPress-Left>')
+            if _tl_kind == 'typed':
+                for _tl_ch in 'XY':
+                    _ty_key(_tl_ch, _tl_ch)
+            else:
+                _sm_clip['data'] = 'XY'
+                _own_key('<Control-KeyPress-v>', '<Control-KeyRelease-v>',
+                         ('Control_L',))
+                _sm_clip['data'] = _sm_tsv
+            if _tl_by == 'theme':
+                app.toggle_theme()
+            else:
+                _tl_size = app.editor_font_size
+                app._set_editor_font(size=_tl_size + 1)
+            app.update()
+            _ty_key('Z', 'Z')
+            _tl_kr.append((_tl_by, _tl_kind, app.body_text.get('4.0', '4.end')))
+            if _tl_by == 'theme':
+                app.toggle_theme()
+            else:
+                app._set_editor_font(size=_tl_size)
+            app.update()
+    check(f'a theme switch or a new font size leaves a row being typed as it '
+          f'is ({_tl_kr})',
+          [r for _b, _k, r in _tl_kr] == ['| Tea | XYZ2 |'] * 4)
     # An older edit of a drawn table's header, walked back past once the
     # line the drawing put under a later table is the note's -- written on,
     # or taken out and drawn again by a theme switch. Tk never recorded the

@@ -2144,8 +2144,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # whatever size it was built at while the text around it moved.
         self._configure_table_tag(self.body_text)
         # Grids carry their own fonts and cell widths, so they are rebuilt
-        # at the new size rather than left at the old one.
-        self._render_table_grids()
+        # at the new size rather than left at the old one -- all but a row
+        # being typed, which a new size is no reason to leave.
+        self._render_table_grids(keep_typed=self._row_being_typed())
         self._refresh_format_buttons()
 
     def _marker_room(self, kind):
@@ -2494,10 +2495,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         with focus in the text or on a toolbar control.
 
         *keep_typed*: a line of a table still being typed, which a paste
-        left the caret on (_tidy_table_paste_left). That table stays text,
-        as after a letter typed there, until the caret leaves it. Drawn,
-        it took the line the caret was on, and the caret guard put the
-        caret under the table: the next letter typed went there.
+        left the caret on (_tidy_table_paste_left), or the caret's own row
+        when a redraw is no edit of the person's (_row_being_typed). That
+        table stays text, as after a letter typed there, until the caret
+        leaves it. Drawn, it took the line the caret was on, and the caret
+        guard put the caret under the table: the next letter typed went
+        there.
         """
         if not hasattr(self, "body_text"):
             return
@@ -6881,24 +6884,32 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
     # _tidy_table_paste_left).
     _PASTE_FROM_TABLE = "pasteFromTable"
 
-    def _note_raw_table_at_caret(self):
-        """The table being typed that the caret stands in -- its row not yet
-        drawn -- as a mark at its first line; None when there is none. Asked
-        of the caret's own row: a table typed by hand is drawn row by row as
-        the caret leaves each, so the row being typed sits under a drawn
-        header, and asking whether the table's first line was drawn found
-        none being typed past its first row."""
-        b = self.body_text
+    def _row_being_typed(self):
+        """The caret's line when it is a row of a table not yet drawn there
+        -- a table being typed -- else None. Asked of the caret's own row: a
+        table typed by hand is drawn row by row as the caret leaves each, so
+        the row being typed sits under a drawn header, and asking whether
+        the table's first line was drawn found none being typed past its
+        first row."""
         try:
-            here = int(b.index("insert").split(".")[0])
-        except (tk.TclError, ValueError):
+            here = int(self.body_text.index("insert").split(".")[0])
+        except (tk.TclError, ValueError, AttributeError):
             return None
-        block = self._table_block_at(here)
-        if block is None or any(
+        if self._table_block_at(here) is None or any(
                 first is not None and first <= here < first + info["nrows"]
                 for info in getattr(self, "_table_grids", [])
                 for first in (self._grid_first_line(info),)):
             return None
+        return here
+
+    def _note_raw_table_at_caret(self):
+        """The table being typed that the caret stands in (_row_being_typed),
+        as a mark at its first line; None when there is none."""
+        b = self.body_text
+        here = self._row_being_typed()
+        if here is None:
+            return None
+        block = self._table_block_at(here)
         b.mark_set(self._PASTE_FROM_TABLE, f"{block[0]}.0")
         b.mark_gravity(self._PASTE_FROM_TABLE, "right")
         self._paste_caret_line = here
@@ -11528,9 +11539,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # rebuild they kept the OLD theme until the next edit touched them.
         # The commit first: render's contract is "never while focus is in
         # a cell", and a theme switched mid-typing otherwise destroyed the
-        # editor's canvas under it -- the keystrokes went with it.
+        # editor's canvas under it -- the keystrokes went with it. A row
+        # being typed stays text: a new theme is no reason to leave it.
         self._commit_cell_editor()
-        self._render_table_grids()
+        self._render_table_grids(keep_typed=self._row_being_typed())
         # Text highlights are painted blended toward the theme surface
         # (the cells' own recipe); the new surface needs a re-blend.
         if hasattr(self, "body_text"):
