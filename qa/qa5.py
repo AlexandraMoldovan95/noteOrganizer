@@ -1601,6 +1601,34 @@ check(f'the status line stops naming a left-out date once it is put back to '
       and 'except' not in _rn_said_fixed
       and _rn_said_fixed.startswith('Auto-saved'))
 
+# The summary with the date box empty: the save keeps the start the note
+# has, and says so; the summary said "needs a start date" as if it had none.
+# And with no start date anywhere, the save keeps no repeat at all: the
+# summary previewed "Every week" for "Every 3x" and called it kept.
+_rn_series(interval=2)
+app.date_entry.delete(0, 'end')
+app.update_recurrence_summary(); app.update()
+_rn_said_cleared = str(app.rec_summary_lbl.cget('text'))
+app._put_back_stored_date_and_repeat()
+app._cancel_pending_autosave()
+app.new_note(); app.update()
+app.notes = [NO.normalize_note({'id': 1, 'title': 'Undated', 'body': 'x'})]
+app.save_notes()
+app.open_note_in_tab(app.find_note(1)); app.update()
+app.rec_freq_var.set(NO.FREQ_LABELS['weekly'])
+app.on_recurrence_changed()
+app.rec_interval_var.set('3x'); app.update()
+_rn_said_nodate = str(app.rec_summary_lbl.cget('text'))
+app._put_back_stored_date_and_repeat()
+app._cancel_pending_autosave()
+check(f'the summary says an emptied date keeps the start the save keeps, and '
+      f'that a repeat with no start date is not saved ({_rn_said_cleared!r}; '
+      f'{_rn_said_nodate!r})',
+      'still starts 2026-09-07' in _rn_said_cleared
+      and 'not saved' in _rn_said_nodate
+      and '“Every 3x”' in _rn_said_nodate
+      and 'kept as saved' not in _rn_said_nodate
+      and not _rn_said_nodate.startswith('Every'))
 
 app.new_note(); app.update()
 app.notes = []; app.save_notes()

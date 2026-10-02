@@ -14091,32 +14091,48 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if anchor == "YYYY-MM-DD":
             anchor = ""
         kept_date = ""
+        kept_repeat = True
         if problems or not parse_date(anchor):
             # What the save would keep, never what the boxes read as: an
             # unreadable "Every" or "After … times" read as 1, and an
             # unreadable end date as none, previewed a rule neither typed
             # nor stored.
             kept_date, kept, _left_out = self._date_and_repeat_to_store()
-            if problems and kept["freq"]:
+            # With no start date to hang it on, the save keeps no repeat.
+            kept_repeat = bool(kept["freq"])
+            if problems and kept_repeat:
                 rec = kept
-        preview = describe_recurrence({"recurrence": rec})
+        # The boxes read with one not understood describe a rule neither
+        # typed nor stored: with nothing kept either, no rule is shown.
+        preview = ("" if problems and not kept_repeat
+                   else describe_recurrence({"recurrence": rec}))
         unread = [{"end": "the end date “%s”",
                    "every": "“Every %s”",
                    "after": "“After %s times”",
                    "days": "day(s) “%s”"}[field] % _truncate(typed, 16)
                   for field, typed in problems]
+        warnings = []
         if not parse_date(anchor):
-            if anchor and parse_date(kept_date or ""):
+            if not parse_date(kept_date or ""):
+                warnings.append("needs a start date, so the repeat is not "
+                                "saved")
+            elif anchor:
                 # The series keeps the start it has; "needs a start date"
                 # said it had none.
                 unread.insert(0, "the date “%s”" % _truncate(anchor, 16))
             else:
-                preview += "   ⚠ needs a start date"
+                # Emptied, most often on the way to a new date: the save
+                # keeps the start, as its own words say.
+                warnings.append("needs a start date, so it still starts %s"
+                                % kept_date)
         if unread:
             # One warning, however many boxes it names: one per box ran
             # past the end of the row.
-            preview += ("   ⚠ Not understood, so kept as saved: "
-                        + ", ".join(unread))
+            warnings.append(("Not understood, so kept as saved: "
+                             if kept_repeat else "Not understood: ")
+                            + ", ".join(unread))
+        preview = "   ".join(([preview] if preview else [])
+                             + ["⚠ " + w for w in warnings])
         self.rec_summary_lbl.config(text=preview)
         # Recurrence settings (frequency, weekdays, interval, end condition)
         # didn't autosave before — this is the single choke point every one of
