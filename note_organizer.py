@@ -4274,6 +4274,19 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         """
         b = self.body_text
         try:
+            # Only a key that typed something: the text grew and the caret
+            # went on. Every release used to count -- an arrow key, or the
+            # caret guard's own stop at a table under "Prices:", put the
+            # caret after a plain ":" glued to a bold word, and the colon
+            # turned bold with nothing typed.
+            # Read once and dropped: a release with no press of its own
+            # (a generated one) is read off the buffer, as before.
+            at_press = getattr(self, "_text_at_press", None)
+            self._text_at_press = None
+            if at_press is not None and (
+                    b.compare("end-1c", "==", at_press[0])
+                    or b.compare("insert", "<=", at_press[1])):
+                return
             typed = b.index("insert-1c")
             prev = b.index("insert-2c")
             if b.compare(prev, ">=", typed):
@@ -12738,6 +12751,15 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                             add="+")
         self.body_text.bind("<KeyRelease>", self._extend_word_styles_on_typing,
                             add="+")
+        # Where the text ended and the caret stood when the key went down:
+        # the release asks whether the key typed anything (see
+        # _extend_word_styles_on_typing).
+        self.body_text.bind(
+            "<KeyPress>",
+            lambda e: setattr(self, "_text_at_press",
+                              (self.body_text.index("end-1c"),
+                               self.body_text.index("insert"))),
+            add="+")
         # KeyRelease alone re-centred the line one frame LATE -- the
         # character appears left-justified for a blink, then snaps to the
         # middle. An idle callback scheduled at KeyPress runs right after

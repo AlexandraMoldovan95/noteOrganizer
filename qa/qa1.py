@@ -10778,6 +10778,16 @@ app.update()
 check(f'selection x table: select all in a note that begins with a table '
       f'keeps the table ({_sm_where()[0]})',
       _sm_where()[0] is not None and _sm_where()[0][0] == '1.0')
+# A key that typed nothing extends no style: the release of an arrow -- or
+# the caret guard's own stop at a table under "Prices:" -- found a plain ":"
+# glued to a bold word left of the caret, and made it bold.
+_sm_fresh('1.6', 'Prices: here')
+app.body_text.tag_add('bold', '1.0', '1.6')
+_sm_press('<KeyPress-Right>')
+check(f'selection x table: an arrow key leaves the bold where it was '
+      f'({app.body_text.tag_ranges("bold")})',
+      [str(i) for i in app.body_text.tag_ranges('bold')] == ['1.0', '1.6'])
+app.body_text.tag_remove('bold', '1.0', 'end')
 # A mouse press beside a drawn table lands on its last row's hidden text.
 # Dragged down, the selection began inside that row, and the next key glued
 # the row onto the paragraph under it; dragged up, it took the whole table.
