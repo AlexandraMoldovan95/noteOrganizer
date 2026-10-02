@@ -2281,6 +2281,47 @@ _rn_cn = (_rn_named, '30/09/2026' in (_rn_said or [''])[0],
 check(f'"Continue without it" on a delete names the turn-off it takes back '
       f'({_rn_cn})',
       _rn_ok and _rn_cn == (True, True, 'weekly', _RN_SERIES))
+# The Undo of a day's delete after a waiting turn-off was made (leaving the
+# note within the Undo's seconds) said "That day is already back" and did
+# nothing; the day's own text was in no file -- the turn-off had not seen
+# it, so it made no rescue copy. The day's text stays in the note while
+# the turn-off waits, and the Undo puts the day back in the rescue copy.
+app.new_note(); app.update()
+app.notes = [
+    NO.normalize_note({'id': 1, 'title': 'Weekly', 'body': 'series text',
+                       'date': '2026-09-07', 'recurrence': {'freq': 'weekly'},
+                       'overrides': {'2026-09-14': {'body': 'DAY 14'}},
+                       'exceptions': ['2026-09-28']}),
+    NO.normalize_note({'id': 2, 'title': 'Other', 'body': 'y'})]
+app.save_notes()
+app.open_note_in_tab(app.find_note(1)); app.update()
+app._cancel_pending_autosave()
+_rn_ok = _rn_pick(NO.FREQ_LABELS[''])
+app.ask_occurrence_scope = lambda *a, **k: 'occurrence'
+try:
+    app._context_delete_note(app.find_note(1), occurrence_date='2026-09-14')
+    app.update()
+finally:
+    app.ask_occurrence_scope = _oc_real_scope
+app.open_note_in_tab(app.find_note(2)); app.update()
+_rn_ok = _rn_ok and _rn_days()[0] == ''
+app._undo_occurrence_delete(1, '2026-09-14', {'body': 'DAY 14'}); app.update()
+_rn_ug = [str(app.status_lbl.cget('text')),
+          sorted(_rn_prev().get('exceptions') or []),
+          ((_rn_prev().get('overrides') or {}).get('2026-09-14') or {}).get('body')]
+app.open_note_in_tab(app.find_note(1)); app.update()
+app.ask_yes_no = lambda *a, **k: True
+try:
+    app.restore_previous_version(); app.update()
+finally:
+    app.ask_yes_no = _ro_yes
+app._cancel_pending_autosave()
+_rn_ug.append(_rn_days())
+check(f'the Undo of a day deleted while a turn-off waited, clicked after it '
+      f'was made, puts the day back in the rescue copy ({_rn_ug})',
+      _rn_ok and 'Restore previous' in _rn_ug[0]
+      and _rn_ug[1:3] == [['2026-09-28'], 'DAY 14']
+      and _rn_ug[3] == _RN_SERIES)
 
 # Restore previous with a big delete still waiting for its autosave: the
 # autosave ran while the question waited and made a new rescue copy of the

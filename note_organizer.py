@@ -21338,6 +21338,27 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if note is None:
             self._show_toast("That note is no longer here", kind="info")
             return
+        if not is_recurring(note):
+            # The repeat was turned off since -- one waiting when the day
+            # went, made by leaving the note or Save. The series is in the
+            # rescue copy the turn-off made, that day deleted in it: it is
+            # put back there. This said "That day is already back" and did
+            # nothing, the day's own text in no file.
+            prev = note.get("_prev") or {}
+            if ((prev.get("recurrence") or {}).get("freq")
+                    and date_str in (prev.get("exceptions") or [])):
+                prev["exceptions"] = [d for d in prev["exceptions"]
+                                      if d != date_str]
+                if own_edit and date_str not in (prev.get("overrides") or {}):
+                    prev.setdefault("overrides", {})[date_str] = dict(own_edit)
+                self.save_notes()
+                self.set_status("This note no longer repeats: ↩ Restore "
+                                "previous brings the series back, that day "
+                                "with it")
+            else:
+                self._show_toast("This note no longer repeats, so that day "
+                                 "can't come back", kind="info")
+            return
         exceptions = set(note.get("exceptions") or [])
         if date_str not in exceptions:
             self._show_toast("That day is already back", kind="info")
@@ -21507,7 +21528,18 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 # Kept for the Undo below: the day's own title and text
                 # went with it, and the Undo used to bring back the day
                 # showing the series' text instead -- the edit gone for good.
-                own_edit = note["overrides"].pop(occurrence_date, None)
+                # With this series on screen and its turn-off waiting, the
+                # day's own text stays in the note too, under the deleted
+                # day: the turn-off, made on leaving, counts it among the
+                # days it takes away and keeps it in its rescue copy. Taken
+                # out, the turn-off saw no day to keep, made no copy, and the
+                # Undo had no series left to put it back in.
+                waiting = (self.selected_note_id == note["id"]
+                           and self.current_occurrence_date != occurrence_date
+                           and self._repeat_off_waits())
+                own_edit = (copy.deepcopy(note["overrides"].get(occurrence_date))
+                            if waiting
+                            else note["overrides"].pop(occurrence_date, None))
                 note["updated"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 self.save_notes()
                 if (self.selected_note_id == note["id"]
