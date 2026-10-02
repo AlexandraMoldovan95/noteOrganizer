@@ -1105,6 +1105,45 @@ check(f'turning the repeat off on a day with a date the app cannot read '
 # agrees with the note again, and nothing below is asked about it.
 app._put_back_stored_date_and_repeat()
 app._cancel_pending_autosave()
+
+
+# A file attached after a day was saved "This occurrence only": the save
+# stored the editor's own list in the note, so the attach changed the note
+# too, the editor read as saved, and closing lost the file's entry.
+app.new_note(); app.update()
+app.notes = [
+    NO.normalize_note({'id': 1, 'title': 'Weekly', 'body': 'series text',
+                       'date': '2026-09-07', 'recurrence': {'freq': 'weekly'}}),
+    NO.normalize_note({'id': 2, 'title': 'Other', 'body': 'y'})]
+app.save_notes()
+app.open_note_in_tab(app.find_note(1), occurrence_date='2026-09-14'); app.update()
+app.body_text.insert('end-1c', ' -- for this day')
+app._themed_dialog = lambda *a, **k: 'occurrence'
+try:
+    app.save_current_note(); app.update()
+finally:
+    app._themed_dialog = _mv_real_dlg
+_fd5.askopenfilenames = lambda **k: (_oc_file,)
+try:
+    app.add_attachment(); app.update()
+finally:
+    _fd5.askopenfilenames = _oc_real_pick
+_at_unsaved = not app.editor_state_matches_saved(app.capture_editor_state())
+_at_asked = []
+app._themed_dialog = lambda *a, **k: (_at_asked.append(a[0]), True)[1]
+try:
+    app.open_note_in_tab(app.find_note(2)); app.update()
+finally:
+    app._themed_dialog = _mv_real_dlg
+with open('notes_data.json', encoding='utf-8') as _f5a:
+    _at_disk = [n for n in _json5r.load(_f5a) if n.get('id') == 1]
+check(f'a file attached after a day was saved on its own reads as unsaved '
+      f'({_at_unsaved}), and leaving stores it '
+      f'({[a.get("filename") for a in (_at_disk[0].get("attachments") or [])] if _at_disk else None})',
+      _at_unsaved and len(_at_disk) == 1
+      and [a.get('filename') for a in _at_disk[0].get('attachments') or []]
+      == ['qa5_handout.txt'])
+
 app.new_note(); app.update()
 app.notes = []; app.save_notes()
 

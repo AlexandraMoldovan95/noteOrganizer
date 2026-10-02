@@ -19293,7 +19293,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 note["overrides"] = {}
             note["date"] = date_value
             note["recurrence"] = recurrence
-        note["attachments"] = self.current_attachments
+        # A copy, as the checklist beside it: the editor's own list stored
+        # in the note made the next file attached or removed change the
+        # note too, so the dirty check compared the list with itself, read
+        # the note as saved, and closing the app lost the change.
+        note["attachments"] = [dict(a) for a in self.current_attachments]
         note["checklist"] = [dict(it) for it in self._get_checklist()]
         return rescued
 
@@ -19608,7 +19612,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 note["category"] = category
                 note["date"] = date_value
                 note["color"] = self.current_note_color
-                note["attachments"] = self.current_attachments
+                # A copy, never the editor's own list -- see
+                # _write_series_owned.
+                note["attachments"] = [dict(a) for a in self.current_attachments]
                 note["recurrence"] = recurrence
                 note["checklist"] = [dict(it) for it in self._get_checklist()]
                 note["updated"] = now

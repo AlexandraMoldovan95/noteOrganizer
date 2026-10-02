@@ -681,6 +681,73 @@ for _mv_path in _mv_files:
     if os.path.isfile(_mv_path):
         os.remove(_mv_path)
 
+# A file attached or removed after a save in the same visit. The save stored
+# the editor's own list in the note, so the attach changed the note too: the
+# editor read as saved, and closing the app lost the file's entry -- and a
+# removed file stayed listed with its stored copy already deleted.
+import json as _json6a
+app.new_note()
+app.title_entry.insert(0, 'AttachAfterSave')
+app.body_text.insert('1.0', 'typed first')
+app.save_current_note(auto=False)
+app.update()
+# A second save, of the note as it now exists: the first one made a new
+# note, whose fields are copied on the way in, and it is the save of an
+# existing note that stored the editor's own list.
+app.body_text.insert('end-1c', ' and typed again')
+app.save_current_note(auto=False)
+app.update()
+_aa_id = app.selected_note_id
+check('fixture: the note was saved twice, the second time as itself',
+      _aa_id is not None and 'typed again' in app.find_note(_aa_id)['body'])
+_aa_files = []
+for _aa_name in ('qa6_after_one.txt', 'qa6_after_two.txt'):
+    _aa_path = os.path.join(tempfile.gettempdir(), _aa_name)
+    with open(_aa_path, 'w') as _aa_f:
+        _aa_f.write('after a save')
+    _aa_files.append(_aa_path)
+
+
+def _aa_disk():
+    with open('notes_data.json', encoding='utf-8') as _aa_f:
+        return [a.get('filename') for n in _json6a.load(_aa_f)
+                if n.get('id') == _aa_id for a in n.get('attachments') or []]
+
+
+fd.askopenfilenames = lambda **k: tuple(_aa_files)
+app.add_attachment()
+app.update()
+_aa_unsaved = not app.editor_state_matches_saved(app.capture_editor_state())
+app._flush_autosave()
+app.update()
+check(f'files attached after a save read as unsaved ({_aa_unsaved}), and the '
+      f'next flush stores them ({_aa_disk()})',
+      _aa_unsaved and _aa_disk() == ['qa6_after_one.txt', 'qa6_after_two.txt'])
+app.ask_yes_no = lambda *a, **k: True
+try:
+    app.remove_attachment(1)
+    app.update()
+finally:
+    app.ask_yes_no = _orig_ask_att
+_aa_unsaved = not app.editor_state_matches_saved(app.capture_editor_state())
+app._flush_autosave()
+app.update()
+check(f'...and a file removed after that save reads as unsaved '
+      f'({_aa_unsaved}), and the next flush stores the removal ({_aa_disk()})',
+      _aa_unsaved and _aa_disk() == ['qa6_after_one.txt'])
+app.ask_yes_no = lambda *a, **k: True
+try:
+    app.remove_attachment(0)
+    app.update()
+finally:
+    app.ask_yes_no = _orig_ask_att
+app._flush_autosave()
+for _aa_path in _aa_files:
+    if os.path.isfile(_aa_path):
+        os.remove(_aa_path)
+app.new_note()
+app.current_attachments = []
+
 # ---- COMBINATIONS ----
 
 # Template + Checklist + Category together
