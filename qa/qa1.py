@@ -6969,6 +6969,70 @@ check(f'every Ctrl+Z and Ctrl+Y after a renumber beside a drawn table '
       f'changes something ({_rw_seen})',
       _rw_after != _rw_start and _rw_seen == [True, True, True, True]
       and _rw_back and app.body_text.get('1.0', 'end-1c') == _rw_after)
+# ...also where an alignment meets the table's window: a centred line right
+# above the table (its alignment runs through its line break, up to the
+# window), or the table placed with "Center table on page" (the drawing
+# gives the window its line's alignment). The two sides of the drawing-again
+# part were compared by moving one into the other's windows, which put an
+# index at a window's column past the window, where Tk does not: the first
+# Ctrl+Z and the last Ctrl+Y changed nothing again -- and every such empty
+# step took one of the journal's 100, so a long session's deepest Ctrl+Z
+# lost the note's bold and colours after half of them.
+for _ra_how in ('centred line above it', 'table placed centre'):
+    set_body('1. one' + chr(10) + '2. two' + chr(10) + 'Title' + chr(10)
+             + '| A | B |' + chr(10) + '| --- | --- |' + chr(10) + '| x | y |')
+    app._render_table_grids()
+    app.update()
+    if _ra_how == 'centred line above it':
+        app.body_text.mark_set('insert', '3.2')
+        app._set_paragraph_align('center')
+    else:
+        app._grid_set_table_align(app._table_grids[0], 'center')
+        app._render_table_grids()
+    app.update()
+    # What the case needs: the window is at 4.0, and the alignment reaches it
+    # -- ending there (the line above) or on it (the table placed).
+    _ra_window = [t for t in app.body_text.tag_names('4.0')
+                  if t == 'align_center']
+    _ra_pre = (app.body_text.window_names()
+               and app.body_text.index(app.body_text.window_names()[0]) == '4.0'
+               and (bool(_ra_window) if _ra_how == 'table placed centre' else
+                    [str(i) for i in app.body_text.tag_ranges('align_center')]
+                    == ['3.0', '4.0']))
+    app._reset_text_undo()
+    app.body_text.mark_set('insert', '1.end')
+    _ra_start = app.body_text.get('1.0', 'end-1c')
+    if take_focus(app.body_text):
+        app._on_body_return(None)
+        app.update()
+    _ra_after = app.body_text.get('1.0', 'end-1c')
+    _ra_seen = []
+    for _ra_k in ('undo', 'undo', 'redo', 'redo'):
+        _ra_was = app.body_text.get('1.0', 'end-1c')
+        app._body_undo_redo(_ra_k)
+        app.update()
+        _ra_seen.append(app.body_text.get('1.0', 'end-1c') != _ra_was)
+        if len(_ra_seen) == 2:
+            _ra_back = app.body_text.get('1.0', 'end-1c') == _ra_start
+    check(f'every Ctrl+Z and Ctrl+Y after a renumber beside a drawn table, '
+          f'{_ra_how}, changes something ({_ra_seen}; case set up '
+          f'{bool(_ra_pre)})',
+          _ra_pre and _ra_after != _ra_start
+          and _ra_seen == [True, True, True, True]
+          and _ra_back and app.body_text.get('1.0', 'end-1c') == _ra_after)
+# What "the same once the windows are accounted for" means: a range split
+# only by a window's character is one range, and a range over a window's
+# character alone is none -- the window's own tags are its line's.
+_wf_sig = (1, 1)
+check('a range split only by a window reads as one range without it',
+      NO._fmt_window_free((_wf_sig, ('4.0',),
+                           (('align_center', '3.0 4.0 4.1 7.0'),)))
+      == NO._fmt_window_free((_wf_sig, (), (('align_center', '3.0 7.0'),))))
+check('a range over a window alone is no range without it',
+      NO._fmt_window_free((_wf_sig, ('4.0',),
+                           (('align_center', '4.0 4.1'),
+                            ('bold', '2.0 2.3'))))
+      == NO._fmt_window_free((_wf_sig, (), (('bold', '2.0 2.3'),))))
 
 # The whole-body renumber rewrite (delete-all + reinsert) on the key
 # path is ONE undo unit: one Ctrl+Z after such an Enter must never leave

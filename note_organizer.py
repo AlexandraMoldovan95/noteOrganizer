@@ -559,6 +559,46 @@ def _fmt_move_ranges(ranges, src, dst):
     return " ".join(moved)
 
 
+def _fmt_window_free(state):
+    """A snapshot's formatting as it reads in the text WITHOUT the drawn
+    tables' windows: {tag: ((line, col), (line, col)) pairs}, each index
+    taken to its column with the windows before it on its line not counted,
+    ranges that meet joined, and tags left with nothing dropped.
+
+    For telling whether two sides of a part differ by anything but where the
+    tables are drawn. Moving one side into the other's windows
+    (_fmt_move_ranges) puts an index at a window's column past the window,
+    and Tk does not always: a range that ends there stays before it (a
+    centred line directly above a table runs through its line break), and a
+    placed table's window carries its line's alignment from the drawing
+    (_build_table_grid). Here a window's own character drops out of both
+    sides alike -- what it carries is its line's, which is compared."""
+    _sig, windows, ranges = state
+    cols = {}
+    for w in windows:
+        line, _, col = w.partition(".")
+        cols.setdefault(line, []).append(int(col))
+    out = {}
+    for tag, spans in ranges:
+        points = []
+        for index in spans.split():
+            line, _, col = index.partition(".")
+            c = int(col)
+            points.append((int(line),
+                           c - sum(1 for w in cols.get(line, ()) if w < c)))
+        joined = []
+        for lo, hi in sorted(zip(points[0::2], points[1::2])):
+            if lo >= hi:
+                continue
+            if joined and lo <= joined[-1][1]:
+                joined[-1] = (joined[-1][0], max(hi, joined[-1][1]))
+            else:
+                joined.append((lo, hi))
+        if joined:
+            out[tag] = tuple(joined)
+    return out
+
+
 def _undo_hidden(method):
     """The method's edits never reach the undo stack.
 
@@ -14643,16 +14683,18 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         table beside a drawn one is split where the tables come down, and
         its drawing again was left as a step of its own, which the first
         Ctrl+Z took back with nothing changing on screen (and the last
-        Ctrl+Y). Tk holds no step for it either: no text changed."""
+        Ctrl+Y). Tk holds no step for it either: no text changed. The two
+        sides are compared without the windows (_fmt_window_free): moved
+        into each other's, a centred line right above a table, or a table
+        placed centre or right, still read as a change -- and each such
+        empty step took one of the journal's 100 (_trim_fmt_journal)."""
         journal = getattr(self, "_fmt_undo", None)
         if journal is None:
             journal = self._fmt_undo = []
         text = after[0] != before[0]
         if (not text and before[1] != after[1]
                 and len(before) > 2 and len(after) > 2
-                and {t: _fmt_pairs(_fmt_move_ranges(s, before[1], after[1]))
-                     for t, s in before[2]}
-                == {t: _fmt_pairs(s) for t, s in after[2]}):
+                and _fmt_window_free(before) == _fmt_window_free(after)):
             return
         journal.append({"text": text,
                         "before": before, "after": after,
