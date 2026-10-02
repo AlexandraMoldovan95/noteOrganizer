@@ -11414,6 +11414,82 @@ try:
           f'back and forth exactly (headers no step had: {_wp_odd})',
           _wp_drawn and 'ItemXY' in _wp_end and not _wp_odd
           and _wp_back == _wp_start and _wp_fwd == _wp_end)
+    # A table at the very end of a note gets a line under it from the
+    # drawing, which Tk never records. Ctrl+Z back past the Enter that made
+    # the person's own line there, then Ctrl+Y, doubled that line, and from
+    # then on a header cell's edit replayed a column off ("| Name s   |").
+    set_body('Intro line')
+    app._reset_text_undo()
+    app._cancel_pending_autosave()
+    app.body_text.mark_set('insert', '1.end')
+    app._last_caret_line = None
+    _ty_key('Return', chr(10))
+    for _te_line in ('| Name | Qty |', '| --- | --- |', '| Tea | 2 |'):
+        for _te_ch in _te_line:
+            _ty_key(_pr_keys.get(_te_ch, _te_ch), _te_ch)
+        if _te_line.startswith('| Tea'):
+            # The caret moved before the last Enter, as a person's End
+            # moves it: that Enter is a step of its own on Tk's stack.
+            _sm_press('<KeyPress-End>')
+        _ty_key('Return', chr(10))
+    app.update()
+    _te_ok = app._grid_at_line(2) is not None
+    if _te_ok:
+        app._open_cell_editor(app._grid_at_line(2), 0, 0)
+        app.update()
+        _te_ed = app._cell_editor['entry']
+        _te_ed.delete('1.0', 'end')
+        _te_ed.insert('1.0', 'Names')
+        app._commit_cell_editor()
+        app.update()
+    _te_edited = app.body_text.get('1.0', 'end-1c')
+    for _te_k in 'zzzyyy':
+        _own_key('<Control-KeyPress-%s>' % _te_k,
+                 '<Control-KeyRelease-%s>' % _te_k, ('Control_L',))
+    _te_after = app.body_text.get('1.0', 'end-1c')
+    check(f'Ctrl+Z and Ctrl+Y past the line under a table at a note\'s end '
+          f'give its header back exactly ({_te_after.split(chr(10))[1:2]}; '
+          f'{_te_after.count(chr(10))} vs {_te_edited.count(chr(10))} lines)',
+          _te_ok and 'Names' in _te_edited and _te_after == _te_edited)
+    # ...and a header cell edited while the drawing's own line stands there
+    # (Ctrl+Z back past the Enter put it there): the edit was noted with the
+    # text as it stood, and the journal must read it so when Ctrl+Z and
+    # Ctrl+Y walk it, or the edit replays as typing, a column off.
+    set_body('Intro line')
+    app._reset_text_undo()
+    app._cancel_pending_autosave()
+    app.body_text.mark_set('insert', '1.end')
+    app._last_caret_line = None
+    _ty_key('Return', chr(10))
+    for _te_line in ('| Name | Qty |', '| --- | --- |', '| Tea | 2 |'):
+        for _te_ch in _te_line:
+            _ty_key(_pr_keys.get(_te_ch, _te_ch), _te_ch)
+        if _te_line.startswith('| Tea'):
+            _sm_press('<KeyPress-End>')
+        _ty_key('Return', chr(10))
+    app.update()
+    for _te_k in 'zz':
+        _own_key('<Control-KeyPress-%s>' % _te_k,
+                 '<Control-KeyRelease-%s>' % _te_k, ('Control_L',))
+    _tb_tail = (app._render_tail_line() is not None
+                and app._grid_at_line(2) is not None)
+    if _tb_tail:
+        app._open_cell_editor(app._grid_at_line(2), 0, 0)
+        app.update()
+        _tb_ed = app._cell_editor['entry']
+        _tb_ed.delete('1.0', 'end')
+        _tb_ed.insert('1.0', 'Names')
+        app._commit_cell_editor()
+        app.update()
+    _tb_edited = app.body_text.get('1.0', 'end-1c')
+    for _te_k in 'zy':
+        _own_key('<Control-KeyPress-%s>' % _te_k,
+                 '<Control-KeyRelease-%s>' % _te_k, ('Control_L',))
+    _tb_after = app.body_text.get('1.0', 'end-1c')
+    check(f'...and a header cell edited beside the drawing\'s own line walks '
+          f'back and forth exactly ({_tb_tail}; '
+          f'{_tb_after.split(chr(10))[1:2]})',
+          _tb_tail and 'Names' in _tb_edited and _tb_after == _tb_edited)
 finally:
     app.tk.eval('rename ::tk::GetSelection {}')
     app.tk.eval('rename ::tk::_qa1_sm_GetSelection ::tk::GetSelection')

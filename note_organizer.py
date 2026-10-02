@@ -2383,6 +2383,38 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         except tk.TclError:
             pass
 
+    # The mark at the empty line the drawing puts under the note's last
+    # table (see _render_table_grids).
+    _RENDER_TAIL = "renderTail"
+
+    def _render_tail_line(self):
+        """Where the empty line the drawing put under the note's last table
+        begins -- or None when there is no such line any more: typed on, or
+        with a line of the person's after it."""
+        b = self.body_text
+        try:
+            at = b.index(self._RENDER_TAIL)
+        except tk.TclError:
+            return None
+        if (at == "1.0" or b.compare(at, "!=", "end-1c linestart")
+                or b.get(at, "end-1c")):
+            return None
+        return at
+
+    @_undo_hidden
+    def _drop_render_tail(self):
+        """Take out the drawing's own line under the last table, which Tk
+        never put there: replaying the Enter that had made a line of the
+        person's there doubled it, and every step after that read as typing
+        and was replayed in the wrong grid state."""
+        at = self._render_tail_line()
+        if at is not None:
+            self.body_text.delete(f"{at} -1c", at)
+        try:
+            self.body_text.mark_unset(self._RENDER_TAIL)
+        except tk.TclError:
+            pass
+
     @_undo_hidden
     def _render_table_grids(self, keep_typed=None):
         """Draw every table in the note as a grid of real cells.
@@ -2440,11 +2472,16 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self._build_table_grid(first0 + 1, last0 + 1)
         # There is always a line under the last table, or the caret guard
         # would have nowhere to put the caret and writing could never
-        # continue past it.
+        # continue past it. That line is the drawing's, not the person's:
+        # Tk never records it (this method is _undo_hidden), so it is
+        # marked, the journal does not count it (_fmt_state), and it goes
+        # before Tk replays a step (_drop_render_tail).
         if blocks:
             total = int(self.body_text.index("end-1c").split(".")[0])
             if blocks[-1][1] + 1 >= total:
                 self.body_text.insert("end", "\n")
+                self.body_text.mark_set(self._RENDER_TAIL, "end-1c")
+                self.body_text.mark_gravity(self._RENDER_TAIL, "left")
         for info in getattr(self, "_table_grids", []):
             line = self._grid_first_line(info)
             if line in restore_x:
@@ -14264,6 +14301,14 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._fmt_undo, self._fmt_redo = [], []
         self._styled_delete_run = None
         self._fmt_last_state = None
+        # A line the drawing put under the last table is part of the note as
+        # loaded now: there is no step left that could replay around it.
+        body = getattr(self, "body_text", None)
+        if body is not None:
+            try:
+                body.mark_unset(self._RENDER_TAIL)
+            except tk.TclError:
+                pass
 
     # How many steps back the formatting journal reaches. Each step holds
     # two snapshots, which share every tag's string with the snapshot
@@ -14319,6 +14364,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         edits on a heavily styled note grew the app by 60 MB."""
         b = self.body_text
         text = b.get("1.0", "end-1c")
+        if self._render_tail_line() is not None:
+            # The drawing's own line under the last table: not the person's,
+            # never on Tk's stack, so not counted (see _render_table_grids).
+            text = text[:-1]
         tags = sorted(t for t in b.tag_names() if _fmt_journal_tag(t))
         if not getattr(self, "_fmt_ranges_proc", False):
             b.tk.eval(_FMT_RANGES_TCL)
@@ -14841,6 +14890,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             # step is replayed with the tables down, like a unit marked so.
             if pending is None or pending.get("grids_down"):
                 self._teardown_table_grids()
+            # Tk replays on the text it recorded: the drawing's own line under
+            # the last table goes first, and the redraw below puts it back if
+            # it is still needed (see _render_table_grids).
+            self._drop_render_tail()
             try:
                 (b.edit_undo if undo else b.edit_redo)()
             except tk.TclError:
