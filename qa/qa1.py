@@ -11288,6 +11288,41 @@ try:
           f'({_rf})',
           [(s, u, r) for s, u, r, _t in _rf] == [('word', False, True),
                                                  ('cell', False, True)])
+    # Tk's own Insert pastes the selection over itself -- the same words,
+    # bare -- and a paste of the very words it replaces does the same: a
+    # change of style alone, which Ctrl+Z dropped, leaving them plain. On
+    # X11 Tk's paste inserts at the caret and leaves the selection where it
+    # is (the date field's paste check says the same), so there the paste
+    # replaces nothing and Ctrl+Z has only the note to give back; Insert,
+    # which deletes the selection the caret is in everywhere, still covers
+    # both halves of the fix there.
+    _in_x11 = str(app.tk.call('tk', 'windowingsystem')) == 'x11'
+    _in = []
+    for _in_name, _in_do in (
+            ('Insert', lambda: _own_key('<KeyPress-Insert>',
+                                        '<KeyRelease-Insert>')),
+            ('Shift+Insert', lambda: _own_key('<Shift-KeyPress-Insert>',
+                                              '<Shift-KeyRelease-Insert>',
+                                              ('Shift_L',)))):
+        set_body('Prices: here' + chr(10) + 'second line')
+        app.body_text.tag_add('bold', '1.0', '1.6')
+        app._reset_text_undo()
+        app.body_text.tag_add('sel', '1.0', '1.6')
+        app.body_text.mark_set('insert', '1.6')
+        _sm_clip['data'] = 'Prices'
+        _in_ok = _in_do()
+        _in_plain = not app.body_text.tag_ranges('bold') or (
+            _in_x11 and _in_name == 'Shift+Insert')
+        app.body_text.tag_remove('sel', '1.0', 'end')
+        _uf_key('<Control-z>')
+        _in.append((_in_name, _in_ok and _in_plain,
+                    [str(i) for i in app.body_text.tag_ranges('bold')],
+                    app.body_text.get('1.0', '1.end')))
+    _sm_clip['data'] = _sm_tsv
+    check(f'Ctrl+Z gives a styled selection its style back after Insert, or a '
+          f'paste of the same words ({_in})',
+          _in == [('Insert', True, ['1.0', '1.6'], 'Prices: here'),
+                  ('Shift+Insert', True, ['1.0', '1.6'], 'Prices: here')])
 finally:
     app.tk.eval('rename ::tk::GetSelection {}')
     app.tk.eval('rename ::tk::_qa1_sm_GetSelection ::tk::GetSelection')

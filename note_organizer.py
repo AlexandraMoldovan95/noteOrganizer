@@ -14614,6 +14614,17 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             return None, None
         if not sel:
             return None, None
+        if keysym == "Insert" and not (state & 0x1) and not control:
+            # Tk's own Insert pastes the selection, deleting it first when
+            # the caret is in it (tk::TextInsert): a replace, as typing over
+            # it is. Its style came back plain, and Ctrl+Z left it so.
+            try:
+                if (b.compare("sel.first", "<=", "insert")
+                        and b.compare("insert", "<=", "sel.last")):
+                    return sel, "replace"
+            except tk.TclError:
+                pass
+            return None, None
         char = getattr(event, "char", "") or ""
         # Control+Alt is AltGr on Windows, which types a character.
         typed = (char.isprintable() and char != ""
@@ -14675,7 +14686,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             after = self._fmt_state()
         except (tk.TclError, ValueError):
             return
-        if after[0] == run["before"][0]:
+        # Nothing changed at all: no step. The same text put back bare --
+        # Insert over the selection it pastes, a paste of the very words it
+        # replaced -- changed their formatting only, and is a step: dropped,
+        # Ctrl+Z gave the words back without their style.
+        if after == run["before"]:
             return
         journal = getattr(self, "_fmt_undo", None)
         if journal is None:
