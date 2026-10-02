@@ -592,6 +592,21 @@ def _undo_hidden(method):
     return wrapped
 
 
+def _holds_repeat_off(method):
+    """The method's saves hold back the turn-off of a repeat whose days
+    hold edits of their own (see _date_and_repeat_to_store): a save no one
+    asked for -- the autosave's -- must not move a series' days away."""
+    @functools.wraps(method)
+    def wrapped(self, *args, **kwargs):
+        held = getattr(self, "_holding_repeat_off", False)
+        self._holding_repeat_off = True
+        try:
+            return method(self, *args, **kwargs)
+        finally:
+            self._holding_repeat_off = held
+    return wrapped
+
+
 def _checklist_rows_current(drawn, items, theme):
     """True when the checklist rows on screen were drawn from exactly this
     list -- the same item objects, in this order, still saying what each
@@ -1229,9 +1244,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         except (IOError, OSError, NameError):
             pass
 
+    @_holds_repeat_off
     def _autosave_now(self):
         """Run an auto-save if the current editor content is worth saving and
-        actually differs from what's on disk."""
+        actually differs from what's on disk. A repeat turned off on a series
+        whose days hold edits of their own is held back from it (see
+        _date_and_repeat_to_store): leaving the note or Save makes that save."""
         # Cancelled, not forgotten: whoever runs this -- its timer, or a
         # caller saving right now -- leaves no other autosave pending. A
         # timer whose job was only set to None stayed scheduled with
@@ -1271,24 +1289,6 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             note = self.find_note(self.selected_note_id)
             if note is not None and is_recurring(note):
                 return
-        # Nor does a timer turn off the repeat of a series whose days hold
-        # edits of their own -- their own text, a day removed. That save
-        # moves them all into the rescue copy, and a "Does not repeat"
-        # picked by mistake and put right a second later brought the series
-        # back without them. Leaving the note, or Save, commits it; until
-        # then the editor holds it, and the status line says so -- and gives
-        # its line back once the repeat is picked again.
-        said = getattr(self, "_status_off_waits", None)
-        if self._repeat_off_waits():
-            if said is None:
-                said = str(self.status_lbl.cget("text"))
-            self.set_status("Not saved yet: with its repeat turned off, "
-                            "this note is saved when you leave it or press "
-                            "Save")
-            self._status_off_waits = said
-            return
-        if said is not None:
-            self.set_status(said)
         try:
             st = self.capture_editor_state()
         except Exception:
@@ -18343,8 +18343,17 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             return True
         try:
             if not self.editor_state_matches_saved(st):
-                if self.save_current_note(auto=True) is self._SAVE_CANCELLED:
-                    return False
+                # A route that saves on its way to something else holds a
+                # repeat's turn-off back, as the autosave does: it moved a
+                # series' days into the rescue copy unasked, the note still
+                # open (see _date_and_repeat_to_store).
+                held = getattr(self, "_holding_repeat_off", False)
+                self._holding_repeat_off = held or not leaving
+                try:
+                    if self.save_current_note(auto=True) is self._SAVE_CANCELLED:
+                        return False
+                finally:
+                    self._holding_repeat_off = held
         except Exception:
             # THE silent spot the audit named: a save failing here, at
             # note-switch or close, is exactly "stopped saving in
@@ -19582,8 +19591,14 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # selected_note_id, so the list re-render after the delete shows the
         # editor's latest content rather than a stale preview. Cancel on a
         # day's save question stops the delete before it asks anything.
-        if self._flush_autosave(
-                leaving=(note or {}).get("id") == self.selected_note_id) is False:
+        # Only deleting the note on screen -- or the very day it shows --
+        # replaces the editor; one other day of it leaves the editor be, and
+        # a repeat's turn-off waiting there is not made for it (the day
+        # delete then asked to delete the whole note).
+        leaving = ((note or {}).get("id") == self.selected_note_id
+                   and (occurrence_date is None
+                        or occurrence_date == self.current_occurrence_date))
+        if self._flush_autosave(leaving=leaving) is False:
             return
         # The target travels as a parameter — never by repointing the
         # editor's selection at it. An earlier version did exactly that,
@@ -20192,6 +20207,18 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 left_out.append("the repeat (a repeating note needs a "
                                 "start date)")
                 rule = normalize_recurrence({})
+        # A repeat turned off on a series whose days hold edits of their own
+        # is held by a save no one asked for (_holds_repeat_off: the
+        # autosave, and a route saving on its way to something else). Its
+        # save moves every day into the rescue copy, and a "Does not repeat"
+        # picked by mistake and put right a moment later brought the series
+        # back without them. Held, it is left out as a value the app cannot
+        # read is: everything else is saved with the note's own repeat, and
+        # the status line says what waits. Leaving the note or Save makes it.
+        if getattr(self, "_holding_repeat_off", False) and self._repeat_off_waits():
+            left_out.append("turning the repeat off (saved when you leave the "
+                            "note or press Save)")
+            rule = kept_rule
         return date_value, rule, left_out
 
     def _unreadable_repeat_fields(self, freq):
@@ -21438,10 +21465,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # _say_nothing_is_left_out only while it is still the line on
         # screen: any other words over it end that. Kept past them, the
         # put-right wrote an earlier save's words over a later save's own.
-        # So with the words a line saying the repeat's turn-off waits gives
-        # back (_autosave_now).
         self._status_names_left_out = None
-        self._status_off_waits = None
         self.status_lbl.config(text=text)
 
     def _on_data_write_failure(self, path, exc):

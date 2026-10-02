@@ -971,10 +971,17 @@ _ro_fixture()
 app.open_note_in_tab(app.find_note(1)); app.update()
 app.rec_freq_var.set(NO.FREQ_LABELS[''])
 app.on_recurrence_changed(); app.update()
-app.save_current_note(); app.update()
+# Save asks nothing: a question here would wait for an answer no one gives.
+_ro_asked = []
+app._themed_dialog = lambda *a, **k: (_ro_asked.append(a[0]), None)[1]
+try:
+    app.save_current_note(); app.update()
+finally:
+    app._themed_dialog = _ro_real_dlg
 _ro_back = _ro_restored()
 check(f'turned off from the series view, every day\'s own text is kept and '
-      f'comes back with Restore previous ({_ro_back})', _ro_back == _RO_WHOLE)
+      f'comes back with Restore previous ({_ro_back}; asked {_ro_asked})',
+      _ro_back == _RO_WHOLE and _ro_asked == [])
 # A day whose words ARE the series' -- its own colour only -- loses no
 # text, and the rescue copy the note already holds is not replaced by a
 # copy of what the note says.
@@ -1882,6 +1889,10 @@ def _rn_pick(label):
 
 def _rn_days():
     n = app.find_note(1)
+    if n is None:
+        # A note deleted on the way is an answer too, not the end of the
+        # suite.
+        return ('note gone', [], [])
     return ((n.get('recurrence') or {}).get('freq'),
             sorted(n.get('overrides') or {}), list(n.get('exceptions') or []))
 
@@ -1898,8 +1909,7 @@ _rn_ok = _rn_pick(NO.FREQ_LABELS['']) and _rn_ok
 app._flush_autosave(); app.update()
 _rn_left = _rn_days()
 _rn_rescue = sorted((app.find_note(1).get('_prev') or {}).get('overrides') or {})
-# The save's own words stay: the words kept for after the wait went with
-# the line they belonged to.
+# The save's own words stay.
 app._autosave_now(); app.update()
 _rn_left_said = str(app.status_lbl.cget('text'))
 app._cancel_pending_autosave()
@@ -1926,12 +1936,102 @@ check(f'"Does not repeat" put right before leaving keeps a series\' own days, '
       f'and leaving commits it with its rescue copy ({_rn_mid}; {_rn_after}; '
       f'{_rn_left}; rescue {_rn_rescue}; {_rn_waits!r}; {_rn_left_said!r}; '
       f'{_rn_removed}; {_rn_removed_after})',
-      _rn_ok and 'Not saved yet' in _rn_waits
-      and 'Not saved yet' not in _rn_back_said
+      _rn_ok and 'except turning the repeat off' in _rn_waits
+      and 'turning the repeat off' not in _rn_back_said
       and _rn_mid == _rn_after == ('weekly', ['2026-09-14'], ['2026-09-28'])
       and _rn_left[0] == '' and _rn_rescue == ['2026-09-14']
       and 'the repeat is off' in _rn_left_said
       and _rn_removed == _rn_removed_after == ('weekly', [], ['2026-09-28']))
+# Held back is the turn-off alone, as a value left out is: everything else
+# is still saved while it waits. The whole autosave had stopped -- a crash
+# lost every word typed meanwhile, Restore previous saved nothing first and
+# put an older copy over the newest text, and a route saving on its way to
+# something else (deleting another note, one day of this one on the
+# Calendar) made the turn-off unasked.
+_rn_held = {}
+app.new_note(); app.update()
+app.notes = [
+    NO.normalize_note({'id': 1, 'title': 'Weekly',
+                       'body': 'NEWEST SERIES TEXT, long enough that wiping '
+                               'it is a big change for the rescue copy',
+                       'date': '2026-09-07', 'recurrence': {'freq': 'weekly'},
+                       'overrides': {'2026-09-14': {'body': 'DAY 14'}}}),
+    NO.normalize_note({'id': 2, 'title': 'Other', 'body': 'y'}),
+    NO.normalize_note({'id': 3, 'title': 'Third', 'body': 'z'})]
+app.notes[0]['_prev'] = {'title': 'Weekly', 'body': 'OLD TEXT FROM LAST MONTH',
+                         'formatting': [], 'paragraphs': [], 'comments': ''}
+app.save_notes()
+app.open_note_in_tab(app.find_note(1)); app.update()
+app._cancel_pending_autosave()
+_rn_ok = _rn_pick(NO.FREQ_LABELS[''])
+app.body_text.insert('end', ' typed while waiting')
+app._autosave_now(); app.update()
+_rn_held['typed'] = ('typed while waiting'
+                     in (app.find_note(1) or {}).get('body', ''),
+                     _rn_days()[:2])
+app.ask_yes_no = lambda *a, **k: True
+try:
+    app._context_delete_note(app.find_note(3)); app.update()
+    _rn_held['other deleted'] = (app.find_note(3) is None, _rn_days()[:2])
+    app.ask_occurrence_scope = lambda *a, **k: 'occurrence'
+    try:
+        app._context_delete_note(app.find_note(1),
+                                 occurrence_date='2026-09-21')
+        app.update()
+    finally:
+        app.ask_occurrence_scope = _oc_real_scope
+    _rn_held['day deleted'] = _rn_days()
+    app.body_text.delete('1.0', 'end')
+    app.body_text.insert('1.0', 'x')
+    app._autosave_job = app.after(60000, app._autosave_now)
+    if app.find_note(1) is not None:
+        app.restore_previous_version(); app.update()
+finally:
+    app.ask_yes_no = _ro_yes
+app._cancel_pending_autosave()
+_rn_held['restored'] = ((app.find_note(1) or {}).get('body', '')[:18],
+                        _rn_days()[:2])
+app._put_back_stored_date_and_repeat()
+app._cancel_pending_autosave()
+_rn_weekly = ('weekly', ['2026-09-14'])
+check(f'a turn-off waiting holds back only itself: typing is saved, routes '
+      f'that save on their way leave the series be, and Restore previous '
+      f'gives back the newest text ({_rn_held})',
+      _rn_ok and _rn_held.get('typed') == (True, _rn_weekly)
+      and _rn_held.get('other deleted') == (True, _rn_weekly)
+      and _rn_held.get('day deleted') == ('weekly', ['2026-09-14'],
+                                          ['2026-09-21'])
+      and _rn_held.get('restored') == ('NEWEST SERIES TEXT', _rn_weekly))
+# The words a waiting turn-off gives back: a date left out beside it and then
+# typed right was still named in the status line once the repeat was picked
+# again -- a flag kept from an earlier save said so.
+app.new_note(); app.update()
+app.notes = [
+    NO.normalize_note({'id': 1, 'title': 'Weekly', 'body': 'series text',
+                       'date': '2026-09-07', 'recurrence': {'freq': 'weekly'},
+                       'overrides': {'2026-09-14': {'body': 'DAY 14'}}}),
+    NO.normalize_note({'id': 2, 'title': 'Other', 'body': 'y'})]
+app.save_notes()
+app.open_note_in_tab(app.find_note(1)); app.update()
+app._cancel_pending_autosave()
+app.date_entry.delete(0, 'end'); app.date_entry.insert(0, '30/09/2026')
+_rn_ok = _rn_pick(NO.FREQ_LABELS[''])
+app._autosave_now(); app.update()
+_rn_said = [str(app.status_lbl.cget('text'))]
+app.date_entry.delete(0, 'end'); app.date_entry.insert(0, '2026-09-07')
+app._autosave_now(); app.update()
+_rn_said.append(str(app.status_lbl.cget('text')))
+_rn_ok = _rn_pick(NO.FREQ_LABELS['weekly']) and _rn_ok
+app._autosave_now(); app.update()
+_rn_said.append(str(app.status_lbl.cget('text')))
+app._cancel_pending_autosave()
+check(f'the status line names what is left out as it stands, a waiting '
+      f'turn-off and a date put right included ({_rn_said})',
+      _rn_ok and '30/09/2026' in _rn_said[0]
+      and 'turning the repeat off' in _rn_said[0]
+      and '30/09/2026' not in _rn_said[1]
+      and 'turning the repeat off' in _rn_said[1]
+      and 'except' not in _rn_said[2])
 
 # Restore previous with a big delete still waiting for its autosave: the
 # autosave ran while the question waited and made a new rescue copy of the
