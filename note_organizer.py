@@ -568,15 +568,22 @@ def _undo_hidden(method):
     The pipe text is the truth and stays recorded; the drawing is not an
     edit. Tk keeps the existing stack across the undo=False window --
     verified against a live Text widget, not assumed.
+
+    Nor is it a change to the text: Tk's modified flag, which says whether
+    the line the drawing put under the last table is still only that
+    (_undo_tail_held), is left as the method found it -- deleting a grid's
+    window character sets it, and every redraw deletes them.
     """
     @functools.wraps(method)
     def wrapped(self, *args, **kwargs):
         depth = getattr(self, "_undo_hidden_depth", 0)
         self._undo_hidden_depth = depth + 1
         prev = None
+        clean = False
         if depth == 0 and hasattr(self, "body_text"):
             try:
                 prev = self.body_text.cget("undo")
+                clean = not self.body_text.edit_modified()
                 self.body_text.configure(undo=False)
             except tk.TclError:
                 prev = None
@@ -587,6 +594,8 @@ def _undo_hidden(method):
             if depth == 0 and prev is not None:
                 try:
                     self.body_text.configure(undo=prev)
+                    if clean:
+                        self.body_text.edit_modified(False)
                 except tk.TclError:
                     pass
     return wrapped
@@ -2383,37 +2392,96 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         except tk.TclError:
             pass
 
-    # The mark at the empty line the drawing puts under the note's last
-    # table (see _render_table_grids).
-    _RENDER_TAIL = "renderTail"
-
-    def _render_tail_line(self):
-        """Where the empty line the drawing put under the note's last table
-        begins -- or None when there is no such line any more: typed on, or
-        with a line of the person's after it."""
+    def _add_line_under_last_table(self):
+        """The line under the note's last table, which the caret guard needs
+        to put the caret under it. It is the drawing's, and Tk never records
+        it (the drawing is _undo_hidden), so the app holds it instead: while
+        the text has not changed since, undo counts the note without it and
+        the next Ctrl+Z or Ctrl+Y takes it out before Tk replays a step
+        (_undo_tail_held). Tk's modified flag is what says the text changed
+        -- every insert and delete sets it, recorded or not, and nothing
+        else in the app reads it."""
         b = self.body_text
+        # A line held before this one is settled first: a second line can
+        # only be needed once the text has changed under the first.
+        self._undo_tail_held()
+        text = b.get("1.0", "end-1c")
+        b.insert("end", "\n")
+        # The signature of the text the line was put under.
+        self._undo_tail = (len(text), hash(text))
         try:
-            at = b.index(self._RENDER_TAIL)
+            b.edit_modified(False)
         except tk.TclError:
-            return None
-        if (at == "1.0" or b.compare(at, "!=", "end-1c linestart")
-                or b.get(at, "end-1c")):
-            return None
-        return at
+            self._undo_tail = None
+
+    def _undo_tail_held(self):
+        """Whether the note's last line is still the one the drawing put
+        under its last table, with not a character changed since.
+
+        A letter typed on that line and erased again leaves the same text,
+        but Tk has steps on the line now: taken out, Tk replayed them on a
+        line that was gone and the word landed on the table's last row. So
+        the moment anything changes the text, the line is the note's for
+        good (_settle_undo_tail), and this answers False."""
+        if getattr(self, "_undo_tail", None) is None:
+            return False
+        try:
+            changed = bool(self.body_text.edit_modified())
+        except tk.TclError:
+            changed = True
+        if changed:
+            self._settle_undo_tail()
+            return False
+        return True
+
+    def _settle_undo_tail(self):
+        """The line the drawing put under the last table stays in the note
+        for good: every state undo noted before now gets it at its end.
+
+        Tk never recorded the line, so it is still there when Tk walks back
+        past where it was made, at the end of every older text. A state's
+        text is not kept, so its signature cannot be worked out again with
+        the line; it counts one more line break at its end instead
+        (_undo_sig_is). The snapshots of a unit or a run of deletes still
+        open are counted too: the edit that settles the line is theirs."""
+        self._undo_tail = None
+
+        def counted(state):
+            sig = state[0]
+            return (((sig[0], sig[1], (sig[2] if len(sig) > 2 else 0) + 1),)
+                    + tuple(state[1:]))
+
+        for journal in (getattr(self, "_fmt_undo", None) or [],
+                        getattr(self, "_fmt_redo", None) or []):
+            for step in journal:
+                step["before"] = counted(step["before"])
+                step["after"] = counted(step["after"])
+        if getattr(self, "_fmt_atom_before", None) is not None:
+            self._fmt_atom_before = counted(self._fmt_atom_before)
+        run = getattr(self, "_styled_delete_run", None)
+        if run is not None:
+            run["before"] = counted(run["before"])
+
+    @staticmethod
+    def _undo_sig_is(sig, plain, text):
+        """Whether a journal side's signature names the body's text: *plain*
+        is that text's own signature, *text* the text itself. A side noted
+        before lines under a table were settled into the note counts the
+        line breaks they put at its end (_settle_undo_tail)."""
+        if len(sig) < 3:
+            return sig == plain
+        k = sig[2]
+        return (text is not None and len(text) - k == sig[0]
+                and text.endswith("\n" * k) and hash(text[:-k]) == sig[1])
 
     @_undo_hidden
-    def _drop_render_tail(self):
-        """Take out the drawing's own line under the last table, which Tk
-        never put there: replaying the Enter that had made a line of the
-        person's there doubled it, and every step after that read as typing
-        and was replayed in the wrong grid state."""
-        at = self._render_tail_line()
-        if at is not None:
-            self.body_text.delete(f"{at} -1c", at)
-        try:
-            self.body_text.mark_unset(self._RENDER_TAIL)
-        except tk.TclError:
-            pass
+    def _drop_undo_tail(self):
+        """Take out the line the drawing put under the last table, as long
+        as the text has not changed since (_undo_tail_held): Tk replays
+        every step on the text it recorded."""
+        if self._undo_tail_held():
+            self.body_text.delete("end-2c")
+        self._undo_tail = None
 
     @_undo_hidden
     def _render_table_grids(self, keep_typed=None):
@@ -2480,16 +2548,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self._build_table_grid(first0 + 1, last0 + 1)
         # There is always a line under the last table, or the caret guard
         # would have nowhere to put the caret and writing could never
-        # continue past it. That line is the drawing's, not the person's:
-        # Tk never records it (this method is _undo_hidden), so it is
-        # marked, the journal does not count it (_fmt_state), and it goes
-        # before Tk replays a step (_drop_render_tail).
+        # continue past it (_add_line_under_last_table).
         if blocks:
             total = int(self.body_text.index("end-1c").split(".")[0])
             if blocks[-1][1] + 1 >= total:
-                self.body_text.insert("end", "\n")
-                self.body_text.mark_set(self._RENDER_TAIL, "end-1c")
-                self.body_text.mark_gravity(self._RENDER_TAIL, "left")
+                self._add_line_under_last_table()
         for info in getattr(self, "_table_grids", []):
             line = self._grid_first_line(info)
             if line in restore_x:
@@ -14324,12 +14387,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._fmt_last_state = None
         # A line the drawing put under the last table is part of the note as
         # loaded now: there is no step left that could replay around it.
-        body = getattr(self, "body_text", None)
-        if body is not None:
-            try:
-                body.mark_unset(self._RENDER_TAIL)
-            except tk.TclError:
-                pass
+        self._undo_tail = None
 
     # How many steps back the formatting journal reaches. Each step holds
     # two snapshots, which share every tag's string with the snapshot
@@ -14385,17 +14443,23 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         edits on a heavily styled note grew the app by 60 MB."""
         b = self.body_text
         text = b.get("1.0", "end-1c")
-        if self._render_tail_line() is not None:
-            # The drawing's own line under the last table: not the person's,
-            # never on Tk's stack, so not counted (see _render_table_grids).
+        sig = (len(text), hash(text))
+        if self._undo_tail_held():
+            # The line the drawing put under the last table, not changed
+            # since: not on Tk's stack, so not counted (see
+            # _add_line_under_last_table).
+            sig = self._undo_tail
             text = text[:-1]
+        # The text this state names, for a side counted with line breaks
+        # settled at its end (_undo_sig_is).
+        self._fmt_last_text = text
         tags = sorted(t for t in b.tag_names() if _fmt_journal_tag(t))
         if not getattr(self, "_fmt_ranges_proc", False):
             b.tk.eval(_FMT_RANGES_TCL)
             self._fmt_ranges_proc = True
         lines = str(b.tk.call("::noteorg_fmt_ranges", b._w,
                               tuple(tags))).split("\n")
-        state = ((len(text), hash(text)), tuple(lines[0].split()),
+        state = (sig, tuple(lines[0].split()),
                  tuple((t, s) for t, s in zip(tags, lines[1:]) if s))
         last = getattr(self, "_fmt_last_state", None)
         if last is not None:
@@ -14527,14 +14591,18 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             except tk.TclError:
                 pass
             self._undo_atom_grouping = False
-            before = getattr(self, "_fmt_atom_before", None)
-            self._fmt_atom_before = None
-            if before is None:
+            if getattr(self, "_fmt_atom_before", None) is None:
                 return
             try:
                 after = self._fmt_state()
             except (tk.TclError, ValueError):
+                self._fmt_atom_before = None
                 return
+            # Read after the snapshot: a line the drawing held under the last
+            # table, which this unit's edits made the note's, was counted
+            # into it just now (_settle_undo_tail).
+            before = self._fmt_atom_before
+            self._fmt_atom_before = None
             if after == before:
                 return
             # A unit that changed the text is a step on Tk's stack as well;
@@ -14625,12 +14693,14 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if getattr(self, "_undo_atom_depth", 0) <= 0:
             return
         if getattr(self, "_atom_part_grids_down", False):
-            before = getattr(self, "_fmt_atom_before", None)
-            if before is not None:
+            if getattr(self, "_fmt_atom_before", None) is not None:
                 try:
                     now = self._fmt_state()
                 except (tk.TclError, ValueError):
                     now = None
+                # Read after the snapshot, which counts a line the drawing
+                # held into it (_settle_undo_tail).
+                before = self._fmt_atom_before
                 if now is not None and now[0] != before[0]:
                     self._push_atom_step(before, now)
                     try:
@@ -14811,14 +14881,19 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         Tk's stack too, so the step and Tk's unit end in the same place.
         A run that deleted nothing (a guard broke the key) leaves no step."""
         run = getattr(self, "_styled_delete_run", None)
-        self._styled_delete_run = None
         if run is None or not hasattr(self, "body_text"):
+            self._styled_delete_run = None
             return
         try:
             self.body_text.edit_separator()
+            # Taken with the run still open: its deletes may have made a
+            # line the drawing held the note's, counted into the run's first
+            # snapshot as into every other (_settle_undo_tail).
             after = self._fmt_state()
         except (tk.TclError, ValueError):
+            self._styled_delete_run = None
             return
+        self._styled_delete_run = None
         # Nothing changed at all: no step. The same text put back bare --
         # Insert over the selection it pastes, a paste of the very words it
         # replaced -- changed their formatting only, and is a step: dropped,
@@ -14882,9 +14957,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         mine, other = ((self._fmt_undo, self._fmt_redo) if undo
                        else (self._fmt_redo, self._fmt_undo))
         now = self._fmt_state()
+        now_text = self._fmt_last_text
         top = mine[-1] if mine else None
         redraw = True
-        if top is not None and not top["text"] and top["before"][0] == now[0]:
+        if (top is not None and not top["text"]
+                and self._undo_sig_is(top["before"][0], now[0], now_text)):
             # A formatting-only step, taken on exactly this text: it is
             # this whole key press, and Tk's stack is not touched.
             mine.pop()
@@ -14913,8 +14990,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             # recorded with the tables taken down is replayed with them
             # down (see _undo_atom_grids_coming_down). They are drawn again
             # below, as after every step.
-            pending = next((s for s in reversed(mine)
-                            if s["text"] and s[came][0] == now[0]), None)
+            pending = next((s for s in reversed(mine) if s["text"]
+                            and self._undo_sig_is(s[came][0], now[0],
+                                                  now_text)), None)
             # A step no unit of the app's noted -- typing, Tk's own deletes
             # and paste -- never touches a drawn table's line (the caret
             # guard keeps the caret off them), so the only windows that
@@ -14925,10 +15003,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             # step is replayed with the tables down, like a unit marked so.
             if pending is None or pending.get("grids_down"):
                 self._teardown_table_grids()
-            # Tk replays on the text it recorded: the drawing's own line under
-            # the last table goes first, and the redraw below puts it back if
-            # it is still needed (see _render_table_grids).
-            self._drop_render_tail()
+            # Tk replays on the text it recorded: a line the drawing put under
+            # the last table since the text last changed goes first, and the
+            # redraw below puts it back if it is still needed.
+            self._drop_undo_tail()
             try:
                 (b.edit_undo if undo else b.edit_redo)()
             except tk.TclError:
@@ -14937,8 +15015,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             landed = (len(text), hash(text))
             step = None
             for i in range(len(mine) - 1, -1, -1):
-                if (mine[i]["text"] and mine[i][came][0] == now[0]
-                        and mine[i][went][0] == landed):
+                if (mine[i]["text"]
+                        and self._undo_sig_is(mine[i][came][0], now[0],
+                                              now_text)
+                        and self._undo_sig_is(mine[i][went][0], landed,
+                                              text)):
                     step = mine.pop(i)
                     break
             if step is None:

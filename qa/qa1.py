@@ -11557,7 +11557,7 @@ try:
     for _te_k in 'zz':
         _own_key('<Control-KeyPress-%s>' % _te_k,
                  '<Control-KeyRelease-%s>' % _te_k, ('Control_L',))
-    _tb_tail = (app._render_tail_line() is not None
+    _tb_tail = (getattr(app, '_undo_tail', None) is not None
                 and app._grid_at_line(2) is not None)
     if _tb_tail:
         app._open_cell_editor(app._grid_at_line(2), 0, 0)
@@ -11576,6 +11576,259 @@ try:
           f'back and forth exactly ({_tb_tail}; '
           f'{_tb_after.split(chr(10))[1:2]})',
           _tb_tail and 'Names' in _tb_edited and _tb_after == _tb_edited)
+
+    # A table typed at a note's very end and left by the mouse: the drawing
+    # puts a line of its own under it, which Tk never records.
+    def _tl_click(index):
+        _w = app.body_text
+        _w.see(index)
+        app.update()
+        _bb = _w.bbox(index)
+        if _bb is None or not take_focus(_w):
+            return False
+        _x, _y = _bb[0] + 1, _bb[1] + max(1, _bb[3] // 2)
+        _qa_fire(_w, '<ButtonPress-1>', x=_x, y=_y)
+        app.update()
+        _qa_fire(_w, '<ButtonRelease-1>', x=_x, y=_y)
+        app.update()
+        return True
+
+    def _tl_table_at_end(start='Intro line'):
+        set_body(start)
+        app._reset_text_undo()
+        app._cancel_pending_autosave()
+        app.body_text.mark_set('insert', 'end-1c')
+        app._last_caret_line = None
+        _ty_key('Return', chr(10))
+        for _tl_i, _tl_row in enumerate(('| Name | Qty |', '| --- | --- |',
+                                         '| Tea | 2 |')):
+            for _tl_ch in _tl_row:
+                _ty_key(_pr_keys.get(_tl_ch, _tl_ch), _tl_ch)
+            if _tl_i < 2:
+                _ty_key('Return', chr(10))
+        _tl_click('1.3')
+        return (app._grid_at_line(start.count(chr(10)) + 2) is not None
+                and getattr(app, '_undo_tail', None) is not None)
+
+    def _tl_text():
+        return app.body_text.get('1.0', 'end-1c')
+
+    def _tl_keys(keys):
+        for _tl_k in keys:
+            _own_key('<Control-KeyPress-%s>' % _tl_k,
+                     '<Control-KeyRelease-%s>' % _tl_k, ('Control_L',))
+
+    def _tl_on_last_line():
+        app.body_text.mark_set('insert', 'end-1c')
+        app._last_caret_line = int(app.body_text.index('insert').split('.')[0])
+
+    # Written on and emptied again, that line is the note's: the text reads
+    # as before, but Tk has steps on the line now. Taken out before Ctrl+Z,
+    # the word Tk gave back landed on the table's last row ("| Tea | 2
+    # |abc"), saved so.
+    _tl_we = []
+    for _tl_how in ('BackSpace', 'select and Delete'):
+        _tl_ok = _tl_table_at_end()
+        _tl_on_last_line()
+        for _tl_ch in 'abc':
+            _ty_key(_tl_ch, _tl_ch)
+        if _tl_how == 'BackSpace':
+            for _ in range(3):
+                _own_key('<BackSpace>', '<KeyRelease-BackSpace>')
+        else:
+            app.body_text.tag_add('sel', 'end-1c linestart', 'end-1c')
+            _own_key('<Delete>', '<KeyRelease-Delete>')
+        _tl_ok = _tl_ok and _tl_text().endswith('|' + chr(10))
+        _tl_keys('z')
+        _tl_we.append((_tl_how, _tl_ok, _tl_text().split(chr(10))[-2:]))
+    check(f'a word written under a table at a note\'s end and erased comes '
+          f'back there on Ctrl+Z ({_tl_we})',
+          all(ok and last[0].startswith('| Tea') and last[0].endswith('|')
+              and last[1] == 'abc' for _h, ok, last in _tl_we))
+    # ...and with a header cell edited before the letter: Ctrl+Z took the
+    # letter back, the next skipped the cell, and Ctrl+Y doubled the edit
+    # ("| Namess |"), saved so.
+    _tl_ok = _tl_table_at_end()
+    _tl_start = _tl_text()
+    if _tl_ok:
+        app._open_cell_editor(app._grid_at_line(2), 0, 0)
+        app.update()
+        _tl_ed = app._cell_editor['entry']
+        _tl_ed.delete('1.0', 'end')
+        _tl_ed.insert('1.0', 'Names')
+        app._commit_cell_editor()
+        app.update()
+    _tl_edited = _tl_text()
+    _tl_on_last_line()
+    _ty_key('x', 'x')
+    _tl_typed = _tl_text()
+    _tl_walk = []
+    for _tl_k in 'zzyy':
+        _tl_keys(_tl_k)
+        _tl_walk.append(_tl_text())
+    check(f'...and with a header cell edited before it, Ctrl+Z and Ctrl+Y '
+          f'walk the letter and the cell exactly '
+          f'({[w.split(chr(10))[1] for w in _tl_walk]})',
+          _tl_ok and 'Names' in _tl_edited
+          and _tl_walk == [_tl_edited, _tl_start, _tl_edited, _tl_typed])
+    # A list renumbered by Enter, in a note whose last table has the
+    # drawing's line under it: Ctrl+Z gave the text back bare -- every bold
+    # and italic in the note gone, saved so.
+    _tl_ok = _tl_table_at_end('Bold words here' + chr(10) + '1. alpha'
+                              + chr(10) + '2. beta' + chr(10) + 'end')
+    app.body_text.tag_add('bold', '1.0', '1.4')
+    app.body_text.tag_add('italic', '2.3', '2.8')
+    _tl_start = _tl_text()
+    app.body_text.mark_set('insert', '2.end')
+    app._last_caret_line = 2
+    _sm_press('<KeyPress-End>')
+    _ty_key('Return', chr(10))
+    _tl_ok = _tl_ok and _tl_text().split(chr(10))[2:4] == ['2. ', '3. beta']
+    for _ in range(4):
+        if _tl_text() == _tl_start:
+            break
+        _tl_keys('z')
+    _tl_styles = ([str(i) for i in app.body_text.tag_ranges('bold')],
+                  [str(i) for i in app.body_text.tag_ranges('italic')])
+    check(f'Ctrl+Z of a list renumbered beside the drawing\'s line under a '
+          f'table gives the text back with its formatting ({_tl_styles})',
+          _tl_ok and _tl_text() == _tl_start
+          and _tl_styles == (['1.0', '1.4'], ['2.3', '2.8']))
+    # A bold word deleted while that line stands: the run of deletes noted
+    # the formatting before the line was the note's, and Ctrl+Z gave the
+    # word back plain.
+    _tl_ok = _tl_table_at_end('Bold words here')
+    app.body_text.tag_add('bold', '1.0', '1.4')
+    app.body_text.tag_add('sel', '1.0', '1.4')
+    app.body_text.mark_set('insert', '1.4')
+    app._last_caret_line = 1
+    _own_key('<BackSpace>', '<KeyRelease-BackSpace>')
+    _tl_ok = _tl_ok and _tl_text().startswith(' words here')
+    _tl_keys('z')
+    _tl_bold = [str(i) for i in app.body_text.tag_ranges('bold')]
+    check(f'a bold word deleted beside the drawing\'s line under a table '
+          f'comes back bold on Ctrl+Z ({_tl_ok}; {_tl_bold})',
+          _tl_ok and _tl_text().startswith('Bold words here')
+          and _tl_bold == ['1.0', '1.4'])
+    # A table at a note's end deleted -- by its grid's Delete table, or
+    # selected to the end with its caption -- then Ctrl+Z: the drawing's
+    # line was taken for the person's, and the table came back glued onto
+    # the line above ("Intro line| Name |"), Ctrl+Y garbling the note. A
+    # bold word in a cell comes back with it: the delete is the edit that
+    # makes the line the note's, from inside its own undo step.
+    _tl_dt = []
+    for _tl_how in ('Delete table', 'Delete', 'BackSpace'):
+        _tl_ok = _tl_table_at_end('Intro line' + chr(10) + chr(10) + 'Caption')
+        app.body_text.tag_add('bold', '6.2', '6.5')
+        _tl_ok = _tl_ok and app.body_text.get('6.2', '6.5') == 'Tea'
+        _tl_start = _tl_text()
+        if _tl_how == 'Delete table':
+            app._grid_delete_table(app._grid_at_line(4))
+            app.update()
+        else:
+            app.body_text.tag_add('sel', '3.0', 'end-1c')
+            app.body_text.mark_set('insert', 'end-1c')
+            _own_key('<%s>' % _tl_how, '<KeyRelease-%s>' % _tl_how)
+        _tl_gone = _tl_text()
+        _tl_keys('z')
+        _tl_back = (_tl_text() == _tl_start
+                    and [str(i) for i in app.body_text.tag_ranges('bold')]
+                    == ['6.2', '6.5'])
+        _tl_keys('y')
+        _tl_dt.append((_tl_how, _tl_ok and _tl_gone != _tl_start,
+                       _tl_back, _tl_text() == _tl_gone))
+    check(f'a table deleted at a note\'s end comes back exactly on Ctrl+Z, '
+          f'and goes again on Ctrl+Y ({_tl_dt})',
+          all(ok and back and fwd for _h, ok, back, fwd in _tl_dt))
+    # An older edit of a drawn table's header, walked back past once the
+    # line the drawing put under a later table is the note's -- written on,
+    # or taken out and drawn again by a theme switch. Tk never recorded the
+    # line, so it stays at the end of every older text, which undo noted
+    # without it: the edit was replayed with the tables down, a column off.
+    _tl_old = []
+    for _tl_how in ('a letter', 'drawn again'):
+        set_body('| A | B |' + chr(10) + '| --- | --- |' + chr(10) + '| 1 | 2 |'
+                 + chr(10) + chr(10) + 'Intro line')
+        app._render_table_grids()
+        app.update()
+        app._reset_text_undo()
+        app._cancel_pending_autosave()
+        _tl_first = _tl_text()
+        _tl_ok = app._grid_at_line(1) is not None
+        if _tl_ok:
+            app._open_cell_editor(app._grid_at_line(1), 0, 0)
+            app.update()
+            _tl_ed = app._cell_editor['entry']
+            _tl_ed.delete('1.0', 'end')
+            _tl_ed.insert('1.0', 'Ax')
+            app._commit_cell_editor()
+            app.update()
+        app.body_text.mark_set('insert', 'end-1c')
+        app._last_caret_line = None
+        _ty_key('Return', chr(10))
+        for _tl_i, _tl_row in enumerate(('| Name | Qty |', '| --- | --- |',
+                                         '| Tea | 2 |')):
+            for _tl_ch in _tl_row:
+                _ty_key(_pr_keys.get(_tl_ch, _tl_ch), _tl_ch)
+            if _tl_i < 2:
+                _ty_key('Return', chr(10))
+        _tl_click('5.3')
+        _tl_ok = _tl_ok and getattr(app, '_undo_tail', None) is not None
+        if _tl_how == 'a letter':
+            app.body_text.mark_set('insert', '5.end')
+            app._last_caret_line = 5
+            _ty_key('q', 'q')
+        else:
+            app.body_text.tag_add('sel', 'end-2c', 'end-1c')
+            app.body_text.mark_set('insert', 'end-1c')
+            _own_key('<Delete>', '<KeyRelease-Delete>')
+            app.toggle_theme()
+            app.toggle_theme()
+            app.update()
+            _tl_ok = _tl_ok and getattr(app, '_undo_tail', None) is not None
+        for _ in range(12):
+            if _tl_text().split(chr(10))[0] == '| A | B |':
+                break
+            _tl_keys('z')
+        _tl_old.append((_tl_how, _tl_ok, _tl_text().split(chr(10))[0],
+                        _tl_text() in (_tl_first, _tl_first + chr(10))))
+    check(f'an older edit of a drawn table\'s header walks back exactly past '
+          f'the drawing\'s line made the note\'s ({_tl_old})',
+          all(ok and first == '| A | B |' and whole
+              for _h, ok, first, whole in _tl_old))
+    # A word made bold in a row still being typed, the table then ending the
+    # note with no line under it. Ctrl+Z back past the Enter typed after
+    # the row puts the drawing's line there, which Tk does not know: counted,
+    # the bold no longer matched, and the next Ctrl+Z took back the row's
+    # typing with the bold left on.
+    set_body('Intro line')
+    app._reset_text_undo()
+    app._cancel_pending_autosave()
+    app.body_text.mark_set('insert', '1.end')
+    app._last_caret_line = None
+    _ty_key('Return', chr(10))
+    for _tl_i, _tl_row in enumerate(('| Name | Qty |', '| --- | --- |',
+                                     '| Tea | 2 |')):
+        for _tl_ch in _tl_row:
+            _ty_key(_pr_keys.get(_tl_ch, _tl_ch), _tl_ch)
+        if _tl_i < 2:
+            _ty_key('Return', chr(10))
+    app.body_text.tag_add('sel', '4.2', '4.5')
+    app.body_text.mark_set('insert', '4.5')
+    _own_key('<Control-KeyPress-b>', '<Control-KeyRelease-b>', ('Control_L',))
+    app.body_text.tag_remove('sel', '1.0', 'end')
+    _tl_bolded = bool(app.body_text.tag_ranges('bold'))
+    _sm_press('<KeyPress-End>')
+    _ty_key('Return', chr(10))
+    _tl_keys('zz')
+    _tl_tail = getattr(app, '_undo_tail', None) is not None
+    _tl_keys('z')
+    _tl_row4 = app.body_text.get('4.0', '4.end')
+    check(f'a bold made in a row being typed is taken back on its own past '
+          f'the drawing\'s line under the table ({_tl_bolded}; {_tl_tail}; '
+          f'{_tl_row4!r}; bold {app.body_text.tag_ranges("bold")})',
+          _tl_bolded and _tl_tail and 'Tea' in _tl_row4
+          and not app.body_text.tag_ranges('bold'))
     # Insert over a selection holding a drawn table: Tk pastes the
     # selection's text over it, and that text leaves out the table's hidden
     # rows -- the table went. Insert does nothing there.
