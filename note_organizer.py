@@ -18087,8 +18087,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             # be read first -- and a mixed selection is precisely what a
             # bulk change is for, so it is also what an undo has to
             # survive.
-            marks = [(n["id"], n.get("category"), n.get("updated"))
-                     for n in to_move]
+            marks = [(n["id"], n.get("category"), n.get("updated"),
+                      n.get("uid")) for n in to_move]
             stamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             for n in to_move:
                 n["category"] = cat
@@ -21413,9 +21413,14 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             return  # Cancel on a day's save question: the undo waits
         restored = []
         homeless = 0
-        for note_id, old_category, old_updated in marks:
+        for mark in marks:
+            note_id, old_category, old_updated = mark[:3]
             note = self.find_note(note_id)
-            if note is None or note.get("category") != applied:
+            # The note's identity too, when the mark has it: an id freed by
+            # a delete goes to the next new note, which is not this one.
+            if (note is None or note.get("category") != applied
+                    or (len(mark) > 3 and mark[3]
+                        and note.get("uid") != mark[3])):
                 continue
             if old_category not in CATEGORY_COLORS:
                 # Renamed or deleted while the toast was up. There is

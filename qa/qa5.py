@@ -2472,6 +2472,24 @@ check(f'the Undo of a day whose note went to the Trash, its id taken by a new '
       f'note, leaves the new note alone ({_rn_id})',
       _rn_id[0] == 'Call mom' and 'That note is no longer here' in _rn_id[1]
       and not _rn_id[2])
+# The category move's Undo knows its notes by identity too: a note that took
+# a moved note's freed id, filed in the same category, is not moved back.
+NO.CATEGORY_COLORS['TempMove5'] = '#336699'
+app.new_note(); app.update()
+app.notes = [NO.normalize_note({'id': 3, 'title': 'New', 'body': 'n',
+                                'category': 'TempMove5', 'uid': 'u-new'}),
+             NO.normalize_note({'id': 4, 'title': 'Moved', 'body': 'm',
+                                'category': 'TempMove5', 'uid': 'u-moved'})]
+app.save_notes()
+app._undo_bulk_category([(3, 'General', '2026-09-01 08:00:00', 'u-gone'),
+                         (4, 'General', '2026-09-01 08:00:00', 'u-moved')],
+                        'TempMove5')
+app.update()
+_rn_cat = (app.find_note(3)['category'], app.find_note(4)['category'])
+NO.CATEGORY_COLORS.pop('TempMove5', None)
+check(f'the Undo of a category move puts back the notes it moved, not a note '
+      f'that took one of their ids ({_rn_cat})',
+      _rn_cat == ('TempMove5', 'General'))
 # The Undo of the only day a waiting turn-off waited for leaves the turn-off
 # waiting: read after the day went back, nothing waited, the Undo opened the
 # day, and leaving the series made the turn-off -- "Put that day back", the
