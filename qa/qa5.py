@@ -2258,6 +2258,29 @@ _rn_dk = (_rn_prev().get('body') == _RN_LONG,
 check(f'a turn-off carried across the duplicates clean-up keeps the text a '
       f'big delete rescued ({_rn_ok}; {_rn_dk})',
       _rn_ok and _rn_dk == (True, 'weekly'))
+# On a delete, "Part of this note isn't saved" asked about an unreadable date
+# alone and said everything else was saved -- while "Continue without it"
+# also took back the "Does not repeat" the delete's save had held.
+_rn_fresh()
+_rn_ok = _rn_pick(NO.FREQ_LABELS[''])
+app.date_entry.delete(0, 'end'); app.date_entry.insert(0, '30/09/2026')
+_rn_said = []
+app._themed_dialog = lambda *a, **k: (_rn_said.append(a[1] if len(a) > 1
+                                                       else ''), True)[1]
+app.ask_yes_no = lambda *a, **k: False
+try:
+    app.delete_current_note()
+    app.update()
+finally:
+    app._themed_dialog = _ro_real_dlg
+    app.ask_yes_no = _ro_yes
+app._cancel_pending_autosave()
+_rn_named = bool(_rn_said) and 'turning the repeat off' in _rn_said[0]
+_rn_cn = (_rn_named, '30/09/2026' in (_rn_said or [''])[0],
+          app.selected_freq_key(), _rn_days())
+check(f'"Continue without it" on a delete names the turn-off it takes back '
+      f'({_rn_cn})',
+      _rn_ok and _rn_cn == (True, True, 'weekly', _RN_SERIES))
 
 # Restore previous with a big delete still waiting for its autosave: the
 # autosave ran while the question waited and made a new rescue copy of the

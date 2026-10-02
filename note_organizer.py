@@ -18489,6 +18489,22 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         except Exception:
             self._log_swallowed("flush: date and repeat check")
             left_out = []
+        if left_out and hold_repeat_off and self._repeat_off_waits():
+            # "Continue" puts the stored date and repeat back, and with them
+            # the turn-off this save held for its question -- so it is named:
+            # the question said everything else was saved, and dropped it
+            # without a word. Not asked for it alone, or every delete of
+            # such a note would ask.
+            held = getattr(self, "_holding_repeat_off", False)
+            self._holding_repeat_off = True
+            try:
+                left_out = [item[:-len(self._HELD_TAIL)]
+                            if item.endswith(self._HELD_TAIL) else item
+                            for item in self._date_and_repeat_to_store()[2]]
+            except Exception:
+                self._log_swallowed("flush: held date and repeat check")
+            finally:
+                self._holding_repeat_off = held
         if left_out:
             if not self._themed_dialog(
                     "Part of this note isn't saved",
@@ -20347,10 +20363,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 what += (f" and the date “{date_value}”" if date_value
                          else " and clearing the date")
                 date_value = kept_date
-            left_out.append(what + " (saved when you leave the note or "
-                            "press Save)")
+            left_out.append(what + self._HELD_TAIL)
             rule = kept_rule
         return date_value, rule, left_out
+
+    # What a held turn-off's words in the status line end with.
+    _HELD_TAIL = " (saved when you leave the note or press Save)"
 
     def _unreadable_repeat_fields(self, freq):
         """The repeat's typed values the app cannot store, as (field,
