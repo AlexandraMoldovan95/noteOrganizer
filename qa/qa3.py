@@ -2589,6 +2589,59 @@ for _ic_name in _ic_names:
         os.remove(_ic_path(_ic_name))
 app.notes = []; app.save_notes()
 
+# ---- A BACKUP WITH A DAMAGED FILE IN IT ----
+# Bytes that are not UTF-8 (a file another program saved in a Windows code
+# page) and nesting deeper than the parser follows raised past the worker's
+# handlers. Its catch-all then ended the whole import with "Import failed
+# unexpectedly" -- even when the damaged file was only the templates, the
+# Trash or the settings riding beside a sound notebook.
+_dz_damage = {'not UTF-8': b'[{"id": 1, "title": "caf\xe9"}]',
+              'nested too deep': b'[' * 100000 + b']' * 100000}
+_dz_sound = json.dumps([{'title': 'Sound note', 'body': 'kept'}]).encode()
+
+
+def _dz_import(members):
+    """Import a backup holding *members* (name -> bytes), saying yes to
+    every question; return what the import said, as (title, text) pairs."""
+    zpath = os.path.join(tempfile.gettempdir(), 'qa3_damaged_member.zip')
+    if os.path.exists(zpath):
+        os.remove(zpath)
+    with zipfile.ZipFile(zpath, 'w') as zf:
+        for name, data in members.items():
+            zf.writestr(name, data)
+    said = []
+    real = app._themed_dialog
+    app._themed_dialog = lambda *a, **k: (said.append((a[0], a[1])), True)[1]
+    fd.askopenfilename = lambda **k: zpath
+    try:
+        app.import_data()
+        t0 = time.time()
+        while app._import_state is not None and time.time() - t0 < 8:
+            app.update()
+    finally:
+        app._themed_dialog = real
+        os.remove(zpath)
+    return said
+
+
+for _dz_how, _dz_bytes in _dz_damage.items():
+    for _dz_extra in ('templates.json', 'trash.json', 'settings.json'):
+        app.notes = []; app.save_notes()
+        _dz_said = _dz_import({'notes_data.json': _dz_sound,
+                               _dz_extra: _dz_bytes})
+        check(f'a backup whose {_dz_extra} is {_dz_how} still brings its '
+              f'notes ({[t for t, _m in _dz_said]})',
+              [n.get('title') for n in app.notes] == ['Sound note']
+              and not any('failed' in t.lower() for t, _m in _dz_said))
+    app.notes = []; app.save_notes()
+    _dz_said = _dz_import({'notes_data.json': _dz_bytes})
+    check(f'a backup whose notebook is {_dz_how} says it cannot read the '
+          f'notes ({[m.split(chr(10))[0] for _t, m in _dz_said]})',
+          app.notes == []
+          and any(m.startswith("Couldn't read the notes in that backup")
+                  for _t, m in _dz_said))
+app.notes = []; app.save_notes()
+
 
 print()
 print(f"=== QA3 FAILURES: {fails if fails else 'NONE'} ===")

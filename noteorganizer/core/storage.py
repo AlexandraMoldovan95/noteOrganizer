@@ -79,7 +79,7 @@ def load_settings():
                 data = json.load(f)
             if isinstance(data, dict):
                 return data
-        except (json.JSONDecodeError, IOError, OSError):
+        except (*paths.JSON_UNREADABLE, IOError, OSError):
             pass
         # Reached only when the file exists but held nothing usable —
         # keep its bytes before the next save replaces them.
@@ -157,7 +157,7 @@ def load_templates():
                     # keep the bytes before a save replaces them.
                     _preserve_corrupt(paths.TEMPLATES_FILE)
                 return kept
-        except (json.JSONDecodeError, IOError, OSError):
+        except (*paths.JSON_UNREADABLE, IOError, OSError):
             pass
         # Reached only when the file exists but held nothing usable —
         # keep its bytes before the next save replaces them.
@@ -194,7 +194,7 @@ def load_trash():
                 if len(kept) != len(data):
                     _preserve_corrupt(paths.TRASH_FILE)
                 return kept
-        except (json.JSONDecodeError, IOError, OSError):
+        except (*paths.JSON_UNREADABLE, IOError, OSError):
             pass
         # Reached only when the file exists but held nothing usable —
         # keep its bytes before the next save replaces them.
@@ -493,7 +493,7 @@ def load_notes(version_change=None):
         try:
             with open(paths.DATA_FILE, "r", encoding="utf-8") as f:
                 raw = json.load(f)
-        except (json.JSONDecodeError, IOError, OSError):
+        except (*paths.JSON_UNREADABLE, IOError, OSError):
             raw = None
         if not isinstance(raw, list):
             # The file exists but held nothing usable — unparsable, or a

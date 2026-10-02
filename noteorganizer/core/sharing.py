@@ -46,6 +46,7 @@ import json
 import os
 import zlib
 
+from .paths import JSON_UNREADABLE
 from .storage import mend_surrogates
 
 # ---- Share codes (move notes between devices as copy-paste text) ----
@@ -153,7 +154,7 @@ def decode_share_code(code):
         )
     try:
         payload = json.loads(raw.decode("utf-8"))
-    except (json.JSONDecodeError, UnicodeDecodeError, ValueError):
+    except (*JSON_UNREADABLE, ValueError):
         raise ValueError(
             "This share code is damaged or incomplete. Ask the sender to copy "
             "the whole code again."

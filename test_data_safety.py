@@ -864,6 +864,85 @@ check("an all-junk templates file is preserved before falling back",
       _tpJ == [] and any(p.startswith("templates_corrupt_")
                          for p in os.listdir(_paths.APP_DIR)))
 
+# ---- Damage the parser does not call JSON is damage all the same ----
+# Two more ways a file can be unreadable, and neither raised the
+# JSONDecodeError the loaders caught: bytes that are not UTF-8 (a file
+# another program saved in a Windows code page, where "e" with an acute
+# accent is the one byte 0xE9) raised UnicodeDecodeError, and nesting
+# deeper than the parser follows raised RecursionError. Both flew past the
+# loaders, and the app would not start while any of its four files held one.
+_DAMAGED = {
+    "not-UTF-8": b'[{"id": 1, "title": "caf\xe9"}]',
+    "nested-too-deep": b"[" * 100000 + b"]" * 100000,
+}
+
+
+def _answer(call):
+    """What *call* returns -- or which exception escaped it. The defect
+    under test is the escape, and a mutant bringing it back must be one red
+    check, not a crash that ends the suite before its footer."""
+    try:
+        return call()
+    except Exception as exc:
+        return "ESCAPED " + type(exc).__name__
+
+
+def _kept_aside(prefix, data):
+    """True if a preserved copy named *prefix*... holds exactly *data*."""
+    for name in os.listdir(_paths.APP_DIR):
+        if name.startswith(prefix):
+            with open(os.path.join(_paths.APP_DIR, name), "rb") as fh:
+                if fh.read() == data:
+                    return True
+    return False
+
+
+_DATA_FILES = (_paths.DATA_FILE, _paths.SETTINGS_FILE, _paths.TRASH_FILE,
+               _paths.TEMPLATES_FILE)
+_before_damage = {}
+for _file in _DATA_FILES:
+    try:
+        with open(_file, "rb") as _f:
+            _before_damage[_file] = _f.read()
+    except OSError:
+        _before_damage[_file] = None
+for _how, _bytes in _DAMAGED.items():
+    with open(_paths.DATA_FILE, "wb") as _f:
+        _f.write(_bytes)
+    _dmg = _answer(lambda: _storage.load_notes(None))
+    check("a %s notes file loads as damaged: empty, flagged, bytes kept (%s)"
+          % (_how, _dmg if isinstance(_dmg, str) else "returned"),
+          isinstance(_dmg, tuple) and _dmg[0] == []
+          and _dmg[1]["notes_file_corrupt"]
+          and _kept_aside("notes_data_corrupt_", _bytes))
+    for _file, _load, _empty, _prefix in (
+            (_paths.SETTINGS_FILE, _storage.load_settings, {}, "settings_corrupt_"),
+            (_paths.TRASH_FILE, _storage.load_trash, [], "trash_corrupt_"),
+            (_paths.TEMPLATES_FILE, _storage.load_templates, [],
+             "templates_corrupt_")):
+        with open(_file, "wb") as _f:
+            _f.write(_bytes)
+        _dmg = _answer(_load)
+        check("a %s %s loads as damaged: empty, bytes kept (%s)"
+              % (_how, os.path.basename(_file),
+                 _dmg if isinstance(_dmg, str) else "returned"),
+              _dmg == _empty and _kept_aside(_prefix, _bytes))
+# What was here goes back, and this block's own copies go: the checks
+# below read every preserved copy as UTF-8 text.
+for _file, _held in _before_damage.items():
+    if _held is None:
+        if os.path.exists(_file):
+            os.remove(_file)
+        continue
+    with open(_file, "wb") as _f:
+        _f.write(_held)
+for _name in os.listdir(_paths.APP_DIR):
+    if "_corrupt_" in _name:
+        with open(os.path.join(_paths.APP_DIR, _name), "rb") as _f:
+            _held = _f.read()
+        if _held in _DAMAGED.values():
+            os.remove(os.path.join(_paths.APP_DIR, _name))
+
 # On a corrupt launch the one-time cleanup must NOT rewrite the notes
 # file — when even the preserve failed, that rewrite would destroy the
 # last copy of the user's bytes while the startup notice still points
@@ -1752,6 +1831,15 @@ for _bad in ("2", None, [1], {"major": 1}):
 check("an ordinary version still imports, and a newer one is still refused",
       _decode_answer(_code_with_version(1)) == "accepted"
       and "newer version" in _decode_answer(_code_with_version(2)))
+# Nesting deeper than the parser follows raised RecursionError, which the
+# decoder did not catch: "Something went wrong" instead of the message
+# that tells the person what to do.
+_deep_code = "NOTE1:" + _b64.urlsafe_b64encode(
+    _zlib.compress(b"[" * 100000 + b"]" * 100000)).decode()
+check("a share code nested too deep to read is refused as damaged (%s)"
+      % _decode_answer(_deep_code)[:40],
+      _decode_answer(_deep_code).startswith("ValueError")
+      and "damaged" in _decode_answer(_deep_code))
 
 # ---- One rule for every door a category name comes in by ----
 # Add and Rename accepted any length and any count; the loader then
@@ -2097,6 +2185,61 @@ try:
 finally:
     _paths.get_appdata_dir = _rc_real_appdata
     shutil.rmtree(_rc_root, ignore_errors=True)
+
+# ---- The startup readers take damage as damage too ----
+# The same two kinds of damage as the loaders' (_DAMAGED), met before any
+# loader runs. Every launch reads settings.json for the reclaim marker and
+# sizes up each notebook a migration might adopt, and the purge reads both
+# notebooks before it deletes anything. Each read raised past its except
+# clause, and the app stopped before its window opened.
+_su_real = (_paths.get_appdata_dir, _paths.get_legacy_dirs)
+_su_root = tempfile.mkdtemp(prefix="nd_damaged_startup_")
+try:
+    _paths.get_appdata_dir = lambda: os.path.join(_su_root, "no_appdata")
+    for _how, _bytes in _DAMAGED.items():
+        _su_app = os.path.join(_su_root, _how, "app")
+        _su_old = os.path.join(_su_root, _how, "old")
+        os.makedirs(_su_app)
+        os.makedirs(_su_old)
+        _paths.get_legacy_dirs = lambda app_dir, _old=_su_old: [_old]
+        _su_notes = os.path.join(_su_old, "notes_data.json")
+        _su_set = os.path.join(_su_old, "settings.json")
+        for _file in (_su_notes, _su_set, os.path.join(_su_app, "settings.json")):
+            with open(_file, "wb") as _f:
+                _f.write(_bytes)
+        check("a %s notebook counts as holding no notes" % _how,
+              _answer(lambda: _paths.count_notes_in(_su_notes)) == 0)
+        check("...and is never taken for a copy of ours, so never deleted",
+              _answer(lambda: _paths.is_redundant_copy(_su_notes, [])) is False)
+        check("a %s settings.json is not taken for ours" % _how,
+              _answer(lambda: _paths._looks_like_our_settings(_su_set)) is False)
+        _answer(lambda: _paths._preserve_settings_if_unreadable(_su_set))
+        check("...and is kept aside before a migration writes over it",
+              any(_n.startswith("settings_corrupt_")
+                  and open(os.path.join(_su_old, _n), "rb").read() == _bytes
+                  for _n in os.listdir(_su_old)))
+        # The launch itself: a damaged settings.json in the app folder, and
+        # only a damaged notebook to adopt -- nothing to do, said quietly.
+        _su_ran = _answer(lambda: _paths.run_migrations(_su_app))
+        check("a launch beside a %s settings.json and notebook starts (%s)"
+              % (_how, _su_ran),
+              _su_ran is None)
+        # The purge, both ways round: our notebook damaged, then theirs.
+        with open(os.path.join(_su_app, "notes_data.json"), "wb") as _f:
+            _f.write(_bytes)
+        _su_purged = _answer(lambda: _paths.purge_stale_copies(_su_app))
+        check("a purge beside a %s notebook of ours deletes nothing (%s)"
+              % (_how, _su_purged),
+              _su_purged == [] and os.path.isfile(_su_notes))
+        with open(os.path.join(_su_app, "notes_data.json"), "w",
+                  encoding="utf-8") as _f:
+            json.dump([{"id": 1, "title": "Ours"}], _f)
+        _su_purged = _answer(lambda: _paths.purge_stale_copies(_su_app))
+        check("...nor beside a %s old one (%s)" % (_how, _su_purged),
+              _su_purged == [] and os.path.isfile(_su_notes))
+finally:
+    _paths.get_appdata_dir, _paths.get_legacy_dirs = _su_real
+    shutil.rmtree(_su_root, ignore_errors=True)
 
 # ---- The qa scripts' own guard fails closed ----
 # Nine identical copies of it read an unreadable notebook as EMPTY and

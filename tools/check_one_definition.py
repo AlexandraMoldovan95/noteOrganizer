@@ -43,6 +43,12 @@ which answers a different question -- is it on the screen right now -- and
 says no for a widget whose page is merely hidden. A button that should
 have gone stayed, woken up with its page (0.82.233). The same shape as
 the rest: one question, answered by hand, the wrong way, everywhere.
+
+Nor is the last. "Could this be read as JSON?" was answered at fourteen
+readers by catching JSONDecodeError -- one of the three ways a text turns
+out unreadable -- and the app would not start beside a data file damaged
+in either of the other two (0.83.338). The owner there is a constant,
+paths.JSON_UNREADABLE, not a function.
 """
 
 import ast
@@ -185,6 +191,20 @@ RULES = [
         },
         window=1,
     ),
+    Rule(
+        question="could this file or code be read as JSON?",
+        owner="JSON_UNREADABLE",
+        # An except clause naming JSONDecodeError itself. That is one of
+        # three ways a JSON text turns out unreadable -- bytes that are not
+        # UTF-8 raise UnicodeDecodeError, nesting deeper than the parser
+        # follows raises RecursionError -- and every reader that named it
+        # alone let the other two escape: the app would not start while its
+        # notes, settings, Trash or templates file held one (0.83.338).
+        # noteorganizer.core.paths.JSON_UNREADABLE names all three.
+        pattern=re.compile(r"\bexcept\b[^:\n]*\bJSONDecodeError\b"),
+        allowed={},
+        window=1,
+    ),
 ]
 
 
@@ -253,8 +273,9 @@ def main():
     for rel, lineno, func, rule in problems:
         print("  %s:%d  in %s()" % (rel, lineno, func))
         print("      question : %s" % rule.question)
-        print("      owned by : %s()" % rule.owner)
-        print("      Call the owner, or -- if this answer is genuinely")
+        print("      owned by : %s%s" % (rule.owner,
+                                         "" if rule.owner.isupper() else "()"))
+        print("      Use the owner, or -- if this answer is genuinely")
         print("      different -- add it to that rule's `allowed` in")
         print("      tools/check_one_definition.py WITH the reason, so the")
         print("      exception is reviewed rather than assumed.")

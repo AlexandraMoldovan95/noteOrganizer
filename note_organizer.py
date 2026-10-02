@@ -1650,7 +1650,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 "⚠ Your notes file could not be read this time, so the app "
                 "started with an empty list. Your notes did NOT delete "
                 "themselves — the file on disk was unreadable (a bad "
-                "shutdown or disk problem can do this)."
+                "shutdown, a disk problem, or saving it from another "
+                "program can do this)."
             )
             if self._corrupt_notes_report:
                 msg += (
@@ -10590,7 +10591,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 try:
                     with open(imported_notes_path, "r", encoding="utf-8") as f:
                         imported_notes = json.load(f)
-                except (json.JSONDecodeError, IOError) as e:
+                except (*_core_paths.JSON_UNREADABLE, IOError) as e:
                     state["error"] = f"Couldn't read the notes in that backup:\n{e}"
                     state["done"] = True
                     return
@@ -10607,7 +10608,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                                 loaded = json.load(f)
                             if isinstance(loaded, list):
                                 state[key] = loaded
-                        except (json.JSONDecodeError, IOError, OSError):
+                        except (*_core_paths.JSON_UNREADABLE, IOError, OSError):
                             pass
                 # The backup's settings.json has always been IN the zip and
                 # was never read back, so every imported note whose category
@@ -10636,7 +10637,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                                 decor = loaded.get(decor_key)
                                 if isinstance(decor, dict):
                                     state["imported_" + decor_key] = decor
-                    except (json.JSONDecodeError, IOError, OSError, AttributeError):
+                    except (*_core_paths.JSON_UNREADABLE, IOError, OSError, AttributeError):
                         pass
 
                 # Copy any attached files from the backup into our attachments

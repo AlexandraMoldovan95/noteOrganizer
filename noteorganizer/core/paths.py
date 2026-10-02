@@ -62,6 +62,18 @@ import tempfile
 from datetime import datetime
 
 
+#: Every way a JSON file or text can turn out unreadable: not JSON at all,
+#: bytes that are not UTF-8 (a notes file saved by another program in
+#: Windows' own Romanian encoding, say), and nesting deeper than the parser
+#: can follow. The readers caught the first kind only, and the other two
+#: escaped them: the app would not start while its notes, settings, Trash or
+#: templates file held one, a share code said "Something went wrong", and a
+#: backup holding such a file failed whole. Every reader of a file or code
+#: that may be damaged catches all three, and treats them as the damage they
+#: are.
+JSON_UNREADABLE = (json.JSONDecodeError, UnicodeDecodeError, RecursionError)
+
+
 # ---- Storage location ----
 #
 # Two very different situations, deliberately handled differently:
@@ -209,7 +221,7 @@ def count_notes_in(path):
         with open(path, "r", encoding="utf-8") as f:
             data = json.load(f)
         return len(data) if isinstance(data, list) else 0
-    except (json.JSONDecodeError, IOError, OSError):
+    except (*JSON_UNREADABLE, IOError, OSError):
         return 0
 
 
@@ -300,7 +312,7 @@ def _preserve_settings_if_unreadable(settings_path):
         with open(settings_path, "r", encoding="utf-8") as f:
             if isinstance(json.load(f), dict):
                 return
-    except (json.JSONDecodeError, IOError, OSError):
+    except (*JSON_UNREADABLE, IOError, OSError):
         pass
     preserve_corrupt_file(settings_path)
 
@@ -326,7 +338,7 @@ def run_migrations(app_dir):
             with open(settings_path, "r", encoding="utf-8") as f:
                 data = json.load(f)
             return data if isinstance(data, dict) else {}
-        except (json.JSONDecodeError, IOError, OSError):
+        except (*JSON_UNREADABLE, IOError, OSError):
             return {}
 
     # --- Case 1: reclaim data from %APPDATA% ---
@@ -478,7 +490,7 @@ def is_redundant_copy(candidate_path, local_notes):
     try:
         with open(candidate_path, "r", encoding="utf-8") as f:
             data = json.load(f)
-    except (json.JSONDecodeError, IOError, OSError):
+    except (*JSON_UNREADABLE, IOError, OSError):
         return False
     if not isinstance(data, list):
         return False
@@ -533,7 +545,7 @@ def _looks_like_our_settings(path):
     try:
         with open(path, "r", encoding="utf-8") as f:
             data = json.load(f)
-    except (json.JSONDecodeError, IOError, OSError, UnicodeDecodeError):
+    except (*JSON_UNREADABLE, IOError, OSError):
         return False
     return isinstance(data, dict) and any(k in data for k in _OUR_SETTINGS_KEYS)
 
@@ -579,7 +591,7 @@ def purge_stale_copies(app_dir):
     try:
         with open(local_path, "r", encoding="utf-8") as f:
             local_notes = json.load(f)
-    except (json.JSONDecodeError, IOError, OSError):
+    except (*JSON_UNREADABLE, IOError, OSError):
         return []
     if not isinstance(local_notes, list):
         return []
