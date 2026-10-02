@@ -597,10 +597,19 @@ check('comments keep their first indent and trailing blank lines on save',
       app.find_note(3)['comments'] == '    for x in items:\n        print(x)\n\n')
 app.new_note(); app.update()
 app.load_note(app.find_note(3)); app.update()
-check('...and reopen exactly as typed, reading as saved',
-      app.comments_text.get('1.0', 'end-1c')
-      == '    for x in items:\n        print(x)\n\n'
-      and app.editor_state_matches_saved(app.capture_editor_state()))
+# What differs, named in the message: this went red once in a dozen runs
+# on a developer machine, and said nothing about which side moved.
+_cm_text = app.comments_text.get('1.0', 'end-1c')
+_cm_state = app.capture_editor_state()
+_cm_note = app.find_note(3) or {}
+_cm_diff = {k: (v, _cm_note.get(k)) for k, v in _cm_state.items()
+            if k in _cm_note and v != (
+                NO.normalize_recurrence(_cm_note.get(k)) if k == 'recurrence'
+                else _cm_note.get(k))}
+check(f'...and reopen exactly as typed, reading as saved '
+      f'({_cm_text!r}; differs from the note: {_cm_diff})',
+      _cm_text == '    for x in items:\n        print(x)\n\n'
+      and app.editor_state_matches_saved(_cm_state))
 app.comments_text.insert('end', '\n')
 check('...so adding only a blank line is an edit the autosave sees',
       not app.editor_state_matches_saved(app.capture_editor_state()))
