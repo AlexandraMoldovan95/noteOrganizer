@@ -14665,12 +14665,16 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         in one step, right in neither state. What it did so far becomes a
         step of its own, ended on Tk's stack by a separator, and the part
         that follows is the part marked as recorded with the grids down."""
-        before = getattr(self, "_fmt_atom_before", None)
-        if before is not None:
+        if getattr(self, "_fmt_atom_before", None) is not None:
             try:
                 now = self._fmt_state()
             except (tk.TclError, ValueError):
                 now = None
+            # Read after the snapshot, which counts a line the drawing held
+            # into it (_settle_undo_tail): read before, the step's first side
+            # named the text without that line, Ctrl+Z matched nothing, and
+            # the formatting it should have laid back was lost.
+            before = self._fmt_atom_before
             if now is not None and now[0] != before[0]:
                 self._push_atom_step(before, now)
                 try:

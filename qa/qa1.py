@@ -11593,15 +11593,15 @@ try:
         app.update()
         return True
 
-    def _tl_table_at_end(start='Intro line'):
+    def _tl_table_at_end(start='Intro line',
+                         rows=('| Name | Qty |', '| --- | --- |', '| Tea | 2 |')):
         set_body(start)
         app._reset_text_undo()
         app._cancel_pending_autosave()
         app.body_text.mark_set('insert', 'end-1c')
         app._last_caret_line = None
         _ty_key('Return', chr(10))
-        for _tl_i, _tl_row in enumerate(('| Name | Qty |', '| --- | --- |',
-                                         '| Tea | 2 |')):
+        for _tl_i, _tl_row in enumerate(rows):
             for _tl_ch in _tl_row:
                 _ty_key(_pr_keys.get(_tl_ch, _tl_ch), _tl_ch)
             if _tl_i < 2:
@@ -11671,6 +11671,35 @@ try:
           f'({[w.split(chr(10))[1] for w in _tl_walk]})',
           _tl_ok and 'Names' in _tl_edited
           and _tl_walk == [_tl_edited, _tl_start, _tl_edited, _tl_typed])
+    # A cell edit that narrows its column draws the table again inside its
+    # own undo step, which splits the step where the tables come down
+    # (_undo_atom_grids_coming_down). That split read the step's first
+    # snapshot before the line under the table was counted into it: Ctrl+Z
+    # gave the cell's text back with half its bold ("Earl Grey" bold,
+    # "teapot" plain), and the next Ctrl+Z skipped a step.
+    _tl_ok = _tl_table_at_end(rows=('| Name | Qty |', '| --- | --- |',
+                                    '| Earl Grey teapot | 2 |'))
+    _tl_at = app.body_text.get('4.0', '4.end').find('Earl Grey teapot')
+    _tl_ok = _tl_ok and _tl_at > 0
+    app.body_text.tag_add('bold', '4.%d' % _tl_at, '4.%d' % (_tl_at + 16))
+    _tl_start = _tl_text()
+    if _tl_ok:
+        app._open_cell_editor(app._grid_at_line(2), 1, 0)
+        app.update()
+        _tl_ed = app._cell_editor['entry']
+        _tl_ed.delete('1.0', 'end')
+        _tl_ed.insert('1.0', 'Earl Grey')
+        app._commit_cell_editor()
+        app.update()
+    _tl_ok = _tl_ok and 'teapot' not in _tl_text()
+    _tl_keys('z')
+    _tl_bold = [str(i) for i in app.body_text.tag_ranges('bold')]
+    app.body_text.tag_remove('bold', '1.0', 'end')
+    check(f'Ctrl+Z of a cell edit that narrows its column, beside the '
+          f'drawing\'s line, gives the cell back with all its bold '
+          f'({_tl_ok}; {_tl_bold})',
+          _tl_ok and _tl_text() == _tl_start
+          and _tl_bold == ['4.%d' % _tl_at, '4.%d' % (_tl_at + 16)])
     # A list renumbered by Enter, in a note whose last table has the
     # drawing's line under it: Ctrl+Z gave the text back bare -- every bold
     # and italic in the note gone, saved so.
