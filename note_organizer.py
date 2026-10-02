@@ -15092,7 +15092,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             # by a delete while the toast is up can name a new note by then.
             marks = [(n, "order" in n, n.get("order")) for n in self.notes]
             placed = [n for n in self.notes if "order" in n]
-            was = [id(n) for n in sorted(placed, key=lambda n: n["order"])]
+            was_notes = sorted(placed, key=lambda n: n["order"])
+            was = [id(n) for n in was_notes]
             self._place_notes_as_sorted(sort_before)
             self.sort_var.set(self.SORT_CUSTOM)
             # Replaced only if the notes placed by hand no longer stand in
@@ -15125,23 +15126,36 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             # as a new arrangement it gave the older one's place to the
             # replacement itself.
             if (getattr(self, "_replaced_custom_order", None) is None
-                    or self._arranged_since_last_replace(was)):
+                    or self._arranged_since_last_replace(was_notes)):
                 self._replaced_custom_order = replaced
-            self._custom_order_left = [id(n) for n in everything]
+            self._custom_order_left = [self._order_identity(n)
+                                       for n in everything]
             self._show_toast(
                 f"Custom order started again from {replaced[1]}",
                 action=lambda: self._undo_custom_order(*replaced))
         return True
 
-    def _arranged_since_last_replace(self, was):
-        """Whether the Custom order a move in a sorted view replaces (`was`,
-        its notes' ids in order) was arranged by hand since the last such
-        move: its order, among the notes both know, is not the order that
-        move left. A note made or deleted since arranges nothing."""
+    @staticmethod
+    def _order_identity(note):
+        """A note as the Custom order offer knows it: by its uid, which a
+        note brought back from the Trash keeps as a new dict."""
+        return note.get("uid") or id(note)
+
+    def _arranged_since_last_replace(self, was_notes):
+        """Whether the Custom order a move in a sorted view replaces (its
+        placed notes, in order) was arranged by hand since the last such
+        move. A note with a place the last move did not know was placed by
+        hand: a new note has none until a move by hand places every note.
+        Otherwise the order of the notes both know decides; a note deleted
+        since arranges nothing."""
         left = getattr(self, "_custom_order_left", None)
-        if left is None or was is None:
+        if left is None or was_notes is None:
             return True
-        common = set(left) & set(was)
+        was = [self._order_identity(n) for n in was_notes]
+        known = set(left)
+        if any(i not in known for i in was):
+            return True
+        common = known & set(was)
         return ([i for i in was if i in common]
                 != [i for i in left if i in common])
 
@@ -15159,7 +15173,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # later move in a sorted view keeps the offer it finds.
         placed = [n for n in self.notes if "order" in n]
         self._custom_order_left = [
-            id(n) for n in sorted(placed, key=lambda n: n["order"])]
+            self._order_identity(n)
+            for n in sorted(placed, key=lambda n: n["order"])]
         self.save_notes()
         self.sort_var.set(sort_before)
         self.refresh_note_list()

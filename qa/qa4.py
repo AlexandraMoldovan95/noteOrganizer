@@ -2126,6 +2126,67 @@ check(f'...and after the second move\'s Undo and a third move, it is still '
       f'{_bl_names()})',
       _bl_after_undo == 'Title A–Z' and len(_bl_questions) == 1
       and _bl_names() == _bl_hand)
+# A NEW note placed by hand is an arrangement made by hand too: compared
+# only among the notes the last sorted-view move knew, its placing counted
+# for nothing, and the older arrangement was offered back.
+_co_fresh(_bl_placed, sort='Custom order')
+_bl_sort('Title A–Z')
+app._hide_toast()
+app._put_keyboard_on_card(app._card_order()[0]); _ls_settle()
+app._list_move_by_keyboard(1); _ls_settle()
+app._hide_toast()
+app.new_note()
+app.title_entry.insert(0, 'Golf note')
+app.body_text.insert('1.0', 'a new note')
+app.save_current_note()
+_ls_settle()
+_bl_golf = app.selected_note_id
+for _bl_i in range(2):
+    app._put_keyboard_on_card(_bl_golf); _ls_settle()
+    app._list_move_by_keyboard(1); _ls_settle()
+app._hide_toast()
+_bl_newer = _bl_names()
+_bl_sort('Title A–Z')
+app._hide_toast()
+app._put_keyboard_on_card(app._card_order()[0]); _ls_settle()
+app._list_move_by_keyboard(1); _ls_settle()
+app._hide_toast()
+del _bl_questions[:]
+_bl_answer[0] = True
+_bl_sort('Custom order')
+check(f'...and a new note placed by hand makes the newer arrangement the one '
+      f'offered back (asked {[q[0] for q in _bl_questions]}; now '
+      f'{_bl_names()}; newer {_bl_newer})',
+      len(_bl_questions) == 1 and _bl_names() == _bl_newer
+      and 'Golf' in _bl_newer)
+# A note deleted and brought back from the Trash meanwhile is the same note:
+# known by the dict alone, it came back as one the last move had never
+# seen, and counted as placed by hand -- the arrangement really made by
+# hand gave its place to the first move's result.
+_co_fresh(_bl_placed, sort='Custom order')
+_bl_sort('Title A–Z')
+app._hide_toast()
+app._put_keyboard_on_card(app._card_order()[0]); _ls_settle()
+app._list_move_by_keyboard(1); _ls_settle()
+app._hide_toast()
+_bl_answer[0] = True
+_bl_victim = next(n for n in app.notes if n['title'].startswith('Kiwi'))
+app._delete_note(_bl_victim, None); _ls_settle()
+app._hide_toast()
+app._restore_trash_entries(
+    [e for e in app.trash if (e.get('title') or '').startswith('Kiwi')])
+_ls_settle()
+_bl_sort('Title A–Z')
+app._hide_toast()
+app._put_keyboard_on_card(app._card_order()[0]); _ls_settle()
+app._list_move_by_keyboard(1); _ls_settle()
+app._hide_toast()
+del _bl_questions[:]
+_bl_sort('Custom order')
+check(f'...while a note only deleted and restored in between arranges '
+      f'nothing: the arrangement made by hand is still the one offered back '
+      f'(asked {[q[0] for q in _bl_questions]}; now {_bl_names()})',
+      len(_bl_questions) == 1 and _bl_names() == _bl_hand)
 # No: the list stays as the replacement left it, and the question does not
 # come back.
 _bl_sort('Title A–Z')
