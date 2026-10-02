@@ -1559,8 +1559,10 @@ check(f'...and so does "Reset this day" (Every box {_rn_box!r}; left out '
       _rn_box == '3x' and bool(_rn_left)
       and '2026-09-14' not in (app.find_note(1).get('overrides') or {}))
 # Not only what a save leaves out: a day of a series never autosaves, and a
-# readable "Every 3" typed there went with the reload -- or stayed, when an
-# unreadable box happened to sit beside it.
+# readable "Every 3" typed there went with Restore previous's reload -- or
+# stayed, when an unreadable box happened to sit beside it. Reset this day
+# discards it, as its question says the day's own edits go: kept, a start
+# date typed there moved the whole series on leaving, without a question.
 _rn_kept_ok = []
 for _rn_route in ('reset', 'restore'):
     _rr_day()
@@ -1579,8 +1581,24 @@ for _rn_route in ('reset', 'restore'):
     app._put_back_stored_date_and_repeat()
     app._cancel_pending_autosave()
 check(f'...and a readable change typed on a day, not saved yet, stays on '
-      f'screen through both, to be saved ({_rn_kept_ok})',
-      _rn_kept_ok == [('reset', '3', 3), ('restore', '3', 3)])
+      f'screen through Restore previous, to be saved, while Reset this day '
+      f'discards it ({_rn_kept_ok})',
+      _rn_kept_ok == [('reset', '1', 1), ('restore', '3', 3)])
+_rr_day()
+app.date_entry.delete(0, 'end')
+app.date_entry.insert(0, '2026-09-23')
+app.ask_yes_no = lambda *a, **k: True
+try:
+    app._reset_occurrence_override(app.find_note(1), '2026-09-14')
+    app.update()
+finally:
+    app.ask_yes_no = _ro_yes
+_rn_reset_date = app.date_entry.get()
+app._put_back_stored_date_and_repeat()
+app._cancel_pending_autosave()
+check(f'...and so is a start date typed on the day, which leaving would have '
+      f'moved the whole series to ({_rn_reset_date!r})',
+      _rn_reset_date == '2026-09-07')
 
 # The status line names a left-out value until it is put right -- also when
 # it is put right to what the note already stores, which leaves nothing to

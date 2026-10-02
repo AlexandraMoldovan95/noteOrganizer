@@ -19314,7 +19314,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             # from a note that never had them (see restore_previous_version).
             self._take_pending_checklist_item()
             self._write_series_owned(note, None, None, schedule=False)
-            carried = self._schedule_to_carry()
+            # Only what no save can store: the day's own edits go, as the
+            # question says (see _schedule_to_carry).
+            carried = self._schedule_to_carry(unsaved=False)
         note["overrides"].pop(occurrence_date, None)
         note["updated"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         self.save_notes()
@@ -19980,7 +19982,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 problems.append(("days", days.strip()))
         return problems
 
-    def _schedule_to_carry(self, date=True, repeat=True):
+    def _schedule_to_carry(self, date=True, repeat=True, unsaved=True):
         """What the date and repeat fields hold that the note does not
         store, to carry across a reload: the date field's text, and the
         repeat's fields as typed -- each only when it differs from what the
@@ -20000,6 +20002,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         unreadable box happened to sit beside it. The repeat goes whole:
         its fields only mean something together. With *date* or *repeat*
         False the reload brings back its own (a rescue copy that holds it).
+        With *unsaved* False only what a save would leave out is carried:
+        Reset this day says the day's own edits will be discarded, and a
+        readable start date it kept was saved on leaving -- moving the whole
+        series without a question, another day's own text with it. A value
+        no save can store moves nothing, and leaving asks about it.
         """
         try:
             date_value, rule, left_out = self._date_and_repeat_to_store()
@@ -20015,14 +20022,16 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if typed == "YYYY-MM-DD":
             typed = ""
         if date and (typed != (date_value or "")
-                     or (date_value or "") != (note.get("date") or "")):
+                     or (unsaved and (date_value or "")
+                         != (note.get("date") or ""))):
             carried["date"] = typed
         freq = self.selected_freq_key()
         # A value it cannot read, the whole repeat left out for want of a
-        # start date, or a rule not saved yet.
+        # start date, or (with *unsaved*) a rule not saved yet.
         if repeat and (self._unreadable_repeat_fields(freq)
                        or (freq and not rule["freq"])
-                       or rule != normalize_recurrence(note.get("recurrence"))):
+                       or (unsaved and rule != normalize_recurrence(
+                           note.get("recurrence")))):
             carried["repeat"] = {
                 "freq": self.rec_freq_var.get(),
                 "interval": self.rec_interval_var.get(),
