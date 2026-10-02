@@ -8999,6 +8999,14 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         start_idx = self.body_text.index(self._PENDING_STYLE_ANCHOR)
         end_idx = self.body_text.index(tk.INSERT)
         if self.body_text.compare(start_idx, "<", end_idx):
+            # The typing settled first, as typing is (_spread_typed_run):
+            # glued onto a styled character, or between two pieces of one
+            # run, the letters wear the run's composite before a size or font
+            # picked replaces its one property of it. Settled after, letters
+            # that wore no composite yet -- at a bold word's edge, at a run's
+            # end, after a second pick -- took the base's font (or size) with
+            # the pick, and the run's never arrived.
+            self._spread_typed_run()
             is_bold = "bold" in self._pending_styles
             is_italic = "italic" in self._pending_styles
             tag = self._font_tag_for(is_bold, is_italic)

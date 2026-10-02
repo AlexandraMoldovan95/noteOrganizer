@@ -6468,6 +6468,57 @@ app.update()
 check(f'text put in at a bold word\'s edge inside a bigger heading keeps the '
       f'heading\'s size, by every road ({_bs_road})',
       len(_bs_road) == 5 and all(v == 20 for v in _bs_road.values()))
+# A size or a font picked before typing, at a run's edge -- beside a bold
+# word inside a run set in Georgia, glued onto its end, or picked again after
+# the first letter -- took the base's font (or size) with the pick: those
+# letters wore no composite yet when the pick was laid.
+_bs_pick = {}
+
+
+def _bs_typed_with(at, *keys, line=(), style='font_family', value='Georgia',
+                   picks=(16,)):
+    _sized_line(*line, style=style, value=value)
+    clear_selection()
+    app.body_text.mark_set('insert', at)
+    _ok = True
+    for _pick, _ch in zip(picks, keys):
+        app._apply_body_font('font_size' if isinstance(_pick, int)
+                             else 'font_family', _pick)
+        _ok = _ty_key(_ch, _ch) and _ok
+    app._pending_font_size = app._pending_font_family = None
+    app._pending_styles = set()
+    _first = int(at.split('.')[1])
+    _spans = app._extract_formatting(app.body_text)
+    return _ok, [sorted((s['style'], s.get('value')) for s in _spans
+                        if s['start'] <= _first + k < s['end']
+                        and s['style'] in ('font_size', 'font_family'))
+                 for k in range(len(keys))]
+
+
+_bs_bold = ({'start': 4, 'end': 9, 'style': 'bold'},)
+_bs_pick['after a bold word'] = _bs_typed_with('1.9', 'A', 'B', line=_bs_bold,
+                                               picks=(16, 16))
+_bs_pick['before a bold word'] = _bs_typed_with('1.4', 'A', 'B', line=_bs_bold,
+                                                picks=(16, 16))
+_bs_pick['glued onto the run\'s end'] = _bs_typed_with('1.14', 'A', 'B',
+                                                       picks=(16, 16))
+_bs_pick['picked again'] = _bs_typed_with('1.6', 'A', 'B', picks=(16, 20))
+_bs_pick['a font after a size'] = _bs_typed_with(
+    '1.6', 'A', 'B', style='font_size', value=20,
+    picks=('Georgia', 'Courier New'))
+_bs_G = ('font_family', 'Georgia')
+check(f'a size or font picked at a run\'s edge keeps the run\'s other property '
+      f'({_bs_pick})',
+      all(v[0] for v in _bs_pick.values())
+      and _bs_pick['after a bold word'][1] == [[_bs_G, ('font_size', 16)]] * 2
+      and _bs_pick['before a bold word'][1] == [[_bs_G, ('font_size', 16)]] * 2
+      and _bs_pick['glued onto the run\'s end'][1]
+      == [[_bs_G, ('font_size', 16)]] * 2
+      and _bs_pick['picked again'][1] == [[_bs_G, ('font_size', 16)],
+                                          [_bs_G, ('font_size', 20)]]
+      and _bs_pick['a font after a size'][1]
+      == [[_bs_G, ('font_size', 20)],
+          [('font_family', 'Courier New'), ('font_size', 20)]])
 # A long paste is fitted by stretches where its tags stay the same, not a
 # character at a time: each character cost an index, a reading of its tags
 # and a tag laid, and a long paste into a note set in a font took two to
