@@ -20579,6 +20579,16 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             if any((shown.get(key) or "") != (note.get(key) or "")
                    for key in ("title", "body", "comments")):
                 return True
+        # A day deleted a moment ago, its own text held by the Undo still
+        # on offer: the turn-off counts it, so it makes the rescue copy the
+        # Undo puts the day back in (_undo_occurrence_delete). Uncounted,
+        # the turn-off of a series whose only own-text day had just been
+        # deleted made no copy, and the Undo had nothing to bring back.
+        pending = getattr(getattr(self, "_toast_action", None), "day_undo", None)
+        if pending and pending[0] == note.get("id") and isinstance(pending[2], dict):
+            return any(key in pending[2]
+                       and (pending[2].get(key) or "") != (note.get(key) or "")
+                       for key in ("title", "body", "comments"))
         return False
 
     @staticmethod
@@ -21352,23 +21362,28 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if note is None:
             self._show_toast("That note is no longer here", kind="info")
             return
-        if not is_recurring(note):
-            # The repeat was turned off since -- one waiting when the day
-            # went, made by leaving the note or Save. The series is in the
+        prev = note.get("_prev") or {}
+        in_copy = bool((prev.get("recurrence") or {}).get("freq")
+                       and date_str in (prev.get("exceptions") or []))
+        if not is_recurring(note) or (
+                in_copy and date_str not in (note.get("exceptions") or [])):
+            # The repeat was turned off since -- by leaving the note or Save
+            # -- and maybe picked again anew. The series as it was is in the
             # rescue copy the turn-off made, that day deleted in it: it is
             # put back there. This said "That day is already back" and did
             # nothing, the day's own text in no file.
-            prev = note.get("_prev") or {}
-            if ((prev.get("recurrence") or {}).get("freq")
-                    and date_str in (prev.get("exceptions") or [])):
+            if in_copy:
                 prev["exceptions"] = [d for d in prev["exceptions"]
                                       if d != date_str]
                 if own_edit and date_str not in (prev.get("overrides") or {}):
                     prev.setdefault("overrides", {})[date_str] = dict(own_edit)
                 self.save_notes()
-                self.set_status("This note no longer repeats: ↩ Restore "
-                                "previous brings the series back, that day "
-                                "with it")
+                self.set_status(
+                    ("This note no longer repeats: ↩ Restore previous brings "
+                     "the series back, that day with it")
+                    if not is_recurring(note) else
+                    ("This note repeats anew: ↩ Restore previous brings the "
+                     "series it had back, that day with it"))
             else:
                 self._show_toast("This note no longer repeats, so that day "
                                  "can't come back", kind="info")
@@ -21542,18 +21557,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 # Kept for the Undo below: the day's own title and text
                 # went with it, and the Undo used to bring back the day
                 # showing the series' text instead -- the edit gone for good.
-                # With this series on screen and its turn-off waiting, the
-                # day's own text stays in the note too, under the deleted
-                # day: the turn-off, made on leaving, counts it among the
-                # days it takes away and keeps it in its rescue copy. Taken
-                # out, the turn-off saw no day to keep, made no copy, and the
-                # Undo had no series left to put it back in.
-                waiting = (self.selected_note_id == note["id"]
-                           and self.current_occurrence_date != occurrence_date
-                           and self._repeat_off_waits())
-                own_edit = (copy.deepcopy(note["overrides"].get(occurrence_date))
-                            if waiting
-                            else note["overrides"].pop(occurrence_date, None))
+                own_edit = note["overrides"].pop(occurrence_date, None)
                 note["updated"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 self.save_notes()
                 if (self.selected_note_id == note["id"]
@@ -21568,10 +21572,15 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 # This one had no way back at all: the date goes into the
                 # note's exceptions and no screen in the app takes it out
                 # again. The toast is not a convenience here.
-                self._show_toast(
-                    "Occurrence removed",
-                    action=lambda nid=note["id"], day=occurrence_date,
-                    edit=own_edit: self._undo_occurrence_delete(nid, day, edit))
+                undo = (lambda nid=note["id"], day=occurrence_date,
+                        edit=own_edit: self._undo_occurrence_delete(nid, day, edit))
+                # What the Undo holds, readable while it is offered: a
+                # repeat turned off meanwhile counts that day's own text
+                # among what it takes away (_repeat_off_loses_days).
+                undo.day_undo = (note["id"], occurrence_date, own_edit)
+                self._show_toast("Occurrence removed", action=undo)
+                if self.selected_note_id == note["id"]:
+                    self._update_occurrence_banner()
                 return
 
         attachment_count = len(note.get("attachments") or [])

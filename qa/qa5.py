@@ -2323,6 +2323,77 @@ check(f'the Undo of a day deleted while a turn-off waited, clicked after it '
       and _rn_ug[1:3] == [['2026-09-28'], 'DAY 14']
       and _rn_ug[3] == _RN_SERIES)
 
+
+def _rn_day_fresh():
+    app.new_note(); app.update()
+    app.notes = [
+        NO.normalize_note({'id': 1, 'title': 'Weekly', 'body': 'series text',
+                           'date': '2026-09-07', 'recurrence': {'freq': 'weekly'},
+                           'overrides': {'2026-09-14': {'body': 'DAY 14'}},
+                           'exceptions': ['2026-09-28']}),
+        NO.normalize_note({'id': 2, 'title': 'Other', 'body': 'y'})]
+    app.save_notes()
+    app.open_note_in_tab(app.find_note(1)); app.update()
+    app._cancel_pending_autosave()
+
+
+def _rn_day_delete(day='2026-09-14'):
+    app.ask_occurrence_scope = lambda *a, **k: 'occurrence'
+    try:
+        app._context_delete_note(app.find_note(1), occurrence_date=day)
+        app.update()
+    finally:
+        app.ask_occurrence_scope = _oc_real_scope
+
+
+def _rn_banner():
+    return str(app.occurrence_banner.cget('text'))
+
+
+# The other order: a day deleted with the repeat on, and the repeat turned
+# off within its Undo's seconds. The turn-off saw no day of its own left,
+# made no copy, and the Undo had nothing to bring the day back in -- its
+# own text in no file. The Undo still on offer is counted now.
+_rn_day_fresh()
+_rn_day_delete()
+_rn_ok = _rn_pick(NO.FREQ_LABELS[''])
+app.open_note_in_tab(app.find_note(2)); app.update()
+app._undo_occurrence_delete(1, '2026-09-14', {'body': 'DAY 14'}); app.update()
+_rn_ro = [str(app.status_lbl.cget('text')),
+          ((_rn_prev().get('overrides') or {}).get('2026-09-14') or {}).get('body')]
+# ...and with the repeat picked anew and saved before the Undo, the day goes
+# back to the series it was deleted from, the one Restore previous holds:
+# the Undo said "That day is already back" and dropped its text.
+_rn_day_fresh()
+_rn_ok = _rn_pick(NO.FREQ_LABELS['']) and _rn_ok
+_rn_day_delete()
+app.save_current_note(); app.update()
+_rn_ok = _rn_pick(NO.FREQ_LABELS['weekly']) and _rn_ok
+app.save_current_note(); app.update()
+app._undo_occurrence_delete(1, '2026-09-14', {'body': 'DAY 14'}); app.update()
+app._cancel_pending_autosave()
+_rn_ro += [str(app.status_lbl.cget('text')),
+           sorted(_rn_prev().get('exceptions') or []),
+           ((_rn_prev().get('overrides') or {}).get('2026-09-14') or {}).get('body')]
+check(f'a day deleted and its repeat turned off in either order comes back '
+      f'with its text into the series Restore previous holds ({_rn_ro})',
+      _rn_ok and 'Restore previous' in _rn_ro[0] and _rn_ro[1] == 'DAY 14'
+      and 'repeats anew' in _rn_ro[2]
+      and _rn_ro[3:5] == [['2026-09-28'], 'DAY 14'])
+# The text of a day deleted while the turn-off waits is not left in the note
+# when the wait ends without it: kept there, the deleted day read as a day
+# with its own edits ("✎1" on the card, "1 day keeps its own edits").
+_rn_day_fresh()
+_rn_ok = _rn_pick(NO.FREQ_LABELS[''])
+_rn_day_delete()
+_rn_ok = _rn_pick(NO.FREQ_LABELS['weekly']) and _rn_ok
+app._autosave_now(); app.update()
+_rn_kd = (sorted((app.find_note(1) or {}).get('overrides') or {}),
+          'own edits' in _rn_banner())
+app._cancel_pending_autosave()
+check(f'the deleted day of a series whose turn-off was taken back keeps no '
+      f'text of its own in the note ({_rn_kd})',
+      _rn_ok and _rn_kd == ([], False))
 # Restore previous with a big delete still waiting for its autosave: the
 # autosave ran while the question waited and made a new rescue copy of the
 # words just deleted, which the restore -- of the copy read before the
