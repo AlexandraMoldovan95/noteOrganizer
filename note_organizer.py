@@ -1210,7 +1210,14 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
     def _autosave_now(self):
         """Run an auto-save if the current editor content is worth saving and
         actually differs from what's on disk."""
-        self._autosave_job = None
+        # Cancelled, not forgotten: whoever runs this -- its timer, or a
+        # caller saving right now -- leaves no other autosave pending. A
+        # timer whose job was only set to None stayed scheduled with
+        # nothing tracking it, and on firing it set the NEXT job to None
+        # the same way: a relay of untracked saves going off at random
+        # moments (28 in one qa1 run, one in the middle of a held
+        # BackSpace, splitting the undo step it was building).
+        self._cancel_pending_autosave()
         if not self._still_alive():
             return
         # selected_note_id can end up stale — pointing at a note that no
@@ -17757,7 +17764,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 self.after_cancel(job)
             except (tk.TclError, ValueError):
                 pass
-        self._find_debounce = self.after(180, lambda: self._find_rescan(reveal=True))
+        self._find_debounce = self.after(180, self._find_debounce_fire, True)
 
     def _find_on_body_edit(self):
         # The body changed while the bar is open: the match model is now
@@ -17772,7 +17779,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 self.after_cancel(job)
             except (tk.TclError, ValueError):
                 pass
-        self._find_debounce = self.after(180, lambda: self._find_rescan(reveal=False))
+        self._find_debounce = self.after(180, self._find_debounce_fire, False)
 
     def _find_on_context_switch(self):
         """Note/tab switch or load: the old note's match model is invalid.
@@ -17888,8 +17895,16 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         matches.sort(key=lambda m: (m["line"], m.get("sortcol", m.get("col", 0))))
         return matches
 
-    def _find_rescan(self, reveal=False):
+    def _find_debounce_fire(self, reveal):
+        """The debounced rescan, run by its own timer -- the only place
+        its job is cleared. A rescan run directly (the Aa box, opening the
+        bar) leaves a waiting one tracked, since it may carry a reveal the
+        direct one does not; clearing the job there left that timer
+        scheduled with nothing tracking it -- see _autosave_now."""
         self._find_debounce = None
+        self._find_rescan(reveal=reveal)
+
+    def _find_rescan(self, reveal=False):
         if not getattr(self, "_find_open", False):
             return
         query = self._find_var.get()

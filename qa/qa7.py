@@ -14,7 +14,8 @@ import note_organizer as NO, tkinter as tk, tkinter.filedialog as fd, os, tempfi
 # Windows foreground -- which a test process never owns. See
 # qa/_qa_support.py; _qa_click refuses to click into the void.
 from _qa_support import (click as _qa_click, fire as _qa_fire,
-                         pin_popup_visibility as _qa_pin)
+                         pin_popup_visibility as _qa_pin,
+                         waiting_timers as _qa_waiting)
 _qa_pin(NO)
 fails = []
 def check(name, cond):
@@ -2320,6 +2321,21 @@ check('the Last-year chip keeps only that year',
       any('HistLastYear' in t for t in _hl)
       and not any('HistDated' in t for t in _hl))
 app._history_set_bucket('All'); app.update()
+# A chip chosen while a typed search waits renders at once, and the
+# waiting render is cancelled. Only forgotten, it stayed scheduled with
+# nothing tracking it, rendered again on its own, and on firing forgot
+# the next one the same way -- the relay qa1's "a save run directly"
+# check describes for the autosave.
+app._history_search_var.set('Hist')       # the typed search's render waits
+_hs_before = _qa_waiting(app, '_render_calendar_history')
+app._history_set_bucket('All')
+_hs_after = _qa_waiting(app, '_render_calendar_history')
+check(f'a History chip chosen while a typed search waits leaves no render '
+      f'waiting ({_hs_before} -> {_hs_after})',
+      len(_hs_before) == 1 and not _hs_after
+      and app._history_search_job is None)
+app._history_search_var.set('')
+app.update(); _t7.sleep(0.4); app.update()
 
 # Theme switch while open: rows re-render in the new palette.
 app.set_theme('light'); app.update()

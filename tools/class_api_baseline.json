@@ -204,6 +204,7 @@
   "_files_to_adopt": "(self, mine, theirs)",
   "_filter_options": "(self)",
   "_find_clear": "(self)",
+  "_find_debounce_fire": "(self, reveal)",
   "_find_delete_flash": "(self)",
   "_find_ensure_visible": "(self)",
   "_find_flash_cell": "(self, m)",

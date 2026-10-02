@@ -94,6 +94,13 @@ different questions, and a check that wants the second asserts it itself
     gives the script a data folder of its own, or refuses to run. It lives
     here, once, because it was nine identical copies -- the one state a
     copied safety rule does not stay in.
+
+``waiting_timers(app, name)``
+    The Tcl timers waiting to run a callback called *name*, asked of Tcl
+    rather than of the job attribute the app keeps. The attribute answers
+    only for the timer it tracks: a job set to None instead of cancelled
+    left its timer scheduled with nothing tracking it, and the autosave's
+    did that in a relay through a whole qa1 run.
 """
 
 import io
@@ -234,3 +241,17 @@ def click(widget, **kwargs):
     ``event_generate``.
     """
     fire(widget, "<Button-1>", **kwargs)
+
+
+def waiting_timers(app, name):
+    """The ids of the Tcl timers waiting to run a callback called *name*,
+    tracked or not. Tkinter names a timer's command after its callback."""
+    waiting = []
+    for job in app.tk.splitlist(app.tk.call("after", "info")):
+        try:
+            script = app.tk.splitlist(app.tk.call("after", "info", job))[0]
+        except tk.TclError:
+            continue
+        if str(script).endswith(name):
+            waiting.append(str(job))
+    return waiting

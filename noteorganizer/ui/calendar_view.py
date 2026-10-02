@@ -1547,7 +1547,17 @@ class CalendarViewMixin:
     def _render_calendar_history(self):
         """The rebuilt half: rows re-created per render, coloured with
         plain .configure so they always wear the CURRENT theme."""
+        # Cancelled, not forgotten: a render run directly (a bucket chosen
+        # while a typed search waits) makes the waiting one redundant, and
+        # a timer only forgotten stayed scheduled with nothing tracking it
+        # -- see _autosave_now.
+        job = getattr(self, "_history_search_job", None)
         self._history_search_job = None
+        if job is not None:
+            try:
+                self.after_cancel(job)
+            except (tk.TclError, ValueError):
+                pass
         if not (self._history_visible and self._history_built):
             return
         for w in self._history_rows.winfo_children():

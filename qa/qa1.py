@@ -15,7 +15,8 @@ import note_organizer as NO, tkinter as tk, json, os, re
 # Windows foreground -- which a test process never owns. See
 # qa/_qa_support.py; _qa_click refuses to click into the void.
 from _qa_support import (click as _qa_click, fire as _qa_fire,
-                         pin_popup_visibility as _qa_pin)
+                         pin_popup_visibility as _qa_pin,
+                         waiting_timers as _qa_waiting)
 _qa_pin(NO)
 from noteorganizer.core import tables as core_tables
 fails=[]
@@ -6980,6 +6981,25 @@ check('find/prose: a miss shows 0/0 and clears the highlight',
       and not app.body_text.tag_ranges('find_all'))
 app._close_find()
 app.update()
+# The Aa box (and opening the bar) rescans directly while a typed query's
+# rescan waits. Clearing the job there left the waiting timer scheduled
+# with nothing tracking it -- the relay qa1's "a save run directly"
+# check describes for the autosave. The waiting rescan stays tracked
+# now: it may carry a reveal the direct one does not.
+app._open_find()
+app.update()
+app._find_var.set('beta')              # the typed query's rescan waits
+_fd_job = getattr(app, '_find_debounce', None)
+app._find_case.set(True)
+app._find_rescan(reveal=False)         # what the Aa box runs
+_fd_waiting = _qa_waiting(app, '_find_debounce_fire')
+check(f'find: a direct rescan leaves the waiting one tracked ({_fd_job} '
+      f'-> {getattr(app, "_find_debounce", None)}, waiting {_fd_waiting})',
+      _fd_job is not None
+      and _fd_waiting == [str(getattr(app, '_find_debounce', None))])
+app._find_case.set(False)
+app._close_find()
+app.update()
 
 # Table cells: header counts as data row 0, separator excluded; a <br>
 # reads as a space; checkbox and merge cells are never words.
@@ -10114,6 +10134,28 @@ finally:
 check(f'journal: a commit with no cell open takes no snapshot ({len(_jc_notes)})',
       app._cell_editor is None and _jc_notes == [])
 set_body('')
+
+# ---- A SAVE RUN DIRECTLY LEAVES NO AUTOSAVE WAITING ----
+# _autosave_now set its job to None rather than cancelling it, so a timer
+# waiting when the save ran some other way stayed scheduled with nothing
+# tracking it -- and on firing it forgot the NEXT job the same way: a
+# relay of untracked saves, 28 in one run of this script, one of which
+# split a held BackSpace's undo step in the block below. The note id
+# points nowhere, so the save itself stops at its first guard.
+_as_sel = app.selected_note_id
+app._cancel_pending_autosave()
+app._schedule_autosave()
+_as_before = _qa_waiting(app, '_autosave_now')
+app.selected_note_id = 999999
+try:
+    app._autosave_now()
+finally:
+    app.selected_note_id = _as_sel
+_as_after = _qa_waiting(app, '_autosave_now')
+check(f'a save run directly leaves no autosave waiting behind it '
+      f'({_as_before} -> {_as_after})',
+      len(_as_before) == 1 and not _as_after
+      and getattr(app, '_autosave_job', None) is None)
 
 # ---- CTRL+Z GIVES BACK WHAT TK'S OWN DELETES TOOK, WITH ITS FORMATTING ----
 # Delete, BackSpace, typing over a selection and Cut are Tk's own
