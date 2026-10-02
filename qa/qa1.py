@@ -6407,6 +6407,67 @@ _bs_fold['bold pasted inside an italic word'] = _drawn('1.6')
 check(f'bold and italic laid over the same letters by typing or a paste are '
       f'drawn bold and italic at once ({_bs_fold})',
       _bs_typed and all(d[1:] == ('bold', 'italic') for d in _bs_fold.values()))
+# Put in at a bold word's edge inside a bigger heading by any road, not only
+# typed: the text wore neither side's composite (Tk passes on only what both
+# sides wear) and came out at the base size, the heading's size split in two
+# around it, saved so.
+_bs_road = {}
+
+
+def _bs_edge():
+    _sized_line({'start': 4, 'end': 9, 'style': 'bold'})
+    app.body_text.mark_set('insert', '1.9')
+
+
+_bs_edge()
+_stub_clipboard(html='<p>XY</p>', text='XY')
+app._on_body_paste()
+app.update()
+_bs_road['Ctrl+V'] = _drawn('1.9')[0]
+_bs_edge()
+_stub_clipboard(text='XY')
+app.clipboard_clear()
+app.clipboard_append('XY')
+take_focus(app.body_text)
+app.body_text.event_generate('<<Paste>>')
+for _ in range(3):
+    app.update()
+    app.update_idletasks()
+_bs_road['Tk\'s own paste'] = _drawn('1.9')[0]
+_bs_edge()
+app._paste_plain()
+app.update()
+_bs_road['Ctrl+Shift+V'] = _drawn('1.9')[0]
+_bs_edge()
+app.body_text.mark_unset('calc_insert_end')
+app._calc_insert_formula('1+1=2')
+app.update()
+app.body_text.mark_unset('calc_insert_end')
+_bs_road['the calculator'] = _drawn('1.9')[0]
+_bs_edge()
+app._insert_emoji_from_toolbar()
+app.update()
+_bs_cells = []
+
+
+def _bs_find_emoji(w):
+    for _c in w.winfo_children():
+        if isinstance(_c, tk.Label) and 'Emoji' in str(_c.cget('font')):
+            _bs_cells.append(_c)
+        _bs_find_emoji(_c)
+
+
+if getattr(app, '_mini_popup', None) is not None:
+    _bs_find_emoji(app._mini_popup)
+if _bs_cells:
+    _bs_cells[0].event_generate('<Button-1>', x=4, y=4)
+    app.update()
+    _bs_road['an emoji'] = _drawn('1.9')[0]
+app._dismiss_mini_popup()
+app.update()
+check(f'text put in at a bold word\'s edge inside a bigger heading keeps the '
+      f'heading\'s size, by every road ({_bs_road})',
+      len(_bs_road) == 5 and all(v == 20 for v in _bs_road.values()))
 # A long paste is fitted by stretches where its tags stay the same, not a
 # character at a time: each character cost an index, a reading of its tags
 # and a tag laid, and a long paste into a note set in a font took two to

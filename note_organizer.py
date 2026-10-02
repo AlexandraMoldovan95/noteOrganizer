@@ -4567,16 +4567,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     and b.compare(start, ">", "1.0")):
                 return
             prev = b.index(f"{start} -1c")
-            # Typed between two pieces of one size or font that differ only
-            # in weight -- right after or before a bold word inside a bigger
-            # heading -- the text wore neither piece's composite (Tk passes
-            # on only what both sides wear) and came out at the base size,
-            # saved so. It takes the run's size and font, with its own
-            # weight, whatever was typed.
-            sides = [[parse_font_tag(t) for t in b.tag_names(i)
-                      if parse_font_tag(t)] for i in (prev, end)]
-            if all(sides) and sides[0][-1][2:] == sides[1][-1][2:]:
-                self._fit_font_tags(start, end, like=prev)
+            self._take_run_between(start, end)
             if not b.get(prev).strip():
                 return
             gap = b.search(r"\s", start, stopindex=end, regexp=True)
@@ -4593,6 +4584,49 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self._fit_font_tags(start, stop, like=prev)
         except tk.TclError:
             pass
+
+    def _take_run_between(self, start, end):
+        """Text put between two pieces of one size or font that differ only
+        in weight -- right after or before a bold word inside a bigger
+        heading -- takes the run's size and font, with its own weight. True
+        when it did.
+
+        It wore neither piece's composite (Tk passes on only what both sides
+        wear) and came out at the base size, saved so -- splitting the
+        heading's size in two around it. Typed, pasted with or without its
+        formatting, pasted by Tk's own Ctrl+V, or put in by the emoji picker
+        or the calculator: every road in asks here. Typing alone did once,
+        and the other roads went on splitting the run."""
+        b = self.body_text
+        try:
+            if not b.compare(start, ">", "1.0"):
+                return False
+            prev = b.index(f"{start} -1c")
+            sides = [[parse_font_tag(t) for t in b.tag_names(i)
+                      if parse_font_tag(t)] for i in (prev, end)]
+            if not (all(sides) and sides[0][-1][2:] == sides[1][-1][2:]):
+                return False
+            self._fit_font_tags(start, end, like=prev)
+        except tk.TclError:
+            return False
+        return True
+
+    # Two marks around what Tk's own paste puts in (see _on_body_paste),
+    # as _TYPED_FROM and _TYPED_TO are around what a key types.
+    _PASTE_FROM = "pasteFrom"
+    _PASTE_TO = "pasteTo"
+
+    def _settle_tk_paste(self):
+        """What Tk's own Ctrl+V put in, between the marks set before it ran,
+        takes the run it landed in (_take_run_between)."""
+        b = self.body_text
+        try:
+            start, end = b.index(self._PASTE_FROM), b.index(self._PASTE_TO)
+            b.mark_unset(self._PASTE_FROM, self._PASTE_TO)
+        except tk.TclError:
+            return
+        if b.compare(start, "<", end):
+            self._take_run_between(start, end)
 
     def _reassert_line_alignment(self, _event=None):
         """Keep the caret's line wearing its own alignment while it is
@@ -6880,6 +6914,17 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._body_follow_caret = True
         self.after_idle(self._resync_list_tags)
         self.after_idle(self._render_table_grids)
+        # ...and so can the run it lands in: two marks where it goes in, the
+        # first staying put, the second carried past it (_settle_tk_paste).
+        b = self.body_text
+        try:
+            b.mark_set(self._PASTE_FROM, "insert")
+            b.mark_gravity(self._PASTE_FROM, "left")
+            b.mark_set(self._PASTE_TO, "insert")
+            b.mark_gravity(self._PASTE_TO, "right")
+            self.after_idle(self._settle_tk_paste)
+        except tk.TclError:
+            pass
         return None
 
     @_undo_atom
@@ -7218,7 +7263,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         except tk.TclError:
             pass
         lead, trail = self._rows_gap(text)
+        at = self.body_text.index("insert")
         self.body_text.insert("insert", lead + text + trail)
+        self._take_run_between(at, self.body_text.index("insert"))
 
     def _rows_gap(self, text):
         """What *text*, about to go in at the caret, needs before and after
@@ -7300,8 +7347,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             [dict(p, line=p["line"] + line) for p in paragraphs],
             scrub_table_align=True)
         # Pasted into a run with a size or a font, the text took the run's
-        # composite tag, weight and all, which outranks the bold it brought.
-        self._fit_font_tags(pasted_from, self.body_text.index("insert"))
+        # composite tag, weight and all, which outranks the bold it brought;
+        # pasted at a weight's edge inside one, it took none.
+        here = self.body_text.index("insert")
+        if not self._take_run_between(pasted_from, here):
+            self._fit_font_tags(pasted_from, here)
         # A pasted list starts its own numbering at one; renumbering makes
         # it continue whatever it was dropped into.
         self._renumber_lists()
@@ -9279,7 +9329,13 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 if not has_focus:
                     text_widget.focus_set()
                 if isinstance(text_widget, tk.Text):
+                    at = text_widget.index(tk.INSERT)
                     text_widget.insert(tk.INSERT, emoji)
+                    if text_widget is getattr(self, "body_text", None):
+                        # Between two pieces of one run, the run's size and
+                        # font, as typed text takes them.
+                        self._take_run_between(
+                            at, text_widget.index(tk.INSERT))
                 else:
                     pos = text_widget.index(tk.INSERT)
                     text_widget.insert(pos, emoji)
