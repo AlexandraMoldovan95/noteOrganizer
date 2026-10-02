@@ -2290,19 +2290,24 @@ _rn_cn = (_rn_named, '30/09/2026' in (_rn_said or [''])[0],
 check(f'"Continue without it" on a delete names the turn-off it takes back '
       f'({_rn_cn})',
       _rn_ok and _rn_cn == (True, True, 'weekly', _RN_SERIES))
-# The Undo of a day's delete after a waiting turn-off was made (leaving the
-# note within the Undo's seconds) said "That day is already back" and did
-# nothing; the day's own text was in no file -- the turn-off had not seen
-# it, so it made no rescue copy. The Undo, clicked as a person clicks it,
-# puts the day back into the series it was given, where Restore previous
-# keeps it.
+# The Undo of a day's delete once the series it was deleted from is gone --
+# its turn-off made by leaving the note within the Undo's seconds -- says
+# the day can't come back, and writes nothing. Three designs that put the
+# day into a rescue copy were each broken by the next round of breakers: a
+# copy made for an Undo never clicked replaced an older one, an older
+# series' copy took the day, a copy of the series as the delete left it
+# undid what was saved since -- and its words pointed at the Restore
+# previous of whatever note was open. Both notes' older copies stay.
+_rn_long = 'LONG SERIES TEXT the person wrote ' * 6
 app.new_note(); app.update()
 app.notes = [
     NO.normalize_note({'id': 1, 'title': 'Weekly', 'body': 'series text',
                        'date': '2026-09-07', 'recurrence': {'freq': 'weekly'},
                        'overrides': {'2026-09-14': {'body': 'DAY 14'}},
-                       'exceptions': ['2026-09-28']}),
-    NO.normalize_note({'id': 2, 'title': 'Other', 'body': 'y'})]
+                       'exceptions': ['2026-09-28'],
+                       '_prev': {'title': 'Weekly', 'body': _rn_long}}),
+    NO.normalize_note({'id': 2, 'title': 'Other', 'body': 'y',
+                       '_prev': {'title': 'Other', 'body': 'OLDER OTHER'}})]
 app.save_notes()
 app.open_note_in_tab(app.find_note(1)); app.update()
 app._cancel_pending_autosave()
@@ -2316,22 +2321,13 @@ finally:
 app.open_note_in_tab(app.find_note(2)); app.update()
 _rn_ok = _rn_ok and _rn_days()[0] == ''
 app._run_toast_action(); app.update()
-_rn_ug = [str(app.status_lbl.cget('text')),
-          sorted(_rn_prev().get('exceptions') or []),
-          ((_rn_prev().get('overrides') or {}).get('2026-09-14') or {}).get('body')]
-app.open_note_in_tab(app.find_note(1)); app.update()
-app.ask_yes_no = lambda *a, **k: True
-try:
-    app.restore_previous_version(); app.update()
-finally:
-    app.ask_yes_no = _ro_yes
-app._cancel_pending_autosave()
-_rn_ug.append(_rn_days())
-check(f'the Undo of a day deleted while a turn-off waited, clicked after it '
-      f'was made, puts the day back in the rescue copy ({_rn_ug})',
-      _rn_ok and 'Restore previous' in _rn_ug[0]
-      and _rn_ug[1:3] == [['2026-09-28'], 'DAY 14']
-      and _rn_ug[3] == _RN_SERIES)
+_rn_ug = (str(app.toast_lbl.cget('text')), _rn_prev().get('body') == _rn_long,
+          'recurrence' in _rn_prev(), app.selected_note_id,
+          app.find_note(2)['body'], app.find_note(2)['_prev']['body'])
+check(f'the Undo of a day whose series was turned off since says it can\'t '
+      f'come back, and changes nothing ({_rn_ug})',
+      _rn_ok and "no longer repeats, so that day can't come back" in _rn_ug[0]
+      and _rn_ug[1:] == (True, False, 2, 'y', 'OLDER OTHER'))
 
 
 def _rn_day_fresh():
@@ -2360,36 +2356,48 @@ def _rn_banner():
     return str(app.occurrence_banner.cget('text'))
 
 
-# The other order: a day deleted with the repeat on, and the repeat turned
-# off within its Undo's seconds. The turn-off saw no day of its own left,
-# made no copy, and the Undo had nothing to bring the day back in -- its
-# own text in no file. The Undo holds the series as the delete left it.
+# With the repeat turned off and picked anew before the Undo, the series has
+# the day again -- without the text it had of its own, which the Undo puts
+# back on it (it said "That day is already back" and dropped the text).
 _rn_day_fresh()
-_rn_day_delete()
 _rn_ok = _rn_pick(NO.FREQ_LABELS[''])
-app.open_note_in_tab(app.find_note(2)); app.update()
-app._run_toast_action(); app.update()
-_rn_ro = [str(app.status_lbl.cget('text')),
-          ((_rn_prev().get('overrides') or {}).get('2026-09-14') or {}).get('body')]
-# ...and with the repeat picked anew and saved before the Undo, the day goes
-# back to the series it was deleted from, the one Restore previous holds:
-# the Undo said "That day is already back" and dropped its text.
-_rn_day_fresh()
-_rn_ok = _rn_pick(NO.FREQ_LABELS['']) and _rn_ok
 _rn_day_delete()
 app.save_current_note(); app.update()
 _rn_ok = _rn_pick(NO.FREQ_LABELS['weekly']) and _rn_ok
 app.save_current_note(); app.update()
 app._run_toast_action(); app.update()
 app._cancel_pending_autosave()
-_rn_ro += [str(app.status_lbl.cget('text')),
-           sorted(_rn_prev().get('exceptions') or []),
-           ((_rn_prev().get('overrides') or {}).get('2026-09-14') or {}).get('body')]
-check(f'a day deleted and its repeat turned off in either order comes back '
-      f'with its text into the series Restore previous holds ({_rn_ro})',
-      _rn_ok and 'Restore previous' in _rn_ro[0] and _rn_ro[1] == 'DAY 14'
-      and 'repeats anew' in _rn_ro[2]
-      and _rn_ro[3:5] == [['2026-09-28'], 'DAY 14'])
+_rn_ro = (str(app.status_lbl.cget('text')), (app.find_note(1).get('recurrence')
+                                             or {}).get('freq'),
+          ((app.find_note(1).get('overrides') or {}).get('2026-09-14')
+           or {}).get('body'))
+check(f'a repeat picked anew with the day on it gets the day\'s own text back '
+      f'from its Undo ({_rn_ro})',
+      _rn_ok and _rn_ro == ('Put that day back', 'weekly', 'DAY 14'))
+# ...and a repeat picked anew without that day says so: "That day is already
+# back" was said of a monthly series with no such day, the day on no
+# calendar.
+app.new_note(); app.update()
+app.notes = [
+    NO.normalize_note({'id': 1, 'title': 'Plain', 'body': 'series text',
+                       'date': '2026-09-07', 'recurrence': {'freq': 'weekly'}}),
+    NO.normalize_note({'id': 2, 'title': 'Other', 'body': 'y'})]
+app.save_notes()
+app.open_note_in_tab(app.find_note(1)); app.update()
+app._cancel_pending_autosave()
+_rn_day_delete()
+_rn_ok = _rn_pick(NO.FREQ_LABELS[''])
+app.save_current_note(); app.update()
+_rn_ok = _rn_pick(NO.FREQ_LABELS['monthly']) and _rn_ok
+app.save_current_note(); app.update()
+app._run_toast_action(); app.update()
+app._cancel_pending_autosave()
+_rn_mo = (str(app.toast_lbl.cget('text')),
+          (app.find_note(1).get('recurrence') or {}).get('freq'))
+check(f'a repeat picked anew without the day says the day can\'t come back '
+      f'({_rn_mo})',
+      _rn_ok and 'no longer has that day' in _rn_mo[0]
+      and _rn_mo[1] == 'monthly')
 # The text of a day deleted while the turn-off waits is not left in the note
 # when the wait ends without it: kept there, the deleted day read as a day
 # with its own edits ("✎1" on the card, "1 day keeps its own edits").
@@ -2404,69 +2412,66 @@ app._cancel_pending_autosave()
 check(f'the deleted day of a series whose turn-off was taken back keeps no '
       f'text of its own in the note ({_rn_kd})',
       _rn_ok and _rn_kd == ([], False))
-# A turn-off made while a deleted day's Undo is on offer makes no rescue copy
-# of its own: it takes nothing of the day, whose text is with the Undo.
-# Counted, it made one anyway -- for an Undo that might never be clicked, or
-# that died with the window -- and it replaced the note's own copy: a big
-# delete's words in no file. The Undo, clicked, puts the day into a copy
-# that keeps them.
-_rn_long = 'LONG SERIES TEXT the person wrote ' * 6
-_rn_day_fresh()
-app.new_note(); app.update()
-app.find_note(1)['body'] = _rn_long
-app.save_notes()
-app.open_note_in_tab(app.find_note(1)); app.update()
-app._cancel_pending_autosave()
-_rn_ok = app.body_text.get('1.0', 'end-1c') == _rn_long
-app.body_text.delete('1.0', 'end'); app.body_text.insert('1.0', 'short')
-app._autosave_now(); app.update()
-_rn_cp = [_rn_prev().get('body') == _rn_long]
-_rn_day_delete()
-_rn_ok = _rn_pick(NO.FREQ_LABELS['']) and _rn_ok
-app.save_current_note(); app.update()
-_rn_cp.append(_rn_prev().get('body') == _rn_long)
-app._run_toast_action(); app.update()
-app._cancel_pending_autosave()
-_rn_cp += [_rn_prev().get('body') == _rn_long,
-           (_rn_prev().get('recurrence') or {}).get('freq'),
-           ((_rn_prev().get('overrides') or {}).get('2026-09-14') or {}).get('body')]
-check(f'a turn-off made while a deleted day\'s Undo is on offer keeps the '
-      f'note\'s older rescue copy, and the Undo puts the day into it ({_rn_cp})',
-      _rn_ok and _rn_cp == [True, True, True, 'weekly', 'DAY 14'])
-# ...and when another day's text made the turn-off keep a copy of its own,
-# the Undo puts the day into that copy, beside the other day's text.
+# A turn-off that kept a copy for another day's text keeps it as it was
+# when the deleted day's Undo is clicked after it: an older turn-off's copy
+# with the same date among its skipped days took the day, and Restore
+# previous brought back that older series.
 _rn_day_fresh()
 app.find_note(1)['overrides']['2026-09-21'] = {'body': 'DAY 21'}
 app.save_notes()
 _rn_day_delete()
 _rn_ok = _rn_pick(NO.FREQ_LABELS[''])
 app.save_current_note(); app.update()
+_rn_copy = _mjson.dumps(_rn_prev(), sort_keys=True)
 app._run_toast_action(); app.update()
 app._cancel_pending_autosave()
-_rn_both = sorted((d, (o or {}).get('body')) for d, o in
-                  (_rn_prev().get('overrides') or {}).items())
-check(f'the Undo puts the day into the copy a turn-off kept for another day\'s '
-      f'text ({_rn_both})',
-      _rn_ok and _rn_both == [('2026-09-14', 'DAY 14'), ('2026-09-21', 'DAY 21')]
-      and sorted(_rn_prev().get('exceptions') or []) == ['2026-09-28'])
-# The Undo of a day, clicked with another note in the editor, opens its own
-# note: the words point at a Restore previous button, and the one on screen
-# was the other note's -- pressing it replaced THAT note's text.
-_rn_day_fresh()
-app.find_note(2)['_prev'] = {'title': 'Other', 'body': 'OLDER OTHER TEXT',
-                             'formatting': [], 'paragraphs': [],
-                             'comments': ''}
+_rn_both = sorted((app.find_note(1).get('_prev') or {}).get('overrides') or {})
+check(f'the Undo leaves the copy a turn-off kept for another day\'s text as it '
+      f'was ({_rn_both})',
+      _rn_ok and _mjson.dumps(_rn_prev(), sort_keys=True) == _rn_copy
+      and _rn_both == ['2026-09-21'])
+# The Undo knows its note by identity, not by id: the series sent to the
+# Trash by a route with no toast of its own (its category deleted with its
+# notes), and the freed id given to a new note, the Undo wrote the series
+# into the NEW note's rescue copy.
+NO.CATEGORY_COLORS['TempGym5'] = '#336699'
+app.new_note(); app.update()
+app.notes = [
+    NO.normalize_note({'id': 1, 'title': 'Other', 'body': 'y'}),
+    NO.normalize_note({'id': 2, 'title': 'Shopping', 'body': 'milk'}),
+    NO.normalize_note({'id': 3, 'title': 'Gym', 'body': 'series text',
+                       'category': 'TempGym5', 'date': '2026-09-07',
+                       'recurrence': {'freq': 'weekly'},
+                       'overrides': {'2026-09-14': {'body': 'GYM 14'}}})]
 app.save_notes()
-_rn_day_delete()
-_rn_ok = _rn_pick(NO.FREQ_LABELS[''])
-app.open_note_in_tab(app.find_note(2)); app.update()
+app.open_note_in_tab(app.find_note(1)); app.update()
+app._cancel_pending_autosave()
+app.ask_occurrence_scope = lambda *a, **k: 'occurrence'
+try:
+    app._context_delete_note(app.find_note(3), occurrence_date='2026-09-14')
+    app.update()
+finally:
+    app.ask_occurrence_scope = _oc_real_scope
+app._ask_category_deletion = lambda *a, **k: 'delete_notes'
+try:
+    app._delete_category('TempGym5', lambda: None)
+    app.update()
+finally:
+    app.__dict__.pop('_ask_category_deletion', None)
+NO.CATEGORY_COLORS.pop('TempGym5', None)
+app.new_note(); app.update()
+app.title_entry.delete(0, 'end'); app.title_entry.insert(0, 'Call mom')
+app.body_text.insert('1.0', 'about the trip')
+app._autosave_now(); app.update()
+_rn_new = app.find_note(3)
 app._run_toast_action(); app.update()
 app._cancel_pending_autosave()
-_rn_on = (app.selected_note_id, 'Restore previous' in str(app.status_lbl.cget('text')),
-          app.find_note(2)['body'], app.find_note(2)['_prev']['body'])
-check(f'the Undo of a day clicked with another note open opens its own note '
-      f'({_rn_on})',
-      _rn_ok and _rn_on == (1, True, 'y', 'OLDER OTHER TEXT'))
+_rn_id = ((_rn_new or {}).get('title'), str(app.toast_lbl.cget('text')),
+          'recurrence' in ((app.find_note(3) or {}).get('_prev') or {}))
+check(f'the Undo of a day whose note went to the Trash, its id taken by a new '
+      f'note, leaves the new note alone ({_rn_id})',
+      _rn_id[0] == 'Call mom' and 'That note is no longer here' in _rn_id[1]
+      and not _rn_id[2])
 # The Undo of the only day a waiting turn-off waited for leaves the turn-off
 # waiting: read after the day went back, nothing waited, the Undo opened the
 # day, and leaving the series made the turn-off -- "Put that day back", the

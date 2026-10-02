@@ -20747,13 +20747,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if not is_recurring(note) or recurrence.get("freq"):
             return False
         # A day deleted a moment ago is not counted, though its Undo is still
-        # on offer: the turn-off takes nothing of it -- its text is held by
-        # the Undo, which puts it back where Restore previous keeps the
-        # series if it is clicked (_undo_occurrence_delete). Counted, the
-        # turn-off made a copy for an Undo that might never be clicked, and
-        # the copy replaced the note's own rescue copy -- a big delete's
-        # text in no file, the window's close counting an Undo that died
-        # with it.
+        # on offer: the turn-off takes nothing of it -- the person deleted it,
+        # and once the series is gone its Undo says the day can't come back
+        # (_undo_occurrence_delete). Counted, the turn-off made a copy for an
+        # Undo that might never be clicked, and the copy replaced the note's
+        # own rescue copy -- a big delete's text in no file, the window's
+        # close counting an Undo that died with it.
         for day in (note.get("overrides") or {}):
             shown = effective_note(note, day)
             if any((shown.get(key) or "") != (note.get(key) or "")
@@ -21517,7 +21516,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.set_status("Checklist item put back")
 
     def _undo_occurrence_delete(self, note_id, date_str, own_edit=None,
-                                series=None):
+                                uid=None):
         """Put back the one day a repeating note was removed from.
 
         This half has no other way home. Deleting a single occurrence
@@ -21527,12 +21526,20 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
         `own_edit` is the day's own title and text the delete took with
         it, if the day had any: the day comes back as it was, not showing
-        the series' text in its place. `series` is the note's date, repeat,
-        skipped days and days' own edits as the delete left them, for a
-        note that no longer holds that series (_put_day_back_in_rescue_copy).
+        the series' text in its place. `uid` is the note's identity: an id
+        freed by a delete goes to the next new note.
+
+        The day goes back only into the series the note holds now. Once the
+        repeat was turned off -- or picked anew without that day -- the
+        series it was deleted from is gone, and the Undo says the day can't
+        come back. Three designs that put it into a rescue copy instead were
+        each broken by the next round of breakers: a copy made for an Undo
+        never clicked replaced an older one, an older series' copy took the
+        day, a copy of the series as the delete left it undid what was saved
+        since. The plain answer is the one that cannot be wrong.
         """
         note = self.find_note(note_id)
-        if note is None:
+        if note is None or (uid and note.get("uid") != uid):
             self._show_toast("That note is no longer here", kind="info")
             return
         # Read before the day goes back: with this very series on screen and
@@ -21542,20 +21549,23 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # it -- "Put that day back", with the series gone from the calendar.
         waits = self.selected_note_id == note_id and self._repeat_off_waits()
         exceptions = set(note.get("exceptions") or [])
-        if not is_recurring(note) or date_str not in exceptions:
-            if is_recurring(note) and (
-                    not own_edit or date_str in (note.get("overrides") or {})):
-                # A repeating note with the day on it, and nothing of the
-                # day's missing: it is back already.
+        if not is_recurring(note):
+            self._show_toast("This note no longer repeats, so that day "
+                             "can't come back", kind="info")
+            return
+        if date_str not in exceptions:
+            # Asked of the calendar: a repeat picked anew may not have that
+            # day at all.
+            day = parse_date(date_str)
+            if day is None or expand_occurrences(note, day, day) != [date_str]:
+                self._show_toast("This note's repeat no longer has that day, "
+                                 "so it can't come back", kind="info")
+                return
+            if not own_edit or date_str in (note.get("overrides") or {}):
                 self._show_toast("That day is already back", kind="info")
                 return
-            # The note no longer holds the series the day was deleted from:
-            # its repeat was turned off since -- by leaving the note or Save
-            # -- and maybe picked again anew, which put the day back without
-            # its own text. This said "That day is already back" and did
-            # nothing, the day's own text in no file.
-            self._put_day_back_in_rescue_copy(note, date_str, own_edit, series)
-            return
+            # The repeat was picked anew and has the day again, without the
+            # text the day had of its own: that goes back below.
         exceptions.discard(date_str)
         note["exceptions"] = sorted(exceptions)
         # Its own edit goes back with it -- unless the day somehow has one
@@ -21577,62 +21587,6 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             # The series stays on screen, its days changed under it.
             self._update_occurrence_banner()
         self.set_status("Put that day back")
-
-    def _put_day_back_in_rescue_copy(self, note, date_str, own_edit, series):
-        """The Undo of a deleted day, for a note that no longer holds the
-        series the day was deleted from: the day goes back into that series,
-        where ↩ Restore previous keeps it.
-
-        A turn-off that took days' own text made a copy holding the series,
-        this day deleted in it: the day goes back there. A turn-off with no
-        day's text to take made none -- this day's text was with the Undo --
-        and the series is the one the Undo was given (*series*): the copy is
-        made now, of the note as it is with that series, and keeps the text
-        of a copy of text alone the note had, so a big delete's words are
-        not lost to it. Made at the turn-off instead, for an Undo still on
-        offer, the copy replaced that one even when the Undo was never
-        clicked. A copy of anything else is left alone, and the day cannot
-        come back."""
-        prev = note.get("_prev")
-        anew = is_recurring(note)
-        if (prev and (prev.get("recurrence") or {}).get("freq")
-                and date_str in (prev.get("exceptions") or [])):
-            rescue = prev
-        elif series is not None and (not prev or "recurrence" not in prev):
-            rescue = self._whole_note_rescue_copy(note)
-            rescue.update(copy.deepcopy(series))
-            if prev:
-                for key in self._RESCUE_TEXT_KEYS:
-                    rescue[key] = copy.deepcopy(prev.get(key))
-            note["_prev"] = rescue
-        else:
-            self._show_toast(("This note repeats anew" if anew
-                              else "This note no longer repeats")
-                             + ", so that day can't come back", kind="info")
-            return
-        rescue["exceptions"] = [d for d in rescue.get("exceptions") or []
-                                if d != date_str]
-        if own_edit and date_str not in (rescue.get("overrides") or {}):
-            rescue.setdefault("overrides", {})[date_str] = dict(own_edit)
-        self.save_notes()
-        # The words point at a Restore previous button, and the one on screen
-        # is the open note's: with another note open, pressing it replaced
-        # THAT note's text. The note is opened, so its own button is there --
-        # or named, if the editor could not leave the note it holds.
-        if self.selected_note_id != note["id"]:
-            self.open_note_in_tab(note)
-        if self.selected_note_id == note["id"]:
-            self._update_restore_button()
-            who, how = "This note", ""
-        else:
-            who = "“%s”" % ((note.get("title") or "").strip()
-                            or "Untitled note")
-            how = "open it, and its "
-        self.set_status(
-            who + (" repeats anew: " + how + "↩ Restore previous brings the "
-                   "series it had back" if anew else
-                   " no longer repeats: " + how + "↩ Restore previous brings "
-                   "the series back") + ", that day with it")
 
     def _attach_dup_preview(self, widget, note):
         """Show a small floating preview of a note's contents while the mouse
@@ -21782,12 +21736,6 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 # showing the series' text instead -- the edit gone for good.
                 own_edit = note["overrides"].pop(occurrence_date, None)
                 note["updated"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                # ...and the series as this delete left it: if the repeat
-                # is turned off before the Undo is clicked, the day goes back
-                # into that series, where Restore previous keeps it. Taken
-                # now, before the editor below is left -- leaving can save.
-                series = {key: copy.deepcopy(note.get(key)) for key in
-                          ("date", "recurrence", "exceptions", "overrides")}
                 self.save_notes()
                 if (self.selected_note_id == note["id"]
                         and self.current_occurrence_date == occurrence_date):
@@ -21801,9 +21749,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 # This one had no way back at all: the date goes into the
                 # note's exceptions and no screen in the app takes it out
                 # again. The toast is not a convenience here.
+                # With the note's identity: an id freed by a delete goes to
+                # the next new note, and the Undo must not act on that one.
                 undo = (lambda nid=note["id"], day=occurrence_date,
-                        edit=own_edit, was=series:
-                        self._undo_occurrence_delete(nid, day, edit, was))
+                        edit=own_edit, uid=note.get("uid"):
+                        self._undo_occurrence_delete(nid, day, edit, uid))
                 self._show_toast("Occurrence removed", action=undo)
                 if self.selected_note_id == note["id"]:
                     self._update_occurrence_banner()
