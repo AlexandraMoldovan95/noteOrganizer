@@ -73,6 +73,7 @@ day-to-day tracking.
 | [The list the note shared with the editor](#the-list-the-note-shared-with-the-editor) | Store a copy of anything you keep editing, or "is it saved?" asks the object about itself; test the route the bug took. | 0.83.335 |
 | [The copy that exposed a reload](#the-copy-that-exposed-a-reload) | Removing an accidental behaviour exposes whatever leaned on it: list the routes that read what the fix changes. | 0.83.335 |
 | [The turn-off that stopped every save to wait](#the-turn-off-that-stopped-every-save-to-wait) | Hold back the one value that must wait, not the save around it: stopping the whole save broke every promise it keeps. | 0.83.335 |
+| [The file the app could not start beside](#the-file-the-app-could-not-start-beside) | An `except` clause is a claim about every way its call can fail: when one call is guarded in many places, write the list once and let a gate refuse a hand-written copy. | 0.83.338 |
 | [A calendar that kept navigating behind the user's back](#a-calendar-that-kept-navigating-behind-the-users-back) | Changing how a page becomes visible invalidates 'is X visible' assumptions in unrelated code. | 0.5.0 |
 | [The date field that either lost your edit, or wouldn't let you finish typing it](#the-date-field-that-either-lost-your-edit-or-wouldnt-let-you-finish-typing-it) | Reusing Save's validation in silent autosave turns a helpful warning into an interruption. | 0.28.38 |
 | [The autosave that could interrupt you over a note that was already gone](#the-autosave-that-could-interrupt-you-over-a-note-that-was-already-gone) | A guard added to one path doesn't cover other routes into the same code. | 0.28.38 |
@@ -1680,6 +1681,33 @@ once more: it was written behind an editor that could be showing that very day, 
 editor's next save read its own stale view as an edit and wrote the series' text over the day's.
 A route that writes a note behind the editor saves the editor first, every time; the rule was
 already written down, and one more route had to learn it.
+
+### The file the app could not start beside
+
+*([0.83.338](../CHANGELOG.md#083338--2026-10-03))*
+
+**Symptom:** A security pass after the nineteenth round tried the data files with two kinds of
+damage nobody had tried: a notes file saved by another program in one of Windows' older text
+encodings, and one nested deeper than a JSON reader can follow. With either in the notes,
+settings, Trash or templates file, the app did not start. A share code damaged the same way said
+"Something went wrong", and a backup carrying such a file failed whole, sound notes and all.
+
+**Root cause:** Every reader caught `json.JSONDecodeError` and took that to mean "unreadable".
+It is one of three ways a JSON text turns out unreadable: bytes that are not UTF-8 raise
+`UnicodeDecodeError` before the parser sees them, and nesting past the parser's depth raises
+`RecursionError`. Fourteen readers each wrote the list out by hand. Two also caught
+`UnicodeDecodeError` — met once each, and fixed where it was met — and none caught
+`RecursionError`.
+
+**Fix:** One definition, `JSON_UNREADABLE` in `core/paths.py`, names all three, and every reader
+catches it. The loaders already knew what to do with damage — keep the file's bytes aside, start
+empty, say so at startup — so none of that changed; the two new kinds simply reach it now.
+`tools/check_one_definition.py` fails on any `except` that names `JSONDecodeError` itself.
+
+**Takeaway:** an `except` clause is a claim about every way its call can fail. When one call is
+guarded in many places, that list is a definition: write it once, and let a gate refuse a copy
+written by hand. Hand-written copies are how two readers learned about the encoding and twelve
+did not.
 
 
 ## Tk & platform gotchas

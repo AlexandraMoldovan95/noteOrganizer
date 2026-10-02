@@ -12,6 +12,7 @@ How the numbers themselves are counted is the
 
 | Version | Date | In one line |
 |---|---|---|
+| [0.83.338](#083338--2026-10-03) | 2026-10-03 | What comes in from outside is taken for what it is: a damaged data file no longer stops the app from starting, an attachment is only its two names, and a paste too long to keep whole says what it left out. |
 | [0.83.335](#083335--2026-10-02) | 2026-10-02 | Nineteen rounds of agents tried to break the app: nothing you type is lost when one field is wrong, an import asks before it changes anything, and questions, tables, the calendar and the note list stop surprising you. |
 | [0.82.233](#082233--2026-09-30) | 2026-09-30 | A note opened from the Calendar no longer brings along the last note's Restore previous, title counter or share code. |
 | [0.82.232](#082232--2026-09-30) | 2026-09-30 | The calendar becomes one drawing: it follows the window's edge as you drag, changes month ten times faster, and a day's markers show on dark themes. |
@@ -83,6 +84,52 @@ How the numbers themselves are counted is the
 | [0.3.0](#030--tags-removed-categories-as-the-sole-organization-system) | — | Tags come out entirely, leaving categories as the app's one organization system. |
 | [0.2.0](#020--inline-ui-overhaul--data-resilience) | — | Every OS-native popup becomes an in-app themed one, and the calendar grows richer. |
 | [0.1.0](#010--core-application) | — | The founding feature set — notes, recurrence, calendar, templates, sharing, themes. |
+
+---
+
+## [0.83.338] — 2026-10-03
+
+*Highlights: what comes in from outside is taken for what it is. A data file damaged in a way the
+app did not expect no longer stops it from starting, an attachment from a share code or a backup
+is only the two names the app uses, and a paste too long to keep whole says what it left out.*
+
+### Fixed
+
+- **A damaged data file no longer keeps the app from starting.** The app took a file for damaged
+  only when it was not JSON at all. Two other kinds of damage got past every reader: bytes that
+  are not UTF-8 (a notes file saved by another program in one of Windows' older text encodings)
+  and nesting deeper than the reader can follow. With either in the notes, settings, Trash or
+  templates file, the app stopped before its window opened; a share code damaged that way said
+  "Something went wrong" instead of asking for the whole code again; and a backup whose
+  templates, Trash or settings file was damaged that way failed whole, sound notes and all. Both
+  are damage like any other now: the file's bytes are kept aside and the app starts (its notice
+  names saving from another program among the causes), the code is refused as damaged, and a
+  backup's notes come in without the damaged extra.
+- **An attachment from a share code or a backup is only its two names.** A record with no stored
+  name took its display name instead, as it was — so a name like `../../x` kept the path the app
+  strips from every stored name (the guards where a file is opened or deleted still held). And a
+  record kept anything else it carried, so a value nested a few hundred deep made Duplicate fail
+  on that note. A record is now its display name and its stored name, the stored one always a
+  bare file name.
+- **A paste too long to keep whole says what it left out.** A formatted paste keeps at most
+  100,000 characters and 2,000 styled pieces. Past either it stopped without a word, and the rest
+  of a long article was simply not in the note. A message now says what was left out, and in a
+  note's body how to get all of it: Ctrl+Z, then Ctrl+Shift+V, which pastes everything without
+  its formatting. A table pasted into a template's body is told the same about its text.
+
+### Testing
+
+- test_data_safety loads each of the four data files damaged both ways and finds it empty,
+  flagged where it is the notes, with its bytes kept aside; walks the startup readers over the
+  same damage — the migration's settings read, the notebook count, the settings rescue and the
+  purge both ways round; refuses a share code nested too deep; and checks an attachment record's
+  stored name and shape. test_richtext checks that the paste converter reports a cut past each
+  cap and not at the cap itself. qa3 imports backups with each extra file damaged and with the
+  notebook damaged; qa1 pastes past both caps into a note's body and follows the message's advice
+  — Ctrl+Z, then Ctrl+Shift+V — to the whole text; qa9 does the template's table paste. Thirty
+  mutants, each killed with the suite reaching its footer. `tools/check_one_definition.py` gains
+  a rule that fails on an `except` naming `JSONDecodeError` itself, so the next reader cannot
+  catch one kind of damage out of three — proved on a reader put back the old way.
 
 ---
 

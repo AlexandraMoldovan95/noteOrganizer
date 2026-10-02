@@ -206,6 +206,10 @@ bold, the colours and the lists come with it.
   version. There is a **Paste without formatting** entry on the right-click menu too.
 - Copying works the same way outwards: select part of a note, copy it, and paste it into an email
   or a document, and it arrives still formatted. Copying between two notes keeps everything.
+- A formatted paste keeps up to **100,000 characters** and **2,000 styled pieces** (a bold word,
+  a coloured line). Past either, a message says what was left out. For the whole of a very long
+  text, press **Ctrl+Z** and paste it again with **Ctrl+Shift+V**, which has no limit — it comes
+  without its formatting.
 
 Pasting from a PDF is a special case, because a PDF has no paragraphs — only lines placed on a
 page. Pasting those as they come gives a note broken into narrow ragged lines a third of the way
@@ -775,7 +779,8 @@ question says so before you choose to update. Every question is asked before any
 
 ### If the data file itself ever breaks
 
-A bad shutdown or a disk problem can leave `notes_data.json` unreadable. The app never papers
+A bad shutdown or a disk problem can leave `notes_data.json` unreadable — and so can saving it
+from another program in one of Windows' older text encodings. The app never papers
 over that: it preserves the unreadable file beside the original (named
 `notes_data_corrupt_<date>.json`, kept forever), starts with an empty list, and tells you at
 startup exactly what happened and where the preserved copy sits — so you can restore your most
