@@ -2230,6 +2230,64 @@ check(f'...and neither a duplicate nor a new note given its place by '
       f'another card\'s move arranges anything: the arrangement made by hand '
       f'comes back ({_bl_kept_hand})',
       _bl_kept_hand == [('duplicate', 1, True), ('jiggle', 1, True)])
+# A known card moved past a new note arranges something -- the new note
+# stands where the person put it beside that card -- though the notes the
+# last move knew keep their order. Counted only when the new note itself
+# was moved, it lost the newest arrangement to the older offer. Moved past
+# it and straight back, nothing is arranged, as with any other card.
+_bl_past = []
+for _bl_how in ('past', 'past and back', 'duplicate, then a jiggle'):
+    _co_fresh(_bl_placed, sort='Custom order')
+    _bl_sort('Title A–Z')
+    app._hide_toast()
+    app._put_keyboard_on_card(app._card_order()[0]); _ls_settle()
+    app._list_move_by_keyboard(1); _ls_settle()
+    app._hide_toast()
+    if _bl_how == 'duplicate, then a jiggle':
+        # A duplicate stands beside its original, mid-list: the record
+        # learns it there, so a card moved down and back arranges nothing.
+        app.duplicate_note(next(n for n in app.notes
+                                if n['title'].startswith('Kiwi')))
+        _ls_settle()
+        _bl_other = next(i for i in app._card_order()
+                         if not app.find_note(i)['title'].startswith('Kiwi'))
+        app._put_keyboard_on_card(_bl_other); _ls_settle()
+        app._list_move_by_keyboard(1); _ls_settle()
+        app._list_move_by_keyboard(-1); _ls_settle()
+    else:
+        app.new_note()
+        app.title_entry.insert(0, 'Golf note')
+        app.body_text.insert('1.0', 'a new note')
+        app.save_current_note()
+        _ls_settle()
+        _bl_order = app._card_order()
+        _bl_golf = next(n['id'] for n in app.notes
+                        if n['title'].startswith('Golf'))
+        _bl_under = _bl_order[_bl_order.index(_bl_golf) + 1]
+        app._put_keyboard_on_card(_bl_under); _ls_settle()
+        app._list_move_by_keyboard(-1); _ls_settle()
+        if _bl_how == 'past and back':
+            app._list_move_by_keyboard(1); _ls_settle()
+    app._hide_toast()
+    _bl_made = app._card_order()
+    _bl_sort('Title A–Z')
+    app._hide_toast()
+    app._put_keyboard_on_card(app._card_order()[0]); _ls_settle()
+    app._list_move_by_keyboard(1); _ls_settle()
+    app._hide_toast()
+    del _bl_questions[:]
+    _bl_answer[0] = True
+    _bl_sort('Custom order')
+    _bl_back = app._card_order()
+    _bl_past.append(
+        (_bl_how, len(_bl_questions),
+         _bl_back == _bl_made if _bl_how == 'past'
+         else [i for i in _bl_back if i in _bl_hand_ids] == _bl_hand_ids))
+check(f'...and a card moved past a new note arranges something, the new '
+      f'arrangement offered back; moved past it and back, or beside a '
+      f'duplicate and back, nothing ({_bl_past})',
+      _bl_past == [('past', 1, True), ('past and back', 1, True),
+                   ('duplicate, then a jiggle', 1, True)])
 # No: the list stays as the replacement left it, and the question does not
 # come back.
 _bl_sort('Title A–Z')
