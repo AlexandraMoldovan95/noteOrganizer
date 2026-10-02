@@ -485,6 +485,22 @@ def _fmt_journal_tag(name):
             or name in ("align_center", "align_right"))
 
 
+def _stored_signature(note):
+    """What a note stores, its "updated" stamp aside, as one string -- to
+    tell a save that changed something from one that changed nothing."""
+    return json.dumps({k: v for k, v in note.items() if k != "updated"},
+                      sort_keys=True, ensure_ascii=False, default=str)
+
+
+def _whole_number(text):
+    """Is this a repeat's count or interval the app can store: a whole
+    number of at least 1, as int() reads it."""
+    try:
+        return int(text) >= 1
+    except (TypeError, ValueError):
+        return False
+
+
 # One round trip for a whole snapshot: where the embedded windows sit, then
 # one "tag ranges" string per tag, in the order asked. Tag names travel as
 # a real Tcl list, so a font family with a space in it is still one name.
@@ -19354,6 +19370,26 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             rule = normalize_recurrence(dict(
                 rule, end=kept_rule["end"], count=kept_rule["count"]))
 
+        # A number the app cannot read is left out as a date is. Read as 1,
+        # "After abc times" ended the series after its first day -- every
+        # later day, its own text included, fell off the calendar -- and a
+        # box emptied on the way to a new number did the same at the next
+        # autosave; "Every x" made the series repeat every time instead.
+        if rule["freq"]:
+            every = self.rec_interval_var.get().strip()
+            if not _whole_number(every):
+                left_out.append(f"the repeat's “Every {every}” "
+                                "(write a whole number, like 2)")
+                rule = normalize_recurrence(dict(
+                    rule, interval=kept_rule["interval"]))
+            if self.rec_end_mode_var.get() == "after":
+                times = self.rec_count_var.get().strip()
+                if not _whole_number(times):
+                    left_out.append(f"the repeat's “After {times} times” "
+                                    "(write a whole number, like 10)")
+                    rule = normalize_recurrence(dict(
+                        rule, end=kept_rule["end"], count=kept_rule["count"]))
+
         if rule["freq"] and not parse_date(date_value):
             if parse_date(kept_date):
                 # Most often the date was cleared on the way to typing a
@@ -19587,6 +19623,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             if note is None:
                 self.show_error("Note missing", "That note no longer exists.")
                 return
+            # What the note stores before this save, and its stamp: a save
+            # that changes none of it is not an update (see the end).
+            stored_before = (_stored_signature(note), note.get("updated"))
 
             scope = "series"
             # Read once, before any question is asked. The question runs a
@@ -19805,6 +19844,13 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             if self.current_occurrence_date and not is_recurring(note):
                 self.current_occurrence_date = None
                 reload_from_note = occurrence_date is not None
+            if left_out and _stored_signature(note) == stored_before[0]:
+                # Only a field this save had to leave out differed from the
+                # note, so nothing it stores changed: the stamp stays. Every
+                # way out of a note with an unreadable date on screen saved
+                # again, and each moved the note up "Recently updated" and
+                # rewrote its "Last updated" with no edit made.
+                note["updated"] = stored_before[1]
         # Recurrence or override counts may have just changed either way.
         self._update_occurrence_banner()
 

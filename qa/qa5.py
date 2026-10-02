@@ -1338,6 +1338,66 @@ check(f'the right-click Duplicate of the open note asks about its unsaved '
       and _rr_files(_rr_copy[0]['id']) == ['qa5_handout.txt'])
 
 
+# A repeat's number the app cannot read is left out, as a date is. Read as
+# 1, "After abc times" ended the series after its first day, and "Every x"
+# repeated it every time.
+def _rn_series(**rule):
+    app.new_note(); app.update()
+    app.notes = [
+        NO.normalize_note({'id': 1, 'title': 'Weekly', 'body': 'series text',
+                           'date': '2026-09-07',
+                           'recurrence': dict({'freq': 'weekly'}, **rule)}),
+        NO.normalize_note({'id': 2, 'title': 'Other', 'body': 'y'})]
+    app.save_notes()
+    app.open_note_in_tab(app.find_note(1)); app.update()
+
+
+_rn_warned = []
+_rn_warn_stub = app.show_warning
+app.show_warning = lambda t, m='', **k: (_rn_warned.append(m), True)[1]
+try:
+    _rn_series(count=10)
+    app.rec_count_var.set('abc'); app.update()
+    app.save_current_note(); app.update()
+    _rn_count = app.find_note(1)['recurrence']
+    _rn_series(interval=2)
+    app.rec_interval_var.set('x'); app.update()
+    app.save_current_note(); app.update()
+    _rn_every = app.find_note(1)['recurrence']
+finally:
+    app.show_warning = _rn_warn_stub
+app._put_back_stored_date_and_repeat()
+app._cancel_pending_autosave()
+check(f'a repeat\'s "After N times" the app cannot read is left out, and '
+      f'said so (count {_rn_count.get("count")}; said {_rn_warned[:1]})',
+      _rn_count.get('count') == 10 and _rn_warned
+      and 'After abc times' in _rn_warned[0])
+check(f'...and so is its "Every N" (interval {_rn_every.get("interval")}; '
+      f'said {_rn_warned[1:2]})',
+      _rn_every.get('interval') == 2 and len(_rn_warned) == 2
+      and 'Every x' in _rn_warned[1])
+
+# A save where only a field it has to leave out differs changes nothing the
+# note stores, so its "updated" stamp stays: every way out of a note with
+# an unreadable date on screen saved again, and each moved the note up
+# "Recently updated" with no edit made.
+_rn_series()
+app.notes[0]['updated'] = '2026-01-01 00:00:00'
+app.save_notes()
+app.date_entry.delete(0, 'end')
+app.date_entry.insert(0, '30/09/2026')
+app.save_current_note(auto=True); app.update()
+_rn_kept = app.find_note(1).get('updated')
+app.body_text.insert('end-1c', ' and an edit')
+app.save_current_note(auto=True); app.update()
+_rn_moved = app.find_note(1).get('updated')
+app._put_back_stored_date_and_repeat()
+app._cancel_pending_autosave()
+check(f'a save that only met a field it had to leave out keeps the note\'s '
+      f'"updated" stamp ({_rn_kept}), while a real edit beside it moves it '
+      f'({_rn_moved})',
+      _rn_kept == '2026-01-01 00:00:00' and _rn_moved != '2026-01-01 00:00:00')
+
 app.new_note(); app.update()
 app.notes = []; app.save_notes()
 
