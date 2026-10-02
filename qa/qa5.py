@@ -1266,6 +1266,78 @@ check(f'a file attached after a day was saved on its own reads as unsaved '
       and [a.get('filename') for a in _at_disk[0].get('attachments') or []]
       == ['qa5_handout.txt'])
 
+
+# Restore previous and "Reset this day" fill the editor from the note. A
+# file attached on a day -- which only the day's own save or a way out of
+# it stores -- was then left with no note, and a file removed came back
+# listed, its stored copy deleted. The editor's files and checklist are
+# stored first now.
+def _rr_day():
+    """A day of a series with a rescue copy, a file attached on screen."""
+    app.new_note(); app.update()
+    app.notes = [
+        NO.normalize_note({'id': 1, 'title': 'Weekly', 'body': 'series text',
+                           'date': '2026-09-07', 'recurrence': {'freq': 'weekly'},
+                           'overrides': {'2026-09-14': {'body': 'DAY 14'}}}),
+        NO.normalize_note({'id': 2, 'title': 'Other', 'body': 'y'})]
+    app.notes[0]['_prev'] = {'title': 'Weekly', 'body': 'older series text',
+                             'formatting': [], 'paragraphs': [], 'comments': ''}
+    app.save_notes()
+    app.open_note_in_tab(app.find_note(1), occurrence_date='2026-09-14')
+    app.update()
+    _fd5.askopenfilenames = lambda **k: (_oc_file,)
+    try:
+        app.add_attachment(); app.update()
+    finally:
+        _fd5.askopenfilenames = _oc_real_pick
+
+
+def _rr_files(note_id=1):
+    return [a.get('filename')
+            for a in app.find_note(note_id).get('attachments') or []]
+
+
+_rr_day()
+app.ask_yes_no = lambda *a, **k: True
+try:
+    app.restore_previous_version(); app.update()
+finally:
+    app.ask_yes_no = _ro_yes
+check(f'Restore previous on a day keeps a file attached there before it '
+      f'(note {_rr_files()}; editor '
+      f'{[a.get("filename") for a in app.current_attachments]})',
+      _rr_files() == ['qa5_handout.txt']
+      and [a.get('filename') for a in app.current_attachments]
+      == ['qa5_handout.txt'])
+_rr_day()
+app.ask_yes_no = lambda *a, **k: True
+try:
+    app._reset_occurrence_override(app.find_note(1), '2026-09-14')
+    app.update()
+finally:
+    app.ask_yes_no = _ro_yes
+check(f'...and so does "Reset this day" ({_rr_files()})',
+      _rr_files() == ['qa5_handout.txt'])
+# The right-click Duplicate of the note the editor holds asks about its
+# unsaved changes, as the editor's own Duplicate does: it copied the stored
+# note in silence, without the file just attached.
+_rr_day()
+_rr_asked = []
+_rr_real_ync = app.ask_yes_no_cancel
+app.ask_yes_no_cancel = lambda t, *a, **k: (_rr_asked.append(t), True)[1]
+_rr_before = {n['id'] for n in app.notes}
+try:
+    app._duplicate_from_menu(app.find_note(1)); app.update()
+finally:
+    app.ask_yes_no_cancel = _rr_real_ync
+_rr_copy = [n for n in app.notes if n['id'] not in _rr_before]
+check(f'the right-click Duplicate of the open note asks about its unsaved '
+      f'changes, and Yes copies them ({_rr_asked}; copy '
+      f'{[_rr_files(n["id"]) for n in _rr_copy]})',
+      _rr_asked == ['Unsaved changes'] and len(_rr_copy) == 1
+      and _rr_files(_rr_copy[0]['id']) == ['qa5_handout.txt'])
+
+
 app.new_note(); app.update()
 app.notes = []; app.save_notes()
 

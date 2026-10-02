@@ -18572,7 +18572,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         menu.add_separator()
         menu.add_command(
             label="📄  Duplicate",
-            command=lambda: (self.duplicate_note(note), self.refresh_day_panel())
+            command=lambda: self._duplicate_from_menu(note)
         )
         # Say what it aims at, before the click rather than after it. With
         # no occurrence_date the target is the stored note, so on a
@@ -18768,13 +18768,19 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 "The separate edits made for this day will be discarded.",
                 icon="warning", default="no"):
             return
+        showing = (self.selected_note_id == note["id"]
+                   and self.current_occurrence_date == occurrence_date)
+        if showing:
+            # The day's own edits go; the files and the checklist on screen
+            # are the series', and the reload below would fill the editor
+            # from a note that never had them (see restore_previous_version).
+            self._write_series_owned(note, None, None, schedule=False)
         note["overrides"].pop(occurrence_date, None)
         note["updated"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         self.save_notes()
         # If the editor is showing exactly this day, reload it so the
         # series content replaces the dropped override on screen too.
-        if (self.selected_note_id == note["id"]
-                and self.current_occurrence_date == occurrence_date):
+        if showing:
             self.load_note(note, occurrence_date)
         self.refresh_note_list()
         self.render_calendar()
@@ -19007,33 +19013,53 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if note is None:
             self.show_info("Nothing to duplicate", "No saved note is open.")
             return
-
-        # If the editor has unsaved changes, the saved version is what gets
-        # copied — make that explicit rather than silently copying stale content.
-        st = self.capture_editor_state()
-        if not self.editor_state_matches_saved(st):
-            choice = self.ask_yes_no_cancel(
-                "Unsaved changes",
-                "This note has unsaved changes. Save them before duplicating?\n\n"
-                "Yes = save, then duplicate\n"
-                "No = duplicate the last saved version\n"
-                "Cancel = do nothing"
-            )
-            if choice is None:
-                return
-            if choice:
-                # Cancel on a repeating day's save question means stay:
-                # nothing saved, so nothing duplicated either.
-                if self.save_current_note() is self._SAVE_CANCELLED:
-                    return
-                # The note the question was about, saved: not whichever one
-                # the editor holds after the answer.
-                note = self.find_note(note["id"])
-
+        note = self._note_to_duplicate(note)
+        if note is None:
+            return
         clone = self.duplicate_note(note)
         # Open the fresh copy so the user can edit it right away.
         if clone is not None:
             self.open_note_in_tab(clone)
+
+    def _note_to_duplicate(self, note):
+        """The stored note a duplicate copies -- or None for Cancel.
+
+        A duplicate copies the SAVED version. When the editor holds this
+        note with unsaved changes, that is said rather than a stale copy
+        made in silence, and the person chooses. The right-click Duplicate
+        on a card or a calendar day copied the stored note without asking:
+        a file attached on a day after its save was not in the copy."""
+        if note.get("id") != self.selected_note_id:
+            return note
+        st = self.capture_editor_state()
+        if self.editor_state_matches_saved(st):
+            return note
+        choice = self.ask_yes_no_cancel(
+            "Unsaved changes",
+            "This note has unsaved changes. Save them before duplicating?\n\n"
+            "Yes = save, then duplicate\n"
+            "No = duplicate the last saved version\n"
+            "Cancel = do nothing"
+        )
+        if choice is None:
+            return None
+        if choice:
+            # Cancel on a repeating day's save question means stay:
+            # nothing saved, so nothing duplicated either.
+            if self.save_current_note() is self._SAVE_CANCELLED:
+                return None
+            # The note the question was about, saved: not whichever one
+            # the editor holds after the answer.
+            return self.find_note(note["id"])
+        return note
+
+    def _duplicate_from_menu(self, note):
+        """A right-click Duplicate: the note as stored, after the same
+        question about unsaved changes as the editor's own Duplicate."""
+        note = self._note_to_duplicate(note)
+        if note is not None:
+            self.duplicate_note(note)
+            self.refresh_day_panel()
 
     def find_note(self, note_id):
         """The note with this id, or None."""
@@ -19188,6 +19214,13 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # the old text into ANOTHER note, which its next save kept.
         in_editor = self.selected_note_id == note["id"]
         if in_editor:
+            # The editor's files and checklist are the note's, and the
+            # rescue copy is of its text: stored first, or the reload below
+            # filled the editor from a note that never had them -- a file
+            # attached on a day after its save was left with no note, and a
+            # removed one came back listed with its stored copy deleted. A
+            # rescue copy that holds them still wins, applied after.
+            self._write_series_owned(note, None, None, schedule=False)
             # Put the previous content back into the editor and save it.
             # Clear any pending style first — the insert hook that applies
             # pending styles doesn't know this insert is a restore rather
