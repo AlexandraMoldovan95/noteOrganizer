@@ -4579,6 +4579,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                         or tag.startswith("text_color_")
                         or tag.startswith("highlight_")):
                     b.tag_add(tag, start, stop)
+            # ...its size and font too, drawn with the weight they now wear.
+            self._fit_font_tags(start, stop, like=prev)
         except tk.TclError:
             pass
 
@@ -7277,6 +7279,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # what arrives needs placing.
         at = self._char_offset(self.body_text, self.body_text.index("insert"))
         line = int(self.body_text.index("insert").split(".")[0]) - 1
+        pasted_from = self.body_text.index("insert")
         self.body_text.insert("insert", text + trail)
 
         self._apply_formatting(
@@ -7286,6 +7289,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self.body_text,
             [dict(p, line=p["line"] + line) for p in paragraphs],
             scrub_table_align=True)
+        # Pasted into a run with a size or a font, the text took the run's
+        # composite tag, weight and all, which outranks the bold it brought.
+        self._lay_font_runs_again(pasted_from, self.body_text.index("insert"))
         # A pasted list starts its own numbering at one; renumbering makes
         # it continue whatever it was dropped into.
         self._renumber_lists()
@@ -8284,6 +8290,64 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             except tk.TclError:
                 pass
 
+    def _lay_font_runs_again(self, start, end):
+        """Lay every composite font tag in the note again -- from the sizes
+        and families the composites hold and the bold and italic tags
+        beside them -- when one touches the text from *start* to *end*.
+
+        A size or a font is drawn by one tag with the weight and slant
+        folded in (_ensure_font_tag), configured after bold and italic so
+        that it wins the font. Bold or italic changed under it, the plain
+        tag alone, was saved and lit the toolbar, and was drawn as before
+        until the note was opened again: Ctrl+B in a bigger heading or a
+        note set to Georgia, and a bold word pasted into one. A note with no
+        size or font pays one look at its tags."""
+        b = self.body_text
+        worn = [t for t in b.tag_names() if parse_font_tag(t)]
+        if not any(t in b.tag_names(start) or b.tag_nextrange(t, start, end)
+                   for t in worn):
+            return
+        # Read while the composites still hold the sizes and families.
+        spans = self._extract_formatting(b)
+        for t in worn:
+            b.tag_remove(t, "1.0", "end")
+        self._apply_font_runs(b, spans)
+
+    def _fit_font_tags(self, start, end, like=None):
+        """Give each of the few characters from *start* to *end* -- just
+        typed -- the composite font tag its own bold and italic call for,
+        with the size and family of the composite it wears, or else of the
+        one at *like*: the character it was typed onto.
+
+        Tk passes a tag on only to text typed between two characters that
+        both wear it, and a composite carries a weight: a letter typed with
+        Bold on inside a bigger heading was drawn in the heading's plain
+        weight, and one glued onto a bold word at a heading's end lost the
+        heading's size, saved that way. Per character, so it costs what was
+        typed (_lay_font_runs_again is for a selection's worth)."""
+        b = self.body_text
+        source = None
+        if like is not None:
+            source = next((parse_font_tag(t) for t in b.tag_names(like)
+                           if parse_font_tag(t)), None)
+        index = b.index(start)
+        while b.compare(index, "<", end):
+            after = b.index(f"{index}+1c")
+            names = b.tag_names(index)
+            worn = [t for t in names if parse_font_tag(t)]
+            # The last wears the highest priority: the one Tk draws.
+            found = parse_font_tag(worn[-1]) if worn else source
+            if found is not None:
+                tag = self._ensure_font_tag(
+                    b, "bold" in names or "bold_italic" in names,
+                    "italic" in names or "bold_italic" in names,
+                    found[2], found[3])
+                for t in worn:
+                    if t != tag:
+                        b.tag_remove(t, index, after)
+                b.tag_add(tag, index, after)
+            index = after
+
     @staticmethod
     def _char_offsets(text_widget, indices):
         """The same answer :meth:`_char_offset` gives, for many indices at
@@ -8561,6 +8625,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             tag = self._font_tag_for(is_bold, is_italic)
             if tag:
                 self.body_text.tag_add(tag, start, end)
+            # Under a size or a font, what is drawn is the composite tag.
+            self._lay_font_runs_again(start, end)
         else:
             already_on = self._selection_has_style(self.body_text, {style}, start, end)
             if already_on:
@@ -8832,12 +8898,21 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 self.body_text.tag_add(tag, start_idx, end_idx)
             if self._pending_font_size or self._pending_font_family:
                 # The plain tag above stays as the marker the toolbar reads;
-                # this one goes over it and decides how the text looks.
-                self.body_text.tag_add(
-                    self._ensure_font_tag(
-                        self.body_text, is_bold, is_italic,
-                        self._pending_font_size, self._pending_font_family),
-                    start_idx, end_idx)
+                # this one goes over it and decides how the text looks. A
+                # composite the letters took from the run they were typed
+                # into goes: beside this one, Tk drew whichever of the two
+                # was made later.
+                font_tag = self._ensure_font_tag(
+                    self.body_text, is_bold, is_italic,
+                    self._pending_font_size, self._pending_font_family)
+                for t in self.body_text.tag_names():
+                    if t != font_tag and parse_font_tag(t):
+                        self.body_text.tag_remove(t, start_idx, end_idx)
+                self.body_text.tag_add(font_tag, start_idx, end_idx)
+            else:
+                # Typed inside a run with a size or a font, the letters
+                # wear its composite with its weight: refitted to theirs.
+                self._fit_font_tags(start_idx, end_idx)
             if "underline" in self._pending_styles:
                 self.body_text.tag_add("underline", start_idx, end_idx)
             if "strike" in self._pending_styles:

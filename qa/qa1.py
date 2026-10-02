@@ -6228,6 +6228,90 @@ check('letters glued onto a coloured word inherit colour AND highlight',
 check('but a word started after a space stays plain', _tyY and _tagsYH == [])
 set_body('')
 
+# Bold, italic or plain given to text under a size or a font is drawn at
+# once. A size or a font is drawn by one composite tag with the weight and
+# slant folded in, which outranks bold and italic. Each route below changed
+# the plain tag alone: the word was saved and lit the toolbar as bold and
+# was drawn as before until the note was opened again -- and a letter
+# glued onto a bold word at a heading's end lost the heading's size.
+def _drawn(index):
+    """(size, weight, slant) Tk draws *index* in: the font of the highest
+    priority tag there that sets one."""
+    _w = app.body_text
+    _font = None
+    for _t in _w.tag_names(index):
+        if _w.tag_cget(_t, 'font'):
+            _font = _w.tag_cget(_t, 'font')
+    _a = _tkfont.Font(font=_font or _w.cget('font')).actual()
+    return _a['size'], _a['weight'], _a['slant']
+
+
+def _sized_line(*extra, style='font_size', value=20):
+    set_body('Big Title here')
+    app._apply_formatting(app.body_text, [
+        {'start': 0, 'end': 14, 'style': style, 'value': value}] + list(extra))
+    app.update()
+
+
+_bs_seen = {}
+_sized_line()
+select('1.4', '1.9')
+app._toggle_body_style('bold')
+clear_selection()
+_bs_seen['Ctrl+B'] = _drawn('1.5')
+_sized_line({'start': 4, 'end': 9, 'style': 'bold'})
+select('1.4', '1.9')
+app._toggle_body_style('bold')
+clear_selection()
+_bs_seen['Ctrl+B off'] = _drawn('1.5')
+_sized_line(style='font_family', value='Georgia')
+select('1.4', '1.9')
+app._toggle_body_style('italic')
+clear_selection()
+_bs_seen['Ctrl+I in Georgia'] = _drawn('1.5')
+_sized_line()
+app.body_text.mark_set('insert', '1.4')
+app._toggle_body_style('bold')
+type_char('N')
+app._pending_styles = set()
+_bs_seen['Bold on, then typing'] = _drawn('1.4')
+_sized_line()
+app.body_text.mark_set('insert', '1.4')
+_stub_clipboard(html='<p><b>B</b></p>')
+app._on_body_paste()
+app.update()
+_bs_seen['a bold paste'] = _drawn('1.4')
+_sized_line({'start': 4, 'end': 9, 'style': 'bold'})
+app.body_text.mark_set('insert', '1.9')
+_bs_typed = _ty_key('X', 'X')
+_bs_seen['a letter glued onto the bold word'] = _drawn('1.9')
+check(f'bold, italic or plain given under a size or a font is drawn at once '
+      f'({_bs_seen})',
+      _bs_typed
+      and _bs_seen['Ctrl+B'] == (20, 'bold', 'roman')
+      and _bs_seen['Ctrl+B off'] == (20, 'normal', 'roman')
+      and _bs_seen['Ctrl+I in Georgia'][1:] == ('normal', 'italic')
+      and _bs_seen['Bold on, then typing'] == (20, 'bold', 'roman')
+      and _bs_seen['a bold paste'] == (20, 'bold', 'roman')
+      and _bs_seen['a letter glued onto the bold word'] == (20, 'bold', 'roman'))
+# A size picked with nothing selected and typed inside a run of another size
+# draws at the size picked: the letters took the run's composite too, and Tk
+# drew whichever of the two tags was made later.
+_sized_line()
+# The bad order made for sure: the picked size's tag exists, and the run's
+# was made after it.
+app._ensure_font_tag(app.body_text, False, False, 16, None)
+app.body_text.tag_raise('font_-_20_00')
+app.body_text.mark_set('insert', '1.4')
+app._apply_body_font('font_size', 16)
+type_char('N')
+_bs_pend = _drawn('1.4')
+app._pending_font_size = None
+app._pending_styles = set()
+check(f'a size picked with nothing selected draws at that size inside a run '
+      f'of another ({_bs_pend})', _bs_pend[0] == 16)
+set_body('')
+
 # On every line, not only the last, and over a selection: a first test of
 # "the key typed something" compared where the text ENDED, which an edit
 # above the last line never moves -- typing after a styled word spread
