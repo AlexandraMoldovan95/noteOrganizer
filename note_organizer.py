@@ -15237,6 +15237,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             return False
         replaced = None
         was = None
+        if self.sort_var.get() == self.SORT_CUSTOM:
+            # A move by hand: the note it moved is placed by hand (see
+            # _arranged_since_last_replace).
+            self._custom_order_hand_moved = (
+                getattr(self, "_custom_order_hand_moved", set())
+                | {self._order_identity(note)})
         if self.sort_var.get() != self.SORT_CUSTOM:
             sort_before = self.sort_var.get()
             # What every note carried, held by the note itself: an id freed
@@ -15281,6 +15287,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 self._replaced_custom_order = replaced
             self._custom_order_left = [self._order_identity(n)
                                        for n in everything]
+            self._custom_order_hand_moved = set()
             self._show_toast(
                 f"Custom order started again from {replaced[1]}",
                 action=lambda: self._undo_custom_order(*replaced))
@@ -15295,16 +15302,20 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
     def _arranged_since_last_replace(self, was_notes):
         """Whether the Custom order a move in a sorted view replaces (its
         placed notes, in order) was arranged by hand since the last such
-        move. A note with a place the last move did not know was placed by
-        hand: a new note has none until a move by hand places every note.
-        Otherwise the order of the notes both know decides; a note deleted
-        since arranges nothing."""
+        move. A note the last move did not know counts when a move by hand
+        moved it -- a new note placed where the person wanted it. Placed
+        any other way it arranges nothing: a duplicate is born with its
+        original's place, a note restored from the Trash keeps its old one,
+        and any move by hand gives every note a place. Otherwise the order
+        of the notes both know decides; a note deleted since arranges
+        nothing."""
         left = getattr(self, "_custom_order_left", None)
         if left is None or was_notes is None:
             return True
         was = [self._order_identity(n) for n in was_notes]
         known = set(left)
-        if any(i not in known for i in was):
+        hand = getattr(self, "_custom_order_hand_moved", set())
+        if any(i not in known and i in hand for i in was):
             return True
         common = known & set(was)
         return ([i for i in was if i in common]
@@ -15326,6 +15337,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._custom_order_left = [
             self._order_identity(n)
             for n in sorted(placed, key=lambda n: n["order"])]
+        self._custom_order_hand_moved = set()
         self.save_notes()
         self.sort_var.set(sort_before)
         self.refresh_note_list()

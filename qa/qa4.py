@@ -2187,6 +2187,49 @@ check(f'...while a note only deleted and restored in between arranges '
       f'nothing: the arrangement made by hand is still the one offered back '
       f'(asked {[q[0] for q in _bl_questions]}; now {_bl_names()})',
       len(_bl_questions) == 1 and _bl_names() == _bl_hand)
+# A duplicate is born with its original's place, and a move by hand of
+# ANOTHER card gives every note a place, a new one included: neither is a
+# note placed by hand. Counted as one, it gave the kept offer's place to the
+# first move's result, and the arrangement made by hand was gone.
+_bl_kept_hand = []
+for _bl_how in ('duplicate', 'jiggle'):
+    _co_fresh(_bl_placed, sort='Custom order')
+    _bl_sort('Title A–Z')
+    app._hide_toast()
+    app._put_keyboard_on_card(app._card_order()[0]); _ls_settle()
+    app._list_move_by_keyboard(1); _ls_settle()
+    app._hide_toast()
+    if _bl_how == 'duplicate':
+        app.duplicate_note(next(n for n in app.notes
+                                if n['title'].startswith('Kiwi')))
+        _ls_settle()
+    else:
+        app.new_note()
+        app.title_entry.insert(0, 'Golf note')
+        app.body_text.insert('1.0', 'a new note')
+        app.save_current_note()
+        _ls_settle()
+        _bl_kiwi = next(n['id'] for n in app.notes
+                        if n['title'].startswith('Kiwi'))
+        app._put_keyboard_on_card(_bl_kiwi); _ls_settle()
+        app._list_move_by_keyboard(1); _ls_settle()
+        app._list_move_by_keyboard(-1); _ls_settle()
+    app._hide_toast()
+    _bl_sort('Title A–Z')
+    app._hide_toast()
+    app._put_keyboard_on_card(app._card_order()[0]); _ls_settle()
+    app._list_move_by_keyboard(1); _ls_settle()
+    app._hide_toast()
+    del _bl_questions[:]
+    _bl_answer[0] = True
+    _bl_sort('Custom order')
+    _bl_kept_hand.append(
+        (_bl_how, len(_bl_questions),
+         [i for i in app._card_order() if i in _bl_hand_ids] == _bl_hand_ids))
+check(f'...and neither a duplicate nor a new note given its place by '
+      f'another card\'s move arranges anything: the arrangement made by hand '
+      f'comes back ({_bl_kept_hand})',
+      _bl_kept_hand == [('duplicate', 1, True), ('jiggle', 1, True)])
 # No: the list stays as the replacement left it, and the question does not
 # come back.
 _bl_sort('Title A–Z')
