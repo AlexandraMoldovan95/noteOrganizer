@@ -11365,6 +11365,55 @@ try:
     check(f'a word pasted into a table row being typed stays in it, and the '
           f'next letter follows it ({_pr})',
           all(not d and t == '| ItemXYZ name | Qty |' for _r, d, t in _pr))
+    # ...and Ctrl+Shift+V there, with another table drawn, walks back and
+    # forth exactly: its unit was recorded with the tables up, and once the
+    # typed table was drawn Ctrl+Z took letters out of its header.
+    set_body('Intro' + chr(10) + '| A | B |' + chr(10) + '| --- | --- |'
+             + chr(10) + '| 1 | 2 |' + chr(10) + chr(10) + chr(10)
+             + 'end line')
+    app._render_table_grids()
+    app.update()
+    app._reset_text_undo()
+    app._cancel_pending_autosave()
+    app.body_text.mark_set('insert', '6.0')
+    app._last_caret_line = None
+    _wp_heads = {''}
+    _wp_start = app.body_text.get('1.0', 'end-1c')
+    for _wp_ch in '| Item name | Qty |':
+        _ty_key(_pr_keys.get(_wp_ch, _wp_ch), _wp_ch)
+    _wp_heads.add(app.body_text.get('6.0', '6.end'))
+    for _ in range(13):
+        _sm_press('<KeyPress-Left>')
+    _sm_clip['data'] = 'XY'
+    _own_key('<Control-Shift-KeyPress-V>', '<Control-Shift-KeyRelease-V>',
+             ('Control_L', 'Shift_L'))
+    _sm_clip['data'] = _sm_tsv
+    _wp_heads.add(app.body_text.get('6.0', '6.end'))
+    _sm_press('<KeyPress-End>')
+    for _wp_line in ('| --- | --- |', '| Tea | 2 |'):
+        _ty_key('Return', chr(10))
+        for _wp_ch in _wp_line:
+            _ty_key(_pr_keys.get(_wp_ch, _wp_ch), _wp_ch)
+        _wp_heads.add(app.body_text.get('6.0', '6.end'))
+    for _ in range(2):
+        _sm_press('<KeyPress-Down>')
+    _wp_heads.add(app.body_text.get('6.0', '6.end'))
+    _wp_end = app.body_text.get('1.0', 'end-1c')
+    _wp_drawn = app._grid_at_line(6) is not None
+    _wp_seen = []
+    for _ in range(12):
+        _uf_key('<Control-z>')
+        _wp_seen.append(app.body_text.get('6.0', '6.end'))
+    _wp_back = app.body_text.get('1.0', 'end-1c')
+    for _ in range(12):
+        _uf_key('<Control-y>')
+        _wp_seen.append(app.body_text.get('6.0', '6.end'))
+    _wp_fwd = app.body_text.get('1.0', 'end-1c')
+    _wp_odd = sorted({h for h in _wp_seen if h not in _wp_heads})
+    check(f'Ctrl+Shift+V into a table being typed beside a drawn one walks '
+          f'back and forth exactly (headers no step had: {_wp_odd})',
+          _wp_drawn and 'ItemXY' in _wp_end and not _wp_odd
+          and _wp_back == _wp_start and _wp_fwd == _wp_end)
 finally:
     app.tk.eval('rename ::tk::GetSelection {}')
     app.tk.eval('rename ::tk::_qa1_sm_GetSelection ::tk::GetSelection')

@@ -6759,6 +6759,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         b.mark_set(self._PASTE_FROM_TABLE, f"{block[0]}.0")
         b.mark_gravity(self._PASTE_FROM_TABLE, "right")
         self._paste_caret_line = here
+        # What the paste writes into that table is recorded with no window
+        # on its first line, and the table is drawn later: replayed with the
+        # window there, Ctrl+Z took letters out of the header. Ctrl+Shift+V
+        # calls this inside its own unit, which is marked so; the routes of
+        # _on_body_paste take the tables down before they write.
+        self._mark_unit_window_free()
         return self._PASTE_FROM_TABLE
 
     def _tidy_table_paste_left(self):
