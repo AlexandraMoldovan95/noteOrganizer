@@ -12570,6 +12570,19 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # clear, which runs first and is what stops the paste landing on top
         # of "YYYY-MM-DD".
         self.date_entry.bind("<<Paste>>", self._schedule_autosave, add="+")
+        # The repeat's summary reads the start date from this field: every
+        # route that changes it redraws the summary (typing and pasting here,
+        # the picker's _pick, clear_note_date). Only the repeat's own boxes
+        # did, and the summary went on saying "needs a start date" after one
+        # was typed, or naming a date already put right. A paste lands after
+        # this binding returns, so its redraw waits for idle.
+        self.date_entry.bind("<KeyRelease>",
+                             lambda _e: self.update_recurrence_summary(),
+                             add="+")
+        self.date_entry.bind(
+            "<<Paste>>",
+            lambda _e: self.after_idle(self.update_recurrence_summary),
+            add="+")
         # Pasting a date copied out of an email is an ordinary thing to want,
         # and this was the field that most invited it and refused.
         self._add_paste_menu(self.date_entry)
@@ -13596,6 +13609,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
     def clear_note_date(self):
         self._show_date_in_field("")
+        # The summary reads the date from the field (see the date field's
+        # bindings): emptied, a series still starts on its stored date.
+        self.update_recurrence_summary()
 
     def _show_date_in_field(self, value):
         """Put a date in the note's date field -- or, for none, the grey
@@ -13659,7 +13675,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             target_entry.delete(0, "end")
             target_entry.insert(0, date_str)
             target_entry.config(fg=self.colors["text"])
-            self._schedule_autosave()
+            # Redraws the repeat's summary, which reads both date fields, and
+            # schedules the autosave.
+            self.update_recurrence_summary()
             self._dismiss_mini_popup()
 
         def _render():
@@ -14114,6 +14132,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         warnings = []
         if not parse_date(anchor):
             if not parse_date(kept_date or ""):
+                if anchor:
+                    # Typed, but not as a date: named, as the save names it.
+                    unread.insert(0, "the date “%s”" % _truncate(anchor, 16))
                 warnings.append("needs a start date, so the repeat is not "
                                 "saved")
             elif anchor:

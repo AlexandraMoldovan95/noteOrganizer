@@ -1630,6 +1630,85 @@ check(f'the summary says an emptied date keeps the start the save keeps, and '
       and 'kept as saved' not in _rn_said_nodate
       and not _rn_said_nodate.startswith('Every'))
 
+# The summary reads the start date from the date field, and every route
+# that changes the field redraws it -- only the repeat's own boxes did: a
+# date typed on an undated weekly note left "needs a start date ... not
+# saved" on screen while the file kept the repeat, and the clear button never
+# said the series still starts on its date. A date typed as no date at all,
+# on a note with none stored, is named as the save names it.
+app.new_note(); app.update()
+app.notes = [NO.normalize_note({'id': 1, 'title': 'Undated', 'body': 'x'})]
+app.save_notes()
+app.open_note_in_tab(app.find_note(1)); app.update()
+app.rec_freq_var.set(NO.FREQ_LABELS['weekly'])
+app.on_recurrence_changed(); app.update()
+
+
+def _rn_date_key(text, keysym):
+    """The date field holding *text*, then a key released there -- with the
+    keyboard on the field first: a generated key follows the focus."""
+    app.date_entry.delete(0, 'end')
+    app.date_entry.insert(0, text)
+    app.date_entry.focus_force()
+    for _ in range(60):
+        app.update(); app.update_idletasks()
+        if app.focus_get() is app.date_entry:
+            break
+        _t5f.sleep(0.01)
+    app.date_entry.event_generate('<KeyRelease>', keysym=keysym)
+    app.update()
+    return app.focus_get() is app.date_entry
+
+
+_rn_focus = _rn_date_key('30/09/2026', '6')
+_rn_said_bad = str(app.rec_summary_lbl.cget('text'))
+_rn_focus = _rn_date_key('2026-09-30', '0') and _rn_focus
+_rn_said_typed = str(app.rec_summary_lbl.cget('text'))
+app._cancel_pending_autosave()
+_rn_series(interval=2)
+app.clear_note_date(); app.update()
+_rn_said_clear = str(app.rec_summary_lbl.cget('text'))
+app._put_back_stored_date_and_repeat()
+app._cancel_pending_autosave()
+check(f'the summary follows the date field as it is typed and cleared, and '
+      f'names a date it cannot read on a note with none ({_rn_said_bad!r}; '
+      f'{_rn_said_typed!r}; {_rn_said_clear!r})',
+      _rn_focus and 'the date “30/09/2026”' in _rn_said_bad
+      and _rn_said_typed == 'Every week'
+      and 'still starts 2026-09-07' in _rn_said_clear)
+# ...and a date pasted there, which lands after the field's own bindings
+# return. The clipboard is a stand-in: the person's own is never read.
+app.new_note(); app.update()
+app.notes = [NO.normalize_note({'id': 1, 'title': 'Undated', 'body': 'x'})]
+app.save_notes()
+app.open_note_in_tab(app.find_note(1)); app.update()
+app.rec_freq_var.set(NO.FREQ_LABELS['weekly'])
+app.on_recurrence_changed(); app.update()
+_rn_paste_before = str(app.rec_summary_lbl.cget('text'))
+app.tk.eval('rename ::tk::GetSelection ::tk::_qa5_real_GetSelection')
+app.tk.createcommand('::qa5_clip', lambda: '2026-09-30')
+app.tk.eval('proc ::tk::GetSelection {w {sel PRIMARY}} {'
+            ' if {$sel eq "CLIPBOARD"} {return [::qa5_clip]};'
+            ' return [::tk::_qa5_real_GetSelection $w $sel] }')
+try:
+    app.date_entry.delete(0, 'end')
+    app.date_entry.event_generate('<<Paste>>')
+    app.update()
+finally:
+    app.tk.eval('rename ::tk::GetSelection {}')
+    app.tk.eval('rename ::tk::_qa5_real_GetSelection ::tk::GetSelection')
+app._cancel_pending_autosave()
+_rn_paste_field = app.date_entry.get()
+_rn_paste_after = str(app.rec_summary_lbl.cget('text'))
+check(f'...and so does a date pasted into the field ({_rn_paste_field!r}: '
+      f'{_rn_paste_before!r} -> {_rn_paste_after!r})',
+      _rn_paste_field == '2026-09-30'
+      and 'needs a start date' in _rn_paste_before
+      and _rn_paste_after == 'Every week')
+app.rec_freq_var.set(NO.FREQ_LABELS[''])
+app.on_recurrence_changed()
+app._cancel_pending_autosave()
+
 app.new_note(); app.update()
 app.notes = []; app.save_notes()
 

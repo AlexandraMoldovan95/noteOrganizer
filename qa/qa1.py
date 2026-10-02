@@ -7581,6 +7581,28 @@ app.update()
 check('picking a day writes the date into the date field',
       app.date_entry.get().endswith('-15')
       and app._mini_popup is not _dp)
+# ...and the repeat's summary follows the date the picker writes: it went on
+# saying "needs a start date" after one was picked.
+app._cancel_pending_autosave()
+app.new_note(); app.update()
+app.rec_freq_var.set(NO.FREQ_LABELS['weekly'])
+app.on_recurrence_changed(); app.update()
+_pk_before = str(app.rec_summary_lbl.cget('text'))
+app.open_date_picker(); app.update()
+_pk_btns = [b for b in _walk_widgets(app._mini_popup, tk.Button)
+            if str(b.cget('text')).strip() == '15']
+if _pk_btns:
+    _pk_btns[0].invoke()
+    app.update()
+app._cancel_pending_autosave()
+_pk_after = str(app.rec_summary_lbl.cget('text'))
+app.rec_freq_var.set(NO.FREQ_LABELS[''])
+app.on_recurrence_changed()
+app._cancel_pending_autosave()
+app.new_note(); app.update()
+check(f'the repeat\'s summary follows a date the picker writes '
+      f'({_pk_before!r} -> {_pk_after!r})',
+      'needs a start date' in _pk_before and _pk_after == 'Every week')
 
 # Note colour picker: a canvas swatch click colours the open note.
 app.title_entry.delete(0, 'end'); app.title_entry.insert(0, 'Colorata')
