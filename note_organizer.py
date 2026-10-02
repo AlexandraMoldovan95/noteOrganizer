@@ -21543,10 +21543,17 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         waits = self.selected_note_id == note_id and self._repeat_off_waits()
         exceptions = set(note.get("exceptions") or [])
         if not is_recurring(note) or date_str not in exceptions:
+            if is_recurring(note) and (
+                    not own_edit or date_str in (note.get("overrides") or {})):
+                # A repeating note with the day on it, and nothing of the
+                # day's missing: it is back already.
+                self._show_toast("That day is already back", kind="info")
+                return
             # The note no longer holds the series the day was deleted from:
             # its repeat was turned off since -- by leaving the note or Save
-            # -- and maybe picked again anew. This said "That day is already
-            # back" and did nothing, the day's own text in no file.
+            # -- and maybe picked again anew, which put the day back without
+            # its own text. This said "That day is already back" and did
+            # nothing, the day's own text in no file.
             self._put_day_back_in_rescue_copy(note, date_str, own_edit, series)
             return
         exceptions.discard(date_str)
