@@ -1770,6 +1770,31 @@ _rn_said_after = str(app.status_lbl.cget('text'))
 check(f'putting the stored date back puts the status line right at once '
       f'({_rn_said_before!r} -> {_rn_said_after!r})',
       'except the date' in _rn_said_before and 'except' not in _rn_said_after)
+# ...and only while that line is still on screen. A day saved "This
+# occurrence only" puts the series' date back too, and the put-right wrote
+# an EARLIER save's words -- its time, the one that left the date out --
+# over the occurrence save's own.
+_rr_day()
+app.date_entry.delete(0, 'end')
+app.date_entry.insert(0, '30/09/2026')
+_rn_warn_real = app.show_warning
+app.show_warning = lambda *a, **k: True
+app.ask_occurrence_scope = lambda *a, **k: 'series'
+try:
+    app.save_current_note(); app.update()
+    _rn_first = str(app.status_lbl.cget('text'))
+    app.body_text.insert('end', ' more')
+    app.ask_occurrence_scope = lambda *a, **k: 'occurrence'
+    app.save_current_note(); app.update()
+    _rn_second = str(app.status_lbl.cget('text'))
+finally:
+    app.show_warning = _rn_warn_real
+    app.ask_occurrence_scope = _oc_real_scope
+app._cancel_pending_autosave()
+check(f'a day saved on its own keeps its own words in the status line '
+      f'({_rn_first!r} -> {_rn_second!r})',
+      'except' in _rn_first and '2026-09-14 only' in _rn_second)
+
 
 # Restore previous with a big delete still waiting for its autosave: the
 # autosave ran while the question waited and made a new rescue copy of the

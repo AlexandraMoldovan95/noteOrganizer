@@ -20684,15 +20684,17 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # Save says it out loud -- which is also why that Save does not
         # send anyone back to the calendar with a date still to fix. Its
         # words without the "except" are kept for the moment the value is
-        # put right with nothing left to save (_say_nothing_is_left_out).
+        # put right with nothing left to save (_say_nothing_is_left_out) --
+        # kept after the line is written, since set_status drops them.
+        if left_out:
+            self.set_status(("Auto-saved " if auto else "Saved at ") + now
+                            + " — except " + "; ".join(left_out)
+                            + (self._REPEAT_OFF_KEPT if repeat_off_kept else ""))
         self._status_names_left_out = (
             ("Auto-saved " if auto else "Saved at ") + now
             + (self._REPEAT_OFF_KEPT if repeat_off_kept else "")
             if left_out else None)
         if left_out:
-            self.set_status(("Auto-saved " if auto else "Saved at ") + now
-                            + " — except " + "; ".join(left_out)
-                            + (self._REPEAT_OFF_KEPT if repeat_off_kept else ""))
             if not auto:
                 self.show_warning("Part of this note isn't saved",
                                   self._left_out_message(left_out))
@@ -21254,6 +21256,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.destroy()
 
     def set_status(self, text):
+        # A line naming what a save left out is put right by
+        # _say_nothing_is_left_out only while it is still the line on
+        # screen: any other words over it end that. Kept past them, the
+        # put-right wrote an earlier save's words over a later save's own.
+        self._status_names_left_out = None
         self.status_lbl.config(text=text)
 
     def _on_data_write_failure(self, path, exc):
