@@ -11473,6 +11473,33 @@ try:
           == [('Ctrl+V', True, '| Tea | XYZ2 |', True),
               ('menu', True, '| Tea | XYZ2 |', True),
               ('above', True, '| New | RoXYZw |', True)])
+    # A paste from the menu has no key whose release names the row it
+    # leaves the caret on: leaving that row by an arrow or the mouse found
+    # no row left, and the table stayed raw and untidied, saved so.
+    _ml = []
+    for _ml_route in ('Paste', 'Paste without formatting'):
+        set_body('Intro' + chr(10) + chr(10) + 'end line')
+        app._reset_text_undo()
+        app.body_text.mark_set('insert', '2.0')
+        app._last_caret_line = None
+        for _ml_ch in '| Item name | Qty |':
+            _ty_key(_pr_keys.get(_ml_ch, _ml_ch), _ml_ch)
+        for _ in range(13):
+            _sm_press('<KeyPress-Left>')
+        _sm_clip['data'] = 'XY'
+        take_focus(app.body_text)
+        if _ml_route == 'Paste':
+            app.body_text.event_generate('<<Paste>>')
+        else:
+            app._paste_plain()
+        app.update()
+        _sm_clip['data'] = _sm_tsv
+        _sm_press('<KeyPress-Down>')
+        _ml.append((_ml_route, app._grid_at_line(2) is not None,
+                    app.body_text.get('2.0', '2.end')))
+    check(f'leaving a row a menu paste kept draws and tidies its table '
+          f'({_ml})',
+          all(d and r == '| ItemXY name | Qty      |' for _n, d, r in _ml))
     # A table at the very end of a note gets a line under it from the
     # drawing, which Tk never records. Ctrl+Z back past the Enter that made
     # the person's own line there, then Ctrl+Y, doubled that line, and from

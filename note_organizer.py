@@ -6872,7 +6872,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if here == getattr(self, "_paste_caret_line", None):
             # Still on the line it was pasted on, as after a letter typed
             # there: the table is tidied, and drawn, once the caret leaves
-            # that line.
+            # that line -- which is the caret's line now, as a letter typed
+            # there leaves it. Left unknown, a paste from the menu, which has
+            # no key whose release would name it, was never tidied or drawn
+            # when the caret left by the mouse or an arrow.
+            self._last_caret_line = here
             return here
         block = self._table_block_at(first)
         if block is not None and not block[0] <= here <= block[1]:
@@ -7039,8 +7043,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # The paste moved the caret and the lines under it; the release of
         # its own key is not the person leaving a table (see
         # _body_undo_redo), and read as one it tidied a table as a recorded
-        # edit outside this unit.
-        self._last_caret_line = None
+        # edit outside this unit. A row it left the caret on stays the
+        # caret's line (_tidy_table_paste_left).
+        self._last_caret_line = kept
         return True
 
     @_undo_atom
@@ -7073,8 +7078,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.after_idle(self._resync_list_tags)
         self.after_idle(lambda: self._render_table_grids(keep_typed=kept))
         self._schedule_autosave()
-        # Not the person leaving a table, either (see _on_body_paste).
-        self._last_caret_line = None
+        # Not the person leaving a table, either (see _on_body_paste); a row
+        # it left the caret on stays the caret's line.
+        self._last_caret_line = kept
         return "break"
 
     def _replace_selection_with(self, text):
