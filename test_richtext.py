@@ -139,6 +139,40 @@ _t, _s, _p = html_to_note("<p>" + ("x" * 200_000) + "</p>")
 check(f"an enormous paste is capped ({len(_t)} chars kept)",
       len(_t) <= NO_MAX if (NO_MAX := 100_000) else False)
 
+# ---- A cap that cuts says so ----
+# Past the caps the paste was cut without a word, and the rest of a long
+# article was simply not in the note. The caller is told now, so it can say
+# what was left out.
+from noteorganizer.core.richtext import MAX_PASTE_CHARS, MAX_PASTE_SPANS
+
+
+def _cut_report(markup):
+    report = {"text_cut": None, "styles_cut": None}
+    html_to_note(markup, report=report)
+    return report
+
+
+_NOTHING_CUT = {"text_cut": False, "styles_cut": False}
+check("text past the character cap is reported as cut",
+      _cut_report("<p>" + "x" * (MAX_PASTE_CHARS + 1) + "</p>")
+      == {"text_cut": True, "styles_cut": False})
+check("text exactly at the cap is not",
+      _cut_report("<p>" + "x" * MAX_PASTE_CHARS + "</p>") == _NOTHING_CUT)
+check("nor is a cap reached with only blank paragraphs after it",
+      _cut_report("<p>" + "x" * MAX_PASTE_CHARS + "</p><p> </p><p></p>")
+      == _NOTHING_CUT)
+check("styles past the style cap are reported as cut",
+      _cut_report("<p>x</p>" + "<p><b>x</b></p>" * (MAX_PASTE_SPANS + 1))
+      == {"text_cut": False, "styles_cut": True})
+check("styles exactly at the cap are not",
+      _cut_report("<p>x</p>" + "<p><b>x</b></p>" * MAX_PASTE_SPANS)
+      == _NOTHING_CUT)
+check("a style still open when the text runs out is counted too",
+      _cut_report("<p>x</p>" + "<p><b>x</b></p>" * MAX_PASTE_SPANS
+                  + "<p><i>unclosed")["styles_cut"] is True)
+check("a report on nothing at all says nothing was cut",
+      _cut_report("") == _NOTHING_CUT and _cut_report(None) == _NOTHING_CUT)
+
 
 # ---- Pasting without formatting must not leave a list behind ----
 # A marker in the text is what makes a line a list line in this app, and

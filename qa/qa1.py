@@ -2379,6 +2379,63 @@ _stub_clipboard(html=None)
 check('with no rich clipboard content, the normal paste is left to run',
       app._on_body_paste() is None)
 
+# ---- A PASTE THE CAPS CUT SAYS SO ----
+# The formatted paste keeps at most MAX_PASTE_CHARS characters and
+# MAX_PASTE_SPANS styles. Past them it cut without a word, and the rest of
+# a long article was simply not in the note. The notice comes once the
+# paste's own work is done (after idle), and its advice -- Ctrl+Z, then
+# Ctrl+Shift+V -- has to really bring all of it in.
+_cut_told = []
+_cut_real_info = app.show_info
+app.show_info = lambda title, message, **k: _cut_told.append((title, message))
+try:
+    _cut_long = 'x' * (NO.MAX_PASTE_CHARS + 500)
+    set_body('before ')
+    app.body_text.mark_set('insert', 'end-1c')
+    app.body_text.edit_separator()
+    _stub_clipboard(html='<p>' + _cut_long + '</p>', text=_cut_long)
+    app._on_body_paste()
+    _cut_inside = list(_cut_told)
+    app.update()
+    check(f'a paste cut at the character cap says so, once the paste is done '
+          f'({[t for t, _m in _cut_told]}, inside: {len(_cut_inside)})',
+          _cut_inside == [] and len(_cut_told) == 1
+          and _cut_told[0][0] == 'Pasted in part'
+          and f'{NO.MAX_PASTE_CHARS:,}' in _cut_told[0][1]
+          and 'Ctrl+Shift+V' in _cut_told[0][1])
+    check(f'...and the note holds what it says was pasted ({len(body())} chars)',
+          body() == 'before ' + 'x' * NO.MAX_PASTE_CHARS)
+    _cut_told.clear()
+    app._body_undo_redo('undo'); app.update()
+    check(f'Ctrl+Z takes the cut paste back whole ({body()[:12]!r}...)',
+          body() == 'before ')
+    take_focus(app.body_text)
+    app.body_text.event_generate('<Control-Shift-V>')
+    app.update()
+    check(f'...and Ctrl+Shift+V then brings in all of it, as the notice says '
+          f'({len(body())} chars)',
+          body() == 'before ' + _cut_long and _cut_told == [])
+
+    set_body('')
+    _stub_clipboard(html='<p>x</p>' + '<p><b>x</b></p>' * (NO.MAX_PASTE_SPANS + 5))
+    app._on_body_paste()
+    app.update()
+    check(f'a paste whose styles pass their cap says the formatting stops '
+          f'({[t for t, _m in _cut_told]})',
+          len(_cut_told) == 1 and 'formatting stops' in _cut_told[0][1]
+          and f'{NO.MAX_PASTE_SPANS:,}' in _cut_told[0][1])
+    _cut_told.clear()
+
+    set_body('')
+    _stub_clipboard(html='<p>A <b>bold</b> word</p>')
+    app._on_body_paste()
+    app.update()
+    check(f'an ordinary formatted paste says nothing ({_cut_told})',
+          _cut_told == [] and body() == 'A bold word')
+finally:
+    app.show_info = _cut_real_info
+set_body('')
+
 # ---- Copying ----
 set_body('heading\nmilk\neggs')
 app.body_text.tag_add('sel', '1.0', '1.end')

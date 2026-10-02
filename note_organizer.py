@@ -197,7 +197,8 @@ from noteorganizer.core import clipboard
 from noteorganizer.core import tables as core_tables
 from noteorganizer.core.tables import is_table_row, with_caret_line
 from noteorganizer.core.richtext import (html_to_note, note_to_html,
-                                        html_document, reflow_wrapped)
+                                        html_document, reflow_wrapped,
+                                        MAX_PASTE_CHARS, MAX_PASTE_SPANS)
 from noteorganizer.core.formatting import (
     normalize_paragraphs,
     parse_list_marker,
@@ -7306,7 +7307,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         markup = clipboard.read_html()
         if not markup:
             return False
-        text, spans, paragraphs = html_to_note(markup)
+        cut = {}
+        text, spans, paragraphs = html_to_note(markup, report=cut)
         if not text:
             return False
         # Only when the source offered no formatting of its own, which is the
@@ -7366,7 +7368,33 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._render_table_grids(keep_typed=kept)
         self._refresh_format_buttons()
         self._schedule_autosave()
+        self._say_if_paste_was_cut(cut, in_body=True)
         return True
+
+    def _say_if_paste_was_cut(self, cut, in_body=False):
+        """Say what a paste had to leave out, when its caps cut it
+        (html_to_note's report): the rest of a long article, or of a big
+        spreadsheet's table, used to be simply missing, without a word.
+
+        Said once the paste's own work is done -- after idle, so a question
+        waiting for an answer never sits inside the paste's undo unit, where
+        everything else waiting (an autosave) would run in its middle.
+        *in_body*: the paste came into the note's body, which keeps the
+        formatting -- so formatting cut short is news there, and nowhere
+        else -- and where Ctrl+Shift+V pastes all of the text, plain."""
+        if cut.get("text_cut"):
+            msg = (f"Only the first {MAX_PASTE_CHARS:,} characters of what you "
+                   "copied were pasted; the rest was left out.")
+            if in_body:
+                msg += ("\n\nTo paste all of it, press Ctrl+Z, then "
+                        "Ctrl+Shift+V: that pastes everything, without its "
+                        "formatting.")
+        elif in_body and cut.get("styles_cut"):
+            msg = ("All of the text was pasted, but its formatting stops after "
+                   f"the first {MAX_PASTE_SPANS:,} styled pieces.")
+        else:
+            return
+        self.after_idle(lambda: self.show_info("Pasted in part", msg))
 
     def _copy_formatted(self, event=None):
         """Copy the selection so it arrives elsewhere still formatted.
@@ -20174,8 +20202,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         except Exception:
             html = None
         if html and "<table" in html.lower():
+            cut = {}
             try:
-                text, _spans, _paras = html_to_note(html)
+                text, _spans, _paras = html_to_note(html, report=cut)
             except Exception:
                 return None
             if core_tables.find_blocks(text):
@@ -20184,6 +20213,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 except tk.TclError:
                     pass
                 text_widget.insert("insert", text)
+                self._say_if_paste_was_cut(cut)
                 return "break"
         return None
 

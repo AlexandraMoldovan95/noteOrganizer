@@ -211,6 +211,38 @@ NO.clipboard.read_html = lambda: '<p>just text</p>'
 check('a non-table paste falls through to the normal path',
       app._paste_table_aware(_body9) is None)
 
+# A table past the character cap was cut here without a word too. This box
+# keeps no formatting and has no Ctrl+Shift+V, so it hears about the text
+# alone, without the body's advice.
+_told9 = []
+_real_info9 = app.show_info
+app.show_info = lambda title, message, **k: _told9.append((title, message))
+try:
+    NO.clipboard.read_html = lambda: (
+        '<table>' + '<tr><td>%s</td><td>%s</td></tr>' % ('x' * 1000, 'y' * 1000)
+        * 60 + '</table>')
+    _body9.delete('1.0', 'end')
+    _took9 = app._paste_table_aware(_body9)
+    app.update()
+    check(f'a table cut at the character cap says so here too '
+          f'({[t for t, _m in _told9]})',
+          _took9 == 'break' and len(_told9) == 1
+          and _told9[0][0] == 'Pasted in part'
+          and f'{NO.MAX_PASTE_CHARS:,}' in _told9[0][1]
+          and 'Ctrl+Shift+V' not in _told9[0][1])
+    _told9.clear()
+    NO.clipboard.read_html = lambda: (
+        '<table>' + '<tr><td>%s</td><td>y</td></tr>' % ('<b>x</b>' * 250)
+        * 10 + '</table>')
+    _body9.delete('1.0', 'end')
+    _took9 = app._paste_table_aware(_body9)
+    app.update()
+    check(f'...but not about formatting, which this box never keeps ({_told9})',
+          _took9 == 'break' and _told9 == [])
+finally:
+    app.show_info = _real_info9
+_body9.delete('1.0', 'end')
+
 # ---- AND THE DIALOG DRAWS A LIVE TABLE PREVIEW ----
 # The body box stays text (that is the store), but the dialog shows the
 # table AS a table underneath -- the same visual language as the editor.
