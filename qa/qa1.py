@@ -11107,6 +11107,168 @@ try:
           f'Ctrl+Z and Ctrl+Y ({[w.split(chr(10))[1] for w in _sm_walk]})',
           _sm_ok and _sm_left != _sm_typed
           and _sm_walk == [_sm_typed, _sm_start, _sm_typed, _sm_left])
+    # A paste on the first line of a table not yet drawn, in a note with no
+    # drawn table: the paste's unit drew the table at its end and was
+    # replayed with that window in place -- Ctrl+Z lost letters of the
+    # header, Ctrl+Y doubled one. A unit with no table drawn when it begins
+    # is replayed with the tables down.
+    set_body('Intro' + chr(10) + '| Item name | Qty |' + chr(10)
+             + '| --- | --- |' + chr(10) + '| Tea | 2 |' + chr(10)
+             + 'end line')
+    app._reset_text_undo()
+    app._cancel_pending_autosave()
+    app.body_text.mark_set('insert', '2.6')
+    _hp_start = app.body_text.get('2.0', '2.end')
+    _sm_clip['data'] = 'XY'
+    _hp_ok = _own_key('<Control-KeyPress-v>', '<Control-KeyRelease-v>',
+                      ('Control_L',))
+    _hp_pasted = app.body_text.get('2.0', '2.end')
+    _uf_key('<Control-z>')
+    _hp_back = app.body_text.get('2.0', '2.end')
+    _uf_key('<Control-y>')
+    _hp_fwd = app.body_text.get('2.0', '2.end')
+    _sm_clip['data'] = _sm_tsv
+    check(f'a paste on the first line of a table not yet drawn walks back and '
+          f'forth exactly ({_hp_pasted!r}; {_hp_back!r}; {_hp_fwd!r})',
+          _hp_ok and _hp_pasted == '| ItemXY name | Qty |'
+          and _hp_back == _hp_start and _hp_fwd == _hp_pasted)
+    # Past the formatting journal's reach a unit's step stays as a stub, so
+    # Ctrl+Z still knows how it was recorded: dropped, a header cell written
+    # with the grid drawn read as typing, was replayed with the grids down,
+    # and came back a column off ("| Names| Qty |"); Ctrl+Y doubled a letter.
+    # The reach is made short here, as an instance attribute, so a few cell
+    # edits carry the header's step past it.
+    set_body('Intro' + chr(10) + '| Name | Qty |' + chr(10) + '| --- | --- |'
+             + chr(10) + '| Tea | 2 |' + chr(10) + chr(10) + 'end line')
+    app._render_table_grids()
+    app.update()
+    app._reset_text_undo()
+    _jt_start = app.body_text.get('1.0', 'end-1c')
+    app._FMT_JOURNAL_DEPTH = 3
+    try:
+        for _jt_r, _jt_v in ((0, 'Names'), (1, 'Tea0'), (1, 'Tea1'),
+                             (1, 'Tea2'), (1, 'Tea3'), (1, 'Tea4')):
+            app._open_cell_editor(app._grid_at_line(2), _jt_r, 0)
+            app.update()
+            _jt_ed = app._cell_editor['entry']
+            _jt_ed.delete('1.0', 'end')
+            _jt_ed.insert('1.0', _jt_v)
+            app._commit_cell_editor()
+            app.update()
+        _jt_end = app.body_text.get('1.0', 'end-1c')
+        _jt_stubs = sum(1 for _s in app._fmt_undo if _s.get('stub'))
+        for _ in range(6):
+            _uf_key('<Control-z>')
+        _jt_back = app.body_text.get('1.0', 'end-1c')
+        for _ in range(6):
+            _uf_key('<Control-y>')
+        _jt_fwd = app.body_text.get('1.0', 'end-1c')
+    finally:
+        del app._FMT_JOURNAL_DEPTH
+    check(f'past the journal\'s reach, Ctrl+Z and Ctrl+Y walk a header cell '
+          f'edit back and forth exactly ({_jt_stubs} stubs; '
+          f'{_jt_back.split(chr(10))[1]!r}; {_jt_fwd.split(chr(10))[1]!r})',
+          _jt_stubs > 0 and _jt_back == _jt_start and _jt_fwd == _jt_end)
+    # A unit that begins with no table drawn is replayed with the tables
+    # down; one that goes on to write into a table it drew has the window in
+    # place for that write, and is split there (_note_edit_with_window).
+    # Driven through the unit's own calls: no route of the app's does this
+    # yet, and the next one must not land a column off.
+    set_body('Intro' + chr(10) + 'end line')
+    app._reset_text_undo()
+    _sp_start = app.body_text.get('1.0', 'end-1c')
+    app._undo_atom_begin()
+    try:
+        app.body_text.insert('2.0', '| Name | Qty |' + chr(10) + '| --- | --- |'
+                             + chr(10) + '| Tea | 2 |' + chr(10))
+        app._render_table_grids()
+        app._write_cell(app._grid_at_line(2), 0, 0, 'Names')
+    finally:
+        app._undo_atom_end()
+    app.update()
+    _sp_end = app.body_text.get('1.0', 'end-1c')
+    for _ in range(2):
+        _uf_key('<Control-z>')
+    _sp_back = app.body_text.get('1.0', 'end-1c')
+    for _ in range(2):
+        _uf_key('<Control-y>')
+    _sp_fwd = app.body_text.get('1.0', 'end-1c')
+    check(f'a unit that writes into a table it drew walks back and forth '
+          f'exactly ({_sp_back.split(chr(10))[:2]}; '
+          f'{_sp_fwd.split(chr(10))[1:2]})',
+          'Names' in _sp_end and _sp_back == _sp_start and _sp_fwd == _sp_end)
+    # A run of Tk's own deletes of styled text is noted by the app, and like
+    # every step of Tk's it never touches a drawn table's line: it is
+    # replayed with the tables down. Unmarked, a bold letter BackSpaced in
+    # the header of a table typed by hand came back a column off once the
+    # table was drawn.
+    set_body('Intro' + chr(10) + '| Item name | Qty |' + chr(10)
+             + '| --- | --- |' + chr(10) + '| Tea | 2 |' + chr(10)
+             + 'end line')
+    app.body_text.tag_add('bold', '2.14', '2.17')
+    app._reset_text_undo()
+    app._cancel_pending_autosave()
+    app.body_text.mark_set('insert', '2.17')
+    app._last_caret_line = None
+    _sd_start = app.body_text.get('1.0', 'end-1c')
+    _sd_ok = _own_key('<BackSpace>', '<KeyRelease-BackSpace>')
+    _sd_deleted = app.body_text.get('2.0', '2.end')
+    for _ in range(3):
+        _sd_ok = _sm_press('<KeyPress-Down>') and _sd_ok
+    _sd_drawn = app._grid_at_line(2) is not None
+    for _ in range(2):
+        _uf_key('<Control-z>')
+    _sd_back = app.body_text.get('1.0', 'end-1c')
+    check(f'a bold letter BackSpaced in a table typed by hand comes back '
+          f'exactly once the table is drawn ({_sd_deleted!r}; '
+          f'{_sd_back.split(chr(10))[1]!r})',
+          _sd_ok and _sd_drawn and _sd_deleted == '| Item name | Qt |'
+          and _sd_back == _sd_start)
+    # ...and once cell edits carry that step past the journal's reach, its
+    # stub still says how it was recorded. One that forgot replayed the
+    # delete with the drawn table's window in place, a column off.
+    set_body('Intro' + chr(10) + '| Item name | Qty |' + chr(10)
+             + '| --- | --- |' + chr(10) + '| Tea | 2 |' + chr(10)
+             + 'end line')
+    app.body_text.tag_add('bold', '2.14', '2.17')
+    app._reset_text_undo()
+    app._cancel_pending_autosave()
+    app.body_text.mark_set('insert', '2.17')
+    app._last_caret_line = None
+    _ss_start = app.body_text.get('1.0', 'end-1c')
+    _ss_stubs = []
+    _ss_end = _ss_back = _ss_fwd = ''
+    app._FMT_JOURNAL_DEPTH = 3
+    try:
+        _ss_ok = _own_key('<BackSpace>', '<KeyRelease-BackSpace>')
+        for _ in range(3):
+            _ss_ok = _sm_press('<KeyPress-Down>') and _ss_ok
+        _ss_ok = _ss_ok and app._grid_at_line(2) is not None
+        if _ss_ok:
+            for _ss_v in ('Tea0', 'Tea1', 'Tea2', 'Tea3'):
+                app._open_cell_editor(app._grid_at_line(2), 1, 0)
+                app.update()
+                _ss_ed = app._cell_editor['entry']
+                _ss_ed.delete('1.0', 'end')
+                _ss_ed.insert('1.0', _ss_v)
+                app._commit_cell_editor()
+                app.update()
+            _ss_end = app.body_text.get('1.0', 'end-1c')
+            _ss_stubs = [bool(_s.get('grids_down')) for _s in app._fmt_undo
+                         if _s.get('stub')]
+            for _ in range(6):
+                _uf_key('<Control-z>')
+            _ss_back = app.body_text.get('1.0', 'end-1c')
+            for _ in range(6):
+                _uf_key('<Control-y>')
+            _ss_fwd = app.body_text.get('1.0', 'end-1c')
+    finally:
+        del app._FMT_JOURNAL_DEPTH
+    check(f'...and so does it once cell edits carry it past the journal\'s '
+          f'reach ({_ss_stubs}; {_ss_back.split(chr(10))[1:2]}; '
+          f'{_ss_fwd.split(chr(10))[1:2]})',
+          _ss_ok and True in _ss_stubs and 'Tea3' in _ss_end
+          and _ss_back == _ss_start and _ss_fwd == _ss_end)
 finally:
     app.tk.eval('rename ::tk::GetSelection {}')
     app.tk.eval('rename ::tk::_qa1_sm_GetSelection ::tk::GetSelection')

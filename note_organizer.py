@@ -14214,6 +14214,31 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
     # text stack.
     _FMT_JOURNAL_DEPTH = 100
 
+    def _trim_fmt_journal(self, journal):
+        """Keep *journal* to _FMT_JOURNAL_DEPTH full steps. A text step past
+        it is not dropped but kept as a stub -- its text's signature on each
+        side and whether it was recorded with the grids down: Ctrl+Z still
+        has to know it was one of the app's units and how its edits were
+        recorded. Dropped, it read as a step no unit noted -- typing -- and
+        was replayed with the tables down: a header cell written 100 steps
+        back came back a column off, and Ctrl+Y doubled a letter. A stub's
+        formatting is not laid back; a formatting step past the cap goes, as
+        before (Tk's stack never held it). Stubs are not capped: a stub
+        stands for a step of Tk's own stack, which is not capped either
+        (maxundo=-1) and holds far more for every step -- cut short, the
+        step it stood for came back as typing."""
+        full = [i for i, s in enumerate(journal) if not s.get("stub")]
+        over = len(full) - self._FMT_JOURNAL_DEPTH
+        if over > 0:
+            for i in full[:over]:
+                s = journal[i]
+                journal[i] = ({"text": True, "stub": True,
+                               "grids_down": bool(s.get("grids_down")),
+                               "before": (s["before"][0],),
+                               "after": (s["after"][0],)}
+                              if s["text"] else None)
+            journal[:] = [s for s in journal if s is not None]
+
     def _fmt_state(self):
         """The body as far as undo has to know it: the text's signature,
         where the embedded windows sit, and the ranges of every formatting
@@ -14319,8 +14344,15 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             return
         if depth == 0:
             # What this unit records is recorded with the tables drawn,
-            # until it takes them down (_undo_atom_grids_coming_down).
-            self._atom_part_grids_down = False
+            # until it takes them down (_undo_atom_grids_coming_down) -- or
+            # with none to take down: then nothing it records can sit beside
+            # a window, and it is replayed with the tables down from the
+            # start. A paste on the first line of a table not yet drawn, in
+            # a note with no drawn table, drew the table at its end and was
+            # replayed with that window in place: Ctrl+Z lost letters.
+            self._atom_part_grids_down = not any(
+                self._grid_first_line(info) is not None
+                for info in getattr(self, "_table_grids", []))
             # Whether it has edited a drawn table's first line with the
             # grid's window there (see _mark_unit_window_free).
             self._atom_edited_with_window = False
@@ -14384,7 +14416,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         journal.append({"text": after[0] != before[0],
                         "before": before, "after": after,
                         "grids_down": getattr(self, "_atom_part_grids_down", False)})
-        del journal[:-self._FMT_JOURNAL_DEPTH]
+        self._trim_fmt_journal(journal)
         self._fmt_redo = []
 
     def _undo_atom_grids_coming_down(self):
@@ -14441,9 +14473,28 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
     def _note_edit_with_window(self):
         """An edit of a drawn table's first line, its grid's window there,
-        inside an open unit (see _mark_unit_window_free)."""
-        if getattr(self, "_undo_atom_depth", 0) > 0:
-            self._atom_edited_with_window = True
+        inside an open unit (see _mark_unit_window_free). A part of the unit
+        marked as recorded with the grids down ends here: what it did so far
+        becomes a step of its own, and what follows is recorded, and
+        replayed, with the grids up."""
+        if getattr(self, "_undo_atom_depth", 0) <= 0:
+            return
+        if getattr(self, "_atom_part_grids_down", False):
+            before = getattr(self, "_fmt_atom_before", None)
+            if before is not None:
+                try:
+                    now = self._fmt_state()
+                except (tk.TclError, ValueError):
+                    now = None
+                if now is not None and now[0] != before[0]:
+                    self._push_atom_step(before, now)
+                    try:
+                        self.body_text.edit_separator()
+                    except tk.TclError:
+                        pass
+                    self._fmt_atom_before = now
+            self._atom_part_grids_down = False
+        self._atom_edited_with_window = True
 
     # The bindtag put first on the note body, so it sees every key and
     # every Cut, Clear and Paste before the body's own bindings do.
@@ -14603,8 +14654,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         journal = getattr(self, "_fmt_undo", None)
         if journal is None:
             journal = self._fmt_undo = []
-        journal.append({"text": True, "before": run["before"], "after": after})
-        del journal[:-self._FMT_JOURNAL_DEPTH]
+        # Tk's own deletes, like every step of Tk's: never on a drawn table's
+        # line, so replayed with the tables down (see _body_undo_redo).
+        journal.append({"text": True, "before": run["before"], "after": after,
+                        "grids_down": True})
+        self._trim_fmt_journal(journal)
         self._fmt_redo = []
 
     def _body_undo_redo(self, action):
@@ -14719,9 +14773,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 # The side left behind is noted as it really was, for the
                 # press that comes back to it.
                 step[came] = now
-                self._fmt_restore(step[went])
+                # A stub's side is its signature alone (see
+                # _trim_fmt_journal): no formatting to lay back.
+                if len(step[went]) > 1:
+                    self._fmt_restore(step[went])
             other.append(step)
-            del other[:-self._FMT_JOURNAL_DEPTH]
+            self._trim_fmt_journal(other)
         self._body_follow_caret = True
         self._resync_list_tags()
         grids = getattr(self, "_table_grids", None)
