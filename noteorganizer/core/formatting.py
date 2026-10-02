@@ -245,7 +245,11 @@ def _fold_bold_with_italic(spans):
     toolbar lit Bold and the note saved it bold.
 
     One sweep over the two styles' ends, and the list as it was when
-    nothing overlaps."""
+    nothing overlaps. When something does, the list comes back in the
+    order the editor reads spans back in (merge_spans): the folded pieces
+    put after the rest made a note saved the old way differ from its own
+    reading at once -- unsaved, and saved again on leaving with no edit,
+    its "Last updated" moved."""
     marks = sorted((s[edge], s["style"], step)
                    for s in spans if s["style"] in ("bold", "italic")
                    for edge, step in (("start", 1), ("end", -1)))
@@ -271,7 +275,8 @@ def _fold_bold_with_italic(spans):
             pieces.append({"start": at, "end": marks[i][0], "style": style})
     if not overlap:
         return spans
-    return [s for s in spans if s["style"] not in ("bold", "italic")] + pieces
+    return sorted([s for s in spans if s["style"] not in ("bold", "italic")]
+                  + pieces, key=lambda s: (s["start"], s["end"], s["style"]))
 
 
 # ---- Naming the tags the editor applies ----

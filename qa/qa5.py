@@ -2685,6 +2685,24 @@ NO.CATEGORY_COLORS.pop('TempMove5', None)
 check(f'the Undo of a category move finds a note after it came back from the '
       f'Trash under a new number ({_rn_moved_back})',
       _rn_moved_back == 'General')
+# A note saved the old way -- bold and italic as two spans over the same
+# letters, another span after them -- opens as saved: the fold gave the spans
+# back in an order the editor never reads them in, so the untouched note read
+# as unsaved and was saved again on leaving, its "Last updated" moved.
+app.new_note(); app.update()
+app.notes = [NO.normalize_note({
+    'id': 1, 'title': 'Old way', 'body': 'one two three four',
+    'formatting': [{'start': 4, 'end': 7, 'style': 'bold'},
+                   {'start': 4, 'end': 7, 'style': 'italic'},
+                   {'start': 8, 'end': 13, 'style': 'underline'}],
+    'updated': '2026-09-03 09:00:00'})]
+app.save_notes()
+app.open_note_in_tab(app.find_note(1)); app.update()
+_rn_clean = app.editor_state_matches_saved(app.capture_editor_state())
+app.new_note(); app.update()
+check(f'a note saved with bold and italic as two spans opens as saved '
+      f'(clean {_rn_clean}; updated {app.find_note(1).get("updated")})',
+      _rn_clean and app.find_note(1).get('updated') == '2026-09-03 09:00:00')
 
 # Restore previous with a big delete still waiting for its autosave: the
 # autosave ran while the question waited and made a new rescue copy of the

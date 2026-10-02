@@ -587,7 +587,7 @@ check("paragraph, table and selection tags are not",
 import random as _random
 import sys as _sys
 from noteorganizer.core.formatting import (resolve_font_runs,
-                                           normalize_formatting,
+                                           normalize_formatting, merge_spans,
                                            FONT_FAMILIES, FONT_SIZES,
                                            FONT_VALUE_STYLES)
 
@@ -697,6 +697,18 @@ _apart = [{"start": 0, "end": 3, "style": "bold"},
           {"start": 1, "end": 2, "style": "underline"}]
 check("bold and italic that do not overlap are left exactly as they were",
       normalize_formatting(_apart) == _apart)
+# ...and a list the fold changed comes back in the order the editor reads
+# spans back in: with the folded pieces put after the rest, a note saved the
+# old way read as unsaved the moment it was opened, and was saved again on
+# leaving with no edit made.
+_old_way = [{"start": 4, "end": 7, "style": "bold"},
+            {"start": 4, "end": 7, "style": "italic"},
+            {"start": 8, "end": 13, "style": "underline"}]
+check("a list the fold changed is in the order the editor reads spans back in",
+      normalize_formatting(_old_way)
+      == merge_spans(normalize_formatting(_old_way))
+      == [{"start": 4, "end": 7, "style": "bold_italic"},
+          {"start": 8, "end": 13, "style": "underline"}])
 
 _n = 600
 _many = [{"start": 3 * i, "end": 3 * i + 2,
