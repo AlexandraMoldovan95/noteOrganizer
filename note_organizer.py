@@ -14242,12 +14242,18 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if over > 0:
             for i in full[:over]:
                 s = journal[i]
-                journal[i] = ({"text": True, "stub": True,
-                               "grids_down": bool(s.get("grids_down")),
-                               "before": (s["before"][0],),
-                               "after": (s["after"][0],)}
-                              if s["text"] else None)
+                journal[i] = self._fmt_stub(s) if s["text"] else None
             journal[:] = [s for s in journal if s is not None]
+
+    @staticmethod
+    def _fmt_stub(step):
+        """A text step of the journal kept as a stub: its text's signature
+        on each side and whether it was recorded with the grids down --
+        what Ctrl+Z and Ctrl+Y need to replay it as Tk recorded it -- and
+        no formatting to lay back."""
+        return {"text": True, "stub": True,
+                "grids_down": bool(step.get("grids_down")),
+                "before": (step["before"][0],), "after": (step["after"][0],)}
 
     def _fmt_state(self):
         """The body as far as undo has to know it: the text's signature,
@@ -14423,11 +14429,21 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         journal = getattr(self, "_fmt_undo", None)
         if journal is None:
             journal = self._fmt_undo = []
-        journal.append({"text": after[0] != before[0],
+        text = after[0] != before[0]
+        journal.append({"text": text,
                         "before": before, "after": after,
                         "grids_down": getattr(self, "_atom_part_grids_down", False)})
         self._trim_fmt_journal(journal)
-        self._fmt_redo = []
+        # A step that changed text is on Tk's stack, and Tk's redo stack
+        # empties with it. One that changed formatting only put nothing
+        # there: Tk can still redo every text step undone before it, so they
+        # stay -- as stubs, how each was recorded, their formatting stale
+        # under the new one. Emptied, Ctrl+Y read a header cell's edit as
+        # typing, replayed it with the tables down, a column off.
+        self._fmt_redo = ([] if text else
+                          [self._fmt_stub(s)
+                           for s in getattr(self, "_fmt_redo", None) or []
+                           if s["text"]])
 
     def _undo_atom_grids_coming_down(self):
         """An open unit is about to take the drawn tables down.

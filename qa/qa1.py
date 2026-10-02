@@ -11250,6 +11250,44 @@ try:
           f'{_ss_fwd.split(chr(10))[1:2]})',
           _ss_ok and True in _ss_stubs and 'Tea3' in _ss_end
           and _ss_back == _ss_start and _ss_fwd == _ss_end)
+    # A style change made after Ctrl+Z puts nothing on Tk's stack, so Tk can
+    # still redo what was undone before it, and the journal keeps how each
+    # of those steps was recorded. Emptied, Ctrl+Y read a header cell's
+    # edit as typing and put it back a column off ("| Name s   |").
+    _rf = []
+    for _rf_style in ('word', 'cell'):
+        set_body('Intro word here' + chr(10) + '| Name | Qty |' + chr(10)
+                 + '| --- | --- |' + chr(10) + '| Tea | 2 |' + chr(10)
+                 + chr(10) + 'end line')
+        app._render_table_grids()
+        app.update()
+        app._reset_text_undo()
+        app._open_cell_editor(app._grid_at_line(2), 0, 0)
+        app.update()
+        _rf_ed = app._cell_editor['entry']
+        _rf_ed.delete('1.0', 'end')
+        _rf_ed.insert('1.0', 'Names')
+        app._commit_cell_editor()
+        app.update()
+        _rf_edited = app.body_text.get('2.0', '2.end')
+        _uf_key('<Control-z>')
+        _rf_undone = app.body_text.get('2.0', '2.end')
+        if _rf_style == 'word':
+            app.body_text.tag_add('sel', '1.6', '1.10')
+            app.body_text.mark_set('insert', '1.10')
+            _own_key('<Control-b>', '<Control-KeyRelease-b>', ('Control_L',))
+            app.body_text.tag_remove('sel', '1.0', 'end')
+        else:
+            app._grid_apply_style(app._grid_at_line(2), (1, 1, 1, 1), 'bold')
+            app.update()
+        _uf_key('<Control-y>')
+        _rf.append((_rf_style, _rf_undone == _rf_edited,
+                    app.body_text.get('2.0', '2.end') == _rf_edited,
+                    app.body_text.get('2.0', '2.end')))
+    check(f'Ctrl+Y after a style change gives a header cell edit back exactly '
+          f'({_rf})',
+          [(s, u, r) for s, u, r, _t in _rf] == [('word', False, True),
+                                                 ('cell', False, True)])
 finally:
     app.tk.eval('rename ::tk::GetSelection {}')
     app.tk.eval('rename ::tk::_qa1_sm_GetSelection ::tk::GetSelection')
