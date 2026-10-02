@@ -16,6 +16,7 @@ import zlib
 import threading
 import time
 import base64
+import bisect
 from html import escape
 import calendar as cal_module
 import re
@@ -8270,14 +8271,16 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         text actually looks like.
         """
         length = len(text_widget.get("1.0", "end-1c"))
-        for start, end, is_bold, is_italic, size, family in resolve_font_runs(
-                spans, length):
+        runs = resolve_font_runs(spans, length)
+        where = self._offset_indices(
+            text_widget, [offset for run in runs for offset in run[:2]])
+        for start, end, is_bold, is_italic, size, family in runs:
             tag = self._ensure_font_tag(text_widget, is_bold, is_italic,
                                         size, family)
             if not tag:
                 continue
             try:
-                text_widget.tag_add(tag, f"1.0+{start}c", f"1.0+{end}c")
+                text_widget.tag_add(tag, where[start], where[end])
             except tk.TclError:
                 pass
 
@@ -8317,6 +8320,51 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             offsets[index] = running
             previous = index
         return offsets
+
+    @staticmethod
+    def _offset_indices(text_widget, offsets):
+        """The way back from :meth:`_char_offsets`: {offset: Tk index} for
+        many offsets into the text as it is saved.
+
+        One walk through the text for all of them. "1.0+Nc" for every span
+        end walked the note from its top each time: Enter in a numbered
+        list of a note of 8,000 styled words froze the editor for 3.6 s
+        (the renumber lays every span again). Sorted, each offset is reached
+        from the one before it, and Tk's "+Nc" adds up, so with no drawn
+        table in the text every index is the one "1.0+Nc" gave.
+
+        And a saved offset never counts a drawn table's window character
+        (len(get()) skips it) while "+Nc" does: a font size set on a word
+        under a drawn table landed one character early per table above it,
+        and every later size or font moved the earlier ones again -- saved
+        that way. So the windows a hop passes are hopped again. Where
+        windows stand right at an offset, its index is before them: a range
+        ending there does not take them in, and one starting there reads
+        back at the same offset either way.
+        """
+        wanted = sorted(set(offsets))
+        if not wanted:
+            return {}
+
+        def position(index):
+            line, _, column = str(index).partition(".")
+            return int(line), int(column)
+
+        windows = sorted(position(index) for _kind, _name, index
+                         in text_widget.dump("1.0", "end", window=True,
+                                             image=True))
+        out, here, at = {}, "1.0", 0
+        for offset in wanted:
+            need = offset - at
+            while need > 0:
+                there = text_widget.index(f"{here}+{need}c")
+                # Each window passed was counted as a character.
+                need = (bisect.bisect_left(windows, position(there))
+                        - bisect.bisect_left(windows, position(here)))
+                here = there
+            at = offset
+            out[offset] = here
+        return out
 
     def _extract_formatting(self, text_widget):
         """Read the widget's current tags back out as a plain span list,
@@ -8394,16 +8442,19 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
     def _apply_formatting(self, text_widget, spans):
         """Re-apply a saved span list as live Tkinter tags, for loading."""
-        for span in normalize_formatting(spans):
-            # Size and family are not applied one span at a time: they have
-            # to be merged with whatever bold/italic covers the same
-            # characters into a single tag, which _apply_font_runs does once
-            # the whole list is known.
-            if span["style"] in FONT_VALUE_STYLES:
-                continue
+        # Size and family are not applied one span at a time: they have to
+        # be merged with whatever bold/italic covers the same characters
+        # into a single tag, which _apply_font_runs does once the whole list
+        # is known.
+        laid = [span for span in normalize_formatting(spans)
+                if span["style"] not in FONT_VALUE_STYLES]
+        where = self._offset_indices(
+            text_widget,
+            [offset for span in laid for offset in (span["start"], span["end"])])
+        for span in laid:
             try:
-                start_idx = text_widget.index(f"1.0+{span['start']}c")
-                end_idx = text_widget.index(f"1.0+{span['end']}c")
+                start_idx = where[span["start"]]
+                end_idx = where[span["end"]]
                 if span["style"] in COLOR_FORMAT_STYLES:
                     tag = self._ensure_color_tag(text_widget, span["style"], span["value"])
                 else:

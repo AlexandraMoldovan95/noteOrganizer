@@ -1699,6 +1699,97 @@ check('two runs of different sizes report Default, not whichever came first',
       app.font_size_var.get() == app.DEFAULT_FONT_LABEL)
 clear_selection()
 
+# A size or a font set under drawn tables lands on the words selected, and
+# stays there. The span ends are worked out without the tables' windows
+# (_char_offset) and were laid back with "1.0+Nc", which counts each window
+# as a character: the run landed one character early per table above it,
+# and every later size or font moved the earlier ones again -- saved so.
+set_body('AB' + chr(10) + '| a | b |' + chr(10) + '| --- | --- |' + chr(10)
+         + '| 1 | 2 |' + chr(10) + 'hello world' + chr(10) + '| c | d |'
+         + chr(10) + '| --- | --- |' + chr(10) + '| 3 | 4 |' + chr(10)
+         + 'tail words')
+app._render_table_grids()
+app.update()
+_ft_windows = len(app.body_text.window_names())
+for _ft_word, _ft_style, _ft_value in (('hello', 'font_size', 16),
+                                       ('tail', 'font_family', 'Georgia'),
+                                       ('hello', 'font_size', 20)):
+    _ft_at = app.body_text.search(_ft_word, '1.0', 'end')
+    select(_ft_at, f'{_ft_at}+{len(_ft_word)}c')
+    app._apply_body_font(_ft_style, _ft_value)
+    clear_selection()
+_ft_text = app.body_text.get('1.0', 'end-1c')
+_ft_got = sorted((_ft_text[s['start']:s['end']], s['style'], s.get('value'))
+                 for s in app._extract_formatting(app.body_text))
+check(f'a size or a font set under drawn tables lands on the words selected, '
+      f'and stays there ({_ft_got})',
+      _ft_windows == 2
+      and _ft_got == [('hello', 'font_size', 20),
+                      ('tail', 'font_family', 'Georgia')])
+
+# The way back from a saved offset to a place in the text, with tables drawn
+# at the top, in the middle and at the end, and an emoji in a cell and in
+# the prose: every offset comes back as itself (_char_offset), and with no
+# table in the text every place is the one "1.0+Nc" gives.
+_oi_table = ['| a ' + chr(0x1F600) + ' | b |', '| --- | --- |', '| 1 | 2 |']
+_oi_prose = ['H' + chr(233) + 'llo ' + chr(0x1F600) + ' done', '',
+             chr(9) + 'Tabbed ' + chr(0x4E2D) + ' line', 'plain']
+set_body(chr(10).join(_oi_prose))
+_oi_where = app._offset_indices(app.body_text, range(60))
+_oi_same = all(app.body_text.index(_oi_where[o])
+               == app.body_text.index(f'1.0+{o}c') for o in range(60))
+set_body(chr(10).join(_oi_table + _oi_prose + _oi_table + ['mid']
+                      + _oi_table))
+app._render_table_grids()
+app.update()
+_oi_len = len(app.body_text.get('1.0', 'end-1c'))
+_oi_where = app._offset_indices(app.body_text, range(_oi_len + 1))
+_oi_off = [o for o in range(_oi_len + 1)
+           if app._char_offset(app.body_text, _oi_where[o]) != o]
+check(f'every saved offset finds its own place with no table drawn and with '
+      f'three ({len(app.body_text.window_names())} drawn; off at {_oi_off[:5]})',
+      _oi_same and len(app.body_text.window_names()) == 3 and not _oi_off)
+
+# Laying a note's spans walks its text once a pass (the plain styles, then
+# the font runs), not once a span. Each span end was found with "1.0+Nc"
+# from the top of the note, so the walk grew with the note's size times its
+# spans: Enter in a numbered list of a note of 8,000 styled words took 3.6 s
+# (the renumber lays every span again), and its open 1.4-1.7 s. Counted,
+# not timed: every "+Nc" the body is asked for, added up.
+_wk_body = chr(10).join('%03d %s' % (i, 'word ' * 10) for i in range(300))
+_wk_spans = []
+for _wk_i in range(0, len(_wk_body) - 8, 29):
+    _wk_spans.append({'start': _wk_i, 'end': _wk_i + 4,
+                      'style': ('bold', 'italic', 'underline')[_wk_i % 3]})
+    if _wk_i % 5 == 0:
+        _wk_spans.append({'start': _wk_i, 'end': _wk_i + 6,
+                          'style': 'font_size', 'value': 16})
+set_body(_wk_body)
+_wk_walked = [0]
+
+
+def _wk_trace(command, *_op):
+    _wk_walked[0] += sum(int(n) for n in re.findall(r'\+(\d+)c', command))
+
+
+app.tk.createcommand('qa_walk_trace', _wk_trace)
+app.tk.call('trace', 'add', 'execution', app.body_text._w, 'enter',
+            'qa_walk_trace')
+try:
+    app._apply_formatting(app.body_text, _wk_spans)
+finally:
+    app.tk.call('trace', 'remove', 'execution', app.body_text._w, 'enter',
+                'qa_walk_trace')
+    app.tk.deletecommand('qa_walk_trace')
+_wk_back = sorted((s['start'], s['end'], s['style'])
+                  for s in app._extract_formatting(app.body_text))
+check(f'laying a note of {len(_wk_spans)} spans walks its '
+      f'{len(_wk_body)} characters once a pass ({_wk_walked[0]} walked)',
+      _wk_walked[0] <= 3 * len(_wk_body)
+      and _wk_back == sorted((s['start'], s['end'], s['style'])
+                             for s in _wk_spans))
+set_body('')
+
 # ---- HOW THE TOOLBAR SPLITS INTO ROWS ----
 # Checked against widths given directly rather than measured off widgets.
 # Which control lands on a row boundary depends entirely on the font, so a
