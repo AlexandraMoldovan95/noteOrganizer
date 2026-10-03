@@ -12,6 +12,7 @@ How the numbers themselves are counted is the
 
 | Version | Date | In one line |
 |---|---|---|
+| [0.84.340](#084340--2026-10-03) | 2026-10-03 | The light themes' secondary text reads against every surface, with every theme's text now measured against WCAG — and the window's bottom scrollbar shows only when the window is too narrow. |
 | [0.84.338](#084338--2026-10-03) | 2026-10-03 | Dates typed the way people write them — 17.10.2026, 2026-10-17, "17 Oct 2026" — and shown day first everywhere, while the notes file keeps the one form it always had. |
 | [0.83.338](#083338--2026-10-03) | 2026-10-03 | What comes in from outside is taken for what it is: a damaged data file no longer stops the app from starting, an attachment is only its two names, and a paste too long to keep whole says what it left out. |
 | [0.83.335](#083335--2026-10-02) | 2026-10-02 | Nineteen rounds of agents tried to break the app: nothing you type is lost when one field is wrong, an import asks before it changes anything, and questions, tables, the calendar and the note list stop surprising you. |
@@ -85,6 +86,61 @@ How the numbers themselves are counted is the
 | [0.3.0](#030--tags-removed-categories-as-the-sole-organization-system) | — | Tags come out entirely, leaving categories as the app's one organization system. |
 | [0.2.0](#020--inline-ui-overhaul--data-resilience) | — | Every OS-native popup becomes an in-app themed one, and the calendar grows richer. |
 | [0.1.0](#010--core-application) | — | The founding feature set — notes, recurrence, calendar, templates, sharing, themes. |
+
+---
+
+## [0.84.340] — 2026-10-03
+
+*Highlights: the light themes' secondary text reads against every surface it sits on, with every
+theme's text now measured against WCAG — and the window shows its horizontal scrollbar only when
+it is too narrow for the app.*
+
+### Fixed
+
+- **Secondary text on the light themes is dark enough to read.** Sort and Show in the sidebar, a
+  note's preview on its card and the editor's captions sat below the 4.5:1 contrast WCAG asks of
+  text this size, on all four light themes — Warm Cream's sidebar at 3.6:1. Each theme's
+  secondary text is one step darker, in the same hue, and text and secondary text now pass in
+  every theme. The accent, warning and confirming colours do not all pass yet: the fix changes how
+  the themes look, so it is set out, with the measurements, in the
+  [architecture notes](docs/ARCHITECTURE.md#contrast-measured).
+- **No scrollbar under a window wide enough for the app.** The horizontal bar along the bottom of
+  the window was always there, though it is only of use when the window is narrower than the
+  sidebar and the editor side by side; it now appears then, and goes when the window is widened.
+
+### Changed
+
+- **The note list lives in its own module.** Drawing the cards and headers, filtering, searching,
+  sorting, the keyboard ring, dragging into Custom order and Select mode moved from the entry file
+  to `noteorganizer/ui/note_list.py`, measured first: since the list became one drawing, its 117
+  methods send 90% of their calls to each other. A pure move — the app class keeps the same 785
+  methods — so nothing about using, running or building the app changed. The entry file went from
+  22,413 lines to 19,711.
+
+### Testing
+
+- Every theme's text measured: `tools/check_contrast.py` works out the WCAG ratio of every text
+  colour on every surface the app draws it on — 19 kinds of pair, 152 across the themes — and
+  fails CI on a pair below AA that is not listed with its reason, or a listed one that has started
+  to pass; on a colour value that means two roles across the themes, which the theme switch
+  depends on; and on a contrast table in the architecture notes that is not the measured one.
+- Comments say why in a few lines: three modules' bug stories moved from their comments to a new
+  [Smaller lessons](docs/ISSUES_LOG.md#smaller-lessons-moved-out-of-the-code) section of the
+  issues log, and `tools/check_comments.py` keeps release numbers out of the app's comments, every
+  pointer into the issues log pointing at something that exists, and the condensed modules
+  condensed.
+- The process is in the repository: the agent's deny rules, committed without one machine's paths
+  and checked to cover every script that wipes its folder (`tools/check_agent_rules.py`); the
+  mutation runner and its catalogue (`tools/mutate.py`, `tools/mutants.json`), with manual CI jobs
+  for the mutants and the stories; the coverage tool running the whole suite again, with a floor
+  of 80% in CI (89% measured); and the performance bench behind the architecture notes' table
+  (`tools/bench.py`).
+- The language gate reads what it missed: words glued to others or to digits are pried apart
+  before they are searched, and Romanian's commonest word endings are known, not only a list of
+  words; the Romanian a sweep found in the suite and the docs is in English now.
+- qa9 checks that the window's horizontal scrollbar is there below the width the app needs and
+  gone above it, both ways and twice, and gone at exactly that width; mutants W01 and W02 are
+  killed.
 
 ---
 
