@@ -464,6 +464,16 @@ A new surface joins this list the moment it ships.
   shows is a question about where things ARE: compare screen
   coordinates (`winfo_rooty()` + height) against the window's edge and
   the next widget's top.
+- **A window is only as big as its screen lets it be.** Tk caps a window
+  at the size of its screen, in silence, and the Windows CI runner's
+  screen is smaller than the windows the checks ask for. qa4's check that
+  the calendar takes its width step across 1150 pixels asked for a
+  1200-pixel window, got the screen's 1024 and read "wide None, narrow
+  None" in CI while passing on every machine it had been run on; three of
+  qa9's resize checks would have followed it. `pin_the_desktop` now lifts
+  the cap for every app the suite builds, so a window takes the size a
+  check asks for whatever screen it runs on. A check whose subject is a
+  size should still print the size the window actually got.
 - **A red that loses its name costs a day, so the runner writes it down.**
   `tools/run_tests.py` saves a failing run's whole output to
   `%TEMP%/notesorg-failure-<label>.txt` and prints the path — the terminal
