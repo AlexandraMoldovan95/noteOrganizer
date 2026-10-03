@@ -767,6 +767,25 @@ worth having; believing it is finished is the thing that costs. And the
 second failure of a class is the one worth reading — the first looks like
 an oversight, the second shows you the shape.
 
+**A third time (2026-10-03):** a two-word search string in qa7 and
+`test_recurrence`, written on 9 September, had sat through both passes
+above. This sweep did not sample. It read the repository by the endings
+Romanian gives its words, by every word in a string or comment that the
+docs' English prose never uses, and by the short words a three-letter
+floor skips, and a person read every candidate: about three hundred
+lines in nineteen files. Two of the ways they hid were in the gate's
+method, not its list — `\b` reads a camelCase title, a word with a digit
+on its end or a word right after a `\n` escape as one unknown word, and
+no list knows the words nobody has written yet. The gate now pries lines
+apart at those seams and knows Romanian's commonest endings. On the old
+tree it flags 265 lines; without the new words it would miss 242 of
+them, without the prying 37, without the endings 17. It still cannot see
+two-letter words or words English shares, and says so in its source —
+35 of the lines this pass translated. On the way, a qa8 check turned out
+to have been unable to fail since the second pass: it asked about a
+title that pass had renamed line by line (now a
+[house rule](../qa/README.md#house-rules-for-new-checks)).
+
 ### The check that pinned the behaviour a release had deliberately replaced
 
 *(2026-09-29, `Testing`)*

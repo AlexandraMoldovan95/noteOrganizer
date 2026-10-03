@@ -20,8 +20,9 @@ own strings. Same idea, different boundary.)
 One exception, agreed on purpose: the Romanian month names the date field
 understands ("17 octombrie 2026"), in noteorganizer/core/recurrence.py and
 in the tests that type them. They are read, never shown; none carries a
-diacritic, and none is on the word list below. Do not "fix" them away --
-and do not let anything else in on their account.
+diacritic, none is on the word list below, and none has an ending the
+shape rule knows. Do not "fix" them away -- and do not let anything else
+in on their account.
 
     py tools/check_english.py
     py tools/check_english.py --list     # every hit, not just the first few
@@ -97,8 +98,79 @@ WORDS = [
     "coada", "facut", "deja", "necunoscut", "ramasa", "dinainte",
     "laterala", "panou", "bara", "continut", "acelasi", "baza",
     "scurt", "originala", "versiune",
+    # A fourth pass, 2026-10-03, after "discutat bugetul" turned up in
+    # qa7 and test_recurrence: written on 9 September, before this gate
+    # existed, and missed by every sweep since. This one did not sample.
+    # It read the repository three ways at once -- by the endings
+    # Romanian gives its words, by every word in a string or comment that
+    # the docs' English prose never uses, and by the short words a
+    # three-letter floor skips -- and a person read every candidate.
+    # About three hundred lines in nineteen files. Two of the ways they
+    # hid are fixed below rather than listed: words glued to other words
+    # or to digits, and words no list will think of in advance. What the
+    # gate still cannot see, said plainly: two-letter words and words
+    # English shares -- "da", "nu", "doi", "cap", "sub" -- thirty-five
+    # of the lines this pass translated. For those, reading before
+    # committing remains the only defence.
+    "acasa", "acte", "adaugata", "albastru", "alta", "antrenament",
+    "ascuns", "bifa", "cablu", "capat", "categorie", "celula", "citit",
+    "coloana", "colorat", "colorata", "corectat", "cumparaturi",
+    "cuvant", "cuvinte", "decat", "descriere", "discutat", "disparuta",
+    "doilea", "dubla", "evidentiat", "franta", "geamana", "golit",
+    "identica", "identitate", "incaltari", "inceput", "inventat", "jos",
+    "lateste", "legenda", "mele", "memorat", "mers", "modificare",
+    "multa", "munca", "nerandat", "nivel", "nou", "noua", "ordine", "oua",
+    "pana", "patru", "plecata", "pozitie", "pret", "prin", "proaspat",
+    "produs", "proiect", "proiecte", "prosop", "repetat", "repetitiva",
+    "retete", "retetele", "rupt", "schimbat", "scoala", "serie",
+    "simulat", "spatii", "straina", "sursa", "tabel", "tarziu",
+    "telefon", "temporara", "titlu", "trei", "treilea", "umplut", "unic",
+    "unu", "valoare", "varianta", "veche", "vecina", "vezi", "vizibil",
+    "vopsit", "ziua",
 ]
 ROMANIAN = re.compile(r"\b(%s)\b" % "|".join(WORDS), re.I)
+
+# Endings Romanian gives its words and English all but never does: the
+# definite article ("planul", "bugetul", "primul"), the genitive plurals,
+# the "-eaza" verbs, the "-iune" nouns and the teens ("unsprezece"). A
+# list only knows the words somebody thought of; an ending also knows the
+# ones nobody has written yet. The few English words that share an ending
+# are named below, so the rule itself can stay strict. A word is a
+# capital at most and then lower case: that is how a word is written, and
+# it is what keeps the rule off base64 ("...SJAAAADUlEQVR4...").
+SHAPES = re.compile(r"\b[A-Za-z][a-z]{2,}(?:(?<![fao])ul|ului|ilor|elor|"
+                    r"urilor|eaza|easca|iune|iunea|iuni|sprezece)\b")
+ENGLISH_SHAPED = {"annul", "consul", "mogul", "kabul", "istanbul",
+                  "sailor", "tailor", "jailor", "bachelor"}
+
+# Glue hides a word from \b. "NotaTabelQ" and "CuvantUnicInCelula" are one
+# word to a regex, and so are "vechi1" and the "trei" in "unu\ntrei" --
+# all four sat in the suite past every earlier pass. Each line is pried
+# apart at those seams before it is searched: a copy of the line, so the
+# file is never touched and nothing the reader sees changes. A name that
+# merely LOOKS glued is kept whole first: the DejaVu fonts are not "deja".
+SEAMS = re.compile(r"\\[ntr](?=[A-Za-z])|(?<=[a-z])(?=[A-Z])"
+                   r"|(?<=[A-Za-z])(?=[0-9])|(?<=[0-9])(?=[A-Za-z])")
+WHOLE_NAMES = ("DejaVu",)
+
+
+def pried(line):
+    for name in WHOLE_NAMES:
+        line = line.replace(name, name.lower())
+    return SEAMS.sub(" ", line)
+
+
+def romanian_in(line):
+    """The first Romanian word in a line, by list or by shape, or None."""
+    line = pried(line)
+    word = ROMANIAN.search(line)
+    if word:
+        return word.group(0)
+    for shape in SHAPES.finditer(line):
+        if shape.group(0).lower() not in ENGLISH_SHAPED:
+            return shape.group(0)
+    return None
+
 
 # Words checked only against FILENAMES. They are too short, or too close
 # to something a program legitimately says, to search for inside code --
@@ -159,10 +231,10 @@ def hits_in(relative):
         return []
     found = []
     for number, line in enumerate(text.splitlines(), start=1):
-        word = ROMANIAN.search(line)
+        word = romanian_in(line)
         mark = DIACRITICS.search(line)
         if word or mark:
-            found.append((number, (word or mark).group(0), line.strip()))
+            found.append((number, word or mark.group(0), line.strip()))
     return found
 
 
@@ -181,7 +253,8 @@ def main():
     # in the file listing, before anybody opens anything.
     for name in tracked():
         stem = os.path.basename(name).rsplit(".", 1)[0].replace("-", " ")
-        if name not in ALLOWED and IN_FILENAME.search(stem):
+        if name not in ALLOWED and (IN_FILENAME.search(pried(stem))
+                                    or romanian_in(stem)):
             named.append(name)
 
     if not leaks and not named:
