@@ -123,15 +123,19 @@ date the way you would on paper:
 
 | You type | It reads |
 |---|---|
-| `17.10.2026`, `17/10/2026`, `17-10-2026` | 17 October 2026. The day always comes first: `10/12/2026` is 10 December. |
+| `17.10.2026`, `17/10/2026`, `17-10-2026` | 17 October 2026. The day comes first: `10/12/2026` is 10 December. |
+| `10/17/2026`, `10-17-2026` | Also 17 October: there is no 17th month, so this can only be the American order, month first. The month is read first only where the day first cannot be. |
 | `2026-10-17` | The same day: four figures first mean the year comes first. |
-| `17 oct 2026`, `17 October 2026`, `October 17, 2026` | The month as a word, short or in full — its English name, or its Romanian one. |
-| `17.10`, `17.10.26` | Completed when you leave the field: this year, or 2026. |
+| `17 oct 2026`, `17 October 2026`, `October 17, 2026` | The month as a word, short or in full, before or after the day — its English name, or its Romanian one. |
+| `Saturday, October 17th, 2026`, `the 17th of October` | English as it is written: a day's name, an ordinal ending and "the … of" are read and set aside. |
+| `17.10`, `17.10.26`, `10/17` | Completed when you finish: this year, or 2026. |
 
-When you leave the field — or press Save, or open another note — the date is written back in the
-one form the app shows dates in, `17.10.2026`, and that is how it appears everywhere: on the
-note's card, in the calendar's History, in the Trash. A year of two figures, or none at all, is
-read only then: while you are still typing, `17.10.20` on its way to 2026 is never saved as 2020.
+You finish with the field by clicking anywhere else — another box, a button, or an empty part of
+the window — by pressing **Enter** or **Tab**, by pressing Save, or by opening another note. The
+date is then written back in the one form the app shows dates in, `17.10.2026`, and that is how
+it appears everywhere: on the note's card, in the calendar's History, in the Trash. A year of two
+figures, or none at all, is read only then: while you are still typing, `17.10.20` on its way to
+2026 is never saved as 2020.
 
 Whatever you typed, the notes file keeps the date as `2026-10-17`, as it always has. The
 **Ends: On date** box of a repeating note reads dates the same way.

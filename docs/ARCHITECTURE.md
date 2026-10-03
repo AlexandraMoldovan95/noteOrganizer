@@ -903,14 +903,18 @@ that as success and replaced the editor — see
 [One unreadable field, and every word typed after it](ISSUES_LOG.md#one-unreadable-field-and-every-word-typed-after-it).
 
 What the app can read is wider since 0.84.338: a date as people write it — the day first in
-figures (17.10.2026, 17/10/2026), the year first (2026-10-17), the month as a word in English or
-Romanian — through one reader, `read_date` in `core/recurrence.py`, and shown in one form,
+figures (17.10.2026, 17/10/2026), the month first only where the day first cannot be (the
+American 10/17/2026), the year first (2026-10-17), the month as a word in English or Romanian,
+with English's day names and ordinal endings set aside — through one reader, `read_date` in
+`core/recurrence.py`, and shown in one form,
 `show_date` (17.10.2026). The store is unchanged: everything that reaches a note goes through
 `format_date`, so `notes_data.json` keeps YYYY-MM-DD whatever was typed. Two rules make that safe:
 
 - **A short or a missing year is read only when the person has finished** (`read_date(...,
-  settled=True)`: leaving the field, an explicit Save, leaving the note, asking for a code —
-  `_settle_date_fields`). The autosave reads strictly, so "17.10.20" on its way to 2026 is left
+  settled=True)`: leaving the field, Enter, a click anywhere else, an explicit Save, leaving the
+  note, asking for a code — `_settle_date_fields`, wired by `_watch_date_field`). A click on
+  anything that takes no keyboard leaves Tk's focus where it was, so it is caught app-wide
+  rather than waited for as a `<FocusOut>` that never comes. The autosave reads strictly, so "17.10.20" on its way to 2026 is left
   out for half a second instead of saved as 2020.
 - **The editor compares a date by the day it names, not its text** (`same_date`). The field
   shows 17.10.2026 where the note stores 2026-10-17; compared as text, every dated note read as

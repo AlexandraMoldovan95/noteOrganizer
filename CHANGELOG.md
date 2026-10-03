@@ -91,19 +91,22 @@ How the numbers themselves are counted is the
 ## [0.84.338] — 2026-10-03
 
 *Highlights: a date is written the way people write it. The date field shows its form, DD.MM.YYYY,
-reads a date in figures day first, year first or with the month as a word, and completes a short
-year when you leave it — and the app shows every date the same way, while the notes file keeps
+reads a date in figures day first (month first, the American way, where the day first cannot
+be), year first or with the month as a word, and completes a short year when you finish with it — and the app shows every date the same way, while the notes file keeps
 the one form it always had.*
 
 ### Added
 
 - **Dates typed the way people write them, and shown day first.** The empty date field shows
   **DD.MM.YYYY**, the order a date is read in. It reads 17.10.2026, 17/10/2026 and 17-10-2026 —
-  the day always first, so 10/12/2026 is 10 December — 2026-10-17, and the month as a word in
-  English or Romanian, short or in full ("17 Oct 2026", "October 17, 2026"). A year of two
-  figures, or none, is read when you leave the field, press Save or leave the note: 17.10 becomes
-  this year's, 17.10.26 becomes 2026, and while you are still typing, "17.10.20" on its way to
-  2026 is never saved as 2020. Leaving the field writes the date back as 17.10.2026, and every
+  the day first, so 10/12/2026 is 10 December, and the month first only where the day first
+  cannot be, so the American 10/17/2026 is 17 October — 2026-10-17, and the month as a word in
+  English or Romanian, short or in full, before or after the day ("17 Oct 2026", "October 17th,
+  2026"), with English's day names, ordinal endings and "the … of" read and set aside
+  ("Saturday, October 17, 2026", "the 17th of October"). A year of two figures, or none, is read
+  when you finish with the field — a click anywhere else, Enter, Tab, Save, another note: 17.10
+  becomes this year's, 17.10.26 becomes 2026, and while you are still typing, "17.10.20" on its
+  way to 2026 is never saved as 2020. Finishing writes the date back as 17.10.2026, and every
   date the app shows reads the same way — the note's card, the calendar's History, Trash and
   duplicate rows, the status line, Statistics, the repeat's "until" — with written-out days day
   first too ("Saturday, 3 October"). The repeat's end-date box reads dates the same way. The
@@ -114,14 +117,16 @@ the one form it always had.*
 
 - test_recurrence reads every promised form and refuses the rest — a day that does not exist, a
   year being typed, digits of another script, thirty figures and a stray symbol, which a single
-  backtracking pattern would have taken hours over in the field's own keystroke. qa5 types each
-  form and finds it stored as YYYY-MM-DD with the editor reading as saved; a year still being
-  typed never saved; the field, Save, leaving the note and a share code each settling a short
-  year; the end-date box; the card; the picker opening on a date typed day first. qa1, qa2, qa3,
+  backtracking pattern would have taken hours over in the field's own keystroke; the American
+  order only where the day first cannot be. qa5 types each form and finds it stored as
+  YYYY-MM-DD with the editor reading as saved; a year still being typed never saved; the field,
+  a click on an empty stretch of the window with the keyboard still in the field (the case a
+  field test found saving nothing), Enter, Save, leaving the note and a share code each settling
+  a short year; the end-date box; the card; the picker opening on a date typed day first. qa1, qa2, qa3,
   qa6, qa7, qa8 and qa9 check the field's form, the picker, the calendar's Add note, History, the
   banner, the day's header and hover, the reminder bar, Trash and duplicate rows, and Statistics.
   The left-out checks that used 30/09/2026 as their unreadable date use one that cannot exist
-  (31/09/2026), so they go on proving what they proved. Fifty-one mutants, each killed with its
+  (31/09/2026), so they go on proving what they proved. Sixty-two mutants, each killed with its
   suite reaching its footer; `tools/check_one_definition.py` gains a rule that keeps the date
   field read in one place, proved on a reader written by hand again.
 - A question a check leaves waiting no longer stops a suite. Under a mutant that left a date out,
