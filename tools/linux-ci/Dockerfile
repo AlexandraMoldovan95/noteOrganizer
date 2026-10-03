@@ -2,7 +2,8 @@
 #
 # Mirrors .github/workflows/tests.yml's ubuntu leg: Python 3.13, Tk,
 # Xvfb as the virtual display, DejaVu fonts (the metrics several checks
-# learned to respect), and Pillow -- the app's one dependency. Running
+# learned to respect) and no colour emoji font (CI removes the runner's
+# to match), and Pillow -- the app's one dependency. Running
 # the suite here BEFORE a push catches the Linux-only behaviours (async
 # window mapping, focus semantics, font metrics) that used to surface
 # only as a red CI run.

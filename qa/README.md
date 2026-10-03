@@ -498,6 +498,16 @@ A new surface joins this list the moment it ships.
   the cap for every app the suite builds, so a window takes the size a
   check asks for whatever screen it runs on. A check whose subject is a
   size should still print the size the window actually got.
+- **CI's Linux machine runs with the mirror's fonts, not its own.** The
+  runner image carries a colour emoji font that the local mirror
+  (`tools/linux-ci`) does not, and Tk 8.6 measures its glyphs hundreds of
+  pixels wide: the calendar's day markers, drawn in "Segoe UI Emoji",
+  which Linux resolves to that font, overflowed every day, and eleven of
+  qa7's checks went red in CI while passing in the mirror. Installing the
+  font in a throwaway mirror reproduced all eleven. The workflow removes
+  it before the suite and prints what is left; a check that passes in the
+  mirror and fails on the runner is a difference between the two machines
+  until shown otherwise.
 - **A red that loses its name costs a day, so the runner writes it down.**
   `tools/run_tests.py` saves a failing run's whole output to
   `%TEMP%/notesorg-failure-<label>.txt` and prints the path — the terminal
