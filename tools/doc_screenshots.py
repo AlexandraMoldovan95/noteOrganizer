@@ -45,6 +45,7 @@ _seed_io.open('notes_data.json', 'w', encoding='utf-8').write('[]')
 _seed_io.open('settings.json', 'w', encoding='utf-8').write(
     _seed_json.dumps({'reclaimed_from_appdata': True}))
 
+import datetime
 import os
 import sys
 import time
@@ -191,6 +192,27 @@ def _window_title_of(pid):
     return titles[0] if titles else "pid %d" % pid
 
 
+def _top_of_cut_row(edge):
+    """The top of the highest line of text or button that `edge` cuts.
+
+    Containers, canvases and scrollbars are left out: they run to the
+    window's edge by design, and their contents are what gets cut.
+    """
+    tops = []
+    for w in _all_widgets(app):
+        try:
+            if (w.winfo_toplevel() is not app or not w.winfo_ismapped()
+                    or w.winfo_class() in ('Canvas', 'Scrollbar',
+                                           'TScrollbar')):
+                continue
+            top, height = w.winfo_rooty(), w.winfo_height()
+        except tk.TclError:
+            continue
+        if height <= 60 and top < edge < top + height:
+            tops.append(top)
+    return min(tops) if tops else None
+
+
 def capture(name, widgets=None, pad=8):
     """Save the whole window, or the box that holds `widgets`."""
     app.lift()
@@ -234,6 +256,12 @@ def capture(name, widgets=None, pad=8):
         box = (app.winfo_rootx(), app.winfo_rooty(),
                app.winfo_rootx() + app.winfo_width(),
                app.winfo_rooty() + app.winfo_height())
+        # A line the window's bottom edge runs through reads as a picture
+        # cut short: the hero shot ended in half of the editor's "Created
+        # ... Last updated" line. The picture ends above it instead.
+        cut = _top_of_cut_row(box[3])
+        if cut is not None:
+            box = (box[0], box[1], box[2], cut - 2)
     intruders = _foreign_window_over(box)
     if intruders:
         who = ", ".join(_window_title_of(p) for p in intruders)
@@ -264,6 +292,11 @@ def clean():
     app.current_attachments = []
     NO.save_templates([])
     app.save_notes()
+    # A painted day outlives its scene: every later picture of that month
+    # (the README's moving picture is one) would show it orange.
+    app.day_colors, app.day_emoji = {}, {}
+    app._persist_day_colors()
+    app._persist_day_emoji()
 
     try:
         app.hide_settings_page()
@@ -313,6 +346,54 @@ def _note(**fields):
     if 'id' not in base:
         base['id'] = max([n['id'] for n in app.notes], default=0) + 1
     return NO.normalize_note(base)
+
+
+def _days_ago(days, at='09:00'):
+    """A timestamp `days` before today, in the app's own shape.
+
+    Statistics' "this week" and the Trash's "days left" count from today,
+    so a fixed date ages inside the picture: a trash row staged on
+    2 September read "0 day(s) left" a month later.
+    """
+    day = datetime.date.today() - datetime.timedelta(days=days)
+    return '%s %s' % (day.isoformat(), at)
+
+
+def _open_day(day):
+    """The calendar on the month `day` is in, with that day open.
+
+    The calendar opens at today's month and these scenes stage fixed
+    dates: once September was over, the September day opened under an
+    October grid, and the painted day was not on screen at all.
+    """
+    app.notebook.select(app.TAB_CALENDAR)
+    pump(10)
+    app.cal_year, app.cal_month = int(day[:4]), int(day[5:7])
+    app.render_calendar()
+    pump(14)
+    app.open_day_popup(day)
+    pump(14)
+    # The day opens below the month and, on purpose, does not scroll
+    # itself into view: a person scrolls down to it, and so does this.
+    app.cal_scroll_canvas.yview_moveto(1.0)
+    pump(10)
+
+
+def _scroll_editor_to(widget, pad=12):
+    """Scroll the editor until `widget` ends inside the window.
+
+    A crop is clamped to the window, so a section running past its
+    bottom edge lost its last row: the checklist's Add button.
+    """
+    pump(4)
+    edge = app.winfo_rooty() + app.winfo_height()
+    overflow = widget.winfo_rooty() + widget.winfo_height() + pad - edge
+    region = app.editor_canvas.bbox('all')
+    if overflow > 0 and region:
+        top = app.editor_canvas.yview()[0]
+        app.editor_canvas.yview_moveto(
+            top + overflow / float(region[3] - region[1]))
+        pump(8)
 
 
 def _weekly_note():
@@ -387,18 +468,32 @@ def search_and_sort():
     capture('search-and-sort')
 
 
+def _september():
+    """The month both calendar pictures show: a weekly note and three more.
+
+    One short title per day: every week is as tall as its fullest day,
+    and two notes on one day, or a title on two lines, made the month too
+    tall to share the window with the open day.
+    """
+    app.notes.append(_note(
+        title='Stand-up', category='Work', date='2026-09-07',
+        recurrence={'freq': 'weekly', 'interval': 1, 'weekdays': [0]}))
+    for title, category, day in (('Dentist', 'Personal', '2026-09-16'),
+                                 ('Bike service', 'General', '2026-09-18'),
+                                 ('Board review', 'Work', '2026-09-24')):
+        app.notes.append(_note(title=title, category=category, date=day))
+    app.save_notes()
+
+
 @scene('calendar-view')
 def calendar_view():
-    """The calendar, with a repeating note and the day panel open.
+    """The calendar: a repeating note, notes on other days, one day open.
 
     Stale since 0.71.111: the calendar gained a History button, which the
     old shot predates.
     """
-    _weekly_note()
-    app.notebook.select(app.TAB_CALENDAR)
-    pump(14)
-    app.open_day_popup('2026-09-14')
-    pump(14)
+    _september()
+    _open_day('2026-09-14')
     capture('calendar-view')
 
 
@@ -526,6 +621,7 @@ def checklist():
     if not app.checklist_section.winfo_ismapped():
         app.toggle_checklist_section()
     pump(16)
+    _scroll_editor_to(app.checklist_section)
     capture('checklist',
             widgets=_editor_box('checklist_btn', 'checklist_section',
                                 'calculator_btn'), pad=12)
@@ -640,19 +736,13 @@ def emoji_picker():
 @scene('calendar-day-color')
 def calendar_day_color():
     """A calendar day painted a colour of its own."""
-    _weekly_note()
+    _september()
     app.day_colors = dict(getattr(app, 'day_colors', {}))
     app.day_colors['2026-09-18'] = '#ff8800'
     app._persist_day_colors()
-    app.notebook.select(app.TAB_CALENDAR)
-    pump(10)
-    # The month is DRAWN, not watched: setting a day's colour and adding a
-    # note change the data, and the grid keeps showing what it drew before.
-    # The first take was a picture of an empty September.
-    app.render_calendar()
-    pump(20)
-    app.open_day_popup('2026-09-18')
-    pump(16)
+    # _open_day draws the month afresh: the grid shows what it drew last,
+    # and the first take was a picture of an empty September.
+    _open_day('2026-09-18')
     capture('calendar-day-color')
     app.notebook.select(app.TAB_NOTES)
     pump()
@@ -671,15 +761,41 @@ def settings_overview():
     """The Settings page: the section list, and one section open.
 
     Statistics rather than General, which holds one blank field and makes
-    a picture of an empty page. This one shows the nav beside a panel
-    with something in it, and no other shot covers it.
+    a picture of an empty page. On a notebook that has been used: the
+    figures count from today, and five notes made on one day in September
+    read as a row of zeros under "Using Note Organizer since" today.
     """
     _demo_notebook()
     _table_note()
-    _settings('statistics')
-    capture('settings-overview')
-    app.hide_settings_page()
-    pump()
+    errands = [{'text': 'Call the bank', 'done': True},
+               {'text': 'Renew the parking permit', 'done': False}]
+    for days, title, category, extra in (
+            (1, 'Plumber visit', 'General', {}),
+            (2, 'Sprint retro', 'Work', {'checklist': errands}),
+            (9, 'Gift ideas', 'Personal', {'checklist': errands}),
+            (40, 'Holiday budget', 'Personal', {}),
+            (120, 'Onboarding notes', 'Work', {'checklist': errands}),
+            (400, 'Flat viewing', 'General', {})):
+        stamp = _days_ago(days)
+        app.notes.append(_note(title=title, category=category,
+                               created=stamp, updated=stamp, **extra))
+    for note in app.notes[:2]:
+        note['updated'] = _days_ago(0)
+    app.save_notes()
+    app.templates = [NO.normalize_template({'name': name, 'title': name})
+                     for name in ('Meeting notes', 'Weekly shop')]
+    app.trash = [{'id': 905 + days, 'title': title, 'body': '',
+                  'category': 'General', 'deleted_at': _days_ago(days, '18:00:00')}
+                 for days, title in ((3, 'Old to-do'), (11, 'Draft'))]
+    since = NO.load_settings().get('first_launch_date')
+    NO.save_setting('first_launch_date', _days_ago(420)[:10])
+    try:
+        _settings('statistics')
+        capture('settings-overview')
+    finally:
+        NO.save_setting('first_launch_date', since)
+        app.hide_settings_page()
+        pump()
 
 
 @scene('theme-picker')
@@ -728,12 +844,12 @@ def trash_panel():
     _demo_notebook()
     app.trash = [
         {'id': 901, 'title': 'Old shopping list', 'body': 'Milk, bread.',
-         'category': 'General', 'deleted_at': '2026-09-12 08:30:00'},
+         'category': 'General', 'deleted_at': _days_ago(2, '08:30:00')},
         {'id': 902, 'title': 'Draft email to the landlord',
          'body': 'About the boiler service.', 'category': 'General',
-         'deleted_at': '2026-09-09 19:05:00'},
+         'deleted_at': _days_ago(5, '19:05:00')},
         {'id': 903, 'title': 'Conference notes', 'body': 'Talk three was the good one.',
-         'category': 'Work', 'deleted_at': '2026-09-02 11:20:00'},
+         'category': 'Work', 'deleted_at': _days_ago(12, '11:20:00')},
     ]
     _settings('trash')
     capture('trash-panel')

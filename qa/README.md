@@ -180,10 +180,18 @@ a Windows check.
 ## Photographs: did a screen change shape while nobody was looking?
 
 `py qa/story_look.py` opens the app on a fixed little notebook,
-photographs six screens — the list, the editor, the calendar, two
-Settings sections and a light theme — and compares each against the copy
-in `qa/screens/`. Those copies are committed, so a change of appearance
-shows up in a diff like any other change.
+photographs eighteen screens — the list, the editor, the calendar,
+Settings sections, a light theme, and the popups and panels that releases
+changed — and compares each against the copy in `qa/screens/`. Those
+copies are committed, so a change of appearance shows up in a diff like
+any other change.
+
+A reference is a claim about what is right, so a release that changes how
+something looks retakes them in the same branch, and someone looks at
+them. Two releases once did not: the references kept the old date format
+and a scrollbar that had gone, and reviewers read them as the app. The
+same retake found that a theme name the app no longer knew had left
+twelve scenes in the light theme, without anyone choosing it.
 
 It does not say "this is wrong"; it cannot know that. It says **this
 changed, and nobody said it would**, which is the honest half a script

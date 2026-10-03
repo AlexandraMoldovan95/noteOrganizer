@@ -30,7 +30,7 @@ notebook -- which showed, in the pictures: a sidebar counting "General
 thirty-three groups. Nothing private was legible, but nothing was chosen
 either.
 
-Three things the script does that a careful hand cannot promise:
+Five things the script does that a careful hand cannot promise:
 
 - **It refuses to photograph a covered window.** Before each shutter it
   asks, at forty-nine points across the frame, which window is actually
@@ -43,6 +43,15 @@ Three things the script does that a careful hand cannot promise:
 - **It puts the screen back between scenes**, not just the notebook. A
   scene that searched for "team" left every later sidebar reading "No
   notes match your search or filter" -- including the hero shot.
+- **A picture stays true whichever day it is taken.** The calendar is
+  put on the month a scene staged, not today's, and the panels that
+  count from today -- Statistics, the Trash's days left -- get dates
+  counted from today. A month after one retake, a September day sat open
+  under an October grid and a trash row read "0 day(s) left".
+- **No picture ends in half a line.** A whole-window shot stops above
+  any line of text the window's bottom edge would cut, and a section
+  photographed on its own is scrolled into view first: the checklist
+  shot had lost its Add button.
 
 Rules that keep the set reading as one app:
 
@@ -53,9 +62,10 @@ Rules that keep the set reading as one app:
 
 **Current set:** retaken 2026-10-03 in the default dark (purple) theme, all
 twenty-two and the demo GIF by `tools/doc_screenshots.py`, on app version
-0.84.340 — dates
-shown day first, the search box showing its hint, and no scrollbar under
-the window; update this line whenever the set is recaptured.
+0.84.340 — dates shown day first, the search box showing its hint, no
+scrollbar under the window, both calendar pictures on the month they
+stage and nothing cut at the bottom edge; update this line whenever the
+set is recaptured.
 
 | Filename | What to capture |
 |---|---|

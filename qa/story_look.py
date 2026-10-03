@@ -85,12 +85,20 @@ app.refresh_note_list()
     ("07-search-with-a-query", """
 app.hide_settings_page()
 app.notebook.select(app.TAB_NOTES)
-app.set_theme('Midnight')
+# 'dark', the key. The display name 'Midnight' was passed here and set_theme
+# ignores a name it does not know, so every scene from here on was taken in
+# the light theme scene 06 left behind -- without anyone choosing that.
+app.set_theme('dark')
+assert app.theme_name == 'dark', 'the dark theme was not applied'
 app.search_var.set('bread')
 app.refresh_note_list()
 """),
     ("08-share-panel-with-a-code", """
-app.search_var.set('')
+# The box as the app opens it, hint and hint colour. Set to '' it waits for
+# a <FocusOut> to write the hint back, and every later scene photographed
+# an empty, unlabelled box (tools/doc_screenshots.py had the same bug).
+app.search_var.set(app.SEARCH_PLACEHOLDER)
+app.search_entry.config(fg=app.colors['subtext'])
 app.refresh_note_list()
 app.toggle_share_panel()
 # The EXISTING vars are set rather than replaced: the checkbuttons on screen
@@ -151,11 +159,11 @@ app._dismiss_mini_popup()
 app.notebook.select(app.TAB_NOTES)
 app.trash = [
     {'id': 9001, 'title': 'Notes', 'body': 'the one about the boiler',
-     'category': 'General', 'deleted_at': '2026-09-20 09:00:00'},
+     'category': 'General', 'deleted_at': _days_ago(5)},
     {'id': 9002, 'title': 'Notes', 'body': 'the one about the car',
-     'category': 'General', 'deleted_at': '2026-09-21 09:00:00'},
+     'category': 'General', 'deleted_at': _days_ago(4)},
     {'id': 9003, 'title': 'Weekend plan', 'body': 'walk, then the market',
-     'category': 'General', 'deleted_at': '2026-09-22 09:00:00'},
+     'category': 'General', 'deleted_at': _days_ago(3)},
 ]
 app.show_settings_page()
 app.update()
@@ -306,10 +314,10 @@ app.trash = [
     {'id': 9101,
      'title': 'Quarterly planning meeting with the whole team',
      'body': 'the long one', 'category': 'General',
-     'deleted_at': '2026-09-20 09:00:00',
+     'deleted_at': _days_ago(5),
      'recurrence': {'freq': 'weekly', 'weekdays': [0]}},
     {'id': 9102, 'title': 'Short one', 'body': 'b',
-     'category': 'General', 'deleted_at': '2026-09-21 09:00:00'},
+     'category': 'General', 'deleted_at': _days_ago(4)},
 ]
 app.show_settings_page()
 app.update()
@@ -378,6 +386,14 @@ def _no_reminder():
         pass
 app.after(500, _no_reminder)
 app.after(900, _no_reminder)
+
+# Trash rows dated a few days before today, whatever day this runs: the
+# panel counts "days left" from today, so a fixed date drifted in every
+# picture, on its way to "0 day(s) left".
+import datetime as _dt
+def _days_ago(days):
+    day = _dt.date.today() - _dt.timedelta(days=days)
+    return day.isoformat() + " 09:00:00"
 
 # PowerShell's CopyFromScreen works in PHYSICAL pixels; Tk reports its
 # geometry in LOGICAL ones. On a display with any scaling the two differ,
@@ -448,7 +464,7 @@ def take_the_pictures():
         json.dumps(SEED))
     io.open(os.path.join(work, "settings.json"), "w", encoding="utf-8").write(
         json.dumps({"cleanup_done": True, "reclaimed_from_appdata": True,
-                    "theme": "Midnight"}))
+                    "theme": "dark"}))
     io.open(os.path.join(work, "scenes.json"), "w", encoding="utf-8").write(
         json.dumps(SCENES))
     io.open(os.path.join(work, "shoot.py"), "w", encoding="utf-8").write(SHOOTER)
