@@ -31,7 +31,8 @@ import note_organizer as NO, tkinter as tk
 # viewable, and the app hides popups whenever another program holds the
 # Windows foreground -- which a test process never owns. See
 # qa/_qa_support.py; _qa_click refuses to click into the void.
-from _qa_support import click as _qa_click, pin_popup_visibility as _qa_pin
+from _qa_support import (click as _qa_click, fire as _qa_fire,
+                         pin_popup_visibility as _qa_pin)
 _qa_pin(NO)
 from datetime import date
 fails=[]
@@ -93,7 +94,8 @@ try:
 except Exception as e:
     check(f'calendar renders without error ({e})', False)
 
-rendered_cells = len(app.cal_grid_frame.winfo_children()) if hasattr(app,'cal_grid_frame') else 0
+# The month is a drawing: a cell is a record of what was drawn for a day.
+rendered_cells = len(getattr(app, '_cal_cells', {}))
 check('calendar produced grid cells', rendered_cells > 20)
 
 # month navigation
@@ -231,25 +233,27 @@ app.render_calendar()
 app.update()
 
 
-def _c8_chips(root, acc=None):
-    """The note titles drawn in the grid: a Label that names a note."""
-    acc = [] if acc is None else acc
-    for child in root.winfo_children():
-        if isinstance(child, tk.Label) and 'Hover' in str(child.cget('text')):
-            acc.append(child)
-        _c8_chips(child, acc)
-    return acc
+def _c8_chips():
+    """The note titles drawn in the grid, as (day, index) -- read from the
+    drawing, since a title is text on the month's canvas, not a Label."""
+    found = []
+    for _d in sorted(app._cal_cells):
+        for _i, _t in enumerate(app._cal_cell_view(_d)['chips']):
+            if 'Hover' in _t:
+                found.append((_d, _i))
+    return found
 
 
-_c8_found = _c8_chips(app.cal_frame if hasattr(app, 'cal_frame') else app)
+_c8_found = _c8_chips()
 check(f'the grid draws the note as a chip ({len(_c8_found)} found)',
       bool(_c8_found))
 if _c8_found:
-    _c8_chip = _c8_found[0]
+    _c8_day, _c8_index = _c8_found[0]
+    _c8_at = app._cal_point(_c8_day, chip=_c8_index)
     # THE PROMISE THE HOVER MAKES. Clicking the chip must land on that one
     # note, not on the day's list -- which is what the day cell around it
-    # still does, and rightly.
-    _qa_click(_c8_chip)
+    # still does, and rightly. A real click, on the canvas, at the title.
+    _qa_click(app.cal_canvas, x=_c8_at[0], y=_c8_at[1])
     app.update()
     check('clicking the chip lands on that one note, not the whole day',
           getattr(app, '_day_panel_mode', None) == 'note')
@@ -258,7 +262,7 @@ if _c8_found:
     _c8_real = NO.tk.Menu.tk_popup
     NO.tk.Menu.tk_popup = lambda _m, *a, **k: _c8_posted.append(_m)
     try:
-        _c8_chip.event_generate('<Button-3>', x=5, y=5)
+        _qa_fire(app.cal_canvas, '<Button-3>', x=_c8_at[0], y=_c8_at[1])
         app.update()
         _c8_labels = []
         if _c8_posted:
@@ -278,8 +282,8 @@ if _c8_found:
         # around the chip -- the day number and the background are the day,
         # and taking its menu away would trade one gap for another.
         _c8_posted.clear()
-        _c8_cell = _c8_chip.master
-        _c8_cell.event_generate('<Button-3>', x=5, y=5)
+        _c8_cell_at = app._cal_point(_c8_day)
+        _qa_fire(app.cal_canvas, '<Button-3>', x=_c8_cell_at[0], y=_c8_cell_at[1])
         app.update()
         _c8_day_labels = []
         if _c8_posted:
@@ -811,7 +815,7 @@ def _b3_texts(widget, out=None):
     return out
 
 
-_b3_all = _b3_texts(app.cal_grid_frame)
+_b3_all = app._cal_texts()
 check('a day holding more notes than fit says how many more (plan 53)',
       any(_b3re.match(r'^\+\d+ more$', t) for t in _b3_all))
 check('...and still shows some of them by name',
@@ -846,7 +850,7 @@ app.notes = [NO.normalize_note(n) for n in app.notes]
 app.save_notes()
 app.filter_var.set('Scoala')
 app.refresh_note_list(); app.update()
-_b3_shown = set(app._note_card_widgets)
+_b3_shown = set(app._card_order())
 check('filtering by a category shows only that category (plan 77)',
       _b3_shown == {7001, 7002})
 app.filter_var.set('All')
@@ -881,11 +885,8 @@ app.refresh_note_list(); app.update()
 _b3_order = [n['title'] for n in app._visible_notes_in_order()] \
     if hasattr(app, '_visible_notes_in_order') else None
 if _b3_order is None:
-    _b3_order = []
-    for _cid, _w in app._note_card_widgets.items():
-        _b3_order.append((_w['card'].winfo_rooty(), _w['note']['title'],
-                          _w['note']['category']))
-    _b3_order = [t for _y, t, _c in sorted(_b3_order)]
+    # The cards in the order they are drawn, top to bottom.
+    _b3_order = [app.find_note(_cid)['title'] for _cid in app._card_order()]
 check('sorting A-Z orders the notes inside each group (plan 83)',
       _b3_order == ['Delta', 'Gama', 'Alfa', 'Beta']
       or _b3_order == ['Alfa', 'Beta', 'Delta', 'Gama'])

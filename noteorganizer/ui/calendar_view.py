@@ -174,10 +174,31 @@ class CalendarViewMixin:
 
         # Grid gets a comfortable minimum height so cells never shrink to
         # unusable slivers; if the window is smaller, the scrollbar kicks in.
-        self.cal_grid_frame = tk.Frame(self.cal_scroll_inner, height=520)
+        self.cal_grid_frame = tk.Frame(self.cal_scroll_inner, height=self.CAL_GRID_HEIGHT)
         self.track_theme(self.cal_grid_frame, bg="bg")
         self.cal_grid_frame.pack(side="top", fill="both", expand=True, padx=30, pady=(0, 10))
         self.cal_grid_frame.pack_propagate(False)
+
+        # The month is DRAWN on this canvas: every day cell, its number,
+        # dots, note titles and markers are shapes and text, not widgets
+        # (see _draw_calendar_grid). Built once; render_calendar and every
+        # change of size only redraw what is on it.
+        self.cal_canvas = tk.Canvas(self.cal_grid_frame, highlightthickness=0,
+                                    bg=self.colors["bg"])
+        self.track_theme(self.cal_canvas, bg="bg")
+        self.cal_canvas.pack(fill="both", expand=True)
+        self._cal_cells = {}
+        self._cal_month_data = None
+        self._cal_hover_key = None
+        self._cal_cursor = ""
+        self.cal_canvas.bind("<Configure>", self._cal_canvas_configured, add="+")
+        self.cal_canvas.bind("<Button-1>", self._cal_pressed)
+        self.cal_canvas.bind("<Button-3>", self._cal_right_pressed)
+        self.cal_canvas.bind("<Motion>", self._cal_pointer_moved)
+        self.cal_canvas.bind("<Leave>", self._cal_pointer_left)
+        # The wheel scrolls the calendar's own area, as it did over the old
+        # cells; bound once, since the canvas outlives every render.
+        self._bind_mousewheel_recursive(self.cal_grid_frame, self.cal_scroll_canvas)
 
         # Re-render the calendar when the window crosses the size threshold, so
         # note previews switch between small/large. Guarded so it only fires on
@@ -195,7 +216,19 @@ class CalendarViewMixin:
             if size != self._cal_last_font_size:
                 self._cal_last_font_size = size
                 self.render_calendar()
-        self.bind("<Configure>", _on_resize, add="+")
+        # On the grid's own <Configure>: the grid changes size exactly when
+        # the step can change -- the window resized while the calendar is
+        # showing, AND the calendar shown again after the window was
+        # resized somewhere else (on the Notes tab, for one -- qa4 walks
+        # it), which the window's own Configure never reports. It used to be
+        # bound on the window with self.bind, which also ran it for every
+        # widget laid out anywhere in the app -- 3,882 times for one
+        # rebuild of a 300-note list -- and that storm was what happened
+        # to cover the second case. The drawing sets the grid's height to
+        # fit the month, which brings this back, but the window's width --
+        # and so the step -- has not changed by then, so it cannot feed
+        # itself.
+        self.cal_grid_frame.bind("<Configure>", _on_resize, add="+")
 
         self.bind_all("<Prior>", lambda e: self._calendar_key(e, months=-1))
         self.bind_all("<Next>", lambda e: self._calendar_key(e, months=1))
@@ -270,48 +303,48 @@ class CalendarViewMixin:
             w = 900
         return 11 if w >= 1150 else 9
 
-    def _build_day_badge(self, cell, date_str, cell_bg, day_color):
-        """Draw (or redraw) the small marker-emoji badge in a day cell's
-        corner, capped to a handful so it can't sprawl across the cell. The
-        resulting Label is stashed on the cell itself (cell._marker_badge) so
-        _refresh_day_badge can find and replace just this one badge later,
-        without touching anything else in the calendar."""
-        old = getattr(cell, "_marker_badge", None)
-        if old is not None:
-            try:
-                old.destroy()
-            except tk.TclError:
-                pass
-            cell._marker_badge = None
+    # The month grid's geometry, as the widget grid it replaces laid it out:
+    # seven equal columns, a row of weekday names, and week rows all as tall
+    # as the busiest day needs (never under 90), each cell inset by 3. The
+    # grid's frame starts 520 pixels tall and then takes the month's height.
+    CAL_GRID_HEIGHT = 520
+    CAL_CELL_PAD = 3
+    CAL_ROW_MIN = 90
+    CAL_CHIP_WRAP = 88          # a note title wraps here, as its Label did
+    CAL_MAX_CHIPS = 2           # titles a day shows before "+N more"
+    CAL_LABEL_INSET = 3         # what a Label kept round its text (bd + pad)
 
+    def _draw_day_badge(self, date_str):
+        """Draw (or redraw) the small marker-emoji badge in a day cell's
+        corner, capped to a handful so it can't sprawl across the cell. Its
+        item is kept in the day's record, so _refresh_day_badge can replace
+        just this one badge later without touching anything else."""
+        rec = self._cal_cells.get(date_str)
+        if rec is None:
+            return
+        cv = self.cal_canvas
+        old = rec["items"].pop("badge", None)
+        if old is not None:
+            cv.delete(old)
         markers = self.day_emoji.get(date_str) or []
         if not markers:
             return
-        shown_markers = markers[:3]
-        badge_text = "".join(shown_markers)
+        badge_text = "".join(markers[:3])
         if len(markers) > 3:
             badge_text += f"+{len(markers) - 3}"
-        badge = tk.Label(cell, text=badge_text, font=("Segoe UI Emoji", 10),
-                         bg=cell_bg if day_color else self.colors["card"])
-        badge.place(relx=1.0, rely=0.0, anchor="ne", x=-3, y=3)
-        cell._marker_badge = badge
+        rec["items"]["badge"] = cv.create_text(
+            rec["x1"] - self.CAL_CELL_PAD - self.CAL_LABEL_INSET,
+            rec["y0"] + self.CAL_CELL_PAD + self.CAL_LABEL_INSET,
+            anchor="ne", text=badge_text, font=("Segoe UI Emoji", 10),
+            fill=rec["fg"], tags=("cal", rec["tag"]))
 
     def _refresh_day_badge(self, date_str):
         """Update just ONE day's marker badge in place — used after saving
-        picks from the Mark-this-day popup. Deliberately avoids a full
-        render_calendar() call: destroying/rebuilding all ~35-42 day cells for
-        a single small change was visibly heavy enough to cause a brief
-        flicker/tear, especially right after a popup closes. This touches
-        only the one cell that actually changed."""
-        cell = getattr(self, "_cal_cell_widgets", {}).get(date_str)
-        if cell is None or not cell.winfo_exists():
-            # The visible month changed since the popup opened, or the
-            # calendar hasn't been rendered yet — nothing to patch in place,
-            # a full render will pick it up naturally next time it's shown.
-            return
-        day_color = self.day_colors.get(date_str)
-        cell_bg = day_color if day_color else self.colors["card"]
-        self._build_day_badge(cell, date_str, cell_bg, day_color)
+        picks from the Mark-this-day popup, where a whole render would redraw
+        every day for a single small change. Nothing to do when that day is
+        not drawn (the month changed since the popup opened, or the calendar
+        was never shown): the next render picks the markers up."""
+        self._draw_day_badge(date_str)
 
     def render_calendar(self):
         if not hasattr(self, "cal_grid_frame"):
@@ -340,12 +373,6 @@ class CalendarViewMixin:
         if not self._calendar_is_showing():
             self._calendar_needs_render = True
             return
-        # Tracks date_str -> cell Frame, so a single day's marker badge can be
-        # refreshed later (see _refresh_day_badge) without tearing down and
-        # rebuilding all ~35-42 day cells just for one small change.
-        self._cal_cell_widgets = {}
-        for widget in self.cal_grid_frame.winfo_children():
-            widget.destroy()
 
         month_name = cal_module.month_name[self.cal_month]
         # The caret is the only hint that this opens a jump dialog, so it
@@ -364,168 +391,16 @@ class CalendarViewMixin:
             for occurrence in expand_occurrences(n, month_start, month_end):
                 notes_by_date.setdefault(occurrence, []).append(n)
 
-        # Direct .configure() calls throughout this function, not
-        # self.track_theme(): every cell and everything in it is destroyed
-        # and rebuilt from scratch on every render_calendar() call (a save,
-        # switching months, ...), so it always picks up the CURRENT theme
-        # fresh anyway. track_theme() appends to a list that's never pruned
-        # when its widgets are destroyed — with ~40 cells rebuilt on every
-        # save over a long session, that added up to a slow, ever-growing list.
-        weekdays = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
-        for col, wd in enumerate(weekdays):
-            lbl = tk.Label(self.cal_grid_frame, text=wd, font=("Segoe UI", 9, "bold"),
-                           bg=self.colors["bg"], fg=self.colors["subtext"])
-            lbl.grid(row=0, column=col, sticky="nsew", pady=(0, 5))
-            self.cal_grid_frame.grid_columnconfigure(col, weight=1, uniform="calday")
-
-        today_str = datetime.now().strftime("%Y-%m-%d")
-        month_weeks = cal_module.monthcalendar(self.cal_year, self.cal_month)
-
-        for row_idx, week in enumerate(month_weeks, start=1):
-            for col_idx, day in enumerate(week):
-                if day == 0:
-                    continue
-                date_str = f"{self.cal_year:04d}-{self.cal_month:02d}-{day:02d}"
-                day_notes = notes_by_date.get(date_str, [])
-                has_notes = bool(day_notes)
-                is_today = date_str == today_str
-
-                cell = tk.Frame(self.cal_grid_frame, cursor="hand2")
-                day_color = self.day_colors.get(date_str)
-                if day_color:
-                    # User painted this day: tint the whole cell.
-                    cell.configure(bg=day_color)
-                else:
-                    cell.configure(bg=self.colors["card"])
-                cell.grid(row=row_idx, column=col_idx, sticky="nsew", padx=3, pady=3, ipady=6)
-                self._cal_cell_widgets[date_str] = cell
-
-                # Background used for this cell's inner labels (matches a
-                # painted day so text doesn't sit on a mismatched patch).
-                cell_bg = day_color if day_color else self.colors["card"]
-                lbl_fg = "#ffffff" if day_color else self.colors["text"]
-
-                if is_today:
-                    # A thin accent-colored top bar marks "today", separate
-                    # from category dots so the two don't get confused.
-                    today_bar = tk.Frame(cell, height=3, bg=self.colors["accent"])
-                    today_bar.pack(fill="x", side="top")
-
-                day_lbl = tk.Label(cell, text=str(day), font=("Segoe UI", 11, "bold" if is_today else "normal"),
-                                   bg=cell_bg, fg=lbl_fg)
-                day_lbl.pack(pady=(4, 2))
-
-                # Manually-flagged day markers (via right-click > Mark this
-                # day) show as a small badge cluster in the cell's corner —
-                # visible whether or not the day has any notes.
-                self._build_day_badge(cell, date_str, cell_bg, day_color)
-
-                hover_targets = [cell, day_lbl]
-
-                if has_notes:
-                    dots_row = tk.Frame(cell, bg=cell_bg)
-                    dots_row.pack(pady=(0, 2))
-                    seen_colors = []
-                    for n in day_notes:
-                        c = self.get_note_color(effective_note(n, date_str))
-                        if c not in seen_colors:
-                            seen_colors.append(c)
-                    for dot_color in seen_colors:
-                        dot = tk.Label(dots_row, text="●", fg=dot_color, font=("Segoe UI", 9), bg=cell_bg)
-                        dot.pack(side="left", padx=1)
-                    hover_targets.append(dots_row)
-
-                    # Title previews — show up to 2 note titles at a readable
-                    # size (bigger in a wide window), plus a "+N more" line.
-                    # A thin divider between them makes it clear where one
-                    # note's title ends and the next begins.
-                    note_fs = self._cal_note_font_size()
-                    max_shown = 2
-                    shown_notes = day_notes[:max_shown]
-                    for idx, dn in enumerate(shown_notes):
-                        eff = effective_note(dn, date_str)
-                        full_title = _note_str(eff, "title") or "(untitled)"
-                        t = _truncate(full_title, 16)
-                        # If the title has an emoji that truncation would cut
-                        # off (e.g. it sits near the end of a long title),
-                        # surface it up front so it's still recognizable at a
-                        # glance instead of silently disappearing.
-                        found_emoji = _extract_first_emoji(full_title)
-                        if found_emoji and found_emoji not in t:
-                            t = f"{found_emoji} {t}"
-                        if is_recurring(dn):
-                            t = "🔁 " + t
-                        chip = tk.Label(cell, text=t, font=("Segoe UI", note_fs),
-                                        wraplength=88, justify="left",
-                                        bg=cell_bg,
-                                        fg=(lbl_fg if day_color else self.colors["text"]))
-                        chip.pack(pady=(0, 1), padx=2, anchor="w", fill="x")
-                        # The chip is the NOTE, and now behaves like one.
-                        #
-                        # Hovering it has always previewed just this note --
-                        # and then clicking it opened the whole day, so
-                        # someone who had just read "Dentist, 14:00" landed
-                        # on a list of the day's six notes and had to find it
-                        # again. Right-click, the app's own route to a note's
-                        # actions everywhere else, offered "Color this day…".
-                        # Every action a note has was unreachable from the
-                        # grid, although the same-looking row in the day panel
-                        # carries all of them.
-                        #
-                        # The day's own menu stays on the cell background, the
-                        # day number and the dot row, which is where it
-                        # belongs: those are the day, and this is a note.
-                        chip.bind("<Button-1>",
-                                  lambda e, n=dn, d=date_str:
-                                  self._open_note_from_grid(n, d))
-                        chip.bind("<Button-3>",
-                                  lambda e, n=dn, d=date_str:
-                                  self.show_note_context_menu(
-                                      e, n, occurrence_date=d))
-                        chip.bind("<Enter>",
-                                  lambda e, n=dn, d=date_str: self.show_note_hover_preview(n, d))
-                        chip.bind("<Leave>", lambda e: self.hide_day_tooltip())
-                        # A faint divider line under each chip except the last,
-                        # so multiple notes in one cell read as separate items.
-                        if idx < len(shown_notes) - 1:
-                            divider = tk.Frame(cell, bg=self.colors["subtext"], height=1)
-                            divider.pack(fill="x", padx=10, pady=1)
-                    if len(day_notes) > max_shown:
-                        more = tk.Label(cell, text=f"+{len(day_notes) - max_shown} more",
-                                        font=("Segoe UI", max(note_fs - 1, 8), "italic"),
-                                        bg=cell_bg,
-                                        fg=(lbl_fg if day_color else self.colors["subtext"]))
-                        more.pack(pady=(0, 4), anchor="w", padx=2)
-                        hover_targets.append(more)
-                    else:
-                        tk.Frame(cell, height=2, bg=cell_bg).pack()
-                else:
-                    # Keep row heights consistent whether or not a day has notes
-                    spacer = tk.Label(cell, text=" ", font=("Segoe UI", 4), bg=cell_bg)
-                    spacer.pack()
-
-                # These targets (cell background, day number, the dot row, and
-                # "+N more") show a compact, TITLES-ONLY summary of the day on
-                # hover — never full note bodies, so it can't balloon into a
-                # huge box even when a day has many notes.
-                for widget in hover_targets:
-                    widget.bind("<Button-1>", lambda e, d=date_str: self.open_day_popup(d))
-                    widget.bind("<Button-3>", lambda e, d=date_str: self.show_day_context_menu(e, d))
-                    if has_notes:
-                        widget.bind("<Enter>", lambda e, d=date_str: self.show_day_summary_tooltip(d))
-                        widget.bind("<Leave>", lambda e: self.hide_day_tooltip())
-
-            # Uniform row height so every week is the same size regardless of
-            # how many notes a day holds. "uniform" ties all rows to one size.
-            self.cal_grid_frame.grid_rowconfigure(row_idx, weight=1, uniform="calweek", minsize=90)
-
-        # Cells are recreated on every render, so (re)bind the mousewheel across
-        # the whole calendar area — otherwise the wheel only works when the
-        # cursor is over the scrollbar, not over the day cells.
-        if hasattr(self, "cal_scroll_canvas"):
-            self._bind_mousewheel_recursive(self.cal_grid_frame, self.cal_scroll_canvas)
-        # Fresh cells also mean the selected-day border was torn down with
-        # the old ones — re-mark the open day, if its month is on screen.
+        # What the month shows, kept so a change of size can draw it again
+        # without working the occurrences out again.
+        self._cal_month_data = {
+            "year": self.cal_year, "month": self.cal_month,
+            "notes_by_date": notes_by_date,
+            "weeks": cal_module.monthcalendar(self.cal_year, self.cal_month),
+        }
+        self._draw_calendar_grid()
+        # A fresh drawing has no selected-day border -- re-mark the open
+        # day, if its month is on screen.
         self._update_selected_day_outline()
         # render_calendar is the single signal "calendar data changed,
         # redraw" — every mutation (delete, restore, save, duplicate)
@@ -535,6 +410,345 @@ class CalendarViewMixin:
         # (field report).
         if getattr(self, "_history_visible", False):
             self._render_calendar_history()
+
+    # ---------- The month grid, drawn ----------
+
+    def _cal_font(self, spec):
+        """A font the grid draws with, and its line height -- measured once,
+        because every cell asks the same few."""
+        cache = getattr(self, "_cal_font_cache", None)
+        if cache is None:
+            cache = self._cal_font_cache = {}
+        found = cache.get(spec)
+        if found is None:
+            import tkinter.font as tkfont
+            font = tkfont.Font(root=self, font=spec)
+            found = cache[spec] = (font, font.metrics("linespace"))
+        return found
+
+    def _draw_calendar_grid(self):
+        """Draw the month on the calendar's canvas.
+
+        The grid used to be built of widgets -- a Frame per day, a Label for
+        its number, each dot, each note title, a Frame per divider: 216
+        windows for a month holding 46 notes, every one of which Windows had
+        to place and paint again at each step of a window resize. The same
+        cells are now rectangles and text on one canvas.
+
+        Laid out as the widget grid did, measured on it: seven columns of
+        floor(i * width / 7), a row of weekday names 26 pixels deep, and week
+        rows as tall as the tallest day needs (never under 90), each cell
+        inset by 3. Inside a cell, everything sits where pack put it -- the
+        comments below give the paddings it used. A day's content is drawn
+        at the origin first, because the row height depends on the tallest
+        day, and moved into place once that is known.
+        """
+        cv = self.cal_canvas
+        cv.delete("cal")
+        self._cal_cells = {}
+        self._cal_hover_key = None
+        data = getattr(self, "_cal_month_data", None)
+        if data is None:
+            return
+        width = cv.winfo_width()
+        if width <= 1:
+            width = self.cal_grid_frame.winfo_width()
+        if width <= 1:
+            # Not laid out yet: the canvas's first <Configure> draws it.
+            return
+        self._cal_drawn_width = width
+        c = self.colors
+        pad = self.CAL_CELL_PAD
+        inset = self.CAL_LABEL_INSET
+        cols = [int(i * width / 7) for i in range(8)]
+
+        header_font, header_ls = self._cal_font(("Segoe UI", 9, "bold"))
+        header_h = header_ls + 2 * inset + 5        # the Label, and pady (0, 5)
+        for i, name in enumerate(("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")):
+            cv.create_text((cols[i] + cols[i + 1]) / 2.0, inset, anchor="n",
+                           text=name, font=header_font, fill=c["subtext"],
+                           tags=("cal",))
+
+        today_str = datetime.now().strftime("%Y-%m-%d")
+        year, month = data["year"], data["month"]
+        placed = []
+        tallest = 0
+        for week_index, week in enumerate(data["weeks"]):
+            for col, day in enumerate(week):
+                if not day:
+                    continue
+                date_str = f"{year:04d}-{month:02d}-{day:02d}"
+                cell_w = cols[col + 1] - cols[col] - 2 * pad
+                rec = self._draw_cal_cell_content(
+                    date_str, day, data["notes_by_date"].get(date_str, []),
+                    date_str == today_str, cell_w)
+                tallest = max(tallest, rec["needs"])
+                placed.append((week_index, col, rec))
+        row_h = max(self.CAL_ROW_MIN, tallest + 2 * pad)
+
+        for week_index, col, rec in placed:
+            x0 = cols[col] + pad
+            y0 = header_h + week_index * row_h + pad
+            x1 = cols[col + 1] - pad
+            y1 = y0 + row_h - 2 * pad
+            rec.update(x0=x0, y0=y0, x1=x1, y1=y1)
+            cv.move(rec["tag"], x0, y0)
+            rec["chips"] = [(note, (bx0 + x0, by0 + y0, bx1 + x0, by1 + y0))
+                            for note, (bx0, by0, bx1, by1) in rec["chips"]]
+            bg = cv.create_rectangle(x0, y0, x1, y1, fill=rec["bg"], outline="",
+                                     tags=("cal", rec["tag"]))
+            # Under the day's own number, dots and titles, which were drawn
+            # first so they could be measured.
+            cv.tag_lower(bg)
+            rec["items"]["bg"] = bg
+            self._cal_cells[rec["date"]] = rec
+            self._draw_day_badge(rec["date"])
+
+        # The frame the grid lives in is as tall as the grid, as it was
+        # when its rows asked for their height -- one busy day makes every
+        # week taller, and the calendar area scrolls.
+        total = header_h + len(data["weeks"]) * row_h
+        try:
+            if int(self.cal_grid_frame.cget("height")) != total:
+                self.cal_grid_frame.configure(height=total)
+        except tk.TclError:
+            pass
+
+    def _draw_cal_cell_content(self, date_str, day, day_notes, is_today, w):
+        """Draw one day's number, dots, titles and "+N more" with the cell's
+        top-left corner at the canvas origin, and say how tall it needs to
+        be. Returns the day's record; the caller moves it into place."""
+        cv = self.cal_canvas
+        c = self.colors
+        inset = self.CAL_LABEL_INSET
+        tag = "calday" + date_str
+        tags = ("cal", tag)
+        day_color = self.day_colors.get(date_str)
+        # White on a painted day, so the text does not sit on a mismatched
+        # patch; the theme's own colours otherwise.
+        fg = "#ffffff" if day_color else c["text"]
+        items = {}
+        chips = []
+        y = 0
+        if is_today:
+            # A thin accent bar marks "today", apart from the category dots
+            # so the two are not confused.
+            items["today"] = cv.create_rectangle(0, 0, w, 3, fill=c["accent"],
+                                                 outline="", tags=tags)
+            y = 3
+        day_font, day_ls = self._cal_font(("Segoe UI", 11, "bold" if is_today else "normal"))
+        y += 4                                          # pady (4, 2)
+        items["day"] = cv.create_text(w / 2.0, y + inset, anchor="n", text=str(day),
+                                      font=day_font, fill=fg, tags=tags)
+        y += day_ls + 2 * inset + 2
+        if day_notes:
+            dot_font, dot_ls = self._cal_font(("Segoe UI", 9))
+            colours = []
+            for n in day_notes:
+                colour = self.get_note_color(effective_note(n, date_str))
+                if colour not in colours:
+                    colours.append(colour)
+            dot_w = dot_font.measure("●") + 2 * inset   # each dot's Label
+            step = dot_w + 2                            # ...and padx 1 either side
+            left = (w - step * len(colours)) // 2 + 1
+            items["dots"] = [
+                cv.create_text(left + i * step + dot_w / 2.0, y + inset, anchor="n",
+                               text="●", font=dot_font, fill=colour, tags=tags)
+                for i, colour in enumerate(colours)]
+            y += dot_ls + 2 * inset + 2                 # pady (0, 2)
+
+            # Up to two titles at a readable size (bigger in a wide
+            # window), a thin divider between them, then "+N more".
+            note_fs = self._cal_note_font_size()
+            chip_font, _chip_ls = self._cal_font(("Segoe UI", note_fs))
+            shown = day_notes[:self.CAL_MAX_CHIPS]
+            items["chips"] = []
+            for index, note in enumerate(shown):
+                eff = effective_note(note, date_str)
+                full_title = _note_str(eff, "title") or "(untitled)"
+                text = _truncate(full_title, 16)
+                # An emoji that truncation would cut off is surfaced up
+                # front, so the title stays recognisable at a glance.
+                found_emoji = _extract_first_emoji(full_title)
+                if found_emoji and found_emoji not in text:
+                    text = f"{found_emoji} {text}"
+                if is_recurring(note):
+                    text = "🔁 " + text
+                # Wrapped at 88 and centred as a block, left-justified inside
+                # -- the Label spanned the cell and centred what it held.
+                item = cv.create_text(w / 2.0, y + inset, anchor="n", text=text,
+                                      width=self.CAL_CHIP_WRAP, justify="left",
+                                      font=chip_font, fill=fg, tags=tags)
+                box = cv.bbox(item)
+                text_h = (box[3] - box[1]) if box else _chip_ls
+                chip_h = text_h + 2 * inset
+                # The chip is the NOTE, and behaves like one: found under the
+                # pointer by this box (see _cal_hit), it opens that note, its
+                # right-click is the note's menu, and hovering previews it.
+                chips.append((note, (2, y, w - 2, y + chip_h)))
+                items["chips"].append(item)
+                y += chip_h + 1                         # pady (0, 1)
+                if index < len(shown) - 1:
+                    line_y = y + 1                      # a divider, pady 1
+                    items.setdefault("dividers", []).append(cv.create_rectangle(
+                        10, line_y, w - 10, line_y + 1, fill=c["subtext"],
+                        outline="", tags=tags))
+                    y = line_y + 2
+            if len(day_notes) > self.CAL_MAX_CHIPS:
+                more_font, more_ls = self._cal_font(
+                    ("Segoe UI", max(note_fs - 1, 8), "italic"))
+                items["more"] = cv.create_text(
+                    2 + inset, y + inset, anchor="nw",
+                    text=f"+{len(day_notes) - self.CAL_MAX_CHIPS} more",
+                    font=more_font, fill=(fg if day_color else c["subtext"]), tags=tags)
+                y += more_ls + 2 * inset + 4            # pady (0, 4)
+            else:
+                y += 2                                  # the 2-pixel spacer frame
+        else:
+            # The empty day's spacer, which kept row heights even.
+            y += self._cal_font(("Segoe UI", 4))[1] + 2 * inset
+        return {"date": date_str, "tag": tag, "items": items, "chips": chips,
+                "bg": day_color or c["card"], "fg": fg, "has_notes": bool(day_notes),
+                "needs": y + 12}                        # ipady 6, top and bottom
+
+    def _cal_canvas_configured(self, event):
+        """The canvas changed size. A new width lays the month out again
+        from what render_calendar worked out -- no occurrences expanded, no
+        widget made. A new height alone is the grid's own doing (it sets the
+        frame's height to fit its rows), and needs nothing."""
+        if event.width == getattr(self, "_cal_drawn_width", None):
+            return
+        if getattr(self, "_cal_month_data", None) is None:
+            return
+        if not self._calendar_is_showing():
+            return
+        self._draw_calendar_grid()
+        self._update_selected_day_outline()
+
+    def _cal_hit(self, x, y):
+        """What lies under a point of the grid: ("chip", date, note) for a
+        note's title, ("day", date, None) for the rest of a day's cell, or
+        None for the gaps and the weekday names."""
+        for date_str, rec in self._cal_cells.items():
+            if rec["x0"] <= x <= rec["x1"] and rec["y0"] <= y <= rec["y1"]:
+                for note, (bx0, by0, bx1, by1) in rec["chips"]:
+                    if bx0 <= x <= bx1 and by0 <= y <= by1:
+                        return ("chip", date_str, note)
+                return ("day", date_str, None)
+        return None
+
+    def _cal_pressed(self, event):
+        """A click on the grid. A note's title opens that one note; the rest
+        of the cell -- its number, dots, "+N more", the background -- opens
+        the day, as the day's widgets each did."""
+        hit = self._cal_hit(event.x, event.y)
+        if hit is None:
+            return
+        kind, date_str, note = hit
+        if kind == "chip":
+            self._open_note_from_grid(note, date_str)
+        else:
+            self.open_day_popup(date_str)
+
+    def _cal_right_pressed(self, event):
+        """Right-click: the note's own menu on its title, the day's menu on
+        the rest of the cell -- those are the day, and a title is a note."""
+        hit = self._cal_hit(event.x, event.y)
+        if hit is None:
+            return
+        kind, date_str, note = hit
+        if kind == "chip":
+            self.show_note_context_menu(event, note, occurrence_date=date_str)
+        else:
+            self.show_day_context_menu(event, date_str)
+
+    def _cal_pointer_moved(self, event):
+        """Hovering. Over a title, a preview of that one note; over the rest
+        of a day that has notes, a titles-only summary of the day; each shown
+        once, when the pointer arrives. And the hand over a day, the plain
+        pointer over the gaps -- what the cells' own cursor said."""
+        hit = self._cal_hit(event.x, event.y)
+        want = "hand2" if hit is not None else ""
+        if want != self._cal_cursor:
+            self._cal_cursor = want
+            try:
+                self.cal_canvas.configure(cursor=want)
+            except tk.TclError:
+                pass
+        if hit is None:
+            key = None
+        elif hit[0] == "chip":
+            key = ("chip", hit[1], id(hit[2]))
+        else:
+            key = ("day", hit[1])
+        if key == self._cal_hover_key:
+            return
+        self._cal_hover_key = key
+        self.hide_day_tooltip()
+        if hit is None:
+            return
+        if hit[0] == "chip":
+            self.show_note_hover_preview(hit[2], hit[1])
+        elif self._cal_cells[hit[1]]["has_notes"]:
+            self.show_day_summary_tooltip(hit[1])
+
+    def _cal_pointer_left(self, _event=None):
+        self._cal_hover_key = None
+        self._cal_cursor = ""
+        try:
+            self.cal_canvas.configure(cursor="")
+        except tk.TclError:
+            pass
+        self.hide_day_tooltip()
+
+    def _cal_cell_view(self, date_str):
+        """What one drawn day shows, read back from the drawing itself --
+        the question checks ask now that a cell has no widgets."""
+        rec = self._cal_cells.get(date_str)
+        if rec is None:
+            return None
+        cv = self.cal_canvas
+        it = rec["items"]
+
+        def text(item):
+            return cv.itemcget(item, "text") if item is not None else ""
+
+        selected = [i for i in cv.find_withtag("cal_selected")
+                    if tuple(int(round(v)) for v in cv.coords(i))
+                    == (rec["x0"] + 1, rec["y0"] + 1, rec["x1"] - 1, rec["y1"] - 1)]
+        return {
+            "box": (rec["x0"], rec["y0"], rec["x1"], rec["y1"]),
+            "bg": cv.itemcget(it["bg"], "fill"),
+            "day": text(it.get("day")),
+            "day_fill": cv.itemcget(it["day"], "fill"),
+            "today": "today" in it,
+            "badge": text(it.get("badge")),
+            "badge_fill": cv.itemcget(it["badge"], "fill") if "badge" in it else "",
+            "dots": [cv.itemcget(d, "fill") for d in it.get("dots", [])],
+            "chips": [text(t) for t in it.get("chips", [])],
+            "chip_fill": [cv.itemcget(t, "fill") for t in it.get("chips", [])],
+            "more": text(it.get("more")),
+            "selected_width": (float(cv.itemcget(selected[0], "width")) if selected else 0),
+            "selected_colour": (cv.itemcget(selected[0], "outline") if selected else ""),
+        }
+
+    def _cal_texts(self):
+        """Every text the month grid draws, in no particular order."""
+        cv = self.cal_canvas
+        return [cv.itemcget(i, "text") for i in cv.find_withtag("cal")
+                if cv.type(i) == "text"]
+
+    def _cal_point(self, date_str, chip=None):
+        """Where to point, in the canvas's own coordinates, to reach a day
+        -- a spot of its cell that holds nothing else -- or one of its
+        titles (chip = its index)."""
+        rec = self._cal_cells.get(date_str)
+        if rec is None:
+            return None
+        if chip is not None:
+            _note, (bx0, by0, bx1, by1) = rec["chips"][chip]
+            return (int((bx0 + bx1) / 2), int((by0 + by1) / 2))
+        return (rec["x0"] + 6, rec["y1"] - 6)
 
     def maybe_show_reminder(self):
         """Show a subtle 'you have notes today' bar — but only once per calendar
@@ -986,15 +1200,21 @@ class CalendarViewMixin:
         selected = (self.selected_day
                     if getattr(self, "_day_panel_mode", "empty") != "empty"
                     else None)
-        for d, cell in (getattr(self, "_cal_cell_widgets", None) or {}).items():
-            try:
-                if d == selected:
-                    cell.configure(highlightthickness=2,
-                                   highlightbackground=self.colors["accent"])
-                else:
-                    cell.configure(highlightthickness=0)
-            except tk.TclError:
-                pass
+        cv = getattr(self, "cal_canvas", None)
+        if cv is None:
+            return
+        try:
+            cv.delete("cal_selected")
+            rec = (getattr(self, "_cal_cells", None) or {}).get(selected)
+            if rec is None:
+                return
+            # Two pixels inside the cell's edge, where the Frame's
+            # highlight ring drew them.
+            cv.create_rectangle(rec["x0"] + 1, rec["y0"] + 1, rec["x1"] - 1, rec["y1"] - 1,
+                                outline=self.colors["accent"], width=2,
+                                tags=("cal", "cal_selected"))
+        except tk.TclError:
+            pass
 
     def _toggle_calendar_history(self):
         """Swap the month grid (and day panel) for the History register,

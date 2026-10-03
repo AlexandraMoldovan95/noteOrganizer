@@ -63,6 +63,15 @@ def find_all_labels(w, acc=None):
         find_all_labels(c, acc)
     return acc
 
+
+def list_texts():
+    """What the note list says, top to bottom: every drawn card's title,
+    then every header's label. The list is a drawing, with no labels to
+    walk."""
+    out = [app._card_view(n)['title'] for n in app._card_order()]
+    out += [app._header_view(c)['label'] for c in app._group_headers]
+    return out
+
 os.makedirs(NO.ATTACHMENTS_DIR, exist_ok=True)
 
 # ============================================================
@@ -553,10 +562,12 @@ check(f'bulk action bar is narrower than the pre-fix sizing '
       f'({fixed_width}px vs {old_width}px reconstructed original)',
       fixed_width < old_width)
 
-card_ids_before = {nid: str(info['card']) for nid, info in app._note_card_widgets.items()}
+# A card drawn again has new canvas items: the item behind each card's
+# background says whether the list was redrawn.
+card_ids_before = {nid: rec['items']['bg'] for nid, rec in app._note_cards.items()}
 app._toggle_note_selected(10, True)
 app.update()
-card_ids_after = {nid: str(info['card']) for nid, info in app._note_card_widgets.items()}
+card_ids_after = {nid: rec['items']['bg'] for nid, rec in app._note_cards.items()}
 check('selecting a note does NOT rebuild the list (no flicker)', card_ids_before == card_ids_after)
 check('selection recorded correctly', app.selected_note_ids == {10})
 
@@ -575,7 +586,7 @@ app.notes.append({'id': 77, 'title': 'TableOnly', 'body': f'{_tbl7.CELL} alfa {_
                   'created': '2026-01-01 00:00', 'checklist': [], 'attachments': []})
 app.search_var.set(_tbl7.CELL)
 app.refresh_note_list(); app.update()
-_visible_cards = len(app._note_card_widgets)
+_visible_cards = len(app._card_order())
 app._bulk_select_all()
 check('searching table plumbing shows nothing and selects nothing',
       _visible_cards == 0 and app.selected_note_ids == set())
@@ -612,39 +623,11 @@ app.save_notes()
 app.refresh_note_list(); app.update()
 app.open_note_in_tab(app.find_note(20))
 app.update()
-# Asked of the COLOUR, not the thickness. Every card carries a two-pixel
-# ring now, because the same border does double duty: Tk paints
-# `highlightbackground` while a widget has no keyboard focus and
-# `highlightcolor` while it does, so one border says both "this is the
-# note you have open" (accent) and "this is where the keyboard is"
-# (text). Uniform thickness is what stops the list shifting by two pixels
-# as the focus walks down it -- and it means thickness no longer answers
-# the question this check is about.
-check('opened note is highlighted',
-      str(app._note_card_widgets[20]['card'].cget('highlightbackground'))
-      == str(app.colors['accent']))
-check('other note is not highlighted',
-      str(app._note_card_widgets[21]['card'].cget('highlightbackground'))
-      == str(app.colors['card']))
-
-# ============================================================
-# A NOTE'S ACTIONS ARE REACHABLE FROM THE KEYBOARD (C-9)
-# ============================================================
-# Pinning, exporting, duplicating and deleting all live in the right-click
-# menu and nowhere else, so anyone working by keyboard could reach none of
-# them. The row asked for two bindings; measured first, a card's takefocus
-# was '0' and nothing in the app ever focused one -- so the bindings would
-# have been bindings that could never fire, and the missing piece was a
-# way for a person to get there.
-_c9_card = app._note_card_widgets[20]['card']
-_c9_other = app._note_card_widgets[21]['card']
-check('a note card is in the keyboard traversal now',
-      str(_c9_card.cget('takefocus')) in ('1', 'True'))
 import time as _c9_time
 
 
 def _c9_take(widget, cap_s=4.0):
-    """FORCE the keyboard onto a card and wait until Tk agrees -- for a
+    """FORCE the keyboard onto a widget and wait until Tk agrees -- for a
     PRECONDITION only (qa/README, "Force a precondition; read back only a
     promise"). A plain focus_set() is a request the window manager may
     refuse while another program holds the desktop foreground, and this
@@ -665,11 +648,34 @@ def _c9_take(widget, cap_s=4.0):
     return False
 
 
+# Asked of the COLOUR, not the thickness. Every card carries a two-pixel
+# ring, and the one ring does double duty: the text colour where the
+# keyboard is, accent for the note that is open. So the open note's accent
+# is asked while the keyboard is somewhere else -- forced into the title
+# box first, as a precondition.
+check('fixture: the keyboard is off the list, in the title box',
+      _c9_take(app.title_entry))
+check('opened note is highlighted',
+      str(app._card_view(20)['ring']) == str(app.colors['accent']))
+check('other note is not highlighted',
+      str(app._card_view(21)['ring']) == str(app.colors['card']))
+
+# ============================================================
+# A NOTE'S ACTIONS ARE REACHABLE FROM THE KEYBOARD (C-9)
+# ============================================================
+# Pinning, exporting, duplicating and deleting all live in the right-click
+# menu and nowhere else, so anyone working by keyboard could reach none of
+# them. The list is one stop for the keyboard now -- its cards are a
+# drawing on one canvas -- and a card is "where the keyboard is" when the
+# list holds the keyboard and the app has put its ring on that card. That
+# second half is a decision the app records (_focused_note_id), so it is
+# read back directly: no focus_get(), which answers None whenever another
+# program holds the desktop foreground.
+check('the note list is in the keyboard traversal',
+      str(app.canvas.cget('takefocus')) in ('1', 'True'))
+
 # Settle every timer that can rebuild the list before anything below is
-# measured (qa/README): the waits in _c9_take can last seconds, and a
-# rebuild inside one replaced the card a check was holding -- index() of
-# the old widget then raised, and qa7 died before its footer, once, in a
-# mutant run. Cards are also looked up afresh after every wait, by note.
+# measured (qa/README).
 app._flush_autosave()
 if getattr(app, '_search_debounce_job', None) is not None:
     app.after_cancel(app._search_debounce_job)
@@ -677,44 +683,43 @@ if getattr(app, '_search_debounce_job', None) is not None:
 app.update()
 
 
-def _c9_live(note_id):
-    """The card on screen NOW for a note -- never one held across a wait."""
-    return (app._note_card_widgets.get(note_id) or {}).get('card')
-
-
 def _c9_on_note(note_id, cap_s=2.0):
-    """Poll for the keyboard on this NOTE's card, whichever widget draws it.
-    A PROMISE, so it is only polled, never forced: the handler's own
-    focus_set is asynchronous too."""
+    """Poll for the ring on this NOTE's card while the list holds the
+    keyboard. A PROMISE, so it is only polled, never forced."""
     end = _c9_time.time() + cap_s
     while _c9_time.time() < end:
         app.update(); app.update_idletasks()
-        try:
-            if getattr(app.focus_get(), '_card_note_id', None) == note_id:
-                return True
-        except (KeyError, tk.TclError):
-            pass
+        if (getattr(app, '_focused_note_id', None) == note_id
+                and getattr(app, '_keyboard_on_card', False)):
+            return True
         _c9_time.sleep(0.01)
     return False
 
 
-check('fixture: the keyboard really is on the card', _c9_take(_c9_live(20)))
-_c9_card = _c9_live(20)
+def _c9_put(note_id):
+    """PRECONDITION: the keyboard on the list, its ring on this card."""
+    took = _c9_take(app.canvas)
+    app._put_keyboard_on_card(note_id)
+    app.update(); app.update_idletasks()
+    return took and _c9_on_note(note_id)
+
+
+check('fixture: the keyboard really is on the card', _c9_put(20))
 # The ring does double duty, so a focused card must be distinguishable
 # from the open one rather than sharing its colour.
+_c9_ring = str(app._card_view(20)['ring'])
 check(f'the focus ring is a different colour from the open-note ring '
-      f'(ring={str(_c9_card.cget("highlightcolor"))!r}, '
-      f'text={str(app.colors["text"])!r}, '
+      f'(ring={_c9_ring!r}, text={str(app.colors["text"])!r}, '
       f'accent={str(app.colors["accent"])!r})',
-      str(_c9_card.cget('highlightcolor')) != str(app.colors['accent'])
-      and str(_c9_card.cget('highlightcolor')) == str(app.colors['text']))
+      _c9_ring != str(app.colors['accent'])
+      and _c9_ring == str(app.colors['text']))
 
 # The menu, from the keyboard, posted where the note is.
 _c9_posted = []
 _c9_real = NO.tk.Menu.tk_popup
 NO.tk.Menu.tk_popup = lambda _m, *a, **k: _c9_posted.append((_m, a))
 try:
-    _c9_card.event_generate('<Shift-F10>')
+    app.canvas.event_generate('<Shift-F10>')
     app.update()
     check('Shift+F10 on a focused card opens its actions menu',
           bool(_c9_posted))
@@ -734,97 +739,92 @@ try:
               and any('Duplicate' in _l for _l in _c9_labels))
         # Posted at the CARD, not at wherever the pointer happens to rest:
         # a menu that opens under the mouse when the mouse was not used is
-        # a menu nobody can see.
+        # a menu nobody can see. The card's place on screen is the canvas's
+        # place plus the card's own, less how far the list is scrolled.
+        _c9_view = app._card_view(20)
+        _c9_card_x = app.canvas.winfo_rootx()
+        _c9_card_y = app.canvas.winfo_rooty() + int(
+            _c9_view['y0'] - app.canvas.canvasy(0))
         check(f'...and it opens at the card rather than at the pointer '
               f'({_c9_at})',
               len(_c9_at) == 2
-              and abs(_c9_at[0] - _c9_card.winfo_rootx()) < 200
-              and abs(_c9_at[1] - _c9_card.winfo_rooty()) < 200)
+              and abs(_c9_at[0] - _c9_card_x) < 200
+              and abs(_c9_at[1] - _c9_card_y) < 200)
     # The dedicated menu key, by whichever name this platform knows it --
     # "App" on Windows, "Menu" on X11, and Tk raises on the other one.
     # Asked of the binding rather than by generating a key that may not
     # exist here: what the row promises is that the key IS bound wherever
     # it exists, and the Shift+F10 route above already proves the handler.
-    _c9_bound = set(_c9_card.bind())
+    _c9_bound = set(app.canvas.bind())
     check(f'the dedicated menu key is bound under a name this platform '
           f'knows ({sorted(s for s in _c9_bound if "App" in s or "Menu" in s or "F10" in s)})',
           '<Key-App>' in _c9_bound or '<Key-Menu>' in _c9_bound)
 finally:
     NO.tk.Menu.tk_popup = _c9_real
 
-# Walking the list. Asked of the order the cards are PACKED in, because
+# Walking the list. Asked of the order the cards are DRAWN in, because
 # the list is sorted, filtered and grouped -- the note after this one in
 # the file is very often not the one underneath it on screen.
-_c9_take(_c9_live(20))
-_c9_live(20).event_generate('<Down>')
+_c9_put(20)
+app.canvas.event_generate('<Down>')
 app.update(); app.update_idletasks()
-_c9_ids = [w._card_note_id for w in app.list_frame.winfo_children()
-           if getattr(w, '_card_note_id', None) is not None]
+_c9_ids = app._card_order()
 _c9_pos = _c9_ids.index(20) if 20 in _c9_ids else None
 _c9_next_id = (_c9_ids[_c9_pos + 1]
                if _c9_pos is not None and _c9_pos + 1 < len(_c9_ids) else None)
 check('Down moves the keyboard to the next card on screen',
       _c9_next_id is not None and _c9_on_note(_c9_next_id))
-if _c9_next_id is not None and _c9_live(_c9_next_id) is not None:
-    _c9_live(_c9_next_id).event_generate('<Up>')
+if _c9_next_id is not None:
+    app.canvas.event_generate('<Up>')
     app.update(); app.update_idletasks()
     check('and Up brings it back', _c9_on_note(20))
 # THE CONTROL: Up at the top must not wrap or crash -- it should simply
 # stay put, which is what a list does. An ABSENCE, so it cannot be polled
-# for: the keyboard is already on the first card, and a poll would answer
-# yes before a wrong move could land. What is asserted is the handler's
-# own decision -- no card is asked to take the keyboard -- recorded where
-# it is made. The precondition is part of the check: a key event only
-# reaches the card that has the keyboard, and one that went elsewhere
-# would record no move and read as a pass.
+# for: the ring is already on the first card, and a poll would answer yes
+# before a wrong move could land. What is asserted is the handler's own
+# decision -- no card is asked to take the ring -- recorded where it is
+# made. The precondition is part of the check: a key event only reaches
+# the widget that has the keyboard, and one that went elsewhere would
+# record no move and read as a pass.
 _c9_first_id = _c9_ids[0] if _c9_ids else None
-_c9_top_ready = (_c9_first_id is not None
-                 and _c9_take(_c9_live(_c9_first_id)))
-# Read AFTER the wait, so the widgets whose decisions are recorded are the
-# ones on screen when the key arrives.
-_c9_order = [w for w in app.list_frame.winfo_children()
-             if getattr(w, '_card_note_id', None) is not None]
+_c9_top_ready = _c9_first_id is not None and _c9_put(_c9_first_id)
 _c9_moved = []
-for _c9_w in _c9_order:
-    _c9_w.focus_set = (lambda _w=_c9_w: _c9_moved.append(_w))
+_c9_real_put = app._put_keyboard_on_card
+app._put_keyboard_on_card = lambda nid: _c9_moved.append(nid)
 try:
-    if _c9_first_id is not None and _c9_live(_c9_first_id) is not None:
-        _c9_live(_c9_first_id).event_generate('<Up>')
+    app.canvas.event_generate('<Up>')
     app.update(); app.update_idletasks()
 finally:
-    for _c9_w in _c9_order:
-        try:
-            del _c9_w.focus_set
-        except AttributeError:
-            pass
+    app.__dict__.pop('_put_keyboard_on_card', None)
 check('Up on the first card stays there rather than wrapping',
-      _c9_top_ready and _c9_moved == [])
+      _c9_top_ready and _c9_moved == []
+      and getattr(app, '_focused_note_id', None) == _c9_first_id)
 
-# The keyboard survives a rebuild. The list is destroyed and rebuilt on a
-# save, a search keystroke, a note switch -- a focus left pointing at a
-# widget that no longer exists would make this route unusable after the
-# first thing that happens.
+# The keyboard survives a rebuild. The list is rebuilt on a search
+# keystroke, a sort, a filter -- a keyboard left pointing at something
+# that no longer exists would make this route unusable after the first
+# thing that happens. The canvas that holds the keyboard survives a
+# rebuild now; what has to come back is the ring, on the same note.
 check('fixture: the keyboard is on a known card before the rebuild',
-      _c9_take(_c9_live(20)))
+      _c9_put(20))
 app.refresh_note_list()
 app.update(); app.update_idletasks()
 check('a rebuilt list puts the keyboard back on the same note',
-      _c9_on_note(20))
+      _c9_on_note(20) and str(app._card_view(20)['ring']) == str(app.colors['text']))
 
-# THE OTHER HALF, and the one that shipped broken. The restore must not
-# fire when the keyboard was somewhere ELSE -- and the guard that decided
-# it asked focus_get(), which answers None whenever the process does not
-# own the desktop foreground. This project measured that on the Ctrl+F
-# checks; a real window hits it for a moment after any other program comes
-# to the front. So "focus_get() is None" was read as "nothing has the
-# keyboard" in exactly the case where something did, and a person typing a
-# title had the next autosave's rebuild pull the keyboard onto a card.
-app.title_entry.focus_set()
-app.update(); app.update_idletasks()
-check('fixture: the keyboard is in the title box, not on a card',
-      getattr(app.focus_get(), '_card_note_id', None) is None)
-# focus_get() made to answer None, the way a lost foreground does. Without
-# this the safe branch is the only one exercised and the bug is invisible.
+# THE OTHER HALF, and the one that once shipped broken. A rebuild must not
+# pull the keyboard ONTO the list when it was somewhere else: a person
+# typing a title had the next autosave's rebuild move the keyboard onto a
+# card, because a guard read focus_get() -- None whenever the process does
+# not own the desktop foreground -- as "nothing has the keyboard". The
+# drawn list never asks focus_get(); asserted by recording whether the
+# rebuild asks the list to take the keyboard at all, with focus_get() made
+# to answer None the way a lost foreground does.
+check('fixture: the keyboard is in the title box, not on the list',
+      _c9_take(app.title_entry))
+_c9_asked = []
+_c9_real_focus_set = app.canvas.focus_set
+app.canvas.focus_set = lambda: _c9_asked.append('focus_set')
 _c9_real_fg = app.focus_get
 app.focus_get = lambda: None
 try:
@@ -833,27 +833,23 @@ try:
         app.update(); app.update_idletasks()
 finally:
     app.focus_get = _c9_real_fg
-# Asked by the MARKER, not by identity against cards captured earlier:
-# the rebuild destroyed those, so `is` against them is False for the new
-# card that would now hold the keyboard -- a check written that way passes
-# while the theft happens. It did, in the probe that found this.
-_c9_where = app.focus_get()
+    app.canvas.__dict__.pop('focus_set', None)
 check(f'a rebuild does NOT pull the keyboard off what someone was typing '
-      f'in ({_c9_where!r})',
-      getattr(_c9_where, '_card_note_id', None) is None)
+      f'in (the list was asked to take it {len(_c9_asked)} times)',
+      _c9_asked == [])
 check('highlight color matches the theme accent',
-      app._note_card_widgets[20]['card'].cget('highlightbackground') == app.colors['accent'])
+      str(app._card_view(20)['ring']) == str(app.colors['accent']))
 
 # Settle every timer that can rebuild the list on its own before
 # measuring, and say out loud that they are settled.
 #
-# This check compares the cards' Tk paths across a note switch, and for
-# months it passed on timing rather than on its subject: the sidebar
-# search debounces with after(180, self.refresh_note_list), and the work
-# ahead of this point used to take long enough that the timer had always
-# fired already. When deleting a note stopped rebuilding the whole list
-# (185ms -> 31ms), that slack disappeared, the timer landed BETWEEN the
-# two readings, and the check went red without the switch doing anything
+# This check compares the cards across a note switch, and for months it
+# passed on timing rather than on its subject: the sidebar search
+# debounces with after(180, self.refresh_note_list), and the work ahead of
+# this point used to take long enough that the timer had always fired
+# already. When deleting a note stopped rebuilding the whole list (185ms
+# -> 31ms), that slack disappeared, the timer landed BETWEEN the two
+# readings, and the check went red without the switch doing anything
 # wrong. A check that can be decided by how fast the code above it runs
 # is not measuring what it names.
 app._flush_autosave()
@@ -864,12 +860,92 @@ app.update()
 check('nothing is queued to rebuild the list before the measurement',
       getattr(app, '_search_debounce_job', None) is None
       and getattr(app, '_autosave_job', None) is None)
-card_ids_before2 = {nid: str(info['card']) for nid, info in app._note_card_widgets.items()}
+# A card drawn again has new canvas items, so the item behind each card's
+# background says whether the list was redrawn.
+card_ids_before2 = {nid: rec['items']['bg'] for nid, rec in app._note_cards.items()}
 app.open_note_in_tab(app.find_note(21))
 app.update()
-card_ids_after2 = {nid: str(info['card']) for nid, info in app._note_card_widgets.items()}
+card_ids_after2 = {nid: rec['items']['bg'] for nid, rec in app._note_cards.items()}
 check('switching notes does NOT rebuild the list (no flicker)', card_ids_before2 == card_ids_after2)
-check('highlight correctly moved to the new note', app._note_card_widgets[21]['card'].cget('highlightthickness') == 2)
+# Asked of the colour: every card wears a two-pixel ring (the keyboard's
+# focus ring shares it), so a check of the thickness passed for any card.
+check('highlight correctly moved to the new note',
+      str(app._card_view(21)['ring']) == app.colors['accent']
+      and str(app._card_view(20)['ring']) != app.colors['accent'])
+
+# ---- A CLICK PUTS THE KEYBOARD ON THE LIST, AND THE LIST FOLLOWS IT ----
+# Field-reported: "I click a note in the list and press Down, and nothing
+# happens." The click opened the note and left the keyboard wherever it
+# had been -- the title box, the search box -- so Down went there. A click
+# on a card now puts the keyboard on the list with the ring on that card,
+# and the walk scrolls the list to keep the ring in view: it used to walk
+# the keyboard off the bottom of the screen and leave the list where it
+# was. The click is a real one, on the canvas at the card; what is asserted
+# is the decision it makes, recorded where it is made.
+_ck_saved = list(app.notes)
+app.notes = [{'id': 700 + i, 'title': 'Walk %02d' % i, 'body': 'x',
+              'category': 'General', 'updated': '2026-01-01 00:%02d' % (59 - i),
+              'created': '2026-01-01 00:00', 'checklist': [], 'attachments': []}
+             for i in range(40)]
+app.save_notes()
+app.new_note()
+app.canvas.yview_moveto(0)
+app._list_restore_px = None
+app.refresh_note_list(); app.update()
+_ck_order = app._card_order()
+_ck_asked = []
+_ck_real_fs = app.canvas.focus_set
+app.canvas.focus_set = lambda: (_ck_asked.append('focus'), _ck_real_fs())[1]
+try:
+    _ck_at = app._card_point(_ck_order[2])
+    _qa_click(app.canvas, x=_ck_at[0], y=_ck_at[1])
+    app.update()
+finally:
+    app.canvas.__dict__.pop('focus_set', None)
+check('a click on a card opens its note',
+      app.selected_note_id == _ck_order[2])
+check('...and puts the keyboard on the list, with the ring on that card',
+      bool(_ck_asked) and app._focused_note_id == _ck_order[2])
+# Down, as the handler bound to the list runs it, twenty times: the ring
+# walks well past the bottom of the view, and the view has to go with it.
+for _ in range(20):
+    app._list_step(1)
+app.update()
+_ck_now = app._focused_note_id
+_ck_view = app._card_view(_ck_now)
+_ck_top = app.canvas.canvasy(0)
+_ck_h = app.canvas.winfo_height()
+check(f'walking down twenty cards moves the ring there ({_ck_now})',
+      _ck_now == _ck_order[22])
+check(f'...and the list scrolls to keep the ring on screen (card '
+      f'{_ck_view["y0"]}-{_ck_view["y1"]}, view {_ck_top:.0f}-'
+      f'{_ck_top + _ck_h:.0f})',
+      _ck_view['y0'] >= _ck_top and _ck_view['y1'] <= _ck_top + _ck_h)
+# Tab: the list is ONE stop. Each card used to be a widget that took the
+# focus, so Tab stepped through every drawn card before leaving the list;
+# drawn, the list is one widget and the ring does the walking. Asked of
+# Tk's own traversal, tk_focusNext / tk_focusPrev, which is what Tab and
+# Shift+Tab run.
+_tab_w, _tab_presses = app.search_entry, 0
+for _ in range(15):
+    _tab_w = _tab_w.tk_focusNext()
+    _tab_presses += 1
+    if _tab_w is None or _tab_w is app.canvas:
+        break
+_tab_after = app.canvas.tk_focusNext()
+check(f'Tab from the search box reaches the list ({_tab_presses} presses)',
+      _tab_w is app.canvas)
+check('...the next Tab leaves it, and Shift+Tab comes back to it',
+      _tab_after is not None
+      and not str(_tab_after).startswith(str(app.canvas))
+      and _tab_after.tk_focusPrev() is app.canvas)
+app.notes = _ck_saved
+app.save_notes()
+app.canvas.yview_moveto(0)
+app._list_restore_px = None
+app.refresh_note_list(); app.update()
+# Back to the state the block below expects: note 21 open in the editor.
+app.open_note_in_tab(app.find_note(21)); app.update()
 
 # bulk category change
 app.ask_yes_no = lambda *a, **k: True
@@ -950,6 +1026,103 @@ app.refresh_attachments_list(); app.update()
 app.open_attachment(0)
 app.update()
 check('corrupt image file handled gracefully, no crash', app._mini_popup is None)
+
+# ---- THE PREVIEW APPEARS AT ONCE, AND AGAIN FROM MEMORY ----
+# Every frame of an animation used to be decoded before the first was
+# shown -- 1.26 s of nothing for a 60-frame GIF, on every opening. The
+# first frame now shows at once and the rest are decoded as the animation
+# reaches them; a finished preview is remembered for the next opening, and
+# forgotten when the file changes.
+import time
+from PIL import Image as _pv_Image, ImageDraw as _pv_Draw
+import noteorganizer.ui.attachments as _pv_att
+_pv_dir = NO.ATTACHMENTS_DIR
+_pv_frames = []
+for _pv_i in range(8):
+    _pv_f = _pv_Image.new('RGB', (300, 200), (20, 20, 30))
+    _pv_Draw.Draw(_pv_f).ellipse([_pv_i * 20, 50, _pv_i * 20 + 80, 130],
+                                 fill=(230, 90, 60))
+    _pv_frames.append(_pv_f)
+_pv_gif = os.path.join(_pv_dir, 'anim_pv.gif')
+_pv_frames[0].save(_pv_gif, save_all=True, append_images=_pv_frames[1:],
+                   duration=20, loop=0)
+app._show_image_preview(_pv_gif, 'anim_pv.gif'); app.update()
+check(f'an animation shows its first frame before decoding the rest '
+      f'({len(app._image_preview_ref)} decoded when shown)',
+      len(app._image_preview_ref) == 1 and app._preview_source is not None)
+_pv_end = time.time() + 10
+while app._preview_source is not None and time.time() < _pv_end:
+    app.update(); time.sleep(0.01)
+check(f'...decodes the rest as it plays, and lets the file go at the end '
+      f'({len(app._image_preview_ref)} of 8)',
+      len(app._image_preview_ref) == 8 and app._preview_source is None)
+app._dismiss_mini_popup(); app.update()
+
+# Reopened: from memory, every frame at once, without opening the file.
+_pv_opened = []
+_pv_real_open = _pv_att.Image.open
+_pv_att.Image.open = lambda *a, **k: (_pv_opened.append(a[0]),
+                                      _pv_real_open(*a, **k))[1]
+try:
+    app._show_image_preview(_pv_gif, 'anim_pv.gif'); app.update()
+    _pv_reopen_frames = len(app._image_preview_ref)
+    app._dismiss_mini_popup(); app.update()
+    _pv_big = os.path.join(_pv_dir, 'big.png')
+    app._show_image_preview(_pv_big, 'big.png'); app.update()
+    app._dismiss_mini_popup(); app.update()
+    _pv_opened.clear()
+    app._show_image_preview(_pv_big, 'big.png'); app.update()
+    app._dismiss_mini_popup(); app.update()
+finally:
+    _pv_att.Image.open = _pv_real_open
+check(f'a preview seen before comes back from memory (animation: '
+      f'{_pv_reopen_frames} frames at once; files opened on the second '
+      f'look at a photo: {len(_pv_opened)})',
+      _pv_reopen_frames == 8 and not _pv_opened)
+
+# A file replaced under the same name is read again, not remembered.
+_pv_swap = os.path.join(_pv_dir, 'swap_pv.png')
+_pv_Image.new('RGB', (300, 200), (255, 0, 0)).save(_pv_swap)
+app._show_image_preview(_pv_swap, 'swap_pv.png'); app.update()
+_pv_w1 = app._image_preview_ref[0].width()
+app._dismiss_mini_popup(); app.update()
+_pv_Image.new('RGB', (200, 300), (0, 255, 0)).save(_pv_swap)
+_pv_later = time.time() + 5
+os.utime(_pv_swap, (_pv_later, _pv_later))
+app._show_image_preview(_pv_swap, 'swap_pv.png'); app.update()
+_pv_w2 = app._image_preview_ref[0].width()
+app._dismiss_mini_popup(); app.update()
+check(f'a file replaced under the same name is read again ({_pv_w1} -> '
+      f'{_pv_w2} wide)', _pv_w1 != _pv_w2)
+
+# Closed half-way through its first loop, the preview lets go of the file
+# -- on Windows an open file cannot be renamed or deleted.
+app._preview_cache.clear()
+app._show_image_preview(_pv_gif, 'anim_pv.gif'); app.update()
+_pv_held = app._preview_source is not None
+app._dismiss_mini_popup(); app.update()
+try:
+    os.replace(_pv_gif, _pv_gif + '.moved')
+    _pv_moved = True
+except OSError:
+    _pv_moved = False
+check(f'closing an animation mid-decode lets its file go (was reading: '
+      f'{_pv_held}, then movable: {_pv_moved})', _pv_held and _pv_moved)
+
+# A JPEG photo is decoded at the size it is shown, and still fills it.
+_pv_jpg = os.path.join(_pv_dir, 'photo_pv.jpg')
+_pv_Image.new('RGB', (3000, 2000), (40, 90, 160)).save(_pv_jpg, quality=85)
+app.update_idletasks()
+_pv_tw = max(int(app.winfo_width() * 0.7), 200)
+_pv_th = max(int(app.winfo_height() * 0.7), 200)
+app._show_image_preview(_pv_jpg, 'photo_pv.jpg'); app.update()
+_pv_pw = app._image_preview_ref[0].width()
+_pv_ph = app._image_preview_ref[0].height()
+app._dismiss_mini_popup(); app.update()
+check(f'a large JPEG fits the preview, and fills it ({_pv_pw}x{_pv_ph} in '
+      f'{_pv_tw}x{_pv_th})',
+      _pv_pw <= _pv_tw and _pv_ph <= _pv_th
+      and max(_pv_pw / _pv_tw, _pv_ph / _pv_th) > 0.95)
 
 # ---- A shortcut file is dangerous too (product review T0-8) ----
 # The warn-before-opening list covered the 1990s executables and missed
@@ -1365,8 +1538,9 @@ app.notebook.select(app.TAB_NOTES)
 app.refresh_note_list()
 app.update()
 _card_labels = None
-_card = (app._note_card_widgets.get(61) or {}).get('card')
-if _card is not None and _card.winfo_ismapped():
+# The card is a drawing on the list's canvas: right-clicked where it is.
+_card_at = app._card_point(61)
+if _card_at is not None and app.canvas.winfo_ismapped():
     _labels_q7.clear()
     tk.Menu.add_command = lambda self, **kw: _labels_q7.append(
         (kw.get('label', ''), kw.get('command')))
@@ -1374,7 +1548,7 @@ if _card is not None and _card.winfo_ismapped():
         (kw.get('label', ''), None))
     tk.Menu.tk_popup = lambda self, *a, **k: None
     try:
-        _card.event_generate('<Button-3>', x=5, y=5)
+        app.canvas.event_generate('<Button-3>', x=_card_at[0], y=_card_at[1])
         app.update()
         _card_labels = [l for l, _ in _labels_q7]
     finally:
@@ -1522,14 +1696,9 @@ def _cc_disk():
 
 def _cc_cell_bg():
     """What the calendar cell is painted -- so the undo is proved on the
-    screen, not only in the store."""
-    _cc_cell = getattr(app, '_cal_cell_widgets', {}).get(_CC_DAY)
-    if _cc_cell is None:
-        return None
-    try:
-        return str(_cc_cell.cget('bg'))
-    except tk.TclError:
-        return None
+    screen, not only in the store. Read from the month's drawing."""
+    _cc_view = app._cal_cell_view(_CC_DAY)
+    return _cc_view['bg'] if _cc_view else None
 
 
 _cc_toasts = []
@@ -1902,14 +2071,14 @@ app.close_day_panel(); app.update()
 # the list render AND bulk select-all, exercised through the render.
 app.filter_var.set(app.FILTER_REPEATING)
 app.refresh_note_list(); app.update()
-_vis = find_all_labels(app.list_frame)
+_vis = list_texts()
 check('the Repeating filter shows only repeating notes',
       any('SeriesVis' in t for t in _vis)
       and not any('DatedVis' in t for t in _vis)
       and not any('PlainVis' in t for t in _vis))
 app.filter_var.set(app.FILTER_DATED)
 app.refresh_note_list(); app.update()
-_vis = find_all_labels(app.list_frame)
+_vis = list_texts()
 check('the Dated filter shows only dated non-repeating notes',
       any('DatedVis' in t for t in _vis)
       and not any('SeriesVis' in t for t in _vis)
@@ -1949,7 +2118,7 @@ app.save_notes()
 app.sort_var.set('Calendar: soonest')
 app.refresh_note_list(); app.update()
 _names_q7 = ('SoonA', 'SoonB', 'SoonC', 'SoonD', 'SoonE')
-_ordered = [n for t in find_all_labels(app.list_frame)
+_ordered = [n for t in list_texts()
             for n in _names_q7 if n in t]
 # Weekly since 9 days ago -> occurrences at -9, -2, +5: the NEXT one
 # (+5) sits AFTER A's date (+1) on purpose — ranked by start date
@@ -1959,7 +2128,7 @@ check('Calendar-soonest ranks by the next relevant date from today',
 
 app.sort_var.set('Calendar: oldest')
 app.refresh_note_list(); app.update()
-_ordered = [n for t in find_all_labels(app.list_frame)
+_ordered = [n for t in list_texts()
             for n in _names_q7 if n in t]
 # Plain chronology by the note's own date: C(-10), B(start -9), D(-2),
 # A(+1), undated E at the bottom.
@@ -2188,22 +2357,299 @@ app.save_notes()
 app.cal_year, app.cal_month = 2026, 7
 app.render_calendar(); app.update()
 app.open_day_popup('2026-07-15'); app.update()
-_cell = app._cal_cell_widgets.get('2026-07-15')
+
+# Read from the month's drawing: a cell is shapes on its canvas now, and
+# its outline is a rectangle drawn over its edge. A day that is not drawn
+# -- a stale month left on screen -- reads as a view every check here
+# fails on, so the suite reports it instead of stopping at a TypeError
+# before its footer (a mutant that stopped drawing did exactly that).
+_CD_NONE = {'box': (0, 0, 0, 0), 'bg': '', 'day': '', 'day_fill': '',
+            'today': False, 'badge': '', 'badge_fill': '', 'dots': [],
+            'chips': [], 'chip_fill': [], 'more': '', 'selected_width': -1,
+            'selected_colour': ''}
+
+
+def _cd_view(date_str):
+    return app._cal_cell_view(date_str) or _CD_NONE
+
+
+def _cd_point(date_str, chip=None):
+    """Where to point at a day or one of its titles; off the grid when
+    it is not drawn, so a click there lands on nothing."""
+    try:
+        return app._cal_point(date_str, chip=chip) or (-50, -50)
+    except (IndexError, KeyError):
+        return (-50, -50)
+
+
+_cell = _cd_view('2026-07-15')
 check('opening a day draws the accent outline on its cell',
-      _cell is not None and int(str(_cell.cget('highlightthickness'))) == 2
-      and str(_cell.cget('highlightbackground')) == app.colors['accent'])
-_other = app._cal_cell_widgets.get('2026-07-10')
+      _cell['selected_width'] == 2
+      and _cell['selected_colour'] == app.colors['accent'])
 check('the other days carry no outline',
-      _other is not None
-      and int(str(_other.cget('highlightthickness'))) == 0)
+      _cd_view('2026-07-10')['selected_width'] == 0)
 app.render_calendar(); app.update()
-_cell = app._cal_cell_widgets.get('2026-07-15')
 check('the outline survives a grid re-render',
-      int(str(_cell.cget('highlightthickness'))) == 2)
+      _cd_view('2026-07-15')['selected_width'] == 2)
 app.close_day_panel(); app.update()
-_cell = app._cal_cell_widgets.get('2026-07-15')
 check('closing the panel clears the outline',
-      int(str(_cell.cget('highlightthickness'))) == 0)
+      _cd_view('2026-07-15')['selected_width'] == 0)
+
+# ---- THE MONTH IS ONE DRAWING ----
+# The grid was built of widgets -- a Frame per day, a Label per number, dot
+# and title, a Frame per divider: 216 windows for a month holding 46 notes,
+# each placed and painted again at every step of a window resize.
+# It is shapes and text on one canvas now, laid out as the widgets were
+# (measured on them), and these checks read the drawing back.
+_cd_markers4 = [e for e, _c in app.DAY_MARKER_EMOJIS[:4]]
+_cd_markers2 = [e for e, _c in app.DAY_MARKER_EMOJIS[:2]]
+app.notes = [
+    {'id': 95, 'title': 'Dentist appointment at the clinic', 'body': 'x',
+     'category': 'General', 'date': '2026-07-08'},
+    {'id': 96, 'title': 'Short', 'body': 'x', 'category': 'General',
+     'date': '2026-07-08'},
+    {'id': 97, 'title': 'Third', 'body': 'x', 'category': 'General',
+     'date': '2026-07-08', 'color': '#2a9d8f'},
+    {'id': 98, 'title': 'Alone', 'body': 'x', 'category': 'General',
+     'date': '2026-07-17'},
+]
+app.notes = [NO.normalize_note(n) for n in app.notes]
+app.save_notes()
+app.day_colors = {'2026-07-17': '#e76f51'}
+app._persist_day_colors()
+app.day_emoji = {'2026-07-17': list(_cd_markers4), '2026-07-11': list(_cd_markers2)}
+app._persist_day_emoji()
+app.cal_year, app.cal_month = 2026, 7
+app.render_calendar(); app.update()
+check('the month is one drawing: the grid holds one canvas, and no widget per day',
+      app.cal_grid_frame.winfo_children() == [app.cal_canvas]
+      and len(app._cal_cells) == 31)
+_cd8 = _cd_view('2026-07-08')
+check(f'a busy day shows a dot per colour, two titles and "+1 more" '
+      f'({_cd8["dots"]}, {_cd8["chips"]}, {_cd8["more"]!r})',
+      len(_cd8['dots']) == 2 and _cd8['dots'][1] == '#2a9d8f'
+      and len(_cd8['chips']) == 2
+      and _cd8['chips'][1] == 'Short' and _cd8['more'] == '+1 more')
+_cd17 = _cd_view('2026-07-17')
+check('a painted day wears its colour, with its text in white',
+      _cd17['bg'] == '#e76f51' and _cd17['day_fill'] == '#ffffff'
+      and _cd17['chip_fill'] == ['#ffffff'])
+check(f'four markers show as three and "+1" ({_cd17["badge"]!r})',
+      _cd17['badge'] == ''.join(_cd_markers4[:3]) + '+1')
+# The markers were drawn in a Label's default colour -- black -- so on a
+# dark theme's day they all but disappeared. The day's own text colour.
+_cd11 = _cd_view('2026-07-11')
+check(f"a day's markers are drawn in its own text colour, not black "
+      f"({_cd11['badge_fill']}, {_cd17['badge_fill']})",
+      _cd11['badge_fill'] == app.colors['text']
+      and _cd17['badge_fill'] == '#ffffff')
+# Rows are as tall as the busiest day needs, as the widget grid's were
+# (its rows asked their cells), and all alike.
+_cd_heights = sorted({_cd_view(d)['box'][3] - _cd_view(d)['box'][1]
+                      for d in app._cal_cells})
+check(f'every week row is as tall as the busiest day needs, and all alike '
+      f'({_cd_heights})', len(_cd_heights) == 1 and _cd_heights[0] > 84)
+# Every day's number, dots and titles sit inside its own cell.
+_cd_outside = []
+for _cd_d, _cd_rec in app._cal_cells.items():
+    _cd_x0, _cd_y0, _cd_x1, _cd_y1 = _cd_rec['x0'], _cd_rec['y0'], _cd_rec['x1'], _cd_rec['y1']
+    for _cd_item in app.cal_canvas.find_withtag(_cd_rec['tag']):
+        _cd_b = app.cal_canvas.bbox(_cd_item)
+        if _cd_b and not (_cd_x0 - 1 <= _cd_b[0] and _cd_b[2] <= _cd_x1 + 1
+                          and _cd_y0 - 1 <= _cd_b[1] and _cd_b[3] <= _cd_y1 + 1):
+            _cd_outside.append(_cd_d)
+check(f'everything a day draws sits inside its own cell ({sorted(set(_cd_outside))})',
+      not _cd_outside)
+
+# A new width lays the month out again from what was worked out -- the
+# notes are not gone through again for a change of size -- and the open
+# day keeps its outline through it.
+app.open_day_popup('2026-07-08'); app.update()
+_cd_renders = []
+_cd_real_render = app.render_calendar
+app.render_calendar = lambda: (_cd_renders.append(1), _cd_real_render())[1]
+try:
+    _cd_w = app.winfo_width()
+    _cd_new = _cd_w + (60 if _cd_w >= 1150 else -60)
+    app.geometry('%dx%d' % (_cd_new, app.winfo_height()))
+    for _ in range(5):
+        app.update(); time.sleep(0.02)
+    _cd_right = max((r['x1'] for r in app._cal_cells.values()), default=0)
+    check(f'a new width draws the month to fit it '
+          f'(right edge {_cd_right}, canvas {app.cal_canvas.winfo_width()})',
+          abs(_cd_right - (app.cal_canvas.winfo_width() - app.CAL_CELL_PAD)) <= 1)
+    check(f'...without working the notes out again ({len(_cd_renders)} renders)',
+          not _cd_renders)
+    check('...and the open day keeps its outline',
+          _cd_view('2026-07-08')['selected_width'] == 2)
+finally:
+    app.__dict__.pop('render_calendar', None)
+    app.geometry('%dx%d' % (_cd_w, app.winfo_height()))
+    for _ in range(5):
+        app.update(); time.sleep(0.02)
+app.close_day_panel(); app.update()
+
+# Hovering: a title previews its note, the rest of a busy day summarises
+# the day, an empty day says nothing; the hand over a day, the plain
+# pointer over the gap between two. Real <Motion> events on the canvas,
+# the answers recorded where the app gives them.
+_cd_hover = []
+app.show_note_hover_preview = lambda n, d: _cd_hover.append(('note', n['id'], d))
+app.show_day_summary_tooltip = lambda d: _cd_hover.append(('day', d))
+try:
+    for _cd_at in (_cd_point('2026-07-08', chip=0), _cd_point('2026-07-08'),
+                   _cd_point('2026-07-09')):
+        _qa_fire(app.cal_canvas, '<Motion>', x=_cd_at[0], y=_cd_at[1])
+        app.update()
+    _cd_hand = str(app.cal_canvas.cget('cursor'))
+    _cd8_box = _cd_view('2026-07-08')['box']
+    _qa_fire(app.cal_canvas, '<Motion>', x=_cd8_box[2] + app.CAL_CELL_PAD,
+             y=(_cd8_box[1] + _cd8_box[3]) // 2)
+    app.update()
+    _cd_plain = str(app.cal_canvas.cget('cursor'))
+finally:
+    for _cd_attr in ('show_note_hover_preview', 'show_day_summary_tooltip'):
+        app.__dict__.pop(_cd_attr, None)
+    app.hide_day_tooltip()
+check(f'hovering a title previews that note, the rest of a busy day '
+      f'summarises it, an empty day says nothing ({_cd_hover})',
+      _cd_hover == [('note', 95, '2026-07-08'), ('day', '2026-07-08')])
+check(f'...and the pointer is a hand over a day and plain between days '
+      f'({_cd_hand!r}, {_cd_plain!r})', _cd_hand == 'hand2' and _cd_plain == '')
+
+# A click on a day's cell, away from its titles, opens the day.
+_cd_at = _cd_point('2026-07-08')
+_qa_click(app.cal_canvas, x=_cd_at[0], y=_cd_at[1])
+app.update()
+check('a click on a day opens its list, not one of its notes',
+      app.selected_day == '2026-07-08' and app._day_panel_mode == 'list')
+app.close_day_panel(); app.update()
+
+# Markers saved from the popup change that one day's corner, without the
+# month being drawn again.
+_cd_renders = []
+app.render_calendar = lambda: (_cd_renders.append(1), _cd_real_render())[1]
+try:
+    app._mark_day_emoji('2026-07-12'); app.update()
+    _cd_pop = app._mini_popup
+
+    def _cd_labels(w, acc):
+        for ch in w.winfo_children():
+            if isinstance(ch, tk.Label):
+                acc.append(ch)
+            _cd_labels(ch, acc)
+        return acc
+
+    _cd_pick = [w for w in _cd_labels(_cd_pop, [])
+                if str(w.cget('text')) in _cd_markers2][:2]
+    for _cd_w_chip in _cd_pick:
+        _qa_click(_cd_w_chip)
+        app.update()
+    _cd_save = find_widget(_cd_pop, tk.Button, 'Save')
+    if _cd_save is not None:
+        _cd_save.invoke()
+        app.update()
+finally:
+    app.__dict__.pop('render_calendar', None)
+check(f"saved markers show in that day's corner, without a redraw of the "
+      f"month ({_cd_view('2026-07-12')['badge']!r}, "
+      f"{len(_cd_renders)} renders)",
+      len(_cd_pick) == 2 and not _cd_renders
+      and _cd_view('2026-07-12')['badge'] == ''.join(_cd_markers2))
+
+# Today wears the accent bar, and only today.
+app.go_to_today(); app.update()
+_cd_today = __import__('datetime').date.today().strftime('%Y-%m-%d')
+check('today wears the accent bar, and only today',
+      _cd_view(_cd_today)['today']
+      and sum(1 for d in app._cal_cells if _cd_view(d)['today']) == 1)
+
+# Everything in the drawing is painted in the colours of the moment it was
+# drawn, so a theme switch has to draw the month again: with the calendar
+# on screen, and from Settings, where the switch is made with the month out
+# of sight and caught up on the way back.
+app.cal_year, app.cal_month = 2026, 7
+app.render_calendar(); app.update()
+_cd_theme_was = app.theme_name
+app.set_theme('light' if _cd_theme_was != 'light' else 'dark'); app.update()
+_cd_v = _cd_view('2026-07-09')
+check(f'a theme switch draws the month in the new colours '
+      f'({_cd_v["bg"]}, {_cd_v["day_fill"]})',
+      _cd_v['bg'] == app.colors['card'] and _cd_v['day_fill'] == app.colors['text']
+      and _cd_v['chip_fill'] == [] and _cd_view('2026-07-08')['chip_fill']
+      == [app.colors['text']] * 2)
+app.show_settings_page(); app.update()
+app.set_theme(_cd_theme_was); app.update()
+app.hide_settings_page(); app.update()
+_cd_v = _cd_view('2026-07-09')
+check(f'...and one made in Settings is drawn on the way back '
+      f'({_cd_v["bg"]}, {_cd_v["day_fill"]})',
+      app.theme_name == _cd_theme_was
+      and _cd_v['bg'] == app.colors['card'] and _cd_v['day_fill'] == app.colors['text'])
+app.day_colors = {}
+app._persist_day_colors()
+app.day_emoji = {}
+app._persist_day_emoji()
+app.cal_year, app.cal_month = 2026, 7
+app.render_calendar(); app.update()
+
+# ---- WHAT SHOULD BE HIDDEN STAYS HIDDEN ----
+# Show/hide decisions asked Tk whether a widget was MAPPED -- on the screen
+# -- and a widget is not, for as long as its page is hidden. The editor
+# sleeps while the Calendar is showing, so a note opened from there with
+# "Open in editor" found the last note's Restore previous, title counter
+# and share code still in place: "hide it if it shows" had read them as
+# hidden already, and they woke up with the page. A person's route: the
+# note with all three open, the Calendar, a day, the other note's "Open in
+# editor". The same switch made from the list, where the editor never
+# sleeps, is the control.
+_hp_day = '2026-07-21'
+app.notes = [NO.normalize_note(n) for n in (
+    {'id': 101, 'title': 'L' * (app.TITLE_MAX_LEN - 3), 'body': 'updated',
+     'category': 'General', '_prev': {'body': 'as it was before the update'}},
+    {'id': 102, 'title': 'Nothing to restore', 'body': 'x',
+     'category': 'General', 'date': _hp_day},
+)]
+app.save_notes()
+
+
+def _hp_placed():
+    return {'restore': app._is_placed(app.restore_prev_btn),
+            'counter': app._is_placed(app.title_count_lbl),
+            'code': app._is_placed(app.editor_code_area)}
+
+
+def _hp_open_the_long_note_with_its_code():
+    app.notebook.select(app.TAB_NOTES); app.update()
+    app.open_note_in_tab(app.find_note(101)); app.update()
+    app.share_current_note_as_code(); app.update()
+    return _hp_placed()
+
+
+_hp_before = _hp_open_the_long_note_with_its_code()
+app.notebook.select(app.TAB_CALENDAR); app.update()
+app.cal_year, app.cal_month = 2026, 7
+app.render_calendar(); app.update()
+app.open_day_popup(_hp_day); app.update()
+app.show_day_note(app.find_note(102), _hp_day); app.update()
+_hp_btn = find_widget(app.day_panel, tk.Button, 'Open in editor')
+if _hp_btn is not None:
+    _hp_btn.invoke()
+for _ in range(3):
+    app.update_idletasks(); app.update()
+_hp_after = _hp_placed()
+check(f"a note opened from the calendar does not keep the last note's "
+      f"Restore previous, title counter or share code "
+      f"({_hp_before} -> {_hp_after})",
+      _hp_btn is not None and app.selected_note_id == 102
+      and all(_hp_before.values()) and not any(_hp_after.values()))
+_hp_before = _hp_open_the_long_note_with_its_code()
+app.open_note_in_tab(app.find_note(102)); app.update()
+check(f'...as the same switch made from the list never did ({_hp_placed()})',
+      all(_hp_before.values()) and not any(_hp_placed().values()))
+# Back to the calendar with no day open, as the blocks below expect.
+app.close_day_panel()
+app.notebook.select(app.TAB_CALENDAR); app.update()
 
 # ---- The bounded-series hybrid in History (field confusion: a "10
 # times" group opened to nothing) — a small bounded series lists ALL

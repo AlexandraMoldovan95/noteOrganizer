@@ -49,6 +49,12 @@ locally on your own computer — there's no account to create and no internet co
 Run from source, the data folder sits next to the script; the installed app keeps it per-user
 under `%APPDATA%\NoteOrganizer` (worth knowing if you ever go looking for your notes folder).
 
+The window can be made as small as 640 by 600 pixels. While you drag its edge, the page inside
+keeps its size — cut off at the edge, or with an empty strip beside it — and settles to fit the
+moment you pause or let go. Laying the whole page out at every step of the drag is what made
+the edge lag behind the mouse. The Calendar's month is the exception: it is quick enough to
+redraw that it follows the edge as you drag.
+
 ![Main window](screenshots/main-window.png)
 
 ---
@@ -340,11 +346,20 @@ the whole list straight back. Right-clicking the box offers Cut / Copy / Paste, 
 text field in the app.
 
 Two dropdowns sit under the box, each with its own caption so you can tell at a glance which is
-which. **Sort** offers seven orders — Recently updated, Oldest updated, Title A–Z, Title Z–A,
-Category, Calendar: soonest, Calendar: oldest. **Show** narrows the list instead of reordering it:
+which. **Sort** offers eight orders — Recently updated, Oldest updated, Title A–Z, Title Z–A,
+Category, Calendar: soonest, Calendar: oldest, and **Custom order**, the one you arrange yourself
+(below). **Show** narrows the list instead of reordering it:
 all your categories, plus **🔁 Repeating** and **📅 Dated** for the notes that live on the
 calendar. Both are remembered, so the list you left is the list you come back to; if the category
 a filter names is later deleted, the filter falls back to **All** rather than showing you nothing.
+
+A long list fills in as you scroll: the app draws the first screenful straight away and the next
+notes as you come near them, by wheel, scrollbar or the arrow keys, so the scrollbar's handle
+shrinks a little as you go. Every note is there, in order; searching, **Select all** and the
+counts beside the category headers always mean the whole list, drawn yet or not.
+
+*Why: a notebook of hundreds of notes used to make you wait for every one of them to be drawn —
+at startup, at every pause in typing, and every time you came back to the list.*
 
 To search *within* the note you already have open, press **Ctrl+F**. A small find bar appears in
 the top-right corner of the editor — inside the window, not a separate dialog. It looks through
@@ -358,14 +373,34 @@ Each note's card previews its first words. A table would be pipe soup at that si
 shows only the note's plain text and the card's tag row marks the table itself — **▦ 1 table**, or
 how many the note holds — next to the comment and attachment marks.
 
-The list can be worked without a mouse. **Tab** into it and the card you land on gets a visible
-ring; **↑** and **↓** walk from card to card in the order they are actually shown — sorted,
-filtered, searched or grouped as you left them, not the order they sit in the file. **Enter** (or
-**Space**) opens the note, and **Shift+F10** — or the menu key, if your keyboard has one — opens
-that note's own right-click menu where the note is, so pinning, duplicating, exporting and
-deleting are all reachable without leaving the keyboard. If the list rebuilds underneath you,
-because a save landed or a search keystroke filtered it, the ring comes back to the card you were
-on.
+The list can be worked without a mouse. Click a note, or **Tab** into the list, and the card gets
+a visible ring; **↑** and **↓** walk from card to card in the order they are actually shown —
+sorted, filtered, searched or grouped as you left them, not the order they sit in the file — and
+the list scrolls along to keep the ring in view. **Enter** (or **Space**) opens the note, and
+**Shift+F10** — or the menu key, if your keyboard has one — opens that note's own right-click
+menu where the note is, so pinning, duplicating, exporting and deleting are all reachable without
+leaving the keyboard. The whole list is one **Tab** stop: Tab again moves on to the next thing in
+the window instead of through every card. If the list rebuilds underneath you, because a save
+landed or a search keystroke filtered it, the ring comes back to the card you were on.
+
+The ring is drawn in the text colour while the keyboard is on the list, and the note you have open
+keeps its accent-coloured outline — so after walking away from the open note you can see both.
+
+#### Arranging the list by hand
+
+Drag a card up or down and let go where the line shows it will land — or, with the ring on a
+card, press **Alt+↑** or **Alt+↓** to move it one place. The list switches to **Custom order**,
+starting from the order it was showing, so nothing jumps; from then on it stays as you arrange it.
+Saving or editing a note does not move its card, and the arrangement is kept in your notes file,
+across restarts and in backups. New notes appear at the top, where you will look for them.
+
+Pinned notes stay above the rest, so a card cannot be dragged across that line; in a grouped list
+a card stays in its own group. Near the top or bottom of the list a drag scrolls it, faster the
+further you push past the edge. **Esc** puts a dragged card back where it was. While ☑ Select is
+on, a click ticks a card instead, and nothing is dragged.
+
+*Why a separate sort: dragging while the list was sorted by date or title would be undone by the
+next save. Custom order is the one sort that means "where I put it".*
 
 ![Search and sort](screenshots/search-and-sort.png)
 
@@ -552,7 +587,8 @@ You can also mark the day itself, independent of any note on it — right-click 
 - **🏷 Mark this day…** puts emoji on it — a birthday, a trip, a payday. **Up to three**, and the
   picker says so: once you have three, the ones you have not picked go flat and a line reads
   "Three is the most a day can show — unpick one to choose another", rather than the fourth click
-  simply doing nothing. The day's cell shows them as a small badge in the corner.
+  simply doing nothing. The day's cell shows them as a small badge in the corner, in the same
+  colour as the day's number.
 
 Both can be cleared from the same menu, and both clears offer an **Undo** in the banner.
 
@@ -728,8 +764,10 @@ keys that only mean something inside a list, in the find bar, or on the note lis
 | **Ctrl+Z** | in a table | Takes back one whole operation. |
 | **Enter** / **Shift+Enter** | find bar | Step forward and back through matches. |
 | **Esc** | find bar | Closes the bar. |
-| **↑** / **↓** | note list | Walks from card to card, in the order the list is showing them. |
+| **↑** / **↓** | note list | Walks from card to card, in the order the list is showing them — also straight after a click on a note. |
 | **Enter** / **Space** | note list | Opens the note — or ticks it, while ☑ Select is on. |
+| **Alt+↑** / **Alt+↓** | note list | Moves the note with the ring one place up or down (Custom order). |
+| **Esc** | note list, while dragging | Puts the dragged card back where it was. |
 | **Shift+F10** or the menu key | note list | Opens that note's own right-click menu, at the note. |
 | **Page Up** / **Page Down** | Calendar tab | Previous / next month. |
 | **Ctrl+Page Up** / **Ctrl+Page Down** | Calendar tab | Previous / next year. |

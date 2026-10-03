@@ -112,12 +112,15 @@ app.templates.append(NO.normalize_template({
     'checklist': [{'text': 'read last week', 'done': False},
                   {'text': 'pick three things', 'done': False}]}))
 app.show_settings_page()
-# update() between the two, and it is load-bearing: toggle_settings_panel
-# unpacks the section that was showing by asking winfo_ismapped(), which Tk
-# answers False until it has processed the geometry. Called back to back, the
-# previous section is still packed and unmapped, the unpack loop skips it, and
-# the picture comes out with two sections stacked -- Recently deleted above a
-# nav reading Templates, which is what the first version of this shot showed.
+# update() between the two. It used to be load-bearing: toggle_settings_panel
+# unpacked the section that was showing by asking winfo_ismapped(), which Tk
+# answers False until it has drawn it, so back to back the previous section
+# was skipped and two stacked -- Recently deleted above a nav reading
+# Templates, which is what the first version of this shot showed. The app
+# asks whether a section has its place now (_is_placed), so back to back is
+# safe; scenes 04 and 05 above, which never had this update(), had been
+# photographing two stacked sections since their first reference, and were
+# accepted five times without anyone seeing it (0.82.233).
 app.update()
 app.toggle_settings_panel('templates')
 app.update()
@@ -193,24 +196,24 @@ app.hide_settings_page()
 app.notebook.select(app.TAB_NOTES)
 app.refresh_note_list()
 app.update()
-_cards = [w for w in app.list_frame.winfo_children()
-          if getattr(w, '_card_note_id', None) is not None]
+_order = app._card_order()
 # Take the desktop foreground back BEFORE placing the focus, not after.
-# Tk draws a widget's highlightcolor only while its toplevel really owns
-# the foreground, and between scenes the shooter runs PowerShell to make
-# the grab -- a separate process that can hold the foreground when this
-# scene starts. So focus_set() alone recorded the focus on the card and
-# drew no ring about one run in three: the reference had the ring, the
-# re-take did not, 0.6% apart, and "re-run it until it is green" would
-# have hidden exactly that. Seen by opening the two pictures side by side.
+# The ring is drawn by the app when the list's canvas hears <FocusIn>, and
+# Tk delivers that only while its toplevel really owns the foreground --
+# between scenes the shooter runs PowerShell to make the grab, a separate
+# process that can hold the foreground when this scene starts. With the
+# card widgets this flaked about one run in three: the reference had the
+# ring, the re-take did not, 0.6% apart, and "re-run it until it is green"
+# would have hidden exactly that. Seen by opening the two pictures side by
+# side.
 #
-# The order is the whole fix. focus_force() on the window after the card
-# had the focus would move the focus OFF the card onto the window and
-# lose the ring every time -- the flake would become a certainty.
+# The order is the whole fix. focus_force() on the window after the list
+# had the focus would move the focus OFF the list onto the window and lose
+# the ring every time -- the flake would become a certainty.
 app.focus_force()
 app.update()
-if len(_cards) > 1:
-    _cards[1].focus_set()
+if len(_order) > 1:
+    app._put_keyboard_on_card(_order[1])
 app.update()
 app.update_idletasks()
 """),

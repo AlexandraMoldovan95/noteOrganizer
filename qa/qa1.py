@@ -223,7 +223,7 @@ app.notes = [
 def rendered_order():
     app.refresh_note_list()
     app.update()
-    return [app.find_note(nid)['title'] for nid in app._note_card_widgets.keys()]
+    return [app.find_note(nid)['title'] for nid in app._card_order()]
 
 for opt, expected in [
     ('Recently updated', ['Cherry', 'Apple', 'Banana']),   # newest updated first
@@ -232,6 +232,9 @@ for opt, expected in [
     ('Title Z–A',        ['Cherry', 'Banana', 'Apple']),
     ('Category',         ['Cherry', 'Banana', 'Apple']),   # Alpha, General, Zeta
     ('Calendar: oldest', ['Apple', 'Cherry', 'Banana']),   # 01-05, 02-20, 03-10
+    # Nobody has placed these yet: newest made first, where a new note
+    # would be looked for.
+    ('Custom order',     ['Cherry', 'Apple', 'Banana']),
 ]:
     try:
         app.sort_var.set(opt)
@@ -4011,9 +4014,14 @@ try:
     # another program's window -> popups WITHDRAW, data intact; the
     # app's own -> they come back. Never destroyed -- a half-typed
     # dialog must survive a trip to the browser.
+    # On the two window classes: the main window's and every popup's. Not
+    # bind_all any more -- Tk sends Deactivate to every widget inside a
+    # window, and bind_all ran the handler once per widget (qa4 guards
+    # that half).
     check('the foreground watch is armed from startup',
           getattr(app, '_deactivate_bound', False)
-          and bool(app.bind_all('<Deactivate>')))
+          and bool(app.bind_class(app.winfo_class(), '<Deactivate>'))
+          and bool(app.bind_class('Toplevel', '<Deactivate>')))
     _popD = app._mini_popup
     _real_ours = app._foreground_is_ours
     app._foreground_is_ours = lambda: True     # the app holds the front
@@ -5017,14 +5025,16 @@ _st24b = 0
 while _st24b < 5 and time.time() < _t24_end:
     app.update()
     time.sleep(0.02)
-    _bb24 = _cv23.bbox('all')
-    _ch24 = (_bb24[3] - _bb24[1]) if _bb24 else 0
+    # The list's extent as the app states it -- Tk's bbox of a drawing
+    # starts at the first row and pads rectangles differently by release.
+    _bb24 = app._list_extent()
+    _ch24 = _bb24[3] - _bb24[1]
     _max24 = _ch24 - _cv23.winfo_height()
     _st24b = (_st24b + 1
               if _max24 > 100 and abs(_cv23.canvasy(0) - _max24) < 30
               else 0)
-_bb24 = _cv23.bbox('all')
-_ch24 = (_bb24[3] - _bb24[1]) if _bb24 else 0
+_bb24 = app._list_extent()
+_ch24 = _bb24[3] - _bb24[1]
 _max24 = _ch24 - _cv23.winfo_height()
 check('collapsing from deep scroll lands at the end, not a blank view',
       _max24 > 100 and abs(_cv23.canvasy(0) - _max24) < 30)
@@ -5041,13 +5051,13 @@ app.title_entry.delete(0, 'end')
 app.title_entry.insert(0, 'CardTables')
 app.save_current_note()
 app.update()
-_cardT = next(i for i in app._note_card_widgets.values()
-              if 'CardTables' in i['title'].cget('text'))
+_cardT = next(app._card_view(n) for n in app._card_order()
+              if 'CardTables' in app._card_view(n)['title'])
 check('a card previews the words, not the pipe rows',
-      '|' not in _cardT['preview'].cget('text')
-      and 'readable words' in _cardT['preview'].cget('text'))
+      '|' not in _cardT['preview']
+      and 'readable words' in _cardT['preview'])
 check('the card tags row counts the table',
-      '\u25a6 1 table' in _cardT['tags'].cget('text'))
+      '\u25a6 1 table' in _cardT['tags'])
 
 # ---- A NEW TABLE UNDER AN OLD ONE STAYS A TABLE OF ITS OWN ----
 # Two adjacent runs of pipe rows read as one block, so a table created
@@ -5463,18 +5473,22 @@ check('the destroyed entry is pruned from self._placeholders, not left dangling'
 _theme_opts = ('bg', 'fg', 'highlightbackground', 'highlightcolor')
 
 def _card_colors():
-    out = []
-    def walk(w):
-        row = [w.__class__.__name__]
-        for o in _theme_opts:
-            try:
-                row.append(str(w.cget(o)).lower())
-            except Exception:
-                pass
-        out.append(tuple(row))
-        for ch in w.winfo_children():
-            walk(ch)
-    walk(app.list_frame)
+    """Every colour the drawn list shows, row by row in screen order: the
+    canvas behind it, each card's fill, stripe, ring and three texts, each
+    header's fill, dot, caret and label. The list is a drawing, so this
+    reads the drawing rather than widget options."""
+    out = [('canvas', str(app.canvas.cget('bg')).lower())]
+    for key in app._list_drawn_keys:
+        if key[0] == 'note':
+            v = app._card_view(key[1])
+            out.append(('card', key[1]) + tuple(
+                str(v[k]).lower() for k in ('bg', 'stripe', 'ring', 'title_fill',
+                                             'preview_fill', 'tags_fill')))
+        else:
+            items = app._group_headers[key[1]]['items']
+            out.append(('header', key[1]) + tuple(
+                str(app.canvas.itemcget(items[k], 'fill')).lower()
+                for k in ('bg', 'dot', 'caret', 'label')))
     return out
 
 app.new_note()
@@ -5501,11 +5515,11 @@ for _theme in ('dark_ocean', 'light_sky', 'light', 'dark'):
 
 app.set_theme('dark_ocean')
 app.update()
-_info = app._note_card_widgets.get(_clash_id)
+_info = app._card_view(_clash_id)
 check("a note's own colour survives a theme switch that doesn't share it",
       _info is not None
-      and str(_info['stripe'].cget('bg')).lower()
-      == app.get_note_color(_info['note']).lower())
+      and str(_info['stripe']).lower()
+      == app.get_note_color(app.find_note(_clash_id)).lower())
 app.set_theme('dark')
 app.update()
 
@@ -5528,12 +5542,15 @@ app._catch_up_deferred_refresh()
 app.update()
 check('a transition that does not show the calendar leaves it deferred',
       getattr(app, '_calendar_needs_render', False) is True)
+# Forget whatever an earlier render drew, so the check below can only be
+# answered by the catch-up itself.
+app._cal_cells = {}
 app.notebook.select(app.TAB_CALENDAR)
 app.update()
 check('the deferred calendar rebuild is caught up when the tab is opened',
       getattr(app, '_calendar_needs_render', False) is False)
 check('...and the month really was drawn, not merely marked done',
-      len(app.cal_grid_frame.winfo_children()) > 0)
+      len(getattr(app, '_cal_cells', {})) > 0)
 app.notebook.select(app.TAB_NOTES)
 app.update()
 
@@ -6394,11 +6411,11 @@ _idQ = app.selected_note_id
 app.search_var.set('---')
 app.refresh_note_list()
 app.update()
-_hitQ1 = _idQ in getattr(app, '_note_card_widgets', {})
+_hitQ1 = _idQ in app._card_order()
 app.search_var.set('gergebe')
 app.refresh_note_list()
 app.update()
-_hitQ2 = _idQ in getattr(app, '_note_card_widgets', {})
+_hitQ2 = _idQ in app._card_order()
 app.search_var.set('')
 app.refresh_note_list()
 app.update()
@@ -6520,7 +6537,7 @@ check('pasting into the search box replaces the hint',
       app.search_entry.get() == 'NotaTabelQ')
 app.refresh_note_list(); app.update()
 check('and the list filters by what was pasted, not by the hint',
-      _idQ in getattr(app, '_note_card_widgets', {}))
+      _idQ in app._card_order())
 
 # The ✕. It appears only for a real query: always-there invites clearing an
 # empty box, and beside the hint it suggests the hint is removable.
@@ -6532,7 +6549,9 @@ check('pressing it empties the box', app.search_var.get() == '')
 check('and takes the ✕ away with it',
       not app.search_clear_btn.winfo_ismapped())
 check('and the full list is back at once, without waiting for the debounce',
-      len(getattr(app, '_note_card_widgets', {})) == len(app.notes))
+      set(app._card_order())
+      | {r[1]['id'] for r in app._list_pending if r[0] == 'note'}
+      == {n['id'] for n in app.notes})
 # The hint is not written back by the ✕ -- the box takes the focus instead,
 # which is the state add_placeholder gives any box someone clicked into, and
 # its own <FocusOut> restores the hint. One mechanism for the hint, not two.
@@ -7819,9 +7838,9 @@ app.update()
 _fc3 = [n for n in app.notes if n['body'].startswith('body with no title')]
 check('a note with a body and no title saves (plan 3)', len(_fc3) == 1)
 if _fc3:
-    _fc_card = (app._note_card_widgets.get(_fc3[0]['id']) or {}).get('title')
+    _fc_card = app._card_view(_fc3[0]['id'])
     check('...and the list calls it (untitled)',
-          _fc_card is not None and '(untitled)' in str(_fc_card.cget('text')))
+          _fc_card is not None and '(untitled)' in _fc_card['title'])
 
 # 4: an empty note is refused, and says so.
 _fc_warned = []
@@ -8013,14 +8032,14 @@ if _fc_bin is not None:
 app.save_current_note(auto=False)
 app.update()
 app.refresh_note_list(); app.update()
-_fc_tags = (app._note_card_widgets.get(_fc_note['id']) or {}).get('tags')
+_fc_tags = app._card_view(_fc_note['id'])
 check('a note with a checklist shows its progress on the card (plan 41)',
-      _fc_tags is not None and '1/2' in str(_fc_tags.cget('text')))
+      _fc_tags is not None and '1/2' in _fc_tags['tags'])
 _fc_plain = next((n for n in app.notes if not n.get('checklist')), None)
 if _fc_plain is not None:
-    _fc_plain_tags = (app._note_card_widgets.get(_fc_plain['id']) or {}).get('tags')
+    _fc_plain_tags = app._card_view(_fc_plain['id'])
     check('...and a note without one shows no checklist mark at all',
-          _fc_plain_tags is not None and '☑' not in str(_fc_plain_tags.cget('text')))
+          _fc_plain_tags is not None and '☑' not in _fc_plain_tags['tags'])
 
 
 # ---- A REMOVED CHECKLIST ITEM CAN COME BACK ----
@@ -8366,9 +8385,9 @@ app.save_notes()
 NO.CATEGORY_COLORS[_b3_cat] = '#ff00ff'
 app.hide_settings_page()
 app.refresh_note_list(); app.update()
-_b3_tags = (app._note_card_widgets.get(5001) or {}).get('tags')
+_b3_tags = app._card_view(5001)
 check("a category's new colour reaches the note card (plan 27)",
-      _b3_tags is not None and str(_b3_tags.cget('fg')).lower() == '#ff00ff')
+      _b3_tags is not None and str(_b3_tags['tags_fill']).lower() == '#ff00ff')
 check('...because the card reads the one stored colour, not a copy',
       NO.CATEGORY_COLORS[_b3_cat].lower() == '#ff00ff')
 NO.CATEGORY_COLORS[_b3_cat] = _b3_was
@@ -8422,19 +8441,19 @@ _btn_text = lambda: str(app._bulk_select_all_btn.cget('text'))
 
 
 def _box_states():
-    """Each drawn card's tick box, as the widget itself believes it."""
+    """Each drawn card's tick box, as the drawing shows it."""
     out = {}
-    for _nid, _info in app._note_card_widgets.items():
-        _cb = _info.get('checkbox')
-        if _cb is None:
-            continue
-        out[_nid] = str(app.getvar(str(_cb.cget('variable')))) in ('1', 'True')
+    for _nid in app._card_order():
+        _checked = app._card_view(_nid)['checked']
+        if _checked is not None:
+            out[_nid] = _checked
     return out
 
 
 def _card_paths():
-    return {_nid: str(_info['card'])
-            for _nid, _info in app._note_card_widgets.items()}
+    # A card drawn again has new canvas items: the item behind each card's
+    # background says whether the list was redrawn.
+    return {_nid: _rec['items']['bg'] for _nid, _rec in app._note_cards.items()}
 
 
 check('the button offers to select everything to begin with',
@@ -8654,28 +8673,28 @@ def _sg_settle():
 
 
 _sg_settle()
-_sg_before = len(app._note_card_widgets)
+_sg_before = len(app._card_order())
 check('the list drew a card per note to begin with', _sg_before == 12)
 # The witness. Every check below about "the cards survived" would pass
 # just as happily after a full rebuild, which produces correct cards
-# too -- so one card's Tk path is remembered. A rebuild destroys and
-# recreates it under a new name; taking one card off does not touch it.
+# too -- so one card's canvas item is remembered. A rebuild deletes it and
+# draws a new one under a new number; taking one card off only moves it.
 # Without this, nothing here can tell the two apart.
-_sg_witness = str(app._note_card_widgets[400]['card'])
+_sg_witness = app._note_cards[400]['items']['bg']
 
 _sg_target = app.find_note(405)
 app._delete_note(_sg_target, None)
 _sg_settle()
 check('the deleted note loses its card',
-      405 not in app._note_card_widgets)
+      405 not in app._card_order())
 check('...and every other card is still there',
-      len(app._note_card_widgets) == _sg_before - 1)
+      len(app._card_order()) == _sg_before - 1)
 check('...and the cards were not rebuilt around it',
-      all(w['card'].winfo_exists() for w in app._note_card_widgets.values()))
-check('...and a surviving card is the SAME widget, not a remade one',
-      str(app._note_card_widgets[400]['card']) == _sg_witness)
+      all(app.canvas.type(r['items']['bg']) for r in app._note_cards.values()))
+check('...and a surviving card is the SAME drawing, not a remade one',
+      app._note_cards[400]['items']['bg'] == _sg_witness)
 check('...and the list agrees with the notes',
-      sorted(app._note_card_widgets) == sorted(n['id'] for n in app.notes))
+      sorted(app._card_order()) == sorted(n['id'] for n in app.notes))
 
 # The scroll guards exist because a REBUILD empties the frame and a
 # Configure landing in that window clamps the canvas to the top -- the
@@ -8705,12 +8724,12 @@ app.save_notes()
 app.new_note()
 app.refresh_note_list()
 _sg_settle()
-_sg_content = app.canvas.bbox('all')
+_sg_content = app._list_extent()
 _sg_room = app.canvas.winfo_height()
 check('the list is long enough to scroll, so the next check means something',
       _sg_content is not None and (_sg_content[3] - _sg_content[1]) > _sg_room + 50)
 # The bottom card: deleting it changes nothing above the viewport.
-_sg_last_id = list(app._note_card_widgets)[-1]
+_sg_last_id = app._card_order()[-1]
 
 
 def _sg_quiet():
@@ -8768,19 +8787,30 @@ app.update()
 app._delete_note(app.find_note(403), None)
 _sg_settle()
 check('deleting the OPEN note leaves the highlight with nothing stale',
-      403 not in app._note_card_widgets)
+      403 not in app._card_order())
 app.open_note_in_tab(app.find_note(402))
 app.update()
+# Drawn first, the way scrolling to it would draw it: the list draws a
+# screenful and the rest as the view comes near, and whether 402 falls in
+# the first screenful depends on whether the thirty notes above were made
+# in the same second as it (the sort is by that timestamp). And asked of
+# the COLOUR: every card wears a two-pixel ring now, so a check of the
+# thickness passed for any card at all.
+while 402 not in app._note_cards and app._list_pending:
+    app._draw_list_rows(app.LIST_DRAW_STEP)
+app.update()
+_sg_402 = app._card_view(402)
 check('...and the next note opened still takes the border',
-      app._note_card_widgets[402]['card'].cget('highlightthickness') == 2)
+      _sg_402 is not None
+      and str(_sg_402['ring']) == app.colors['accent'])
 
 # A theme switch afterwards recolours what is left, in place, and must
 # not trip over the entry that was removed.
 app.set_theme('light')
 app.update()
 check('a theme switch after a delete recolours the surviving cards',
-      all(str(w['card'].cget('bg')).lower() == app.colors['card'].lower()
-          for w in app._note_card_widgets.values()))
+      all(str(app._card_view(n)['bg']).lower() == app.colors['card'].lower()
+          for n in app._card_order()))
 app.set_theme('dark')
 app.update()
 
@@ -8796,13 +8826,9 @@ app.update()
 app._delete_note(app.find_note(500), None)
 _sg_settle()
 check('deleting the last note empties the card registry',
-      not app._note_card_widgets)
-_sg_texts = []
-for _w in app.list_frame.winfo_children():
-    try:
-        _sg_texts.append(str(_w.cget('text')))
-    except tk.TclError:
-        pass
+      not app._note_cards)
+_sg_texts = [str(app.canvas.itemcget(_i, 'text'))
+             for _i in app.canvas.find_withtag('list_empty')]
 check('...and the empty list says so, which only a full rebuild writes',
       any('No notes' in t for t in _sg_texts))
 
@@ -8834,30 +8860,27 @@ app.save_notes()
 app.refresh_note_list()
 app.update()
 app.update_idletasks()
-_ov_card = next((w for w in app.list_frame.winfo_children()
-                 if getattr(w, '_card_note_id', None) == 7100), None)
+_ov_card = app._card_view(7100)
 check('the card for a note carrying everything is on screen',
       _ov_card is not None)
-
-
-def _ov_labels(w, out):
-    for c in w.winfo_children():
-        if isinstance(c, tk.Label) and str(c.cget('text')).strip():
-            out.append(c)
-        _ov_labels(c, out)
-    return out
-
-
-_ov_found = _ov_labels(_ov_card, []) if _ov_card is not None else []
-_ov_wide = [str(lb.cget('text'))[:28] for lb in _ov_found
-            if lb.winfo_reqwidth() > _ov_card.winfo_width()]
-check('no label on the card asks for more room than the card has '
+# Asked of where each text is DRAWN against the card's own edges: a text
+# drawn past the ring is text a person cannot read, whatever the item
+# holds.
+_ov_names = ('title', 'preview', 'tags')
+_ov_wide = []
+if _ov_card is not None:
+    _ov_x0, _ov_y0, _ov_x1, _ov_y1 = _ov_card['box']
+    for _ov_name, _ov_b in zip(_ov_names, _ov_card['text_boxes']):
+        if (_ov_b is None or _ov_b[0] < _ov_x0 or _ov_b[2] > _ov_x1 - app.CARD_RING
+                or _ov_b[3] > _ov_y1 - app.CARD_RING):
+            _ov_wide.append(_ov_name)
+check('no text on the card reaches past the card\'s edges '
       '(over: %s)' % _ov_wide,
-      bool(_ov_found) and _ov_wide == [])
+      _ov_card is not None and _ov_wide == [])
 # The tags are the reason this matters most: each one is a separate
 # fact, so a row that runs out of room drops whole marks rather than
 # the tail of a sentence.
-_ov_tags = ' | '.join(str(lb.cget('text')) for lb in _ov_found)
+_ov_tags = _ov_card['tags'] if _ov_card is not None else ''
 check('...and the checklist progress is whole, not a clipped "1/"',
       '1/2' in _ov_tags)
 check('...with the table mark and the attachment count still there',

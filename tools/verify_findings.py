@@ -83,10 +83,14 @@ TIER_CHECKS = [
      ".lnk and its family are in the warn list"),
 
     ("T1-1", lambda: False, None),
-    ("T1-2", lambda: re.search(r"def render_calendar.*?\n(.{0,400})", HUB, re.S)
-     and ("_calendar_is_showing" in HUB or "_is_calendar_visible" in HUB)
-     and re.search(r"def render_calendar\b.*?(_calendar_is_showing|"
-                   r"_is_calendar_visible)", HUB, re.S) is not None,
+    # render_calendar moved to ui/calendar_view.py with the module split;
+    # asked of the hub alone, this row read "still open" for a fix that
+    # was in the code all along. The guard must come before the rebuild,
+    # inside the method, wherever the method lives.
+    ("T1-2", lambda: re.search(
+        r"def render_calendar\(self\):(?:(?!\n    def ).)*?"
+        r"if not self\._calendar_is_showing\(\):", CALENDAR_UI + HUB, re.S)
+     is not None,
      "render_calendar checks visibility before working"),
     ("T1-3", lambda: "json.dumps(" in STORAGE and "json.dump(" not in STORAGE,
      "the write builds one string"),
@@ -149,7 +153,10 @@ SURVEY_CHECKS = [
      "Escape backs out of the anchored popups"),
     ("C-8", lambda: "_open_note_from_grid" in CALENDAR_UI,
      "a day cell's note title opens that note"),
-    ("C-9", lambda: "_bulk_toggle_pin" in HUB and "_bind_card_keys" in HUB,
+    # The cards stopped being widgets (they are drawn on the list's canvas),
+    # so the keys moved from each card's bindings to the canvas's own.
+    ("C-9", lambda: "_bulk_toggle_pin" in HUB and re.search(
+        r'cv\.bind\("<Down>", lambda _e: self\._list_step\(1\)\)', HUB) is not None,
      "bulk Pin, and the note list answers the keyboard"),
     ("C-10", lambda: "Click a line to insert it into the note" in CALC_UI,
      "the calculator history says what clicking a line does"),

@@ -51,13 +51,16 @@ app.refresh_note_list()
 app.update()
 
 # ---- SEARCH DEBOUNCE: no rebuild while typing, correct filter after the pause ----
-card_ids_before = {nid: str(info['card']) for nid, info in app._note_card_widgets.items()}
+# The list is a drawing: a rebuild draws every card anew, and a card drawn
+# anew has new canvas items -- so the item behind each card's background
+# says whether it was redrawn, as the card widget's name used to.
+card_ids_before = {nid: rec['items']['bg'] for nid, rec in app._note_cards.items()}
 typed = ''
 for ch in 'Note1':
     typed += ch
     app.search_var.set(typed)
     app.update()
-card_ids_immediately_after = {nid: str(info['card']) for nid, info in app._note_card_widgets.items()}
+card_ids_immediately_after = {nid: rec['items']['bg'] for nid, rec in app._note_cards.items()}
 check('rapid typing in search does not rebuild the list immediately',
       card_ids_before == card_ids_immediately_after)
 
@@ -72,7 +75,17 @@ def find_all_labels(w, acc=None):
         if isinstance(c, tk.Label): acc.append(str(c.cget('text')))
         find_all_labels(c, acc)
     return acc
-texts = find_all_labels(app.list_frame)
+
+
+def list_texts():
+    """What the note list says: every drawn card's title, and every
+    header's label -- the list is a drawing, with no labels to walk."""
+    out = [app._card_view(n)['title'] for n in app._card_order()]
+    out += [app._header_view(c)['label'] for c in app._group_headers]
+    return out
+
+
+texts = list_texts()
 check('after the debounce elapses, search correctly filters',
       'Note1' in texts and 'Note2' not in texts)
 
@@ -94,7 +107,7 @@ t0 = time.time()
 while time.time() - t0 < 0.4:
     app.update()
     time.sleep(0.02)
-_texts = find_all_labels(app.list_frame)
+_texts = list_texts()
 check('search finds a word living inside a table cell',
       'TabelNote' in _texts)
 check('and filters out the note that does not have it',

@@ -12,6 +12,9 @@ How the numbers themselves are counted is the
 
 | Version | Date | In one line |
 |---|---|---|
+| [0.82.233](#082233--2026-09-30) | 2026-09-30 | A note opened from the Calendar no longer brings along the last note's Restore previous, title counter or share code. |
+| [0.82.232](#082232--2026-09-30) | 2026-09-30 | The calendar becomes one drawing: it follows the window's edge as you drag, changes month ten times faster, and a day's markers show on dark themes. |
+| [0.82.230](#082230--2026-09-30) | 2026-09-30 | Cancel means stay and the keyboard goes back where it was; a big notebook stops making you wait; and the note list becomes one drawing you can arrange by hand. |
 | [0.81.213](#081213--2026-09-29) | 2026-09-29 | Nothing moves or removes your notes behind your back: categories survive a lost settings file, an update can be taken back whole, and nothing is deleted on a resemblance. |
 | [0.81.202](#081202--2026-09-29) | 2026-09-29 | Two places where the app left something out: a note's card cut off the end of what it says, and the keyboard shortcuts page was missing a whole group of keys. |
 | [0.81.200](#081200--2026-09-29) | 2026-09-29 | The note list stops pulling the keyboard away from what you were typing in. |
@@ -82,11 +85,117 @@ How the numbers themselves are counted is the
 
 ---
 
-## [Unreleased]
+## [0.82.233] — 2026-09-30
+
+*Highlights: a button that should have gone stays gone. Opening a note from the Calendar no
+longer brings along the last note's "Restore previous", title counter or share code.*
+
+### Fixed
+
+- **What should be hidden stays hidden.** The app decided whether to show or hide a button, a
+  counter or a panel by asking whether it was on the screen — which it is not, for as long as its
+  page is hidden. So a note opened from the Calendar with "Open in editor" found the last note's
+  "↩ Restore previous" still in place, pressing it did nothing, since this note had nothing to
+  restore; the last note's title counter could stay beside a short title, and its share code left
+  an empty strip. Every such decision now asks whether the widget has its place in the layout,
+  which does not change while a page is hidden.
+
+### Testing
+
+- qa7 walks the route a person takes — a note with an earlier version, its code and a long title
+  open; the Calendar; another note's "Open in editor" — and checks that Restore previous, the title
+  counter and the share code are all gone, with the same switch from the list as the control. The
+  travel story gains a chapter that does the same on the real app and photographs it. qa6 opens
+  Settings and chooses a section at once, which a script does and a person does not, and finds one
+  section, not two. Five mutants, each killed with the suite reaching its footer, and one on the
+  story; `tools/check_one_definition.py` gains a rule that fails on `winfo_ismapped()` outside the
+  three functions that mean the screen, proved on two sites no runtime check reaches.
+- Two of `story_look`'s reference pictures were wrong: scenes 04 and 05 open Settings and choose a
+  section in one breath, and since their first reference they had shown two sections stacked. The
+  fix changed them to the one section each scene names, and the corrected pictures are accepted.
+
+---
+
+## [0.82.232] — 2026-09-30
+
+*Highlights: the calendar's month is one drawing now, as the note list became in 0.82.230 — so it
+follows the window's edge while you drag it, and moving between months stops making you wait.
+Drawing it also found a colour nobody had chosen: a day's markers were black on every theme.*
+
+### Fixed
+
+- **The calendar is one drawing, and follows the window's edge.** The month was built of
+  widgets — a frame for every day, a label for its number and for each dot and note title — 216
+  windows for a month holding 46 notes, each made, placed and painted by the operating system.
+  Since 0.82.230 the window has waited while its edge is held, which kept the edge with the
+  pointer, but the month stood still at its old width for the whole drag and then caught up in
+  one jump. The month is now shapes and text on one canvas, drawn to look as it did, and a step
+  of the drag costs a quarter of what it did — 38 milliseconds instead of 162 — so with the
+  calendar on screen the month is drawn again at every step and keeps the window's width all the
+  way. Moving to the next month takes 25 milliseconds instead of 295, and opening the Calendar
+  tab after a change 33 instead of 275. The other pages still wait for the drag to pause, as in
+  0.82.230. Field-reported.
+
+- **A day's markers show on dark themes.** The emoji marking a day were drawn in the system's
+  default text colour — black — whatever the theme, so on the dark themes' day cells they all
+  but disappeared. They take the day's own text colour now: the theme's, or white on a painted
+  day, like the day's number beside them.
+
+### Testing
+
+- qa7 reads the drawn month back: one canvas and no widget per day; a busy day's dots (one per
+  colour), two titles and "+1 more"; a painted day's colour with white text; four markers shown
+  as three and "+1", in the day's text colour; week rows all as tall as the busiest day needs,
+  with everything a day draws inside its own cell; a new width drawn to fit without the notes
+  being worked out again, the open day keeping its outline; hovering — a title previews its
+  note, the rest of a busy day summarises it, an empty day says nothing, a hand over a day and
+  the plain pointer between days; a click on a day opens its list; saved markers change that one
+  corner without the month being drawn again; today's bar on today alone; and a theme switch
+  draws the month in the new colours, also one made in Settings. qa9: with the calendar showing,
+  a held drag is laid out at every step and the month drawn to the new width, while the History
+  register waits like the other pages. The checks in qa1, qa2, qa6 and qa7 that read the grid's
+  widgets read the drawing now — qa2's click and right-click land on the canvas where the title
+  is. Twenty-eight mutants, each killed with the suite reaching its footer. One survived its first
+  aim: qa1 opens the calendar for the first time just then, and a first showing is drawn by the
+  canvas's first resize whatever render does, so a render that drew nothing passed; qa6 and qa7,
+  which change a month already on screen, kill it. It also crashed qa7 before its footer, so the
+  calendar reads there now fail, rather than stop the suite, when the month on screen is not the
+  one they expect.
+- The travel story gains two chapters: a day marked and another painted through their right-click
+  menus, a note opened by its title; then the app closed and opened again, both days as they were,
+  a title previewed on hover and a narrower window drawn to fit. Three calendar bugs were put back
+  one at a time — black markers, a title's click opening the day, a new width never drawn — and the
+  story went red on each, naming its step.
+- The test harness answers the mouse button for the app. The window's resize freeze asks Windows
+  whether the button is down anywhere on the desktop, and the travel story went red while a person
+  was clicking in another program: its app started as if its edge were being dragged, the note
+  list was not laid out yet, a click on a card was dropped, and a later step blamed the app for a
+  share code left on screen. Reproduced by answering "held" for the app. `_qa_support` now pins the
+  button as it pinned who owns the foreground, for every qa script and story; the three tools that
+  build the window themselves pin it too; and the story's click fails at the click when its note
+  did not open.
+
+---
+
+## [0.82.230] — 2026-09-30
 
 *Highlights: Cancel means stay, the keyboard goes back where it was, and a button that opens
 something closes it on the next click — the everyday places where the app did something other
-than what a person just asked.*
+than what a person just asked. And a big notebook stops making you wait: a pause in typing,
+coming back to the list and opening a picture no longer cost time for every note you have, and
+the list itself is one drawing now, which a click hands to the keyboard — and which you can
+arrange by hand.*
+
+### Added
+
+- **Arrange the note list by hand.** Drag a card up or down the list and let go where the line
+  shows — or press Alt+↑ or Alt+↓ on the card with the ring. The list switches to a new sort,
+  **Custom order**, starting from the order it was showing, and keeps the arrangement: in the
+  notes file, across restarts, through saves (an edit does not move a card) and in backups. New
+  notes appear at the top; pinned notes stay above the rest, and in a grouped list a card stays
+  in its group. Near the top or bottom of the list a drag scrolls it, faster the further you
+  push; Escape puts a dragged card back. A share code does not carry a note's place — it is
+  yours, not the note's. Asked for in the field test.
 
 ### Fixed
 
@@ -138,6 +247,74 @@ than what a person just asked.*
   notes you already have left the whole unpacked backup — attachments included — in the temp
   folder. The other Cancel on that screen always cleaned up; this one does too.
 
+- **A pause in typing no longer freezes the app.** Every autosave rebuilt the whole note list,
+  card by card, so each pause after a burst of typing froze the window — about a second with 100
+  notes, three with 300, fourteen with 1,000: longest for the people with the most notes. A save
+  now redraws the one card that changed, moves it to where the sort puts it (the top, under
+  Recently updated), and moves the cards around it instead of redrawing them: about twenty
+  milliseconds, at 300 notes as at 1,000. Anything it cannot be sure of — a first note in an
+  empty list, a note changing group in a grouped list — still rebuilds, because a list that
+  quietly disagrees with your notes would be worse than a slow one.
+
+- **The note list draws what you can see.** The list drew a card for every note on every rebuild
+  — at startup, and again for each search, new sort or Group by. It now draws the first thirty
+  and the rest as you come near them, by wheel, scrollbar or the arrow keys. Search, Select all
+  and the counts beside the category headers still mean every note on the list, drawn yet or
+  not. Measured before and after on the same machine, with 1,000 notes: starting the app went
+  from 9.1 seconds to 1.9, a theme switch from 0.9 to 0.14, and a rebuild of the list from 14
+  seconds to 9 milliseconds.
+
+- **The note list is one drawing.** Each card was six windows the operating system had to make,
+  place, paint and take down, and a big notebook showed the seams: coming back to the list from
+  the Calendar showed it being built, and a fast drag of the scrollbar tore the cards apart for a
+  moment before they caught up. A card is now a few shapes on one canvas, drawn to look as it
+  did, and the list moves as one picture. With 1,000 notes, coming back to the list takes 0.08
+  seconds instead of 3.7, however far down it has been scrolled, and closing Settings the same;
+  scrolling to the very end, drawing every card on the way, takes a third of a second.
+  Field-reported.
+
+- **A click on a note puts the keyboard on the list.** Clicking a card opened the note and left
+  the keyboard wherever it had been, so ↓ straight after a click did nothing; and walking the
+  list from the keyboard moved the ring onto cards below the window while the list stood still.
+  A click now puts the ring on the card you clicked, ↑ and ↓ move it with the list scrolling to
+  keep it in sight, and Enter opens the note it is on. The list is one Tab stop now, where Tab
+  used to step through every card before leaving it. Field-reported.
+
+- **The window stops repeating its own work for every widget in it.** Two handlers that only
+  care about the window — the title bar's colours and the calendar's switch between small and
+  large text — were bound so that they ran for every widget as well: about two thousand and four
+  thousand times per rebuild of a 300-note list. A third, which hides popups while another
+  program is in front, ran once per widget on every Alt+Tab. Each now runs where it belongs; the
+  calendar's switch listens to its own grid, which also catches a resize made while you were on
+  another tab.
+
+- **A picture opens at once.** Opening an animated GIF decoded every frame before showing the
+  first — over a second of nothing for a sixty-frame animation, every time. The first frame now
+  appears straight away (35 milliseconds) and the rest are decoded as it plays; a photo is decoded
+  at the size it is shown rather than at full size; and a picture opened before comes back from
+  memory, up to a limit, and is read again if the file has changed.
+
+- **Saving writes the notes file twice as fast.** The file was written in thousands of small
+  pieces; it is written in one now — 18 milliseconds instead of 36 for 1,000 notes, and the same
+  file to the byte. Every autosave paid it.
+
+- **The chosen "Ends" option of a repeating note shows which one it is.** The dot marking Never,
+  On date or After was painted in the text colour on a near-white circle, so on every dark theme
+  the chosen option looked exactly like the other two — the choice worked, and nothing on screen
+  said so. Measured: Tk on Windows paints a radio's dot in the button's own text colour, unlike a
+  tick box's mark, which is always dark; the circle had been given the tick boxes' rule. It takes
+  the card colour now, which stands apart from the text on every theme. Field-reported.
+
+- **Dragging the window's edge follows the mouse.** Every step of a drag handed the window's
+  content its new size at once, and laying it out cost more than a step lasts — a quarter of a
+  second on the Calendar, a sixth on the editor — so the edge crawled behind the pointer. Two
+  changes. While the button holds the edge, the content waits and is laid out once, when the
+  drag pauses or the button is let go. And Windows no longer repaints the whole window at every
+  step: Tk asks it to, and then redraws each widget itself anyway. A step of the drag now costs
+  10 milliseconds on the Calendar instead of 264, and a layout half of what it did (128 instead
+  of 264 on the Calendar, 75 instead of 145 on the editor). Maximising, a snap to the side of the
+  screen and the keyboard lay the window out at once, as before. Field-reported, twice.
+
 ### Testing
 
 - Checks in qa7 (Cancel on six routes plus a control, shortcuts pressed from inside an open
@@ -156,6 +333,70 @@ than what a person just asked.*
   first version of this change read that as Cancel — the window refused to close. Callers now
   stop on an explicit `False` only, and a mutant restoring the looser test is caught by that
   same check.
+- qa4 gains a block for the note list. The window-level handlers are counted during a rebuild
+  (none run), each with its positive half: the window's own appearance still paints the title
+  bar, the calendar still changes its text size across 1,150 pixels — also after a resize made
+  on another tab — and a popup losing the front still asks the watch to look. Then the drawing:
+  a scroll to the end draws all 300 cards in the list's order, Down walks past the drawn part
+  (also from a card a save has moved), a note deleted before it was drawn never is, a group's
+  header drawn later counts what is left, a rebuild keeps the depth and the place, a first draw
+  shorter than its window fills it, and Select all ticks cards drawn later. And the save: one
+  card redrawn, every other card proved to be the same widget, and the list compared row by row
+  with a full rebuild — ungrouped, grouped, a note leaving the search, a brand-new note. qa7
+  gains the preview's half, and `test_data_safety` pins the notes file's exact bytes.
+  Twenty-three mutants, each killed with the suite reaching its footer.
+- The mutants caught four of those checks being weaker than their names before any of them
+  shipped: the popup check waited for a watch that also runs on its own heartbeat; the check
+  that a short list fills its window drew three cards, which already overfill that window, and
+  inherited a scroll restore still running from the check before it; a card left behind by a
+  faulty save crashed the comparison instead of failing it; and a check's name carried the very
+  number a mutant changes, so the runner could not find it. Each now asserts the request, the
+  fixture or the name it depends on.
+- Older checks that met the change: two asserted the mechanism it replaced and were rewritten on
+  the promise (qa4's "builds every card, 300 of 300", now the first draw plus a scroll to the
+  end; qa1's "the watch is armed", which read `bind_all`); three read the list in the order its
+  widgets were made and now read the order on screen; two asked the open note's card for the
+  thickness of its ring — which every card has worn since the keyboard's focus ring shipped —
+  and now ask for its colour; and one of qa1's passed a run and failed the next, because whether
+  its note fell in the first screenful depended on the second its fixture was made in.
+- The drawn list: every check that read cards as widgets now reads the drawing — what each card
+  shows, its colours and where it sits — and "the same card" means the same shapes on the
+  canvas where it meant the same widget. The comparison with a full rebuild includes where every
+  row is drawn, so a gap left by a deletion or a card drawn on top of another fails it, and it
+  names anything drawn that no row owns. New checks: a click on a header's line folds its group,
+  the pointer is a hand over a card and plain between cards, a click in Select mode ticks the card
+  on screen and in the selection, a deleted card's gap closes, a click on a note puts the
+  keyboard on the list, whose ring then walks twenty cards down with the list keeping it in view,
+  Tab crosses the list in one stop, and the scroll region spans the drawing from 0 to below its
+  last row. qa4 checks on every theme that a chosen radio's dot stands apart from its circle.
+  Fifteen mutants, each killed with the suite reaching its footer.
+- The Linux image caught what twenty green checks on Windows could not: eight checks about the
+  top of the list failed there, because Tk 8.6.16 stopped padding a rectangle's `bbox` by the
+  pixel 8.6.15 adds, and the drawing's extent had been taken from Tk. It is worked out from the
+  rows now, and a mutant that puts the top at 1 — what the image read — fails the same checks.
+- qa9 drives a held drag of the window's edge, answering the mouse button for the app because a
+  script cannot hold it: the layout waits, the release lays it out, so does a pause, and a resize
+  with no button held is laid out at once. It also asks Windows for the style of Tk's two window
+  classes, which must no longer carry the whole-window repaint. Five mutants, each killed with
+  the suite reaching its footer — after the one for the pause survived the first version of its
+  check, whose wait began before the window had changed size and so was over before it started.
+  Before the repaint change was made, the window was photographed with and without it, mid-drag
+  and at a new size, on the Calendar and the editor: the same to the pixel.
+- Custom order, in qa4 with real pointer events on the list: a drag up and a drag down land where
+  the line was, the list switches to Custom order starting from what it showed, the file holds
+  the order and no note's "updated" moves; a shaky click is not a drag; Escape and a rebuild
+  under a drag both put the card back; Alt+↑/↓ move the card and keep the ring; a save leaves a
+  card where it was, a new note starts at the top; the pinned line and the groups hold; choosing
+  Custom order first keeps the order shown; Select mode drags nothing; share codes carry no
+  place; the list's edge scrolls a drag both ways, with rows drawn on demand arriving under it;
+  and a card carried past the edge stays in sight. The travel story gains two chapters: a card
+  dragged to the top and one moved from the keyboard, then the app closed and opened again, the
+  order still there after an edit. Fourteen mutants, each killed with the suite reaching its
+  footer — two only after their checks were made to ask where the line said the card would
+  land: a pinned card and a group both re-sort a card after the drop, so the landing looked
+  right while the line had promised a place the card could never take.
+- The travel story carried a Romanian failure message; it is English now, like everything else
+  in the repository.
 
 ---
 

@@ -35,6 +35,7 @@ load, and reports what it did so the app can tell the user.
 """
 
 import copy
+import math
 import os
 import re
 import uuid
@@ -371,6 +372,16 @@ def normalize_note(note):
     if not clean["created"]:
         clean["created"] = clean["updated"]
     clean["pinned"] = bool(clean.get("pinned"))
+    # The note's place in Custom order: written only when a person moves a
+    # note (a drag, Alt+Up/Down), and absent until then -- a note nobody
+    # has placed stands at the top. Not in NOTE_DEFAULTS, because "not
+    # placed yet" is its own answer and no number can say it. A number
+    # from a hand-edited file or an older build is kept only if it is one;
+    # True, "3" or NaN would reach the sort comparator.
+    order = note.get("order")
+    if (isinstance(order, (int, float)) and not isinstance(order, bool)
+            and math.isfinite(order)):
+        clean["order"] = order
     if clean["category"] not in CATEGORY_COLORS:
         clean["category"] = "General"
 

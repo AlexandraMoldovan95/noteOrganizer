@@ -209,9 +209,11 @@ destructive confirms must do the same.
 right colors to it. This is for **persistent** widgets — ones built once at startup and never
 destroyed (the sidebar, the main buttons, the tab bar).
 
-For content that gets **destroyed and rebuilt** on every refresh — note cards, calendar cells,
-the attachments list, anything inside a Settings section panel — widgets are colored with plain
-`.configure(bg=self.colors[...])` calls instead. Since this content is always rebuilt fresh, it
+For content that gets **destroyed and rebuilt** on every refresh — the attachments list, the
+History register's rows, anything inside a Settings section panel — widgets are colored with
+plain `.configure(bg=self.colors[...])` calls instead. (The note list and the calendar's month
+are not widgets any more but drawings, whose items take their colours when drawn: the list is
+recoloured in place, below, and the month is drawn again.) Since this content is always rebuilt fresh, it
 never needs live tracking; using `track_theme` here just means every rebuilt widget's tracking
 registration outlives the widget itself. That was an actual bug this codebase had for a while
 (see [CHANGELOG.md](../CHANGELOG.md) 0.4.0) — a growing, unbounded list of registrations for
@@ -230,11 +232,14 @@ There's a third case, added in 0.32.49: content that is normally rebuilt on refr
 **not** be rebuilt just because the palette changed. `apply_theme()` used to call
 `refresh_note_list()`, which destroyed and rebuilt every note card — about 85ms of a 121ms
 theme switch, with the list visibly emptying and refilling. Nothing about a theme switch
-changes note *data*, so `_recolor_note_cards()` now re-applies colors to the cards already on
-screen, using named widget references recorded in `_note_card_widgets` when each card is built.
+changes note *data*, so `_recolor_note_cards()` now re-applies colors to the cards already
+drawn, through the items each card's record in `_note_cards` names (the list is a drawing on
+one canvas; see [Large lists](#large-lists-draw-what-can-be-seen-the-rest-on-demand)).
 
-This is **not** the `track_theme` pattern that leaked: `_note_card_widgets` is rebuilt from
-scratch by every `refresh_note_list()`, so it only ever holds cards currently on screen.
+This is **not** the `track_theme` pattern that leaked: `_note_cards` is rebuilt from scratch
+by every `refresh_note_list()`, and every update that stops short of one keeps it exact, so it
+only ever holds the cards that are drawn. And since a drawing is not a widget,
+`_recolor_stragglers()` never reaches the list at all — this is its only recolour.
 
 Two ordering rules matter here — `_recolor_note_cards()` runs *after* `_recolor_stragglers()`
 so a note's own color (recomputed from the note, not color-swapped) wins over the generic
@@ -460,13 +465,84 @@ occupy an index but are skipped by character counts, and a rebuild mid-gesture d
 canvas under the mouse — each of those has burned this codebase once, and each now has a
 regression check in `qa/qa1.py` and a war story in [ISSUES_LOG.md](ISSUES_LOG.md).
 
-### Large lists: paginate, don't virtualize (yet)
+### Large lists: draw what can be seen, the rest on demand
 
 The Trash (Settings → Recently deleted) and the multi-note Share panel both cap how many rows
 they build at once (50 and 100 respectively), with a "Show more" button to reveal the next
-batch, rather than rendering every entry immediately. This was enough to take the Trash panel from ~1.8s to ~100ms with 600
-entries. The main note list doesn't do this yet — see [ROADMAP.md](ROADMAP.md) for real
-windowed virtualization, which would help further at very large note counts.
+batch, rather than rendering every entry immediately. This was enough to take the Trash panel
+from ~1.8s to ~100ms with 600 entries.
+
+The main note list does the same job without a button, because it is the app's main way
+around and a button every thirty notes would be felt — and it is **drawn**, not built of
+widgets. In Tk on Windows every widget is its own OS window; a card built of widgets was six,
+and everything the list did scaled with them: rebuilding it, showing it again after the
+Calendar or Settings, scrolling it fast (Windows moved hundreds of child windows per step, and
+the picture tore). The cards are rectangles and text on the list's one canvas now
+(`_draw_note_card`, from `_card_texts`, the one definition of what a card says), laid out in
+records that know where each row stands.
+
+On top of that, a rebuild draws `LIST_FIRST_DRAW` rows (30); the rest wait in `_list_pending`,
+and `_list_view_changed` — the canvas's `yscrollcommand`, which hears every way the view can
+move: wheel, scrollbar, a taller window, a drawn step lengthening the content — draws
+`LIST_DRAW_STEP` more whenever less than a screen of drawn list is left below the view. The
+keyboard's ↓ draws ahead of itself.
+
+Rules that keep it honest:
+
+- **One definition of what the list shows.** `_list_rows()` (built on `_notes_on_the_list()`)
+  is read by the rebuild, the top-up, the one-card save and Select all. Nothing asks the
+  *cards* which notes are on the list — "all" means every note the list shows, drawn yet or not.
+- **The drawn part is a prefix.** `_list_drawn` (records, in screen order) followed by
+  `_list_pending` is exactly `_list_rows()`. Every update short of a rebuild — a delete
+  (`_remove_note_cards`), a save (`_redraw_saved_card`) — keeps that true, moves the rows below
+  the change with `_reflow_list` (one repaint), and asks for a top-up itself when it leaves rows
+  waiting, because the canvas reports only when something changes size.
+- **Screen order is the records' order.** `_card_order()`; a card has no widget to ask.
+- **The drawing's extent comes from the rows, not from Tk.** `_list_extent()` is (0, 0, width,
+  bottom of the last row), and the scrollregion, the top-up and every scroll guard below read it.
+  A drawing's `bbox` starts at its first item, four pixels down, where the old frame's started
+  at 0; and how Tk pads a rectangle's `bbox` changed between releases (8.6.15 counts a pixel
+  round one with no outline, 8.6.16 does not), so an invisible rectangle from 0 held on Windows
+  and failed on the Linux image.
+- **Input is found by position.** Mouse and keys are bound once on the canvas
+  (`_bind_list_input`); a click, a right-click or the pointer's hand asks `_list_record_at`
+  which row it is over. A click on a card also puts the keyboard on the list, with the ring on
+  that card, and the ring's walk scrolls the list to keep it in view.
+
+A rebuild keeps the depth that was drawn when the list was scrolled, so the position restored
+in pixels (below) has content to land on, and draws the card the keyboard was on. This is not
+virtualization: a card once drawn stays drawn until the next rebuild — which costs the drawing
+little, since a drawn card is a handful of canvas items rather than six windows. Windowed
+rendering stays on the [ROADMAP](ROADMAP.md) for notebooks far larger than the thousand notes
+this was measured with. See
+[The list that was drawn whole, for every pause in typing](ISSUES_LOG.md#the-list-that-was-drawn-whole-for-every-pause-in-typing).
+
+### Custom order: a place is written only by a move
+
+A note's place in Custom order is its `order` number, and only a person's move writes it — a
+drag on the list or Alt+↑/↓ (`_move_note`). Nothing else touches it: a save, an edit, a
+recolour. A move is not an edit, so no `updated` changes. `normalize_note` keeps the number only
+if it is a real one, and a note without it has not been placed yet: it stands above the placed
+ones, newest first — where a new note, or one from a share code, is looked for.
+
+`_move_note` renumbers every note in one pass (0, 1, 2 …) rather than squeezing a number between
+two neighbours, so there is never a precision problem to manage. It works on the whole notebook
+in Custom order, not only on what a search shows, so a hidden note keeps its place among the
+rest. When the list was sorted some other way, it first places every note as that sort had them
+(`_place_notes_as_sorted`) — the drag happened in *that* order — and switches the sort.
+
+Two rules keep a move from being undone by the next rebuild: a card only trades places with
+cards of the same pin state, and, in a grouped list, the same category (`_same_list_block`).
+
+The drag itself (`_list_drag_arm` → `_start_list_drag` → `_follow_list_drag` → `_list_released`)
+moves only the card's **drawing**: its record keeps its place, and the lifted card's offset is
+tracked on the side. That matters because a drag near the list's edge scrolls it, and scrolling
+draws the rows still waiting — which `_draw_list_rows` places from the records. Anything that
+changes the rows under a drag (a rebuild, a save redrawing a card, a delete) ends it first
+(`_cancel_list_drag`), putting the card back before the rows move.
+
+The number is this notebook's own: `SHAREABLE_FIELDS` leaves it out of a share code, while a
+backup — the same notebook on another machine — keeps it.
 
 ### Scrollable canvases guard their own view
 
@@ -485,12 +561,88 @@ So the two scrolling canvases carry the same guard family. The editor page has p
 content to the top since `0.32.x`; the note list (since `0.58.82`) additionally remembers its
 offset in **pixels** across a full rebuild and keeps that restore *in force* for a short
 window — re-applied on every late Configure and on short timers for the silent-shrink case,
-with the scrollregion refreshed from `bbox("all")` before any fraction math, because a
-scrollregion is a claim, not a fact.
+with the scrollregion refreshed from the content's real extent before any fraction math (the
+editor page's window item, the list's own `_list_extent()`), because a scrollregion is a claim,
+not a fact.
 
 A deliberate wheel or scrollbar move cancels the pending restore: the user always outranks the
 machinery. Any new scrollable canvas whose content gets rebuilt should either reuse this family
 or consciously argue why it can't suffer the same two failures.
+
+### Showing and hiding asks the layout, not the screen
+
+Every "show this if it is not showing" and "hide this if it is" — Restore previous, the title
+counter, the share code, the Settings sections, the day panel and the rest — asks `_is_placed()`:
+does the widget have its place in the layout (`winfo_manager()`)? Never `winfo_ismapped()`, which
+asks whether it is on the screen and says no for a placed widget until Tk first draws it, and for
+as long as its page is hidden. A hide that asked the screen skipped a sleeping widget, which woke
+up with its page; a show that asked it packed a placed widget again, moving it to the end of its
+container. `tools/check_one_definition.py` fails on `winfo_ismapped()` outside the three places
+that mean the screen (a tooltip, a click on the Settings page, the calendar's keys). See
+[The button that woke up with its page](ISSUES_LOG.md#the-button-that-woke-up-with-its-page).
+
+### A drag of the window's edge waits for the hand
+
+The whole window sits in one frame inside `main_canvas`, and every size the window takes is
+handed to that frame — which places and paints every widget again. A drag of the edge sends a
+new size every few milliseconds, and a layout cost more than that: 275 ms a step with the
+Calendar showing, 149 with the editor, 70 on Settings, 98% of it inside Tk.
+
+So `_on_main_canvas_configure` asks whether the mouse's primary button is down
+(`_pointer_button_held`, a question for Windows: the edge belongs to the operating system, and Tk
+hears the sizes but not the button). While it is, the new size waits; `_lay_out_at_window_size`
+hands it over once, when the drag pauses for `RESIZE_PAUSE_MS` or a watch every
+`RESIZE_WATCH_MS` sees the button let go. With no button held — maximising, a snap, the
+keyboard — it is handed over at once, as it always was. Anywhere but Windows, or if the question
+fails, the answer is "not held", which is the old behaviour.
+
+A held step still cost about 70 ms on the Calendar, and that turned out to be a class style.
+Tk registers its two window classes, `TkTopLevel` and `TkChild`, with `CS_HREDRAW` and
+`CS_VREDRAW`, so Windows invalidates a window whole whenever its size changes, and everything
+on screen was painted again at every step. Tk does not need that: each of its widgets redraws
+itself when its own size changes. `_stop_whole_repaints` takes the two styles off both classes
+when the window is first mapped (Windows only, by class name). After it, a held step costs
+about 10 ms and a step laid out live about half of what it did. Photographed with and without,
+mid-drag and at a new size, the window is the same to the pixel. See
+[The window that crawled behind its edge](ISSUES_LOG.md#the-window-that-crawled-behind-its-edge).
+
+One page does not wait. The Calendar's month is a drawing (next section), and a step of the drag
+costs it under 40 ms, so `_page_follows_the_drag` has a held drag laid out at every step while
+the month is on screen. Every other page is built of widgets and waits for the hand; so does
+the calendar's History register, which is rows of widgets too.
+
+### The calendar's month is one drawing
+
+The month grid was built the way the note list used to be: a frame per day, a label for its
+number, one for each dot and each note title, a frame per divider — 216 widgets for a month
+holding 46 notes, each of them an OS window on Windows. `_draw_calendar_grid` draws the same
+cells as rectangles and text on one canvas, `cal_canvas`, laid out from measurements of the
+widget grid it replaced: seven columns at floor(i × width / 7), a row of weekday names, week
+rows all as tall as the busiest day needs and never under 90, and the paddings pack used inside
+a cell. A day's content is drawn at the origin first (`_draw_cal_cell_content`), because the row
+height depends on the tallest day, and moved into place once that is known.
+
+The rules that keep the list honest keep this one too:
+
+- **Records, not widgets.** `_cal_cells` holds each drawn day: its box, its items and the boxes
+  of its note titles. `_cal_cell_view` reads a day back from the drawing — what it says, its
+  colours, its outline — which is what checks ask now that a day has no widget.
+- **Input is found by position.** Click, right-click and hover are bound once on the canvas, and
+  `_cal_hit` answers whether the pointer is over a note's title — that note: open it, its menu,
+  its preview — or the rest of a day: the day's list, the day's menu, its titles-only summary.
+- **A new width draws; it does not render.** `render_calendar` works out which notes fall on
+  which day and keeps the answer (`_cal_month_data`). A change of size draws again from it
+  (`_cal_canvas_configured`) without expanding a single occurrence. Crossing the 1,150-pixel
+  step between small and large titles is the one resize that renders.
+- **Colours are taken when drawn.** Nothing tracks a drawn item's colour, so a theme switch
+  draws the month again: `apply_theme` asks for a render like every other change, and one made
+  while the calendar is hidden is caught up when it is shown.
+
+The grid's frame is given the month's height, as the widget grid's rows gave it, so one busy day
+still makes every week taller and the calendar area scrolls. Measured on that 46-note month: the
+next month in 25 ms instead of 295, the Calendar tab after a change in 33 instead of 275, a step
+of a window resize in 38 instead of 162. See
+[The month that was two hundred windows](ISSUES_LOG.md#the-month-that-was-two-hundred-windows).
 
 ## Background work: exporting and importing
 

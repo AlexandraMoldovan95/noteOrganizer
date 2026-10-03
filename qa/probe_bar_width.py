@@ -27,6 +27,13 @@ io.open("settings.json", "w", encoding="utf-8").write(
 
 import note_organizer as NO
 
+# The window's resize freeze asks Windows whether the mouse button is down,
+# anywhere on the desktop, and lays nothing out while it is: a click held in
+# another program would leave the widths below measured before the layout.
+# The qa suite pins the same answer (_qa_support's pin_the_desktop).
+if hasattr(NO.NoteOrganizer, '_pointer_button_held'):
+    NO.NoteOrganizer._pointer_button_held = lambda self: False
+
 app = NO.NoteOrganizer()
 app._poll_active_dirty = lambda: None
 app.show_info = lambda *a, **k: True

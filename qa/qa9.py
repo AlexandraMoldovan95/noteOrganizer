@@ -1231,26 +1231,173 @@ _ms_w, _ms_h = app.minsize()
 app.geometry('%dx%d' % (_ms_w, _ms_h))
 for _ in range(30):
     app.update(); time.sleep(0.02)
-_ms_cards = [w for w in app.list_frame.winfo_children()
-             if getattr(w, '_card_note_id', None) is not None]
+_ms_order = app._card_order()
+_ms_view = app._card_view(_ms_order[0]) if _ms_order else None
 _ms_new = find_widget(app, tk.Button, 'New Note')
 # Asked of where things ARE, in screen coordinates. The list's own height
 # cannot answer it: at the old 500x400 the list still reported 354px,
 # running past the bottom of the window, while the New Note button was
 # drawn over the card (measured: card 482-571, button from 487). A card
 # is visible when it ends above the first button below the list and
-# inside the window.
-_ms_card_bottom = (_ms_cards[0].winfo_rooty() + _ms_cards[0].winfo_height()
-                   if _ms_cards else 10 ** 6)
+# inside the window. The card is a drawing on the list's canvas, so its
+# place on screen is the canvas's place plus the card's own, less however
+# far the list is scrolled.
+_ms_card_bottom = (app.canvas.winfo_rooty()
+                   + int(_ms_view['y1'] - app.canvas.canvasy(0))
+                   if _ms_view else 10 ** 6)
 _ms_limit = min(_ms_new.winfo_rooty() if _ms_new is not None else 10 ** 6,
                 app.winfo_rooty() + app.winfo_height())
 check('at the smallest size the window allows, a whole note card is on screen '
       '(card ends at %d, room ends at %d)' % (_ms_card_bottom, _ms_limit),
-      bool(_ms_cards) and _ms_new is not None
-      and _ms_cards[0].winfo_height() > 1 and _ms_card_bottom <= _ms_limit)
+      _ms_view is not None and _ms_new is not None
+      and _ms_view['y1'] - _ms_view['y0'] > 1 and _ms_card_bottom <= _ms_limit)
 app.geometry('1100x850')
 for _ in range(10):
     app.update(); time.sleep(0.02)
+
+# ============================================================
+# A DRAG OF THE WINDOW'S EDGE LAYS THE WINDOW OUT ONCE
+# ============================================================
+# Laying the window out costs more than a step of a drag lasts (measured:
+# 260 ms a step on the Calendar), so while the mouse button holds the edge
+# the content waits, and is laid out when the drag pauses or the button is
+# let go. A script cannot hold the edge -- the drag belongs to Windows --
+# so the button is answered for the app, and each promise is asked of the
+# layout itself: the width the content was given.
+def _rz_width():
+    return int(float(app.main_canvas.itemcget(app._main_window_item, 'width')))
+
+
+def _rz_window():
+    return max(app.main_canvas.winfo_width(), app._main_min_width)
+
+
+# Asked of the real method: the suite pins the answer to "not held" for
+# every app it builds (_qa_support.pin_the_desktop), because a click held
+# in another program while the tests run would otherwise freeze layouts.
+_rz_real = NO.NoteOrganizer._desktop_pointer_button_held
+check('the mouse button can be asked, and says no when nobody holds it',
+      _rz_real(app) in (False, True)
+      and (sys.platform.startswith('win') or _rz_real(app) is False))
+_rz_held = {'now': True}
+app._pointer_button_held = lambda: _rz_held['now']
+# The pause must not land by accident between two steps of the check.
+app.RESIZE_PAUSE_MS = 60000
+try:
+    _rz_before = _rz_width()
+    app.geometry('1180x850')
+    for _ in range(5):
+        app.update_idletasks(); app.update()
+    check(f'while the mouse holds the window\'s edge, the layout waits '
+          f'({_rz_before} kept, the window is {_rz_window()})',
+          _rz_width() == _rz_before != _rz_window()
+          and app._resize_watch_job is not None)
+
+    def _rz_wait_for_layout():
+        """Until the content has the window's width, or five seconds."""
+        _rz_end = time.time() + 5
+        while time.time() < _rz_end and _rz_width() != _rz_window():
+            app.update(); time.sleep(0.02)
+
+    # The release, as the watch sees it on its next look -- the pause is out
+    # of reach, so nothing else can lay the window out.
+    _rz_held['now'] = False
+    _rz_wait_for_layout()
+    check(f'...and letting go lays it out at the new size '
+          f'({_rz_width()} for {_rz_window()})',
+          _rz_width() == _rz_window())
+    # A drag that pauses with the button still down is laid out too. The
+    # fixture first: a held step whose layout visibly waits -- a wait that
+    # starts before the window has changed is over before it begins, which
+    # is how the first version of this check passed with the pause removed.
+    _rz_held['now'] = True
+    app.geometry('1060x850')
+    for _ in range(5):
+        app.update_idletasks(); app.update()
+    _rz_waiting = _rz_width() != _rz_window()
+    app.RESIZE_PAUSE_MS = 50
+    app.geometry('1040x850')      # the next step arms the (now short) pause
+    for _ in range(2):
+        app.update_idletasks(); app.update()
+    _rz_wait_for_layout()
+    check(f'...and a pause in a held drag lays it out without the release '
+          f'({_rz_width()} for {_rz_window()}; it waited first: {_rz_waiting})',
+          _rz_waiting and _rz_width() == _rz_window())
+    # No button: a maximise, a snap or the keyboard -- at once, as always.
+    # Neither timer may stand in for "at once": both are put out of reach.
+    _rz_held['now'] = False
+    app.RESIZE_PAUSE_MS = 60000
+    app.RESIZE_WATCH_MS = 60000
+    app.geometry('1120x850')
+    app.update_idletasks(); app.update()
+    check(f'a resize with no button held is laid out at once '
+          f'({_rz_width()} for {_rz_window()})',
+          _rz_width() == _rz_window())
+    # The calendar's month is one drawing, quick enough to follow the drag
+    # (under 40 ms a step), so with it showing a held step is laid out at
+    # once -- and the month drawn to the new width. The History register is
+    # rows of widgets, and waits with the other pages. Both timers are
+    # still out of reach, so neither can stand in for "at once".
+    app.notebook.select(app.TAB_CALENDAR)
+    for _ in range(5):
+        app.update_idletasks(); app.update()
+    _rz_held['now'] = True
+    app.geometry('1080x850')
+    for _ in range(5):
+        app.update_idletasks(); app.update()
+    _rz_cal_right = max((r['x1'] for r in app._cal_cells.values()), default=0)
+    check(f'with the calendar showing, a held drag is laid out at every step '
+          f'({_rz_width()} for {_rz_window()}; the month drawn to '
+          f'{_rz_cal_right} of {app.cal_canvas.winfo_width()})',
+          _rz_width() == _rz_window()
+          and abs(_rz_cal_right
+                  - (app.cal_canvas.winfo_width() - app.CAL_CELL_PAD)) <= 1)
+    app._toggle_calendar_history()
+    for _ in range(5):
+        app.update_idletasks(); app.update()
+    _rz_before = _rz_width()
+    app.geometry('1140x850')
+    for _ in range(5):
+        app.update_idletasks(); app.update()
+    check(f'...but the History register waits for the drag, like the other '
+          f'pages ({_rz_before} kept, the window is {_rz_window()})',
+          app._history_visible and _rz_width() == _rz_before != _rz_window())
+    app._toggle_calendar_history()
+    _rz_held['now'] = False
+    app._lay_out_at_window_size()
+    app.notebook.select(app.TAB_NOTES)
+    for _ in range(5):
+        app.update_idletasks(); app.update()
+finally:
+    for _rz_attr in ('_pointer_button_held', 'RESIZE_PAUSE_MS', 'RESIZE_WATCH_MS'):
+        app.__dict__.pop(_rz_attr, None)
+    app._lay_out_at_window_size()
+
+# Tk's window classes come with CS_HREDRAW and CS_VREDRAW, which made
+# Windows repaint the whole window on every change of size -- 72 ms a step
+# of a drag with nothing even laid out, 10 without. Asked of Windows
+# itself, on the classes of the real window and of a widget in it.
+if sys.platform.startswith('win'):
+    import ctypes as _ws_ct
+    _ws_u = _ws_ct.windll.user32
+    _ws_u.GetClassLongPtrW.restype = _ws_ct.c_size_t
+    _ws_u.GetClassLongPtrW.argtypes = [_ws_ct.c_void_p, _ws_ct.c_int]
+    _ws_styles = {}
+    for _ws_h in (int(app.wm_frame(), 16), app.main_canvas.winfo_id()):
+        _ws_n = _ws_ct.create_unicode_buffer(64)
+        _ws_u.GetClassNameW(_ws_ct.c_void_p(_ws_h), _ws_n, 64)
+        _ws_styles[_ws_n.value] = _ws_u.GetClassLongPtrW(_ws_h, -26)
+    check('Windows no longer repaints the whole window on every change of size '
+          '(%s)' % {k: hex(v) for k, v in _ws_styles.items()},
+          set(_ws_styles) == {'TkTopLevel', 'TkChild'}
+          and all(not (v & 0x3) for v in _ws_styles.values()))
+else:
+    check('elsewhere the repaint styles are left alone, and asking does not fail',
+          app._stop_whole_repaints() is None)
+app.geometry('1100x850')
+for _ in range(10):
+    app.update(); time.sleep(0.02)
+
 app.notes = list(_tg_saved_notes)
 app.templates = list(_tg_saved_templates)
 app.save_notes()

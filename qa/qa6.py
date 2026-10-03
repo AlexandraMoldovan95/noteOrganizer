@@ -66,7 +66,7 @@ app.group_by_category.set(True)
 app._on_toggle_group_by_category()
 app.refresh_note_list()
 app.update()
-check('grouping enabled shows category headers', find_widget(app.list_frame, tk.Frame) is not None)
+check('grouping enabled shows category headers', bool(app._group_headers))
 
 # collapse a group and verify state
 app._toggle_group_collapsed('Work')
@@ -1521,29 +1521,30 @@ check('and the undiscoverable rest',
 # promise was broken once: the note list's keys shipped in 0.81.199 and
 # nobody added their rows, so the page and the user guide both went on
 # claiming completeness they no longer had. Asking for the three names
-# would only pin THIS omission. So this asks the CARD what it binds and
-# requires every answer to be named here -- a key bound later with no row
+# would only pin THIS omission. So this asks the LIST what it binds -- the
+# cards are a drawing, and the list's canvas holds their keys -- and
+# requires every answer to be named here: a key bound later with no row
 # fails at the first check, and one that is named but not drawn fails at
 # the second.
 _QW_NOT_KEYS = {'<Button-1>', '<Button-3>', '<Button-2>', '<Enter>',
                 '<Leave>', '<FocusIn>', '<FocusOut>', '<Motion>',
-                '<MouseWheel>', '<Double-Button-1>'}
+                '<MouseWheel>', '<Double-Button-1>', '<Configure>',
+                '<B1-Motion>', '<ButtonRelease-1>'}
 # Spelled the way Tk reports them back, not the way they were bound:
 # bind('<Return>') is read back as '<Key-Return>', and this check was
 # written with the binding spelling and caught its own mistake.
 _QW_KEY_NAMES = {'<Key-Return>': 'Enter', '<Key-space>': 'Space',
                  '<Key-Down>': 'Down', '<Key-Up>': 'Up',
+                 '<Alt-Key-Down>': 'Alt+Down', '<Alt-Key-Up>': 'Alt+Up',
+                 '<Key-Escape>': 'Escape',
                  '<Shift-Key-F10>': 'Shift+F10',
                  '<Key-App>': 'menu key', '<Key-Menu>': 'menu key'}
-_qw_card = next((w for w in app.list_frame.winfo_children()
-                 if getattr(w, '_card_note_id', None) is not None), None)
 # A check that cannot find its subject must fail rather than pass on an
 # empty list -- the shape of every check that has quietly stopped working.
-check('a note card is on screen to ask about', _qw_card is not None)
-_qw_bound = ([s for s in _qw_card.bind() if s not in _QW_NOT_KEYS]
-             if _qw_card is not None else [])
+check('a note card is on screen to ask about', bool(app._card_order()))
+_qw_bound = [s for s in app.canvas.bind() if s not in _QW_NOT_KEYS]
 _qw_unnamed = [s for s in _qw_bound if s not in _QW_KEY_NAMES]
-check('every key a note card binds has a name here (unnamed: %s)'
+check('every key the note list binds has a name here (unnamed: %s)'
       % _qw_unnamed, bool(_qw_bound) and _qw_unnamed == [])
 _qw_missing = [s for s in _qw_bound
                if s in _QW_KEY_NAMES and _QW_KEY_NAMES[s] not in _allQW]
@@ -2046,7 +2047,7 @@ check('...and its notes are kept, filed under General (plan 110)',
 app.hide_settings_page()
 app.refresh_note_list(); app.update()
 check('...and the grouped list shows them where they now are (plan 110)',
-      all((app._note_card_widgets.get(n['id']) or {}).get('note', {}).get('category')
+      all((app._note_cards.get(n['id']) or {}).get('note', {}).get('category')
           == 'General' for n in app.notes if n['id'] >= 4100))
 app.group_by_category.set(False)
 app.refresh_note_list(); app.update()
@@ -2123,22 +2124,9 @@ _cal_day = '2026-08-14'
 
 
 def _calendar_says(text):
-    """Is `text` drawn anywhere in the month grid on screen right now?"""
-    found = []
-
-    def walk(w):
-        try:
-            value = str(w.cget('text'))
-        except tk.TclError:
-            value = ''
-        if text in value:
-            found.append(w)
-        for kid in w.winfo_children():
-            walk(kid)
-
-    if hasattr(app, 'cal_grid_frame'):
-        walk(app.cal_grid_frame)
-    return bool(found)
+    """Is `text` drawn anywhere in the month grid on screen right now? The
+    month is text on one canvas, so it is asked of the drawing."""
+    return any(text in t for t in app._cal_texts())
 
 
 app.hide_settings_page(); app.update()
@@ -2191,6 +2179,29 @@ NO.save_trash(app.trash)
 app.notebook.select(app.TAB_NOTES)
 app.new_note(); app.update()
 
+# ---------------------------------------------------------------------
+# Opening Settings and choosing a section in one breath shows ONE section.
+#
+# Choosing a section hides the others first, and asked each whether it
+# was on the screen. A section Settings has only just packed is not, until
+# Tk next draws, so it was left in place and two sections stacked on the
+# page -- which is how a reference photograph once came out with Recently
+# deleted under a nav reading Templates. It is asked whether it has its
+# place now, and the answer does not depend on the drawing.
+# ---------------------------------------------------------------------
+app.show_settings_page(); app.update()
+app.toggle_settings_panel('appearance'); app.update()
+app.hide_settings_page(); app.update()
+app.show_settings_page()                   # packs Appearance again...
+app.toggle_settings_panel('trash')         # ...and at once asks for another
+app.update()
+_one_placed = [key for key, _label, _b, _e in app.SETTINGS_SECTIONS
+               if getattr(app, 'settings_%s_panel' % key, None) is not None
+               and app._is_placed(getattr(app, 'settings_%s_panel' % key))]
+check(f'opening Settings and choosing a section at once shows that one '
+      f'section only ({_one_placed})', _one_placed == ['trash'])
+app.hide_settings_page(); app.update()
+
 
 # ---------------------------------------------------------------------
 # Grouping x the surgical card removal.
@@ -2242,13 +2253,8 @@ def _settle():
 
 
 def _header_text(cat):
-    head = app._group_header_widgets.get(cat)
-    if head is None:
-        return None
-    try:
-        return str(head['label'].cget('text'))
-    except tk.TclError:
-        return None
+    head = app._header_view(cat)
+    return None if head is None else str(head['label'])
 
 
 check('a grouped list builds a header per category',
@@ -2267,7 +2273,7 @@ _settle()
 app._delete_note(app.find_note(603), None)
 _settle()
 check('emptying a group takes its header away with the last note',
-      'Personal' not in app._group_header_widgets)
+      'Personal' not in app._group_headers)
 check('...and the surviving group is untouched',
       _header_text('Work') == 'Work (1)')
 
@@ -2287,15 +2293,15 @@ app.refresh_note_list()
 app.update()
 check('a collapsed group draws its header and none of its cards',
       _header_text('Work') == 'Work (2)'
-      and 611 not in app._note_card_widgets
-      and 612 not in app._note_card_widgets)
+      and 611 not in app._note_cards
+      and 612 not in app._note_cards)
 _settle()
 app._delete_note(app.find_note(611), None)
 _settle()
 check('deleting inside a COLLAPSED group still counts it down',
       _header_text('Work') == 'Work (1)')
 check('...and does not mistake "no cards drawn" for "no notes left"',
-      'Work' in app._group_header_widgets)
+      'Work' in app._group_headers)
 
 app.collapsed_groups.discard('Work')
 app.group_by_category.set(False)
@@ -2316,31 +2322,24 @@ app.refresh_note_list()
 app.update()
 
 
-def _stats_says(text):
-    found = []
-
-    def walk(w):
-        try:
-            if text in str(w.cget('text')):
-                found.append(w)
-        except tk.TclError:
-            pass
-        for kid in w.winfo_children():
-            walk(kid)
-    if hasattr(app, 'stats_frame'):
-        walk(app.stats_frame)
-    return bool(found)
+def _stats_total():
+    """The "Total notes" tile, read as the number it shows. Searching every
+    text in the panel for a digit also found it in the date of "Using Note
+    Organizer since 04.10.2026": red on the fourth of the month, and the
+    "2" it waited for was always there, in the year."""
+    return stats_pairs().get('Total notes')
 
 
 app.show_settings_page()
 app.toggle_settings_panel('statistics')
 app.update()
-check('arriving at Statistics shows the count as it is now',
-      _stats_says('5'))
+check(f'arriving at Statistics shows the count as it is now '
+      f'({_stats_total()})', _stats_total() == 5)
 # Deleted from under an open Settings page: the panel must follow.
 app._delete_note(app.find_note(620), None)
 app.update()
-check('a delete while Statistics is open updates it', _stats_says('4'))
+check(f'a delete while Statistics is open updates it ({_stats_total()})',
+      _stats_total() == 4)
 app.hide_settings_page()
 app.update()
 
@@ -2352,8 +2351,8 @@ app.update()
 app.show_settings_page()
 app.toggle_settings_panel('statistics')
 app.update()
-check('Statistics is current on the next visit, not left behind',
-      _stats_says('2') and not _stats_says('4'))
+check(f'Statistics is current on the next visit, not left behind '
+      f'({_stats_total()})', _stats_total() == 2)
 app.hide_settings_page()
 app.update()
 

@@ -22,10 +22,10 @@ there, never scroll past.
 | `qa1` | notes, categories, templates — plus the editor's heaviest surfaces: tables, rich text, the find bar, bulk actions |
 | `qa2` | recurrence, calendar, duplicates |
 | `qa3` | trash, sharing, import/export |
-| `qa4` | theming, stress tests, leak regression |
+| `qa4` | theming, stress tests, leak regression — and the note list drawn a screenful at a time, with a save redrawing one card |
 | `qa5` | corrupt data, edge cases |
 | `qa6` | grouping, settings, attachments, multi-feature combinations |
-| `qa7` | calendar delete, the calendar History register, multi-select, image preview, autosave & memory fixes |
+| `qa7` | calendar delete, the month drawn on one canvas, the calendar History register, multi-select, image preview, autosave & memory fixes |
 | `qa8` | search debounce, background-timer robustness |
 | `qa9` | the nested-dropdown-inside-popup fix |
 
@@ -51,22 +51,22 @@ the one you happen to be editing:
 
 | Surface | Guarded in |
 |---|---|
-| Bulk-action bar / selection mode | **qa7**, **qa1** |
+| Bulk-action bar / selection mode | **qa1**, **qa3**, qa7, qa9, qa4 |
 | Theming (apply/track/toggle) | **qa1**, **qa4**, qa6 |
-| Autosave (debounce, guards, flush) | **qa8**, **qa7**, **qa1**, qa5, qa2, qa6, qa3 |
+| Autosave (debounce, guards, flush) | **qa1**, qa7, qa8, qa5, qa6, qa3, qa2, qa4 |
 | Editor page scroll/canvas | **qa1**, **qa8**, qa6 |
-| Note list (refresh, scroll guards, grouping) | **qa7**, **qa1**, qa6, qa8, qa4, qa5 |
-| Tables / drawn grids | **qa1**, qa7, qa5, qa2, qa3 |
+| Note list (refresh, scroll guards, grouping) | **qa4**, qa1, qa7, qa6, qa3, qa8, qa2, qa9, qa5 |
+| Tables / drawn grids | **qa1**, qa7, qa5, qa3 |
 | Find in note (Ctrl+F) / find bar | **qa1**, qa5 |
-| Templates | **qa9**, **qa1**, **qa6**, qa3, qa7, qa4 |
-| Settings panels | **qa6**, qa7, qa4, qa3 |
-| Calendar | **qa7**, qa2, qa5, qa1, qa8, qa9, qa4, qa6, qa3 |
-| Trash | **qa3**, **qa7**, qa6, qa1, qa4, qa5 |
-| Share codes | **qa3**, qa5, qa1 |
-| Export (files, backup) | **qa3**, **qa1**, qa6, qa8, qa4, qa5 |
-| Attachments | **qa7**, qa6, qa3, qa4, qa1, qa8, qa2, qa5 |
-| Recurrence / occurrences | **qa7**, **qa2**, qa8, qa5, qa3, qa4, qa1 |
-| Checklist | **qa1**, qa7, qa3, qa6, qa2, qa4, qa5, qa8, qa9 |
+| Templates | **qa9**, **qa1**, qa6, qa3, qa7, qa4 |
+| Settings panels | **qa6**, qa3, qa4, qa9, qa7, qa2, qa1 |
+| Calendar | **qa7**, qa4, qa2, qa1, qa9, qa5, qa6, qa8, qa3 |
+| Trash | **qa3**, **qa6**, qa7, qa2, qa1, qa4, qa5, qa9 |
+| Share codes | **qa3**, qa1, qa4, qa5 |
+| Export (files, backup) | **qa3**, **qa1**, qa6, qa8, qa4, qa9, qa5, qa7 |
+| Attachments | **qa7**, qa6, qa3, qa1, qa4, qa8, qa2, qa5 |
+| Recurrence / occurrences | **qa7**, **qa2**, qa3, qa1, qa8, qa5, qa4, qa6, qa9 |
+| Checklist | **qa1**, qa3, qa7, qa6, qa2, qa4, qa5, qa9, qa8 |
 | Formatting / rich text | **qa1**, qa3, qa2, qa9, qa7, qa6 |
 
 Bold = the heavy owner(s): a file carrying at least a quarter of a
@@ -181,7 +181,8 @@ A new surface joins this list the moment it ships.
 - **Organization:** sidebar search · sort modes · categories · grouping ·
   pinning · multi-select & bulk bar · note list rendering & scroll guards ·
   the note list's keyboard route (focus ring, ↑/↓ walk, Enter, menu key,
-  focus restored across a rebuild) · remembered sort & filter
+  focus restored across a rebuild) · Custom order (a card dragged, with its
+  line, edge scrolling and Escape; Alt+↑/↓) · remembered sort & filter
 - **Time:** date field · recurrence · calendar (view, day colours, day
   markers with their cap, preview) · a day cell's note chips as notes
   (click opens, right-click gives the note's menu, hover previews one) ·
@@ -364,15 +365,24 @@ A new surface joins this list the moment it ships.
   developer's machine can never reproduce.
 - **`winfo_ismapped()` is False for a moment after packing, and code that
   asks it will skip the widget you just packed.** `toggle_settings_panel`
-  hides whichever section is showing by looping over the panels and
+  hid whichever section was showing by looping over the panels and
   unpacking the mapped one. Called straight after `show_settings_page()`
-  with no `update()` between, the previous section is packed but not yet
-  mapped, the loop skips it, and BOTH sections end up on screen — a
+  with no `update()` between, the previous section was packed but not yet
+  mapped, the loop skipped it, and BOTH sections ended up on screen — a
   reference photograph came out with Recently deleted stacked under a nav
-  reading Templates. A person never hits this, because a click always
-  arrives after Tk has drawn. A script does. **Put an `update()` between
-  showing a thing and selecting within it**, and the same applies to any
-  check reading `winfo_ismapped` to decide what is on screen. Sibling of
+  reading Templates. This rule once said a person never hits it, because a
+  click always arrives after Tk has drawn. A person did, through the other
+  half of the same answer: Tk also says "not mapped" for as long as a
+  widget's PAGE is hidden, so a note opened from the Calendar found the last
+  note's Restore previous still in place (0.82.233). The app asks
+  `_is_placed()` for every show/hide decision now, and
+  `tools/check_one_definition.py` fails on a new `winfo_ismapped()` outside
+  the three functions that mean the screen. In a CHECK, reading
+  `winfo_ismapped` still answers "is it on the screen", which is sometimes
+  the question — but **put an `update()` between showing a thing and
+  asserting what is drawn**. And look at a reference picture as the thing
+  its name says: scenes 04 and 05 of `story_look` had shown two stacked
+  sections since their first reference, accepted five times. Sibling of
   the chip that looked clickable, in the Issues Log.
 - **A check about an ABSENCE must name the thing that would actually be
   there.** `check('the comments box is deliberately not persisted',
@@ -421,6 +431,30 @@ A new surface joins this list the moment it ships.
   a binding, a placeholder, a validator or a menu sits between the user
   and the function, drive the outermost thing the app itself drives —
   here, the same virtual event the app's own menu sends.
+- **The note list is a drawing, drawn a screenful at a time.** Three
+  things every check about the list has to know.
+
+  A card has no widgets to read. Ask the app what it drew:
+  `_card_view(id)` (texts, fills, ring, tick, where it stands),
+  `_header_view(cat)`, `_card_order()` (screen order), `_card_point(id)`
+  (where a click on it lands, for a real `<Button-1>` on `app.canvas`).
+  Whether a card was *redrawn* is the identity of its canvas items —
+  `_note_cards[id]['items']['bg']` — which a move keeps and a redraw
+  replaces, as a widget's path used to.
+
+  A card beyond the first `LIST_FIRST_DRAW` rows does not exist until the
+  view comes near it: a check about such a card draws it first, the way
+  scrolling would (`_draw_list_rows` until it is there), and says so.
+  Whether a note lands in the first screenful can hinge on the second its
+  fixture was made in, because Recently updated sorts by that stamp — one
+  of qa1's checks passed a run and failed the next on exactly that.
+
+  And the ring's colour means two things (the text colour where the list
+  holds the keyboard, accent for the open note), so a check about "the
+  open note is highlighted" first forces the keyboard somewhere else. Two
+  older checks asked for the ring's *thickness* — two pixels, which every
+  card has — and could not fail at all. A property every candidate shares
+  cannot tell them apart.
 - **A widget clipped by its window still reports its full height.** The
   check for the window's smallest size first asked whether the note
   list's `winfo_height()` could hold a card, and passed at the old,
@@ -430,6 +464,16 @@ A new surface joins this list the moment it ships.
   shows is a question about where things ARE: compare screen
   coordinates (`winfo_rooty()` + height) against the window's edge and
   the next widget's top.
+- **A window is only as big as its screen lets it be.** Tk caps a window
+  at the size of its screen, in silence, and the Windows CI runner's
+  screen is smaller than the windows the checks ask for. qa4's check that
+  the calendar takes its width step across 1150 pixels asked for a
+  1200-pixel window, got the screen's 1024 and read "wide None, narrow
+  None" in CI while passing on every machine it had been run on; three of
+  qa9's resize checks would have followed it. `pin_the_desktop` now lifts
+  the cap for every app the suite builds, so a window takes the size a
+  check asks for whatever screen it runs on. A check whose subject is a
+  size should still print the size the window actually got.
 - **A red that loses its name costs a day, so the runner writes it down.**
   `tools/run_tests.py` saves a failing run's whole output to
   `%TEMP%/notesorg-failure-<label>.txt` and prints the path — the terminal
@@ -506,6 +550,14 @@ A new surface joins this list the moment it ships.
   expired whether or not the clamp works, while twelve hours tells the two
   apart. Three of that block's ten checks were satisfied by a boundary
   coincidence like this one.
+- **Read a number from the label that shows it, never as a digit somewhere
+  on the screen.** qa6 checked Statistics by looking for "4" in any of the
+  panel's texts, and on 4 October found it in "Using Note Organizer since
+  04.10.2026": red on the fourth, the fourteenth and the twenty-fourth of
+  every month, in local time on a developer's machine and in UTC on CI.
+  The "2" it waited for was always there too, in the year. Statistics'
+  numbers are read through `stats_pairs()`, as the number under its
+  caption.
 - **Never read a verdict out of output that can be truncated without
   saying so.** `tools/run_tests.py` prints the first eight failing checks.
   Two live mutants read as survivors because the checks they broke were the
@@ -737,3 +789,21 @@ A new surface joins this list the moment it ships.
   leaked mock: qa7 once saved-and-restored an always-`'occurrence'`
   scope prompt this way, and the leak silently shadowed the real
   method for the rest of the run.
+- **Whatever the app asks the desktop, a test answers for it.** Two such
+  questions exist: who owns the foreground (popups hide when it is not
+  the app) and whether the mouse's primary button is down (the window's
+  resize freeze lays nothing out while it is — the PHYSICAL button,
+  anywhere on the desktop). The second was not pinned when it arrived,
+  and the travel story went red while a person was clicking in another
+  program: the app started as if its edge were being dragged, its note
+  list was still unlaid — one pixel tall, never mapped — the story's
+  clicks on a card were dropped, and chapter 3 reported a share code left
+  on screen after a switch that never happened. Reproduced by answering
+  "held" for the app; one run in two failed exactly so. `_qa_pin(NO)`
+  (`pin_the_desktop`) now answers both, for every script and story that
+  calls it; the three tools that build the window themselves pin the
+  button too. A check ABOUT the freeze answers the button on the
+  instance (qa9 does), and the real question stays reachable as
+  `_desktop_pointer_button_held`. And a story's click now fails where it
+  missed — `_open_note_by_clicking` is true only if that note opened —
+  instead of three lines later, blaming the app.

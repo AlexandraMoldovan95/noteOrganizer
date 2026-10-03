@@ -39,7 +39,7 @@ day-to-day tracking.
 | [The undo that guarded the wrong state](#the-undo-that-guarded-the-wrong-state) | An undo must test for the state its own action produced, not the one it means to restore; and sweep for what else reaches the same loss. | 0.75.181 |
 | [The binding that could never fire](#the-binding-that-could-never-fire) | A binding is not an answer to "does this key work" — ask where the key goes; and a probe whose finding is an absence needs a control that produces the presence. | 0.75.183 |
 | [Eleven decisions about your notes, made from half the evidence](#eleven-decisions-about-your-notes-made-from-half-the-evidence) | When two files must agree, rebuild the weaker from the stronger; an automatic removal asks the strictest question there is; a dialog's promise is part of the mechanism. | 0.81.213 |
-| [The Cancel that went ahead anyway](#the-cancel-that-went-ahead-anyway) | A function that can be told "no" must say so to its caller; a modal dialog holds the mouse only unless the keyboard is held too; bind the end of a widget-level record to the widget's own end. | Unreleased |
+| [The Cancel that went ahead anyway](#the-cancel-that-went-ahead-anyway) | A function that can be told "no" must say so to its caller; a modal dialog holds the mouse only unless the keyboard is held too; bind the end of a widget-level record to the widget's own end. | 0.82.230 |
 | [The paste that landed on top of the placeholder](#the-paste-that-landed-on-top-of-the-placeholder) | `bind()` replaces where `add="+"` accumulates, so a widget's own binding silently displaces a shared helper's; and a virtual event outranks the physical one beside it in the same bindtag. | 0.75.185 |
 | [The sweep that stopped at the edge of the Settings page](#the-sweep-that-stopped-at-the-edge-of-the-settings-page) | A fix's sibling sweep must name the surfaces it did not visit; a cap in characters is not a width; and text that wraps for the first time inherits every multi-line default the widget was hiding. | 0.81.202 |
 | [The seven small rows, four of which were not what they said](#the-seven-small-rows-four-of-which-were-not-what-they-said) | A suggested fix is a hypothesis about the code — four of seven were wrong about scope, premise or mechanism, each found by a grep; and a check asserting `not in` against a name the code would never write cannot fail. | 0.76.192 |
@@ -48,6 +48,7 @@ day-to-day tracking.
 | [The panel that lost its content depending on how you got there](#the-panel-that-lost-its-content-depending-on-how-you-got-there) | Recalculate layout on Tk's `<Map>` event, not after a guessed delay. | 0.3.0 |
 | [The scroll that stopped twice, for two different reasons](#the-scroll-that-stopped-twice-for-two-different-reasons) | Same symptom, unrelated causes — check neighbouring areas instead of assuming one fix covers all. | 0.28.38 |
 | [The chip that looked clickable, and the fix that looked like it worked](#the-chip-that-looked-clickable-and-the-fix-that-looked-like-it-worked) | Tk doesn't update winfo_ismapped synchronously; when the work is cheap, skip the visibility optimization. | 0.28.38 |
+| [The button that woke up with its page](#the-button-that-woke-up-with-its-page) | "Is it placed?" is not "is it on the screen?" — they part exactly when a page is hidden; and a reference picture is a claim about what is right, so look at it as the thing its name says. | 0.82.233 |
 | [The DPI fix that made things worse](#the-dpi-fix-that-made-things-worse) | An unverifiable fix is a gamble — flag the uncertainty up front, revert without shame. | 0.30.38 |
 | [The module that existed twice](#the-module-that-existed-twice) | 'All tests pass' only reassures if the suite can represent the failing case. | 0.32.51 |
 | [The bullet that had no bullet in it](#the-bullet-that-had-no-bullet-in-it) | Text inserted between same-tagged characters inherits the tag; content, not presentation tags, decides state. | 0.34.51 |
@@ -77,6 +78,10 @@ day-to-day tracking.
 | [The slowdown that only showed up after a long session](#the-slowdown-that-only-showed-up-after-a-long-session) | 'Slow after a while, fine at first' means unbounded growth; reproduce with a loop. | 0.4.0 |
 | [Export/import freezing the app](#exportimport-freezing-the-app) | Do file I/O on a worker thread; only the main thread touches Tkinter widgets. | 0.4.0 |
 | [The theme-switch flicker, and three ways not to fix it](#the-theme-switch-flicker-and-three-ways-not-to-fix-it) | Profile before reaching for rendering tricks; the fix was stopping work nothing asked for. | 0.32.49 |
+| [The list that was drawn whole, for every pause in typing](#the-list-that-was-drawn-whole-for-every-pause-in-typing) | Measure where the time goes before trimming what is easy to count; before removing work that looks wasted, ask what it was doing for someone; when every symptom is the same cost seen from another side, remove the cost — six windows per card became none. | 0.82.230 |
+| [The window that crawled behind its edge](#the-window-that-crawled-behind-its-edge) | When the cost is inside the toolkit and paid per step, stop taking the step until it counts — then measure what the step costs when it does nothing (here, a window class style asking Windows to repaint everything); a smooth frame over a stale picture is a judgement for the eye. | 0.82.230 |
+| [The line that promised a place the card could not take](#the-line-that-promised-a-place-the-card-could-not-take) | When the screen re-sorts after an action, the end state proves nothing about what was promised during it — check the promise itself; and look at the photograph, because a green check does not see a card that is not there. | 0.82.230 |
+| [The month that was two hundred windows](#the-month-that-was-two-hundred-windows) | A fix to one screen's cost is a list of its siblings; a colour a widget took by default is a colour nobody chose; and whatever the app reads from the desktop, the person at the machine feeds every test run until a test answers it. | 0.82.232 |
 | [The Settings panels that stayed dark on a light theme](#the-settings-panels-that-stayed-dark-on-a-light-theme) | A computed colour is invisible to palette matching; derive it once, teach the theme switch. | 0.36.54 |
 | [The title box that took three and a half seconds a keystroke](#the-title-box-that-took-three-and-a-half-seconds-a-keystroke) | Measure to isolate: the app was fine, one widget was quadratic — cap its input. | 0.36.55 |
 | [The dropdown that opened on the wrong monitor](#the-dropdown-that-opened-on-the-wrong-monitor) | Position popups against the app window's own bounds, not the full virtual desktop. | 0.2.0 |
@@ -1299,7 +1304,7 @@ check written for it.
 
 ### The Cancel that went ahead anyway
 
-*([Unreleased](../CHANGELOG.md#unreleased))*
+*([0.82.230](../CHANGELOG.md#082230--2026-09-30))*
 
 **The same "try to break it" audit found seven places where the app did
 something other than what a person had just asked — each small, each met
@@ -1417,6 +1422,42 @@ check happened to set it first. It is read with a default now.
 **Fix that actually stuck:** Removed the visibility guard entirely. `_render_statistics()` now runs unconditionally whenever `refresh_note_list()` runs, and whenever a template is added/edited/deleted. It only ever draws a handful of small widgets — genuinely cheap to redraw every time — so there's no real cost to just always doing it, and no Tk mapping-timing subtlety left to get wrong.
 
 **Takeaway:** A visibility check that "looks like the right optimization" is worth being suspicious of when it depends on exact widget-mapping timing — Tk doesn't guarantee `winfo_ismapped()` reflects a `pack()` call synchronously, and a test suite that forces `update_idletasks()` at every step can hide exactly this kind of bug, passing cleanly while the real app still misbehaves. When the underlying work is cheap, skipping the optimization entirely can be the more robust choice.
+
+### The button that woke up with its page
+
+*([0.82.233](../CHANGELOG.md#082233--2026-09-30))*
+
+**Symptom:** a note updated from a share code keeps its earlier version, and the editor offers
+"↩ Restore previous". Open another note from the Calendar, with its day's "Open in editor", and
+the button was still there although that note had nothing to restore — pressing it did nothing.
+The same switch made from the note list hid it.
+
+**What was happening.** Fourteen places decide whether to show or hide a button, a counter or a
+panel, and each asked Tk `winfo_ismapped()` — "is it on the screen?" — when what they meant was
+"does it have its place in the layout?". The answers differ in two ordinary moments: until Tk
+first draws a widget after it was packed (the half the story above met in 0.28.38), and for as
+long as the page holding it is hidden, because Tk unmaps every child of a hidden container and
+maps them again when it comes back. From the Calendar the editor is still asleep when the note
+loads, so "hide it if it shows" read Restore previous as hidden already, left it in the layout,
+and it woke up with the page. The title counter did the same, and so did the share code's area,
+as an empty strip.
+
+**The fix.** One question, one answer: `_is_placed()` asks the geometry manager, which does not
+change while a page sleeps, and every show/hide decision asks it. The three places that really
+mean the screen — a tooltip, a click on the Settings page, the calendar's keys — keep
+`winfo_ismapped()`, and are named in `tools/check_one_definition.py`, which now fails on any other
+use.
+
+**The reference pictures had the bug in them.** The fix changed two of `story_look`'s reference
+photographs, and it was the references that were wrong. Scenes 04 and 05 open Settings and choose
+a section in one breath, and since their first reference, on 2026-09-15, they had shown two
+sections stacked — General above Recently deleted — under a nav naming one. They were accepted five
+times. The tool reported "unchanged" each time, truthfully: it compares a picture with the last
+one, and cannot know the last one was wrong.
+
+**Takeaway:** ask the question you mean — "is it placed?" is not "is it on the screen?", and they
+part exactly when a page is hidden. And a reference picture is a claim about what is right: look
+at it as the thing its name says, not only at whether it moved.
 
 ### The DPI fix that made things worse
 
@@ -2236,6 +2277,280 @@ where it is drawn.
 **A real bug fell out of verifying it.** That equivalence check caught a custom note colour being repainted with the new theme's accent — `_recolor_stragglers` can't tell a themed widget from a note the user deliberately coloured the same hex. It was confirmed present on `main`, i.e. pre-existing and unrelated to the new work. Fixed by running the card recolour *after* the straggler pass and recomputing each stripe from the note's own data, so the note's colour is authoritative.
 
 **Takeaway:** three attempts were spent hiding a symptom before anyone measured where the time went; the measurement pointed straight at the fix and took less effort than any of them. When something looks like a rendering problem, profile before reaching for a rendering trick. Also worth remembering: an "additive" fix that only wraps existing behaviour can still make things worse (attempt 2), and reverting cleanly is a legitimate outcome rather than a failure. What remains is a genuine plain-Tkinter limit — one OS window per widget, each repainting as it is recoloured — not something further code can remove.
+
+### The list that was drawn whole, for every pause in typing
+
+*([0.82.230](../CHANGELOG.md#082230--2026-09-30))*
+
+**Symptom:** with a few hundred notes the app froze at every pause in typing — about a second
+with 100 notes, three with 300, twelve with 1,000 — and switching back to the list from the
+Calendar or from Settings took most of a second at 300 notes and over three at 1,000. The product review had it as T1-1, "the single most likely reason a month-in
+user would stop"; deleting a note and Select all had already been taken off the full rebuild
+(`0.74.169`, `0.75.173`), and the autosave was the one frequent route still paying for it.
+
+**What the profile said, and what it did not.** One rebuild of 300 notes, under cProfile: about a
+second destroying the old cards, a seventh of a second building the new ones in Python, and 2.7
+seconds inside Tk laying them out and mapping them. Inside that last part were about two thousand
+calls of the title bar's paint and four thousand of the calendar's width check (counted: 1,939
+and 3,882 per rebuild) — handlers meant for the window,
+bound with `self.bind`, which every widget in the window hears too, because each carries its
+window's tag. Taking them off the storm took the counts to zero and the wall clock down by only
+a few per cent: outside a profiler a Python call is cheap. The cost that scaled was the cards
+themselves — six OS windows each — and the fact that all of them were made on every rebuild,
+and all of them mapped again whenever the list came back on screen. No amount of trimming the
+Python would have moved that.
+
+**The fix, in four parts.**
+
+1. **The window's own handlers hear only the window.** The title bar's paint lives on a bind tag
+   only the main window carries (`_bind_window_only`); the Alt+Tab handler moved from `bind_all`
+   to the two window classes. Tk delivers Activate to every widget in a window, so with 300
+   notes it ran 2,132 times per switch — counted by delivering the event the way Tk does — only
+   to return at its first line.
+2. **The list draws what can be seen.** A rebuild draws thirty rows and the rest wait; the
+   canvas's `yscrollcommand`, which hears every way the view can move, draws twenty more whenever
+   less than a screen is left below the view, and the keyboard's ↓ draws ahead of itself. One
+   definition of what the list shows (`_list_rows`) serves the rebuild, the top-up, the save
+   and Select all.
+3. **A save redraws its own card.** The rows are worked out again and compared with what is
+   drawn; when the only difference is the saved note, its card is redrawn and packed where the
+   sort puts it. Anything else still rebuilds.
+4. **The notebook file is written in one piece.** `json.dump` streamed the same text through
+   the file's encoder in thousands of small writes; one string and one write is twice as fast
+   here (36 → 18 ms for 1,000 notes), and a test compares the bytes with the old way of writing
+   them.
+
+**Measured** with the code before the branch and after it run in alternating rounds on the
+same machine, the same afternoon — medians, a mixed notebook of tables, checklists and
+repeating notes:
+
+| | 100 notes | 300 notes | 1,000 notes |
+|---|---|---|---|
+| A pause in typing (autosave) | 1.0 s → 74 ms | 3.2 s → 75 ms | 12.6 s → 90 ms |
+| Starting the app | 2.3 → 1.9 s | 3.4 → 1.9 s | 8.6 → 1.9 s |
+| Back to the list from the Calendar | 330 → 146 ms | 850 → 141 ms | 3.4 s → 142 ms |
+| Closing Settings | 321 → 148 ms | 843 → 146 ms | 3.4 s → 150 ms |
+| Switching the theme | 194 → 136 ms | 358 → 152 ms | 887 → 150 ms |
+
+The cost of a card did not disappear; it moved to when the card is reached. Scrolling a
+1,000-note list to its end drew the rest in steps of twenty, about a fifth of a second each,
+9.4 seconds in all where it used to be nothing — and once everything was drawn, coming back to
+the list cost 3.0 seconds against 3.3 before. That was still a widget list; the next paragraph
+is what changed it.
+
+**Three things that nearly slipped, each caught before it shipped.**
+
+- **The storm had been doing a job.** The calendar's width check was on the window with
+  `self.bind`, and the per-widget events were what noticed the window had been resized while
+  the calendar was hidden: maximise on the Notes tab, come back, and the calendar switched to
+  its larger text. Moved to the window alone, it stopped doing that — found by asking, before
+  the move was finished, what the storm had been doing for the handler rather than only what it
+  cost. It now listens to its own grid, which changes size in exactly those two cases.
+- **A card that went to wait, with nothing to ask for it.** A new note landing just below the
+  last drawn row joined the rows waiting — and the canvas reports only when something changes
+  size, which nothing had. qa1's "the list calls it (untitled)" went red. A list drawn to its
+  end now stays drawn to its end, and every update that leaves rows waiting asks for a top-up
+  itself.
+- **Made order is not screen order.** `winfo_children()` lists widgets in the order they were
+  made, `pack_slaves()` in the order they are packed; they agreed only while every change was a
+  full rebuild. The keyboard's walk and two checks comparing the list against a rebuild had to
+  learn the difference the first time a saved card was made last and packed first.
+
+**Then the field test, and the cards became a drawing.** Drawing on demand fixed what scaled
+with the notebook, and left what scaled with the cards that were drawn. The first person to use
+it said so in four ways: coming back to the list from the Calendar still showed it being built;
+a fast drag of the scrollbar tore the list and repaired it; the first regroup after a while was
+slow; and after scrolling through everything, coming back cost what it always had. Each was the
+same fact — six OS windows per card — seen from a different side: mapping them, moving them,
+destroying them. No arrangement of widgets gets under that, so the cards stopped being widgets.
+They are rectangles and text on the list's one canvas (`_draw_note_card`), laid out in records,
+found under the pointer by position, recoloured item by item. Photographed side by side with a
+widget card first, to be sure it could look the same; it does.
+
+On the drawing, at 300 notes: coming back to the list 74 ms whether one screenful or all 300 are
+drawn (the widget list: 141 ms and 794 ms), a rebuild 20 ms (320), a save 21 ms (75), a scroll
+to the end that draws all 300 in 0.09 s (2.4 s), a regroup of all 300 in 62 ms.
+
+And against 0.81.213 at 1,000 notes, in a second alternating run: a save 14.1 s → 22 ms, a
+rebuild 14.4 s → 9 ms, back to the list 3.7 s → 82 ms with one screenful drawn and 3.6 s → 81 ms
+with all of it, closing Settings 3.7 s → 83 ms, starting the app 9.1 → 1.9 s, and a scroll to
+the end that draws all 1,000 in 0.34 s. The old code's save took 12.6 s in the first run and
+14.1 s in this one — the same code on the same machine, another afternoon — which is why a
+number here is only ever compared with its own run.
+
+Two things the drawing asked for that the widgets had done unasked. A drawing's `bbox` starts at
+its first item, four pixels down, where a frame's started at 0 — so the top of the list read as
+"scrolled four pixels", every rebuild kept its old depth, and a list scrolled to its end once was
+drawn whole ever after. And the same field test found the keyboard stranded: a click opened a
+note and left the keyboard wherever it had been, so Down "did nothing", and the walk itself had
+never scrolled the list after the ring. A click puts the keyboard on the list now, and the list
+follows its ring.
+
+The first fix for the four pixels was an invisible rectangle from 0, placed one pixel in from
+each edge because Tk counts a pixel round a rectangle into its `bbox`. Twenty checks green on
+Windows; on the Linux image, qa1 and qa4 failed eight checks, every one about the list's top.
+Asked of plain Tk in both places, the same rectangle at (1, 1, 249, 199) read (0, 0, 250, 200) on
+Windows' Tk 8.6.15 and (1, 1, 249, 199) on the image's 8.6.16: the newer release stopped padding a
+rectangle with no outline. So "the top" read as 1 there, and every guard believed the list was
+scrolled. The rectangle is gone. The app knows where its rows end, and `_list_extent()` says so
+to the scrollregion, the top-up and every guard, whatever Tk thinks a rectangle measures.
+
+One measurement was a guess until a photograph caught it: the column the tick box takes in Select
+mode was drawn 17 pixels wide, and the widget card's Checkbutton had been 22 — so on the
+photograph the stripe and the text of every card in Select mode stood five pixels left of where
+they had always been. Measured on the old code and drawn at 22. The comparison tool had called
+that screen "changed" by 0.6% of its area; only looking at it said what had changed.
+
+**The preview, in the same pass.** Opening an animated GIF decoded every frame before showing
+the first: 1.3 seconds of nothing for a 60-frame animation, on every opening. The first frame is
+shown at once now (35 ms) and the rest are decoded as the animation reaches them; a JPEG photo
+is decoded straight at the size it will be shown; and a finished preview is remembered for the
+next opening, up to a memory limit, and forgotten when the file changes. Decoding lazily keeps
+the file open while it plays the first time round, and an open file is a lock on Windows — so
+the file is closed at the last frame and whenever the preview goes away before it.
+
+**Takeaway:** measure where the time goes before trimming what is easy to count — two thousand
+callbacks were real and worth removing, and still not the cost; the cost was how many things
+existed. Before removing work that looks wasted, ask what it was doing for someone. And a list
+that stops drawing everything owes every reader of "what is on the list" an answer that does
+not depend on what happens to be drawn.
+
+### The window that crawled behind its edge
+
+*([0.82.230](../CHANGELOG.md#082230--2026-09-30))*
+
+**Symptom:** dragging the window's edge to make it wider or narrower moved in jerks, the
+Calendar most of all — the edge fell behind the pointer and caught up in steps. Field-reported,
+with the observation that Settings felt better, "maybe because half of it is empty".
+
+**What was happening.** A drag of the edge sends the window a new size every few milliseconds,
+and the app handed each one to its content at once: every widget placed and painted again.
+Timed per step, dragging from 1,400 pixels wide to 900 and back: 275 ms with the Calendar
+showing, 149 with a note in the editor, 70 on Settings — the field report's ranking, and for its
+reason, since the cost follows the number of widgets on screen. Profiled, 98% of it was inside
+Tk, so no Python was going to make a step cheap.
+
+**The fix: take the step away until it counts.** While the mouse button holds the edge, the new
+size waits. The window's frame follows the pointer, and the content is laid out once — when the
+button is let go, or when the drag pauses for 120 ms. A resize with no button held (maximising,
+a snap to the side of the screen, the keyboard) is laid out at once, as before. Tk hears the
+sizes and nothing of the button making them, so the app asks Windows whether the primary button
+is down — the physical right one, for someone who has swapped them; anywhere else, or if the
+question fails, the answer is no, which is the old behaviour.
+
+Timed the same way, a held step is 66–77 ms on the Calendar and 52–54 on the editor, and the one
+layout at the end about a third of a second. The layout a settled drag leaves was compared with
+the same size given at once: identical. Photographed mid-drag, the Calendar keeps its old width
+— cut off at the right when the window shrinks, an empty strip when it grows — and at the
+release it fits the window again.
+
+What a held step still cost was Windows repainting what is on screen while the window changes
+size. With the content hidden for the drag a step measured 13 ms — and the window would show
+nothing until the button was let go. That trade went to the field test instead of being decided
+here.
+
+**The field test answered first.** Still heavy: the page "rebuilds slowly", and her screenshot
+showed black strips where the window had grown faster than it was painted. So the 70 ms of a
+step that lays nothing out was taken apart. Holding repaints off during the layout
+(`WM_SETREDRAW`) made a live step slower, not faster — 299 ms against 258 — because nearly all
+of it (246 ms) was the painting that follows the layout, not the layout. What Windows repaints
+on a change of size is decided by the window CLASS: Tk registers `TkTopLevel` and `TkChild` with
+`CS_HREDRAW | CS_VREDRAW`, which tell Windows to invalidate the whole window every time its size
+changes. Taken off the child class alone, a held step went from 91 to 60 ms; off both, 9 ms.
+Tk has no use for them — each of its widgets redraws itself when its own size changes — so the
+styles only paid for the same paint twice. A live step fell with them: 264 → 128 ms on the
+Calendar, 145 → 75 on the editor. Photographed before and after the change, mid-drag and at a
+new size: the same to the pixel.
+
+**One check that asked nothing.** The first version of "a pause in a held drag lays it out"
+passed with the pause taken out of the code: its wait began before the window had changed
+size, when the content's width and the window's still agreed, so it was over before it started.
+It now sees the layout waiting first, then waits for the pause.
+
+**Takeaway:** when the cost is inside the toolkit and paid per step, stop taking the step until
+it counts — and then measure what the step costs when it does nothing, because that part is not
+the work, it is overhead someone asked for. A smooth frame over a stale picture is a judgement,
+not a measurement: say so, and hand it to someone who will look.
+
+### The line that promised a place the card could not take
+
+*([0.82.230](../CHANGELOG.md#082230--2026-09-30))*
+
+**What was built.** The field test asked to move a note up or down the list with the mouse.
+The list now has a sort arranged by hand, Custom order: a card is dragged, a line shows where it
+will land, and letting go puts it there — or Alt+↑/↓ moves it from the keyboard. Two rules keep
+a drop honest. A pinned note stands above the rest, and a grouped list sorts every card into its
+category, so a card may only trade places with cards on its own side of both lines.
+
+**Two checks that looked at the wrong moment.** The first versions checked where a card ended up.
+Mutants that let a card cross the pinned line, or leave its group, survived them: the drop went
+through, the list re-sorted the card back to its side, and the end state was exactly right. What
+was wrong happened *during* the drag. The line had been drawn above the pinned card, or inside
+the other group — a promise of a place the card could never take. The checks now ask where the
+line said the card would go as well as where it went, and both mutants fail.
+
+**One problem only the photograph showed.** The story that walks the feature on the real app
+passed, and its picture of a drag in progress showed the line at the top of the list and no
+card anywhere. The pointer had been carried past the list's top edge, the list had scrolled up
+under it, and the card had followed the pointer out of the canvas. It now stays at the edge it
+was carried to, in sight, while the list scrolls under it — and a check asks for that, with a
+mutant that removes it.
+
+**And one number that was guessed.** A drag near the edge scrolled the list one step every 40
+milliseconds. Worked out rather than tried, that is over a minute to take a card from the bottom
+of 300 notes to the top; the step now grows with how far past the edge the pointer is pushed.
+
+**Takeaway:** when the screen re-sorts after an action, the state it settles into proves nothing
+about what the screen promised during it — check the promise too. And look at the photograph:
+the story's checks asked whether a line appeared, and none of them could see that the card it
+belonged to had not.
+
+### The month that was two hundred windows
+
+*([0.82.232](../CHANGELOG.md#082232--2026-09-30))*
+
+**Symptom:** after the window learned to wait while its edge is dragged, the field test found it
+better but not right: on the Calendar the month stood still at its old width for the whole drag
+— cut off, or beside an empty strip — then caught up in one jump when the hand stopped.
+
+**What was happening.** The month was built the way the note list had been: a frame for every
+day, a label for its number, one for each dot and each note title, a frame per divider. Counted
+on a month holding 46 notes, 216 widgets, and each is a window the operating system makes, places
+and paints. Laying them out cost 162 ms a step of the drag, which is why the window had to stop
+laying them out at all; and the same cost was paid everywhere else the month was drawn — 295 ms
+to move to the next month, 275 to open the Calendar tab after a change.
+
+**The fix: the same move the list made.** The month is rectangles and text on one canvas now, laid
+out from measurements of the widget grid it replaced — column edges, the weekday row, rows as tall
+as the busiest day and never under 90, the paddings pack used — and a click, a right-click or the
+pointer is matched to a day or a note's title by where it is. Photographed side by side with the
+old grid, on a light and a dark theme and a six-week month, the two agree, but for the markers'
+colour (below) and the open day's frame, two pixels from where it was. The numbers, measured
+both ways in turn on the same machine: 25 ms to the next month, 33 to open the tab, and 38 a step
+of the drag — little enough that the month is now drawn at every step and follows the edge. The
+other pages are still built of widgets, so they keep waiting for the hand.
+
+**Found by drawing it.** A drawing has to name every colour it uses, and the day's markers had
+never named one: their label took the system default, black, on every theme, so on a dark day the
+emoji all but disappeared. Nobody had asked for black — it was simply what a widget does when
+nobody says. They take the day's own text colour now.
+
+**One red that was not the app's.** Walking the travel story to prove this, chapter 3 went red on
+a share code "still on screen" after a note switch — code nobody had touched, green minutes
+before. The story's photograph showed the whole desktop, and on it the person at the machine,
+busy in another program. The window's resize freeze asks Windows whether the mouse button is down
+anywhere on the desktop: a click held elsewhere as the story's app started made it wait, as if
+its own edge were being dragged; the note list was still unlaid, one pixel tall, never mapped;
+the story's click on a card was dropped without a word; and the next step blamed the app.
+Answering "held" for the app reproduced it, one run in two. The test harness already pinned the
+one other thing the app asks the desktop — who owns the foreground — and now pins the button
+too, for every script and story; and a story's click fails at the click when its note did not
+open. See [qa/README](../qa/README.md#house-rules-for-new-checks).
+
+**Takeaway:** when one screen's cost turns out to be its widgets, the other screens built the
+same way are its siblings — the list's fix was a list of candidates, and the month was on it. A
+colour a widget took by default is a colour nobody chose. And an input the app reads from the
+desktop is an input the person at the machine is feeding every test run, until a test answers it.
 
 ### The Settings panels that stayed dark on a light theme
 

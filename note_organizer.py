@@ -46,7 +46,7 @@ except ImportError:
 # Added/Fixed CHANGELOG.md entries, not per-release counts). The running
 # app records this into settings, so the next time a newer build opens
 # over older data it can tell the user what changed version-wise.
-APP_VERSION = "0.81.213"
+APP_VERSION = "0.82.233"
 
 
 def parse_version(v):
@@ -496,12 +496,24 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         initialise()
         super().__init__()
         self.title("Note Organizer")
-        # Armed from day one, for EVERY popup path -- and with bind_all,
-        # for every WINDOW: typing in a popup makes the popup the active
-        # window, so its deactivation lands on the popup's own toplevel
-        # and a binding on the root alone never hears it.
-        self.bind_all("<Deactivate>", self._on_app_deactivated, add="+")
-        self.bind_all("<Activate>", self._on_app_activated, add="+")
+        # Armed from day one, for EVERY popup path -- and for every WINDOW:
+        # typing in a popup makes the popup the active window, so its
+        # deactivation lands on the popup's own toplevel and a binding on
+        # the root alone never hears it.
+        #
+        # On the two window classes rather than with bind_all. Tk sends
+        # Activate and Deactivate to every widget INSIDE a window, not only
+        # to the window, so bind_all ran these handlers once per widget on
+        # every Alt+Tab -- 2,132 calls for a list of 300 notes, counted by
+        # delivering the event the way Tk does, each returning at its first
+        # line because the widget was not a window. Only windows carry these
+        # class tags, so the question the handlers ask first is now answered
+        # before Python is ever called.
+        for window_class in (self.winfo_class(), "Toplevel"):
+            self.bind_class(window_class, "<Deactivate>",
+                            self._on_app_deactivated, add="+")
+            self.bind_class(window_class, "<Activate>",
+                            self._on_app_activated, add="+")
         self._deactivate_bound = True
         # ...and the heartbeat, because a popup holding the activation
         # receives neither event when the user switches away.
@@ -530,10 +542,19 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # first handle, reports success, and then Windows throws the
         # window away. That is why a fresh launch kept the system colours
         # until a theme was switched: the switch was simply the first
-        # paint that happened after mapping. Bound with add so nothing
-        # else on <Map> is displaced, and repainting is free (measured at
-        # 0 ms), so the repeats a mapping storm produces cost nothing.
-        self.bind("<Map>", lambda _e: self._paint_title_bar(), add="+")
+        # paint that happened after mapping.
+        #
+        # Bound to the window ITSELF, not with self.bind. A binding on the
+        # main window is also a binding on every widget inside it (each one
+        # carries its window's tag), so this used to repaint the title bar
+        # once per widget whenever a page was shown -- 1,939 paints for a
+        # rebuild of 300 notes, and as many again for every switch back to
+        # the list. One paint costs next to nothing; two thousand of them
+        # did not. See _bind_window_only.
+        self._bind_window_only("<Map>", lambda _e: self._paint_title_bar())
+        # On <Map> for the same reason: before the window is mapped,
+        # wm_frame() names a different window. See _stop_whole_repaints.
+        self._bind_window_only("<Map>", lambda _e: self._stop_whole_repaints())
 
         self.theme_name = self.load_theme_setting()
         self.colors = THEMES[self.theme_name]
@@ -642,6 +663,86 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
     _DWMWA_BORDER_COLOR = 34
     _DWMWA_CAPTION_COLOR = 35
     _DWMWA_TEXT_COLOR = 36
+
+    # A bind tag only the main window carries. See _bind_window_only.
+    _WINDOW_ONLY_TAG = "NoteOrganizerWindowOnly"
+
+    def _bind_window_only(self, sequence, func):
+        """Bind `func` to `sequence` on the main window itself -- never on
+        the widgets inside it.
+
+        `self.bind` cannot say that. Every widget carries its window's tag
+        among its own, which is what lets a key pressed anywhere reach a
+        window-level shortcut -- and it means a <Map> or <Configure> bound
+        on the window also runs for every widget that is mapped or laid
+        out. A list rebuild of 300 notes repainted the title bar 1,939
+        times that way, for a handler that only ever cared about the
+        window. (The calendar's width step was the other one; it listens to
+        its own grid now, which is the event it really wanted.)
+
+        So the window gets a tag of its own, placed right after its own
+        name, and window-level handlers live on that. Nothing else
+        carries it.
+
+        Before moving a handler here, ask what the storm was doing for it:
+        the calendar's step had been riding on its descendants' events to
+        notice a resize made while it was hidden, and a window-only
+        binding silently took that away.
+        """
+        tags = self.bindtags()
+        if self._WINDOW_ONLY_TAG not in tags:
+            self.bindtags((tags[0], self._WINDOW_ONLY_TAG) + tuple(tags[1:]))
+        return self.bind_class(self._WINDOW_ONLY_TAG, sequence, func, add="+")
+
+    # The two window classes Tk registers on Windows, and the class styles
+    # that make Windows repaint a window WHOLE whenever its size changes.
+    _TK_WINDOW_CLASSES = ("TkTopLevel", "TkChild")
+    _CS_WHOLE_REPAINT = 0x0001 | 0x0002         # CS_VREDRAW | CS_HREDRAW
+
+    def _stop_whole_repaints(self):
+        """Stop Windows repainting every window whole on each size change.
+
+        Tk registers its window classes with CS_HREDRAW and CS_VREDRAW, so
+        every change of size -- each step of a drag of the window's edge --
+        invalidated the main window whole, and everything on screen was
+        painted again: measured, 72 ms a step on the Calendar with its
+        content not even being laid out. Tk does not need it. Its widgets
+        redraw themselves when their own size changes (every one handles
+        ConfigureNotify), so the class styles only paid for the same paint
+        twice. Taken off both classes, a held step measured 10 ms, a step
+        laid out live 120 instead of 264, the editor 65 instead of 145 --
+        and the window photographed before and after, mid-drag and at a new
+        size, was the same to the pixel.
+
+        On <Map>, because before the window is mapped wm_frame() names a
+        different window (see _paint_title_bar). Only Tk's own two classes
+        are touched, asked by name. Windows only; anywhere else, or if the
+        question fails, nothing changes and the window paints as it did.
+        """
+        if not sys.platform.startswith("win"):
+            return
+        try:
+            import ctypes
+            user32 = ctypes.windll.user32
+            get_style = user32.GetClassLongPtrW
+            set_style = user32.SetClassLongPtrW
+            get_style.restype = set_style.restype = ctypes.c_size_t
+            get_style.argtypes = [ctypes.c_void_p, ctypes.c_int]
+            set_style.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_size_t]
+            gcl_style = -26
+            name = ctypes.create_unicode_buffer(64)
+            windows = [int(self.wm_frame(), 16), self.winfo_id()]
+            if getattr(self, "main_canvas", None) is not None:
+                windows.append(self.main_canvas.winfo_id())   # measured: TkChild
+            for hwnd in windows:
+                user32.GetClassNameW(ctypes.c_void_p(hwnd), name, 64)
+                if name.value not in self._TK_WINDOW_CLASSES:
+                    continue
+                style = get_style(hwnd, gcl_style)
+                if style & self._CS_WHOLE_REPAINT:
+                    set_style(hwnd, gcl_style, style & ~self._CS_WHOLE_REPAINT)
+        except Exception:                             # noqa: BLE001
+            self._log_swallowed("window class repaint styles")
 
     def _paint_title_bar(self):
         """Ask Windows to draw the title bar in the current theme.
@@ -813,9 +914,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if btn is None:
             return                      # called while the row is being built
         if self._search_query():
-            if not btn.winfo_ismapped():
+            if not self._is_placed(btn):
                 btn.pack(side="right", padx=(0, 6))
-        elif btn.winfo_ismapped():
+        elif self._is_placed(btn):
             btn.pack_forget()
 
     def _clear_search(self):
@@ -865,7 +966,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if self._title_is_placeholder():
             used = 0
         if used < self.TITLE_MAX_LEN - self.TITLE_COUNT_FROM:
-            if self.title_count_lbl.winfo_ismapped():
+            if self._is_placed(self.title_count_lbl):
                 self.title_count_lbl.pack_forget()
             return
         self.title_count_lbl.config(
@@ -873,7 +974,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             fg=self.colors["danger"] if used >= self.TITLE_MAX_LEN
             else self.colors["subtext"],
         )
-        if not self.title_count_lbl.winfo_ismapped():
+        if not self._is_placed(self.title_count_lbl):
             # Before the category button, which is packed to the right first,
             # so the counter sits between the title and it rather than past
             # the edge of the row.
@@ -1045,6 +1146,27 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         except tk.TclError:
             return False
 
+    def _is_placed(self, widget):
+        """Whether a widget has its place in the layout -- packed, gridded
+        or placed -- which is what every "show it" / "hide it" decision
+        means to ask.
+
+        Not winfo_ismapped(). That asks whether the widget is on the SCREEN,
+        and Tk answers no for a widget that has its place in two ordinary
+        moments: until Tk first draws it after it was packed, and for as
+        long as the page holding it is hidden -- Tk unmaps every child of a
+        hidden container and maps them again when it comes back. So "hide
+        it if it shows" skipped a widget that was only asleep, and it woke
+        up with its page: Restore previous stayed on a note with nothing to
+        restore, opened from the Calendar. And "show it if it does not" packed
+        again a widget that already had a place, which moves it to the end
+        of its container. tools/check_one_definition.py keeps
+        winfo_ismapped() out of these decisions."""
+        try:
+            return bool(widget.winfo_manager())
+        except tk.TclError:
+            return False
+
     def _poll_active_dirty(self):
         """Cheaply keep the active tab's dirty dot in sync while the user types,
         without binding every widget. Only redraws when the state flips."""
@@ -1121,16 +1243,14 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     self._apply_list_scroll_px(pending)
                     return
                 self._list_restore_px = None
-            bbox = canvas.bbox("all")
-            if not bbox:
-                return
             # Keep the scrollregion honest before judging the origin:
-            # yview_moveto() below works in region fractions, the region
-            # can lag behind the content (see _apply's comment), and
-            # shrinking it to the truth makes Tk clamp an origin sitting
-            # past the new end (a blank viewport otherwise) by itself.
-            canvas.configure(scrollregion=bbox)
-            content_h = bbox[3] - bbox[1]
+            # yview_moveto() below works in region fractions, and setting
+            # the region to the truth makes Tk clamp an origin sitting past
+            # a new, shorter end (a blank viewport otherwise) by itself.
+            # The extent comes from the rows, not from Tk (_list_extent).
+            region = self._list_extent()
+            canvas.configure(scrollregion=region)
+            content_h = region[3] - region[1]
             if (content_h <= canvas.winfo_height()
                     or canvas.canvasy(0) < 0):
                 canvas.yview_moveto(0)
@@ -1140,20 +1260,18 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
     def _apply_list_scroll_px(self, pixels):
         """Scroll the list to `pixels` from the top, clamped into the
         content as it is RIGHT NOW; content that fits pins to the top.
-        Sets the scrollregion from bbox first: when content shrinks
-        while the canvas is scrolled past the new end, the embedded
-        frame ends up above the viewport, Tk stops resizing it, its
-        Configure never fires, and the scrollregion stays stale -- but
-        bbox already knows the real (requested) height."""
+        Sets the scrollregion from the list's own extent first: the
+        content may just have shrunk under a canvas scrolled past its new
+        end, and a stale region would leave the view parked in blank
+        space. (When the cards lived in a frame, that frame could end up
+        above the viewport, stop being resized and never report it.)"""
         canvas = getattr(self, "canvas", None)
         if canvas is None:
             return
         try:
-            bbox = canvas.bbox("all")
-            if not bbox:
-                return
-            canvas.configure(scrollregion=bbox)
-            content_h = max(1, bbox[3] - bbox[1])
+            region = self._list_extent()
+            canvas.configure(scrollregion=region)
+            content_h = max(1, region[3] - region[1])
             view_h = canvas.winfo_height()
             if content_h <= view_h:
                 canvas.yview_moveto(0)
@@ -7748,10 +7866,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.import_box.focus()
 
     def toggle_import_panel(self):
-        if self.import_panel.winfo_ismapped():
+        if self._is_placed(self.import_panel):
             self.import_panel.pack_forget()
         else:
-            if self.share_panel.winfo_ismapped():
+            if self._is_placed(self.share_panel):
                 self.share_panel.pack_forget()
             self.import_panel.pack(fill="x", padx=8, pady=(0, 8))
             self.import_box.focus()
@@ -8051,10 +8169,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                                   fg=self.colors["success"])
 
     def toggle_share_panel(self):
-        if self.share_panel.winfo_ismapped():
+        if self._is_placed(self.share_panel):
             self.share_panel.pack_forget()
         else:
-            if self.import_panel.winfo_ismapped():
+            if self._is_placed(self.import_panel):
                 self.import_panel.pack_forget()
             self._build_share_panel()
             self.share_panel.pack(fill="x", padx=8, pady=(0, 8))
@@ -8445,7 +8563,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # Render inline in the editor's code area.
         for w in self.editor_code_area.winfo_children():
             w.destroy()
-        if not self.editor_code_area.winfo_ismapped():
+        if not self._is_placed(self.editor_code_area):
             self.editor_code_area.pack(fill="x", padx=30, pady=(0, 20))
         self._render_editor_code(code, had_attachments)
 
@@ -8487,7 +8605,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if area is None:
             return
         try:
-            if area.winfo_ismapped():
+            if self._is_placed(area):
                 area.pack_forget()
             for w in area.winfo_children():
                 w.destroy()
@@ -10065,6 +10183,110 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         """Mix two #rrggbb colors. t=0 -> hex_a, t=1 -> hex_b."""
         return core_blend(hex_a, hex_b, t)
 
+    # ---------- Resizing the window by its edge ----------
+    # A drag of the window's edge sends a new size every few milliseconds,
+    # and laying the whole window out again cost far more than that:
+    # measured, 260 ms a step with the Calendar showing, 155 with a note in
+    # the editor, 70 on Settings -- 98% of it inside Tk, placing and
+    # painting hundreds of widgets, so no Python could make it quicker. The
+    # edge crawled behind the pointer (field-reported on the Calendar).
+    #
+    # So while the mouse button holds the edge, the window waits: its frame
+    # follows the pointer, and the content is laid out once, when the drag
+    # pauses or the button is let go. A resize with no button held --
+    # maximising, a snap, the keyboard -- is laid out at once, as before.
+    RESIZE_PAUSE_MS = 120   # a held drag this still is laid out anyway
+    RESIZE_WATCH_MS = 40    # how often a held drag looks for the release
+
+    def _on_main_canvas_configure(self, event):
+        self._main_size_wanted = (max(event.width, self._main_min_width),
+                                  event.height)
+        if self._pointer_button_held() and not self._page_follows_the_drag():
+            self._wait_for_resize_to_settle()
+            return
+        self._lay_out_at_window_size()
+
+    def _page_follows_the_drag(self):
+        """Whether the page on screen is laid out at every step of a held
+        drag, rather than when the drag pauses or ends.
+
+        The calendar's month is drawn on one canvas, and a step of the drag
+        costs it under 40 ms there -- quick enough to follow the mouse, which
+        is what the field test asked for. Every other page is built of
+        widgets and still costs 70 ms or more a step, so it keeps the frame
+        light and catches up once the hand stops. The History register is
+        rows of widgets too, so it waits with the rest."""
+        return (self._calendar_is_showing()
+                and not getattr(self, "_history_visible", False))
+
+    def _lay_out_at_window_size(self):
+        """Give the window's content the window's size: the one place it
+        happens, whether at once or when a drag settles."""
+        for name in ("_resize_pause_job", "_resize_watch_job"):
+            job = getattr(self, name, None)
+            if job is not None:
+                try:
+                    self.after_cancel(job)
+                except (tk.TclError, ValueError):
+                    pass
+                setattr(self, name, None)
+        size = getattr(self, "_main_size_wanted", None)
+        if size is None or size == getattr(self, "_main_size_laid_out", None):
+            return
+        try:
+            self.main_canvas.itemconfig(self._main_window_item,
+                                        width=size[0], height=size[1])
+        except tk.TclError:
+            return
+        self._main_size_laid_out = size
+
+    def _wait_for_resize_to_settle(self):
+        """A held drag of the edge: lay out after a pause in it, or at the
+        release, whichever comes first."""
+        job = getattr(self, "_resize_pause_job", None)
+        if job is not None:
+            try:
+                self.after_cancel(job)
+            except (tk.TclError, ValueError):
+                pass
+        self._resize_pause_job = self.after(self.RESIZE_PAUSE_MS,
+                                            self._lay_out_at_window_size)
+        if getattr(self, "_resize_watch_job", None) is None:
+            self._resize_watch_job = self.after(self.RESIZE_WATCH_MS,
+                                                self._watch_resize_release)
+
+    def _watch_resize_release(self):
+        """One look at the mouse button during a held drag: still down,
+        look again shortly; let go, lay the window out now."""
+        self._resize_watch_job = None
+        if not self._still_alive():
+            return
+        if self._pointer_button_held():
+            self._resize_watch_job = self.after(self.RESIZE_WATCH_MS,
+                                                self._watch_resize_release)
+            return
+        self._lay_out_at_window_size()
+
+    def _pointer_button_held(self):
+        """Whether the mouse's primary button is down right now.
+
+        Asked of Windows, because the window's edge belongs to the
+        operating system: Tk hears the new sizes and nothing of the button
+        making them. Windows reports the PHYSICAL button, so for someone
+        who has swapped the buttons the primary one is the right. Anywhere
+        else, or if the question fails, the answer is no -- which is simply
+        the behaviour from before."""
+        if not sys.platform.startswith("win"):
+            return False
+        try:
+            import ctypes
+            user32 = ctypes.windll.user32
+            swapped = user32.GetSystemMetrics(23)       # SM_SWAPBUTTON
+            key = 0x02 if swapped else 0x01              # VK_RBUTTON, VK_LBUTTON
+            return bool(user32.GetAsyncKeyState(key) & 0x8000)
+        except Exception:                                # noqa: BLE001
+            return False
+
     # ---------- UI construction ----------
     def build_ui(self):
         self._placeholders = []
@@ -10087,14 +10309,13 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         def _on_inner_configure(event):
             self.main_canvas.configure(scrollregion=self.main_canvas.bbox("all"))
 
-        MIN_TOTAL_WIDTH = SIDEBAR_WIDTH + EDITOR_MIN_WIDTH
-
-        def _on_main_canvas_configure(event):
-            target_width = max(event.width, MIN_TOTAL_WIDTH)
-            self.main_canvas.itemconfig(main_window, width=target_width, height=event.height)
+        # Read by _on_main_canvas_configure, which gives the content the
+        # window's size -- at once, or when a drag of the edge settles.
+        self._main_window_item = main_window
+        self._main_min_width = SIDEBAR_WIDTH + EDITOR_MIN_WIDTH
 
         self.main_inner.bind("<Configure>", _on_inner_configure)
-        self.main_canvas.bind("<Configure>", _on_main_canvas_configure)
+        self.main_canvas.bind("<Configure>", self._on_main_canvas_configure)
 
         def _on_shift_wheel(event):
             self.main_canvas.xview_scroll(int(-1 * (event.delta / 120)), "units")
@@ -10271,11 +10492,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             # query is known now, and a clear button that appeared a fifth of
             # a second after the typing would read as a glitch.
             self._refresh_search_clear()
-            # Rebuilding the whole note list is not cheap (every card is a
-            # handful of widgets) — doing it on every keystroke made typing a
+            # Rebuilding the note list on every keystroke made typing a
             # search term feel laggy with a large note collection, worse the
-            # more notes there are (exactly when search matters most). Wait
-            # for a short pause in typing instead, same idea as autosave.
+            # more notes there were (exactly when search matters most) --
+            # back when every card was a handful of widgets. A rebuild is
+            # cheap now that the list is drawn, but filtering still reads
+            # every note; wait for a short pause in typing, as autosave does.
             if self._search_debounce_job is not None:
                 try:
                     self.after_cancel(self._search_debounce_job)
@@ -10354,6 +10576,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             "Category",
             "Calendar: soonest",
             "Calendar: oldest",
+            self.SORT_CUSTOM,
         ]
         # Remembered across launches, like the "Group by category" checkbox a
         # few pixels below and the folded groups beside it. Three controls on
@@ -10384,7 +10607,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # over-full in DejaVu Sans on the Linux CI image.
         sort_menu = self._build_themed_dropdown(
             filter_row, self.sort_var, self.SORT_OPTIONS,
-            on_change=lambda v: self.refresh_note_list(), width_chars=0)
+            on_change=self._on_sort_chosen, width_chars=0)
 
         # Same as the sort above, with one more thing to be careful about: a
         # stored filter can name a category that has since been deleted, or
@@ -10573,26 +10796,24 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.track_theme(list_container, bg="sidebar")
         list_container.pack(fill="both", expand=True, padx=10)
 
-        self.canvas = tk.Canvas(list_container, highlightthickness=0)
+        # The note list is DRAWN on this canvas -- every card is rectangles
+        # and text, not widgets (see _draw_note_card). takefocus: the list
+        # is one stop for Tab, and walks with Down and Up from there.
+        self.canvas = tk.Canvas(list_container, highlightthickness=0,
+                                takefocus=1)
         self.track_theme(self.canvas, bg="sidebar")
         scrollbar = ttk.Scrollbar(list_container, orient="vertical",
                                   command=self._list_scrollbar_moved)
-        self.list_frame = tk.Frame(self.canvas)
-        self.track_theme(self.list_frame, bg="sidebar")
-
-        self.list_frame.bind(
-            "<Configure>", lambda e: (
-                self.canvas.configure(
-                    scrollregion=self.canvas.bbox("all")),
-                self._sync_list_scroll())
-        )
         # The same guard the editor page has carried since 0.32.x: when
         # the content fits (or the origin drifts above the first card),
         # the list pins back to the top instead of sitting displaced.
         self.canvas.bind("<Configure>",
                          lambda e: self._sync_list_scroll(), add="+")
-        self.canvas.create_window((0, 0), window=self.list_frame, anchor="nw", width=250)
-        self.canvas.configure(yscrollcommand=scrollbar.set)
+        # Through _list_view_changed rather than straight to the scrollbar:
+        # it is also what draws the rest of the list as the view nears it.
+        self._list_scrollbar = scrollbar
+        self.canvas.configure(yscrollcommand=self._list_view_changed)
+        self._bind_list_input()
 
         # Pack the scrollbar FIRST (side="right") so it always reserves its own
         # width before the canvas claims the rest with expand=True — packed in
@@ -11579,7 +11800,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         auto-scroll down to it — clicking a date used to yank the view down
         every time, which was disruptive if you were just glancing at the
         month. Scroll down yourself when you're ready to see it."""
-        if not self.day_panel.winfo_ismapped():
+        if not self._is_placed(self.day_panel):
             self.day_panel.pack(side="bottom", fill="x", padx=30, pady=(0, 20))
 
     def close_day_panel(self):
@@ -11672,7 +11893,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if not hasattr(self, "calendar_return_btn") or not hasattr(self, "editor_top_row"):
             return
         if getattr(self, "_pending_calendar_return", None):
-            if not self.calendar_return_btn.winfo_ismapped():
+            if not self._is_placed(self.calendar_return_btn):
                 self.calendar_return_btn.pack(fill="x", padx=30, pady=(14, 0),
                                               anchor="w", before=self.editor_top_row)
         else:
@@ -11709,7 +11930,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     text += f" · {n_over} days keep their own edits (✎)"
         if text:
             self.occurrence_banner.config(text=text)
-            if not self.occurrence_banner.winfo_ismapped():
+            if not self._is_placed(self.occurrence_banner):
                 self.occurrence_banner.pack(fill="x", padx=30, pady=(6, 0),
                                             before=self.editor_top_row)
         else:
@@ -12041,13 +12262,21 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.rec_end_mode_var = tk.StringVar(value="never")
 
         def _end_radio(value, text):
+            # The well is the CARD colour, which is the opposite of what the
+            # tick boxes need -- measured, not assumed. Tk on Windows paints
+            # a selected radio's dot in the button's own foreground colour
+            # (a tick box's mark is dark whatever the palette says), and the
+            # foreground is the text colour, light on every dark theme. On
+            # the light check_well that dot was invisible: whichever of the
+            # three was chosen, all three looked unchosen. card stands well
+            # apart from the text colour on every theme, light or dark.
             rb = tk.Radiobutton(
                 end_row, text=text, value=value, variable=self.rec_end_mode_var,
                 font=("Segoe UI", 9), relief="flat", cursor="hand2",
                 command=self.on_end_mode_changed,
-                selectcolor=self.colors["check_well"]
+                selectcolor=self.colors["card"]
             )
-            self.track_theme(rb, bg="bg", fg="text", activebackground="bg", activeforeground="text", selectcolor="check_well")
+            self.track_theme(rb, bg="bg", fg="text", activebackground="bg", activeforeground="text", selectcolor="card")
             rb.pack(side="left", padx=2)
             return rb
 
@@ -12481,9 +12710,18 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         return note.get("category") == selected
 
     def refresh_note_list(self):
-        if not hasattr(self, "list_frame") or not self._still_alive():
+        if not hasattr(self, "canvas") or not self._still_alive():
             return
-        # The rebuild empties the frame for a moment, and a Configure
+        # A card lifted by a drag is drawn away from its record; the
+        # rebuild below would draw the list around a card that is not
+        # where it seems. The drag ends, and the card goes back first.
+        self._cancel_list_drag()
+        # The sort this list is drawn in -- what Custom order starts from
+        # when it is chosen for the first time (_on_sort_chosen).
+        sort_var = getattr(self, "sort_var", None)
+        if sort_var is not None:
+            self._sort_shown = sort_var.get()
+        # The rebuild empties the drawing for a moment, and a Configure
         # landing in that window clamps the canvas to the top -- the
         # 'scroll jumps back to the top' report on the grouped list.
         # The offset is remembered in pixels and put back once the new
@@ -12510,69 +12748,42 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # Placed before the early-return branches below (e.g. an empty
         # filtered list) so it isn't skipped in those cases.
         self._render_statistics()
-        # Snapshot BEFORE the destroy: tearing the focused card down fires
-        # its own <FocusOut>, which would clear the flag the restore below
-        # depends on -- so the question "was the keyboard on a card" has to
-        # be asked while the answer still exists.
+        # Whether the keyboard is on the list decides how far the rebuild
+        # draws (see _list_draw_target). The keyboard itself stays where it
+        # is: the canvas survives a rebuild, only its drawing is replaced.
         self._restore_focus_wanted = getattr(self, "_keyboard_on_card", False)
-        for widget in self.list_frame.winfo_children():
-            widget.destroy()
-        # Tracks note id -> the card's own widgets, so switching the open
-        # note or toggling selection mode can update just the cards that
-        # actually changed, instead of a full destroy-and-rebuild (which
-        # flickered — every full rebuild here is otherwise a rare enough
-        # action, like saving, searching, or sorting, that the flicker was
-        # only really noticeable on the frequent actions that started using
-        # it too: switching notes, and toggling selection mode).
-        self._note_card_widgets = {}
-        # Category headers, by the same logic and for the same reason:
-        # _remove_note_cards has to update the "(N)" on a header without
-        # rebuilding the list around it. Rebuilt here, like the cards, so
-        # it only ever describes what is on screen.
-        self._group_header_widgets = {}
+        # How deep the list was drawn, asked before the drawing goes.
+        drawn_before = len(getattr(self, "_list_drawn", None) or ())
+        self.canvas.delete("row")
+        # One record per drawn row, in the order the rows stand on screen,
+        # and the same records by note id and by category -- what every
+        # update that stops short of a rebuild works from. Rebuilt here,
+        # so they only ever describe what is drawn.
+        self._list_drawn = []
+        self._note_cards = {}
+        self._group_headers = {}
+        self._list_pending = []
 
-        query = self._search_query()
+        rows = self._list_rows()
 
-        filtered = [n for n in self.notes
-                    if self._query_matches_note(query, n)]
-
-        # Category/type filter (from the dropdown). "All" shows everything.
-        chosen_category = getattr(self, "filter_var", None)
-        if chosen_category is not None:
-            selected = self.filter_var.get()
-            if selected != "All":
-                filtered = [n for n in filtered
-                            if self._note_passes_filter(n, selected)]
-
-        self._sort_notes(filtered)
-
-        if not filtered:
+        if not rows:
             # Distinguish "no notes at all" from "nothing matches the filter".
             if self.notes:
                 msg = "No notes match your search or filter."
             else:
                 msg = "No notes yet.\nClick '+ New Note' to start!"
-            empty_lbl = tk.Label(
-                self.list_frame, text=msg,
-                font=("Segoe UI", 10), justify="left"
-            )
-            self.track_theme(empty_lbl, bg="sidebar", fg="subtext")
-            empty_lbl.pack(pady=20, padx=10, anchor="w")
+            self.canvas.create_text(
+                13, 23, anchor="nw", text=msg, font=("Segoe UI", 10),
+                fill=self.colors["subtext"], tags=("row", "list_empty"))
+            self._list_extent_changed()
             return
 
-        if getattr(self, "group_by_category", None) is not None and self.group_by_category.get():
-            self._render_grouped_notes(filtered)
-        else:
-            for note in filtered:
-                self.build_note_card(note)
-
-        self._bind_mousewheel_recursive(self.list_frame, self.canvas)
-        # After BOTH branches, so grouped and ungrouped lists behave the
-        # same. The list is destroyed and rebuilt on a save, a search
-        # keystroke, a note switch -- and a keyboard left pointing at a
-        # widget that no longer exists would make the whole route unusable
-        # after the first thing that happens. Deferred because the cards
-        # exist here but Tk has not laid them out yet.
+        self._list_pending = rows
+        self._draw_list_rows(self._list_draw_target(
+            rows, drawn_before, saved_list_scroll))
+        # The card with the keyboard's ring is drawn with it; this repaints
+        # it once the app is idle, for a rebuild that ran while the list was
+        # not the thing holding the keyboard.
         self.after_idle(self._restore_card_focus)
         if getattr(self, "selection_mode", False):
             # What "all" means has just changed -- a search or a filter
@@ -12581,67 +12792,316 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             # so an ordinary refresh pays nothing for it.
             self._update_bulk_selected_label()
 
-    def _render_grouped_notes(self, filtered):
-        """Render notes clustered under collapsible category headers. Group
-        order follows Manage-categories order; notes within a group keep the
-        sort already applied to `filtered`. A note whose category no longer
-        exists (deleted category) falls into its own group by that name, so it
-        stays visible rather than disappearing."""
-        groups = {}
-        for note in filtered:
-            cat = note.get("category") or "General"
-            groups.setdefault(cat, []).append(note)
+    # How many rows -- cards, and category headers when grouped -- the list
+    # draws straight away, and how many more each time the view comes
+    # within a screen of the end of what is drawn. See _draw_list_rows.
+    LIST_FIRST_DRAW = 30
+    LIST_DRAW_STEP = 20
 
+    # The list is drawn on its canvas: every card is rectangles and text,
+    # not widgets. These reproduce the widget cards they replaced, to the
+    # pixel where it could be measured (a card of both kinds, photographed
+    # side by side). See _draw_note_card.
+    # The sort a person arranges by hand -- by dragging a card, or with
+    # Alt+Up and Alt+Down -- stored as each note's "order" (see
+    # normalize_note). One name, because the dropdown, the sort and the
+    # move all have to mean the same option.
+    SORT_CUSTOM = "Custom order"
+    DRAG_THRESHOLD = 5          # pixels a press must travel to become a drag
+    DRAG_EDGE = 28              # near the list's top or bottom, a drag scrolls
+    DRAG_SCROLL_MS = 40         # ...one step this often
+
+    LIST_DRAW_WIDTH = 250       # the list's width, as the old frame's was
+    CARD_MARGIN = (5, 5)        # above and below each card
+    HEADER_MARGIN = (6, 2)      # above and below each category header
+    HEADER_HEIGHT = 22
+    CARD_INSET_X = 2            # between the list's edge and a card's
+    CARD_RING = 2               # the ring: open note, keyboard, or nothing
+    CARD_STRIPE = 5             # the note's colour down the left edge
+    CARD_PAD = (10, 8)          # around the text inside a card
+    CARD_TEXT_INSET = 3         # what a Label kept around its own text
+    CARD_CHECK = 13             # the tick box, in selection mode
+    # The tick's mark is dark on every theme, as Windows drew it on the
+    # Checkbutton this replaces: the well it sits in is light everywhere.
+    CARD_CHECK_MARK = "#22223a"
+
+    @property
+    def _list_drawn_keys(self):
+        """What is drawn, as ("note", id) and ("header", category), in the
+        order it stands on screen."""
+        return [rec["key"] for rec in getattr(self, "_list_drawn", None) or ()]
+
+    def _notes_on_the_list(self):
+        """The notes the sidebar's search box and filter let through, in
+        the notebook's own order.
+
+        The ONE answer to "which notes does the list show", for the reason
+        _query_matches_note is one: the list drew from a copy of this
+        written out inline, and Select all from another -- the copies
+        agreed, which is exactly what copies stop doing.
+        """
+        query = self._search_query()
+        shown = [n for n in self.notes if self._query_matches_note(query, n)]
+        # Category/type filter (from the dropdown). "All" shows everything.
+        chosen_category = getattr(self, "filter_var", None)
+        if chosen_category is not None:
+            selected = self.filter_var.get()
+            if selected != "All":
+                shown = [n for n in shown
+                         if self._note_passes_filter(n, selected)]
+        return shown
+
+    def _list_rows(self):
+        """Every row the note list shows, in screen order, before any of
+        them is drawn.
+
+        A row is ("note", note) for a card, or -- when the list is grouped
+        -- ("header", category, notes_in_group, collapsed) ahead of each
+        group, followed by the group's cards unless it is collapsed. Group
+        order follows Manage-categories order; notes within a group keep
+        the sort. A note whose category no longer exists falls into its
+        own group by that name, so it stays visible rather than
+        disappearing.
+
+        One definition for everything that draws the list: the rebuild
+        draws the first of these rows, the scrolling draws the rest, and
+        a save redrawing its own card asks where in them the card now
+        belongs.
+        """
+        shown = self._notes_on_the_list()
+        self._sort_notes(shown)
+        if not shown:
+            return []
+        if not (getattr(self, "group_by_category", None) is not None
+                and self.group_by_category.get()):
+            return [("note", note) for note in shown]
+        groups = {}
+        for note in shown:
+            groups.setdefault(note.get("category") or "General", []).append(note)
         # Known categories first (in their defined order), then any leftover
         # (stale/deleted) category names so nothing gets silently dropped.
         ordered = [c for c in CATEGORY_COLORS.keys() if c in groups]
         ordered += [c for c in groups.keys() if c not in ordered]
-
+        rows = []
         for cat in ordered:
-            notes_in_group = groups[cat]
             collapsed = cat in self.collapsed_groups
-            color = CATEGORY_COLORS.get(cat, self.colors["accent"])
-
-            header = tk.Frame(self.list_frame, bg=self.colors["sidebar"], cursor="hand2")
-            header.pack(fill="x", pady=(6, 2))
-            dot = tk.Canvas(header, width=10, height=10, highlightthickness=0,
-                            bg=self.colors["sidebar"], cursor="hand2")
-            dot.create_oval(1, 1, 9, 9, fill=color, outline=color)
-            dot.pack(side="left", padx=(4, 6), pady=6)
-            caret = tk.Label(header, text=("▶" if collapsed else "▼"),
-                             bg=self.colors["sidebar"], fg=self.colors["subtext"],
-                             font=("Segoe UI", 8), cursor="hand2")
-            caret.pack(side="left", padx=(0, 4))
-            lbl = tk.Label(header, text=f"{cat} ({len(notes_in_group)})",
-                           bg=self.colors["sidebar"], fg=self.colors["text"],
-                           font=("Segoe UI", 9, "bold"), cursor="hand2")
-            lbl.pack(side="left")
-
-            for w in (header, dot, caret, lbl):
-                w.bind("<Button-1>", lambda e, c=cat: self._toggle_group_collapsed(c))
-
-            # The ids, not the cards: a collapsed group draws no cards at
-            # all, and its header still has to show the right number.
-            self._group_header_widgets[cat] = {
-                "frame": header, "label": lbl,
-                "ids": [n["id"] for n in notes_in_group]}
-
+            rows.append(("header", cat, groups[cat], collapsed))
             if not collapsed:
-                for note in notes_in_group:
-                    self.build_note_card(note)
+                rows.extend(("note", note) for note in groups[cat])
+        return rows
 
-    def _sort_notes(self, notes):
-        """Sort the list in place according to the chosen sort option. All keys
+    def _list_draw_target(self, rows, drawn_before, scrolled_px):
+        """How many rows a rebuild draws before handing back to the user.
+
+        A screenful and some to spare, as a rule. But a rebuild must not
+        take the list out from under the person using it: when it was
+        scrolled, the old depth is drawn again, so the position restored
+        in pixels has content to land on; and when the keyboard was on a
+        card, that card is drawn, so the ring has somewhere to be.
+        """
+        want = self.LIST_FIRST_DRAW
+        if scrolled_px > 0:
+            want = max(want, drawn_before)
+        if getattr(self, "_restore_focus_wanted", False):
+            wanted = getattr(self, "_focused_note_id", None)
+            for index, row in enumerate(rows):
+                if row[0] == "note" and row[1].get("id") == wanted:
+                    want = max(want, index + 1)
+                    break
+        return want
+
+    def _draw_list_rows(self, count):
+        """Draw the next `count` waiting rows, below what is already drawn.
+
+        The list used to be drawn whole, on every rebuild. Every card was
+        six windows to the operating system, so a list of 300 notes took
+        three seconds to rebuild and one of 1,000 over twelve -- and a
+        rebuild followed every pause in typing. Switching back to the list
+        and closing Settings paid again for every card, on screen or not.
+
+        A rebuild draws a screenful and some to spare, and the rest is
+        drawn as the view comes near it: _list_view_changed hears every
+        scroll, by wheel, scrollbar or resize, and the keyboard's walk
+        draws ahead of itself (_focus_card_by_offset). And since the cards
+        became a drawing rather than windows, what is drawn costs Windows
+        one window however long the list gets.
+        """
+        batch = self._list_pending[:count]
+        self._list_pending = self._list_pending[count:]
+        if not batch:
+            return
+        y = self._list_end_y()
+        for row in batch:
+            if row[0] == "header":
+                rec = self._draw_group_header(
+                    row[1], row[2], row[3], y + self.HEADER_MARGIN[0])
+            else:
+                rec = self._draw_note_card(row[1], y + self.CARD_MARGIN[0])
+            self._list_drawn.append(rec)
+            y = rec["y1"] + rec["margin"][1]
+        self._list_extent_changed()
+
+    def _list_end_y(self):
+        """Where the next row would start: below the last drawn row and
+        its margin, or at the top of an empty drawing."""
+        drawn = getattr(self, "_list_drawn", None)
+        if not drawn:
+            return 0
+        return drawn[-1]["y1"] + drawn[-1]["margin"][1]
+
+    def _list_extent(self):
+        """How far the drawing reaches, as the scrollbar and every scroll
+        guard must see it: (0, 0, width, bottom) -- from the very top to
+        the last drawn row's bottom margin, or to below the empty-list
+        message.
+
+        Worked out from the rows, never asked of Tk. The frame the cards
+        once lived in started at y=0, so bbox("all") did too, and every
+        guard counts on that; a drawing's bbox starts at its first item,
+        at the first card's margin, and the top of the list read as
+        "scrolled four pixels" -- every rebuild kept its old depth and a
+        snap to the top landed at 4. An empty rectangle from 0 papered
+        over it on Windows and failed on the Linux image: Tk 8.6.15 counts
+        a pixel round a rectangle with no outline into its bbox and 8.6.16
+        does not, so the same rectangle read (0, 0, ...) on one and
+        (1, 1, ...) on the other. The app knows where its rows end.
+        """
+        bottom = self._list_end_y()
+        if not bottom:
+            try:
+                empty = self.canvas.bbox("list_empty")
+            except tk.TclError:
+                empty = None
+            bottom = (empty[3] + 20) if empty else 2
+        return (0, 0, self.LIST_DRAW_WIDTH, bottom)
+
+    def _list_extent_changed(self):
+        """Tell the canvas how far the drawing reaches now -- what the list
+        frame's own <Configure> used to report whenever its size changed --
+        and let the guard that keeps the list honest about its top look."""
+        try:
+            self.canvas.configure(scrollregion=self._list_extent())
+        except tk.TclError:
+            return
+        self._sync_list_scroll()
+
+    def _reflow_list(self, start=0):
+        """Move every drawn row from `start` on to its place below the row
+        before it. Rows keep their own heights; only where they stand
+        changes, by moving their items -- one repaint for the lot."""
+        drawn = self._list_drawn
+        y = 0
+        if start > 0:
+            y = drawn[start - 1]["y1"] + drawn[start - 1]["margin"][1]
+        for rec in drawn[start:]:
+            top = y + rec["margin"][0]
+            dy = top - rec["y0"]
+            if dy:
+                self.canvas.move(rec["tag"], 0, dy)
+                rec["y0"] += dy
+                rec["y1"] += dy
+            y = rec["y1"] + rec["margin"][1]
+        self._list_extent_changed()
+
+    def _list_view_changed(self, first, last):
+        """The list canvas saying which part of it is in view -- its
+        yscrollcommand.
+
+        The scrollbar hears it, as it always did. And while rows are still
+        waiting, it asks for a top-up, once however many reports arrive
+        before the app is next idle. Every way the view can move comes
+        through here -- the wheel, the scrollbar, a window made taller, a
+        drawn step making the content longer -- which is what makes it the
+        one place to watch.
+        """
+        try:
+            self._list_scrollbar.set(first, last)
+        except (tk.TclError, AttributeError):
+            return
+        self._ask_for_top_up()
+
+    def _ask_for_top_up(self):
+        """Look, once the app is idle, whether more rows should be drawn --
+        unless nothing waits, or a look is already on its way."""
+        if (getattr(self, "_list_pending", None)
+                and getattr(self, "_list_top_up_job", None) is None):
+            self._list_top_up_job = self.after_idle(self._top_up_list)
+
+    def _top_up_list(self):
+        """Draw another step of rows if less than a screen of drawn list is
+        left below the view. Drawing lengthens the content, the canvas
+        reports it, and this runs again -- until there is a screen to
+        spare or nothing left to draw."""
+        self._list_top_up_job = None
+        if not getattr(self, "_list_pending", None) or not self._still_alive():
+            return
+        try:
+            view_h = self.canvas.winfo_height()
+            left_below = self._list_extent()[3] - self.canvas.canvasy(view_h)
+        except tk.TclError:
+            return
+        if left_below < view_h:
+            self._draw_list_rows(self.LIST_DRAW_STEP)
+
+    def _draw_group_header(self, cat, notes_in_group, collapsed, top):
+        """One collapsible category header, drawn with its top at `top`."""
+        cv = self.canvas
+        c = self.colors
+        self._header_seq = getattr(self, "_header_seq", 0) + 1
+        tag = "hdr%d" % self._header_seq
+        tags = ("row", tag)
+        color = CATEGORY_COLORS.get(cat, c["accent"])
+        bottom = top + self.HEADER_HEIGHT
+        mid = top + self.HEADER_HEIGHT // 2
+        items = {}
+        # Across the whole row, like the frame it replaces: a click anywhere
+        # on the header's line folds the group, not only on its words.
+        items["bg"] = cv.create_rectangle(
+            0, top, self.LIST_DRAW_WIDTH, bottom, fill=c["sidebar"],
+            outline="", tags=tags)
+        items["dot"] = cv.create_oval(5, mid - 4, 13, mid + 4, fill=color,
+                                      outline=color, tags=tags)
+        items["caret"] = cv.create_text(
+            23, mid, anchor="w", text=("▶" if collapsed else "▼"),
+            font=("Segoe UI", 8), fill=c["subtext"], tags=tags)
+        caret_right = cv.bbox(items["caret"])[2]
+        items["label"] = cv.create_text(
+            caret_right + 10, mid, anchor="w",
+            text=f"{cat} ({len(notes_in_group)})",
+            font=("Segoe UI", 9, "bold"), fill=c["text"], tags=tags)
+        # The ids, not the cards: a collapsed group draws no cards at
+        # all, and its header still has to show the right number.
+        rec = {"kind": "header", "key": ("header", cat), "tag": tag,
+               "cat": cat, "ids": [n["id"] for n in notes_in_group],
+               "collapsed": collapsed, "y0": top, "y1": bottom,
+               "margin": self.HEADER_MARGIN, "items": items}
+        self._group_headers[cat] = rec
+        return rec
+
+    def _sort_notes(self, notes, choice=None):
+        """Sort the list in place according to the chosen sort option -- or
+        to `choice`, when the question is how the list WAS sorted. All keys
         coerce missing/None fields to safe defaults so a single odd note can't
         crash the whole list."""
-        choice = getattr(self, "sort_var", None)
-        choice = choice.get() if choice is not None else "Recently updated"
+        if choice is None:
+            choice = getattr(self, "sort_var", None)
+            choice = choice.get() if choice is not None else "Recently updated"
 
         def _s(n, key):
             v = n.get(key, "")
             return v if isinstance(v, str) else ""
 
-        if choice == "Recently updated":
+        if choice == self.SORT_CUSTOM:
+            # Where a person put each note. A note nobody has placed yet --
+            # new since, or arrived in a share code -- stands above the
+            # placed ones, newest first, so it is found where it was just
+            # made. Two passes, the second stable: newest first, then the
+            # placed notes by their number below the unplaced.
+            notes.sort(key=lambda n: (_s(n, "created"), n.get("id") or 0),
+                       reverse=True)
+            notes.sort(key=lambda n: (0, 0) if "order" not in n
+                       else (1, n["order"]))
+        elif choice == "Recently updated":
             notes.sort(key=lambda n: _s(n, "updated"), reverse=True)
         elif choice == "Oldest updated":
             notes.sort(key=lambda n: _s(n, "updated"))
@@ -12694,216 +13154,632 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # from the chosen sort. Python's sort is stable, so this preserves it.
         notes.sort(key=lambda n: not n.get("pinned", False))
 
-    def _bind_card_keys(self, card, note):
-        """Make one note card answer the keyboard the way it answers a mouse.
+    # ---------- Custom order: the list arranged by hand ----------
 
-        Pinning, exporting, duplicating and deleting a note all live in the
-        right-click menu and nowhere else, so anyone working by keyboard
-        could not reach a single one of them. The menu is one keystroke
-        away now, and the list is walkable.
+    def _on_sort_chosen(self, value):
+        """The Sort dropdown's choice. Custom order chosen before anything
+        was ever placed starts from the order the list was showing, rather
+        than from an order nobody has seen."""
+        if (value == self.SORT_CUSTOM
+                and not any("order" in n for n in self.notes)):
+            before = getattr(self, "_sort_shown", None)
+            if before and before != self.SORT_CUSTOM:
+                self._place_notes_as_sorted(before)
+                self.save_notes()
+        self.refresh_note_list()
 
-        `show_note_context_menu` reads nothing off the event but `x_root`
-        and `y_root` -- checked, not assumed -- so a keyboard route can
-        hand it the card's own position on screen and the menu opens where
-        the note is rather than wherever the pointer happens to rest.
+    def _place_notes_as_sorted(self, choice):
+        """Give every note its place in Custom order from the way `choice`
+        sorts them -- all of them, not only those a search lets through,
+        so what a filter hides keeps its place among the rest."""
+        everything = list(self.notes)
+        self._sort_notes(everything, choice=choice)
+        for place, note in enumerate(everything):
+            note["order"] = place
+
+    def _same_list_block(self, a, b):
+        """Whether two notes may trade places: both pinned or both not, and
+        -- in a grouped list -- in the same group. A pinned note always
+        stands above the rest, and a group is its category; a move that
+        crossed either would be undone by the next rebuild."""
+        if bool(a.get("pinned")) != bool(b.get("pinned")):
+            return False
+        grouped = getattr(self, "group_by_category", None)
+        if grouped is not None and grouped.get():
+            return ((a.get("category") or "General")
+                    == (b.get("category") or "General"))
+        return True
+
+    def _move_note(self, note_id, before_id=None, after_id=None):
+        """Put a note just before one note, or just after one, in Custom
+        order, and show the list in that order.
+
+        The list may have been sorted some other way: then Custom order
+        starts from the order it was showing -- the one the person just
+        moved a card in -- and the move is made there. Every note gets its
+        place again, in one pass, so a number never has to fit between two
+        others. A move is not an edit: nothing's "updated" changes."""
+        note = self.find_note(note_id)
+        anchor = self.find_note(before_id if before_id is not None else after_id)
+        if note is None or anchor is None or anchor is note:
+            return False
+        if self.sort_var.get() != self.SORT_CUSTOM:
+            self._place_notes_as_sorted(self.sort_var.get())
+            self.sort_var.set(self.SORT_CUSTOM)
+        everything = list(self.notes)
+        self._sort_notes(everything, choice=self.SORT_CUSTOM)
+        everything.remove(note)
+        at = everything.index(anchor) + (0 if before_id is not None else 1)
+        everything.insert(at, note)
+        for place, each in enumerate(everything):
+            each["order"] = place
+        self.save_notes()
+        self.refresh_note_list()
+        return True
+
+    def _list_move_by_keyboard(self, delta):
+        """Alt+Up or Alt+Down: the card with the ring moves one place, and
+        the ring goes with it."""
+        nid = getattr(self, "_focused_note_id", None)
+        note = self.find_note(nid) if nid is not None else None
+        if note is None or self.selection_mode:
+            return "break"
+        block = [row[1]["id"] for row in self._list_rows()
+                 if row[0] == "note" and self._same_list_block(row[1], note)]
+        if nid not in block:
+            return "break"
+        at = block.index(nid) + delta
+        if not 0 <= at < len(block):
+            return "break"
+        if delta < 0:
+            moved = self._move_note(nid, before_id=block[at])
+        else:
+            moved = self._move_note(nid, after_id=block[at])
+        if moved:
+            self._put_keyboard_on_card(nid)
+        return "break"
+
+    # ---------- Custom order: dragging a card ----------
+
+    def _list_drag_arm(self, rec, event):
+        """A press on a card that might become a drag: remembered, nothing
+        drawn yet. It becomes one only after the pointer has travelled
+        DRAG_THRESHOLD pixels, so an ordinary click never moves anything."""
+        try:
+            cy = self.canvas.canvasy(event.y)
+        except tk.TclError:
+            return
+        self._drag = {"nid": rec["note"]["id"], "press_y": cy,
+                      "grab_dy": cy - rec["y0"], "started": False,
+                      "offset": 0, "slot": None, "line": None,
+                      "pointer_y": event.y, "scroll_job": None}
+
+    def _list_dragged(self, event):
+        """The pointer moving with the button down."""
+        drag = getattr(self, "_drag", None)
+        if not drag:
+            return
+        try:
+            cy = self.canvas.canvasy(event.y)
+        except tk.TclError:
+            return
+        if not drag["started"]:
+            if abs(cy - drag["press_y"]) < self.DRAG_THRESHOLD:
+                return
+            if not self._start_list_drag():
+                self._drag = None
+                return
+        drag["pointer_y"] = event.y
+        self._follow_list_drag()
+        self._scroll_list_drag_near_edge()
+
+    def _start_list_drag(self):
+        """Lift the card: it is drawn over the others and follows the
+        pointer, and a line shows where it would land. Nothing is moved
+        in the notebook until the button is let go."""
+        drag = self._drag
+        rec = (getattr(self, "_note_cards", None) or {}).get(drag["nid"])
+        if rec is None:
+            return False
+        cv = self.canvas
+        try:
+            cv.tag_raise(rec["tag"])
+            drag["line"] = cv.create_line(
+                self.CARD_INSET_X, -10, self.LIST_DRAW_WIDTH - self.CARD_INSET_X, -10,
+                width=3, fill=self.colors["accent"], tags=("row", "drag_line"))
+            cv.configure(cursor="fleur")
+        except tk.TclError:
+            return False
+        drag["started"] = True
+        return True
+
+    def _follow_list_drag(self):
+        """Keep the lifted card under the pointer and the line at the slot
+        it would drop into. The card's record is left where it was: only
+        its drawing moves, so a step of rows drawn below while the list
+        scrolls under a drag still finds everything where it stands."""
+        drag = self._drag
+        rec = self._note_cards.get(drag["nid"])
+        if rec is None:
+            return
+        cv = self.canvas
+        try:
+            cy = cv.canvasy(drag["pointer_y"])
+            view_top = cv.canvasy(0)
+            view_bottom = cv.canvasy(cv.winfo_height())
+        except tk.TclError:
+            return
+        # Under the pointer, but never out of sight: carried past the top
+        # or the bottom of the list, the card stays at that edge while the
+        # list scrolls under it. Photographed first without this -- a line
+        # at the top of the list, and the card it belonged to nowhere.
+        top = cy - drag["grab_dy"]
+        top = max(view_top, min(top, view_bottom - (rec["y1"] - rec["y0"])))
+        dy = top - (rec["y0"] + drag["offset"])
+        if dy:
+            cv.move(rec["tag"], 0, dy)
+            drag["offset"] += dy
+        slot = self._list_drop_slot(rec, cy)
+        drag["slot"] = slot
+        if slot is None:
+            cv.coords(drag["line"], 0, -10, 0, -10)
+            return
+        kind, other = slot
+        target = self._note_cards[other]
+        if kind == "before":
+            y = target["y0"] - target["margin"][0] / 2.0
+        else:
+            y = target["y1"] + target["margin"][1] / 2.0
+        cv.coords(drag["line"], self.CARD_INSET_X, y,
+                  self.LIST_DRAW_WIDTH - self.CARD_INSET_X, y)
+
+    def _list_drop_slot(self, rec, cy):
+        """Where the lifted card would land for a pointer at canvas y `cy`:
+        ("before", id) or ("after", id), among the drawn cards it may trade
+        places with -- or None when that is where it already stands."""
+        note = rec["note"]
+        block = [r for r in self._list_drawn
+                 if r["kind"] == "note" and r is not rec
+                 and self._same_list_block(r["note"], note)]
+        if not block:
+            return None
+        slot = None
+        for r in block:
+            if cy < (r["y0"] + r["y1"]) / 2.0:
+                slot = ("before", r["note"]["id"])
+                break
+        if slot is None:
+            slot = ("after", block[-1]["note"]["id"])
+        # Dropping a card right where it is moves nothing, and says so by
+        # showing no line.
+        order = [r["note"]["id"] for r in self._list_drawn
+                 if r["kind"] == "note" and self._same_list_block(r["note"], note)]
+        at = order.index(note["id"])
+        if slot == ("before", order[at + 1] if at + 1 < len(order) else None):
+            return None
+        if slot == ("after", order[at - 1] if at > 0 else None):
+            return None
+        return slot
+
+    def _scroll_list_drag_near_edge(self):
+        """Near the top or bottom of the list a drag scrolls it, one step
+        at a time while the pointer stays there -- or a card could never
+        be taken further than the list shows."""
+        drag = getattr(self, "_drag", None)
+        if not drag or not drag["started"]:
+            return
+        try:
+            height = self.canvas.winfo_height()
+        except tk.TclError:
+            return
+        y = drag["pointer_y"]
+        if y < self.DRAG_EDGE:
+            depth, direction = self.DRAG_EDGE - y, -1
+        elif y > height - self.DRAG_EDGE:
+            depth, direction = y - (height - self.DRAG_EDGE), 1
+        else:
+            if drag["scroll_job"] is not None:
+                self.after_cancel(drag["scroll_job"])
+                drag["scroll_job"] = None
+            return
+        # Faster the further the pointer is pushed past the edge: a step a
+        # beat at the edge itself, ten beyond it. At one step a beat, taking
+        # a card from the bottom of 300 notes to the top took over a minute.
+        step = direction * min(10, 1 + int(depth) // 8)
+        if drag["scroll_job"] is None:
+            drag["scroll_job"] = self.after(self.DRAG_SCROLL_MS,
+                                            lambda: self._list_drag_scroll_step(step))
+
+    def _list_drag_scroll_step(self, step):
+        drag = getattr(self, "_drag", None)
+        if not drag or not drag["started"]:
+            return
+        drag["scroll_job"] = None
+        # A deliberate move beats a rebuild's still-pending restore.
+        self._list_restore_px = None
+        try:
+            self.canvas.yview_scroll(step, "units")
+        except tk.TclError:
+            return
+        self._follow_list_drag()
+        self._scroll_list_drag_near_edge()
+
+    def _list_released(self, _event=None):
+        """The button let go: a drag drops its card where the line was; a
+        press that never became a drag has already done what a click does."""
+        drag = getattr(self, "_drag", None)
+        self._drag = None
+        if not drag or not drag["started"]:
+            return
+        self._end_list_drag(drag)
+        slot = drag["slot"]
+        if slot is None:
+            self._put_lifted_card_back(drag)
+            return
+        kind, other = slot
+        nid = drag["nid"]
+        if kind == "before":
+            moved = self._move_note(nid, before_id=other)
+        else:
+            moved = self._move_note(nid, after_id=other)
+        if not moved:
+            self._put_lifted_card_back(drag)
+            return
+        self._put_keyboard_on_card(nid)
+
+    def _list_drag_escape(self, _event=None):
+        """Escape during a drag puts the card back and moves nothing."""
+        drag = getattr(self, "_drag", None)
+        if not drag or not drag["started"]:
+            return None
+        self._cancel_list_drag()
+        return "break"
+
+    def _cancel_list_drag(self):
+        """Stop a drag in progress, if there is one, and put its card back
+        -- also when the list is about to change under it (a rebuild, a
+        save redrawing a card, a delete), which would otherwise reflow the
+        rows around a card whose drawing is not where its record says."""
+        drag = getattr(self, "_drag", None)
+        self._drag = None
+        if not drag or not drag["started"]:
+            return
+        self._end_list_drag(drag)
+        self._put_lifted_card_back(drag)
+
+    def _end_list_drag(self, drag):
+        if drag.get("scroll_job") is not None:
+            try:
+                self.after_cancel(drag["scroll_job"])
+            except (tk.TclError, ValueError):
+                pass
+            drag["scroll_job"] = None
+        try:
+            if drag.get("line") is not None:
+                self.canvas.delete(drag["line"])
+            self.canvas.configure(cursor="")
+        except tk.TclError:
+            pass
+        self._list_cursor = ""
+
+    def _put_lifted_card_back(self, drag):
+        rec = (getattr(self, "_note_cards", None) or {}).get(drag["nid"])
+        if rec is None or not drag.get("offset"):
+            return
+        try:
+            self.canvas.move(rec["tag"], 0, -drag["offset"])
+        except tk.TclError:
+            pass
+        drag["offset"] = 0
+
+    def _bind_list_input(self):
+        """The list's mouse and keyboard, bound once on the canvas that
+        draws it -- a card is a drawing, and has no bindings of its own.
+
+        Pinning, exporting, duplicating and deleting a note live in its
+        right-click menu, so the keyboard reaches that menu too, and the
+        list is walkable: a click puts the keyboard on the list, Down and Up
+        move the ring from card to card, Enter or Space does what a click
+        does, and the menu key opens the note's menu at the note.
         """
-        def open_menu(_event=None):
-            self.show_note_context_menu(
-                # A tiny stand-in rather than an import: the menu reads two
-                # attributes off the event and nothing else, checked rather
-                # than assumed, so this is the whole of what it needs.
-                type("KeyEvent", (), {
-                    "x_root": card.winfo_rootx() + 30,
-                    "y_root": card.winfo_rooty() + card.winfo_height() - 4,
-                })(),
-                note, click_opens=True)
-            return "break"
-
-        def activate(_event=None):
-            # Enter does what a plain click does, which is not the same
-            # thing in both modes: in selection mode clicking a card ticks
-            # it rather than opening it, and a keyboard that opened the
-            # note instead would be the one route that ignores the mode.
-            if self.selection_mode:
-                entry = self._note_card_widgets.get(note["id"]) or {}
-                box = entry.get("checkbox")
-                if box is not None:
-                    box.invoke()
-            else:
-                self.open_note_in_tab(note)
-            return "break"
-
-        def step(delta):
-            def go(_event=None):
-                self._focus_card_by_offset(note["id"], delta)
-                return "break"
-            return go
-
-        card.bind("<Return>", activate)
-        card.bind("<space>", activate)
-        card.bind("<Down>", step(1))
-        card.bind("<Up>", step(-1))
+        cv = self.canvas
+        cv.bind("<Button-1>", self._list_pressed)
+        cv.bind("<Button-3>", self._list_right_pressed)
+        cv.bind("<Motion>", self._list_pointer_moved)
+        cv.bind("<Leave>", self._list_pointer_left)
+        # A card can be dragged to another place (Custom order): the press
+        # above arms it, these carry it and drop it, Escape puts it back.
+        cv.bind("<B1-Motion>", self._list_dragged)
+        cv.bind("<ButtonRelease-1>", self._list_released)
+        cv.bind("<Escape>", self._list_drag_escape)
+        cv.bind("<Down>", lambda _e: self._list_step(1))
+        cv.bind("<Up>", lambda _e: self._list_step(-1))
+        cv.bind("<Alt-Down>", lambda _e: self._list_move_by_keyboard(1))
+        cv.bind("<Alt-Up>", lambda _e: self._list_move_by_keyboard(-1))
+        cv.bind("<Return>", self._list_activate)
+        cv.bind("<space>", self._list_activate)
         # The dedicated menu key has a different keysym per platform --
         # "App" on Windows, "Menu" on X11 -- and Tk RAISES on an unknown
         # one rather than ignoring it, so binding both unguarded takes the
         # whole note list down. It did: every card failed to build and all
         # nine qa scripts died on the Linux image while Windows was green.
-        # Measured on Windows first and assumed universal, which is what
-        # that image is for.
         for seq in ("<Shift-F10>", "<App>", "<Menu>"):
             try:
-                card.bind(seq, open_menu)
+                cv.bind(seq, self._list_open_menu)
             except tk.TclError:
                 pass
-        # Remembered so a rebuild can put the keyboard back where it was:
-        # the list is destroyed and rebuilt on a save, a search keystroke,
-        # a note switch -- and a focus that silently went to nowhere in the
-        # middle of that would make the whole route unusable.
-        def took_focus(_event=None, n=note):
-            self._focused_note_id = n["id"]
-            self._keyboard_on_card = True
+        cv.bind("<FocusIn>", self._list_focus_in, add="+")
+        cv.bind("<FocusOut>", self._list_focus_out, add="+")
 
-        def lost_focus(_event=None):
-            # Moving between two cards fires Leave then Enter, so the flag
-            # ends up True either way. Moving to the title box, the search
-            # box or anything else leaves it False -- which is the whole
-            # point: only a rebuild that interrupted the KEYBOARD ON A CARD
-            # should put it back.
-            self._keyboard_on_card = False
+    def _list_record_at(self, x, y):
+        """The drawn row under a point given in the canvas widget's own
+        coordinates, or None -- the gap between two cards is nobody's."""
+        try:
+            cy = self.canvas.canvasy(y)
+        except tk.TclError:
+            return None
+        if not 0 <= x <= self.LIST_DRAW_WIDTH:
+            return None
+        for rec in getattr(self, "_list_drawn", None) or ():
+            if rec["y0"] <= cy <= rec["y1"]:
+                return rec
+        return None
 
-        card.bind("<FocusIn>", took_focus, add="+")
-        card.bind("<FocusOut>", lost_focus, add="+")
+    def _list_pressed(self, event):
+        """A click on the list: a header folds its group, a card opens its
+        note -- or ticks it, in selection mode, where opening would defeat
+        the point of picking several without leaving the list. Either way
+        the keyboard comes to the list, on the card clicked, so Down and Up
+        carry on from there. Nothing is returned: the window's own click
+        handling (closing an open popup) still hears the click."""
+        self._drag = None
+        rec = self._list_record_at(event.x, event.y)
+        if rec is None:
+            return
+        if rec["kind"] == "header":
+            self._toggle_group_collapsed(rec["cat"])
+            return
+        note = rec["note"]
+        nid = note["id"]
+        if self.selection_mode:
+            self._toggle_note_selected(nid, nid not in self.selected_note_ids)
+            self._paint_card_check(nid)
+            self._put_keyboard_on_card(nid)
+            return
+        # Not when the open refused to happen: Cancel on a repeating day's
+        # save question keeps the person on the day they were editing.
+        if self.open_note_in_tab(note) is not False:
+            self._put_keyboard_on_card(nid)
+            # Asked afresh: the open can have saved the note left behind,
+            # and that save can have moved this card.
+            rec = (getattr(self, "_note_cards", None) or {}).get(nid)
+            if rec is not None:
+                self._list_drag_arm(rec, event)
+
+    def _list_right_pressed(self, event):
+        """Right-click on a card opens that note's menu. A plain click on
+        the same card opens the note, so the menu leaves out Open / Edit."""
+        rec = self._list_record_at(event.x, event.y)
+        if rec is None or rec["kind"] != "note":
+            return
+        self.show_note_context_menu(event, rec["note"], click_opens=True)
+
+    def _list_pointer_moved(self, event):
+        """The hand over a row, the plain pointer over the gaps -- what each
+        card and header widget's own cursor used to say."""
+        want = "hand2" if self._list_record_at(event.x, event.y) else ""
+        if getattr(self, "_list_cursor", None) != want:
+            self._list_cursor = want
+            try:
+                self.canvas.configure(cursor=want)
+            except tk.TclError:
+                pass
+
+    def _list_pointer_left(self, _event=None):
+        self._list_cursor = ""
+        try:
+            self.canvas.configure(cursor="")
+        except tk.TclError:
+            pass
+
+    def _list_step(self, delta):
+        """Down or Up on the list: the ring moves one card along."""
+        current = getattr(self, "_focused_note_id", None)
+        if current not in (getattr(self, "_note_cards", None) or {}):
+            order = self._card_order()
+            if order:
+                self._put_keyboard_on_card(order[0])
+            return "break"
+        self._focus_card_by_offset(current, delta)
+        return "break"
+
+    def _list_activate(self, _event=None):
+        """Enter or Space: what a click does -- open the note, or tick it
+        in selection mode, where a keyboard that opened the note instead
+        would be the one route that ignores the mode."""
+        rec = (getattr(self, "_note_cards", None) or {}).get(
+            getattr(self, "_focused_note_id", None))
+        if rec is None:
+            return "break"
+        nid = rec["note"]["id"]
+        if self.selection_mode:
+            self._toggle_note_selected(nid, nid not in self.selected_note_ids)
+            self._paint_card_check(nid)
+        else:
+            self.open_note_in_tab(rec["note"])
+        return "break"
+
+    def _list_open_menu(self, _event=None):
+        """The note's own menu, opened at the note rather than wherever the
+        pointer happens to rest. show_note_context_menu reads nothing off
+        the event but x_root and y_root -- checked, not assumed -- so a
+        tiny stand-in carries the card's place on screen."""
+        rec = (getattr(self, "_note_cards", None) or {}).get(
+            getattr(self, "_focused_note_id", None))
+        if rec is None:
+            return "break"
+        try:
+            y_on_screen = rec["y1"] - self.canvas.canvasy(0)
+            self.show_note_context_menu(
+                type("KeyEvent", (), {
+                    "x_root": self.canvas.winfo_rootx() + 30,
+                    "y_root": self.canvas.winfo_rooty() + int(y_on_screen) - 4,
+                })(),
+                rec["note"], click_opens=True)
+        except tk.TclError:
+            pass
+        return "break"
+
+    def _list_focus_in(self, _event=None):
+        """The keyboard arrived on the list: the ring shows where it is --
+        on the card it was last on, else the open note's, else the first."""
+        self._keyboard_on_card = True
+        cards = getattr(self, "_note_cards", None) or {}
+        if getattr(self, "_focused_note_id", None) not in cards:
+            order = self._card_order()
+            if self.selected_note_id in cards:
+                self._focused_note_id = self.selected_note_id
+            elif order:
+                self._focused_note_id = order[0]
+        self._paint_ring(getattr(self, "_focused_note_id", None))
+
+    def _list_focus_out(self, _event=None):
+        """The keyboard left the list: the ring goes back to saying only
+        which note is open."""
+        self._keyboard_on_card = False
+        self._paint_ring(getattr(self, "_focused_note_id", None))
+
+    def _put_keyboard_on_card(self, note_id):
+        """Give the keyboard to the list, with the ring on this card, and
+        bring the card into view."""
+        previous = getattr(self, "_focused_note_id", None)
+        self._focused_note_id = note_id
+        try:
+            self.canvas.focus_set()
+        except tk.TclError:
+            return
+        if previous != note_id:
+            self._paint_ring(previous)
+        self._paint_ring(note_id)
+        rec = (getattr(self, "_note_cards", None) or {}).get(note_id)
+        if rec is not None:
+            self._scroll_row_into_view(rec)
+
+    def _scroll_row_into_view(self, rec):
+        """Scroll the list just far enough that this row is all on screen.
+        The walk used to move the keyboard onto cards scrolled out of
+        sight and leave the list where it was, which looks exactly like
+        the field report's "Down does nothing" (whose own cause was a
+        click that never gave the list the keyboard)."""
+        cv = self.canvas
+        try:
+            region = self._list_extent()
+            height = cv.winfo_height()
+            if height <= 1:
+                return
+            total = max(1, region[3] - region[1])
+            top = cv.canvasy(0)
+            margin = rec["margin"]
+            if rec["y0"] - margin[0] < top:
+                target = rec["y0"] - margin[0]
+            elif rec["y1"] + margin[1] > top + height:
+                target = rec["y1"] + margin[1] - height
+            else:
+                return
+            # A deliberate move beats a rebuild's still-pending restore.
+            self._list_restore_px = None
+            cv.yview_moveto(max(0, target - region[1]) / total)
+        except tk.TclError:
+            pass
 
     def _focus_card_by_offset(self, note_id, delta):
-        """Move the keyboard focus `delta` cards along the list on screen.
+        """Move the ring `delta` cards along the list on screen.
 
-        Asked of the ORDER THE CARDS ARE PACKED IN rather than of
+        Asked of the ORDER THE CARDS ARE DRAWN IN rather than of
         self.notes: the list is sorted, filtered, searched and grouped, so
         the note after this one in the file is very often not the one
         underneath it on screen.
         """
-        order = [w for w in self.list_frame.winfo_children()
-                 if getattr(w, "_card_note_id", None) is not None]
-        ids = [w._card_note_id for w in order]
-        if note_id not in ids:
+        order = self._card_order()
+        if note_id not in order:
             return
-        target = ids.index(note_id) + delta
+        target = order.index(note_id) + delta
+        # The list is drawn a step at a time (see _draw_list_rows), and
+        # the keyboard must not stop where the drawing happened to: walking
+        # off the end of what is drawn draws the next step first. A loop,
+        # because a step of a grouped list can be nothing but the headers
+        # of collapsed groups.
+        while target >= len(order) and getattr(self, "_list_pending", None):
+            self._draw_list_rows(self.LIST_DRAW_STEP)
+            order = self._card_order()
         if 0 <= target < len(order):
-            order[target].focus_set()
+            self._put_keyboard_on_card(order[target])
 
     def _restore_card_focus(self):
-        """Put the keyboard back on the card it was on before a rebuild.
+        """Repaint the keyboard's ring after a rebuild.
 
-        Decided by whether the keyboard WAS on a card, recorded as it
-        moved, and NOT by asking focus_get() where it is now.
-        focus_get() answers None whenever the process does not own the
-        desktop foreground -- measured in this project on the Ctrl+F
-        checks, and true of a real window for a moment after any other
-        program comes to the front. A guard reading "focus_get() is None"
-        as "nothing has the keyboard" therefore fires in exactly the case
-        where something does.
-
-        It was not theoretical: with that guard, someone typing a title
-        while another window came forward had the next autosave's list
-        rebuild pull the keyboard out of the title box and onto a card.
-        Measured before this was changed, by making focus_get() answer
-        None the way a lost foreground does.
+        The keyboard itself never moves on a rebuild any more -- the canvas
+        that holds it survives, only the drawing is replaced -- which ends
+        a whole class of trouble the widget cards had: a keyboard left on
+        a destroyed card, and a guard that had to decide, from focus_get()
+        (which answers None whenever another program holds the desktop's
+        foreground), whether to pull it back.
         """
-        if not getattr(self, "_restore_focus_wanted", False):
-            return
-        wanted = getattr(self, "_focused_note_id", None)
-        if wanted is None:
-            return
-        entry = self._note_card_widgets.get(wanted)
-        card = (entry or {}).get("card")
-        if card is None:
+        self._paint_ring(getattr(self, "_focused_note_id", None))
+
+    def _card_ring_color(self, note_id):
+        """What a card's ring says. The text colour where the keyboard is;
+        accent for the note that is open; otherwise the card's own fill,
+        which is no ring at all -- the thickness is on every card, so
+        nothing shifts by two pixels as the ring moves down the list."""
+        c = self.colors
+        if (note_id == getattr(self, "_focused_note_id", None)
+                and getattr(self, "_keyboard_on_card", False)):
+            return c["text"]
+        if note_id == self.selected_note_id:
+            return c["accent"]
+        return c["card"]
+
+    def _paint_ring(self, note_id):
+        rec = (getattr(self, "_note_cards", None) or {}).get(note_id)
+        if rec is None:
             return
         try:
-            card.focus_set()
-        except (tk.TclError, KeyError):
+            self.canvas.itemconfigure(
+                rec["items"]["ring"], outline=self._card_ring_color(note_id))
+        except tk.TclError:
             pass
 
-    def build_note_card(self, note):
-        # Direct .configure() calls here, not self.track_theme(): every card
-        # is destroyed and rebuilt from scratch on every refresh_note_list()
-        # call (a save, a search keystroke, switching notes, ...), so it
-        # always picks up the CURRENT theme colors fresh anyway — it never
-        # needs live tracking for a later theme switch. track_theme() appends
-        # to a list that's never pruned when its widgets are destroyed, so
-        # with a few hundred notes and a session's worth of saves, that list
-        # grew into the thousands, measurably slowing down both this render
-        # and every future theme switch.
+    def _paint_card_check(self, note_id):
+        """Tick or untick one card's box to match selected_note_ids."""
+        rec = (getattr(self, "_note_cards", None) or {}).get(note_id)
+        if rec is None or "mark" not in rec["items"]:
+            return
+        try:
+            self.canvas.itemconfigure(
+                rec["items"]["mark"],
+                state="normal" if note_id in self.selected_note_ids else "hidden")
+        except tk.TclError:
+            pass
+
+    def _card_texts(self, note):
+        """What a note's card says, and in which colour. The one definition
+        the card is drawn from, wherever it is drawn.
+
+        Every field is coerced to a string first, so one odd note (from
+        older data, say) can never crash the whole list.
+        """
         color = self.get_note_color(note)
-        is_open = note["id"] == self.selected_note_id
-        # takefocus=1, and the ring does double duty. Tk draws
-        # `highlightbackground` while a widget does NOT have the keyboard
-        # focus and `highlightcolor` while it does -- so one border says
-        # both things without either hiding the other: accent for "this is
-        # the note you have open", the plain text colour for "this is where
-        # the keyboard is". The thickness is now on every card rather than
-        # only the open one, so nothing shifts by two pixels as the focus
-        # moves down the list.
-        #
-        # Without takefocus a card cannot be focused by Tab at all, and the
-        # keyboard bindings below would be bindings that could never fire --
-        # measured before any of this was written: a card's takefocus was
-        # '0', focus_set() on one worked, and a freshly opened window had
-        # the focus nowhere.
-        card = tk.Frame(
-            self.list_frame, cursor="hand2", bg=self.colors["card"],
-            takefocus=1, highlightthickness=2,
-            highlightbackground=(self.colors["accent"] if is_open
-                                 else self.colors["card"]),
-            highlightcolor=self.colors["text"]
-        )
-        card.pack(fill="x", pady=5, padx=2)
-        # Which note this card is for, recorded on the widget so walking the
-        # list on screen needs no second index to go stale.
-        card._card_note_id = note["id"]
-        self._bind_card_keys(card, note)
-
-        sel_cb = None
-        if self.selection_mode:
-            sel_var = tk.BooleanVar(value=note["id"] in self.selected_note_ids)
-            sel_cb = tk.Checkbutton(
-                card, variable=sel_var, bg=self.colors["card"],
-                activebackground=self.colors["card"], selectcolor=self.colors["check_well"],
-                bd=0, highlightthickness=0,
-                command=lambda n=note, v=sel_var: self._toggle_note_selected(n["id"], v.get())
-            )
-            sel_cb.pack(side="left", padx=(6, 0))
-
-        stripe = tk.Frame(card, bg=color, width=5)
-        stripe.pack(side="left", fill="y")
-
-        content = tk.Frame(card, bg=self.colors["card"])
-        content.pack(side="left", fill="both", expand=True, padx=10, pady=8)
-
-        # Coerce possibly-missing/None fields to safe strings so one odd note
-        # (e.g. from older data) can never crash the whole list render.
         note_title = note.get("title") if isinstance(note.get("title"), str) else ""
         note_body = note.get("body") if isinstance(note.get("body"), str) else ""
-        note_category = note.get("category") if isinstance(note.get("category"), str) else "General"
+        note_category = (note.get("category")
+                         if isinstance(note.get("category"), str) else "General")
 
         title_text = _truncate(note_title, 42) if note_title else "(untitled)"
         if note.get("pinned"):
             title_text = "📌 " + title_text
         if is_recurring(note):
             title_text = "🔁 " + title_text
-        # Wrapped to the width it is actually given, like the Settings
-        # subtitles in 0.73.167 and for the same reason: a Label with no
-        # wraplength draws one line as long as its text and the card
-        # simply does not show the end of it, with nothing to say so.
-        # The sidebar is a fixed width, so this is not an edge case --
-        # photographed on an ordinary note, a title lost "with the whole
-        # team", the preview stopped mid-word, and the tags row dropped
-        # the attachment count, the table mark and the checklist
-        # progress entirely.
-        title_lbl = tk.Label(content, text=title_text, font=("Segoe UI", 11, "bold"),
-                             anchor="w", justify="left",
-                             bg=self.colors["card"], fg=self.colors["text"])
-        title_lbl.pack(fill="x")
-        self._wrap_to_own_width(title_lbl)
 
         # Table rows read as pipe soup at card size, so the preview shows
         # only the note's plain text; the tags row says a table is there.
@@ -12914,23 +13790,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 if ln.strip() and not is_table_row(ln))
         else:
             preview_src = note_body.replace("\n", " ")
-        preview = preview_src[:40]
-        preview_lbl = tk.Label(
-            content, text=preview + ("..." if len(preview_src) > 40 else ""),
-            # justify="left" matters only once there are two lines, which
-            # is exactly what wrapping introduced: Tk CENTRES a Label's
-            # second line by default, and anchor="w" does not change that
-            # -- anchor places the text block, justify places the lines
-            # inside it. Seen in the photograph, not reasoned about.
-            font=("Segoe UI", 9), anchor="w", justify="left",
-            bg=self.colors["card"], fg=self.colors["subtext"]
-        )
-        preview_lbl.pack(fill="x")
-        # The 40-character cap above is not a width: forty narrow
-        # characters fit and forty wide ones do not, which is why a
-        # 39-character body still ran off the card. The cap keeps the
-        # preview a glimpse; this keeps the glimpse readable.
-        self._wrap_to_own_width(preview_lbl)
+        # The 40-character cap is a glimpse, not a width: the drawing wraps
+        # the glimpse to the card, so it stays readable however wide the
+        # characters are.
+        preview = preview_src[:40] + ("..." if len(preview_src) > 40 else "")
 
         tags_text = note_category
         if is_recurring(note):
@@ -12953,109 +13816,185 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             done = sum(1 for it in checklist
                        if isinstance(it, dict) and it.get("done"))
             tags_text += f"   ☑ {done}/{len(checklist)}"
-        cat_lbl = tk.Label(content, text=tags_text, fg=color, font=("Segoe UI", 8, "bold"),
-                           anchor="w", justify="left", bg=self.colors["card"])
-        cat_lbl.pack(fill="x", pady=(3, 0))
-        # The worst of the three, because each tag is a separate fact
-        # rather than the tail of a sentence: a row that ran out of room
-        # dropped whole marks, and a clipped "1/2" read as "1/". The
-        # three spaces between tags give the wrap somewhere to break, so
-        # a second line starts at a tag rather than inside one.
-        self._wrap_to_own_width(cat_lbl)
+        return {"title": title_text, "preview": preview, "tags": tags_text,
+                "color": color}
 
-        widgets = [card, stripe, content, title_lbl, preview_lbl, cat_lbl]
-        for widget in widgets:
-            if self.selection_mode:
-                # In selection mode, clicking anywhere on the card toggles it —
-                # opening the note would defeat the point of picking several at
-                # once without leaving the list.
-                widget.bind("<Button-1>", lambda e, cb=sel_cb: cb.invoke())
-            else:
-                widget.bind("<Button-1>", lambda e, n=note: self.open_note_in_tab(n))
-            # Right-click anywhere on the card opens the context menu. A
-            # plain click on this same card opens the note, so the menu
-            # leaves out its "Open / Edit" entry here.
-            widget.bind("<Button-3>", lambda e, n=note: self.show_note_context_menu(
-                e, n, click_opens=True))
+    def _draw_note_card(self, note, top):
+        """Draw one note's card with its top edge at canvas y `top`, and
+        return its record.
 
-        self._note_card_widgets[note["id"]] = {
-            "card": card, "clickable": widgets, "checkbox": sel_cb, "note": note,
-            # Named references (not positions in "clickable") so a theme
-            # switch can recolour these in place instead of destroying and
-            # rebuilding every card — see _recolor_note_cards.
-            "stripe": stripe, "content": content, "title": title_lbl,
-            "preview": preview_lbl, "tags": cat_lbl,
+        The same card the widgets drew -- a ring, the colour stripe, the
+        title, a glimpse of the body and the tags row -- as rectangles and
+        text on the list's canvas. Six windows to the operating system
+        became none: that is what made showing the list again, scrolling
+        it fast and rebuilding it cost what they did.
+
+        Everything is wrapped to the card's width, never cut: a Label with
+        no wraplength drew one line as long as its text and simply did not
+        show the end of it -- a title lost "with the whole team", the tags
+        row dropped the attachment count, and a clipped "1/2" read as "1/".
+        The three spaces between tags give the wrap somewhere to break, so
+        a second line starts at a tag rather than inside one.
+        """
+        cv = self.canvas
+        c = self.colors
+        nid = note["id"]
+        tag = "card%s" % nid
+        tags = ("row", tag)
+        says = self._card_texts(note)
+        x0 = self.CARD_INSET_X
+        x1 = self.LIST_DRAW_WIDTH - self.CARD_INSET_X
+        left = x0 + self.CARD_RING
+        check_x = None
+        if getattr(self, "selection_mode", False):
+            # Leftmost, ahead of the stripe, where the Checkbutton stood:
+            # packed with 6 pixels before it and 22 wide, measured on the
+            # widget card. Guessed at 17 first, the photograph showed the
+            # stripe and text five pixels left of where they had been.
+            check_x = left + 8
+            left += 6 + 22
+        stripe_x = left
+        content_left = stripe_x + self.CARD_STRIPE + self.CARD_PAD[0]
+        content_right = x1 - self.CARD_RING - self.CARD_PAD[0]
+        text_x = content_left + 2
+        wrap = max(40, content_right - content_left - 4)
+        inset = self.CARD_TEXT_INSET
+        items = {}
+        y = top + self.CARD_RING + self.CARD_PAD[1] + inset
+        # " " for an empty line: a Label kept a line's height for no text,
+        # and the card must not change shape because a body is empty.
+        items["title"] = cv.create_text(
+            text_x, y, anchor="nw", width=wrap, text=says["title"] or " ",
+            font=("Segoe UI", 11, "bold"), fill=c["text"], tags=tags)
+        y = cv.bbox(items["title"])[3] + 2 * inset
+        items["preview"] = cv.create_text(
+            text_x, y, anchor="nw", width=wrap, text=says["preview"] or " ",
+            font=("Segoe UI", 9), fill=c["subtext"], tags=tags)
+        y = cv.bbox(items["preview"])[3] + 2 * inset + 3
+        items["tags"] = cv.create_text(
+            text_x, y, anchor="nw", width=wrap, text=says["tags"] or " ",
+            font=("Segoe UI", 8, "bold"), fill=says["color"], tags=tags)
+        bottom = (cv.bbox(items["tags"])[3] + inset + self.CARD_PAD[1]
+                  + self.CARD_RING)
+        items["bg"] = cv.create_rectangle(
+            x0, top, x1, bottom, fill=c["card"], outline="", tags=tags)
+        cv.tag_lower(items["bg"], items["title"])
+        items["stripe"] = cv.create_rectangle(
+            stripe_x, top + self.CARD_RING, stripe_x + self.CARD_STRIPE,
+            bottom - self.CARD_RING, fill=says["color"], outline="", tags=tags)
+        if check_x is not None:
+            mid = (top + bottom) // 2
+            half = self.CARD_CHECK // 2
+            items["check"] = cv.create_rectangle(
+                check_x, mid - half, check_x + self.CARD_CHECK, mid + half + 1,
+                fill=c["check_well"], outline=c["subtext"], tags=tags)
+            items["mark"] = cv.create_line(
+                check_x + 3, mid, check_x + 6, mid + 3, check_x + 10, mid - 3,
+                width=2, fill=self.CARD_CHECK_MARK, tags=tags,
+                state="normal" if nid in self.selected_note_ids else "hidden")
+        items["ring"] = cv.create_rectangle(
+            x0 + 1, top + 1, x1 - 1, bottom - 1, width=self.CARD_RING,
+            outline=self._card_ring_color(nid), tags=tags)
+        rec = {"kind": "note", "key": ("note", nid), "tag": tag, "note": note,
+               "y0": top, "y1": bottom, "margin": self.CARD_MARGIN,
+               "items": items}
+        self._note_cards[nid] = rec
+        return rec
+
+    def _card_order(self):
+        """The ids of the drawn cards, in the order they stand on screen."""
+        return [rec["note"]["id"] for rec in getattr(self, "_list_drawn", None) or ()
+                if rec["kind"] == "note"]
+
+    def _card_view(self, note_id):
+        """What one drawn card shows, read back from the drawing itself --
+        its texts, its colours, where it is -- or None when it is not drawn.
+        The question the checks ask, now that a card has no widgets to
+        read."""
+        rec = (getattr(self, "_note_cards", None) or {}).get(note_id)
+        if rec is None:
+            return None
+        cv = self.canvas
+        it = rec["items"]
+        view = {
+            "title": cv.itemcget(it["title"], "text"),
+            "preview": cv.itemcget(it["preview"], "text"),
+            "tags": cv.itemcget(it["tags"], "text"),
+            "title_fill": cv.itemcget(it["title"], "fill"),
+            "preview_fill": cv.itemcget(it["preview"], "fill"),
+            "tags_fill": cv.itemcget(it["tags"], "fill"),
+            "bg": cv.itemcget(it["bg"], "fill"),
+            "stripe": cv.itemcget(it["stripe"], "fill"),
+            "ring": cv.itemcget(it["ring"], "outline"),
+            "y0": rec["y0"], "y1": rec["y1"],
+            "text_boxes": [cv.bbox(it[k]) for k in ("title", "preview", "tags")],
+            "box": (self.CARD_INSET_X, rec["y0"],
+                    self.LIST_DRAW_WIDTH - self.CARD_INSET_X, rec["y1"]),
+            "checked": None,
         }
+        if "mark" in it:
+            view["checked"] = cv.itemcget(it["mark"], "state") != "hidden"
+            view["check_well"] = cv.itemcget(it["check"], "fill")
+            view["check_mark"] = cv.itemcget(it["mark"], "fill")
+        return view
+
+    def _header_view(self, cat):
+        """What one drawn category header shows, or None."""
+        rec = (getattr(self, "_group_headers", None) or {}).get(cat)
+        if rec is None:
+            return None
+        cv = self.canvas
+        return {"label": cv.itemcget(rec["items"]["label"], "text"),
+                "caret": cv.itemcget(rec["items"]["caret"], "text"),
+                "y0": rec["y0"], "y1": rec["y1"]}
+
+    def _card_point(self, note_id):
+        """A point inside a drawn card, in the canvas widget's coordinates
+        -- where a click on it lands. None when it is not drawn."""
+        rec = (getattr(self, "_note_cards", None) or {}).get(note_id)
+        if rec is None:
+            return None
+        return (self.LIST_DRAW_WIDTH // 2,
+                int((rec["y0"] + rec["y1"]) / 2 - self.canvas.canvasy(0)))
 
     def _recolor_note_cards(self):
-        """Re-apply the current theme's colours to the note cards already on
-        screen, instead of destroying and rebuilding every one of them just
-        because the palette changed.
+        """Re-apply the current theme's colours to the drawn list, instead
+        of drawing it again just because the palette changed.
 
-        A full refresh_note_list() was measured at ~85ms of a ~121ms theme
-        switch (roughly 2ms per card), and it's a destroy-then-repopulate:
-        the list visibly empties and refills, which is what the theme-switch
-        flicker actually was. Recolouring in place skips both.
-
-        This is NOT the track_theme() pattern that leaked before (see
-        docs/ISSUES_LOG.md): nothing is appended to a list that outlives the
-        widgets. _note_card_widgets is rebuilt from scratch on every
-        refresh_note_list(), so it only ever holds the cards currently on
-        screen, and dead entries are skipped defensively below.
-
-        The stripe and tag colours are deliberately RECOMPUTED from the note
-        via get_note_color() rather than colour-swapped, so a note's own
-        custom colour survives a theme switch exactly as it would through a
-        real rebuild.
+        The stripe and tag colours are deliberately RECOMPUTED from the
+        note via get_note_color() rather than colour-swapped, so a note's
+        own custom colour survives a theme switch exactly as it would
+        through a real rebuild. Runs after _recolor_stragglers for the same
+        reason, as it always has -- which no longer reaches the list at all
+        (a drawing is not a widget), so this is the list's only recolour.
         """
         c = self.colors
-        for note_id, info in list(getattr(self, "_note_card_widgets", {}).items()):
-            card = info.get("card")
-            if card is None:
-                continue
-            try:
-                if not card.winfo_exists():
-                    continue
-                note_color = self.get_note_color(info.get("note") or {})
-                # The ring says two things, so the recolour has to know
-                # which one this card is wearing: accent for the note that
-                # is open, the card's own fill (invisible) for the rest,
-                # and the text colour for wherever the keyboard is. Set
-                # unconditionally before, when every unopened card had no
-                # ring to see -- now they all have one, and painting them
-                # all accent on a theme switch would light up the whole
-                # list. Caught by the check that compares an in-place
-                # recolour against a full rebuild.
-                card.configure(
-                    bg=c["card"],
-                    highlightbackground=(c["accent"]
-                                         if note_id == self.selected_note_id
-                                         else c["card"]),
-                    highlightcolor=c["text"])
-                for key in ("content",):
-                    w = info.get(key)
-                    if w is not None:
-                        w.configure(bg=c["card"])
-                stripe = info.get("stripe")
-                if stripe is not None:
-                    stripe.configure(bg=note_color)
-                title = info.get("title")
-                if title is not None:
-                    title.configure(bg=c["card"], fg=c["text"])
-                preview = info.get("preview")
-                if preview is not None:
-                    preview.configure(bg=c["card"], fg=c["subtext"])
-                tags = info.get("tags")
-                if tags is not None:
-                    tags.configure(bg=c["card"], fg=note_color)
-                checkbox = info.get("checkbox")
-                if checkbox is not None:
-                    checkbox.configure(bg=c["card"], activebackground=c["card"],
-                                       selectcolor=c["check_well"])
-            except tk.TclError:
-                # The card (or one of its children) was destroyed between the
-                # snapshot above and now — nothing to recolour.
-                continue
+        cv = getattr(self, "canvas", None)
+        if cv is None:
+            return
+        try:
+            for note_id, rec in list((getattr(self, "_note_cards", None) or {}).items()):
+                it = rec["items"]
+                note_color = self.get_note_color(rec["note"] or {})
+                cv.itemconfigure(it["bg"], fill=c["card"])
+                cv.itemconfigure(it["stripe"], fill=note_color)
+                cv.itemconfigure(it["title"], fill=c["text"])
+                cv.itemconfigure(it["preview"], fill=c["subtext"])
+                cv.itemconfigure(it["tags"], fill=note_color)
+                cv.itemconfigure(it["ring"], outline=self._card_ring_color(note_id))
+                if "check" in it:
+                    cv.itemconfigure(it["check"], fill=c["check_well"],
+                                     outline=c["subtext"])
+            for cat, rec in list((getattr(self, "_group_headers", None) or {}).items()):
+                it = rec["items"]
+                dot = CATEGORY_COLORS.get(cat, c["accent"])
+                cv.itemconfigure(it["bg"], fill=c["sidebar"])
+                cv.itemconfigure(it["dot"], fill=dot, outline=dot)
+                cv.itemconfigure(it["caret"], fill=c["subtext"])
+                cv.itemconfigure(it["label"], fill=c["text"])
+            cv.itemconfigure("list_empty", fill=c["subtext"])
+        except tk.TclError:
+            pass
 
     # ---------- Multi-select for bulk actions ----------
     def _toggle_selection_mode(self):
@@ -13085,73 +14024,194 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         to take one card away. Field-reported as "the picture breaks a
         little and rebuilds itself".
 
+        On the drawing it is: delete the card's items, slide every row
+        below it up by what it took, and bring the headers' counts down.
+
         Returns True when the list on screen now matches the data, and
         False when it could not be done surgically -- the caller then
         falls back to refresh_note_list(). Every uncertain case returns
         False on purpose: a list that quietly disagrees with the notes
         is far worse than one that flickers.
         """
-        cards = getattr(self, "_note_card_widgets", None)
-        if cards is None:
+        # The rows are about to slide; a card lifted by a drag goes back
+        # to its record first (see _cancel_list_drag).
+        self._cancel_list_drag()
+        cards = getattr(self, "_note_cards", None)
+        drawn = getattr(self, "_list_drawn", None)
+        if cards is None or drawn is None:
             return False
-        removed = 0
-        for note_id in note_ids:
-            info = cards.pop(note_id, None)
-            if info is None:
-                # Never drawn -- filtered out by the search box or the
-                # category dropdown. Nothing on screen to take away, and
-                # nothing wrong either.
+        gone = set(note_ids)
+        focused = getattr(self, "_focused_note_id", None)
+        order_before = self._card_order()
+        kept = []
+        try:
+            for rec in drawn:
+                if rec["kind"] == "note" and rec["note"]["id"] in gone:
+                    self.canvas.delete(rec["tag"])
+                    cards.pop(rec["note"]["id"], None)
+                    continue
+                kept.append(rec)
+            # Headers, whether or not a card came off: a COLLAPSED group
+            # draws no cards at all, so deleting a note from one takes
+            # nothing off the screen while its header's count still has to
+            # come down. Counts come from the ids each header was drawn
+            # with, never from the cards under it. A header left counting
+            # nothing goes, with its group.
+            headers = getattr(self, "_group_headers", None) or {}
+            still_drawn = []
+            for rec in kept:
+                if rec["kind"] != "header":
+                    still_drawn.append(rec)
+                    continue
+                rec["ids"] = [i for i in rec["ids"] if i not in gone]
+                if rec["ids"]:
+                    self.canvas.itemconfigure(
+                        rec["items"]["label"],
+                        text=f"{rec['cat']} ({len(rec['ids'])})")
+                    still_drawn.append(rec)
+                else:
+                    self.canvas.delete(rec["tag"])
+                    headers.pop(rec["cat"], None)
+        except tk.TclError:
+            return False
+        self._list_drawn = still_drawn
+        # And the rows still waiting to be drawn (see _draw_list_rows):
+        # left alone, scrolling down would draw the card of a note that
+        # is gone, under a header still counting it.
+        waiting = []
+        for row in getattr(self, "_list_pending", None) or ():
+            if row[0] == "note":
+                if row[1].get("id") not in gone:
+                    waiting.append(row)
                 continue
-            card = info.get("card")
-            try:
-                if card is not None and card.winfo_exists():
-                    card.destroy()
-                    removed += 1
-            except tk.TclError:
-                return False
-        # Headers first, and whether or not a card came off: a COLLAPSED
-        # group draws no cards at all, so deleting a note from one takes
-        # nothing off the screen while its header's count still has to
-        # come down. An early "nothing was drawn, nothing to do" left
-        # that number stale -- caught by a check only once the search
-        # debounce, which had been quietly rebuilding the list and
-        # repairing it, was settled first.
-        if not self._sync_group_headers(note_ids):
-            return False
-        if not cards and not getattr(self, "_group_header_widgets", None):
+            kept_notes = [n for n in row[2] if n.get("id") not in gone]
+            if kept_notes:
+                waiting.append((row[0], row[1], kept_notes, row[3]))
+        self._list_pending = waiting
+        if not self._list_drawn:
             # Nothing drawn at all now. An empty list is not simply "no
             # cards": it carries a message, and which message depends on
             # whether anything is filtered. That belongs to
             # refresh_note_list().
             return False
+        # From the top: only the rows below a gap actually move, so the rows
+        # above cost a comparison each.
+        self._reflow_list(0)
+        # The keyboard's ring was on a card that went: it moves to the card
+        # that took its place, so the walk carries on from where it was.
+        if focused in gone and focused in order_before:
+            order = self._card_order()
+            if order:
+                place = min(order_before.index(focused), len(order) - 1)
+                self._focused_note_id = order[place]
+                self._paint_ring(self._focused_note_id)
+        # What was taken off may have left less than a screen drawn.
+        self._ask_for_top_up()
         # refresh_note_list() recomputes these on its way past, and
         # Settings may be open on them right now. Due even when no card
         # was drawn -- a note still left the notebook.
         self._render_statistics()
         return True
 
-    def _sync_group_headers(self, removed_ids):
-        """Update the category headers after cards were taken off the list.
+    def _redraw_saved_card(self, note_id):
+        """Bring the list up to date after ONE note was saved, by redrawing
+        that note's card and nothing else.
 
-        Counts come from the ids each header was built with, not from the
-        cards under it: a COLLAPSED group has a header and no cards at
-        all, and counting what is drawn would read it as empty and throw
-        its header away.
+        A save used to rebuild the whole list, and autosave saves at every
+        pause in typing: each time someone stopped to think, the window
+        froze for about a second with 100 notes, three with 300, twelve
+        with 1,000 -- where this takes under a tenth of a second. The sixth
+        member of the family that exists for this reason (see
+        _remove_note_cards).
+
+        What the list shows is worked out afresh (_list_rows) and compared
+        with what it showed. When the only difference is this note -- its
+        text, where the sort now puts it, whether the search still lets it
+        through -- its card is drawn again in its new place and the rows
+        between the two places slide, all in one repaint of the one canvas:
+        nothing on screen empties or reappears. Anything more returns
+        False, and the caller rebuilds: a group whose count changed (the
+        note moved category, or is new, while the list is grouped), an
+        empty list that needs its message, a list never drawn. A list that
+        quietly disagrees with the notes is far worse than one that is slow
+        to catch up.
         """
-        headers = getattr(self, "_group_header_widgets", None)
-        if headers is None:
-            return True
-        gone = set(removed_ids)
-        for cat, head in list(headers.items()):
-            head["ids"] = [i for i in head.get("ids", []) if i not in gone]
-            try:
-                if head["ids"]:
-                    head["label"].configure(text=f"{cat} ({len(head['ids'])})")
-                else:
-                    head["frame"].destroy()
-                    headers.pop(cat, None)
-            except (tk.TclError, KeyError):
+        # As in _remove_note_cards: rows are about to move.
+        self._cancel_list_drag()
+        cards = getattr(self, "_note_cards", None)
+        drawn = getattr(self, "_list_drawn", None)
+        pending = getattr(self, "_list_pending", None)
+        if cards is None or not drawn or pending is None:
+            return False
+
+        def key_of(row):
+            return (row[0], row[1] if row[0] == "header" else row[1]["id"])
+
+        rows = self._list_rows()
+        new_keys = [key_of(row) for row in rows]
+        old_drawn_keys = [rec["key"] for rec in drawn]
+        old_keys = old_drawn_keys + [key_of(row) for row in pending]
+        own = ("note", note_id)
+        if [k for k in new_keys if k != own] != [k for k in old_keys if k != own]:
+            return False
+        # Leaving the others where they were is not enough when grouped: a
+        # header's "(N)" counts its group, and the note may have joined or
+        # left one without any other row moving.
+        headers = getattr(self, "_group_headers", None) or {}
+        waiting_groups = {row[1]: row[2] for row in pending if row[0] == "header"}
+        for row in rows:
+            if row[0] != "header":
+                continue
+            if row[1] in headers:
+                before = set(headers[row[1]].get("ids", ()))
+            elif row[1] in waiting_groups:
+                before = {n["id"] for n in waiting_groups[row[1]]}
+            else:
                 return False
+            if {n["id"] for n in row[2]} != before:
+                return False
+
+        # Where the card goes: among the drawn rows, or -- when the sort
+        # moved it past them -- among the ones still waiting, which is
+        # where a rebuild would have left it too. Landing just below the
+        # last drawn row, it is drawn if it was before, or if nothing was
+        # waiting: a list drawn to its end stays drawn to its end. Left to
+        # wait there, the card of a brand-new note in a short list would
+        # appear only once something scrolled.
+        was_drawn = own in old_drawn_keys
+        old_at = old_drawn_keys.index(own) if was_drawn else None
+        others_drawn = len(drawn) - (1 if was_drawn else 0)
+        new_at = new_keys.index(own) if own in new_keys else None
+        drawn_now = new_at is not None and (
+            new_at < others_drawn
+            or (new_at == others_drawn and (was_drawn or not pending)))
+        depth = others_drawn + (1 if drawn_now else 0)
+        try:
+            if was_drawn:
+                old = drawn.pop(old_at)
+                cards.pop(note_id, None)
+                self.canvas.delete(old["tag"])
+            if drawn_now:
+                # Drawn anywhere and put in its place by the reflow below,
+                # which slides every row between the old place and the new
+                # one -- the drawing changes in one repaint.
+                drawn.insert(new_at, self._draw_note_card(rows[new_at][1], 0))
+        except tk.TclError:
+            return False
+        starts = [i for i in (old_at, new_at if drawn_now else None) if i is not None]
+        self._reflow_list(min(starts) if starts else len(drawn))
+        self._list_pending = rows[depth:]
+        for row in rows[:depth]:
+            if row[0] == "header" and row[1] in headers:
+                headers[row[1]]["ids"] = [n["id"] for n in row[2]]
+        # A card that went to wait below may have left the drawn part
+        # shorter than the view, and whether the canvas reports that
+        # depends on whether anything changed size -- so ask directly.
+        self._ask_for_top_up()
+        # Everything else refresh_note_list does on its way past.
+        self._render_statistics()
+        if getattr(self, "selection_mode", False):
+            self._update_bulk_selected_label()
         return True
 
     def _exit_selection_mode_after_bulk_action(self):
@@ -13173,43 +14233,15 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.refresh_note_list()
 
     def _apply_selection_mode_to_cards(self):
-        """Add or remove just the per-card checkbox, and rebind each card's
-        click handler to match the current selection_mode — without
-        destroying and rebuilding every card. A full refresh_note_list() here
-        worked, but visibly flickered the whole list just to toggle one
-        column of checkboxes on or off."""
-        for note_id, info in list(self._note_card_widgets.items()):
-            card = info["card"]
-            try:
-                card.winfo_exists()
-            except tk.TclError:
-                continue
-            old_cb = info.get("checkbox")
-            if old_cb is not None:
-                try:
-                    old_cb.destroy()
-                except tk.TclError:
-                    pass
-                info["checkbox"] = None
-
-            if self.selection_mode:
-                note = info["note"]
-                sel_var = tk.BooleanVar(value=note_id in self.selected_note_ids)
-                sel_cb = tk.Checkbutton(
-                    card, variable=sel_var, bg=self.colors["card"],
-                    activebackground=self.colors["card"], selectcolor=self.colors["check_well"],
-                    bd=0, highlightthickness=0,
-                    command=lambda n=note_id, v=sel_var: self._toggle_note_selected(n, v.get())
-                )
-                # Leftmost, ahead of everything already packed in the card.
-                sel_cb.pack(side="left", padx=(6, 0), before=card.winfo_children()[0])
-                info["checkbox"] = sel_cb
-                for widget in info["clickable"]:
-                    widget.bind("<Button-1>", lambda e, cb=sel_cb: cb.invoke())
-            else:
-                note = info["note"]
-                for widget in info["clickable"]:
-                    widget.bind("<Button-1>", lambda e, n=note: self.open_note_in_tab(n))
+        """Add or remove the per-card tick box as selection mode turns on or
+        off. The box takes room at the card's left, so the text wraps
+        again and the cards change height: the drawn part of the list is
+        drawn again, as deep as it was and where it was scrolled -- which
+        on the drawing is one repaint, not the flicker of the widget list
+        that made this surgical in the first place. What a click does is
+        decided when the click arrives (_list_pressed), so nothing needs
+        rebinding."""
+        self.refresh_note_list()
 
     def _selection_anchor_row(self):
         """The row the bulk-action bar should appear directly under. Looked
@@ -13283,15 +14315,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         that decides whether everything IS selected have to mean exactly
         the same set, or the button offers to select what is already
         selected.
+
+        Asked of the notes, not of the cards: the list draws a step at a
+        time, and "all" means every note it shows, drawn yet or not.
         """
-        query = self._search_query()
-        visible = [n for n in self.notes
-                   if self._query_matches_note(query, n)]
-        chosen_category = getattr(self, "filter_var", None)
-        if chosen_category is not None and self.filter_var.get() != "All":
-            visible = [n for n in visible
-                       if self._note_passes_filter(n, self.filter_var.get())]
-        return {n["id"] for n in visible}
+        return {n["id"] for n in self._notes_on_the_list()}
 
     def _bulk_select_all(self):
         """Select every note the list is showing — or, if they are all
@@ -13320,29 +14348,18 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._sync_card_checkboxes()
 
     def _sync_card_checkboxes(self):
-        """Make every card's tick box agree with selected_note_ids.
+        """Make every drawn card's tick box agree with selected_note_ids.
 
-        select()/deselect() set the widget's own variable WITHOUT firing
-        its command, which matters: the command is _toggle_note_selected,
-        and letting it run here would have each box re-report a change
-        that has already been made -- twenty times over, each one asking
-        the label to recount.
+        Only the drawing changes: nothing here reports a change back, which
+        matters -- _toggle_note_selected has already been told, and each box
+        re-reporting it would have the label recount twenty times over.
 
         Cards that are not drawn (filtered out, or inside a collapsed
-        group) have no box to update, and need none: build_note_card
-        reads selected_note_ids for the initial value when it makes one.
+        group) have no box to update, and need none: _draw_note_card reads
+        selected_note_ids for the box it draws.
         """
-        for note_id, info in list(getattr(self, "_note_card_widgets", {}).items()):
-            box = info.get("checkbox")
-            if box is None:
-                continue
-            try:
-                if note_id in self.selected_note_ids:
-                    box.select()
-                else:
-                    box.deselect()
-            except tk.TclError:
-                pass
+        for note_id in list((getattr(self, "_note_cards", None) or {})):
+            self._paint_card_check(note_id)
 
     def _series_warning(self, notes):
         """One sentence saying how many of `notes` are whole repeating
@@ -13900,39 +14917,20 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self.render_calendar()
 
     def _update_open_highlight(self):
-        """Move the 'currently open' card border directly to whichever card
-        needs it, without rebuilding the list. self._note_card_widgets is
-        kept up to date by the last full refresh_note_list() — this just
-        touches the (at most) two cards that actually changed."""
+        """Move the 'currently open' ring directly to whichever card needs
+        it, without rebuilding the list -- the (at most) two cards that
+        actually changed.
+
+        Every place that says which note is open asks _card_ring_color,
+        which also knows where the keyboard is: the colour carries the
+        meaning (the thickness is on every card), and a card that is both
+        open and holding the keyboard shows the keyboard's ring."""
         prev = getattr(self, "_last_highlighted_note_id", None)
         current = self.selected_note_id
         if prev == current:
             return
-        cards = getattr(self, "_note_card_widgets", {})
-        # The THIRD place that says which note is open, after build_note_card
-        # and _recolor_note_cards -- and the one a sweep missed, because it
-        # was found by the Linux image rather than by reading. It used to set
-        # thickness 0 and 2, which was the whole of the old scheme; now every
-        # card keeps a two-pixel ring and the COLOUR carries the meaning, so
-        # a thickness of 0 here would take the keyboard's focus ring off
-        # whichever card you just left, and highlightcolor=accent would make
-        # a focused card indistinguishable from an open one.
-        if prev is not None and prev in cards:
-            try:
-                cards[prev]["card"].configure(
-                    highlightthickness=2,
-                    highlightbackground=self.colors["card"],
-                    highlightcolor=self.colors["text"])
-            except tk.TclError:
-                pass
-        if current is not None and current in cards:
-            try:
-                cards[current]["card"].configure(
-                    highlightthickness=2,
-                    highlightbackground=self.colors["accent"],
-                    highlightcolor=self.colors["text"])
-            except tk.TclError:
-                pass
+        self._paint_ring(prev)
+        self._paint_ring(current)
         self._last_highlighted_note_id = current
 
     def open_note_in_tab(self, note, occurrence_date=None, flush=True):
@@ -15470,10 +16468,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             return
         note = self.find_note(self.selected_note_id) if self.selected_note_id else None
         has_prev = bool(note and note.get("_prev"))
-        if has_prev and not self.restore_prev_btn.winfo_ismapped():
+        if has_prev and not self._is_placed(self.restore_prev_btn):
             self.restore_prev_btn.grid(row=2, column=0, columnspan=3, sticky="w",
                                        padx=(0, 8), pady=(0, 6), ipadx=10, ipady=5)
-        elif not has_prev and self.restore_prev_btn.winfo_ismapped():
+        elif not has_prev and self._is_placed(self.restore_prev_btn):
             self.restore_prev_btn.grid_forget()
 
     # What "↩ Restore previous" can bring back beyond the text, in the
@@ -15870,7 +16868,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             # can catch them up — see _catch_up_deferred_refresh().
             self._note_list_needs_refresh = True
         else:
-            self.refresh_note_list()
+            # One note changed, so one card is redrawn; the whole list is
+            # rebuilt only when that cannot be known to be enough.
+            if not self._redraw_saved_card(self.selected_note_id):
+                self.refresh_note_list()
             self.render_calendar()
             self._note_list_needs_refresh = False
         # The saved note now matches disk; update this tab's snapshot so its
