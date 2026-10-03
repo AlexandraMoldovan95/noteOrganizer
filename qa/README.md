@@ -544,7 +544,12 @@ A new surface joins this list the moment it ships.
   after it. qa8 does it right in all twelve places:
   `app.show_info = lambda *a, **k: True` on the line after the constructor.
   A hang is reported now as that script's failure, with its last printed
-  lines, and the run goes on.
+  lines, and the run goes on. And a check that COUNTS what a new app says
+  lets the app's own announcement have its turn first: qa5 counted the
+  notices of an app built a moment earlier, and on a CI runner that built
+  the app quickly the 250 ms timer landed inside the counting and added
+  one. `waiting_timers(app, 'announce_startup_changes')` says when
+  it has run.
 - **Assert the app's DECISION, not the arrival, wherever the promise is
   about focus.** `focus_get()` needs the process to own the desktop
   foreground, which a test run never does; measured, it answers 100/100
