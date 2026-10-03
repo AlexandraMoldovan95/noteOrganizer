@@ -38,6 +38,7 @@ day-to-day tracking.
 | [The finding that described a dialog nobody had opened](#the-finding-that-described-a-dialog-nobody-had-opened) | A review that only reads finds where to look but cannot decide — check a finding's reason separately from the finding, and correct a refuted row in place. | — |
 | [The undo that guarded the wrong state](#the-undo-that-guarded-the-wrong-state) | An undo must test for the state its own action produced, not the one it means to restore; and sweep for what else reaches the same loss. | 0.75.181 |
 | [The binding that could never fire](#the-binding-that-could-never-fire) | A binding is not an answer to "does this key work" — ask where the key goes; and a probe whose finding is an absence needs a control that produces the presence. | 0.75.183 |
+| [Eleven decisions about your notes, made from half the evidence](#eleven-decisions-about-your-notes-made-from-half-the-evidence) | When two files must agree, rebuild the weaker from the stronger; an automatic removal asks the strictest question there is; a dialog's promise is part of the mechanism. | 0.81.213 |
 | [The paste that landed on top of the placeholder](#the-paste-that-landed-on-top-of-the-placeholder) | `bind()` replaces where `add="+"` accumulates, so a widget's own binding silently displaces a shared helper's; and a virtual event outranks the physical one beside it in the same bindtag. | 0.75.185 |
 | [The sweep that stopped at the edge of the Settings page](#the-sweep-that-stopped-at-the-edge-of-the-settings-page) | A fix's sibling sweep must name the surfaces it did not visit; a cap in characters is not a width; and text that wraps for the first time inherits every multi-line default the widget was hiding. | 0.81.202 |
 | [The seven small rows, four of which were not what they said](#the-seven-small-rows-four-of-which-were-not-what-they-said) | A suggested fix is a hypothesis about the code — four of seven were wrong about scope, premise or mechanism, each found by a grep; and a check asserting `not in` against a name the code would never write cannot fail. | 0.76.192 |
@@ -1223,6 +1224,77 @@ it.
    and irrelevant. Look for the thing that stops it mattering.
 4. A verdict that changes with the speed of the run is not a verdict.
    State the precondition and establish it, in the check itself.
+
+### Eleven decisions about your notes, made from half the evidence
+
+*([0.81.213](../CHANGELOG.md#081213--2026-09-29))*
+
+**A deliberate attempt to break the app found eleven places that moved,
+merged or removed a user's work on their own — and each one decided from a
+partial view of the facts.** Three agents were each given one territory
+(the data layer, the interface, the first run and packaging) and one rule:
+reproduce it in a scratch copy, or it does not count. Every finding was
+then read again in the code before anything changed. None was false.
+
+**What each one trusted too much.**
+
+- *A second file's word over the note's own.* A note stores only its
+  category's name; which names exist lives in settings.json. Everything
+  that made the two disagree — deleting settings.json to reset the
+  preferences, copying only the notes file to a new PC, a category the
+  loader dropped for being too long, or for being the 201st — ended with
+  `normalize_note` filing the note under General, and the startup clean-up
+  writing that to disk before the user had touched anything. The fix
+  believes the notes: missing categories are rebuilt from them, and the
+  doors a name comes in by refuse what the loader would drop. The loader's
+  own comment said a dropped name went missing "loudly". Nothing was said.
+- *Resemblance where identity was needed.* `content_signature` had a loose
+  default — styling, per-day edits and skipped days left out, because "a
+  stray bold word does not make a duplicate" — and a strict mode for "the
+  one caller whose wrong answer is unrecoverable". The startup collapse's
+  wrong answer is unrecoverable too: the copy it merges away goes nowhere,
+  not even the Trash. Two copies of a weekly routine, one edited on a single
+  day and pinned, became one, under a notice calling it an exact duplicate.
+  The loose mode is gone. The sweep for siblings found a third automatic
+  remover — a restored backup's Trash skip — asking the fuzzier question the
+  Settings duplicate panel asks, where a person looks before anything goes.
+- *A promise wider than its mechanism.* The Update dialog said each update
+  "can be undone with ↩ Restore previous", and the rescue copy held five
+  fields while the update replaced ten. Next to it, a backup's copy of a
+  note went down the share-code route, which by design carries no
+  attachments and no per-day timeline: right for a stranger's code, wrong
+  for the user's own notebook arriving on a new PC.
+- *Two answers to one question.* `_main` resolved the data folder, locked
+  it, and `initialise()` resolved it again. The writability probe wrote one
+  fixed file name, so two launches probing together collided — measured at
+  46% of overlapping probes answering "not writable" — and a launch that
+  read AppData that way locked a fallback folder, then opened the notebook
+  its twin was holding. Deciding once removes the second answer; a probe
+  file of its own removes the collision.
+- *A check narrower than the delete it allowed.* The stale-copy purge
+  compared attachment names, at the top level only, and then removed the
+  whole tree. It compares bytes now, leaves a folder with anything else in
+  it alone, and deletes file by file. One limit, stated rather than hidden:
+  once the check has passed, deleting file by file and deleting the tree
+  remove the same files, so no test can tell them apart. The second layer
+  only matters if the folder changes between the check and the delete.
+
+**How it was proved.** Twenty-four mutants, each applied to a fresh copy of
+the project rather than to the source, so no failure of the runner could
+leave one behind: every fix taken away in turn, and every one caught by the
+check written for it.
+
+**The lessons.**
+
+1. When two files must agree, decide which one holds the truth and rebuild
+   the other from it. Never let the weaker one rewrite the stronger.
+2. An automatic removal has nobody in the loop, so it asks the strictest
+   question there is. A looser one is for suggestions a person confirms.
+3. What a dialog promises is part of the mechanism. An undo that cannot put
+   back what the action replaced is a data-loss bug with a reassuring label.
+4. A decision taken twice can be answered twice. Take it once and pass the
+   answer down.
+5. Judge what a deletion removes by the bytes it removes, not by the names.
 
 
 ## Tk & platform gotchas

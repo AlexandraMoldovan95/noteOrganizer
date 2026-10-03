@@ -34,6 +34,7 @@ carrying the most actual content - rather than picking arbitrarily.
 load, and reports what it did so the app can tell the user.
 """
 
+import copy
 import os
 import re
 import uuid
@@ -214,8 +215,24 @@ UPDATABLE_FROM_SHARED = [
     "comments", "category", "date", "color", "recurrence", "checklist",
 ]
 
+# A restored backup is the user's OWN notebook -- from another device, or
+# from an earlier day -- so its copy of a note owns its timeline and its
+# pin as well. Treated like a share code, the per-day edits, the skipped
+# days and the pin a backup carried were dropped without a word, on the
+# route people use to move a notebook to a new PC. (Its attachments are
+# added too, by the caller: they are files, and files are not this
+# module's business.)
+UPDATABLE_FROM_BACKUP = UPDATABLE_FROM_SHARED + [
+    "exceptions", "overrides", "pinned",
+]
 
-def apply_shared_update(note, incoming):
+# The text half of a rescue copy: what a drastic shrink keeps, and the
+# part every rescue copy has. Anything beyond it in ``_prev`` came from
+# an update, and "↩ Restore previous" puts that back as well.
+PREV_TEXT_FIELDS = ("title", "body", "formatting", "paragraphs", "comments")
+
+
+def apply_shared_update(note, incoming, fields=UPDATABLE_FROM_SHARED):
     """Overwrite *note*'s content from *incoming*, keeping a way back.
 
     The rescue copy goes into ``_prev`` -- the same one a drastic shrink
@@ -223,19 +240,32 @@ def apply_shared_update(note, incoming):
     means an update that replaced the wrong thing is one button away from
     being undone, with no new mechanism to build or explain.
 
-    *incoming* is whatever a share code decoded to, so it is normalised
-    before anything is copied out of it.
+    It holds EVERY field the update replaces. It used to hold the text
+    alone while the update also replaced the checklist, the date, the
+    repeat rule, the colour and the category -- and the dialog asking for
+    the update promised each one "can be undone". Restore brought the
+    words back, and a ticked list, a date and a yearly reminder were gone
+    for good.
+
+    *incoming* is whatever a share code or a backup decoded to, so it is
+    normalised before anything is copied out of it. *fields* is what it
+    may replace: UPDATABLE_FROM_SHARED for a share code,
+    UPDATABLE_FROM_BACKUP for a backup.
     """
     fresh = normalize_note(dict(incoming))
-    note["_prev"] = {
+    prev = {
         "title": note.get("title") or "",
         "body": note.get("body") or "",
         "formatting": note.get("formatting") or [],
         "paragraphs": note.get("paragraphs") or [],
         "comments": note.get("comments") or "",
     }
-    for field in UPDATABLE_FROM_SHARED:
-        note[field] = fresh[field]
+    for field in fields:
+        if field not in prev:
+            prev[field] = copy.deepcopy(note.get(field, NOTE_DEFAULTS.get(field)))
+    note["_prev"] = prev
+    for field in fields:
+        note[field] = copy.deepcopy(fresh[field])
     note["updated"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     return note
 
@@ -301,6 +331,18 @@ def normalize_note(note):
             "paragraphs": normalize_paragraphs(
                 prev.get("paragraphs") if isinstance(prev.get("paragraphs"), list) else []),
         }
+        # What an update replaced beyond the text (see apply_shared_update)
+        # rides along too. It is shaped by the very rules the note's own
+        # fields pass -- a restore puts it straight back INTO the note, so
+        # it has to be exactly as trustworthy -- and a key the copy never
+        # had stays absent, which is how restore tells an update's rescue
+        # copy from a drastic shrink's.
+        extra = {key: prev[key] for key in UPDATABLE_FROM_BACKUP
+                 if key not in PREV_TEXT_FIELDS and key in prev}
+        if extra:
+            shaped = normalize_note(extra)
+            for key in extra:
+                clean["_prev"][key] = shaped[key]
     for key, default in NOTE_DEFAULTS.items():
         value = note.get(key, default)
         if isinstance(default, str) and not isinstance(value, str):
@@ -595,27 +637,39 @@ def _recurrence_signature(recurrence):
     )) + (str(normalized["freq"]),)
 
 
-def content_signature(note, strict=False):
+def content_signature(note):
     """THE identity of a note's content — one definition, every consumer.
 
-    Two other modules ask "is this the same note?" with life-or-death
-    stakes: clean_notes below collapses duplicates at startup, and
-    core/paths.py's stale-copy purge uses it to authorise deleting a whole
-    leftover notebook folder from disk. Each used to carry its own
-    hand-rolled field tuple, and the two drifted: when the checklist
-    joined this one, the purge's copy still judged notes by
-    (title, body, comments, category, date) alone, so a legacy folder
-    whose notes differed from the local ones ONLY by their checklists
-    still read as "fully covered" and was deleted — no Trash, no undo.
-    A field list that exists twice WILL fall out of step; this function
-    is the fix at the root of that class.
+    Three places remove notes on their own, with no Trash and nobody
+    asked: clean_notes below collapses duplicates at startup,
+    core/paths.py's stale-copy purge deletes a whole leftover notebook
+    folder from disk, and a restored backup's Trash skips entries this
+    device already holds. Each used to carry its own idea of "the same
+    note", and they drifted: when the checklist joined this one, the
+    purge's copy still judged notes by (title, body, comments, category,
+    date) alone, so a legacy folder whose notes differed from the local
+    ones ONLY by their checklists still read as "fully covered" and was
+    deleted — no Trash, no undo. A field list that exists twice WILL fall
+    out of step; this function is the fix at the root of that class.
 
-    'id' and 'updated' are deliberately excluded — those differ on
+    Everything a person did to a note is part of the answer: styling,
+    layout, per-day edits, skipped dates, the pin and the colour. There
+    used to be a looser default that left those out -- "a stray bold word
+    does not make a duplicate into a different note" -- and the startup
+    collapse used it. Two copies of a weekly routine, one edited on a
+    single day and pinned, then read as one note: the edited copy was
+    removed, and the startup message called it an exact duplicate. An
+    answer that decides what gets deleted has to be the strict one, so
+    the strict one is the only one. (The Settings "Duplicates" panel asks
+    a different, deliberately fuzzier question -- duplicates._dup_key --
+    and there a person looks before anything is removed.)
+
+    'id', 'uid' and 'updated' are deliberately excluded — those differ on
     copies. Defensive about shapes throughout, because the purge feeds it
     raw dicts parsed straight from disk, before any normalization."""
     def _text(value):
         return value.strip() if isinstance(value, str) else ""
-    signature = (
+    return (
         _text(note.get("title")),
         _text(note.get("body")),
         _text(note.get("comments")),
@@ -624,28 +678,12 @@ def content_signature(note, strict=False):
         _checklist_signature(note.get("checklist")),
         _attachment_signature(note.get("attachments")),
         _recurrence_signature(note.get("recurrence")),
-    )
-    if not strict:
-        return signature
-    # The STRICT tail, for the one caller whose wrong answer is
-    # unrecoverable. Styling, layout, per-day edits and skipped dates are
-    # all real work a person did, and none of them show up above -- so a
-    # leftover notebook whose notes differ from the local ones ONLY in
-    # those was judged "already covered" and deleted outright, while the
-    # startup message said "nothing was deleted unless every note and
-    # attachment in it already existed".
-    #
-    # They stay out of the DEFAULT answer on purpose: the startup
-    # duplicate collapse is about two notes a person would call the same
-    # note, and a stray bold word does not make a duplicate into a
-    # different note. One definition, one explicit axis of strictness,
-    # both halves written down -- rather than two field lists drifting
-    # apart again.
-    return signature + (
         _stable(note.get("formatting")),
         _stable(note.get("paragraphs")),
         _stable(note.get("overrides")),
         _stable(note.get("exceptions")),
+        bool(note.get("pinned")),
+        _text(note.get("color")),
     )
 
 
@@ -679,6 +717,37 @@ def clean_notes(notes):
 
     stats["after"] = len(deduped)
     return deduped, stats
+
+
+def repair_note_ids(notes):
+    """Make every note's id a positive number no other note shares.
+
+    Returns True when anything had to change.
+
+    The id is how the whole app finds a note -- find_note returns the
+    FIRST match, and delete filters by it -- yet nothing kept it unique
+    after the one-time cleanup had run. Two notebooks merged by hand both
+    number from 1: editing the second note of a pair saved into the
+    first, silently replacing its text, and deleting either one took both
+    to the Trash. normalize_note also turns an unusable id into 0, which
+    the editor reads as "no note selected".
+
+    Run on every load, not only in the cleanup. The first note holding a
+    number keeps it, so a remembered open note still means the same one;
+    each later holder gets the next free number.
+    """
+    next_id = max((n["id"] for n in notes if n["id"] > 0), default=0) + 1
+    seen = set()
+    changed = False
+    for note in notes:
+        if note["id"] > 0 and note["id"] not in seen:
+            seen.add(note["id"])
+            continue
+        note["id"] = next_id
+        seen.add(next_id)
+        next_id += 1
+        changed = True
+    return changed
 
 
 # ---- Looking notes up, and moving them between categories ----

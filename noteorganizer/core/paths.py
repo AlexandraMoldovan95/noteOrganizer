@@ -53,10 +53,12 @@ by counting files, so "10 notes here, 10 notes there" is never mistaken
 for "the same 10 notes".
 """
 
+import filecmp
 import json
 import os
 import shutil
 import sys
+import tempfile
 from datetime import datetime
 
 
@@ -106,16 +108,32 @@ def bundled_file(*parts):
 
 def _is_writable(folder):
     """True if we can actually create a file here. Existence isn't enough —
-    Program Files exists too, but writing to it silently fails."""
+    Program Files exists too, but writing to it silently fails.
+
+    The probe's name is this call's own. It used to be one fixed name, and
+    two launches probing the same folder at the same moment -- a second
+    double-click on a slow PC -- collided: a sharing violation, or the
+    other launch had already deleted it. Measured at nearly half of all
+    overlapping probes answering "not writable", which sent a launch off
+    to a fallback folder while its twin locked the real one (see _main).
+    Removing the probe is tidiness, not proof: creating and writing it
+    already answered the question."""
     try:
         os.makedirs(folder, exist_ok=True)
-        probe = os.path.join(folder, ".write_test")
-        with open(probe, "w") as f:
-            f.write("ok")
-        os.remove(probe)
-        return True
+        handle, probe = tempfile.mkstemp(prefix=".write_test_", dir=folder)
     except (IOError, OSError):
         return False
+    try:
+        with os.fdopen(handle, "w") as f:
+            f.write("ok")
+        writable = True
+    except (IOError, OSError):
+        writable = False
+    try:
+        os.remove(probe)
+    except OSError:
+        pass
+    return writable
 
 
 def resolve_data_dir(script_dir):
@@ -151,7 +169,6 @@ def resolve_data_dir(script_dir):
                 "saved next to the app instead. They'll persist, but move the app "
                 "out of Downloads/Program Files if notes ever go missing."
             )
-        import tempfile
         tmp = os.path.join(tempfile.gettempdir(), "NoteOrganizer")
         return tmp, (
             "Couldn't find a permanent place to save notes on this PC, so a "
@@ -340,9 +357,16 @@ def run_migrations(app_dir):
             except OSError:
                 pass
 
+        # Copied, not moved: the AppData copy stays where it is (the purge
+        # never touches that folder), and the installed app goes on
+        # reading it. The message used to say "moved", and the entry file
+        # added that the two "can never drift apart" -- when from here on
+        # they are two notebooks that do exactly that.
         message = (
-            f"Moved your notebook back into the app folder:\n{app_dir}\n\n"
-            f"Brought {moved} note(s) back from:\n{appdata_dir}"
+            f"Copied your notebook into the app folder:\n{app_dir}\n\n"
+            f"Brought {moved} note(s) from:\n{appdata_dir}\n\n"
+            "The installed app keeps its own notebook there, so changes "
+            "made here will not appear in it, or the other way round."
         )
         if displaced:
             message += (
@@ -371,7 +395,11 @@ def run_migrations(app_dir):
         return None
 
     legacy_settings = os.path.join(best_dir, "settings.json")
-    if os.path.exists(legacy_settings):
+    # Only a settings file this app wrote. The built app looks in the
+    # folder its own folder was unpacked into, and a generic
+    # settings.json there -- another program's -- used to be adopted
+    # wholesale as this app's preferences.
+    if os.path.exists(legacy_settings) and _looks_like_our_settings(legacy_settings):
         _preserve_settings_if_unreadable(settings_path)
         try:
             shutil.copy2(legacy_settings, settings_path)
@@ -407,13 +435,13 @@ def _content_signatures(notes):
     # closes that loop and crashes the whole package. The function-level
     # import runs long after every module is initialised.
     from .model import content_signature
-    # strict=True: this set gates an irreversible delete, so ANY content
-    # difference must keep the folder -- styling, layout, per-day edits
-    # and skipped dates included. The default (looser) answer belongs to
-    # the startup duplicate collapse, where a stray bold word does not
-    # make a duplicate into a different note.
+    # This set gates an irreversible delete, so ANY content difference
+    # must keep the folder -- styling, layout, per-day edits, skipped
+    # dates, the pin and the colour included. content_signature has only
+    # that strict answer now; see its docstring for the looser one it
+    # used to offer, and what it cost.
     return {
-        content_signature(n, strict=True) for n in notes if isinstance(n, dict)
+        content_signature(n) for n in notes if isinstance(n, dict)
     }
 
 
@@ -438,16 +466,54 @@ def is_redundant_copy(candidate_path, local_notes):
 
 
 def _attachments_are_covered(stale_dir, app_dir):
-    """Every attached file in the old folder must already exist in the new one."""
+    """Every attached file in the old folder must already exist in the new
+    one -- the same bytes, not merely the same name.
+
+    It used to compare names alone, and only of the files at the top
+    level. The purge then deleted the whole folder, so a file in a
+    subfolder (never copied: the migration copies the top level only) or
+    a different file that happened to share a name was destroyed, while
+    the startup message said every attachment had been checked. The app
+    itself only ever writes files flat, so a subfolder means the folder
+    is not wholly ours, and it is left alone."""
     stale_attach = os.path.join(stale_dir, "attachments")
     if not os.path.isdir(stale_attach):
         return True
     local_attach = os.path.join(app_dir, "attachments")
-    for filename in os.listdir(stale_attach):
-        if os.path.isfile(os.path.join(stale_attach, filename)):
-            if not os.path.exists(os.path.join(local_attach, filename)):
+    try:
+        entries = os.listdir(stale_attach)
+    except OSError:
+        return False
+    for filename in entries:
+        stale_file = os.path.join(stale_attach, filename)
+        if not os.path.isfile(stale_file):
+            return False
+        local_file = os.path.join(local_attach, filename)
+        try:
+            if not (os.path.isfile(local_file)
+                    and filecmp.cmp(stale_file, local_file, shallow=False)):
                 return False
+        except OSError:
+            return False
     return True
+
+
+# Keys only this app writes into its settings.json. A folder the purge or
+# the adoption looks at can be somebody else's -- in the built app, the
+# folder ABOVE the app's own is one of them, and that is wherever the zip
+# was unpacked: Downloads, the Desktop. A settings.json there that carries
+# none of these is not ours, and is neither adopted nor deleted.
+_OUR_SETTINGS_KEYS = ("app_version", "cleanup_done", "categories",
+                      "first_launch_date", "reclaimed_from_appdata")
+
+
+def _looks_like_our_settings(path):
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except (json.JSONDecodeError, IOError, OSError, UnicodeDecodeError):
+        return False
+    return isinstance(data, dict) and any(k in data for k in _OUR_SETTINGS_KEYS)
 
 
 def purge_stale_copies(app_dir):
@@ -457,8 +523,10 @@ def purge_stale_copies(app_dir):
     Deletion only happens when ALL of these hold:
       - the local notes file exists and is readable
       - every note in the stale copy is already present locally
-      - every attachment in the stale folder is already present locally
-      - the file being deleted is one this app created
+      - every attachment in the stale folder is already present locally,
+        byte for byte, and the attachments folder holds nothing else
+      - the file being deleted is one this app created (a settings.json
+        must also carry this app's own keys)
       - the folder isn't the real per-user AppData folder (see below)
 
     The dist\\ folder itself is never removed (it holds the .exe); only the
@@ -516,18 +584,35 @@ def purge_stale_copies(app_dir):
 
         for filename in entries:
             full = os.path.join(stale_dir, filename)
-            if os.path.isfile(full) and _is_owned_file(filename):
+            if not (os.path.isfile(full) and _is_owned_file(filename)):
+                continue
+            if filename == "settings.json" and not _looks_like_our_settings(full):
+                continue
+            try:
+                os.remove(full)
+                removed_anything = True
+            except OSError:
+                pass
+
+        # File by file, each one proved identical to its copy in the app
+        # folder at the moment it goes -- never the folder wholesale.
+        # shutil.rmtree took whatever else was in it too, subfolders
+        # included. The folder itself goes only if that left it empty.
+        stale_attach = os.path.join(stale_dir, "attachments")
+        local_attach = os.path.join(app_dir, "attachments")
+        if os.path.isdir(stale_attach):
+            for filename in os.listdir(stale_attach):
+                stale_file = os.path.join(stale_attach, filename)
+                local_file = os.path.join(local_attach, filename)
                 try:
-                    os.remove(full)
-                    removed_anything = True
+                    if (os.path.isfile(stale_file) and os.path.isfile(local_file)
+                            and filecmp.cmp(stale_file, local_file, shallow=False)):
+                        os.remove(stale_file)
+                        removed_anything = True
                 except OSError:
                     pass
-
-        stale_attach = os.path.join(stale_dir, "attachments")
-        if os.path.isdir(stale_attach):
             try:
-                shutil.rmtree(stale_attach)
-                removed_anything = True
+                os.rmdir(stale_attach)
             except OSError:
                 pass
 

@@ -1700,6 +1700,46 @@ if _ipop is not None and _ipop.winfo_exists():
     _renamed = 'ProiecteX' in _CC6 and 'Proiecte' not in _CC6
 check('renaming through the inline editor moves the category',
       _renamed and 'ProiecteX' in NO.get_setting('categories', {}))
+
+# ---- Add and Rename refuse what the loader will not keep ----
+# Both doors took any length, and load_categories drops a name over the
+# ceiling: the category worked all day, and the next launch filed every
+# note under it into General. The doors now ask the loader's own rule.
+_catwarn6 = []
+_real_catwarn6 = app.show_warning
+app.show_warning = lambda t, m, **k: _catwarn6.append((t, m))
+_long6 = 'L' * (NO.MAX_CATEGORY_NAME + 1)
+_new_entry = _entries6(_catf)[-1]
+_new_entry.delete(0, 'end')
+_new_entry.insert(0, _long6)
+_btn6(_catf, '+ Add').invoke()
+app.update()
+check('Add refuses a category name longer than the app keeps',
+      _long6 not in _CC6
+      and _long6 not in NO.get_setting('categories', {}))
+check('...and says why, naming the limit',
+      bool(_catwarn6) and str(NO.MAX_CATEGORY_NAME) in _catwarn6[-1][1])
+_catwarn6.clear()
+_prow = _row_of6(_catf, 'ProiecteX')
+_pencil6 = [c for c in _prow.winfo_children() if isinstance(c, tk.Canvas)][0]
+_qa_click(_pencil6)
+app.update()
+_kept_name6 = False
+_ipop = app._mini_popup
+if _ipop is not None and _ipop.winfo_exists():
+    _ientry = _entries6(_ipop)[0]
+    _ientry.delete(0, 'end')
+    _ientry.insert(0, _long6)
+    _btn6(_ipop, 'Save').invoke()
+    app.update()
+    _kept_name6 = 'ProiecteX' in _CC6 and _long6 not in _CC6
+    app._dismiss_mini_popup()
+    app.update()
+check('Rename refuses it too, and the category keeps its name',
+      _kept_name6 and bool(_catwarn6)
+      and str(NO.MAX_CATEGORY_NAME) in _catwarn6[-1][1])
+app.show_warning = _real_catwarn6
+
 for _nm in ('Proiecte', 'ProiecteX'):
     _CC6.pop(_nm, None)
 NO.persist_categories()

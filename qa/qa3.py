@@ -1847,6 +1847,180 @@ app.hide_settings_page()
 app.update()
 _undo_reset()
 
+# ======================================================================
+# The "try to break it" audit of 2026-09-29: the Update route
+# ======================================================================
+
+# ---- Restore previous brings back EVERYTHING an update replaced ----
+# The update dialog promised each update "can be undone with ↩ Restore
+# previous", while the rescue copy held the text alone: the ticked list,
+# the date, the yearly repeat and the colour were gone for good.
+app.open_blank_tab()
+app.update()
+app.notes = [NO.normalize_note({
+    'id': 1, 'title': 'Passport', 'body': 'renew',
+    'checklist': [{'text': 'photo', 'done': True},
+                  {'text': 'form', 'done': True},
+                  {'text': 'fee', 'done': False}],
+    'date': '2026-10-01', 'recurrence': {'freq': 'yearly'},
+    'color': '#ff0000'})]
+app.save_notes()
+_pp = app.notes[0]
+_pp_code = NO.encode_share_code([{
+    'uid': _pp['uid'], 'title': 'Passport', 'body': 'renew (from phone)',
+    'comments': '', 'category': 'General', 'date': '', 'color': '',
+    'recurrence': {}, 'checklist': [{'text': 'photo', 'done': False}]}])
+_real_dlg_pp = app._themed_dialog
+_real_ask_pp = app.ask_yes_no
+app._themed_dialog = lambda *a, **k: 'update'
+app.import_box.delete('1.0', 'end')
+app.import_box.insert('1.0', _pp_code)
+app._do_inline_import()
+app.update()
+check('a share-code update replaced the checklist, date, repeat and colour',
+      len(_pp['checklist']) == 1 and _pp['date'] == ''
+      and not _pp['recurrence'].get('freq') and _pp['color'] == '')
+_pp_asked = []
+app.ask_yes_no = lambda *a, **k: (_pp_asked.append(a), True)[1]
+app.load_note(_pp)
+app.update()
+app.restore_previous_version()
+app.update()
+check('Restore previous brings the checklist back, ticks and all',
+      [(i['text'], i['done']) for i in _pp['checklist']]
+      == [('photo', True), ('form', True), ('fee', False)])
+check('...and the date, the yearly repeat and the colour',
+      _pp['date'] == '2026-10-01'
+      and _pp['recurrence'].get('freq') == 'yearly'
+      and _pp['color'] == '#ff0000' and 'renew' == _pp['body'].strip())
+check('...into the editor too, not only the file',
+      len(app.capture_editor_state().get('checklist', [])) == 3
+      and app.date_entry.get() == '2026-10-01')
+check('...and its question names what comes back, not just "text"',
+      bool(_pp_asked) and 'checklist' in _pp_asked[-1][1]
+      and 'repeat rule' in _pp_asked[-1][1])
+app._themed_dialog = _real_dlg_pp
+app.ask_yes_no = _real_ask_pp
+
+# ---- A backup's Update brings what its copy owns ----
+# A backup is the user's own notebook. Routed like a share code, its
+# attachments, skipped days, per-day edits and pin were dropped without a
+# word, on the route people use to move a notebook to a new PC.
+app.open_blank_tab()
+app.update()
+_bk_name = 'qa3_ticket_upd.txt'
+_bk_path = os.path.join(NO.ATTACHMENTS_DIR, _bk_name)
+with open(_bk_path, 'w', encoding='utf-8') as _f:
+    _f.write('ticket')
+app.trash = []
+NO.save_trash(app.trash)
+app.notes = [NO.normalize_note({
+    'id': 1, 'title': 'Trip', 'body': 'laptop version',
+    'date': '2026-09-01', 'recurrence': {'freq': 'weekly'},
+    'exceptions': ['2026-09-08'],
+    'overrides': {'2026-09-15': {'body': 'moved to Wed'}},
+    'pinned': True,
+    'attachments': [{'filename': 'ticket.txt', 'stored_as': _bk_name}]})]
+app.save_notes()
+_trip_uid = app.notes[0]['uid']
+_bkzip = os.path.join(tempfile.gettempdir(), 'qa3_update_backup.zip')
+if os.path.exists(_bkzip):
+    os.remove(_bkzip)
+fd.asksaveasfilename = lambda **k: _bkzip
+app.export_data()
+t0 = time.time()
+while app._export_state is not None and time.time() - t0 < 5:
+    app.update()
+# The other PC: the same note, from before the laptop's changes.
+os.remove(_bk_path)
+app.notes = [NO.normalize_note({
+    'id': 1, 'uid': _trip_uid, 'title': 'Trip', 'body': 'desktop version',
+    'date': '2026-09-01', 'recurrence': {'freq': 'weekly'},
+    'checklist': [{'text': 'visa', 'done': False}]})]
+app.save_notes()
+_real_dlg_bk = app._themed_dialog
+app._themed_dialog = lambda *a, **k: 'update'
+fd.askopenfilename = lambda **k: _bkzip
+app.import_data()
+t0 = time.time()
+while app._import_state is not None and time.time() - t0 < 8:
+    app.update()
+app._themed_dialog = _real_dlg_bk
+_trips = [n for n in app.notes if n.get('uid') == _trip_uid]
+_trip = _trips[0] if _trips else {}
+check('a backup Update adds no second copy of the note', len(_trips) == 1)
+check("...and brings the backup's skipped days, per-day edits and pin",
+      _trip.get('exceptions') == ['2026-09-08']
+      and (_trip.get('overrides') or {}).get('2026-09-15', {}).get('body')
+      == 'moved to Wed'
+      and _trip.get('pinned') is True)
+_trip_files = [a.get('stored_as') for a in _trip.get('attachments') or []]
+check("...and the file attached on the other PC, present on disk",
+      len(_trip_files) == 1
+      and os.path.isfile(os.path.join(NO.ATTACHMENTS_DIR, _trip_files[0])))
+app.load_note(_trip)
+app.update()
+app.ask_yes_no = lambda *a, **k: True
+app.restore_previous_version()
+app.update()
+app.ask_yes_no = _real_ask_pp
+check('Restore previous after a backup Update puts this PC\'s version back whole',
+      'desktop version' in _trip.get('body', '')
+      and _trip.get('exceptions') == [] and _trip.get('overrides') == {}
+      and _trip.get('pinned') is False
+      and [i['text'] for i in _trip.get('checklist', [])] == ['visa'])
+check('...while the file the backup brought stays attached (an update only adds files)',
+      [a.get('stored_as') for a in _trip.get('attachments') or []] == _trip_files)
+os.remove(_bkzip)
+
+# ---- A backup's Trash keeps an entry that only RESEMBLES a local one ----
+# Re-importing your own backup must not double the Trash, and the skip
+# that prevents it runs with nobody asked. It used the fuzzy duplicate key,
+# which ignores the date, so a trashed note differing from a local one in
+# its date was dropped -- the only copy of it, on a route that says it
+# adds and never removes.
+app.open_blank_tab()
+app.update()
+app.notes = []
+app.save_notes()
+app.trash = [dict(NO.normalize_note({'id': 7, 'title': 'Old plan', 'body': 'x',
+                                     'date': '2026-01-01'}),
+                  deleted_at='2026-09-01 10:00:00')]
+NO.save_trash(app.trash)
+_trzip = os.path.join(tempfile.gettempdir(), 'qa3_trash_strict.zip')
+if os.path.exists(_trzip):
+    os.remove(_trzip)
+fd.asksaveasfilename = lambda **k: _trzip
+app.export_data()
+t0 = time.time()
+while app._export_state is not None and time.time() - t0 < 5:
+    app.update()
+app.trash = [dict(NO.normalize_note({'id': 7, 'title': 'Old plan', 'body': 'x',
+                                     'date': '2026-02-02'}),
+                  deleted_at='2026-09-02 10:00:00')]
+NO.save_trash(app.trash)
+_real_dlg_tr = app._themed_dialog
+app._themed_dialog = lambda *a, **k: 'all'
+fd.askopenfilename = lambda **k: _trzip
+for _round in range(2):
+    app.import_data()
+    t0 = time.time()
+    while app._import_state is not None and time.time() - t0 < 8:
+        app.update()
+    if _round == 0:
+        check("a backup's trashed note that differs in its date is kept",
+              sorted(e.get('date') for e in app.trash
+                     if e.get('title') == 'Old plan')
+              == ['2026-01-01', '2026-02-02'])
+app._themed_dialog = _real_dlg_tr
+check('...and importing the same backup again still does not double the Trash',
+      len([e for e in app.trash if e.get('title') == 'Old plan']) == 2)
+os.remove(_trzip)
+app.trash = []
+NO.save_trash(app.trash)
+app.notes = []
+app.save_notes()
+
 
 print()
 print(f"=== QA3 FAILURES: {fails if fails else 'NONE'} ===")

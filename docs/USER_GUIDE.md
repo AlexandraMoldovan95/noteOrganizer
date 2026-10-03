@@ -385,7 +385,9 @@ remembered.
   without opening it — the same list of categories the editor offers.
 - **Categories** act as folders — create, rename, recolour, or delete them from Settings →
   Categories. Deleting a category with notes in it asks where to move them first; nothing is ever
-  silently lost.
+  silently lost. A name can be up to 80 characters, and you can have up to 200 categories. If the
+  settings file is ever lost, the categories your notes are filed under come back on the next
+  start, with default colours, and the app says which ones.
 
 ![Categories panel](screenshots/categories-panel.png)
 
@@ -594,7 +596,8 @@ When that happens you are asked:
 - **Update this note** replaces its title, text, styling, comments, category, date, colour,
   repeat rule and checklist with the version from the code. It stays the same note in the same
   place, keeps its attachments, and keeps the date it was created. If it was a mistake, the
-  editor's **↩ Restore previous** puts it back.
+  editor's **↩ Restore previous** puts all of it back — the ticks in the checklist included,
+  not only the words.
 - **Add as a new note** leaves both, so you can read them side by side and delete whichever you
   don't want. The copy is a note in its own right from then on — editing it never touches the
   original.
@@ -647,6 +650,12 @@ attachments, templates and the Trash together. Just like importing a code, you'l
 about any notes that look identical to what you already have before anything is added; a
 template only comes in if you don't already have one by that name, and re-importing the same
 backup never doubles the Trash.
+
+A note the backup holds that you **already have** — edited on the other device since — is
+recognised as that note, and you're asked once whether to update yours or keep both. An update
+brings everything the backup's copy carries: its text and checklist, its skipped days and
+per-day edits, its pin, and any files attached on the other device. Files already attached here
+stay attached; an update only ever adds them. **↩ Restore previous** takes the rest back.
 
 ![Import backup](screenshots/import-backup.png)
 

@@ -6446,6 +6446,14 @@ check('and so is choosing a filter',
 NO.save_setting('note_sort', 'Sorted By Moon Phase')
 NO.save_setting('note_filter', 'A Category Nobody Has')
 _fresh = NO.NoteOrganizer(); _fresh._poll_active_dirty = lambda: None
+# Every app a check builds answers its own dialogs before it handles a
+# single event. The startup notice is scheduled for 250ms after the window
+# and blocks until answered: this notebook holds a note filed under a
+# category the settings never had ('Zeta', from the sort checks), which a
+# fresh start now brings back and SAYS so -- and an unanswered notice hung
+# the script for ten minutes. qa8 has always done this; these three had
+# only been lucky that there was nothing to announce.
+_fresh.show_info = lambda *a, **k: True
 _fresh.update()
 check('a stored sort this version does not have falls back to the default',
       _fresh.sort_var.get() == _fresh.SORT_OPTIONS[0])
@@ -6456,6 +6464,7 @@ check('and a stored filter naming an unknown category falls back to All',
 NO.save_setting('note_sort', 'Title A–Z')
 NO.save_setting('note_filter', app.FILTER_DATED)
 _fresh2 = NO.NoteOrganizer(); _fresh2._poll_active_dirty = lambda: None
+_fresh2.show_info = lambda *a, **k: True
 _fresh2.update()
 check('a stored sort that IS on offer comes back',
       _fresh2.sort_var.get() == 'Title A–Z')
@@ -8869,6 +8878,7 @@ app.update()
 check('choosing a theme writes it down (plan 46)',
       NO.load_settings().get('theme') == _b3_pick)
 _b3_fresh = NO.NoteOrganizer()
+_b3_fresh.show_info = lambda *a, **k: True  # see _fresh above
 _b3_fresh.update()
 check('...and a fresh start opens in it, not in the default (plan 46)',
       _b3_fresh.theme_name == _b3_pick)

@@ -6,6 +6,7 @@
   "_add_paste_menu": "(self, text_widget, extra_items=None)",
   "_add_resize_handle": "(self, target, min_h=80, max_h=1000, host=None)",
   "_add_text_resize_toggle": "(self, host, text_widget, compact, expanded, pack_kwargs=None, remember_key=None)",
+  "_adopt_backup_attachments": "(self, mine, theirs)",
   "_align_table_block": "(self, line_no)",
   "_align_table_on_leaving": "(self, event=None)",
   "_apply_body_color": "(self, kind, hex_color)",

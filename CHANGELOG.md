@@ -12,6 +12,7 @@ How the numbers themselves are counted is the
 
 | Version | Date | In one line |
 |---|---|---|
+| [0.81.213](#081213--2026-09-29) | 2026-09-29 | Nothing moves or removes your notes behind your back: categories survive a lost settings file, an update can be taken back whole, and nothing is deleted on a resemblance. |
 | [0.81.202](#081202--2026-09-29) | 2026-09-29 | Two places where the app left something out: a note's card cut off the end of what it says, and the keyboard shortcuts page was missing a whole group of keys. |
 | [0.81.200](#081200--2026-09-29) | 2026-09-29 | The note list stops pulling the keyboard away from what you were typing in. |
 | [0.81.199](#081199--2026-09-29) | 2026-09-29 | A note's actions are reachable from where the note is — on the calendar, and from the keyboard. |
@@ -78,6 +79,113 @@ How the numbers themselves are counted is the
 | [0.3.0](#030--tags-removed-categories-as-the-sole-organization-system) | — | Tags come out entirely, leaving categories as the app's one organization system. |
 | [0.2.0](#020--inline-ui-overhaul--data-resilience) | — | Every OS-native popup becomes an in-app themed one, and the calendar grows richer. |
 | [0.1.0](#010--core-application) | — | The founding feature set — notes, recurrence, calendar, templates, sharing, themes. |
+
+---
+
+## [0.81.213] — 2026-09-29
+
+*Highlights: nothing moves or removes your notes behind your back — found by trying to break
+the app on purpose, and every one of them a place where it decided something about your work
+from half the evidence.*
+
+### Fixed
+
+- **A category with a long name, or the 201st, no longer vanishes the next time the app
+  opens.** Add and Rename in Settings took a name of any length and any number of categories,
+  while the loader keeps names up to 80 characters and 200 categories — so a category that
+  worked all day was gone the next morning, and every note filed under it was in General, for
+  good after the first save, with nothing on screen to say so. Both doors now refuse what the
+  loader will not keep, with a message naming the limit. A restored backup skips such a
+  category whole instead of cutting its name short: cutting it was the very mistake the
+  loader's own comment records, because the notes filed under the full name then match
+  nothing.
+
+- **Losing settings.json no longer files every note under General.** Categories live in the
+  settings file and a note stores only its category's name, so deleting settings.json to reset
+  the preferences, or copying only notes_data.json to a new PC, moved every note into General —
+  written to disk during startup, before the user had done anything, with no word said. The
+  notes are believed now: any category a note, or one day of a repeating note, is filed under
+  comes back with a default colour, and the startup notice names them.
+
+- **Nothing is removed automatically unless it is the same in every respect.** The one-time
+  startup tidy-up, which also runs again whenever settings.json is lost, merged two copies of a
+  weekly routine when one had been edited on a single day and pinned: the edited copy was
+  removed, not trashed, under a notice calling it an exact duplicate. It compared notes with a
+  looser signature that left out styling, per-day edits, skipped days, the pin and the colour.
+  Every automatic removal now asks the one strict question — and the sweep for siblings found a
+  third that did not: a restored backup's Trash skipped an entry that merely resembled a local
+  one, differing in its date for instance, and that entry was the only copy of it.
+
+- **↩ Restore previous after an Update brings back everything the Update replaced.** Updating
+  a note from a share code or a backup replaces its checklist, date, repeat rule, colour and
+  category as well as its text, and the dialog promised each update "can be undone with ↩
+  Restore previous" — but the rescue copy held the text alone, so a ticked list, a date and a
+  yearly reminder were gone for good. The rescue copy holds every field the update replaced,
+  it survives a restart, and the restore's question names what comes back.
+
+- **Updating a note from a backup brings what the backup's copy carries.** A backup was
+  treated like a share code, which never carries attachments, skipped days or per-day edits —
+  so on the route people use to move a notebook to a new PC, a file attached on the laptop, a
+  skipped occurrence, an edit for one day and a pin did not arrive, and "Import complete" said
+  nothing about it. They arrive now. Files are only ever added, never swapped, and a file
+  another note already owns arrives as a copy of its own.
+
+- **Two notes sharing one number can no longer overwrite each other.** A note's internal
+  number is how the app finds it, and nothing kept it unique after the first launch. Two
+  notebooks merged by hand both number from 1, so editing one of a pair saved into the other —
+  silently replacing its text — and deleting either sent both to the Trash. Numbers are made
+  unique on every load, the first holder keeping its own.
+
+- **A monthly repeat on "the end of the month" appears once a day.** Days 29, 30 and 31 all
+  fall on February 28 when the month is shorter, and each landing counted as an occurrence of
+  its own: the note sat in one calendar cell four times, and a series set to "N times" spent
+  four of its N on a single day and ended months early. The dates are worked out first and
+  each is counted once.
+
+- **A damaged share code is answered with the damaged-code message.** A code whose version
+  field was not a number made the import fail with an internal error, and the app's
+  "Something went wrong" banner, instead of saying the code was damaged.
+
+- **Two launches at the same moment can no longer open one notebook twice.** The app locks
+  the notebook's folder before it opens it, but it decided which folder twice, and its test for
+  a writable folder used one fixed file name. Two launches testing at the same instant — a
+  second double-click on a slow PC — could make one of them lock a fallback folder and then
+  open the very notebook its twin was holding, unlocked. The folder is decided once now, and
+  each test writes a file of its own.
+
+- **The first-launch clean-up deletes only what it proved it had copied.** Leftover notebook
+  folders are removed once their contents exist in the app's own folder, but attachments were
+  compared by name, at the top level only, and then the whole folder was deleted — so a file in
+  a subfolder, which the migration never copies, or a different file with the same name was
+  destroyed while the startup notice said every attachment had been checked. Files are compared
+  byte for byte now and removed one at a time, a folder holding anything else is left alone,
+  and a settings.json that is not this app's is neither adopted nor deleted.
+
+- **The startup notice about a moved notebook says what happened.** It said the notebook had
+  been "moved" when it was copied, and added that the script and the installed app "can never
+  drift apart" — when from then on they are two notebooks that do exactly that.
+
+### Testing
+
+- Checks for every fix above in the unit suites (`test_data_safety`, `test_recurrence`) and
+  in qa3, qa5 and qa6, and twenty-four mutants: each fix taken away in turn, on a fresh copy
+  of the project rather than on the source, and each caught by the check written for it.
+- Three new chapters in `qa/story_note_travels.py`, walked on the real app across real
+  restarts and photographed: a category name refused and a real one used, the settings file
+  lost between two sessions, and an update taken back with Restore previous. The pictures were
+  looked at, and the first set showed the startup notice over a window of white rectangles —
+  the story's own stand-in for the dialog's wait was freezing the paint, so it now lets the
+  app draw before a picture is taken. Every chapter also runs with a `%APPDATA%` of its own,
+  so a story that loses its settings on purpose can never meet a real notebook.
+- `tools/run_tests.py` survives a hung script. It is reported as that script's failure, with
+  the last lines it printed, and the run goes on — a hang in qa1 used to end the whole run,
+  so the eight suites after it were never run and the report said nothing about them. Every
+  script now runs unbuffered, so those last lines are honest.
+- qa1 built three fresh apps that never answered the startup notice, and hung the first time
+  there was something to announce; they answer it now, the way qa8's twelve always have.
+- qa7's keyboard walk read a focus it had only requested, so the same code passed or failed
+  depending on who was using the PC during the run. It forces its preconditions now, polls
+  for what the app promises, and records the one decision that is an absence.
 
 ---
 

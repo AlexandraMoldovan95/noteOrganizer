@@ -640,10 +640,44 @@ _c9_card = app._note_card_widgets[20]['card']
 _c9_other = app._note_card_widgets[21]['card']
 check('a note card is in the keyboard traversal now',
       str(_c9_card.cget('takefocus')) in ('1', 'True'))
-_c9_card.focus_set()
-app.update(); app.update_idletasks()
-check('fixture: the keyboard really is on the card',
-      app.focus_get() is _c9_card)
+import time as _c9_time
+
+
+def _c9_take(widget, cap_s=4.0):
+    """FORCE the keyboard onto a card and wait until Tk agrees -- for a
+    PRECONDITION only (qa/README, "Force a precondition; read back only a
+    promise"). A plain focus_set() is a request the window manager may
+    refuse while another program holds the desktop foreground, and this
+    block went red that way whenever someone was using the PC during a
+    run: the same code passed, failed, and passed again minutes apart.
+    The force is re-asked every quarter second: measured, Windows refused
+    the first request of a run and granted the next ones."""
+    end = _c9_time.time() + cap_s
+    asked = 0.0
+    while _c9_time.time() < end:
+        if _c9_time.time() - asked >= 0.25:
+            widget.focus_force()
+            asked = _c9_time.time()
+        app.update(); app.update_idletasks()
+        if app.focus_get() is widget:
+            return True
+        _c9_time.sleep(0.01)
+    return False
+
+
+def _c9_settles_on(widget, cap_s=2.0):
+    """Wait for the focus the APP moved -- a PROMISE, so it is only polled,
+    never forced: the handler's own focus_set is asynchronous too."""
+    end = _c9_time.time() + cap_s
+    while _c9_time.time() < end:
+        app.update(); app.update_idletasks()
+        if app.focus_get() is widget:
+            return True
+        _c9_time.sleep(0.01)
+    return False
+
+
+check('fixture: the keyboard really is on the card', _c9_take(_c9_card))
 # The ring does double duty, so a focused card must be distinguishable
 # from the open one rather than sharing its colour.
 check(f'the focus ring is a different colour from the open-note ring '
@@ -699,8 +733,7 @@ finally:
 # Walking the list. Asked of the order the cards are PACKED in, because
 # the list is sorted, filtered and grouped -- the note after this one in
 # the file is very often not the one underneath it on screen.
-_c9_card.focus_set()
-app.update(); app.update_idletasks()
+_c9_take(_c9_card)
 _c9_card.event_generate('<Down>')
 app.update(); app.update_idletasks()
 _c9_order = [w for w in app.list_frame.winfo_children()
@@ -708,37 +741,42 @@ _c9_order = [w for w in app.list_frame.winfo_children()
 _c9_expected = _c9_order[_c9_order.index(_c9_card) + 1] \
     if _c9_order.index(_c9_card) + 1 < len(_c9_order) else None
 check('Down moves the keyboard to the next card on screen',
-      _c9_expected is not None and app.focus_get() is _c9_expected)
+      _c9_expected is not None and _c9_settles_on(_c9_expected))
 if _c9_expected is not None:
     _c9_expected.event_generate('<Up>')
     app.update(); app.update_idletasks()
-    check('and Up brings it back', app.focus_get() is _c9_card)
+    check('and Up brings it back', _c9_settles_on(_c9_card))
 # THE CONTROL: Up at the top must not wrap or crash -- it should simply
-# stay put, which is what a list does.
-_c9_order[0].focus_set()
-app.update(); app.update_idletasks()
-_c9_order[0].event_generate('<Up>')
-app.update(); app.update_idletasks()
+# stay put, which is what a list does. An ABSENCE, so it cannot be polled
+# for: the keyboard is already on the first card, and a poll would answer
+# yes before a wrong move could land. What is asserted is the handler's
+# own decision -- no card is asked to take the keyboard -- recorded where
+# it is made. The precondition is part of the check: a key event only
+# reaches the card that has the keyboard, and one that went elsewhere
+# would record no move and read as a pass.
+_c9_top_ready = _c9_take(_c9_order[0])
+_c9_moved = []
+for _c9_w in _c9_order:
+    _c9_w.focus_set = (lambda _w=_c9_w: _c9_moved.append(_w))
+try:
+    _c9_order[0].event_generate('<Up>')
+    app.update(); app.update_idletasks()
+finally:
+    for _c9_w in _c9_order:
+        del _c9_w.focus_set
 check('Up on the first card stays there rather than wrapping',
-      app.focus_get() is _c9_order[0])
+      _c9_top_ready and _c9_moved == [])
 
 # The keyboard survives a rebuild. The list is destroyed and rebuilt on a
 # save, a search keystroke, a note switch -- a focus left pointing at a
 # widget that no longer exists would make this route unusable after the
 # first thing that happens.
-_c9_card.focus_set()
-app.update(); app.update_idletasks()
 check('fixture: the keyboard is on a known card before the rebuild',
-      app.focus_get() is _c9_card)
+      _c9_take(_c9_card))
 app.refresh_note_list()
 app.update(); app.update_idletasks()
-import time as _c9_time
-for _ in range(60):
-    if app.focus_get() is app._note_card_widgets[20]['card']:
-        break
-    app.update(); app.update_idletasks(); _c9_time.sleep(0.01)
 check('a rebuilt list puts the keyboard back on the same note',
-      app.focus_get() is app._note_card_widgets[20]['card'])
+      _c9_settles_on(app._note_card_widgets[20]['card']))
 
 # THE OTHER HALF, and the one that shipped broken. The restore must not
 # fire when the keyboard was somewhere ELSE -- and the guard that decided
