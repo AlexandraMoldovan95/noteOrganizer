@@ -372,9 +372,18 @@ if _launched:
 # internal maintenance vocabulary, about nothing, over an empty notebook.
 app5f = NO.NoteOrganizer()
 app5f._poll_active_dirty = lambda: None
-app5f.update()
 _notices = []
 app5f.show_info = lambda title, msg, **k: (_notices.append((title, msg)), True)[1]
+# The app announces its own start from a timer, 250 ms after its window. On
+# a slow CI runner that announcement landed inside the checks below and was
+# counted as one of theirs, so it has its turn first, and the checks count
+# only the notices they ask for.
+_t5f_end = _t5f.time() + 5
+while _qa_waiting(app5f, 'announce_startup_changes') and _t5f.time() < _t5f_end:
+    app5f.update(); _t5f.sleep(0.02)
+check("the new app's own startup notice has had its turn before the counting",
+      not _qa_waiting(app5f, 'announce_startup_changes'))
+_notices.clear()
 
 app5f._version_backup_path = None
 app5f._corrupt_notes_report = None
