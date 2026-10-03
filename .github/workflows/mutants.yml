@@ -1,0 +1,43 @@
+name: Mutants
+
+# The mutation catalogue, on demand. Each entry in tools/mutants.json takes a
+# fix back out of the app and names the checks that must go red because of
+# it; tools/mutate.py applies each one to a fresh copy and reports KILLED,
+# SURVIVED, or that the catalogue no longer matches the code (PATTERN).
+# Two entries test the runner itself: one mutant that must die and one
+# equivalent mutant that must survive.
+#
+# Manual only (the Actions tab, "Run workflow"): its verdicts change only
+# when the catalogue or the code it names does, and every run costs
+# minutes. Linux, because a Linux minute is half the price of a Windows one.
+on:
+  workflow_dispatch:
+
+jobs:
+  mutants:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      PYTHONIOENCODING: utf-8
+    steps:
+      - name: Check out the code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install Tkinter and a virtual display
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y python3-tk xvfb
+
+      - name: Install Python dependencies
+        run: pip install -r requirements.txt
+
+      - name: The runner's own two checks
+        run: xvfb-run -a python tools/mutate.py --self-test
+
+      - name: The catalogue
+        run: xvfb-run -a python tools/mutate.py

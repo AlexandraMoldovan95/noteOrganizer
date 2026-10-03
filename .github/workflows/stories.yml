@@ -1,0 +1,58 @@
+name: Stories
+
+# The end-to-end stories, on demand. Each one drives the real app the way a
+# person would -- clicks, keys, closing it and opening it again -- inside a
+# throwaway folder, and photographs the screen as it goes. They caught what
+# the qa suite could not (qa/README, "Stories"), and they used to run only
+# by hand, where nothing stops them from going stale.
+#
+# Manual only (the Actions tab, "Run workflow"). Linux: the two stories
+# that assert behaviour run here as they do on Windows. qa/story_look.py
+# compares its photographs with Windows references, pixel for pixel, and
+# stays a Windows check run by hand. The photographs are kept with the run,
+# so they can be looked at without running anything; the findings
+# register's verifier prints its table alongside.
+on:
+  workflow_dispatch:
+
+jobs:
+  stories:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      PYTHONIOENCODING: utf-8
+    steps:
+      - name: Check out the code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install Tkinter and a virtual display
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y python3-tk xvfb
+
+      - name: Install Python dependencies
+        run: pip install -r requirements.txt
+
+      - name: The travel story -- a note across restarts, codes and backups
+        run: xvfb-run -a python qa/story_note_travels.py
+
+      - name: The audit story -- each chapter on a fresh notebook
+        if: always()
+        run: xvfb-run -a python qa/story_audit.py
+
+      - name: The findings register, read against the code
+        if: always()
+        run: python tools/verify_findings.py
+
+      - name: Keep the photographs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: story-photographs
+          path: qa/shots/
+          if-no-files-found: ignore

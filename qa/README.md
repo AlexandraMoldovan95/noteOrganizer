@@ -139,7 +139,11 @@ is the bar for adding another one.
 
 Stories are slow by nature (a real window per chapter, seconds not
 milliseconds), so they are not in `tools/run_tests.py`. Run them before
-calling a user-facing feature done.
+calling a user-facing feature done. The Actions tab also runs
+`story_note_travels` and `story_audit` on demand ("Stories", on Linux,
+where both pass as they do on Windows) and keeps their photographs with
+the run; `story_look` compares pixels with Windows references and stays
+a Windows check.
 
 ## Photographs: did a screen change shape while nobody was looking?
 
@@ -207,12 +211,16 @@ A new surface joins this list the moment it ships.
 - Every new check is **mutation-tested**: break the mechanism it
   guards, watch it fail, then trust it. Old checks go stale silently —
   see the [Issues Log](../docs/ISSUES_LOG.md), "The teeth that had gone
-  dull"; the fixes documented there are a ready-made mutant catalogue
-  for periodic audits. And a mutant run's verdict counts **only if the
-  suite ran to completion** — check for the script's FAILURES footer,
-  never just grep for FAIL lines: a mutant that crashes the import
-  prints no failures at all, and reads as "survived nothing" when it
-  really ran nothing (this exact false-clean happened here once).
+  dull". The runner is `py tools/mutate.py`, and the mutants worth
+  keeping go into its catalogue, [tools/mutants.json](../tools/mutants.json): each
+  names the checks that must go red, and two entries test the runner
+  itself (one mutant that must die, one equivalent that must survive).
+  The Actions tab runs the catalogue on demand ("Mutants"). A verdict
+  counts **only if the suite ran to completion** — check for the
+  script's FAILURES footer, never just grep for FAIL lines: a mutant
+  that crashes the import prints no failures at all, and reads as
+  "survived nothing" when it really ran nothing (this exact false-clean
+  happened here once; the runner refuses it).
 - **A check a mutant can lead to a question records the question; it
   never waits for one.** The date checks of 0.84.338 left a note with no
   stub on `_themed_dialog`, and under a mutant that left the date out,
@@ -843,9 +851,9 @@ A new surface joins this list the moment it ships.
   so before the real one runs.
 - **A mutant must compile.** Removing the only statement of a block
   leaves an IndentationError, and the run proves nothing — it read
-  NO-RUN twice here before the session's runner learned to compile the
-  mutated file first and refuse it at once. Put `pass` where the
-  statement was.
+  NO-RUN twice here before the runner learned to compile the mutated
+  file first and refuse it at once (`tools/mutate.py` does). Put `pass`
+  where the statement was.
 - **A photograph can lie about stacking.** The screenshot helpers pin
   the main window topmost for the grab, which changes what is on top of
   what: a question photographed "under" a popup was, by Windows' own

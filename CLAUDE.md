@@ -197,6 +197,10 @@ Two things a mutant runner must do, both learned the hard way:
   end. The content was identical and `git diff` was empty, which is
   precisely why it went unnoticed until `git status` disagreed.
 
+`tools/mutate.py` is that runner, committed: it works on a fresh copy, so
+the source is never written and there is nothing to restore, and its
+catalogue of mutants worth keeping is `tools/mutants.json`.
+
 **Permanent fixes only (standing rule, 2026-09-05).** Every failure —
 in the app or in a check — gets a fix at the root of its *class*, not a
 patch over the instance, so the same failure cannot reappear:
