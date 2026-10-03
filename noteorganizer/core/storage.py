@@ -1,43 +1,12 @@
 """Reading and writing the app's data files.
 
-WHAT THIS MODULE IS FOR
------------------------
-Everything that touches ``settings.json``, ``templates.json`` and
-``trash.json`` on disk, plus the pre-flight backup of the notes file.
-
-WHERE THE FILES ARE
--------------------
-This module does not decide *where* the data lives - :mod:`.paths` does.
-It reads the locations as attributes::
-
-    with open(paths.SETTINGS_FILE) as f: ...
-
-That indirection is deliberate. The paths are not known when this module
-is imported; they get filled in by ``paths.configure()`` once the app has
-worked out which folder to use. Writing ``from .paths import
-SETTINGS_FILE`` would copy the value as it stands at import time - which
-is ``None`` - and would never see the real one. Going through the module
-means the lookup happens when the function actually runs.
-
-This is the same binding rule that made a monkeypatched name stop working
-after an earlier extraction; see `docs/CODE_TOUR.md`.
-
-THE PATTERN EVERY LOADER FOLLOWS
---------------------------------
-Each ``load_*`` function returns something usable whatever it finds: a
-missing file, an unreadable file, or valid JSON of entirely the wrong
-shape all produce an empty default rather than an exception — after
-preserving the unreadable file's bytes aside, so falling back to empty
-can never destroy them. The app is meant to keep running with an empty
-notebook, not refuse to start because one file got damaged.
-
-``save_setting`` (singular) is read-modify-write rather than a blind
-overwrite, so two features updating different keys cannot clobber each
-other; every writer funnels through one atomic tmp-then-replace helper.
-
-:func:`backup_notes_file` gives destructive operations something to fall
-back on, and returns ``None`` on failure so callers can decide whether to
-proceed - the migration code, for one, refuses to.
+Everything that touches settings.json, templates.json and trash.json, and
+the copy of the notes file made before it is rewritten. The locations are
+read from :mod:`.paths` when a function runs, never copied at import time,
+when they are not yet known. Every loader returns something usable
+whatever it finds -- a missing, unreadable or wrongly shaped file gives an
+empty default, after the unreadable bytes are kept aside -- and every
+writer goes through one atomic helper. docs/CODE_TOUR.md walks through it.
 """
 
 import json

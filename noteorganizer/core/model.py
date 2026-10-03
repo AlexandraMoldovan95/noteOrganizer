@@ -1,37 +1,13 @@
 """The note itself: what a note is, and making sure it stays that way.
 
-WHAT THIS MODULE IS FOR
------------------------
-:data:`NOTE_DEFAULTS` defines every field a note has and what an empty
-one looks like. :func:`normalize_note` is the single gate every note
-passes through before the rest of the app is allowed to touch it - on
-load, on import, on paste from a share code.
-
-WHY normalize_note MATTERS MORE THAN IT LOOKS
----------------------------------------------
-Notes come from a JSON file a user can hand-edit, from backups made by
-older versions, and from share codes typed in from elsewhere. Any field
-might be missing, be the wrong type, or hold something nonsensical.
-
-Rather than defend against that everywhere, the app funnels all of it
-through one function that returns a note of known shape - a ``None``
-title becomes ``""``, a checklist that is not a list becomes ``[]``, a
-category that no longer exists falls back to "General". A single corrupt
-entry therefore degrades to a slightly emptier note instead of taking
-down the note list.
-
-The same idea appears in :func:`~noteorganizer.core.recurrence.normalize_recurrence`
-and :func:`~noteorganizer.core.formatting.normalize_formatting`, which
-this delegates to for their parts of the note. **Validate once, at the
-edge, then trust the data inwards.**
-
-WHAT "EMPTY" AND "RICHNESS" ARE FOR
------------------------------------
-:func:`note_is_empty` and :func:`note_richness` support cleanup: when
-duplicates are merged, richness decides which copy to keep - the one
-carrying the most actual content - rather than picking arbitrarily.
-:func:`clean_notes` uses both to drop blank notes and de-duplicate on
-load, and reports what it did so the app can tell the user.
+:data:`NOTE_DEFAULTS` names every field a note has and its empty value.
+:func:`normalize_note` is the one gate every note passes before the rest
+of the app touches it -- on load, on import, on paste from a share code --
+so a field that is missing, mistyped or nonsensical becomes a safe value,
+and one corrupt entry cannot take down the list. Validate once, at the
+edge, then trust the data inwards. :func:`note_is_empty` and
+:func:`note_richness` decide what the cleanup drops and which copy of a
+duplicate it keeps. docs/CODE_TOUR.md walks through it.
 """
 
 import copy

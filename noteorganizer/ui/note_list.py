@@ -1,33 +1,13 @@
 """The note list: the sidebar's cards, drawn on one canvas.
 
-WHAT THIS IS FOR
-----------------
-Everything that shows notes as a list: drawing the cards and the category
-headers on the list's canvas (what is on screen first, the rest as the
-view comes near it), filtering, searching and sorting them, the keyboard
-ring that moves from card to card, dragging a card into a Custom order,
-and Select mode for bulk actions.
-
-WHY THESE BELONG TOGETHER
--------------------------
-Measured, as the earlier extractions were (docs/ARCHITECTURE.md, the
-call-graph case study): 90% of the calls these 117 methods make go to
-each other. When the list was a column of widgets, the same measurement
-gave 41% -- below the bar the dialogs (62%) and the calendar (59%) had
-cleared -- so it stayed on the hub. Drawing the list on one canvas gave
-it geometry, input and drawing code of its own, and measuring again after
-that change is what moved it.
-
-WHAT DELIBERATELY STAYED BEHIND
--------------------------------
-The bulk actions themselves (move to the Trash, change the category, pin)
-and their confirmations (``_series_warning``, ``_category_override_warning``)
-act on notes rather than on the list, and Settings asks the same
-questions; they stay on the app class. So does ``add_placeholder``, which
-every entry field uses.
-
-See :mod:`noteorganizer.ui` for what a mixin is and the two rules that
-keep them working.
+The cards and category headers (what is on screen first, the rest as the
+view nears it), filtering, searching, sorting, the keyboard ring, dragging
+into Custom order, and Select mode. Nine in ten of the calls these methods
+make go to each other, which is why they left the hub (tools/call_graph.py;
+docs/ARCHITECTURE.md, "The list, measured again"). The bulk actions and
+their questions act on notes, not on the list, and Settings asks them too,
+so they stay on the app class, with add_placeholder, which every entry
+field uses. :mod:`noteorganizer.ui` says what a mixin is.
 """
 
 import time
@@ -347,6 +327,11 @@ class NoteListMixin:
     HEADER_MARGIN = (6, 2)      # above and below each category header
     HEADER_HEIGHT = 22
     HEADER_FONT = ("Segoe UI", 9, "bold")
+    CARD_TITLE_FONT = ("Segoe UI", 11, "bold")
+    CARD_PREVIEW_FONT = ("Segoe UI", 9)
+    CARD_TAGS_FONT = ("Segoe UI", 8, "bold")
+    CARD_TITLE_CHARS = 42       # a longer title is shortened, then wrapped
+    CARD_PREVIEW_CHARS = 40     # a glimpse of the body, wrapped to the card
     CARD_INSET_X = 2            # between the list's edge and a card's
     CARD_RING = 2               # the ring: open note, keyboard, or nothing
     CARD_STRIPE = 5             # the note's colour down the left edge
@@ -1858,7 +1843,8 @@ class NoteListMixin:
         note_category = (note.get("category")
                          if isinstance(note.get("category"), str) else "General")
 
-        title_text = _truncate(note_title, 42) if note_title else "(untitled)"
+        title_text = (_truncate(note_title, self.CARD_TITLE_CHARS)
+                      if note_title else "(untitled)")
         if note.get("pinned"):
             title_text = "📌 " + title_text
         if is_recurring(note):
@@ -1873,10 +1859,10 @@ class NoteListMixin:
                 if ln.strip() and not is_table_row(ln))
         else:
             preview_src = note_body.replace("\n", " ")
-        # The 40-character cap is a glimpse, not a width: the drawing wraps
-        # the glimpse to the card, so it stays readable however wide the
-        # characters are.
-        preview = preview_src[:40] + ("..." if len(preview_src) > 40 else "")
+        # The cap is a glimpse, not a width: the drawing wraps the glimpse
+        # to the card, so it stays readable however wide the characters are.
+        cap = self.CARD_PREVIEW_CHARS
+        preview = preview_src[:cap] + ("..." if len(preview_src) > cap else "")
 
         tags_text = note_category
         if is_recurring(note):
@@ -1937,15 +1923,15 @@ class NoteListMixin:
         # and the card must not change shape because a body is empty.
         items["title"] = cv.create_text(
             text_x, y, anchor="nw", width=wrap, text=says["title"] or " ",
-            font=("Segoe UI", 11, "bold"), fill=c["text"], tags=tags)
+            font=self.CARD_TITLE_FONT, fill=c["text"], tags=tags)
         y = cv.bbox(items["title"])[3] + 2 * inset
         items["preview"] = cv.create_text(
             text_x, y, anchor="nw", width=wrap, text=says["preview"] or " ",
-            font=("Segoe UI", 9), fill=c["subtext"], tags=tags)
+            font=self.CARD_PREVIEW_FONT, fill=c["subtext"], tags=tags)
         y = cv.bbox(items["preview"])[3] + 2 * inset + 3
         items["tags"] = cv.create_text(
             text_x, y, anchor="nw", width=wrap, text=says["tags"] or " ",
-            font=("Segoe UI", 8, "bold"), fill=says["color"], tags=tags)
+            font=self.CARD_TAGS_FONT, fill=says["color"], tags=tags)
         bottom = (cv.bbox(items["tags"])[3] + inset + self.CARD_PAD[1]
                   + self.CARD_RING)
         items["bg"] = cv.create_rectangle(
