@@ -12,6 +12,7 @@ How the numbers themselves are counted is the
 
 | Version | Date | In one line |
 |---|---|---|
+| [0.84.338](#084338--2026-10-03) | 2026-10-03 | Dates typed the way people write them — 17.10.2026, 2026-10-17, "17 Oct 2026" — and shown day first everywhere, while the notes file keeps the one form it always had. |
 | [0.83.338](#083338--2026-10-03) | 2026-10-03 | What comes in from outside is taken for what it is: a damaged data file no longer stops the app from starting, an attachment is only its two names, and a paste too long to keep whole says what it left out. |
 | [0.83.335](#083335--2026-10-02) | 2026-10-02 | Nineteen rounds of agents tried to break the app: nothing you type is lost when one field is wrong, an import asks before it changes anything, and questions, tables, the calendar and the note list stop surprising you. |
 | [0.82.233](#082233--2026-09-30) | 2026-09-30 | A note opened from the Calendar no longer brings along the last note's Restore previous, title counter or share code. |
@@ -84,6 +85,50 @@ How the numbers themselves are counted is the
 | [0.3.0](#030--tags-removed-categories-as-the-sole-organization-system) | — | Tags come out entirely, leaving categories as the app's one organization system. |
 | [0.2.0](#020--inline-ui-overhaul--data-resilience) | — | Every OS-native popup becomes an in-app themed one, and the calendar grows richer. |
 | [0.1.0](#010--core-application) | — | The founding feature set — notes, recurrence, calendar, templates, sharing, themes. |
+
+---
+
+## [0.84.338] — 2026-10-03
+
+*Highlights: a date is written the way people write it. The date field shows its form, DD.MM.YYYY,
+reads a date in figures day first, year first or with the month as a word, and completes a short
+year when you leave it — and the app shows every date the same way, while the notes file keeps
+the one form it always had.*
+
+### Added
+
+- **Dates typed the way people write them, and shown day first.** The empty date field shows
+  **DD.MM.YYYY**, the order a date is read in. It reads 17.10.2026, 17/10/2026 and 17-10-2026 —
+  the day always first, so 10/12/2026 is 10 December — 2026-10-17, and the month as a word in
+  English or Romanian, short or in full ("17 Oct 2026", "October 17, 2026"). A year of two
+  figures, or none, is read when you leave the field, press Save or leave the note: 17.10 becomes
+  this year's, 17.10.26 becomes 2026, and while you are still typing, "17.10.20" on its way to
+  2026 is never saved as 2020. Leaving the field writes the date back as 17.10.2026, and every
+  date the app shows reads the same way — the note's card, the calendar's History, Trash and
+  duplicate rows, the status line, Statistics, the repeat's "until" — with written-out days day
+  first too ("Saturday, 3 October"). The repeat's end-date box reads dates the same way. The
+  notes file keeps YYYY-MM-DD whatever was typed, and a note that arrives with its date written
+  day first (an older share code, a hand edit) is read into that form, so it reaches the calendar.
+
+### Testing
+
+- test_recurrence reads every promised form and refuses the rest — a day that does not exist, a
+  year being typed, digits of another script, thirty figures and a stray symbol, which a single
+  backtracking pattern would have taken hours over in the field's own keystroke. qa5 types each
+  form and finds it stored as YYYY-MM-DD with the editor reading as saved; a year still being
+  typed never saved; the field, Save, leaving the note and a share code each settling a short
+  year; the end-date box; the card; the picker opening on a date typed day first. qa1, qa2, qa3,
+  qa6, qa7, qa8 and qa9 check the field's form, the picker, the calendar's Add note, History, the
+  banner, the day's header and hover, the reminder bar, Trash and duplicate rows, and Statistics.
+  The left-out checks that used 30/09/2026 as their unreadable date use one that cannot exist
+  (31/09/2026), so they go on proving what they proved. Fifty-one mutants, each killed with its
+  suite reaching its footer; `tools/check_one_definition.py` gains a rule that keeps the date
+  field read in one place, proved on a reader written by hand again.
+- A question a check leaves waiting no longer stops a suite. Under a mutant that left a date out,
+  an older qa5 check met "Part of this note isn't saved" with nothing to answer it, and the suite
+  stood there for its whole ten-minute timeout. The qa scripts' shared support now answers a
+  question still waiting after 20 seconds with its safe button, names it on a FAIL line, and ends
+  the run red.
 
 ---
 

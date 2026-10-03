@@ -29,6 +29,7 @@ anywhere else.
 ### Notes & writing
 
 - Create, edit, pin, duplicate and soft-delete notes; each carries a category, colour, date, comments, a checklist and file attachments
+- Dates typed the way people write them — 17.10.2026, 17/10/2026, 2026-10-17, "17 Oct 2026" — and shown day first everywhere
 - Autosave on pause, on note switch and on close — quitting never asks about "unsaved notes"
 - Rich text (bold, italic, underline, strikethrough, colour, highlight, font size & family) plus nested bullet/numbered lists, indentation and alignment
 - Paste from a browser, a word processor or a PDF and keep the formatting (**Ctrl+Shift+V** for plain text); a PDF's broken line endings are rejoined into the paragraphs they came from

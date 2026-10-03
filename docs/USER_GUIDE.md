@@ -10,6 +10,7 @@ every major feature.
 - [Getting started](#getting-started)
 - [Notes](#notes)
   - [Creating and editing](#creating-and-editing)
+  - [Writing a date](#writing-a-date)
   - [Formatting](#formatting)
   - [Pasting and copying](#pasting-and-copying)
   - [Tables](#tables)
@@ -94,11 +95,12 @@ on its own while you type. Your edits wait in the editor, and the question comes
 pressing Save, switching notes, or closing the app. Answer it and the edit is saved where you
 chose; cancel it and the edit stays only as long as you stay on that view.
 
-A field the app cannot read never costs you the rest of the note. A date written as 30/09/2026
-(the field reads `YYYY-MM-DD`), a repeat's end date written the same way, a repeat's **Every**
-or **After … times** box holding something other than a whole number, or a repeat with no start
-date is **left out**: the note keeps that field's last good value, everything else saves, and
-the status line says what was left out. When you then leave the note, you are asked —
+A field the app cannot read never costs you the rest of the note. A date it cannot read (see
+[Writing a date](#writing-a-date) for every way it can — what is left is a day that does not
+exist, like 31.09.2026), a repeat's end date the same, a repeat's **Every** or **After … times**
+box holding something other than a whole number, or a repeat with no start date is **left out**:
+the note keeps that field's last good value, everything else saves, and the status line says what
+was left out. When you then leave the note, you are asked —
 **Go back and fix it** (what Enter and Escape choose) or **Continue without it**, which puts the
 stored value back on screen.
 
@@ -113,6 +115,26 @@ real grid), with a brief note telling you it happened.
 
 For the quick light/dark switch at the end of the formatting toolbar, see
 [Appearance](#appearance).
+
+### Writing a date
+
+The empty date field shows the order a date is read in: **DD.MM.YYYY**, the day first. Write a
+date the way you would on paper:
+
+| You type | It reads |
+|---|---|
+| `17.10.2026`, `17/10/2026`, `17-10-2026` | 17 October 2026. The day always comes first: `10/12/2026` is 10 December. |
+| `2026-10-17` | The same day: four figures first mean the year comes first. |
+| `17 oct 2026`, `17 October 2026`, `October 17, 2026` | The month as a word, short or in full — its English name, or its Romanian one. |
+| `17.10`, `17.10.26` | Completed when you leave the field: this year, or 2026. |
+
+When you leave the field — or press Save, or open another note — the date is written back in the
+one form the app shows dates in, `17.10.2026`, and that is how it appears everywhere: on the
+note's card, in the calendar's History, in the Trash. A year of two figures, or none at all, is
+read only then: while you are still typing, `17.10.20` on its way to 2026 is never saved as 2020.
+
+Whatever you typed, the notes file keeps the date as `2026-10-17`, as it always has. The
+**Ends: On date** box of a repeating note reads dates the same way.
 
 ### Formatting
 
