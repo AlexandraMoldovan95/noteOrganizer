@@ -488,6 +488,16 @@ A new surface joins this list the moment it ships.
   shows is a question about where things ARE: compare screen
   coordinates (`winfo_rooty()` + height) against the window's edge and
   the next widget's top.
+- **A window is only as big as its screen lets it be.** Tk caps a window
+  at the size of its screen, in silence, and the Windows CI runner's
+  screen is smaller than the windows the checks ask for. qa4's check that
+  the calendar takes its width step across 1150 pixels asked for a
+  1200-pixel window, got the screen's 1024 and read "wide None, narrow
+  None" in CI while passing on every machine it had been run on; three of
+  qa9's resize checks would have followed it. `pin_the_desktop` now lifts
+  the cap for every app the suite builds, so a window takes the size a
+  check asks for whatever screen it runs on. A check whose subject is a
+  size should still print the size the window actually got.
 - **A red that loses its name costs a day, so the runner writes it down.**
   `tools/run_tests.py` saves a failing run's whole output to
   `%TEMP%/notesorg-failure-<label>.txt` and prints the path — the terminal
@@ -564,6 +574,14 @@ A new surface joins this list the moment it ships.
   expired whether or not the clamp works, while twelve hours tells the two
   apart. Three of that block's ten checks were satisfied by a boundary
   coincidence like this one.
+- **Read a number from the label that shows it, never as a digit somewhere
+  on the screen.** qa6 checked Statistics by looking for "4" in any of the
+  panel's texts, and on 4 October found it in "Using Note Organizer since
+  04.10.2026": red on the fourth, the fourteenth and the twenty-fourth of
+  every month, in local time on a developer's machine and in UTC on CI.
+  The "2" it waited for was always there too, in the year. Statistics'
+  numbers are read through `stats_pairs()`, as the number under its
+  caption.
 - **Never read a verdict out of output that can be truncated without
   saying so.** `tools/run_tests.py` prints the first eight failing checks.
   Two live mutants read as survivors because the checks they broke were the

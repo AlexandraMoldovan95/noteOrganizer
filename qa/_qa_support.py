@@ -201,6 +201,18 @@ def pin_the_desktop(NO):
     (_note_real_keys). See the module docstring."""
     cls = NO.NoteOrganizer
     cls._foreground_is_ours = lambda self: True
+    # Every app the script builds may take any size a check asks for. Tk caps
+    # a window at the size of its screen, and a CI runner's screen is smaller
+    # than the windows the checks ask for: a request past it is cut, in silence.
+    if not getattr(cls, "_qa_outgrows_the_screen", False):
+        made = cls.__init__
+
+        def __init__(self, *args, **kwargs):
+            made(self, *args, **kwargs)
+            self.maxsize(10000, 10000)
+
+        cls.__init__ = __init__
+        cls._qa_outgrows_the_screen = True
     real = getattr(cls, "_pointer_button_held", None)
     if real is not None and not hasattr(cls, "_desktop_pointer_button_held"):
         cls._desktop_pointer_button_held = real
