@@ -281,7 +281,7 @@ is the LAST line of defence, not permission to run tests in place.
 The safest way is to let `tools/run_tests.py` do it for you: it makes a
 fresh temp folder far outside the project, copies in `note_organizer.py`,
 the `noteorganizer/` package and the tests, runs everything (units +
-qa1–qa9, plus the four static gates CI runs) there, and deletes the folder
+qa1–qa9, plus the static gates CI runs) there, and deletes the folder
 afterward — the project's own files are only ever read (`py
 tools/run_tests.py`, or `py tools/run_tests.py qa6` for one script). The
 manual ritual below is the fallback, and the reason that tool exists.
@@ -348,8 +348,13 @@ Two things learned while writing it, both worth keeping:
   matched nothing; the deny list looked complete and protected nothing.
   Found by probing a harmless member of the rule shape (`py test_recurrence.py`,
   which touches no data files) and watching it run. Every dangerous script
-  is now named in full, in each spelling that could reach it — 204
-  spellings, none uncovered.
+  is now named in full, in each spelling that could reach it. That claim
+  once read "204 spellings, none uncovered" while 141 bare and `./` forms
+  were missing (a `:*` rule needs something after the name); it is now a
+  gate, not a sentence: the deny tier is committed without this machine's
+  paths as `tools/agent_deny_rules.json`, and `tools/check_agent_rules.py`
+  finds the destructive scripts itself and fails on any uncovered spelling
+  — and, here, on any committed rule the live lists lack.
 - **Never probe a destructive deny rule with the destructive command.**
   Whether `py test_data_safety.py` is blocked is verified by reading the
   list, not by running it: if the rule were wrong, the probe would delete
@@ -381,7 +386,7 @@ subprocess.run([...], cwd=work)
 
 The seed is written **inside** the temp directory and the app runs with its
 working directory there, so a wrong-directory mistake cannot reach the real
-notebook. `qa1`–`qa9` stay denied, in all twelve spellings each, because
+notebook. `qa1`–`qa9` stay denied, in every spelling, because
 those genuinely wipe `*.json` in whatever directory they are run from — and
 so does `qa/probe_bar_width.py`, which builds the app the same way.
 

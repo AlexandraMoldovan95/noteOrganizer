@@ -7,7 +7,7 @@ method was added to the app class after the API baseline had already been
 re-recorded earlier on the branch, nobody re-ran the check locally, and
 the first thing to notice was CI -- twenty minutes and one push later.
 
-CI's first step runs three cheap, purely-static gates. There was never a
+CI's first step runs cheap, purely-static gates. There was never a
 reason to discover their verdict remotely; this script is those same
 gates, in the same order, on the machine where the fix is one keystroke
 away. It complements ``run_tests.py`` (the full suite in a safe scratch
@@ -29,7 +29,9 @@ WHAT IT RUNS
 4. ``check_doc_links`` and ``check_english`` -- anchors that still go
    somewhere, and no Romanian in anything a reader of this repository
    sees. The app's interface is English; the qa stories had drifted.
-5. ``compile()`` over every tracked ``.py`` in the repo -- tests and qa
+5. ``check_agent_rules`` -- the agent's committed deny rules cover every
+   script that wipes its working folder, in every spelling.
+6. ``compile()`` over every tracked ``.py`` in the repo -- tests and qa
    scripts included, because a syntax error in a TEST file is exactly
    what the remote runner would otherwise find first (a locally-valid
    PEP 701 f-string once died only on CI's older Python; the interpreter
@@ -96,6 +98,11 @@ def main():
     # run then printed Romanian check names into a public log.
     _run_gate("English throughout",
               [os.path.join("tools", "check_english.py")])
+    # The agent's deny rules, committed without this machine's paths: every
+    # script that wipes its working folder, in every spelling that could
+    # start it -- and the live lists here hold every committed rule.
+    _run_gate("deny rules cover the wipers",
+              [os.path.join("tools", "check_agent_rules.py")])
 
     print("== every tracked .py compiles", flush=True)
     listed = subprocess.run(["git", "ls-files", "*.py"], cwd=ROOT,

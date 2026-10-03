@@ -148,6 +148,7 @@ jobs:
           python tools/check_class_api.py
           python tools/check_one_definition.py
           python tools/check_english.py
+          python tools/check_agent_rules.py
 
       - name: Recurrence engine tests
         run: python test_recurrence.py
