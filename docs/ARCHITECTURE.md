@@ -705,6 +705,25 @@ rendering stays on the [ROADMAP](ROADMAP.md) for notebooks far larger than the t
 this was measured with. See
 [The list that was drawn whole, for every pause in typing](ISSUES_LOG.md#the-list-that-was-drawn-whole-for-every-pause-in-typing).
 
+### Measured, at 1,000 and 5,000 notes
+
+`py tools/bench.py` reproduces these: each number is a fresh process in a throwaway folder,
+over a notebook generated from a fixed seed, and `--against <copy>` alternates the two
+versions run by run, so a machine that slows down halfway slows both. Medians of three runs,
+on the development machine (Windows), 3 October 2026; 0.81.202 is the release before the
+list was drawn:
+
+| | 1,000 notes, now | 1,000 notes, 0.81.202 | 5,000 notes, now |
+|---|---|---|---|
+| start-up, to the first drawn list | 1.9 s | 8.3 s | 2.0 s |
+| a rebuild of the whole list | 7 ms | 9.8 s | 9 ms |
+| one note's automatic save | 12 ms | 9.8 s | 42 ms |
+| memory once the window is up | 56 MB | 117 MB | 68 MB |
+
+The guards in CI are structural rather than these timings: qa4 checks that a rebuild draws one
+screenful and holds the rest, which fails when the list goes back to drawing everything, and a
+check that fired on a slower runner would be a flaky one.
+
 ### Custom order: a place is written only by a move
 
 A note's place in Custom order is its `order` number, and only a person's move writes it — a
