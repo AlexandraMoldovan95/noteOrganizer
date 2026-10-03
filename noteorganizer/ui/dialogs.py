@@ -90,6 +90,24 @@ class DialogsMixin:
         if buttons is None:
             buttons = [("OK", True)]
         focus_index = self._dialog_focus_index(buttons, default)
+        # Where the keyboard was, so it goes back there when the question
+        # is answered. The dialog takes the focus onto its own button and
+        # is then destroyed, and Tk handed the keyboard to the bare window:
+        # someone typing a note, interrupted by a question, answered it and
+        # kept typing into nothing until they clicked back in. focus_get()
+        # answers None while another program holds the desktop foreground
+        # (qa/README), so the window's own record is the fallback.
+        returns_to = None
+        try:
+            returns_to = self.focus_get()
+        except (KeyError, tk.TclError):
+            returns_to = None
+        if returns_to is None:
+            try:
+                returns_to = self.nametowidget(
+                    self.tk.call("focus", "-lastfor", self._w))
+            except (KeyError, tk.TclError):
+                returns_to = None
 
         # The overlay lives INSIDE the main window, and a -topmost
         # popup floats above that -- so a question ABOUT the popup (save
@@ -166,6 +184,14 @@ class DialogsMixin:
             border.grab_set()
         except tk.TclError:
             pass
+        # While this waits for an answer, the app's global shortcuts stand
+        # still (_a_dialog_is_asking). A grab confines the POINTER only;
+        # keys bound with bind_all still ran underneath -- Ctrl+S twice
+        # stacked the same question on itself, and Ctrl+N under the
+        # repeating-day question cleared the editor so the answer wrote
+        # the edit under a day of None. Raised here, right beside the
+        # finally that lowers it, so no failure can leave it raised.
+        self._modal_depth = getattr(self, "_modal_depth", 0) + 1
         try:
             self.wait_variable(done)
         finally:
@@ -182,7 +208,56 @@ class DialogsMixin:
             except tk.TclError:
                 pass
             self._popups_step_forward(stepped_back)
+            self._modal_depth = max(0, getattr(self, "_modal_depth", 1) - 1)
+            try:
+                if (returns_to is not None and returns_to is not self
+                        and returns_to.winfo_exists()):
+                    returns_to.focus_set()
+            except tk.TclError:
+                pass
         return result["value"]
+
+    def _a_dialog_is_asking(self):
+        """True while a themed dialog waits for an answer. Every handler
+        bound with bind_all asks this first and does nothing if so."""
+        return getattr(self, "_modal_depth", 0) > 0
+
+    def _toggles_its_popup(self, btn, open_popup):
+        """Make a button open its popup on one click and close it on the next.
+
+        A tk.Button acts on the RELEASE, and the app-wide click-outside
+        handler closes the open popup on the PRESS -- so a second click on
+        the button that opened a popup closed it and then opened a fresh
+        one: a blink instead of a toggle. The themed dropdowns were fixed
+        for exactly this after a field report (their guard, in
+        _build_themed_dropdown, is the same idea); eleven other openers --
+        the text colour, the highlight, the emoji, both date pickers, the
+        note's colour, the table size, the template picker, the calendar's
+        month, and the selection bar's Category and Export -- never were.
+
+        The decision is taken on the press, in the button's own binding,
+        which runs before the window's: at that moment the popup is still
+        open and it is knowable whether it is this button's. It is taken
+        afresh on every press, so a press dragged off the button leaves
+        nothing behind to swallow the next click.
+        """
+        state = {"closing": False}
+
+        def on_press(_event=None):
+            mine = getattr(btn, "_its_popup", None)
+            state["closing"] = (mine is not None
+                                and getattr(self, "_mini_popup", None) is mine)
+
+        def on_release_command():
+            if state["closing"]:
+                state["closing"] = False
+                return
+            open_popup()
+            btn._its_popup = getattr(self, "_mini_popup", None)
+
+        btn.bind("<ButtonPress-1>", on_press, add="+")
+        btn.configure(command=on_release_command)
+        return btn
 
     @staticmethod
     def _dialog_focus_index(buttons, default):

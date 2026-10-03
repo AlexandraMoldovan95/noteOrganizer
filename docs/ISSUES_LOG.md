@@ -39,6 +39,7 @@ day-to-day tracking.
 | [The undo that guarded the wrong state](#the-undo-that-guarded-the-wrong-state) | An undo must test for the state its own action produced, not the one it means to restore; and sweep for what else reaches the same loss. | 0.75.181 |
 | [The binding that could never fire](#the-binding-that-could-never-fire) | A binding is not an answer to "does this key work" — ask where the key goes; and a probe whose finding is an absence needs a control that produces the presence. | 0.75.183 |
 | [Eleven decisions about your notes, made from half the evidence](#eleven-decisions-about-your-notes-made-from-half-the-evidence) | When two files must agree, rebuild the weaker from the stronger; an automatic removal asks the strictest question there is; a dialog's promise is part of the mechanism. | 0.81.213 |
+| [The Cancel that went ahead anyway](#the-cancel-that-went-ahead-anyway) | A function that can be told "no" must say so to its caller; a modal dialog holds the mouse only unless the keyboard is held too; bind the end of a widget-level record to the widget's own end. | Unreleased |
 | [The paste that landed on top of the placeholder](#the-paste-that-landed-on-top-of-the-placeholder) | `bind()` replaces where `add="+"` accumulates, so a widget's own binding silently displaces a shared helper's; and a virtual event outranks the physical one beside it in the same bindtag. | 0.75.185 |
 | [The sweep that stopped at the edge of the Settings page](#the-sweep-that-stopped-at-the-edge-of-the-settings-page) | A fix's sibling sweep must name the surfaces it did not visit; a cap in characters is not a width; and text that wraps for the first time inherits every multi-line default the widget was hiding. | 0.81.202 |
 | [The seven small rows, four of which were not what they said](#the-seven-small-rows-four-of-which-were-not-what-they-said) | A suggested fix is a hypothesis about the code — four of seven were wrong about scope, premise or mechanism, each found by a grep; and a check asserting `not in` against a name the code would never write cannot fail. | 0.76.192 |
@@ -1295,6 +1296,72 @@ check written for it.
 4. A decision taken twice can be answered twice. Take it once and pass the
    answer down.
 5. Judge what a deletion removes by the bytes it removes, not by the names.
+
+### The Cancel that went ahead anyway
+
+*([Unreleased](../CHANGELOG.md#unreleased))*
+
+**The same "try to break it" audit found seven places where the app did
+something other than what a person had just asked — each small, each met
+every day, and each one a gesture whose answer never reached the code
+that acted on it.**
+
+- *An answer nobody was told about.* Leaving an edited day of a repeating
+  note asks where the edit belongs. On Cancel, `save_current_note`
+  returned without saving — and returned nothing, so `_flush_autosave`
+  could not say so, and every caller loaded the next note, cleared the
+  editor or closed the window anyway. The edit was gone, and the
+  docstring of the close route even recorded it as intended. One route,
+  Back to Calendar, had already learned to stay, by asking afterwards
+  whether the editor was still dirty. The fix makes the answer explicit
+  (`_SAVE_CANCELLED`) and passes it up through every caller that replaces
+  the editor — and through `open_note_in_tab`'s own callers, three of
+  which armed a way back to the calendar for a note that had not opened.
+- *A grab that holds the mouse and not the keys.* A dialog confines the
+  pointer; shortcuts bound with `bind_all` run for any focused widget,
+  the dialog's own button included. So Ctrl+S twice stacked a question
+  on itself, and Ctrl+N under it emptied the editor, after which the
+  answer wrote the edit under a day of `None`. The shortcuts now wait
+  while a question does, and the save reads its day before asking.
+- *A focus taken and not given back.* Every dialog put the keyboard on
+  its button and then destroyed itself. It remembers where the keyboard
+  was now — through `focus -lastfor` when the process does not own the
+  desktop foreground, since `focus_get()` then answers None.
+- *A record that outlived its widget.* The open table cell's editor died
+  with the table when another note opened; its record did not, and the
+  toolbar kept aiming at it. A `<Destroy>` binding ends the record on
+  every route that ends the widget, including the ones nobody listed.
+- *A shortcut acting on a page that was not on screen.* Settings is
+  swapped in place of the notebook, so selecting the Notes tab from it
+  changed nothing visible while the hidden editor was emptied — and a
+  half-written template was dismissed without the question a click would
+  have asked.
+- *Press and release.* A `tk.Button` acts on the release; the popup's
+  click-outside handler closes it on the press. Eleven buttons therefore
+  reopened their popup on a second click. One helper,
+  `_toggles_its_popup`, decides on the press, in the button's own
+  binding, which runs before the window's.
+- *A minimum nobody measured.* At the allowed 500 by 400 the sidebar's
+  fixed parts used all the height and the list showed nothing. Measured
+  and photographed, the minimum is now the smallest size where a card
+  fits.
+
+**Found on the way.** A probe written to measure the window's minimum
+crashed on the first note it opened — the new code read
+`_pending_calendar_return` before the app had ever set it. Every existing
+check happened to set it first. It is read with a default now.
+
+**The lessons.**
+
+1. A function that can be told "no" has to say so to whoever called it.
+   Silence is read as "done", and the caller carries on.
+2. A dialog that looks modal is modal for the mouse only, unless the
+   keyboard is held as well.
+3. What a widget-level record describes should die with the widget —
+   bind the ending, rather than list the routes that end it.
+4. A button's press and its command are two events with the whole
+   window's bindings in between. Decide on the press what the release
+   will mean.
 
 
 ## Tk & platform gotchas

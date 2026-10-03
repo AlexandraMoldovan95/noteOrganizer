@@ -111,9 +111,12 @@ class CalendarViewMixin:
 
         # The title doubles as a jump target for anything far away.
         self.cal_month_lbl = tk.Button(
-            cluster, text="", command=self.open_month_jump, relief="flat",
+            cluster, text="", relief="flat",
             font=("Segoe UI", 16, "bold"), cursor="hand2", borderwidth=0
         )
+        # A second click on the title closes the month picker (see
+        # _toggles_its_popup) instead of opening a fresh one.
+        self._toggles_its_popup(self.cal_month_lbl, self.open_month_jump)
         self.track_theme(self.cal_month_lbl, bg="bg", fg="text",
                          activebackground="bg", activeforeground="accent")
         self.cal_month_lbl.pack(side="left", padx=10)
@@ -218,6 +221,10 @@ class CalendarViewMixin:
     def _calendar_key(self, event, months=0, years=0, today=False):
         """Keyboard navigation, but only while the Calendar tab is showing and
         the user isn't typing — otherwise PgUp/Home would hijack the editor."""
+        # Nor while a question is waiting for an answer: the grid would
+        # move to another month underneath the question about a day in it.
+        if self._a_dialog_is_asking():
+            return "break"
         if not self._is_calendar_visible():
             return
 
@@ -934,7 +941,10 @@ class CalendarViewMixin:
         remembered = {"year": self.cal_year, "month": self.cal_month,
                       "date_str": date_str, "origin": "edit"}
         self.notebook.select(self.TAB_NOTES)
-        self.open_note_in_tab(base_note, occurrence_date=date_str)
+        # Cancel on the day still in the editor means this note was not
+        # opened, and the way back must not be re-pointed at it.
+        if not self.open_note_in_tab(base_note, occurrence_date=date_str):
+            return
         self._pending_calendar_return = remembered
         self._update_calendar_return_button()
 
@@ -944,8 +954,11 @@ class CalendarViewMixin:
         from in the calendar so saving (or 'Back to Calendar') returns you to
         the exact same month/day — it shouldn't feel like being sent away."""
         # Flush before clearing, like every other route into an empty
-        # editor — this path once discarded pending edits silently.
-        self._flush_autosave()
+        # editor — this path once discarded pending edits silently. And
+        # Cancel on a repeating day's save question means stay, here as
+        # on every route that would replace the editor.
+        if self._flush_autosave() is False:
+            return
         self.notebook.select(self.TAB_NOTES)
         self.new_note()
         # Set AFTER new_note — new_note clears any pending return, since
