@@ -47,7 +47,7 @@ except ImportError:
 # Added/Fixed CHANGELOG.md entries, not per-release counts). The running
 # app records this into settings, so the next time a newer build opens
 # over older data it can tell the user what changed version-wise.
-APP_VERSION = "0.83.338"
+APP_VERSION = "0.84.338"
 
 
 def parse_version(v):
@@ -379,6 +379,12 @@ from noteorganizer.core.recurrence import (
     MAX_OCCURRENCES,
     parse_date,
     format_date,
+    DATE_FORM,
+    read_date,
+    show_date,
+    show_stamp,
+    show_day,
+    same_date,
     normalize_recurrence,
     is_recurring,
     expand_occurrences,
@@ -6870,7 +6876,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # sake, and on Windows the rich-paste route saw it FIRST -- so
         # pasting a copied table back into a note took the generic HTML
         # road: no set widths, no placement, and the first row glued onto
-        # the caret's line ("Sursa: | fff |..." in the field report). The
+        # the caret's line ("Source: | fff |..." in the field report). The
         # TSV route carries everything the copy knew, so our own copies go
         # there; the rich route is for content from OTHER applications.
         # Detection reads the system clipboard directly, no Tk fallback:
@@ -10329,6 +10335,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
     def share_current_note_as_code(self):
         """Generate a share code for the note currently open and show it inline
         in the editor (no pop-up), with a Copy button."""
+        # Asking for a code is finishing with the fields: a date typed short
+        # is settled first (17.10 -> 17.10.2026), so the code carries it.
+        self._settle_date_fields()
         st = self.capture_editor_state()
         # The shared content test, minus the one field a code cannot
         # carry. SHAREABLE_FIELDS covers everything _editor_state_has_content
@@ -13076,7 +13085,14 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         )
         self.track_theme(self.date_entry, bg="card", fg="text", insertbackground="text")
         self.date_entry.pack(side="left", padx=(6, 4), ipady=3)
-        self.add_placeholder(self.date_entry, "YYYY-MM-DD")
+        # The empty field shows its form: the order a typed date is read in.
+        self.add_placeholder(self.date_entry, DATE_FORM)
+        # Finishing with the field settles what was typed into the form it
+        # shows (_settle_date_fields): 17.10 becomes 17.10.2026 then, and
+        # only then -- read while someone is still typing, "17.10.20" on its
+        # way to 2026 would be stored as 2020. What finishing means is wired
+        # in one place, for this field and the repeat's end date alike.
+        self._watch_date_field(self.date_entry)
         # Typing a date directly (as opposed to using the picker popup, which
         # already autosaves via _pick()) previously had no autosave binding
         # at all, so a typed date change could be silently lost.
@@ -13087,7 +13103,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # loss the comment above describes, on the route the paste menu below
         # is about to open. add="+" keeps add_placeholder's own <<Paste>>
         # clear, which runs first and is what stops the paste landing on top
-        # of "YYYY-MM-DD".
+        # of the field's form (DATE_FORM).
         self.date_entry.bind("<<Paste>>", self._schedule_autosave, add="+")
         # The repeat's summary reads the start date from this field: every
         # route that changes it redraws the summary (typing and pasting here,
@@ -14015,10 +14031,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         occ = getattr(self, "current_occurrence_date", None)
         text = ""
         if occ:
-            try:
-                pretty = datetime.strptime(occ, "%Y-%m-%d").strftime("%A, %d %B %Y")
-            except ValueError:
-                pretty = occ
+            day = parse_date(occ)
+            pretty = show_day(day) if day else occ
             text = f"📅 Editing this day of the series: {pretty}"
         elif self.selected_note_id is not None:
             # The series view of a repeating note gets its own line: edits
@@ -14133,17 +14147,101 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.update_recurrence_summary()
 
     def _show_date_in_field(self, value):
-        """Put a date in the note's date field -- or, for none, the grey
-        YYYY-MM-DD placeholder. The one way the editor fills that field, so
-        the text and its colour cannot come apart between the routes that
-        load, restore, import or put back a note's date."""
+        """Put a date in the note's date field, the way the app shows dates
+        (show_date: a stored 2026-10-17 reads 17.10.2026, and text it cannot
+        read stays as it was typed) -- or, for none, the grey form
+        DD.MM.YYYY. The one way the editor fills that field, so the text
+        and its colour cannot come apart between the routes that load,
+        restore, import or put back a note's date."""
         self.date_entry.delete(0, "end")
         if value:
-            self.date_entry.insert(0, value)
+            self.date_entry.insert(0, show_date(value))
             self.date_entry.config(fg=self.colors["text"])
         else:
-            self.date_entry.insert(0, "YYYY-MM-DD")
+            self.date_entry.insert(0, DATE_FORM)
             self.date_entry.config(fg=self.colors["subtext"])
+
+    def _typed_date(self):
+        """What the date field holds as typed: its text, or "" while it shows
+        its form. The one reader of the field -- the form compared by hand
+        in five places was five places to forget the day it changed, and a
+        rule in tools/check_one_definition.py now keeps it to one."""
+        typed = self.date_entry.get().strip()
+        return "" if typed == DATE_FORM else typed
+
+    def _settle_date_fields(self, redraw=False):
+        """What finishing with the date fields does: a date typed in a way
+        the app reads is written back in the form it shows -- 2026-10-17
+        and "17 octombrie 2026" as 17.10.2026 -- and a short or a missing
+        year is completed, 17.10.26 and 17.10 becoming 17.10.2026
+        (read_date, settled). Text the app cannot read is left as typed, for
+        the save to name.
+
+        Run when the person has finished: on leaving either field (*redraw*:
+        the repeat's summary is redrawn, which schedules the save), and
+        first on every save made on purpose or on the way out of the note,
+        which then read the settled text. Never while typing: a year read
+        before it is whole is a wrong year saved.
+
+        Returns whether either field changed."""
+        changed = False
+        typed = self._typed_date()
+        if typed:
+            day = read_date(typed, settled=True)
+            if day is not None and show_date(format_date(day)) != typed:
+                self._show_date_in_field(format_date(day))
+                changed = True
+        end_typed = self.rec_end_date_var.get().strip()
+        if end_typed:
+            day = read_date(end_typed, settled=True)
+            if day is not None and show_date(format_date(day)) != end_typed:
+                # Its trace redraws the summary, as every change to it does.
+                self.rec_end_date_var.set(show_date(format_date(day)))
+                changed = True
+        if changed and redraw:
+            self.update_recurrence_summary()
+        return changed
+
+    def _watch_date_field(self, entry):
+        """Wire what finishing with a date field means to *entry*: leaving
+        it, pressing Enter in it -- and a click anywhere else in the window.
+
+        The last is the one Tk does not give for free. A click on a label,
+        a frame or an empty stretch of the window moves the keyboard
+        nowhere, so the caret stays in the field and no <FocusOut> comes:
+        17.10 typed and a click beside it was read as still being typed and
+        left out, and only a click into another box saved it (field report,
+        0.84.338). Which field holds the keyboard is noted on its own
+        <FocusIn> and <FocusOut>, so the click needs no focus_get(); the
+        click's own work goes on (_settle_dates_on_click_elsewhere never
+        breaks it). add="+" throughout: add_placeholder's handlers on the
+        field, which put the form back in an emptied one, run first."""
+        def arrived(_event):
+            self._date_field_in_use = entry
+
+        def left(_event):
+            if getattr(self, "_date_field_in_use", None) is entry:
+                self._date_field_in_use = None
+            self._settle_date_fields(redraw=True)
+
+        def enter(_event):
+            self._settle_date_fields(redraw=True)
+
+        entry.bind("<FocusIn>", arrived, add="+")
+        entry.bind("<FocusOut>", left, add="+")
+        for sequence in ("<Return>", "<KP_Enter>"):
+            entry.bind(sequence, enter, add="+")
+        if not getattr(self, "_watching_clicks_for_dates", False):
+            self.bind_all("<ButtonPress-1>",
+                          self._settle_dates_on_click_elsewhere, add="+")
+            self._watching_clicks_for_dates = True
+
+    def _settle_dates_on_click_elsewhere(self, event):
+        """A click anywhere but the date field that holds the keyboard
+        settles it, as leaving it would (see _watch_date_field)."""
+        entry = getattr(self, "_date_field_in_use", None)
+        if entry is not None and getattr(event, "widget", None) is not entry:
+            self._settle_date_fields(redraw=True)
 
     def open_date_picker(self, target_entry=None, anchor_widget=None):
         """Small calendar dropdown for picking a date, anchored to whichever
@@ -14154,11 +14252,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         target_entry = target_entry or self.date_entry
         anchor_widget = anchor_widget or self.pick_date_btn
 
-        current_val = target_entry.get().strip()
-        try:
-            start_date = datetime.strptime(current_val, "%Y-%m-%d")
-        except ValueError:
-            start_date = datetime.now()
+        # Read as the field would be once left: the picker opens on the date
+        # typed there, in whatever form it was typed, and marks that day.
+        current_day = read_date(target_entry.get(), settled=True)
+        start_date = current_day or datetime.now().date()
 
         self._dismiss_mini_popup()
         picker = tk.Toplevel(self)
@@ -14192,7 +14289,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
         def _pick(date_str):
             target_entry.delete(0, "end")
-            target_entry.insert(0, date_str)
+            target_entry.insert(0, show_date(date_str))
             target_entry.config(fg=self.colors["text"])
             # Redraws the repeat's summary, which reads both date fields, and
             # schedules the autosave.
@@ -14215,7 +14312,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     if day == 0:
                         continue
                     date_str = f"{state['year']:04d}-{state['month']:02d}-{day:02d}"
-                    is_selected = date_str == current_val
+                    is_selected = (current_day is not None
+                                   and format_date(current_day) == date_str)
                     btn = tk.Button(
                         grid_frame, text=str(day), width=4, relief="flat",
                         font=("Segoe UI", 9, "bold" if is_selected else "normal"),
@@ -14444,6 +14542,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # to be pasted from somewhere else.
         self._add_paste_menu(self.rec_end_date_entry)
         self.rec_end_date_var.trace_add("write", lambda *a: self.update_recurrence_summary())
+        # Read like the note's own date, and settled the same way when you
+        # finish with it: 31.12 becomes 31.12.2026 (_watch_date_field).
+        self._watch_date_field(self.rec_end_date_entry)
 
         self.rec_end_date_pick_btn = tk.Button(
             end_row, text="📅",
@@ -14620,7 +14721,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self.rec_end_date_var.set("")
         elif rec["end"]:
             self.rec_end_mode_var.set("on")
-            self.rec_end_date_var.set(rec["end"])
+            self.rec_end_date_var.set(show_date(rec["end"]))
         else:
             self.rec_end_mode_var.set("never")
             self.rec_end_date_var.set("")
@@ -14636,12 +14737,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self._schedule_autosave(skip_word_count=True)
             return
         problems = self._unreadable_repeat_fields(rec["freq"])
-        anchor = self.date_entry.get().strip()
-        if anchor == "YYYY-MM-DD":
-            anchor = ""
+        anchor = self._typed_date()
         kept_date = ""
         kept_repeat = True
-        if problems or not parse_date(anchor):
+        if problems or not read_date(anchor):
             # What the save would keep, never what the boxes read as: an
             # unreadable "Every" or "After … times" read as 1, and an
             # unreadable end date as none, previewed a rule neither typed
@@ -14661,7 +14760,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                    "days": "day(s) “%s”"}[field] % _truncate(typed, 16)
                   for field, typed in problems]
         warnings = []
-        if not parse_date(anchor):
+        if not read_date(anchor):
             if not parse_date(kept_date or ""):
                 if anchor:
                     # Typed, but not as a date: named, as the save names it.
@@ -14676,7 +14775,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 # Emptied, most often on the way to a new date: the save
                 # keeps the start, as its own words say.
                 warnings.append("needs a start date, so it still starts %s"
-                                % kept_date)
+                                % show_date(kept_date))
         if unread:
             # One warning, however many boxes it names: one per box ran
             # past the end of the row.
@@ -14710,7 +14809,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         return self._themed_dialog(
             f"{action_word} repeating note",
             f"This note repeats. What should '{action_word}' apply to?\n"
-            f"Currently open occurrence: {occurrence_date}{extra}",
+            f"Currently open occurrence: {show_date(occurrence_date)}{extra}",
             kind="question",
             buttons=[("Cancel", None), ("The entire series", "series"),
                      ("This occurrence only", "occurrence")]
@@ -17401,7 +17500,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             if note.get("overrides"):
                 tags_text += f"   ✎{len(note['overrides'])}"
         elif note.get("date"):
-            tags_text += f"   📅 {note['date']}"
+            tags_text += f"   📅 {show_date(note['date'])}"
         if note.get("comments"):
             tags_text += "   💬"
         if note.get("attachments"):
@@ -18393,9 +18492,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         title = self.title_entry.get()
         if title == "Note title...":
             title = ""
-        date_raw = self.date_entry.get().strip()
-        if date_raw == "YYYY-MM-DD":
-            date_raw = ""
+        date_raw = self._typed_date()
         return {
             "selected_note_id": self.selected_note_id,
             "occurrence_date": self.current_occurrence_date,
@@ -18574,9 +18671,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             # base's spans when the shown body equals the base's, and
             # comparing them made an overridden occurrence read as dirty
             # forever.
+            # The date by the day it names (same_date): the field shows
+            # 17.10.2026 where the note stores 2026-10-17.
             return (st.get("checklist", []) == note.get("checklist", [])
                     and st.get("attachments", []) == note.get("attachments", [])
-                    and st["date"] == note.get("date", "")
+                    and same_date(st["date"], note.get("date", ""))
                     and st["recurrence"]
                     == normalize_recurrence(note.get("recurrence")))
         shown = note
@@ -18594,7 +18693,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 or st.get("checklist", []) != note.get("checklist", [])):
             return False
         # Date / recurrence belong to the series (compare against base note).
-        if st["date"] != note.get("date", ""):
+        # The date by the day it names, not its text: the field shows
+        # 17.10.2026 where the note stores 2026-10-17, and compared as text
+        # every dated note read as unsaved the moment it opened.
+        if not same_date(st["date"], note.get("date", "")):
             return False
         if st["recurrence"] != normalize_recurrence(note.get("recurrence")):
             return False
@@ -18786,6 +18888,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # it goes into the note it was typed for, before that note is left.
         # It used to stay in the box and be added to whichever note came next.
         self._take_pending_checklist_item()
+        # So is a date typed short: leaving the note settles it as leaving
+        # the field does (17.10 -> 17.10.2026). A click on another note, a
+        # new note or the window's close need not move the keyboard out of
+        # the field first, so its own <FocusOut> cannot be relied on here.
+        if leaving:
+            self._settle_date_fields()
         try:
             st = self.capture_editor_state()
         except Exception:
@@ -19010,7 +19118,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                        highlightbackground=self.colors["accent"])
         # The accent-coloured border must be tracked too, not just the fill:
         # left off the map it stays frozen at the theme the bar was first
-        # built under, so changing the accent (mov -> albastru) leaves the
+        # built under, so changing the accent (purple -> blue) leaves the
         # old colour framing the bar until it is rebuilt.
         self.track_theme(bar, bg="card", highlightbackground="accent")
         self._find_var = tk.StringVar()
@@ -19625,13 +19733,15 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if self.current_occurrence_date:
             has_override = self.current_occurrence_date in (note.get("overrides") or {})
             suffix = " (edited separately)" if has_override else ""
-            self.set_status(f"Occurrence {self.current_occurrence_date}{suffix}")
+            self.set_status(
+                f"Occurrence {show_date(self.current_occurrence_date)}{suffix}")
         else:
             created = note.get("created", "")
             if created:
-                self.set_status(f"Created: {created}   ·   Last updated: {note['updated']}")
+                self.set_status(f"Created: {show_stamp(created)}   ·   "
+                                f"Last updated: {show_stamp(note['updated'])}")
             else:
-                self.set_status(f"Last updated: {note['updated']}")
+                self.set_status(f"Last updated: {show_stamp(note['updated'])}")
         self.update_word_count()
         self._refresh_format_buttons()
         self._reset_editor_scroll()
@@ -20028,7 +20138,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             return
         if not self.ask_yes_no(
                 "Reset this day",
-                f"Return {occurrence_date} to the series content?\n\n"
+                f"Return {show_date(occurrence_date)} to the series content?\n\n"
                 "The separate edits made for this day will be discarded.",
                 icon="warning", default="no"):
             return
@@ -20618,8 +20728,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         be stored keeps the value the note already had, everything else is
         saved, and ``left_out`` says what was not, in words for the person.
 
-        What can be left out: a date that is not a date (the field reads
-        YYYY-MM-DD), any repeat value the app cannot read
+        What can be left out: a date written no way the app reads (read_date:
+        31.09.2026, a half-typed 17.10 that no one has left yet), any repeat
+        value the app cannot read
         (_unreadable_repeat_fields: its end date, "Every", "After … times", a
         monthly repeat's days), and a repeat with no start date to hang on.
         The save, the question asked on the way out of the note, the
@@ -20632,20 +20743,21 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         kept_rule = normalize_recurrence((note or {}).get("recurrence"))
         left_out = []
 
-        typed = self.date_entry.get().strip()
-        if typed == "YYYY-MM-DD":
-            typed = ""
-        date_value = typed
-        if typed and not parse_date(typed):
+        typed = self._typed_date()
+        day = read_date(typed)
+        # Stored in the one form, however it was typed: 17.10.2026 and
+        # "17 oct 2026" both reach the note as 2026-10-17.
+        date_value = format_date(day) if day else typed
+        if typed and day is None:
             # Exactly the date the note already has is not left out,
             # readable or not: nothing new is being lost. A note can arrive
             # holding a date the app cannot read (a share code or a backup
             # keeps a one-off note's date as it came), and it asked "Part
             # of this note isn't saved" every time it was left -- untouched
             # -- while "Continue without it" put back that same date.
-            if typed != kept_date.strip():
+            if not same_date(typed, kept_date):
                 left_out.append(f"the date “{typed}” "
-                                "(dates are written like 2026-09-30)")
+                                "(write dates like 30.09.2026)")
             date_value = kept_date
 
         rule = self.read_recurrence_from_ui()
@@ -20658,7 +20770,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         for field, typed in self._unreadable_repeat_fields(rule["freq"]):
             if field == "end":
                 left_out.append(f"the repeat's end date “{typed}” "
-                                "(dates are written like 2026-12-31)")
+                                "(write dates like 31.12.2026)")
                 rule = normalize_recurrence(dict(
                     rule, end=kept_rule["end"], count=kept_rule["count"]))
             elif field == "every":
@@ -20682,7 +20794,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 # Most often the date was cleared on the way to typing a
                 # new one: the series keeps the day it already starts on.
                 left_out.append("the cleared date (a repeating note needs "
-                                f"a start date, so it still starts {kept_date})")
+                                "a start date, so it still starts "
+                                f"{show_date(kept_date)})")
                 date_value = kept_date
             else:
                 left_out.append("the repeat (a repeating note needs a "
@@ -20704,7 +20817,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if getattr(self, "_holding_repeat_off", False) and self._repeat_off_waits():
             what = "turning the repeat off"
             if date_value != kept_date:
-                what += (f" and the date “{date_value}”" if date_value
+                what += (f" and the date “{show_date(date_value)}”" if date_value
                          else " and clearing the date")
                 date_value = kept_date
             left_out.append(what + self._HELD_TAIL)
@@ -20731,7 +20844,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         mode = self.rec_end_mode_var.get()
         if mode == "on":
             end = self.rec_end_date_var.get().strip()
-            if end and not parse_date(end):
+            # Read as normalize_recurrence reads it, so what is named here
+            # as not understood and what the rule keeps cannot disagree.
+            if end and not read_date(end):
                 problems.append(("end", end))
         every = self.rec_interval_var.get().strip()
         if not _whole_number(every):
@@ -20784,10 +20899,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if note is None:
             return {}
         carried = {}
-        typed = self.date_entry.get().strip()
-        if typed == "YYYY-MM-DD":
-            typed = ""
-        if date and (typed != (date_value or "")
+        typed = self._typed_date()
+        # By the day the text names: the field shows 17.10.2026 for the
+        # 2026-10-17 a save stores, and that is no difference to carry.
+        if date and (not same_date(typed, date_value or "")
                      or (unsaved and (date_value or "")
                          != (note.get("date") or ""))):
             carried["date"] = typed
@@ -21024,7 +21139,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # Autosave fires while someone may still be mid-keystroke on a
         # date ("2026-1"), so the automatic routes stay quiet about it --
         # the status line says it, the explicit Save says it out loud, and
-        # leaving the note asks (_flush_autosave).
+        # leaving the note asks (_flush_autosave). A Save pressed on purpose
+        # is the person finished with the fields, so a date typed short is
+        # settled first, as leaving the field would (17.10 -> 17.10.2026).
+        if not auto:
+            self._settle_date_fields()
         date_value, recurrence, left_out = self._date_and_repeat_to_store()
 
         has_attachments = bool(self.current_attachments)
@@ -21114,7 +21233,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             }))
             self.selected_note_id = new_id
             self._remember_last_open_note(new_id)
-            self.set_status(("Auto-saved " if auto else "Saved at ") + now)
+            self.set_status(("Auto-saved " if auto else "Saved at ") + show_stamp(now))
             if auto:
                 self._show_toast("Note created", yield_to_action=True)
         else:
@@ -21235,7 +21354,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 # the whole series: the series moved, or stopped repeating.
                 left_out = []
                 self.set_status(("Auto-saved " if auto else "Saved ")
-                                + f"{occurrence_date} only"
+                                + f"{show_date(occurrence_date)} only"
                                 + (" — the date and the repeat stay the "
                                    "whole series'" if schedule_changed else ""))
                 if auto:
@@ -21252,7 +21371,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 rescued = repeat_off_kept = self._write_series_owned(
                     note, date_value, recurrence)
                 note["updated"] = now
-                self.set_status(("Auto-saved " if auto else "Saved at ") + now
+                self.set_status(("Auto-saved " if auto else "Saved at ") + show_stamp(now)
                                 + (self._REPEAT_OFF_KEPT if rescued else ""))
                 if auto:
                     self._show_toast("Note updated", yield_to_action=True)
@@ -21333,7 +21452,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     # only once the rescue copy above holds it.
                     note["exceptions"] = []
                     note["overrides"] = {}
-                self.set_status(("Auto-saved " if auto else "Saved at ") + now
+                self.set_status(("Auto-saved " if auto else "Saved at ") + show_stamp(now)
                                 + (self._REPEAT_OFF_KEPT if days_lost else ""))
                 if auto:
                     self._show_toast("Note updated", yield_to_action=True)
@@ -21429,11 +21548,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # put right with nothing left to save (_say_nothing_is_left_out) --
         # kept after the line is written, since set_status drops them.
         if left_out:
-            self.set_status(("Auto-saved " if auto else "Saved at ") + now
+            self.set_status(("Auto-saved " if auto else "Saved at ") + show_stamp(now)
                             + " — except " + "; ".join(left_out)
                             + (self._REPEAT_OFF_KEPT if repeat_off_kept else ""))
         self._status_names_left_out = (
-            ("Auto-saved " if auto else "Saved at ") + now
+            ("Auto-saved " if auto else "Saved at ") + show_stamp(now)
             + (self._REPEAT_OFF_KEPT if repeat_off_kept else "")
             if left_out else None)
         if left_out:
@@ -21839,7 +21958,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             comments = (note.get("comments") or "").strip()
             if comments:
                 line("Comments", comments[:80] + ("…" if len(comments) > 80 else ""))
-            line("Date", note.get("date"))
+            line("Date", show_date(note.get("date")))
             if note.get("color"):
                 line("Color", note["color"])
             atts = note.get("attachments", [])
@@ -21847,7 +21966,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 line("Attachments", ", ".join(a.get("filename", "?") for a in atts))
             created = note.get("created", "")
             if created:
-                line("Created", created)
+                line("Created", show_stamp(created))
 
             # Position just below-right of the cursor.
             win.wm_geometry(f"+{event.x_root + 14}+{event.y_root + 12}")

@@ -402,7 +402,7 @@ for _w in (52, 70, 95):
           reflow_wrapped(_clear_wrapped) == "\n".join(CLEAR))
 
 # --- what must be left alone ---
-_address = "Str. Mihai Viteazul 12\nBloc A, ap. 4\nCluj-Napoca"
+_address = "St. Mary's Road 12\nBlock A, Apt. 4\nCambridge"
 check("an address keeps its own line breaks",
       reflow_wrapped(_address) == _address)
 
@@ -535,11 +535,11 @@ check("the document CSS keeps th left-aligned and bordered",
 
 # A multi-line cell stores its breaks as the literal <br> marker; left
 # to escaping alone they arrived as visible "&lt;br&gt;" text in the page.
-_br_body = ("| unu<br>doi | trei |" + chr(10) + "| --- | --- |" + chr(10)
+_br_body = ("| one<br>two | three |" + chr(10) + "| --- | --- |" + chr(10)
             + "| a | b |")
 _br_html = note_to_html(_br_body, [], [])
 check("a cell's <br> markers become real line breaks",
-      "unu<br>doi" in _br_html and "&lt;br&gt;" not in _br_html)
+      "one<br>two" in _br_html and "&lt;br&gt;" not in _br_html)
 
 # The table's place on the page rides its lines' alignment entries.
 _pl_body = "| A | B |" + chr(10) + "| --- | --- |" + chr(10) + "| a | b |"

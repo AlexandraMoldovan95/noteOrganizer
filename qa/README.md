@@ -213,6 +213,22 @@ A new surface joins this list the moment it ships.
   never just grep for FAIL lines: a mutant that crashes the import
   prints no failures at all, and reads as "survived nothing" when it
   really ran nothing (this exact false-clean happened here once).
+- **A check a mutant can lead to a question records the question; it
+  never waits for one.** The date checks of 0.84.338 left a note with no
+  stub on `_themed_dialog`, and under a mutant that left the date out,
+  leaving the note asked "Part of this note isn't saved" -- a real modal
+  question nobody would answer. The suite stood in front of it for its
+  whole ten-minute timeout, and the mutant run behind it with it. Stub
+  the dialog for any stretch where a broken app could ask (record the
+  title, give the safe answer), and assert the list is empty where no
+  question is the promise: the mutant then shows up as one red check.
+  The next mutant found an older qa5 check with the same gap, so the
+  class gets a net as well: `pin_the_desktop` answers a question still
+  waiting after `QUESTION_WAIT_MS` (20 s) with its safe button, names it
+  on a `FAIL a question was left waiting` line, and ends the run red.
+  That mutant then cost four minutes instead of ten and reached the
+  footer. The net is a backstop, not a stub: a check that leans on it
+  is slow and red by design.
 - **A check that can be decided by how fast the code above it runs is
   measuring the machine.** The sidebar search debounces with
   `after(180, refresh_note_list)`, and a full rebuild puts every card
@@ -528,7 +544,12 @@ A new surface joins this list the moment it ships.
   after it. qa8 does it right in all twelve places:
   `app.show_info = lambda *a, **k: True` on the line after the constructor.
   A hang is reported now as that script's failure, with its last printed
-  lines, and the run goes on.
+  lines, and the run goes on. And a check that COUNTS what a new app says
+  lets the app's own announcement have its turn first: qa5 counted the
+  notices of an app built a moment earlier, and on a CI runner that built
+  the app quickly the 250 ms timer landed inside the counting and added
+  one. `waiting_timers(app, 'announce_startup_changes')` says when
+  it has run.
 - **Assert the app's DECISION, not the arrival, wherever the promise is
   about focus.** `focus_get()` needs the process to own the desktop
   foreground, which a test run never does; measured, it answers 100/100
@@ -910,3 +931,10 @@ A new surface joins this list the moment it ships.
   event(s) …` at exit. A red in a run that printed it is reproduced in a
   run that did not before it is believed or dismissed; a red in a run
   that did not print it is never blamed on the keyboard.
+- **A rename renames every mention at once.** The pass that put the
+  suite into English on 2026-09-29 renamed qa8's control note to
+  `OtherNote` line by line, and left the check that it is filtered out
+  asking about the note's old Romanian title — a title no note had any
+  more, so the check could not fail. Data a check names is renamed
+  across the whole file in one replacement whose count is known before
+  it runs, and the check is then made to fail once on purpose.

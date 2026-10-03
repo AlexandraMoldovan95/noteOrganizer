@@ -316,7 +316,7 @@ from noteorganizer.core import tables as _core_tables_q7
 app.notes = [{'id': 9, 'title': 'PreviewNote', 'category': 'General',
               'date': '2026-07-20', 'updated': '2026-01-01 00:00',
               'created': '2026-01-01 00:00', 'attachments': [],
-              'body': 'Text sus\n| A | B |\n| --- | --- |\n| 1 | 2 |\nText jos',
+              'body': 'Text above\n| A | B |\n| --- | --- |\n| 1 | 2 |\nText below',
               'comments': 'a comment that must not be shown',
               'checklist': [{'text': 'a', 'done': True},
                             {'text': 'b', 'done': False}]}]
@@ -339,7 +339,7 @@ _pv_chip = next((w.cget('text') for w in _pv_texts
                  and ('▦' in str(w.cget('text')) or '💬' in str(w.cget('text')))),
                 '')
 check('calendar preview strips the table to plain text',
-      '|' not in _pv_text and 'Text sus' in _pv_text and 'Text jos' in _pv_text)
+      '|' not in _pv_text and 'Text above' in _pv_text and 'Text below' in _pv_text)
 check('calendar preview does not dump the comments inline',
       'a comment that must not' not in _pv_text)
 check('calendar preview flags table + checklist + comments as chips',
@@ -365,6 +365,11 @@ app.show_day_summary_tooltip('2026-07-20')
 app.update()
 check('hovering a day normally does show its preview',
       getattr(app, '_day_tooltip', None) is not None)
+# ...naming the day day first, the month short: "Monday, 20 Jul".
+_dt_said = (find_all_labels(app._day_tooltip)
+            if getattr(app, '_day_tooltip', None) is not None else [])
+check(f'...which names the day day first ({_dt_said[:1]})',
+      any(t.startswith('Monday, 20 Jul') for t in _dt_said))
 app.hide_day_tooltip()
 app._context_menu_open = True
 app.show_day_summary_tooltip('2026-07-20')
@@ -1426,6 +1431,15 @@ check('the Back to Calendar button is mapped on the ctx route',
 check('the banner names the day being edited',
       bool(app.occurrence_banner.winfo_ismapped())
       and '15 July 2026' in app.occurrence_banner.cget('text'))
+# Written out day first, the day without a leading nought, the names the
+# app's own whatever language Windows speaks: "Monday, 6 July 2026".
+app._ctx_open(app.find_note(60), '2026-07-06', return_day='2026-07-06')
+app.update()
+check(f'the banner writes the day out, day first '
+      f'({app.occurrence_banner.cget("text")!r})',
+      app.occurrence_banner.cget('text').endswith('Monday, 6 July 2026'))
+app._ctx_open(app.find_note(60), '2026-07-15', return_day='2026-07-15')
+app.update()
 
 app.load_note(app.find_note(61)); app.update()
 check('the banner hides on a plain note',
@@ -2211,7 +2225,7 @@ app.notes = [
      'updated': '2026-01-01 00:00', 'created': '2026-01-01 00:00',
      'checklist': [], 'attachments': [], 'exceptions': [],
      'overrides': {
-         '2026-08-17': {'title': '', 'body': 'discutat bugetul',
+         '2026-08-17': {'title': '', 'body': 'discussed the budget',
                         'comments': '', 'category': 'General', 'color': ''},
          '2026-06-15': {'title': 'HistSpecial', 'body': 'plan',
                         'comments': '', 'category': 'General', 'color': ''}}},
@@ -2234,21 +2248,21 @@ check('History opens over the grid and lists the calendar dwellers',
       and any('HistSeries' in t for t in _hl)
       and any('HistLastYear' in t for t in _hl))
 check('a series group starts collapsed (no ✎ children yet)',
-      not any('2026-08-17' in t for t in _hl))
+      not any('17.08.2026' in t for t in _hl))
 
 app._history_toggle_group(80); app.update()
 _hl = find_all_labels(app._history_rows)
 check('expanding the group reveals its edited days, newest first',
-      any('2026-08-17' in t for t in _hl)
-      and any('2026-06-15' in t and 'HistSpecial' in t for t in _hl))
+      any('17.08.2026' in t for t in _hl)
+      and any('15.06.2026' in t and 'HistSpecial' in t for t in _hl))
 app._history_toggle_group(80); app.update()
 
 # Search reaches into a day's own override content and auto-expands.
-app._history_search_var.set('bugetul')
+app._history_search_var.set('budget')
 app.update(); import time as _t7; _t7.sleep(0.4); app.update()
 _hl = find_all_labels(app._history_rows)
 check('search finds override content and auto-expands its group',
-      any('2026-08-17' in t for t in _hl)
+      any('17.08.2026' in t for t in _hl)
       and not any('HistDated' in t for t in _hl))
 app._history_search_var.set('')
 app.update(); _t7.sleep(0.4); app.update()
@@ -2256,7 +2270,7 @@ app.update(); _t7.sleep(0.4); app.update()
 # ---- A PASTE ONTO THIS SEARCH BOX'S PLACEHOLDER ----
 # The check above drives the search through the VARIABLE, which steps over
 # the widget entirely -- so it could never see that a right-click Paste
-# landed glued to the placeholder: "Search all calendar entries...bugetul",
+# landed glued to the placeholder: "Search all calendar entries...budget",
 # a query that matches nothing, which reads as the search being broken. Set
 # through the var it works; set through the field it did not. The fix lives
 # in add_placeholder, so this is the sibling of qa1's title checks on the
@@ -2285,30 +2299,30 @@ if _hist_entry is not None:
     app.update()
     check('fixture: the History search shows its placeholder',
           _hist_entry.get() == _PH_HIST)
-    app.clipboard_clear(); app.clipboard_append('bugetul'); app.update()
+    app.clipboard_clear(); app.clipboard_append('budget'); app.update()
     _hist_entry.event_generate('<<Paste>>')
     app.update(); _t7.sleep(0.4); app.update()
     check('pasting into the History search replaces the placeholder',
-          _hist_entry.get() == 'bugetul')
+          _hist_entry.get() == 'budget')
     # And the consequence, not just the contents: the query the user pasted
     # is the query that ran. The same hit the var-driven check above proved,
     # so a failure here is about the paste and not about the fixture.
     _hl = find_all_labels(app._history_rows)
     check('and the pasted query is the one the register searched for',
-          any('2026-08-17' in t for t in _hl)
+          any('17.08.2026' in t for t in _hl)
           and not any('HistDated' in t for t in _hl))
     # The control: a paste must not wipe a query someone typed.
     _hist_entry.delete(0, 'end')
-    _hist_entry.insert(0, 'bug')
+    _hist_entry.insert(0, 'bud')
     _hist_entry.icursor('end')
     app.update()
     check('fixture: the History search holds real text, no placeholder',
-          _hist_entry.get() == 'bug')
-    app.clipboard_clear(); app.clipboard_append('etul'); app.update()
+          _hist_entry.get() == 'bud')
+    app.clipboard_clear(); app.clipboard_append('get'); app.update()
     _hist_entry.event_generate('<<Paste>>')
     app.update(); _t7.sleep(0.4); app.update()
     check('a paste into a typed History query leaves that text alone',
-          _hist_entry.get() == 'bugetul')
+          _hist_entry.get() == 'budget')
     _hist_entry.delete(0, 'end')
     app.update(); _t7.sleep(0.4); app.update()
 app._history_search_var.set('')
@@ -2609,6 +2623,10 @@ _qa_click(app.cal_canvas, x=_cd_at[0], y=_cd_at[1])
 app.update()
 check('a click on a day opens its list, not one of its notes',
       app.selected_day == '2026-07-08' and app._day_panel_mode == 'list')
+# Its header writes the day out day first, as every date in the app is.
+_cd_head = [t for t in find_all_labels(app.day_panel) if '2026' in t]
+check(f'the day\'s list names the day day first ({_cd_head[:1]})',
+      any('Wednesday, 8 July 2026' in t for t in _cd_head))
 app.close_day_panel(); app.update()
 
 # Markers saved from the popup change that one day's corner, without the
@@ -2765,9 +2783,9 @@ check('a childless live series wears the jump arrow, not a dropdown one',
 app._history_toggle_group(91); app.update()
 _hl = find_all_labels(app._history_rows)
 check('expanding the bounded group lists all three days, ✎ only where edited',
-      any(t.startswith('✎ 2026-07-01') and 'MidRun' in t for t in _hl)
-      and any(t.startswith('• 2026-08-01') for t in _hl)
-      and any(t.startswith('• 2026-06-01') for t in _hl))
+      any(t.startswith('✎ 01.07.2026') and 'MidRun' in t for t in _hl)
+      and any(t.startswith('• 01.08.2026') for t in _hl)
+      and any(t.startswith('• 01.06.2026') for t in _hl))
 _lonely_lbl = next(w for w in app._history_rows.winfo_children()
                    if isinstance(w, tk.Frame)
                    and any('LonelyLive' in str(c.cget('text'))
@@ -2835,8 +2853,11 @@ def _hr_disk_date(note_id):
 def _hr_open_from_the_list(note_id, date_str):
     app.notebook.select(app.TAB_NOTES); app.update()
     app.open_note_in_tab(app.find_note(note_id)); app.update()
+    # The field shows the stored date as every date is shown, day first,
+    # and an undated note's field shows its form.
     return (app.selected_note_id == note_id
-            and app.date_entry.get() == date_str)
+            and app.date_entry.get() == (NO.show_date(date_str)
+                                         or NO.DATE_FORM))
 
 
 def _hr_open_one_day_of_the_walk():
@@ -2852,7 +2873,7 @@ def _hr_open_one_day_of_the_walk():
         _hr_btn.invoke(); app.update()
     return (app.selected_note_id == 122
             and app.current_occurrence_date == '2026-07-10'
-            and app.date_entry.get() == '2026-07-01')
+            and app.date_entry.get() == '01.07.2026')
 
 
 def _hr_click_the_row(title):
@@ -2889,7 +2910,7 @@ try:
              120, '2026-03-10', 123),
             ('one day of a series', _hr_open_one_day_of_the_walk,
              122, '2026-07-01', 123),
-            ('an undated note', lambda: _hr_open_from_the_list(123, 'YYYY-MM-DD'),
+            ('an undated note', lambda: _hr_open_from_the_list(123, ''),
              123, '', 120)):
         for _hr_then in ('another note is opened', 'the window is closed'):
             _hr_reset()
@@ -2913,7 +2934,7 @@ try:
             check(f'a History row leaves the date of {_hr_what} in the editor '
                   f'alone, and on disk once {_hr_then} (field {_hr_field!r}, '
                   f'disk {_hr_stored!r}, questions {len(_hr_asked)})',
-                  _hr_field == (_hr_date or 'YYYY-MM-DD')
+                  _hr_field == (NO.show_date(_hr_date) or NO.DATE_FORM)
                   and _hr_stored == _hr_date and not _hr_asked)
 finally:
     del app.ask_occurrence_scope
@@ -3777,7 +3798,7 @@ tk.Menu.add_command = lambda self, **kw: _hm_caught.append(
     (str(kw.get('label', '')), kw.get('command')))
 tk.Menu.tk_popup = lambda self, *a, **k: None
 try:
-    _hm_row = _lt_label(app._history_rows, '2026-06-05')
+    _hm_row = _lt_label(app._history_rows, '05.06.2026')
     if _hm_row is not None:
         _qa_fire(_hm_row, '<Button-3>', x=5, y=5, rootx=200, rooty=200)
         app.update()
@@ -3797,7 +3818,7 @@ check(f'...and after one of a series\' days is deleted under them, the count '
       _hm_delete is not None
       and '2026-06-05' in (app.find_note(230).get('exceptions') or [])
       and any('KeptSeries' in t and '9 occurrences' in t for t in _hm_after)
-      and not any('2026-06-05' in t for t in _hm_after)
+      and not any('05.06.2026' in t for t in _hm_after)
       and _hm_after == _hm_fresh())
 app._history_search_var.set('')
 app._render_calendar_history(); app.update()
@@ -4014,7 +4035,7 @@ app.open_blank_tab(); app.update()
 # been driven through the real widgets.
 app.notes = []
 for i in range(3):
-    app.notes.append({'id': 800 + i, 'title': 'Geamana', 'body': 'idem',
+    app.notes.append({'id': 800 + i, 'title': 'Twin', 'body': 'idem',
                       'category': 'General', 'updated': '2026-01-01 00:00',
                       'created': '2026-01-01 00:00', 'checklist': [],
                       'attachments': []})
@@ -4049,15 +4070,15 @@ finally:
     app.ask_yes_no = _orig_ask7c
     del app._reopen_dup_panel
 check('tick-all-but-first plus cleanup keeps exactly one twin',
-      sum(1 for n in app.notes if n.get('title') == 'Geamana') == 1
-      and sum(1 for e in app.trash if e.get('title') == 'Geamana') == 2)
+      sum(1 for n in app.notes if n.get('title') == 'Twin') == 1
+      and sum(1 for e in app.trash if e.get('title') == 'Twin') == 2)
 _dpf.destroy(); app.update()
 
 # ---- Duplicates hover PREVIEW (coverage-lift #2) ----
 _pv_note = {'id': 900, 'title': 'PreviewNote', 'body': 'preview body',
             'category': 'General', 'updated': '2026-01-01 00:00',
-            'created': '2026-01-01 00:00', 'checklist': [],
-            'attachments': []}
+            'created': '2026-01-01 09:30', 'date': '2026-03-05',
+            'checklist': [], 'attachments': []}
 _pv_lbl = tk.Label(app, text='hover me')
 _pv_lbl.pack()
 app._attach_dup_preview(_pv_lbl, _pv_note)
@@ -4100,6 +4121,11 @@ def _tip_txts7(tops):
     return out
 check('hovering a duplicate row shows its floating preview',
       _tips and any('PreviewNote' in t for t in _tip_txts7(_tips)))
+# ...its date and its creation shown as every date in the app is, day first.
+_pv_said = _tip_txts7(_tips) if _tips else []
+check(f'...naming the note\'s date and when it was made, day first '
+      f'({[t for t in _pv_said if "2026" in t]})',
+      '05.03.2026' in _pv_said and '01.01.2026 09:30' in _pv_said)
 _qa_fire(_pv_lbl, '<Leave>')
 app.update()
 check('leaving the row hides the preview',
@@ -4116,7 +4142,7 @@ print()
 # Ctrl+S), never save_current_note directly, precisely because the bug
 # lived in front of it.
 app.open_blank_tab(); app.update()
-app.title_entry.insert(0, 'DeGolit')
+app.title_entry.insert(0, 'ToEmpty')
 app.body_text.insert('1.0', 'old content')
 app.save_current_note(auto=False); app.update()
 _gid = app.selected_note_id
@@ -4128,7 +4154,7 @@ check('switch-away flush records the emptying of a saved note',
       _gn is not None and _gn['title'] == '' and _gn['body'] == '')
 
 app.open_blank_tab(); app.update()
-app.title_entry.insert(0, 'DeGolit2')
+app.title_entry.insert(0, 'ToEmpty2')
 app.body_text.insert('1.0', 'other content')
 app.save_current_note(auto=False); app.update()
 _gid2 = app.selected_note_id
@@ -4140,7 +4166,7 @@ check('the autosave timer route records the emptying too',
       _gn2 is not None and _gn2['title'] == '' and _gn2['body'] == '')
 
 app.open_blank_tab(); app.update()
-app.title_entry.insert(0, 'DeGolit3')
+app.title_entry.insert(0, 'ToEmpty3')
 app.body_text.insert('1.0', 'content again')
 app.save_current_note(auto=False); app.update()
 _gid3 = app.selected_note_id
@@ -4183,7 +4209,7 @@ check('a comments-only note is real content to the autosave',
 # change" and the automatic routes never wrote it: the fix's own promise,
 # defeated one frame upstream.
 app.open_blank_tab(); app.update()
-app.title_entry.insert(0, 'Spatii')
+app.title_entry.insert(0, 'Spaces')
 app.body_text.insert('1.0', 'abc')
 app.save_current_note(auto=False); app.update()
 _wid = app.selected_note_id

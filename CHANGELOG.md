@@ -12,6 +12,7 @@ How the numbers themselves are counted is the
 
 | Version | Date | In one line |
 |---|---|---|
+| [0.84.338](#084338--2026-10-03) | 2026-10-03 | Dates typed the way people write them — 17.10.2026, 2026-10-17, "17 Oct 2026" — and shown day first everywhere, while the notes file keeps the one form it always had. |
 | [0.83.338](#083338--2026-10-03) | 2026-10-03 | What comes in from outside is taken for what it is: a damaged data file no longer stops the app from starting, an attachment is only its two names, and a paste too long to keep whole says what it left out. |
 | [0.83.335](#083335--2026-10-02) | 2026-10-02 | Nineteen rounds of agents tried to break the app: nothing you type is lost when one field is wrong, an import asks before it changes anything, and questions, tables, the calendar and the note list stop surprising you. |
 | [0.82.233](#082233--2026-09-30) | 2026-09-30 | A note opened from the Calendar no longer brings along the last note's Restore previous, title counter or share code. |
@@ -84,6 +85,55 @@ How the numbers themselves are counted is the
 | [0.3.0](#030--tags-removed-categories-as-the-sole-organization-system) | — | Tags come out entirely, leaving categories as the app's one organization system. |
 | [0.2.0](#020--inline-ui-overhaul--data-resilience) | — | Every OS-native popup becomes an in-app themed one, and the calendar grows richer. |
 | [0.1.0](#010--core-application) | — | The founding feature set — notes, recurrence, calendar, templates, sharing, themes. |
+
+---
+
+## [0.84.338] — 2026-10-03
+
+*Highlights: a date is written the way people write it. The date field shows its form, DD.MM.YYYY,
+reads a date in figures day first (month first, the American way, where the day first cannot
+be), year first or with the month as a word, and completes a short year when you finish with it — and the app shows every date the same way, while the notes file keeps
+the one form it always had.*
+
+### Added
+
+- **Dates typed the way people write them, and shown day first.** The empty date field shows
+  **DD.MM.YYYY**, the order a date is read in. It reads 17.10.2026, 17/10/2026 and 17-10-2026 —
+  the day first, so 10/12/2026 is 10 December, and the month first only where the day first
+  cannot be, so the American 10/17/2026 is 17 October — 2026-10-17, and the month as a word in
+  English or Romanian, short or in full, before or after the day ("17 Oct 2026", "October 17th,
+  2026"), with English's day names, ordinal endings and "the … of" read and set aside
+  ("Saturday, October 17, 2026", "the 17th of October"). A year of two figures, or none, is read
+  when you finish with the field — a click anywhere else, Enter, Tab, Save, another note: 17.10
+  becomes this year's, 17.10.26 becomes 2026, and while you are still typing, "17.10.20" on its
+  way to 2026 is never saved as 2020. Finishing writes the date back as 17.10.2026, and every
+  date the app shows reads the same way — the note's card, the calendar's History, Trash and
+  duplicate rows, the status line, Statistics, the repeat's "until" — with written-out days day
+  first too ("Saturday, 3 October"). The repeat's end-date box reads dates the same way. The
+  notes file keeps YYYY-MM-DD whatever was typed, and a note that arrives with its date written
+  day first (an older share code, a hand edit) is read into that form, so it reaches the calendar.
+
+### Testing
+
+- test_recurrence reads every promised form and refuses the rest — a day that does not exist, a
+  year being typed, digits of another script, thirty figures and a stray symbol, which a single
+  backtracking pattern would have taken hours over in the field's own keystroke; the American
+  order only where the day first cannot be. qa5 types each form and finds it stored as
+  YYYY-MM-DD with the editor reading as saved; a year still being typed never saved; the field,
+  a click on an empty stretch of the window with the keyboard still in the field (the case a
+  field test found saving nothing), Enter, Save, leaving the note and a share code each settling
+  a short year; the end-date box; the card; the picker opening on a date typed day first. qa1, qa2, qa3,
+  qa6, qa7, qa8 and qa9 check the field's form, the picker, the calendar's Add note, History, the
+  banner, the day's header and hover, the reminder bar, Trash and duplicate rows, and Statistics.
+  The left-out checks that used 30/09/2026 as their unreadable date use one that cannot exist
+  (31/09/2026), so they go on proving what they proved. Sixty-two mutants, each killed with its
+  suite reaching its footer; `tools/check_one_definition.py` gains a rule that keeps the date
+  field read in one place, proved on a reader written by hand again.
+- A question a check leaves waiting no longer stops a suite. Under a mutant that left a date out,
+  an older qa5 check met "Part of this note isn't saved" with nothing to answer it, and the suite
+  stood there for its whole ten-minute timeout. The qa scripts' shared support now answers a
+  question still waiting after 20 seconds with its safe button, names it on a FAIL line, and ends
+  the run red.
 
 ---
 
@@ -1119,7 +1169,7 @@ say what it was for.*
   `Note title...My pasted title` — the hint that says "type a title here" was still in
   the box and the pasted text was stuck to the end of it. The same on the Calendar's
   History search, where the result was a query like
-  `Search all calendar entries...bugetul`, which matches nothing, so the search looked
+  `Search all calendar entries...budget`, which matches nothing, so the search looked
   broken rather than misfilled. The note title also lost thirteen characters of its
   200-character limit to the hint, so a long pasted title came back shorter than it had
   to be. The hint is now cleared by a paste exactly as it is by typing, on every field
@@ -2344,8 +2394,8 @@ adversarial review of the first round proved the class was wider than the findin
   one degrade gracefully in older builds (the import path has always normalized the field).
 
 ### Changed
-- **The table caption speaks English.** The inserted labels were "Tab. N: descriere" / "Sursa:"
-  (the academic convention the feature was first built around, in Romanian); they are now
+- **The table caption speaks English.** The inserted labels were in Romanian ("Tab. N:" and a
+  source line, the academic convention the feature was first built around); they are now
   "Table N: description" / "Source: " — the app's own functions are English everywhere, and the
   caption stays plain editable text, so what's written after the labels (or instead of them) is
   the user's, in any language. Numbering now counts only caption-shaped lines ("Table 3:"), not
@@ -2414,9 +2464,9 @@ regression checks.*
   switch, a per-view choice rather than saved note content. The redundant in-panel "Close" buttons
   were dropped from both boxes, since their header bars already toggle them shut.
 - **A system-managed table caption.** Table menu → **Table → Add caption below…** inserts a
-  centred, auto-numbered label line ("Tab. N: descriere" — *Table N: description*, the placeholder
-  pre-selected so typing replaces it) plus a "Sursa:" (*Source*) line for as many sources or links
-  as needed — the literal labels the app inserts, following the academic table-caption convention
+  centred, auto-numbered label line (*Table N: description*, the placeholder
+  pre-selected so typing replaces it) plus a *Source* line for as many sources or links
+  as needed — labels the app inserted in Romanian at first, following the academic table-caption convention
   it was built for, as ordinary body text after that, editable like anything else. Nobody has to hand-build a caption and fight its
   alignment again.
 - **The table menu got shelves.** The flat run had grown past fifteen entries ("finding the one you
@@ -2481,7 +2531,7 @@ regression checks.*
 - **Our own table copy takes its own road home.** The cell copy puts an HTML table on the clipboard
   for Word's sake — and on Windows the rich-paste route saw that HTML first, so pasting a copied
   table back into a note bypassed the table route's own fixes on the shipping platform: no
-  remembered widths, no placement, the first row glued onto the caret's line ("`Sursa: | fff |…`"
+  remembered widths, no placement, the first row glued onto the caret's line ("`Source: | fff |…`"
   in the field report). A paste whose plain text matches our own cell copy now goes straight to the
   table route with all its guards; content from other applications keeps the rich route. The qa
   clipboard stub gained a loopback mode that serves back exactly what the app wrote — the Windows

@@ -889,7 +889,7 @@ appends one trace per spot per session to `crash_log.txt` via `_log_swallowed` (
 a persistent bug can no longer stop saving with nothing anywhere to diagnose.
 
 A save never lets one field veto the rest. A date the app cannot read, a repeat with no start
-date, a repeat's end date typed day-first, or a repeat's "Every" / "After … times" that is not a
+date, a repeat's end date it cannot read, or a repeat's "Every" / "After … times" that is not a
 whole number is *left out*: it keeps the note's last good value, everything else is saved, and
 the status line says what was left out. (Read as 1, as the widgets used to read it, "After abc
 times" ended a series after its first day.) Leaving the note — another note, Ctrl+N, a delete,
@@ -901,6 +901,29 @@ stores, so it keeps the note's "updated" stamp (`_stored_signature`): otherwise 
 a note with an unreadable date on screen moved it up "Recently updated". Before 0.83.335 the save returned nothing for such a field, and every automatic route read
 that as success and replaced the editor — see
 [One unreadable field, and every word typed after it](ISSUES_LOG.md#one-unreadable-field-and-every-word-typed-after-it).
+
+What the app can read is wider since 0.84.338: a date as people write it — the day first in
+figures (17.10.2026, 17/10/2026), the month first only where the day first cannot be (the
+American 10/17/2026), the year first (2026-10-17), the month as a word in English or Romanian,
+with English's day names and ordinal endings set aside — through one reader, `read_date` in
+`core/recurrence.py`, and shown in one form,
+`show_date` (17.10.2026). The store is unchanged: everything that reaches a note goes through
+`format_date`, so `notes_data.json` keeps YYYY-MM-DD whatever was typed. Two rules make that safe:
+
+- **A short or a missing year is read only when the person has finished** (`read_date(...,
+  settled=True)`: leaving the field, Enter, a click anywhere else, an explicit Save, leaving the
+  note, asking for a code — `_settle_date_fields`, wired by `_watch_date_field`). A click on
+  anything that takes no keyboard leaves Tk's focus where it was, so it is caught app-wide
+  rather than waited for as a `<FocusOut>` that never comes. The autosave reads strictly, so "17.10.20" on its way to 2026 is left
+  out for half a second instead of saved as 2020.
+- **The editor compares a date by the day it names, not its text** (`same_date`). The field
+  shows 17.10.2026 where the note stores 2026-10-17; compared as text, every dated note read as
+  unsaved the moment it opened — the same shape as the table-ending note the dirty comparator
+  once read as changed forever.
+
+The field is read in one place, `_typed_date` (a rule in `tools/check_one_definition.py` holds
+it there): its empty form was compared by hand in five places, five places to forget the day it
+changed.
 
 ## Testing
 

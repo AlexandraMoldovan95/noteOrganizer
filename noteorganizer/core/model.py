@@ -48,6 +48,8 @@ from .tables import with_caret_line
 from .recurrence import (
     normalize_recurrence,
     parse_date,
+    format_date,
+    read_date,
     expand_occurrences,
     OVERRIDABLE_FIELDS,
 )
@@ -483,6 +485,15 @@ def normalize_note(note):
         clean["category"] = "General"
 
     clean["recurrence"] = normalize_recurrence(clean["recurrence"])
+
+    # A date written another way the app reads -- day first, as an older
+    # share code or a hand edit can carry it -- is stored in the one form
+    # the calendar places a note by. A date that cannot be read is kept as
+    # it came, as before (see _date_and_repeat_to_store).
+    if clean["date"] and not parse_date(clean["date"]):
+        day = read_date(clean["date"])
+        if day is not None:
+            clean["date"] = format_date(day)
 
     # A recurring rule with no anchor date can't be placed on a calendar,
     # so it degrades to a normal note instead of silently disappearing.

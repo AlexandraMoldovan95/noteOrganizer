@@ -197,8 +197,10 @@ stamp = load_settings().get("first_launch_date")
 
 check("Statistics has a real first-launch stamp to show", bool(stamp))
 check("the stamp is the sandbox one, so this assertion is exact", stamp == STAMP)
+# Shown as every date in the app is shown, day first (show_date): the
+# stored stamp is 2020-01-02, the screen says 02.01.2020.
 check("Statistics shows the date, not None",
-      stamp in stats_text and "since None" not in stats_text,
+      imported.show_date(stamp) in stats_text and "since None" not in stats_text,
       f"(stats said: {stats_text[-90:]!r})")
 
 app.destroy()

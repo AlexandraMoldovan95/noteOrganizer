@@ -77,23 +77,26 @@ app.search_var.set('')
 # The design's whole promise is that a table is plain text in the note,
 # so a word in a cell is findable like any other word. Asserted both
 # ways: the table note is kept, the plain note is filtered out.
-_tbl_note = {'title': 'TabelNote',
-             'body': '| Produs | Pret |\n| CuvantUnicInCelula | 3 |'}
-_oth_note = {'title': 'OtherNote', 'body': 'nothing special here'}
+# Each with an id of its own: normalize_note gives a note that has none
+# id 0, which Note0 above already holds, and the list keeps one card per
+# id -- two shown notes sharing one read back as the same title twice.
+_tbl_note = {'id': 100, 'title': 'TableNote',
+             'body': '| Product | Price |\n| UniqueWordInCell | 3 |'}
+_oth_note = {'id': 101, 'title': 'OtherNote', 'body': 'nothing special here'}
 app.notes.append(NO.normalize_note(_tbl_note))
 app.notes.append(NO.normalize_note(_oth_note))
 app.refresh_note_list()
 app.update()
-app.search_var.set('CuvantUnicInCelula')
+app.search_var.set('UniqueWordInCell')
 t0 = time.time()
 while time.time() - t0 < 0.4:
     app.update()
     time.sleep(0.02)
 _texts = list_texts()
 check('search finds a word living inside a table cell',
-      'TabelNote' in _texts)
+      'TableNote' in _texts)
 check('and filters out the note that does not have it',
-      'AltaNota' not in _texts)
+      'OtherNote' not in _texts)
 app.search_var.set('')
 app.update()
 time.sleep(0.25)
@@ -375,8 +378,9 @@ check('calendar add-note asks and saves the deferred edit before clearing',
       and 'cal-add-pending' in app13.notes[0]['overrides']['2026-07-11']['body'])
 _ca_ok = False
 for _ in range(60):  # settle: a late timer tick may still be landing
+    # Shown as every date in the field is, day first.
     if (app13.selected_note_id is None
-            and app13.date_entry.get() == '2026-08-15'):
+            and app13.date_entry.get() == '15.08.2026'):
         _ca_ok = True
         break
     app13.update()

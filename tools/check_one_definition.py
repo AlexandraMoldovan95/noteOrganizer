@@ -205,6 +205,17 @@ RULES = [
         allowed={},
         window=1,
     ),
+    Rule(
+        question="what has the person typed in the date field?",
+        owner="_typed_date",
+        # The field read by hand. Five readers each compared it with its
+        # empty form ("YYYY-MM-DD") themselves, and the day the form became
+        # DD.MM.YYYY each was one more place to forget -- a reader that
+        # missed it would take the form for a date someone typed.
+        pattern=re.compile(r"self\.date_entry\.get\(\)"),
+        allowed={"_typed_date": "the single answer"},
+        window=1,
+    ),
 ]
 
 

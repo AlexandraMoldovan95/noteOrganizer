@@ -2116,7 +2116,8 @@ check('a paste into a title that has real text leaves that text alone',
 # wants a paste menu on next; it has no <<Paste>> route a user can reach
 # today, so this is the latent half of the same hole, checked so that adding
 # the menu cannot re-open it.
-_PH_DATE = 'YYYY-MM-DD'
+# The field's form, DD.MM.YYYY: the order a typed date is read in.
+_PH_DATE = NO.DATE_FORM
 check('fixture: the date field is showing its placeholder',
       _restore_placeholder(app.date_entry, _PH_DATE))
 app.clipboard_clear(); app.clipboard_append('2026-10-05'); app.update()
@@ -2243,7 +2244,7 @@ def _stub_clipboard(html=None, text=None, loopback=False):
     # Windows clipboard behaves exactly like that, and the rich-paste
     # route only sees our own table copies through it. Without this mode
     # the suite never exercised the Windows route order, and the pasted
-    # table gluing itself onto the "Sursa:" line shipped unseen.
+    # table gluing itself onto the "Source:" line shipped unseen.
     if loopback:
         NO.clipboard.read_html = lambda: _written.get('html')
         NO.clipboard.read_text = lambda: _written.get('text')
@@ -2760,10 +2761,10 @@ check(f'a pipe typed into a cell cannot break the row ({lines_now()[0]!r})',
 # sideways instead of being cut off at the edge.
 set_body('')
 _stub_clipboard(html=('<table>'
-                      "<tr><th rowspan='2'>Nr</th>"
-                      "<th colspan='2'>Cablu</th></tr>"
+                      "<tr><th rowspan='2'>No</th>"
+                      "<th colspan='2'>Cable</th></tr>"
                       '<tr><th>Vodafone</th><th>Digi</th></tr>'
-                      '<tr><td>1.</td><td>da</td><td>nu</td></tr>'
+                      '<tr><td>1.</td><td>yes</td><td>no</td></tr>'
                       '</table>'))
 app._on_body_paste()
 app.update()
@@ -2783,11 +2784,11 @@ check('covered positions are not cells at all',
 app._open_cell_editor(_merged, 0, 1)
 _e = app._cell_editor['entry']
 _e.delete('1.0', 'end')
-_e.insert('1.0', 'Cablu Nou')
+_e.insert('1.0', 'New Cable')
 app._commit_cell_editor()
 app.update()
 check(f'editing a merge anchor keeps the merge ({lines_now()[0]!r})',
-      core_tables.split_row(lines_now()[0]) == ['Nr', 'Cablu Nou', '<']
+      core_tables.split_row(lines_now()[0]) == ['No', 'New Cable', '<']
       and core_tables.split_row(lines_now()[1])[0] == '^')
 
 # A narrow table needs no scrollbar; a wide one gets a live one.
@@ -3038,7 +3039,7 @@ check('the caret guard leaves a fresh note alone after a table note',
 # ---- FIND-IN-NOTE match width across an emoji ----
 # search -count returns UTF-16 units while "+Nc" counts characters, so
 # a matched astral emoji widened the highlight by one character apiece.
-set_body('vezi \U0001F600ok maybe')
+set_body('see \U0001F600ok maybe')
 app._open_find()  # the scan model lives on the find bar's variables
 app.update()
 _fm = app._find_scan_model('\U0001F600ok')
@@ -3311,15 +3312,15 @@ _t9 = app._grid_at_line(_first9)
 check(f'a fresh single-cell copy is what pastes '
       f'({_t9["cells"][(1, 0)]["value"]!r})',
       _t9['cells'][(1, 0)]['value'] == 'Heading')
-app._grid_cell_clip = [['MEMORAT']]
+app._grid_cell_clip = [['REMEMBERED']]
 app.clipboard_clear()
-app.clipboard_append('EXTERN\tNOU')
+app.clipboard_append('EXTERNAL\tNEW')
 app._grid_paste_cells(_t9, 1, 0)
 app.update()
 _t9 = app._grid_at_line(_first9)
 check('a newer system clipboard outranks the remembered matrix',
-      _t9['cells'][(1, 0)]['value'] == 'EXTERN'
-      and _t9['cells'][(1, 1)]['value'] == 'NOU')
+      _t9['cells'][(1, 0)]['value'] == 'EXTERNAL'
+      and _t9['cells'][(1, 1)]['value'] == 'NEW')
 
 # The remembered matrix earns its keep on the one copy the clipboard
 # cannot describe: an empty cell. Its clipboard text is '', which a parser
@@ -3345,7 +3346,7 @@ set_body('')
 set_body('')
 app.clipboard_clear()
 app.clipboard_append('OLD FROM LAST WEEK')
-_stub_clipboard(html='<table><tr><td>Unu</td><td>Doi</td></tr>'
+_stub_clipboard(html='<table><tr><td>One</td><td>Two</td></tr>'
                      '<tr><td></td><td></td></tr></table>')
 app._on_body_paste()
 app.update()
@@ -3376,8 +3377,8 @@ app.update()
 _tX = app._grid_at_line(1)
 check(f'Ctrl+C/Ctrl+V move the selected cells '
       f'({_tX["cells"][(1, 0)]["value"]!r}, {_tX["cells"][(1, 1)]["value"]!r})',
-      _tX['cells'][(1, 0)]['value'] == 'Unu'
-      and _tX['cells'][(1, 1)]['value'] == 'Doi')
+      _tX['cells'][(1, 0)]['value'] == 'One'
+      and _tX['cells'][(1, 1)]['value'] == 'Two')
 check('nothing lands outside the table',
       len(body().split('\n')) == _linesX
       and 'OLD' not in body())
@@ -3400,8 +3401,8 @@ app._cell_editor['entry'].event_generate('<Control-v>')
 app.update()
 _tX = app._grid_at_line(1)
 check('Ctrl+V in a cell spreads the copied block from it',
-      _tX['cells'][(1, 0)]['value'] == 'Unu'
-      and _tX['cells'][(1, 1)]['value'] == 'Doi')
+      _tX['cells'][(1, 0)]['value'] == 'One'
+      and _tX['cells'][(1, 1)]['value'] == 'Two')
 
 # The editor grows with its content instead of hiding the overflow.
 app._open_cell_editor(_tX, 1, 0)
@@ -3437,7 +3438,7 @@ _x0 = _tX['canvas'].xview()[0]
 app._open_cell_editor(_tX, 1, 5)
 _edX = app._cell_editor
 _edX['entry'].delete('1.0', 'end')
-_edX['entry'].insert('1.0', 'modificare care lateste coloana vizibil')
+_edX['entry'].insert('1.0', 'an edit that visibly widens the column')
 app._commit_cell_editor()
 app.update()
 app.update()
@@ -3542,14 +3543,14 @@ app._open_cell_editor(_tU, 0, 1)
 app.update()
 _eU = app._cell_editor['entry']
 _eU.delete('1.0', 'end')
-_eU.insert('1.0', 'vecina')
+_eU.insert('1.0', 'neighbour')
 app._commit_cell_editor()
 app.update()
 _tU = app._grid_at_line(1)
 check(f'the cell after an emoji is written where it belongs '
       f'({_tU["cells"][(0, 1)]["value"]!r})',
       _tU['cells'][(0, 0)]['value'].count(chr(0x1F600)) == 2
-      and _tU['cells'][(0, 1)]['value'] == 'vecina')
+      and _tU['cells'][(0, 1)]['value'] == 'neighbour')
 
 # Clear cell, from the single-cell menu's handler.
 app._grid_fill_selection({'info': _tU, 'box': (0, 1, 0, 1)}, '')
@@ -3953,7 +3954,7 @@ _tR = app._grid_at_line(1)
 app._open_cell_editor(_tR, 1, 0)
 app.update()
 app._cell_editor['entry'].delete('1.0', 'end')
-app._cell_editor['entry'].insert('1.0', 'un text mult mai lat decat coloana')
+app._cell_editor['entry'].insert('1.0', 'a text much wider than the column')
 _oldR = _tR['canvas']
 _cellR = _tR['cells'][(2, 0)]
 _evR = type('E', (), {'x': int(_cellR['x'] + 30),
@@ -3973,7 +3974,7 @@ check(f'a click across the rebuild opens the editor on the fresh grid '
       and app._cell_editor['info'] is _freshR
       and (app._cell_editor['r'], app._cell_editor['c']) == (2, 0))
 check('and the wide value was committed on the way',
-      _freshR['cells'][(1, 0)]['value'].startswith('un text'))
+      _freshR['cells'][(1, 0)]['value'].startswith('a text'))
 app._commit_cell_editor()
 app.update()
 set_body('')
@@ -3984,7 +3985,7 @@ set_body('')
 # entry's own cell. The press now closes the editor and hands the
 # keyboard to the grid.
 set_body('| Food | X | Y |\n| Fruit | Cheese |  |\n'
-         '| Cereal |  |  |\n| Oua |  |  |')
+         '| Cereal |  |  |\n| Eggs |  |  |')
 app._render_table_grids()
 app.update()
 take_focus(app.body_text)   # the window must own the desktop focus first
@@ -4034,7 +4035,7 @@ check(f'a fast Ctrl+C straight after the drag still means the cells '
 app._open_cell_editor(_tE, 1, 1)
 app.update()
 app._cell_editor['entry'].delete('1.0', 'end')
-app._cell_editor['entry'].insert('1.0', 'text destul de lat sa mute coloana')
+app._cell_editor['entry'].insert('1.0', 'text wide enough to move the column')
 _tE2 = app._grid_at_line(1)
 _aE, _bE = _tE2['cells'][(1, 0)], _tE2['cells'][(2, 0)]
 _cvE = _tE2['canvas']
@@ -4216,8 +4217,8 @@ set_body('')
 # The selection matrix read TEXT rows, so in any resized table (which
 # has a separator) every copy took the line ABOVE the one on screen --
 # the phantom values that haunted the field tests.
-set_body('| Cap | G | H | I |\n| --- | --- | --- | --- |\n'
-         '| unu | doi |  |  |\n| trei | patru |  |  |')
+set_body('| Head | G | H | I |\n| --- | --- | --- | --- |\n'
+         '| one | two |  |  |\n| three | four |  |  |')
 app._render_table_grids()
 app.update()
 take_focus(app.body_text)
@@ -4228,14 +4229,14 @@ app.body_text.event_generate('<Control-c>')
 app.update()
 check(f'with a separator, Ctrl+C copies the row on screen '
       f'({app.clipboard_get()!r})',
-      app.clipboard_get() == 'unu\tdoi')
+      app.clipboard_get() == 'one\ttwo')
 _select_cells(_tS4, (1, 2), (1, 3))
 app.body_text.event_generate('<Control-v>')
 app.update()
 _tS4 = app._grid_at_line(1)
 check('and the horizontal pair lands whole',
-      _tS4['cells'][(1, 2)]['value'] == 'unu'
-      and _tS4['cells'][(1, 3)]['value'] == 'doi')
+      _tS4['cells'][(1, 2)]['value'] == 'one'
+      and _tS4['cells'][(1, 3)]['value'] == 'two')
 
 # ---- THE TOOLBAR CENTRE MEANS THE SELECTED CELLS ----
 # The paragraph path applied an alignment the table lines shed at once,
@@ -4269,16 +4270,16 @@ set_body('')
 # A browser's plain text stacks every copied cell on its own line, so
 # two SIDE-BY-SIDE cells pasted one UNDER the other. The clipboard's
 # HTML knows the true rows and columns; the cell paste reads it.
-set_body('| Cap | G | H |\n|  |  |  |\n|  |  |  |')
+set_body('| Head | G | H |\n|  |  |  |\n|  |  |  |')
 app._render_table_grids()
 app.update()
 _tW = app._grid_at_line(1)
 _stub_clipboard(
-    html='<table><tbody><tr><td>Franta</td><td>Paris</td></tr>'
+    html='<table><tbody><tr><td>France</td><td>Paris</td></tr>'
          '</tbody></table>',
-    text='Franta\nParis')
+    text='France\nParis')
 app.clipboard_clear()
-app.clipboard_append('Franta\nParis')
+app.clipboard_append('France\nParis')
 app._grid_cell_clip = None
 app._grid_paste_cells(_tW, 1, 0)
 app.update()
@@ -4286,7 +4287,7 @@ _tW = app._grid_at_line(1)
 check(f'two side-by-side web cells paste side by side '
       f'({_tW["cells"][(1, 0)]["value"]!r}, '
       f'{_tW["cells"][(1, 1)]["value"]!r})',
-      _tW['cells'][(1, 0)]['value'] == 'Franta'
+      _tW['cells'][(1, 0)]['value'] == 'France'
       and _tW['cells'][(1, 1)]['value'] == 'Paris'
       and _tW['cells'][(2, 0)]['value'] == '')
 
@@ -4310,16 +4311,16 @@ check('a 2x2 web block lands as 2x2',
 # Freshness still belongs to the plain clipboard: stale table HTML with
 # a NEWER, unrelated plain copy must not shape the paste.
 _stub_clipboard(
-    html='<table><tr><td>vechi1</td><td>vechi2</td></tr></table>',
-    text='proaspat')
+    html='<table><tr><td>old1</td><td>old2</td></tr></table>',
+    text='fresh')
 app.clipboard_clear()
-app.clipboard_append('proaspat')
+app.clipboard_append('fresh')
 app._grid_cell_clip = None
 app._grid_paste_cells(_tW, 2, 0)
 app.update()
 _tW = app._grid_at_line(1)
 check('stale table HTML never outranks a newer plain copy',
-      _tW['cells'][(2, 0)]['value'] == 'proaspat'
+      _tW['cells'][(2, 0)]['value'] == 'fresh'
       and _tW['cells'][(2, 1)]['value'] == 'a2')
 set_body('')
 
@@ -4341,12 +4342,12 @@ check('a template with a table applies as a drawn grid',
 app._open_cell_editor(_gT, 1, 1)
 app.update()
 app._cell_editor['entry'].delete('1.0', 'end')
-app._cell_editor['entry'].insert('1.0', 'citit')
+app._cell_editor['entry'].insert('1.0', 'read')
 app._commit_cell_editor()
 app.update()
 _gT = app._grid_at_line(1)
 check('and the grid from the template is editable',
-      _gT['cells'][(1, 1)]['value'] == 'citit')
+      _gT['cells'][(1, 1)]['value'] == 'read')
 app.templates.remove(_tplT)
 set_body('')
 
@@ -4541,7 +4542,7 @@ app.update()
 # surface (the table cells' own recipe) -- the raw palette fill buried
 # the text under it. The tag NAME keeps the pure colour, so the stored
 # data never changes; a theme switch re-blends the ink.
-set_body('cuvinte de evidentiat')
+set_body('words to highlight')
 app.body_text.tag_add('sel', '1.0', '1.7')
 _pureH = NO.HIGHLIGHT_COLOR_PALETTE[0]
 app._apply_body_color('highlight', _pureH)
@@ -4572,7 +4573,7 @@ app._grid_apply_style(_gE, (1, 1, 1, 1), 'highlight', _pureH)
 app.update()
 check('an empty cell takes a highlight on its padding',
       app._grid_cell_paint(_gE, 1, 1)['bg'] == _pureH)
-app._write_cell(_gE, 1, 1, 'umplut')
+app._write_cell(_gE, 1, 1, 'filled')
 app.update()
 _gE2 = app._grid_at_line(1)
 check('the highlight survives the cell being filled in',
@@ -4634,7 +4635,7 @@ check('a real edit still toasts Note updated',
 # stripped the bold the user had JUST applied to it. Alignment is a
 # padding edit, and padding edits are exactly what pad_ops does with
 # the tags left in place.
-set_body('| Cap | Doi |\n| :--- | ---: |\n| bold | colorat |')
+set_body('| Head | Two |\n| :--- | ---: |\n| bold | colored |')
 app._render_table_grids()
 app.update()
 _gA = app._grid_at_line(1)
@@ -4655,7 +4656,7 @@ check("the neighbour cell's highlight rides through untouched",
 set_body('')
 
 # ---- MULTI-LINE CELLS, RUN COLOURS, LIVE EDITOR STYLES, CHECKMARKS ----
-set_body('| Cap | Doi |\n| vopsit | text |')
+set_body('| Head | Two |\n| painted | text |')
 app._render_table_grids()
 app.update()
 _gM = app._grid_at_line(1)
@@ -4677,7 +4678,7 @@ app._editor_newline()
 # Enter rebuilds the grids and REOPENS the editor in the grown cell --
 # the old editor widget is gone; talk to the fresh one.
 _edM = app._cell_editor['entry']
-_edM.insert('insert', 'sub')
+_edM.insert('insert', 'low')
 _edM.tag_add('sel', '2.0', '2.3')
 app._apply_body_color('text_color', '#00aa00')
 app.update()
@@ -4694,9 +4695,9 @@ _cM = _gM['cells'][(1, 0)]
 _runsM = [(_gM['canvas'].itemcget(t, 'text'),
            _gM['canvas'].itemcget(t, 'fill')) for t in _cM['texts']]
 check('the committed cell stores the break and draws two coloured runs',
-      _cM['value'] == 'vopsit<br>sub'
-      and ('vopsit', '#ff0000') in _runsM
-      and ('sub', '#00aa00') in _runsM
+      _cM['value'] == 'painted<br>low'
+      and ('painted', '#ff0000') in _runsM
+      and ('low', '#00aa00') in _runsM
       and _cM['h'] == 2 * _gM['row_h'])
 
 # a single character coloured in a cell stays a single coloured run
@@ -4730,7 +4731,7 @@ _runsM2 = [(_gM2['canvas'].itemcget(t, 'text'),
             _gM2['canvas'].itemcget(t, 'fill'))
            for t in _gM2['cells'][(1, 0)]['texts']]
 check('the multi-line coloured cell survives save and reload',
-      ('vopsit', '#ff0000') in _runsM2 and ('sub', '#00aa00') in _runsM2
+      ('painted', '#ff0000') in _runsM2 and ('low', '#00aa00') in _runsM2
       and app.editor_state_matches_saved(app.capture_editor_state()))
 
 # the checkbox palette: an UNCHECKED box lands, wearing the colour
@@ -4800,7 +4801,7 @@ set_body('')
 # Tk only inherits a tag with it on both sides, so a character typed at
 # the END of a blue run arrived plain -- and retyping over the opening
 # select-all wiped a coloured cell to plain ink entirely.
-set_body('| Cap | Doi |\n| bleu | text |')
+set_body('| Head | Two |\n| blue | text |')
 app._render_table_grids()
 app.update()
 _gT = app._grid_at_line(1)
@@ -4843,7 +4844,7 @@ check('the retyped cell commits still coloured, not reset to plain',
 set_body('')
 
 # ---- ROWS DRAG TALLER AND SHORTER; WIDE TABLES SCROLL SIDEWAYS ----
-set_body('| Cap | Doi |\n| unu<br>doi | x |\n| jos | y |')
+set_body('| Head | Two |\n| one<br>two | x |\n| low | y |')
 app._render_table_grids()
 app.update()
 _gR = app._grid_at_line(1)
@@ -4855,18 +4856,18 @@ app.update()
 _gR = app._grid_at_line(1)
 check('dragging a row taller pads it with empty lines',
       _gR['cells'][(2, 0)]['h'] == 3 * _gR['row_h']
-      and _gR['cells'][(2, 0)]['value'] == 'jos<br><br>')
+      and _gR['cells'][(2, 0)]['value'] == 'low<br><br>')
 app._grid_set_row_lines(_gR, 2, 1)
 app.update()
 _gR = app._grid_at_line(1)
 check('dragging it back short trims the padding again',
       _gR['cells'][(2, 0)]['h'] == _gR['row_h']
-      and _gR['cells'][(2, 0)]['value'] == 'jos')
+      and _gR['cells'][(2, 0)]['value'] == 'low')
 app._grid_set_row_lines(_gR, 1, 1)
 app.update()
 _gR = app._grid_at_line(1)
 check('a drag can never cut real content: two full lines stay two',
-      _gR['cells'][(1, 0)]['value'] == 'unu<br>doi'
+      _gR['cells'][(1, 0)]['value'] == 'one<br>two'
       and _gR['cells'][(1, 0)]['h'] == 2 * _gR['row_h'])
 
 # fast typing: press, press, release, release -- BOTH characters must
@@ -4908,8 +4909,8 @@ app._commit_cell_editor()
 app.update()
 
 # a table wider than the editor grows its own horizontal scrollbar
-set_body('| ' + ' | '.join('Coloana%d' % i for i in range(12)) + ' |\n'
-         + '| ' + ' | '.join('valoare%d' % i for i in range(12)) + ' |')
+set_body('| ' + ' | '.join('Heading%d' % i for i in range(12)) + ' |\n'
+         + '| ' + ' | '.join('content%d' % i for i in range(12)) + ' |')
 app._render_table_grids()
 app.update()
 app.update_idletasks()
@@ -4978,7 +4979,7 @@ check('one press flips dark/light, the next flips back, glyph follows',
       == ('\u2600' if app.theme_name in NO.DARK_THEMES else '\U0001f319'))
 
 # ---- WHOLE ROWS COPY TO THE BOTTOM, LIKE COLUMNS COPY TO THE EDGE ----
-set_body('| Cap | Doi |\n| unu | doi |\n| trei | patru |')
+set_body('| Head | Two |\n| one | two |\n| three | four |')
 app._render_table_grids()
 app.update()
 _gV = app._grid_at_line(1)
@@ -4990,7 +4991,7 @@ _rowsV = [core_tables.split_row(app.body_text.get('%d.0' % n,
           for n in range(1, 6)]
 check('selected rows are copied again to the bottom, text and all',
       _gV['data_rows'] == 5
-      and _rowsV[3] == ['unu', 'doi'] and _rowsV[4] == ['trei', 'patru'])
+      and _rowsV[3] == ['one', 'two'] and _rowsV[4] == ['three', 'four'])
 set_body('| A | B |\n| ^ | c |\n| x | y |')
 app._render_table_grids()
 app.update()
@@ -5032,7 +5033,7 @@ _qa_fire(_cvV, '<ButtonRelease-1>', x=_shownV - 5,
          y=int(_c00V['y'] + 8))
 app.update()
 
-set_body('| Cap | Doi |\n'
+set_body('| Head | Two |\n'
          + '\n'.join('| r%02d | v%02d |' % (i, i) for i in range(40)))
 app._render_table_grids()
 app.update()
@@ -5207,7 +5208,7 @@ check('the card tags row counts the table',
 # Two adjacent runs of pipe rows read as one block, so a table created
 # right under another fused with it: mismatched columns, a garbled grid,
 # loose '---' lines on screen.
-set_body('| Cap | G |\n| --- | --- |\n| unu | doi |')
+set_body('| Head | G |\n| --- | --- |\n| one | two |')
 app._render_table_grids()
 app.update()
 app.body_text.mark_set('insert', 'end')
@@ -5275,8 +5276,8 @@ set_body('')
 # the note lost the position unless Save was pressed by hand.
 app.new_note()
 app.update()
-app.title_entry.insert(0, 'autosave pozitie')
-app.body_text.insert('1.0', '| Cap | G |\n| unu | doi |')
+app.title_entry.insert(0, 'autosave position')
+app.body_text.insert('1.0', '| Head | G |\n| one | two |')
 app._render_table_grids()
 app.update()
 app.save_current_note()
@@ -5309,7 +5310,7 @@ check(f'the reloaded note is clean, with no phantom centred line below '
 set_body('')
 
 # ---- THE THEME SWITCH REPAINTS THE DRAWN TABLES ----
-set_body('| Cap | G |\n| unu | doi |')
+set_body('| Head | G |\n| one | two |')
 app._render_table_grids()
 app.update()
 _oldT = app.theme_name
@@ -6065,7 +6066,7 @@ _infoF = app._grid_at_line(1)
 app._open_cell_editor(_infoF, 1, 1)
 _edF = app._cell_editor['entry']
 _bgEmpty = str(_edF.cget('bg'))
-_edF.insert('insert', 'nou')
+_edF.insert('insert', 'new')
 app.update()
 _bgTyping = str(_edF.cget('bg'))
 app._commit_cell_editor()
@@ -6199,8 +6200,8 @@ check('a duplicated table comes back at the SAME column widths',
 set_body('')
 
 # The checkbox through the REAL popup: caret and scroll stay put.
-set_body('sus' + chr(10) + '| a | b |' + chr(10) + '| --- | --- |'
-         + chr(10) + '|   |   |' + chr(10) + ('jos ' * 200))
+set_body('top' + chr(10) + '| a | b |' + chr(10) + '| --- | --- |'
+         + chr(10) + '|   |   |' + chr(10) + ('low ' * 200))
 app._render_table_grids()
 app.update()
 _iH = app._grid_at_line(2)
@@ -6266,7 +6267,7 @@ def _ty_key(keysym, ch):
     return True
 
 
-set_body('cuvant ')
+set_body('tinted ')
 _b = app.body_text
 app._ensure_color_tag(_b, 'highlight', '#ffff00')
 app._ensure_color_tag(_b, 'text_color', '#e63946')
@@ -6792,7 +6793,7 @@ set_body('')
 # (the embedded windows' geometry settling) is corrected by the timers
 # -- the old one-shot restore stayed scrolled away.
 set_body(chr(10).join('| r%d | c%d |' % (i, i) for i in range(8))
-         + chr(10) + ('text jos' + chr(10)) * 50)
+         + chr(10) + ('text low' + chr(10)) * 50)
 app._render_table_grids()
 app.update()
 app._grid_view_restore = None
@@ -6802,7 +6803,7 @@ _y0J = app.body_text.yview()[0]
 _iJ = app._grid_at_line(1)
 app._grid_set_alignment(_iJ, (1, 0, 1, 0), core_tables.ALIGN_CENTER)
 app.update()
-app.body_text.yview_moveto(0.0)      # yank-ul tarziu, simulat
+app.body_text.yview_moveto(0.0)      # the late yank, simulated
 _t_endJ = time.time() + 0.6
 while time.time() < _t_endJ:
     app.update()
@@ -6825,15 +6826,15 @@ check('a deliberate scrollbar drag beats the pending restore',
 set_body('')
 
 # Pipe text pasted mid-line lands on lines of its own.
-set_body('inceput fig2')
+set_body('opening fig2')
 app.body_text.mark_set('insert', '1.8')
 app.clipboard_clear()
-app.clipboard_append('| x | [x] |' + chr(10) + 'legenda')
+app.clipboard_append('| x | [x] |' + chr(10) + 'caption')
 app.update()
 # Through _on_body_paste, the REAL route of a Ctrl+V -- a method called
 # directly stays green even when its hook disappears (the "dead on
 # arrival" lesson).
-_stub_clipboard(html=None, text='| x | [x] |' + chr(10) + 'legenda')
+_stub_clipboard(html=None, text='| x | [x] |' + chr(10) + 'caption')
 _okJ = app._on_body_paste() == 'break'
 app.update()
 _linesJ = app.body_text.get('1.0', 'end-1c').split(chr(10))
@@ -6936,7 +6937,7 @@ app._grid_set_table_align(_iL, 'center')
 app.update()
 _iL = app._grid_at_line(1)
 app._grid_select_range(_iL, (0, 0), (1, 1))
-_stub_clipboard()   # read_text -> None; paste cade pe clipboardul Tk real
+_stub_clipboard()   # read_text -> None; paste falls back to the real Tk clipboard
 app._grid_copy_selection({'info': _iL, 'box': (0, 0, 1, 1)})
 app._grid_clear_selection()
 app.body_text.mark_set('insert', '6.0')
@@ -6952,7 +6953,7 @@ set_body('')
 # THE WINDOWS ROUTE (round 6): our copy also puts HTML on the clipboard,
 # and the rich-paste route saw that FIRST -- a copied table pasted back
 # generically: no widths, no placement, and the first row landing at the
-# tail of the source line ('Sursa: | fff |...' in the field report, from
+# tail of the source line ('Source: | fff |...' in the field report, from
 # when the caption labels were Romanian). The loopback serves back
 # exactly what was written, as the Windows clipboard does; our own copy
 # must take the TSV route, with all its guards.
@@ -7042,7 +7043,7 @@ set_body('')
 # while cell content stays searchable.
 app.new_note()
 app.title_entry.delete(0, 'end')
-app.title_entry.insert(0, 'NotaTabelQ')
+app.title_entry.insert(0, 'NoteTableQ')
 app.body_text.insert('1.0', '| gergebe | x |' + chr(10)
                      + '| --- | --- |' + chr(10) + '| a | b |')
 app.save_current_note(auto=False)
@@ -7164,17 +7165,17 @@ app.sort_var.set(app.SORT_OPTIONS[0])
 app.refresh_note_list(); app.update()
 # The hint is wired to search_var like everything else in this box, so a
 # paste onto it would land glued and then be SEARCHED FOR -- a query of
-# "search notes...NotaTabelQ" matches nothing and reads as a broken search.
+# "search notes...NoteTableQ" matches nothing and reads as a broken search.
 app.search_entry.delete(0, 'end')
 app.search_entry.event_generate('<FocusOut>')
 app.update()
 check('fixture: the search box is showing its hint',
       app.search_entry.get() == NO.NoteOrganizer.SEARCH_PLACEHOLDER)
-app.clipboard_clear(); app.clipboard_append('NotaTabelQ'); app.update()
+app.clipboard_clear(); app.clipboard_append('NoteTableQ'); app.update()
 app.search_entry.event_generate('<<Paste>>')
 app.update()
 check('pasting into the search box replaces the hint',
-      app.search_entry.get() == 'NotaTabelQ')
+      app.search_entry.get() == 'NoteTableQ')
 app.refresh_note_list(); app.update()
 check('and the list filters by what was pasted, not by the hint',
       _idQ in app._card_order())
@@ -7318,13 +7319,13 @@ _iU = app._grid_at_line(1)
 app._open_cell_editor(_iU, 1, 0)
 app.update()
 app._cell_editor['entry'].delete('1.0', 'end')
-app._cell_editor['entry'].insert('1.0', 'unu-nou')
+app._cell_editor['entry'].insert('1.0', 'one-new')
 app._commit_cell_editor()
 app.update()
 app._open_cell_editor(app._grid_at_line(1), 1, 1)
 app.update()
 app._cell_editor['entry'].delete('1.0', 'end')
-app._cell_editor['entry'].insert('1.0', 'doi-nou')
+app._cell_editor['entry'].insert('1.0', 'two-new')
 app._commit_cell_editor()
 app.update()
 _txtU0 = app.body_text.get('1.0', 'end-1c')
@@ -7335,10 +7336,10 @@ app._body_undo_redo('undo')
 app.update()
 _txtU2 = app.body_text.get('1.0', 'end-1c')
 check('one Ctrl+Z takes back one whole cell edit',
-      'unu-nou' in _txtU0 and 'doi-nou' in _txtU0
-      and 'unu-nou' in _txtU1 and 'doi-nou' not in _txtU1)
+      'one-new' in _txtU0 and 'two-new' in _txtU0
+      and 'one-new' in _txtU1 and 'two-new' not in _txtU1)
 check('the second Ctrl+Z takes back the edit before it, not the redraw',
-      'unu-nou' not in _txtU2
+      'one-new' not in _txtU2
       and '| 1 | 2 |' in _txtU2.split(chr(10))[2])
 _iU2 = app._grid_at_line(1)
 check('the drawn grid follows the undone text',
@@ -7346,11 +7347,11 @@ check('the drawn grid follows the undone text',
 app._body_undo_redo('redo')
 app.update()
 check('redo brings the edit and its drawing back',
-      'unu-nou' in app.body_text.get('1.0', 'end-1c')
-      and app._grid_at_line(1)['cells'][(1, 0)]['value'] == 'unu-nou')
+      'one-new' in app.body_text.get('1.0', 'end-1c')
+      and app._grid_at_line(1)['cells'][(1, 0)]['value'] == 'one-new')
 
 # An inserted table leaves whole on a single undo, drawing included.
-set_body('text sus')
+set_body('text top')
 app.update()
 app.body_text.edit_reset()
 app.body_text.mark_set('insert', 'end -1c')
@@ -7366,7 +7367,7 @@ app.update()
 _txtU3 = app.body_text.get('1.0', 'end-1c')
 check('one undo removes the whole inserted table, drawing included',
       '|' not in _txtU3 and len(app._table_grids) == 0
-      and 'text sus' in _txtU3)
+      and 'text top' in _txtU3)
 set_body('')
 
 # ---- UNDO x LISTS/GRID: one operation = one Ctrl+Z, never an empty note ----
@@ -7932,7 +7933,7 @@ app.update()
 # ---- LIFT #2: cell styling, raw-row Tab, category dropdown, share panel ----
 
 # Bold/italic INSIDE the cell editor (_editor_apply_style's chars walk).
-set_body('| stilcel | b |\n| c | d |')
+set_body('| stylecell | b |\n| c | d |')
 app._render_table_grids(); app.update()
 _t2 = app._grid_at_line(1)
 app._open_cell_editor(_t2, 0, 0)
@@ -7952,16 +7953,16 @@ app._commit_cell_editor(); app.update()
 
 # Tab through a RAW (never-rendered) pipe row: the un-rendered branch of
 # _tab_in_table walks cell to cell without a grid.
-set_body('| unu | doi | trei |')
+set_body('| one | two | three |')
 app.body_text.mark_set('insert', '1.3')
 _moved = app._tab_in_table(1)
 app.update()
 check('Tab advances the caret to the next raw cell and selects it',
-      _moved and app.body_text.get('sel.first', 'sel.last') == 'doi')
+      _moved and app.body_text.get('sel.first', 'sel.last') == 'two')
 _moved = app._tab_in_table(-1)
 app.update()
 check('Shift-Tab walks back to the first cell',
-      _moved and app.body_text.get('sel.first', 'sel.last') == 'unu')
+      _moved and app.body_text.get('sel.first', 'sel.last') == 'one')
 
 # The editor's category dropdown: open it, pick a category by row.
 app.new_note(); app.update()
@@ -8148,8 +8149,10 @@ _day_btns = [b for b in _walk_widgets(_dp, tk.Button)
              if str(b.cget('text')).strip() == '15']
 _day_btns[0].invoke()
 app.update()
+# Written as every date in the field is shown, day first: 15.MM.YYYY.
 check('picking a day writes the date into the date field',
-      app.date_entry.get().endswith('-15')
+      app.date_entry.get().startswith('15.')
+      and NO.read_date(app.date_entry.get()) is not None
       and app._mini_popup is not _dp)
 # ...and the repeat's summary follows the date the picker writes: it went on
 # saying "needs a start date" after one was picked.
@@ -8175,7 +8178,7 @@ check(f'the repeat\'s summary follows a date the picker writes '
       'needs a start date' in _pk_before and _pk_after == 'Every week')
 
 # Note colour picker: a canvas swatch click colours the open note.
-app.title_entry.delete(0, 'end'); app.title_entry.insert(0, 'Colorata')
+app.title_entry.delete(0, 'end'); app.title_entry.insert(0, 'Colored')
 app.title_entry.config(fg='black')
 app.save_current_note(auto=False); app.update()
 app.open_color_picker()
@@ -8354,7 +8357,7 @@ app.open_blank_tab(); app.update()
 _TBL_Q = '| a | b |\n| --- | --- |\n| 1 | 2 |'
 
 app.open_blank_tab(); app.update()
-app.title_entry.delete(0, 'end'); app.title_entry.insert(0, 'TabelLaFinal')
+app.title_entry.delete(0, 'end'); app.title_entry.insert(0, 'TableAtEnd')
 app.body_text.delete('1.0', 'end')
 app.body_text.insert('1.0', 'intro\n' + _TBL_Q)
 app.update()
@@ -8403,7 +8406,7 @@ check('the editor still draws a line under the trailing table',
 # widget already holds it, so without these two the mechanism at those
 # points was asserted by nothing.
 app.open_blank_tab(); app.update()
-app.title_entry.delete(0, 'end'); app.title_entry.insert(0, 'Nerandat')
+app.title_entry.delete(0, 'end'); app.title_entry.insert(0, 'Unrendered')
 app.body_text.delete('1.0', 'end')
 app.body_text.insert('1.0', 'intro\n' + _TBL_Q)   # no update(): no render
 check('the widget itself has no caret line yet (the precondition)',
@@ -8682,7 +8685,7 @@ check('...without taking longer than a person would wait (%.1fs)' % _fc_elapsed,
 _fc_warned = []
 app.show_warning = lambda *a, **k: (_fc_warned.append(a), True)[1]
 app.new_note()
-app.title_entry.delete(0, 'end'); app.title_entry.insert(0, 'Repetitiva')
+app.title_entry.delete(0, 'end'); app.title_entry.insert(0, 'Repeating')
 app.title_entry.config(fg='black')
 app.body_text.insert('1.0', 'something')
 app.rec_freq_var.set(NO.FREQ_LABELS['daily'])
@@ -8691,7 +8694,7 @@ app.date_entry.delete(0, 'end')
 app.save_current_note(auto=False)
 app.update()
 app.show_warning = _fc_real_warning
-_fc_rep = next((n for n in app.notes if n['title'] == 'Repetitiva'), None)
+_fc_rep = next((n for n in app.notes if n['title'] == 'Repeating'), None)
 check('a repeating note with no start date keeps its words (plan 66)',
       _fc_rep is not None and _fc_rep['body'].strip() == 'something')
 check('...but not a repeat it has no start date for',
@@ -8788,9 +8791,9 @@ check('...and closes again on the same button',
 
 # 39: a checklist row is removed by its own bin, immediately.
 app.toggle_checklist_section(); app.update()
-app._working_checklist = [{'text': 'primul', 'done': False},
-                          {'text': 'al doilea', 'done': True},
-                          {'text': 'al treilea', 'done': False}]
+app._working_checklist = [{'text': 'first', 'done': False},
+                          {'text': 'second', 'done': True},
+                          {'text': 'third', 'done': False}]
 app._render_checklist_items(); app.update()
 _fc_bin = None
 for _row in app.checklist_items_frame.winfo_children():
@@ -8805,7 +8808,7 @@ if _fc_bin is not None:
     _fc_bin.invoke()
     app.update()
     check('...and using it removes that row straight away',
-          [i['text'] for i in app._working_checklist] == ['al doilea', 'al treilea'])
+          [i['text'] for i in app._working_checklist] == ['second', 'third'])
 
 # 41: the card says how far along a checklist is -- and says nothing when
 # there is no checklist.
@@ -8955,7 +8958,11 @@ def _cu_counting_schedule(*a, **k):
 
 app._schedule_autosave = _cu_counting_schedule
 try:
-    app._toast_action()
+    # Called only when there is one: with no Undo on offer (a broken app,
+    # a mutant) this line raised and ended the suite before its footer,
+    # where the check below says so as one red line.
+    if callable(getattr(app, '_toast_action', None)):
+        app._toast_action()
     app.update()
 finally:
     app._schedule_autosave = _cu_real_schedule
@@ -9217,10 +9224,10 @@ check('and the code protects it by name, not by hoping (plan 25)',
 # 27: a category's colour is one value, read everywhere it is shown.
 _b3_cat = next((c for c in NO.CATEGORY_COLORS if c != 'General'), None)
 if _b3_cat is None:
-    NO.CATEGORY_COLORS['Proiect'] = '#123456'
-    _b3_cat = 'Proiect'
+    NO.CATEGORY_COLORS['Project'] = '#123456'
+    _b3_cat = 'Project'
 _b3_was = NO.CATEGORY_COLORS[_b3_cat]
-app.notes = [{'id': 5001, 'title': 'Colorata', 'body': 'x', 'comments': '',
+app.notes = [{'id': 5001, 'title': 'Colored', 'body': 'x', 'comments': '',
               'category': _b3_cat, 'date': '', 'color': '', 'recurrence': {},
               'checklist': [], 'attachments': [],
               'created': '2026-01-01 00:00', 'updated': '2026-01-01 00:00'}]
@@ -9793,36 +9800,36 @@ app.notes = []
 app.save_notes()
 app.new_note()
 app.body_text.delete('1.0', 'end')
-app.body_text.insert('1.0', 'unu\ndoi\ntrei\npatru')
+app.body_text.insert('1.0', 'one\ntwo\nthree\nfour')
 for _b4_line in range(1, 5):
     app.body_text.mark_set('insert', '%d.0' % _b4_line)
     app._toggle_list('number')
 app.update()
 _b4_before = app.body_text.get('1.0', 'end-1c')
 check('a four-item numbered list is numbered 1-4 (plan 139)',
-      _b4_before.startswith('1. unu') and '4. patru' in _b4_before)
+      _b4_before.startswith('1. one') and '4. four' in _b4_before)
 app.body_text.delete('2.0', '3.0')          # the SECOND item, from the middle
 app._renumber_lists()
 app.update()
 _b4_after = app.body_text.get('1.0', 'end-1c')
 check('removing a middle item renumbers what follows it (plan 139)',
-      '1. unu' in _b4_after and '2. trei' in _b4_after and '3. patru' in _b4_after
+      '1. one' in _b4_after and '2. three' in _b4_after and '3. four' in _b4_after
       and '4.' not in _b4_after)
 
 # 178: duplicating a note that holds a table gives a real second table,
 # not a shared one -- editing the copy must not reach the original.
 app.new_note()
-app.title_entry.delete(0, 'end'); app.title_entry.insert(0, 'Cu tabel')
+app.title_entry.delete(0, 'end'); app.title_entry.insert(0, 'With table')
 app.title_entry.config(fg='black')
 app.body_text.delete('1.0', 'end')
 app.body_text.insert('1.0', '| A | B |\n| --- | --- |\n| 1 | 2 |')
 app.save_current_note(auto=False)
 app.update()
-_b4_orig = next(n for n in app.notes if n['title'] == 'Cu tabel')
+_b4_orig = next(n for n in app.notes if n['title'] == 'With table')
 app.duplicate_note(_b4_orig)
 app.update()
 _b4_copy = next((n for n in app.notes
-                 if n['id'] != _b4_orig['id'] and 'Cu tabel' in (n['title'] or '')), None)
+                 if n['id'] != _b4_orig['id'] and 'With table' in (n['title'] or '')), None)
 check('a note with a table can be duplicated (plan 178)', _b4_copy is not None)
 if _b4_copy is not None:
     check('...and the copy carries the table, drawn as rows not as pipes',
@@ -9837,7 +9844,7 @@ app.notes = []
 app.save_notes()
 _b4_tpl = {'name': 'Template', 'title': 'From template', 'body': 'body',
            'comments': '', 'category': 'General',
-           'checklist': [{'text': 'primul pas', 'done': False}]}
+           'checklist': [{'text': 'first step', 'done': False}]}
 app.ask_yes_no = lambda *a, **k: True
 app.new_note()
 app._apply_template(_b4_tpl)
@@ -9845,9 +9852,9 @@ app.save_current_note(auto=False)
 app.update()
 _b4_note_a = app.notes[-1]
 check('a template brings its checklist into the note it makes (plan 114)',
-      [i['text'] for i in (_b4_note_a.get('checklist') or [])] == ['primul pas'])
-_b4_tpl['checklist'] = [{'text': 'pas schimbat', 'done': False},
-                        {'text': 'pas nou', 'done': False}]
+      [i['text'] for i in (_b4_note_a.get('checklist') or [])] == ['first step'])
+_b4_tpl['checklist'] = [{'text': 'changed step', 'done': False},
+                        {'text': 'new step', 'done': False}]
 app.new_note()
 app._apply_template(_b4_tpl)
 app.save_current_note(auto=False)
@@ -9855,10 +9862,10 @@ app.update()
 _b4_note_b = app.notes[-1]
 check('editing the template later leaves the earlier note untouched (plan 114)',
       [i['text'] for i in (app.find_note(_b4_note_a['id']) or {}).get('checklist', [])]
-      == ['primul pas'])
+      == ['first step'])
 check('...and the next note made from it gets the NEW checklist (plan 114)',
       [i['text'] for i in (_b4_note_b.get('checklist') or [])]
-      == ['pas schimbat', 'pas nou'])
+      == ['changed step', 'new step'])
 
 app.notes = list(_b4_saved)
 app.save_notes()
@@ -9873,8 +9880,8 @@ app.new_note(); app.update()
 # to be open. The note nobody had open kept the new category, which is
 # what makes it so easy to miss.
 _bk_saved = list(app.notes)
-NO.CATEGORY_COLORS.setdefault('Munca', '#775599')
-app.notes = [NO.normalize_note({'id': 7700 + i, 'title': 'Masa %d' % i,
+NO.CATEGORY_COLORS.setdefault('Job', '#775599')
+app.notes = [NO.normalize_note({'id': 7700 + i, 'title': 'Desk %d' % i,
                                 'body': 'body %d' % i, 'category': 'General'})
              for i in range(3)]
 app.save_notes()
@@ -9886,7 +9893,7 @@ app._bulk_change_category()
 app.update()
 # The popup is a Toplevel kept as app._mini_popup, one row per
 # category, each bound to the handler a click reaches. Find the row
-# whose label says Munca and click IT -- never do its work here, or the
+# whose label says Job and click IT -- never do its work here, or the
 # check passes on its own behaviour instead of the app's.
 _bk_row = None
 _bk_pop = getattr(app, '_mini_popup', None)
@@ -9895,7 +9902,7 @@ _bk_pop = getattr(app, '_mini_popup', None)
 def _bk_find_row(widget):
     global _bk_row
     for child in widget.winfo_children():
-        if isinstance(child, tk.Label) and str(child.cget('text')).strip() == 'Munca':
+        if isinstance(child, tk.Label) and str(child.cget('text')).strip() == 'Job':
             _bk_row = child
             return
         _bk_find_row(child)
@@ -9911,7 +9918,7 @@ if _bk_row is not None:
 
 check('a bulk category change reaches the notes (audit finding)',
       [n['category'] for n in app.notes if n['id'] in (7700, 7701)]
-      == ['Munca', 'Munca'])
+      == ['Job', 'Job'])
 app.body_text.insert('end', ' and I carry on typing')
 app._flush_autosave()
 app.update()
@@ -9919,9 +9926,9 @@ _bk_stored = json.load(open('notes_data.json', encoding='utf-8'))
 _bk_open = next(n for n in _bk_stored if n['id'] == 7700)
 _bk_other = next(n for n in _bk_stored if n['id'] == 7701)
 check('...and typing afterwards does not revert it on the OPEN note '
-      '(audit finding)', _bk_open['category'] == 'Munca')
+      '(audit finding)', _bk_open['category'] == 'Job')
 check('...while the note nobody had open was never at risk',
-      _bk_other['category'] == 'Munca')
+      _bk_other['category'] == 'Job')
 check('...and what was typed afterwards is saved too',
       'carry on typing' in _bk_open['body'])
 

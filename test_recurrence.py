@@ -171,7 +171,7 @@ _h_notes = [
      'date': '2026-01-01', 'recurrence': {'freq': 'daily'},
      'exceptions': ['2026-02-02'],
      'overrides': {
-         '2026-08-15': {'title': '', 'body': 'discutat bugetul',
+         '2026-08-15': {'title': '', 'body': 'discussed the budget',
                         'comments': '', 'category': 'General', 'color': ''},
          '2025-12-01': {'title': 'Year-end sync', 'body': 'retro',
                         'comments': '', 'category': 'General', 'color': ''},
@@ -222,7 +222,7 @@ check("a child with no override title borrows the series'",
 check('a series with no edited days still gets a row',
       any(e['note_id'] == 4 and e['kind'] == 'series' for e in _all))
 
-_q = _hist(_h_notes, query='bugetul', today=_H_TODAY)
+_q = _hist(_h_notes, query='budget', today=_H_TODAY)
 check('search reaches into a day\'s own override content',
       [e['note_id'] for e in _q] == [3]
       and [c['date'] for c in _q[0]['children']] == ['2026-08-15']
@@ -267,6 +267,150 @@ for _junk in ('daily', 0, 1, [], ['freq'], 3.5, True):
     except Exception as _e:
         check('a %r recurrence answers instead of raising (%s)' % (_junk, _e),
               False)
+
+
+# ---------------------------------------------------------------------
+# Dates the way people write them (read_date), and the one form the app
+# shows them in (show_date). The files keep YYYY-MM-DD whatever was typed.
+# A short or a missing year is read only once the person has finished
+# with the field (settled): read while typing, "17.10.20" on its way to
+# 2026 would be stored as 2020.
+# ---------------------------------------------------------------------
+_RD_TODAY = date(2026, 10, 3)
+_RD = date(2026, 10, 17)
+
+
+def _rd(text, settled=False):
+    return NO.read_date(text, settled=settled, today=_RD_TODAY)
+
+
+for _form in ('17.10.2026', '17/10/2026', '17-10-2026', '17 10 2026',
+              '17. 10. 2026', ' 17.10.2026 ', '2026-10-17', '2026.10.17',
+              '2026/10/17', '17 oct 2026', '17 Oct. 2026', '17-oct-2026',
+              '17 octombrie 2026', '17 OCTOMBRIE 2026', 'October 17, 2026',
+              'oct 17 2026', '17 octo 2026'):
+    check('the date is read from %r' % _form, _rd(_form) == _RD)
+check('one figure for the day or the month is enough',
+      _rd('1.2.2026') == date(2026, 2, 1) and _rd('01.02.2026') == date(2026, 2, 1))
+check('figures are read day first: 10/12/2026 is the tenth of December',
+      _rd('10/12/2026') == date(2026, 12, 10))
+# The month first only where the day first cannot be: no 17th month, so
+# 10/17/2026 is October 17th, written the American way.
+for _form in ('10/17/2026', '10-17-2026', '10.17.2026', 'Oct. 17, 2026',
+              'October 17th, 2026', 'Oct 17th 2026', '17th October 2026',
+              '17th of October 2026', 'the 17th of October 2026',
+              'Saturday, October 17, 2026', 'Sat, Oct 17, 2026',
+              'Saturday 17 October 2026', 'Sat 17.10.2026',
+              'SATURDAY, OCTOBER 17TH, 2026'):
+    check('the date is read from %r' % _form, _rd(_form) == _RD)
+check('a day named that is not the day still reads the date the figures give',
+      _rd('Monday, October 17, 2026') == _RD)
+check('the month first only when the day first cannot be (12/13 and 13/12 '
+      'alike), and the day first whenever it can',
+      _rd('12/13/2026') == date(2026, 12, 13)
+      and _rd('13/12/2026') == date(2026, 12, 13)
+      and _rd('1/2/2026') == date(2026, 2, 1))
+for _form in ('10/17/26', '10/17', 'Oct 17th', 'Saturday, October 17',
+              '17th October'):
+    check('%r waits until the field is left, then reads as 17.10.2026' % _form,
+          _rd(_form) is None and _rd(_form, settled=True) == _RD)
+for _form, _want in (('17 mai 2026', 5), ('17 may 2026', 5),
+                     ('3 martie 2026', 3), ('3 mar 2026', 3),
+                     ('5 iun 2026', 6), ('5 iul 2026', 7),
+                     ('5 noi 2026', 11), ('5 nov 2026', 11),
+                     ('5 sept 2026', 9), ('5 ianuarie 2026', 1),
+                     ('5 decembrie 2026', 12)):
+    _got = _rd(_form)
+    check('the month in %r is read as month %d' % (_form, _want),
+          _got is not None and _got.month == _want)
+check('a leap day is read in a leap year, and refused in another',
+      _rd('29.02.2028') == date(2028, 2, 29) and _rd('29.02.2027') is None)
+for _form in ('17.10', '17 oct', '17.10.26', '17 oct 26', 'oct 17'):
+    check('%r waits until the field is left' % _form, _rd(_form) is None)
+    check('...and is read then, as 17.10.2026 (%r)' % _form,
+          _rd(_form, settled=True) == _RD)
+check('a two-figure year being typed is never read as a year of its own',
+      _rd('17.10.20') is None and _rd('17.10.202') is None)
+check('...and once the field is left, two figures mean this century',
+      _rd('17.10.20', settled=True) == date(2020, 10, 17))
+for _form in ('31.09.2026', '00.10.2026', '17.13.2026', '17.10.20262',
+              '2026-10', 'abc', '17 ma 2026', '17 xyz 2026', '117.10.2026',
+              '17.100.2026', 'oct 2026', '17 oct 2026 18', '17.10.0999',
+              'DD.MM.YYYY', '17.10.2026!', '', '   ', '١٧.10.2026',
+              '17·10·2026', None, 17, '13/13/2026', '02/30/2026',
+              'Saturday', 'Sat Sun 17 oct 2026', '17 th oct 2026',
+              '2026th oct 17', '17thx oct 2026', 'October November 17 2026',
+              'the of', 'Moonday 17 oct 2026'):
+    # ascii(), not %r: a plain Windows console cannot print the digits of
+    # another script, and the line would crash the suite instead of naming it.
+    check('%s is not read as a date' % ascii(_form), _rd(_form) is None
+          and _rd(_form, settled=True) is None)
+check('a date stretched past forty characters is not read',
+      _rd('17' + ' ' * 40 + '10 2026') is None)
+# No three letters start two months' names today, in either language, so
+# the rule that such a word names no month is proved by teaching the table
+# a name that would make "mar" ambiguous -- and taking it away again.
+from noteorganizer.core import recurrence as _rd_rec
+_rd_rec._MONTH_NAMES['marzipan'] = 7
+try:
+    _rd_ambiguous = _rd('17 mar 2026')
+finally:
+    del _rd_rec._MONTH_NAMES['marzipan']
+check("a word starting two months' names is no month",
+      _rd_ambiguous is None and _rd('17 mar 2026') == date(2026, 3, 17))
+# The reader takes a word for a day's name before it asks whether it is a
+# month's, which is only safe while no three letters start both.
+check('no three letters start both a day name and a month name',
+      not [(d, m) for d in _rd_rec._WEEKDAY_NAMES for m in _rd_rec._MONTH_NAMES
+           if d[:3] == m[:3]])
+# One pass over the text, never a backtracking search: thirty figures and a
+# stray symbol took a single repeated-group pattern hours, in the field's
+# own keystroke. The unbacked version answers in microseconds.
+_rd_t0 = time.perf_counter()
+_rd_hostile = _rd('1' * 26 + '!')
+check('twenty-six figures and a symbol are refused at once (%.3f s)'
+      % (time.perf_counter() - _rd_t0),
+      _rd_hostile is None and time.perf_counter() - _rd_t0 < 1.0)
+
+check('a stored date is shown day first',
+      NO.show_date('2026-10-17') == '17.10.2026'
+      and NO.show_date('2026-1-5') == '05.01.2026')
+check('text that is not a stored date is shown as it is',
+      NO.show_date('17.10') == '17.10' and NO.show_date('') == ''
+      and NO.show_date(None) == '')
+check('a stored moment keeps its time, its date shown day first',
+      NO.show_stamp('2026-09-01 09:00') == '01.09.2026 09:00'
+      and NO.show_stamp('odd') == 'odd')
+check('a day written out comes day first, in English whatever the system',
+      NO.show_day(_RD) == 'Saturday, 17 October 2026'
+      and NO.show_day(_RD, year=False) == 'Saturday, 17 October'
+      and NO.show_day(_RD, year=False, short_month=True) == 'Saturday, 17 Oct')
+check('a date and the field showing it are the same date',
+      NO.same_date('17.10.2026', '2026-10-17')
+      and NO.same_date(' 30.09.2026 ', '30.09.2026')
+      and NO.same_date('', ''))
+check('...and a half-typed one is not',
+      not NO.same_date('17.10', '2026-10-17') and not NO.same_date('x', 'y'))
+check('an end date written day first is that end, not "never ends"',
+      NO.normalize_recurrence({'freq': 'daily', 'end': '31.12.2026'})['end']
+      == '2026-12-31')
+check('...and one not yet whole is no end at all, as before',
+      NO.normalize_recurrence({'freq': 'daily', 'end': '31.12'})['end'] == '')
+check('a note arriving with its date written day first is stored in the '
+      'form the calendar places it by',
+      NO.normalize_note({'title': 't', 'date': '30.09.2026'})['date'] == '2026-09-30'
+      and NO.normalize_note({'title': 't', 'date': '17 oct 2026'})['date'] == '2026-10-17')
+check('...while a date no one can read arrives as it came, as before',
+      NO.normalize_note({'title': 't', 'date': '31.09.2026'})['date'] == '31.09.2026'
+      and NO.normalize_note({'title': 't', 'date': '17.10'})['date'] == '17.10')
+check('...and a repeat anchored on a day-first date keeps repeating',
+      NO.normalize_note({'title': 't', 'date': '07.09.2026',
+                         'recurrence': {'freq': 'weekly'}})['recurrence']['freq']
+      == 'weekly')
+check('the "until" of a repeat is shown day first',
+      NO.describe_recurrence({'recurrence': {'freq': 'weekly', 'interval': 2,
+                                             'end': '2026-12-31'}})
+      == 'Every 2 weeks, until 31.12.2026')
 
 
 print()

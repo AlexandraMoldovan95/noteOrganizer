@@ -767,6 +767,25 @@ worth having; believing it is finished is the thing that costs. And the
 second failure of a class is the one worth reading — the first looks like
 an oversight, the second shows you the shape.
 
+**A third time (2026-10-03):** a two-word search string in qa7 and
+`test_recurrence`, written on 9 September, had sat through both passes
+above. This sweep did not sample. It read the repository by the endings
+Romanian gives its words, by every word in a string or comment that the
+docs' English prose never uses, and by the short words a three-letter
+floor skips, and a person read every candidate: about three hundred
+lines in nineteen files. Two of the ways they hid were in the gate's
+method, not its list — `\b` reads a camelCase title, a word with a digit
+on its end or a word right after a `\n` escape as one unknown word, and
+no list knows the words nobody has written yet. The gate now pries lines
+apart at those seams and knows Romanian's commonest endings. On the old
+tree it flags 265 lines; without the new words it would miss 242 of
+them, without the prying 37, without the endings 17. It still cannot see
+two-letter words or words English shares, and says so in its source —
+35 of the lines this pass translated. On the way, a qa8 check turned out
+to have been unable to fail since the second pass: it asked about a
+title that pass had renamed line by line (now a
+[house rule](../qa/README.md#house-rules-for-new-checks)).
+
 ### The check that pinned the behaviour a release had deliberately replaced
 
 *(2026-09-29, `Testing`)*
@@ -2013,7 +2032,7 @@ Right-click a new note's title, choose Paste, and the field read
 `Note title...My pasted title`. The grey hint text the app puts there to
 say "type a title here" was still sitting in the box, and the pasted text
 was glued to the end of it. The same on the Calendar's History search,
-where the glued query — `Search all calendar entries...bugetul` — matched
+where the glued query — `Search all calendar entries...budget` — matched
 nothing, so the search read as broken rather than as misfilled.
 
 **Found by a pre-flight, not by a report.** The register wanted a paste
@@ -2693,7 +2712,7 @@ it was noticing which operations never needed it at all.
 *([0.64.95](../CHANGELOG.md#06495--2026-09-02) · 2026-09-02)*
 
 **Symptom:** found by an audit probe, not a field report — edit a
-table cell from `1` to `schimbat`, press Ctrl+Z once, and the cell
+table cell from `1` to `changed`, press Ctrl+Z once, and the cell
 reads neither: `|  | 2 |`. The old value gone, the padding collapsed,
 and the drawn grid still showing the text from before the undo.
 

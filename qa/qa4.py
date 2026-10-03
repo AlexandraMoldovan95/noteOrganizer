@@ -165,7 +165,7 @@ check('duplicate_note: deleting the copy leaves the original file intact',
 # by a feature that has nothing to do with sharing -- and nothing would
 # look wrong until a share code or an import tried to tell them apart.
 _ident_src = _model4.normalize_note(
-    {'id': 1, 'title': 'Are identitate', 'body': 'x'})
+    {'id': 1, 'title': 'Has identity', 'body': 'x'})
 app.notes = [_ident_src]
 app.save_notes()
 _ident_clone = app.duplicate_note(app.notes[0])
@@ -285,7 +285,7 @@ _probe_btn.destroy(); _probe_dd.destroy(); _probe_txt.destroy(); app.update()
 _cl_was_open = app._checklist_open
 if not _cl_was_open:
     app.toggle_checklist_section()
-app.checklist_add_var.set('bifa')
+app.checklist_add_var.set('tick')
 app._add_checklist_item()
 app.update()
 def _caret_ok():

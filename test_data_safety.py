@@ -1359,12 +1359,12 @@ try:
     # True -- so only genuine delegation can pass. (The first version of
     # this check used title-less fixtures a private copy also collapsed,
     # and the drift mutant survived it.)
-    _ta = _legacy_file([dict(_base, title="UnTitlu")])
+    _ta = _legacy_file([dict(_base, title="ATitle")])
     _real_sig = _model_mod.content_signature
     try:
         _model_mod.content_signature = lambda n: ("bent",)
         check("the purge consults model.content_signature, not a private copy",
-              _paths_mod.is_redundant_copy(_ta, [dict(_base, title="AltTitlu")])
+              _paths_mod.is_redundant_copy(_ta, [dict(_base, title="OtherTitle")])
               is True)
     finally:
         _model_mod.content_signature = _real_sig
@@ -1436,8 +1436,8 @@ check("the signature tolerates raw junk shapes",
 # recurrence joined its key (they are never merged, so a grouping there
 # destroys whichever copy is dropped), attachments deliberately did NOT
 # (cleanup hands the kept note the group's combined files).
-_t1 = dict(_base, title="Cumparaturi", checklist=[{"text": "milk", "done": False}])
-_t2 = dict(_base, title="Cumparaturi", checklist=[{"text": "gym", "done": False}])
+_t1 = dict(_base, title="Groceries", checklist=[{"text": "milk", "done": False}])
+_t2 = dict(_base, title="Groceries", checklist=[{"text": "gym", "done": False}])
 check("different checklists keep two same-text notes apart",
       _fdg([_t1, _t2]) == [])
 _r1 = dict(_base, title="Sport", date="2026-01-01",
@@ -1445,8 +1445,8 @@ _r1 = dict(_base, title="Sport", date="2026-01-01",
 _r2 = dict(_base, title="Sport", date="2026-01-01", recurrence={})
 check("a repeat rule keeps a series apart from its one-off twin",
       _fdg([_r1, _r2]) == [])
-_a1 = dict(_base, title="Acte", attachments=[{"stored_as": "a.pdf"}])
-_a2 = dict(_base, title="Acte", attachments=[{"stored_as": "b.pdf"}])
+_a1 = dict(_base, title="Documents", attachments=[{"stored_as": "a.pdf"}])
+_a2 = dict(_base, title="Documents", attachments=[{"stored_as": "b.pdf"}])
 check('a repeat rule signs by MEANING, not representation',
       _model_mod._recurrence_signature({}) == ()
       and _model_mod._recurrence_signature(
@@ -1492,9 +1492,9 @@ try:
     check("an absurdly long category name is dropped, not silently renamed",
           not any(n.startswith("NNNN") for n in _loaded2))
     _save_settings(dict(_settings_backup,
-                        categories={"Proiecte": "#112233"}))
+                        categories={"Projects": "#112233"}))
     check("...while an ordinary name is kept exactly as written",
-          "Proiecte" in _cats_mod.load_categories())
+          "Projects" in _cats_mod.load_categories())
 finally:
     _save_settings(_settings_backup)
     _cats_mod.CATEGORY_COLORS.clear()

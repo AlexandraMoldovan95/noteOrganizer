@@ -467,7 +467,7 @@ if __name__ == "__main__":
             import traceback
             traceback.print_exc()
             io.open(RESULTS, "w", encoding="utf-8").write(json.dumps(
-                [["capitolul %d a mers pana la capat" % number, False,
+                [["chapter %d ran to the end" % number, False,
                   traceback.format_exc().strip().splitlines()[-1]]],
                 ensure_ascii=False))
         sys.exit(0)
