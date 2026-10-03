@@ -172,6 +172,7 @@ noteOrganizer/
 │       ├── settings_page.py     #   the Settings page and its panels
 │       ├── dialogs.py           #   the hand-built dialogs and popups
 │       ├── calendar_view.py     #   the Calendar tab
+│       ├── note_list.py         #   the note list, drawn on one canvas
 │       └── attachments.py       #   the attachments section
 ├── tools/                    # refactor safety net, run by CI
 │   ├── check_*.py                # five static gates: names that resolve, the app

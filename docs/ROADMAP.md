@@ -222,21 +222,24 @@ bindings), and template deletion saying plainly that it skips the Trash and can'
 ### Splitting the UI into modules
 
 Done, and stopped deliberately rather than out of steam. The data-and-rules layer went first —
-fourteen modules under `noteorganizer/core/`, none importing tkinter — and five UI areas now live
+fourteen modules under `noteorganizer/core/`, none importing tkinter — and six UI areas now live
 in `noteorganizer/ui/` as mixins: the calculator panel, the Settings page, the dialogs and popups,
-the calendar, and attachments. All the pure logic went down into `core/` first.
-`note_organizer.py` is about 22,300 lines — it dipped when the extractions landed and has grown
-again through the rich-text, tables and field-testing work, but the pure logic behind all of that
-went into `core/` rather than into it, which is the point: the entry file is a UI hub, not a junk
-drawer.
+the calendar, attachments, and — re-measured once it became one drawing — the note list. All the
+pure logic went down into `core/` first. `note_organizer.py` is about 19,700 lines — it dipped
+when the extractions landed and grew again through the rich-text, tables and field-testing work,
+but the pure logic behind all of that went into `core/` rather than into it, which is the point:
+the entry file is a UI hub, not a junk drawer.
 
-The stopping point is a measurement, not fatigue. The seams were measured from the call graph and
-nothing else clears the bar — the note list keeps 41% of its calls to itself, sharing 33%,
-open-note tabs 26%, and the editor 17%. The editor barely moved across three extractions, which is
-the clearest evidence that it is the hub the class turns around rather than a module waiting
-inside it. What remains in the entry file is genuinely shared surface — the note list, the
-open-note tabs and the editor all call heavily into each other — and moving any of it into a file
-would relocate the tangle rather than remove it. The full method-by-method analysis lives in
+The stopping point is a measurement, not fatigue. The seams were measured from the call graph, and
+after the first three extractions nothing else cleared the bar — sharing kept 33% of its calls to
+itself, open-note tabs 26%, and the editor 17%. The editor barely moved across those three
+extractions, which is the clearest evidence that it is the hub the class turns around rather than
+a module waiting inside it. The one group that changed shape later was the note list: it stayed
+at 41%, but once it became one drawing it kept 90% of its calls to itself, so it was measured
+again and moved. What remains in the entry file is genuinely shared surface — the editor the rest
+turns around, and methods such as `set_status` and `find_note` that are called from everywhere —
+and moving any of it into a file would relocate the tangle rather than remove it. The full
+method-by-method analysis lives in
 [ARCHITECTURE.md's call-graph case study](ARCHITECTURE.md#case-study-deciding-the-split-with-a-call-graph).
 
 If the UI is ever rebuilt on a different toolkit, that is the moment to revisit this — not before.

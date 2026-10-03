@@ -9,11 +9,12 @@ calls, no accounts, no database.
 - **Organised as a package (split complete, stopped deliberately):** the
   app was a single file by design for most of its life; it now lives as a
   `core/` layer (data and rules; **must never import tkinter**) and a `ui/`
-  layer of mixin classes — fourteen `core/` modules and five `ui/` mixins —
-  with `note_organizer.py` (~22,300 lines) remaining the entry point and
+  layer of mixin classes — fourteen `core/` modules and six `ui/` mixins —
+  with `note_organizer.py` (~19,700 lines) remaining the entry point and
   the genuinely shared UI hub, by measurement rather than by neglect (see
   `docs/ARCHITECTURE.md`'s call-graph case study for why the split stopped
-  where it did). The entry file re-exports whatever has moved, so
+  where it did, and why the note list moved later, once re-measured). The
+  entry file re-exports whatever has moved, so
   `py note_organizer.py`, `import note_organizer as NO` in the QA scripts,
   and the PyInstaller build all keep working untouched. If a further
   extraction is ever attempted, it must be a pure move that leaves the full

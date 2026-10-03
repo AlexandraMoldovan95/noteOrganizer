@@ -55,7 +55,7 @@ py note_organizer.py
 
 `note_organizer.py` is still the front door. The pure logic has moved into
 the `noteorganizer/` package next to it and is imported back in; the entry
-file itself stays large (~22,300 lines) because it is the UI hub the pieces
+file itself stays large (~19,700 lines) because it is the UI hub the pieces
 hang off, not a junk drawer of stray logic.
 
 To run every test — units + qa1–qa9 — safely in a scratch copy:
@@ -97,6 +97,7 @@ noteorganizer/
     ├── settings_page.py     the Settings page and its sections
     ├── dialogs.py           the hand-built dialogs and popups
     ├── calendar_view.py     the Calendar tab
+    ├── note_list.py         the note list: cards drawn on one canvas
     └── attachments.py       the attachments section
 docs/                     these documents
 qa/                       headless GUI tests

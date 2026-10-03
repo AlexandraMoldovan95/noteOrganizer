@@ -21,7 +21,7 @@ lives in two places: the `noteorganizer/` package — a `core/` layer of data an
 `ui/` layer of mixins — and `note_organizer.py` itself, the entry point and the UI hub the
 pieces hang off.
 
-Both layers are fully extracted: fourteen `core/` modules and five `ui/` mixins. The annotated,
+Both layers are fully extracted: fourteen `core/` modules and six `ui/` mixins. The annotated,
 module-by-module inventory is [README's project tree](../README.md#project-structure), and
 [CODE_TOUR.md](CODE_TOUR.md) walks through the modules for someone learning the codebase. Three
 of the core modules — `richtext`, `clipboard` and `tables` — landed with the rich-text and
@@ -34,7 +34,7 @@ sharing. **No module in here may import tkinter**, which is what keeps it testab
 and reusable by a different front end. `test_data_safety.py` checks that rather than trusting
 it — the property is easy to lose to one stray import and impossible to notice by hand.
 
-### `ui/` — five mixins over one class
+### `ui/` — six mixins over one class
 
 `noteorganizer/ui/` holds everything on screen, split one area at a time into **mixin** classes
 that `NoteOrganizer` inherits from. The methods are unchanged: they still reach for
@@ -70,8 +70,10 @@ that have moved, so existing callers — including the ~270 `note_organizer.<nam
 across the QA scripts — keep working untouched. That's deliberate: it means each extraction is
 a pure move that leaves the whole test suite green, rather than a rewrite.
 
-What remains in the file is ~22,300 lines of genuinely shared surface. It grew again through
-the rich-text and tables work even as the pure logic behind those features went into `core/`.
+What remains in the file is ~19,700 lines of genuinely shared surface. It grew again through
+the rich-text and tables work even as the pure logic behind those features went into `core/`,
+and dropped by ~2,700 when the note list moved to `ui/note_list.py` (see the
+[case study](#the-list-measured-again)).
 
 ### How it got here
 
@@ -1004,12 +1006,13 @@ leave without dragging the class behind it.
 | dialogs | 11 | ~400 | 62% | extracted first |
 | calendar | 29 | ~917 | 59% | extracted second |
 | attachments | 6 | ~227 | 38% | 67% by its turn — extracted third |
-| note list | 5 | ~256 | 46% | 41% |
+| note list | 5 | ~256 | 46% | 41%; 90% once drawn — extracted fourth (below) |
 | sharing | 6 | ~323 | 19% | 33% |
 | open-note tabs | 5 | ~148 | 24% | 26% |
 | editor | 10 | ~447 | **11%** | **17%** |
 
-The last column is the measurement of record for the groups that stayed: 41 / 33 / 26 / 17.
+The last column is the measurement of record for the groups that stayed: 33 / 26 / 17 — and
+41 for the note list, until it became one drawing ([below](#the-list-measured-again)).
 
 At planning time, only the top two were cohesive enough to move as units. **`editor` is the
 important negative result** — at 11%, fifty of its fifty-six calls went outside the group. It
@@ -1030,14 +1033,35 @@ confirmation box. Planning all the groups up front would have ranked it near the
 
 ### Where it stopped, and why
 
-After dialogs, the calendar and attachments, nothing else clears the bar. The editor moved from
+After dialogs, the calendar and attachments, nothing else cleared the bar. The editor moved from
 11% to 17% across three extractions, which is the strongest evidence available that it is not a
 module hiding inside the class — moving any of the shared surface into a file would relocate
 the tangle rather than remove it.
 
-The entry file has grown well past that measurement since — ~22,300 lines now — but the growth
-is the rich-text and tables UI, which is more of exactly this shared surface, not a new
-extractable module.
+The entry file then grew well past that measurement — to ~22,400 lines — mostly through the
+rich-text and tables UI, which is more of exactly this shared surface, not a new extractable
+module.
+
+### The list, measured again
+
+One part of that growth was different. In 0.82.230 the note list stopped being a column of
+widgets and became one drawing (see
+[Large lists](#large-lists-draw-what-can-be-seen-the-rest-on-demand)), and a drawing brings its
+own geometry, input handling and painting code. Measured again on 3 October 2026, with the same
+script and the same question, the group around it — 117 methods, ~2,500 lines: drawing the cards
+and headers, filtering, searching, sorting, the keyboard ring, dragging into Custom order,
+Select mode — sent **90%** of its calls to itself. That is well past the bar the dialogs (62%)
+and the calendar (59%) cleared, so it moved, as they did, to `ui/note_list.py`, and the hub went
+from ~22,400 lines to ~19,700.
+
+It was a move, not a rewrite: the class exposes exactly the same methods (the API gate's
+baseline did not change), every name the module uses is imported from `core/` (the names gate),
+and the full suite is unchanged. The one line that changed is a static method that called its
+siblings through `NoteOrganizer`, a name the module cannot import without a cycle; it calls them
+through the mixin that defines them. What stayed behind is what the list does not own: the bulk
+actions and their confirmations, which Settings shares, and `add_placeholder`, which every
+entry field uses. No other group was re-measured into moving; the rule is still to measure,
+not to aim for a number of files.
 
 ### One blind spot in the measurement
 
