@@ -13087,15 +13087,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.date_entry.pack(side="left", padx=(6, 4), ipady=3)
         # The empty field shows its form: the order a typed date is read in.
         self.add_placeholder(self.date_entry, DATE_FORM)
-        # Leaving the field settles what was typed into the form it shows
-        # (_settle_date_fields): 17.10 becomes 17.10.2026 there, and only
-        # there -- read while someone is still typing, "17.10.20" on its way
-        # to 2026 would be stored as 2020. add="+": add_placeholder's own
-        # <FocusOut>, which puts the form back in an emptied field, has to
-        # keep running first.
-        self.date_entry.bind("<FocusOut>",
-                             lambda _e: self._settle_date_fields(redraw=True),
-                             add="+")
+        # Finishing with the field settles what was typed into the form it
+        # shows (_settle_date_fields): 17.10 becomes 17.10.2026 then, and
+        # only then -- read while someone is still typing, "17.10.20" on its
+        # way to 2026 would be stored as 2020. What finishing means is wired
+        # in one place, for this field and the repeat's end date alike.
+        self._watch_date_field(self.date_entry)
         # Typing a date directly (as opposed to using the picker popup, which
         # already autosaves via _pick()) previously had no autosave binding
         # at all, so a typed date change could be silently lost.
@@ -14205,6 +14202,47 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self.update_recurrence_summary()
         return changed
 
+    def _watch_date_field(self, entry):
+        """Wire what finishing with a date field means to *entry*: leaving
+        it, pressing Enter in it -- and a click anywhere else in the window.
+
+        The last is the one Tk does not give for free. A click on a label,
+        a frame or an empty stretch of the window moves the keyboard
+        nowhere, so the caret stays in the field and no <FocusOut> comes:
+        17.10 typed and a click beside it was read as still being typed and
+        left out, and only a click into another box saved it (field report,
+        0.84.338). Which field holds the keyboard is noted on its own
+        <FocusIn> and <FocusOut>, so the click needs no focus_get(); the
+        click's own work goes on (_settle_dates_on_click_elsewhere never
+        breaks it). add="+" throughout: add_placeholder's handlers on the
+        field, which put the form back in an emptied one, run first."""
+        def arrived(_event):
+            self._date_field_in_use = entry
+
+        def left(_event):
+            if getattr(self, "_date_field_in_use", None) is entry:
+                self._date_field_in_use = None
+            self._settle_date_fields(redraw=True)
+
+        def enter(_event):
+            self._settle_date_fields(redraw=True)
+
+        entry.bind("<FocusIn>", arrived, add="+")
+        entry.bind("<FocusOut>", left, add="+")
+        for sequence in ("<Return>", "<KP_Enter>"):
+            entry.bind(sequence, enter, add="+")
+        if not getattr(self, "_watching_clicks_for_dates", False):
+            self.bind_all("<ButtonPress-1>",
+                          self._settle_dates_on_click_elsewhere, add="+")
+            self._watching_clicks_for_dates = True
+
+    def _settle_dates_on_click_elsewhere(self, event):
+        """A click anywhere but the date field that holds the keyboard
+        settles it, as leaving it would (see _watch_date_field)."""
+        entry = getattr(self, "_date_field_in_use", None)
+        if entry is not None and getattr(event, "widget", None) is not entry:
+            self._settle_date_fields(redraw=True)
+
     def open_date_picker(self, target_entry=None, anchor_widget=None):
         """Small calendar dropdown for picking a date, anchored to whichever
         button opened it — not a separate window. Reusable: pass a different
@@ -14504,11 +14542,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # to be pasted from somewhere else.
         self._add_paste_menu(self.rec_end_date_entry)
         self.rec_end_date_var.trace_add("write", lambda *a: self.update_recurrence_summary())
-        # Read like the note's own date, and settled the same way on leaving
-        # it: 31.12 becomes 31.12.2026 (_settle_date_fields).
-        self.rec_end_date_entry.bind(
-            "<FocusOut>", lambda _e: self._settle_date_fields(redraw=True),
-            add="+")
+        # Read like the note's own date, and settled the same way when you
+        # finish with it: 31.12 becomes 31.12.2026 (_watch_date_field).
+        self._watch_date_field(self.rec_end_date_entry)
 
         self.rec_end_date_pick_btn = tk.Button(
             end_row, text="📅",

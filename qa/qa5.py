@@ -694,6 +694,63 @@ check('...and a date no one can read is left out in words that show the form',
       any('(write dates like 30.09.2026)' in item
           for item in app._date_and_repeat_to_store()[2]))
 
+# A click anywhere else finishes with the field as well. In Tk a click on a
+# label or an empty stretch of the window moves the keyboard nowhere, so no
+# <FocusOut> came: 17.10 typed and a click beside it was read as still
+# being typed, and nothing was saved (field report). Enter finishes too.
+
+
+def _w_focus(entry):
+    entry.focus_force()
+    for _ in range(60):
+        app.update(); app.update_idletasks()
+        if app.focus_get() is entry:
+            return True
+        _t5f.sleep(0.01)
+    return False
+
+
+_w_note(date='2026-10-17')
+_w_focused = _w_focus(app.date_entry)
+_w_type('16.11')
+# A click in the field itself is the person still at work -- moving the
+# caret, say -- and finishes nothing.
+_qa_click(app.date_entry)
+app.update()
+_w_inside = app.date_entry.get()
+_qa_click(app.date_entry.master)
+app.update()
+_w_clicked = app.date_entry.get()
+_w_kept = app.focus_get() is app.date_entry
+app._autosave_now(); app.update()
+check(f'a click beside the field, on no box at all, finishes with it: the '
+      f'date is completed and saved ({_w_focused}; {_w_clicked!r}; '
+      f'{app.find_note(1)["date"]})',
+      _w_focused and _w_kept and _w_clicked == '16.11.%d' % _W_YEAR
+      and app.find_note(1)['date'] == '%d-11-16' % _W_YEAR)
+check(f'...while a click in the field itself finishes nothing ({_w_inside!r})',
+      _w_inside == '16.11')
+_w_type('15.11.26')
+app.date_entry.event_generate('<Return>')
+app.update()
+_w_entered = app.date_entry.get()
+app._cancel_pending_autosave()
+check(f'...and so does Enter in it ({_w_entered!r})',
+      _w_entered == '15.11.2026')
+# Once the keyboard has left the field, a click elsewhere is about something
+# else: a value put back into the field by the app -- a half-typed date a
+# reload carried over, say -- stays as it was until the person finishes it.
+_w_back = _w_focus(app.body_text)
+_w_type('14.11')
+_qa_click(app.date_entry.master)
+app.update()
+_w_untouched = app.date_entry.get()
+app._show_date_in_field('2026-10-17')
+app._cancel_pending_autosave()
+check(f'...and once the keyboard has left the field, a click elsewhere '
+      f'leaves it alone ({_w_back}; {_w_untouched!r})',
+      _w_back and _w_untouched == '14.11')
+
 _w_note(date='2026-10-17')
 _w_type('16.11.26')
 del _w_asked[:]
