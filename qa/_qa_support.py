@@ -57,6 +57,15 @@ The rules that close it
     (``REAL_KEYS``) and said when the run ends, so a red that came from
     someone typing names itself rather than reading as a flake.
 
+    A question nobody answers: a check that meets one of the app's own
+    modal questions without having stubbed it waits for an answer that
+    never comes, and the suite stood there for its whole timeout -- under
+    a mutant that left a date out, "Part of this note isn't saved" stopped
+    qa5, and the mutant run behind it. A question still waiting after
+    ``QUESTION_WAIT_MS`` is answered with its safe button (Escape's
+    answer), named on a FAIL line, and the run ends red
+    (``_fail_for_unanswered``): one red line instead of a stopped suite.
+
     Patches the class, not an instance, so every app the script builds —
     including ones built later — is deterministic, and a new qa script
     needs one line rather than remembering to repeat it. The popup
@@ -197,9 +206,12 @@ def pin_the_desktop(NO):
     """Make the app's two questions about the desktop -- who owns the
     foreground, whether the mouse button is down -- answer the same way
     whoever is using the machine, give every app the script builds a
-    clipboard of the script's own, and note every key a keyboard sends it
-    (_note_real_keys). See the module docstring."""
+    clipboard of the script's own, note every key a keyboard sends it
+    (_note_real_keys), and never let one of its questions wait for an
+    answer nobody will give (_answer_what_waits). See the module
+    docstring."""
     cls = NO.NoteOrganizer
+    _answer_what_waits(cls)
     cls._foreground_is_ours = lambda self: True
     real = getattr(cls, "_pointer_button_held", None)
     if real is not None and not hasattr(cls, "_desktop_pointer_button_held"):
@@ -303,6 +315,71 @@ def _say_real_keys():
           "script ran -- someone typed on this machine, and a red in this "
           "run may be theirs: %s" % (len(REAL_KEYS), REAL_KEYS[:12]),
           flush=True)
+
+
+# Far longer than any check takes to answer a question it means to answer
+# (they do it in milliseconds), and far shorter than the suite's timeout.
+QUESTION_WAIT_MS = 20000
+
+# The titles of questions nobody answered, in the order they were asked.
+UNANSWERED = []
+
+
+def _answer_what_waits(cls):
+    """Wrap the app's modal question (``_themed_dialog``) so that one still
+    waiting after QUESTION_WAIT_MS is answered with its safe button -- the
+    first, Escape's answer -- and named on a FAIL line; the run then ends
+    red (_fail_for_unanswered). A check that stubs the question on the app
+    itself never reaches this: the stub shadows the class."""
+    real = cls._themed_dialog
+    if getattr(real, "_qa_answers_what_waits", False):
+        return
+
+    def _themed_dialog(self, title, message, *args, **kwargs):
+        def answer():
+            stack = getattr(self, "_asking_dialogs", None) or []
+            if not stack:
+                return
+            if not UNANSWERED:
+                atexit.register(_fail_for_unanswered)
+            UNANSWERED.append(str(title))
+            print("FAIL a question was left waiting, and nobody answered it: "
+                  "%r" % (str(title),), flush=True)
+            try:
+                stack[-1]["buttons"][0].invoke()
+            except (tk.TclError, IndexError, KeyError):
+                pass
+
+        try:
+            job = self.after(QUESTION_WAIT_MS, answer)
+        except tk.TclError:
+            job = None
+        try:
+            return real(self, title, message, *args, **kwargs)
+        finally:
+            if job is not None:
+                try:
+                    self.after_cancel(job)
+                except (tk.TclError, ValueError):
+                    pass
+
+    _themed_dialog._qa_answers_what_waits = True
+    cls._themed_dialog = _themed_dialog
+
+
+def _fail_for_unanswered():
+    """The run ends red when a question was left waiting: its FAIL line is
+    not in the script's own list, so the script's exit code would say
+    green. Said with the real keys too, when there were any -- this exits
+    before the handler that says them would run."""
+    print("UNANSWERED QUESTIONS: %d -- each was answered with its safe "
+          "button after %d s, and this run fails: %s"
+          % (len(UNANSWERED), QUESTION_WAIT_MS // 1000, UNANSWERED[:8]),
+          flush=True)
+    if REAL_KEYS:
+        _say_real_keys()
+    sys.stdout.flush()
+    os._exit(1)
 
 
 # The original name, from when the foreground was the only answer pinned;

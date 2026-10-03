@@ -213,6 +213,22 @@ A new surface joins this list the moment it ships.
   never just grep for FAIL lines: a mutant that crashes the import
   prints no failures at all, and reads as "survived nothing" when it
   really ran nothing (this exact false-clean happened here once).
+- **A check a mutant can lead to a question records the question; it
+  never waits for one.** The date checks of 0.84.338 left a note with no
+  stub on `_themed_dialog`, and under a mutant that left the date out,
+  leaving the note asked "Part of this note isn't saved" -- a real modal
+  question nobody would answer. The suite stood in front of it for its
+  whole ten-minute timeout, and the mutant run behind it with it. Stub
+  the dialog for any stretch where a broken app could ask (record the
+  title, give the safe answer), and assert the list is empty where no
+  question is the promise: the mutant then shows up as one red check.
+  The next mutant found an older qa5 check with the same gap, so the
+  class gets a net as well: `pin_the_desktop` answers a question still
+  waiting after `QUESTION_WAIT_MS` (20 s) with its safe button, names it
+  on a `FAIL a question was left waiting` line, and ends the run red.
+  That mutant then cost four minutes instead of ten and reached the
+  footer. The net is a backstop, not a stub: a check that leans on it
+  is slow and red by design.
 - **A check that can be decided by how fast the code above it runs is
   measuring the machine.** The sidebar search debounces with
   `after(180, refresh_note_list)`, and a full rebuild puts every card

@@ -8958,7 +8958,11 @@ def _cu_counting_schedule(*a, **k):
 
 app._schedule_autosave = _cu_counting_schedule
 try:
-    app._toast_action()
+    # Called only when there is one: with no Undo on offer (a broken app,
+    # a mutant) this line raised and ended the suite before its footer,
+    # where the check below says so as one red line.
+    if callable(getattr(app, '_toast_action', None)):
+        app._toast_action()
     app.update()
 finally:
     app._schedule_autosave = _cu_real_schedule
