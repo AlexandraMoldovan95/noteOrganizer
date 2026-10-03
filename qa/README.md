@@ -337,6 +337,16 @@ A new surface joins this list the moment it ships.
   assert it is clear**: without that the check passes on a job left over
   from something earlier in the same script, which is exactly how one of
   these survived the mutant that deleted the binding it guards.
+- **A leak is what a second batch adds, not what the first one did.** qa6
+  counted Tcl commands across thirty redraws of Recently deleted and
+  allowed four more; a CI runner read nine more, which a leak that
+  happens at every redraw cannot do. It was not reproducible here, so it
+  was not guessed at: the three panels' checks now run thirty redraws to
+  absorb anything done only once, measure the next thirty with waiting
+  timers left out, and name the kinds of command that grew. Nine lasting
+  commands registered once still fail the old form and pass the new; a
+  handler bound on the rows' frame at every redraw fails the new one as
+  "<lambda> +30".
 - **A job attribute answers only for the timer it tracks — ask Tcl which
   timers wait.** A held-BackSpace check went red on the Linux runner
   alone: an autosave fired between two presses and split the run the
