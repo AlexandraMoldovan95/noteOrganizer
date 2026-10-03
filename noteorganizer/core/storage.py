@@ -58,12 +58,9 @@ TRASH_RETENTION_DAYS = 30
 
 
 def trash_retention_days():
-    """The trash retention window in days: the user's setting, or the
-    default. Clamped to a sane range -- a hand-edited settings file
-    saying 0 (or "forever", or -3) must not make startup purge
-    everything, so anything that isn't a usable number of days reads
-    as the default. Read fresh on every call: the setting can change
-    while the app runs, and the next purge should honour it."""
+    """The trash retention window in days: the user's setting or the default,
+    clamped to 1-365 so a hand-edited 0, -3 or "forever" cannot make startup
+    purge everything. Read fresh each call: the setting can change mid-run."""
     days = get_setting("trash_retention_days")
     if isinstance(days, bool) or not isinstance(days, int):
         return TRASH_RETENTION_DAYS
@@ -126,11 +123,9 @@ def normalize_template(tpl):
                                            len(_s("body").split("\n"))),
         "comments": _s("comments"),
         "category": _s("category") or "General",
-        # Capped like a note's checklist (same constant, same reason): a
-        # template is one more door the original widget bomb walked
-        # through — normalize_note's cap never sees a template, so an
-        # imported/hand-edited templates.json with 20,000 items still
-        # froze the app the moment the template was applied.
+        # Capped like a note's checklist, since normalize_note never sees a
+        # template: 20,000 items in templates.json froze the app the moment
+        # the template was applied.
         "checklist": [
             {"text": it.get("text", "") if isinstance(it.get("text"), str) else "",
              "done": bool(it.get("done"))}
@@ -176,15 +171,10 @@ def save_templates(templates):
 
 
 def load_trash():
-    """Read the trashed notes list. Malformed/missing -> empty list, never
-    crashes; a malformed file is preserved aside first.
-
-    Only entries that are notes (dicts) come in. A hand-edited file holding
-    a string or a null beside them kept Settings -> Recently deleted from
-    opening at all, so the real notes beside the junk could not be restored.
-    The file is preserved aside before anything is left out, as when it
-    cannot be read; the entries themselves are kept as the file held them
-    (normalize_note does not run on the way out of the Trash)."""
+    """Read the trashed notes list: missing or malformed gives [], after the
+    file is preserved aside. Only dict entries come in, kept as the file held
+    them: a string or null beside them kept Recently deleted from opening,
+    and the real notes could not be restored."""
     if os.path.exists(paths.TRASH_FILE):
         try:
             with open(paths.TRASH_FILE, "r", encoding="utf-8") as f:
@@ -221,10 +211,9 @@ def _attachment_path_within(stored_as):
     if not isinstance(stored_as, str) or not stored_as:
         return None
     if "\x00" in stored_as:
-        # A NUL doesn't always make realpath raise (platform-dependent),
-        # but a later os.remove/os.startfile on it raises ValueError,
-        # which the sinks' `except OSError` would NOT catch — reject it
-        # outright rather than let that escape.
+        # Refused outright: realpath does not always raise on a NUL, but a
+        # later remove or startfile raises ValueError, which the sinks'
+        # "except OSError" would not catch.
         return None
     try:
         base = os.path.realpath(paths.ATTACHMENTS_DIR)
@@ -234,24 +223,19 @@ def _attachment_path_within(stored_as):
         if os.path.commonpath([base, candidate]) != base:
             return None  # escaped the attachments folder
     except (ValueError, OSError):
-        # commonpath raises ValueError across drives / UNC roots, and
-        # realpath raises on an embedded NUL — all only reachable from a
-        # crafted stored_as. "Can't resolve safely" means refuse, never
-        # let the exception escape and crash the delete loop (which runs
-        # unguarded at startup purge).
+        # commonpath raises across drives and UNC roots, realpath on a NUL:
+        # "cannot resolve safely" means refuse, never crash the delete loop,
+        # which runs unguarded in the startup purge.
         return None
     return candidate
 
 
 def copy_attachment_file(stored_as):
-    """Copy an existing attachment to a fresh, unique on-disk name and
-    return that name — so a duplicated note gets its OWN physical files
-    instead of sharing the original's. A plain deep-copy of a note keeps
-    the same stored_as values, i.e. the same files; permanently deleting
-    either note then removed the file the other still referenced —
-    silent attachment loss (audit finding). Returns None if the source
-    is missing or the copy fails, and the caller keeps the old reference
-    (no worse than before)."""
+    """Copy an attachment to a fresh unique name and return it, or None if
+    the source is missing or the copy fails (the caller keeps the old name).
+    A duplicated note needs files of its own: sharing them, a permanent
+    delete of either note removed the other's. ISSUES_LOG: "The duplicate
+    that wasn't a copy"."""
     src = _attachment_path_within(stored_as)
     if src is None or not os.path.isfile(src):
         return None
@@ -281,19 +265,11 @@ def attachment_names_in(notes_or_entries):
 
 
 def _delete_attachment_files(notes_or_entries, spare=()):
-    """Permanently remove the on-disk files for every attachment referenced by
-    the given notes/trash-entries. Each attachment gets a unique timestamped
-    filename on disk (see add_attachment), so it's never shared between notes
-    — safe to delete outright, no risk of affecting a different note. Only
-    call this for PERMANENT deletion (trash purge, delete-forever, empty
-    trash) — moving a note to trash must never touch these files, since the
-    note might still be restored.
-
-    `spare` names files that must survive anyway -- what the notes still
-    in the app use (see attachment_names_in). "Never shared" holds only
-    while nothing acts on a stale copy of an entry: a Trash row drawn
-    before the toast's Undo brought its note back still held the entry,
-    and its Delete destroyed the file the restored note was showing."""
+    """Remove the files of every attachment these notes or trash entries use
+    -- only for PERMANENT deletion (purge, delete forever, empty trash): a
+    note moved to the Trash may still come back. *spare* names files that
+    must survive, those the notes in the app still use, in case a stale row
+    acts. ISSUES_LOG: "The Trash that gave notes back one at a time"."""
     for note in notes_or_entries:
         if not isinstance(note, dict):
             continue
@@ -305,11 +281,8 @@ def _delete_attachment_files(notes_or_entries, spare=()):
                 continue
             path = _attachment_path_within(stored_as)
             if path is None:
-                # stored_as escaped the attachments folder (e.g. a
-                # "../../file" smuggled in via a crafted share code) —
-                # refuse to delete anything outside it. The same
-                # path-traversal guard the zip import already applies,
-                # now on the delete side too.
+                # Outside the attachments folder (a "../../file" from a
+                # crafted share code): refused, as the zip import refuses it.
                 continue
             try:
                 if os.path.isfile(path):
@@ -336,18 +309,10 @@ def _trash_cutoff(days=None):
 
 
 def _trash_entry_is_past(entry, cutoff):
-    """THE single answer to "has this entry outlived the window?".
-
-    Two callers ask it: the startup purge, which acts on the answer, and
-    trash_entries_past_window below, which is how the UI can say out loud
-    what a shorter window is about to destroy. A dialog that counts with
-    one rule while the purge deletes by another is a dialog that lies, and
-    a field list written twice always falls out of step -- the lesson
-    content_signature exists for.
-
-    An entry whose `deleted_at` cannot be read is never past the window:
-    better to keep a note too long than to delete it early.
-    """
+    """THE single answer to "has this entry outlived the window?", asked by
+    the startup purge and by trash_entries_past_window, so a dialog names
+    what a shorter window will destroy by the very rule the purge uses. An
+    unreadable deleted_at is never past: better kept too long than early."""
     if not isinstance(entry, dict):
         return False
     try:
@@ -419,24 +384,8 @@ def backup_notes_file():
 
 
 # ---- Notes file ----
-#
-# These moved out of NoteOrganizer, where they had been methods since before
-# there was a core layer. Neither drew anything; they were on the UI class
-# only because that is where all the code used to live.
-#
-# Two things changed in the move, both deliberate:
-#
-# 1. ``load_notes`` used to read the module-global ``VERSION_CHANGE``. A
-#    global on the entry module is exactly the value that goes missing when
-#    the app runs as ``py note_organizer.py`` -- the running copy is then
-#    ``__main__`` and any ``import note_organizer`` gets a *second* module
-#    whose ``initialise()`` never ran (see test_entry_module_identity.py,
-#    and the About/Statistics bug it was written for). So it is a parameter
-#    now: the caller, which does know, passes it in.
-#
-# 2. ``save_notes`` used to open an error dialog itself. Nothing in core may
-#    touch the interface, so it reports the failure and the caller decides
-#    how to show it.
+# The version change is a parameter, not the entry module's global, which a
+# second import never sets: ISSUES_LOG, "The module that existed twice".
 
 def load_notes(version_change=None):
     """Read, normalise and (once) clean the notes file.
@@ -468,11 +417,8 @@ def load_notes(version_change=None):
         All are None/False/empty the rest of the time, which is almost
         always.
     """
-    # Imported here rather than at the top of the file because there is a
-    # real cycle: storage -> model -> categories -> storage. At module level
-    # it fails with "cannot import name 'load_settings' from partially
-    # initialized module". Inside the function the import runs long after
-    # every module is built, so it resolves cleanly.
+    # Imported here: storage -> model -> categories -> storage is a real
+    # cycle, and at module level the import fails half-initialised.
     from .model import normalize_note, clean_notes, repair_note_ids
     from .categories import adopt_categories_of, persist_categories
 
@@ -481,13 +427,9 @@ def load_notes(version_change=None):
               "categories_adopted": []}
     raw = []
     if os.path.exists(paths.DATA_FILE):
-        # A newer app version is about to run against data last saved by
-        # an older one — snapshot it now, before this version's own code
-        # (which could have new bugs or changed logic) gets any chance
-        # to rewrite it. Every future update gets this safety net, not
-        # just the very first run (see backup_notes_file's other call,
-        # below, for that one-time case). Never auto-deleted — it's the
-        # user's call when old backups are no longer needed.
+        # After an upgrade, a snapshot before this version's code can rewrite
+        # the file -- on every update, not only the first run. Never deleted
+        # automatically: old backups are the user's to throw away.
         if version_change and version_change[0] == "up":
             report["version_backup_path"] = backup_notes_file()
         try:
@@ -496,22 +438,18 @@ def load_notes(version_change=None):
         except (*paths.JSON_UNREADABLE, IOError, OSError):
             raw = None
         if not isinstance(raw, list):
-            # The file exists but held nothing usable — unparsable, or a
-            # JSON value of the wrong shape. Keep its bytes before the
-            # empty list below can be saved over them (that overwrite
-            # used to be the moment a corrupt notebook became a
-            # permanent loss), and flag it so the caller TELLS the user.
+            # There, but nothing usable: its bytes are kept before an empty
+            # list can be saved over them (once the moment a corrupt notebook
+            # was lost for good), and the caller is told to TELL the user.
             report["notes_file_corrupt"] = True
             report["corrupt_backup_path"] = _preserve_corrupt(paths.DATA_FILE)
             raw = []
     if not isinstance(raw, list):
         raw = []
 
-    # The categories the notes are filed under join the map BEFORE the
-    # notes are normalised: normalize_note re-files a note whose category
-    # is not in the map to General, and the map comes from a different
-    # file. Saved straight away -- and before the cleanup below reads the
-    # settings, so its own write carries them too.
+    # The notes' own categories join the map BEFORE normalising, which files
+    # an unknown category under General; saved at once, before the cleanup
+    # below reads the settings, so its own write carries them too.
     report["categories_adopted"] = adopt_categories_of(raw)
     if report["categories_adopted"]:
         persist_categories()
@@ -520,48 +458,27 @@ def load_notes(version_change=None):
     # guess whether an old note has 'comments' or 'attachments'.
     notes = [normalize_note(n) for n in raw if isinstance(n, dict)]
     ids_repaired = repair_note_ids(notes)
-    # An identity handed out and never written down is a different
-    # identity every launch. normalize_note mints one for any note that
-    # arrives without it -- in memory. On a session that only READS,
-    # nothing saves, so the next launch mints a fresh set, and a share
-    # code made yesterday matches nothing today, which is the entire
-    # point of the field. So a read that minted any writes them down,
-    # once. Decided here, done after the cleanup below, which rewrites
-    # the file itself on the launch it runs.
+    # Identities minted in memory differ every launch unless written down
+    # (ISSUES_LOG: "The identity that only lasted until you closed the
+    # app"), so a read that minted any writes them, once, after the cleanup.
     minted_any = any(
         isinstance(n, dict) and not str(n.get("uid") or "").strip()
         for n in raw)
     if raw and not notes and not report["notes_file_corrupt"]:
-        # A list-shaped file whose entries are all junk is the same loss
-        # in a different costume — every note gone, nothing usable kept.
-        # It must not slip past the preserve-and-announce net just
-        # because the outermost bracket happened to be the right one.
+        # A list of nothing but junk is the same loss in another costume:
+        # preserved and announced like a file that cannot be read.
         report["notes_file_corrupt"] = True
         report["corrupt_backup_path"] = _preserve_corrupt(paths.DATA_FILE)
 
     settings = load_settings()
-    # The one-time cleanup would rewrite the notes file — on a launch
-    # that just declared the file unreadable, that rewrite could destroy
-    # the corrupt bytes at the very moment the startup notice tells the
-    # user they are still on disk. There is nothing to clean in an empty
-    # list anyway; the cleanup simply waits for the next healthy launch.
+    # The one-time cleanup rewrites the file, so it waits out a launch that
+    # just declared the file unreadable: the startup notice is promising
+    # those bytes are still on disk (and an empty list has nothing to clean).
     if not settings.get("cleanup_done") and not report["notes_file_corrupt"]:
         backup_path = backup_notes_file()
-        # The note the user had open is remembered by ID, and this cleanup
-        # renumbers every ID from 1 -- so the remembered number has to be
-        # re-pointed at the same NOTE, or it silently comes to mean
-        # whichever note inherits it. Measured before it was fixed: with
-        # one empty note in front of it, the note being read moved from
-        # id 2 to id 1, the setting still said 2, and the next launch
-        # opened the note AFTER it instead.
-        #
-        # Matched by identity, not by content: clean_notes returns the
-        # very dicts it was handed, so the note that survived is the one
-        # that IS this object. A note the cleanup removed (it was empty,
-        # or it was an exact duplicate collapsed into its twin) leaves
-        # nothing to re-point at, and the app then opens no note at all --
-        # which is the honest outcome, and far better than opening
-        # someone else's.
+        # The cleanup renumbers every id from 1, so the remembered open note
+        # is re-pointed by identity, or forgotten if the cleanup removed it.
+        # ISSUES_LOG, smaller lessons: load_notes.
         remembered = settings.get("last_open_note_id")
         was_open = None
         if remembered is not None:
@@ -585,13 +502,9 @@ def load_notes(version_change=None):
         ids_repaired = False
 
     if (minted_any or ids_repaired) and not report["notes_file_corrupt"]:
-        # Guarded exactly like the cleanup above: never over a file this
-        # launch has just declared unreadable, whose bytes the startup
-        # notice is at that moment promising are still on disk. A failure
-        # here is not worth a dialog -- the app runs perfectly well, and
-        # the next save writes them anyway. Repaired ids ride the same
-        # write, for the same reason identities do: a session that only
-        # reads would otherwise repair them afresh on every launch.
+        # Guarded like the cleanup: never over a file just declared
+        # unreadable. A failure needs no dialog, as the next save writes them
+        # anyway; repaired ids ride along, or a read-only session repeats it.
         try:
             _write_json_atomic(paths.DATA_FILE, notes)
         except (IOError, OSError):
@@ -603,13 +516,10 @@ def load_notes(version_change=None):
 def mend_surrogates(value):
     """Recombine UTF-16 surrogate pairs into the characters they spell.
 
-    Tk stores text in UTF-16 and hands astral characters -- every emoji
-    past the basic plane -- to Python as two surrogate code points. They
-    display, but they cannot be UTF-8 encoded, so the first emoji typed
-    into a note killed every save after it. A proper pair becomes the real
-    character; a lone surrogate, which spells nothing, becomes U+FFFD
-    rather than poisoning the file.
-    """
+    Tk hands astral characters (most emoji) to Python as two surrogates,
+    which cannot be UTF-8 encoded: the first emoji typed killed every save
+    after it. A lone surrogate becomes U+FFFD. ISSUES_LOG: "The mend that
+    only ran on the way to disk"."""
     if isinstance(value, str):
         try:
             value.encode("utf-8")
@@ -625,12 +535,9 @@ def mend_surrogates(value):
     return value
 
 
-# The UI registers a callback here at startup — core never imports
-# tkinter, so this attribute is the one channel core has to say "that
-# write FAILED" to whatever is drawing the window. Independently of the
-# callback, every failed data-file write is appended to crash_log.txt
-# (the same file the crash handlers use), so a failure on a route nobody
-# checks still leaves a trace to diagnose.
+# The UI registers a callback here at startup: core never imports tkinter, so
+# this is its one way to say "that write FAILED". Every failed write is also
+# appended to crash_log.txt, so a route nobody checks still leaves a trace.
 on_write_failure = None
 
 
@@ -655,26 +562,19 @@ def _report_write_failure(path, exc):
 
 def _write_json_atomic(path, value):
     """Write a JSON data file the one safe way: mend surrogates, dump to a
-    sibling ``.tmp``, then atomically replace the real file. A crash
-    mid-write leaves the old file whole, and an unencodable value fails
-    cleanly instead of leaving a truncated file behind. Every data file
-    the app owns saves through here — notes_data.json learned each of
-    these guards from a real loss, and its siblings (trash, templates,
-    settings) once lacked all of them, so an emoji in a deleted note
-    could corrupt trash.json outright.
+    sibling ``.tmp``, then atomically replace the real file, so a crash
+    mid-write leaves the old file whole and an unencodable value fails
+    cleanly. Every data file the app owns saves through here. ISSUES_LOG:
+    "The mend that only ran on the way to disk".
 
     Returns:
         ``(True, None)`` on success, or ``(False, exception)``.
     """
     tmp_path = path + ".tmp"
     try:
-        # Mended only when it has to be. mend_surrogates rebuilds every
-        # dict and list of the notebook to find the rare lone surrogate --
-        # a quarter of every autosave at 5,000 notes (53 ms of ~240,
-        # measured). Dumping first and asking the text whether it encodes
-        # costs one C-speed pass, and a notebook with nothing to mend
-        # dumps to the very same text either way, so the file is identical
-        # to the byte.
+        # Mended only when needed: mend_surrogates rebuilds the notebook (a
+        # quarter of an autosave at 5,000 notes), while asking the dumped text
+        # whether it encodes is one C pass, and the bytes come out the same.
         text = json.dumps(value, indent=2, ensure_ascii=False)
         try:
             text.encode("utf-8")
@@ -682,20 +582,16 @@ def _write_json_atomic(path, value):
             text = json.dumps(mend_surrogates(value), indent=2,
                               ensure_ascii=False)
         with open(tmp_path, "w", encoding="utf-8") as f:
-            # One string, one write. json.dump streams the same text
-            # through the file's encoder in thousands of small pieces:
-            # twice the time for a 1,000-note notebook (36 ms against 18,
-            # measured), for a file identical to the byte -- and every
-            # autosave paid it.
+            # One string, one write: json.dump streams the same bytes in
+            # thousands of pieces, twice the time at 1,000 notes (36 ms to 18).
             f.write(text)
         # Atomic replace: a crash mid-write can't corrupt the real file,
         # it either fully updates or stays as it was.
         os.replace(tmp_path, path)
         return True, None
     # ValueError covers UnicodeEncodeError, TypeError the unserializable:
-    # the old clause caught only I/O, so an emoji typed into a note flew
-    # straight past it, autosave crash-logged sixteen times in a row, and
-    # every edit after the first emoji lived only in the running app.
+    # catching I/O alone let an emoji through, and every edit after it lived
+    # only in the running app.
     except (IOError, OSError, ValueError, TypeError) as exc:
         try:
             os.remove(tmp_path)
@@ -706,13 +602,9 @@ def _write_json_atomic(path, value):
 
 
 def save_notes(notes):
-    """Write notes to disk.
-
-    A failure here used to be invisible — the app looked like it saved but
-    nothing hit the disk, which is exactly how notes 'vanished' on other
-    PCs. It is surfaced instead, but by the caller: this returns the reason
-    rather than opening a dialog, so the same function works whatever is
-    drawing the window.
+    """Write notes to disk, returning why a write failed rather than showing
+    it: a failure nobody saw is how notes once 'vanished' on other PCs, and
+    the caller, which owns the window, decides how to say so.
 
     Returns:
         ``(True, None)`` on success, or ``(False, exception)``.
@@ -721,10 +613,7 @@ def save_notes(notes):
 
 
 # ---- Trash operations ----
-#
-# These were methods on the app class and touch no interface at all. They are
-# the data half of "delete" and "restore": the caller still owns telling the
-# screen to redraw afterwards.
+# The data half of "delete" and "restore"; the caller redraws the screen.
 
 def move_notes_to_trash(trash, notes_to_trash):
     """Move notes into the trash with a deletion timestamp.
@@ -772,20 +661,10 @@ def restore_from_trash(notes, trash, entry):
 def restore_many_from_trash(notes, trash, entries):
     """Bring trashed notes back into the active list, in one pass.
 
-    A note whose category was deleted while it sat in the trash comes back
-    filed under "General" rather than orphaned -- but that is
-    :func:`~noteorganizer.core.model.normalize_note`'s doing, not this
-    function's. The method this replaced re-checked the category itself and
-    fell back to the same value, which had no effect; the check is gone
-    rather than carried over, and the guarantee is tested where it lives.
-
-    Nothing is written. The caller saves the notes FIRST and the trash
-    after, so a failed notes write leaves the note still in trash.json --
-    a duplicate at worst. This used to save the trash itself, before any
-    caller had saved the notes: a failed notes write then left the note in
-    neither file. And a batch used to come here one note at a time, each
-    call writing the whole trash file again: an Undo of a thousand notes
-    moved to the Trash froze the app for over half a minute.
+    Nothing is written: the caller saves the notes FIRST and the trash after,
+    so a failed write leaves a duplicate at worst, never a note in neither
+    file. ISSUES_LOG: "The Trash that gave notes back one at a time"; smaller
+    lessons: restore_many_from_trash, on why no category is checked here.
 
     Args:
         notes: the active note list, appended to in place.
@@ -810,12 +689,9 @@ def restore_many_from_trash(notes, trash, entries):
         # note created after it was deleted.
         note["id"] = next_id
         next_id += 1
-        # The identity has the same problem for a different reason: while
-        # this note sat in the trash, a copy of it may have arrived from a
-        # share code, and two notes wearing one identity is the collision
-        # the field exists to prevent. Only then -- an ordinary restore
-        # keeps the identity, so a code made before the note was deleted
-        # still finds it.
+        # A new identity only if a copy arrived by share code while this one
+        # sat in the trash (two notes, one identity); otherwise it is kept,
+        # so a code made before the delete still finds the note.
         if note.get("uid") in worn:
             note["uid"] = new_note_uid()
         worn.add(note["uid"])
@@ -826,12 +702,8 @@ def restore_many_from_trash(notes, trash, entries):
 
 
 # ---- Single settings values ----
-#
-# Six methods on the app class were the same three lines: load the settings,
-# change one key, save them back. That shape is not incidental -- writing the
-# whole file for one value is what stops a save from wiping a key it never
-# meant to touch, like the one-time cleanup flag. Doing it once here keeps
-# the reason attached to the code rather than repeated in six comments.
+# Read-modify-write of the whole file for one value, so a save never wipes a
+# key it did not mean to touch (the one-time cleanup flag, say).
 
 def get_setting(key, default=None, expect=None):
     """One value out of settings.json.

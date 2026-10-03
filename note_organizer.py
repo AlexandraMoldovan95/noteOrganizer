@@ -14050,8 +14050,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         a frame or an empty stretch of the window moves the keyboard
         nowhere, so the caret stays in the field and no <FocusOut> comes:
         17.10 typed and a click beside it was read as still being typed and
-        left out, and only a click into another box saved it (field report,
-        0.84.338). Which field holds the keyboard is noted on its own
+        left out, and only a click into another box saved it (a field
+        report). Which field holds the keyboard is noted on its own
         <FocusIn> and <FocusOut>, so the click needs no focus_get(); the
         click's own work goes on (_settle_dates_on_click_elsewhere never
         breaks it). add="+" throughout: add_placeholder's handlers on the
@@ -16279,19 +16279,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
     def _sync_editor_snapshot(self):
         """Write the live editor back into the stored state of the note it
-        belongs to.
-
-        This was refresh_tab_strip, which drew a row of tabs above the
-        editor -- a row that could never appear. Every path that touches
-        the list resets it to a single entry and no append exists, so the
-        strip's "hidden at 0-1 notes" branch was the only one ever taken
-        (recorded as finding C12 in qa/COVERAGE_LEDGER.md, and closed by
-        removing it in 0.73.165 rather than by building multi-note tabs).
-
-        What was never dead is the snapshot it refreshed on the way: the
-        dirty comparison and the restore after a bulk delete both read it,
-        so it is kept under the name of the thing it actually does.
-        """
+        belongs to. The dirty comparison and the restore after a bulk delete
+        both read that snapshot. ISSUES_LOG, smaller lessons:
+        _sync_editor_snapshot."""
         self._sync_active_tab()
 
     def _bind_global_shortcuts(self):
@@ -17168,16 +17158,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         pin_label = "📌  Unpin from top" if note.get("pinned") else "📌  Pin to top"
         menu.add_command(label=pin_label, command=lambda: self.toggle_pin(note))
 
-        # One note out into the world as a file. HTML is the complete
-        # export (colours, tables, everything) and doubles as the road
-        # to PDF (browser, Ctrl+P) and Word (opens .html natively);
-        # plain text is the body as stored.
-        #
-        # (This said "Markdown is portable but drops what Markdown cannot
-        # say", describing a third format the menu below has never built.
-        # A sibling of the docstring corrected in 0.76.195, and missed by
-        # that sweep because it greps as a comment about Markdown rather
-        # than as a claim about the formats on offer.)
+        # One note out as a file: HTML is the complete export, the road to PDF
+        # (a browser's Ctrl+P) and to Word; plain text is the body as stored.
+        # ISSUES_LOG, smaller lessons: the export menu's comment.
         export_menu = tk.Menu(menu, tearoff=0)
         export_menu.configure(
             bg=self.colors["card"], fg=self.colors["text"],

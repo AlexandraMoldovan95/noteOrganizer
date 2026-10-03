@@ -59,34 +59,26 @@ class NoteListMixin:
         self.refresh_note_list()
 
     def _sync_list_scroll(self, _event=None):
-        """Keep the note list honest about where its top is: content
-        that fits the viewport sits AT the top, and the origin never
-        rests above the first card (which showed as unexplained space
-        between the top bar and the first title). The editor page has
-        carried this exact guard for its own canvas since 0.32.x; the
-        list showed the same family of symptoms without it."""
+        """Keep the note list honest about where its top is: content that
+        fits sits AT the top, and the origin never rests above the first card
+        (which showed as unexplained space under the top bar). The editor's
+        canvas carries the same guard."""
         canvas = getattr(self, "canvas", None)
         if canvas is None:
             return
         try:
-            # While a rebuild's restore is still in force, every Configure
-            # re-applies it. A rebuilt list's geometry settles over SEVERAL
-            # event-loop passes (measured: one collapse reported heights
-            # 106 -> 276 -> 820 as separate Configure events), and each
-            # intermediate scrollregion re-clamps the canvas -- a single
-            # idle-time restore loses that race to whichever stage lands
-            # after it.
+            # While a rebuild's restore is in force, every Configure re-applies
+            # it: a rebuilt list settles over several passes (heights 106 ->
+            # 276 -> 820, measured), each re-clamping, and one restore loses.
             pending = getattr(self, "_list_restore_px", None)
             if pending is not None:
                 if time.monotonic() <= getattr(self, "_list_restore_until", 0):
                     self._apply_list_scroll_px(pending)
                     return
                 self._list_restore_px = None
-            # Keep the scrollregion honest before judging the origin:
-            # yview_moveto() below works in region fractions, and setting
-            # the region to the truth makes Tk clamp an origin sitting past
-            # a new, shorter end (a blank viewport otherwise) by itself.
-            # The extent comes from the rows, not from Tk (_list_extent).
+            # The region set to the truth first, from the rows (_list_extent):
+            # yview_moveto works in its fractions, and Tk then clamps an origin
+            # left past a new, shorter end, which would show a blank view.
             region = self._list_extent()
             canvas.configure(scrollregion=region)
             content_h = region[3] - region[1]
@@ -97,13 +89,10 @@ class NoteListMixin:
             pass
 
     def _apply_list_scroll_px(self, pixels):
-        """Scroll the list to `pixels` from the top, clamped into the
-        content as it is RIGHT NOW; content that fits pins to the top.
-        Sets the scrollregion from the list's own extent first: the
-        content may just have shrunk under a canvas scrolled past its new
-        end, and a stale region would leave the view parked in blank
-        space. (When the cards lived in a frame, that frame could end up
-        above the viewport, stop being resized and never report it.)"""
+        """Scroll the list to `pixels` from the top, clamped into the content
+        as it is now; content that fits pins to the top. The region is set
+        from the list's own extent first: content that just shrank under a
+        view scrolled past its new end would leave it in blank space."""
         canvas = getattr(self, "canvas", None)
         if canvas is None:
             return
@@ -121,16 +110,11 @@ class NoteListMixin:
             pass
 
     def _restore_list_scroll(self, pixels):
-        """Put the note list back where it was before a full rebuild --
-        in PIXELS from the top, because a rebuild can change the content
-        height (collapsing a group, say) and a remembered fraction would
-        land somewhere else. The restore stays in force for a short
-        window rather than firing once, re-applied from two directions:
-        _sync_list_scroll on every Configure (a rebuilt list's geometry
-        settles over several event-loop passes, each re-clamping the
-        canvas), and the timers below (a rebuild that only SHRINKS
-        content scrolled out of view fires no Configure at all, and at
-        this idle moment bbox may still report the old geometry)."""
+        """Put the list back where it was before a rebuild, in PIXELS (the
+        height can change, so a fraction would land elsewhere), and keep it
+        there for 0.4 s against every Configure and by the timers below: the
+        geometry settles over several passes. ISSUES_LOG: "The list that lost
+        its place, twice, for two silent reasons"."""
         self._list_restore_px = pixels
         self._list_restore_until = time.monotonic() + 0.4
         self._apply_list_scroll_px(pixels)
@@ -164,19 +148,12 @@ class NoteListMixin:
             pass
 
     def _list_scrolled_by_hand(self):
-        """The person is scrolling the list -- the wheel, the scrollbar, a
-        drag held at its edge. A deliberate move beats a rebuild's
-        still-pending restore; and a ring it takes out of sight was left
-        there on purpose, so the keyboard coming back puts the ring on a
-        card in view rather than scrolling back to it (_list_focus_in).
-        Only the person's own scrolls say this: a save or a search that
-        moves the ringed card away has the card brought back instead.
-
-        And only a scroll that leaves the ring's row out of sight, read
-        once the view has moved. Every wheel notch said so, even one that
-        kept the card in view or moved nothing at the list's end: the next
-        save that took the card away put the ring on another note, and
-        Enter opened that one."""
+        """The person is scrolling the list (wheel, scrollbar, a drag held at
+        its edge). A deliberate move beats a rebuild's pending restore, and a
+        ring it leaves out of sight was left on purpose: the keyboard coming
+        back takes a card in view (_list_focus_in), where a save or a search
+        brings the ringed card back. Judged once the view has moved. ISSUES_LOG,
+        smaller lessons: _list_scrolled_by_hand."""
         self._list_restore_px = None
         if getattr(self, "_hand_scroll_check", None) is None:
             try:
@@ -190,10 +167,9 @@ class NoteListMixin:
         of sight (see _list_scrolled_by_hand)? A row the list has not drawn
         is out of sight too."""
         self._hand_scroll_check = None
-        # The ring's row whether drawn or not: _ring_row answers None for
-        # one not drawn, and a scroll that left such a row was taken for no
-        # scroll at all -- the keyboard's return then drew every row down
-        # to it and pulled the view away from where the person had put it.
+        # Drawn or not: _ring_row answers None for a row not drawn, and such a
+        # scroll once read as none, so the keyboard's return drew every row to
+        # it and pulled the view from where the person had put it.
         cat = getattr(self, "_focused_header", None)
         key = (("header", cat) if cat is not None
                else ("note", getattr(self, "_focused_note_id", None)))
@@ -214,26 +190,17 @@ class NoteListMixin:
         self.refresh_note_list()
 
     # ---------- Note list rendering ----------
-    # The sidebar dropdown mixes two kinds of choice: a category name, or
-    # one of these two type filters. Every consumer of filter_var goes
-    # through _note_passes_filter, so the list render and the bulk
-    # select-all can never diverge on what "visible" means.
+    # The filter dropdown offers a category or one of these two types; every
+    # reader goes through _note_passes_filter, so "visible" means one thing.
     FILTER_REPEATING = "🔁 Repeating"
     FILTER_DATED = "📅 Dated"
 
     def _filter_options(self):
-        """Everything the sidebar's filter dropdown offers, in order.
-
-        The dropdown is built from this, and so is every check of whether a
-        filter value is still a real choice. It had been written out inline
-        at the dropdown and then half-remembered by the guard that keeps the
-        selection valid, which asked `not in CATEGORY_COLORS` -- true of both
-        type filters above, neither of which is a category. So filtering the
-        list to Repeating and then adding a category in Settings silently
-        threw the filter away and showed everything. Measured on the real
-        app before it was changed, with a control: a real category survived
-        the same call and a deleted one was correctly reset.
-        """
+        """Everything the sidebar's filter dropdown offers, in order: the
+        dropdown and every check that a filter is still a real choice read
+        it. A half-remembered copy asked `not in CATEGORY_COLORS`, true of
+        both type filters, so adding a category threw a Repeating filter
+        away. ISSUES_LOG, smaller lessons: _filter_options."""
         return ["All", self.FILTER_REPEATING, self.FILTER_DATED] + \
             list(CATEGORY_COLORS.keys())
 
@@ -273,11 +240,9 @@ class NoteListMixin:
         sort_var = getattr(self, "sort_var", None)
         if sort_var is not None:
             self._sort_shown = sort_var.get()
-        # The rebuild empties the drawing for a moment, and a Configure
-        # landing in that window clamps the canvas to the top -- the
-        # 'scroll jumps back to the top' report on the grouped list.
-        # The offset is remembered in pixels and put back once the new
-        # content exists, whatever happened in between.
+        # The rebuild empties the drawing for a moment, and a Configure then
+        # clamps the canvas to the top ("the scroll jumps back to the top"):
+        # the offset is kept in pixels and put back once the rows exist.
         try:
             # If the previous rebuild's restore is still in force, the
             # canvas may sit at a transiently clamped position right now
@@ -290,21 +255,16 @@ class NoteListMixin:
                 saved_list_scroll = max(0, self.canvas.canvasy(0))
         except (tk.TclError, AttributeError):
             saved_list_scroll = 0
-        # Called from everywhere note/category data changes (save, delete,
-        # category rename/delete, import, ...) — piggyback the Statistics
-        # panel's refresh here too, so it stays live while Settings happens
-        # to be open, instead of only updating the next time it's opened.
-        # Placed before the early-return branches below (e.g. an empty
-        # filtered list) so it isn't skipped in those cases.
+        # Every data change ends here, so the Statistics panel refreshes too,
+        # live while Settings is open -- before the early returns below.
         self._render_statistics()
         # Whether the keyboard is on the list decides how far the rebuild
         # draws (see _list_draw_target). The keyboard itself stays where it
         # is: the canvas survives a rebuild, only its drawing is replaced.
         self._restore_focus_wanted = getattr(self, "_keyboard_on_card", False)
-        # Whether the person could see the ring: if this rebuild moves its
-        # row out of sight -- the card pinned from its menu goes to the top
-        # -- the view goes after it (_restore_card_focus). Only ever set
-        # here, so two rebuilds before the app is idle cannot forget it.
+        # A ring the person could see is followed if this rebuild moves its
+        # row (a card pinned from its menu goes to the top); set only here, so
+        # two rebuilds before the app is idle cannot forget it.
         ring = self._ring_row()
         if (self._restore_focus_wanted and ring is not None
                 and self._row_on_screen(self._list_row_record(ring)) == "all"):
@@ -313,10 +273,8 @@ class NoteListMixin:
         # goes: as deep as the view needs, not as deep as it once went.
         drawn_before = self._list_depth_for(saved_list_scroll)
         self.canvas.delete("row")
-        # One record per drawn row, in the order the rows stand on screen,
-        # and the same records by note id and by category -- what every
-        # update that stops short of a rebuild works from. Rebuilt here,
-        # so they only ever describe what is drawn.
+        # One record per drawn row in screen order, and the same records by
+        # note id and by category: what every update short of a rebuild uses.
         self._list_drawn = []
         self._note_cards = {}
         self._group_headers = {}
@@ -347,13 +305,9 @@ class NoteListMixin:
         self._draw_list_rows(self._list_draw_target(
             rows, drawn_before, saved_list_scroll))
         if saved_list_scroll > 0:
-            # The restore is in force from here, not from when the app is
-            # next idle. Every deliberate scroll -- the wheel, the scrollbar,
-            # the ring's scroll-into-view, a click keeping its card under the
-            # pointer -- cancels a restore by clearing _list_restore_px; a
-            # restore queued as a bare callback could not be cancelled, and
-            # scrolled the view back after them. A press measured in one view
-            # and a jitter read in the other then passed for a drag.
+            # In force from here, not from idle: a deliberate scroll cancels it
+            # by clearing _list_restore_px, which a queued bare callback could
+            # not see. ISSUES_LOG, smaller lessons: refresh_note_list.
             self._list_restore_px = saved_list_scroll
             self._list_restore_until = time.monotonic() + 0.4
             self.after_idle(self._begin_list_restore)
@@ -362,10 +316,9 @@ class NoteListMixin:
         # not the thing holding the keyboard.
         self.after_idle(self._restore_card_focus)
         if getattr(self, "selection_mode", False):
-            # What "all" means has just changed -- a search or a filter
-            # alters which notes are on screen, and the Select all button
-            # says what pressing it would do. Only while the bar is up,
-            # so an ordinary refresh pays nothing for it.
+            # What "all" means just changed (a search or filter), and the
+            # Select all button says what a press would do; only while the
+            # bar is up, so an ordinary refresh pays nothing.
             self._update_bulk_selected_label()
 
     # How many rows -- cards, and category headers when grouped -- the list
@@ -377,14 +330,8 @@ class NoteListMixin:
     # its place: above the list, where no row ever stands (_reflow_list).
     LIST_OUT_OF_THE_WAY = -100000
 
-    # The list is drawn on its canvas: every card is rectangles and text,
-    # not widgets. These reproduce the widget cards they replaced, to the
-    # pixel where it could be measured (a card of both kinds, photographed
-    # side by side). See _draw_note_card.
-    # The sort a person arranges by hand -- by dragging a card, or with
-    # Alt+Up and Alt+Down -- stored as each note's "order" (see
-    # normalize_note). One name, because the dropdown, the sort and the
-    # move all have to mean the same option.
+    # The sort a person arranges by hand (a drag, or Alt+Up/Down), stored as
+    # each note's "order"; one name, so the dropdown, sort and move agree.
     SORT_CUSTOM = "Custom order"
     LIST_DOUBLE_PRESS_S = 0.5   # how long a double-click's first press counts
     DRAG_THRESHOLD = 5          # pixels a press must travel to become a drag
@@ -393,6 +340,8 @@ class NoteListMixin:
     DRAG_EDGE_DWELL_MS = 400    # ...a drag that began there, once held this long
     DRAG_SCROLL_RAMP = 10       # ...its steps growing to full over these beats
 
+    # A card is rectangles and text on the canvas, not widgets; these match
+    # the widget cards they replaced, to the pixel where it could be measured.
     LIST_DRAW_WIDTH = 250       # the list's width, as the old frame's was
     CARD_MARGIN = (5, 5)        # above and below each card
     HEADER_MARGIN = (6, 2)      # above and below each category header
@@ -415,14 +364,10 @@ class NoteListMixin:
         return [rec["key"] for rec in getattr(self, "_list_drawn", None) or ()]
 
     def _notes_on_the_list(self):
-        """The notes the sidebar's search box and filter let through, in
-        the notebook's own order.
-
-        The ONE answer to "which notes does the list show", for the reason
-        _query_matches_note is one: the list drew from a copy of this
-        written out inline, and Select all from another -- the copies
-        agreed, which is exactly what copies stop doing.
-        """
+        """The notes the sidebar's search box and filter let through, in the
+        notebook's own order: the ONE answer to "which notes does the list
+        show", as _query_matches_note is for one note. The list and Select all
+        once each kept a copy, and copies agree only until they stop."""
         query = self._search_query()
         if not query:
             shown = list(self.notes)
@@ -456,22 +401,11 @@ class NoteListMixin:
         return note.get("category") or "General"
 
     def _list_rows(self):
-        """Every row the note list shows, in screen order, before any of
-        them is drawn.
-
-        A row is ("note", note) for a card, or -- when the list is grouped
-        -- ("header", category, notes_in_group, collapsed) ahead of each
-        group, followed by the group's cards unless it is collapsed. Group
-        order follows Manage-categories order; notes within a group keep
-        the sort. A note whose category no longer exists falls into its
-        own group by that name, so it stays visible rather than
-        disappearing.
-
-        One definition for everything that draws the list: the rebuild
-        draws the first of these rows, the scrolling draws the rest, and
-        a save redrawing its own card asks where in them the card now
-        belongs.
-        """
+        """Every row the note list shows, in screen order, before any is drawn:
+        ("note", note), or when grouped ("header", category, notes, collapsed)
+        ahead of each group's cards. Groups follow Manage-categories order, a
+        vanished category keeps a group of its own, and the rebuild, the
+        scrolling and a save redrawing its card all ask this one definition."""
         shown = self._notes_on_the_list()
         self._sort_notes(shown)
         if not shown:
@@ -495,16 +429,11 @@ class NoteListMixin:
         return rows
 
     def _list_draw_target(self, rows, drawn_before, scrolled_px):
-        """How many rows a rebuild draws before handing back to the user.
-
-        A screenful and some to spare, as a rule. But a rebuild must not
-        take the list out from under the person using it: when it was
-        scrolled, as many rows are drawn again as reached a screen below
-        the view (`drawn_before`, measured by _list_depth_for on the drawing
-        being replaced), so the position restored in pixels has content to
-        land on; and when the keyboard was on a card, that card is drawn,
-        so the ring has somewhere to be.
-        """
+        """How many rows a rebuild draws before handing back: a screenful and
+        some, as a rule -- but as deep as reached a screen below a scrolled
+        view (`drawn_before`, from _list_depth_for), so the restored position
+        has rows to land on, and down to the ring's card when the keyboard
+        was on one."""
         want = self.LIST_FIRST_DRAW
         if scrolled_px > 0:
             want = max(want, drawn_before)
@@ -515,16 +444,11 @@ class NoteListMixin:
         return want
 
     def _list_depth_for(self, scrolled_px):
-        """How many of the drawn rows it takes to reach a screen below a
-        view scrolled `scrolled_px` down -- asked of the drawing a rebuild is
-        about to replace, whose rows the new one mostly shares.
-
-        A rebuild used to draw again every row drawn before whenever the list
-        was scrolled at all: after one trip to the end of 1,000 notes and
-        back near the top, every pin, Select mode, grouping and search drew
-        all 1,000 (90-360 ms against 12-52 at the top). The restore needs
-        the rows down to the view's bottom; one screen more is what the
-        top-up keeps below the view anyway, so a wheel turn finds rows."""
+        """How many drawn rows reach a screen below a view scrolled
+        `scrolled_px` down (the margin the top-up keeps, so a wheel turn finds
+        rows), asked of the drawing a rebuild replaces. Drawing again every row
+        drawn before cost 90-360 ms a pin or a search after one trip to the end
+        of 1,000 notes and back."""
         drawn = getattr(self, "_list_drawn", None) or ()
         if scrolled_px <= 0 or not drawn:
             return 0
@@ -541,20 +465,10 @@ class NoteListMixin:
 
     def _draw_list_rows(self, count):
         """Draw the next `count` waiting rows, below what is already drawn.
-
-        The list used to be drawn whole, on every rebuild. Every card was
-        six windows to the operating system, so a list of 300 notes took
-        three seconds to rebuild and one of 1,000 over twelve -- and a
-        rebuild followed every pause in typing. Switching back to the list
-        and closing Settings paid again for every card, on screen or not.
-
-        A rebuild draws a screenful and some to spare, and the rest is
-        drawn as the view comes near it: _list_view_changed hears every
-        scroll, by wheel, scrollbar or resize, and the keyboard's walk
-        draws ahead of itself (_focus_card_by_offset). And since the cards
-        became a drawing rather than windows, what is drawn costs Windows
-        one window however long the list gets.
-        """
+        A rebuild draws a screenful and some; the rest is drawn as the view
+        comes near it (_list_view_changed) or the keyboard walks ahead of it
+        (_focus_card_by_offset). ISSUES_LOG: "The list that was drawn whole,
+        for every pause in typing"."""
         batch = self._list_pending[:count]
         self._list_pending = self._list_pending[count:]
         if not batch:
@@ -580,21 +494,10 @@ class NoteListMixin:
 
     def _list_extent(self):
         """How far the drawing reaches, as the scrollbar and every scroll
-        guard must see it: (0, 0, width, bottom) -- from the very top to
-        the last drawn row's bottom margin, or to below the empty-list
-        message.
-
-        Worked out from the rows, never asked of Tk. The frame the cards
-        once lived in started at y=0, so bbox("all") did too, and every
-        guard counts on that; a drawing's bbox starts at its first item,
-        at the first card's margin, and the top of the list read as
-        "scrolled four pixels" -- every rebuild kept its old depth and a
-        snap to the top landed at 4. An empty rectangle from 0 papered
-        over it on Windows and failed on the Linux image: Tk 8.6.15 counts
-        a pixel round a rectangle with no outline into its bbox and 8.6.16
-        does not, so the same rectangle read (0, 0, ...) on one and
-        (1, 1, ...) on the other. The app knows where its rows end.
-        """
+        guard must see it: (0, 0, width, bottom of the last row's margin, or
+        below the empty-list message). Worked out from the rows, never from
+        Tk's bbox, which starts at the first item and pads differently in Tk
+        8.6.15 and 8.6.16. ISSUES_LOG, smaller lessons: _list_extent."""
         bottom = self._list_end_y()
         if not bottom:
             try:
@@ -616,23 +519,11 @@ class NoteListMixin:
 
     def _reflow_list(self, start=0):
         """Move every drawn row from `start` on to its place below the row
-        before it. Rows keep their own heights; only where they stand
-        changes, by moving their items -- one repaint for the lot.
-
-        Rows that move by the same amount move together, in one tagged move
-        of the band they stand in. A canvas finds a tag by walking every
-        item it holds, so moving each row by its own tag cost rows times
-        items: 2.6 s to close the gap one delete left in a list drawn to the
-        end of 5,000 notes, and a first autosave of a note far down paid the
-        same. A band is tagged by what lies wholly inside it, before any
-        band moves, and trusted only if it holds exactly its rows' items;
-        otherwise those rows move one by one, as they always did.
-
-        Tk's search for what lies inside skips hidden items, and in Select
-        mode every unticked card's tick mark is one: every band came up a
-        mark short per card and moved row by row -- 4.7 s for a delete at
-        5,000 notes. The marks join their band by id (a lookup, not a walk
-        of the canvas), so they travel with their cards."""
+        before it, by moving items, in one repaint. Rows that move alike move
+        as one tagged band (a tag per row cost rows x items: 2.6 s at 5,000
+        notes), trusted only if it holds exactly its rows' items; hidden tick
+        marks join by id, since a search for what lies inside skips them.
+        ISSUES_LOG, smaller lessons: _reflow_list."""
         drawn = self._list_drawn
         y = 0
         if start > 0:
@@ -675,16 +566,10 @@ class NoteListMixin:
         self._list_extent_changed()
 
     def _list_view_changed(self, first, last):
-        """The list canvas saying which part of it is in view -- its
-        yscrollcommand.
-
-        The scrollbar hears it, as it always did. And while rows are still
-        waiting, it asks for a top-up, once however many reports arrive
-        before the app is next idle. Every way the view can move comes
-        through here -- the wheel, the scrollbar, a window made taller, a
-        drawn step making the content longer -- which is what makes it the
-        one place to watch.
-        """
+        """The canvas's yscrollcommand: the scrollbar hears which part is in
+        view, and while rows wait, a top-up is asked for, once per idle. Every
+        way the view moves -- wheel, scrollbar, a taller window, a drawn step
+        -- comes through here, which makes it the one place to watch."""
         try:
             self._list_scrollbar.set(first, last)
         except (tk.TclError, AttributeError):
@@ -760,13 +645,10 @@ class NoteListMixin:
         return rec
 
     def _header_label_text(self, cat, count, left):
-        """What a category header says -- the category and how many notes it
-        holds -- fitted between `left` and the edge the card texts keep to.
-
-        The count always shows: on a folded group it is all the header says
-        about the group's size. A name too long for the line gives way to
-        an ellipsis first. Drawn whole, a long name (up to 80 characters is
-        allowed) ran past the list's edge and took the count with it."""
+        """What a category header says -- its name and note count -- fitted
+        between `left` and the edge the card texts keep to. The count always
+        shows (on a folded group it is all there is); a long name (up to 80
+        characters) gives way to an ellipsis instead of running off the edge."""
         font = getattr(self, "_header_font", None)
         if font is None:
             # A Font object, not the tuple: _ellipsize measures a tuple
@@ -793,11 +675,9 @@ class NoteListMixin:
             return v if isinstance(v, str) else ""
 
         if choice == self.SORT_CUSTOM:
-            # Where a person put each note. A note nobody has placed yet --
-            # new since, or arrived in a share code -- stands above the
-            # placed ones, newest first, so it is found where it was just
-            # made. Two passes, the second stable: newest first, then the
-            # placed notes by their number below the unplaced.
+            # Where a person put each note; one nobody placed yet (new, or from
+            # a share code) stands above, newest first, where it was just made.
+            # Two passes, the second stable.
             notes.sort(key=lambda n: (_s(n, "created"), n.get("id") or 0),
                        reverse=True)
             notes.sort(key=lambda n: (0, 0) if "order" not in n
@@ -816,11 +696,9 @@ class NoteListMixin:
             notes.sort(key=lambda n: (_s(n, "category"), _s(n, "updated")),
                        reverse=False)
         elif choice == "Calendar: soonest":
-            # "Soonest" keeps its promise now: the note's NEXT relevant
-            # date, counted from today. A repeating series ranks by its
-            # next occurrence (not its start date), upcoming dates come
-            # before past ones, the freshest past date leads that group,
-            # and undated notes sink to the bottom.
+            # Each note's NEXT relevant date from today (a series by its next
+            # occurrence): upcoming first, then the past newest first, then
+            # the undated.
             today = datetime.now().strftime("%Y-%m-%d")
 
             def _inv(d):
@@ -858,16 +736,11 @@ class NoteListMixin:
     # ---------- Custom order: the list arranged by hand ----------
 
     def _on_sort_chosen(self, value):
-        """The Sort dropdown's choice. Custom order chosen before anything
-        was ever placed starts from the order the list was showing, rather
-        than from an order nobody has seen.
-
-        And Custom order chosen after a move replaced an arrangement made by
-        hand (see _move_note) asks, once, whether to bring that arrangement
-        back. Its toast offered it for eight seconds, and the next toast
-        with an Undo -- a delete's, say -- took the offer's place: the
-        arrangement then had no way back at all. Kept for the session, it
-        is offered where the person goes looking for it."""
+        """The Sort dropdown's choice. Custom order chosen before anything was
+        placed starts from the order the list was showing; chosen after a move
+        replaced an arrangement made by hand (_move_note), it asks once whether
+        to bring that back. ISSUES_LOG, smaller lessons: the Custom order
+        offer."""
         replaced = getattr(self, "_replaced_custom_order", None)
         if value == self.SORT_CUSTOM and replaced is not None:
             self._replaced_custom_order = None
@@ -916,20 +789,11 @@ class NoteListMixin:
         return True
 
     def _move_note(self, note_id, before_id=None, after_id=None):
-        """Put a note just before one note, or just after one, in Custom
-        order, and show the list in that order.
-
-        The list may have been sorted some other way: then Custom order
-        starts from the order it was showing -- the one the person just
-        moved a card in -- and the move is made there. Every note gets its
-        place again, in one pass, so a number never has to fit between two
-        others. A move is not an edit: nothing's "updated" changes.
-
-        Starting from the order shown replaces any arrangement made by hand
-        earlier, so when there was one, the toast says so and offers it
-        back (_undo_custom_order). It used to go without a word: one
-        Alt+Down while looking at the list by title, and the arrangement
-        was gone from the notes file."""
+        """Put a note just before or just after another in Custom order, and
+        show the list so. From another sort, Custom order starts from the order
+        shown, every note numbered again in one pass; a move is not an edit.
+        An arrangement made by hand that this replaces is offered back.
+        ISSUES_LOG, smaller lessons: the Custom order offer."""
         note = self.find_note(note_id)
         anchor = self.find_note(before_id if before_id is not None else after_id)
         if note is None or anchor is None or anchor is note:
@@ -965,19 +829,9 @@ class NoteListMixin:
         self.save_notes()
         self.refresh_note_list()
         if replaced is not None:
-            # Kept beyond the toast, which the next offer replaces: choosing
-            # Custom order asks whether to bring it back (_on_sort_chosen).
-            # The arrangement made by hand is the one kept: a second move
-            # in a sorted view "replaced" the first replacement, and its
-            # marks took the place of the hand-made order's, which then had
-            # no way back at all. That move's toast still offers its own.
-            # But an arrangement made by hand ON that replacement is then
-            # the newest one made by hand, and it is the one kept: offered
-            # the older one, the newer was lost. Made by hand means the order
-            # differs from the one the last such move left -- not that a card
-            # was moved: Alt+Down then Alt+Up arranges nothing, and counted
-            # as a new arrangement it gave the older one's place to the
-            # replacement itself.
+            # Kept beyond the toast, for _on_sort_chosen: the newest arrangement
+            # made by hand, judged by the order it left, not by the moves made.
+            # ISSUES_LOG, smaller lessons: the Custom order offer.
             if (getattr(self, "_replaced_custom_order", None) is None
                     or self._arranged_since_last_replace(was_notes)):
                 self._replaced_custom_order = replaced
@@ -995,15 +849,11 @@ class NoteListMixin:
         return note.get("uid") or id(note)
 
     def _arranged_since_last_replace(self, was_notes):
-        """Whether the Custom order a move in a sorted view replaces (its
-        placed notes, in order) was arranged by hand since the last such
-        move: whether the notes both know stand in another order now. A note
-        deleted since arranges nothing. A note that move did not know -- new
-        since, a duplicate, one back from the Trash -- is known from the
-        first move by hand after it, where it stood then
-        (_custom_order_knows): moving it, or moving a card past it, arranges
-        something; a move undone by the next arranges nothing, as with any
-        other card."""
+        """Whether the Custom order a move in a sorted view replaces (its placed
+        notes, in order) was arranged by hand since the last such move: whether
+        the notes both know stand in another order now. A note deleted since
+        arranges nothing; one that move did not know is placed in the record
+        by _custom_order_knows."""
         left = getattr(self, "_custom_order_left", None)
         if left is None or was_notes is None:
             return True
@@ -1013,16 +863,10 @@ class NoteListMixin:
                 != [i for i in left if i in common])
 
     def _custom_order_knows(self, shown):
-        """Put the notes the last move in a sorted view did not know into
-        its record (_custom_order_left), each just under the known note it
-        stands under in *shown* -- the list in Custom order before a move by
-        hand -- so the move is compared like any other.
-
-        Counting only the note a move by hand moved missed an arrangement
-        made by moving a known card past a new note: the known notes' order
-        was unchanged, and the newest arrangement made by hand was replaced
-        by the older one. Counting every note a move passed would count a
-        card moved past a new note and back."""
+        """Put the notes the last move in a sorted view did not know into its
+        record (_custom_order_left), each just under the known note it stands
+        under in *shown*, so a move past a new note compares like any other.
+        ISSUES_LOG, smaller lessons: the Custom order offer."""
         left = getattr(self, "_custom_order_left", None)
         if left is None:
             return
@@ -1067,14 +911,10 @@ class NoteListMixin:
 
     def _put_back_custom_order(self, marks, dry_run=False):
         """Give every note in `marks` -- (note, had a place, the place), as
-        _move_note took them -- the place it had, or its having none; with
-        dry_run, only count. Returns how many notes' places change.
-
-        A note is found by the dict itself or by its uid. A note deleted and
-        brought back from the Trash since is a new dict with the same uid,
-        and its place comes back with the rest; held by the dict alone, it
-        stayed where the replacement had put it. A note made since keeps
-        whatever place it has, and one still in the Trash is not there."""
+        _move_note took them -- the place it had or its having none; with
+        dry_run, only count. Returns how many places change. A note is found
+        by the dict or by its uid, so one back from the Trash (a new dict)
+        gets its place back too; a note made since keeps its own."""
         present = {id(n) for n in self.notes}
         by_uid = {n.get("uid"): n for n in self.notes if n.get("uid")}
         changed = 0
@@ -1132,10 +972,9 @@ class NoteListMixin:
                       "offset": 0, "slot": None, "line": None,
                       "pointer_y": event.y, "press_wy": event.y,
                       "scroll_job": None,
-                      # Pressed in the open list, an edge may scroll at
-                      # once; pressed at an edge -- or a slip away from
-                      # one -- only once the pointer has left it or stayed
-                      # there a moment.
+                      # Pressed in the open list, an edge may scroll at once;
+                      # pressed at an edge (or a slip from one), only once the
+                      # pointer has left it or stayed there a moment.
                       "edge_free": not self._list_near_edge(event.y),
                       "edge_since": None, "edge_beats": 0}
 
@@ -1145,10 +984,9 @@ class NoteListMixin:
         if not drag:
             return
         if not drag["started"]:
-            # How far the HAND has moved, in the widget's own pixels. Asked
-            # in canvas pixels, a view that moved under a held button -- a
-            # rebuild's restore landing after the press was measured --
-            # counted as travel, and a 1px jitter started a drag.
+            # How far the HAND has moved, in widget pixels: in canvas pixels a
+            # view moved under a held button (a restore landing after the
+            # press) counted as travel, and a 1px jitter started a drag.
             if abs(event.y - drag["press_wy"]) < self.DRAG_THRESHOLD:
                 return
             if not self._start_list_drag():
@@ -1198,10 +1036,9 @@ class NoteListMixin:
             view_bottom = cv.canvasy(cv.winfo_height())
         except tk.TclError:
             return
-        # Under the pointer, but never out of sight: carried past the top
-        # or the bottom of the list, the card stays at that edge while the
-        # list scrolls under it. Photographed first without this -- a line
-        # at the top of the list, and the card it belonged to nowhere.
+        # Under the pointer, but never out of sight: carried past an edge, the
+        # card stays there while the list scrolls under it (photographed
+        # without this: a line at the top, and its card nowhere).
         top = cy - drag["grab_dy"]
         top = max(view_top, min(top, view_bottom - (rec["y1"] - rec["y0"])))
         dy = top - (rec["y0"] + drag["offset"])
@@ -1275,19 +1112,12 @@ class NoteListMixin:
                    for d in (0, -slip, slip))
 
     def _scroll_list_drag_near_edge(self):
-        """Near the top or bottom of the list a drag scrolls it, one step
-        at a time while the pointer stays there -- or a card could never
-        be taken further than the list shows.
-
-        Not at once for a drag that BEGAN there. The card cut by the list's
-        edge is the one a hand most often clicks, and a click whose hand
-        slips five pixels starts a drag: it scrolled the list under the
-        held card from the first beat, and the release dropped the card one
-        to three places away -- the list switched to Custom order, or a
-        hand-made one changed without a word. Such a drag waits until the
-        pointer has been out in the open list, or has stayed at the edge
-        for DRAG_EDGE_DWELL_MS; and every arrival at an edge starts slowly
-        (_list_drag_scroll_step)."""
+        """Near the list's top or bottom a drag scrolls it, a step at a time,
+        or a card could never go further than the list shows. A drag that
+        BEGAN there waits until the pointer has been out in the open list or
+        held the edge for DRAG_EDGE_DWELL_MS, and every arrival starts slowly
+        (_list_drag_scroll_step). ISSUES_LOG, smaller lessons: dragging at the
+        list's edge."""
         drag = getattr(self, "_drag", None)
         if not drag or not drag["started"]:
             return
@@ -1313,15 +1143,10 @@ class NoteListMixin:
             drag["scroll_job"] = self.after(delay, self._list_drag_scroll_step)
 
     def _list_drag_scroll_step(self):
-        """One beat of a drag's scrolling at the list's edge.
-
-        Faster the further the pointer is pushed past the edge: a tenth of
-        the view a beat at the edge itself, the whole view beyond it -- at
-        one tenth a beat, taking a card from the bottom of 300 notes to the
-        top took over a minute. But the first beats at an edge take a part
-        of that, growing to all of it over DRAG_SCROLL_RAMP beats: at the
-        full step from the first beat, an edge reached a moment before the
-        release had already carried the list a card or two along."""
+        """One beat of a drag's scrolling at the list's edge: from a tenth of
+        the view a beat at the edge to the whole view beyond it, the first
+        beats at an edge ramping up over DRAG_SCROLL_RAMP. ISSUES_LOG, smaller
+        lessons: dragging at the list's edge."""
         drag = getattr(self, "_drag", None)
         if not drag or not drag["started"]:
             return
@@ -1419,15 +1244,10 @@ class NoteListMixin:
         drag["offset"] = 0
 
     def _bind_list_input(self):
-        """The list's mouse and keyboard, bound once on the canvas that
-        draws it -- a card is a drawing, and has no bindings of its own.
-
-        Pinning, exporting, duplicating and deleting a note live in its
-        right-click menu, so the keyboard reaches that menu too, and the
-        list is walkable: a click puts the keyboard on the list, Down and Up
-        move the ring from card to card, Enter or Space does what a click
-        does, and the menu key opens the note's menu at the note.
-        """
+        """The list's mouse and keyboard, bound once on the canvas that draws
+        it (a card is a drawing, with no bindings of its own). The list is
+        walkable: Down and Up move the ring, Enter or Space does what a click
+        does, and the menu key opens the note's own menu at the note."""
         cv = self.canvas
         cv.bind("<Button-1>", self._list_pressed)
         # Tk hands the second press of a double-click to this instead of
@@ -1450,11 +1270,9 @@ class NoteListMixin:
         cv.bind("<Alt-Up>", lambda _e: self._list_move_by_keyboard(-1))
         cv.bind("<Return>", self._list_activate)
         cv.bind("<space>", self._list_activate)
-        # The dedicated menu key has a different keysym per platform --
-        # "App" on Windows, "Menu" on X11 -- and Tk RAISES on an unknown
-        # one rather than ignoring it, so binding both unguarded takes the
-        # whole note list down. It did: every card failed to build and all
-        # nine qa scripts died on the Linux image while Windows was green.
+        # The menu key is "App" on Windows and "Menu" on X11, and Tk RAISES on
+        # an unknown keysym: bound unguarded, it took the whole list down on
+        # the Linux image while Windows stayed green.
         for seq in ("<Shift-F10>", "<App>", "<Menu>"):
             try:
                 cv.bind(seq, self._list_open_menu)
@@ -1478,17 +1296,12 @@ class NoteListMixin:
         return None
 
     def _list_pressed(self, event):
-        """A click on the list: a header folds its group, a card opens its
-        note -- or ticks it, in selection mode, where opening would defeat
-        the point of picking several without leaving the list. Either way
-        the keyboard comes to the list, on the card clicked, so Down and Up
-        carry on from there. The window's own click handling (closing an
-        open popup) still hears the click -- unless the note's opening was
-        refused ("break", see _list_press_row)."""
-        # A card still lifted means the release that should have dropped
-        # it never arrived (lost to another window, say). Put it back
-        # first: forgetting the drag left its drawing, its line and its
-        # pointer shape on the list, over records that had never moved.
+        """A click on the list: a header folds its group, a card opens its note
+        (or ticks it, in selection mode), and the keyboard comes to the list on
+        that row. The window's own click handling still hears the click, unless
+        the note's opening was refused ("break", see _list_press_row)."""
+        # A card still lifted lost its release (to another window, say): it is
+        # put back first, or its drawing, line and pointer shape stayed behind.
         self._cancel_list_drag()
         # Only the second press of a double-click may follow the first
         # press's aim (_list_double_pressed); any other press forgets it.
@@ -1499,25 +1312,18 @@ class NoteListMixin:
         return None
 
     def _list_double_pressed(self, event):
-        """The second press of a double-click -- Tk's own judgement of one
-        (close in time and place), which replaces <Button-1> for that press.
-
-        It goes where the first press went. The first press can open a note
-        and so save the note left behind, and under a sort by date that save
-        moves rows: the clicked card slides away and its neighbour slides
-        under the pointer. The list keeps the clicked card there when it can
-        scroll far enough (_keep_row_under_pointer); when it cannot, the
-        first press leaves its aim here, and without it the second press
-        opened the neighbour -- a double-click that opened the wrong note."""
+        """The second press of a double-click (Tk's own judgement, replacing
+        <Button-1> for that press) goes where the first press went: a first
+        press that opens a note can save the one left, and under a date sort
+        that slides another card under the pointer. ISSUES_LOG: "The list that
+        moved under the pointer"."""
         self._cancel_list_drag()
         aim = getattr(self, "_list_press_aim", None)
         self._list_press_aim = None
         rec = None
-        # Only for as long as a double-click can take: Tk's own judgement
-        # reads the events' timestamps, and an event made by a program
-        # carries none, so two such presses a minute apart read as one
-        # double-click -- and an aim left from long ago redirected the
-        # later press to a card nobody had just pressed.
+        # Only for as long as a double-click takes: a program-made event has
+        # no timestamp, so two presses a minute apart read as one double-click,
+        # and an old aim redirected the later press.
         if (aim is not None
                 and time.monotonic() - aim[1] <= self.LIST_DOUBLE_PRESS_S):
             rec = self._list_row_record(aim[0])
@@ -1537,11 +1343,9 @@ class NoteListMixin:
     def _list_press_row(self, rec, event):
         """What a press does to the row it is for (see _list_pressed)."""
         key = rec["key"]
-        # Where the row stands on the SCREEN before the press acts. Opening
-        # a note can save the note left behind, and that save can move this
-        # card -- by a surgical redraw, or by the full rebuild a popup
-        # deferred; folding a group scrolled near the end shortens the list,
-        # and the view clamps under the header.
+        # Where the row stands on the SCREEN before the press acts: opening a
+        # note can save the one left and move this card, and folding a group
+        # near the end shortens the list under the header.
         try:
             on_screen = rec["y0"] - self.canvas.canvasy(0)
         except tk.TclError:
@@ -1557,24 +1361,18 @@ class NoteListMixin:
                 self._paint_card_check(nid)
                 self._put_keyboard_on_card(nid)
                 return
-            # Not when the open refused to happen: Cancel on a repeating
-            # day's save question keeps the person on the day they were
-            # editing -- or on the template they were writing, whose
-            # "Save changes?" was the question. "break" then: the window's
-            # click-outside, still to run for this same press, would ask
-            # it a second time, and "No" there threw the template away.
+            # A refused open (Cancel on a day's or a template's save question)
+            # returns "break": the window's click-outside, still to run for
+            # this press, would ask again, and its "No" lost the template.
             if self.open_note_in_tab(note) is False:
                 return "break"
             # Before the ring's scroll-into-view, which then still brings a
             # card clicked at the list's edge fully into sight.
             self._keep_row_under_pointer(key, on_screen)
             self._put_keyboard_on_card(nid)
-        # Asked afresh, and only of a row still under the pointer: a drag
-        # armed on a card that slid away measured its grab against a place
-        # the hand was not on, so a slip of a few pixels dropped the card
-        # before its neighbour -- and switched the whole list to Custom
-        # order. A row that could not be kept there leaves its aim for the
-        # second press of a double-click (_list_double_pressed).
+        # A drag is armed only on a row still under the pointer: one armed on a
+        # card that slid away dropped it before its neighbour on a slip, and
+        # switched the list to Custom order. Else the aim is left behind.
         rec = self._list_row_record(key)
         if rec is None:
             return
@@ -1603,13 +1401,10 @@ class NoteListMixin:
         self._restore_list_scroll(max(0, want))
 
     def _list_right_pressed(self, event):
-        """Right-click on a card opens that note's menu. A plain click on
-        the same card opens the note, so the menu leaves out Open / Edit.
-
-        During a drag it cancels the drag and opens nothing: the card under
-        the pointer then is the lifted one's drawing, while the record there
-        is its neighbour's, so a menu would have been for a note nobody
-        pointed at."""
+        """Right-click on a card opens that note's menu, without Open (a plain
+        click opens it). During a drag it cancels the drag and opens nothing:
+        the drawing under the pointer is the lifted card, the record there
+        its neighbour's."""
         drag = getattr(self, "_drag", None)
         if drag and drag["started"]:
             self._cancel_list_drag()
@@ -1728,20 +1523,12 @@ class NoteListMixin:
         return "break"
 
     def _list_focus_in(self, _event=None):
-        """The keyboard arrived on the list: the ring shows where it is --
-        on the row it was last on, else the open note's card, else the
-        first card, else (every group folded) the first header.
-
-        Always where the person can see it: a ring left 900px above the
-        view had Enter open a note nobody could see and the menu key post
-        its menu off the screen. What took the ring's row out of sight
-        decides how. If the person scrolled the list away from it, the ring
-        goes to the first row the view shows, and the view stays where they
-        put it. If the list moved the row while the keyboard was elsewhere
-        -- a save took the card to the top, a search keystroke filtered the
-        notes above it -- the ring stays on its row and the row is brought
-        into view: given to the first row in view, it sat on another note,
-        and Enter opened that one. A row half in sight is scrolled in."""
+        """The keyboard arrived on the list: the ring shows on the row it was
+        last on, else the open note's card, else the first row -- always in
+        sight. Scrolled away by the person, it moves to the first row in view;
+        moved away by the list (a save, a search), its row is brought back into
+        view, so Enter never acts on a note out of sight or on another one.
+        ISSUES_LOG, smaller lessons: _list_focus_in."""
         self._keyboard_on_card = True
         by_hand = getattr(self, "_list_hand_scrolled", False)
         own = self._ring_row()
@@ -1978,15 +1765,10 @@ class NoteListMixin:
         self._focus_row_by_offset(("note", note_id), delta)
 
     def _focus_row_by_offset(self, key, delta):
-        """Move the ring `delta` rows along the list on screen -- cards, and
-        the headers of a grouped list, which are stops like the cards: the
-        keyboard folds and opens a group from its header.
-
-        Asked of the ORDER THE ROWS ARE DRAWN IN rather than of
-        self.notes: the list is sorted, filtered, searched and grouped, so
-        the note after this one in the file is very often not the one
-        underneath it on screen.
-        """
+        """Move the ring `delta` rows along the list on screen -- cards, and a
+        grouped list's headers, which are stops too. Asked of the order the
+        rows are DRAWN in, not of self.notes: sorted, filtered and grouped, the
+        next note in the file is often not the one below it on screen."""
         order = self._list_drawn_keys
         if key not in order:
             return
@@ -2001,20 +1783,12 @@ class NoteListMixin:
             self._put_keyboard_on_row(order[target])
 
     def _restore_card_focus(self):
-        """Repaint the keyboard's ring after a rebuild.
-
-        The keyboard itself never moves on a rebuild any more -- the canvas
-        that holds it survives, only the drawing is replaced -- which ends
-        a whole class of trouble the widget cards had: a keyboard left on
-        a destroyed card, and a guard that had to decide, from focus_get()
-        (which answers None whenever another program holds the desktop's
-        foreground), whether to pull it back.
-
-        A ring the person could see before the rebuild stays in sight after
-        it: the view follows its row, as it follows Alt+Up/Down. A ring the
-        wheel had already scrolled away is left where it is -- the keys
-        that act on it bring it back first (_bring_ring_into_view).
-        """
+        """Repaint the keyboard's ring after a rebuild, which no longer moves
+        the keyboard (the canvas survives; only the drawing is replaced). A
+        ring the person could see stays in sight, the view following its row;
+        one the wheel scrolled away stays there until a key acts on it
+        (_bring_ring_into_view). ISSUES_LOG, smaller lessons:
+        _restore_card_focus."""
         self._paint_ring_row()
         follow = getattr(self, "_ring_follow", False)
         self._ring_follow = False
@@ -2129,22 +1903,12 @@ class NoteListMixin:
                 "color": color}
 
     def _draw_note_card(self, note, top):
-        """Draw one note's card with its top edge at canvas y `top`, and
-        return its record.
-
-        The same card the widgets drew -- a ring, the colour stripe, the
-        title, a glimpse of the body and the tags row -- as rectangles and
-        text on the list's canvas. Six windows to the operating system
-        became none: that is what made showing the list again, scrolling
-        it fast and rebuilding it cost what they did.
-
-        Everything is wrapped to the card's width, never cut: a Label with
-        no wraplength drew one line as long as its text and simply did not
-        show the end of it -- a title lost "with the whole team", the tags
-        row dropped the attachment count, and a clipped "1/2" read as "1/".
-        The three spaces between tags give the wrap somewhere to break, so
-        a second line starts at a tag rather than inside one.
-        """
+        """Draw one note's card with its top edge at canvas y `top`, and return
+        its record: ring, colour stripe, title, a glimpse of the body and the
+        tags row, as rectangles and text rather than six windows a card. All
+        text wraps to the card, never cut (a Label without wraplength hid the
+        end of a long title, and "1/2" read as "1/"); three spaces between
+        tags give the wrap somewhere to break."""
         cv = self.canvas
         c = self.colors
         nid = note["id"]
@@ -2156,10 +1920,9 @@ class NoteListMixin:
         left = x0 + self.CARD_RING
         check_x = None
         if getattr(self, "selection_mode", False):
-            # Leftmost, ahead of the stripe, where the Checkbutton stood:
-            # packed with 6 pixels before it and 22 wide, measured on the
-            # widget card. Guessed at 17 first, the photograph showed the
-            # stripe and text five pixels left of where they had been.
+            # Leftmost, ahead of the stripe, where the Checkbutton stood: 6
+            # pixels before it and 22 wide, measured on the widget card (17,
+            # guessed first, put the stripe five pixels off in the photograph).
             check_x = left + 8
             left += 6 + 22
         stripe_x = left
@@ -2267,16 +2030,11 @@ class NoteListMixin:
                 int((rec["y0"] + rec["y1"]) / 2 - self.canvas.canvasy(0)))
 
     def _recolor_note_cards(self):
-        """Re-apply the current theme's colours to the drawn list, instead
-        of drawing it again just because the palette changed.
-
-        The stripe and tag colours are deliberately RECOMPUTED from the
-        note via get_note_color() rather than colour-swapped, so a note's
-        own custom colour survives a theme switch exactly as it would
-        through a real rebuild. Runs after _recolor_stragglers for the same
-        reason, as it always has -- which no longer reaches the list at all
-        (a drawing is not a widget), so this is the list's only recolour.
-        """
+        """Re-apply the theme's colours to the drawn list instead of drawing it
+        again. Stripe and tag colours are RECOMPUTED from the note
+        (get_note_color), not swapped, so a note's own colour survives a theme
+        switch as through a rebuild; _recolor_stragglers never reaches the
+        list (a drawing is not a widget), so this is its only recolour."""
         c = self.colors
         cv = getattr(self, "canvas", None)
         if cv is None:
@@ -2323,26 +2081,11 @@ class NoteListMixin:
         self._apply_selection_mode_to_cards()
 
     def _remove_note_cards(self, note_ids):
-        """Take deleted notes' cards off the list without rebuilding it.
-
-        The fourth member of a family the list already has -- alongside
-        _recolor_note_cards, _apply_selection_mode_to_cards and
-        _update_open_highlight, each written because a full rebuild
-        "visibly flickered the whole list" for a change that touched a
-        few cards. Deleting a note was the one frequent action still
-        paying the full price: 120 widgets destroyed and remade, 115ms,
-        to take one card away. Field-reported as "the picture breaks a
-        little and rebuilds itself".
-
-        On the drawing it is: delete the card's items, slide every row
-        below it up by what it took, and bring the headers' counts down.
-
-        Returns True when the list on screen now matches the data, and
-        False when it could not be done surgically -- the caller then
-        falls back to refresh_note_list(). Every uncertain case returns
-        False on purpose: a list that quietly disagrees with the notes
-        is far worse than one that flickers.
-        """
+        """Take deleted notes' cards off the list without rebuilding it: delete
+        their items, slide the rows below up, bring the headers' counts down.
+        Returns False whenever it cannot be sure -- the caller then rebuilds,
+        since a list that quietly disagrees with the notes is far worse than
+        one that flickers. ISSUES_LOG, smaller lessons: the surgical updates."""
         # The rows are about to slide; a card lifted by a drag goes back
         # to its record first (see _cancel_list_drag).
         self._cancel_list_drag()
@@ -2363,12 +2106,9 @@ class NoteListMixin:
                     cards.pop(rec["note"]["id"], None)
                     continue
                 kept.append(rec)
-            # Headers, whether or not a card came off: a COLLAPSED group
-            # draws no cards at all, so deleting a note from one takes
-            # nothing off the screen while its header's count still has to
-            # come down. Counts come from the ids each header was drawn
-            # with, never from the cards under it. A header left counting
-            # nothing goes, with its group.
+            # Headers too, card or not: a COLLAPSED group draws no cards, yet
+            # its count must come down. Counts come from the ids each header
+            # was drawn with; a header left counting nothing goes.
             headers = getattr(self, "_group_headers", None) or {}
             still_drawn = []
             for rec in kept:
@@ -2402,10 +2142,8 @@ class NoteListMixin:
                 waiting.append((row[0], row[1], kept_notes, row[3]))
         self._list_pending = waiting
         if not self._list_drawn:
-            # Nothing drawn at all now. An empty list is not simply "no
-            # cards": it carries a message, and which message depends on
-            # whether anything is filtered. That belongs to
-            # refresh_note_list().
+            # Nothing drawn at all: an empty list carries a message, which
+            # depends on the filter -- refresh_note_list's business.
             return False
         # From the top: only the rows below a gap actually move, so the rows
         # above cost a comparison each.
@@ -2440,28 +2178,12 @@ class NoteListMixin:
         return True
 
     def _redraw_saved_card(self, note_id):
-        """Bring the list up to date after ONE note was saved, by redrawing
-        that note's card and nothing else.
-
-        A save used to rebuild the whole list, and autosave saves at every
-        pause in typing: each time someone stopped to think, the window
-        froze for about a second with 100 notes, three with 300, twelve
-        with 1,000 -- where this takes under a tenth of a second. The sixth
-        member of the family that exists for this reason (see
-        _remove_note_cards).
-
-        What the list shows is worked out afresh (_list_rows) and compared
-        with what it showed. When the only difference is this note -- its
-        text, where the sort now puts it, whether the search still lets it
-        through -- its card is drawn again in its new place and the rows
-        between the two places slide, all in one repaint of the one canvas:
-        nothing on screen empties or reappears. Anything more returns
-        False, and the caller rebuilds: a group whose count changed (the
-        note moved category, or is new, while the list is grouped), an
-        empty list that needs its message, a list never drawn. A list that
-        quietly disagrees with the notes is far worse than one that is slow
-        to catch up.
-        """
+        """Bring the list up to date after ONE note was saved, redrawing only
+        its card. The rows are worked out afresh (_list_rows); when only this
+        note differs (text, place, search), its card is drawn in its new place
+        and the rows between slide, in one repaint. Anything more returns
+        False and the caller rebuilds. ISSUES_LOG: "The list that was drawn
+        whole, for every pause in typing"."""
         # As in _remove_note_cards: rows are about to move.
         self._cancel_list_drag()
         cards = getattr(self, "_note_cards", None)
@@ -2497,13 +2219,9 @@ class NoteListMixin:
             if {n["id"] for n in row[2]} != before:
                 return False
 
-        # Where the card goes: among the drawn rows, or -- when the sort
-        # moved it past them -- among the ones still waiting, which is
-        # where a rebuild would have left it too. Landing just below the
-        # last drawn row, it is drawn if it was before, or if nothing was
-        # waiting: a list drawn to its end stays drawn to its end. Left to
-        # wait there, the card of a brand-new note in a short list would
-        # appear only once something scrolled.
+        # The card goes among the drawn rows, or among the waiting ones when
+        # the sort moved it past them; just below the last drawn row it is
+        # drawn if it was, or if nothing waits (a new note in a short list).
         was_drawn = own in old_drawn_keys
         old_at = old_drawn_keys.index(own) if was_drawn else None
         others_drawn = len(drawn) - (1 if was_drawn else 0)
@@ -2518,12 +2236,9 @@ class NoteListMixin:
                 cards.pop(note_id, None)
                 self.canvas.delete(old["tag"])
             if drawn_now:
-                # Drawn out of the way and put in its place by the reflow
-                # below, which slides every row between the old place and
-                # the new one -- the drawing changes in one repaint. Out of
-                # the way, not at the top: the reflow moves rows as bands,
-                # and a card drawn over them made the band it landed in hold
-                # items that were not its rows', so every row moved alone.
+                # Drawn out of the way, then put in place by the reflow below:
+                # drawn over the rows, it made its band hold items that were
+                # not its rows', and every row moved alone.
                 drawn.insert(new_at, self._draw_note_card(
                     rows[new_at][1], self.LIST_OUT_OF_THE_WAY))
         except tk.TclError:
@@ -2542,24 +2257,17 @@ class NoteListMixin:
         self._render_statistics()
         if getattr(self, "selection_mode", False):
             self._update_bulk_selected_label()
-        # A new note's first save makes it the open one and draws its card
-        # so; the card of the note open before it (Ctrl+N, a day on the
-        # calendar) still wears the outline, and a rebuild would have
-        # repainted it. One card redrawn repaints only itself.
+        # A new note's first save draws its card as the open one, and the card
+        # open before it still wears the outline: one card redrawn repaints
+        # only itself.
         self._update_open_highlight()
         return True
 
     def _exit_selection_mode_after_bulk_action(self):
-        """Same UI cleanup as turning selection mode off, but followed by a
-        full refresh_note_list() instead of the surgical per-card update —
-        used after a bulk action (trash, category change) that actually
-        changed which notes exist or what they show. The surgical update
-        _toggle_selection_mode() uses elsewhere only adds/removes checkboxes
-        on cards that are still valid; after a bulk action, some of those
-        cards represent notes that no longer exist (or no longer belong in
-        the current view), so nothing short of a real rebuild reflects that
-        correctly — the notes were genuinely gone, but their cards stayed
-        on screen showing stale data until clicked."""
+        """Turn selection mode off as _toggle_selection_mode does, then rebuild
+        the list in full: after a bulk action (Trash, a category change) some
+        cards show notes that are gone or no longer belong in the view, and
+        the surgical update only adds or removes tick boxes."""
         self.selection_mode = False
         self.selected_note_ids = set()
         self.select_toggle_btn.config(text="☑ Select")
@@ -2569,13 +2277,9 @@ class NoteListMixin:
 
     def _apply_selection_mode_to_cards(self):
         """Add or remove the per-card tick box as selection mode turns on or
-        off. The box takes room at the card's left, so the text wraps
-        again and the cards change height: the drawn part of the list is
-        drawn again, as deep as it was and where it was scrolled -- which
-        on the drawing is one repaint, not the flicker of the widget list
-        that made this surgical in the first place. What a click does is
-        decided when the click arrives (_list_pressed), so nothing needs
-        rebinding."""
+        off: the box takes room, the text wraps again and cards change height,
+        so the drawn part is drawn again where it was -- one repaint on the
+        canvas. What a click does is decided when it arrives (_list_pressed)."""
         self.refresh_note_list()
 
     def _selection_anchor_row(self):
@@ -2585,14 +2289,10 @@ class NoteListMixin:
         return self.select_toggle_btn.master
 
     def _prune_selection(self):
-        """Keep the ticks to notes that still exist, and the bar's words
-        with them.
-
-        A note deleted from its own menu (or with its category, or as a
-        duplicate) kept its tick: the bar went on counting it, the Trash
-        question named it, and because a new note's id is the highest one
-        plus one, a note made next could take the freed id -- and arrive
-        drawn ticked, to be trashed by a Trash nobody aimed at it."""
+        """Keep the ticks to notes that still exist, and the bar's words with
+        them: a deleted note kept its tick, and a new note could take its freed
+        id (the highest plus one) and arrive ticked, to be trashed by a Trash
+        nobody aimed at it."""
         chosen = getattr(self, "selected_note_ids", None)
         if not chosen:
             return
@@ -2607,23 +2307,17 @@ class NoteListMixin:
         else:
             self.selected_note_ids.discard(note_id)
         self._update_bulk_selected_label()
-        # No refresh_note_list() here on purpose: rebuilding every card just
-        # to reflect one checkbox change caused a visible flicker on every
-        # single click. The checkbox already updates its own check-mark
-        # natively; nothing else about the card needs to change.
+        # No refresh_note_list(): a rebuild for one tick flickered on every
+        # click. The caller repaints the one mark (_paint_card_check).
 
     def _update_bulk_selected_label(self):
         n = len(self.selected_note_ids)
         self.bulk_selected_lbl.config(text=f"{n} selected")
-        # Same idea as the Select-all label below, from the same place: what
-        # "Pin" will do depends on what is ticked at this moment, so the word
-        # is worked out wherever the selection changes rather than only when
-        # the bar is built.
+        # What "Pin" will do depends on what is ticked now, so its word is
+        # worked out wherever the selection changes, like Select all's below.
         self._refresh_bulk_pin_label()
-        # The button says what pressing it will do, which changes once
-        # everything on screen is already selected. Asked from the same
-        # _visible_note_ids() the press itself uses, so the word and the
-        # action cannot disagree.
+        # The button says what a press will do, asked of the same
+        # _visible_note_ids() the press uses, so word and action agree.
         button = getattr(self, "_bulk_select_all_btn", None)
         if button is None:
             return
@@ -2637,19 +2331,12 @@ class NoteListMixin:
 
     @staticmethod
     def _query_matches_note(query, note):
-        """The ONE definition of "this note matches the sidebar search".
-        The list render and Select-all-visible each carried a hand-rolled
-        copy, and the copies drifted: the list stripped table plumbing
-        from bodies (searching "---" no longer matches every table note)
-        while Select all matched the raw body — so "Select all visible"
-        quietly selected notes the filter had hidden, and bulk actions
-        hit them. Every field is coerced to a string first, so a
-        missing/None field from older data can't crash the render.
-
-        Nothing typed matches every note, and is answered without reading
-        one: every rebuild, every autosave's one-card redraw and every tick
-        in Select mode used to lowercase every body and parse every table
-        in the notebook to find that an empty query is in all of them."""
+        """The ONE definition of "this note matches the sidebar search", every
+        field coerced to text first. Two hand-rolled copies once drifted, and
+        Select all ticked notes the filter hid. An empty query matches every
+        note without reading one (each rebuild and tick used to parse every
+        table to learn that). ISSUES_LOG, smaller lessons:
+        _query_matches_note."""
         if not query:
             return True
         return NoteListMixin._query_in_texts(
@@ -2690,24 +2377,11 @@ class NoteListMixin:
         return hit[1]
 
     def _visible_note_ids(self):
-        """The notes the list is showing right now, by id.
-
-        The ONE definition, for the same reason _query_matches_note is
-        one: the moment two places work out "what is on screen" for
-        themselves, they drift, and this project has already paid for
-        that once (see that method's note). Select-all and the label
-        that decides whether everything IS selected have to mean exactly
-        the same set, or the button offers to select what is already
-        selected.
-
-        Asked of the notes, not of the cards: the list draws a step at a
-        time, and "all" means every note it shows, drawn yet or not.
-
-        A folded group shows its header and none of its notes, so they are
-        not on the list -- the same fold _list_rows applies. Asked only of
-        the search and the filter, Select all ticked every note of every
-        folded group, and bulk Trash took notes the person could not see.
-        """
+        """The notes the list is showing right now, by id: the ONE definition,
+        so Select all and the label saying whether all ARE selected mean the
+        same set. Asked of the notes, not the drawn cards ("all" includes rows
+        not drawn yet), and leaving out a folded group's notes: counted, they
+        let Select all and then bulk Trash take notes nobody could see."""
         shown = self._notes_on_the_list()
         grouped = getattr(self, "group_by_category", None)
         folded = getattr(self, "collapsed_groups", None)
@@ -2716,41 +2390,25 @@ class NoteListMixin:
         return {n["id"] for n in shown}
 
     def _bulk_select_all(self):
-        """Select every note the list is showing — or, if they are all
-        already selected, let them all go again.
-
-        One button rather than two, because the second is only ever
-        wanted straight after the first: a mis-aimed "Select all" used to
-        mean leaving selection mode entirely and starting over, since
-        nothing else clears a selection in one gesture. It respects
-        whatever search or category filter is active, so "all" is what is
-        on screen, never the whole notebook.
-        """
+        """Select every note the list is showing, or let them all go if all
+        are selected already: one button, since the second is only wanted right
+        after the first. "All" respects the search and the filter -- what is on
+        screen, never the whole notebook."""
         visible = self._visible_note_ids()
         if visible and visible <= self.selected_note_ids:
             self.selected_note_ids = set()
         else:
             self.selected_note_ids = set(visible)
         self._update_bulk_selected_label()
-        # Not refresh_note_list(). Nothing about the notes changed -- only
-        # which of them are ticked -- and rebuilding the list to move a
-        # tick costs 140 widgets and ~170ms, which is the flicker this
-        # button was reported for. The fifth member of the family that
-        # already exists for exactly this reason (see _recolor_note_cards,
-        # _apply_selection_mode_to_cards, _update_open_highlight,
-        # _remove_note_cards).
+        # Not refresh_note_list(): only the ticks changed, and a rebuild to
+        # move them was the flicker this button was reported for. ISSUES_LOG,
+        # smaller lessons: the surgical updates.
         self._sync_card_checkboxes()
 
     def _sync_card_checkboxes(self):
-        """Make every drawn card's tick box agree with selected_note_ids.
-
-        Only the drawing changes: nothing here reports a change back, which
-        matters -- _toggle_note_selected has already been told, and each box
-        re-reporting it would have the label recount twenty times over.
-
-        Cards that are not drawn (filtered out, or inside a collapsed
-        group) have no box to update, and need none: _draw_note_card reads
-        selected_note_ids for the box it draws.
-        """
+        """Make every drawn card's tick box agree with selected_note_ids. Only
+        the drawing changes, with no change reported back (the label would
+        recount once per box); a card not drawn needs nothing, since
+        _draw_note_card reads selected_note_ids for the box it draws."""
         for note_id in list((getattr(self, "_note_cards", None) or {})):
             self._paint_card_check(note_id)

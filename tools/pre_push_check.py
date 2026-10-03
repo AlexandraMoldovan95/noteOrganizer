@@ -31,7 +31,10 @@ WHAT IT RUNS
    sees. The app's interface is English; the qa stories had drifted.
 5. ``check_agent_rules`` -- the agent's committed deny rules cover every
    script that wipes its working folder, in every spelling.
-6. ``compile()`` over every tracked ``.py`` in the repo -- tests and qa
+6. ``check_comments`` -- no release named in the app's comments, every
+   pointer into the issues log leads somewhere, and the condensed modules
+   keep their comments to a reason.
+7. ``compile()`` over every tracked ``.py`` in the repo -- tests and qa
    scripts included, because a syntax error in a TEST file is exactly
    what the remote runner would otherwise find first (a locally-valid
    PEP 701 f-string once died only on CI's older Python; the interpreter
@@ -103,6 +106,9 @@ def main():
     # start it -- and the live lists here hold every committed rule.
     _run_gate("deny rules cover the wipers",
               [os.path.join("tools", "check_agent_rules.py")])
+    # Comments say why in a few lines, and the story they point to exists.
+    _run_gate("comments say why, briefly",
+              [os.path.join("tools", "check_comments.py")])
 
     print("== every tracked .py compiles", flush=True)
     listed = subprocess.run(["git", "ls-files", "*.py"], cwd=ROOT,

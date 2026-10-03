@@ -175,19 +175,24 @@ noteOrganizer/
 │       ├── note_list.py         #   the note list, drawn on one canvas
 │       └── attachments.py       #   the attachments section
 ├── tools/                    # refactor safety net, run by CI
-│   ├── check_*.py                # five static gates: names that resolve, the app
+│   ├── check_*.py                # seven static gates: names that resolve, the app
 │   │                             #   class's surface, one definition per judgement,
-│   │                             #   documentation links that go somewhere, and
-│   │                             #   English in everything a reader sees
-│   ├── pre_push_check.py         # all five, runnable locally in seconds
+│   │                             #   documentation links that go somewhere, English
+│   │                             #   in everything a reader sees, deny rules that
+│   │                             #   cover the wipers, comments that say why briefly
+│   ├── pre_push_check.py         # all seven, runnable locally in seconds
 │   ├── run_tests.py              # the whole suite, safely, from a scratch copy
+│   ├── run_coverage.py           # the whole suite again, measuring what it executes
+│   ├── mutate.py                 # takes each fix away and checks a check fails
+│   ├── bench.py                  # start-up, save and memory, at 1,000+ notes
 │   ├── visual_scenes.py          # screenshot harness for eyeballing rendered scenes
 │   ├── make_icon.py              # draws the app icon, rather than storing one
 │   ├── doc_screenshots.py        # retakes the documentation's own screenshots
 │   ├── regen_seam_map.py         # rebuilds qa/README's seam map from the suite
 │   └── linux-ci/                 # one Docker command reproduces the Ubuntu CI leg
-├── test_*.py                 # six standalone unit suites: recurrence, data safety,
-│                             #   calculator, tables, rich text, entry-module identity
+├── test_*.py                 # seven standalone unit suites: recurrence, data safety,
+│                             #   calculator, tables, rich text, entry-module identity,
+│                             #   note identity
 ├── docs/
 │   ├── USER_GUIDE.md          # full walkthrough with screenshots
 │   ├── ARCHITECTURE.md        # how the code is organized, and why

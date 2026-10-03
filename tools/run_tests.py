@@ -101,6 +101,10 @@ STATIC = [
     # root -- and, here on a machine with the live lists, they hold them all.
     ("deny rules cover the wipers",
      [sys.executable, os.path.join("tools", "check_agent_rules.py")]),
+    # The sixth: no release named in the app's comments, every pointer into
+    # the issues log leads somewhere, and condensed modules stay condensed.
+    ("comments say why, briefly",
+     [sys.executable, os.path.join("tools", "check_comments.py")]),
 ]
 
 
