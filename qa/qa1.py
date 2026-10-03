@@ -1,29 +1,11 @@
 # HERMETIC SEED -- BEFORE the note_organizer import below: the module
 # resolves its data directory and runs the data MIGRATIONS at import
-# time, so by the first line of test code the adoption has already
-# happened. The data directory must be this test's alone. An
-# empty directory invites run_migrations to adopt whatever real notebook
-# %APPDATA% holds, and real notes then leak into every scenario: the
-# checks start flaking whenever the OWNER's data changes. Seeding an
-# empty notebook plus the reclaim marker closes both migration doors
-# before the app is even constructed. The refusal is the same last-line
-# defence test_data_safety carries: run from a folder holding real
-# notes, the script stops instead of seeding over them.
-import io as _seed_io, json as _seed_json, os as _seed_os, sys as _seed_sys
-if _seed_os.path.exists('notes_data.json'):
-    try:
-        _seed_prev = _seed_json.load(
-            _seed_io.open('notes_data.json', encoding='utf-8'))
-    except Exception:
-        _seed_prev = []
-    if isinstance(_seed_prev, list) and _seed_prev:
-        _seed_sys.exit(
-            'REFUSING to run: notes_data.json here holds %d real note(s). '
-            'Copy this script to a scratch directory instead.'
-            % len(_seed_prev))
-_seed_io.open('notes_data.json', 'w', encoding='utf-8').write('[]')
-_seed_io.open('settings.json', 'w', encoding='utf-8').write(
-    _seed_json.dumps({'reclaimed_from_appdata': True}))
+# time, so this script's data directory must be its own before that
+# happens. hermetic_seed (qa/_qa_support.py) seeds it -- or refuses to
+# run at all outside a scratch run, or beside a notebook it cannot
+# prove is empty.
+from _qa_support import hermetic_seed as _qa_seed
+_qa_seed()
 
 import sys
 import time
@@ -33,7 +15,8 @@ import note_organizer as NO, tkinter as tk, json, os, re
 # Windows foreground -- which a test process never owns. See
 # qa/_qa_support.py; _qa_click refuses to click into the void.
 from _qa_support import (click as _qa_click, fire as _qa_fire,
-                         pin_popup_visibility as _qa_pin)
+                         pin_popup_visibility as _qa_pin,
+                         waiting_timers as _qa_waiting)
 _qa_pin(NO)
 from noteorganizer.core import tables as core_tables
 fails=[]
@@ -118,6 +101,14 @@ app=NO.NoteOrganizer(); app._poll_active_dirty=lambda:None
 app.show_info=lambda *a,**k: True
 app.show_warning=lambda *a,**k: True
 app.geometry('1100x850'); app.update()
+# Every copy and paste below goes through the suite's own clipboard: the
+# machine's is shared with every program on it, and with its owner.
+check('fixture: the clipboard is a stand-in kept in this process',
+      bool(app.tk.call('info', 'commands', '::_qa_machine_clipboard'))
+      and 'qa_clipboard_selection' in app.tk.eval(
+          'info body ::tk::GetSelection')
+      and (sys.platform != 'win32'
+           or NO.clipboard.write.__name__ == '_write_clipboard'))
 
 # ---- BASIC NOTE CRUD ----
 app.new_note()
@@ -1708,6 +1699,97 @@ check('two runs of different sizes report Default, not whichever came first',
       app.font_size_var.get() == app.DEFAULT_FONT_LABEL)
 clear_selection()
 
+# A size or a font set under drawn tables lands on the words selected, and
+# stays there. The span ends are worked out without the tables' windows
+# (_char_offset) and were laid back with "1.0+Nc", which counts each window
+# as a character: the run landed one character early per table above it,
+# and every later size or font moved the earlier ones again -- saved so.
+set_body('AB' + chr(10) + '| a | b |' + chr(10) + '| --- | --- |' + chr(10)
+         + '| 1 | 2 |' + chr(10) + 'hello world' + chr(10) + '| c | d |'
+         + chr(10) + '| --- | --- |' + chr(10) + '| 3 | 4 |' + chr(10)
+         + 'tail words')
+app._render_table_grids()
+app.update()
+_ft_windows = len(app.body_text.window_names())
+for _ft_word, _ft_style, _ft_value in (('hello', 'font_size', 16),
+                                       ('tail', 'font_family', 'Georgia'),
+                                       ('hello', 'font_size', 20)):
+    _ft_at = app.body_text.search(_ft_word, '1.0', 'end')
+    select(_ft_at, f'{_ft_at}+{len(_ft_word)}c')
+    app._apply_body_font(_ft_style, _ft_value)
+    clear_selection()
+_ft_text = app.body_text.get('1.0', 'end-1c')
+_ft_got = sorted((_ft_text[s['start']:s['end']], s['style'], s.get('value'))
+                 for s in app._extract_formatting(app.body_text))
+check(f'a size or a font set under drawn tables lands on the words selected, '
+      f'and stays there ({_ft_got})',
+      _ft_windows == 2
+      and _ft_got == [('hello', 'font_size', 20),
+                      ('tail', 'font_family', 'Georgia')])
+
+# The way back from a saved offset to a place in the text, with tables drawn
+# at the top, in the middle and at the end, and an emoji in a cell and in
+# the prose: every offset comes back as itself (_char_offset), and with no
+# table in the text every place is the one "1.0+Nc" gives.
+_oi_table = ['| a ' + chr(0x1F600) + ' | b |', '| --- | --- |', '| 1 | 2 |']
+_oi_prose = ['H' + chr(233) + 'llo ' + chr(0x1F600) + ' done', '',
+             chr(9) + 'Tabbed ' + chr(0x4E2D) + ' line', 'plain']
+set_body(chr(10).join(_oi_prose))
+_oi_where = app._offset_indices(app.body_text, range(60))
+_oi_same = all(app.body_text.index(_oi_where[o])
+               == app.body_text.index(f'1.0+{o}c') for o in range(60))
+set_body(chr(10).join(_oi_table + _oi_prose + _oi_table + ['mid']
+                      + _oi_table))
+app._render_table_grids()
+app.update()
+_oi_len = len(app.body_text.get('1.0', 'end-1c'))
+_oi_where = app._offset_indices(app.body_text, range(_oi_len + 1))
+_oi_off = [o for o in range(_oi_len + 1)
+           if app._char_offset(app.body_text, _oi_where[o]) != o]
+check(f'every saved offset finds its own place with no table drawn and with '
+      f'three ({len(app.body_text.window_names())} drawn; off at {_oi_off[:5]})',
+      _oi_same and len(app.body_text.window_names()) == 3 and not _oi_off)
+
+# Laying a note's spans walks its text once a pass (the plain styles, then
+# the font runs), not once a span. Each span end was found with "1.0+Nc"
+# from the top of the note, so the walk grew with the note's size times its
+# spans: Enter in a numbered list of a note of 8,000 styled words took 3.6 s
+# (the renumber lays every span again), and its open 1.4-1.7 s. Counted,
+# not timed: every "+Nc" the body is asked for, added up.
+_wk_body = chr(10).join('%03d %s' % (i, 'word ' * 10) for i in range(300))
+_wk_spans = []
+for _wk_i in range(0, len(_wk_body) - 8, 29):
+    _wk_spans.append({'start': _wk_i, 'end': _wk_i + 4,
+                      'style': ('bold', 'italic', 'underline')[_wk_i % 3]})
+    if _wk_i % 5 == 0:
+        _wk_spans.append({'start': _wk_i, 'end': _wk_i + 6,
+                          'style': 'font_size', 'value': 16})
+set_body(_wk_body)
+_wk_walked = [0]
+
+
+def _wk_trace(command, *_op):
+    _wk_walked[0] += sum(int(n) for n in re.findall(r'\+(\d+)c', command))
+
+
+app.tk.createcommand('qa_walk_trace', _wk_trace)
+app.tk.call('trace', 'add', 'execution', app.body_text._w, 'enter',
+            'qa_walk_trace')
+try:
+    app._apply_formatting(app.body_text, _wk_spans)
+finally:
+    app.tk.call('trace', 'remove', 'execution', app.body_text._w, 'enter',
+                'qa_walk_trace')
+    app.tk.deletecommand('qa_walk_trace')
+_wk_back = sorted((s['start'], s['end'], s['style'])
+                  for s in app._extract_formatting(app.body_text))
+check(f'laying a note of {len(_wk_spans)} spans walks its '
+      f'{len(_wk_body)} characters once a pass ({_wk_walked[0]} walked)',
+      _wk_walked[0] <= 3 * len(_wk_body)
+      and _wk_back == sorted((s['start'], s['end'], s['style'])
+                             for s in _wk_spans))
+set_body('')
+
 # ---- HOW THE TOOLBAR SPLITS INTO ROWS ----
 # Checked against widths given directly rather than measured off widgets.
 # Which control lands on a row boundary depends entirely on the font, so a
@@ -2296,6 +2378,63 @@ set_body('')
 _stub_clipboard(html=None)
 check('with no rich clipboard content, the normal paste is left to run',
       app._on_body_paste() is None)
+
+# ---- A PASTE THE CAPS CUT SAYS SO ----
+# The formatted paste keeps at most MAX_PASTE_CHARS characters and
+# MAX_PASTE_SPANS styles. Past them it cut without a word, and the rest of
+# a long article was simply not in the note. The notice comes once the
+# paste's own work is done (after idle), and its advice -- Ctrl+Z, then
+# Ctrl+Shift+V -- has to really bring all of it in.
+_cut_told = []
+_cut_real_info = app.show_info
+app.show_info = lambda title, message, **k: _cut_told.append((title, message))
+try:
+    _cut_long = 'x' * (NO.MAX_PASTE_CHARS + 500)
+    set_body('before ')
+    app.body_text.mark_set('insert', 'end-1c')
+    app.body_text.edit_separator()
+    _stub_clipboard(html='<p>' + _cut_long + '</p>', text=_cut_long)
+    app._on_body_paste()
+    _cut_inside = list(_cut_told)
+    app.update()
+    check(f'a paste cut at the character cap says so, once the paste is done '
+          f'({[t for t, _m in _cut_told]}, inside: {len(_cut_inside)})',
+          _cut_inside == [] and len(_cut_told) == 1
+          and _cut_told[0][0] == 'Pasted in part'
+          and f'{NO.MAX_PASTE_CHARS:,}' in _cut_told[0][1]
+          and 'Ctrl+Shift+V' in _cut_told[0][1])
+    check(f'...and the note holds what it says was pasted ({len(body())} chars)',
+          body() == 'before ' + 'x' * NO.MAX_PASTE_CHARS)
+    _cut_told.clear()
+    app._body_undo_redo('undo'); app.update()
+    check(f'Ctrl+Z takes the cut paste back whole ({body()[:12]!r}...)',
+          body() == 'before ')
+    take_focus(app.body_text)
+    app.body_text.event_generate('<Control-Shift-V>')
+    app.update()
+    check(f'...and Ctrl+Shift+V then brings in all of it, as the notice says '
+          f'({len(body())} chars)',
+          body() == 'before ' + _cut_long and _cut_told == [])
+
+    set_body('')
+    _stub_clipboard(html='<p>x</p>' + '<p><b>x</b></p>' * (NO.MAX_PASTE_SPANS + 5))
+    app._on_body_paste()
+    app.update()
+    check(f'a paste whose styles pass their cap says the formatting stops '
+          f'({[t for t, _m in _cut_told]})',
+          len(_cut_told) == 1 and 'formatting stops' in _cut_told[0][1]
+          and f'{NO.MAX_PASTE_SPANS:,}' in _cut_told[0][1])
+    _cut_told.clear()
+
+    set_body('')
+    _stub_clipboard(html='<p>A <b>bold</b> word</p>')
+    app._on_body_paste()
+    app.update()
+    check(f'an ordinary formatted paste says nothing ({_cut_told})',
+          _cut_told == [] and body() == 'A bold word')
+finally:
+    app.show_info = _cut_real_info
+set_body('')
 
 # ---- Copying ----
 set_body('heading\nmilk\neggs')
@@ -3690,6 +3829,11 @@ try:
     _labels = _menu_entries(_posted[-1]) if _posted else []
     check('a partial selection does not offer Hide',
           'Hide column' not in _labels and 'Merge cells' in _labels)
+    # Every right-click builds its menu anew; none was ever destroyed.
+    # The hidden column's stub menu above and these three leave one.
+    _left_menus = [w for w in app.winfo_children() if isinstance(w, NO.tk.Menu)]
+    check('the table\'s right-click menus leave one menu behind, not one '
+          'each (%d)' % len(_left_menus), len(_left_menus) <= 1)
 finally:
     NO.tk.Menu.tk_popup = _real_popup
 app._grid_clear_selection()
@@ -5703,8 +5847,13 @@ _exp_note = NO.normalize_note({
     'comments': 'a comment', 'category': 'General',
     'checklist': [{'text': 'done already', 'done': True},
                   {'text': 'to do <more>', 'done': False}]})
-_exp_dir = os.path.abspath('qa_export_out')
-os.makedirs(_exp_dir, exist_ok=True)
+# A folder of its own on every run. The bulk export below names its files
+# after what the folder already holds (" (2)" beside an existing file), so
+# a fixed folder kept from an earlier run in the same place made this run
+# read that run's files as its own: the second of three runs in one folder
+# went red with nothing wrong in the app.
+import tempfile as _tmpX
+_exp_dir = _tmpX.mkdtemp(prefix='qa_export_out_', dir=os.getcwd())
 _toastsX = []
 _origToastX = app._show_toast
 app._show_toast = lambda text, kind='success': _toastsX.append(text)
@@ -5989,44 +6138,17 @@ app._grid_copy_selection({'info': _infoG, 'box': (0, 0, 1, 1)})
 app._grid_clear_selection()
 app.body_text.mark_set('insert', '4.0')
 app.update()
-
-
-def _clipboard_holds_cells(attempts=100):
-    """Wait until the copied cells are really ON the clipboard.
-
-    This check went red twice on a developer machine while Linux stayed
-    green, and the cause is not the tables. The clipboard is a SHARED OS
-    RESOURCE: core/clipboard.read_text() opens the Windows clipboard and
-    returns None -- silently -- when another process is holding it open,
-    and the Tk fallback beneath it goes through the same clipboard and
-    raises for the same reason. Any program on the machine touching the
-    clipboard in that instant made the paste a no-op, and the check
-    reported it as "no second table".
-
-    So the fixture is waited for and then ASSERTED, rather than assumed:
-    a transient hiccup becomes a short wait, and a clipboard that never
-    delivers fails under its own name instead of blaming the tables.
-    """
-    for _ in range(attempts):
-        try:
-            raw = NO.clipboard.read_text()
-        except Exception:
-            raw = None
-        if raw is None:
-            try:
-                raw = app.body_text.clipboard_get()
-            except tk.TclError:
-                raw = None
-        if raw and '\t' in raw:
-            return raw
-        app.update()
-        time.sleep(0.01)
-    return None
-
-
-_clipG = _clipboard_holds_cells()
+# The clipboard here is the suite's stand-in, never the machine's
+# (_qa_support.pin_the_desktop). On the machine's, this check went red three
+# times on a developer machine while Linux stayed green: another program
+# holding the clipboard open for an instant made the paste read nothing,
+# and a wait for one good read only moved the race to the paste's own.
+try:
+    _clipG = NO.clipboard.read_text() or app.body_text.clipboard_get()
+except tk.TclError:
+    _clipG = None
 check('fixture: the copied cells really reached the clipboard',
-      _clipG is not None)
+      bool(_clipG) and '\t' in _clipG)
 _okG = app._paste_tsv_as_table()
 app.update()
 _bodyG = app.body_text.get('1.0', 'end-1c')
@@ -6119,32 +6241,550 @@ check('the checkbox palette writes surgically: value set, caret and '
 set_body('')
 
 # Letters glued onto a coloured word wear its colours; after a space, not.
+def _ty_key(keysym, ch):
+    """A typing key pressed and released on the body, as a person does.
+    The press notes where typing starts (_note_typing_key), and a release
+    with no press of its own spreads no style. A synthetic key's %A does
+    not reliably insert (with real focus on Windows it does), so the
+    character goes in by hand only when the press typed nothing -- over the
+    selection the caret is in, as Tk's class binding puts it."""
+    _w = app.body_text
+    if not take_focus(_w):
+        return False
+    _before = _w.get('1.0', 'end-1c')
+    _w.event_generate('<KeyPress>', keysym=keysym)
+    if _w.get('1.0', 'end-1c') == _before:
+        try:
+            if (_w.compare('sel.first', '<=', 'insert')
+                    and _w.compare('insert', '<=', 'sel.last')):
+                _w.delete('sel.first', 'sel.last')
+        except tk.TclError:
+            pass
+        _w.insert('insert', ch)
+    _w.event_generate('<KeyRelease>', keysym=keysym)
+    app.update()
+    return True
+
+
 set_body('cuvant ')
 _b = app.body_text
 app._ensure_color_tag(_b, 'highlight', '#ffff00')
 app._ensure_color_tag(_b, 'text_color', '#e63946')
 _b.tag_add('highlight_ffff00', '1.0', '1.6')
 _b.tag_add('text_color_e63946', '1.0', '1.6')
-take_focus(_b)
 _b.mark_set('insert', '1.6')
-# Insert + KeyRelease, WITHOUT a synthetic KeyPress: with real focus
-# on Windows the generated KeyPress itself types the character too
-# (the class binding inserts), and the doubled letter becomes the
-# untagged neighbour the handler then reads.
-_b.insert('insert', 'X')
-_b.event_generate('<KeyRelease>', keysym='X')
-app.update()
+_tyX = _ty_key('X', 'X')
 _tagsXH = sorted(t for t in _b.tag_names('1.6')
                  if 'color' in t or 'highlight' in t)
 _b.mark_set('insert', '1.end')
-_b.insert('insert', ' Y')
-_b.event_generate('<KeyRelease>', keysym='Y')
-app.update()
+_tyY = _ty_key('space', ' ') and _ty_key('Y', 'Y')
 _tagsYH = [t for t in _b.tag_names('1.end-1c')
            if 'color' in t or 'highlight' in t]
 check('letters glued onto a coloured word inherit colour AND highlight',
-      len(_tagsXH) == 2)
-check('but a word started after a space stays plain', _tagsYH == [])
+      _tyX and len(_tagsXH) == 2)
+check('but a word started after a space stays plain', _tyY and _tagsYH == [])
+set_body('')
+
+# Bold, italic or plain given to text under a size or a font is drawn at
+# once. A size or a font is drawn by one composite tag with the weight and
+# slant folded in, which outranks bold and italic. Each route below changed
+# the plain tag alone: the word was saved and lit the toolbar as bold and
+# was drawn as before until the note was opened again -- and a letter
+# glued onto a bold word at a heading's end lost the heading's size.
+def _drawn(index):
+    """(size, weight, slant) Tk draws *index* in: the font of the highest
+    priority tag there that sets one."""
+    _w = app.body_text
+    _font = None
+    for _t in _w.tag_names(index):
+        if _w.tag_cget(_t, 'font'):
+            _font = _w.tag_cget(_t, 'font')
+    _a = _tkfont.Font(font=_font or _w.cget('font')).actual()
+    return _a['size'], _a['weight'], _a['slant']
+
+
+def _sized_line(*extra, style='font_size', value=20):
+    set_body('Big Title here')
+    app._apply_formatting(app.body_text, [
+        {'start': 0, 'end': 14, 'style': style, 'value': value}] + list(extra))
+    app.update()
+
+
+_bs_seen = {}
+_sized_line()
+select('1.4', '1.9')
+app._toggle_body_style('bold')
+clear_selection()
+_bs_seen['Ctrl+B'] = _drawn('1.5')
+_sized_line({'start': 4, 'end': 9, 'style': 'bold'})
+select('1.4', '1.9')
+app._toggle_body_style('bold')
+clear_selection()
+_bs_seen['Ctrl+B off'] = _drawn('1.5')
+_sized_line(style='font_family', value='Georgia')
+select('1.4', '1.9')
+app._toggle_body_style('italic')
+clear_selection()
+_bs_seen['Ctrl+I in Georgia'] = _drawn('1.5')
+_sized_line()
+app.body_text.mark_set('insert', '1.4')
+app._toggle_body_style('bold')
+type_char('N')
+app._pending_styles = set()
+_bs_seen['Bold on, then typing'] = _drawn('1.4')
+_sized_line()
+app.body_text.mark_set('insert', '1.4')
+_stub_clipboard(html='<p><b>B</b></p>')
+app._on_body_paste()
+app.update()
+_bs_seen['a bold paste'] = _drawn('1.4')
+_sized_line({'start': 4, 'end': 9, 'style': 'bold'})
+app.body_text.mark_set('insert', '1.9')
+_bs_typed = _ty_key('X', 'X')
+_bs_seen['a letter glued onto the bold word'] = _drawn('1.9')
+check(f'bold, italic or plain given under a size or a font is drawn at once '
+      f'({_bs_seen})',
+      _bs_typed
+      and _bs_seen['Ctrl+B'] == (20, 'bold', 'roman')
+      and _bs_seen['Ctrl+B off'] == (20, 'normal', 'roman')
+      and _bs_seen['Ctrl+I in Georgia'][1:] == ('normal', 'italic')
+      and _bs_seen['Bold on, then typing'] == (20, 'bold', 'roman')
+      and _bs_seen['a bold paste'] == (20, 'bold', 'roman')
+      and _bs_seen['a letter glued onto the bold word'] == (20, 'bold', 'roman'))
+# A size picked with nothing selected and typed inside a run of another size
+# draws at the size picked: the letters took the run's composite too, and Tk
+# drew whichever of the two tags was made later.
+_sized_line()
+# The bad order made for sure: the picked size's tag exists, and the run's
+# was made after it.
+app._ensure_font_tag(app.body_text, False, False, 16, None)
+app.body_text.tag_raise('font_-_20_00')
+app.body_text.mark_set('insert', '1.4')
+app._apply_body_font('font_size', 16)
+type_char('N')
+_bs_pend = _drawn('1.4')
+app._pending_font_size = None
+app._pending_styles = set()
+check(f'a size picked with nothing selected draws at that size inside a run '
+      f'of another ({_bs_pend})', _bs_pend[0] == 16)
+# ...and keeps the run's font: laid in place of the composite the letters
+# inherited, the size took Georgia away with it, saved without it.
+_sized_line(style='font_family', value='Georgia')
+app.body_text.mark_set('insert', '1.6')
+app._apply_body_font('font_size', 16)
+for _bs_ch in 'NEW':
+    type_char(_bs_ch)
+app._pending_font_size = None
+app._pending_styles = set()
+_bs_spans = app._extract_formatting(app.body_text)
+# Every letter typed, not only the first: the first takes the run's
+# composite from both its neighbours, the next ones from no one.
+_bs_both = [sorted((s['style'], s.get('value')) for s in _bs_spans
+                   if s['start'] <= at < s['end']) for at in (6, 7, 8)]
+check(f'a size picked inside a run set in a font keeps the font on every '
+      f'letter typed ({_bs_both})',
+      _bs_both == [[('font_family', 'Georgia'), ('font_size', 16)]] * 3)
+# Typed right after a bold word inside a bigger heading -- a space and a
+# word -- the text wore neither side's composite and came out at 12 pt.
+_sized_line({'start': 4, 'end': 9, 'style': 'bold'})
+app.body_text.mark_set('insert', '1.9')
+_bs_typed = _ty_key('space', ' ') and _ty_key('b', 'b')
+_bs_edge = [_drawn(i)[0] for i in ('1.9', '1.10')]
+check(f'text typed at a bold word\'s edge inside a bigger heading keeps the '
+      f'heading\'s size ({_bs_edge})', _bs_typed and _bs_edge == [20, 20])
+# Bold and italic on the same letters -- a bold italic word pasted, or a note
+# saved that way -- were two tags that both set the font, and italic won.
+set_body('')
+_stub_clipboard(html='<p><b><i>BI</i></b> plain</p>')
+app._on_body_paste()
+app.update()
+_bs_bi = _drawn('1.0')
+set_body('one two')
+app._apply_formatting(app.body_text,
+                      [{'start': 4, 'end': 7, 'style': 'bold'},
+                       {'start': 4, 'end': 7, 'style': 'italic'}])
+app.update()
+_bs_bi_loaded = _drawn('1.5')
+check(f'bold italic, pasted or opened, is drawn bold and italic '
+      f'({_bs_bi}, {_bs_bi_loaded})',
+      _bs_bi[1:] == ('bold', 'italic') and _bs_bi_loaded[1:] == ('bold', 'italic'))
+# Ctrl+B on one word in a long note set in a font lays the composites of
+# that word, not of the note: laid across the note, it took 250 ms at 8,000
+# styled words. Counted, not timed: the body's "tag add" and "tag remove".
+_bs_words = ['word%d' % i for i in range(400)]
+set_body(' '.join(_bs_words))
+app._apply_formatting(app.body_text, [
+    {'start': 0, 'end': len(' '.join(_bs_words)), 'style': 'font_family',
+     'value': 'Georgia'}] + [
+    {'start': 7 * i, 'end': 7 * i + 4, 'style': 'bold'} for i in range(0, 400, 3)])
+app.update()
+_bs_at = app.body_text.search('word200', '1.0', 'end')
+select(_bs_at, f'{_bs_at}+7c')
+_bs_calls = [0]
+
+
+def _bs_trace(command, *_op):
+    if ' tag add ' in command or ' tag remove ' in command:
+        _bs_calls[0] += 1
+
+
+app.tk.createcommand('qa_tag_trace', _bs_trace)
+app.tk.call('trace', 'add', 'execution', app.body_text._w, 'enter',
+            'qa_tag_trace')
+try:
+    app._toggle_body_style('bold')
+finally:
+    app.tk.call('trace', 'remove', 'execution', app.body_text._w, 'enter',
+                'qa_tag_trace')
+    app.tk.deletecommand('qa_tag_trace')
+clear_selection()
+check(f'Ctrl+B on one word of a long note set in a font lays that word\'s '
+      f'composites only ({_bs_calls[0]} tag changes; drawn {_drawn(_bs_at)})',
+      _bs_calls[0] <= 20 and _drawn(_bs_at)[1] == 'bold')
+# Bold and italic laid over the same letters by typing or a paste -- Italic
+# turned on after a bold word and letters typed glued onto it, or bold
+# pasted inside an italic word -- were two tags that both set the font:
+# drawn italic alone while the toolbar lit both, until the note was opened
+# again.
+clear_selection()
+set_body('one two three')
+app.body_text.tag_add('bold', '1.4', '1.7')
+app.body_text.mark_set('insert', '1.7')
+app._toggle_body_style('italic')
+_bs_typed = _ty_key('X', 'X') and _ty_key('Y', 'Y')
+app._pending_styles = set()
+_bs_fold = {'typed after a bold word, Italic on': _drawn('1.8')}
+set_body('one two three')
+app.body_text.tag_add('italic', '1.4', '1.7')
+app.body_text.mark_set('insert', '1.5')
+_stub_clipboard(html='<p><b>XY</b></p>')
+app._on_body_paste()
+app.update()
+_bs_fold['bold pasted inside an italic word'] = _drawn('1.6')
+check(f'bold and italic laid over the same letters by typing or a paste are '
+      f'drawn bold and italic at once ({_bs_fold})',
+      _bs_typed and all(d[1:] == ('bold', 'italic') for d in _bs_fold.values()))
+# Put in at a bold word's edge inside a bigger heading by any road, not only
+# typed: the text wore neither side's composite (Tk passes on only what both
+# sides wear) and came out at the base size, the heading's size split in two
+# around it, saved so.
+_bs_road = {}
+
+
+def _bs_edge():
+    _sized_line({'start': 4, 'end': 9, 'style': 'bold'})
+    app.body_text.mark_set('insert', '1.9')
+
+
+_bs_edge()
+_stub_clipboard(html='<p>XY</p>', text='XY')
+app._on_body_paste()
+app.update()
+_bs_road['Ctrl+V'] = _drawn('1.9')[0]
+_bs_edge()
+_stub_clipboard(text='XY')
+app.clipboard_clear()
+app.clipboard_append('XY')
+take_focus(app.body_text)
+app.body_text.event_generate('<<Paste>>')
+for _ in range(3):
+    app.update()
+    app.update_idletasks()
+_bs_road['Tk\'s own paste'] = _drawn('1.9')[0]
+_bs_edge()
+app._paste_plain()
+app.update()
+_bs_road['Ctrl+Shift+V'] = _drawn('1.9')[0]
+_bs_edge()
+app.body_text.mark_unset('calc_insert_end')
+app._calc_insert_formula('1+1=2')
+app.update()
+app.body_text.mark_unset('calc_insert_end')
+_bs_road['the calculator'] = _drawn('1.9')[0]
+_bs_edge()
+app._insert_emoji_from_toolbar()
+app.update()
+_bs_cells = []
+
+
+def _bs_find_emoji(w):
+    for _c in w.winfo_children():
+        if isinstance(_c, tk.Label) and 'Emoji' in str(_c.cget('font')):
+            _bs_cells.append(_c)
+        _bs_find_emoji(_c)
+
+
+if getattr(app, '_mini_popup', None) is not None:
+    _bs_find_emoji(app._mini_popup)
+if _bs_cells:
+    _bs_cells[0].event_generate('<Button-1>', x=4, y=4)
+    app.update()
+    _bs_road['an emoji'] = _drawn('1.9')[0]
+app._dismiss_mini_popup()
+app.update()
+check(f'text put in at a bold word\'s edge inside a bigger heading keeps the '
+      f'heading\'s size, by every road ({_bs_road})',
+      len(_bs_road) == 5 and all(v == 20 for v in _bs_road.values()))
+# A size or a font picked before typing, at a run's edge -- beside a bold
+# word inside a run set in Georgia, glued onto its end, or picked again after
+# the first letter -- took the base's font (or size) with the pick: those
+# letters wore no composite yet when the pick was laid.
+_bs_pick = {}
+
+
+def _bs_typed_with(at, *keys, line=(), style='font_family', value='Georgia',
+                   picks=(16,)):
+    _sized_line(*line, style=style, value=value)
+    clear_selection()
+    app.body_text.mark_set('insert', at)
+    _ok = True
+    for _pick, _ch in zip(picks, keys):
+        app._apply_body_font('font_size' if isinstance(_pick, int)
+                             else 'font_family', _pick)
+        _ok = _ty_key(_ch, _ch) and _ok
+    app._pending_font_size = app._pending_font_family = None
+    app._pending_styles = set()
+    _first = int(at.split('.')[1])
+    _spans = app._extract_formatting(app.body_text)
+    return _ok, [sorted((s['style'], s.get('value')) for s in _spans
+                        if s['start'] <= _first + k < s['end']
+                        and s['style'] in ('font_size', 'font_family'))
+                 for k in range(len(keys))]
+
+
+_bs_bold = ({'start': 4, 'end': 9, 'style': 'bold'},)
+_bs_pick['after a bold word'] = _bs_typed_with('1.9', 'A', 'B', line=_bs_bold,
+                                               picks=(16, 16))
+_bs_pick['before a bold word'] = _bs_typed_with('1.4', 'A', 'B', line=_bs_bold,
+                                                picks=(16, 16))
+_bs_pick['glued onto the run\'s end'] = _bs_typed_with('1.14', 'A', 'B',
+                                                       picks=(16, 16))
+_bs_pick['picked again'] = _bs_typed_with('1.6', 'A', 'B', picks=(16, 20))
+_bs_pick['a font after a size'] = _bs_typed_with(
+    '1.6', 'A', 'B', style='font_size', value=20,
+    picks=('Georgia', 'Courier New'))
+_bs_G = ('font_family', 'Georgia')
+check(f'a size or font picked at a run\'s edge keeps the run\'s other property '
+      f'({_bs_pick})',
+      all(v[0] for v in _bs_pick.values())
+      and _bs_pick['after a bold word'][1] == [[_bs_G, ('font_size', 16)]] * 2
+      and _bs_pick['before a bold word'][1] == [[_bs_G, ('font_size', 16)]] * 2
+      and _bs_pick['glued onto the run\'s end'][1]
+      == [[_bs_G, ('font_size', 16)]] * 2
+      and _bs_pick['picked again'][1] == [[_bs_G, ('font_size', 16)],
+                                          [_bs_G, ('font_size', 20)]]
+      and _bs_pick['a font after a size'][1]
+      == [[_bs_G, ('font_size', 20)],
+          [('font_family', 'Courier New'), ('font_size', 20)]])
+# A long paste is fitted by stretches where its tags stay the same, not a
+# character at a time: each character cost an index, a reading of its tags
+# and a tag laid, and a long paste into a note set in a font took two to
+# three times what laying the whole note again had. Counted, not timed: the
+# body's "tag names".
+_bs_long = 'word ' * 400
+set_body(_bs_long)
+app._apply_formatting(app.body_text, [
+    {'start': 0, 'end': len(_bs_long), 'style': 'font_family',
+     'value': 'Georgia'}] + [
+    {'start': 50 * i, 'end': 50 * i + 4, 'style': 'bold'} for i in range(10)])
+app.update()
+_bs_reads = [0]
+
+
+def _bs_read_trace(command, *_op):
+    if ' tag names ' in command:
+        _bs_reads[0] += 1
+
+
+app.tk.createcommand('qa_read_trace', _bs_read_trace)
+app.tk.call('trace', 'add', 'execution', app.body_text._w, 'enter',
+            'qa_read_trace')
+try:
+    app._fit_font_tags('1.0', 'end-1c')
+finally:
+    app.tk.call('trace', 'remove', 'execution', app.body_text._w, 'enter',
+                'qa_read_trace')
+    app.tk.deletecommand('qa_read_trace')
+check(f'a long paste is fitted by stretches, not a character at a time '
+      f'({_bs_reads[0]} tag readings for {len(_bs_long)} characters in 21 '
+      f'stretches; drawn {_drawn("1.0")})',
+      _bs_reads[0] <= 60 and _drawn('1.0')[1] == 'bold')
+set_body('')
+
+# On every line, not only the last, and over a selection: a first test of
+# "the key typed something" compared where the text ENDED, which an edit
+# above the last line never moves -- typing after a styled word spread
+# nothing on any other line, nor over the end of a styled word selected.
+set_body('Prices: here' + chr(10) + 'Total due' + chr(10) + 'end line')
+app._ensure_color_tag(_b, 'text_color', '#d32f2f')
+_b.tag_add('bold', '1.0', '1.6')
+_b.tag_add('text_color_d32f2f', '2.0', '2.5')
+_b.mark_set('insert', '1.6')
+_tyL = _ty_key('x', 'x') and _ty_key('y', 'y')
+_b.mark_set('insert', '2.5')
+_tyL = _ty_key('z', 'z') and _tyL
+check(f'typing after a styled word spreads its style on every line, not '
+      f'only the last (bold {_b.tag_ranges("bold")}; red '
+      f'{_b.tag_ranges("text_color_d32f2f")})',
+      _tyL
+      and [str(i) for i in _b.tag_ranges('bold')] == ['1.0', '1.8']
+      and [str(i) for i in _b.tag_ranges('text_color_d32f2f')]
+      == ['2.0', '2.6'])
+_tyO = []
+for _ty_from, _ty_caret in (('1.4', '1.6'), ('1.4', '1.4')):
+    set_body('Prices: here' + chr(10) + 'more')
+    _b.tag_add('bold', '1.0', '1.6')
+    _b.tag_add('sel', _ty_from, '1.6')
+    _b.mark_set('insert', _ty_caret)
+    _ty_ok = all(_ty_key(_k, _k) for _k in 'ing')
+    _tyO.append((_ty_ok, _b.get('1.0', '1.end'),
+                 [str(i) for i in _b.tag_ranges('bold')]))
+check(f'typing over the end of a styled word, selected either way, keeps '
+      f'its style ({_tyO})',
+      all(_ok and _t == 'Pricing: here' and _r == ['1.0', '1.7']
+          for _ok, _t, _r in _tyO))
+
+
+# A key with a binding of its own types nothing to spread a style over:
+# Delete, BackSpace, Ctrl+B, Ctrl+Z and a paste without its styling each
+# turned the plain ":" glued to a bold word bold (no press of a typing key
+# noted them, and the release read the two characters left of the caret).
+# Pressed as a person presses them: a modifier goes down first, as a key of
+# its own -- one with no binding here, so it reads as a key that may type.
+def _own_key(press, release, mods=()):
+    if not take_focus(app.body_text):
+        return False
+    for _m in mods:
+        app.body_text.event_generate('<KeyPress-%s>' % _m)
+    app.body_text.event_generate(press)
+    app.body_text.event_generate(release)
+    for _m in reversed(mods):
+        app.body_text.event_generate('<KeyRelease-%s>' % _m)
+    app.update()
+    return True
+
+
+_ty_real_read = NO.clipboard.read_text
+_tyK = []
+try:
+    NO.clipboard.read_text = lambda: ':'
+    for _ty_name, _ty_caret, _ty_do in (
+            ('Delete', '1.7',
+             lambda: _own_key('<Delete>', '<KeyRelease-Delete>')),
+            ('BackSpace', '1.8',
+             lambda: _own_key('<BackSpace>', '<KeyRelease-BackSpace>')),
+            ('Ctrl+B', '1.7',
+             lambda: _own_key('<Control-b>', '<Control-KeyRelease-b>',
+                              ('Control_L',))),
+            ('typing, then Ctrl+Z', '1.7',
+             lambda: (_ty_key('x', 'x')
+                      and _own_key('<Control-z>', '<Control-KeyRelease-z>',
+                                   ('Control_L',)))),
+            ('BackSpace, then Ctrl+Z', '1.7',
+             lambda: (_own_key('<BackSpace>', '<KeyRelease-BackSpace>')
+                      and _own_key('<Control-z>', '<Control-KeyRelease-z>',
+                                   ('Control_L',)))),
+            ('Ctrl+Shift+V', '1.6',
+             lambda: _own_key('<Control-Shift-KeyPress-V>',
+                              '<Control-Shift-KeyRelease-V>',
+                              ('Control_L', 'Shift_L')))):
+        set_body('Prices: here')
+        _b.tag_add('bold', '1.0', '1.6')
+        _b.mark_set('insert', _ty_caret)
+        app._reset_text_undo()
+        _ty_ok = _ty_do()
+        app._pending_styles = set()
+        _tyK.append((_ty_name, _ty_ok, _b.get('1.0', '1.end'),
+                     [str(i) for i in _b.tag_ranges('bold')]))
+finally:
+    NO.clipboard.read_text = _ty_real_read
+check(f'Delete, BackSpace, Ctrl+B, Ctrl+Z and a paste without its styling '
+      f'spread no style onto a plain colon ({_tyK})',
+      all(_ok and _r == ['1.0', '1.6'] for _n, _ok, _t, _r in _tyK)
+      and [_t for _n, _ok, _t, _r in _tyK][3:]
+      == ['Prices: here', 'Prices: here', 'Prices:: here'])
+
+
+# Keys pressed over each other -- the next letter down before the last is
+# up, as fast typing goes, or a key held until it repeats: each press set
+# the marks again, the first release found two fresh plain letters, and the
+# style stayed behind. What a key typed is settled at the next key's press.
+def _ty_down(keysym, ch):
+    """A typing key's press alone, the character put in by hand when the
+    synthetic press typed nothing (see _ty_key)."""
+    _w = app.body_text
+    _before = _w.get('1.0', 'end-1c')
+    _w.event_generate('<KeyPress>', keysym=keysym)
+    if _w.get('1.0', 'end-1c') == _before:
+        _w.insert('insert', ch)
+
+
+_tyR = []
+for _ty_how in ('rollover', 'held'):
+    set_body('Prices: here' + chr(10) + 'second line')
+    _b.tag_add('bold', '1.0', '1.6')
+    _b.mark_set('insert', '1.6')
+    _ty_ok = take_focus(_b)
+    if _ty_how == 'rollover':
+        _ty_down('x', 'x')
+        _ty_down('y', 'y')
+        _b.event_generate('<KeyRelease>', keysym='x')
+        _b.event_generate('<KeyRelease>', keysym='y')
+    else:
+        for _ in range(3):
+            _ty_down('x', 'x')
+        _b.event_generate('<KeyRelease>', keysym='x')
+    app.update()
+    _tyR.append((_ty_how, _ty_ok, _b.get('1.0', '1.end'),
+                 [str(i) for i in _b.tag_ranges('bold')]))
+check(f'letters pressed over each other, or a held key, after a styled word '
+      f'wear its style ({_tyR})',
+      _tyR == [('rollover', True, 'Pricesxy: here', ['1.0', '1.8']),
+               ('held', True, 'Pricesxxx: here', ['1.0', '1.9'])])
+# A key that types nothing, after a table typed by hand: its release tidies
+# the table it left, and the padding goes in where the press set its marks
+# -- read as typed, the character before the caret, on the line the key
+# went to, took the style of the one before it.
+set_body('Intro' + chr(10) + '| Item name | Qty |' + chr(10) + '| --- | --- |'
+         + chr(10) + '| Te | 2 |' + chr(10) + 'P: tail')
+_b.tag_add('bold', '5.0', '5.1')
+_b.mark_set('insert', '4.4')
+app._last_caret_line = None
+_tyT = _ty_key('a', 'a')
+_tyT = take_focus(_b) and _tyT
+_b.event_generate('<KeyPress-Down>')
+_b.mark_set('insert', '5.2')
+_b.event_generate('<KeyRelease-Down>')
+app.update()
+_tyT_rows = _b.get('2.0', '4.end').split(chr(10))
+check(f'a key that types nothing spreads no style after the table it left '
+      f'is tidied (bold {_b.tag_ranges("bold")}; rows {_tyT_rows})',
+      _tyT and [str(i) for i in _b.tag_ranges('bold')] == ['5.0', '5.1']
+      and len({len(r) for r in _tyT_rows}) == 1)
+# Tk's own Ctrl+T swaps the two letters at the caret, and the Insert key
+# pastes the selection: neither is typing, and a run opened for them gave
+# the swapped letters -- or the pasted words -- the word's style.
+set_body('Pricesab here' + chr(10) + 'second line')
+_b.tag_add('bold', '1.0', '1.6')
+_b.mark_set('insert', '1.7')
+_tyCT = _own_key('<Control-KeyPress-t>', '<Control-KeyRelease-t>',
+                 ('Control_L',))
+_tyCT = (_tyCT, _b.get('1.0', '1.end'),
+         [str(i) for i in _b.tag_ranges('bold')])
+set_body('Prices: here' + chr(10) + 'second line')
+_b.tag_add('bold', '1.0', '1.6')
+_b.mark_set('insert', '1.6')
+app.title_entry.delete(0, 'end')
+app.title_entry.insert(0, 'Fresh words')
+app.title_entry.selection_range(0, 'end')
+_tyIns = _own_key('<KeyPress-Insert>', '<KeyRelease-Insert>')
+_tyIns = (_tyIns, _b.get('1.0', '1.end'),
+          [str(i) for i in _b.tag_ranges('bold')])
+app.title_entry.selection_clear()
+app.title_entry.delete(0, 'end')
+check(f'Ctrl+T and the Insert key spread no style ({_tyCT}; {_tyIns})',
+      _tyCT == (True, 'Pricesba here', ['1.0', '1.6'])
+      and _tyIns == (True, 'PricesFresh words: here', ['1.0', '1.6']))
 set_body('')
 
 # ---- FIELD ROUND 4 ----
@@ -6586,7 +7226,9 @@ app.update()
 app._flush_autosave(); app.update()
 check('fixture: the stored date is the old one',
       app.find_note(_idD).get('date') == '2020-01-01')
-app._autosave_job = None
+# Cancelled, never just forgotten: a job set to None leaves its timer
+# scheduled with nothing tracking it (see _nd_burst).
+app._cancel_pending_autosave()
 check('fixture: no autosave is pending before the date is pasted',
       not getattr(app, '_autosave_job', None))
 app.clipboard_clear(); app.clipboard_append('2026-10-05'); app.update()
@@ -6774,6 +7416,97 @@ _body_after = app.body_text.get('1.0', 'end-1c')
 check('Enter that renumbers a list above a table keeps the table drawn',
       len(app.body_text.window_names()) == 1
       and len(core_tables.find_blocks(_body_after)) == 1)
+# ...and every Ctrl+Z and Ctrl+Y after it changes something. The rewrite is
+# split where the tables come down, and their drawing again was left as a
+# journal step of its own: in any note with a drawn table, the first Ctrl+Z
+# after a renumber changed nothing on screen, and so did the last Ctrl+Y.
+set_body('1. one' + chr(10) + '2. two' + chr(10) + '| A | B |'
+         + chr(10) + '| --- | --- |' + chr(10) + '| x | y |')
+app._render_table_grids()
+app.update()
+app._reset_text_undo()
+app.body_text.mark_set('insert', '1.end')
+_rw_start = app.body_text.get('1.0', 'end-1c')
+if take_focus(app.body_text):
+    app._on_body_return(None)
+    app.update()
+_rw_after = app.body_text.get('1.0', 'end-1c')
+_rw_seen = []
+for _rw_k in ('undo', 'undo', 'redo', 'redo'):
+    _rw_was = app.body_text.get('1.0', 'end-1c')
+    app._body_undo_redo(_rw_k)
+    app.update()
+    _rw_seen.append(app.body_text.get('1.0', 'end-1c') != _rw_was)
+    if len(_rw_seen) == 2:
+        _rw_back = app.body_text.get('1.0', 'end-1c') == _rw_start
+check(f'every Ctrl+Z and Ctrl+Y after a renumber beside a drawn table '
+      f'changes something ({_rw_seen})',
+      _rw_after != _rw_start and _rw_seen == [True, True, True, True]
+      and _rw_back and app.body_text.get('1.0', 'end-1c') == _rw_after)
+# ...also where an alignment meets the table's window: a centred line right
+# above the table (its alignment runs through its line break, up to the
+# window), or the table placed with "Center table on page" (the drawing
+# gives the window its line's alignment). The two sides of the drawing-again
+# part were compared by moving one into the other's windows, which put an
+# index at a window's column past the window, where Tk does not: the first
+# Ctrl+Z and the last Ctrl+Y changed nothing again -- and every such empty
+# step took one of the journal's 100, so a long session's deepest Ctrl+Z
+# lost the note's bold and colours after half of them.
+for _ra_how in ('centred line above it', 'table placed centre'):
+    set_body('1. one' + chr(10) + '2. two' + chr(10) + 'Title' + chr(10)
+             + '| A | B |' + chr(10) + '| --- | --- |' + chr(10) + '| x | y |')
+    app._render_table_grids()
+    app.update()
+    if _ra_how == 'centred line above it':
+        app.body_text.mark_set('insert', '3.2')
+        app._set_paragraph_align('center')
+    else:
+        app._grid_set_table_align(app._table_grids[0], 'center')
+        app._render_table_grids()
+    app.update()
+    # What the case needs: the window is at 4.0, and the alignment reaches it
+    # -- ending there (the line above) or on it (the table placed).
+    _ra_window = [t for t in app.body_text.tag_names('4.0')
+                  if t == 'align_center']
+    _ra_pre = (app.body_text.window_names()
+               and app.body_text.index(app.body_text.window_names()[0]) == '4.0'
+               and (bool(_ra_window) if _ra_how == 'table placed centre' else
+                    [str(i) for i in app.body_text.tag_ranges('align_center')]
+                    == ['3.0', '4.0']))
+    app._reset_text_undo()
+    app.body_text.mark_set('insert', '1.end')
+    _ra_start = app.body_text.get('1.0', 'end-1c')
+    if take_focus(app.body_text):
+        app._on_body_return(None)
+        app.update()
+    _ra_after = app.body_text.get('1.0', 'end-1c')
+    _ra_seen = []
+    for _ra_k in ('undo', 'undo', 'redo', 'redo'):
+        _ra_was = app.body_text.get('1.0', 'end-1c')
+        app._body_undo_redo(_ra_k)
+        app.update()
+        _ra_seen.append(app.body_text.get('1.0', 'end-1c') != _ra_was)
+        if len(_ra_seen) == 2:
+            _ra_back = app.body_text.get('1.0', 'end-1c') == _ra_start
+    check(f'every Ctrl+Z and Ctrl+Y after a renumber beside a drawn table, '
+          f'{_ra_how}, changes something ({_ra_seen}; case set up '
+          f'{bool(_ra_pre)})',
+          _ra_pre and _ra_after != _ra_start
+          and _ra_seen == [True, True, True, True]
+          and _ra_back and app.body_text.get('1.0', 'end-1c') == _ra_after)
+# What "the same once the windows are accounted for" means: a range split
+# only by a window's character is one range, and a range over a window's
+# character alone is none -- the window's own tags are its line's.
+_wf_sig = (1, 1)
+check('a range split only by a window reads as one range without it',
+      NO._fmt_window_free((_wf_sig, ('4.0',),
+                           (('align_center', '3.0 4.0 4.1 7.0'),)))
+      == NO._fmt_window_free((_wf_sig, (), (('align_center', '3.0 7.0'),))))
+check('a range over a window alone is no range without it',
+      NO._fmt_window_free((_wf_sig, ('4.0',),
+                           (('align_center', '4.0 4.1'),
+                            ('bold', '2.0 2.3'))))
+      == NO._fmt_window_free((_wf_sig, (), (('bold', '2.0 2.3'),))))
 
 # The whole-body renumber rewrite (delete-all + reinsert) on the key
 # path is ONE undo unit: one Ctrl+Z after such an Enter must never leave
@@ -6991,6 +7724,25 @@ app.update()
 check('find/prose: a miss shows 0/0 and clears the highlight',
       app._find_count_lbl.cget('text') == '0/0'
       and not app.body_text.tag_ranges('find_all'))
+app._close_find()
+app.update()
+# The Aa box (and opening the bar) rescans directly while a typed query's
+# rescan waits. Clearing the job there left the waiting timer scheduled
+# with nothing tracking it -- the relay qa1's "a save run directly"
+# check describes for the autosave. The waiting rescan stays tracked
+# now: it may carry a reveal the direct one does not.
+app._open_find()
+app.update()
+app._find_var.set('beta')              # the typed query's rescan waits
+_fd_job = getattr(app, '_find_debounce', None)
+app._find_case.set(True)
+app._find_rescan(reveal=False)         # what the Aa box runs
+_fd_waiting = _qa_waiting(app, '_find_debounce_fire')
+check(f'find: a direct rescan leaves the waiting one tracked ({_fd_job} '
+      f'-> {getattr(app, "_find_debounce", None)}, waiting {_fd_waiting})',
+      _fd_job is not None
+      and _fd_waiting == [str(getattr(app, '_find_debounce', None))])
+app._find_case.set(False)
 app._close_find()
 app.update()
 
@@ -7399,6 +8151,28 @@ app.update()
 check('picking a day writes the date into the date field',
       app.date_entry.get().endswith('-15')
       and app._mini_popup is not _dp)
+# ...and the repeat's summary follows the date the picker writes: it went on
+# saying "needs a start date" after one was picked.
+app._cancel_pending_autosave()
+app.new_note(); app.update()
+app.rec_freq_var.set(NO.FREQ_LABELS['weekly'])
+app.on_recurrence_changed(); app.update()
+_pk_before = str(app.rec_summary_lbl.cget('text'))
+app.open_date_picker(); app.update()
+_pk_btns = [b for b in _walk_widgets(app._mini_popup, tk.Button)
+            if str(b.cget('text')).strip() == '15']
+if _pk_btns:
+    _pk_btns[0].invoke()
+    app.update()
+app._cancel_pending_autosave()
+_pk_after = str(app.rec_summary_lbl.cget('text'))
+app.rec_freq_var.set(NO.FREQ_LABELS[''])
+app.on_recurrence_changed()
+app._cancel_pending_autosave()
+app.new_note(); app.update()
+check(f'the repeat\'s summary follows a date the picker writes '
+      f'({_pk_before!r} -> {_pk_after!r})',
+      'needs a start date' in _pk_before and _pk_after == 'Every week')
 
 # Note colour picker: a canvas swatch click colours the open note.
 app.title_entry.delete(0, 'end'); app.title_entry.insert(0, 'Colorata')
@@ -7900,7 +8674,11 @@ check('...and reopens with every character of it',
 check('...without taking longer than a person would wait (%.1fs)' % _fc_elapsed,
       _fc_elapsed < 5.0)
 
-# 66: a repeat with no date is refused, and the reason names the date.
+# 66: a repeat with no date cannot be stored, and the reason names the
+# date -- but the note's words are not refused along with it. One field
+# the app cannot read used to veto the whole save, and on the automatic
+# routes that veto threw the typing away; now the words are saved, the
+# repeat is left out, and the warning says why.
 _fc_warned = []
 app.show_warning = lambda *a, **k: (_fc_warned.append(a), True)[1]
 app.new_note()
@@ -7910,12 +8688,14 @@ app.body_text.insert('1.0', 'something')
 app.rec_freq_var.set(NO.FREQ_LABELS['daily'])
 app.on_recurrence_changed()
 app.date_entry.delete(0, 'end')
-_fc_before = len(app.notes)
 app.save_current_note(auto=False)
 app.update()
 app.show_warning = _fc_real_warning
-check('a repeating note with no start date is refused (plan 66)',
-      len(app.notes) == _fc_before)
+_fc_rep = next((n for n in app.notes if n['title'] == 'Repetitiva'), None)
+check('a repeating note with no start date keeps its words (plan 66)',
+      _fc_rep is not None and _fc_rep['body'].strip() == 'something')
+check('...but not a repeat it has no start date for',
+      _fc_rep is not None and not _fc_rep['recurrence']['freq'])
 check('...and the warning says a start date is what is missing',
       any('start date' in str(a[1]).lower() or 'start date' in str(a[0]).lower()
           for a in _fc_warned))
@@ -7953,7 +8733,7 @@ app.on_end_mode_changed()
 app.update()
 check('fixture: choosing "On date" enables it',
       str(app.rec_end_date_entry.cget('state')) == 'normal')
-app._autosave_job = None
+app._cancel_pending_autosave()
 check('fixture: no autosave is pending before the paste',
       not getattr(app, '_autosave_job', None))
 app.clipboard_clear(); app.clipboard_append('2027-03-01'); app.update()
@@ -8201,6 +8981,19 @@ check('checklist undo: with no offer up, the autosave banner still shows',
 check('checklist undo: fixture ready for the error case',
       _cu_setup(['milk', 'bread']))
 _cu_press(0)
+# The delete schedules its own autosave, and its reassurance banner
+# yields only to a live OFFER -- so, landing after the error banner, it
+# replaces it. Left pending, that timer fired inside the update() below
+# whenever the machine was slow, and this check went red twice under a
+# loaded desktop with nothing wrong with what it asks. Settled first, and
+# asserted settled, so the reading is about its own promise. (That a
+# "Note updated" can cover an error at all is its own question, reported
+# with the audit's editor fixes.)
+app._flush_autosave()
+app.update()
+check('checklist undo: the delete\'s own save is settled before the error '
+      '(precondition)', getattr(app, '_autosave_job', None) is None
+      and app._toast_action is not None)
 app._show_toast('a failure the user must see', kind='error')
 app.update()
 check('checklist undo: an error is never held back by a live offer',
@@ -8282,6 +9075,56 @@ _cu_undo()
 app.update()
 check('checklist undo: Undo after a template leaves the template list alone',
       _cu_texts() == ['from the template'])
+# Restore previous fills the editor from the same note again, and loading
+# it gave the checklist a new list: the Undo just offered said "That note is
+# no longer open" with the note on screen, and the item could not come
+# back. The same note loaded over itself keeps its list.
+check('checklist undo: fixture ready for Restore previous',
+      _cu_setup(['milk', 'eggs'],
+                extra={'_prev': {'title': 'Shopping', 'body': 'an older body',
+                                 'formatting': [], 'paragraphs': [],
+                                 'comments': ''}}))
+_cu_press(1)
+_cu_undo = app._toast_action
+_cu_real_ask = app.ask_yes_no
+app.ask_yes_no = lambda *a, **k: True
+try:
+    app.restore_previous_version()
+    app.update()
+finally:
+    app.ask_yes_no = _cu_real_ask
+_cu_undo()
+app.update()
+check(f'checklist undo: Undo after Restore previous puts the item back '
+      f'({_cu_texts()}; restored {app.find_note(9100).get("body")!r})',
+      _cu_texts() == ['milk', 'eggs']
+      and 'older body' in app.find_note(9100).get('body', ''))
+# ...but not after a reload that brought ANOTHER checklist -- a rescue copy
+# that holds its own, as an import's Update leaves one: the item it brought
+# back as a new entry was put back again beside it, and stored twice.
+check('checklist undo: fixture ready for a rescue copy with its own checklist',
+      _cu_setup(['milk', 'eggs', 'bread'],
+                extra={'_prev': {'title': 'Shopping', 'body': 'an older body',
+                                 'formatting': [], 'paragraphs': [],
+                                 'comments': '',
+                                 'checklist': [
+                                     {'text': 'milk', 'done': False},
+                                     {'text': 'eggs', 'done': False}]}}))
+_cu_press(1)
+_cu_undo = app._toast_action
+app.ask_yes_no = lambda *a, **k: True
+try:
+    app.restore_previous_version()
+    app.update()
+finally:
+    app.ask_yes_no = _cu_real_ask
+_cu_undo()
+app.update()
+_cu_kept = [i.get('text') for i in app.find_note(9100).get('checklist') or []]
+check(f'checklist undo: ...and after Restore previous brings back its own '
+      f'checklist, the Undo stores nothing twice ({_cu_texts()}; stored '
+      f'{_cu_kept})',
+      _cu_texts() == ['milk', 'eggs'] and _cu_kept == ['milk', 'eggs'])
 
 # Any alphabet, and a day of a repeating note.
 check('checklist undo: fixture ready for the astral item',
@@ -8437,6 +9280,22 @@ app.update()
 if not app.selection_mode:
     app._toggle_selection_mode()
 app.update()
+# The search_var.set('') above scheduled the search debounce -- a full
+# refresh_note_list 180 ms later, which draws every card anew -- and the
+# new note left an autosave pending. Whenever this setup ran faster than
+# the debounce, the refresh landed between the baseline and the reading
+# below and the "without rebuilding" checks went red with nothing wrong
+# (3 times in 16 loaded Windows runs, never on Linux; reproduced by
+# listing the timers still pending at the baseline). Settled and
+# asserted settled, so the reading is about the button alone.
+if getattr(app, '_search_debounce_job', None) is not None:
+    app.after_cancel(app._search_debounce_job)
+    app._search_debounce_job = None
+app._flush_autosave()
+app.update()
+check('select all: no timer left that could redraw the list (precondition)',
+      getattr(app, '_search_debounce_job', None) is None
+      and getattr(app, '_autosave_job', None) is None)
 _btn_text = lambda: str(app._bulk_select_all_btn.cget('text'))
 
 
@@ -9395,6 +10254,2731 @@ app.ask_yes_no = _bc_real_ask
 app.notes = list(_bc_saved)
 app.save_notes()
 app.new_note(); app.update()
+
+# ---- ESCAPE LEAVES A CELL AND KEEPS WHAT WAS TYPED ----
+# The User Guide lists Escape beside Tab and a click elsewhere as the way
+# out of a cell. It closed the editor without a commit, and the typing
+# reaches the note only through one -- so a quick Escape threw the cell's
+# text away while Tab, with the same timing, kept it. Driven through the
+# editor's own binding: the focus is a precondition, forced and asserted.
+set_body('| Item | Qty |' + chr(10) + '| --- | --- |' + chr(10)
+         + '|  |  |' + chr(10) + 'after')
+app._render_table_grids()
+app.update()
+app._open_cell_editor(app._grid_at_line(1), 1, 0)
+app.update()
+_esc_entry = app._cell_editor['entry']
+_esc_entry.delete('1.0', 'end')
+_esc_entry.insert('1.0', 'Milk')
+check('Escape: the cell editor holds the keyboard (precondition)',
+      take_focus(_esc_entry))
+_esc_entry.event_generate('<Escape>')
+app.update()
+check('Escape leaves the cell', app._cell_editor is None)
+check('...and keeps what was typed in it (' + repr(
+          app.body_text.get('3.0', '3.end')) + ')',
+      core_tables.split_row(app.body_text.get('3.0', '3.end'))
+      == ['Milk', ''])
+set_body('')
+
+# ---- THE KEYS STOP AT A DRAWN TABLE'S EDGE ----
+# Delete at the end of the line above a table, or BackSpace at the start
+# of the line under it, took the line break between them: the prose was
+# glued onto the table's first or last row, which then read as prose,
+# fell out of the grid, and was saved that way. The table is one block --
+# the boundary the caret guard already keeps -- and the keys stop at its
+# edge. Tk's own Ctrl+H (a BackSpace) and Ctrl+K (at a line's end, a
+# Delete) join lines too and meet the same guard. Every "nothing
+# happened" below has its control: the same key one character away from
+# the edge really deletes, so the silence is about the edge, not about a
+# key that never arrived.
+_edge_body = ('Shopping for Saturday' + chr(10) + '| Item | Qty |' + chr(10)
+              + '| --- | --- |' + chr(10) + '| Milk | 2 |' + chr(10)
+              + '| Eggs | 12 |' + chr(10) + 'remember the bags')
+
+
+def _edge_press(index, sequence, body=None):
+    """Reset the note, put the caret at *index* and press *sequence* on
+    the body through Tk. Returns the text after, or None when the body
+    could not get the keyboard (the precondition, asserted by callers)."""
+    set_body(_edge_body if body is None else body)
+    app._render_table_grids()
+    app.update()
+    app.body_text.tag_remove('sel', '1.0', 'end')
+    app.body_text.mark_set('insert', index)
+    if not take_focus(app.body_text):
+        return None
+    app.body_text.event_generate(sequence)
+    app.update()
+    return app.body_text.get('1.0', 'end-1c')
+
+
+def _edge_rows():
+    info = app._grid_at_line(2)
+    return (None if info is None else
+            [info['cells'][(r, 0)]['value'] for r in range(info['data_rows'])])
+
+
+_edge_after = _edge_press('1.end', '<Delete>')
+check('table edge: the body holds the keyboard (precondition)',
+      _edge_after is not None)
+check('table edge: Delete at the end of the line above a table does nothing',
+      _edge_after == _edge_body and _edge_rows() == ['Item', 'Milk', 'Eggs'])
+_edge_after = _edge_press('1.20', '<Delete>')
+check('table edge: ...while Delete one character earlier still deletes',
+      _edge_after == _edge_body.replace('Saturday', 'Saturda', 1))
+_edge_after = _edge_press('6.0', '<BackSpace>')
+check('table edge: BackSpace at the start of the line under a table does nothing',
+      _edge_after == _edge_body and _edge_rows() == ['Item', 'Milk', 'Eggs'])
+_edge_after = _edge_press('6.1', '<BackSpace>')
+check('table edge: ...while BackSpace one character later still deletes',
+      _edge_after == _edge_body.replace('remember', 'emember', 1))
+_edge_after = _edge_press('6.0', '<Control-h>')
+check('table edge: Ctrl+H (Tk\'s BackSpace) stops at the edge too',
+      _edge_after == _edge_body)
+_edge_after = _edge_press('6.1', '<Control-h>')
+check('table edge: ...and still deletes away from it',
+      _edge_after == _edge_body.replace('remember', 'emember', 1))
+_edge_after = _edge_press('1.end', '<Control-k>')
+check('table edge: Ctrl+K at the end of the line above stops at the edge',
+      _edge_after == _edge_body)
+_edge_after = _edge_press('6.0', '<Control-k>')
+check('table edge: ...and still clears a line away from it',
+      _edge_after == _edge_body.replace('remember the bags', '', 1))
+# A selection is not a question about the edge: with the caret inside it
+# Delete takes the selection, as Tk always has.
+set_body(_edge_body)
+app._render_table_grids()
+app.update()
+app.body_text.tag_add('sel', '1.13', '1.21')
+app.body_text.mark_set('insert', '1.21')
+if take_focus(app.body_text):
+    app.body_text.event_generate('<Delete>')
+    app.update()
+check('table edge: a selection ending at the edge is still deleted whole',
+      app.body_text.get('1.0', '1.end') == 'Shopping for '
+      and _edge_rows() == ['Item', 'Milk', 'Eggs'])
+# The note that ENDS in a table: BackSpace on the writable line under it,
+# then typing -- the typing lands on its own line, not on the last row.
+_edge_end_body = _edge_body.rsplit(chr(10), 1)[0]
+_edge_after = _edge_press('end-1c', '<BackSpace>', body=_edge_end_body)
+app.body_text.insert('insert', 'and bread')
+app.update()
+_edge_lines = app.body_text.get('1.0', 'end-1c').split(chr(10))
+check('table edge: BackSpace under a note-ending table keeps the last row whole',
+      _edge_after is not None and _edge_lines[4] == '| Eggs | 12 |'
+      and _edge_lines[5] == 'and bread')
+# Tk's own Ctrl+T swaps the two characters around the caret; at the edge
+# one of them was the table's line break, and the last row became
+# "| Eggs | 12 |r". A swap removes no line, so even the empty line under
+# a table (where BackSpace may go, below) holds it: the swap there was the
+# last row's closing pipe and its line break.
+_edge_after = _edge_press('6.0', '<Control-t>')
+check('table edge: Ctrl+T (Tk\'s transpose) at the start of the line under '
+      f'a table does nothing ({_edge_after!r})',
+      _edge_after == _edge_body and _edge_rows() == ['Item', 'Milk', 'Eggs'])
+_edge_after = _edge_press('6.3', '<Control-t>')
+check('table edge: ...while Ctrl+T in the prose under it still transposes',
+      _edge_after == _edge_body.replace('remember', 'reemmber', 1))
+_edge_after = _edge_press('1.end', '<Control-t>')
+check('table edge: ...and so does Ctrl+T at the end of the line above it',
+      _edge_after == _edge_body.replace('Saturday', 'Saturdya', 1)
+      and _edge_rows() == ['Item', 'Milk', 'Eggs'])
+_edge_gap_below = _edge_body.replace('| Eggs | 12 |' + chr(10),
+                                     '| Eggs | 12 |' + chr(10) + chr(10), 1)
+_edge_after = _edge_press('6.0', '<Control-t>', body=_edge_gap_below)
+check('table edge: Ctrl+T on the empty line under a table does nothing '
+      f'({_edge_after!r})',
+      _edge_after == _edge_gap_below
+      and _edge_rows() == ['Item', 'Milk', 'Eggs'])
+_edge_after = _edge_press('end-1c', '<Control-t>', body=_edge_end_body)
+check('table edge: Ctrl+T on the writable line under a note-ending table '
+      f'keeps the last row whole ({_edge_after!r})',
+      _edge_after is not None
+      and _edge_after.split(chr(10))[4] == '| Eggs | 12 |'
+      and _edge_rows() == ['Item', 'Milk', 'Eggs'])
+# An EMPTY line beside a table joins nothing onto a row when it goes, and
+# the edge guard refused it anyway: Delete on the empty line above, or
+# BackSpace on the empty line below, did nothing. It goes now -- but not
+# the empty line BETWEEN two tables (they would merge into one block),
+# and not the writable line the renderer keeps under a note-ending table
+# (checked just above).
+_edge_gap_above = _edge_body.replace('Saturday' + chr(10),
+                                     'Saturday' + chr(10) + chr(10), 1)
+_edge_after = _edge_press('2.0', '<Delete>', body=_edge_gap_above)
+check('table edge: Delete on the empty line above a table removes it '
+      f'({_edge_after!r})',
+      _edge_after == _edge_body and _edge_rows() == ['Item', 'Milk', 'Eggs'])
+_edge_after = _edge_press('6.0', '<BackSpace>', body=_edge_gap_below)
+check('table edge: BackSpace on the empty line under a table removes it '
+      f'({_edge_after!r})',
+      _edge_after == _edge_body and _edge_rows() == ['Item', 'Milk', 'Eggs'])
+_edge_two = ('| A | B |' + chr(10) + '| --- | --- |' + chr(10) + '| a1 | b1 |'
+             + chr(10) + chr(10) + '| C | D |' + chr(10) + '| --- | --- |'
+             + chr(10) + '| c1 | d1 |' + chr(10) + 'end')
+for _edge_key in ('<Delete>', '<BackSpace>'):
+    _edge_after = _edge_press('4.0', _edge_key, body=_edge_two)
+    check(f'table edge: {_edge_key} on the empty line between two tables '
+          f'does nothing ({_edge_after!r}, {len(app._table_grids)} grids)',
+          _edge_after == _edge_two and len(app._table_grids) == 2)
+set_body('')
+
+# ---- A TABLE OPERATION LEAVES EVERY CELL IT DID NOT TOUCH AS IT WAS ----
+# Clearing ONE cell with Delete, dropping a checkbox, deleting a row,
+# pasting cells: each rewrote the table's whole text, and every bold word
+# and colour in the table died with it -- "the accepted cost of
+# reshaping", said the rewrite, while clearing a cell reshapes nothing.
+# The styles are carried cell by cell now, and the ops that MOVE cells (a
+# row or column in or out, copies at an edge) carry them to where the
+# cell went. Asked of the store (the spans a save writes) and, for the
+# moved cells, of the drawing too.
+_cs_body = ('| Item | Qty | Done |' + chr(10) + '| --- | --- | --- |' + chr(10)
+            + '| Milk | 2 | x |' + chr(10) + '| Eggs | 12 | y |')
+
+
+def _cs_setup():
+    set_body(_cs_body)
+    _m, _q = _cs_body.index('Milk'), _cs_body.index('12')
+    app._apply_formatting(app.body_text, [
+        {'start': _m, 'end': _m + 4, 'style': 'bold'},
+        {'start': _q, 'end': _q + 2, 'style': 'text_color',
+         'value': '#e63946'}])
+    app._render_table_grids()
+    app.update()
+    return app._grid_at_line(1)
+
+
+def _cs_styles():
+    _b = app.body_text.get('1.0', 'end-1c')
+    return sorted((s['style'], _b[s['start']:s['end']])
+                  for s in app._extract_formatting(app.body_text))
+
+
+def _cs_paint(r, c):
+    _i = app._grid_at_line(1)
+    return None if _i is None else app._grid_cell_paint(_i, r, c)
+
+
+_cs_want = [('bold', 'Milk'), ('text_color', '12')]
+_cs_info = _cs_setup()
+check('carried styles: the fixture carries the bold and the red',
+      _cs_styles() == _cs_want)
+app._grid_select_range(_cs_info, (1, 2), (1, 2))
+app._on_body_delete_key()
+app.update()
+check('carried styles: clearing ANOTHER cell with Delete keeps them '
+      f'({_cs_styles()})',
+      _cs_styles() == _cs_want and 'x' not in app.body_text.get('3.0', '3.end'))
+_cs_info = _cs_setup()
+app._grid_set_marker(_cs_info, 2, 2, core_tables.CHECKBOX_EMPTY)
+app.update()
+check(f'carried styles: dropping a checkbox elsewhere keeps them ({_cs_styles()})',
+      _cs_styles() == _cs_want)
+_cs_info = _cs_setup()
+app._grid_insert_row(_cs_info, 3)
+app.update()
+app._grid_delete_row(app._grid_at_line(1), 3)
+app.update()
+check(f'carried styles: adding and deleting an empty row keeps them ({_cs_styles()})',
+      _cs_styles() == _cs_want)
+_cs_info = _cs_setup()
+app._grid_delete_row(_cs_info, 1)
+app.update()
+check('carried styles: deleting the bold row moves the red up with its row '
+      f'({_cs_styles()})',
+      _cs_styles() == [('text_color', '12')]
+      and (_cs_paint(1, 1) or {}).get('fg') == '#e63946')
+_cs_info = _cs_setup()
+app._grid_insert_col(_cs_info, 0)
+app.update()
+check('carried styles: a column inserted in front moves both styles right '
+      f'({_cs_styles()})',
+      _cs_styles() == _cs_want and (_cs_paint(1, 1) or {}).get('bold')
+      and (_cs_paint(2, 2) or {}).get('fg') == '#e63946')
+_cs_info = _cs_setup()
+app._grid_delete_col(_cs_info, 0)
+app.update()
+check('carried styles: deleting the first column moves the red left '
+      f'({_cs_styles()})',
+      _cs_styles() == [('text_color', '12')]
+      and (_cs_paint(2, 0) or {}).get('fg') == '#e63946')
+_cs_info = _cs_setup()
+app._grid_append_rows(_cs_info, 1, 1)
+app.update()
+check(f'carried styles: a row copied to the bottom brings its bold ({_cs_styles()})',
+      _cs_styles() == [('bold', 'Milk'), ('bold', 'Milk'), ('text_color', '12')])
+_cs_info = _cs_setup()
+app._grid_append_cols(_cs_info, 1, 1)
+app.update()
+check(f'carried styles: a column copied to the edge brings its red ({_cs_styles()})',
+      _cs_styles() == [('bold', 'Milk'), ('text_color', '12'),
+                       ('text_color', '12')])
+_cs_saved_clip = (NO.clipboard.read_html, NO.clipboard.read_text,
+                  NO.clipboard.write)
+_cs_info = _cs_setup()
+_stub_clipboard(text='z')
+app._grid_cell_clip = None
+app.clipboard_get = lambda **k: 'z'
+try:
+    app._grid_paste_cells(_cs_info, 1, 2)
+    app.update()
+finally:
+    del app.clipboard_get
+check(f'carried styles: pasting into another cell keeps them ({_cs_styles()})',
+      _cs_styles() == _cs_want
+      and core_tables.split_row(app.body_text.get('3.0', '3.end'))[2] == 'z')
+# A merge moves every cell's text into the merged cell ("nothing the merge
+# swallows is thrown away") and dropped every style that text carried.
+# The red '12' joins 'Eggs' at an offset, so it proves where the style
+# lands, not only that one survived.
+_cs_info = _cs_setup()
+app._grid_merge_selection({'info': _cs_info, 'box': (2, 0, 2, 1)})
+app.update()
+check('carried styles: merging the red 12 into its row\'s first cell keeps '
+      f'it red, on the 12 ({_cs_styles()}, '
+      f'{core_tables.split_row(app.body_text.get("4.0", "4.end"))})',
+      _cs_styles() == _cs_want
+      and core_tables.split_row(app.body_text.get('4.0', '4.end'))[0]
+      == 'Eggs 12')
+
+# ---- CELLS PASTED WIDER THAN THE TABLE GROW IT ----
+# Four columns copied from a spreadsheet into a two-column table: the rows
+# grew to fit, the two extra columns were dropped without a word. Columns
+# grow now exactly as rows always did (no table has a column cap, so
+# nothing is clipped). Pasted through the cell editor's own Ctrl+V.
+set_body('| Name | Phone |' + chr(10) + '| --- | --- |' + chr(10) + '|  |  |')
+app._render_table_grids()
+app.update()
+_pw_tsv = (chr(9).join(['Ana', '0722 111 222', 'Bucharest', 'ana@example.com'])
+           + chr(10)
+           + chr(9).join(['Dan', '0733 444 555', 'Cluj', 'dan@example.com']))
+_stub_clipboard(text=_pw_tsv)
+app._grid_cell_clip = None
+app.clipboard_get = lambda **k: _pw_tsv
+try:
+    app._open_cell_editor(app._grid_at_line(1), 1, 0)
+    app.update()
+    check('wide paste: the cell editor holds the keyboard (precondition)',
+          take_focus(app._cell_editor['entry']))
+    app._cell_editor['entry'].event_generate('<Control-v>')
+    app.update()
+finally:
+    del app.clipboard_get
+NO.clipboard.read_html, NO.clipboard.read_text, NO.clipboard.write = \
+    _cs_saved_clip
+_pw_rows = [core_tables.split_row(_l)
+            for _l in app.body_text.get('1.0', 'end-1c').split(chr(10))
+            if core_tables.is_table_row(_l)
+            and not core_tables.is_separator_row(_l)]
+check(f'wide paste: four columns into a two-column table grow it to four ({_pw_rows})',
+      _pw_rows == [['Name', 'Phone', '', ''],
+                   ['Ana', '0722 111 222', 'Bucharest', 'ana@example.com'],
+                   ['Dan', '0733 444 555', 'Cluj', 'dan@example.com']])
+check('wide paste: and the drawn grid has the four columns',
+      (app._grid_at_line(1) or {}).get('ncols') == 4)
+set_body('')
+
+# ---- CTRL+Z TAKES BACK A STYLE CHANGE, AND ONLY IT ----
+# Tk's undo stack holds text, never a tag. Bolding a word left nothing
+# on it, so Ctrl+Z skipped the bold and took back the last burst of
+# typing instead (and the autosave stored that); Ctrl+Y brought the
+# typing back without the bold. A formatting journal beside Tk's stack
+# now takes the style back first, and the typing on later presses, in
+# order. Every sibling formatting action -- a colour, a size, a centred
+# line, an indented paragraph, a styled cell -- is checked the same way.
+# Keys through Tk: the body's focus is a precondition, forced and asserted.
+def _uf_key(sequence):
+    if not take_focus(app.body_text):
+        return False
+    app.body_text.event_generate(sequence)
+    app.update()
+    return True
+
+
+def _uf_setup(body, typed=''):
+    """A note holding *body*, with *typed* then typed at its end as one
+    burst and the pause after it -- the boundary an autosave leaves."""
+    set_body(body)
+    app._reset_text_undo()
+    app.body_text.mark_set('insert', 'end-1c')
+    for _ch in typed:
+        app.body_text.insert('insert', _ch)
+    app._flush_table_grids()
+
+
+def _uf_select(word):
+    _at = app.body_text.search(word, '1.0', 'end')
+    app.body_text.tag_remove('sel', '1.0', 'end')
+    app.body_text.tag_add('sel', _at, f'{_at}+{len(word)}c')
+    app.body_text.mark_set('insert', f'{_at}+{len(word)}c')
+
+
+_uf_typed = 'the meeting moved to Friday'
+_uf_full = 'Dear Ana,' + chr(10) + _uf_typed
+_uf_setup('Dear Ana,' + chr(10), _uf_typed)
+_uf_select('Friday')
+check('style undo: the body holds the keyboard (precondition)',
+      _uf_key('<Control-b>'))
+check('style undo: Ctrl+B made the word bold (fixture)',
+      _cs_styles() == [('bold', 'Friday')])
+_uf_key('<Control-z>')
+check('style undo: Ctrl+Z right after a bold takes back the bold ONLY '
+      f'({app.body_text.get("1.0", "end-1c")!r}, {_cs_styles()})',
+      app.body_text.get('1.0', 'end-1c') == _uf_full and _cs_styles() == [])
+_uf_key('<Control-y>')
+check(f'style undo: Ctrl+Y gives the bold back ({_cs_styles()})',
+      app.body_text.get('1.0', 'end-1c') == _uf_full
+      and _cs_styles() == [('bold', 'Friday')])
+_uf_key('<Control-z>')
+_uf_key('<Control-z>')
+check('style undo: the typing goes on the NEXT press, in order '
+      f'({app.body_text.get("1.0", "end-1c")!r})',
+      app.body_text.get('1.0', 'end-1c') == 'Dear Ana,' + chr(10))
+_uf_key('<Control-y>')
+_uf_key('<Control-y>')
+check(f'style undo: two Ctrl+Y bring the typing AND the bold back ({_cs_styles()})',
+      app.body_text.get('1.0', 'end-1c') == _uf_full
+      and _cs_styles() == [('bold', 'Friday')])
+# Typing AFTER the style is undone first; the style on the press after.
+_uf_setup('Dear Ana,' + chr(10), _uf_typed)
+_uf_select('Friday')
+_uf_key('<Control-b>')
+app.body_text.tag_remove('sel', '1.0', 'end')
+app.body_text.mark_set('insert', 'end-1c')
+app.body_text.edit_separator()
+app.body_text.insert('insert', ' at ten')
+_uf_key('<Control-z>')
+check('style undo: typing after the bold is taken back first '
+      f'({app.body_text.get("1.0", "end-1c")!r}, {_cs_styles()})',
+      app.body_text.get('1.0', 'end-1c') == _uf_full
+      and _cs_styles() == [('bold', 'Friday')])
+_uf_key('<Control-z>')
+check(f'style undo: ...and the bold on the press after it ({_cs_styles()})',
+      app.body_text.get('1.0', 'end-1c') == _uf_full and _cs_styles() == [])
+
+# The siblings: every other action that changes formatting and no text.
+for _uf_name, _uf_do, _uf_read, _uf_before in (
+        ('a text colour',
+         lambda: app._apply_body_color('text_color', '#e63946'),
+         _cs_styles, []),
+        ('a font size',
+         lambda: app._apply_body_font('font_size', 14),
+         _cs_styles, []),
+        ('a centred line',
+         lambda: app._set_paragraph_align('center'),
+         lambda: app._paragraph_align_of(app.body_text, 2), 'left'),
+        ('an indented plain paragraph',
+         lambda: app._change_paragraph_indent(+1),
+         lambda: app._paragraph_indent_of(app.body_text, 2), 0)):
+    _uf_setup('Dear Ana,' + chr(10), _uf_typed)
+    _uf_select('Friday')
+    _uf_do()
+    app.update()
+    _uf_changed = _uf_read()
+    _uf_key('<Control-z>')
+    check(f'style undo: Ctrl+Z takes back {_uf_name} and keeps the typing '
+          f'({_uf_changed!r} -> {_uf_read()!r})',
+          _uf_changed != _uf_before and _uf_read() == _uf_before
+          and app.body_text.get('1.0', 'end-1c') == _uf_full)
+# A styled cell is the same kind of step.
+_uf_info = _cs_setup()
+app._reset_text_undo()
+app._grid_apply_style(_uf_info, (2, 0, 2, 0), 'bold')
+app.update()
+_uf_bold = _cs_styles()
+_uf_key('<Control-z>')
+check(f'style undo: Ctrl+Z takes back a cell made bold ({_uf_bold} -> {_cs_styles()})',
+      ('bold', 'Eggs') in _uf_bold and _cs_styles() == _cs_want)
+
+# Caps Lock turns the letter over: Tk reads Ctrl+Z as an upper-case Z,
+# which no letter binding of the body matched, so Tk's own <<Undo>>
+# walked its stack behind the journal's back -- the bold went with the
+# typing. Pressed the way the keyboard sends it: the key's code with
+# Control and Lock held (a generated <Control-Lock-Z> pattern is not
+# faithful on Windows, where Tk adds Shift to reach an upper-case Z). The
+# code is read off a throwaway entry, so the same lines run on X11. A spy
+# counts the presses that reach the journal, a tag ahead of the body's
+# own records what Tk made of each press.
+def _ck_codes(*keysyms):
+    _ent = tk.Entry(app)
+    _ent.place(x=0, y=0)
+    _got = {}
+    _ent.bind('<KeyPress>',
+              lambda e: (_got.setdefault(e.keysym, e.keycode), 'break')[1])
+    try:
+        if take_focus(_ent):
+            for _k in keysyms:
+                _ent.event_generate(f'<KeyPress-{_k}>')
+                app.update()
+    finally:
+        _ent.destroy()
+    return [_got.get(_k) for _k in keysyms]
+
+
+_ck_calls, _ck_seen = [], []
+_ck_real = app._body_undo_redo
+_ck_tags = app.body_text.bindtags()
+
+
+def _ck_press(code, state):
+    del _ck_calls[:], _ck_seen[:]
+    if code is None or not take_focus(app.body_text):
+        return False
+    app.body_text.event_generate('<KeyPress>', keycode=code, state=state)
+    app.body_text.event_generate('<KeyRelease>', keycode=code, state=state)
+    app.update()
+    return True
+
+
+app.bind_class('QaKeySeen', '<KeyPress>',
+               lambda e: _ck_seen.append((e.keysym, e.state & 0x7)))
+app.body_text.bindtags(('QaKeySeen',) + tuple(_ck_tags))
+app._body_undo_redo = lambda action: (_ck_calls.append(action),
+                                      _ck_real(action))[1]
+try:
+    _ck_z, _ck_y = _ck_codes('z', 'y')
+    check(f'caps lock: the keyboard codes of Z and Y were read ({_ck_z}, {_ck_y}) '
+          '(precondition)', _ck_z is not None and _ck_y is not None)
+    _uf_setup('Dear Ana,' + chr(10), _uf_typed)
+    _uf_select('Friday')
+    _uf_key('<Control-b>')
+    check('caps lock: the body holds the keyboard (precondition)',
+          _ck_press(_ck_z, 0x6))
+    check(f'caps lock: the press reads as Ctrl+Z under Caps Lock ({_ck_seen}) '
+          '(precondition)', _ck_seen[:1] == [('Z', 0x6)])
+    check('caps lock: Ctrl+Z takes back the bold ONLY, through the journal, '
+          f'once ({_ck_calls}, {app.body_text.get("1.0", "end-1c")!r}, '
+          f'{_cs_styles()})',
+          _ck_calls == ['undo'] and _cs_styles() == []
+          and app.body_text.get('1.0', 'end-1c') == _uf_full)
+    # Ctrl+Y under Caps Lock is a spelling of <<Redo>> on Windows only: X11's
+    # <<Redo>> is Ctrl+Shift+Z alone, and there the press reaches nothing.
+    if '<Control-Lock-Key-Y>' in app.tk.call('event', 'info', '<<Redo>>'):
+        _ck_press(_ck_y, 0x6)
+        check(f'caps lock: Ctrl+Y gives the bold back ({_ck_seen}, '
+              f'{_ck_calls}, {_cs_styles()})',
+              _ck_calls == ['redo'] and _cs_styles() == [('bold', 'Friday')]
+              and app.body_text.get('1.0', 'end-1c') == _uf_full)
+    else:
+        _ck_real('redo')
+        app.update()
+    # Shift as well turns it back into a lower-case z, which the plain
+    # Ctrl+Z binding answered: Ctrl+Shift+Z undid instead of redoing.
+    _ck_press(_ck_z, 0x6)
+    _ck_press(_ck_z, 0x7)
+    check('caps lock: Ctrl+Shift+Z is still a redo '
+          f'({_ck_seen}, {_ck_calls}, {_cs_styles()})',
+          _ck_calls == ['redo'] and _cs_styles() == [('bold', 'Friday')])
+    # Without Caps Lock a press matches a letter AND the virtual event: it
+    # still runs once (Tk runs the most specific binding of the tag).
+    _ck_press(_ck_z, 0x4)
+    check(f'caps lock: a plain Ctrl+Z still undoes exactly once ({_ck_calls})',
+          _ck_calls == ['undo'] and _cs_styles() == [])
+    del _ck_calls[:]
+    app.body_text.event_generate('<<Redo>>')
+    app.update()
+    check(f'caps lock: Tk\'s <<Redo>> reaches the journal ({_ck_calls}, '
+          f'{_cs_styles()})',
+          _ck_calls == ['redo'] and _cs_styles() == [('bold', 'Friday')])
+    del _ck_calls[:]
+    app.body_text.event_generate('<<Undo>>')
+    app.update()
+    check(f'caps lock: ...and so does <<Undo>> ({_ck_calls}, {_cs_styles()})',
+          _ck_calls == ['undo'] and _cs_styles() == []
+          and app.body_text.get('1.0', 'end-1c') == _uf_full)
+    # The comments box, the same turn of the letter: Ctrl+Shift+Z under
+    # Caps Lock arrives as a lower-case z, which its plain Ctrl+Z binding
+    # answered -- an undo where a redo was asked for.
+    _ck_cm = app.comments_text
+    _ck_cm.delete('1.0', 'end')
+    _ck_cm.edit_reset()
+    _ck_cm.insert('end', 'first')
+    _ck_cm.edit_separator()
+    _ck_cm.insert('end', ' second')
+    _ck_cm.edit_separator()
+    _ck_cm.edit_undo()
+    _ck_cm_ok = _ck_z is not None and take_focus(_ck_cm)
+    if _ck_cm_ok:
+        _ck_cm.event_generate('<KeyPress>', keycode=_ck_z, state=0x7)
+        _ck_cm.event_generate('<KeyRelease>', keycode=_ck_z, state=0x7)
+        app.update()
+    check(f'caps lock: Ctrl+Shift+Z in the comments box redoes, not undoes '
+          f'({_ck_cm.get("1.0", "end-1c")!r}, keyboard there: {_ck_cm_ok})',
+          _ck_cm_ok and _ck_cm.get('1.0', 'end-1c') == 'first second')
+    _ck_cm.delete('1.0', 'end')
+    _ck_cm.edit_reset()
+finally:
+    app.body_text.bindtags(_ck_tags)
+    del app._body_undo_redo
+
+# ---- THE JOURNAL COSTS WHAT A STEP CHANGED, NOT WHAT THE NOTE HOLDS ----
+# Every unit configured the body (autoseparators off, then on), and Tk
+# re-lays out every line of the note on any configure: a bold on a long
+# note went from 46 to 266 ms. Every unit kept two full copies of the
+# note's formatting (+60 MB over 100 cell edits on a heavily styled
+# note), a cell click with no cell open took both copies for nothing, and
+# Ctrl+Z of one bold stripped and re-laid every style in the note and
+# redrew every table -- seconds. Asked of the mechanism, never of a clock:
+# what the body was asked to do, which widgets survived, what is shared.
+_jc_body = ('Plan the trip' + chr(10) + '| Item | Qty |' + chr(10)
+            + '| --- | --- |' + chr(10) + '| Milk | 2 |' + chr(10)
+            + 'pack the bags')
+
+
+def _jc_setup():
+    set_body(_jc_body)
+    _m = _jc_body.index('Milk')
+    app._apply_formatting(app.body_text,
+                          [{'start': _m, 'end': _m + 4, 'style': 'bold'}])
+    app._render_table_grids()
+    app.update()
+    app._reset_text_undo()
+    return app._grid_at_line(2)
+
+
+def _jc_frame():
+    return str(app._table_grids[0]['frame']) if app._table_grids else None
+
+
+_jc_seps = []
+_jc_real_configure = app.body_text.configure
+
+
+def _jc_configure(*a, **k):
+    if 'autoseparators' in k:
+        _jc_seps.append(k['autoseparators'])
+    return _jc_real_configure(*a, **k)
+
+
+# Each record is read the moment the action returns, before anything runs
+# the event loop: an autosave firing in an update() commits an open cell
+# through a unit of its own, and on a slow run its pairs joined the record
+# (a full-suite run on Linux read four).
+app.body_text.configure = _jc_configure
+try:
+    _jc_setup()
+    _uf_select('trip')
+    del _jc_seps[:]
+    app._toggle_body_style('bold')
+    _jc_seen = list(_jc_seps)
+    app.update()
+    check('journal: a bold lays no configure on the body, which re-lays out '
+          f'the whole note ({_jc_seen}, {_cs_styles()})',
+          _jc_seen == [] and ('bold', 'trip') in _cs_styles())
+    _jc_info = _jc_setup()
+    del _jc_seps[:]
+    app._grid_insert_row(_jc_info, 1)
+    _jc_seen = list(_jc_seps)
+    app.update()
+    check(f'journal: ...while a table operation still groups its edits ({_jc_seen})',
+          _jc_seen == [False, True])
+    # A tags-only action that reaches a text edit after all -- the toolbar's
+    # Italic with a cell open commits the typing in it first -- groups it.
+    _jc_info = _jc_setup()
+    app._open_cell_editor(_jc_info, 1, 1)
+    app.update()
+    app._cell_editor['entry'].insert('end', '5')
+    del _jc_seps[:]
+    app._toggle_body_style('italic')
+    _jc_seen = list(_jc_seps)
+    app.update()
+    check('journal: a tags-only action that commits an open cell groups that '
+          f'edit ({_jc_seen}, '
+          f'{core_tables.split_row(app.body_text.get("4.0", "4.end"))})',
+          _jc_seen == [False, True]
+          and core_tables.split_row(app.body_text.get('4.0', '4.end'))[1]
+          == '25')
+    app._commit_cell_editor()
+    app.update()
+finally:
+    del app.body_text.configure
+# Ctrl+Z of a bold in the prose touches that word: the table and its own
+# bold stay as they are -- the same drawn grid, not a rebuilt one.
+_jc_setup()
+_uf_select('trip')
+app._toggle_body_style('bold')
+app.update()
+app.body_text.tag_remove('sel', '1.0', 'end')
+_jc_before = _jc_frame()
+_uf_key('<Control-z>')
+check('journal: Ctrl+Z of a bold in the prose leaves the drawn table '
+      f'standing ({_jc_before} -> {_jc_frame()}, {_cs_styles()})',
+      _jc_before is not None and _jc_frame() == _jc_before
+      and _cs_styles() == [('bold', 'Milk')])
+_uf_key('<Control-y>')
+check(f'journal: ...and Ctrl+Y lays it again ({_cs_styles()})',
+      _cs_styles() == [('bold', 'Milk'), ('bold', 'trip')]
+      and _jc_frame() == _jc_before)
+# A step that restyled a cell does redraw: the drawing shows the cell.
+_jc_info = _jc_setup()
+app._grid_apply_style(_jc_info, (1, 0, 1, 0), 'bold')
+app.update()
+_jc_before = _jc_frame()
+_uf_key('<Control-z>')
+check('journal: Ctrl+Z of a cell made plain draws the table again '
+      f'({_jc_before} -> {_jc_frame()}, {_cs_styles()})',
+      _jc_frame() is not None and _jc_frame() != _jc_before
+      and _cs_styles() == [('bold', 'Milk')])
+# Steps share what they did not change: the snapshot after one step IS
+# the one before the next, and a tag the step left alone is the same
+# string in both of its snapshots.
+_jc_setup()
+for _jc_word, _jc_style in (('trip', 'bold'), ('pack', 'italic'),
+                            ('bags', 'underline')):
+    _uf_select(_jc_word)
+    app._toggle_body_style(_jc_style)
+    app.update()
+_jc_steps = list(app._fmt_undo)
+_jc_bold = [dict(_s[_side][2]).get('bold') for _s in _jc_steps[1:]
+            for _side in ('before', 'after')]
+check(f'journal: three styles in a row are three steps sharing their '
+      f'snapshots ({len(_jc_steps)} steps)',
+      len(_jc_steps) == 3
+      and _jc_steps[0]['after'] is _jc_steps[1]['before']
+      and _jc_steps[1]['after'] is _jc_steps[2]['before']
+      and _jc_bold[0] is not None
+      and all(_b is _jc_bold[0] for _b in _jc_bold))
+# A commit with no cell open -- every cell click and table operation
+# starts with one -- notes nothing.
+_jc_setup()
+_jc_notes = []
+app._fmt_state = lambda: (_jc_notes.append(1),
+                          type(app)._fmt_state(app))[1]
+try:
+    app._commit_cell_editor()
+finally:
+    del app._fmt_state
+check(f'journal: a commit with no cell open takes no snapshot ({len(_jc_notes)})',
+      app._cell_editor is None and _jc_notes == [])
+set_body('')
+
+# ---- A SAVE RUN DIRECTLY LEAVES NO AUTOSAVE WAITING ----
+# _autosave_now set its job to None rather than cancelling it, so a timer
+# waiting when the save ran some other way stayed scheduled with nothing
+# tracking it -- and on firing it forgot the NEXT job the same way: a
+# relay of untracked saves, 28 in one run of this script, one of which
+# split a held BackSpace's undo step in the block below. The note id
+# points nowhere, so the save itself stops at its first guard.
+_as_sel = app.selected_note_id
+app._cancel_pending_autosave()
+app._schedule_autosave()
+_as_before = _qa_waiting(app, '_autosave_now')
+app.selected_note_id = 999999
+try:
+    app._autosave_now()
+finally:
+    app.selected_note_id = _as_sel
+_as_after = _qa_waiting(app, '_autosave_now')
+check(f'a save run directly leaves no autosave waiting behind it '
+      f'({_as_before} -> {_as_after})',
+      len(_as_before) == 1 and not _as_after
+      and getattr(app, '_autosave_job', None) is None)
+
+# ---- CTRL+Z GIVES BACK WHAT TK'S OWN DELETES TOOK, WITH ITS FORMATTING ----
+# Delete, BackSpace, typing over a selection and Cut are Tk's own
+# bindings, and Tk's stack holds no tag: Ctrl+Z gave the text back plain,
+# the bold gone. A tag ahead of the body's bindings notes the formatting
+# first (_note_styled_delete). <<Clear>> stands for Cut -- the same
+# delete, without writing to the clipboard of the machine running this.
+def _nd_setup():
+    """'Friday' bold in a note just opened: on the text, not on any stack.
+
+    No autosave is left pending: its boundary ends a run of deletes (on
+    purpose -- see the check about a pause below), and one firing in the
+    middle of a check's key run, on a loaded machine, would split the run
+    the check is about."""
+    _uf_setup('Dear Ana,' + chr(10), _uf_typed)
+    _uf_select('Friday')
+    _uf_key('<Control-b>')
+    app._reset_text_undo()
+    app._cancel_pending_autosave()
+    app.body_text.tag_remove('sel', '1.0', 'end')
+
+
+def _nd_clear():
+    app.body_text.event_generate('<<Clear>>')
+    app.update()
+    return True
+
+
+def _nd_burst(press, count):
+    """*count* presses of a key, each with its release, as one burst: what
+    a person sends holding the key down, or tapping it quickly.
+
+    A burst has no pause in it, and a pause is what the 500ms autosave
+    measures -- its boundary ends a run of deletes on purpose (the pause
+    check below). Two things made one here anyway, on a loaded machine:
+    an autosave left waiting from earlier in this script with nothing
+    tracking it (its job set to None instead of cancelled -- see
+    _autosave_now), and each press's own wait for the keyboard outlasting
+    a release's autosave. Either fired between two presses and split the
+    run the check is about ('Fr' came back alone on Linux; a 0.7s wait
+    between presses does it on any machine). So a burst starts with no
+    autosave waiting at all -- asked of Tcl, not of the job the app
+    tracks -- and holds the autosave for its length: its target is
+    replaced, which is what a timer captures when it is SCHEDULED. The
+    dirty poll ends a run too; with one tab it captures nothing."""
+    release = press.replace('KeyPress', 'KeyRelease')
+    app._cancel_pending_autosave()
+    _waiting = _qa_waiting(app, '_autosave_now')
+    check(f'native delete: a burst of {press} starts with no autosave '
+          f'waiting, tracked or not, and one tab (fixture: {_waiting})',
+          not _waiting and len(app.open_tabs) <= 1)
+    app._autosave_now = lambda: None
+    try:
+        for _ in range(count):
+            _uf_key(press)
+            app.body_text.event_generate(release)
+            app.update()
+    finally:
+        del app._autosave_now
+        app._cancel_pending_autosave()
+
+
+_nd_real_read_text = NO.clipboard.read_text
+for _nd_name, _nd_do in (
+        ('Delete', lambda: _uf_key('<KeyPress-Delete>')),
+        ('BackSpace', lambda: _uf_key('<KeyPress-BackSpace>')),
+        ('typing over it', lambda: _uf_key('<KeyPress-x>')),
+        ('Cut (as Clear)', _nd_clear),
+        ('Paste without formatting', lambda: (app._paste_plain(), app.update(), True)[-1])):
+    _nd_setup()
+    check(f'native delete: the fixture holds a bold word on no stack ({_cs_styles()})',
+          _cs_styles() == [('bold', 'Friday')] and not app._fmt_undo)
+    _uf_select('Friday')
+    NO.clipboard.read_text = lambda: 'Monday'
+    try:
+        _nd_done = _nd_do()
+    finally:
+        NO.clipboard.read_text = _nd_real_read_text
+    _nd_gone = 'Friday' not in app.body_text.get('1.0', 'end-1c')
+    _uf_key('<Control-z>')
+    check(f'native delete: {_nd_name} over a bold word, then Ctrl+Z, gives the '
+          f'word back bold (deleted: {_nd_done and _nd_gone}; '
+          f'{app.body_text.get("1.0", "end-1c")!r}, {_cs_styles()})',
+          _nd_done and _nd_gone
+          and app.body_text.get('1.0', 'end-1c') == _uf_full
+          and _cs_styles() == [('bold', 'Friday')])
+    _uf_key('<Control-y>')
+    check(f'native delete: ...and Ctrl+Y takes it away again ({_cs_styles()})',
+          'Friday' not in app.body_text.get('1.0', 'end-1c')
+          and ('bold', 'Friday') not in _cs_styles())
+
+# BackSpace held through the word: one Ctrl+Z, as Tk merges the run --
+# and where the run leaves the bold for plain text, two, each laying the
+# formatting it took back on the text it restores.
+_nd_setup()
+app.body_text.mark_set('insert', 'end-1c')
+_nd_burst('<KeyPress-BackSpace>', len('Friday'))
+_nd_after_run = app.body_text.get('1.0', 'end-1c')
+_uf_key('<Control-z>')
+check(f'native delete: six BackSpaces through a bold word are one Ctrl+Z, '
+      f'bold again ({_nd_after_run!r} -> {_cs_styles()})',
+      _nd_after_run == 'Dear Ana,' + chr(10) + 'the meeting moved to '
+      and app.body_text.get('1.0', 'end-1c') == _uf_full
+      and _cs_styles() == [('bold', 'Friday')])
+_nd_setup()
+app.body_text.mark_set('insert', 'end-1c')
+_nd_burst('<KeyPress-BackSpace>', len(' to Friday'))
+_uf_key('<Control-z>')
+_nd_first = (app.body_text.get('1.0', 'end-1c'), _cs_styles())
+_uf_key('<Control-z>')
+check(f'native delete: BackSpace from a bold word into plain text: the '
+      f'plain part comes back first, then the word, bold ({_nd_first} -> '
+      f'{_cs_styles()})',
+      _nd_first == ('Dear Ana,' + chr(10) + 'the meeting moved to ', [])
+      and app.body_text.get('1.0', 'end-1c') == _uf_full
+      and _cs_styles() == [('bold', 'Friday')])
+# Undo reached without a key (any caller of _body_undo_redo) closes the
+# run the same way the key's own press does.
+_nd_setup()
+_uf_select('Friday')
+_uf_key('<KeyPress-Delete>')
+app._body_undo_redo('undo')
+check(f'native delete: Undo called without a key gives the bold word back '
+      f'too ({_cs_styles()})',
+      app.body_text.get('1.0', 'end-1c') == _uf_full
+      and _cs_styles() == [('bold', 'Friday')])
+# A toolbar operation right after the delete is a step of its own, taken
+# back first: the run closes where the operation's unit opens.
+_nd_setup()
+_uf_select('Friday')
+_uf_key('<KeyPress-Delete>')
+_uf_select('Dear')
+app._toggle_body_style('bold')
+app.update()
+_uf_key('<Control-z>')
+_nd_first = (app.body_text.get('1.0', 'end-1c'), _cs_styles())
+_uf_key('<Control-z>')
+check(f'native delete: a toolbar bold after the delete is taken back first, '
+      f'then the word comes back bold ({_nd_first} -> {_cs_styles()})',
+      _nd_first == ('Dear Ana,' + chr(10) + 'the meeting moved to ', [])
+      and app.body_text.get('1.0', 'end-1c') == _uf_full
+      and _cs_styles() == [('bold', 'Friday')])
+# The other way round: plain text first, then the bold word. Tk would
+# merge the two into one unit, and the formatting noted at the bold
+# word's edge would never meet the text that unit restores.
+_nd_setup()
+app.body_text.mark_set('insert', 'end-1c')
+app.body_text.insert('insert', ' at ten')
+app.body_text.edit_separator()
+_nd_burst('<KeyPress-BackSpace>', len('Friday at ten'))
+_uf_key('<Control-z>')
+_nd_first = (app.body_text.get('1.0', 'end-1c'), _cs_styles())
+_uf_key('<Control-z>')
+check(f'native delete: BackSpace from plain text into a bold word: the word '
+      f'comes back bold first, then the plain part ({_nd_first} -> '
+      f'{app.body_text.get("1.0", "end-1c")!r})',
+      _nd_first == (_uf_full, [('bold', 'Friday')])
+      and app.body_text.get('1.0', 'end-1c') == _uf_full + ' at ten'
+      and _cs_styles() == [('bold', 'Friday')])
+# Plain text is left to Tk entirely: no step of ours, no separator, and
+# not even the look at the formatting that a step would cost.
+_uf_setup('Dear Ana,' + chr(10), _uf_typed)
+app.body_text.mark_set('insert', 'end-1c')
+_nd_burst('<KeyPress-BackSpace>', 3)
+_nd_open = getattr(app, '_styled_delete_run', None)
+_uf_key('<Control-z>')
+check(f'native delete: BackSpace through plain text notes nothing and is '
+      f'still one Ctrl+Z ({app.body_text.get("1.0", "end-1c")!r}, '
+      f'a step opened: {_nd_open is not None})',
+      _nd_open is None and app.body_text.get('1.0', 'end-1c') == _uf_full)
+# A pause in the middle of the run: the autosave's boundary (one pause, one
+# Ctrl+Z, as Tk does for typing) split Tk's unit under the run's single
+# step, and both halves came back plain. Each half is a step of its own now.
+_nd_setup()
+app.body_text.mark_set('insert', 'end-1c')
+_nd_burst('<KeyPress-BackSpace>', 3)
+app._flush_table_grids()            # what an autosave does at a pause
+_nd_burst('<KeyPress-BackSpace>', 3)
+_uf_key('<Control-z>')
+_nd_first = (app.body_text.get('1.0', 'end-1c'), _cs_styles())
+_uf_key('<Control-z>')
+check(f'native delete: a pause in a run through a bold word -- each part '
+      f'comes back on its own Ctrl+Z, bold ({_nd_first} -> {_cs_styles()})',
+      _nd_first == ('Dear Ana,' + chr(10) + 'the meeting moved to Fri',
+                    [('bold', 'Fri')])
+      and app.body_text.get('1.0', 'end-1c') == _uf_full
+      and _cs_styles() == [('bold', 'Friday')])
+
+# The keys a person presses. Ctrl+X and Ctrl+V reach the bindtag's Cut and
+# Paste as the key's own press, not as a virtual event, and were read as
+# no delete at all; the menu's Paste tried the app's own paste routes
+# first, and their undo units ended the run before Tk's paste deleted
+# anything; Tk's own Ctrl+H, Ctrl+K and Ctrl+T were unknown to it. Each
+# gave the bold back plain. Tcl's clipboard is replaced in this process
+# for the block, so the machine's own clipboard is never read or written.
+_kp_clip = {'data': 'Monday'}
+
+
+def _kp_clipboard(*args):
+    args = [str(a) for a in args]
+    if args and args[0] == 'clear':
+        _kp_clip['data'] = ''
+    elif args and args[0] == 'append':
+        _kp_clip['data'] += args[-1]
+    elif args and args[0] == 'get':
+        return _kp_clip['data']
+    return ''
+
+
+_kp_real = (NO.clipboard.read_text, NO.clipboard.read_html, NO.clipboard.write)
+app.tk.eval('rename clipboard ::_qa1_real_clipboard')
+app.tk.createcommand('clipboard', _kp_clipboard)
+app.tk.eval('rename ::tk::GetSelection ::tk::_qa1_real_GetSelection')
+app.tk.createcommand('::qa1_clip', lambda: _kp_clip['data'])
+app.tk.eval('proc ::tk::GetSelection {w {sel PRIMARY}} {'
+            ' if {$sel eq "CLIPBOARD"} {return [::qa1_clip]};'
+            ' return [::tk::_qa1_real_GetSelection $w $sel] }')
+NO.clipboard.read_text = lambda: _kp_clip['data']
+NO.clipboard.read_html = lambda: None
+NO.clipboard.write = lambda *a, **k: True
+
+
+def _kp_at(index):
+    app.body_text.tag_remove('sel', '1.0', 'end')
+    app.body_text.mark_set('insert', index)
+
+
+try:
+    for _kp_name, _kp_do in (
+            ('Ctrl+X', lambda: (_uf_select('Friday'),
+                                _uf_key('<Control-KeyPress-x>'))),
+            ('Ctrl+V', lambda: (_uf_select('Friday'),
+                                _uf_key('<Control-KeyPress-v>'))),
+            ("the menu's Paste", lambda: (
+                _uf_select('Friday'), take_focus(app.body_text),
+                app.body_text.event_generate('<<Paste>>'), app.update())),
+            ('Ctrl+H six times', lambda: (
+                _kp_at('end-1c'),
+                _nd_burst('<Control-KeyPress-h>', 6))),
+            ('Ctrl+K before it', lambda: (_kp_at('2.21'),
+                                          _uf_key('<Control-KeyPress-k>'))),
+            ("Ctrl+T at the word's end", lambda: (
+                _kp_at('end-1c'), _uf_key('<Control-KeyPress-t>')))):
+        _nd_setup()
+        _kp_clip['data'] = 'Monday'
+        _kp_do()
+        _kp_after = app.body_text.get('1.0', 'end-1c')
+        _uf_key('<Control-z>')
+        check(f'native delete: {_kp_name} over a bold word, then Ctrl+Z, gives '
+              f'the word back bold ({_kp_after!r} -> {_cs_styles()})',
+              _kp_after != _uf_full
+              and app.body_text.get('1.0', 'end-1c') == _uf_full
+              and _cs_styles() == [('bold', 'Friday')])
+finally:
+    app.tk.deletecommand('clipboard')
+    app.tk.eval('rename ::_qa1_real_clipboard clipboard')
+    app.tk.eval('rename ::tk::GetSelection {}')
+    app.tk.eval('rename ::tk::_qa1_real_GetSelection ::tk::GetSelection')
+    app.tk.deletecommand('::qa1_clip')
+    NO.clipboard.read_text, NO.clipboard.read_html, NO.clipboard.write = _kp_real
+
+# A spreadsheet's cells pasted over selected text: the table takes the
+# selection's place, as every other paste does. The selected text used to
+# stay, and the table landed under its line.
+_nd_setup()
+_uf_select('Friday')
+_ts_real = (NO.clipboard.read_text, NO.clipboard.read_html)
+NO.clipboard.read_text = lambda: 'Day\tTime' + chr(10) + 'Mon\t10:00'
+NO.clipboard.read_html = lambda: None
+try:
+    _ts_done = app._on_body_paste()
+    app.update()
+finally:
+    NO.clipboard.read_text, NO.clipboard.read_html = _ts_real
+_ts_after = app.body_text.get('1.0', 'end-1c')
+_uf_key('<Control-z>')
+check(f'a spreadsheet\'s cells pasted over selected text replace it, and '
+      f'Ctrl+Z gives the word back bold ({_ts_after!r} -> {_cs_styles()})',
+      _ts_done == 'break' and 'Friday' not in _ts_after and '| Day' in _ts_after
+      and app.body_text.get('1.0', 'end-1c') == _uf_full
+      and _cs_styles() == [('bold', 'Friday')])
+
+# ---- A SELECTION MEETS A DRAWN TABLE ----
+# The caret guard walks the caret under a drawn table, and it left the
+# selection's moving end behind. Shift+Down on the line above a table
+# selected that line and the table's own line break, caret under the table:
+# a letter went in under the table with the line still selected, a paste
+# glued its text to the next line, and cells pasted went INTO the table.
+# Shift+Up from under a table selected all of it, invisibly -- a grid shows
+# no selection -- and the next letter deleted it. A first press now stops at
+# the table's edge with the caret; a second press crosses, as before.
+_sm_body = ('Prices:' + chr(10) + '| Item | Qty |' + chr(10)
+            + '| --- | --- |' + chr(10) + '| Tea | 2 |' + chr(10) + 'after'
+            + chr(10) + 'more')
+_sm_tsv = 'Day\tTime' + chr(10) + 'Mon\t10:00'
+
+
+def _sm_fresh(caret, body=None):
+    set_body(_sm_body if body is None else body)
+    app._render_table_grids()
+    app.update()
+    app._reset_text_undo()
+    app._cancel_pending_autosave()
+    app.body_text.tag_remove('sel', '1.0', 'end')
+    app.body_text.mark_set('insert', caret)
+    app._sel_held_at_table = None
+    app._last_caret_line = None
+
+
+def _sm_press(seq):
+    """A key pressed and released, as a person does, on the body."""
+    if not take_focus(app.body_text):
+        return False
+    app.body_text.event_generate(seq)
+    app.body_text.event_generate(seq.replace('KeyPress', 'KeyRelease'))
+    app.update()
+    return True
+
+
+def _sm_where():
+    try:
+        sel = (app.body_text.index('sel.first'),
+               app.body_text.index('sel.last'))
+    except tk.TclError:
+        sel = None
+    return sel, app.body_text.index('insert')
+
+
+def _sm_table_kept():
+    """The old table stands whole, rows and all, as its own block."""
+    text = app.body_text.get('1.0', 'end-1c')
+    lines = text.split(chr(10))
+    want = ['|Item|Qty|', '|---|---|', '|Tea|2|']
+    return any([r.replace(' ', '') for r in lines[a:b + 1]] == want
+               for a, b in core_tables.find_blocks(text))
+
+
+_sm_clip = {'data': _sm_tsv}
+_sm_real = (NO.clipboard.read_text, NO.clipboard.read_html)
+app.tk.eval('rename ::tk::GetSelection ::tk::_qa1_sm_GetSelection')
+app.tk.createcommand('::qa1_sm_clip', lambda: _sm_clip['data'])
+app.tk.eval('proc ::tk::GetSelection {w {sel PRIMARY}} {'
+            ' if {$sel eq "CLIPBOARD"} {return [::qa1_sm_clip]};'
+            ' return [::tk::_qa1_sm_GetSelection $w $sel] }')
+NO.clipboard.read_text = lambda: _sm_clip['data']
+NO.clipboard.read_html = lambda: None
+try:
+    _sm_fresh('1.0')
+    _sm_press('<Shift-KeyPress-Down>')
+    _sm_one = _sm_where()
+    _sm_press('<KeyPress-x>')
+    check(f'selection x table: Shift+Down on the line above a table stops at '
+          f'its edge, with the caret ({_sm_one}), and a letter replaces the '
+          f'line, the table kept '
+          f'({app.body_text.get("1.0", "2.0")!r}, kept {_sm_table_kept()})',
+          _sm_one == (('1.0', '1.7'), '1.7')
+          and app.body_text.get('1.0', '2.0') == 'x' + chr(10)
+          and _sm_table_kept())
+    _sm_fresh('1.0')
+    _sm_press('<Shift-KeyPress-Down>')
+    _sm_press('<Shift-KeyPress-Down>')
+    check(f'selection x table: ...and a second Shift+Down crosses the table, '
+          f'the caret with the selection ({_sm_where()})',
+          _sm_where() == (('1.0', '5.0'), '5.0'))
+    _sm_fresh('5.0')
+    _sm_press('<Shift-KeyPress-Up>')
+    _sm_up = _sm_where()
+    _sm_press('<KeyPress-x>')
+    check(f'selection x table: Shift+Up from under a table stops at its edge '
+          f'({_sm_up}), so a letter typed then deletes nothing of it (kept '
+          f'{_sm_table_kept()}, {app.body_text.get("5.0", "5.end")!r})',
+          _sm_up == (None, '5.0') and _sm_table_kept()
+          and app.body_text.get('5.0', '5.end') == 'xafter')
+    _sm_fresh('5.0')
+    _sm_press('<Shift-KeyPress-Up>')
+    _sm_press('<Shift-KeyPress-Up>')
+    check(f'selection x table: ...and a second Shift+Up crosses it '
+          f'({_sm_where()})', _sm_where() == (('1.7', '5.0'), '1.7'))
+    _sm_fresh('1.5')
+    for _sm_i in range(3):
+        _sm_press('<Shift-KeyPress-Right>')
+    _sm_right = _sm_where()
+    _sm_press('<Shift-KeyPress-Right>')
+    check(f'selection x table: Shift+Right stops at the end of the line above '
+          f'a table ({_sm_right}), then crosses ({_sm_where()})',
+          _sm_right == (('1.5', '1.7'), '1.7')
+          and _sm_where() == (('1.5', '5.0'), '5.0'))
+    # The mouse has no second press: a drag that ends on a table stops at
+    # the edge it came from.
+    _sm_fresh('1.0')
+    app.body_text.tag_add('sel', '1.0', '2.0')
+    app.body_text.mark_set('insert', '2.0')
+    _qa_fire(app.body_text, '<ButtonRelease-1>', x=2, y=2)
+    app.update()
+    check(f'selection x table: a drag ending on a table stops at its edge '
+          f'({_sm_where()}; a crossing armed: '
+          f'{app._sel_held_at_table is not None})',
+          _sm_where() == (('1.0', '1.7'), '1.7')
+          and app._sel_held_at_table is None)
+    # Cells pasted over the line Shift+Down selected take its place; the old
+    # table stands, one Ctrl+Z gives the line back and one Ctrl+Y the paste.
+    _sm_fresh('1.0')
+    _sm_press('<Shift-KeyPress-Down>')
+    _sm_press('<Control-KeyPress-v>')
+    _sm_pasted = app.body_text.get('1.0', 'end-1c')
+    _uf_key('<Control-z>')
+    _sm_undone = app.body_text.get('1.0', 'end-1c')
+    _uf_key('<Control-y>')
+    check(f'selection x table: cells pasted over the line Shift+Down selected '
+          f'stand above the old table, which is kept whole, and one Ctrl+Z / '
+          f'one Ctrl+Y undo and redo the paste ({_sm_pasted!r})',
+          _sm_pasted.startswith('| Day') and _sm_table_kept() is True
+          and _sm_undone == _sm_body
+          and app.body_text.get('1.0', 'end-1c') == _sm_pasted)
+    # A whole line replaced by cells: the first Ctrl+Z took back only the
+    # padding the tidy gave the new table at the key's release.
+    _sm_fresh('1.0', 'one line' + chr(10) + 'two line' + chr(10) + 'three')
+    _sm_press('<Shift-KeyPress-End>')
+    _sm_press('<Control-KeyPress-v>')
+    _sm_pasted = app.body_text.get('1.0', 'end-1c')
+    _uf_key('<Control-z>')
+    check(f'selection x table: cells pasted over a whole line are one Ctrl+Z '
+          f'({app.body_text.get("1.0", "end-1c")!r})',
+          _sm_pasted.startswith('| Day')
+          and app.body_text.get('1.0', 'end-1c')
+          == 'one line' + chr(10) + 'two line' + chr(10) + 'three')
+    # Ctrl+A in a note that starts with a table: the paste read the first
+    # selected line, a table row, as "inside a table" and left the cells to
+    # Tk as raw tabs.
+    _sm_fresh('end-1c', '| Item | Qty |' + chr(10) + '| --- | --- |' + chr(10)
+              + '| Tea | 2 |' + chr(10) + 'notes after the table')
+    take_focus(app.body_text)
+    app.body_text.event_generate('<<SelectAll>>')
+    app.update()
+    _sm_press('<Control-KeyPress-v>')
+    _sm_text = app.body_text.get('1.0', 'end-1c')
+    check(f'selection x table: Ctrl+A then cells pasted, in a note that starts '
+          f'with a table, give a drawn table ({_sm_text!r})',
+          chr(9) not in _sm_text and _sm_text.startswith('| Day')
+          and app._grid_at_line(1) is not None)
+    # Two drawn tables a line apart. Leaving the first draws the second
+    # again, and its window, put back at the very index the selection ends
+    # on, pushed the caret one column on: the guard missed an exact match,
+    # and the third Shift+Down left the selection holding the second
+    # table's line break, with the caret under that table.
+    _sm_two = ('top' + chr(10) + '| Item | Qty |' + chr(10) + '| --- | --- |'
+               + chr(10) + '| Tea | 2 |' + chr(10) + 'mid' + chr(10)
+               + '| Day | Time |' + chr(10) + '| --- | --- |' + chr(10)
+               + '| Mon | 10 |' + chr(10) + 'end')
+    _sm_fresh('1.0', _sm_two)
+    for _sm_i in range(3):
+        _sm_press('<Shift-KeyPress-Down>')
+    check(f'selection x table: with two tables a line apart, the third '
+          f'Shift+Down stops at the second table\'s edge ({_sm_where()})',
+          _sm_where() == (('1.0', '5.3'), '5.3'))
+    # A table on the note's first line: an upward crossing leaves the caret
+    # on it, and the next key's guard read that as a first press, dropping
+    # the table out of the selection -- a letter kept it, Delete took it.
+    _sm_fresh('4.3', '| Item | Qty |' + chr(10) + '| --- | --- |' + chr(10)
+              + '| Tea | 2 |' + chr(10) + 'after' + chr(10) + 'more')
+    _sm_press('<Shift-KeyPress-Up>')
+    _sm_press('<Shift-KeyPress-Up>')
+    _sm_crossed = _sm_where()
+    _sm_press('<KeyPress-x>')
+    check(f'selection x table: a first-line table crossed with Shift+Up stays '
+          f'in what the next key acts on ({_sm_crossed}; '
+          f'{app.body_text.get("1.0", "end-1c")!r})',
+          _sm_crossed == (('1.0', '4.3'), '1.0')
+          and app.body_text.get('1.0', 'end-1c') == 'xer' + chr(10) + 'more')
+    # Table rows pasted as text onto the line above a table, or the empty
+    # line between, joined it: its header read as a data row. Every paste
+    # route leaves a blank line now -- Ctrl+V's own, over the line Shift+Down
+    # selected too, Ctrl+Shift+V, and a rich paste from another program.
+    _sm_rows = '| Day | Time |' + chr(10) + '| --- | --- |' + chr(10) + '| Mon | 10 |'
+    _sm_kept = []
+    for _sm_how in ('caret', 'selected', 'plain', 'rich'):
+        _sm_fresh('1.7')
+        if _sm_how == 'selected':
+            app.body_text.mark_set('insert', '1.0')
+            _sm_press('<Shift-KeyPress-Down>')
+        _sm_clip['data'] = _sm_rows
+        if _sm_how == 'plain':
+            app._paste_plain()
+            app.update()
+        elif _sm_how == 'rich':
+            NO.clipboard.read_html = lambda: (
+                '<table><tr><th>Day</th><th>Time</th></tr>'
+                '<tr><td>Mon</td><td>10</td></tr></table>')
+            try:
+                app._on_body_paste()
+                app.update()
+            finally:
+                NO.clipboard.read_html = lambda: None
+        else:
+            _sm_press('<Control-KeyPress-v>')
+        _sm_kept.append((_sm_how, _sm_table_kept()))
+    _sm_clip['data'] = _sm_tsv
+    check(f'selection x table: table rows pasted onto the line above a table '
+          f'stay a table of their own, by every route ({_sm_kept})',
+          all(_k for _h, _k in _sm_kept))
+    # ...and on lines of their own: after a caption, Ctrl+Shift+V and a
+    # table from another program glued the first row onto the caption's
+    # line, where it stopped being a row.
+    _sm_own = []
+    for _sm_how in ('plain', 'rich'):
+        _sm_fresh('1.7', 'Prices:' + chr(10) + 'after' + chr(10) + 'more')
+        _sm_clip['data'] = _sm_rows
+        if _sm_how == 'plain':
+            app._paste_plain()
+            app.update()
+        else:
+            NO.clipboard.read_html = lambda: (
+                '<table><tr><th>Day</th><th>Time</th></tr>'
+                '<tr><td>Mon</td><td>10</td></tr></table>')
+            try:
+                app._on_body_paste()
+                app.update()
+            finally:
+                NO.clipboard.read_html = lambda: None
+        _sm_lines = app.body_text.get('1.0', 'end-1c').split(chr(10))
+        _sm_own.append((_sm_how, _sm_lines[0],
+                        core_tables.is_table_row(_sm_lines[1])))
+    _sm_clip['data'] = _sm_tsv
+    check(f'selection x table: rows pasted after a caption start a line of '
+          f'their own, by Ctrl+Shift+V and from another program ({_sm_own})',
+          all(_first == 'Prices:' and _row for _h, _first, _row in _sm_own))
+    # A paste with no selection, in a note that already holds a drawn
+    # table: the drawing at the end of the paste's unit split it, and the
+    # first Ctrl+Z took back only where the windows sat -- nothing on screen.
+    _sm_under = ('Prices:' + chr(10) + '| Item | Qty |' + chr(10)
+                 + '| --- | --- |' + chr(10) + '| Tea | 2 |' + chr(10)
+                 + chr(10) + 'more')
+    _sm_undone = []
+    for _sm_what in (_sm_rows, _sm_tsv, 'rich'):
+        _sm_fresh('5.0', _sm_under)
+        if _sm_what == 'rich':
+            # A table: prose under a table moves no grid, so the drawing
+            # leaves nothing to split the unit on.
+            NO.clipboard.read_html = lambda: (
+                '<table><tr><th>Day</th><th>Time</th></tr>'
+                '<tr><td>Mon</td><td>10</td></tr></table>')
+            try:
+                app._on_body_paste()
+                app.update()
+            finally:
+                NO.clipboard.read_html = lambda: None
+        else:
+            _sm_clip['data'] = _sm_what
+            _sm_press('<Control-KeyPress-v>')
+        _sm_pasted = app.body_text.get('1.0', 'end-1c')
+        _uf_key('<Control-z>')
+        _sm_undone.append((_sm_pasted != _sm_under,
+                           app.body_text.get('1.0', 'end-1c') == _sm_under))
+    _sm_clip['data'] = _sm_tsv
+    check(f'selection x table: rows, cells or rich text pasted under a drawn '
+          f'table are one Ctrl+Z ({_sm_undone})',
+          _sm_undone == [(True, True), (True, True), (True, True)])
+    # After a first Shift+Down stopped at the table's edge: its release had
+    # noted the table's line Tk moved the caret to, and the next key's
+    # release "left" that table and padded it -- outside that key's undo
+    # unit, so a letter, a Delete or a paste over the selection took two
+    # Ctrl+Z, the first changing nothing on screen.
+    _sm_edge = []
+    for _sm_what in ('letter', 'delete', _sm_rows, 'just words', 'plain'):
+        _sm_fresh('1.0')
+        _sm_press('<Shift-KeyPress-Down>')
+        _sm_sel = _sm_where()[0]
+        if _sm_what == 'letter':
+            _sm_typed = _ty_key('Z', 'Z')
+        elif _sm_what == 'delete':
+            _sm_typed = _own_key('<Delete>', '<KeyRelease-Delete>')
+        elif _sm_what == 'plain':
+            # Ctrl+Shift+V, the paste without its styling.
+            _sm_clip['data'] = _sm_rows
+            _sm_typed = _sm_press('<Control-Shift-KeyPress-V>')
+        else:
+            _sm_clip['data'] = _sm_what
+            _sm_typed = _sm_press('<Control-KeyPress-v>')
+        _sm_done = app.body_text.get('1.0', 'end-1c')
+        _uf_key('<Control-z>')
+        _sm_edge.append((_sm_sel, _sm_typed, _sm_done != _sm_body,
+                         app.body_text.get('1.0', 'end-1c') == _sm_body))
+    _sm_clip['data'] = _sm_tsv
+    check(f'selection x table: after a first Shift+Down stops at a table, a '
+          f'letter, a Delete or a paste over the selection is one Ctrl+Z '
+          f'({_sm_edge})',
+          all(_s == ('1.0', '1.7') and _t and _c and _u
+              for _s, _t, _c, _u in _sm_edge))
+    # A paste pressed as a person presses it -- Ctrl or Shift first, a key
+    # that may type -- never wears the word's style: Ctrl+V and Shift+Insert
+    # are <<Paste>> in the bindtag that notes every key, and a virtual event
+    # outranks <KeyPress> there, so their press went unnoted and the paste
+    # landed in the run Ctrl had opened. Nor does Tk's own Ctrl+O, which
+    # puts a line break where the caret stands and stays before it.
+    _sm_keys = []
+    for _sm_name, _sm_do in (
+            ('Ctrl+V', lambda: _own_key('<Control-KeyPress-v>',
+                                        '<Control-KeyRelease-v>',
+                                        ('Control_L',))),
+            ('Shift+Insert', lambda: _own_key('<Shift-KeyPress-Insert>',
+                                              '<Shift-KeyRelease-Insert>',
+                                              ('Shift_L',))),
+            ('Ctrl+O', lambda: _own_key('<Control-KeyPress-o>',
+                                        '<Control-KeyRelease-o>',
+                                        ('Control_L',)))):
+        _sm_fresh('1.6' if _sm_name != 'Ctrl+O' else '1.7',
+                  'Prices: here' + chr(10) + 'second line')
+        app.body_text.tag_add('bold', '1.0', '1.6')
+        _sm_clip['data'] = '!'
+        _sm_ok = _sm_do()
+        _sm_keys.append((_sm_name, _sm_ok, app.body_text.get('1.0', '1.end'),
+                         [str(i) for i in app.body_text.tag_ranges('bold')]))
+    _sm_clip['data'] = _sm_tsv
+    check(f'a paste pressed after its Ctrl or Shift, and Ctrl+O, spread no '
+          f'style ({_sm_keys})',
+          [(_n, _ok, _r) for _n, _ok, _t, _r in _sm_keys]
+          == [('Ctrl+V', True, ['1.0', '1.6']),
+              ('Shift+Insert', True, ['1.0', '1.6']),
+              ('Ctrl+O', True, ['1.0', '1.6'])]
+          and _sm_keys[0][2] == 'Prices!: here')
+    # A table typed by hand, left by a paste: the paste's release no longer
+    # reads as leaving a table, so the table was drawn and never tidied --
+    # its saved pipe text ragged. The paste tidies it, in its own undo unit.
+    _sm_raw = ('Intro' + chr(10) + '| Item name | Qty |' + chr(10)
+               + '| --- | --- |' + chr(10) + '| Tea | 2 |' + chr(10)
+               + 'end line')
+    set_body(_sm_raw)
+    app._reset_text_undo()
+    app._cancel_pending_autosave()
+    app.body_text.mark_set('insert', '4.end')
+    app._last_caret_line = None
+    _sm_clip['data'] = chr(10) + 'After the table'
+    _sm_ok = _own_key('<Control-KeyPress-v>', '<Control-KeyRelease-v>',
+                      ('Control_L',))
+    _sm_rows4 = app.body_text.get('1.0', 'end-1c').split(chr(10))
+    _sm_tidy = (_sm_ok and _sm_rows4[4] == 'After the table'
+                and len({len(r) for r in _sm_rows4[1:4]}) == 1)
+    _uf_key('<Control-z>')
+    _sm_back = app.body_text.get('1.0', 'end-1c') == _sm_raw
+    # A paste that leaves the caret on its own line is a letter typed there:
+    # the table is tidied when the caret leaves that line, not by the paste.
+    set_body(_sm_raw)
+    app._reset_text_undo()
+    app.body_text.mark_set('insert', '4.end')
+    app._last_caret_line = None
+    _sm_clip['data'] = '!'
+    _sm_ok2 = _own_key('<Control-KeyPress-v>', '<Control-KeyRelease-v>',
+                       ('Control_L',))
+    _sm_stay = app.body_text.get('2.0', '2.end')
+    _sm_clip['data'] = _sm_tsv
+    check(f'a table being typed that a paste leaves is tidied, and one Ctrl+Z '
+          f'takes the paste back; a paste that stays on its line leaves it '
+          f'for the caret to leave ({_sm_rows4[1:5]}; {_sm_stay!r})',
+          _sm_tidy and _sm_back and _sm_ok2
+          and _sm_stay == '| Item name | Qty |')
+    # Ctrl+Z and Ctrl+Y after a table typed by hand is left: its rows were
+    # typed with no window on its first line, and replayed with the drawn
+    # grid's window there they landed a column off -- the header lost a
+    # letter ("| Item name | Qy  |"), and Ctrl+Y lost more.
+    set_body('Intro' + chr(10) + '| Item name | Qt |' + chr(10)
+             + '| --- | --- |' + chr(10) + '| Tea | 2 |' + chr(10)
+             + 'end line')
+    app._reset_text_undo()
+    app._cancel_pending_autosave()
+    app.body_text.mark_set('insert', '2.16')
+    app._last_caret_line = None
+    _sm_start = app.body_text.get('1.0', 'end-1c')
+    _sm_ok = _ty_key('y', 'y')
+    _sm_typed = app.body_text.get('1.0', 'end-1c')
+    for _ in range(3):
+        _sm_ok = _sm_press('<KeyPress-Down>') and _sm_ok
+    _sm_left = app.body_text.get('1.0', 'end-1c')
+    _sm_walk = []
+    for _sm_k in ('<Control-z>', '<Control-z>', '<Control-y>', '<Control-y>'):
+        _uf_key(_sm_k)
+        _sm_walk.append(app.body_text.get('1.0', 'end-1c'))
+    check(f'a table typed by hand and left walks back and forth exactly on '
+          f'Ctrl+Z and Ctrl+Y ({[w.split(chr(10))[1] for w in _sm_walk]})',
+          _sm_ok and _sm_left != _sm_typed
+          and _sm_walk == [_sm_typed, _sm_start, _sm_typed, _sm_left])
+    # A paste on the first line of a table not yet drawn, in a note with no
+    # drawn table: the paste's unit drew the table at its end and was
+    # replayed with that window in place -- Ctrl+Z lost letters of the
+    # header, Ctrl+Y doubled one. A unit with no table drawn when it begins
+    # is replayed with the tables down.
+    set_body('Intro' + chr(10) + '| Item name | Qty |' + chr(10)
+             + '| --- | --- |' + chr(10) + '| Tea | 2 |' + chr(10)
+             + 'end line')
+    app._reset_text_undo()
+    app._cancel_pending_autosave()
+    app.body_text.mark_set('insert', '2.6')
+    _hp_start = app.body_text.get('2.0', '2.end')
+    _sm_clip['data'] = 'XY'
+    _hp_ok = _own_key('<Control-KeyPress-v>', '<Control-KeyRelease-v>',
+                      ('Control_L',))
+    _hp_pasted = app.body_text.get('2.0', '2.end')
+    _uf_key('<Control-z>')
+    _hp_back = app.body_text.get('2.0', '2.end')
+    _uf_key('<Control-y>')
+    _hp_fwd = app.body_text.get('2.0', '2.end')
+    _sm_clip['data'] = _sm_tsv
+    check(f'a paste on the first line of a table not yet drawn walks back and '
+          f'forth exactly ({_hp_pasted!r}; {_hp_back!r}; {_hp_fwd!r})',
+          _hp_ok and _hp_pasted == '| ItemXY name | Qty |'
+          and _hp_back == _hp_start and _hp_fwd == _hp_pasted)
+    # Past the formatting journal's reach a unit's step stays as a stub, so
+    # Ctrl+Z still knows how it was recorded: dropped, a header cell written
+    # with the grid drawn read as typing, was replayed with the grids down,
+    # and came back a column off ("| Names| Qty |"); Ctrl+Y doubled a letter.
+    # The reach is made short here, as an instance attribute, so a few cell
+    # edits carry the header's step past it.
+    set_body('Intro' + chr(10) + '| Name | Qty |' + chr(10) + '| --- | --- |'
+             + chr(10) + '| Tea | 2 |' + chr(10) + chr(10) + 'end line')
+    app._render_table_grids()
+    app.update()
+    app._reset_text_undo()
+    _jt_start = app.body_text.get('1.0', 'end-1c')
+    app._FMT_JOURNAL_DEPTH = 3
+    try:
+        for _jt_r, _jt_v in ((0, 'Names'), (1, 'Tea0'), (1, 'Tea1'),
+                             (1, 'Tea2'), (1, 'Tea3'), (1, 'Tea4')):
+            app._open_cell_editor(app._grid_at_line(2), _jt_r, 0)
+            app.update()
+            _jt_ed = app._cell_editor['entry']
+            _jt_ed.delete('1.0', 'end')
+            _jt_ed.insert('1.0', _jt_v)
+            app._commit_cell_editor()
+            app.update()
+        _jt_end = app.body_text.get('1.0', 'end-1c')
+        _jt_stubs = sum(1 for _s in app._fmt_undo if _s.get('stub'))
+        for _ in range(6):
+            _uf_key('<Control-z>')
+        _jt_back = app.body_text.get('1.0', 'end-1c')
+        for _ in range(6):
+            _uf_key('<Control-y>')
+        _jt_fwd = app.body_text.get('1.0', 'end-1c')
+    finally:
+        del app._FMT_JOURNAL_DEPTH
+    check(f'past the journal\'s reach, Ctrl+Z and Ctrl+Y walk a header cell '
+          f'edit back and forth exactly ({_jt_stubs} stubs; '
+          f'{_jt_back.split(chr(10))[1]!r}; {_jt_fwd.split(chr(10))[1]!r})',
+          _jt_stubs > 0 and _jt_back == _jt_start and _jt_fwd == _jt_end)
+    # A unit that begins with no table drawn is replayed with the tables
+    # down; one that goes on to write into a table it drew has the window in
+    # place for that write, and is split there (_note_edit_with_window).
+    # Driven through the unit's own calls: no route of the app's does this
+    # yet, and the next one must not land a column off.
+    set_body('Intro' + chr(10) + 'end line')
+    app._reset_text_undo()
+    _sp_start = app.body_text.get('1.0', 'end-1c')
+    app._undo_atom_begin()
+    try:
+        app.body_text.insert('2.0', '| Name | Qty |' + chr(10) + '| --- | --- |'
+                             + chr(10) + '| Tea | 2 |' + chr(10))
+        app._render_table_grids()
+        app._write_cell(app._grid_at_line(2), 0, 0, 'Names')
+    finally:
+        app._undo_atom_end()
+    app.update()
+    _sp_end = app.body_text.get('1.0', 'end-1c')
+    for _ in range(2):
+        _uf_key('<Control-z>')
+    _sp_back = app.body_text.get('1.0', 'end-1c')
+    for _ in range(2):
+        _uf_key('<Control-y>')
+    _sp_fwd = app.body_text.get('1.0', 'end-1c')
+    check(f'a unit that writes into a table it drew walks back and forth '
+          f'exactly ({_sp_back.split(chr(10))[:2]}; '
+          f'{_sp_fwd.split(chr(10))[1:2]})',
+          'Names' in _sp_end and _sp_back == _sp_start and _sp_fwd == _sp_end)
+    # A run of Tk's own deletes of styled text is noted by the app, and like
+    # every step of Tk's it never touches a drawn table's line: it is
+    # replayed with the tables down. Unmarked, a bold letter BackSpaced in
+    # the header of a table typed by hand came back a column off once the
+    # table was drawn.
+    set_body('Intro' + chr(10) + '| Item name | Qty |' + chr(10)
+             + '| --- | --- |' + chr(10) + '| Tea | 2 |' + chr(10)
+             + 'end line')
+    app.body_text.tag_add('bold', '2.14', '2.17')
+    app._reset_text_undo()
+    app._cancel_pending_autosave()
+    app.body_text.mark_set('insert', '2.17')
+    app._last_caret_line = None
+    _sd_start = app.body_text.get('1.0', 'end-1c')
+    _sd_ok = _own_key('<BackSpace>', '<KeyRelease-BackSpace>')
+    _sd_deleted = app.body_text.get('2.0', '2.end')
+    for _ in range(3):
+        _sd_ok = _sm_press('<KeyPress-Down>') and _sd_ok
+    _sd_drawn = app._grid_at_line(2) is not None
+    for _ in range(2):
+        _uf_key('<Control-z>')
+    _sd_back = app.body_text.get('1.0', 'end-1c')
+    check(f'a bold letter BackSpaced in a table typed by hand comes back '
+          f'exactly once the table is drawn ({_sd_deleted!r}; '
+          f'{_sd_back.split(chr(10))[1]!r})',
+          _sd_ok and _sd_drawn and _sd_deleted == '| Item name | Qt |'
+          and _sd_back == _sd_start)
+    # ...and once cell edits carry that step past the journal's reach, its
+    # stub still says how it was recorded. One that forgot replayed the
+    # delete with the drawn table's window in place, a column off.
+    set_body('Intro' + chr(10) + '| Item name | Qty |' + chr(10)
+             + '| --- | --- |' + chr(10) + '| Tea | 2 |' + chr(10)
+             + 'end line')
+    app.body_text.tag_add('bold', '2.14', '2.17')
+    app._reset_text_undo()
+    app._cancel_pending_autosave()
+    app.body_text.mark_set('insert', '2.17')
+    app._last_caret_line = None
+    _ss_start = app.body_text.get('1.0', 'end-1c')
+    _ss_stubs = []
+    _ss_end = _ss_back = _ss_fwd = ''
+    app._FMT_JOURNAL_DEPTH = 3
+    try:
+        _ss_ok = _own_key('<BackSpace>', '<KeyRelease-BackSpace>')
+        for _ in range(3):
+            _ss_ok = _sm_press('<KeyPress-Down>') and _ss_ok
+        _ss_ok = _ss_ok and app._grid_at_line(2) is not None
+        if _ss_ok:
+            for _ss_v in ('Tea0', 'Tea1', 'Tea2', 'Tea3'):
+                app._open_cell_editor(app._grid_at_line(2), 1, 0)
+                app.update()
+                _ss_ed = app._cell_editor['entry']
+                _ss_ed.delete('1.0', 'end')
+                _ss_ed.insert('1.0', _ss_v)
+                app._commit_cell_editor()
+                app.update()
+            _ss_end = app.body_text.get('1.0', 'end-1c')
+            _ss_stubs = [bool(_s.get('grids_down')) for _s in app._fmt_undo
+                         if _s.get('stub')]
+            for _ in range(6):
+                _uf_key('<Control-z>')
+            _ss_back = app.body_text.get('1.0', 'end-1c')
+            for _ in range(6):
+                _uf_key('<Control-y>')
+            _ss_fwd = app.body_text.get('1.0', 'end-1c')
+    finally:
+        del app._FMT_JOURNAL_DEPTH
+    check(f'...and so does it once cell edits carry it past the journal\'s '
+          f'reach ({_ss_stubs}; {_ss_back.split(chr(10))[1:2]}; '
+          f'{_ss_fwd.split(chr(10))[1:2]})',
+          _ss_ok and True in _ss_stubs and 'Tea3' in _ss_end
+          and _ss_back == _ss_start and _ss_fwd == _ss_end)
+    # A style change made after Ctrl+Z puts nothing on Tk's stack, so Tk can
+    # still redo what was undone before it, and the journal keeps how each
+    # of those steps was recorded. Emptied, Ctrl+Y read a header cell's
+    # edit as typing and put it back a column off ("| Name s   |").
+    _rf = []
+    for _rf_style in ('word', 'cell'):
+        set_body('Intro word here' + chr(10) + '| Name | Qty |' + chr(10)
+                 + '| --- | --- |' + chr(10) + '| Tea | 2 |' + chr(10)
+                 + chr(10) + 'end line')
+        app._render_table_grids()
+        app.update()
+        app._reset_text_undo()
+        app._open_cell_editor(app._grid_at_line(2), 0, 0)
+        app.update()
+        _rf_ed = app._cell_editor['entry']
+        _rf_ed.delete('1.0', 'end')
+        _rf_ed.insert('1.0', 'Names')
+        app._commit_cell_editor()
+        app.update()
+        _rf_edited = app.body_text.get('2.0', '2.end')
+        _uf_key('<Control-z>')
+        _rf_undone = app.body_text.get('2.0', '2.end')
+        if _rf_style == 'word':
+            app.body_text.tag_add('sel', '1.6', '1.10')
+            app.body_text.mark_set('insert', '1.10')
+            _own_key('<Control-b>', '<Control-KeyRelease-b>', ('Control_L',))
+            app.body_text.tag_remove('sel', '1.0', 'end')
+        else:
+            app._grid_apply_style(app._grid_at_line(2), (1, 1, 1, 1), 'bold')
+            app.update()
+        _uf_key('<Control-y>')
+        _rf.append((_rf_style, _rf_undone == _rf_edited,
+                    app.body_text.get('2.0', '2.end') == _rf_edited,
+                    app.body_text.get('2.0', '2.end')))
+    check(f'Ctrl+Y after a style change gives a header cell edit back exactly '
+          f'({_rf})',
+          [(s, u, r) for s, u, r, _t in _rf] == [('word', False, True),
+                                                 ('cell', False, True)])
+    # Tk's own Insert pastes the selection over itself -- the same words,
+    # bare -- and a paste of the very words it replaces does the same: a
+    # change of style alone, which Ctrl+Z dropped, leaving them plain. On
+    # X11 Tk's paste inserts at the caret and leaves the selection where it
+    # is (the date field's paste check says the same), so there the paste
+    # replaces nothing and Ctrl+Z has only the note to give back; Insert,
+    # which deletes the selection the caret is in everywhere, still covers
+    # both halves of the fix there.
+    _in_x11 = str(app.tk.call('tk', 'windowingsystem')) == 'x11'
+    _in = []
+    for _in_name, _in_do in (
+            ('Insert', lambda: _own_key('<KeyPress-Insert>',
+                                        '<KeyRelease-Insert>')),
+            ('Shift+Insert', lambda: _own_key('<Shift-KeyPress-Insert>',
+                                              '<Shift-KeyRelease-Insert>',
+                                              ('Shift_L',)))):
+        set_body('Prices: here' + chr(10) + 'second line')
+        app.body_text.tag_add('bold', '1.0', '1.6')
+        app._reset_text_undo()
+        app.body_text.tag_add('sel', '1.0', '1.6')
+        app.body_text.mark_set('insert', '1.6')
+        _sm_clip['data'] = 'Prices'
+        _in_ok = _in_do()
+        _in_plain = not app.body_text.tag_ranges('bold') or (
+            _in_x11 and _in_name == 'Shift+Insert')
+        app.body_text.tag_remove('sel', '1.0', 'end')
+        _uf_key('<Control-z>')
+        _in.append((_in_name, _in_ok and _in_plain,
+                    [str(i) for i in app.body_text.tag_ranges('bold')],
+                    app.body_text.get('1.0', '1.end')))
+    _sm_clip['data'] = _sm_tsv
+    check(f'Ctrl+Z gives a styled selection its style back after Insert, or a '
+          f'paste of the same words ({_in})',
+          _in == [('Insert', True, ['1.0', '1.6'], 'Prices: here'),
+                  ('Shift+Insert', True, ['1.0', '1.6'], 'Prices: here')])
+    # A word pasted into a table row still being typed: the row stays a row
+    # being typed, the caret after the word, as after a letter typed there.
+    # The paste drew it, the caret guard put the caret under the table, and
+    # the next letter went to the line below -- by every paste route.
+    _pr = []
+    _pr_keys = {' ': 'space', '|': 'bar', '-': 'minus'}
+    for _pr_route in ('Ctrl+V', 'Ctrl+Shift+V', 'menu', 'rich'):
+        set_body('Intro' + chr(10) + chr(10) + 'end line')
+        app._reset_text_undo()
+        app.body_text.mark_set('insert', '2.0')
+        app._last_caret_line = None
+        for _pr_ch in '| Item name | Qty |':
+            _ty_key(_pr_keys.get(_pr_ch, _pr_ch), _pr_ch)
+        for _ in range(13):
+            _sm_press('<KeyPress-Left>')
+        _sm_clip['data'] = 'XY'
+        if _pr_route in ('Ctrl+V', 'rich'):
+            # The rich route: the word as a web page puts it on the
+            # clipboard, HTML beside the text.
+            if _pr_route == 'rich':
+                NO.clipboard.read_html = lambda: '<span>XY</span>'
+            try:
+                _own_key('<Control-KeyPress-v>', '<Control-KeyRelease-v>',
+                         ('Control_L',))
+            finally:
+                NO.clipboard.read_html = lambda: None
+        elif _pr_route == 'Ctrl+Shift+V':
+            _own_key('<Control-Shift-KeyPress-V>',
+                     '<Control-Shift-KeyRelease-V>',
+                     ('Control_L', 'Shift_L'))
+        else:
+            take_focus(app.body_text)
+            app.body_text.event_generate('<<Paste>>')
+            app.update()
+        app.update()
+        _pr_drawn = app._grid_at_line(2) is not None
+        _ty_key('Z', 'Z')
+        _pr.append((_pr_route, _pr_drawn, app.body_text.get('2.0', '2.end')))
+    _sm_clip['data'] = _sm_tsv
+    check(f'a word pasted into a table row being typed stays in it, and the '
+          f'next letter follows it ({_pr})',
+          all(not d and t == '| ItemXYZ name | Qty |' for _r, d, t in _pr))
+    # ...and Ctrl+Shift+V there, with another table drawn, walks back and
+    # forth exactly: its unit was recorded with the tables up, and once the
+    # typed table was drawn Ctrl+Z took letters out of its header.
+    set_body('Intro' + chr(10) + '| A | B |' + chr(10) + '| --- | --- |'
+             + chr(10) + '| 1 | 2 |' + chr(10) + chr(10) + chr(10)
+             + 'end line')
+    app._render_table_grids()
+    app.update()
+    app._reset_text_undo()
+    app._cancel_pending_autosave()
+    app.body_text.mark_set('insert', '6.0')
+    app._last_caret_line = None
+    _wp_heads = {''}
+    _wp_start = app.body_text.get('1.0', 'end-1c')
+    for _wp_ch in '| Item name | Qty |':
+        _ty_key(_pr_keys.get(_wp_ch, _wp_ch), _wp_ch)
+    _wp_heads.add(app.body_text.get('6.0', '6.end'))
+    for _ in range(13):
+        _sm_press('<KeyPress-Left>')
+    _sm_clip['data'] = 'XY'
+    _own_key('<Control-Shift-KeyPress-V>', '<Control-Shift-KeyRelease-V>',
+             ('Control_L', 'Shift_L'))
+    _sm_clip['data'] = _sm_tsv
+    _wp_heads.add(app.body_text.get('6.0', '6.end'))
+    _sm_press('<KeyPress-End>')
+    for _wp_line in ('| --- | --- |', '| Tea | 2 |'):
+        _ty_key('Return', chr(10))
+        for _wp_ch in _wp_line:
+            _ty_key(_pr_keys.get(_wp_ch, _wp_ch), _wp_ch)
+        _wp_heads.add(app.body_text.get('6.0', '6.end'))
+    for _ in range(2):
+        _sm_press('<KeyPress-Down>')
+    _wp_heads.add(app.body_text.get('6.0', '6.end'))
+    _wp_end = app.body_text.get('1.0', 'end-1c')
+    _wp_drawn = app._grid_at_line(6) is not None
+    _wp_seen = []
+    for _ in range(12):
+        _uf_key('<Control-z>')
+        _wp_seen.append(app.body_text.get('6.0', '6.end'))
+    _wp_back = app.body_text.get('1.0', 'end-1c')
+    for _ in range(12):
+        _uf_key('<Control-y>')
+        _wp_seen.append(app.body_text.get('6.0', '6.end'))
+    _wp_fwd = app.body_text.get('1.0', 'end-1c')
+    _wp_odd = sorted({h for h in _wp_seen if h not in _wp_heads})
+    check(f'Ctrl+Shift+V into a table being typed beside a drawn one walks '
+          f'back and forth exactly (headers no step had: {_wp_odd})',
+          _wp_drawn and 'ItemXY' in _wp_end and not _wp_odd
+          and _wp_back == _wp_start and _wp_fwd == _wp_end)
+    # ...and into a later row of a table typed by hand: its header was drawn
+    # as the caret left it, the row being typed sits under the grid, and the
+    # paste drew it too -- the next letter went under the table.
+    _lr = []
+    for _lr_route in ('Ctrl+V', 'menu'):
+        set_body('Intro' + chr(10) + chr(10) + chr(10) + 'end line')
+        app._reset_text_undo()
+        app.body_text.mark_set('insert', '2.0')
+        app._last_caret_line = None
+        for _lr_line in ('| Item name | Qty |', '| --- | --- |'):
+            for _lr_ch in _lr_line:
+                _ty_key(_pr_keys.get(_lr_ch, _lr_ch), _lr_ch)
+            _ty_key('Return', chr(10))
+        for _lr_ch in '| Tea | 2 |':
+            _ty_key(_pr_keys.get(_lr_ch, _lr_ch), _lr_ch)
+        for _ in range(3):
+            _sm_press('<KeyPress-Left>')
+        _lr_header = app._grid_at_line(2) is not None
+        _sm_clip['data'] = 'XY'
+        if _lr_route == 'Ctrl+V':
+            _own_key('<Control-KeyPress-v>', '<Control-KeyRelease-v>',
+                     ('Control_L',))
+        else:
+            take_focus(app.body_text)
+            app.body_text.event_generate('<<Paste>>')
+            app.update()
+        app.update()
+        _ty_key('Z', 'Z')
+        _lr.append((_lr_route, _lr_header, app.body_text.get('4.0', '4.end'),
+                    app._grid_at_line(2) is not None
+                    and app._grid_at_line(4) is None))
+    # ...or a row typed straight above a drawn table, which joins it: the
+    # table under the row is drawn as it was.
+    set_body('Intro' + chr(10) + chr(10) + '| Item | Qty |' + chr(10)
+             + '| --- | --- |' + chr(10) + '| Tea | 2 |' + chr(10) + chr(10)
+             + 'end line')
+    app._render_table_grids()
+    app.update()
+    app._reset_text_undo()
+    app.body_text.mark_set('insert', '2.0')
+    app._last_caret_line = None
+    for _lr_ch in '| New | Row |':
+        _ty_key(_pr_keys.get(_lr_ch, _lr_ch), _lr_ch)
+    for _ in range(3):
+        _sm_press('<KeyPress-Left>')
+    _sm_clip['data'] = 'XY'
+    _own_key('<Control-KeyPress-v>', '<Control-KeyRelease-v>', ('Control_L',))
+    app.update()
+    _ty_key('Z', 'Z')
+    _lr.append(('above', app._grid_at_line(3) is not None,
+                app.body_text.get('2.0', '2.end'),
+                app._grid_at_line(2) is None))
+    _sm_clip['data'] = _sm_tsv
+    check(f'...and into a later row of one, under its drawn header, or a row '
+          f'typed above one ({_lr})',
+          [(r, h, t, d) for r, h, t, d in _lr]
+          == [('Ctrl+V', True, '| Tea | XYZ2 |', True),
+              ('menu', True, '| Tea | XYZ2 |', True),
+              ('above', True, '| New | RoXYZw |', True)])
+    # A paste from the menu has no key whose release names the row it
+    # leaves the caret on: leaving that row by an arrow or the mouse found
+    # no row left, and the table stayed raw and untidied, saved so.
+    _ml = []
+    for _ml_route in ('Paste', 'Paste without formatting'):
+        set_body('Intro' + chr(10) + chr(10) + 'end line')
+        app._reset_text_undo()
+        app.body_text.mark_set('insert', '2.0')
+        app._last_caret_line = None
+        for _ml_ch in '| Item name | Qty |':
+            _ty_key(_pr_keys.get(_ml_ch, _ml_ch), _ml_ch)
+        for _ in range(13):
+            _sm_press('<KeyPress-Left>')
+        _sm_clip['data'] = 'XY'
+        take_focus(app.body_text)
+        if _ml_route == 'Paste':
+            app.body_text.event_generate('<<Paste>>')
+        else:
+            app._paste_plain()
+        app.update()
+        _sm_clip['data'] = _sm_tsv
+        _sm_press('<KeyPress-Down>')
+        _ml.append((_ml_route, app._grid_at_line(2) is not None,
+                    app.body_text.get('2.0', '2.end')))
+    check(f'leaving a row a menu paste kept draws and tidies its table '
+          f'({_ml})',
+          all(d and r == '| ItemXY name | Qty      |' for _n, d, r in _ml))
+    # A table at the very end of a note gets a line under it from the
+    # drawing, which Tk never records. Ctrl+Z back past the Enter that made
+    # the person's own line there, then Ctrl+Y, doubled that line, and from
+    # then on a header cell's edit replayed a column off ("| Name s   |").
+    set_body('Intro line')
+    app._reset_text_undo()
+    app._cancel_pending_autosave()
+    app.body_text.mark_set('insert', '1.end')
+    app._last_caret_line = None
+    _ty_key('Return', chr(10))
+    for _te_line in ('| Name | Qty |', '| --- | --- |', '| Tea | 2 |'):
+        for _te_ch in _te_line:
+            _ty_key(_pr_keys.get(_te_ch, _te_ch), _te_ch)
+        if _te_line.startswith('| Tea'):
+            # The caret moved before the last Enter, as a person's End
+            # moves it: that Enter is a step of its own on Tk's stack.
+            _sm_press('<KeyPress-End>')
+        _ty_key('Return', chr(10))
+    app.update()
+    _te_ok = app._grid_at_line(2) is not None
+    if _te_ok:
+        app._open_cell_editor(app._grid_at_line(2), 0, 0)
+        app.update()
+        _te_ed = app._cell_editor['entry']
+        _te_ed.delete('1.0', 'end')
+        _te_ed.insert('1.0', 'Names')
+        app._commit_cell_editor()
+        app.update()
+    _te_edited = app.body_text.get('1.0', 'end-1c')
+    for _te_k in 'zzzyyy':
+        _own_key('<Control-KeyPress-%s>' % _te_k,
+                 '<Control-KeyRelease-%s>' % _te_k, ('Control_L',))
+    _te_after = app.body_text.get('1.0', 'end-1c')
+    check(f'Ctrl+Z and Ctrl+Y past the line under a table at a note\'s end '
+          f'give its header back exactly ({_te_after.split(chr(10))[1:2]}; '
+          f'{_te_after.count(chr(10))} vs {_te_edited.count(chr(10))} lines)',
+          _te_ok and 'Names' in _te_edited and _te_after == _te_edited)
+    # ...and a header cell edited while the drawing's own line stands there
+    # (Ctrl+Z back past the Enter put it there): the edit was noted with the
+    # text as it stood, and the journal must read it so when Ctrl+Z and
+    # Ctrl+Y walk it, or the edit replays as typing, a column off.
+    set_body('Intro line')
+    app._reset_text_undo()
+    app._cancel_pending_autosave()
+    app.body_text.mark_set('insert', '1.end')
+    app._last_caret_line = None
+    _ty_key('Return', chr(10))
+    for _te_line in ('| Name | Qty |', '| --- | --- |', '| Tea | 2 |'):
+        for _te_ch in _te_line:
+            _ty_key(_pr_keys.get(_te_ch, _te_ch), _te_ch)
+        if _te_line.startswith('| Tea'):
+            _sm_press('<KeyPress-End>')
+        _ty_key('Return', chr(10))
+    app.update()
+    for _te_k in 'zz':
+        _own_key('<Control-KeyPress-%s>' % _te_k,
+                 '<Control-KeyRelease-%s>' % _te_k, ('Control_L',))
+    _tb_tail = (getattr(app, '_undo_tail', None) is not None
+                and app._grid_at_line(2) is not None)
+    if _tb_tail:
+        app._open_cell_editor(app._grid_at_line(2), 0, 0)
+        app.update()
+        _tb_ed = app._cell_editor['entry']
+        _tb_ed.delete('1.0', 'end')
+        _tb_ed.insert('1.0', 'Names')
+        app._commit_cell_editor()
+        app.update()
+    _tb_edited = app.body_text.get('1.0', 'end-1c')
+    for _te_k in 'zy':
+        _own_key('<Control-KeyPress-%s>' % _te_k,
+                 '<Control-KeyRelease-%s>' % _te_k, ('Control_L',))
+    _tb_after = app.body_text.get('1.0', 'end-1c')
+    check(f'...and a header cell edited beside the drawing\'s own line walks '
+          f'back and forth exactly ({_tb_tail}; '
+          f'{_tb_after.split(chr(10))[1:2]})',
+          _tb_tail and 'Names' in _tb_edited and _tb_after == _tb_edited)
+
+    # A table typed at a note's very end and left by the mouse: the drawing
+    # puts a line of its own under it, which Tk never records.
+    def _tl_click(index):
+        _w = app.body_text
+        _w.see(index)
+        app.update()
+        _bb = _w.bbox(index)
+        if _bb is None or not take_focus(_w):
+            return False
+        _x, _y = _bb[0] + 1, _bb[1] + max(1, _bb[3] // 2)
+        _qa_fire(_w, '<ButtonPress-1>', x=_x, y=_y)
+        app.update()
+        _qa_fire(_w, '<ButtonRelease-1>', x=_x, y=_y)
+        app.update()
+        return True
+
+    def _tl_table_at_end(start='Intro line',
+                         rows=('| Name | Qty |', '| --- | --- |', '| Tea | 2 |')):
+        set_body(start)
+        app._reset_text_undo()
+        app._cancel_pending_autosave()
+        app.body_text.mark_set('insert', 'end-1c')
+        app._last_caret_line = None
+        _ty_key('Return', chr(10))
+        for _tl_i, _tl_row in enumerate(rows):
+            for _tl_ch in _tl_row:
+                _ty_key(_pr_keys.get(_tl_ch, _tl_ch), _tl_ch)
+            if _tl_i < 2:
+                _ty_key('Return', chr(10))
+        _tl_click('1.3')
+        return (app._grid_at_line(start.count(chr(10)) + 2) is not None
+                and getattr(app, '_undo_tail', None) is not None)
+
+    def _tl_text():
+        return app.body_text.get('1.0', 'end-1c')
+
+    def _tl_keys(keys):
+        for _tl_k in keys:
+            _own_key('<Control-KeyPress-%s>' % _tl_k,
+                     '<Control-KeyRelease-%s>' % _tl_k, ('Control_L',))
+
+    def _tl_on_last_line():
+        app.body_text.mark_set('insert', 'end-1c')
+        app._last_caret_line = int(app.body_text.index('insert').split('.')[0])
+
+    # Written on and emptied again, that line is the note's: the text reads
+    # as before, but Tk has steps on the line now. Taken out before Ctrl+Z,
+    # the word Tk gave back landed on the table's last row ("| Tea | 2
+    # |abc"), saved so.
+    _tl_we = []
+    for _tl_how in ('BackSpace', 'select and Delete'):
+        _tl_ok = _tl_table_at_end()
+        _tl_on_last_line()
+        for _tl_ch in 'abc':
+            _ty_key(_tl_ch, _tl_ch)
+        if _tl_how == 'BackSpace':
+            for _ in range(3):
+                _own_key('<BackSpace>', '<KeyRelease-BackSpace>')
+        else:
+            app.body_text.tag_add('sel', 'end-1c linestart', 'end-1c')
+            _own_key('<Delete>', '<KeyRelease-Delete>')
+        _tl_ok = _tl_ok and _tl_text().endswith('|' + chr(10))
+        _tl_keys('z')
+        _tl_we.append((_tl_how, _tl_ok, _tl_text().split(chr(10))[-2:]))
+    check(f'a word written under a table at a note\'s end and erased comes '
+          f'back there on Ctrl+Z ({_tl_we})',
+          all(ok and last[0].startswith('| Tea') and last[0].endswith('|')
+              and last[1] == 'abc' for _h, ok, last in _tl_we))
+    # ...and with a header cell edited before the letter: Ctrl+Z took the
+    # letter back, the next skipped the cell, and Ctrl+Y doubled the edit
+    # ("| Namess |"), saved so.
+    _tl_ok = _tl_table_at_end()
+    _tl_start = _tl_text()
+    if _tl_ok:
+        app._open_cell_editor(app._grid_at_line(2), 0, 0)
+        app.update()
+        _tl_ed = app._cell_editor['entry']
+        _tl_ed.delete('1.0', 'end')
+        _tl_ed.insert('1.0', 'Names')
+        app._commit_cell_editor()
+        app.update()
+    _tl_edited = _tl_text()
+    _tl_on_last_line()
+    _ty_key('x', 'x')
+    _tl_typed = _tl_text()
+    _tl_walk = []
+    for _tl_k in 'zzyy':
+        _tl_keys(_tl_k)
+        _tl_walk.append(_tl_text())
+    check(f'...and with a header cell edited before it, Ctrl+Z and Ctrl+Y '
+          f'walk the letter and the cell exactly '
+          f'({[w.split(chr(10))[1] for w in _tl_walk]})',
+          _tl_ok and 'Names' in _tl_edited
+          and _tl_walk == [_tl_edited, _tl_start, _tl_edited, _tl_typed])
+    # A cell edit that narrows its column draws the table again inside its
+    # own undo step, which splits the step where the tables come down
+    # (_undo_atom_grids_coming_down). That split read the step's first
+    # snapshot before the line under the table was counted into it: Ctrl+Z
+    # gave the cell's text back with half its bold ("Earl Grey" bold,
+    # "teapot" plain), and the next Ctrl+Z skipped a step.
+    _tl_ok = _tl_table_at_end(rows=('| Name | Qty |', '| --- | --- |',
+                                    '| Earl Grey teapot | 2 |'))
+    _tl_at = app.body_text.get('4.0', '4.end').find('Earl Grey teapot')
+    _tl_ok = _tl_ok and _tl_at > 0
+    app.body_text.tag_add('bold', '4.%d' % _tl_at, '4.%d' % (_tl_at + 16))
+    _tl_start = _tl_text()
+    if _tl_ok:
+        app._open_cell_editor(app._grid_at_line(2), 1, 0)
+        app.update()
+        _tl_ed = app._cell_editor['entry']
+        _tl_ed.delete('1.0', 'end')
+        _tl_ed.insert('1.0', 'Earl Grey')
+        app._commit_cell_editor()
+        app.update()
+    _tl_ok = _tl_ok and 'teapot' not in _tl_text()
+    _tl_keys('z')
+    _tl_bold = [str(i) for i in app.body_text.tag_ranges('bold')]
+    app.body_text.tag_remove('bold', '1.0', 'end')
+    check(f'Ctrl+Z of a cell edit that narrows its column, beside the '
+          f'drawing\'s line, gives the cell back with all its bold '
+          f'({_tl_ok}; {_tl_bold})',
+          _tl_ok and _tl_text() == _tl_start
+          and _tl_bold == ['4.%d' % _tl_at, '4.%d' % (_tl_at + 16)])
+    # A list renumbered by Enter, in a note whose last table has the
+    # drawing's line under it: Ctrl+Z gave the text back bare -- every bold
+    # and italic in the note gone, saved so.
+    _tl_ok = _tl_table_at_end('Bold words here' + chr(10) + '1. alpha'
+                              + chr(10) + '2. beta' + chr(10) + 'end')
+    app.body_text.tag_add('bold', '1.0', '1.4')
+    app.body_text.tag_add('italic', '2.3', '2.8')
+    _tl_start = _tl_text()
+    app.body_text.mark_set('insert', '2.end')
+    app._last_caret_line = 2
+    _sm_press('<KeyPress-End>')
+    _ty_key('Return', chr(10))
+    _tl_ok = _tl_ok and _tl_text().split(chr(10))[2:4] == ['2. ', '3. beta']
+    for _ in range(4):
+        if _tl_text() == _tl_start:
+            break
+        _tl_keys('z')
+    _tl_styles = ([str(i) for i in app.body_text.tag_ranges('bold')],
+                  [str(i) for i in app.body_text.tag_ranges('italic')])
+    check(f'Ctrl+Z of a list renumbered beside the drawing\'s line under a '
+          f'table gives the text back with its formatting ({_tl_styles})',
+          _tl_ok and _tl_text() == _tl_start
+          and _tl_styles == (['1.0', '1.4'], ['2.3', '2.8']))
+    # A bold word deleted while that line stands: the run of deletes noted
+    # the formatting before the line was the note's, and Ctrl+Z gave the
+    # word back plain.
+    _tl_ok = _tl_table_at_end('Bold words here')
+    app.body_text.tag_add('bold', '1.0', '1.4')
+    app.body_text.tag_add('sel', '1.0', '1.4')
+    app.body_text.mark_set('insert', '1.4')
+    app._last_caret_line = 1
+    _own_key('<BackSpace>', '<KeyRelease-BackSpace>')
+    _tl_ok = _tl_ok and _tl_text().startswith(' words here')
+    _tl_keys('z')
+    _tl_bold = [str(i) for i in app.body_text.tag_ranges('bold')]
+    check(f'a bold word deleted beside the drawing\'s line under a table '
+          f'comes back bold on Ctrl+Z ({_tl_ok}; {_tl_bold})',
+          _tl_ok and _tl_text().startswith('Bold words here')
+          and _tl_bold == ['1.0', '1.4'])
+    # A table at a note's end deleted -- by its grid's Delete table, or
+    # selected to the end with its caption -- then Ctrl+Z: the drawing's
+    # line was taken for the person's, and the table came back glued onto
+    # the line above ("Intro line| Name |"), Ctrl+Y garbling the note. A
+    # bold word in a cell comes back with it: the delete is the edit that
+    # makes the line the note's, from inside its own undo step.
+    _tl_dt = []
+    for _tl_how in ('Delete table', 'Delete', 'BackSpace'):
+        _tl_ok = _tl_table_at_end('Intro line' + chr(10) + chr(10) + 'Caption')
+        app.body_text.tag_add('bold', '6.2', '6.5')
+        _tl_ok = _tl_ok and app.body_text.get('6.2', '6.5') == 'Tea'
+        _tl_start = _tl_text()
+        if _tl_how == 'Delete table':
+            app._grid_delete_table(app._grid_at_line(4))
+            app.update()
+        else:
+            app.body_text.tag_add('sel', '3.0', 'end-1c')
+            app.body_text.mark_set('insert', 'end-1c')
+            _own_key('<%s>' % _tl_how, '<KeyRelease-%s>' % _tl_how)
+        _tl_gone = _tl_text()
+        _tl_keys('z')
+        _tl_back = (_tl_text() == _tl_start
+                    and [str(i) for i in app.body_text.tag_ranges('bold')]
+                    == ['6.2', '6.5'])
+        _tl_keys('y')
+        _tl_dt.append((_tl_how, _tl_ok and _tl_gone != _tl_start,
+                       _tl_back, _tl_text() == _tl_gone))
+    check(f'a table deleted at a note\'s end comes back exactly on Ctrl+Z, '
+          f'and goes again on Ctrl+Y ({_tl_dt})',
+          all(ok and back and fwd for _h, ok, back, fwd in _tl_dt))
+    # The theme switched, or the font size changed, with a table row still
+    # being typed: the redraw drew the row, and the next letter typed went
+    # under the table.
+    _tl_kr = []
+    for _tl_by in ('theme', 'font size'):
+        for _tl_kind in ('typed', 'pasted'):
+            set_body('Intro' + chr(10) + chr(10) + chr(10) + 'end line')
+            app._reset_text_undo()
+            app.body_text.mark_set('insert', '2.0')
+            app._last_caret_line = None
+            for _tl_i, _tl_row in enumerate(('| Item name | Qty |',
+                                             '| --- | --- |', '| Tea | 2 |')):
+                for _tl_ch in _tl_row:
+                    _ty_key(_pr_keys.get(_tl_ch, _tl_ch), _tl_ch)
+                if _tl_i < 2:
+                    _ty_key('Return', chr(10))
+            for _ in range(3):
+                _sm_press('<KeyPress-Left>')
+            if _tl_kind == 'typed':
+                for _tl_ch in 'XY':
+                    _ty_key(_tl_ch, _tl_ch)
+            else:
+                _sm_clip['data'] = 'XY'
+                _own_key('<Control-KeyPress-v>', '<Control-KeyRelease-v>',
+                         ('Control_L',))
+                _sm_clip['data'] = _sm_tsv
+            if _tl_by == 'theme':
+                app.toggle_theme()
+            else:
+                _tl_size = app.editor_font_size
+                app._set_editor_font(size=_tl_size + 1)
+            app.update()
+            _ty_key('Z', 'Z')
+            _tl_kr.append((_tl_by, _tl_kind, app.body_text.get('4.0', '4.end')))
+            if _tl_by == 'theme':
+                app.toggle_theme()
+            else:
+                app._set_editor_font(size=_tl_size)
+            app.update()
+    check(f'a theme switch or a new font size leaves a row being typed as it '
+          f'is ({_tl_kr})',
+          [r for _b, _k, r in _tl_kr] == ['| Tea | XYZ2 |'] * 4)
+    # An older edit of a drawn table's header, walked back past once the
+    # line the drawing put under a later table is the note's -- written on,
+    # or taken out and drawn again by a theme switch. Tk never recorded the
+    # line, so it stays at the end of every older text, which undo noted
+    # without it: the edit was replayed with the tables down, a column off.
+    _tl_old = []
+    for _tl_how in ('a letter', 'drawn again'):
+        set_body('| A | B |' + chr(10) + '| --- | --- |' + chr(10) + '| 1 | 2 |'
+                 + chr(10) + chr(10) + 'Intro line')
+        app._render_table_grids()
+        app.update()
+        app._reset_text_undo()
+        app._cancel_pending_autosave()
+        _tl_first = _tl_text()
+        _tl_ok = app._grid_at_line(1) is not None
+        if _tl_ok:
+            app._open_cell_editor(app._grid_at_line(1), 0, 0)
+            app.update()
+            _tl_ed = app._cell_editor['entry']
+            _tl_ed.delete('1.0', 'end')
+            _tl_ed.insert('1.0', 'Ax')
+            app._commit_cell_editor()
+            app.update()
+        app.body_text.mark_set('insert', 'end-1c')
+        app._last_caret_line = None
+        _ty_key('Return', chr(10))
+        for _tl_i, _tl_row in enumerate(('| Name | Qty |', '| --- | --- |',
+                                         '| Tea | 2 |')):
+            for _tl_ch in _tl_row:
+                _ty_key(_pr_keys.get(_tl_ch, _tl_ch), _tl_ch)
+            if _tl_i < 2:
+                _ty_key('Return', chr(10))
+        _tl_click('5.3')
+        _tl_ok = _tl_ok and getattr(app, '_undo_tail', None) is not None
+        if _tl_how == 'a letter':
+            app.body_text.mark_set('insert', '5.end')
+            app._last_caret_line = 5
+            _ty_key('q', 'q')
+        else:
+            app.body_text.tag_add('sel', 'end-2c', 'end-1c')
+            app.body_text.mark_set('insert', 'end-1c')
+            _own_key('<Delete>', '<KeyRelease-Delete>')
+            app.toggle_theme()
+            app.toggle_theme()
+            app.update()
+            _tl_ok = _tl_ok and getattr(app, '_undo_tail', None) is not None
+        for _ in range(12):
+            if _tl_text().split(chr(10))[0] == '| A | B |':
+                break
+            _tl_keys('z')
+        _tl_old.append((_tl_how, _tl_ok, _tl_text().split(chr(10))[0],
+                        _tl_text() in (_tl_first, _tl_first + chr(10))))
+    check(f'an older edit of a drawn table\'s header walks back exactly past '
+          f'the drawing\'s line made the note\'s ({_tl_old})',
+          all(ok and first == '| A | B |' and whole
+              for _h, ok, first, whole in _tl_old))
+    # A word made bold in a row still being typed, the table then ending the
+    # note with no line under it. Ctrl+Z back past the Enter typed after
+    # the row puts the drawing's line there, which Tk does not know: counted,
+    # the bold no longer matched, and the next Ctrl+Z took back the row's
+    # typing with the bold left on.
+    set_body('Intro line')
+    app._reset_text_undo()
+    app._cancel_pending_autosave()
+    app.body_text.mark_set('insert', '1.end')
+    app._last_caret_line = None
+    _ty_key('Return', chr(10))
+    for _tl_i, _tl_row in enumerate(('| Name | Qty |', '| --- | --- |',
+                                     '| Tea | 2 |')):
+        for _tl_ch in _tl_row:
+            _ty_key(_pr_keys.get(_tl_ch, _tl_ch), _tl_ch)
+        if _tl_i < 2:
+            _ty_key('Return', chr(10))
+    app.body_text.tag_add('sel', '4.2', '4.5')
+    app.body_text.mark_set('insert', '4.5')
+    _own_key('<Control-KeyPress-b>', '<Control-KeyRelease-b>', ('Control_L',))
+    app.body_text.tag_remove('sel', '1.0', 'end')
+    _tl_bolded = bool(app.body_text.tag_ranges('bold'))
+    _sm_press('<KeyPress-End>')
+    _ty_key('Return', chr(10))
+    _tl_keys('zz')
+    _tl_tail = getattr(app, '_undo_tail', None) is not None
+    _tl_keys('z')
+    _tl_row4 = app.body_text.get('4.0', '4.end')
+    check(f'a bold made in a row being typed is taken back on its own past '
+          f'the drawing\'s line under the table ({_tl_bolded}; {_tl_tail}; '
+          f'{_tl_row4!r}; bold {app.body_text.tag_ranges("bold")})',
+          _tl_bolded and _tl_tail and 'Tea' in _tl_row4
+          and not app.body_text.tag_ranges('bold'))
+    # Insert over a selection holding a drawn table: Tk pastes the
+    # selection's text over it, and that text leaves out the table's hidden
+    # rows -- the table went. Insert does nothing there.
+    set_body('Intro word here' + chr(10) + '| Name | Qty |' + chr(10)
+             + '| --- | --- |' + chr(10) + '| Tea | 2 |' + chr(10) + chr(10)
+             + 'end line')
+    app._render_table_grids()
+    app.update()
+    app._reset_text_undo()
+    _it_start = app.body_text.get('1.0', 'end-1c')
+    app.body_text.tag_add('sel', '1.6', '5.0')
+    app.body_text.mark_set('insert', '5.0')
+    _it_ok = _own_key('<KeyPress-Insert>', '<KeyRelease-Insert>')
+    app.body_text.tag_remove('sel', '1.0', 'end')
+    check('Insert over a selection holding a drawn table keeps the table',
+          _it_ok and app.body_text.get('1.0', 'end-1c') == _it_start
+          and app._grid_at_line(2) is not None)
+finally:
+    app.tk.eval('rename ::tk::GetSelection {}')
+    app.tk.eval('rename ::tk::_qa1_sm_GetSelection ::tk::GetSelection')
+    app.tk.deletecommand('::qa1_sm_clip')
+    NO.clipboard.read_text, NO.clipboard.read_html = _sm_real
+# A drag from beside one table to beside another: the end the caret was not
+# at stayed on the first table's hidden text -- the guard ran only when the
+# caret was off every table -- and Delete or a paste, which run no guard of
+# their own, glued a row or merged the two tables.
+_sm_twos = []
+for _sm_from, _sm_to in (('4.end', '8.end'), ('8.end', '4.end')):
+    _sm_fresh(_sm_to, _sm_two)
+    _sm_a = app.body_text.index(_sm_from)
+    _sm_b = app.body_text.index(_sm_to)
+    if app.body_text.compare(_sm_a, '>', _sm_b):
+        _sm_a, _sm_b = _sm_b, _sm_a
+    app.body_text.tag_add('sel', _sm_a, _sm_b)
+    _qa_fire(app.body_text, '<ButtonRelease-1>', x=2, y=2)
+    app.update()
+    _sm_twos.append(_sm_where()[0])
+check(f'selection x table: a drag from beside one table to beside another '
+      f'selects only the line between, either way ({_sm_twos})',
+      _sm_twos == [('5.0', '5.3'), ('5.0', '5.3')])
+# Select all in a note that begins with a table: its start, at the table's
+# top, read as "on the table", and the table was cut out of the selection.
+_sm_fresh('4.3', '| Item | Qty |' + chr(10) + '| --- | --- |' + chr(10)
+          + '| Tea | 2 |' + chr(10) + 'after' + chr(10) + 'more')
+take_focus(app.body_text)
+app.body_text.event_generate('<<SelectAll>>')
+app.body_text.event_generate('<KeyRelease-a>')
+app.update()
+check(f'selection x table: select all in a note that begins with a table '
+      f'keeps the table ({_sm_where()[0]})',
+      _sm_where()[0] is not None and _sm_where()[0][0] == '1.0')
+# A key that typed nothing extends no style: the release of an arrow -- or
+# the caret guard's own stop at a table under "Prices:" -- found a plain ":"
+# glued to a bold word left of the caret, and made it bold.
+_sm_fresh('1.6', 'Prices: here')
+app.body_text.tag_add('bold', '1.0', '1.6')
+_sm_press('<KeyPress-Right>')
+check(f'selection x table: an arrow key leaves the bold where it was '
+      f'({app.body_text.tag_ranges("bold")})',
+      [str(i) for i in app.body_text.tag_ranges('bold')] == ['1.0', '1.6'])
+app.body_text.tag_remove('bold', '1.0', 'end')
+# A mouse press beside a drawn table lands on its last row's hidden text.
+# Dragged down, the selection began inside that row, and the next key glued
+# the row onto the paragraph under it; dragged up, it took the whole table.
+# The end left on a table goes to the table's edge facing the other end.
+_sm_fresh('5.3')
+app.body_text.tag_add('sel', '4.end', '5.3')
+_qa_fire(app.body_text, '<ButtonRelease-1>', x=2, y=2)
+app.update()
+_sm_down = _sm_where()
+_sm_fresh('1.3')
+app.body_text.tag_add('sel', '1.3', '4.end')
+_qa_fire(app.body_text, '<ButtonRelease-1>', x=2, y=2)
+app.update()
+_sm_up = _sm_where()
+_sm_fresh('3.2')
+app.body_text.tag_add('sel', '2.3', '3.2')
+_qa_fire(app.body_text, '<ButtonRelease-1>', x=2, y=2)
+app.update()
+check(f'selection x table: a drag that starts beside a table leaves the '
+      f'table out, either way ({_sm_down}; {_sm_up}), and one inside a '
+      f'table\'s hidden text selects nothing ({_sm_where()})',
+      _sm_down == (('5.0', '5.3'), '5.3') and _sm_up == (('1.3', '1.7'), '1.3')
+      and _sm_where()[0] is None)
+# Our own copied cells: the separator from the copied widths went in
+# narrower than its rows, and the tidy padded it as an undo step of its
+# own once the caret had been in and out of the table.
+_sm_fresh('6.0')
+app._grid_cell_clip_text = _sm_tsv
+app._grid_cell_clip_widths = [{'width': 12, 'align': None, 'hidden': False},
+                              {'width': None, 'align': None, 'hidden': False}]
+app._grid_cell_clip_place = None
+try:
+    app._paste_tsv_as_table(_sm_tsv)
+    app.update()
+finally:
+    app._grid_cell_clip_text = None
+    app._grid_cell_clip_widths = None
+_sm_all = app.body_text.get('1.0', 'end-1c')
+_sm_last = core_tables.find_blocks(_sm_all)[-1]
+_sm_block = _sm_all.split(chr(10))[_sm_last[0]:_sm_last[1] + 1]
+_sm_aligns = [core_tables.cell_alignments(_l) for _l in _sm_block]
+_sm_widths = core_tables.layout_widths(
+    [core_tables.split_row(_l) for _l in _sm_block], _sm_aligns)
+check(f'selection x table: our own copied cells come back laid out as the '
+      f'tidy lays them out, the copied width kept ({_sm_block})',
+      len(_sm_block) == 3 and not any(
+          core_tables.pad_ops(_l, _sm_widths, _a)
+          for _l, _a in zip(_sm_block, _sm_aligns))
+      and (core_tables.parse_separator(_sm_block[1])[0] or {}).get('width') == 12)
+# The paste itself never puts cells into a table's line, however the
+# selection was made: one that holds a table's line break keeps the break.
+_sm_fresh('1.0')
+app.body_text.tag_add('sel', '1.0', '2.0')
+# The line a key's release recorded before the paste: the selection's end.
+app._last_caret_line = 2
+app._paste_tsv_as_table(_sm_tsv)
+app.update()
+check(f'selection x table: a selection holding a table\'s line break leaves '
+      f'the break, and the table, where they were (kept {_sm_table_kept()}; '
+      f'{app.body_text.get("1.0", "end-1c")!r})',
+      _sm_table_kept()
+      and app.body_text.get('1.0', 'end-1c').startswith('| Day'))
+# ...laid out as the tidy would leave it, and the caret's last line
+# forgotten: the release of the paste's own key is not the caret leaving a
+# table, and read as one it tidied a table as an undo step of its own.
+_sm_lines = app.body_text.get('1.0', 'end-1c').split(chr(10))[:3]
+_sm_aligns = [core_tables.cell_alignments(_l) for _l in _sm_lines]
+_sm_widths = core_tables.layout_widths(
+    [core_tables.split_row(_l) for _l in _sm_lines], _sm_aligns)
+_sm_ops = [core_tables.pad_ops(_l, _sm_widths, _a)
+           for _l, _a in zip(_sm_lines, _sm_aligns)]
+check(f'selection x table: pasted cells are laid out as the tidy lays them '
+      f'out, and the caret\'s last line is forgotten ({_sm_lines}; '
+      f'{app._last_caret_line})',
+      not any(_sm_ops) and app._last_caret_line is None)
+set_body('')
+
+# ---- CTRL+Z PUTS A TABLE'S FIRST LINE BACK EXACTLY ----
+# A drawn table's first line holds the grid's window at column 0, and Tk
+# records an edit by its index. Operations that take the grids down, edit,
+# and draw them again recorded their edits one column off from where
+# Ctrl+Z replayed them with the grids drawn: centring a cell, inserting a
+# row below or autofitting a column, then Ctrl+Z, gave the header back as
+# "| Ite  | Qt  |". A step recorded with the grids down is replayed with
+# them down now (_undo_atom_grids_coming_down).
+_tu_body = ('Plan the trip' + chr(10) + '| Item | Qty | Note |' + chr(10)
+            + '| --- | --- | --- |' + chr(10) + '| Milk | 2 | x |' + chr(10)
+            + '| Eggs | 12 | y |' + chr(10) + 'pack the bags')
+
+
+def _tu_fresh():
+    set_body(_tu_body)
+    app._render_table_grids()
+    app.update()
+    app._reset_text_undo()
+    app._cancel_pending_autosave()
+    return app._grid_at_line(2)
+
+
+for _tu_name, _tu_do in (
+        ('centring a header cell',
+         lambda i: (app._grid_select_range(i, (0, 0), (0, 0)),
+                    app._set_paragraph_align('center'))),
+        ('centring a data cell',
+         lambda i: (app._grid_select_range(i, (1, 1), (1, 1)),
+                    app._set_paragraph_align('center'))),
+        ('inserting a row below', lambda i: app._grid_insert_row(i, 2)),
+        ('autofitting a column', lambda i: app._grid_autofit_col(i, 0)),
+        ('inserting a column at the left', lambda i: app._grid_insert_col(i, 0)),
+        ('merging two header cells',
+         lambda i: (app._grid_select_range(i, (0, 0), (0, 1)),
+                    app._grid_merge_selection(app._grid_sel)))):
+    _tu_info = _tu_fresh()
+    _tu_t0 = app.body_text.get('1.0', 'end-1c')
+    _tu_do(_tu_info)
+    app.update()
+    _tu_t1 = app.body_text.get('1.0', 'end-1c')
+    app._body_undo_redo('undo'); app.update()
+    _tu_t2 = app.body_text.get('1.0', 'end-1c')
+    app._body_undo_redo('redo'); app.update()
+    _tu_t3 = app.body_text.get('1.0', 'end-1c')
+    check(f'table undo: {_tu_name}, then Ctrl+Z, puts the table back exactly, '
+          f'and Ctrl+Y the operation ({_tu_t2.split(chr(10))[1]!r}, '
+          f'{_tu_t3.split(chr(10))[1]!r})',
+          _tu_t1 != _tu_t0 and _tu_t2 == _tu_t0 and _tu_t3 == _tu_t1
+          and app._grid_at_line(2) is not None)
+# One step held a header cell's commit -- made with the grid drawn -- AND
+# the toolbar's centre that followed, made with it down: right in neither
+# state. The commit is a step of its own now, so the first Ctrl+Z takes
+# back the centre and leaves the word whole, the second the word.
+_tu_info = _tu_fresh()
+_tu_t0 = app.body_text.get('1.0', 'end-1c')
+app._open_cell_editor(_tu_info, 0, 0)
+app.update()
+_tu_ed = getattr(app, '_cell_editor', None)
+if _tu_ed is not None:
+    _tu_ed['entry'].delete('1.0', 'end')
+    _tu_ed['entry'].insert('1.0', 'Food')
+_tu_info = app._grid_at_line(2)
+app._grid_select_range(_tu_info, (0, 0), (0, 0))
+app._set_paragraph_align('center')
+app.update()
+app._body_undo_redo('undo'); app.update()
+_tu_first = app.body_text.get('1.0', 'end-1c').split(chr(10))[1]
+app._body_undo_redo('undo'); app.update()
+check(f'table undo: a header cell still being edited when the toolbar '
+      f'centres it comes back in two whole steps ({_tu_first!r}, then '
+      f'{app.body_text.get("1.0", "end-1c").split(chr(10))[1]!r})',
+      _tu_ed is not None
+      and [c.strip() for c in _tu_first.strip('|').split('|')]
+      == ['Food', 'Qty', 'Note']
+      and app.body_text.get('1.0', 'end-1c') == _tu_t0)
+# Walking back past a table operation on a table narrower than the app
+# pads (pasted Markdown keeps its columns until the caret leaves): the
+# release of an undo key found the caret "leaving" the table the undo had
+# put it in, and padded it as a new recorded edit -- which wiped the redo
+# history, so Ctrl+Y brought nothing back.
+_rd_body = ('Plan the trip' + chr(10) + '| Item | Qty |' + chr(10)
+            + '| --- | --- |' + chr(10) + '| Milk | 2 |' + chr(10)
+            + '| Eggs | 12 |' + chr(10) + 'pack the bags')
+
+
+def _rd_press(keysym):
+    """A Control key as the keyboard sends it: its press, then its release."""
+    if not take_focus(app.body_text):
+        return False
+    app.body_text.event_generate(f'<Control-KeyPress-{keysym}>')
+    app.body_text.event_generate(f'<Control-KeyRelease-{keysym}>')
+    app.update()
+    return True
+
+
+set_body(_rd_body)
+app._render_table_grids()
+app.update()
+app._reset_text_undo()
+app._cancel_pending_autosave()
+app.body_text.mark_set('insert', 'end-1c')
+app.body_text.insert('insert', ' hello')
+app._flush_table_grids()            # the pause an autosave leaves
+_rd_typed = app.body_text.get('1.0', 'end-1c')
+app._grid_insert_row(app._grid_at_line(2), 2)
+app.update()
+_rd_row = app.body_text.get('1.0', 'end-1c')
+_rd_seen = []
+for _rd_k in ('z', 'z', 'y', 'y'):
+    _rd_press(_rd_k)
+    _rd_seen.append(app.body_text.get('1.0', 'end-1c'))
+check(f'table undo: Ctrl+Z twice past a row inserted in a narrow table, then '
+      f'Ctrl+Y twice, lands on each state exactly -- the redo history '
+      f'survives ({[s == w for s, w in zip(_rd_seen, (_rd_typed, _rd_body, _rd_typed, _rd_row))]})',
+      _rd_row != _rd_typed
+      and _rd_seen == [_rd_typed, _rd_body, _rd_typed, _rd_row])
+# Every draw of a table bound its callbacks on the grid, and deleting the
+# grid's window took the widget away inside Tk but not in tkinter: each
+# redraw left ten Tcl commands and a frame behind, for good.
+set_body(_rd_body)
+app._render_table_grids()
+app.update()
+_lk_base = (len(app.tk.call('info', 'commands')), len(app.body_text.children))
+for _lk_i in range(30):
+    app._render_table_grids()
+app.update()
+_lk_grew = (len(app.tk.call('info', 'commands')) - _lk_base[0],
+            len(app.body_text.children) - _lk_base[1])
+check(f'a table drawn again 30 times leaves no Tcl command or frame behind '
+      f'(commands, frames grown: {_lk_grew})',
+      _lk_grew[0] <= 2 and _lk_grew[1] <= 0
+      and app._grid_at_line(2) is not None)
+set_body('')
+
+# ---- CTRL+Z AFTER A TABLE OPERATION BRINGS THE TABLE'S STYLES BACK ----
+# Tk re-inserts the text an undo puts back without its tags, so every
+# table operation's Ctrl+Z returned the cells bare. The journal lays the
+# styles the table had back on the text Tk restores -- and Ctrl+Y lays
+# the operation's own ones back on the way forward.
+for _ut_name, _ut_do in (
+        ('clearing a cell with Delete',
+         lambda i: (app._grid_select_range(i, (1, 2), (1, 2)),
+                    app._on_body_delete_key())),
+        ('dropping a checkbox',
+         lambda i: app._grid_set_marker(i, 2, 2, core_tables.CHECKBOX_EMPTY)),
+        ('deleting the bold row',
+         lambda i: app._grid_delete_row(i, 1)),
+        ('inserting a column',
+         lambda i: app._grid_insert_col(i, 0))):
+    _ut_info = _cs_setup()
+    app._reset_text_undo()
+    _ut_text0 = app.body_text.get('1.0', 'end-1c')
+    _ut_do(_ut_info)
+    app.update()
+    _ut_text1, _ut_styles1 = app.body_text.get('1.0', 'end-1c'), _cs_styles()
+    _uf_key('<Control-z>')
+    check(f'table undo: Ctrl+Z after {_ut_name} brings the text AND the '
+          f'styles back ({_cs_styles()})',
+          app.body_text.get('1.0', 'end-1c') == _ut_text0
+          and _cs_styles() == _cs_want)
+    _uf_key('<Control-y>')
+    check(f'table undo: ...and Ctrl+Y redoes {_ut_name} with its styles '
+          f'({_cs_styles()})',
+          app.body_text.get('1.0', 'end-1c') == _ut_text1
+          and _cs_styles() == _ut_styles1)
+
+# The whole-body rewrite that renumbers a list is the same mechanism: Tk
+# put the old body back bare, every style in the note gone with one press.
+set_body('1. one' + chr(10) + '2. two' + chr(10) + 'bold words')
+app._apply_formatting(app.body_text, [
+    {'start': len('1. one\n2. two\n'), 'end': len('1. one\n2. two\nbold'),
+     'style': 'bold'}])
+app.update()
+app._reset_text_undo()
+app.body_text.mark_set('insert', '1.end')
+_ut_before = app.body_text.get('1.0', 'end-1c')
+app._on_body_return(None)
+app.update()
+_uf_key('<Control-z>')
+_uf_key('<Control-z>')
+check('list undo: Ctrl+Z after a renumbering Enter keeps the note\'s bold '
+      f'({_cs_styles()})',
+      app.body_text.get('1.0', 'end-1c') == _ut_before
+      and _cs_styles() == [('bold', 'bold')])
+set_body('')
+
+# ---- A CHECKLIST CHANGE TOUCHES ONE ROW, AND A CLOSED LIST BUILDS NONE ----
+# Adding or removing ONE item destroyed and rebuilt every row -- four
+# widgets each, and a new font per label: 0.3 s at 50 items, over 2 s at
+# 200. And every note with a checklist built all its rows on opening, for
+# a section a note switch always leaves closed. The rows are built when
+# the section opens now, and a change touches only its own row. Asked of
+# the widgets themselves: the rows that should stay are the SAME widgets
+# afterwards, which is what a rebuild cannot fake.
+def _cl_rows():
+    return [str(_w) for _w in app.checklist_items_frame.winfo_children()
+            if isinstance(_w, tk.Frame)]
+
+
+def _cl_texts():
+    return [str(_c.cget('text'))
+            for _r in app.checklist_items_frame.winfo_children()
+            if isinstance(_r, tk.Frame)
+            for _c in _r.winfo_children() if isinstance(_c, tk.Label)]
+
+
+check('checklist rows: fixture opens three items',
+      _cu_setup(['milk', 'eggs', 'bread']))
+_cl_0 = _cl_rows()
+app.checklist_add_var.set('butter')
+app._add_checklist_item()
+app.update()
+_cl_1 = _cl_rows()
+check('checklist rows: adding an item builds ONE row and keeps the others',
+      _cl_1[:3] == _cl_0 and len(_cl_1) == 4
+      and _cl_texts() == ['milk', 'eggs', 'bread', 'butter'])
+_cu_press(1)
+check('checklist rows: removing an item takes only its own row',
+      _cl_rows() == [_cl_1[0], _cl_1[2], _cl_1[3]]
+      and _cl_texts() == ['milk', 'bread', 'butter'])
+if app._toast_action is not None:
+    app._toast_action()
+app.update()
+_cl_2 = _cl_rows()
+check('checklist rows: the Undo puts that one row back in its place',
+      _cl_texts() == ['milk', 'eggs', 'bread', 'butter']
+      and _cl_2[0] == _cl_1[0] and _cl_2[2:] == [_cl_1[2], _cl_1[3]])
+app.toggle_checklist_section()
+app.toggle_checklist_section()
+app.update()
+check('checklist rows: closing and reopening the same list rebuilds nothing',
+      _cl_rows() == _cl_2)
+# Another note's checklist, then back: loading closes the section, and a
+# closed section gets no rows at all until it is opened.
+app.open_note_in_tab(app.find_note(9101))
+app.update()
+app.open_note_in_tab(app.find_note(9100))
+app.update()
+check('checklist rows: a note opened with the section closed builds no rows '
+      f'({_cl_texts()})',
+      not app._checklist_open
+      and not ({'milk', 'eggs', 'bread', 'butter'} & set(_cl_texts())))
+app.toggle_checklist_section()
+app.update()
+check('checklist rows: opening the section builds them',
+      _cl_texts() == ['milk', 'eggs', 'bread', 'butter'])
+# Two items that read the same are two items: removing the second must
+# leave the row standing tied to the item left in the list, or its tick
+# box writes to a dict nothing saves any more.
+check('checklist rows: fixture with two items reading the same',
+      _cu_setup(['milk', 'milk']))
+_cu_press(1)
+_cl_box = [_c for _r in app.checklist_items_frame.winfo_children()
+           if isinstance(_r, tk.Frame)
+           for _c in _r.winfo_children() if isinstance(_c, tk.Checkbutton)]
+if len(_cl_box) == 1:
+    _cl_box[0].invoke()
+    app.update()
+check('checklist rows: with two items alike, the row left ticks the item left',
+      len(_cl_box) == 1 and len(app._get_checklist()) == 1
+      and app._get_checklist()[0]['done'] is True)
+
+# ---- A DOUBLE-CLICK ON A CHECKLIST BIN REMOVES ONE ITEM ----
+# Many people double-click every button. The first click removed the row
+# and the next row slid up into its place, so the second press landed on
+# THAT row's bin and removed it too -- the toast's single Undo offering
+# back only the second, the first gone for good. The second press of a
+# double-click (Tk's own rule: 500 ms, 5 px) is swallowed now, on
+# whichever bin it lands. Delivered the way a pointer delivers it --
+# Enter, press, release -- at explicit screen points and event times, so
+# the verdict never depends on this desktop's clock or where its pointer
+# rests. Each "it removed nothing more" has its control: the same press
+# later, or elsewhere, is a click of its own and removes.
+def _dc_click(widget, x_root, y_root, t):
+    # No bin where one should be (a row too many already gone) is for the
+    # checks below to report by what the list holds -- never a crash that
+    # ends the script before its FAILURES line.
+    if widget is None:
+        return
+    _qa_fire(widget, '<Enter>')
+    _qa_fire(widget, '<ButtonPress-1>', x=5, y=5, rootx=x_root,
+             rooty=y_root, time=t)
+    _qa_fire(widget, '<ButtonRelease-1>', x=5, y=5, rootx=x_root,
+             rooty=y_root, time=t + 60)
+    app.update()
+
+
+check('double-click: fixture opens four items',
+      _cu_setup(['milk', 'eggs', 'bread', 'butter']))
+_dc_x, _dc_y = 400, 300
+_dc_click(_cu_bin(1), _dc_x, _dc_y, 100000)
+check('double-click: the first click of it removes the row under it (fixture)',
+      _cu_texts() == ['milk', 'bread', 'butter'])
+_dc_click(_cu_bin(1), _dc_x, _dc_y, 100250)
+check(f'double-click: the second press, on the row slid into place, removes '
+      f'nothing ({_cu_texts()})',
+      _cu_texts() == ['milk', 'bread', 'butter'])
+check('double-click: and the toast still offers back the one it removed',
+      'eggs' in str(app.toast_lbl.cget('text')) and app._toast_action is not None)
+_dc_click(_cu_bin(1), _dc_x, _dc_y, 100900)
+check('double-click: a click after the double-click window removes as usual',
+      _cu_texts() == ['milk', 'butter'])
+_dc_click(_cu_bin(1), _dc_x, _dc_y + 40, 101000)
+check('double-click: a quick click on a bin elsewhere is a click of its own',
+      _cu_texts() == ['milk'])
+app.notes = list(_cu_saved)
+app.save_notes()
+app.new_note(); app.update()
+
+# ---- A TABLE IS DRAWN ONCE ----
+# Building a grid drew every cell plain and then _grid_restyle drew every
+# one again, reading all its tags a second time -- half of opening a
+# 60-row table. Each cell's text is drawn once now, and its rectangle
+# takes its highlight in that same pass: asked of the rectangle's own
+# fill, for a highlighted header, a highlighted cell with text and a
+# highlighted EMPTY cell (whose colour lives on its padding).
+set_body('| Head | Other |' + chr(10) + '| --- | --- |' + chr(10)
+         + '| text |  |' + chr(10) + '| more | x |')
+_one_hl = [('| Head | Other |', 0, '#ffe066'), ('| text |  |', 0, '#a0e7e5'),
+           ('| text |  |', 1, '#c8f7c5')]
+_one_body = app.body_text.get('1.0', 'end-1c')
+_one_spans = []
+for _row, _ci, _hex in _one_hl:
+    _at = _one_body.index(_row)
+    _pp = [_i for _i, _ch in enumerate(_row) if _ch == '|']
+    _one_spans.append({'start': _at + _pp[_ci] + 1, 'end': _at + _pp[_ci + 1],
+                       'style': 'highlight', 'value': _hex})
+app._apply_formatting(app.body_text, _one_spans)
+_one_draws = {'n': 0}
+_one_real_draw = app._grid_draw_cell_text
+
+
+def _one_counting_draw(*a, **k):
+    _one_draws['n'] += 1
+    return _one_real_draw(*a, **k)
+
+
+app._grid_draw_cell_text = _one_counting_draw
+try:
+    app._render_table_grids()
+    app.update()
+finally:
+    del app._grid_draw_cell_text
+_one_info = app._grid_at_line(1)
+_one_cells = len(_one_info['cells']) if _one_info is not None else -1
+check(f'one pass: every cell\'s text is drawn once '
+      f'({_one_draws["n"]} draws for {_one_cells} cells)',
+      _one_draws['n'] == _one_cells)
+
+
+def _one_fill(r, c, hex_):
+    if _one_info is None or (r, c) not in _one_info['cells']:
+        return None
+    _surface = (NO.inset_surface(app.colors) if r == 0 else app.colors['card'])
+    _fill = str(_one_info['canvas'].itemcget(
+        _one_info['cells'][(r, c)]['rect'], 'fill'))
+    return _fill if hex_ is None else _fill == app._blend_hex(hex_, _surface,
+                                                              0.45)
+
+
+check('one pass: a highlighted header, text cell and EMPTY cell are washed '
+      'in it',
+      _one_fill(0, 0, '#ffe066') is True and _one_fill(1, 0, '#a0e7e5') is True
+      and _one_fill(1, 1, '#c8f7c5') is True)
+check('one pass: and a plain cell keeps its surface',
+      _one_fill(2, 1, None) == app.colors['card'])
+# The UTF-16 width is counted by the codec now instead of per character;
+# the answer must be the rule Tk keeps -- an astral character two units,
+# anything else (a lone surrogate half included) one.
+check('one pass: the UTF-16 count is still the one Tk keeps',
+      all(NO.NoteOrganizer._tk_units(_s)
+          == sum(2 if ord(_ch) > 0xFFFF else 1 for _ch in _s)
+          for _s in ('', 'abc', 'a' + chr(0x1F600) + 'b', chr(0xD83D),
+                     chr(0x65E5) + chr(0x672C),
+                     chr(0x1F468) + chr(0x200D) + chr(0x1F469) + ' ok')))
+set_body('')
 
 # ---- CLOSING SAVES SILENTLY (dead last: it destroys the app) ----
 # The quit-time "Unsaved notes" ask could only ever cover the last

@@ -139,6 +139,40 @@ _t, _s, _p = html_to_note("<p>" + ("x" * 200_000) + "</p>")
 check(f"an enormous paste is capped ({len(_t)} chars kept)",
       len(_t) <= NO_MAX if (NO_MAX := 100_000) else False)
 
+# ---- A cap that cuts says so ----
+# Past the caps the paste was cut without a word, and the rest of a long
+# article was simply not in the note. The caller is told now, so it can say
+# what was left out.
+from noteorganizer.core.richtext import MAX_PASTE_CHARS, MAX_PASTE_SPANS
+
+
+def _cut_report(markup):
+    report = {"text_cut": None, "styles_cut": None}
+    html_to_note(markup, report=report)
+    return report
+
+
+_NOTHING_CUT = {"text_cut": False, "styles_cut": False}
+check("text past the character cap is reported as cut",
+      _cut_report("<p>" + "x" * (MAX_PASTE_CHARS + 1) + "</p>")
+      == {"text_cut": True, "styles_cut": False})
+check("text exactly at the cap is not",
+      _cut_report("<p>" + "x" * MAX_PASTE_CHARS + "</p>") == _NOTHING_CUT)
+check("nor is a cap reached with only blank paragraphs after it",
+      _cut_report("<p>" + "x" * MAX_PASTE_CHARS + "</p><p> </p><p></p>")
+      == _NOTHING_CUT)
+check("styles past the style cap are reported as cut",
+      _cut_report("<p>x</p>" + "<p><b>x</b></p>" * (MAX_PASTE_SPANS + 1))
+      == {"text_cut": False, "styles_cut": True})
+check("styles exactly at the cap are not",
+      _cut_report("<p>x</p>" + "<p><b>x</b></p>" * MAX_PASTE_SPANS)
+      == _NOTHING_CUT)
+check("a style still open when the text runs out is counted too",
+      _cut_report("<p>x</p>" + "<p><b>x</b></p>" * MAX_PASTE_SPANS
+                  + "<p><i>unclosed")["styles_cut"] is True)
+check("a report on nothing at all says nothing was cut",
+      _cut_report("") == _NOTHING_CUT and _cut_report(None) == _NOTHING_CUT)
+
 
 # ---- Pasting without formatting must not leave a list behind ----
 # A marker in the text is what makes a line a list line in this app, and
@@ -281,13 +315,15 @@ for label, text, paras in KIND_CHANGES:
     check(f"a list changing kind starts a new list: {label}",
           back_text == text and back_paras == paras and valid(markup))
 
-# Styles must survive the trip, though bold+italic may come back as two
-# spans where it went out as one -- the note format allows both.
+# Styles must survive the trip. Bold+italic went out as one span and came
+# back as two, bold and italic -- which the note format allows, but as two
+# Tk tags that both set the font they do not compose, and the text was
+# drawn italic alone. It comes back as the one span it went out as.
 markup = note_to_html("abc", [{"start": 0, "end": 3, "style": "bold_italic"}])
 _t, _s, _p = html_to_note(markup)
-check("bold_italic survives as bold and italic over the same characters",
-      sorted(s["style"] for s in _s) == ["bold", "italic"]
-      and all(s["start"] == 0 and s["end"] == 3 for s in _s))
+check("bold_italic survives the trip as bold_italic over the same characters",
+      [(s["style"], s["start"], s["end"]) for s in _s]
+      == [("bold_italic", 0, 3)])
 
 # --- reflow_wrapped: rejoining what a column broke --------------------------
 # A PDF hands over its own line breaks. Keeping them gives narrow ragged text;
@@ -556,6 +592,168 @@ _t, _s, _p = html_to_note("<table><tr><td>a<br>b</td></tr></table>")
 check("a cell's line break arrives as the cell break marker, not a space",
       _tbl.LINE_BREAK in _t and "a" + _tbl.LINE_BREAK + "b"
       in _t.replace(" ", ""))
+
+# ---- One answer to "is this Tk tag character formatting?" ----
+# The table rewrite carries these tags cell by cell and the undo journal
+# clears and re-lays them; both ask this one function, so a new kind of
+# format tag cannot be carried by one and dropped by the other.
+from noteorganizer.core.formatting import (is_format_tag, font_tag_for,
+                                           color_tag_name)
+check("the plain styles are format tags",
+      all(is_format_tag(t) for t in
+          ("bold", "italic", "bold_italic", "underline", "strike")))
+check("a colour tag with a real hex is a format tag",
+      is_format_tag(color_tag_name("text_color", "#E63946"))
+      and is_format_tag(color_tag_name("highlight", "#ffe066")))
+check("a composite font tag is a format tag",
+      is_format_tag(font_tag_for(True, False, 14, "Georgia")))
+check("paragraph, table and selection tags are not",
+      not any(is_format_tag(t) for t in
+              ("para_bullet_1", "align_center", "table_hidden", "sel",
+               "text_color_nothex", "highlight_", "font_Nope_99_10",
+               None, 5)))
+
+# ---- Where a composite font tag goes, worked out in one sweep ----
+# resolve_font_runs checked every span at every span boundary: one font
+# size in a note of 8,000 styled words cost 1.7 s at every open, every
+# Enter in a numbered list and every font change. The sweep must give the
+# very runs the old way gave -- this is the old way, kept as the oracle.
+import random as _random
+import sys as _sys
+from noteorganizer.core.formatting import (resolve_font_runs,
+                                           normalize_formatting, merge_spans,
+                                           FONT_FAMILIES, FONT_SIZES,
+                                           FONT_VALUE_STYLES)
+
+
+def _runs_checked_one_by_one(spans, text_length):
+    spans = normalize_formatting(spans)
+    affects = {"bold", "italic", "bold_italic"} | FONT_VALUE_STYLES
+    relevant = [s for s in spans if s["style"] in affects]
+    if not any(s["style"] in FONT_VALUE_STYLES for s in relevant):
+        return []
+    marks = {0, text_length}
+    for s in relevant:
+        marks.update((s["start"], s["end"]))
+    points = sorted(m for m in marks if 0 <= m <= text_length)
+    runs = []
+    for a, z in zip(points, points[1:]):
+        bold = italic = False
+        size = family = None
+        for s in relevant:
+            if s["start"] > a or s["end"] < z:
+                continue
+            if s["style"] == "bold":
+                bold = True
+            elif s["style"] == "italic":
+                italic = True
+            elif s["style"] == "bold_italic":
+                bold = italic = True
+            elif s["style"] == "font_size":
+                size = s["value"]
+            else:
+                family = s["value"]
+        if size is not None or family is not None:
+            runs.append((a, z, bold, italic, size, family))
+    merged = []
+    for run in runs:
+        if merged and merged[-1][1] == run[0] and merged[-1][2:] == run[2:]:
+            merged[-1] = (merged[-1][0], run[1]) + run[2:]
+        else:
+            merged.append(run)
+    return merged
+
+
+def _random_spans(rng, length):
+    spans = []
+    for _ in range(rng.randint(0, 14)):
+        a = rng.randint(0, length + 3)
+        z = a + rng.randint(1, 12)
+        style = rng.choice(("bold", "italic", "bold_italic", "underline",
+                            "font_size", "font_family", "font_size"))
+        span = {"start": a, "end": z, "style": style}
+        if style == "font_size":
+            span["value"] = rng.choice(FONT_SIZES)
+        elif style == "font_family":
+            span["value"] = rng.choice(FONT_FAMILIES)
+        spans.append(span)
+    return spans
+
+
+_rng = _random.Random(20261002)
+_differ = []
+for _case in range(4000):
+    _len = _rng.randint(0, 30)
+    _sp = _random_spans(_rng, _len)
+    if resolve_font_runs(_sp, _len) != _runs_checked_one_by_one(_sp, _len):
+        _differ.append((_sp, _len))
+check(f"the sweep gives the runs every span checked in turn gave, on 4,000 "
+      f"random notes -- overlapping sizes and families, bold_italic, spans "
+      f"past the end ({len(_differ)} differ)", not _differ)
+
+
+def _lines_run_in(fn, *args):
+    """How many lines of *fn* itself ran: the work it does, counted rather
+    than timed, so a slow machine cannot fail it and a fast one cannot
+    hide a loop inside a loop."""
+    ran = [0]
+
+    def inside(frame, event, arg):
+        if event == "line":
+            ran[0] += 1
+        return inside
+
+    def calls(frame, event, arg):
+        return inside if frame.f_code is fn.__code__ else None
+
+    _sys.settrace(calls)
+    try:
+        fn(*args)
+    finally:
+        _sys.settrace(None)
+    return ran[0]
+
+
+# Bold and italic over the same letters are one bold_italic span: as two Tk
+# tags that both set the font they do not compose, and italic won -- bold
+# italic pasted from a web page or the app's own copy was drawn italic.
+def _styles(spans):
+    return sorted((s["start"], s["end"], s["style"])
+                  for s in normalize_formatting(spans))
+
+
+check("overlapping bold and italic become bold, bold_italic and italic",
+      _styles([{"start": 0, "end": 5, "style": "bold"},
+               {"start": 3, "end": 8, "style": "italic"}])
+      == [(0, 3, "bold"), (3, 5, "bold_italic"), (5, 8, "italic")])
+_apart = [{"start": 0, "end": 3, "style": "bold"},
+          {"start": 5, "end": 8, "style": "italic"},
+          {"start": 1, "end": 2, "style": "underline"}]
+check("bold and italic that do not overlap are left exactly as they were",
+      normalize_formatting(_apart) == _apart)
+# ...and a list the fold changed comes back in the order the editor reads
+# spans back in: with the folded pieces put after the rest, a note saved the
+# old way read as unsaved the moment it was opened, and was saved again on
+# leaving with no edit made.
+_old_way = [{"start": 4, "end": 7, "style": "bold"},
+            {"start": 4, "end": 7, "style": "italic"},
+            {"start": 8, "end": 13, "style": "underline"}]
+check("a list the fold changed is in the order the editor reads spans back in",
+      normalize_formatting(_old_way)
+      == merge_spans(normalize_formatting(_old_way))
+      == [{"start": 4, "end": 7, "style": "bold_italic"},
+          {"start": 8, "end": 13, "style": "underline"}])
+
+_n = 600
+_many = [{"start": 3 * i, "end": 3 * i + 2,
+          "style": ("bold", "italic")[i % 2]} for i in range(_n)]
+_many.append({"start": 0, "end": 3 * _n, "style": "font_size", "value": 20})
+_lines = _lines_run_in(resolve_font_runs, _many, 3 * _n)
+# About 46 lines a word now; checking every span at every boundary ran
+# about 3,600 a word (2.2 million in all), measured.
+check(f"working out the runs of {_n} styled words and one size takes work in "
+      f"step with the words, not with their square ({_lines} lines ran)",
+      _lines <= 120 * _n)
 
 print()
 print(f"FAILURES: {fails if fails else 'none'}")

@@ -66,6 +66,7 @@ from ..core.storage import (
     # that will actually go.
     trash_entries_past_window,
     _delete_attachment_files,
+    attachment_names_in,
     copy_attachment_file,
     get_setting,
     save_setting,
@@ -108,6 +109,25 @@ def _host():
     return note_organizer
 
 
+def _trash_tick_key(entry):
+    """Which trash entry a tick in Settings -> Recently deleted belongs to.
+
+    Not the id alone: a note's id is only its place in notes_data.json, and
+    it is handed out again once the note is deleted -- so two entries could
+    share one, and ticking either row ticked both and restored both. When
+    the note was deleted tells them apart, as it does for the toast's Undo;
+    its uid as well, for two deletes inside one second.
+    """
+    key = (entry.get("id"), entry.get("deleted_at"), entry.get("uid"))
+    try:
+        hash(key)
+    except TypeError:
+        # The trash file is read as it was written, and a hand-edited one
+        # can hold a list where a value goes; a dict key must be hashable.
+        key = tuple(repr(part) for part in key)
+    return key
+
+
 class SettingsPageMixin:
     """The Settings page for :class:`NoteOrganizer`.
 
@@ -129,6 +149,13 @@ class SettingsPageMixin:
         target, builder, eager = sections.get(which, (None, None, None))
         if target is None:
             return
+
+        # Leaving a section -- or rebuilding the one on screen -- takes a
+        # popup holding typed work with it (the template editor lives in
+        # Templates). It has its say first, as it does on a click outside
+        # it. Returns False when the person stays on it.
+        if not self._dismiss_mini_popup_asking(holding_work_only=True):
+            return False
 
         for key, (panel, _b, _e) in sections.items():
             if panel is not None and self._is_placed(panel):
@@ -313,24 +340,51 @@ class SettingsPageMixin:
             return
         if not getattr(self, "_settings_open", False):
             return
-        for w in self.stats_frame.winfo_children():
-            w.destroy()
 
         notes = self.notes
         total = len(notes)
-
-        def _parse_ts(raw):
-            if not isinstance(raw, str) or not raw:
-                return None
-            try:
-                return datetime.strptime(raw[:16], "%Y-%m-%d %H:%M")
-            except ValueError:
-                return None
 
         today = date_cls.today()
         week_start = today - timedelta(days=today.weekday())
         month_start = today.replace(day=1)
         year_start = today.replace(month=1, day=1)
+        # Days compared as "YYYY-MM-DD" text, which sorts as the dates do.
+        week_day, month_day, year_day = (week_start.isoformat(),
+                                         month_start.isoformat(),
+                                         year_start.isoformat())
+        real_days = {}
+
+        def _day(raw):
+            # Every stamp went through strptime, twice per note on every
+            # render: 10,212 calls at 5,000 notes, most of a render's 200 ms.
+            # The app writes one shape, "YYYY-MM-DD HH:MM", and that shape
+            # is read as text now -- its date checked once per distinct day
+            # and its time against the same ranges strptime allows. Any
+            # other shape still goes through strptime, so exactly the same
+            # stamps count, and the same odd ones are skipped.
+            if not isinstance(raw, str) or not raw:
+                return None
+            head = raw[:16]
+            if (len(head) == 16 and head.isascii() and head[4] == "-"
+                    and head[7] == "-" and head[10] == " " and head[13] == ":"
+                    and (head[:4] + head[5:7] + head[8:10] + head[11:13]
+                         + head[14:16]).isdigit()):
+                if int(head[11:13]) > 23 or int(head[14:16]) > 59:
+                    return None
+                day = head[:10]
+                real = real_days.get(day)
+                if real is None:
+                    try:
+                        date_cls.fromisoformat(day)
+                        real = True
+                    except ValueError:
+                        real = False
+                    real_days[day] = real
+                return day if real else None
+            try:
+                return datetime.strptime(head, "%Y-%m-%d %H:%M").date().isoformat()
+            except ValueError:
+                return None
 
         def _bucket_counts(field):
             # Cumulative from the start of each period (so "this year"
@@ -338,15 +392,14 @@ class SettingsPageMixin:
             # complement — notes not touched at all since Jan 1st.
             week = month = year = older = 0
             for n in notes:
-                ts = _parse_ts(n.get(field))
-                if not ts:
+                d = _day(n.get(field))
+                if d is None:
                     continue
-                d = ts.date()
-                if d >= week_start:
+                if d >= week_day:
                     week += 1
-                if d >= month_start:
+                if d >= month_day:
                     month += 1
-                if d >= year_start:
+                if d >= year_day:
                     year += 1
                 else:
                     older += 1
@@ -379,6 +432,66 @@ class SettingsPageMixin:
         templates_count = len(self.templates)
         checklists_count = sum(1 for n in notes if n.get("checklist"))
         deleted_count = len(self.trash)
+        tile_values = (total, added_week, len(counts), templates_count,
+                       checklists_count, deleted_count)
+        table_values = ((added_week, added_month, added_year, added_older),
+                        (updated_week, updated_month, updated_year, updated_older))
+        # --- Per-category split. Known categories first (Manage-categories
+        # order), then any leftover/stale names so nothing is silently
+        # dropped. Deliberately not clickable: this is a snapshot, not
+        # another way to filter notes -- see docs/ISSUES_LOG.md. ---
+        ordered_cats = [c for c in CATEGORY_COLORS.keys() if c in counts]
+        ordered_cats += [c for c in counts.keys() if c not in ordered_cats]
+        # Read the stamp back from settings rather than the entry module's
+        # FIRST_LAUNCH_DATE -- see _host()'s docstring for why that global
+        # can be None here. Purely a read: the stamp is written once, at
+        # startup, by get_first_launch_date().
+        since = load_settings().get("first_launch_date") or "\u2014"
+
+        # Same wheel-forwarding pattern used elsewhere in Settings (theme
+        # picker, inline panels) — without it, scrolling with the cursor
+        # over the summary text or a category chip does nothing, since
+        # those widgets have no scroll behavior of their own to fall back
+        # to. Bound on the frame once: re-binding it on every render left
+        # one more Tcl command behind each time, for good.
+        def _stats_wheel(event):
+            try:
+                self.settings_canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+            except (tk.TclError, ValueError):
+                pass
+            return "break"
+        if not getattr(self.stats_frame, "_wheel_bound", False):
+            self.stats_frame._wheel_bound = True
+            self.stats_frame.bind("<MouseWheel>", _stats_wheel)
+
+        # The widgets stay; their figures change. This destroyed and rebuilt
+        # all of them on every render -- every list refresh while Settings
+        # is open. It builds again only when what is DRAWN changes: another
+        # palette, or another set of categories to split by.
+        shape = tuple((c, CATEGORY_COLORS.get(c)) for c in ordered_cats)
+        view = getattr(self, "_stats_view", None)
+        try:
+            same_drawing = (view is not None and view["colors"] is self.colors
+                            and view["shape"] == shape
+                            and view["since"].winfo_exists())
+        except tk.TclError:
+            same_drawing = False
+        if same_drawing:
+            for lbl, value in zip(view["tiles"], tile_values):
+                lbl.configure(text=str(value))
+            for row, values in zip(view["table"], table_values):
+                for lbl, value in zip(row, values):
+                    lbl.configure(text=str(value),
+                                  fg=self.colors["text"] if value else self.colors["subtext"])
+            for lbl, cat in zip(view["cat_counts"], ordered_cats):
+                lbl.configure(text=str(counts[cat]))
+            view["since"].configure(text=f"Using Note Organizer since {since}")
+            return
+        for w in self.stats_frame.winfo_children():
+            w.destroy()
+        view = self._stats_view = {"colors": self.colors, "shape": shape,
+                                   "tiles": [], "table": [], "cat_counts": [],
+                                   "since": None}
 
         tiles = tk.Frame(self.stats_frame, bg=self.colors["bg"])
         tiles.pack(fill="x", pady=(0, 22))
@@ -389,22 +502,19 @@ class SettingsPageMixin:
         # with three; dropping to match it exactly would have deleted the
         # template, checklist and trash counts, which are real figures this
         # panel has always shown and has regression tests for.
-        for i, (value, caption) in enumerate((
-                (total, "Total notes"),
-                (added_week, "Added this week"),
-                (len(counts), "Categories"),
-                (templates_count, "Templates"),
-                (checklists_count, "With a checklist"),
-                (deleted_count, "In trash"))):
+        for i, (value, caption) in enumerate(zip(tile_values, (
+                "Total notes", "Added this week", "Categories", "Templates",
+                "With a checklist", "In trash"))):
             edge = tk.Frame(tiles, bg=self._border_color())
             edge.grid(row=i // 3, column=i % 3, sticky="nsew",
                       padx=(0 if i % 3 == 0 else 12, 0),
                       pady=(0 if i < 3 else 12, 0))
             tile = tk.Frame(edge, bg=self._surface())
             tile.pack(fill="both", expand=True, padx=1, pady=1)
-            tk.Label(tile, text=str(value), font=("Segoe UI", 20, "bold"),
-                     bg=self._surface(), fg=self.colors["text"], anchor="w"
-                     ).pack(fill="x", padx=18, pady=(16, 0))
+            figure = tk.Label(tile, text=str(value), font=("Segoe UI", 20, "bold"),
+                              bg=self._surface(), fg=self.colors["text"], anchor="w")
+            figure.pack(fill="x", padx=18, pady=(16, 0))
+            view["tiles"].append(figure)
             tk.Label(tile, text=caption, font=("Segoe UI", 9, "bold"),
                      bg=self._surface(), fg=self.colors["subtext"], anchor="w"
                      ).pack(fill="x", padx=18, pady=(3, 16))
@@ -428,25 +538,19 @@ class SettingsPageMixin:
         rule = tk.Frame(table, height=1, bg=self._border_color())
         rule.grid(row=1, column=0, columnspan=5, sticky="ew", pady=(0, 4))
 
-        for r, (caption, values) in enumerate((
-                ("Added", (added_week, added_month, added_year, added_older)),
-                ("Updated", (updated_week, updated_month, updated_year, updated_older)))):
+        for r, (caption, values) in enumerate(zip(("Added", "Updated"), table_values)):
             tk.Label(table, text=caption, font=("Segoe UI", 9), bg=self.colors["bg"],
                      fg=self.colors["subtext"], anchor="w"
                      ).grid(row=r + 2, column=0, sticky="w", pady=2)
+            row_figures = []
             for c, value in enumerate(values):
-                tk.Label(table, text=str(value), font=("Segoe UI", 10, "bold"),
-                         bg=self.colors["bg"],
-                         fg=self.colors["text"] if value else self.colors["subtext"],
-                         anchor="e"
-                         ).grid(row=r + 2, column=c + 1, sticky="ew", padx=(8, 0), pady=2)
-
-        # --- Per-category split. Known categories first (Manage-categories
-        # order), then any leftover/stale names so nothing is silently
-        # dropped. Deliberately not clickable: this is a snapshot, not
-        # another way to filter notes -- see docs/ISSUES_LOG.md. ---
-        ordered_cats = [c for c in CATEGORY_COLORS.keys() if c in counts]
-        ordered_cats += [c for c in counts.keys() if c not in ordered_cats]
+                figure = tk.Label(table, text=str(value), font=("Segoe UI", 10, "bold"),
+                                  bg=self.colors["bg"],
+                                  fg=self.colors["text"] if value else self.colors["subtext"],
+                                  anchor="e")
+                figure.grid(row=r + 2, column=c + 1, sticky="ew", padx=(8, 0), pady=2)
+                row_figures.append(figure)
+            view["table"].append(row_figures)
 
         tk.Label(self.stats_frame, text="BY CATEGORY", font=("Segoe UI", 8, "bold"),
                  bg=self.colors["card"], fg=self.colors["subtext"], anchor="w"
@@ -476,35 +580,19 @@ class SettingsPageMixin:
                 tk.Label(pill, text=cat, font=("Segoe UI", 9, "bold"),
                          bg=self._surface(), fg=self.colors["subtext"], anchor="w"
                          ).pack(side="left", fill="x", expand=True)
-                tk.Label(pill, text=str(n), font=("Consolas", 9),
-                         bg=self._surface(), fg=self.colors["text"], anchor="e"
-                         ).pack(side="right", padx=(6, 12))
+                figure = tk.Label(pill, text=str(n), font=("Consolas", 9),
+                                  bg=self._surface(), fg=self.colors["text"], anchor="e")
+                figure.pack(side="right", padx=(6, 12))
+                view["cat_counts"].append(figure)
 
-        # Read the stamp back from settings rather than the entry module's
-        # FIRST_LAUNCH_DATE -- see _host()'s docstring for why that global
-        # can be None here. Purely a read: the stamp is written once, at
-        # startup, by get_first_launch_date().
-        since = load_settings().get("first_launch_date") or "\u2014"
-        tk.Label(
+        view["since"] = tk.Label(
             self.stats_frame, text=f"Using Note Organizer since {since}",
             font=("Segoe UI", 9), bg=self.colors["bg"],
-            fg=self.colors["subtext"], anchor="w"
-        ).pack(fill="x", pady=(18, 0))
-
-
-        # Same wheel-forwarding pattern used elsewhere in Settings (theme
-        # picker, inline panels) — without it, scrolling with the cursor
-        # over the summary text or a category chip does nothing, since
-        # those widgets have no scroll behavior of their own to fall back
-        # to. Rebound every time this panel rebuilds (it's redrawn on every
-        # Settings-page open, to stay fresh).
-        def _stats_wheel(event):
-            try:
-                self.settings_canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
-            except (tk.TclError, ValueError):
-                pass
-            return "break"
-        self._bind_wheel_tree(self.stats_frame, _stats_wheel)
+            fg=self.colors["subtext"], anchor="w")
+        view["since"].pack(fill="x", pady=(18, 0))
+        # The wheel on what was just built; the frame itself is bound once.
+        for child in self.stats_frame.winfo_children():
+            self._bind_wheel_tree(child, _stats_wheel)
 
     def _build_settings_categories_panel(self, parent):
         self._settings_subtitle(
@@ -526,6 +614,13 @@ class SettingsPageMixin:
         canvas.pack(side="left", fill="both", expand=True)
         self._active_panel_canvas = canvas
 
+        # The frame outlives every redraw: it gets the wheel once, here, and
+        # each redraw gives it only to the rows it builds. Re-binding the
+        # frame itself left a Tcl command behind per rename, recolour and
+        # delete (see the Trash panel).
+        wheel = lambda e: self._panel_or_page_wheel(canvas, e)  # noqa: E731
+        rows_frame.bind("<MouseWheel>", wheel)
+
         def redraw():
             for w in rows_frame.winfo_children():
                 w.destroy()
@@ -533,7 +628,8 @@ class SettingsPageMixin:
                 if i:
                     self._row_divider(rows_frame)
                 self._build_category_row(rows_frame, name, redraw)
-            self._bind_wheel_tree(rows_frame, lambda e: self._panel_or_page_wheel(canvas, e))
+            for child in rows_frame.winfo_children():
+                self._bind_wheel_tree(child, wheel)
         redraw()
 
         # Add-new row
@@ -594,7 +690,18 @@ class SettingsPageMixin:
         canvas.pack(side="left", fill="both", expand=True)
         self._active_panel_canvas = canvas
 
+        # The frame outlives every redraw: it gets the wheel once, here, and
+        # each redraw gives it only to the rows it builds -- as the Trash and
+        # Categories panels do. Re-binding the frame itself left a Tcl
+        # command behind at every save, delete and rename of a template.
+        wheel = lambda e: self._panel_or_page_wheel(canvas, e)  # noqa: E731
+        rows.bind("<MouseWheel>", wheel)
+
         def redraw():
+            # A list this section no longer shows: rebuilt since, its rows
+            # are gone, and there is nothing to redraw.
+            if not rows.winfo_exists():
+                return
             for w in rows.winfo_children():
                 w.destroy()
             if not self.templates:
@@ -608,7 +715,8 @@ class SettingsPageMixin:
                     if i:
                         self._row_divider(rows)
                     self._build_template_row(rows, tpl, redraw)
-            self._bind_wheel_tree(rows, lambda e: self._panel_or_page_wheel(canvas, e))
+            for child in rows.winfo_children():
+                self._bind_wheel_tree(child, wheel)
         redraw()
         self._refresh_templates_panel = redraw
 
@@ -633,6 +741,25 @@ class SettingsPageMixin:
                  ).pack(side="left", fill="x", expand=True, padx=6, pady=8)
 
         def delete():
+            # The window's click-outside used to answer this press too,
+            # after the delete: the editor's "Save changes?" came second,
+            # and its Yes wrote back the very template just deleted "for
+            # good". Now the press is answered here alone. This template
+            # open in the editor: the delete question covers its unsaved
+            # edit, and is the only one. Another template's editor has its
+            # say first, as the pencil beside this bin lets it.
+            pop = getattr(self, "_mini_popup", None)
+            own = pop is not None and getattr(pop, "edited_template", None) is tpl
+            if not own and not self._dismiss_mini_popup_asking():
+                return "break"
+            # The editor's save can have replaced this very template -- its
+            # name taken, "Replace" answered Yes. There is nothing left for
+            # this bin to delete: asked anyway, Yes deleted nothing and the
+            # template saved under that name stayed.
+            if not any(t is tpl for t in self.templates):
+                self.set_status(f"“{name}” was replaced by the template "
+                                "you saved")
+                return "break"
             # Honest about the stakes: notes go to the Trash and can come
             # back for the whole retention window -- templates do not.
             if self.ask_yes_no(
@@ -640,16 +767,26 @@ class SettingsPageMixin:
                     f"Delete the template “{name}” for good?\n\n"
                     "Templates don't go to the Trash — this can't be undone.",
                     icon="warning", default="no"):
+                if own:
+                    self._dismiss_mini_popup()
                 self.templates = [t for t in self.templates if t is not tpl]
                 save_templates(self.templates)
                 redraw()
                 self._render_statistics()
+            return "break"
 
         self._icon_button(row, "trash", delete, danger=True, bg_key="sidebar"
                           ).pack(side="right", padx=(1, 6))
         edit_btn = self._icon_button(row, "pencil", bg_key="sidebar")
-        edit_btn.bind("<Button-1>",
-                      lambda _e: self._edit_template(tpl, redraw, edit_btn))
+
+        def edit(_e=None):
+            # Another template's editor, half written, stayed open: this
+            # click is spent, and must not reach the window's click-outside
+            # to ask the same question twice.
+            if self._edit_template(tpl, redraw, edit_btn) is False:
+                return "break"
+
+        edit_btn.bind("<Button-1>", edit)
         edit_btn.pack(side="right", padx=1)
 
     def _draw_template_table_preview(self, canvas, body_text):
@@ -762,13 +899,22 @@ class SettingsPageMixin:
 
     def _edit_template(self, tpl, redraw, anchor_widget=None):
         """Open a small editor (inline window) to create or edit a template's
-        name, title, body, comments and category."""
+        name, title, body, comments and category. Returns False when it
+        could not: the editor already open holds typed work and the person
+        chose to keep it."""
         is_new = tpl is None
         data = normalize_template(tpl or {})
 
-        self._dismiss_mini_popup()
+        # The editor already open -- another template's -- has its say
+        # first. A pencil acts on its own press, before the window's
+        # click-outside ever runs, so it used to close that editor without
+        # the question and the half-written template was simply gone.
+        if not self._dismiss_mini_popup_asking():
+            return False
         pop = tk.Toplevel(self)
         self._mini_popup = pop
+        # Which template it edits (None for a new one), for that row's bin.
+        pop.edited_template = tpl
         pop.wm_overrideredirect(True)
         pop.configure(bg=self.colors["accent"])
         frame = tk.Frame(pop, bg=self.colors["card"], padx=12, pady=12)
@@ -1009,7 +1155,8 @@ class SettingsPageMixin:
                 # bg_key as the row it sits in, and no track_theme, because
                 # render_tpl_checklist() rebuilds these rows.
                 self._icon_button(row, "trash", do_del, danger=True,
-                                  bg_key="sidebar").pack(side="right")
+                                  bg_key="sidebar", removes_row=True
+                                  ).pack(side="right")
 
         render_tpl_checklist()
 
@@ -1098,7 +1245,12 @@ class SettingsPageMixin:
                     self.templates.append(new_tpl)
             save_templates(self.templates)
             self._dismiss_mini_popup()
-            redraw()
+            # The list as the page shows it NOW, looked up at this moment.
+            # The section can be rebuilt while this editor is open, and the
+            # rows `redraw` was handed are then gone: redrawing them raised,
+            # and a template that WAS saved reported "Something went wrong".
+            live = getattr(self, "_refresh_templates_panel", None) or redraw
+            live()
             self._render_statistics()
 
         btns = tk.Frame(frame, bg=self.colors["card"])
@@ -1127,19 +1279,26 @@ class SettingsPageMixin:
                 return True               # nothing changed: just close
             confirm_state["asking"] = True
             try:
-                wants_save = self.ask_yes_no(
+                # Three answers, not two. Asked as Yes/No, Escape -- the
+                # key for "never mind" -- answered No and threw the typed
+                # work away. Cancel is first, so Escape takes it.
+                choice = self.ask_yes_no_cancel(
                     "Save changes?",
                     "You changed this template. Save the changes "
                     "before closing?", icon="question", default="yes")
             finally:
                 confirm_state["asking"] = False
-            if wants_save:
+            if choice is None:
+                return False              # Cancel or Escape: keep editing
+            if choice:
                 save()                    # dismisses itself on success
                 # A failed save (no name) keeps the dialog for fixing.
                 return False
-            return True
+            return True                   # No: close without saving
 
         pop._confirm_dismiss = confirm_dismiss
+        # Ctrl+S while the keyboard is in this editor (_shortcut_save_now).
+        pop._save_from_keyboard = save
         if anchor_widget is not None and anchor_widget.winfo_exists():
             self._place_dropdown_popup(pop, anchor_widget)
         else:
@@ -1147,9 +1306,9 @@ class SettingsPageMixin:
                 pop, None,
                 anchor_xy=(self.winfo_rootx() + self.winfo_width() // 2,
                           self.winfo_rooty() + self.winfo_height() // 3))
-        pop.bind("<Escape>",
-                 lambda e: (self._dismiss_mini_popup()
-                            if confirm_dismiss() else None))
+        # Innermost first (an open Category list, an emoji picker), then
+        # this editor -- asking, when something was typed.
+        pop.bind("<Escape>", lambda e: self._escape_backs_out())
 
     def _build_trash_row(self, parent, entry, redraw, on_tick=None):
         row = tk.Frame(parent, bg=self.colors["card"])
@@ -1163,7 +1322,7 @@ class SettingsPageMixin:
         # because redraw() destroys every row -- paging, restoring or
         # deleting anything would otherwise clear what you had ticked. The
         # Duplicates panel below does the same thing with its own list.
-        key = entry.get("id")
+        key = _trash_tick_key(entry)
         var = self._trash_sel.get(key)
         if var is None:
             var = tk.IntVar(value=0)
@@ -1194,6 +1353,11 @@ class SettingsPageMixin:
                  font=("Segoe UI", 10, "bold"), anchor="w").pack(fill="x")
         # Show when it was deleted and how long remains.
         meta = entry.get("deleted_at", "")
+        if not isinstance(meta, str):
+            # Only a hand-edited trash.json gets here (the backup import
+            # keeps text only): the date is unknown, and slicing a number
+            # below raised and kept the whole panel from opening.
+            meta = ""
         remaining = self._days_left_in_trash(meta)
         sub = f"deleted {meta[:10]}" if meta else "deleted"
         if remaining is not None:
@@ -1219,28 +1383,49 @@ class SettingsPageMixin:
         # the same helper reads it without any adapting.
         self._attach_dup_preview(left, entry)
 
+        # The row holds the entry it was drawn for, and the toast's Undo
+        # can take that entry out of the Trash while the row is still on
+        # screen. Acted on anyway, Restore put back a second copy of a note
+        # already back, and Delete destroyed the file that note showed.
+        def still_in_trash():
+            return any(e is entry for e in self.trash)
+
         def restore():
-            self._restore_from_trash(entry)
+            if still_in_trash():
+                self._restore_from_trash(entry)
             redraw()
 
         def delete_forever():
+            if not still_in_trash():
+                redraw()
+                return
             if self.ask_yes_no(
                 "Delete permanently",
                 f"Permanently delete “{title}”? This can't be undone."
                 + self._series_warning([entry]),
                 icon="warning", default="no"
-            ):
-                _delete_attachment_files([entry])
+            ) and still_in_trash():
+                _delete_attachment_files(
+                    [entry], spare=attachment_names_in(
+                        self.notes + [e for e in self.trash if e is not entry]))
                 self.trash = [e for e in self.trash if e is not entry]
                 save_trash(self.trash)
-                redraw()
+            redraw()
 
         tk.Button(row, text="Delete", command=delete_forever, relief="flat",
                   cursor="hand2", bg=self.colors["danger"], fg="white",
                   font=("Segoe UI", 8, "bold")).pack(side="right", padx=(2, 8), ipadx=4, ipady=1)
-        tk.Button(row, text="Restore", command=restore, relief="flat",
-                  cursor="hand2", bg=self.colors["accent"], fg="white",
-                  font=("Segoe UI", 8, "bold")).pack(side="right", padx=2, ipadx=4, ipady=1)
+        restore_btn = tk.Button(row, text="Restore", command=restore, relief="flat",
+                                cursor="hand2", bg=self.colors["accent"], fg="white",
+                                font=("Segoe UI", 8, "bold"))
+        restore_btn.pack(side="right", padx=2, ipadx=4, ipady=1)
+        # A double-click's second press lands on the row that slid up into
+        # this one's place when the first restore redrew the list -- and
+        # restored that note too. The checklist bin's hazard, and its guard.
+        restore_btn.bind(
+            "<ButtonPress-1>",
+            lambda e: "break" if self._second_press_of_double_click(e) else None,
+            add="+")
         # The text last, on what the buttons left. Reported from the
         # field once a series row grew a "repeats ..." line: the buttons
         # were squeezed to slivers. A row can afford a shortened title;
@@ -1387,8 +1572,8 @@ class SettingsPageMixin:
             twice: the ticks outlive individual rows on purpose.
             """
             return [e for e in self.trash
-                    if self._trash_sel.get(e.get("id"))
-                    and self._trash_sel[e.get("id")].get()]
+                    if self._trash_sel.get(_trash_tick_key(e))
+                    and self._trash_sel[_trash_tick_key(e)].get()]
 
         def refresh_restore_btn():
             picked = ticked_entries()
@@ -1412,15 +1597,27 @@ class SettingsPageMixin:
             # No confirmation: this is the recovering direction. The app asks
             # in proportion to how recoverable an action is, and putting a
             # note back is undone by deleting it again -- which is the button
-            # right beside it.
+            # right beside it. One batch: note by note, each restore wrote
+            # both files and rebuilt the list and the statistics again.
+            self._restore_trash_entries(picked)
             for entry in picked:
-                self._restore_from_trash(entry)
-            for entry in picked:
-                self._trash_sel.pop(entry.get("id"), None)
+                self._trash_sel.pop(_trash_tick_key(entry), None)
             self.set_status("Restored %d note%s"
                             % (len(picked), "" if len(picked) == 1 else "s"))
             shown_count["n"] = max(PAGE_SIZE, shown_count["n"])
             redraw()
+
+        # The frame holding the rows outlives every redraw, so it gets the
+        # wheel once, here; each redraw gives it only to what it builds.
+        # Binding a fresh handler on the frame itself every time left one
+        # more Tcl command behind per redraw, for good -- every Restore,
+        # Delete, page and toast Undo while the panel was on screen.
+        wheel = lambda e: self._panel_or_page_wheel(canvas, e)  # noqa: E731
+        rows.bind("<MouseWheel>", wheel)
+
+        def wheel_on_rows():
+            for child in rows.winfo_children():
+                self._bind_wheel_tree(child, wheel)
 
         def redraw():
             for w in rows.winfo_children():
@@ -1428,9 +1625,12 @@ class SettingsPageMixin:
             if not self.trash:
                 tk.Label(rows, text="Trash is empty.", bg=self.colors["card"],
                          fg=self.colors["subtext"], font=("Segoe UI", 10)).pack(pady=20)
-                self._bind_wheel_tree(rows, lambda e: self._panel_or_page_wheel(canvas, e))
+                wheel_on_rows()
                 return
-            ordered = sorted(self.trash, key=lambda e: e.get("deleted_at", ""), reverse=True)
+            # str(): a hand-edited trash.json can hold a number or a list
+            # beside the dates, and sorting them together raised.
+            ordered = sorted(self.trash, key=lambda e: str(e.get("deleted_at", "")),
+                             reverse=True)
             visible = ordered[:shown_count["n"]]
             for entry in visible:
                 self._build_trash_row(rows, entry, redraw,
@@ -1445,21 +1645,29 @@ class SettingsPageMixin:
                           command=show_more, relief="flat", cursor="hand2",
                           bg=self.colors["sidebar"], fg=self.colors["text"],
                           font=("Segoe UI", 8)).pack(fill="x", pady=(6, 2), ipady=4)
-            self._bind_wheel_tree(rows, lambda e: self._panel_or_page_wheel(canvas, e))
+            wheel_on_rows()
             refresh_restore_btn()
 
         def empty_trash():
             if not self.trash:
                 return
+            # The entries the question counts are the entries deleted: a
+            # note that reaches the Trash while it waits was never asked
+            # about, and goes nowhere but the Trash.
+            named = list(self.trash)
             if self.ask_yes_no(
                 "Empty trash",
-                f"Permanently delete all {len(self.trash)} "
-                f"{'note' if len(self.trash) == 1 else 'notes'} in the trash? "
-                "This can't be undone." + self._series_warning(self.trash),
+                f"Permanently delete all {len(named)} "
+                f"{'note' if len(named) == 1 else 'notes'} in the trash? "
+                "This can't be undone." + self._series_warning(named),
                 icon="warning", default="no"
             ):
-                _delete_attachment_files(self.trash)
-                self.trash = []
+                named_ids = {id(e) for e in named}
+                gone = [e for e in self.trash if id(e) in named_ids]
+                kept = [e for e in self.trash if id(e) not in named_ids]
+                _delete_attachment_files(
+                    gone, spare=attachment_names_in(list(self.notes) + kept))
+                self.trash = kept
                 save_trash(self.trash)
                 shown_count["n"] = PAGE_SIZE
                 redraw()
@@ -1481,6 +1689,12 @@ class SettingsPageMixin:
         empty_holder = self._settings_big_button(
             parent, "Empty trash", empty_trash, kind="danger")
         empty_holder.pack(fill="x", padx=12, pady=(4, 10), ipady=5)
+        # How a change made outside this panel -- the toast's Undo -- gets
+        # its rows redrawn while the panel is on screen (see
+        # _refresh_open_trash_panel). The rows were rebuilt only when the
+        # section was opened, so they went on offering entries that had
+        # already left the Trash.
+        self._trash_panel_redraw = redraw
         redraw()
 
     def _build_settings_duplicates_panel(self, parent):
@@ -1526,7 +1740,17 @@ class SettingsPageMixin:
 
         del_vars = []  # (var, note, group) across all groups
         all_group_vars = []  # list of per-group var lists, for the "clean up everything" button
+        # A tick for every copy in every group, drawn or not: the groups are
+        # drawn a page at a time, and "Clean up ALL" still has to reach the
+        # copies on pages nobody has opened yet.
         for group in groups:
+            group_vars = [tk.IntVar(value=0) for _note in group]
+            all_group_vars.append(group_vars)
+            del_vars.extend((var, note, group) for var, note in zip(group_vars, group))
+        wheel = lambda e: self._panel_or_page_wheel(canvas, e)  # noqa: E731
+        inner.bind("<MouseWheel>", wheel)
+
+        def draw_group(group, group_vars):
             box = tk.Frame(inner, bg=self.colors["sidebar"])
             box.pack(fill="x", pady=5, padx=2)
             title = (group[0].get("title") or "").strip() or "(untitled)"
@@ -1545,16 +1769,12 @@ class SettingsPageMixin:
                          fg=self.colors["accent"], anchor="w", wraplength=460, justify="left"
                          ).pack(fill="x", padx=14, pady=(0, 2))
 
-            group_vars = []
-            for note in group:
+            for note, var in zip(group, group_vars):
                 created = note.get("created", "")
                 updated = note.get("updated", "")
                 meta = f"created {created[:10]}" if created else ""
                 if updated and updated != created:
                     meta += f" · updated {updated[:10]}"
-                var = tk.IntVar(value=0)
-                del_vars.append((var, note, group))
-                group_vars.append(var)
                 cb = tk.Checkbutton(
                     box, text=f"Delete this copy   ({meta})" if meta else "Delete this copy",
                     variable=var,
@@ -1574,8 +1794,6 @@ class SettingsPageMixin:
                 for v in gv:
                     v.set(0)
 
-            all_group_vars.append(group_vars)
-
             btn_row = tk.Frame(box, bg=self.colors["sidebar"])
             btn_row.pack(fill="x", padx=10, pady=(2, 8))
             tk.Button(btn_row, text="Tick all but first", command=check_all_but_first,
@@ -1586,8 +1804,36 @@ class SettingsPageMixin:
                       bg=self.colors["card"], fg=self.colors["subtext"], relief="flat",
                       font=("Segoe UI", 8), cursor="hand2"
                       ).pack(side="left", padx=(6, 0), ipadx=6, ipady=2)
+            self._bind_wheel_tree(box, wheel)
 
-        self._bind_wheel_tree(inner, lambda e: self._panel_or_page_wheel(canvas, e))
+        # A page of groups at a time. Every group was drawn at once --
+        # 676 widgets for the hundred groups of a 5,000-note notebook, most of
+        # a visit's 900 ms -- and the list shows a handful at a time anyway.
+        # "Show more" draws the next page from the groups already found:
+        # nothing is looked for again until the section is built again.
+        DUP_PAGE_SIZE = 20
+        drawn = {"n": 0, "more": None}
+
+        def draw_next_page():
+            if drawn["more"] is not None:
+                drawn["more"].destroy()
+                drawn["more"] = None
+            start = drawn["n"]
+            drawn["n"] = min(len(groups), start + DUP_PAGE_SIZE)
+            for gi in range(start, drawn["n"]):
+                draw_group(groups[gi], all_group_vars[gi])
+            remaining = len(groups) - drawn["n"]
+            if remaining > 0:
+                drawn["more"] = tk.Button(
+                    inner, text=f"Show {min(remaining, DUP_PAGE_SIZE)} more groups "
+                                f"({remaining} not shown)",
+                    command=draw_next_page, relief="flat", cursor="hand2",
+                    bg=self.colors["sidebar"], fg=self.colors["text"],
+                    font=("Segoe UI", 8))
+                drawn["more"].pack(fill="x", pady=(6, 2), ipady=4)
+                drawn["more"].bind("<MouseWheel>", wheel)
+
+        draw_next_page()
 
         def do_cleanup():
             self._cleanup_selected_duplicates(
@@ -1636,15 +1882,13 @@ class SettingsPageMixin:
                   ).pack(fill="x", padx=12, pady=(4, 10), ipady=6)
 
     def _reopen_dup_panel(self):
-        """Rebuild the duplicates panel in place after a cleanup."""
-        panel = getattr(self, "settings_duplicates_panel", None)
-        if panel is None:
+        """Rebuild the duplicates panel in place after a cleanup -- the way
+        the nav builds it. Calling the builder directly skipped the section's
+        heading and its resize handle: after a cleanup the section lost its
+        title and its Expand toggle until it was chosen again."""
+        if getattr(self, "settings_duplicates_panel", None) is None:
             return
-        for w in panel.winfo_children():
-            w.destroy()
-        self._build_settings_duplicates_panel(panel)
-        if not self._is_placed(panel):
-            panel.pack(fill="x", padx=16, pady=(0, 12))
+        self.toggle_settings_panel("duplicates")
 
     def _build_theme_picker(self, parent):
         """The theme swatches for the current mode, as in the reference design.
@@ -1748,7 +1992,6 @@ class SettingsPageMixin:
             except (tk.TclError, ValueError):
                 pass
             return "break"
-        self._bind_wheel_tree(parent, _theme_picker_wheel)
 
         # Re-wrap when the column's width changes. Only an actual change in
         # the number of columns rebuilds, so ordinary Configure noise -- which
@@ -1758,7 +2001,17 @@ class SettingsPageMixin:
             balanced = -(-per_group // (-(-per_group // fits)))
             if balanced != getattr(self, "_theme_picker_cols", None):
                 self._build_theme_picker(parent)
-        parent.bind("<Configure>", _rewrap)
+
+        # The column outlives every rebuild, so its own two handlers are
+        # bound once: binding them again on each rebuild -- every theme
+        # switch -- left two more Tcl commands behind each time, for good.
+        # What each rebuild creates gets the wheel afresh.
+        if not getattr(parent, "_picker_bound", False):
+            parent._picker_bound = True
+            parent.bind("<MouseWheel>", _theme_picker_wheel)
+            parent.bind("<Configure>", _rewrap)
+        for child in parent.winfo_children():
+            self._bind_wheel_tree(child, _theme_picker_wheel)
 
         self._refresh_theme_picker = lambda: self._build_theme_picker(parent)
 
@@ -1768,8 +2021,9 @@ class SettingsPageMixin:
         where self.settings_page is created."""
         # A popup anchored to the page being swapped out would keep
         # floating over the new one -- the Settings dropdown was still on
-        # screen back in the editor.
-        self._dismiss_mini_popup()
+        # screen back in the editor. Asking first if it holds typed work.
+        if not self._dismiss_mini_popup_asking():
+            return
         self._catch_up_deferred_refresh()
         self.notebook.pack_forget()
         # Stated, not inferred. Whether the notebook is on screen is
@@ -1795,8 +2049,13 @@ class SettingsPageMixin:
         self._render_statistics()
 
     def hide_settings_page(self):
-        """Return from Settings to the Notes/Calendar notebook."""
-        self._dismiss_mini_popup()
+        """Return from Settings to the Notes/Calendar notebook. Returns False
+        when the person stays: the template editor was open with typed work
+        and they chose to keep it. The arrow beside "Back to Notes" acts on
+        its own press, before the window's click-outside ever runs, so this
+        is where that question has to be asked."""
+        if not self._dismiss_mini_popup_asking():
+            return False
         self.settings_page.pack_forget()
         self.notebook.pack(fill="both", expand=True)
         self._settings_open = False
@@ -1815,6 +2074,7 @@ class SettingsPageMixin:
         # "not showing", deferring again and leaving exactly the
         # staleness this was added to prevent.
         self._catch_up_deferred_refresh()
+        return True
 
     # ---------- Settings tab ----------
     # One row per section: nav order, the builder that fills the pane, and
@@ -1971,7 +2231,10 @@ class SettingsPageMixin:
                          activebackground="card", activeforeground="text")
         back_lbl.pack(side="left", fill="x", expand=True)
         for w in (back_row, back_ico):
-            w.bind("<Button-1>", lambda _e: self.hide_settings_page())
+            # "break" when the person stayed (a half-written template):
+            # the window's click-outside must not ask them a second time.
+            w.bind("<Button-1>",
+                   lambda _e: None if self.hide_settings_page() else "break")
 
         def _back_hover(on, _ws=(back_row, back_ico, back_lbl)):
             c = self.colors["card"] if on else self.colors["sidebar"]
@@ -2118,8 +2381,12 @@ class SettingsPageMixin:
                          cursor="hand2")
         icon.pack(side="left", padx=(9, 0))
         # The glyph is decoration; the button beside it is the control, so
-        # clicking the glyph has to reach the same place.
-        icon.bind("<Button-1>", lambda _e, k=key: self.toggle_settings_panel(k))
+        # clicking the glyph has to reach the same place. "break" when the
+        # person stayed with a half-written template, so the same click's
+        # window-level click-outside does not ask them again.
+        icon.bind("<Button-1>",
+                  lambda _e, k=key: (None if self.toggle_settings_panel(k)
+                                     is not False else "break"))
 
         btn = tk.Button(
             row, text=label, anchor="w", relief="flat",
@@ -2414,8 +2681,14 @@ class SettingsPageMixin:
     }
 
     def _icon_button(self, parent, kind, command=None, danger=False,
-                     bg_key="card", tip=None):
+                     bg_key="card", tip=None, removes_row=False):
         """A small drawn-glyph button for a list row.
+
+        ``removes_row`` is for a button that takes its own row away with no
+        question in between: the row below slides up under the pointer, so
+        the second press of a double-click would take that one too. It is
+        ignored, by the rule the checklist bin follows
+        (_second_press_of_double_click).
 
         Replaces the emoji these rows used to use. Emoji are fixed-colour
         bitmaps, so a red wastebasket stayed the same shade of red on all
@@ -2447,7 +2720,14 @@ class SettingsPageMixin:
 
         paint(base)
         if command is not None:
-            c.bind("<Button-1>", lambda _e: command())
+            def _press(event):
+                if removes_row and self._second_press_of_double_click(event):
+                    return "break"
+                # A command that has answered the press says "break", so
+                # the window's click-outside does not answer it again.
+                return command()
+
+            c.bind("<Button-1>", _press)
             hot = self.colors["danger"] if danger else self.colors["text"]
             rest_bg = self.colors[bg_key]
             hover_bg = (self._blend(rest_bg, self.colors["danger"], 0.16) if danger
@@ -2723,7 +3003,12 @@ class SettingsPageMixin:
                 if refusal:
                     self.show_warning("Can't rename it to that", refusal)
                     return False
-                CATEGORY_COLORS[new] = CATEGORY_COLORS.pop(name)
+                # Renamed where it stands: pop-and-insert moved the
+                # category to the end of the list's groups.
+                in_order = [(new if key == name else key, colour)
+                            for key, colour in CATEGORY_COLORS.items()]
+                CATEGORY_COLORS.clear()
+                CATEGORY_COLORS.update(in_order)
                 self.rename_category_everywhere(name, new)
                 persist_categories()
                 self.save_notes()
@@ -2754,30 +3039,65 @@ class SettingsPageMixin:
                                        f"Delete “{name}”? It has no notes.",
                                        icon="warning", default="no"):
                 return
+            # No notes, but templates, the Trash and a folded group can
+            # still hold the name -- and a note restored from the Trash
+            # would bring the category straight back.
+            self.reassign_category_everywhere(name, PROTECTED_CATEGORY)
             CATEGORY_COLORS.pop(name, None)
             persist_categories()
             redraw()
             self.refresh_category_widgets()
             return
 
-        # Notes exist — ask what happens to them.
-        choice = self._ask_category_deletion(name, count)
+        # Notes exist. What the editor holds is saved first, as every delete
+        # route does: the note on screen may be about to go to the Trash,
+        # and its unsaved typing belongs in the Trash copy, not in an
+        # editor about to be cleared. Cancel on a day's question stops here.
+        # The question about a date the save could not store is asked only
+        # when the note on screen is filed here -- the one case where the
+        # editor may be cleared; any other note stays open, date and all.
+        # A repeat's turn-off waiting there is held back for the question:
+        # a No made it all the same (see _context_delete_note).
+        shown = (self.find_note(self.selected_note_id)
+                 if self.selected_note_id is not None else None)
+        leaving = (self.category_var.get() == name
+                   or (shown is not None and shown.get("category") == name))
+        if self._flush_autosave(leaving=leaving, hold_repeat_off=True) is False:
+            return
+        # Ask what happens to them. Only a note FILED here can go to the
+        # Trash; a repeating note with just a day filed here is counted
+        # apart, because that day moves to General whatever the answer.
+        # Both counted now, after the save above: it can have just filed
+        # the note on screen here, or taken it out.
+        count = self.count_notes_in_category(name)
+        named = {n["id"] for n in self.notes if n.get("category") == name}
+        choice = self._ask_category_deletion(name, len(named),
+                                             days_only=count - len(named))
         if choice is None:
             return
         if choice == "move":
             self.reassign_category_everywhere(name, PROTECTED_CATEGORY)
         elif choice == "delete_notes":
             # Move the affected notes to trash rather than destroying them.
-            doomed = [n for n in self.notes if n.get("category") == name]
+            # Only the notes the question counted, and only while they are
+            # still filed here. Read after the answer, a note filed here
+            # while the question waited (a timer's question took its grab,
+            # and a click went through) went to the Trash too -- one more
+            # than the question said. It goes to General now, with the
+            # rest of the category's traces below.
+            doomed = [n for n in self.notes
+                      if n["id"] in named and n.get("category") == name]
+            gone = {n["id"] for n in doomed}
             self._move_notes_to_trash(doomed)
-            self.notes = [n for n in self.notes
-                          if n.get("category") != name]
-            # Also strip overrides that point at the dead category.
-            for n in self.notes:
-                overrides = n.get("overrides") or {}
-                for d in list(overrides):
-                    if overrides[d].get("category") == name:
-                        del overrides[d]
+            self.notes = [n for n in self.notes if n["id"] not in gone]
+            # A day of a series that stays, filed here on its own, is
+            # re-filed under General by the call below -- never deleted.
+            # It used to be deleted outright: the day's own title and text
+            # were in neither file, under a button promising "restorable".
+            # The notes just trashed, the templates and a folded group
+            # still hold the name too; restoring one of those notes would
+            # bring the category back.
+            self.reassign_category_everywhere(name, PROTECTED_CATEGORY)
 
         CATEGORY_COLORS.pop(name, None)
         persist_categories()
@@ -2789,12 +3109,35 @@ class SettingsPageMixin:
         if self.selected_note_id and not self.find_note(self.selected_note_id):
             self.new_note()
 
-    def _ask_category_deletion(self, name, count):
+    def _ask_category_deletion(self, name, count, days_only=0):
         """Returns 'move', 'delete_notes', or None (cancel). Uses the in-app
-        themed dialog overlay (not a separate window)."""
+        themed dialog overlay (not a separate window).
+
+        `count` notes are filed under the category; `days_only` more are
+        repeating notes with only a day of theirs filed there. Those days
+        move to General whichever way this is answered -- a series never
+        goes to the Trash for one of its days -- so the question names
+        them apart rather than counting them among the notes it trashes."""
+        days = ""
+        if days_only:
+            days = (f"{days_only} repeating note(s) have a day filed under "
+                    f"“{name}”; those days move to “{PROTECTED_CATEGORY}” "
+                    "either way.")
+        if not count:
+            # Nothing here can go to the Trash, so there is nothing to
+            # choose between: only whether the category goes. Enter keeps
+            # it, as on the question asked of an empty category.
+            return self._themed_dialog(
+                "Delete category",
+                f"Delete “{name}”? No note is filed under it. {days}",
+                kind="warning",
+                buttons=[("Cancel", None),
+                         ("Delete the category", "move", "danger")],
+                default="Cancel")
         return self._themed_dialog(
             "Delete category",
-            f"“{name}” has {count} note(s). What should happen to them?",
+            f"“{name}” has {count} note(s). What should happen to them?"
+            + (f"\n\n{days}" if days else ""),
             kind="warning",
             # "delete_notes" does NOT destroy anything -- it calls
             # _move_notes_to_trash, so the notes are restorable for the full
@@ -2822,36 +3165,14 @@ class SettingsPageMixin:
             if var.get():
                 by_group[gid]["remove"].append(note)
 
+        plan = []   # (the first survivor or None, the notes removed)
         to_trash = []
         for info in by_group.values():
-            group = info["group"]
             remove = info["remove"]
             if not remove:
                 continue
-            survivors = [n for n in group if n not in remove]
-            if survivors:
-                # Merge removed notes' attachments into the first survivor.
-                # The removed note keeps its own references and goes to the
-                # trash, whose later purge deletes its files — so the
-                # survivor must get its OWN copy of each merged file, not a
-                # reference to the same one on disk (otherwise the one
-                # attachment the merge exists to preserve is exactly what
-                # the purge destroys). Same fix as duplicate_note.
-                kept = survivors[0]
-                merged_attach = list(kept.get("attachments", []))
-                seen_attach = {a.get("stored_as") for a in merged_attach}
-                for note in remove:
-                    for a in note.get("attachments", []):
-                        if a.get("stored_as") in seen_attach:
-                            continue
-                        seen_attach.add(a.get("stored_as"))
-                        new_name = copy_attachment_file(a.get("stored_as"))
-                        if new_name:
-                            merged_attach.append(dict(a, stored_as=new_name))
-                        # If the copy can't be made, skip it rather than
-                        # alias a file the purge will delete out from under
-                        # the survivor.
-                kept["attachments"] = merged_attach
+            survivors = [n for n in info["group"] if n not in remove]
+            plan.append((survivors[0] if survivors else None, remove))
             to_trash.extend(remove)
 
         if not to_trash:
@@ -2859,17 +3180,81 @@ class SettingsPageMixin:
                 "Nothing selected",
                 "Tick the duplicates you want to remove first.")
             return
+        # What the editor holds is saved first, as every delete route does:
+        # the note on screen may be one of these copies, and its unsaved
+        # typing belongs in the Trash copy, not in an editor about to be
+        # cleared. Cancel on a day's question stops here. A date the save
+        # could not store is asked about only when the editor is about to
+        # be cleared or reloaded -- a copy going, or a kept copy gaining
+        # files (see the end); any other note stays open, date and all.
+        affected = ({n.get("id") for n in to_trash}
+                    | {kept.get("id") for kept, _remove in plan
+                       if kept is not None})
+        # A repeat's turn-off waiting there is held back for the question:
+        # a No made it all the same (see _context_delete_note).
+        if self._flush_autosave(
+                leaving=self.selected_note_id in affected,
+                hold_repeat_off=True) is False:
+            return
         if not self.ask_yes_no(
             "Move duplicates to trash",
             f"Move {len(to_trash)} selected note(s) to the trash? "
             f"You can restore them within {trash_retention_days()} days.",
-            icon="question"
+            # Enter answers a question now: a reflexive one deletes nothing.
+            icon="question", default="no"
         ):
             return
+        # Only now, after Yes, are the files merged. The merge copies each
+        # file, and it used to run before the question: "No" still gave
+        # the kept note new files, and every retry made another copy.
+        grew = set()
+        for kept, remove in plan:
+            if kept is None:
+                continue
+            # Merge removed notes' attachments into the first survivor.
+            # The removed note keeps its own references and goes to the
+            # trash, whose later purge deletes its files — so the
+            # survivor must get its OWN copy of each merged file, not a
+            # reference to the same one on disk (otherwise the one
+            # attachment the merge exists to preserve is exactly what
+            # the purge destroys). Same fix as duplicate_note.
+            merged_attach = list(kept.get("attachments", []))
+            seen_attach = {a.get("stored_as") for a in merged_attach}
+            for note in remove:
+                for a in note.get("attachments", []):
+                    if a.get("stored_as") in seen_attach:
+                        continue
+                    seen_attach.add(a.get("stored_as"))
+                    new_name = copy_attachment_file(a.get("stored_as"))
+                    if new_name:
+                        merged_attach.append(dict(a, stored_as=new_name))
+                    # If the copy can't be made, skip it rather than
+                    # alias a file the purge will delete out from under
+                    # the survivor.
+            if merged_attach != list(kept.get("attachments", [])):
+                kept["attachments"] = merged_attach
+                grew.add(kept.get("id"))
         trash_ids = {id(n) for n in to_trash}
         self._move_notes_to_trash(to_trash)
         self.notes = [n for n in self.notes if id(n) not in trash_ids]
         self.save_notes()
+        # The editor is told, as after every change made behind it: a copy
+        # it held went to the Trash (it starts fresh, as every delete route
+        # does), or a kept copy it holds gained files (it moves onto that
+        # version -- its next save used to write the old list back, and the
+        # merged file was left belonging to nobody).
+        if (self.selected_note_id is not None
+                and self.find_note(self.selected_note_id) is None):
+            self.new_note()
+            self._sync_editor_snapshot()
+        else:
+            # A repeat's turn-off held back for the question goes across the
+            # reload, still waiting: the merge changed the kept copy's
+            # files, never its date or repeat.
+            carried = (self._schedule_to_carry()
+                       if self.selected_note_id in grew else {})
+            self._editor_follows_external_change(grew)
+            self._put_back_schedule(carried)
         self.refresh_note_list()
         self.render_calendar()
         if announce:
@@ -3135,9 +3520,14 @@ class SettingsPageMixin:
         )),
         ("Note list (click a note, or Tab into it from the search box)", (
             ("Up  /  Down", "Walk from card to card, in the order the list "
-                            "is showing them."),
+                            "is showing them — over the category headers "
+                            "too, when the list is grouped."),
             ("Enter  /  Space", "Open the note — or tick it, while "
-                                "☑ Select is on."),
+                                "☑ Select is on. On a category header: "
+                                "fold or open its group."),
+            ("Left  /  Right", "In a list grouped by category: Left folds "
+                               "the group (from a note or its header), Right "
+                               "opens a folded one."),
             ("Alt+Up  /  Alt+Down", "Move the note one place up or down. "
                                     "The list switches to Custom order, "
                                     "starting from the order it was "

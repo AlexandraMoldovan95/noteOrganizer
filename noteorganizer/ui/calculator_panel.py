@@ -353,9 +353,11 @@ class CalculatorPanelMixin:
             self.body_text.focus_set()
         if has_prior:
             self.body_text.mark_set(tk.INSERT, "calc_insert_end")
-            self.body_text.insert(tk.INSERT, "\n" + formula)
-        else:
-            self.body_text.insert(tk.INSERT, formula)
+        at = self.body_text.index(tk.INSERT)
+        self.body_text.insert(tk.INSERT, ("\n" if has_prior else "") + formula)
+        # Between two pieces of one run, the run's size and font, as typed
+        # text takes them (_take_run_between).
+        self._take_run_between(at, self.body_text.index(tk.INSERT))
         self.body_text.mark_set("calc_insert_end", tk.INSERT)
         self._schedule_autosave(skip_word_count=True)
 

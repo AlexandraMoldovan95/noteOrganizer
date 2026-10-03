@@ -79,7 +79,7 @@ def load_settings():
                 data = json.load(f)
             if isinstance(data, dict):
                 return data
-        except (json.JSONDecodeError, IOError, OSError):
+        except (*paths.JSON_UNREADABLE, IOError, OSError):
             pass
         # Reached only when the file exists but held nothing usable —
         # keep its bytes before the next save replaces them.
@@ -157,7 +157,7 @@ def load_templates():
                     # keep the bytes before a save replaces them.
                     _preserve_corrupt(paths.TEMPLATES_FILE)
                 return kept
-        except (json.JSONDecodeError, IOError, OSError):
+        except (*paths.JSON_UNREADABLE, IOError, OSError):
             pass
         # Reached only when the file exists but held nothing usable —
         # keep its bytes before the next save replaces them.
@@ -177,14 +177,24 @@ def save_templates(templates):
 
 def load_trash():
     """Read the trashed notes list. Malformed/missing -> empty list, never
-    crashes; a malformed file is preserved aside first."""
+    crashes; a malformed file is preserved aside first.
+
+    Only entries that are notes (dicts) come in. A hand-edited file holding
+    a string or a null beside them kept Settings -> Recently deleted from
+    opening at all, so the real notes beside the junk could not be restored.
+    The file is preserved aside before anything is left out, as when it
+    cannot be read; the entries themselves are kept as the file held them
+    (normalize_note does not run on the way out of the Trash)."""
     if os.path.exists(paths.TRASH_FILE):
         try:
             with open(paths.TRASH_FILE, "r", encoding="utf-8") as f:
                 data = json.load(f)
             if isinstance(data, list):
-                return data
-        except (json.JSONDecodeError, IOError, OSError):
+                kept = [e for e in data if isinstance(e, dict)]
+                if len(kept) != len(data):
+                    _preserve_corrupt(paths.TRASH_FILE)
+                return kept
+        except (*paths.JSON_UNREADABLE, IOError, OSError):
             pass
         # Reached only when the file exists but held nothing usable —
         # keep its bytes before the next save replaces them.
@@ -261,14 +271,29 @@ def copy_attachment_file(stored_as):
         return None
 
 
-def _delete_attachment_files(notes_or_entries):
+def attachment_names_in(notes_or_entries):
+    """The stored file name of every attachment these notes (or trash
+    entries) use."""
+    return {att.get("stored_as")
+            for note in notes_or_entries if isinstance(note, dict)
+            for att in (note.get("attachments") or [])
+            if isinstance(att, dict) and att.get("stored_as")}
+
+
+def _delete_attachment_files(notes_or_entries, spare=()):
     """Permanently remove the on-disk files for every attachment referenced by
     the given notes/trash-entries. Each attachment gets a unique timestamped
     filename on disk (see add_attachment), so it's never shared between notes
     — safe to delete outright, no risk of affecting a different note. Only
     call this for PERMANENT deletion (trash purge, delete-forever, empty
     trash) — moving a note to trash must never touch these files, since the
-    note might still be restored."""
+    note might still be restored.
+
+    `spare` names files that must survive anyway -- what the notes still
+    in the app use (see attachment_names_in). "Never shared" holds only
+    while nothing acts on a stale copy of an entry: a Trash row drawn
+    before the toast's Undo brought its note back still held the entry,
+    and its Delete destroyed the file the restored note was showing."""
     for note in notes_or_entries:
         if not isinstance(note, dict):
             continue
@@ -276,7 +301,7 @@ def _delete_attachment_files(notes_or_entries):
             if not isinstance(att, dict):
                 continue
             stored_as = att.get("stored_as")
-            if not stored_as:
+            if not stored_as or stored_as in spare:
                 continue
             path = _attachment_path_within(stored_as)
             if path is None:
@@ -468,7 +493,7 @@ def load_notes(version_change=None):
         try:
             with open(paths.DATA_FILE, "r", encoding="utf-8") as f:
                 raw = json.load(f)
-        except (json.JSONDecodeError, IOError, OSError):
+        except (*paths.JSON_UNREADABLE, IOError, OSError):
             raw = None
         if not isinstance(raw, list):
             # The file exists but held nothing usable — unparsable, or a
@@ -643,14 +668,26 @@ def _write_json_atomic(path, value):
     """
     tmp_path = path + ".tmp"
     try:
+        # Mended only when it has to be. mend_surrogates rebuilds every
+        # dict and list of the notebook to find the rare lone surrogate --
+        # a quarter of every autosave at 5,000 notes (53 ms of ~240,
+        # measured). Dumping first and asking the text whether it encodes
+        # costs one C-speed pass, and a notebook with nothing to mend
+        # dumps to the very same text either way, so the file is identical
+        # to the byte.
+        text = json.dumps(value, indent=2, ensure_ascii=False)
+        try:
+            text.encode("utf-8")
+        except UnicodeEncodeError:
+            text = json.dumps(mend_surrogates(value), indent=2,
+                              ensure_ascii=False)
         with open(tmp_path, "w", encoding="utf-8") as f:
             # One string, one write. json.dump streams the same text
             # through the file's encoder in thousands of small pieces:
             # twice the time for a 1,000-note notebook (36 ms against 18,
             # measured), for a file identical to the byte -- and every
             # autosave paid it.
-            f.write(json.dumps(mend_surrogates(value), indent=2,
-                               ensure_ascii=False))
+            f.write(text)
         # Atomic replace: a crash mid-write can't corrupt the real file,
         # it either fully updates or stays as it was.
         os.replace(tmp_path, path)
@@ -722,7 +759,18 @@ def days_left_in_trash(deleted_at):
 
 
 def restore_from_trash(notes, trash, entry):
-    """Bring a trashed note back into the active list.
+    """Bring one trashed note back into the active list; see
+    :func:`restore_many_from_trash`, which this is one case of.
+
+    Returns:
+        ``(notes, trash)`` -- both lists. Nothing is written to disk.
+    """
+    notes, trash, _restored = restore_many_from_trash(notes, trash, [entry])
+    return notes, trash
+
+
+def restore_many_from_trash(notes, trash, entries):
+    """Bring trashed notes back into the active list, in one pass.
 
     A note whose category was deleted while it sat in the trash comes back
     filed under "General" rather than orphaned -- but that is
@@ -731,35 +779,50 @@ def restore_from_trash(notes, trash, entry):
     fell back to the same value, which had no effect; the check is gone
     rather than carried over, and the guarantee is tested where it lives.
 
+    Nothing is written. The caller saves the notes FIRST and the trash
+    after, so a failed notes write leaves the note still in trash.json --
+    a duplicate at worst. This used to save the trash itself, before any
+    caller had saved the notes: a failed notes write then left the note in
+    neither file. And a batch used to come here one note at a time, each
+    call writing the whole trash file again: an Undo of a thousand notes
+    moved to the Trash froze the app for over half a minute.
+
     Args:
         notes: the active note list, appended to in place.
-        trash: the trash list; ``entry`` is removed from it.
-        entry: the trashed note to restore.
+        trash: the trash list; ``entries`` are removed from it.
+        entries: the trashed notes to restore (objects from ``trash``).
 
     Returns:
-        ``(notes, trash)`` -- both lists, saved to disk.
+        ``(notes, trash, restored)`` -- the two lists, and the notes that
+        were appended, in order.
     """
-    from .model import find_by_uid, new_note_uid, normalize_note
+    from .model import new_note_uid, normalize_note
 
-    # normalize_note rebuilds the note from a known schema, so it drops
-    # "deleted_at" and anything else the trash entry carried. The method this
-    # replaced stripped that key by hand first; verified redundant, so it is
-    # gone rather than copied across. What it guaranteed is still tested.
-    note = normalize_note(entry)
-    # A fresh id: the trashed note's own id may have been reused by a note
-    # created after it was deleted.
-    note["id"] = max([n["id"] for n in notes], default=0) + 1
-    # The identity has the same problem for a different reason: while this
-    # note sat in the trash, a copy of it may have arrived from a share
-    # code, and two notes wearing one identity is the collision the field
-    # exists to prevent. Only then -- an ordinary restore keeps the
-    # identity, so a code made before the note was deleted still finds it.
-    if find_by_uid(notes, note.get("uid")) is not None:
-        note["uid"] = new_note_uid()
-    notes.append(note)
-    trash = [e for e in trash if e is not entry]
-    save_trash(trash)
-    return notes, trash
+    leaving = {id(e) for e in entries}
+    next_id = max([n["id"] for n in notes], default=0) + 1
+    worn = {n.get("uid") for n in notes if isinstance(n, dict)}
+    restored = []
+    for entry in entries:
+        # normalize_note rebuilds the note from a known schema, so it drops
+        # "deleted_at" and anything else the trash entry carried.
+        note = normalize_note(entry)
+        # A fresh id: the trashed note's own id may have been reused by a
+        # note created after it was deleted.
+        note["id"] = next_id
+        next_id += 1
+        # The identity has the same problem for a different reason: while
+        # this note sat in the trash, a copy of it may have arrived from a
+        # share code, and two notes wearing one identity is the collision
+        # the field exists to prevent. Only then -- an ordinary restore
+        # keeps the identity, so a code made before the note was deleted
+        # still finds it.
+        if note.get("uid") in worn:
+            note["uid"] = new_note_uid()
+        worn.add(note["uid"])
+        notes.append(note)
+        restored.append(note)
+    trash = [e for e in trash if id(e) not in leaving]
+    return notes, trash, restored
 
 
 # ---- Single settings values ----

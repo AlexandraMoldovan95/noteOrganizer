@@ -12,6 +12,8 @@ How the numbers themselves are counted is the
 
 | Version | Date | In one line |
 |---|---|---|
+| [0.83.338](#083338--2026-10-03) | 2026-10-03 | What comes in from outside is taken for what it is: a damaged data file no longer stops the app from starting, an attachment is only its two names, and a paste too long to keep whole says what it left out. |
+| [0.83.335](#083335--2026-10-02) | 2026-10-02 | Nineteen rounds of agents tried to break the app: nothing you type is lost when one field is wrong, an import asks before it changes anything, and questions, tables, the calendar and the note list stop surprising you. |
 | [0.82.233](#082233--2026-09-30) | 2026-09-30 | A note opened from the Calendar no longer brings along the last note's Restore previous, title counter or share code. |
 | [0.82.232](#082232--2026-09-30) | 2026-09-30 | The calendar becomes one drawing: it follows the window's edge as you drag, changes month ten times faster, and a day's markers show on dark themes. |
 | [0.82.230](#082230--2026-09-30) | 2026-09-30 | Cancel means stay and the keyboard goes back where it was; a big notebook stops making you wait; and the note list becomes one drawing you can arrange by hand. |
@@ -82,6 +84,397 @@ How the numbers themselves are counted is the
 | [0.3.0](#030--tags-removed-categories-as-the-sole-organization-system) | — | Tags come out entirely, leaving categories as the app's one organization system. |
 | [0.2.0](#020--inline-ui-overhaul--data-resilience) | — | Every OS-native popup becomes an in-app themed one, and the calendar grows richer. |
 | [0.1.0](#010--core-application) | — | The founding feature set — notes, recurrence, calendar, templates, sharing, themes. |
+
+---
+
+## [0.83.338] — 2026-10-03
+
+*Highlights: what comes in from outside is taken for what it is. A data file damaged in a way the
+app did not expect no longer stops it from starting, an attachment from a share code or a backup
+is only the two names the app uses, and a paste too long to keep whole says what it left out.*
+
+### Fixed
+
+- **A damaged data file no longer keeps the app from starting.** The app took a file for damaged
+  only when it was not JSON at all. Two other kinds of damage got past every reader: bytes that
+  are not UTF-8 (a notes file saved by another program in one of Windows' older text encodings)
+  and nesting deeper than the reader can follow. With either in the notes, settings, Trash or
+  templates file, the app stopped before its window opened; a share code damaged that way said
+  "Something went wrong" instead of asking for the whole code again; and a backup whose
+  templates, Trash or settings file was damaged that way failed whole, sound notes and all. Both
+  are damage like any other now: the file's bytes are kept aside and the app starts (its notice
+  names saving from another program among the causes), the code is refused as damaged, and a
+  backup's notes come in without the damaged extra.
+- **An attachment from a share code or a backup is only its two names.** A record with no stored
+  name took its display name instead, as it was — so a name like `../../x` kept the path the app
+  strips from every stored name (the guards where a file is opened or deleted still held). And a
+  record kept anything else it carried, so a value nested a few hundred deep made Duplicate fail
+  on that note. A record is now its display name and its stored name, the stored one always a
+  bare file name.
+- **A paste too long to keep whole says what it left out.** A formatted paste keeps at most
+  100,000 characters and 2,000 styled pieces. Past either it stopped without a word, and the rest
+  of a long article was simply not in the note. A message now says what was left out, and in a
+  note's body how to get all of it: Ctrl+Z, then Ctrl+Shift+V, which pastes everything without
+  its formatting. A table pasted into a template's body is told the same about its text.
+
+### Testing
+
+- test_data_safety loads each of the four data files damaged both ways and finds it empty,
+  flagged where it is the notes, with its bytes kept aside; walks the startup readers over the
+  same damage — the migration's settings read, the notebook count, the settings rescue and the
+  purge both ways round; refuses a share code nested too deep; and checks an attachment record's
+  stored name and shape. test_richtext checks that the paste converter reports a cut past each
+  cap and not at the cap itself. qa3 imports backups with each extra file damaged and with the
+  notebook damaged; qa1 pastes past both caps into a note's body and follows the message's advice
+  — Ctrl+Z, then Ctrl+Shift+V — to the whole text; qa9 does the template's table paste. Thirty
+  mutants, each killed with the suite reaching its footer. `tools/check_one_definition.py` gains
+  a rule that fails on an `except` naming `JSONDecodeError` itself, so the next reader cannot
+  catch one kind of damage out of three — proved on a reader put back the old way.
+
+---
+
+## [0.83.335] — 2026-10-02
+
+*Highlights: nineteen rounds of agents tried to break the app, and what they broke is fixed, but
+for a few edges recorded under [Known limitations](docs/ROADMAP.md#known-limitations). Nothing
+you type is lost any more when one field is wrong; imports ask everything before they change
+anything; a question holds the app until you answer it; Ctrl+Z brings back styles and tables
+exactly; the calendar and the note list stop surprising you; and a long session stays quick. One
+new thing: the keyboard folds and opens the note list's groups.*
+
+### Added
+
+- **The keyboard folds and opens the note list's groups.** In a list grouped by category, the
+  category headers are stops on the ↑/↓ walk; **Enter** or **Space** on a header folds or opens
+  its group, **←** folds the group (from a note or its header) and **→** opens a folded one. The
+  Keyboard shortcuts page lists both.
+
+### Fixed
+
+#### What you type, import, delete and restore
+
+- **One unreadable field no longer throws away everything typed after it.** A date written the
+  way many people write it (30/09/2026), a repeat with no start date, or a repeat's end date
+  typed day-first made the save refuse the whole note — and every automatic route (a pause,
+  another note, Ctrl+N, closing the window) read that refusal as success and replaced the
+  editor. Such a field is now *left out*: it keeps the note's last good value, everything else
+  saves, the status line names what was left out, and leaving the note asks **Go back and fix
+  it** or **Continue without it**. A share code made in the editor carries the date a save would
+  keep, so a note that arrived by code can be edited again. A save that only met such a field
+  changes nothing the note stores, so its "Last updated" stays where it was.
+- **Deleting another note no longer puts an older version of the open one back.** Every delete
+  "switched" to the editor's first tab — a leftover of the multi-tab editor — and restored it from
+  a snapshot taken when the note was opened, so whatever had been saved since went back to the
+  older version. Every delete route also saves the editor's typing first now.
+- **Cancel on a repeating day's question during an import keeps the day.** The import went on
+  after the Cancel and loaded itself into that day, whose Save then replaced the whole series.
+- **An import changes nothing until its last question is answered.** "Update" was applied at
+  the first answer, so Cancel on the duplicate question after it left the update in memory for
+  the next save to write. Every question is asked first now, and the duplicate check is asked
+  about the notebook as it will be.
+- **Importing the same backup twice no longer destroys the only rescue copy.** An update that
+  changed nothing still rewrote "↩ Restore previous"'s copy with the backup's text. A note that
+  arrives exactly as it is here is neither updated nor copied, the result counts updated and
+  unchanged notes, and "Update" flags a backup copy older than this device's.
+- **A note imported from a share code can't be undone away.** Ctrl+Z right after the import
+  took the whole note back to an empty page, and the autosave then saved it empty. Ctrl+Z starts
+  from the note as it arrived, as it does after opening any note.
+- **Settings → Duplicates tells the editor what it did.** Text typed in a copy it removed
+  disappeared, a file attached to it was lost, and answering "No" still copied files. The
+  clean-up plans first, saves the editor, asks, merges, and the editor follows.
+- **A category's name is moved everywhere it lives.** Renaming the category of the open note
+  filed it under General a moment later; templates, the Trash and the rescue copies kept the old
+  name; a folded group unfolded; the category moved to the end of the list; and a deleted
+  category came back with a restored series. One method moves every holder of the name — the
+  notes and their days, the Trash, templates, folds, the filter, the editor's box and each note's
+  rescue copy, so **↩ Restore previous** files a note right after a rename or a delete — and a
+  rename keeps the category's place.
+- **Undo after removing one day of a repeating note brings back that day's own text.**
+- **"The entire series" on a day with its own text makes that text the series'.** It wrote the
+  day's text into the series but kept the day's identical copy, and asked the same question at
+  every exit.
+- **A tick on a day with its own text no longer writes that text over the whole series.** A
+  save made without a question, because only a series field changed, wrote the whole editor;
+  it writes only what belongs to the series now (checklist, attachments, date, repeat). And
+  when that save turns the repeat off, the editor shows the note it saved — keeping on screen
+  a date it had to leave out: left showing the day's text, the next save wrote it over the
+  series' own.
+- **"This occurrence only" keeps the file and the tick you made on that day.** The day's text
+  went to the day, and the rest of the visit was dropped: an attached file stayed in the folder
+  with no note, a removed one was still listed with its file gone, a tick was undone. A day has
+  nowhere to keep them; they are the series', and are saved to it. A date or a repeat changed
+  in the same visit — even a date typed in a form the app cannot read — stays the series' as it
+  was: the question says so, and the editor shows it again.
+- **Turning a repeat off keeps every day's own text.** It went with the repeat, with no question
+  and no copy. The note as it was — its repeat and its days — is the rescue copy now, and
+  "↩ Restore previous" brings the series back whole.
+- **Comments keep their first-line indent and trailing blank lines** through every save.
+- **A checklist item typed but not added stays with its own note.** It followed you to the next
+  note and was added there.
+- **A repeat's end date typed day-first is left out, not dropped.** The series used to become
+  endless without a word.
+- **A note sent out by code and sent back is recognised.** The review editor dropped the identity
+  the code carried, so it arrived as a second copy.
+- **Abandoning an import leaves nothing behind.** Closing the window while an import worked left
+  the unpacked backup in the temp folder and its copied files in attachments/; Cancel on one of
+  its questions, or a backup import that took nothing, left the files it had copied for notes that
+  never arrived.
+- **Restoring from the Trash writes the notes first.** The Trash was written before the notes, so
+  a failed write could leave a note in neither file.
+- **Undo after moving many notes to the Trash is quick.** A thousand notes came back one by one,
+  each rewriting the whole trash file: 30–46 seconds of a frozen window, now about 0.3 s.
+- **A row in Recently deleted checks its note is still there.** A row could restore a second copy
+  of a note the banner's Undo had already brought back, and its Delete destroyed a file that note
+  was showing; a permanent delete spares any file a note still uses.
+- **An error banner is not covered by the autosave's "Note updated".**
+- **A superscript digit (²) in Jump to month's year, or in a monthly repeat's days, is refused
+  kindly** instead of raising an internal error.
+- **Restore previous redraws the calendar**, which a restored date, repeat or colour needs.
+- **Deleting a category with its notes never deletes a repeating note's own day.** "Delete the
+  notes too" trashed the notes filed under the category, then deleted outright every day of a
+  series filed there on its own — the day's title and text were in neither file, and the question
+  had counted that series among the notes. Such a day moves to General now, the question names it
+  apart, and a category only a day is filed under asks just whether the category goes.
+- **Two rows in Recently deleted that share a note's number tick separately.** Ticking one ticked
+  both, and "Restore selected" brought back the note that was not chosen.
+- **Redrawing Recently deleted, the category list or the Templates list leaves nothing behind**
+  — each redraw, save, delete or rename left one Tcl command.
+- **Recently deleted opens whatever its file holds.** A deleted date that is not text, or an
+  entry that is not a note at all — only a hand-edited trash.json can hold either — stopped the
+  panel from opening.
+- **A damaged data file is kept aside once.** A file the app could not use was copied aside
+  again at every launch until something rewrote it, one more identical copy each time.
+- **A file attached or removed after a save is saved too.** After any save in the same visit —
+  the autosave half a second after typing is enough — the note held the editor's own list of
+  files, so the change read as saved: closing the app lost an attached file's entry (the file
+  stayed in the folder with no note), and a removed one stayed listed with its file deleted.
+- **Restore previous, Reset this day and the right-click Duplicate keep what you had not saved
+  yet.** On a day of a repeating note — where only a save or a way out stores anything — a file
+  attached or removed, or a checklist item ticked, was dropped by Restore previous and by
+  "Reset this day": they filled the editor from the note as stored. The right-click Duplicate
+  copied the stored note without the question the editor's own Duplicate asks. Both reloads
+  also keep an item typed in the checklist's box and a value they cannot store on screen to be
+  fixed, and leave the Undo just offered for a deleted checklist item working. A date or repeat
+  changed on the day and not saved yet stays through Restore previous; Reset this day discards it
+  with the day's other edits, as its question says.
+- **A repeat's number the app cannot read is left out, not read as 1.** "After abc times" —
+  or the box emptied on the way to a new number — ended the series after its first day, its
+  later days and their own text gone from the calendar; "Every x" made it repeat every time.
+  They are left out like an unreadable date now — a monthly repeat's day written "15th" too —
+  leaving the note asks, and the summary under the repeat shows what is kept and names what it
+  did not understand.
+- **Turning a repeat off saves itself, like every other edit.** Choosing "Does not repeat" asked
+  for no save: the change waited for the note to be left or the app to close, and the status
+  line never said it was saved. On a series whose days hold edits of their own, the turn-off —
+  which moves those days into the rescue copy — waits for the note to be left or Save, as a
+  value the app cannot read waits, while everything else goes on saving; the status line says
+  so, and a mistaken pick put right at once keeps every day.
+
+#### The editor: tables, undo, checklist
+
+- **Escape in a table cell leaves the cell and keeps what was typed.**
+- **Delete and BackSpace stop at a drawn table's edge** instead of gluing a line onto a row.
+- **A table operation leaves every cell it did not touch as it was.** Deleting a cell, a row, a
+  tick or a paste wiped the bold and colours from the whole table, and Ctrl+Z could not bring
+  them back.
+- **Cells pasted wider than a table grow it** instead of dropping the extra columns in silence.
+- **A spreadsheet's cells pasted over selected text take its place.** The selected text stayed,
+  and the table landed under its line. A table beside the selection keeps its rows, and one
+  Ctrl+Z takes the paste back.
+- **A selection that reaches a drawn table keeps the caret with it.** Shift+Down on the line
+  above a table selected that line and the table's own line break, with the caret walked under
+  the table: a letter typed then went in under the table with the line still selected, and a
+  paste glued its text to the next line. Shift+Up from under a table selected all of it — a
+  drawn table shows no selection — and the next letter deleted the table. The first press now
+  stops at the table's edge, and a second one crosses it — with two tables close together, and
+  with a table on the note's first line — and a mouse drag that starts beside a table, or runs
+  from one table to the next, leaves them out instead of gluing a row onto the paragraph below.
+  Select all in a note that begins with a table keeps the table.
+- **Cells copied from a table and pasted back take one Ctrl+Z.** Their separator went in
+  narrower than the rows, and the table's tidy padded it later as an undo step of its own, so
+  the first Ctrl+Z changed nothing on screen. Anything pasted under a drawn table — rows, cells,
+  rich text — is one Ctrl+Z as well, and so is a letter, a Delete or a paste over a selection
+  that stopped at a table's edge.
+- **Table rows pasted as text stay a table of their own.** Pasted onto the line above a table,
+  or the empty line between, by Ctrl+V, Ctrl+Shift+V or from another program, they joined it:
+  its header read as a data row and its separator as a row of dashes; pasted after a caption,
+  the first row was glued onto the caption's line. They start on a line of their own now, with
+  a blank line between them and a table beside them.
+- **A word pasted into a table row still being typed stays in it.** The paste drew the row as a
+  table at once and put the caret under it, so the next letters typed went to the line below —
+  by Ctrl+V, the menu, Ctrl+Shift+V and a paste from a web page alike, in the header or any row
+  typed under it. The row is tidied and drawn when the caret leaves it, as after a letter typed
+  there — and a theme switch or a new font size in between, which drew any row being typed,
+  pasted into or not, leaves it as it is.
+- **A key that types nothing spreads no formatting.** The release of an arrow key — or of the
+  Shift+Down that stops at a table under "Prices:" — gave a plain ":" glued to a bold word that
+  word's bold, saved that way; so did Delete, BackSpace, Ctrl+B, Ctrl+Z, Ctrl+O, a paste and
+  leaving a table typed by hand. And letters typed fast after a styled word, or a held key, wear
+  its style now, as letters typed one by one did — its size and font included.
+- **Ctrl+Z takes back a style change, and a table's undo keeps its styles.** Ctrl+Z after making
+  a word bold erased the last sentence typed instead (and the autosave stored that). A
+  formatting journal beside Tk's undo stack now takes the style back first — and costs what a
+  step changed, not what the note holds: at 8,000 styled spans, Ctrl+B takes about 44 ms and its
+  Ctrl+Z about 51.
+- **Ctrl+Z after deleting styled text gives it back styled.** Delete, BackSpace, typing over a
+  selection, Cut (Ctrl+X or the menu), Paste (Ctrl+V, the menu, or without formatting), the
+  Insert key and Tk's own Ctrl+H, Ctrl+K and Ctrl+T brought the text back plain — and a paste of
+  the very words selected left them plain for good; a run of BackSpaces is still one Ctrl+Z.
+- **A long checklist no longer freezes the editor:** a change touches one row, and a closed list
+  builds none (0.3 s at 50 items and over 2 s at 200 became 30–60 ms).
+- **A double-click on a row's remove button removes one row.** The row below slid up under the
+  pointer and the second press removed it too — checklist bins, the Trash's Restore, and the
+  template editor's checklist bins.
+- **A table is drawn once**, each width measured once: a note with a big table opens about twice
+  as fast, drawn identically.
+- **Enter in a numbered list of a long styled note no longer freezes the editor.** Every bold,
+  italic and colour was laid back by walking the note from its top, once for each of its ends:
+  at 8,000 styled words one Enter took about 3.4 s, and now takes about 0.2 s, laid identically.
+- **A font size or a font set under a drawn table lands on the words selected.** It landed one
+  character early for every table above them, and every later size or font moved the earlier
+  ones again — saved that way.
+- **One font size or font in a long styled note no longer slows it down.** Where a size or font
+  met the bold and italic around it was worked out by checking every styled word at every
+  boundary: with one size in a note of 8,000 styled words, opening it, Enter in a numbered
+  list, a paste or a font change took 1.7–1.9 s each, and now take 0.07–0.22 s, laid identically.
+- **Bold or italic given to text in another size or font shows at once.** Ctrl+B, Ctrl+I, Bold
+  turned on before typing, and a bold paste, inside a bigger heading or a note set to Georgia,
+  were saved and lit the toolbar while the text was drawn as before until the note was opened
+  again; taking bold off failed the same way. A size or a font picked before typing draws as
+  picked and keeps the run's other one — inside the run, at a bold word's edge and at its end;
+  and text typed, pasted (with or without its formatting) or put in by the emoji picker or the
+  calculator right before or after a bold word inside a bigger heading keeps the heading's size.
+- **Bold italic stays bold italic.** A bold italic word pasted from a web page, or copied and
+  pasted inside the app — and bold pasted inside an italic word — was drawn italic only, and
+  again on every open, while the toolbar lit Bold and the note saved it bold.
+- **Ctrl+Z, Ctrl+Y and Ctrl+Shift+Z work with Caps Lock on**, in the note and in its comments.
+  Caps Lock turned the letter over, so Ctrl+Z skipped the app's own undo — a bold took the last
+  typing with it, a table came back without its grid — and Ctrl+Shift+Z undid instead of redoing.
+- **Ctrl+T at a table's edge no longer breaks the table.** Tk's own transpose swapped the
+  table's closing line break with the next letter, and the last row was saved as prose; and
+  Tk's own Insert, over a selection holding a table, pasted the selection's visible text over
+  it — without the table's hidden rows, so the table went.
+- **Ctrl+Z after a table operation puts the table's first line back exactly.** Centring a cell,
+  inserting a row below or autofitting a column, then Ctrl+Z, gave the header back one column off
+  ("| Ite  | Qt  |"); so did Ctrl+Z and Ctrl+Y after typing a table by hand and leaving it,
+  after a plain paste into its first row while another table was drawn, and back past the line
+  under a table that ends the note — which also left an extra empty line.
+- **Ctrl+Z back past a table operation no longer wipes the redo history.** The release of the
+  undo key tidied a narrow table (pasted Markdown keeps its columns until the caret leaves) as a
+  new edit, and Ctrl+Y could no longer bring back what was undone.
+- **A table drawn again leaves nothing behind.** Every redraw — each table operation, each
+  Ctrl+Z of one — left ten Tcl commands and a frame for as long as the app ran.
+
+#### The calendar
+
+- **A History row no longer re-dates the note open in the editor.** Since 0.71.111, clicking any
+  History row while a saved note sat in the editor changed that note's date at the next switch
+  or close.
+- **"Reset this day" says what it did.** It ended with "Make this repeat…"'s last lines: a false
+  "Set a repeat frequency" and the keyboard sent to the hidden editor; "Make this repeat…" now
+  focuses the Repeat control, as it promised.
+- **December 9999 draws, whatever repeats.**
+- **The open day follows every redraw** — after an Undo, a delete, a theme switch or a category
+  change, its list shows what is true.
+- **An open series' banner counts its days' own edits as they are.** A day deleted, reset or
+  put back from the Calendar left "1 day keeps its own edits (✎)" over the editor until the
+  next save.
+- **A category change repaints the calendar's dots** and the open day.
+- **A theme switch leaves the open day's notes in their own colours.**
+- **A note's preview goes when the days move under it** — PgUp/PgDn/Home change the month, or
+  the wheel scrolls the area.
+- **Under History, the page keys page the register**, not the hidden month.
+- **The "notes for today" bar lands on today, on screen**, from any month and from Settings.
+- **Saving the marker popup empty offers the same Undo** as "Clear day markers".
+- **A day's drawing stays inside its cell and clear of its number:** dots that do not fit become
+  "+", and more than two markers show as "⭐+2".
+- **A day painted a light colour draws its text dark**, readable on its paint.
+- **A long title gives way, never the marks after it**, in the day list and History.
+- **With a day open, dragging the window's edge waits for the hand** (180–240 ms a step became
+  40–50).
+- **History works a series out once while it is open**, and a keystroke only filters.
+- **Hovering or opening a day reads the month already worked out** (31 → 10–16 ms at 5,000 notes).
+- **History and the day panel leave no Tcl command behind** at each redraw.
+
+#### Popups, questions and the keyboard
+
+- **A list inside a popup no longer stops every dropdown from opening.**
+- **Closing the window under a question no longer leaves the app running with no window.** The
+  close is refused while a question asks, and the question comes forward.
+- **Enter answers a question**, with the button that has the keyboard; the confirmations that
+  move notes to the Trash keep it on No.
+- **A half-written template is never thrown away without the question**, by any route — a click
+  beside it, a note card, Ctrl+N — and Cancel keeps editing. A template's own bin beside it asks
+  only whether to delete, and what it deletes stays deleted.
+- **"Insert emoji…" from a field inside a popup keeps the popup** and what was typed in it.
+- **A template saved after its section was rebuilt saves**, instead of "Something went wrong".
+- **The Duplicates section keeps its title and Expand toggle** after a cleanup.
+- **In a short window the Import and Share panels keep their own buttons**, and Share's code
+  appears.
+- **Statistics is drawn once and updated in place** (about 210 ms a visit became 4–12).
+- **The Duplicates section draws a page of groups at a time.**
+- **A right-click menu is destroyed when the next one is built.** Each right-click on a note left
+  three windows and about 37 KB behind; a theme switch after a thousand of them took 420 ms
+  instead of 80.
+- **A question asked inside another gives the grab back.** A timer's own question answered
+  inside another ("Export complete" over "Move to trash?") left the app under the first one
+  taking clicks.
+- **Tab inside a question walks its own buttons**, and comes back round, as a Windows message box
+  does. It walked out of the question into the note under it, where typing landed, and onto the
+  note list, whose Shift+F10 menu holds Delete.
+- **A confirmation, or an Undo, acts on exactly what it named.** "Move to trash" removed a note
+  ticked while it waited from the notebook with no Trash copy; Empty trash destroyed a note
+  trashed meanwhile; deleting a category's notes trashed one more than it said; Restore previous
+  wrote the old text into whichever note the editor held by then, and, pressed right after a big
+  delete, lost the deleted words — the autosave that ran while it asked kept them as a newer copy,
+  which the restore replaced with the one it had read before asking; removing an attachment could
+  delete a different file for good; "Save them before duplicating?" duplicated whichever note
+  was open by then; and deleting the day of a repeating note on screen, after "Does not repeat"
+  was picked on it, asked to delete the whole note — the save before the question had already
+  turned the series off — and Yes sent it to the Trash. An Undo finds its notes by identity, not
+  by number: a category move's Undo put back a new note that had taken a moved note's number,
+  and a deleted day's Undo lost its series once the series came back from the Trash under a new
+  one. Cancel on the question an Undo asks first keeps the Undo on offer.
+- **A long message keeps its buttons in the window.** A startup notice joining several messages
+  drew its only button below a 600-pixel window, while the window's close was refused; the
+  message scrolls now, and a row of buttons too wide for the window stands one under another.
+
+#### The note list
+
+- **A click that saves the note left behind keeps the clicked card under the pointer**, so a
+  double-click opens that note, not its neighbour, and a tiny slip drops nothing into a new place.
+- **A drag whose release never arrives no longer leaves its card lifted.**
+- **Select all ticks only what the list shows**, not the notes in folded groups.
+- **A ticked note that is deleted leaves the selection**, so a new note cannot inherit its tick.
+- **A move that replaces a Custom order made by hand says so and offers it back** — on its
+  message, and once that has gone, the next time Custom order is chosen — the newest
+  arrangement made by hand, even after a second move made in a sorted view.
+- **Only the open note's card wears the "open" outline.**
+- **A category header keeps its count inside the list**, however long its name.
+- **The keyboard's ring stays where you can see it**, and comes back to its card when a save or
+  a search moves the list — unless you scrolled it out of sight yourself.
+- **The note list stays quick after it has been scrolled far down** (pin, Select, search,
+  Alt+↓: 225–380 ms became 10–30 at 1,000 notes).
+- **An empty search reads no note, and a search keystroke reads only what changed.**
+- **A click that slips at the list's edge no longer drops the card elsewhere.** A drag that
+  began on the card the edge cuts — or a few pixels from it — scrolled the list from its first
+  beat, so a five-pixel slip moved the card one to three places and switched the list to Custom
+  order.
+
+### Testing
+
+- The qa suite's safety guard fails closed, in one place (`qa/_qa_support.hermetic_seed`); the
+  names gate reads the qa scripts and unit suites too.
+- Every fix lands with a check that fails when the fix is taken away: mutation-tested, at least
+  361 mutants named in the commit messages, each killed with its suite reaching the footer.
+- Nineteen rounds of agents tried to break the app, each aimed at what the round before had
+  changed; every finding was reproduced with the agent's own probe before it was fixed, and run
+  again after. The checks press the keys a person presses (Ctrl+X, not the menu's event), with
+  the machine's clipboard kept out of the test, and a qa run says when keys came from the
+  machine's own keyboard while it worked (`REAL KEYS`), so a red they may have caused is not
+  misread.
+- The suite runs about 3,400 checks — ~2,700 in the nine qa scripts and
+  ~700 in the seven unit suites — on Windows and on Linux.
 
 ---
 

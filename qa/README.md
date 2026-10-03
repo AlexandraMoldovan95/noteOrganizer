@@ -1,7 +1,7 @@
 # The qa suite — read me before touching a guarded surface
 
-Nine scripts, ~1,070 checks (the six unit suites beside them bring the
-whole run to ~1,540), all driving the real app headlessly (Xvfb on
+Nine scripts, ~2,700 checks (the seven unit suites beside them bring the
+whole run to ~3,400), all driving the real app headlessly (Xvfb on
 Linux CI, real Windows Tk on the Windows CI job and every dev machine).
 The manual half of the QA story sits beside them:
 `NoteOrganizer_TestPlan.xlsx`, the structured test plan for scenarios
@@ -313,6 +313,30 @@ A new surface joins this list the moment it ships.
   assert it is clear**: without that the check passes on a job left over
   from something earlier in the same script, which is exactly how one of
   these survived the mutant that deleted the binding it guards.
+- **A job attribute answers only for the timer it tracks — ask Tcl which
+  timers wait.** A held-BackSpace check went red on the Linux runner
+  alone: an autosave fired between two presses and split the run the
+  check measured. Its fixture had cancelled the pending save and asserted
+  `_autosave_job is None` — true, while another save waited. The app's
+  callback cleared its own job on entry, so every direct
+  `_autosave_now()` in these scripts left a timer running untracked, and
+  each one, firing, untracked the next: 28 in one qa1 run, counted by
+  wrapping `after`. The app cancels now instead of forgetting; a check
+  that needs no timer waiting asks `waiting_timers(app, name)` from
+  `_qa_support`, which reads Tcl's own `after info`, and **never sets a
+  job to None without cancelling its timer** —
+  `_cancel_pending_autosave()` does both.
+
+  Two more things from the same hunt. **A burst of keys is not a
+  pause**: a check about a run of keys holds the autosave for the burst
+  (`_nd_burst` in qa1), because the check's own slowness between presses
+  is not the person's, and a pause gets an explicit check of its own.
+  And **a check's output folder is its own**: the bulk export names its
+  files after what the folder already holds, and a fixed `qa_export_out`
+  filled by an earlier run in the same place turned the second run red —
+  it is a fresh `mkdtemp` now. Both flakes reproduced on demand before
+  either was fixed: a 0.7s wait between the presses, and three runs in
+  one folder.
 - **Never decide from `focus_get()` whether something has the keyboard.**
   It answers `None` whenever the process does not own the desktop
   foreground — already measured here on the Ctrl+F checks, and true of a
@@ -474,6 +498,16 @@ A new surface joins this list the moment it ships.
   the cap for every app the suite builds, so a window takes the size a
   check asks for whatever screen it runs on. A check whose subject is a
   size should still print the size the window actually got.
+- **CI's Linux machine runs with the mirror's fonts, not its own.** The
+  runner image carries a colour emoji font that the local mirror
+  (`tools/linux-ci`) does not, and Tk 8.6 measures its glyphs hundreds of
+  pixels wide: the calendar's day markers, drawn in "Segoe UI Emoji",
+  which Linux resolves to that font, overflowed every day, and eleven of
+  qa7's checks went red in CI while passing in the mirror. Installing the
+  font in a throwaway mirror reproduced all eleven. The workflow removes
+  it before the suite and prints what is left; a check that passes in the
+  mirror and fails on the runner is a difference between the two machines
+  until shown otherwise.
 - **A red that loses its name costs a day, so the runner writes it down.**
   `tools/run_tests.py` saves a failing run's whole output to
   `%TEMP%/notesorg-failure-<label>.txt` and prints the path — the terminal
@@ -577,9 +611,10 @@ A new surface joins this list the moment it ships.
   a widget that no longer exists by the time it is used, and Tk answers
   "bad window path name" — which **kills the script** rather than
   failing a check, and a dead script reports no failures at all. qa6
-  held a Statistics chip across `app.geometry(...)`; the panel is
-  destroyed and rebuilt on every list refresh while Settings is open, so
-  the reference was a coin toss. It had always been one, and only began
+  held a Statistics chip across `app.geometry(...)`; the panel was then
+  destroyed and rebuilt on every list refresh while Settings was open
+  (it updates in place since 0.83.335, and still rebuilds on a palette or
+  category change), so the reference was a coin toss. It had always been one, and only began
   landing wrong when gating that redraw on whether Settings is open
   moved WHEN the rebuild happens: two runs in four on Linux, none on
   Windows, none at all before the change. **Find it again immediately
@@ -807,3 +842,71 @@ A new surface joins this list the moment it ships.
   `_desktop_pointer_button_held`. And a story's click now fails where it
   missed — `_open_note_by_clicking` is true only if that note opened —
   instead of three lines later, blaming the app.
+- **A block that swaps `app.notes` under a live editor resets the
+  editor first.** A pending autosave saves what the editor holds into
+  whatever notebook is in place when it fires: qa4 once grew to 301
+  notes in four runs of five because an unsaved note from the block
+  before landed in its fixture. `app.new_note()` before the swap, and a
+  fixture check that counts the notes.
+- **A fixture check states the premise the real check needs.** The
+  rename's "keeps its place" check could not fail while the renamed
+  category was already the last one — renaming it to the end changed
+  nothing. The fixture now adds a category after it, and a check says
+  so before the real one runs.
+- **A mutant must compile.** Removing the only statement of a block
+  leaves an IndentationError, and the run proves nothing — it read
+  NO-RUN twice here before the session's runner learned to compile the
+  mutated file first and refuse it at once. Put `pass` where the
+  statement was.
+- **A photograph can lie about stacking.** The screenshot helpers pin
+  the main window topmost for the grab, which changes what is on top of
+  what: a question photographed "under" a popup was, by Windows' own
+  `WindowFromPoint` (`winfo_containing`), on top at every button.
+  Judge stacking by asking Windows, never from a photo.
+- **"invalid command name … ("after" script)" on stderr after a
+  restart simulation is harness noise.** qa1, qa5 and qa8 destroy an app
+  and build another in the same process; Tcl's notifier is per thread,
+  so the next app's event loop fires the old one's timers. The app is
+  not affected (closing it ends the process). Any OTHER background error
+  is real — capture `bgerror` in a check, as qa9 does, because Tk
+  reports it to nobody by default.
+- **Generated events carry time 0.** Tk pairs two presses into a
+  `<Double-Button-1>` by time and place, so any two generated presses at
+  one spot are a double-click to Tk. A check about single clicks spaces
+  them in place or passes `time=`; a check about double-clicks passes
+  both times explicitly.
+- **The names gate reads the qa scripts and the unit suites too.** A
+  name borrowed from a removed block (a seed's `os`, `io`) fails the
+  gate the moment the script is read, instead of halfway through a run.
+- **A check reads the broken state it exists to catch without raising.**
+  test_data_safety's junk-in-the-Trash check asked every entry `.get()`
+  — and under its own mutant the entries were the junk, so the script
+  died with a traceback and the mutant read NO-RUN instead of KILLED.
+  Read what comes back the way the bug would leave it.
+- **Press the key a person presses.** The styled-delete checks generated
+  `<<Cut>>`, the menu's way, and passed while Ctrl+X itself — which
+  reaches a virtual binding as the key's own press — gave the bold back
+  plain. Generate the key with its modifier (`<Control-KeyPress-x>`),
+  and its release too when a `<KeyRelease>` binding is part of the
+  story. Anything a key would do to the machine's clipboard is kept in
+  the process: rename Tcl's `clipboard` and `::tk::GetSelection` for the
+  block and put them back in a `finally`, as qa1 does.
+- **The machine's clipboard is out of the suite's reach.** It is shared
+  with every program on the machine: one holding it open for an instant
+  made a paste read nothing, and qa1's copy-and-paste check went red three
+  times on a developer machine while Linux stayed green — a wait for one
+  good read only moved the race to the paste's own read. `pin_the_desktop`
+  gives every app a script builds a stand-in kept in the process
+  (`_qa_support.CLIPBOARD`), so no check can race another program, and a
+  run no longer writes over the owner's clipboard while she works.
+- **A run says when the keyboard was real.** The clipboard, the
+  foreground and the mouse button are answered for the suite; the
+  keyboard cannot be — a key pressed on the machine while a script's
+  window holds the focus reaches the app under test. A qa5 check went red
+  once in sixteen runs and never in twenty-five repeats, while the
+  break-it agents' probes caught a person's keys arriving in their
+  windows. `pin_the_desktop` now notes every key event whose time is not
+  0 (generated events carry time 0) and prints `REAL KEYS: N key
+  event(s) …` at exit. A red in a run that printed it is reproduced in a
+  run that did not before it is believed or dismissed; a red in a run
+  that did not print it is never blamed on the keyboard.

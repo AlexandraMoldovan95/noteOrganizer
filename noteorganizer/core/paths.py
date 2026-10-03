@@ -62,6 +62,18 @@ import tempfile
 from datetime import datetime
 
 
+#: Every way a JSON file or text can turn out unreadable: not JSON at all,
+#: bytes that are not UTF-8 (a notes file saved by another program in
+#: Windows' own Romanian encoding, say), and nesting deeper than the parser
+#: can follow. The readers caught the first kind only, and the other two
+#: escaped them: the app would not start while its notes, settings, Trash or
+#: templates file held one, a share code said "Something went wrong", and a
+#: backup holding such a file failed whole. Every reader of a file or code
+#: that may be damaged catches all three, and treats them as the damage they
+#: are.
+JSON_UNREADABLE = (json.JSONDecodeError, UnicodeDecodeError, RecursionError)
+
+
 # ---- Storage location ----
 #
 # Two very different situations, deliberately handled differently:
@@ -209,7 +221,7 @@ def count_notes_in(path):
         with open(path, "r", encoding="utf-8") as f:
             data = json.load(f)
         return len(data) if isinstance(data, list) else 0
-    except (json.JSONDecodeError, IOError, OSError):
+    except (*JSON_UNREADABLE, IOError, OSError):
         return 0
 
 
@@ -255,12 +267,34 @@ def preserve_corrupt_file(path):
     migration code below needs it too, and paths cannot import storage
     back. storage re-exports it as its own ``_preserve_corrupt``.
 
+    The same bytes are kept aside once. A file the app cannot use is read
+    again at every launch until something rewrites it -- a Trash nobody
+    touches, a templates file -- and each launch kept one more identical
+    copy, never deleted.
+
     Returns:
-        The copy's path, or None if even the copy failed.
+        The copy's path (an earlier one holding the same bytes, if there is
+        one), or None if even the copy failed.
     """
     stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     root, ext = os.path.splitext(path)
-    backup_path = f"{root}_corrupt_{stamp}{ext or '.json'}"
+    ext = ext or ".json"
+    try:
+        with open(path, "rb") as fh:
+            held = fh.read()
+        folder = os.path.dirname(path) or "."
+        prefix = os.path.basename(root) + "_corrupt_"
+        for name in sorted(os.listdir(folder)):
+            if not (name.startswith(prefix) and name.endswith(ext)):
+                continue
+            kept = os.path.join(folder, name)
+            if os.path.getsize(kept) == len(held):
+                with open(kept, "rb") as fh:
+                    if fh.read() == held:
+                        return kept
+    except (IOError, OSError):
+        pass
+    backup_path = f"{root}_corrupt_{stamp}{ext}"
     try:
         shutil.copy2(path, backup_path)
         return backup_path
@@ -278,7 +312,7 @@ def _preserve_settings_if_unreadable(settings_path):
         with open(settings_path, "r", encoding="utf-8") as f:
             if isinstance(json.load(f), dict):
                 return
-    except (json.JSONDecodeError, IOError, OSError):
+    except (*JSON_UNREADABLE, IOError, OSError):
         pass
     preserve_corrupt_file(settings_path)
 
@@ -304,7 +338,7 @@ def run_migrations(app_dir):
             with open(settings_path, "r", encoding="utf-8") as f:
                 data = json.load(f)
             return data if isinstance(data, dict) else {}
-        except (json.JSONDecodeError, IOError, OSError):
+        except (*JSON_UNREADABLE, IOError, OSError):
             return {}
 
     # --- Case 1: reclaim data from %APPDATA% ---
@@ -456,7 +490,7 @@ def is_redundant_copy(candidate_path, local_notes):
     try:
         with open(candidate_path, "r", encoding="utf-8") as f:
             data = json.load(f)
-    except (json.JSONDecodeError, IOError, OSError):
+    except (*JSON_UNREADABLE, IOError, OSError):
         return False
     if not isinstance(data, list):
         return False
@@ -511,7 +545,7 @@ def _looks_like_our_settings(path):
     try:
         with open(path, "r", encoding="utf-8") as f:
             data = json.load(f)
-    except (json.JSONDecodeError, IOError, OSError, UnicodeDecodeError):
+    except (*JSON_UNREADABLE, IOError, OSError):
         return False
     return isinstance(data, dict) and any(k in data for k in _OUR_SETTINGS_KEYS)
 
@@ -543,18 +577,28 @@ def purge_stale_copies(app_dir):
     local_path = os.path.join(app_dir, "notes_data.json")
     if not os.path.exists(local_path):
         return []
+    appdata_dir = os.path.abspath(get_appdata_dir())
+    # Only a leftover folder that still holds a notebook can need clearing
+    # (the loop below skips every other one), and on nearly every launch
+    # there is none. Reading the whole local notebook first bought
+    # nothing: a second full parse of it at every startup, ~95 ms at
+    # 5,000 notes (measured).
+    stale_dirs = [d for d in get_legacy_dirs(app_dir)
+                  if os.path.abspath(d) != appdata_dir
+                  and os.path.exists(os.path.join(d, "notes_data.json"))]
+    if not stale_dirs:
+        return []
     try:
         with open(local_path, "r", encoding="utf-8") as f:
             local_notes = json.load(f)
-    except (json.JSONDecodeError, IOError, OSError):
+    except (*JSON_UNREADABLE, IOError, OSError):
         return []
     if not isinstance(local_notes, list):
         return []
 
-    appdata_dir = os.path.abspath(get_appdata_dir())
     cleared = []
 
-    for stale_dir in get_legacy_dirs(app_dir):
+    for stale_dir in stale_dirs:
         if os.path.abspath(stale_dir) == appdata_dir:
             # The per-user AppData folder is the durable, cross-run store the
             # distributed .exe actually reads from — never a disposable

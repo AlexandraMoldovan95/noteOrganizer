@@ -729,7 +729,12 @@ def chapter_7():
             code = widget.get("1.0", "end-1c").strip()
     story.check("I have a code for the list as it is", code.startswith("NOTE1"))
 
-    # Now she changes it: everything unticked, the date taken off.
+    # Now she changes it: everything unticked, the date taken off. The
+    # rows exist only while the checklist is open, as a person has it
+    # open to untick anything.
+    if not app._checklist_open:
+        app.checklist_btn.invoke()
+        app.update()
     for box in [w for w in _all_children(app.checklist_items_frame)
                 if isinstance(w, tk.Checkbutton)]:
         if box.cget("variable") and int(app.getvar(box.cget("variable"))):

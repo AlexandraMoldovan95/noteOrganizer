@@ -57,6 +57,8 @@ CHANGELOG = read("CHANGELOG.md")
 QA4 = read("qa", "qa4.py")
 README = read("README.md")
 CLAUDE_MD = read("CLAUDE.md")
+ARCHITECTURE = read("docs", "ARCHITECTURE.md")
+USER_GUIDE = read("docs", "USER_GUIDE.md")
 
 # Every UI source a glyph could hide in, for the checks that ask whether a
 # character appears anywhere rather than in one named place.
@@ -104,8 +106,17 @@ TIER_CHECKS = [
      "the spec sets an icon or a version resource"),
     ("T2-3", lambda: "SetProcessDpiAware" in HUB or "shcore" in HUB,
      "DPI awareness is engaged"),
-    ("T2-8", lambda: "filedialog" not in HUB,
-     "no native file dialogs remain"),
+    # Resolved by correcting the documents, not the code (C-25): the file
+    # chooser stays, because the system's own is the better one, and the
+    # promises that said otherwise are gone. The check used to be
+    # "filedialog not in HUB" -- the fix that was rejected -- so the row
+    # could never close however true the documents became. A heading is
+    # what makes the claim; ARCHITECTURE now quotes the old one in prose.
+    ("T2-8", lambda: README.count("choosing a file or folder") >= 2
+     and not re.search(r"^#+ .*[Nn]o native dialogs", ARCHITECTURE, re.M)
+     and "clickable chip" not in USER_GUIDE,
+     "the documents no longer promise no native dialogs or clickable "
+     "Statistics chips"),
     ("T2-9", lambda: not re.search(r"30 days", HUB),
      "the delete confirmation no longer hardcodes 30 days"),
 

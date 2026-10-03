@@ -217,8 +217,8 @@ def is_recurring(note):
     note that has been through :func:`normalize_note` and fatal for one
     that has not: a ``recurrence`` holding a string is truthy, and
     ``.get`` on a string raises. Live notes are normalised on load;
-    TRASH entries are not -- ``load_trash`` returns whatever the file
-    held -- so the first caller to ask a trashed note whether it repeats
+    TRASH entries are not -- ``load_trash`` returns each entry as the file
+    held it -- so the first caller to ask a trashed note whether it repeats
     would have taken the whole Trash panel down with it. Found by a
     check written for exactly that, the day such a caller appeared.
     """
@@ -251,7 +251,7 @@ def _day_in_month(year, month, wanted_day, policy):
     return None  # "skip"
 
 
-def expand_occurrences(note, range_start, range_end):
+def expand_occurrences(note, range_start, range_end, limit=None):
     """Every date this note lands on between range_start and range_end
     (inclusive), as 'YYYY-MM-DD' strings. Exceptions are already removed.
 
@@ -263,6 +263,9 @@ def expand_occurrences(note, range_start, range_end):
         note: The note dict, providing its date, rule and exceptions.
         range_start: First date of interest (a ``date`` object).
         range_end: Last date of interest, inclusive.
+        limit: Stop once this many dates are found -- the first ones, in
+            order. For a caller asking "more than fifty?", which needs
+            fifty-one and not a decade of them.
 
     Returns:
         A sorted list of date strings. Empty if the note has no valid
@@ -300,7 +303,8 @@ def expand_occurrences(note, range_start, range_end):
         """Record one occurrence. Returns False when the rule is exhausted.
 
         Note it counts EVERY occurrence since the anchor (for "stop after
-        N times"), but only collects the ones inside the visible range.
+        N times"), but only collects the ones inside the visible range --
+        each formatted once, here, where a skipped day is also told apart.
         """
         nonlocal produced
         if candidate < anchor:
@@ -309,7 +313,11 @@ def expand_occurrences(note, range_start, range_end):
             return False
         produced += 1
         if range_start <= candidate <= range_end:
-            results.append(candidate)
+            text = format_date(candidate)
+            if text not in exceptions:
+                results.append((candidate, text))
+                if limit is not None and len(results) >= limit:
+                    return False
         if limited and produced >= max_count:
             return False
         return True
@@ -326,6 +334,11 @@ def expand_occurrences(note, range_start, range_end):
         while current <= horizon and guard < MAX_OCCURRENCES:
             guard += 1
             if not take(current):
+                break
+            # Measured before stepping, because the step past the horizon
+            # is the one a date may be unable to take: from 9999-12-31 it
+            # raised OverflowError, and December 9999 failed to draw.
+            if horizon - current < step:
                 break
             current += step
 
@@ -345,12 +358,16 @@ def expand_occurrences(note, range_start, range_end):
         while week_start <= horizon and guard < MAX_OCCURRENCES and not stop:
             guard += 1
             for weekday in weekdays:
-                candidate = week_start + timedelta(days=weekday)
-                if candidate > horizon:
+                # Measured from the week's Monday rather than added to it:
+                # the last week of 9999 has no Saturday or Sunday to add.
+                if (horizon - week_start).days < weekday:
                     continue
+                candidate = week_start + timedelta(days=weekday)
                 if not take(candidate):
                     stop = True
                     break
+            if horizon - week_start < week_step:
+                break
             week_start += week_step
 
     elif rec["freq"] == "monthly":
@@ -365,7 +382,9 @@ def expand_occurrences(note, range_start, range_end):
         while guard < MAX_OCCURRENCES and not stop:
             guard += 1
             year, month = _shift_month(anchor.year, anchor.month, step_index * interval)
-            if date_cls(year, month, 1) > horizon:
+            # Compared as numbers, not as a date: the month after December
+            # 9999 has no first day to build ("year 10000 is out of range").
+            if (year, month) > (horizon.year, horizon.month):
                 break
             # Resolved first, THEN counted: under "clamp", days 29, 30 and
             # 31 all land on Feb 28 -- which is exactly what someone who
@@ -405,7 +424,7 @@ def expand_occurrences(note, range_start, range_end):
                     break
             year_index += 1
 
-    return [format_date(d) for d in sorted(results) if format_date(d) not in exceptions]
+    return [text for _day, text in sorted(results)]
 
 
 def _history_bucket_of(date_str, today):
@@ -433,7 +452,10 @@ def _history_match(query, *texts):
     return any(q in (t or "").lower() for t in texts)
 
 
-def history_entries(notes, query="", year_bucket="All", today=None):
+_UNKNOWN = object()
+
+
+def history_entries(notes, query="", year_bucket="All", today=None, memo=None):
     """Build the Calendar History listing: the days that carry real
     content, newest first — not every occurrence a rule generates.
 
@@ -457,6 +479,13 @@ def history_entries(notes, query="", year_bucket="All", today=None):
         year_bucket: "All", "This year", "Last year", "2 years ago" or
             "Older".
         today: injectable date for tests; defaults to the real today.
+        memo: a dict the caller may keep between calls. What does not
+            depend on the query or the year -- a series' days, label and
+            next day, whether a date is one, which year bucket it is in --
+            is kept there under exactly what it is worked out from (the
+            date, the rule, the skipped days, today), so a search keystroke
+            only filters, and a changed note simply misses under its new
+            key. Read-only to the caller.
 
     Returns:
         A list of dicts, newest activity first. A dated note:
@@ -466,9 +495,22 @@ def history_entries(notes, query="", year_bucket="All", today=None):
     """
     if today is None:
         today = date_cls.today()
+    if memo is None:
+        memo = {}
+
+    def is_date(d):
+        found = memo.get(("date", d), _UNKNOWN)
+        if found is _UNKNOWN:
+            found = memo[("date", d)] = parse_date(d) is not None
+        return found
 
     def bucket_ok(d):
-        return year_bucket == "All" or _history_bucket_of(d, today) == year_bucket
+        if year_bucket == "All":
+            return True
+        found = memo.get(("bucket", d, today), _UNKNOWN)
+        if found is _UNKNOWN:
+            found = memo[("bucket", d, today)] = _history_bucket_of(d, today)
+        return found == year_bucket
 
     entries = []
     for note in notes:
@@ -481,23 +523,46 @@ def history_entries(notes, query="", year_bucket="All", today=None):
             base_matches = _history_match(
                 query, title, note.get("body"), note.get("comments"))
 
-            # A BOUNDED, small series lists ALL its occurrences — the
-            # field expectation: a "10 times" group opens to its 10 days.
-            # An unbounded rule would drown the register in identical
-            # rows, so it lists only the separately-edited days instead.
-            rec = normalize_recurrence(note.get("recurrence"))
-            anchor = parse_date(note.get("date") or "")
-            occ_days = None
-            if anchor is not None:
-                if 0 < rec["count"] <= 50:
-                    occ_days = expand_occurrences(
-                        note, anchor, anchor + timedelta(days=36600))
-                elif rec["end"]:
-                    end_d = parse_date(rec["end"])
-                    if end_d is not None:
-                        got = expand_occurrences(note, anchor, end_d)
-                        if len(got) <= 50:
-                            occ_days = got
+            # What this series costs to work out, kept under what it is
+            # worked out from (see `memo`).
+            key = ("series", note.get("date") or "",
+                   repr(note.get("recurrence")),
+                   tuple(note.get("exceptions") or ()), today)
+            known = memo.get(key)
+            if known is None:
+                # A BOUNDED, small series lists ALL its occurrences — the
+                # field expectation: a "10 times" group opens to its 10
+                # days. An unbounded rule would drown the register in
+                # identical rows, so it lists only the separately-edited
+                # days instead.
+                rec = normalize_recurrence(note.get("recurrence"))
+                anchor = parse_date(note.get("date") or "")
+                occ_days = None
+                if anchor is not None:
+                    if 0 < rec["count"] <= 50:
+                        # A century is room for fifty of anything -- up to
+                        # the last day a date can hold, which a series
+                        # dated in the 9900s reaches first (the sum itself
+                        # overflowed).
+                        far = (anchor + timedelta(days=36600)
+                               if (date_cls.max - anchor).days >= 36600
+                               else date_cls.max)
+                        occ_days = expand_occurrences(note, anchor, far)
+                    elif rec["end"]:
+                        end_d = parse_date(rec["end"])
+                        if end_d is not None:
+                            # "Fifty or fewer?" is answered by the
+                            # fifty-first: a daily series ending in three
+                            # years was worked out day by day to be thrown
+                            # away, on every search pause, for every such
+                            # series.
+                            got = expand_occurrences(note, anchor, end_d,
+                                                     limit=51)
+                            if len(got) <= 50:
+                                occ_days = got
+                known = memo[key] = {"occ_days": occ_days,
+                                     "freq_label": describe_recurrence(note)}
+            occ_days = known["occ_days"]
 
             children = []
             any_child_match = False
@@ -524,7 +589,7 @@ def history_entries(notes, query="", year_bucket="All", today=None):
             else:
                 children_kind = "edited"
                 for day, override in sorted(overrides.items(), reverse=True):
-                    if day in exceptions or parse_date(day) is None:
+                    if day in exceptions or not is_date(day):
                         # A deleted day's override is normally popped with
                         # the exception; a stray one must not resurface.
                         continue
@@ -554,7 +619,7 @@ def history_entries(notes, query="", year_bucket="All", today=None):
                     "kind": "series",
                     "note_id": note.get("id"),
                     "title": title,
-                    "freq_label": describe_recurrence(note),
+                    "freq_label": known["freq_label"],
                     "children": children,
                     "children_kind": children_kind,
                     "n_occurrences": (len(occ_days) if occ_days is not None
@@ -567,14 +632,16 @@ def history_entries(notes, query="", year_bucket="All", today=None):
                     # Nothing to unfold: the row itself becomes the door —
                     # it jumps to the series' next (or first) day on the
                     # calendar instead of opening an empty group.
-                    entry["jump_date"] = (
-                        next_occurrence_on_or_after(
-                            note, format_date(today))
-                        or note.get("date") or "")
+                    if "jump_date" not in known:
+                        known["jump_date"] = (
+                            next_occurrence_on_or_after(
+                                note, format_date(today))
+                            or note.get("date") or "")
+                    entry["jump_date"] = known["jump_date"]
                 entries.append(entry)
         else:
             d = note.get("date") or ""
-            if parse_date(d) is None:
+            if not is_date(d):
                 continue  # plain undated notes don't live on the calendar
             if not bucket_ok(d):
                 continue

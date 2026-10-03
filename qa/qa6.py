@@ -1,29 +1,11 @@
 # HERMETIC SEED -- BEFORE the note_organizer import below: the module
 # resolves its data directory and runs the data MIGRATIONS at import
-# time, so by the first line of test code the adoption has already
-# happened. The data directory must be this test's alone. An
-# empty directory invites run_migrations to adopt whatever real notebook
-# %APPDATA% holds, and real notes then leak into every scenario: the
-# checks start flaking whenever the OWNER's data changes. Seeding an
-# empty notebook plus the reclaim marker closes both migration doors
-# before the app is even constructed. The refusal is the same last-line
-# defence test_data_safety carries: run from a folder holding real
-# notes, the script stops instead of seeding over them.
-import io as _seed_io, json as _seed_json, os as _seed_os, sys as _seed_sys
-if _seed_os.path.exists('notes_data.json'):
-    try:
-        _seed_prev = _seed_json.load(
-            _seed_io.open('notes_data.json', encoding='utf-8'))
-    except Exception:
-        _seed_prev = []
-    if isinstance(_seed_prev, list) and _seed_prev:
-        _seed_sys.exit(
-            'REFUSING to run: notes_data.json here holds %d real note(s). '
-            'Copy this script to a scratch directory instead.'
-            % len(_seed_prev))
-_seed_io.open('notes_data.json', 'w', encoding='utf-8').write('[]')
-_seed_io.open('settings.json', 'w', encoding='utf-8').write(
-    _seed_json.dumps({'reclaimed_from_appdata': True}))
+# time, so this script's data directory must be its own before that
+# happens. hermetic_seed (qa/_qa_support.py) seeds it -- or refuses to
+# run at all outside a scratch run, or beside a notebook it cannot
+# prove is empty.
+from _qa_support import hermetic_seed as _qa_seed
+_qa_seed()
 
 import sys
 import time
@@ -349,10 +331,12 @@ check('Settings pane overflows for the chip test too',
       app.settings_canvas.yview()[1] < 1.0)
 before_stats_scroll = app.settings_canvas.yview()
 # Found again, here, and not reused from before the resize. The
-# statistics panel is destroyed and rebuilt from scratch on every
-# note-list refresh while Settings is open, so a chip captured earlier
-# can name a widget that no longer exists by the time the wheel is aimed
-# at it -- "bad window path name", and the script dies rather than fails.
+# statistics panel was destroyed and rebuilt from scratch on every
+# note-list refresh while Settings was open (it updates its figures in
+# place now, and still rebuilds on a palette or category change), so a
+# chip captured earlier can name a widget that no longer exists by the
+# time the wheel is aimed at it -- "bad window path name", and the
+# script dies rather than fails.
 #
 # It was always this fragile; it only started biting when gating the
 # panel's redraw on whether Settings is open moved WHEN that rebuild
@@ -476,7 +460,7 @@ check('stats show the category before it is deleted',
       category_in_stats('TempStatsCat'))
 
 app.ask_yes_no = lambda *a, **k: True
-app._ask_category_deletion = lambda name, count: "move"
+app._ask_category_deletion = lambda name, count, days_only=0: "move"
 app._delete_category('TempStatsCat', redraw=lambda: None)
 app.update()
 check('stats no longer show the deleted category, without reopening Settings',
@@ -659,6 +643,110 @@ check('the confirm asks with the warning glyph and No pre-selected',
       _att_ask.get('icon') == 'warning' and _att_ask.get('default') == 'no')
 check('remove_attachment clears the list', len(app.current_attachments) == 0)
 check('remove_attachment deletes the file from disk', not os.path.isfile(stored_path))
+
+# The file asked about is the file removed. While the question waited, the
+# editor could move on to another note; the index then named THAT note's
+# attachment, whose stored file went for good.
+_mv_files = []
+for _mv_name in ('mv_a.txt', 'mv_b.txt'):
+    _mv_path = os.path.join(NO.ATTACHMENTS_DIR, _mv_name)
+    with open(_mv_path, 'w') as _mv_f:
+        _mv_f.write('keep me')
+    _mv_files.append(_mv_path)
+app.current_attachments = [{'filename': 'mine.txt', 'stored_as': 'mv_a.txt'}]
+_mv_other = [{'filename': 'theirs.txt', 'stored_as': 'mv_b.txt'}]
+_mv_note_before = app.selected_note_id
+
+
+def _mv_answer(*a, **k):
+    # Another note opens under the waiting question, then the answer: Yes.
+    app.selected_note_id = (_mv_note_before or 0) + 999
+    app.current_attachments = list(_mv_other)
+    return True
+
+
+app.ask_yes_no = _mv_answer
+try:
+    app.remove_attachment(0)
+    app.update()
+finally:
+    app.ask_yes_no = _orig_ask_att
+    app.selected_note_id = _mv_note_before
+check('a Yes given after the editor moved on removes nothing: the other '
+      'note\'s file stays on disk and in its list (%s)' % app.current_attachments,
+      os.path.isfile(_mv_files[1]) and app.current_attachments == _mv_other
+      and os.path.isfile(_mv_files[0]))
+app.current_attachments = []
+for _mv_path in _mv_files:
+    if os.path.isfile(_mv_path):
+        os.remove(_mv_path)
+
+# A file attached or removed after a save in the same visit. The save stored
+# the editor's own list in the note, so the attach changed the note too: the
+# editor read as saved, and closing the app lost the file's entry -- and a
+# removed file stayed listed with its stored copy already deleted.
+import json as _json6a
+app.new_note()
+app.title_entry.insert(0, 'AttachAfterSave')
+app.body_text.insert('1.0', 'typed first')
+app.save_current_note(auto=False)
+app.update()
+# A second save, of the note as it now exists: the first one made a new
+# note, whose fields are copied on the way in, and it is the save of an
+# existing note that stored the editor's own list.
+app.body_text.insert('end-1c', ' and typed again')
+app.save_current_note(auto=False)
+app.update()
+_aa_id = app.selected_note_id
+check('fixture: the note was saved twice, the second time as itself',
+      _aa_id is not None and 'typed again' in app.find_note(_aa_id)['body'])
+_aa_files = []
+for _aa_name in ('qa6_after_one.txt', 'qa6_after_two.txt'):
+    _aa_path = os.path.join(tempfile.gettempdir(), _aa_name)
+    with open(_aa_path, 'w') as _aa_f:
+        _aa_f.write('after a save')
+    _aa_files.append(_aa_path)
+
+
+def _aa_disk():
+    with open('notes_data.json', encoding='utf-8') as _aa_f:
+        return [a.get('filename') for n in _json6a.load(_aa_f)
+                if n.get('id') == _aa_id for a in n.get('attachments') or []]
+
+
+fd.askopenfilenames = lambda **k: tuple(_aa_files)
+app.add_attachment()
+app.update()
+_aa_unsaved = not app.editor_state_matches_saved(app.capture_editor_state())
+app._flush_autosave()
+app.update()
+check(f'files attached after a save read as unsaved ({_aa_unsaved}), and the '
+      f'next flush stores them ({_aa_disk()})',
+      _aa_unsaved and _aa_disk() == ['qa6_after_one.txt', 'qa6_after_two.txt'])
+app.ask_yes_no = lambda *a, **k: True
+try:
+    app.remove_attachment(1)
+    app.update()
+finally:
+    app.ask_yes_no = _orig_ask_att
+_aa_unsaved = not app.editor_state_matches_saved(app.capture_editor_state())
+app._flush_autosave()
+app.update()
+check(f'...and a file removed after that save reads as unsaved '
+      f'({_aa_unsaved}), and the next flush stores the removal ({_aa_disk()})',
+      _aa_unsaved and _aa_disk() == ['qa6_after_one.txt'])
+app.ask_yes_no = lambda *a, **k: True
+try:
+    app.remove_attachment(0)
+    app.update()
+finally:
+    app.ask_yes_no = _orig_ask_att
+app._flush_autosave()
+for _aa_path in _aa_files:
+    if os.path.isfile(_aa_path):
+        os.remove(_aa_path)
+app.new_note()
+app.current_attachments = []
 
 # ---- COMBINATIONS ----
 
@@ -1535,6 +1623,7 @@ _QW_NOT_KEYS = {'<Button-1>', '<Button-3>', '<Button-2>', '<Enter>',
 # written with the binding spelling and caught its own mistake.
 _QW_KEY_NAMES = {'<Key-Return>': 'Enter', '<Key-space>': 'Space',
                  '<Key-Down>': 'Down', '<Key-Up>': 'Up',
+                 '<Key-Left>': 'Left', '<Key-Right>': 'Right',
                  '<Alt-Key-Down>': 'Alt+Down', '<Alt-Key-Up>': 'Alt+Up',
                  '<Key-Escape>': 'Escape',
                  '<Shift-Key-F10>': 'Shift+F10',
@@ -1679,6 +1768,33 @@ check('recolouring through the swatch palette stores the clicked colour',
       _CC6.get('Proiecte') == _want6
       and NO.get_setting('categories', {}).get('Proiecte') == _want6)
 
+# What a rename carries besides the notes: the note open in the editor,
+# the templates, the Trash, a folded group, and its place among the
+# groups. Only the notes were renamed -- the editor's box fell back to
+# General and the next save filed the open note there, and a note
+# restored from the Trash brought the old name back.
+_rn_kept6 = (list(app.notes), list(app.trash), list(app.templates),
+             set(app.collapsed_groups))
+app.new_note(); app.update()
+app.notes = [NO.normalize_note({'id': 1, 'title': 'Budget', 'body': 'x',
+                                'category': 'Proiecte'})]
+app.save_notes()
+app.open_note_in_tab(app.notes[0]); app.update()
+app.templates = [NO.normalize_template({'name': 'Weekly', 'category': 'Proiecte'})]
+NO.save_templates(app.templates)
+app.trash = [dict(NO.normalize_note({'id': 2, 'title': 'Old', 'body': 'x',
+                                     'category': 'Proiecte'}),
+                  deleted_at='2026-09-30 10:00:00')]
+NO.save_trash(app.trash)
+app.collapsed_groups = {'Proiecte'}
+# A category AFTER the renamed one: added last, 'Proiecte' was already at
+# the end, so "moved to the end" and "kept its place" read the same and the
+# place check could not fail (a mutant restoring the move survived it).
+_CC6['ZAfterProiecte'] = '#556677'
+_rn_order6 = list(_CC6)
+check('fixture: the category about to be renamed is not the last one',
+      _rn_order6.index('Proiecte') < len(_rn_order6) - 1)
+
 # Rename through the pencil's inline editor.
 _prow = _row_of6(_catf, 'Proiecte')
 # children order = creation order: the pencil canvas is created before
@@ -1701,6 +1817,25 @@ if _ipop is not None and _ipop.winfo_exists():
     _renamed = 'ProiecteX' in _CC6 and 'Proiecte' not in _CC6
 check('renaming through the inline editor moves the category',
       _renamed and 'ProiecteX' in NO.get_setting('categories', {}))
+check('...the note open in the editor goes with it',
+      app.category_var.get() == 'ProiecteX')
+app._flush_autosave(); app.update()
+check('...so its next save does not file it under General',
+      app.find_note(1)['category'] == 'ProiecteX')
+check('...templates and the Trash go with it too',
+      app.templates[0]['category'] == 'ProiecteX'
+      and app.trash[0]['category'] == 'ProiecteX')
+check('...a folded group stays folded, under its new name',
+      app.collapsed_groups == {'ProiecteX'}
+      and NO.get_setting('collapsed_groups', []) == ['ProiecteX'])
+check('...and the category keeps its place among the groups',
+      list(_CC6).index('ProiecteX') == _rn_order6.index('Proiecte'))
+app.new_note(); app.update()
+_CC6.pop('ZAfterProiecte', None)
+NO.persist_categories()
+app.notes, app.trash, app.templates, app.collapsed_groups = _rn_kept6
+app.save_notes(); NO.save_trash(app.trash); NO.save_templates(app.templates)
+NO.save_setting('collapsed_groups', sorted(app.collapsed_groups))
 
 # ---- Add and Rename refuse what the loader will not keep ----
 # Both doors took any length, and load_categories drops a name over the
@@ -1800,6 +1935,30 @@ finally:
     app.ask_yes_no = _real_ask6
 check('answering Yes attaches exactly what fits, no more',
       len(app.current_attachments) == _cap6)
+# ...and to the note it asked about: a Yes given after the editor moved on
+# to another note attaches nothing to the note that opened meanwhile.
+app.current_attachments = app.current_attachments[:_cap6 - 1]
+app.refresh_attachments_list(); app.update()
+_ad_note_before = app.selected_note_id
+_ad_other = []
+
+
+def _ad_answer(*a, **k):
+    app.selected_note_id = (_ad_note_before or 0) + 999
+    app.current_attachments = _ad_other
+    return True
+
+
+app.ask_yes_no = _ad_answer
+fd.askopenfilenames = lambda **k: (tmp_file, tmp_file, tmp_file)
+try:
+    app.add_attachment()
+    app.update()
+finally:
+    app.ask_yes_no = _real_ask6
+    app.selected_note_id = _ad_note_before
+check('a Yes given after the editor moved on attaches nothing to the note '
+      'that opened meanwhile (%d)' % len(_ad_other), _ad_other == [])
 app.current_attachments = []
 app.refresh_attachments_list()
 app.new_note(); app.update()
@@ -1913,8 +2072,11 @@ check('the ticks live on the panel, not on the rows that get destroyed',
 # 5002. The first version of this hardcoded that guess and failed on a
 # correct app -- which is the whole reason to ask the state rather than
 # predict it.
-_c14_picked = sorted(k for k, v in app._trash_sel.items() if v.get())
-_c14_left = sorted(e['id'] for e in app.trash if e['id'] not in _c14_picked)
+# The ticks are keyed by the entry's identity in the trash, not by its id
+# alone (two entries can share an id -- see the check further down).
+from noteorganizer.ui.settings_page import _trash_tick_key as _c14_key
+_c14_picked = {k for k, v in app._trash_sel.items() if v.get()}
+_c14_left = sorted(e['id'] for e in app.trash if _c14_key(e) not in _c14_picked)
 # Identified by BODY, not by id, and that is not a workaround: restoring
 # deliberately assigns a fresh id, because the trashed note's own may have
 # been reused by a note created after it was deleted -- core/storage says
@@ -1922,7 +2084,7 @@ _c14_left = sorted(e['id'] for e in app.trash if e['id'] not in _c14_picked)
 # is the situation this row is about, so the body is the only thing that
 # tells them apart -- exactly what the new hover preview shows a person.
 _c14_want_bodies = sorted(e['body'] for e in app.trash
-                          if e['id'] in _c14_picked)
+                          if _c14_key(e) in _c14_picked)
 _c14_restore.invoke()
 app.update()
 check('restoring the ticked notes brings back exactly those two',
@@ -1942,6 +2104,156 @@ check('Empty trash is still there, and still wears the danger weight',
 app.trash = []
 app.notes = []
 app.save_notes()
+
+# Two Trash entries can share an id: a note's id is only its place in the
+# notes file, handed out again after a delete -- delete the newest note,
+# write another, delete that too. Keyed by the id alone, ticking one row
+# ticked both, and "Restore selected" brought back a note nobody picked.
+app.trash = [
+    {'id': 2, 'title': 'Old draft', 'body': 'the old one', 'category': 'General',
+     'deleted_at': '2026-09-20 10:00:00', 'uid': 'qa6-old-draft'},
+    {'id': 2, 'title': 'Second draft', 'body': 'the new one',
+     'category': 'General', 'deleted_at': '2026-09-21 10:00:00',
+     'uid': 'qa6-second-draft'}]
+NO.save_trash(app.trash)
+app.show_settings_page(); app.update()
+app.toggle_settings_panel('trash'); app.update()
+_sid_ticks = _c14_widgets(app.settings_trash_panel, tk.Checkbutton)
+check(f'fixture: two Trash rows sharing an id, a tick each ({len(_sid_ticks)})',
+      len(_sid_ticks) == 2)
+
+
+def _sid_ticked():
+    return [int(app.getvar(str(t.cget('variable')))) for t in _sid_ticks]
+
+
+_sid_picked = None
+if len(_sid_ticks) == 2:
+    _sid_titles = [str(l.cget('text'))
+                   for l in _c14_widgets(_sid_ticks[0].master, tk.Label)]
+    _sid_picked = next((t for t in ('Old draft', 'Second draft')
+                        if any(t in s for s in _sid_titles)), None)
+    _sid_ticks[0].invoke(); app.update()
+_sid_btn = _c14_button('selected')
+check(f'ticking one of two rows that share an id ticks only that row '
+      f'({_sid_ticked()}, {_sid_btn and str(_sid_btn.cget("text"))!r})',
+      _sid_ticked() == [1, 0] and _sid_btn is not None
+      and '1 selected' in str(_sid_btn.cget('text')))
+if _sid_btn is not None:
+    _sid_btn.invoke(); app.update()
+check(f'...and Restore selected brings back only the ticked note ({_sid_picked})',
+      _sid_picked is not None
+      and [n['title'] for n in app.notes] == [_sid_picked]
+      and [e['title'] for e in app.trash]
+      == [t for t in ('Old draft', 'Second draft') if t != _sid_picked])
+app.trash = []
+app.notes = []
+app.save_notes(); NO.save_trash(app.trash)
+
+# Every redraw of Recently deleted bound a new handler on the frame that
+# holds its rows -- a frame that outlives the redraw -- and Tk keeps a
+# command for each one: one more per Restore, Delete, page or toast Undo
+# while the panel was open, for good. The Categories list did the same
+# on every rename, recolour and delete.
+def _lk_cmds():
+    return len(app.tk.splitlist(app.tk.call('info', 'commands')))
+
+
+app.trash = [{'id': 6100 + i, 'title': 'Leak %d' % i, 'body': 'x',
+              'category': 'General',
+              'deleted_at': '2026-03-%02d 00:00:00' % (i + 1)} for i in range(3)]
+NO.save_trash(app.trash)
+app.show_settings_page(); app.update()
+app.toggle_settings_panel('trash'); app.update()
+_lk_redraw = app._trash_panel_redraw
+_lk_redraw(); app.update()
+_lk_before = _lk_cmds()
+for _lk_i in range(30):
+    _lk_redraw()
+app.update()
+_lk_after = _lk_cmds()
+check(f'redrawing Recently deleted 30 times leaves no Tcl command behind '
+      f'({_lk_before} -> {_lk_after})', _lk_after - _lk_before < 5)
+_lk_canvas = app._active_panel_canvas
+_lk_items = _lk_canvas.find_all()
+_lk_rows = (_lk_canvas.nametowidget(_lk_canvas.itemcget(_lk_items[0], 'window'))
+            if _lk_items else None)
+check('...while the wheel still reaches the list and every row in it',
+      _lk_rows is not None and bool(_lk_rows.bind('<MouseWheel>'))
+      and len(_lk_rows.winfo_children()) >= 3
+      and all(r.bind('<MouseWheel>') for r in _lk_rows.winfo_children()))
+app.trash = []; NO.save_trash(app.trash)
+# A hand-edited trash.json can hold a deleted_at that is not text (the
+# backup import keeps text only): sorting it beside the dates, and showing
+# it, raised, and Recently deleted did not open at all.
+app.trash = [{'id': 6200, 'title': 'Odd number', 'body': 'x', 'category': 'General',
+              'deleted_at': 5},
+             {'id': 6201, 'title': 'Odd list', 'body': 'x', 'category': 'General',
+              'deleted_at': [2026, 3, 1]},
+             {'id': 6202, 'title': 'Plain date', 'body': 'x', 'category': 'General',
+              'deleted_at': '2026-03-01 00:00:00'}]
+_od_err = None
+try:
+    app._trash_panel_redraw(); app.update()
+except Exception as _od_exc:   # noqa: BLE001 -- the check reports it
+    _od_err = repr(_od_exc)
+_od_canvas = app._active_panel_canvas
+_od_items = _od_canvas.find_all()
+_od_rows = (_od_canvas.nametowidget(_od_canvas.itemcget(_od_items[0], 'window'))
+            if _od_items else None)
+
+
+def _od_texts(w):
+    out = []
+    for c in w.winfo_children():
+        if isinstance(c, tk.Label):
+            out.append(str(c.cget('text')))
+        out.extend(_od_texts(c))
+    return out
+
+
+_od_shown = [t for t in (_od_texts(_od_rows) if _od_rows is not None else [])
+             if t in ('Odd number', 'Odd list', 'Plain date')]
+check(f'a deleted_at that is not text still lets Recently deleted draw every '
+      f'row ({_od_err}, {sorted(_od_shown)})',
+      _od_err is None and sorted(_od_shown) == ['Odd list', 'Odd number', 'Plain date'])
+app.trash = []; NO.save_trash(app.trash)
+# The Categories list: its redraw is the one each row is handed.
+_lk_cat_redraws = []
+_lk_real_cat_row = app._build_category_row
+app._build_category_row = lambda parent, name, redraw: (
+    _lk_cat_redraws.append(redraw), _lk_real_cat_row(parent, name, redraw))[1]
+app.toggle_settings_panel('categories'); app.update()
+del app._build_category_row
+if _lk_cat_redraws:
+    _lk_cat_redraws[-1](); app.update()
+    _lk_before = _lk_cmds()
+    for _lk_i in range(30):
+        _lk_cat_redraws[-1]()
+    app.update()
+    _lk_after = _lk_cmds()
+check(f'redrawing the Categories list 30 times leaves no Tcl command behind '
+      f'({_lk_before} -> {_lk_after})',
+      bool(_lk_cat_redraws) and _lk_after - _lk_before < 5)
+# The Templates list, the same shape: redrawn at every save, delete and
+# rename of a template.
+_lk_tpl_saved = list(app.templates)
+app.templates = [NO.normalize_template({'name': 'Leak tpl %d' % i, 'body': 'x'})
+                 for i in range(3)]
+app.toggle_settings_panel('templates'); app.update()
+_lk_tpl_redraw = getattr(app, '_refresh_templates_panel', None)
+if _lk_tpl_redraw is not None:
+    _lk_tpl_redraw(); app.update()
+    _lk_before = _lk_cmds()
+    for _lk_i in range(30):
+        _lk_tpl_redraw()
+    app.update()
+    _lk_after = _lk_cmds()
+check(f'redrawing the Templates list 30 times leaves no Tcl command behind '
+      f'({_lk_before} -> {_lk_after})',
+      _lk_tpl_redraw is not None and _lk_after - _lk_before < 5)
+app.templates = _lk_tpl_saved
+app.hide_settings_page(); app.update()
 
 # 107: the wheel over an empty Trash panel must reach the page beneath
 # it. A fully-shown list has nothing of its own to scroll, and trapping
@@ -2033,6 +2345,15 @@ app.notes = [NO.normalize_note({'id': 4100 + i, 'title': 'In temporara %d' % i,
                                 'body': 'x', 'category': 'Temporara'})
              for i in range(3)]
 app.save_notes()
+# The Trash holds the name too: a series deleted earlier, one day of it
+# filed under the category. Left alone, restoring it brought the category
+# back at the next launch, announced as "gone missing from the settings".
+app.trash = [dict(NO.normalize_note({
+    'id': 4200, 'title': 'Old series', 'body': 'x', 'category': 'Temporara',
+    'date': '2026-09-01', 'recurrence': {'freq': 'weekly'},
+    'overrides': {'2026-09-08': {'body': 'moved', 'category': 'Temporara'}}}),
+    deleted_at='2026-09-30 10:00:00')]
+NO.save_trash(app.trash)
 app.group_by_category.set(True)
 app.refresh_note_list(); app.update()
 app._themed_dialog = lambda *a, **k: 'move'      # keep the notes
@@ -2044,6 +2365,23 @@ check('deleting a category takes it off the list (plan 110)',
       'Temporara' not in NO.CATEGORY_COLORS)
 check('...and its notes are kept, filed under General (plan 110)',
       all(n['category'] == 'General' for n in app.notes if n['id'] >= 4100))
+check('...and the Trash lets go of the name too, day by day',
+      app.trash[0]['category'] == 'General'
+      and app.trash[0]['overrides']['2026-09-08']['category'] == 'General')
+# An entry trashed before that -- by an older version, still naming a
+# category that no longer exists -- comes back filed somewhere real.
+_old_series6 = dict(NO.normalize_note({
+    'id': 4201, 'title': 'Older series', 'body': 'x', 'date': '2026-09-01',
+    'recurrence': {'freq': 'weekly'}}), deleted_at='2026-09-30 10:00:00')
+_old_series6['overrides'] = {'2026-09-08': {'body': 'moved',
+                                            'category': 'Temporara'}}
+app.trash.append(_old_series6)
+app._restore_from_trash(_old_series6); app.update()
+check('...so a day filed under a deleted category comes back under General',
+      app.notes[-1]['overrides']['2026-09-08']['category'] == 'General')
+app.notes = [n for n in app.notes if n.get('title') != 'Older series']
+app.save_notes()
+app.trash = []; NO.save_trash(app.trash)
 app.hide_settings_page()
 app.refresh_note_list(); app.update()
 check('...and the grouped list shows them where they now are (plan 110)',
@@ -2361,6 +2699,286 @@ app.trash = []
 app.save_notes()
 NO.save_trash(app.trash)
 app.new_note(); app.update()
+
+# ---- THE DUPLICATES CLEAN-UP MERGES ON YES, AND TELLS THE EDITOR ----
+# It merged the files BEFORE asking (so "No" still gave the kept copy new
+# files, one more per retry), never saved what the editor held (typing in
+# the copy it trashed was in no file), and never told the editor, whose
+# next save wrote the kept copy's old file list back.
+class _DupVar6:
+    def __init__(self, v):
+        self._v = v
+
+    def get(self):
+        return self._v
+
+
+def _dup_setup6():
+    fname = '20260930100000000000_dupmerge.txt'
+    os.makedirs(NO.ATTACHMENTS_DIR, exist_ok=True)
+    with open(os.path.join(NO.ATTACHMENTS_DIR, fname), 'w') as fh:
+        fh.write('m')
+    kept = NO.normalize_note({'id': 1, 'title': 'Dup', 'body': 'same'})
+    gone = NO.normalize_note({'id': 2, 'title': 'Dup', 'body': 'same',
+                              'attachments': [{'name': 'm.txt',
+                                               'stored_as': fname}]})
+    app.new_note(); app.update()
+    app.notes = [kept, gone]
+    app.trash = []
+    app.save_notes(); NO.save_trash(app.trash)
+    return kept, gone, [(_DupVar6(False), kept, [kept, gone]),
+                        (_DupVar6(True), gone, [kept, gone])]
+
+
+_dup_yes6 = app.ask_yes_no
+_kept6, _gone6, _dv6 = _dup_setup6()
+_files_before6 = sorted(os.listdir(NO.ATTACHMENTS_DIR))
+app.ask_yes_no = lambda *a, **k: False
+app._cleanup_selected_duplicates(_dv6, None, refresh=lambda: None)
+app.ask_yes_no = _dup_yes6
+check('answering No to the duplicates clean-up merges nothing',
+      _kept6['attachments'] == []
+      and sorted(os.listdir(NO.ATTACHMENTS_DIR)) == _files_before6)
+
+_kept6, _gone6, _dv6 = _dup_setup6()
+app.open_note_in_tab(_kept6); app.update()
+app.ask_yes_no = lambda *a, **k: True
+app._cleanup_selected_duplicates(_dv6, None, refresh=lambda: None)
+app.ask_yes_no = _dup_yes6
+app.update()
+check('...Yes gives the kept copy the merged file, in the editor too',
+      len(app.current_attachments) == 1)
+app._flush_autosave(); app.update()
+check('...so its next save keeps the file instead of writing the old list back',
+      len(app.find_note(1)['attachments']) == 1)
+
+_kept6, _gone6, _dv6 = _dup_setup6()
+app.open_note_in_tab(_gone6); app.update()
+app.body_text.insert('end', '\naction: Ana sends the figures')
+app.ask_yes_no = lambda *a, **k: True
+app._cleanup_selected_duplicates(_dv6, None, refresh=lambda: None)
+app.ask_yes_no = _dup_yes6
+app.update()
+check('...and the copy open in the editor goes to the Trash with its typing',
+      any('Ana sends the figures' in e.get('body', '') for e in app.trash))
+check('...leaving a fresh editor, not the trashed copy',
+      app.selected_note_id is None)
+app.notes = []; app.trash = []
+app.save_notes(); NO.save_trash(app.trash)
+app.new_note(); app.update()
+
+# ---- DELETING A CATEGORY NEVER DELETES A DAY'S OWN TEXT ----
+# "Delete the notes too (restorable for N days)" trashed the notes filed
+# under the category and then deleted, outright, every day of a series
+# that was filed there on its own: the day's title and text were in
+# neither file. The question had counted that series among the notes.
+NO.CATEGORY_COLORS['Home6d'] = '#22aa66'
+# The real question this time: an earlier section answers it with a stub.
+app.__dict__.pop('_ask_category_deletion', None)
+app.notes = [
+    NO.normalize_note({'id': 1, 'title': 'Standup', 'body': 'series text',
+                       'date': '2026-09-07', 'recurrence': {'freq': 'weekly'},
+                       'overrides': {'2026-09-14': {
+                           'title': 'Standup at home', 'body': 'DAY TEXT',
+                           'category': 'Home6d'}}}),
+    NO.normalize_note({'id': 2, 'title': 'Groceries', 'body': 'milk',
+                       'category': 'Home6d'})]
+app.trash = []
+app.save_notes(); NO.save_trash(app.trash)
+_cd_asked = []
+_cd_real_dlg = app._themed_dialog
+app._themed_dialog = lambda *a, **k: (
+    _cd_asked.append((a[0], a[1], [b[0] for b in k.get('buttons') or []])),
+    'delete_notes')[1]
+app._delete_category('Home6d', lambda: None); app.update()
+app._themed_dialog = _cd_real_dlg
+_cd_day = ((app.find_note(1) or {}).get('overrides') or {}).get('2026-09-14', {})
+check("deleting a category with its notes keeps a series' own day filed there, "
+      f"re-filed under General ({_cd_day})",
+      _cd_day.get('body') == 'DAY TEXT' and _cd_day.get('category') == 'General')
+check('...while the note filed there goes to the Trash, restorable',
+      [e.get('title') for e in app.trash] == ['Groceries']
+      and app.find_note(2) is None)
+check(f'...and the question counts only that note, naming the day apart '
+      f'({_cd_asked and _cd_asked[0][1]!r})',
+      len(_cd_asked) == 1 and '1 note(s)' in _cd_asked[0][1]
+      and 'have a day filed under' in _cd_asked[0][1])
+# Held by a day alone, there is no note to trash, so nothing offers to.
+NO.CATEGORY_COLORS['Away6d'] = '#aa6622'
+app.find_note(1)['overrides']['2026-09-21'] = {'body': 'away', 'category': 'Away6d'}
+app.save_notes()
+_cd_asked.clear()
+app._themed_dialog = lambda *a, **k: (
+    _cd_asked.append((a[0], a[1], [b[0] for b in k.get('buttons') or []])),
+    'move')[1]
+app._delete_category('Away6d', lambda: None); app.update()
+app._themed_dialog = _cd_real_dlg
+check(f'a category only a day is filed under offers no "delete the notes" '
+      f'({_cd_asked and _cd_asked[0][2]})',
+      len(_cd_asked) == 1
+      and not any('Delete the notes' in b for b in _cd_asked[0][2])
+      and 'Away6d' not in NO.CATEGORY_COLORS
+      and app.find_note(1)['overrides']['2026-09-21'].get('category') == 'General')
+# Counted after the open note is saved: that save can file it under the
+# category being deleted, and a count taken before it named "-1
+# repeating note(s)".
+NO.CATEGORY_COLORS['Late6d'] = '#6622aa'
+app.notes = [NO.normalize_note({'id': 1, 'title': 'Filed just now', 'body': 'x'}),
+             NO.normalize_note({'id': 2, 'title': 'Filed before', 'body': 'y',
+                                'category': 'Late6d'})]
+app.save_notes()
+app.open_note_in_tab(app.find_note(1)); app.update()
+app.category_var.set('Late6d')
+_cd_asked.clear()
+app._themed_dialog = lambda *a, **k: (
+    _cd_asked.append((a[0], a[1], [b[0] for b in k.get('buttons') or []])),
+    None)[1]
+app._delete_category('Late6d', lambda: None); app.update()
+app._themed_dialog = _cd_real_dlg
+check(f'...and it counts the notes as they are once the open note is saved '
+      f'({_cd_asked and _cd_asked[0][1]!r})',
+      len(_cd_asked) == 1 and '2 note(s)' in _cd_asked[0][1]
+      and 'repeating' not in _cd_asked[0][1]
+      and app.find_note(1)['category'] == 'Late6d')
+app.new_note(); app.update()
+NO.CATEGORY_COLORS.pop('Late6d', None); NO.persist_categories()
+app.notes = []; app.trash = []
+app.save_notes(); NO.save_trash(app.trash)
+# Yes trashes the notes the question counted, and only them. Read after
+# the answer, a note filed under the category while the question waited
+# (a timer's question took its grab, and a click went through) went to
+# the Trash too -- one more than the question said. It goes to General.
+NO.CATEGORY_COLORS['Wait6d'] = '#2266aa'
+app.notes = [NO.normalize_note({'id': 1, 'title': 'Counted', 'body': 'x',
+                                'category': 'Wait6d'}),
+             NO.normalize_note({'id': 2, 'title': 'Filed while asking',
+                                'body': 'y'})]
+app.save_notes()
+_cd_asked.clear()
+
+
+def _cd_filed_while_asking(*a, **k):
+    _cd_asked.append((a[0], a[1], [b[0] for b in k.get('buttons') or []]))
+    app.find_note(2)['category'] = 'Wait6d'
+    return 'delete_notes'
+
+
+app._themed_dialog = _cd_filed_while_asking
+app._delete_category('Wait6d', lambda: None); app.update()
+app._themed_dialog = _cd_real_dlg
+_cd_late = (app.find_note(2) or {}).get('category')
+check(f'Yes to deleting a category\'s notes trashes the notes its question '
+      f'counted, and only them -- one filed there while it waited goes to '
+      f'General ({[e.get("title") for e in app.trash]}, {_cd_late}, '
+      f'{_cd_asked and _cd_asked[0][1]!r})',
+      [e.get('title') for e in app.trash] == ['Counted']
+      and _cd_late == 'General'
+      and len(_cd_asked) == 1 and '1 note(s)' in _cd_asked[0][1])
+app.notes = []; app.trash = []
+app.save_notes(); NO.save_trash(app.trash)
+
+# ---- A CATEGORY RENAME REACHES THE RESCUE COPY ----
+# "↩ Restore previous" after an update puts back the category and the
+# per-day edits the update replaced. A rename rewrote every other holder
+# of the name but not those: the restore filed the note under General and
+# its day under the dead name, which the next launch re-created. And a
+# Trash entry holding the name only there was never rewritten at all.
+NO.CATEGORY_COLORS['Work6r'] = '#3366cc'
+_rn_note = NO.normalize_note({'id': 1, 'title': 'Plan', 'body': 'new text',
+                              'category': 'Work6r', 'date': '2026-09-07',
+                              'recurrence': {'freq': 'weekly'}})
+_rn_note['_prev'] = {'title': 'Plan', 'body': 'old text', 'formatting': [],
+                     'paragraphs': [], 'comments': '', 'category': 'Work6r',
+                     'overrides': {'2026-09-14': {'title': 'Plan, day',
+                                                  'category': 'Work6r'}}}
+_rn_entry = dict(NO.normalize_note({'id': 9, 'title': 'Old', 'body': 'x'}),
+                 deleted_at='2026-09-20 10:00:00')
+_rn_entry['_prev'] = {'title': 'Old', 'body': 'y', 'formatting': [],
+                      'paragraphs': [], 'comments': '', 'category': 'Work6r'}
+app.notes = [_rn_note]
+app.trash = [_rn_entry]
+app.save_notes(); NO.save_trash(app.trash)
+# The Settings rename's own steps (do_rename).
+NO.CATEGORY_COLORS['Office6r'] = NO.CATEGORY_COLORS.pop('Work6r')
+app.rename_category_everywhere('Work6r', 'Office6r')
+NO.persist_categories(); app.save_notes()
+_rn_prev = app.find_note(1)['_prev']
+check(f"a rename reaches a note's rescue copy and its days "
+      f"({_rn_prev.get('category')}, "
+      f"{_rn_prev['overrides']['2026-09-14'].get('category')})",
+      _rn_prev.get('category') == 'Office6r'
+      and _rn_prev['overrides']['2026-09-14'].get('category') == 'Office6r')
+_rn_disk = [e for e in NO.load_trash() if e.get('title') == 'Old']
+check('...and a Trash entry holding the name only in its rescue copy, on disk',
+      len(_rn_disk) == 1
+      and (_rn_disk[0].get('_prev') or {}).get('category') == 'Office6r')
+app.open_note_in_tab(app.find_note(1)); app.update()
+_rn_yes = app.ask_yes_no
+app.ask_yes_no = lambda *a, **k: True
+app.restore_previous_version(); app.update()
+app.ask_yes_no = _rn_yes
+_rn_back = app.find_note(1)
+check(f'...so Restore previous files the note and its day under the new name '
+      f'({_rn_back.get("category")}, '
+      f'{(_rn_back.get("overrides") or {}).get("2026-09-14", {}).get("category")})',
+      _rn_back.get('category') == 'Office6r'
+      and (_rn_back.get('overrides') or {}).get('2026-09-14', {}).get('category')
+      == 'Office6r')
+# Whatever left a dead name in a rescue copy, the restore files the day
+# the way the note itself is filed: under General.
+app.new_note(); app.update()
+_rn_note = NO.normalize_note({'id': 2, 'title': 'Gone', 'body': 'now',
+                              'date': '2026-09-07',
+                              'recurrence': {'freq': 'weekly'}})
+_rn_note['_prev'] = {'title': 'Gone', 'body': 'then', 'formatting': [],
+                     'paragraphs': [], 'comments': '',
+                     'overrides': {'2026-09-14': {'body': 'that day',
+                                                  'category': 'NoSuchCat6r'}}}
+app.notes = [_rn_note]; app.save_notes()
+app.open_note_in_tab(app.find_note(2)); app.update()
+app.ask_yes_no = lambda *a, **k: True
+app.restore_previous_version(); app.update()
+app.ask_yes_no = _rn_yes
+check('...and a day restored under a category that is gone comes back under General',
+      (app.find_note(2).get('overrides') or {}).get('2026-09-14', {}).get('category')
+      == 'General')
+# The note the question named is the note restored, and the editor is
+# filled only while it still holds that note. Moved on to another note
+# while the question waited, the editor took the rescue copy's text into
+# THAT note, which its next save kept.
+app.new_note(); app.update()
+_rv_a = NO.normalize_note({'id': 3, 'title': 'Asked about', 'body': 'new'})
+_rv_a['_prev'] = {'title': 'Asked about', 'body': 'old words',
+                  'formatting': [], 'paragraphs': [], 'comments': ''}
+app.notes = [_rv_a, NO.normalize_note({'id': 4, 'title': 'Opened meanwhile',
+                                       'body': 'its own words'})]
+app.save_notes()
+app.open_note_in_tab(app.find_note(3)); app.update()
+
+
+def _rv_moved_on(*a, **k):
+    app.open_note_in_tab(app.find_note(4)); app.update()
+    return True
+
+
+app.ask_yes_no = _rv_moved_on
+app.restore_previous_version(); app.update()
+app.ask_yes_no = _rn_yes
+app._flush_autosave(); app.update()
+_rv_kept = (app.find_note(4) or {}).get('body', '')
+check(f'Restore previous, answered after the editor moved to another note, '
+      f'restores the note it asked about and leaves the open one alone '
+      f'({(app.find_note(3) or {}).get("body")!r}, {_rv_kept!r}, '
+      f'editor on {app.selected_note_id})',
+      (app.find_note(3) or {}).get('body', '').startswith('old words')
+      and _rv_kept.startswith('its own words')
+      and app.selected_note_id == 4
+      and 'old words' not in app.body_text.get('1.0', 'end-1c'))
+app.new_note(); app.update()
+NO.CATEGORY_COLORS.pop('Office6r', None); NO.CATEGORY_COLORS.pop('Home6d', None)
+NO.persist_categories()
+app.notes = []; app.trash = []
+app.save_notes(); NO.save_trash(app.trash)
 
 
 print()

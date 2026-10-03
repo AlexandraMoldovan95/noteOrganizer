@@ -16,6 +16,7 @@ import zlib
 import threading
 import time
 import base64
+import bisect
 from html import escape
 import calendar as cal_module
 import re
@@ -46,7 +47,7 @@ except ImportError:
 # Added/Fixed CHANGELOG.md entries, not per-release counts). The running
 # app records this into settings, so the next time a newer build opens
 # over older data it can tell the user what changed version-wise.
-APP_VERSION = "0.82.233"
+APP_VERSION = "0.83.338"
 
 
 def parse_version(v):
@@ -196,7 +197,8 @@ from noteorganizer.core import clipboard
 from noteorganizer.core import tables as core_tables
 from noteorganizer.core.tables import is_table_row, with_caret_line
 from noteorganizer.core.richtext import (html_to_note, note_to_html,
-                                        html_document, reflow_wrapped)
+                                        html_document, reflow_wrapped,
+                                        MAX_PASTE_CHARS, MAX_PASTE_SPANS)
 from noteorganizer.core.formatting import (
     normalize_paragraphs,
     parse_list_marker,
@@ -210,6 +212,7 @@ from noteorganizer.core.formatting import (
     MAX_INDENT,
     MAX_FORMATTING_SPANS,
     parse_font_tag,
+    is_format_tag,
     resolve_font_runs,
     clamp_spans_per_line,
     MAX_SPANS_PER_LINE,
@@ -239,6 +242,7 @@ from noteorganizer.core.storage import (
     load_trash,
     save_trash,
     _delete_attachment_files,
+    attachment_names_in,
     copy_attachment_file,
     purge_expired_trash,
     # The same question the purge acts on, asked without acting: what a
@@ -256,6 +260,7 @@ from noteorganizer.core.storage import (
     move_notes_to_trash as core_move_to_trash,
     days_left_in_trash as core_days_left_in_trash,
     restore_from_trash as core_restore_from_trash,
+    restore_many_from_trash as core_restore_many_from_trash,
 )
 
 
@@ -345,6 +350,7 @@ from noteorganizer.core.model import (
     find_by_uid,
     split_by_identity,
     apply_shared_update,
+    shared_update_changes,
     UPDATABLE_FROM_SHARED,
     UPDATABLE_FROM_BACKUP,
     PREV_TEXT_FIELDS,
@@ -435,7 +441,7 @@ from noteorganizer.core.themes import (
 )
 
 
-def _undo_atom(method):
+def _undo_atom(method=None, *, tags_only=False, only_if=None):
     """One table operation = ONE undo unit.
 
     A commit, a resize, a fill are each a burst of small inserts and
@@ -443,15 +449,156 @@ def _undo_atom(method):
     undoing a cell edit could stop halfway -- the old value gone, the
     padding collapsed. The wrapper opens a unit, runs the operation,
     closes the unit; nested wrapped calls keep the outermost unit.
+
+    *tags_only* is for an action that lays tags and inserts or deletes no
+    text -- a bold, a colour, an alignment. Its unit leaves Tk's
+    autoseparators alone: turning them off and on is a configure, and
+    Tk re-lays out every line of the note on any configure (measured at
+    150-200 ms on a long note) -- for an action that puts nothing on Tk's
+    stack to group. Should it reach a text edit after all (an open cell
+    committed first), that inner unit turns them off there.
+
+    *only_if* opens the unit only when it answers true for the instance;
+    otherwise the method runs bare -- for a call that is often a no-op.
     """
+    if method is None:
+        return lambda m: _undo_atom(m, tags_only=tags_only, only_if=only_if)
+
     @functools.wraps(method)
     def wrapped(self, *args, **kwargs):
+        if only_if is not None and not only_if(self):
+            return method(self, *args, **kwargs)
+        # Read and cleared by the open it is meant for.
+        self._undo_atom_tags_only = tags_only
         self._undo_atom_begin()
         try:
             return method(self, *args, **kwargs)
         finally:
             self._undo_atom_end()
     return wrapped
+
+
+def _fmt_journal_tag(name):
+    """Is this a tag the formatting journal keeps? Character formatting
+    and the paragraph tags (indent, alignment): what Tk's undo stack never
+    records. The one list -- the snapshot, the restore and the look-ahead
+    for Tk's own deletes all ask it."""
+    return (is_format_tag(name) or name.startswith("para_")
+            or name in ("align_center", "align_right"))
+
+
+def _stored_signature(note):
+    """What a note stores, its "updated" stamp aside, as one string -- to
+    tell a save that changed something from one that changed nothing."""
+    return json.dumps({k: v for k, v in note.items() if k != "updated"},
+                      sort_keys=True, ensure_ascii=False, default=str)
+
+
+def _is_month_day(chunk):
+    """One of a monthly repeat's days, as the box holds it: 1 to 31."""
+    # isdecimal(): "3²" passed isdigit() and crashed int().
+    return chunk.isdecimal() and 1 <= int(chunk) <= 31
+
+
+def _whole_number(text):
+    """Is this a repeat's count or interval the app can store: a whole
+    number of at least 1, as int() reads it."""
+    try:
+        return int(text) >= 1
+    except (TypeError, ValueError):
+        return False
+
+
+# One round trip for a whole snapshot: where the embedded windows sit, then
+# one "tag ranges" string per tag, in the order asked. Tag names travel as
+# a real Tcl list, so a font family with a space in it is still one name.
+_FMT_RANGES_TCL = """proc ::noteorg_fmt_ranges {w tags} {
+    set out [list [join [lmap name [$w window names] {$w index $name}]]]
+    foreach t $tags { lappend out [join [$w tag ranges $t]] }
+    return [join $out "\\n"]
+}"""
+
+
+def _fmt_pairs(ranges):
+    """A "tag ranges" string as a set of (start, end) index pairs."""
+    tokens = ranges.split()
+    return set(zip(tokens[0::2], tokens[1::2]))
+
+
+def _fmt_move_ranges(ranges, src, dst):
+    """*ranges*, read with embedded windows at *src*, as they read with the
+    windows at *dst* instead.
+
+    A drawn table's window is a character to Tk's indices: every column
+    after it on its line counts one more than in the text without it. Tk's
+    undo puts a table's text back without its window, so a snapshot taken
+    with the grids drawn is moved to wherever the windows are now (none,
+    or a stale one) before it is compared or laid. Each index is taken to
+    its column in the text without windows, then past the windows of
+    *dst* on its line.
+    """
+    def by_line(windows):
+        out = {}
+        for w in windows:
+            line, _, col = w.partition(".")
+            out.setdefault(line, []).append(int(col))
+        for cols in out.values():
+            cols.sort()
+        return out
+
+    old, new = by_line(src), by_line(dst)
+    moved = []
+    for index in ranges.split():
+        line, _, col = index.partition(".")
+        if line in old or line in new:
+            c = int(col)
+            c -= sum(1 for w in old.get(line, ()) if w < c)
+            for w in new.get(line, ()):
+                if w <= c:
+                    c += 1
+            index = f"{line}.{c}"
+        moved.append(index)
+    return " ".join(moved)
+
+
+def _fmt_window_free(state):
+    """A snapshot's formatting as it reads in the text WITHOUT the drawn
+    tables' windows: {tag: ((line, col), (line, col)) pairs}, each index
+    taken to its column with the windows before it on its line not counted,
+    ranges that meet joined, and tags left with nothing dropped.
+
+    For telling whether two sides of a part differ by anything but where the
+    tables are drawn. Moving one side into the other's windows
+    (_fmt_move_ranges) puts an index at a window's column past the window,
+    and Tk does not always: a range that ends there stays before it (a
+    centred line directly above a table runs through its line break), and a
+    placed table's window carries its line's alignment from the drawing
+    (_build_table_grid). Here a window's own character drops out of both
+    sides alike -- what it carries is its line's, which is compared."""
+    _sig, windows, ranges = state
+    cols = {}
+    for w in windows:
+        line, _, col = w.partition(".")
+        cols.setdefault(line, []).append(int(col))
+    out = {}
+    for tag, spans in ranges:
+        points = []
+        for index in spans.split():
+            line, _, col = index.partition(".")
+            c = int(col)
+            points.append((int(line),
+                           c - sum(1 for w in cols.get(line, ()) if w < c)))
+        joined = []
+        for lo, hi in sorted(zip(points[0::2], points[1::2])):
+            if lo >= hi:
+                continue
+            if joined and lo <= joined[-1][1]:
+                joined[-1] = (joined[-1][0], max(hi, joined[-1][1]))
+            else:
+                joined.append((lo, hi))
+        if joined:
+            out[tag] = tuple(joined)
+    return out
 
 
 def _undo_hidden(method):
@@ -463,15 +610,22 @@ def _undo_hidden(method):
     The pipe text is the truth and stays recorded; the drawing is not an
     edit. Tk keeps the existing stack across the undo=False window --
     verified against a live Text widget, not assumed.
+
+    Nor is it a change to the text: Tk's modified flag, which says whether
+    the line the drawing put under the last table is still only that
+    (_undo_tail_held), is left as the method found it -- deleting a grid's
+    window character sets it, and every redraw deletes them.
     """
     @functools.wraps(method)
     def wrapped(self, *args, **kwargs):
         depth = getattr(self, "_undo_hidden_depth", 0)
         self._undo_hidden_depth = depth + 1
         prev = None
+        clean = False
         if depth == 0 and hasattr(self, "body_text"):
             try:
                 prev = self.body_text.cget("undo")
+                clean = not self.body_text.edit_modified()
                 self.body_text.configure(undo=False)
             except tk.TclError:
                 prev = None
@@ -482,9 +636,67 @@ def _undo_hidden(method):
             if depth == 0 and prev is not None:
                 try:
                     self.body_text.configure(undo=prev)
+                    if clean:
+                        self.body_text.edit_modified(False)
                 except tk.TclError:
                     pass
     return wrapped
+
+
+def _holds_repeat_off(method):
+    """The method's saves hold back the turn-off of a repeat whose days
+    hold edits of their own (see _date_and_repeat_to_store): a save no one
+    asked for -- the autosave's -- must not move a series' days away."""
+    @functools.wraps(method)
+    def wrapped(self, *args, **kwargs):
+        held = getattr(self, "_holding_repeat_off", False)
+        self._holding_repeat_off = True
+        try:
+            return method(self, *args, **kwargs)
+        finally:
+            self._holding_repeat_off = held
+    return wrapped
+
+
+def _checklist_rows_current(drawn, items, theme):
+    """True when the checklist rows on screen were drawn from exactly this
+    list -- the same item objects, in this order, still saying what each
+    item says -- and in this theme.
+
+    Only then may a change touch one row instead of redrawing them all:
+    every row's tick box and bin close over its own item, so a row left
+    standing beside a DIFFERENT item would tick or remove the wrong one.
+    *drawn* is the record _render_checklist_items keeps, or None.
+    """
+    return (drawn is not None and drawn["items"] is items
+            and drawn["theme"] == theme
+            and len(drawn["rows"]) == len(items)
+            and all(rec[0] is item
+                    and rec[2] == (item.get("text", ""), bool(item.get("done")))
+                    for rec, item in zip(drawn["rows"], items)))
+
+
+def _table_edge_holds(app, index):
+    """Does a drawn table's edge hold the body character at *index*?
+
+    The edge is the line break just above the table, everything in it,
+    and the line break just below it: moving or removing any of those
+    glues prose onto a row, which then reads as prose, falls out of the
+    grid and is saved that way. The one place this boundary is written
+    down -- the deletion keys (_deletion_joins_table) and Tk's Ctrl+T both
+    ask it. May raise tk.TclError for a bad index; callers catch it.
+    """
+    b = app.body_text
+    for info in getattr(app, "_table_grids", []):
+        first = app._grid_first_line(info)
+        if first is None:
+            continue
+        last = first + info["nrows"] - 1
+        start = f"{first - 1}.end" if first > 1 else "1.0"
+        if (b.compare(start, "<=", index)
+                and b.compare(index, "<=", f"{last}.end")):
+            return True
+    return False
 
 
 
@@ -1043,12 +1255,17 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 self.update_word_count()
             except Exception:
                 self._log_swallowed("autosave: schedule-time word count")
+        self._cancel_pending_autosave()
+        self._autosave_job = self.after(500, self._autosave_now)
+
+    def _cancel_pending_autosave(self):
+        """Drop a scheduled autosave, if one is waiting."""
         if getattr(self, "_autosave_job", None) is not None:
             try:
                 self.after_cancel(self._autosave_job)
             except (tk.TclError, ValueError):
                 pass
-        self._autosave_job = self.after(500, self._autosave_now)
+            self._autosave_job = None
 
     def _log_swallowed(self, where):
         """A guarded spot chose to carry on — leave the trace the bare
@@ -1078,10 +1295,20 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         except (IOError, OSError, NameError):
             pass
 
+    @_holds_repeat_off
     def _autosave_now(self):
         """Run an auto-save if the current editor content is worth saving and
-        actually differs from what's on disk."""
-        self._autosave_job = None
+        actually differs from what's on disk. A repeat turned off on a series
+        whose days hold edits of their own is held back from it (see
+        _date_and_repeat_to_store): leaving the note or Save makes that save."""
+        # Cancelled, not forgotten: whoever runs this -- its timer, or a
+        # caller saving right now -- leaves no other autosave pending. A
+        # timer whose job was only set to None stayed scheduled with
+        # nothing tracking it, and on firing it set the NEXT job to None
+        # the same way: a relay of untracked saves going off at random
+        # moments (28 in one qa1 run, one in the middle of a held
+        # BackSpace, splitting the undo step it was building).
+        self._cancel_pending_autosave()
         if not self._still_alive():
             return
         # selected_note_id can end up stale — pointing at a note that no
@@ -1093,6 +1320,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # uses for the same reason.
         if self.selected_note_id is not None and self.find_note(self.selected_note_id) is None:
             return
+        # Before any early return below -- a day of a series never saves
+        # here, and an editor that matches the note has nothing to save.
+        self._say_nothing_is_left_out()
         # Catch the word count up now, in case rapid edits (e.g. inserting
         # several emojis in a row) skipped recomputing it on every click.
         try:
@@ -1133,6 +1363,36 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # Reuse the normal save path, but mark it as automatic so the status
         # message is gentle rather than a loud "Saved!".
         self.save_current_note(auto=True)
+
+    def _repeat_off_waits(self):
+        """Whether the editor turns off the repeat of a series whose days
+        hold edits of their own -- a save a timer never makes (see
+        _autosave_now)."""
+        if self.selected_note_id is None or self.selected_freq_key():
+            return False
+        note = self.find_note(self.selected_note_id)
+        return bool(note is not None and is_recurring(note)
+                    and (note.get("overrides") or note.get("exceptions")))
+
+    def _say_nothing_is_left_out(self):
+        """Put the status line right once nothing is left out any more.
+
+        Only a save writes "-- except the date ..." and only a save rewrote
+        it: a value put back to what the note already stores leaves nothing
+        to save, and the line went on naming it as not saved while leaving
+        asked nothing. The save's own words, without the except, come back
+        (kept by save_current_note)."""
+        said = getattr(self, "_status_names_left_out", None)
+        if not said:
+            return
+        try:
+            left_out = self._date_and_repeat_to_store()[2]
+        except Exception:
+            self._log_swallowed("autosave: left-out status check")
+            return
+        if not left_out:
+            self._status_names_left_out = None
+            self.set_status(said)
 
     def _still_alive(self):
         """True if the app window is still around and usable. Checked before
@@ -1298,6 +1558,13 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         for delay in (60, 160, 360):
             self.after(delay, self._reapply_list_restore)
 
+    def _begin_list_restore(self):
+        """Start the timed restore a rebuild left in force -- unless a
+        deliberate scroll has cancelled it since (see refresh_note_list)."""
+        pending = getattr(self, "_list_restore_px", None)
+        if pending is not None and self._still_alive():
+            self._restore_list_scroll(pending)
+
     def _reapply_list_restore(self):
         """One timed beat of a still-in-force rebuild restore."""
         pending = getattr(self, "_list_restore_px", None)
@@ -1311,11 +1578,51 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
     def _list_scrollbar_moved(self, *args):
         """The list scrollbar's command: a deliberate drag beats a
         rebuild's still-pending restore, then scrolls as normal."""
-        self._list_restore_px = None
+        self._list_scrolled_by_hand()
         try:
             self.canvas.yview(*args)
         except tk.TclError:
             pass
+
+    def _list_scrolled_by_hand(self):
+        """The person is scrolling the list -- the wheel, the scrollbar, a
+        drag held at its edge. A deliberate move beats a rebuild's
+        still-pending restore; and a ring it takes out of sight was left
+        there on purpose, so the keyboard coming back puts the ring on a
+        card in view rather than scrolling back to it (_list_focus_in).
+        Only the person's own scrolls say this: a save or a search that
+        moves the ringed card away has the card brought back instead.
+
+        And only a scroll that leaves the ring's row out of sight, read
+        once the view has moved. Every wheel notch said so, even one that
+        kept the card in view or moved nothing at the list's end: the next
+        save that took the card away put the ring on another note, and
+        Enter opened that one."""
+        self._list_restore_px = None
+        if getattr(self, "_hand_scroll_check", None) is None:
+            try:
+                self._hand_scroll_check = self.after_idle(
+                    self._note_hand_scroll)
+            except tk.TclError:
+                self._hand_scroll_check = None
+
+    def _note_hand_scroll(self):
+        """After a scroll of the person's: did it leave the ring's row out
+        of sight (see _list_scrolled_by_hand)? A row the list has not drawn
+        is out of sight too."""
+        self._hand_scroll_check = None
+        # The ring's row whether drawn or not: _ring_row answers None for
+        # one not drawn, and a scroll that left such a row was taken for no
+        # scroll at all -- the keyboard's return then drew every row down
+        # to it and pulled the view away from where the person had put it.
+        cat = getattr(self, "_focused_header", None)
+        key = (("header", cat) if cat is not None
+               else ("note", getattr(self, "_focused_note_id", None)))
+        if key[1] is None:
+            return
+        rec = self._list_row_record(key)
+        self._list_hand_scrolled = (rec is None
+                                    or self._row_on_screen(rec) == "none")
 
     def _toggle_group_collapsed(self, category):
         if category in self.collapsed_groups:
@@ -1344,7 +1651,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 "⚠ Your notes file could not be read this time, so the app "
                 "started with an empty list. Your notes did NOT delete "
                 "themselves — the file on disk was unreadable (a bad "
-                "shutdown or disk problem can do this)."
+                "shutdown, a disk problem, or saving it from another "
+                "program can do this)."
             )
             if self._corrupt_notes_report:
                 msg += (
@@ -1649,17 +1957,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 self.show_error("Export failed",
                                f"Couldn't create the backup file:\n{state['error']}")
             else:
-                # Remember when the last successful export happened -- the
-                # Backup panel shows it, since an export is the only copy
-                # of the notes outside the app's own folder.
-                stamp = datetime.now().strftime("%Y-%m-%d %H:%M")
-                save_setting("last_export_at", stamp)
-                lbl = getattr(self, "last_export_lbl", None)
-                if lbl is not None:
-                    try:
-                        lbl.config(text=f"Last exported: {stamp}")
-                    except tk.TclError:
-                        pass
+                self._remember_finished_export()
                 self.show_info(
                     "Export complete",
                     f"Your notes, settings, and attachments were saved to:\n"
@@ -1669,6 +1967,66 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 )
             return
         self._export_poll_job = self.after(100, self._poll_export_progress)
+
+    def _remember_finished_export(self):
+        """Record the moment a backup export succeeded -- the Backup panel
+        shows it, since an export is the only copy of the notes outside
+        the app's own folder."""
+        stamp = datetime.now().strftime("%Y-%m-%d %H:%M")
+        save_setting("last_export_at", stamp)
+        lbl = getattr(self, "last_export_lbl", None)
+        if lbl is not None:
+            try:
+                lbl.config(text=f"Last exported: {stamp}")
+            except tk.TclError:
+                pass
+
+    def _settle_background_work_at_close(self):
+        """Finish what the main thread does once a backup's worker is done
+        -- at close, where the timer that would have done it never runs.
+
+        An export that finished is recorded as the last one. An import
+        whose worker finished, but whose notes were never merged, is dropped
+        whole: the unpacked backup leaves the temp folder, and the files it
+        copied into attachments -- which no note points at yet -- leave that
+        folder. The close used to wait for the worker and quit, leaving both
+        behind (forty orphaned files in one run) and the export unrecorded.
+        Merging instead would mean asking the import's questions in a window
+        that is closing.
+        """
+        state = self._export_state
+        if state is not None and state.get("done") and not state.get("error"):
+            self._remember_finished_export()
+            self._export_state = None
+        state = self._import_state
+        if state is None or not state.get("done"):
+            # Still running past the wait's cap: leave it alone.
+            return
+        self._import_state = None
+        if state.get("temp_dir"):
+            shutil.rmtree(state["temp_dir"], ignore_errors=True)
+        self._drop_unclaimed_import_files(state)
+
+    def _drop_unclaimed_import_files(self, state):
+        """Remove the files a backup import copied into attachments that no
+        note and no Trash entry uses.
+
+        The worker copies a backup's files before anything is asked, so
+        every way out of an import that did not take them all -- Cancel on
+        any of its questions, an error, skipping duplicates, the window
+        closing -- leaves files that belong to nobody. Only the close did
+        this; each Cancel left one copy per distinct backup behind, out of
+        sight. A file a note or a Trash entry points at is never touched,
+        and neither is anything the import did not copy itself.
+        """
+        in_use = attachment_names_in(self.notes + self.trash)
+        for name in state.get("copied") or []:
+            if name in in_use or os.path.basename(name) != name:
+                continue
+            try:
+                os.remove(os.path.join(ATTACHMENTS_DIR, name))
+            except OSError:
+                pass
 
     # ---------- Share codes ----------
     def _add_paste_menu(self, text_widget, extra_items=None):
@@ -1829,8 +2187,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # whatever size it was built at while the text around it moved.
         self._configure_table_tag(self.body_text)
         # Grids carry their own fonts and cell widths, so they are rebuilt
-        # at the new size rather than left at the old one.
-        self._render_table_grids()
+        # at the new size rather than left at the old one -- all but a row
+        # being typed, which a new size is no reason to leave.
+        self._render_table_grids(keep_typed=self._row_being_typed())
         self._refresh_format_buttons()
 
     def _marker_room(self, kind):
@@ -1914,6 +2273,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if not block:
             return False
         first, last = block
+        if self._grid_at_line(first) is None:
+            # Not drawn: recorded with no window, replayed with none.
+            self._mark_unit_window_free()
         lines = [self.body_text.get(f"{n}.0", f"{n}.end")
                  for n in range(first, last + 1)]
         aligns = [core_tables.cell_alignments(line) for line in lines]
@@ -1935,6 +2297,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     line, widths,
                     aligns[offset] if offset < len(aligns) else None):
                 changed = True
+                if base:
+                    self._note_edit_with_window()
                 # Ops come right-to-left, so the prefix each one converts
                 # against is still the snapshot the offsets were computed
                 # from. The deltas themselves are spaces -- one unit each.
@@ -2022,8 +2386,22 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         """1 when a grid window occupies column 0 of this line, else 0."""
         return 1 if self._grid_at_line(line_no) is not None else 0
 
-    @_undo_hidden
     def _teardown_table_grids(self):
+        """Take every drawn table down to its text (_remove_grid_windows).
+
+        Inside an undo unit, the edits recorded so far were made with the
+        grids up and those that follow will be made with them down -- and
+        Tk records each edit by its index, while a drawn table's first line
+        holds the grid's window at column 0. So the unit is told first
+        (_undo_atom_grids_coming_down), with Tk still recording: a
+        separator inserted once the recording is off would be ignored."""
+        if (getattr(self, "_table_grids", None)
+                and getattr(self, "_undo_atom_depth", 0) > 0):
+            self._undo_atom_grids_coming_down()
+        self._remove_grid_windows()
+
+    @_undo_hidden
+    def _remove_grid_windows(self):
         for info in getattr(self, "_table_grids", []):
             # Deleting the window's character is what actually removes it
             # from the text. Destroying the widget alone leaves the slot
@@ -2034,10 +2412,17 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             try:
                 self.body_text.delete(self.body_text.index(info["frame"]))
             except tk.TclError:
-                try:
-                    info["frame"].destroy()
-                except tk.TclError:
-                    pass
+                pass
+            # Deleting the character destroys the widget inside Tk, but
+            # not tkinter's record of it: the callbacks each draw binds on
+            # the grid stayed registered as Tcl commands, and the frame
+            # stayed among the body's children with every cell it held --
+            # ten commands more at every redraw, for as long as the app
+            # ran. tkinter's destroy() lets both go.
+            try:
+                info["frame"].destroy()
+            except tk.TclError:
+                pass
             try:
                 self.body_text.mark_unset(info["mark"])
             except tk.TclError:
@@ -2051,8 +2436,99 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         except tk.TclError:
             pass
 
+    def _add_line_under_last_table(self):
+        """The line under the note's last table, which the caret guard needs
+        to put the caret under it. It is the drawing's, and Tk never records
+        it (the drawing is _undo_hidden), so the app holds it instead: while
+        the text has not changed since, undo counts the note without it and
+        the next Ctrl+Z or Ctrl+Y takes it out before Tk replays a step
+        (_undo_tail_held). Tk's modified flag is what says the text changed
+        -- every insert and delete sets it, recorded or not, and nothing
+        else in the app reads it."""
+        b = self.body_text
+        # A line held before this one is settled first: a second line can
+        # only be needed once the text has changed under the first.
+        self._undo_tail_held()
+        text = b.get("1.0", "end-1c")
+        b.insert("end", "\n")
+        # The signature of the text the line was put under.
+        self._undo_tail = (len(text), hash(text))
+        try:
+            b.edit_modified(False)
+        except tk.TclError:
+            self._undo_tail = None
+
+    def _undo_tail_held(self):
+        """Whether the note's last line is still the one the drawing put
+        under its last table, with not a character changed since.
+
+        A letter typed on that line and erased again leaves the same text,
+        but Tk has steps on the line now: taken out, Tk replayed them on a
+        line that was gone and the word landed on the table's last row. So
+        the moment anything changes the text, the line is the note's for
+        good (_settle_undo_tail), and this answers False."""
+        if getattr(self, "_undo_tail", None) is None:
+            return False
+        try:
+            changed = bool(self.body_text.edit_modified())
+        except tk.TclError:
+            changed = True
+        if changed:
+            self._settle_undo_tail()
+            return False
+        return True
+
+    def _settle_undo_tail(self):
+        """The line the drawing put under the last table stays in the note
+        for good: every state undo noted before now gets it at its end.
+
+        Tk never recorded the line, so it is still there when Tk walks back
+        past where it was made, at the end of every older text. A state's
+        text is not kept, so its signature cannot be worked out again with
+        the line; it counts one more line break at its end instead
+        (_undo_sig_is). The snapshots of a unit or a run of deletes still
+        open are counted too: the edit that settles the line is theirs."""
+        self._undo_tail = None
+
+        def counted(state):
+            sig = state[0]
+            return (((sig[0], sig[1], (sig[2] if len(sig) > 2 else 0) + 1),)
+                    + tuple(state[1:]))
+
+        for journal in (getattr(self, "_fmt_undo", None) or [],
+                        getattr(self, "_fmt_redo", None) or []):
+            for step in journal:
+                step["before"] = counted(step["before"])
+                step["after"] = counted(step["after"])
+        if getattr(self, "_fmt_atom_before", None) is not None:
+            self._fmt_atom_before = counted(self._fmt_atom_before)
+        run = getattr(self, "_styled_delete_run", None)
+        if run is not None:
+            run["before"] = counted(run["before"])
+
+    @staticmethod
+    def _undo_sig_is(sig, plain, text):
+        """Whether a journal side's signature names the body's text: *plain*
+        is that text's own signature, *text* the text itself. A side noted
+        before lines under a table were settled into the note counts the
+        line breaks they put at its end (_settle_undo_tail)."""
+        if len(sig) < 3:
+            return sig == plain
+        k = sig[2]
+        return (text is not None and len(text) - k == sig[0]
+                and text.endswith("\n" * k) and hash(text[:-k]) == sig[1])
+
     @_undo_hidden
-    def _render_table_grids(self):
+    def _drop_undo_tail(self):
+        """Take out the line the drawing put under the last table, as long
+        as the text has not changed since (_undo_tail_held): Tk replays
+        every step on the text it recorded."""
+        if self._undo_tail_held():
+            self.body_text.delete("end-2c")
+        self._undo_tail = None
+
+    @_undo_hidden
+    def _render_table_grids(self, keep_typed=None):
         """Draw every table in the note as a grid of real cells.
 
         Torn down and rebuilt whole: a grid is cheap to make, and tracking
@@ -2060,6 +2536,14 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         while focus is in a cell -- rebuilding would destroy the widget
         being typed into -- which the call sites guarantee: they all run
         with focus in the text or on a toolbar control.
+
+        *keep_typed*: a line of a table still being typed, which a paste
+        left the caret on (_tidy_table_paste_left), or the caret's own row
+        when a redraw is no edit of the person's (_row_being_typed). That
+        table stays text, as after a letter typed there, until the caret
+        leaves it. Drawn, it took the line the caret was on, and the caret
+        guard put the caret under the table: the next letter typed went
+        there.
         """
         if not hasattr(self, "body_text"):
             return
@@ -2094,16 +2578,27 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     pass
         self.body_text.tag_configure(self.TABLE_HIDE_TAG, elide=True)
         text = self.body_text.get("1.0", "end-1c")
-        blocks = core_tables.find_blocks(text)
+        blocks = []
+        for first0, last0 in core_tables.find_blocks(text):
+            if keep_typed is None or not first0 + 1 <= keep_typed <= last0 + 1:
+                blocks.append((first0, last0))
+                continue
+            # The row being typed stays text; the rows on either side of it,
+            # drawn before the paste, are drawn as they were.
+            kept0 = keep_typed - 1
+            if kept0 > first0:
+                blocks.append((first0, kept0 - 1))
+            if kept0 < last0:
+                blocks.append((kept0 + 1, last0))
         for first0, last0 in blocks:
             self._build_table_grid(first0 + 1, last0 + 1)
         # There is always a line under the last table, or the caret guard
         # would have nowhere to put the caret and writing could never
-        # continue past it.
+        # continue past it (_add_line_under_last_table).
         if blocks:
             total = int(self.body_text.index("end-1c").split(".")[0])
             if blocks[-1][1] + 1 >= total:
-                self.body_text.insert("end", "\n")
+                self._add_line_under_last_table()
         for info in getattr(self, "_table_grids", []):
             line = self._grid_first_line(info)
             if line in restore_x:
@@ -2144,18 +2639,34 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             cache[font] = tkfont.Font(family=font[0], size=font[1])
         return cache[font]
 
+    def _measure_text(self, font, text):
+        """``_measuring_font(font).measure(text)``, remembered per font and
+        text. Opening a 60-row table asked Tk for 1,563 widths -- a third
+        of the open -- over a few hundred distinct strings. The grid's
+        fonts are never reconfigured in place (a new size or family makes
+        new Font objects, see _grid_fonts), so a remembered width cannot
+        go stale; the store is dropped whole if it ever grows large."""
+        font = self._measuring_font(font)
+        cache = getattr(self, "_measure_text_cache", None)
+        if cache is None or len(cache) > 50000:
+            cache = self._measure_text_cache = {}
+        key = (str(font), text)
+        width = cache.get(key)
+        if width is None:
+            width = cache[key] = font.measure(text)
+        return width
+
     def _ellipsize(self, value, font, max_px):
         """The drawing clips, the text never does: a value wider than its
         column is drawn shortened with an ellipsis, while the note's own
         text keeps every character."""
-        font = self._measuring_font(font)
-        if max_px <= 0 or font.measure(value) <= max_px:
+        if max_px <= 0 or self._measure_text(font, value) <= max_px:
             return value
         ellipsis = "\u2026"
         lo, hi = 0, len(value)
         while lo < hi:
             mid = (lo + hi + 1) // 2
-            if font.measure(value[:mid] + ellipsis) <= max_px:
+            if self._measure_text(font, value[:mid] + ellipsis) <= max_px:
                 lo = mid
             else:
                 hi = mid - 1
@@ -2177,14 +2688,16 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         start, end = bounds[c]
         if start >= end:
             return []
-        base = self._col_base(line_no)
+        # The column walks along with the characters -- counting each one's
+        # UTF-16 width from the line's start again made this quadratic.
+        col = self._col_base(line_no) + self._tk_col(line, start)
         out = []
-        for i in range(end - start):
-            col = base + self._tk_col(line, start + i)
+        for ch in line[start:end]:
             try:
                 tags = set(self.body_text.tag_names(f"{line_no}.{col}"))
             except tk.TclError:
                 tags = set()
+            col += 2 if ord(ch) > 0xFFFF else 1
             st = {"bold": bool(tags & {"bold", "bold_italic"}),
                   "italic": bool(tags & {"italic", "bold_italic"}),
                   "underline": "underline" in tags,
@@ -2258,7 +2771,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             laid, used = [], 0
             for key, txt in runs:
                 font = self._grid_run_font(key, header)
-                width = self._measuring_font(font).measure(txt)
+                width = self._measure_text(font, txt)
                 if used + width <= budget:
                     laid.append((txt, font, key[4]))
                     used += width
@@ -2266,7 +2779,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     shown = self._ellipsize(txt, font, budget - used)
                     if shown:
                         laid.append((shown, font, key[4]))
-                        used += self._measuring_font(font).measure(shown)
+                        used += self._measure_text(font, shown)
                     break
             if align == core_tables.ALIGN_CENTER:
                 x = cell["x"] + (cell["w"] - used) / 2
@@ -2279,7 +2792,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 items.append(canvas.create_text(
                     x, y_mid, anchor="w", font=font,
                     fill=fg or self.colors["text"], text=txt))
-                x += self._measuring_font(font).measure(txt)
+                x += self._measure_text(font, txt)
         return items
 
     def _grid_redraw_cell_text(self, info, r, c):
@@ -2886,8 +3399,13 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             pass
         entry.bind("<Return>", lambda _e: self._editor_newline())
         entry.bind("<Shift-Return>", lambda _e: self._editor_newline())
+        # Escape LEAVES the cell and keeps what was typed, exactly as Tab
+        # and a click elsewhere do -- what the User Guide promises. It
+        # used to close the editor without a commit, and the keystrokes
+        # only ever reach the text through one, so a quick Escape threw
+        # the cell's typing away.
         entry.bind("<Escape>",
-                   lambda _e: (self._cancel_cell_editor(), "break")[1])
+                   lambda _e: (self._commit_cell_editor(), "break")[1])
         entry.bind("<FocusOut>",
                    lambda _e, this=entry: self.after_idle(
                        lambda: self._maybe_close_cell_editor(this)))
@@ -2951,9 +3469,6 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self._grid_saved_view = self._capture_grid_views()
             self._render_table_grids()
 
-    def _cancel_cell_editor(self):
-        self._close_cell_editor()
-
     def _forget_dead_cell_editor(self, entry):
         """A destroyed cell editor stops being the open one (see where
         _open_cell_editor binds this)."""
@@ -2998,7 +3513,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             pass
         self._commit_cell_editor()
 
-    @_undo_atom
+    # Opening a cell and every table operation commit first, mostly with no
+    # cell open: such a call is a no-op, and its unit noted the note's
+    # formatting twice for nothing.
+    @_undo_atom(only_if=lambda self: getattr(self, "_cell_editor", None))
     def _commit_cell_editor(self, close=True):
         """The editor's value reaches the hidden text, then the drawing.
 
@@ -3100,6 +3618,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 sfx += 1
             t_a = base + self._tk_col(line, start + p)
             t_b = base + self._tk_col(line, end - sfx)
+            if base:
+                self._note_edit_with_window()
             if t_b > t_a:
                 b.delete(f"{line_no}.{t_a}", f"{line_no}.{t_b}")
             mid = value[p:len(value) - sfx]
@@ -3342,7 +3862,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 # A multi-line cell is as wide as its WIDEST line, not as
                 # wide as its raw text with the break markers in it.
                 col_w[c] = max(col_w[c], max(
-                    (font.measure(seg)
+                    (self._measure_text(font, seg)
                      for seg in core_tables.cell_display_lines(value)),
                     default=0) + 2 * pad_x)
         col_x = [0]
@@ -3371,6 +3891,33 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         canvas.pack(side="top", anchor="w")
         cells = {}
         rule = hairline(self.colors)
+
+        def wash(line_no, line, c, styles):
+            """The highlight a cell's rectangle is washed with -- the tag on
+            its first character, or on its padding when it is empty: the
+            same question _grid_cell_paint asks of a grid already built."""
+            if styles:
+                return styles[0]["bg"]
+            pipes = core_tables.pipe_positions(line)
+            if c + 1 >= len(pipes) or pipes[c] + 1 >= pipes[c + 1]:
+                return None
+            try:
+                tags = self.body_text.tag_names(
+                    f"{line_no}.{self._tk_col(line, pipes[c] + 1)}")
+            except tk.TclError:
+                return None
+            bg = None
+            for t in tags:
+                if t.startswith("highlight_"):
+                    bg = "#" + t[len("highlight_"):]
+            return bg
+
+        # Each cell is drawn ONCE, with its own styles. The build used to
+        # draw every cell plain and then _grid_restyle drew every one
+        # again, reading all its tags a second time -- half of opening a
+        # big table. The rectangles go down first and the text after
+        # them, the stacking that second pass left behind.
+        texts = []
         for r, row in enumerate(rows):
             for c in range(len(widths)):
                 if (r, c) in covered:
@@ -3380,13 +3927,23 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 w = col_x[min(c + col_span, len(col_w))] - x
                 h = row_y[min(r + row_span, len(rows))] - y
                 value = row[c] if c < len(row) else ""
+                surface = (inset_surface(self.colors) if r == 0
+                           else self.colors["card"])
+                if c in hidden_cols:
+                    canvas.create_rectangle(x, y, x + w, y + h,
+                                            fill=surface, outline=rule)
+                    continue
+                line_no = first + row_off[r]
+                line = block[row_off[r]]
+                styles = self._cell_value_styles(line_no, line, c)
+                bg = wash(line_no, line, c, styles)
+                # The saved colour stays pure; only the DRAWING blends it
+                # toward the cell's surface (see _grid_restyle).
                 rect = canvas.create_rectangle(
                     x, y, x + w, y + h,
-                    fill=(inset_surface(self.colors) if r == 0
-                          else self.colors["card"]),
+                    fill=(self._blend_hex(bg, surface, 0.45) if bg
+                          else surface),
                     outline=rule)
-                if c in hidden_cols:
-                    continue
                 align = (aligns_matrix[r][c]
                          if r < len(aligns_matrix)
                          and c < len(aligns_matrix[r])
@@ -3394,13 +3951,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 cell = {"value": value, "rect": rect, "texts": [],
                         "x": x, "y": y, "w": w, "h": h,
                         "rs": row_span, "cs": col_span}
-                line_no = first + row_off[r]
-                line = block[row_off[r]]
-                styles = self._cell_value_styles(line_no, line, c)
-                cell["texts"] = self._grid_draw_cell_text(
-                    canvas, cell, value, styles, align, r == 0,
-                    pad_x, row_h)
                 cells[(r, c)] = cell
+                texts.append((cell, value, styles, align, r == 0))
+        for cell, value, styles, align, header in texts:
+            cell["texts"] = self._grid_draw_cell_text(
+                canvas, cell, value, styles, align, header, pad_x, row_h)
         mark = f"table_grid_{id(host)}"
         b.mark_set(mark, f"{first}.0")
         b.mark_gravity(mark, "left")
@@ -3421,9 +3976,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         canvas.bind("<Double-Button-1>",
                     lambda e, i=info: self._grid_double(i, e))
         # Saved formatting is already on the text as tags by the time a
-        # grid is built (load applies formatting first), so painting from
-        # tags here shows it from the first frame.
-        self._grid_restyle(info)
+        # grid is built (load applies formatting first), so the one pass
+        # above painted it from the first frame.
         for widget in (host, canvas):
             widget.bind("<MouseWheel>", self._forward_grid_wheel)
             widget.bind("<Shift-MouseWheel>",
@@ -3690,9 +4244,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
         Tk counts UTF-16 units, so an astral character -- every emoji past
         the basic plane -- is two steps, and advancing by Python's len()
-        parks the caret inside the character just inserted.
+        parks the caret inside the character just inserted. Counted by
+        the codec rather than character by character (the same answer,
+        a lone surrogate half counting one): opening a 60-row table
+        walked 131,000 characters through a generator here.
         """
-        return sum(2 if ord(ch) > 0xFFFF else 1 for ch in text)
+        return len(text.encode("utf-16-le", "surrogatepass")) // 2
 
     @classmethod
     def _tk_col(cls, line, char_col):
@@ -3878,7 +4435,24 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         Every other value is in the text already -- each commit wrote it --
         so capture, autosave and the dirty poll only need the one editor
         flushed, without closing it under the user's typing.
+
+        With no cell open there is nothing to flush, and the commit's undo
+        unit -- which notes the note's formatting (_undo_atom_begin) -- is
+        not worth opening on every autosave and every dirty poll. The one
+        thing it always left behind stays: an undo boundary, which is what
+        makes Ctrl+Z take typing back one pause at a time.
         """
+        if not getattr(self, "_cell_editor", None):
+            # A run of Tk's own deletes of styled text ends at this
+            # boundary too: the separator would split Tk's unit under the
+            # run's one journal step, and after a pause in the middle of
+            # BackSpacing through a bold word, Ctrl+Z gave it back plain.
+            self._close_styled_delete_run()
+            try:
+                self.body_text.edit_separator()
+            except (tk.TclError, AttributeError):
+                pass
+            return False
         return self._commit_cell_editor(close=False)
 
     @_undo_atom
@@ -3919,32 +4493,142 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         character inherits that character's colour, highlight and font
         styles; type a space first and the styles stay behind.
         """
+        self._spread_typed_run()
+
+    # Two marks around what a key types (see _spread_typed_run): text
+    # inserted at the caret goes after the first and before the second.
+    _TYPED_FROM = "typedFrom"
+    _TYPED_TO = "typedTo"
+
+    def _note_key_down(self, _event=None):
+        """Any key going down in the body, noted first -- by the bindtag
+        ahead of the body's own, and for Cut, Clear and Paste by their
+        virtual events as well, which outrank its <KeyPress> (Tk runs one
+        binding per tag, the most specific). What the key before typed is
+        settled now, before this one acts: a paste pressed after its Ctrl
+        -- which reads as a key that may type -- must not land in the run
+        that Ctrl opened, and a letter pressed before the last one was
+        released (fast typing, a held key) goes on from the style its
+        predecessor has just been given."""
+        self._spread_typed_run()
+
+    def _note_typing_key(self, event=None):
+        """A key with no binding of its own in the body -- every key that
+        types -- going down: two marks at the caret, the first staying put,
+        the second carried along by whatever goes in there. What the key
+        types lands between them, after the selection it replaces is gone.
+        Tk runs one binding per tag, the most specific, so this never runs
+        for a key with a binding of its own (Delete, BackSpace, Ctrl+B,
+        Ctrl+Z, a paste). The run is settled at the key's release, or at
+        the next key's press, whichever comes first (_spread_typed_run).
+
+        A key with Control held, and no Alt, types nothing: Text's own
+        <Control-Key> does nothing, and Tk's Ctrl+T swaps the two letters at
+        the caret and Ctrl+O puts a line break there -- the swapped letters
+        took the word's style. Control with Alt is AltGr on Windows, which
+        types. Insert pastes the selection: a paste, never typing."""
+        state = getattr(event, "state", 0)
+        if ((state & 0x4 and not state & 0x20000)
+                or getattr(event, "keysym", "") == "Insert"):
+            return
         b = self.body_text
         try:
-            typed = b.index("insert-1c")
-            prev = b.index("insert-2c")
-            if b.compare(prev, ">=", typed):
+            b.mark_set(self._TYPED_FROM, "insert")
+            b.mark_gravity(self._TYPED_FROM, "left")
+            b.mark_set(self._TYPED_TO, "insert")
+            b.mark_gravity(self._TYPED_TO, "right")
+        except tk.TclError:
+            return
+        self._typed_run_open = True
+
+    def _spread_typed_run(self):
+        """Settle what the last typing key put in: letters glued onto a
+        styled character wear its styles, up to a space typed with them.
+
+        Only letters that went in between the marks count, styled from the
+        character just before them. Every release used to count, reading
+        the two characters left of the caret: an arrow key, or the caret
+        guard's stop at a table under "Prices:", turned a plain ":" after a
+        bold word bold with nothing typed, and so did Delete, BackSpace,
+        Ctrl+B, Ctrl+Z and a paste. Asked "did the text grow?" by where the
+        text ENDED, typing spread nothing on any line but the last. And
+        read at the caret, what else lands between the marks -- the spaces
+        the tidy of a table the key left pads its cells with, the line
+        break Tk's own Ctrl+O puts there with the caret before it -- gave
+        the character before the caret, elsewhere, the style. The
+        characters come from the buffer, never the event: a synthetic key
+        carries none."""
+        if not getattr(self, "_typed_run_open", False):
+            return
+        self._typed_run_open = False
+        b = self.body_text
+        try:
+            start = b.index(self._TYPED_FROM)
+            end = b.index(self._TYPED_TO)
+            if not (b.compare(start, "<", end)
+                    and b.compare(start, ">", "1.0")):
                 return
-            # The characters come from the BUFFER, not the event: a
-            # synthetic KeyRelease carries no char at all, and reading
-            # what actually sits left of the caret is true for real
-            # typing, IME input and tests alike.
-            typed_ch = b.get(typed)
-            if not typed_ch.strip():
+            prev = b.index(f"{start} -1c")
+            self._take_run_between(start, end)
+            if not b.get(prev).strip():
                 return
-            prev_ch = b.get(prev)
-            if not prev_ch.strip():
+            gap = b.search(r"\s", start, stopindex=end, regexp=True)
+            stop = gap or end
+            if not b.compare(start, "<", stop):
                 return
-            carry = [t for t in b.tag_names(prev)
-                     if t in ("bold", "italic", "bold_italic",
-                              "underline", "strike")
-                     or t.startswith("text_color_")
-                     or t.startswith("highlight_")]
-            for tag in carry:
-                if tag not in b.tag_names(typed):
-                    b.tag_add(tag, typed, "insert")
+            for tag in b.tag_names(prev):
+                if (tag in ("bold", "italic", "bold_italic", "underline",
+                            "strike")
+                        or tag.startswith("text_color_")
+                        or tag.startswith("highlight_")):
+                    b.tag_add(tag, start, stop)
+            # ...its size and font too, drawn with the weight they now wear.
+            self._fit_font_tags(start, stop, like=prev)
         except tk.TclError:
             pass
+
+    def _take_run_between(self, start, end):
+        """Text put between two pieces of one size or font that differ only
+        in weight -- right after or before a bold word inside a bigger
+        heading -- takes the run's size and font, with its own weight. True
+        when it did.
+
+        It wore neither piece's composite (Tk passes on only what both sides
+        wear) and came out at the base size, saved so -- splitting the
+        heading's size in two around it. Typed, pasted with or without its
+        formatting, pasted by Tk's own Ctrl+V, or put in by the emoji picker
+        or the calculator: every road in asks here. Typing alone did once,
+        and the other roads went on splitting the run."""
+        b = self.body_text
+        try:
+            if not b.compare(start, ">", "1.0"):
+                return False
+            prev = b.index(f"{start} -1c")
+            sides = [[parse_font_tag(t) for t in b.tag_names(i)
+                      if parse_font_tag(t)] for i in (prev, end)]
+            if not (all(sides) and sides[0][-1][2:] == sides[1][-1][2:]):
+                return False
+            self._fit_font_tags(start, end, like=prev)
+        except tk.TclError:
+            return False
+        return True
+
+    # Two marks around what Tk's own paste puts in (see _on_body_paste),
+    # as _TYPED_FROM and _TYPED_TO are around what a key types.
+    _PASTE_FROM = "pasteFrom"
+    _PASTE_TO = "pasteTo"
+
+    def _settle_tk_paste(self):
+        """What Tk's own Ctrl+V put in, between the marks set before it ran,
+        takes the run it landed in (_take_run_between)."""
+        b = self.body_text
+        try:
+            start, end = b.index(self._PASTE_FROM), b.index(self._PASTE_TO)
+            b.mark_unset(self._PASTE_FROM, self._PASTE_TO)
+        except tk.TclError:
+            return
+        if b.compare(start, "<", end):
+            self._take_run_between(start, end)
 
     def _reassert_line_alignment(self, _event=None):
         """Keep the caret's line wearing its own alignment while it is
@@ -3974,6 +4658,123 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         except (tk.TclError, ValueError):
             pass
 
+    def _selection_end_at_table(self, first, nrows, event):
+        """The moving end of a selection has landed on a drawn table's lines:
+        keep the caret with it, at the table's near edge, and on the next
+        press at that edge carry both past the table. True when the caret
+        was placed here; False leaves the caret guard to walk it under the
+        table as for a plain caret.
+
+        Walked under the table alone, the caret left the selection's end
+        behind. Shift+Down on the line above a table selected that line and
+        the table's own line break, with the caret below the table: a letter
+        typed then went in under the table with the line still selected; a
+        paste deleted the line and put its text under the table, glued to
+        the next line; cells pasted there went INTO the table. Shift+Up from
+        under a table selected every row of it, invisibly -- a grid shows no
+        selection -- and the caret, walked back under it, could not go
+        further up: the next letter typed deleted the whole table.
+
+        A first press stops at the edge, so a selection never takes a table
+        in without a second press saying so; that second press crosses it,
+        as before, so the keyboard can still select across a table. The
+        mouse has no second press: a drag ending on a table stops at the
+        edge it came from."""
+        b = self.body_text
+        try:
+            sel_first, sel_last = b.index("sel.first"), b.index("sel.last")
+        except tk.TclError:
+            return False
+        top = f"{first}.0"
+        above = b.index(f"{top} -1c")
+        below = b.index(f"{first + nrows}.0")
+        if (getattr(self, "_sel_crossed_table", None) == (first, "up")
+                and b.compare(sel_first, "<=", top)
+                and b.compare(sel_last, ">=", below)):
+            # An upward crossing of a table on the note's first line, just
+            # made: there is no line above it, so the caret is left on it.
+            # Left as it is -- read as a first press, it dropped the table
+            # out of what the next key acts on, so a letter kept the table
+            # while Delete took it.
+            return True
+        # Which end moved is read off the selection's ends against the
+        # table, never off an exact match with the caret: leaving one table
+        # draws the next one again, and its window, put back at the very
+        # index the selection ends on, pushes the caret one column on.
+        if b.compare(sel_first, "<", top) and b.compare(sel_last, ">=", top):
+            direction, edge, past = "down", above, below
+        elif (b.compare(sel_last, ">=", below)
+                and b.compare(sel_first, "<", below)):
+            direction, edge, past = "up", below, above
+        else:
+            if (b.compare(top, "<=", sel_first)
+                    and b.compare(sel_last, "<", below)):
+                # Both ends on the table's hidden text: nothing anyone could
+                # see choosing, and a cut would have taken rows apart.
+                b.tag_remove("sel", sel_first, sel_last)
+            return False
+        keyed = getattr(event, "type", None) in (tk.EventType.KeyPress,
+                                                 tk.EventType.KeyRelease)
+        held = getattr(self, "_sel_held_at_table", None)
+        try:
+            if keyed and held is not None and held[:2] == (first, direction):
+                if direction == "down":
+                    b.tag_add("sel", sel_first, past)
+                else:
+                    b.tag_add("sel", past, sel_last)
+                b.mark_set("insert", past)
+                self._sel_held_at_table = None
+                self._sel_crossed_table = (first, direction)
+                return True
+            if direction == "down":
+                b.tag_remove("sel", edge, sel_last)
+            else:
+                b.tag_remove("sel", sel_first, edge)
+            b.mark_set("insert", edge)
+        except tk.TclError:
+            return False
+        self._sel_held_at_table = ((first, direction, edge) if keyed
+                                   else None)
+        return True
+
+    def _selection_ends_off_tables(self):
+        """A selection end left on a drawn table's hidden text, with the
+        caret elsewhere, goes to the table's edge facing the other end.
+
+        A mouse press beside a drawn table, right of the grid, lands on the
+        end of its last row's hidden text. Dragged down, the selection began
+        inside that row, and the next key glued the row onto the paragraph
+        under it ("| Tea | 2 |er") -- out of the table. Dragged up, it took
+        the whole table in, unasked. The caret guard looked only at the end
+        the drag finished on."""
+        b = self.body_text
+        for info in getattr(self, "_table_grids", []):
+            first = self._grid_first_line(info)
+            if first is None:
+                continue
+            try:
+                start, end = b.index("sel.first"), b.index("sel.last")
+            except tk.TclError:
+                return
+            top = f"{first}.0"
+            below = b.index(f"{first + info['nrows']}.0")
+            # A start exactly at the table's top is its edge, not a point on
+            # it: Ctrl+A in a note that begins with a table starts there,
+            # and read as "on the table" it was cut down to what follows.
+            # An END at the top is on it -- that end holds the line break
+            # above the table, the shape a first press is stopped from.
+            start_on = (b.compare(top, "<", start)
+                        and b.compare(start, "<", below))
+            end_on = (b.compare(top, "<=", end)
+                      and b.compare(end, "<", below))
+            try:
+                if start_on and not end_on:
+                    b.tag_remove("sel", start, below)
+                elif end_on and not start_on:
+                    b.tag_remove("sel", b.index(f"{top} -1c"), end)
+            except tk.TclError:
+                return
+
     def _caret_out_of_hidden(self, _event=None):
         """Keep the caret off a rendered table's lines entirely.
 
@@ -3982,21 +4783,134 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         edit characters nobody can see or land text floating beside the
         grid. The caret is walked to the line under the table instead, so
         writing always continues from the start of a real row.
+
+        On a key press it also holds the table's edges against Tk's own
+        line-joining keys, which reach no handler of their own: Ctrl+H
+        deletes backwards as BackSpace does, and Ctrl+K at the end of a
+        line deletes its line break -- at a drawn table's edge either one
+        pulled a table row onto the prose beside it. Delete and BackSpace
+        ask the same question in their own handlers.
         """
         b = self.body_text
         try:
             line_no = int(b.index("insert").split(".")[0])
         except (tk.TclError, ValueError):
             return None
+        held = getattr(self, "_sel_held_at_table", None)
+        met = False
         for info in getattr(self, "_table_grids", []):
             first = self._grid_first_line(info)
             if first is not None and first <= line_no < first + info["nrows"]:
+                met = True
+                if not self._selection_end_at_table(first, info["nrows"],
+                                                    _event):
+                    try:
+                        b.mark_set("insert", f"{first + info['nrows']}.0")
+                    except tk.TclError:
+                        pass
+                break
+        # Every time, not only when the caret is off the tables: a drag from
+        # beside one table to beside another put the caret's end at the
+        # second table's edge and left the start on the first one's hidden
+        # text, so Delete or a paste -- which run no guard of their own --
+        # glued a row or merged the two tables.
+        self._selection_ends_off_tables()
+        if met:
+            # The caret never rests on a drawn table: it was where this left
+            # it. _align_table_on_leaving, which runs first, had noted the
+            # table's line Tk moved it to, and the next key's release "left"
+            # that table and padded it -- an edit of its own, outside that
+            # key's undo unit: after a first Shift+Down stopped at a table, a
+            # letter or a Delete over the selection took two Ctrl+Z.
+            try:
+                self._last_caret_line = int(b.index("insert").split(".")[0])
+            except (tk.TclError, ValueError):
+                pass
+        if not met:
+            self._sel_crossed_table = None
+        if not met and held is not None:
+            # The stop at a table's edge is remembered only while the caret
+            # stays there; any other move forgets it.
+            try:
+                if b.compare("insert", "!=", held[2]):
+                    self._sel_held_at_table = None
+            except tk.TclError:
+                self._sel_held_at_table = None
+        if (getattr(_event, "type", None) == tk.EventType.KeyPress
+                and getattr(_event, "state", 0) & 0x4):
+            keysym = getattr(_event, "keysym", "")
+            try:
+                at_line_end = b.compare("insert", "==", "insert lineend")
+            except tk.TclError:
+                at_line_end = False
+            if ((keysym == "h"
+                 and self._deletion_joins_table(False, selection_wins=False))
+                    or (keysym == "k" and at_line_end
+                        and self._deletion_joins_table(
+                            True, selection_wins=False))):
+                return "break"
+            if keysym == "t":
+                # Tk's Ctrl+T swaps the two characters around the caret
+                # (the two before it at a line's end). At a table's edge
+                # one of them is the table's line break, which moves: the
+                # last row became "| Eggs | 12 |r" and dropped out of the
+                # grid. A swap removes no line, so the empty-line leniency
+                # of _deletion_joins_table does not apply: any character
+                # the edge holds stops it. (Under Caps Lock alone the keysym
+                # is "T", which no Tk binding answers; with Shift as well
+                # it is "t" again and lands here.)
+                at = "insert" if at_line_end else "insert+1c"
                 try:
-                    b.mark_set("insert", f"{first + info['nrows']}.0")
+                    pair = (b.index(f"{at}-2c"), b.index(f"{at}-1c"))
+                    if any(_table_edge_holds(self, i) for i in pair):
+                        return "break"
                 except tk.TclError:
                     pass
-                return None
         return None
+
+    def _deletion_joins_table(self, forward, selection_wins=True):
+        """Would a one-character deletion at the caret break a drawn table?
+
+        True when the character it takes is the line break just above a
+        drawn table, the one just below it, or anything in between. Tk's
+        own Delete and BackSpace glued the neighbouring line onto the
+        table's first or last row -- the row then read as prose, fell out
+        of the grid and was saved that way. The same boundary the caret
+        guard keeps: the table is one block, and the keys stop at its
+        edge. *selection_wins* mirrors Tk's rule for Delete and
+        BackSpace: with the caret inside a selection they delete the
+        selection instead, which is not a question about the edge.
+
+        Except where the caret's own line is EMPTY: taking its line break
+        removes that line and glues nothing onto a row (Delete on the
+        empty line above a table, BackSpace on the one below), so it goes
+        -- unless the line beyond it is a table row, which would merge two
+        tables into one block, or there is no line beyond it, which is the
+        writable line the renderer keeps under a note-ending table.
+        """
+        b = self.body_text
+        try:
+            if (selection_wins and b.tag_ranges("sel")
+                    and b.compare("sel.first", "<=", "insert")
+                    and b.compare("insert", "<=", "sel.last")):
+                return False
+            if not forward and b.compare("insert", "==", "1.0"):
+                return False
+            at = b.index("insert" if forward else "insert-1c")
+            if not _table_edge_holds(self, at):
+                return False
+            if b.compare("insert linestart", "==", "insert lineend"):
+                line = int(b.index("insert").split(".")[0])
+                far = line - 1 if forward else line + 1
+                total = int(b.index("end-1c").split(".")[0])
+                if far < 1:
+                    return False
+                if far <= total and not is_table_row(
+                        b.get(f"{far}.0", f"{far}.end")):
+                    return False
+            return True
+        except (tk.TclError, ValueError):
+            return False
 
     # ---------- The table's own right-click menu ----------
 
@@ -4079,17 +4993,25 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 for n in range(first, first + nrows)]
 
     def _grid_replace_block(self, first, old_nrows, rows, aligns=None,
-                            sep_cols=None):
+                            sep_cols=None, source=None):
         """Wholesale rewrite for the structural ops that reshape columns.
 
-        Character formatting inside the table does not survive these ops --
-        the accepted cost of reshaping; plain cell text does, which is what
-        a table almost always holds.
+        The text is rewritten whole, but no cell the operation did not
+        touch may change: each cell's styles are read off the old block
+        first and laid back on the cell they belong to afterwards. It used
+        to be "the accepted cost of reshaping" -- and the same rewrite
+        served clearing one cell with Delete, dropping one checkbox and
+        deleting one row, so a bold word anywhere in the table died for an
+        edit three cells away. *source* maps a new (row, column) to the
+        old one it came from, for the ops that move cells (an inserted or
+        deleted row or column, copies appended at an edge); the identity
+        otherwise. See _grid_lay_cell_styles for what a changed cell keeps.
         """
         b = self.body_text
         # The rewrite deletes the tagged text, and the table's position on
         # the page would go with it -- read it first, put it back after.
         table_align = self._grid_table_align_of(first)
+        carried = self._grid_read_cell_styles(first, old_nrows)
         b.delete(f"{first}.0", f"{first + old_nrows - 1}.end")
         lines = core_tables.format_table(rows, aligns)
         if sep_cols is not None and lines:
@@ -4102,9 +5024,135 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             ) + core_tables.CELL
             lines = [lines[0], sep_line] + lines[1:]
         b.insert(f"{first}.0", "\n".join(lines))
+        self._grid_lay_cell_styles(first, lines, carried, source)
         if table_align in ("center", "right"):
             for n in range(first, first + len(lines)):
                 b.tag_add(f"align_{table_align}", f"{n}.0", f"{n}.end")
+
+    def _grid_read_cell_styles(self, first, nrows):
+        """Every data cell's styles, read off the block's tags before a
+        rewrite deletes them: ``{(row, col): {"value", "runs", "pad_bg",
+        "paint_bg"}}``.
+
+        *runs* are the character-format tags on the cell's text, as
+        ``(tag, start, end)`` in the value's own characters. *pad_bg* is a
+        CELL-level highlight -- one reaching into the padding, where the
+        table's highlight action puts it. *paint_bg* is the colour the
+        drawing washes the whole cell with (the highlight on its first
+        character, or on its padding when empty; see _grid_cell_paint),
+        which is what a person sees as "a coloured cell". Read range by
+        range, not character by character: a table of hundreds of cells
+        is a few dozen Tk calls this way.
+        """
+        b = self.body_text
+        block = [b.get(f"{n}.0", f"{n}.end")
+                 for n in range(first, first + nrows)]
+        sep_at = core_tables.separator_index(block)
+        data = [i for i in range(len(block)) if i != sep_at]
+        runs = {i: [] for i in data}
+        top, bottom = f"{first}.0", f"{first + nrows - 1}.end"
+        for tag in b.tag_names():
+            if not is_format_tag(tag):
+                continue
+            ranges = b.tag_ranges(tag)
+            for k in range(0, len(ranges) - 1, 2):
+                s, e = str(ranges[k]), str(ranges[k + 1])
+                if b.compare(e, "<=", top) or b.compare(s, ">=", bottom):
+                    continue
+                s_line, s_col = (int(p) for p in s.split("."))
+                e_line, e_col = (int(p) for p in e.split("."))
+                for n in range(max(s_line, first),
+                               min(e_line, first + nrows - 1) + 1):
+                    i = n - first
+                    if i not in runs:
+                        continue
+                    line = block[i]
+                    a = self._py_col(line, s_col) if n == s_line else 0
+                    z = self._py_col(line, e_col) if n == e_line else len(line)
+                    if z > a:
+                        runs[i].append((tag, a, z))
+        cells = {}
+        for r, i in enumerate(data):
+            line = block[i]
+            pipes = core_tables.pipe_positions(line)
+            for c, (s, e) in enumerate(core_tables.cell_bounds(line)):
+                lo = pipes[c] + 1 if c < len(pipes) else s
+                hi = pipes[c + 1] if c + 1 < len(pipes) else e
+                paint_at = s if e > s else lo
+                rec = {"value": line[s:e], "runs": [], "pad_bg": None,
+                       "paint_bg": None}
+                for tag, a, z in runs[i]:
+                    if not (a < hi and z > lo):
+                        continue
+                    if a < e and z > s:
+                        rec["runs"].append((tag, max(a, s) - s,
+                                            min(z, e) - s))
+                    if tag.startswith("highlight_"):
+                        if a < s or z > e or s == e:
+                            rec["pad_bg"] = tag
+                        if a <= paint_at < z:
+                            rec["paint_bg"] = tag
+                cells[(r, c)] = rec
+        return cells
+
+    def _grid_lay_cell_styles(self, first, lines, carried, source=None):
+        """Lay the styles _grid_read_cell_styles read back on the cells of
+        the freshly written *lines*.
+
+        A cell whose text is exactly what it was gets every style back,
+        where it was on that text, and its cell-level highlight over its
+        new padding. A cell the operation CHANGED keeps only the colour it
+        was drawn with, over the whole cell: its character styles
+        described text that is no longer there, while a coloured cell is
+        still the same cell (a dropped checkbox or a cleared cell keeps
+        its colour, as the fill always promised).
+
+        A merge's cell is the exception: *source* gives it as
+        ``(anchor, joined)``, the cells whose text it holds in reading
+        order, and while it reads exactly as their texts joined by a space
+        each piece's styles go back on that piece, where it now sits.
+        """
+        b = self.body_text
+        sep_at = core_tables.separator_index(lines)
+        r = -1
+        for i, line in enumerate(lines):
+            if i == sep_at:
+                continue
+            r += 1
+            line_no = first + i
+            pipes = core_tables.pipe_positions(line)
+            for c, (s, e) in enumerate(core_tables.cell_bounds(line)):
+                src = source(r, c) if source is not None else (r, c)
+                joined = ()
+                if src is not None and isinstance(src[0], tuple):
+                    src, joined = src
+                rec = carried.get(src) if src is not None else None
+                if rec is None:
+                    continue
+                same = line[s:e] == rec["value"]
+                wash = rec["pad_bg"] if same else rec["paint_bg"]
+                if wash and c + 1 < len(pipes):
+                    b.tag_add(wash,
+                              f"{line_no}.{self._tk_col(line, pipes[c] + 1)}",
+                              f"{line_no}.{self._tk_col(line, pipes[c + 1])}")
+                if not same:
+                    parts = [carried.get(k) for k in joined]
+                    if not (parts and all(parts) and line[s:e] == " ".join(
+                            p["value"] for p in parts)):
+                        continue
+                    offset = 0
+                    for part in parts:
+                        for tag, a, z in part["runs"]:
+                            lo = self._tk_col(line, s + offset + a)
+                            hi = self._tk_col(line, s + offset + z)
+                            b.tag_add(tag, f"{line_no}.{lo}",
+                                      f"{line_no}.{hi}")
+                        offset += len(part["value"]) + 1
+                    continue
+                for tag, a, z in rec["runs"]:
+                    b.tag_add(tag,
+                              f"{line_no}.{self._tk_col(line, s + a)}",
+                              f"{line_no}.{self._tk_col(line, s + z)}")
 
     def _dissolve_orphan_markers(self, rows):
         _spans, covered = core_tables.merge_map(rows)
@@ -4148,7 +5196,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if sep_cols is not None:
             sep_cols.insert(min(at, len(sep_cols)),
                             {"width": None, "align": None, "hidden": False})
-        self._grid_replace_block(first, nrows, rows, aligns, sep_cols)
+        self._grid_replace_block(
+            first, nrows, rows, aligns, sep_cols,
+            source=lambda r, c: ((r, c) if c < at
+                                 else (r, c - 1) if c > at else None))
         self._grid_after_op(first)
 
     @_undo_atom
@@ -4167,7 +5218,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         del rows[r]
         del aligns[r]
         rows = self._dissolve_orphan_markers(rows)
-        self._grid_replace_block(first, nrows, rows, aligns, sep_cols)
+        gone = r
+        self._grid_replace_block(
+            first, nrows, rows, aligns, sep_cols,
+            source=lambda rr, c: (rr if rr < gone else rr + 1, c))
         self._grid_after_op(first)
 
     @_undo_atom
@@ -4184,12 +5238,14 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             return
         first, nrows, ncols = context
         rows, aligns, sep_cols, _sep_at = self._grid_block_parts(first, nrows)
+        source = None
         if ncols <= 2:
             for row in rows:
                 if c < len(row):
                     row[c] = ""
             rows = self._dissolve_orphan_markers(rows)
         else:
+            source = (lambda r, cc: (r, cc if cc < c else cc + 1))
             spans, _covered = core_tables.merge_map(rows)
             for (ar, ac), (rs, cs) in spans.items():
                 if ac <= c < ac + cs:
@@ -4206,7 +5262,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             if sep_cols is not None and c < len(sep_cols):
                 del sep_cols[c]
             rows = self._dissolve_orphan_markers(rows)
-        self._grid_replace_block(first, nrows, rows, aligns, sep_cols)
+        self._grid_replace_block(first, nrows, rows, aligns, sep_cols,
+                                 source=source)
         self._grid_after_op(first)
 
     @_undo_atom
@@ -4354,6 +5411,15 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             return
         first, nrows, _ncols = context
         rows, aligns, sep_cols, _sep_at = self._grid_block_parts(first, nrows)
+        # The copies carry their originals' styles: "text and all".
+        old_len = [len(row) for row in rows]
+
+        def source(r, c):
+            if c < old_len[r]:
+                return (r, c)
+            k = c - old_len[r]
+            return (r, c0 + k) if k <= c1 - c0 else None
+
         for row in rows:
             copied = [row[c] if c < len(row) else ""
                       for c in range(c0, c1 + 1)]
@@ -4372,7 +5438,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                                   "hidden": False}
                             for c in range(c0, c1 + 1))
         rows = self._dissolve_orphan_markers(rows)
-        self._grid_replace_block(first, nrows, rows, aligns, sep_cols)
+        self._grid_replace_block(first, nrows, rows, aligns, sep_cols,
+                                 source=source)
         self._grid_after_op(first)
 
     @_undo_atom
@@ -4394,10 +5461,14 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if copied_rows:
             copied_rows[0] = ["" if v == core_tables.MERGE_UP else v
                               for v in copied_rows[0]]
+        n_old = len(rows)
         rows.extend(copied_rows)
         aligns.extend(copied_aligns)
         rows = self._dissolve_orphan_markers(rows)
-        self._grid_replace_block(first, nrows, rows, aligns, sep_cols)
+        # The copies carry their originals' styles, as the columns' do.
+        self._grid_replace_block(
+            first, nrows, rows, aligns, sep_cols,
+            source=lambda r, c: (r, c) if r < n_old else (r0 + r - n_old, c))
         self._grid_after_op(first)
 
     @_undo_atom
@@ -4660,16 +5731,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
     def _grid_fill_selection(self, sel, value, align=None):
         info = sel["info"]
         r0, c0, r1, c1 = sel["box"]
-        # The wholesale rewrite below takes every tag with it -- fair for
-        # the text styles a fill overwrites anyway, but a CELL-level
-        # highlight describes the cell, not the text, and inserting a
-        # checkbox into a coloured cell stripped the colour. Remember
-        # each cell's highlight before, re-dress the cells after.
-        cell_bgs = {}
-        for (r, c) in list(info.get("cells", {})):
-            bg = self._grid_cell_paint(info, r, c).get("bg")
-            if bg:
-                cell_bgs[(r, c)] = bg
+        # The rewrite keeps every other cell exactly as it was and a
+        # filled cell's colour -- a CELL-level highlight describes the
+        # cell, not the text (see _grid_lay_cell_styles).
         context = self._grid_op_context(info)
         if not context:
             return
@@ -4684,17 +5748,6 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                         aligns[r][c] = align
         self._grid_replace_block(first, nrows, rows, aligns, sep_cols)
         self._grid_after_op(first)
-        if cell_bgs:
-            fresh = self._grid_at_line(first)
-            if fresh is not None:
-                for (r, c), bg in cell_bgs.items():
-                    span = self._grid_cell_text_range(
-                        fresh, r, c, pad_ok=True, full=True)
-                    if span:
-                        tag = self._ensure_color_tag(
-                            self.body_text, "highlight", bg)
-                        self.body_text.tag_add(tag, span[0], span[1])
-                self._grid_restyle(fresh)
 
     @_undo_atom
     def _grid_toggle_checkbox(self, info, r, c):
@@ -4820,13 +5873,14 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # moves into the merged cell, joined in reading order. Merging "A"
         # with an empty neighbour used to keep whichever cell was the
         # anchor -- and lose the text when the anchor was the empty one.
-        pieces = []
+        pieces, piece_cells = [], []
         for r in range(r0, min(r1 + 1, len(rows))):
             for c in range(c0, min(c1 + 1, len(rows[r]))):
                 value = rows[r][c]
                 if value and value not in (core_tables.MERGE_LEFT,
                                            core_tables.MERGE_UP):
                     pieces.append(value)
+                    piece_cells.append((r, c))
         rows[r0][c0] = " ".join(pieces)
         for r in range(r0, min(r1 + 1, len(rows))):
             for c in range(c0, min(c1 + 1, len(rows[r]))):
@@ -4835,13 +5889,20 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 rows[r][c] = (core_tables.MERGE_LEFT if r == r0
                               else (core_tables.MERGE_UP if c == c0
                                     else core_tables.MERGE_LEFT))
-        self._grid_replace_block(first, nrows, rows, aligns, sep_cols)
+        # Nor their styles: the merged cell names the cells it joined, so
+        # each piece's bold and colours land on that piece inside it (see
+        # _grid_lay_cell_styles). A merged cell used to come out plain.
+        merged = ((r0, c0), tuple(piece_cells))
+        self._grid_replace_block(
+            first, nrows, rows, aligns, sep_cols,
+            source=lambda r, c: merged if (r, c) == (r0, c0) else (r, c))
         self._grid_after_op(first)
 
     @_undo_atom
     def _grid_paste_cells(self, info, r, c):
         """Copied cells land as a block starting at the clicked cell,
-        growing the table downward when they need more rows."""
+        growing the table downward when they need more rows, and
+        rightward when they need more columns."""
         matrix = getattr(self, "_grid_cell_clip", None)
         try:
             raw = self.clipboard_get()
@@ -4900,9 +5961,17 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             return
         first, nrows, ncols = context
         rows, aligns, sep_cols, sep_at = self._grid_block_parts(first, nrows)
+        # Columns grow the way rows always have: four columns copied from a
+        # spreadsheet into a two-column table used to lose the last two
+        # without a word. Tables carry no column cap (a pasted TSV table,
+        # an inserted or appended column never had one), so nothing here
+        # is clipped; the separator gains its columns in the rewrite.
+        width = max([ncols] + [c + len(line) for line in matrix])
+        for row in rows:
+            row.extend([""] * (width - len(row)))
         while r + len(matrix) > len(rows):
-            rows.append([""] * ncols)
-            aligns.append([core_tables.ALIGN_LEFT] * ncols)
+            rows.append([""] * width)
+            aligns.append([core_tables.ALIGN_LEFT] * width)
         for dr, source_row in enumerate(matrix):
             for dc, value in enumerate(source_row):
                 if c + dc < len(rows[r + dr]):
@@ -5174,6 +6243,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                                     editor["r"], editor["c"])
         return None
 
+    @_undo_atom(tags_only=True)
     def _grid_apply_style(self, info, box, kind, value=None):
         """One toolbar action, over every selected cell's text.
 
@@ -5295,7 +6365,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
     def _grid_stub_menu(self, info, event, c):
         """The only menu a hidden column can offer: bring it back."""
-        menu = tk.Menu(self, tearoff=0, bg=self.colors["card"],
+        menu = self._new_context_menu(tearoff=0, bg=self.colors["card"],
                        fg=self.colors["text"],
                        activebackground=self.colors["accent"],
                        activeforeground="#ffffff")
@@ -5323,7 +6393,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             return "break"
         r, c = hit
         cell = info["cells"][(r, c)]
-        menu = tk.Menu(self, tearoff=0, bg=self.colors["card"],
+        menu = self._new_context_menu(tearoff=0, bg=self.colors["card"],
                        fg=self.colors["text"],
                        activebackground=self.colors["accent"],
                        activeforeground="#ffffff")
@@ -5593,6 +6663,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 return align
         return "left"
 
+    @_undo_atom(tags_only=True)
     def _set_paragraph_align(self, align):
         """Align the selected lines left, centre or right.
 
@@ -5786,6 +6857,15 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 self._grid_paste_cells(sel["info"],
                                        sel["box"][0], sel["box"][1])
                 return "break"
+        # A paste moves the caret and the lines under it, by every route
+        # below and by Tk's own: the release of its key is not the person
+        # leaving a table (as for _paste_tsv_as_table and _body_undo_redo).
+        # Read as one, it padded the pasted rows -- or the table they had
+        # pushed down -- as an edit outside the paste's undo unit, and the
+        # first Ctrl+Z changed nothing on screen. A table being typed that
+        # the paste really leaves is tidied by the paste, inside its unit.
+        self._last_caret_line = None
+        self._paste_from_table = self._note_raw_table_at_caret()
         # Our own cell copy puts an HTML table on the clipboard for Word's
         # sake, and on Windows the rich-paste route saw it FIRST -- so
         # pasting a copied table back into a note took the generic HTML
@@ -5799,6 +6879,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # too, so the paste falls through to the TSV route anyway.
         own = getattr(self, "_grid_cell_clip_text", None)
         own_copy = bool(own) and clipboard.read_text() == own
+        # The run of Tk's own deletes opened for this paste (it replaces a
+        # styled selection: _note_styled_delete). Each route tried below is
+        # an undo unit of its own, and opening one ends any run -- here
+        # before Tk had deleted anything, so the run ended empty, and the
+        # selection Tk's paste then replaced came back plain on Ctrl+Z.
+        run = getattr(self, "_styled_delete_run", None)
         if own_copy:
             if self._paste_tsv_as_table():
                 return "break"
@@ -5810,11 +6896,37 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             return "break"
         if self._paste_pipe_text_on_own_lines():
             return "break"
+        # In a table being typed the plain paste is made here, so the table
+        # it leaves is tidied inside the same unit (Tk's own lands after this
+        # returns, outside any unit of the app's).
+        if (getattr(self, "_paste_from_table", None)
+                and self._paste_text_leaving_table()):
+            return "break"
+        # None of them took it, and Tk's paste is the delete the run was
+        # opened for -- given back while the text is still what the run
+        # noted.
+        if run is not None:
+            try:
+                if self._fmt_state()[0] == run["before"][0]:
+                    self._styled_delete_run = run
+            except (tk.TclError, ValueError):
+                pass
         # Plain paste: Tk inserts the text after this returns, so the list
         # tags can only be brought back into step once that has happened.
         self._body_follow_caret = True
         self.after_idle(self._resync_list_tags)
         self.after_idle(self._render_table_grids)
+        # ...and so can the run it lands in: two marks where it goes in, the
+        # first staying put, the second carried past it (_settle_tk_paste).
+        b = self.body_text
+        try:
+            b.mark_set(self._PASTE_FROM, "insert")
+            b.mark_gravity(self._PASTE_FROM, "left")
+            b.mark_set(self._PASTE_TO, "insert")
+            b.mark_gravity(self._PASTE_TO, "right")
+            self.after_idle(self._settle_tk_paste)
+        except tk.TclError:
+            pass
         return None
 
     @_undo_atom
@@ -5827,14 +6939,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         line -- '|   | [x] |fig2...' in the field report -- and the
         caption onto the last one. Tk's default paste is right for
         prose; pipe rows only mean something at a line start, so they
-        get the newlines that keep them rows. Selection replacement is
-        left to the default handler -- this path only runs caret-only.
+        get the newlines that keep them rows -- and a blank line from a
+        table they would touch (_rows_gap).
         """
-        try:
-            if self.body_text.tag_ranges("sel"):
-                return False
-        except tk.TclError:
-            return False
         raw = clipboard.read_text()
         if raw is None:
             try:
@@ -5851,17 +6958,130 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 or core_tables.is_table_row(lines[-1])):
             return False
         b = self.body_text
-        before = b.get("insert linestart", "insert")
-        after = b.get("insert", "insert lineend")
+        # The grids down before anything is written (see
+        # _paste_tsv_as_table): torn down by the drawing below, inside this
+        # unit, they split it, and the first Ctrl+Z changed nothing.
+        self._teardown_table_grids()
+        if b.tag_ranges("sel"):
+            # Over a selection the rows take its place, as cells do; left to
+            # Tk, a line selected above a table was replaced by rows that
+            # then joined that table.
+            try:
+                b.delete("sel.first", "sel.last")
+            except tk.TclError:
+                pass
         text = raw.strip("\n")
-        if core_tables.is_table_row(lines[0]) and before.strip():
-            text = "\n" + text
-        if core_tables.is_table_row(lines[-1]) and after.strip():
-            text = text + "\n"
-        b.insert("insert", text)
+        lead, trail = self._rows_gap(text)
+        b.insert("insert", lead + text + trail)
+        kept = self._tidy_table_paste_left()
         self._body_follow_caret = True
         self._resync_list_tags()
-        self._render_table_grids()
+        self._render_table_grids(keep_typed=kept)
+        self._schedule_autosave()
+        return True
+
+    # Where a table being typed began when a paste started (see
+    # _tidy_table_paste_left).
+    _PASTE_FROM_TABLE = "pasteFromTable"
+
+    def _row_being_typed(self):
+        """The caret's line when it is a row of a table not yet drawn there
+        -- a table being typed -- else None. Asked of the caret's own row: a
+        table typed by hand is drawn row by row as the caret leaves each, so
+        the row being typed sits under a drawn header, and asking whether
+        the table's first line was drawn found none being typed past its
+        first row."""
+        try:
+            here = int(self.body_text.index("insert").split(".")[0])
+        except (tk.TclError, ValueError, AttributeError):
+            return None
+        if self._table_block_at(here) is None or any(
+                first is not None and first <= here < first + info["nrows"]
+                for info in getattr(self, "_table_grids", [])
+                for first in (self._grid_first_line(info),)):
+            return None
+        return here
+
+    def _note_raw_table_at_caret(self):
+        """The table being typed that the caret stands in (_row_being_typed),
+        as a mark at its first line; None when there is none."""
+        b = self.body_text
+        here = self._row_being_typed()
+        if here is None:
+            return None
+        block = self._table_block_at(here)
+        b.mark_set(self._PASTE_FROM_TABLE, f"{block[0]}.0")
+        b.mark_gravity(self._PASTE_FROM_TABLE, "right")
+        self._paste_caret_line = here
+        # What the paste writes into that table is recorded with no window
+        # on its first line, and the table is drawn later: replayed with the
+        # window there, Ctrl+Z took letters out of the header. Ctrl+Shift+V
+        # calls this inside its own unit, which is marked so; the routes of
+        # _on_body_paste take the tables down before they write.
+        self._mark_unit_window_free()
+        return self._PASTE_FROM_TABLE
+
+    def _tidy_table_paste_left(self):
+        """Tidy the table being typed that a paste took the caret out of,
+        inside the paste's own undo unit, as leaving it by any key tidies it
+        (_align_table_on_leaving). A paste's release no longer reads as
+        leaving a table -- that padded tables the caret was never in, as an
+        edit of its own -- so a table a paste did leave was drawn and never
+        tidied, its saved pipe text left with ragged columns.
+
+        Returns the line of the table still being typed that the paste left
+        the caret on, for the drawing that follows to leave alone (see
+        _render_table_grids), or None."""
+        mark = getattr(self, "_paste_from_table", None)
+        self._paste_from_table = None
+        if not mark:
+            return None
+        b = self.body_text
+        try:
+            first = int(b.index(mark).split(".")[0])
+            b.mark_unset(mark)
+            here = int(b.index("insert").split(".")[0])
+        except (tk.TclError, ValueError):
+            return None
+        if here == getattr(self, "_paste_caret_line", None):
+            # Still on the line it was pasted on, as after a letter typed
+            # there: the table is tidied, and drawn, once the caret leaves
+            # that line -- which is the caret's line now, as a letter typed
+            # there leaves it. Left unknown, a paste from the menu, which has
+            # no key whose release would name it, was never tidied or drawn
+            # when the caret left by the mouse or an arrow.
+            self._last_caret_line = here
+            return here
+        block = self._table_block_at(first)
+        if block is not None and not block[0] <= here <= block[1]:
+            self._align_table_block(block[0])
+        return None
+
+    @_undo_atom
+    def _paste_text_leaving_table(self):
+        """Tk's plain paste, made by the app when the caret stands in a
+        table being typed, so the table the paste takes the caret out of is
+        tidied in the same undo unit (_tidy_table_paste_left)."""
+        text = clipboard.read_text()
+        if text is None:
+            try:
+                text = self.body_text.clipboard_get()
+            except tk.TclError:
+                self._paste_from_table = None
+                return False
+        b = self.body_text
+        # The grids down before anything is written (see
+        # _paste_tsv_as_table): the drawing at the end would split the unit.
+        self._teardown_table_grids()
+        try:
+            b.delete("sel.first", "sel.last")
+        except tk.TclError:
+            pass
+        b.insert("insert", text.replace("\r\n", "\n").replace("\r", "\n"))
+        kept = self._tidy_table_paste_left()
+        self._body_follow_caret = True
+        self._resync_list_tags()
+        self._render_table_grids(keep_typed=kept)
         self._schedule_autosave()
         return True
 
@@ -5891,18 +7111,44 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         raw = raw.replace("\r\n", "\n").replace("\r", "\n")
         b = self.body_text
         try:
-            here = b.get("insert linestart", "insert lineend")
+            selected = b.index("sel.first")
+            # A selection that ends where a table begins holds that
+            # table's own line break (Shift+Down from the line above). The
+            # break stays: deleted with the rest, it left the caret on the
+            # table's first row, and the new rows went in under that row,
+            # cutting the old table's header from its body.
+            last = b.index("sel.last")
+            if (b.compare(last, "==", f"{last} linestart")
+                    and b.compare(selected, "<", last)
+                    and core_tables.is_table_row(
+                        b.get(last, f"{last} lineend"))):
+                b.tag_remove("sel", f"{last} -1c", last)
+                if not b.tag_ranges("sel"):
+                    # Only the break was selected: paste where it stood.
+                    b.mark_set("insert", f"{last} -1c")
+                    selected = None
+        except tk.TclError:
+            selected = None
+        try:
+            here = b.get(f"{selected or 'insert'} linestart",
+                         f"{selected or 'insert'} lineend")
+            # Over a selection, the paste lands on what is left of its
+            # lines once the selection is gone. Read off the first line
+            # alone, Ctrl+A in a note that starts with a table read as
+            # "inside a table", and the cells went in as raw tabs.
+            remains = (here if selected is None else
+                       b.get("sel.first linestart", "sel.first")
+                       + b.get("sel.last", "sel.last lineend"))
         except tk.TclError:
             return False
-        if core_tables.is_table_row(here):
+        if (core_tables.is_table_row(here)
+                and core_tables.is_table_row(remains)):
             # Inside a table, pasting cells is the grid's business (the
             # cell-selection branch above); don't nest pipes into pipes.
             return False
         rows = [line.split("\t") for line in raw.strip("\n").split("\n")]
         ncols = max(len(row) for row in rows)
         rows = [row + [""] * (ncols - len(row)) for row in rows]
-        aligns = [[core_tables.ALIGN_LEFT] * ncols for _ in rows]
-        lines = core_tables.format_table(rows, aligns)
         # Our own copy remembers the source columns' set widths -- a
         # duplicated table comes back at the SAME widths, not shrunk
         # to the default. Text from elsewhere gets the plain rule.
@@ -5913,17 +7159,38 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             while len(clip_widths) < ncols:
                 clip_widths.append({"width": None, "align": None,
                                     "hidden": False})
-        if clip_widths:
-            sep = core_tables.CELL + core_tables.CELL.join(
-                " " + cell + " "
-                for cell in core_tables.make_separator(clip_widths)
-            ) + core_tables.CELL
-        else:
-            sep = ("|" + "|".join([" --- "] * ncols) + "|")
-        lines = [lines[0], sep] + lines[1:]
+        # The separator is laid out with the rows, as the tidy lays it out
+        # (_align_table_block): built narrower, it was padded by the tidy --
+        # at the key's release, or once the caret had been in the table and
+        # left -- a recorded edit of its own, and the first Ctrl+Z after
+        # the paste changed nothing on screen. Its dashes are its own all
+        # the same: they carry each column's set width, and the padding
+        # beside them is spaces.
+        separator = (core_tables.make_separator(clip_widths) if clip_widths
+                     else ["---"] * ncols)
+        rows = [rows[0], separator] + rows[1:]
+        aligns = [[core_tables.ALIGN_LEFT] * ncols for _ in rows]
+        lines = core_tables.format_table(rows, aligns)
         clip_place = None
         if raw == getattr(self, "_grid_cell_clip_text", None):
             clip_place = getattr(self, "_grid_cell_clip_place", None)
+        # The grids come down before anything is written, selection or not:
+        # torn down by the drawing at the end, inside this unit, they split
+        # it -- the paste one step, where the windows sit another on top --
+        # and the first Ctrl+Z changed nothing on screen.
+        self._teardown_table_grids()
+        if selected is not None:
+            # Pasted over a selection, the table takes its place, as every
+            # other paste here does: the selected text used to stay, the
+            # table landing under its line. Within this undo unit, so one
+            # Ctrl+Z brings the selection back with its styles.
+            try:
+                start = b.index("sel.first")
+                b.delete("sel.first", "sel.last")
+                b.mark_set("insert", start)
+                here = b.get("insert linestart", "insert lineend")
+            except tk.TclError:
+                pass
         prefix = "" if not here.strip() else "\n"
         if not here.strip():
             # Pasting ONTO an empty line directly under a table would
@@ -5942,17 +7209,28 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             first_new = ins_line + (1 if prefix else 0)
             for n in range(first_new, first_new + len(lines)):
                 b.tag_add(f"align_{clip_place}", f"{n}.0", f"{n}.end")
+        kept = self._tidy_table_paste_left()
         self._body_follow_caret = True
         self._resync_list_tags()
-        self._render_table_grids()
+        self._render_table_grids(keep_typed=kept)
         self._schedule_autosave()
+        # The paste moved the caret and the lines under it; the release of
+        # its own key is not the person leaving a table (see
+        # _body_undo_redo), and read as one it tidied a table as a recorded
+        # edit outside this unit. A row it left the caret on stays the
+        # caret's line (_tidy_table_paste_left).
+        self._last_caret_line = kept
         return True
 
+    @_undo_atom
     def _paste_plain(self, event=None):
         """Paste the clipboard's text with none of its formatting.
 
         The escape hatch for pasting from a web page into a note without
-        dragging its styling along.
+        dragging its styling along. One undo unit, as every other paste
+        is: it deletes the selection by hand, and outside a unit Ctrl+Z
+        took the paste back in two steps and returned the selection with
+        none of the formatting it had.
         """
         text = clipboard.read_text()
         if text is None:
@@ -5967,11 +7245,16 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # A PDF's line breaks are where its column ended, not where the
         # writer did. Rejoined before the markers are stripped, because that
         # decision reads the line structure and refuses to touch a list.
+        self._paste_from_table = self._note_raw_table_at_caret()
         self._replace_selection_with(strip_list_markers(reflow_wrapped(text)))
+        kept = self._tidy_table_paste_left()
         self._body_follow_caret = True
         self.after_idle(self._resync_list_tags)
-        self.after_idle(self._render_table_grids)
+        self.after_idle(lambda: self._render_table_grids(keep_typed=kept))
         self._schedule_autosave()
+        # Not the person leaving a table, either (see _on_body_paste); a row
+        # it left the caret on stays the caret's line.
+        self._last_caret_line = kept
         return "break"
 
     def _replace_selection_with(self, text):
@@ -5981,7 +7264,42 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self.body_text.delete("sel.first", "sel.last")
         except tk.TclError:
             pass
-        self.body_text.insert("insert", text)
+        lead, trail = self._rows_gap(text)
+        at = self.body_text.index("insert")
+        self.body_text.insert("insert", lead + text + trail)
+        self._take_run_between(at, self.body_text.index("insert"))
+
+    def _rows_gap(self, text):
+        """What *text*, about to go in at the caret, needs before and after
+        it so table rows at its edges stay a table of their own: lines of
+        their own, and a blank line between them and a table on the next or
+        the previous line.
+
+        Pasted onto the line above a drawn table, or the empty line between,
+        rows joined that table -- its header read as a data row and its
+        separator as a row of dashes, the grid one misshapen table. Pasted
+        after a caption (Ctrl+Shift+V, or a table from another program),
+        the first row was glued onto the caption's line and stopped being a
+        row. Only Ctrl+V's own route and the spreadsheet paste kept either
+        rule; every paste route asks here now."""
+        b = self.body_text
+        lines = text.split("\n")
+        lead = trail = ""
+        try:
+            before = b.get("insert linestart", "insert")
+            after = b.get("insert", "insert lineend")
+            here = int(b.index("insert").split(".")[0])
+            above = b.get(f"{here - 1}.0", f"{here - 1}.end") if here > 1 else ""
+            below = b.get(f"{here + 1}.0", f"{here + 1}.end")
+        except (tk.TclError, ValueError):
+            return lead, trail
+        if core_tables.is_table_row(lines[-1]):
+            if after.strip() or core_tables.is_table_row(below):
+                trail = "\n"
+        if core_tables.is_table_row(lines[0]):
+            if before.strip() or core_tables.is_table_row(above):
+                lead = "\n"
+        return lead, trail
 
     @_undo_atom
     def _paste_formatted(self):
@@ -5989,7 +7307,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         markup = clipboard.read_html()
         if not markup:
             return False
-        text, spans, paragraphs = html_to_note(markup)
+        cut = {}
+        text, spans, paragraphs = html_to_note(markup, report=cut)
         if not text:
             return False
         # Only when the source offered no formatting of its own, which is the
@@ -6001,16 +7320,27 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if not spans and not paragraphs:
             text = reflow_wrapped(text)
 
+        # The grids down before anything is written (see
+        # _paste_tsv_as_table): the drawing at the end of this unit would
+        # split it, and the first Ctrl+Z would change nothing.
+        self._teardown_table_grids()
         try:
             self.body_text.delete("sel.first", "sel.last")
         except tk.TclError:
             pass
+        # A blank line between table rows it brings and a table it would
+        # touch (_rows_gap) -- the one before goes in first, so the offsets
+        # below still count from where the text itself begins.
+        lead, trail = self._rows_gap(text)
+        if lead:
+            self.body_text.insert("insert", lead)
         # Where it lands, before inserting: everything after this point
         # shifts, and Tk moves its own tags along with the text, so only
         # what arrives needs placing.
         at = self._char_offset(self.body_text, self.body_text.index("insert"))
         line = int(self.body_text.index("insert").split(".")[0]) - 1
-        self.body_text.insert("insert", text)
+        pasted_from = self.body_text.index("insert")
+        self.body_text.insert("insert", text + trail)
 
         self._apply_formatting(
             self.body_text,
@@ -6019,19 +7349,52 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self.body_text,
             [dict(p, line=p["line"] + line) for p in paragraphs],
             scrub_table_align=True)
+        # Pasted into a run with a size or a font, the text took the run's
+        # composite tag, weight and all, which outranks the bold it brought;
+        # pasted at a weight's edge inside one, it took none.
+        here = self.body_text.index("insert")
+        if not self._take_run_between(pasted_from, here):
+            self._fit_font_tags(pasted_from, here)
         # A pasted list starts its own numbering at one; renumbering makes
         # it continue whatever it was dropped into.
         self._renumber_lists()
+        kept = self._tidy_table_paste_left()
         # A whole-body pass, which this is the case the cheap per-line one
         # is not for: a paste can bring in many lines at once, and the tags
         # derived from what those lines say -- a list's margin, a table's
         # monospace face -- are not carried by the text itself.
         self._body_follow_caret = True
         self._resync_list_tags()
-        self._render_table_grids()
+        self._render_table_grids(keep_typed=kept)
         self._refresh_format_buttons()
         self._schedule_autosave()
+        self._say_if_paste_was_cut(cut, in_body=True)
         return True
+
+    def _say_if_paste_was_cut(self, cut, in_body=False):
+        """Say what a paste had to leave out, when its caps cut it
+        (html_to_note's report): the rest of a long article, or of a big
+        spreadsheet's table, used to be simply missing, without a word.
+
+        Said once the paste's own work is done -- after idle, so a question
+        waiting for an answer never sits inside the paste's undo unit, where
+        everything else waiting (an autosave) would run in its middle.
+        *in_body*: the paste came into the note's body, which keeps the
+        formatting -- so formatting cut short is news there, and nowhere
+        else -- and where Ctrl+Shift+V pastes all of the text, plain."""
+        if cut.get("text_cut"):
+            msg = (f"Only the first {MAX_PASTE_CHARS:,} characters of what you "
+                   "copied were pasted; the rest was left out.")
+            if in_body:
+                msg += ("\n\nTo paste all of it, press Ctrl+Z, then "
+                        "Ctrl+Shift+V: that pastes everything, without its "
+                        "formatting.")
+        elif in_body and cut.get("styles_cut"):
+            msg = ("All of the text was pasted, but its formatting stops after "
+                   f"the first {MAX_PASTE_SPANS:,} styled pieces.")
+        else:
+            return
+        self.after_idle(lambda: self.show_info("Pasted in part", msg))
 
     def _copy_formatted(self, event=None):
         """Copy the selection so it arrives elsewhere still formatted.
@@ -6111,8 +7474,19 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     add="+")
         widget.bind("<Leave>", lambda e: self._hide_tooltip(), add="+")
         # Clicking should get on with the job, not leave a label hanging over
-        # the result of it.
-        widget.bind("<Button-1>", lambda e: self._hide_tooltip(), add="+")
+        # the result of it. Through ONE command registered on the window,
+        # not a lambda of the widget's own: Tk expands every script bound to
+        # a click before running any, and a click whose own handler destroys
+        # the widget -- a bin that redraws its row -- deleted this one while
+        # it was still queued. "invalid command name", in silence, on every
+        # such click (the popups' bind lines had the same lesson).
+        hide = getattr(self, "_hide_tooltip_command", None)
+        if hide is None:
+            hide = self._hide_tooltip_command = self.register(self._hide_tooltip)
+        # The "+" is spelled into the script: given a string, tkinter's
+        # bind ignores add="+" and REPLACES the widget's other click
+        # handlers -- measured, it took every icon's own action with it.
+        widget.bind("<Button-1>", "+" + hide)
 
     def _schedule_tooltip(self, widget, title, detail):
         """Wait a moment before showing, so sweeping across the toolbar on
@@ -6559,8 +7933,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                                 bg=inset_surface(self.colors))
                 cell.grid(row=r, column=c, padx=1, pady=1)
                 cell.bind("<Enter>", lambda e, r=r, c=c: highlight(r, c))
+                # "break": this destroys the popup the cell is in (see
+                # _show_inline_rename).
                 cell.bind("<Button-1>", lambda e, r=r, c=c: (
-                    self._dismiss_mini_popup(), self._insert_table(r, c)))
+                    self._dismiss_mini_popup(), self._insert_table(r, c),
+                    "break")[2])
                 cells[(r, c)] = cell
         grid.bind("<Leave>", leave)
 
@@ -6779,10 +8156,17 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
     def _on_body_delete_key(self, event=None):
         """Delete (and Backspace) with cells selected clears them, the way
         a spreadsheet does -- the table's text is hidden, so Tk's own
-        deletion has nothing sensible to do there anyway."""
+        deletion has nothing sensible to do there anyway.
+
+        Without cells selected, Delete at the end of the line above a
+        drawn table does nothing (see _deletion_joins_table). BackSpace
+        comes through here for the cells only and asks about its own
+        direction in _on_body_backspace."""
         sel = getattr(self, "_grid_sel", None)
         if sel is not None and self._grid_first_line(sel["info"]) is not None:
             self._grid_fill_selection(sel, "")
+            return "break"
+        if self._deletion_joins_table(True):
             return "break"
         return None
 
@@ -6792,10 +8176,14 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         Otherwise the only way out of a list is to delete the bullet one
         character at a time, which reads as the app fighting you.
         """
-        cleared = self._on_body_delete_key(event)
-        if cleared:
-            return cleared
+        sel = getattr(self, "_grid_sel", None)
+        if sel is not None and self._grid_first_line(sel["info"]) is not None:
+            return self._on_body_delete_key(event)
         self._caret_out_of_hidden()
+        # At the start of the line under a drawn table, the character
+        # before the caret is the table's own line break: nothing to take.
+        if self._deletion_joins_table(False):
+            return "break"
         index = self.body_text.index("insert")
         line_no, col = (int(p) for p in index.split("."))
         kind = self._list_kind_of(self.body_text, line_no)
@@ -6978,16 +8366,124 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         text actually looks like.
         """
         length = len(text_widget.get("1.0", "end-1c"))
-        for start, end, is_bold, is_italic, size, family in resolve_font_runs(
-                spans, length):
+        runs = resolve_font_runs(spans, length)
+        where = self._offset_indices(
+            text_widget, [offset for run in runs for offset in run[:2]])
+        for start, end, is_bold, is_italic, size, family in runs:
             tag = self._ensure_font_tag(text_widget, is_bold, is_italic,
                                         size, family)
             if not tag:
                 continue
             try:
-                text_widget.tag_add(tag, f"1.0+{start}c", f"1.0+{end}c")
+                text_widget.tag_add(tag, where[start], where[end])
             except tk.TclError:
                 pass
+
+    def _weigh_font_tags(self, start, end, is_bold, is_italic):
+        """Ctrl+B or Ctrl+I over a selection left every character of it the
+        same weight and slant: give each piece of a composite font tag inside
+        it the composite with its own size and family and that weight.
+
+        A size or a font is drawn by one tag with the weight and slant folded
+        in (_ensure_font_tag), configured after bold and italic so that it
+        wins the font. Bold or italic changed under it, the plain tag alone,
+        was saved and lit the toolbar and was drawn as before until the note
+        was opened again. Laid again across the whole note instead, one
+        word's Ctrl+B in a note set in a font took 250 ms at 8,000 styled
+        words; this costs what the selection holds."""
+        b = self.body_text
+        for t in [t for t in b.tag_names() if parse_font_tag(t)]:
+            _bold, _italic, size, family = parse_font_tag(t)
+            want = self._ensure_font_tag(b, is_bold, is_italic, size, family)
+            if want == t:
+                continue
+            pieces = []
+            covering = b.tag_prevrange(t, start)
+            if covering and b.compare(covering[1], ">", start):
+                pieces.append((start, covering[1]))
+            at = start
+            while True:
+                found = b.tag_nextrange(t, at, end)
+                if not found:
+                    break
+                pieces.append(found)
+                at = found[1]
+            for lo, hi in pieces:
+                if b.compare(hi, ">", end):
+                    hi = end
+                b.tag_remove(t, lo, hi)
+                b.tag_add(want, lo, hi)
+
+    def _fit_font_tags(self, start, end, like=None, size=None, family=None):
+        """Give each of the characters from *start* to *end* -- just typed
+        or pasted -- the composite font tag its own bold and italic
+        call for, with the size and family of the composite it wears, or
+        else of the one at *like*: the character it was typed onto. A *size*
+        or *family* given -- one picked before typing -- takes the place of
+        that property alone.
+
+        Tk passes a tag on only to text typed between two characters that
+        both wear it, and a composite carries a weight: a letter typed with
+        Bold on inside a bigger heading was drawn in the heading's plain
+        weight, one glued onto a bold word at a heading's end lost the
+        heading's size, and a size picked before typing inside a run set in
+        Georgia took Georgia away with the composite it replaced -- each
+        saved that way.
+
+        Bold and italic laid over the same letters as two plain tags become
+        bold_italic here too: the two both set the font and do not compose,
+        and italic -- made after bold -- won. Letters typed after a bold word
+        with Italic turned on, or bold pasted inside an italic word, were
+        drawn italic alone while the toolbar lit both.
+
+        By stretches: wherever none of the tags that decide the font starts
+        or stops, every character wears the same ones. Fitted a character at
+        a time, a long paste into a note set in a font cost two to three
+        times what laying the whole note again had."""
+        b = self.body_text
+        source = None
+        if like is not None:
+            source = next((parse_font_tag(t) for t in b.tag_names(like)
+                           if parse_font_tag(t)), None)
+        start, end = b.index(start), b.index(end)
+        if not b.compare(start, "<", end):
+            return
+        # In the order the text holds them, so the stretches come out in it.
+        points = [start]
+        for _key, tag, index in b.dump(start, end, tag=True):
+            if ((tag in self._FONT_STYLES or parse_font_tag(tag))
+                    and index != points[-1]):
+                points.append(index)
+        if points[-1] != end:
+            points.append(end)
+        for lo, hi in zip(points, points[1:]):
+            names = b.tag_names(lo)
+            plain = [t for t in names if t in self._FONT_STYLES]
+            is_bold = "bold" in plain or "bold_italic" in plain
+            is_italic = "italic" in plain or "bold_italic" in plain
+            one = self._font_tag_for(is_bold, is_italic)
+            if plain != ([one] if one else []):
+                for t in plain:
+                    if t != one:
+                        b.tag_remove(t, lo, hi)
+                if one:
+                    b.tag_add(one, lo, hi)
+            worn = [t for t in names if parse_font_tag(t)]
+            # The last wears the highest priority: the one Tk draws.
+            found = parse_font_tag(worn[-1]) if worn else source
+            if found is None and (size is not None or family is not None):
+                found = (False, False, None, None)
+            if found is None:
+                continue
+            tag = self._ensure_font_tag(
+                b, is_bold, is_italic,
+                size if size is not None else found[2],
+                family if family is not None else found[3])
+            for t in worn:
+                if t != tag:
+                    b.tag_remove(t, lo, hi)
+            if tag and parse_font_tag(tag):
+                b.tag_add(tag, lo, hi)
 
     @staticmethod
     def _char_offsets(text_widget, indices):
@@ -7025,6 +8521,51 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             offsets[index] = running
             previous = index
         return offsets
+
+    @staticmethod
+    def _offset_indices(text_widget, offsets):
+        """The way back from :meth:`_char_offsets`: {offset: Tk index} for
+        many offsets into the text as it is saved.
+
+        One walk through the text for all of them. "1.0+Nc" for every span
+        end walked the note from its top each time: Enter in a numbered
+        list of a note of 8,000 styled words froze the editor for 3.6 s
+        (the renumber lays every span again). Sorted, each offset is reached
+        from the one before it, and Tk's "+Nc" adds up, so with no drawn
+        table in the text every index is the one "1.0+Nc" gave.
+
+        And a saved offset never counts a drawn table's window character
+        (len(get()) skips it) while "+Nc" does: a font size set on a word
+        under a drawn table landed one character early per table above it,
+        and every later size or font moved the earlier ones again -- saved
+        that way. So the windows a hop passes are hopped again. Where
+        windows stand right at an offset, its index is before them: a range
+        ending there does not take them in, and one starting there reads
+        back at the same offset either way.
+        """
+        wanted = sorted(set(offsets))
+        if not wanted:
+            return {}
+
+        def position(index):
+            line, _, column = str(index).partition(".")
+            return int(line), int(column)
+
+        windows = sorted(position(index) for _kind, _name, index
+                         in text_widget.dump("1.0", "end", window=True,
+                                             image=True))
+        out, here, at = {}, "1.0", 0
+        for offset in wanted:
+            need = offset - at
+            while need > 0:
+                there = text_widget.index(f"{here}+{need}c")
+                # Each window passed was counted as a character.
+                need = (bisect.bisect_left(windows, position(there))
+                        - bisect.bisect_left(windows, position(here)))
+                here = there
+            at = offset
+            out[offset] = here
+        return out
 
     def _extract_formatting(self, text_widget):
         """Read the widget's current tags back out as a plain span list,
@@ -7102,16 +8643,19 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
     def _apply_formatting(self, text_widget, spans):
         """Re-apply a saved span list as live Tkinter tags, for loading."""
-        for span in normalize_formatting(spans):
-            # Size and family are not applied one span at a time: they have
-            # to be merged with whatever bold/italic covers the same
-            # characters into a single tag, which _apply_font_runs does once
-            # the whole list is known.
-            if span["style"] in FONT_VALUE_STYLES:
-                continue
+        # Size and family are not applied one span at a time: they have to
+        # be merged with whatever bold/italic covers the same characters
+        # into a single tag, which _apply_font_runs does once the whole list
+        # is known.
+        laid = [span for span in normalize_formatting(spans)
+                if span["style"] not in FONT_VALUE_STYLES]
+        where = self._offset_indices(
+            text_widget,
+            [offset for span in laid for offset in (span["start"], span["end"])])
+        for span in laid:
             try:
-                start_idx = text_widget.index(f"1.0+{span['start']}c")
-                end_idx = text_widget.index(f"1.0+{span['end']}c")
+                start_idx = where[span["start"]]
+                end_idx = where[span["end"]]
                 if span["style"] in COLOR_FORMAT_STYLES:
                     tag = self._ensure_color_tag(text_widget, span["style"], span["value"])
                 else:
@@ -7155,6 +8699,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         """Black or near-white, whichever reads better against hex_color."""
         return core_contrasting_fg(hex_color)
 
+    @_undo_atom(tags_only=True)
     def _toggle_body_style(self, style):
         """Bold/Italic/Underline/Strikethrough toolbar + right-click handler.
 
@@ -7217,6 +8762,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             tag = self._font_tag_for(is_bold, is_italic)
             if tag:
                 self.body_text.tag_add(tag, start, end)
+            # Under a size or a font, what is drawn is the composite tag.
+            self._weigh_font_tags(start, end, is_bold, is_italic)
         else:
             already_on = self._selection_has_style(self.body_text, {style}, start, end)
             if already_on:
@@ -7227,6 +8774,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._refresh_format_buttons()
         self._schedule_autosave()
 
+    @_undo_atom(tags_only=True)
     def _apply_body_color(self, kind, hex_color):
         """Text-color/highlight-color picker handler. kind is "text_color"
         or "highlight"; hex_color is the chosen color, or None to clear it.
@@ -7285,6 +8833,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._refresh_format_buttons()
         self._schedule_autosave()
 
+    @_undo_atom(tags_only=True)
     def _apply_body_font(self, style, value):
         """Font size / family picker handler.
 
@@ -7479,19 +9028,41 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         start_idx = self.body_text.index(self._PENDING_STYLE_ANCHOR)
         end_idx = self.body_text.index(tk.INSERT)
         if self.body_text.compare(start_idx, "<", end_idx):
+            # The typing settled first, as typing is (_spread_typed_run):
+            # glued onto a styled character, or between two pieces of one
+            # run, the letters wear the run's composite before a size or font
+            # picked replaces its one property of it. Settled after, letters
+            # that wore no composite yet -- at a bold word's edge, at a run's
+            # end, after a second pick -- took the base's font (or size) with
+            # the pick, and the run's never arrived.
+            self._spread_typed_run()
             is_bold = "bold" in self._pending_styles
             is_italic = "italic" in self._pending_styles
             tag = self._font_tag_for(is_bold, is_italic)
             if tag:
                 self.body_text.tag_add(tag, start_idx, end_idx)
-            if self._pending_font_size or self._pending_font_family:
-                # The plain tag above stays as the marker the toolbar reads;
-                # this one goes over it and decides how the text looks.
-                self.body_text.tag_add(
-                    self._ensure_font_tag(
-                        self.body_text, is_bold, is_italic,
-                        self._pending_font_size, self._pending_font_family),
-                    start_idx, end_idx)
+            # The plain tag above stays as the marker the toolbar reads; the
+            # composite decides how the text looks. Typed inside a run with a
+            # size or a font, the letters wear the run's composite, with its
+            # weight: refitted to theirs -- and a size or a font picked
+            # before typing takes the place of that one property, the other
+            # kept from the run. Laid beside the run's instead, Tk drew
+            # whichever composite was made later; laid in its place, the
+            # run's font went with it.
+            # A letter after the first of a run typed with a size or font
+            # picked inherits nothing (Tk passes on what BOTH sides wear,
+            # and the first letter's composite is not the run's): it goes
+            # on from the letter typed before it with the same pick.
+            size, family = self._pending_font_size, self._pending_font_family
+            before = self.body_text.index(f"{start_idx} -1c")
+            went = next((parse_font_tag(t)
+                         for t in self.body_text.tag_names(before)
+                         if parse_font_tag(t)), None)
+            same_pick = went is not None and (
+                (size and went[2] == size) or (family and went[3] == family))
+            self._fit_font_tags(start_idx, end_idx,
+                                like=before if same_pick else None,
+                                size=size, family=family)
             if "underline" in self._pending_styles:
                 self.body_text.tag_add("underline", start_idx, end_idx)
             if "strike" in self._pending_styles:
@@ -7731,10 +9302,26 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
     def _show_emoji_picker(self, text_widget, anchor=None):
         """Small themed popup for inserting an emoji at the current cursor
         position of whichever field opened it (title, body, comments, etc.).
-        Anchored to that field, not a separate window."""
-        self._dismiss_mini_popup()
+        Anchored to that field, not a separate window.
+
+        A field that lives INSIDE a popup -- the template editor, a rename
+        box -- gets the picker as a popup within that one, the way a
+        dropdown in the template editor does. Closing the host first, as
+        every other opener does, destroyed it and everything typed in it,
+        and left the picker at the screen's corner, aimed at a field that
+        no longer existed."""
+        host = getattr(self, "_mini_popup", None)
+        nested = host is not None and self._is_inside_popup(text_widget, host)
+        if nested:
+            self._close_nested_popup()
+        elif not self._dismiss_mini_popup_asking():
+            return
         pop = tk.Toplevel(self)
-        self._mini_popup = pop
+        if nested:
+            # Remembered where Escape and the host's own closing look.
+            self._nested_dropdown = pop
+        else:
+            self._mini_popup = pop
         pop.wm_overrideredirect(True)
         pop.configure(bg=self.colors["accent"])
         outer = tk.Frame(pop, bg=self.colors["card"], padx=8, pady=8)
@@ -7744,9 +9331,14 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         head.pack(fill="x", pady=(0, 6))
         tk.Label(head, text="Insert emoji", bg=self.colors["card"],
                  fg=self.colors["subtext"], font=("Segoe UI", 8, "bold")).pack(side="left")
-        tk.Button(head, text="✕", command=self._dismiss_mini_popup, relief="flat",
+        tk.Button(head, text="✕",
+                  command=pop.destroy if nested else self._dismiss_mini_popup,
+                  relief="flat",
                   cursor="hand2", bg=self.colors["card"], fg=self.colors["subtext"],
                   font=("Segoe UI", 9, "bold"), bd=0).pack(side="right")
+        if nested:
+            # Its own Escape closes just it, as a nested dropdown's does.
+            pop.bind("<Escape>", lambda e: pop.destroy())
 
         wrap = tk.Frame(outer, bg=self.colors["card"], height=220, width=260)
         wrap.pack()
@@ -7774,7 +9366,13 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 if not has_focus:
                     text_widget.focus_set()
                 if isinstance(text_widget, tk.Text):
+                    at = text_widget.index(tk.INSERT)
                     text_widget.insert(tk.INSERT, emoji)
+                    if text_widget is getattr(self, "body_text", None):
+                        # Between two pieces of one run, the run's size and
+                        # font, as typed text takes them.
+                        self._take_run_between(
+                            at, text_widget.index(tk.INSERT))
                 else:
                     pos = text_widget.index(tk.INSERT)
                     text_widget.insert(pos, emoji)
@@ -7788,7 +9386,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 # Best-effort: nudge autosave if this field participates in it.
                 # skip_word_count avoids re-reading the whole body on every
                 # single click — that's what made rapid emoji-clicking laggy.
-                self._schedule_autosave(skip_word_count=True)
+                # A popup's field never does: its popup saves it.
+                if not nested:
+                    self._schedule_autosave(skip_word_count=True)
             except (tk.TclError, KeyError):
                 pass
             # Left open on purpose — inserting a few emojis in a row is common.
@@ -7873,13 +9473,144 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 self.share_panel.pack_forget()
             self.import_panel.pack(fill="x", padx=8, pady=(0, 8))
             self.import_box.focus()
+        self._fit_sidebar_panel()
+
+    # How far an open panel's scrolling middle gives when the window is
+    # short: (natural, comfortable, least) -- pixels of Share's list of
+    # notes, lines of Import's paste box.
+    SIDEBAR_PANEL_BODY = {"share": (130, 56, 28), "import": (4, 2, 1)}
+
+    def _fit_sidebar_panel(self, _event=None):
+        """Keep the open panel's own buttons -- and a generated code -- on
+        screen in a short window.
+
+        The bottom zone is packed before the note list, so the list gives
+        up its height first. At the smallest window that is not enough:
+        the sidebar's fixed parts leave the panel about a hundred pixels,
+        Import needs 157 and Share with its code 329, and pack took the
+        difference off the bottom of the zone -- the panel's own buttons,
+        then the code itself, so "Generate code" seemed to do nothing.
+
+        Only when the room runs out, then: the panel's scrolling middle
+        gives up rows down to a comfortable few, the zone's other buttons
+        step aside while the panel is open -- Settings, then the other
+        panel's button, then New Note -- the middle goes down to one row,
+        and last the panel's own button steps aside too (its Close still
+        closes it). It is worked out from the sizes things ask for, not from
+        what is drawn, and everything comes back when the panel closes or
+        the window grows. Measured: 640x600 and 1366x690 both hold the
+        panels whole; at 1150x860 nothing changes at all."""
+        zone = getattr(self, "_sidebar_bottom", None)
+        buttons = getattr(self, "_sidebar_zone_buttons", None)
+        if zone is None or not buttons or getattr(self, "_fitting_sidebar", False):
+            return
+        if self._is_placed(self.share_panel):
+            panel, which = self.share_panel, "share"
+        elif self._is_placed(self.import_panel):
+            panel, which = self.import_panel, "import"
+        else:
+            panel, which = None, None
+        wrap = getattr(self, "_share_list_wrap", None)
+        try:
+            natural_state = (
+                all(self._is_placed(b) for b, _kw in buttons)
+                and int(self.import_box.cget("height")) == self.SIDEBAR_PANEL_BODY["import"][0]
+                and (wrap is None or not wrap.winfo_exists()
+                     or int(wrap.cget("height")) == self.SIDEBAR_PANEL_BODY["share"][0]))
+        except tk.TclError:
+            return
+        if panel is None and natural_state:
+            return                      # the everyday case: nothing to do
+        self._fitting_sidebar = True
+        try:
+            self._fit_sidebar_panel_now(zone, buttons, panel, which, wrap)
+        except tk.TclError:
+            pass
+        finally:
+            self._fitting_sidebar = False
+
+    def _fit_sidebar_panel_now(self, zone, buttons, panel, which, wrap):
+        def height(w, kw):
+            pady = kw.get("pady", 0)
+            pad = sum(pady) if isinstance(pady, (tuple, list)) else 2 * int(pady)
+            return w.winfo_reqheight() + 2 * int(kw.get("ipady", 0)) + pad
+
+        hidden = set()
+        body = {"share": self.SIDEBAR_PANEL_BODY["share"][0],
+                "import": self.SIDEBAR_PANEL_BODY["import"][0]}
+        room = self.sidebar.winfo_height()
+        if panel is not None and room > 1:
+            self.update_idletasks()
+            unit = (1 if which == "share" else tkfont.Font(
+                font=self.import_box.cget("font")).metrics("linespace"))
+            natural, comfortable, least = self.SIDEBAR_PANEL_BODY[which]
+            now = int((wrap if which == "share" else self.import_box).cget("height"))
+            list_host = self.canvas.master
+            top = sum(height(s, s.pack_info()) for s in self.sidebar.pack_slaves()
+                      if s is not zone and s is not list_host)
+            want = (sum(height(b, kw) for b, kw in buttons)
+                    + panel.winfo_reqheight() + (natural - now) * unit
+                    + height(panel, panel.pack_info()) - panel.winfo_reqheight())
+            over = top + want - room
+
+            def give(to):
+                nonlocal over
+                units = min(max(0, -(-over // unit)), body[which] - to)
+                body[which] -= units
+                over -= units * unit
+
+            if over > 0:
+                give(comfortable)
+            new_b, import_b, share_b, settings_b = (b for b, _kw in buttons)
+            own = import_b if which == "import" else share_b
+            other = share_b if which == "import" else import_b
+            for b in (settings_b, other, new_b):
+                if over <= 0:
+                    break
+                hidden.add(b)
+                over -= height(b, dict(buttons)[b])
+            if over > 0:
+                give(least)
+            if over > 0:
+                # The very last resort: the panel's own button. Its Close
+                # still closes it (measured: the selection bar open above
+                # Share with a code, at 1366x690 in the Linux fonts).
+                hidden.add(own)
+                over -= height(own, dict(buttons)[own])
+        # Apply only what changes, the zone's order kept: a button coming
+        # back goes in front of the next one still packed.
+        order = [b for b, _kw in buttons] + ([panel] if panel is not None else [])
+        for i, (b, kw) in enumerate(buttons):
+            if b in hidden:
+                if self._is_placed(b):
+                    b.pack_forget()
+            elif not self._is_placed(b):
+                nxt = next((w for w in order[i + 1:] if self._is_placed(w)), None)
+                if nxt is not None:
+                    b.pack(before=nxt, **kw)
+                else:
+                    b.pack(**kw)
+        if int(self.import_box.cget("height")) != body["import"]:
+            self.import_box.configure(height=body["import"])
+        if wrap is not None and wrap.winfo_exists() \
+                and int(wrap.cget("height")) != body["share"]:
+            wrap.configure(height=body["share"])
 
     def _take_known_notes(self, incoming, source):
-        """Ask once about the notes in a batch we already have, then act.
+        """Ask once about the notes in a batch we already have.
 
-        Returns ``(proceed, remaining)``: *remaining* is what the caller
-        should go on to import as new notes, and *proceed* is False when
-        the user cancelled.
+        Returns ``(proceed, remaining, updates, unchanged)``: *remaining*
+        is what the caller should go on to import as new notes, *proceed*
+        is False when the user cancelled, *updates* is what "Update" agreed
+        to, and *unchanged* counts the notes that arrived exactly as they
+        are here and need nothing at all.
+
+        The updates are NOT applied here. The caller applies them with
+        _apply_known_updates once the last question of its import is
+        answered: applied here, a Cancel on the question that follows (the
+        duplicate check) left the notes already replaced in memory, with
+        nothing on screen saying so, and the next unrelated save wrote them
+        to disk.
 
         Both bulk routes -- a share code carrying several notes and a
         restored backup -- come through here, so the two cannot drift
@@ -7893,8 +9624,15 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         it is attrition.
         """
         known, fresh = split_by_identity(self.notes, incoming)
+        # A note that arrives exactly as it is here needs nothing: not an
+        # update (see shared_update_changes for what that used to cost),
+        # and not a second copy either.
+        differing = [(mine, theirs) for mine, theirs in known
+                     if self._known_note_differs(mine, theirs, source)]
+        unchanged = len(known) - len(differing)
+        known = differing
         if not known:
-            return True, incoming
+            return True, fresh, [], unchanged
         count = len(known)
         plural = "" if count == 1 else "s"
         if fresh:
@@ -7914,6 +9652,16 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 f"undone with \u201c\u21a9 Restore previous\u201d.\n"
                 f"Adding leaves both versions, so you can compare them."
             )
+        # "Edited elsewhere" reads as "newer", and a backup from last month
+        # is edited elsewhere too. Updating from it trades this device's
+        # newer text for older text, so the question says so. (A backup's
+        # notes carry when they were last saved; a share code does not.)
+        older = 0 if source != "backup" else sum(
+            1 for mine, theirs in known
+            if str(theirs.get("updated") or "") < str(mine.get("updated") or ""))
+        if older:
+            who = "It is" if count == 1 else f"{older} of them are"
+            message += f"\n\n{who} OLDER than the copy on this device."
         choice = self._themed_dialog(
             f"{count} note{plural} you already have",
             message,
@@ -7923,25 +9671,17 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                      (f"Update the {count}", "update")],
         )
         if choice is None or choice == "cancel":
-            return False, []
+            return False, [], [], unchanged
         if choice == "update":
             # Same order as the single-note route, for the same reason:
-            # the editor's unsaved work is saved before it is replaced,
-            # and the editor is then brought onto the new version -- or
-            # its next save puts the old one back. Cancel on the day's
-            # save question cancels the import: going on would replace
-            # the very edit the person just declined to let go of.
-            if self._flush_autosave() is False:
-                return False, []
-            fields = (UPDATABLE_FROM_BACKUP if source == "backup"
-                      else UPDATABLE_FROM_SHARED)
-            for mine, theirs in known:
-                apply_shared_update(mine, theirs, fields)
-                if source == "backup":
-                    self._adopt_backup_attachments(mine, theirs)
-            self._editor_follows_external_change(
-                {n.get("id") for n, _ in known})
-            return True, fresh
+            # the editor's unsaved work is saved before anything replaces
+            # it. Cancel on the day's save question cancels the import:
+            # going on would replace the very edit the person just
+            # declined to let go of.
+            if self._flush_autosave(leaving=self.selected_note_id in {
+                    mine.get("id") for mine, _theirs in known}) is False:
+                return False, [], [], unchanged
+            return True, fresh, known, unchanged
         # "add": the copies go on as new notes, without the identity they
         # arrived with -- two notes wearing one uid is the collision this
         # whole field exists to prevent.
@@ -7950,7 +9690,49 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             copy = dict(theirs)
             copy.pop("uid", None)
             stripped.append(copy)
-        return True, fresh + stripped
+        return True, fresh + stripped, [], unchanged
+
+    def _apply_known_updates(self, updates, source):
+        """Apply what "Update" agreed to in _take_known_notes; returns how
+        many notes changed. The editor is then brought onto the new
+        version of any note it holds -- or its next save puts the old
+        version straight back."""
+        fields = (UPDATABLE_FROM_BACKUP if source == "backup"
+                  else UPDATABLE_FROM_SHARED)
+        for mine, theirs in updates:
+            apply_shared_update(mine, theirs, fields)
+            if source == "backup":
+                self._adopt_backup_attachments(mine, theirs)
+        if updates:
+            self._editor_follows_external_change(
+                {n.get("id") for n, _ in updates})
+        return len(updates)
+
+    def _dup_keys_after(self, updates):
+        """The duplicate-check keys of the notebook as it will be once
+        *updates* (from _take_known_notes) are applied. They are applied
+        only after the duplicate question is answered, but that question
+        is about the notebook the import will leave behind."""
+        replaced = {id(mine) for mine, _ in updates}
+        return ({_dup_key(n) for n in self.notes if id(n) not in replaced}
+                | {_dup_key(normalize_note(theirs)) for _, theirs in updates})
+
+    def _known_note_differs(self, mine, theirs, source):
+        """Whether importing *theirs* over *mine* would change anything: a
+        field the route may update, or -- from a backup, whose files are
+        added and never swapped -- a file this device's copy lacks."""
+        fields = (UPDATABLE_FROM_BACKUP if source == "backup"
+                  else UPDATABLE_FROM_SHARED)
+        if shared_update_changes(mine, theirs, fields):
+            return True
+        return source == "backup" and bool(self._files_to_adopt(mine, theirs))
+
+    def _files_to_adopt(self, mine, theirs):
+        """The attachments a backup's copy of a note has and *mine* lacks."""
+        have = {a.get("stored_as") for a in mine.get("attachments") or []
+                if isinstance(a, dict)}
+        return [att for att in normalize_note(dict(theirs)).get("attachments") or []
+                if att.get("stored_as") and att.get("stored_as") not in have]
 
     def _adopt_backup_attachments(self, mine, theirs):
         """Add the files a backup's copy of a note has and this one lacks.
@@ -7966,15 +9748,14 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         """
         have = {a.get("stored_as") for a in mine.get("attachments") or []
                 if isinstance(a, dict)}
-        incoming = normalize_note(dict(theirs)).get("attachments") or []
         claimed = {a.get("stored_as")
                    for n in (self.notes + self.trash)
                    if isinstance(n, dict) and n is not mine
                    for a in (n.get("attachments") or [])
                    if isinstance(a, dict)}
-        for att in incoming:
+        for att in self._files_to_adopt(mine, theirs):
             name = att.get("stored_as")
-            if not name or name in have:
+            if name in have:
                 continue
             if len(mine.setdefault("attachments", [])) >= MAX_ATTACHMENTS:
                 break
@@ -8029,6 +9810,15 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             # different precisely because it was edited, so it would say
             # "new note" and quietly leave two copies behind.
             mine = find_by_uid(self.notes, normalize_note(incoming).get("uid"))
+            if mine is not None and not self._known_note_differs(
+                    mine, incoming, "code"):
+                # The code holds this note exactly as it is here. "The two
+                # differ" was said without comparing, and Update then
+                # replaced the rescue copy with a duplicate of the note.
+                self.import_status.config(
+                    text="This note is already here, exactly as in the code.",
+                    fg=self.colors["success"])
+                return
             if mine is not None:
                 choice = self._themed_dialog(
                     "Same note, a different version",
@@ -8072,14 +9862,14 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 # save it as a new note.
                 #
                 # Dropping the uid here is belt and braces, and honestly
-                # so: the editor carries fields, not a uid, so the saved
-                # copy is minted a fresh identity whether or not this
-                # line runs — a mutant that removes it survives the whole
-                # suite. It stays because it puts the intent where the
-                # decision is made, instead of resting on a property of a
-                # function three calls away that nobody would think to
-                # preserve. The BULK route two branches down has no such
-                # accident and is covered by a check that does bite.
+                # so: the review editor carries an arriving identity only
+                # when no note here wears it, and this one does, so the
+                # saved copy is minted a fresh identity whether or not
+                # this line runs. It stays because it puts the intent
+                # where the decision is made, instead of resting on a
+                # check two calls away. The BULK route two branches down
+                # has no second guard and is covered by a check that
+                # does bite.
                 incoming = dict(incoming)
                 incoming.pop("uid", None)
                 valid = [incoming]
@@ -8095,27 +9885,34 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 )
                 if choice is None or choice == "cancel":
                     return
-            self.import_box.delete("1.0", "end")
-            self.toggle_import_panel()
             # Passed DOWN rather than set here: _open_imported_note_in_editor
             # ends by setting its own status, so a set_status at this point
             # was overwritten one frame later and the user never saw that
             # their note had been trimmed. Dead code with a ledger row
             # claiming it shipped.
-            self._open_imported_note_in_editor(incoming, trimmed=bool(oversized))
+            if self._open_imported_note_in_editor(
+                    incoming, trimmed=bool(oversized)) is False:
+                # Cancel on a repeating day's save question: that day stays
+                # in the editor, and the code stays in the box to try again.
+                return
+            self.import_box.delete("1.0", "end")
+            self.toggle_import_panel()
             return
         # Identity first: notes this batch says we already have.
-        proceed, valid = self._take_known_notes(valid, "code")
+        proceed, valid, updates, unchanged = self._take_known_notes(valid, "code")
         if not proceed:
             return
         if not valid:
-            self.save_notes()
+            updated = self._apply_known_updates(updates, "code")
+            if updated:
+                self.save_notes()
             self.import_box.delete("1.0", "end")
             self.toggle_import_panel()
             self.refresh_note_list()
             self.render_calendar()
             self.set_status("Notes updated from the code "
-                            "— ↩ Restore previous undoes each one")
+                            "— ↩ Restore previous undoes each one" if updated
+                            else "Everything in this code is already here, unchanged")
             return
         next_id = max([n["id"] for n in self.notes], default=0) + 1
         # Check each incoming note against what's already here — same
@@ -8123,7 +9920,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # everything. Importing the same share code twice (or a code that
         # overlaps with notes you already kept) used to silently create
         # duplicates with no way to tell beforehand.
-        existing_keys = {_dup_key(n) for n in self.notes}
+        existing_keys = self._dup_keys_after(updates)
         fresh = [sn for sn in valid if _dup_key(normalize_note(sn)) not in existing_keys]
         dupe_count = len(valid) - len(fresh)
         to_import = valid
@@ -8151,6 +9948,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 return
             if choice == "skip":
                 to_import = fresh
+        # Every question is answered: only now do the updates happen.
+        updated = self._apply_known_updates(updates, "code")
         added = 0
         for sn in to_import:
             note = normalize_note(sn)
@@ -8165,8 +9964,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         skipped_note = f" ({dupe_count} duplicate(s) skipped)" if dupe_count and to_import is not valid else ""
         oversize_note = (f" — {oversized} oversized note(s) trimmed to safe limits"
                          if oversized else "")
-        self.import_status.config(text=f"Added {added} notes ✓{skipped_note}{oversize_note}",
-                                  fg=self.colors["success"])
+        known_note = ((f", updated {updated}" if updated else "")
+                      + (f", {unchanged} already here" if unchanged else ""))
+        self.import_status.config(
+            text=f"Added {added} notes{known_note} ✓{skipped_note}{oversize_note}",
+            fg=self.colors["success"])
 
     def toggle_share_panel(self):
         if self._is_placed(self.share_panel):
@@ -8176,6 +9978,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 self.import_panel.pack_forget()
             self._build_share_panel()
             self.share_panel.pack(fill="x", padx=8, pady=(0, 8))
+        self._fit_sidebar_panel()
 
     def _build_share_panel(self):
         """Inline multi-note share: checkboxes to pick notes, then a generated
@@ -8208,9 +10011,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # Scrollable checklist (a notebook can have many notes). Fixed height so
         # it never grows the whole panel off-screen; the scrollbar handles the
         # overflow.
-        list_wrap = tk.Frame(p, bg=self.colors["sidebar"], height=130)
+        list_wrap = tk.Frame(p, bg=self.colors["sidebar"],
+                             height=self.SIDEBAR_PANEL_BODY["share"][0])
         list_wrap.pack(fill="x", padx=6, pady=(0, 2))
         list_wrap.pack_propagate(False)
+        # What gives up rows first when the window is short (_fit_sidebar_panel).
+        self._share_list_wrap = list_wrap
         canvas = tk.Canvas(list_wrap, bg=self.colors["sidebar"], highlightthickness=0)
         sb = ttk.Scrollbar(list_wrap, orient="vertical", command=canvas.yview)
         inner = tk.Frame(canvas, bg=self.colors["sidebar"])
@@ -8338,6 +10144,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         had_attachments = any(n.get("attachments") for n in chosen)
         code = encode_share_code(chosen)
         self._render_inline_code(self.share_code_area, code, len(chosen), had_attachments)
+        # The code needs room of its own; in a short window it is made here.
+        self._fit_sidebar_panel()
 
     def _clear_inline_code(self, area):
         """Take a generated share code off the panel it was drawn on.
@@ -8360,6 +10168,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         def clear():
             for w in area.winfo_children():
                 w.destroy()
+            # The room the code took is given back (_fit_sidebar_panel).
+            self._fit_sidebar_panel()
         self.after_idle(clear)
 
     def _render_inline_code(self, parent, code, count, had_attachments):
@@ -8542,6 +10352,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # formatting, the paragraphs and the checklist that a code from
         # the multi-note Share panel (which passes whole notes) carried.
         note = {k: st.get(k) for k in SHAREABLE_FIELDS if st.get(k) is not None}
+        # The date and repeat a save would store, not the raw field: a code
+        # that carried "30.09.2026" delivered a date no save could keep,
+        # and every edit to the note that arrived was lost on the far end.
+        note["date"], note["recurrence"], _left_out = self._date_and_repeat_to_store()
         # The identity is the one shareable field that is NOT editor
         # content: it belongs to the note this editor has open, and
         # capture_editor_state has no reason to hold it. Building the
@@ -8660,7 +10474,19 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         this stays a NEW note (no selected_note_id) so Save creates a fresh one."""
         note = normalize_note(shared_note)
         self.notebook.select(self.TAB_NOTES)
-        self.open_blank_tab()    # gives a clean new-note editor state
+        # A clean new-note editor -- unless the person chose to stay on a
+        # repeating day's edit, and then nothing here may touch the editor.
+        if self.open_blank_tab() is False:
+            return False
+        # The identity it arrived with goes into its first save, unless a
+        # note here already wears it. This editor used to drop it, so a
+        # note sent out, edited elsewhere and sent back arrived as a
+        # stranger and became a second copy. Read from what arrived, not
+        # from `note`: normalize_note mints an identity for a note that
+        # carries none, and "Add as a new note" removes it on purpose.
+        uid = str(shared_note.get("uid") or "").strip()
+        self._arrived_uid = (uid if uid and find_by_uid(self.notes, uid) is None
+                             else "")
 
         self.title_entry.delete(0, "end")
         title = note.get("title", "")
@@ -8676,13 +10502,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.comments_text.delete("1.0", "end")
         self.comments_text.insert("1.0", note.get("comments", ""))
 
-        self.date_entry.delete(0, "end")
-        if note.get("date"):
-            self.date_entry.insert(0, note["date"])
-            self.date_entry.config(fg=self.colors["text"])
-        else:
-            self.date_entry.insert(0, "YYYY-MM-DD")
-            self.date_entry.config(fg=self.colors["subtext"])
+        self._show_date_in_field(note.get("date"))
 
         cat = note.get("category", "General")
         self.category_var.set(cat if cat in CATEGORY_COLORS else "General")
@@ -8707,6 +10527,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self._sync_checklist_open_state()
 
         self.update_word_count()
+        # Ctrl+Z starts from the note as it arrived, as after every other
+        # load: the import itself was the first step on Tk's stack, and
+        # Ctrl+Z took the whole body back -- which the autosave then stored,
+        # the imported note saved empty.
+        self._reset_text_undo()
         self.set_status(
             "Imported from code — trimmed to the app's size limits; review, "
             "then Save to keep it" if trimmed
@@ -8728,6 +10553,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 f"{MAX_SPANS_PER_LINE} of them on any one line).\n\n"
                 "Nothing of yours was touched — this is only about what "
                 "arrived. Review it before saving.")
+        return True
 
     def import_data(self):
         """Import a previously exported .zip. Notes are MERGED into your
@@ -8751,16 +10577,21 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
         confirm = self.ask_yes_no(
             "Import notes",
-            "This will ADD the notes from that backup to your current list "
-            "(your existing notes won't be changed or removed).\n\n"
+            "This will ADD the notes from that backup to your current list. "
+            "Nothing you have is removed, and a note you already have is "
+            "only replaced if you choose to update it.\n\n"
             "Continue?"
         )
         if not confirm:
             return
 
+        # "copied": the files the worker put in the attachments folder, so
+        # an import the window closes on can take them back out again (see
+        # _settle_background_work_at_close).
         self._import_state = {"phase": "extracting", "current": 0, "total": 1,
                               "done": False, "error": None,
-                              "temp_dir": None, "imported_notes": None}
+                              "temp_dir": None, "imported_notes": None,
+                              "copied": []}
         self.export_progress_bar.configure(maximum=1, value=0)
         self.export_progress_lbl.config(text="Importing… reading backup")
         self.export_progress_frame.place(relx=0.5, rely=1.0, anchor="s", y=-14)
@@ -8788,7 +10619,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 try:
                     with open(imported_notes_path, "r", encoding="utf-8") as f:
                         imported_notes = json.load(f)
-                except (json.JSONDecodeError, IOError) as e:
+                except (*_core_paths.JSON_UNREADABLE, IOError) as e:
                     state["error"] = f"Couldn't read the notes in that backup:\n{e}"
                     state["done"] = True
                     return
@@ -8805,7 +10636,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                                 loaded = json.load(f)
                             if isinstance(loaded, list):
                                 state[key] = loaded
-                        except (json.JSONDecodeError, IOError, OSError):
+                        except (*_core_paths.JSON_UNREADABLE, IOError, OSError):
                             pass
                 # The backup's settings.json has always been IN the zip and
                 # was never read back, so every imported note whose category
@@ -8834,7 +10665,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                                 decor = loaded.get(decor_key)
                                 if isinstance(decor, dict):
                                     state["imported_" + decor_key] = decor
-                    except (json.JSONDecodeError, IOError, OSError, AttributeError):
+                    except (*_core_paths.JSON_UNREADABLE, IOError, OSError, AttributeError):
                         pass
 
                 # Copy any attached files from the backup into our attachments
@@ -8857,6 +10688,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                                 shutil.copy2(
                                     os.path.join(imported_attachments_dir, filename), part)
                                 os.replace(part, dest)
+                                state["copied"].append(filename)
                             except (IOError, OSError):
                                 try:
                                     os.remove(part)
@@ -8905,6 +10737,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         temp_dir = state["temp_dir"]
 
         if state["error"]:
+            # A worker that failed partway may have copied files already.
+            self._drop_unclaimed_import_files(state)
             self.show_error("Import failed", state["error"])
             if temp_dir:
                 shutil.rmtree(temp_dir, ignore_errors=True)
@@ -8962,15 +10796,18 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             added_names.clear()
 
         # Identity first, exactly as the share-code route asks it.
-        proceed, valid_notes = self._take_known_notes(valid_notes, "backup")
+        proceed, valid_notes, updates, unchanged = self._take_known_notes(
+            valid_notes, "backup")
         if not proceed:
             _undo_category_merge()
             # The extracted backup goes with it, as it does when the
             # duplicate question below is cancelled; this exit left the
-            # whole unpacked zip in the temp folder.
+            # whole unpacked zip in the temp folder. The files the worker
+            # copied go too: nothing was imported to own them.
             shutil.rmtree(temp_dir, ignore_errors=True)
+            self._drop_unclaimed_import_files(state)
             return
-        existing_keys = {_dup_key(n) for n in self.notes}
+        existing_keys = self._dup_keys_after(updates)
         fresh = [n for n in valid_notes if _dup_key(normalize_note(n)) not in existing_keys]
         dupe_count = len(valid_notes) - len(fresh)
         to_import = valid_notes
@@ -8997,6 +10834,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             if choice is None or choice == "cancel":
                 _undo_category_merge()
                 shutil.rmtree(temp_dir, ignore_errors=True)
+                self._drop_unclaimed_import_files(state)
                 return
             if choice == "skip":
                 to_import = fresh
@@ -9008,6 +10846,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if added_categories:
             persist_categories()
             self.refresh_category_widgets()
+        # ...and only now are the notes you already have updated. Before
+        # the claimed-file scan below, because an update can bring files in.
+        updated = self._apply_known_updates(updates, "backup")
 
         # Calendar day colours and emoji markers ride the backup's
         # settings.json exactly like categories do, and used to be dropped
@@ -9135,6 +10976,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.refresh_note_list()
         self.render_calendar()
         shutil.rmtree(temp_dir, ignore_errors=True)
+        # The skipped duplicates' files were copied too, and nothing owns
+        # them now.
+        self._drop_unclaimed_import_files(state)
 
         skipped_note = f" ({dupe_count} duplicate(s) skipped)" if dupe_count and to_import is not valid_notes else ""
         extras_note = ""
@@ -9155,9 +10999,19 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 f"not be added (a name over {MAX_CATEGORY_NAME} characters, "
                 f"or more than {MAX_CATEGORIES} categories in all), so the "
                 "notes filed under them are in General.")
+        # The notes it updated and the ones it found unchanged are counted
+        # too: "Added 0 note(s)" after an update read as "nothing
+        # happened", and invited the second import that used to destroy
+        # this device's newer text.
+        known_note = ""
+        if updated:
+            known_note += (f" Updated {updated} note(s) you already had "
+                           "(“↩ Restore previous” undoes each one).")
+        if unchanged:
+            known_note += f" {unchanged} note(s) were already here, unchanged."
         self.show_info("Import complete",
                        f"Added {len(to_import)} note(s) from the backup."
-                       f"{skipped_note}{extras_note}")
+                       f"{known_note}{skipped_note}{extras_note}")
 
     # ---------- Theme helpers ----------
     def get_note_color(self, note):
@@ -9171,6 +11025,45 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if not isinstance(category, str):
             category = "General"
         return CATEGORY_COLORS.get(category, self.colors["accent"])
+
+    # Tk's own rule for when two presses make one double-click (tkBind.c,
+    # NEARBY_MS and NEARBY_PIXELS). Kept here rather than asked of Tk,
+    # because Tk pairs two presses only when both land on the SAME widget.
+    _DOUBLE_CLICK_MS = 500
+    _DOUBLE_CLICK_PX = 5
+
+    def _second_press_of_double_click(self, event):
+        """True when *event*, a press on a button that removes its own row,
+        is the second half of a double-click.
+
+        Many people double-click every button. The first click removes the
+        row and the row below slides up into its place, so the second press
+        lands on a DIFFERENT button -- the next row's -- and removed that
+        one too, while the toast's single Undo offered back only the second
+        (the first was gone for good). Tk cannot tell: it makes a
+        double-click of two presses on one widget only. So the pairing is
+        done here, by Tk's own rule, across every such button: a press
+        within 500 ms and 5 px of the previous one is the echo of the same
+        gesture. Every call records its press. Bind it to the press, so
+        the second one never arms the button::
+
+            button.bind("<ButtonPress-1>", lambda e: "break"
+                        if self._second_press_of_double_click(e) else None,
+                        add="+")
+
+        A generated event carries no time; the clock stands in for it.
+        """
+        stamp = getattr(event, "time", 0) or int(time.monotonic() * 1000)
+        here = (stamp, getattr(event, "x_root", 0), getattr(event, "y_root", 0))
+        last = getattr(self, "_row_removal_press", None)
+        self._row_removal_press = here
+        if last is None:
+            return False
+        # Event times are milliseconds on a 32-bit clock that wraps.
+        elapsed = (here[0] - last[0]) & 0xFFFFFFFF
+        return (elapsed <= self._DOUBLE_CLICK_MS
+                and abs(here[1] - last[1]) <= self._DOUBLE_CLICK_PX
+                and abs(here[2] - last[2]) <= self._DOUBLE_CLICK_PX)
 
     # ---------- Checklist ----------
     def toggle_checklist_section(self):
@@ -9190,7 +11083,14 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                                         after=self.checklist_btn)
             self._checklist_open = True
             self.checklist_btn.config(text="☑ Checklist  ▲")
-            self._render_checklist_items()
+            # The rows are built on opening (see _render_checklist_items);
+            # rows already drawn from this very list need no rebuild.
+            if _checklist_rows_current(getattr(self, "_checklist_drawn", None),
+                                       self._get_checklist(),
+                                       getattr(self, "theme_name", None)):
+                self._update_checklist_progress()
+            else:
+                self._render_checklist_items()
 
     def _match_checklist_to_calculator(self):
         """Size the checklist list area so the whole box matches the
@@ -9326,8 +11226,22 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         return self._working_checklist
 
     def _render_checklist_items(self):
-        """Redraw the checklist rows from the working list."""
+        """Redraw the checklist rows from the working list -- while the
+        section is OPEN. Closed, no row is built: a note switch collapses
+        the section anyway, and each row is four widgets (a frame, a tick
+        box, a label, a bin), so building them for a closed section was
+        pure cost -- a 50-item note paid ~200 widgets on every open.
+        toggle_checklist_section builds them the moment it opens. The
+        rows drawn are recorded (see _checklist_rows_current), so a
+        change can touch the one row it concerns instead of all of them.
+        """
         if not hasattr(self, "checklist_items_frame"):
+            return
+        self._update_checklist_progress()
+        if not getattr(self, "_checklist_open", False):
+            # What stands in the closed frame no longer matches the list;
+            # the next open redraws it.
+            self._checklist_drawn = None
             return
         for w in self.checklist_items_frame.winfo_children():
             w.destroy()
@@ -9336,17 +11250,22 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             tk.Label(self.checklist_items_frame, text="No items yet — add one below.",
                      bg=self.colors["card"], fg=self.colors["subtext"],
                      font=("Segoe UI", 9), anchor="w").pack(fill="x", padx=4, pady=6)
-        for idx, item in enumerate(items):
-            self._build_checklist_row(idx, item)
-        self._update_checklist_progress()
+        self._checklist_drawn = {
+            "items": items, "theme": getattr(self, "theme_name", None),
+            "rows": [self._build_checklist_row(idx, item)
+                     for idx, item in enumerate(items)]}
 
     def _build_checklist_row(self, idx, item):
+        """One row, packed at the end. Returns its record for the drawn
+        list: ``[item, row frame, (text, done) as drawn]``."""
         row = tk.Frame(self.checklist_items_frame, bg=self.colors["card"])
         row.pack(fill="x", pady=1)
+        record = [item, row, (item.get("text", ""), bool(item.get("done")))]
         var = tk.IntVar(value=1 if item.get("done") else 0)
 
         def on_toggle():
             item["done"] = bool(var.get())
+            record[2] = (item.get("text", ""), item["done"])
             self._update_checklist_progress()
             self._restyle_checklist_label(lbl, item["done"])
             self._schedule_autosave()
@@ -9368,17 +11287,29 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         def delete():
             items = self._get_checklist()
             # The index is read from the list now rather than taken from
-            # the idx this row was built with. Every route that changes
-            # the list re-renders, so today the two always agree -- but
-            # the pair handed to the undo has to be a position IN THIS
-            # LIST, and reading it here says so instead of depending on
-            # that invariant holding for whoever edits next.
-            try:
-                index = items.index(item)
-            except ValueError:
+            # the idx this row was built with: the pair handed to the undo
+            # has to be a position IN THIS LIST. Found by IDENTITY --
+            # list.index() finds the first EQUAL item, and two items reading
+            # the same are two items; now that a delete takes away only its
+            # own row, the wrong one would leave this row standing, tied to
+            # an item no longer in the list.
+            index = next((i for i, it in enumerate(items) if it is item),
+                         None)
+            if index is None:
                 return
+            drawn = getattr(self, "_checklist_drawn", None)
+            in_step = (getattr(self, "_checklist_open", False)
+                       and _checklist_rows_current(
+                           drawn, items, getattr(self, "theme_name", None)))
             items.pop(index)
-            self._render_checklist_items()
+            if in_step and items:
+                # This row goes, the others stay: rebuilding every row
+                # took over two seconds at 200 items.
+                drawn["rows"].pop(index)
+                row.destroy()
+                self._update_checklist_progress()
+            else:
+                self._render_checklist_items()
             self._schedule_autosave()
             # The one thing that could be taken off a note with no way
             # back at all: Ctrl+Z reaches the Text widgets (edit_undo),
@@ -9393,26 +11324,75 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 f"Removed “{label}”" if label else "Checklist item removed",
                 action=lambda: self._undo_checklist_delete(items, index, item))
 
-        tk.Button(row, text="🗑", command=delete, relief="flat", cursor="hand2",
-                  bg=self.colors["card"], fg=self.colors["danger"],
-                  font=("Segoe UI", 9), bd=0).pack(side="right")
+        bin_btn = tk.Button(row, text="🗑", command=delete, relief="flat",
+                            cursor="hand2", bg=self.colors["card"],
+                            fg=self.colors["danger"], font=("Segoe UI", 9),
+                            bd=0)
+        bin_btn.pack(side="right")
+        # A double-click's second press lands on the NEXT row's bin, slid
+        # up into this one's place: it must not remove that row too.
+        bin_btn.bind("<ButtonPress-1>",
+                     lambda e: "break"
+                     if self._second_press_of_double_click(e) else None,
+                     add="+")
+        return record
 
     def _restyle_checklist_label(self, lbl, done):
-        """Dim + strike-through style for completed items (overstrike font)."""
+        """Dim + strike-through style for completed items (overstrike font).
+
+        Two fonts shared by every row, made once from the first label's
+        font -- a new Font per call was one more Tk font object for every
+        row built and every tick."""
+        fg = self.colors["subtext"] if done else self.colors["text"]
         try:
-            f = tkfont.Font(font=lbl.cget("font"))
-            f.configure(overstrike=1 if done else 0)
-            lbl.configure(font=f, fg=self.colors["subtext"] if done else self.colors["text"])
+            fonts = getattr(self, "_checklist_fonts", None)
+            if fonts is None:
+                plain = tkfont.Font(font=lbl.cget("font"))
+                plain.configure(overstrike=0)
+                struck = tkfont.Font(font=lbl.cget("font"))
+                struck.configure(overstrike=1)
+                fonts = self._checklist_fonts = (plain, struck)
+            lbl.configure(font=fonts[1] if done else fonts[0], fg=fg)
         except Exception:
-            lbl.configure(fg=self.colors["subtext"] if done else self.colors["text"])
+            lbl.configure(fg=fg)
+
+    def _take_pending_checklist_item(self):
+        """Add what sits typed in the checklist's add box to this note's list,
+        as leaving the note requires (see _flush_autosave). Unlike the Add
+        button it leaves the keyboard where it is: the person is on their
+        way somewhere else."""
+        var = getattr(self, "checklist_add_var", None)
+        text = var.get().strip() if var is not None else ""
+        if not text:
+            return
+        self._get_checklist().append({"text": text, "done": False})
+        var.set("")
+        if hasattr(self, "checklist_items_frame"):
+            self._render_checklist_items()
 
     def _add_checklist_item(self):
         text = self.checklist_add_var.get().strip()
         if not text:
             return
-        self._get_checklist().append({"text": text, "done": False})
+        items = self._get_checklist()
+        drawn = getattr(self, "_checklist_drawn", None)
+        in_step = (getattr(self, "_checklist_open", False)
+                   and _checklist_rows_current(
+                       drawn, items, getattr(self, "theme_name", None)))
+        item = {"text": text, "done": False}
+        items.append(item)
         self.checklist_add_var.set("")
-        self._render_checklist_items()
+        if in_step:
+            # One new row, not the whole list again: rebuilding every row
+            # took over two seconds per add at 200 items.
+            if not drawn["rows"]:
+                for w in self.checklist_items_frame.winfo_children():
+                    w.destroy()          # the "No items yet" line
+            drawn["rows"].append(self._build_checklist_row(len(items) - 1,
+                                                           item))
+            self._update_checklist_progress()
+        else:
+            self._render_checklist_items()
         self._schedule_autosave()
         try:
             self.checklist_add_entry.focus_set()
@@ -9642,8 +11622,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                   cursor="hand2", bg=self.colors["sidebar"], fg=self.colors["text"],
                   font=("Segoe UI", 8, "bold")).pack(side="left", ipadx=4, ipady=2)
 
-        entry.bind("<Return>", lambda e: save())
-        entry.bind("<Escape>", lambda e: self._dismiss_mini_popup())
+        # "break" on both: each can destroy the box, and Tk has already
+        # read every script of the key -- the box's own <Escape> among them
+        # (_place_dropdown_popup). Escape here called that dead command: a
+        # silent "invalid command name" on every Escape in a rename box.
+        entry.bind("<Return>", lambda e: (save(), "break")[1])
+        entry.bind("<Escape>", lambda e: (self._dismiss_mini_popup(), "break")[1])
 
         self._place_mini_popup(pop, anchor_widget)
         # Focus the entry after placing (safe now — no grab).
@@ -9692,7 +11676,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 cell.create_text(13, 13, text="✓", fill="white",
                                  font=("Segoe UI", 11, "bold"))
             cell.grid(row=r, column=c, padx=3, pady=3)
-            cell.bind("<Button-1>", lambda e, col=color: pick(col))
+            # "break": the pick destroys this popup (see _show_inline_rename).
+            cell.bind("<Button-1>", lambda e, col=color: (pick(col), "break")[1])
 
         if allow_reset:
             tk.Button(frame, text=reset_label,
@@ -9758,7 +11743,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 self._dismiss_mini_popup()
 
             for w in (row, dot, lbl):
-                w.bind("<Button-1>", lambda e, c=cat: pick(c))
+                # "break": the pick destroys this popup (see
+                # _show_inline_rename).
+                w.bind("<Button-1>", lambda e, c=cat: (pick(c), "break")[1])
                 w.bind("<Enter>", lambda e, r=row, d=dot, l=lbl:
                        (r.configure(bg=self.colors["sidebar"]),
                         d.configure(bg=self.colors["sidebar"]),
@@ -9806,8 +11793,23 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
     def track_theme(self, widget, **option_map):
         self.themed_widgets.append((widget, option_map))
+        # A section rebuilt on every visit registers its widgets again each
+        # time, and only a theme switch dropped the dead ones: a session
+        # that never switched theme kept every widget it ever drew (339 ->
+        # 809 entries over 175 Settings visits, measured). Pruned whenever
+        # the registry has doubled since the last prune -- a constant cost
+        # per call, averaged.
+        if len(self.themed_widgets) >= 2 * getattr(self, "_themed_pruned_at", 256):
+            self._prune_themed_widgets()
         widget.configure(**{opt: self.colors[key] for opt, key in option_map.items()})
         return widget
+
+    def _prune_themed_widgets(self):
+        """Drop the registry's entries for widgets that no longer exist."""
+        self.themed_widgets = [
+            (w, m) for w, m in self.themed_widgets
+            if self._widget_alive(w)]
+        self._themed_pruned_at = max(256, len(self.themed_widgets))
 
 
     def toggle_theme(self):
@@ -9853,9 +11855,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # kept the destroyed ones forever — the note-card leak class, at
         # the registry level (each dead entry cost a caught TclError on
         # every switch, growing without bound).
-        self.themed_widgets = [
-            (w, m) for w, m in self.themed_widgets
-            if self._widget_alive(w)]
+        self._prune_themed_widgets()
         for widget, option_map in self.themed_widgets:
             try:
                 widget.configure(**{opt: self.colors[key] for opt, key in option_map.items()})
@@ -9866,9 +11866,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # rebuild they kept the OLD theme until the next edit touched them.
         # The commit first: render's contract is "never while focus is in
         # a cell", and a theme switched mid-typing otherwise destroyed the
-        # editor's canvas under it -- the keystrokes went with it.
+        # editor's canvas under it -- the keystrokes went with it. A row
+        # being typed stays text: a new theme is no reason to leave it.
         self._commit_cell_editor()
-        self._render_table_grids()
+        self._render_table_grids(keep_typed=self._row_being_typed())
         # Text highlights are painted blended toward the theme surface
         # (the cells' own recipe); the new surface needs a re-blend.
         if hasattr(self, "body_text"):
@@ -9883,13 +11884,14 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.refresh_weekday_buttons()
         self.on_end_mode_changed()
         self.style_notebook()
-        # Statistics is deliberately NOT re-rendered here. It destroys and
-        # rebuilds its widgets, and a theme switch changes no statistic --
-        # only the palette, which _recolor_stragglers below handles. It's on
-        # the Settings page, i.e. exactly where the user is standing when
-        # they switch themes, so rebuilding it there was visible churn for
-        # no new information. Real data changes still redraw it through
-        # refresh_note_list(), which is unchanged.
+        # Statistics is deliberately NOT re-rendered here: a theme switch
+        # changes no statistic -- only the palette, which
+        # _recolor_stragglers below handles, and the panel's next render
+        # rebuilds it in the new palette (it updates its figures in place
+        # otherwise). It's on the Settings page, i.e. exactly where the user
+        # is standing when they switch themes, so rebuilding it there was
+        # visible churn for no new information. Real data changes still
+        # redraw it through refresh_note_list(), which is unchanged.
         #
         # Same reasoning for the calendar: rebuilding every day cell is
         # pointless while the calendar isn't even on screen. That test
@@ -10041,6 +12043,15 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             walk(self)
         except tk.TclError:
             pass
+        # An open day's list paints each row's stripe in its note's own
+        # colour, and the walk above cannot tell that from a palette's:
+        # General's #7c5cff is the dark and light accent, Urgent's #ff5c7c
+        # the dark theme's danger, so they were swapped for the new theme's.
+        # Drawn again from the notes, as _recolor_note_cards does for the
+        # note list -- also while Settings hides it, so that it is right
+        # when it shows. (The one-note view has no colour of its own.)
+        if getattr(self, "_day_panel_mode", "empty") == "list":
+            self.show_day_list()
 
     def _refresh_placeholder_colors(self):
         # self._placeholders only ever grows (add_placeholder() appends,
@@ -10215,9 +12226,13 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         is what the field test asked for. Every other page is built of
         widgets and still costs 70 ms or more a step, so it keeps the frame
         light and catches up once the hand stops. The History register is
-        rows of widgets too, so it waits with the rest."""
+        rows of widgets too, so it waits with the rest -- and so does an
+        open day's panel below the month: a row per note, or a whole note's
+        text, laid out again at every step (60 ms a step for an ordinary
+        month, 150 and more for a busy one, measured)."""
         return (self._calendar_is_showing()
-                and not getattr(self, "_history_visible", False))
+                and not getattr(self, "_history_visible", False)
+                and getattr(self, "_day_panel_mode", "empty") == "empty")
 
     def _lay_out_at_window_size(self):
         """Give the window's content the window's size: the one place it
@@ -10538,6 +12553,15 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # relying on that ordering is how this breaks when someone reorders
         # these lines.
         self._refresh_search_clear()
+        # ...and it scheduled a list rebuild for a search nobody typed: a
+        # second full rebuild at every startup, on top of the one the
+        # launch runs anyway (~55 ms at 5,000 notes, measured).
+        if self._search_debounce_job is not None:
+            try:
+                self.after_cancel(self._search_debounce_job)
+            except (tk.TclError, ValueError):
+                pass
+            self._search_debounce_job = None
 
         # Sort + category filter row
         # Captions for the two controls below, because both are labelled with
@@ -10829,14 +12853,18 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             fg="white", relief="flat", font=("Segoe UI", 11, "bold"), cursor="hand2"
         )
         self.track_theme(new_btn, bg="accent", activebackground="accent_hover")
-        new_btn.pack(fill="x", padx=15, pady=(10, 4), ipady=8)
+        # Each button's packing is kept (_fit_sidebar_panel packs a button
+        # back exactly as it was after it stepped aside for an open panel).
+        new_kw = dict(fill="x", padx=15, pady=(10, 4), ipady=8)
+        new_btn.pack(**new_kw)
 
         import_btn = tk.Button(
             bottom_zone, text="📥 Import code", command=self.toggle_import_panel,
             relief="flat", font=("Segoe UI", 10, "bold"), cursor="hand2"
         )
         self.track_theme(import_btn, bg="card", fg="text")
-        import_btn.pack(fill="x", padx=15, pady=(0, 4), ipady=5)
+        import_kw = dict(fill="x", padx=15, pady=(0, 4), ipady=5)
+        import_btn.pack(**import_kw)
 
         # Inline import panel — expands under the button instead of a pop-up.
         self.import_panel = tk.Frame(bottom_zone)
@@ -10849,7 +12877,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             relief="flat", font=("Segoe UI", 10, "bold"), cursor="hand2"
         )
         self.track_theme(share_multi_btn, bg="card", fg="text")
-        share_multi_btn.pack(fill="x", padx=15, pady=(0, 12), ipady=5)
+        share_kw = dict(fill="x", padx=15, pady=(0, 12), ipady=5)
+        share_multi_btn.pack(**share_kw)
 
         # Inline share panel — pick notes, get a code, all without a pop-up.
         self.share_panel = tk.Frame(bottom_zone)
@@ -10860,7 +12889,16 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             relief="flat", font=("Segoe UI", 10, "bold"), cursor="hand2"
         )
         self.track_theme(settings_btn, bg="card", fg="text")
-        settings_btn.pack(fill="x", padx=15, pady=(0, 12), ipady=5)
+        settings_kw = dict(fill="x", padx=15, pady=(0, 12), ipady=5)
+        settings_btn.pack(**settings_kw)
+        self._sidebar_zone_buttons = [(new_btn, new_kw), (import_btn, import_kw),
+                                      (share_multi_btn, share_kw),
+                                      (settings_btn, settings_kw)]
+        # A window made shorter (or taller) with a panel open fits it again --
+        # and so does the zone given less room by something above it, like
+        # the selection bar appearing, which leaves the sidebar's size alone.
+        self.sidebar.bind("<Configure>", self._fit_sidebar_panel, add="+")
+        bottom_zone.bind("<Configure>", self._fit_sidebar_panel, add="+")
 
         # --- Sidebar collapse toggle (thin strip on the sidebar's edge) ---
         # Stays visible whether the sidebar is shown or hidden, so the user can
@@ -11051,6 +13089,19 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # clear, which runs first and is what stops the paste landing on top
         # of "YYYY-MM-DD".
         self.date_entry.bind("<<Paste>>", self._schedule_autosave, add="+")
+        # The repeat's summary reads the start date from this field: every
+        # route that changes it redraws the summary (typing and pasting here,
+        # the picker's _pick, clear_note_date). Only the repeat's own boxes
+        # did, and the summary went on saying "needs a start date" after one
+        # was typed, or naming a date already put right. A paste lands after
+        # this binding returns, so its redraw waits for idle.
+        self.date_entry.bind("<KeyRelease>",
+                             lambda _e: self.update_recurrence_summary(),
+                             add="+")
+        self.date_entry.bind(
+            "<<Paste>>",
+            lambda _e: self.after_idle(self.update_recurrence_summary),
+            add="+")
         # Pasting a date copied out of an email is an ordinary thing to want,
         # and this was the field that most invited it and refused.
         self._add_paste_menu(self.date_entry)
@@ -11352,6 +13403,31 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.body_text.bind("<Return>", self._on_body_return)
         self.body_text.bind("<BackSpace>", self._on_body_backspace)
         self.body_text.bind("<Delete>", self._on_body_delete_key)
+        # Ahead of every other binding the body has: Tk's own deletes --
+        # Delete, BackSpace, typing over a selection, Cut -- put no tag on
+        # the undo stack, so Ctrl+Z brought styled text back plain. This
+        # notes the formatting first (see _note_styled_delete).
+        # Every key is noted going down first, its own binding or none, so
+        # what the key before typed is settled before this one acts (see
+        # _note_key_down); the body's <KeyPress> then speaks for the keys
+        # that type.
+        self.bind_class(self._STYLED_DELETE_TAG, "<KeyPress>",
+                        self._note_key_down)
+        self.bind_class(self._STYLED_DELETE_TAG, "<KeyPress>",
+                        self._note_styled_delete, add="+")
+        # Each virtual binding says what it is: a key that means Cut or
+        # Paste (Ctrl+X, Ctrl+V) arrives as that key's own press, and read
+        # as a key, Ctrl+X was no delete at all -- the bold it cut came
+        # back plain on Ctrl+Z. Only the menu's Cut was a virtual event.
+        # The same outranking hid Ctrl+V and Shift+Insert from
+        # _note_key_down, and a paste after its Ctrl wore the word's style.
+        for virtual in ("<<Cut>>", "<<Clear>>", "<<Paste>>"):
+            self.bind_class(self._STYLED_DELETE_TAG, virtual,
+                            lambda e: (self._note_key_down(),
+                                       self._note_styled_delete(
+                                           e, virtual=True))[1])
+        self.body_text.bindtags(
+            (self._STYLED_DELETE_TAG,) + tuple(self.body_text.bindtags()))
         self.body_text.bind("<<Paste>>", self._on_body_paste, add="+")
         self.body_text.bind("<<Copy>>", self._copy_formatted, add="+")
         # Ctrl+Shift+V is the usual way to ask for the text without its
@@ -11395,6 +13471,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                             add="+")
         self.body_text.bind("<KeyRelease>", self._extend_word_styles_on_typing,
                             add="+")
+        # What the key did, settled at its release or at the next key's
+        # press (see _spread_typed_run): a key with no binding of its own
+        # here -- the keys that type -- sets two marks at the caret, and
+        # what it types lands between them.
+        self.body_text.bind("<KeyPress>", self._note_typing_key, add="+")
         # KeyRelease alone re-centred the line one frame LATE -- the
         # character appears left-justified for a blink, then snaps to the
         # middle. An idle callback scheduled at KeyPress runs right after
@@ -11561,12 +13642,32 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                             lambda e: self._body_undo_redo("redo"))
         self.body_text.bind("<Control-Shift-Z>",
                             lambda e: self._body_undo_redo("redo"))
+        # Caps Lock turns the letter over: Tk reads Ctrl+Z as an upper-case
+        # Z and Ctrl+Shift+Z as a lower-case z. No letter above matched the
+        # first, so Tk's own <<Undo>> walked its stack behind the journal's
+        # back -- the bold went with the last typing, a table came back
+        # with no grid -- and the second ran as an undo. The body answers
+        # the virtual events as well, in every spelling Tk maps to them
+        # (Caps Lock included); the letters stay for the ones the virtual
+        # events lack (Ctrl+Shift+Z on Windows, Ctrl+Y on X11). Tk runs one
+        # binding per tag, the most specific, so a key matching a letter
+        # and a virtual event at once still undoes once.
+        self.body_text.bind("<Control-Shift-z>",
+                            lambda e: self._body_undo_redo("redo"))
+        self.body_text.bind("<<Undo>>",
+                            lambda e: self._body_undo_redo("undo"))
+        self.body_text.bind("<<Redo>>",
+                            lambda e: self._body_undo_redo("redo"))
         _tw = self.comments_text
         _tw.bind("<Control-z>", lambda e, w=_tw: (w.edit_undo(), "break")[1]
                  if self._can_edit_undo(w) else "break")
         _tw.bind("<Control-y>", lambda e, w=_tw: (w.edit_redo(), "break")[1]
                  if self._can_edit_redo(w) else "break")
         _tw.bind("<Control-Shift-Z>", lambda e, w=_tw: (w.edit_redo(), "break")[1]
+                 if self._can_edit_redo(w) else "break")
+        # Caps Lock turns the letter over here too: Ctrl+Shift+Z arrives as
+        # a lower-case z and undid instead of redoing, as in the body.
+        _tw.bind("<Control-Shift-z>", lambda e, w=_tw: (w.edit_redo(), "break")[1]
                  if self._can_edit_redo(w) else "break")
 
         # Attachments section
@@ -11736,7 +13837,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
         def _go(event=None):
             raw = year_var.get().strip()
-            if not raw.isdigit() or not 1 <= int(raw) <= 9999:
+            # isdecimal(), not isdigit(): isdigit() also passes "2026²",
+            # which int() then refuses with a ValueError instead of this
+            # message. isdecimal() is exactly what int() reads -- so
+            # "٢٠٢٦" and a full-width "２０２６" still work (the
+            # calculator learned this first, core/calculator.py).
+            if not raw.isdecimal() or not 1 <= int(raw) <= 9999:
                 error_lbl.config(text="Enter a year between 1 and 9999")
                 return
             self.cal_year = int(raw)
@@ -11744,7 +13850,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self.render_calendar()
             self._dismiss_mini_popup()
 
-        year_entry.bind("<Return>", _go)
+        # "break": a good year destroys this popup (see _show_inline_rename).
+        year_entry.bind("<Return>", lambda e: (_go(), "break")[1])
 
         btn_row = tk.Frame(frame, bg=self.colors["card"])
         btn_row.pack(fill="x", padx=16, pady=(10, 14))
@@ -12020,9 +14127,23 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._place_dropdown_popup(popup, self.color_swatch_btn)
 
     def clear_note_date(self):
+        self._show_date_in_field("")
+        # The summary reads the date from the field (see the date field's
+        # bindings): emptied, a series still starts on its stored date.
+        self.update_recurrence_summary()
+
+    def _show_date_in_field(self, value):
+        """Put a date in the note's date field -- or, for none, the grey
+        YYYY-MM-DD placeholder. The one way the editor fills that field, so
+        the text and its colour cannot come apart between the routes that
+        load, restore, import or put back a note's date."""
         self.date_entry.delete(0, "end")
-        self.date_entry.insert(0, "YYYY-MM-DD")
-        self.date_entry.config(fg=self.colors["subtext"])
+        if value:
+            self.date_entry.insert(0, value)
+            self.date_entry.config(fg=self.colors["text"])
+        else:
+            self.date_entry.insert(0, "YYYY-MM-DD")
+            self.date_entry.config(fg=self.colors["subtext"])
 
     def open_date_picker(self, target_entry=None, anchor_widget=None):
         """Small calendar dropdown for picking a date, anchored to whichever
@@ -12073,7 +14194,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             target_entry.delete(0, "end")
             target_entry.insert(0, date_str)
             target_entry.config(fg=self.colors["text"])
-            self._schedule_autosave()
+            # Redraws the repeat's summary, which reads both date fields, and
+            # schedules the autosave.
+            self.update_recurrence_summary()
             self._dismiss_mini_popup()
 
         def _render():
@@ -12139,13 +14262,38 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         freq_menu = self._build_themed_dropdown(
             freq_row, self.rec_freq_var,
             [FREQ_LABELS[k] for k in ("", "daily", "weekly", "monthly", "yearly")],
-            on_change=lambda v: self.on_recurrence_changed(), width_chars=14)
+            # A frequency picked is an edit, saved like any other. The
+            # summary asks for the save when there is a repeat to describe;
+            # "Does not repeat" draws none, so it asked for nothing, and
+            # turning a repeat off waited for the note to be left.
+            on_change=lambda v: (self.on_recurrence_changed(),
+                                 self._schedule_autosave(skip_word_count=True)),
+            width_chars=14)
         freq_menu.pack(side="left", padx=(8, 10))
         self.rec_freq_menu = freq_menu
 
-        self.rec_summary_lbl = tk.Label(freq_row, text="", font=("Segoe UI", 8, "italic"))
+        self.rec_summary_lbl = tk.Label(freq_row, text="", font=("Segoe UI", 8, "italic"),
+                                        justify="left")
         self.track_theme(self.rec_summary_lbl, bg="bg", fg="accent")
         self.rec_summary_lbl.pack(side="left")
+
+        def _wrap_summary(_event=None):
+            # The summary wraps inside what its row leaves it rather than
+            # running out of the row: a long rule, or the warning naming the
+            # boxes not understood, was cut off at its end. Counted from the
+            # widths the row's other widgets ask for, which are known before
+            # the packer has placed anything, less the label's own padding
+            # (the wrap is the text's width, not the label's).
+            lbl = self.rec_summary_lbl
+            try:
+                inner = 2 * sum(int(str(lbl.cget(o))) for o in
+                                ("padx", "borderwidth", "highlightthickness"))
+                room = (freq_row.winfo_width() - freq_label.winfo_reqwidth()
+                        - freq_menu.winfo_reqwidth() - 18 - inner)
+                lbl.configure(wraplength=max(room, 120))
+            except (tk.TclError, ValueError):
+                pass
+        freq_row.bind("<Configure>", _wrap_summary, add="+")
 
         # --- Everything below is hidden unless a frequency is chosen ---
         # The frame is packed once, here, so it always keeps its slot in the
@@ -12373,6 +14521,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         """Show only the controls that apply to the chosen frequency. All rows
         are re-packed in a fixed order so nothing drifts to the bottom."""
         freq = self.selected_freq_key()
+        if freq:
+            # A repeat picked again ends the wait of its turn-off: a rescue
+            # copy a held save made meanwhile is a delete's own copy from now
+            # on, and a later turn-off's copy is the note as it stands
+            # (_turn_off_rescue_copy).
+            self._held_text_rescue = None
 
         rows = (self.rec_interval_row, self.rec_weekday_row, self.rec_monthday_row,
                 self.rec_policy_row, self.rec_end_row)
@@ -12429,7 +14583,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if freq == "monthly":
             for chunk in self.rec_monthdays_var.get().replace(";", ",").split(","):
                 chunk = chunk.strip()
-                if chunk.isdigit() and 1 <= int(chunk) <= 31:
+                # _is_month_day's isdecimal(): "3²" passed isdigit() and
+                # crashed int() on every read of the rule, saves included.
+                if _is_month_day(chunk):
                     month_days.append(int(chunk))
 
         policy = "clamp" if self.rec_policy_var.get() == "Use the last day" else "skip"
@@ -12477,26 +14633,84 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         rec = self.read_recurrence_from_ui()
         if not rec["freq"]:
             self.rec_summary_lbl.config(text="")
-            self._schedule_autosave()
+            self._schedule_autosave(skip_word_count=True)
             return
-        preview = describe_recurrence({"recurrence": rec})
+        problems = self._unreadable_repeat_fields(rec["freq"])
         anchor = self.date_entry.get().strip()
+        if anchor == "YYYY-MM-DD":
+            anchor = ""
+        kept_date = ""
+        kept_repeat = True
+        if problems or not parse_date(anchor):
+            # What the save would keep, never what the boxes read as: an
+            # unreadable "Every" or "After … times" read as 1, and an
+            # unreadable end date as none, previewed a rule neither typed
+            # nor stored.
+            kept_date, kept, _left_out = self._date_and_repeat_to_store()
+            # With no start date to hang it on, the save keeps no repeat.
+            kept_repeat = bool(kept["freq"])
+            if problems and kept_repeat:
+                rec = kept
+        # The boxes read with one not understood describe a rule neither
+        # typed nor stored: with nothing kept either, no rule is shown.
+        preview = ("" if problems and not kept_repeat
+                   else describe_recurrence({"recurrence": rec}))
+        unread = [{"end": "the end date “%s”",
+                   "every": "“Every %s”",
+                   "after": "“After %s times”",
+                   "days": "day(s) “%s”"}[field] % _truncate(typed, 16)
+                  for field, typed in problems]
+        warnings = []
         if not parse_date(anchor):
-            preview += "   ⚠ needs a start date"
+            if not parse_date(kept_date or ""):
+                if anchor:
+                    # Typed, but not as a date: named, as the save names it.
+                    unread.insert(0, "the date “%s”" % _truncate(anchor, 16))
+                warnings.append("needs a start date, so the repeat is not "
+                                "saved")
+            elif anchor:
+                # The series keeps the start it has; "needs a start date"
+                # said it had none.
+                unread.insert(0, "the date “%s”" % _truncate(anchor, 16))
+            else:
+                # Emptied, most often on the way to a new date: the save
+                # keeps the start, as its own words say.
+                warnings.append("needs a start date, so it still starts %s"
+                                % kept_date)
+        if unread:
+            # One warning, however many boxes it names: one per box ran
+            # past the end of the row.
+            warnings.append(("Not understood, so kept as saved: "
+                             if kept_repeat else "Not understood: ")
+                            + ", ".join(unread))
+        preview = "   ".join(([preview] if preview else [])
+                             + ["⚠ " + w for w in warnings])
         self.rec_summary_lbl.config(text=preview)
         # Recurrence settings (frequency, weekdays, interval, end condition)
         # didn't autosave before — this is the single choke point every one of
         # those changes passes through, so hooking it here covers them all.
-        self._schedule_autosave()
+        # None of them changes a word of the body, so the count is not read
+        # again: every key in the date field redraws this summary, beside its
+        # own autosave, and each key read the whole body twice (loading a
+        # note counts its words itself).
+        self._schedule_autosave(skip_word_count=True)
 
     # ---------- Occurrence scope prompt ----------
-    def ask_occurrence_scope(self, action_word, occurrence_date):
+    def ask_occurrence_scope(self, action_word, occurrence_date,
+                             keeps_schedule=False):
         """Google-Calendar-style prompt. Returns 'occurrence', 'series' or None.
-        Uses the in-app themed dialog overlay (not a separate window)."""
+        Uses the in-app themed dialog overlay (not a separate window).
+
+        *keeps_schedule*: the date or the repeat was changed too. They are
+        the series' own, and the question says what "This occurrence only"
+        does with them."""
+        extra = ("\n\nThe date and the repeat belong to the whole series: "
+                 "'This occurrence only' keeps them as they are."
+                 if keeps_schedule else "")
         return self._themed_dialog(
             f"{action_word} repeating note",
             f"This note repeats. What should '{action_word}' apply to?\n"
-            f"Currently open occurrence: {occurrence_date}",
+            f"Currently open occurrence: {occurrence_date}{extra}",
             kind="question",
             buttons=[("Cancel", None), ("The entire series", "series"),
                      ("This occurrence only", "occurrence")]
@@ -12504,13 +14718,145 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
     def _reset_text_undo(self):
         """Clear undo history on both editors — called after loading a note so
-        Ctrl+Z can't undo back into a previous note's content."""
+        Ctrl+Z can't undo back into a previous note's content. The body's
+        formatting journal goes with it (see _body_undo_redo): it is only
+        ever read beside the stack it was written next to."""
         for w in (getattr(self, "body_text", None), getattr(self, "comments_text", None)):
             if w is not None:
                 try:
                     w.edit_reset()
                 except tk.TclError:
                     pass
+        self._fmt_undo, self._fmt_redo = [], []
+        self._styled_delete_run = None
+        self._fmt_last_state = None
+        # A line the drawing put under the last table is part of the note as
+        # loaded now: there is no step left that could replay around it.
+        self._undo_tail = None
+
+    # How many steps back the formatting journal reaches. Each step holds
+    # two snapshots, which share every tag's string with the snapshot
+    # before them where it did not change (see _fmt_state) -- so a step
+    # costs about what it changed; the cap keeps a long session from
+    # growing without bound anyway. Past it, Ctrl+Z still walks Tk's own
+    # text stack.
+    _FMT_JOURNAL_DEPTH = 100
+
+    def _trim_fmt_journal(self, journal):
+        """Keep *journal* to _FMT_JOURNAL_DEPTH full steps. A text step past
+        it is not dropped but kept as a stub -- its text's signature on each
+        side and whether it was recorded with the grids down: Ctrl+Z still
+        has to know it was one of the app's units and how its edits were
+        recorded. Dropped, it read as a step no unit noted -- typing -- and
+        was replayed with the tables down: a header cell written 100 steps
+        back came back a column off, and Ctrl+Y doubled a letter. A stub's
+        formatting is not laid back; a formatting step past the cap goes, as
+        before (Tk's stack never held it). Stubs are not capped: a stub
+        stands for a step of Tk's own stack, which is not capped either
+        (maxundo=-1) and holds far more for every step -- cut short, the
+        step it stood for came back as typing."""
+        full = [i for i, s in enumerate(journal) if not s.get("stub")]
+        over = len(full) - self._FMT_JOURNAL_DEPTH
+        if over > 0:
+            for i in full[:over]:
+                s = journal[i]
+                journal[i] = self._fmt_stub(s) if s["text"] else None
+            journal[:] = [s for s in journal if s is not None]
+
+    @staticmethod
+    def _fmt_stub(step):
+        """A text step of the journal kept as a stub: its text's signature
+        on each side and whether it was recorded with the grids down --
+        what Ctrl+Z and Ctrl+Y need to replay it as Tk recorded it -- and
+        no formatting to lay back."""
+        return {"text": True, "stub": True,
+                "grids_down": bool(step.get("grids_down")),
+                "before": (step["before"][0],), "after": (step["after"][0],)}
+
+    def _fmt_state(self):
+        """The body as far as undo has to know it: the text's signature,
+        where the embedded windows sit, and the ranges of every formatting
+        and paragraph tag -- the things Tk's undo stack never records.
+
+        Taken as Tk reports it, one string of line.col ranges per tag:
+        no character offsets to work out, which is what made the span list
+        cost 64 ms a snapshot at 8,000 styled words (measured: 5.7 ms this
+        way). A string equal to the last snapshot's for the same tag is
+        that string object, and an unchanged snapshot is the last one, so
+        the steps of a long session share what they did not change -- a
+        step held two full copies of the note's formatting, and 100 cell
+        edits on a heavily styled note grew the app by 60 MB."""
+        b = self.body_text
+        text = b.get("1.0", "end-1c")
+        sig = (len(text), hash(text))
+        if self._undo_tail_held():
+            # The line the drawing put under the last table, not changed
+            # since: not on Tk's stack, so not counted (see
+            # _add_line_under_last_table).
+            sig = self._undo_tail
+            text = text[:-1]
+        # The text this state names, for a side counted with line breaks
+        # settled at its end (_undo_sig_is).
+        self._fmt_last_text = text
+        tags = sorted(t for t in b.tag_names() if _fmt_journal_tag(t))
+        if not getattr(self, "_fmt_ranges_proc", False):
+            b.tk.eval(_FMT_RANGES_TCL)
+            self._fmt_ranges_proc = True
+        lines = str(b.tk.call("::noteorg_fmt_ranges", b._w,
+                              tuple(tags))).split("\n")
+        state = (sig, tuple(lines[0].split()),
+                 tuple((t, s) for t, s in zip(tags, lines[1:]) if s))
+        last = getattr(self, "_fmt_last_state", None)
+        if last is not None:
+            if last == state:
+                return last
+            old = dict(last[2])
+            state = (state[0], state[1],
+                     tuple((t, old[t] if old.get(t) == s else s)
+                           for t, s in state[2]))
+        self._fmt_last_state = state
+        return state
+
+    def _fmt_restore(self, state, current=None):
+        """Lay a snapshot's formatting back on the text it was taken from
+        -- the caller has matched the text's signature. Tags only; the
+        text is never touched.
+
+        Only what differs is touched: tag by tag, the ranges the body has
+        and the snapshot does not are removed, and the ones the snapshot
+        has and the body does not are added. Taking back one bold used to
+        tear the grids down, strip every tag in the note and lay every
+        span again -- seconds on a heavily styled note, for one word.
+        Where the drawn tables' windows sit elsewhere than when the
+        snapshot was taken (Tk's undo put a table's text back without
+        one), its ranges are moved to them first (_fmt_move_ranges).
+        Returns the (start, end) pairs it touched -- empty when nothing
+        differed."""
+        if current is None:
+            current = self._fmt_state()
+        _sig, windows, ranges = state
+        if current[1:] == (windows, ranges):
+            return []
+        want = dict(ranges)
+        if windows != current[1]:
+            want = {t: _fmt_move_ranges(s, windows, current[1])
+                    for t, s in want.items()}
+        have = dict(current[2])
+        b = self.body_text
+        touched = []
+        for tag in set(want) | set(have):
+            wanted, held = want.get(tag, ""), have.get(tag, "")
+            if wanted == held:
+                continue
+            wanted, held = _fmt_pairs(wanted), _fmt_pairs(held)
+            drop = [i for pair in held - wanted for i in pair]
+            put = [i for pair in wanted - held for i in pair]
+            if drop:
+                b.tk.call(b._w, "tag", "remove", tag, *drop)
+            if put:
+                b.tk.call(b._w, "tag", "add", tag, *put)
+            touched.extend(held ^ wanted)
+        return touched
 
     def _can_edit_undo(self, widget):
         try:
@@ -12526,13 +14872,56 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
     def _undo_atom_begin(self):
         """Open one undo unit on the body (see the _undo_atom decorator).
-        Re-entrant: nested opens keep the outermost unit."""
+        Re-entrant: nested opens keep the outermost unit. The outermost
+        open also notes the body's formatting, so the unit's Ctrl+Z can
+        put back what Tk's text-only stack cannot (see _body_undo_redo)."""
         depth = getattr(self, "_undo_atom_depth", 0)
+        # A tags-only open (the decorator's flag) is for this call alone.
+        tags_only = getattr(self, "_undo_atom_tags_only", False)
+        self._undo_atom_tags_only = False
+        if depth == 0:
+            # A run of Tk's own deletes ends where an operation of the
+            # app's begins, as Tk's own unit does at the separator below.
+            self._close_styled_delete_run()
         self._undo_atom_depth = depth + 1
-        if depth == 0 and hasattr(self, "body_text"):
+        if not hasattr(self, "body_text"):
+            return
+        if depth == 0:
+            # What this unit records is recorded with the tables drawn,
+            # until it takes them down (_undo_atom_grids_coming_down) -- or
+            # with none to take down: then nothing it records can sit beside
+            # a window, and it is replayed with the tables down from the
+            # start. A paste on the first line of a table not yet drawn, in
+            # a note with no drawn table, drew the table at its end and was
+            # replayed with that window in place: Ctrl+Z lost letters.
+            self._atom_part_grids_down = not any(
+                self._grid_first_line(info) is not None
+                for info in getattr(self, "_table_grids", []))
+            # Whether it has edited a drawn table's first line with the
+            # grid's window there (see _mark_unit_window_free).
+            self._atom_edited_with_window = False
+            self._undo_atom_grouping = False
             try:
                 self.body_text.edit_separator()
+            except tk.TclError:
+                pass
+            self._fmt_atom_before = None
+            try:
+                # Only while the body records undo: an edit made inside
+                # _undo_hidden leaves no step on Tk's stack to pair with.
+                if self.body_text.tk.getboolean(
+                        self.body_text.cget("undo")):
+                    self._fmt_atom_before = self._fmt_state()
+            except (tk.TclError, ValueError):
+                pass
+        # Grouping Tk's edits into one step costs a configure, which
+        # re-lays out the whole note: paid once per unit, and only by a
+        # unit that may edit text -- a tags-only unit pays it only when a
+        # text unit opens inside it.
+        if not tags_only and not getattr(self, "_undo_atom_grouping", False):
+            try:
                 self.body_text.configure(autoseparators=False)
+                self._undo_atom_grouping = True
             except tk.TclError:
                 pass
 
@@ -12541,10 +14930,350 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._undo_atom_depth = depth
         if depth == 0 and hasattr(self, "body_text"):
             try:
-                self.body_text.configure(autoseparators=True)
+                if getattr(self, "_undo_atom_grouping", False):
+                    self.body_text.configure(autoseparators=True)
                 self.body_text.edit_separator()
             except tk.TclError:
                 pass
+            self._undo_atom_grouping = False
+            if getattr(self, "_fmt_atom_before", None) is None:
+                return
+            try:
+                after = self._fmt_state()
+            except (tk.TclError, ValueError):
+                self._fmt_atom_before = None
+                return
+            # Read after the snapshot: a line the drawing held under the last
+            # table, which this unit's edits made the note's, was counted
+            # into it just now (_settle_undo_tail).
+            before = self._fmt_atom_before
+            self._fmt_atom_before = None
+            if after == before:
+                return
+            # A unit that changed the text is a step on Tk's stack as well;
+            # one that changed only formatting is a step on this one alone.
+            self._push_atom_step(before, after)
+
+    def _push_atom_step(self, before, after):
+        """One journal step for (the part of) a unit that ran from
+        *before* to *after*, marked with whether its text edits were
+        recorded with the tables taken down.
+
+        A part in which only the drawn tables moved -- the same text, the
+        same formatting once the windows are accounted for -- is no step:
+        a unit that rewrites the body (a list renumbered) or inserts a
+        table beside a drawn one is split where the tables come down, and
+        its drawing again was left as a step of its own, which the first
+        Ctrl+Z took back with nothing changing on screen (and the last
+        Ctrl+Y). Tk holds no step for it either: no text changed. The two
+        sides are compared without the windows (_fmt_window_free): moved
+        into each other's, a centred line right above a table, or a table
+        placed centre or right, still read as a change -- and each such
+        empty step took one of the journal's 100 (_trim_fmt_journal)."""
+        journal = getattr(self, "_fmt_undo", None)
+        if journal is None:
+            journal = self._fmt_undo = []
+        text = after[0] != before[0]
+        if (not text and before[1] != after[1]
+                and len(before) > 2 and len(after) > 2
+                and _fmt_window_free(before) == _fmt_window_free(after)):
+            return
+        journal.append({"text": text,
+                        "before": before, "after": after,
+                        "grids_down": getattr(self, "_atom_part_grids_down", False)})
+        self._trim_fmt_journal(journal)
+        # A step that changed text is on Tk's stack, and Tk's redo stack
+        # empties with it. One that changed formatting only put nothing
+        # there: Tk can still redo every text step undone before it, so they
+        # stay -- as stubs, how each was recorded, their formatting stale
+        # under the new one. Emptied, Ctrl+Y read a header cell's edit as
+        # typing, replayed it with the tables down, a column off.
+        self._fmt_redo = ([] if text else
+                          [self._fmt_stub(s)
+                           for s in getattr(self, "_fmt_redo", None) or []
+                           if s["text"]])
+
+    def _undo_atom_grids_coming_down(self):
+        """An open unit is about to take the drawn tables down.
+
+        Tk records every edit by its index, and a drawn table's first line
+        holds the grid's window at column 0: an edit recorded with the
+        grids down landed one column off when Ctrl+Z replayed it with them
+        drawn -- centring a cell, inserting a row below or autofitting a
+        column, then Ctrl+Z, gave the header back as "| Ite  | Qt  |".
+        _body_undo_redo takes the grids down first for a step marked so.
+
+        A unit that already edited the text with the grids drawn -- a cell
+        committed before a table operation -- would hold both kinds of edit
+        in one step, right in neither state. What it did so far becomes a
+        step of its own, ended on Tk's stack by a separator, and the part
+        that follows is the part marked as recorded with the grids down."""
+        if getattr(self, "_fmt_atom_before", None) is not None:
+            try:
+                now = self._fmt_state()
+            except (tk.TclError, ValueError):
+                now = None
+            # Read after the snapshot, which counts a line the drawing held
+            # into it (_settle_undo_tail): read before, the step's first side
+            # named the text without that line, Ctrl+Z matched nothing, and
+            # the formatting it should have laid back was lost.
+            before = self._fmt_atom_before
+            if now is not None and now[0] != before[0]:
+                self._push_atom_step(before, now)
+                try:
+                    self.body_text.edit_separator()
+                except tk.TclError:
+                    pass
+                self._fmt_atom_before = now
+        self._atom_part_grids_down = True
+        self._atom_edited_with_window = False
+
+    def _mark_unit_window_free(self):
+        """The open unit is about to edit a table that is not drawn -- one
+        typed by hand, tidied as the caret leaves it or as a paste does.
+        Its edits are recorded with no window on the table's first line,
+        and the drawing that follows puts one there: replayed with it drawn,
+        Ctrl+Z took back the padding a column off and the header lost a
+        letter ("| Item name | Qt  |"). Marked as recorded with the grids
+        down, so _body_undo_redo takes them down first. A unit that has
+        already edited a drawn table's first line with its window there (a
+        cell written, a drawn table aligned) is split there, as
+        _undo_atom_grids_coming_down does; any other edit lands the same
+        with the grids down or up, and the unit is marked whole, unsplit."""
+        if getattr(self, "_undo_atom_depth", 0) <= 0:
+            return
+        if getattr(self, "_atom_part_grids_down", False):
+            return
+        if not getattr(self, "_atom_edited_with_window", False):
+            self._atom_part_grids_down = True
+            return
+        self._undo_atom_grids_coming_down()
+
+    def _note_edit_with_window(self):
+        """An edit of a drawn table's first line, its grid's window there,
+        inside an open unit (see _mark_unit_window_free). A part of the unit
+        marked as recorded with the grids down ends here: what it did so far
+        becomes a step of its own, and what follows is recorded, and
+        replayed, with the grids up."""
+        if getattr(self, "_undo_atom_depth", 0) <= 0:
+            return
+        if getattr(self, "_atom_part_grids_down", False):
+            if getattr(self, "_fmt_atom_before", None) is not None:
+                try:
+                    now = self._fmt_state()
+                except (tk.TclError, ValueError):
+                    now = None
+                # Read after the snapshot, which counts a line the drawing
+                # held into it (_settle_undo_tail).
+                before = self._fmt_atom_before
+                if now is not None and now[0] != before[0]:
+                    self._push_atom_step(before, now)
+                    try:
+                        self.body_text.edit_separator()
+                    except tk.TclError:
+                        pass
+                    self._fmt_atom_before = now
+            self._atom_part_grids_down = False
+        self._atom_edited_with_window = True
+
+    # The bindtag put first on the note body, so it sees every key and
+    # every Cut, Clear and Paste before the body's own bindings do.
+    _STYLED_DELETE_TAG = "NoteBodyStyledDelete"
+
+    def _note_styled_delete(self, event, virtual=False):
+        """Note the formatting before Tk deletes styled text by its own hand.
+
+        Delete, BackSpace, typing over a selection and Cut are Tk's own
+        bindings; no undo unit of the app's wraps them, so nothing noted
+        the bold, colours and paragraph formatting they took, and Ctrl+Z
+        brought the text back plain. Before such a delete reaches text that
+        carries formatting, this notes the body's formatting and starts a
+        step of its own on Tk's stack; the step becomes a journal entry
+        (_close_styled_delete_run) once something other than the same
+        delete comes along, and _body_undo_redo lays it back on the text
+        Tk restores.
+
+        A run of BackSpaces (or Deletes) stays ONE step, because Tk merges
+        contiguous deletes into one unit: undo granularity is Tk's, as it
+        always was. Measured before this was written: typing over a
+        selection, Cut and Paste are one unit each, five BackSpaces are
+        one, and a separator from a tag ahead of the Text class splits
+        them where it is put. Text with no formatting is left entirely to
+        Tk -- not even a separator.
+        """
+        b = self.body_text
+        if (not virtual and getattr(event, "keysym", "") == "Insert"
+                and not (getattr(event, "state", 0) & 0x5)):
+            # Tk's own Insert pastes the selection over itself, and the
+            # selection's text leaves out a drawn table's hidden rows: over
+            # a selection holding a table, the table went. Insert does
+            # nothing there.
+            try:
+                if (b.compare("sel.first", "<=", "insert")
+                        and b.compare("insert", "<=", "sel.last")
+                        and b.tag_nextrange(self.TABLE_HIDE_TAG,
+                                            "sel.first", "sel.last")):
+                    return "break"
+            except tk.TclError:
+                pass
+        try:
+            if not b.tk.getboolean(b.cget("undo")):
+                return None
+        except (tk.TclError, ValueError):
+            return None
+        doomed, kind = self._native_delete_range(event, virtual)
+        styled = (doomed is not None
+                  and self._range_carries_formatting(*doomed))
+        run = getattr(self, "_styled_delete_run", None)
+        if run is not None:
+            if (styled and kind in ("back", "del") and kind == run["kind"]
+                    and b.compare("insert", "==", run["at"])):
+                run["at"] = doomed[0]
+                return None
+            self._close_styled_delete_run()
+        if styled:
+            try:
+                b.edit_separator()
+                self._styled_delete_run = {"before": self._fmt_state(),
+                                           "kind": kind, "at": doomed[0]}
+            except (tk.TclError, ValueError):
+                self._styled_delete_run = None
+        return None
+
+    def _native_delete_range(self, event, virtual=False):
+        """(start, end) of what Tk's own binding for `event` will delete
+        from the body, and which kind of delete it is -- or (None, None).
+        Selected cells are the app's own path (_on_body_delete_key).
+        *virtual*: the event is Cut, Clear or Paste, by whatever key."""
+        b = self.body_text
+        if getattr(self, "_grid_sel", None) is not None:
+            return None, None
+        try:
+            sel = (b.index("sel.first"), b.index("sel.last"))
+        except tk.TclError:
+            sel = None
+        if virtual or getattr(event.type, "name", str(event.type)) == "VirtualEvent":
+            return (sel, "replace") if sel else (None, None)
+        keysym = getattr(event, "keysym", "")
+        state = getattr(event, "state", 0)
+        if not isinstance(state, int):
+            state = 0
+        control, alt = bool(state & 0x4), bool(state & 0x20000)
+        try:
+            if control and not alt and keysym in ("h", "k", "t"):
+                # Tk's own Ctrl+H (one character back), Ctrl+K (to the
+                # line's end, or its line break) and Ctrl+T (swap the two
+                # characters at the caret), which read a selection as
+                # nothing. Their bold came back plain on Ctrl+Z.
+                return self._tk_control_delete_range(keysym)
+            if keysym == "BackSpace":
+                if sel:
+                    return sel, "back"
+                if b.compare("insert", "==", "1.0"):
+                    return None, None
+                return (b.index("insert-1c"), b.index("insert")), "back"
+            if keysym == "Delete":
+                if sel:
+                    return sel, "del"
+                if b.compare("insert", ">=", "end-1c"):
+                    return None, None
+                return (b.index("insert"), b.index("insert+1c")), "del"
+        except tk.TclError:
+            return None, None
+        if not sel:
+            return None, None
+        if keysym == "Insert" and not (state & 0x1) and not control:
+            # Tk's own Insert pastes the selection, deleting it first when
+            # the caret is in it (tk::TextInsert): a replace, as typing over
+            # it is. Its style came back plain, and Ctrl+Z left it so.
+            try:
+                if (b.compare("sel.first", "<=", "insert")
+                        and b.compare("insert", "<=", "sel.last")):
+                    return sel, "replace"
+            except tk.TclError:
+                pass
+            return None, None
+        char = getattr(event, "char", "") or ""
+        # Control+Alt is AltGr on Windows, which types a character.
+        typed = (char.isprintable() and char != ""
+                 and (not control or alt))
+        if typed or keysym in ("Return", "KP_Enter", "Tab"):
+            return sel, "replace"
+        return None, None
+
+    def _tk_control_delete_range(self, keysym):
+        """What Tk's own Ctrl+H, Ctrl+K or Ctrl+T will take from the body
+        (text.tcl's bindings, on every platform), and which kind of delete
+        it is: a run of Ctrl+H is a run of BackSpaces, of Ctrl+K a run of
+        Deletes, and a swap replaces the two characters it moves."""
+        b = self.body_text
+        if keysym == "h":
+            if b.compare("insert", "==", "1.0"):
+                return None, None
+            return (b.index("insert-1c"), b.index("insert")), "back"
+        if keysym == "k":
+            if b.compare("insert", "==", "insert lineend"):
+                if b.compare("insert", ">=", "end-1c"):
+                    return None, None
+                return (b.index("insert"), b.index("insert+1c")), "del"
+            return (b.index("insert"), b.index("insert lineend")), "del"
+        pos = ("insert" if b.compare("insert", "==", "insert lineend")
+               else "insert+1c")
+        if b.compare(f"{pos}-1c", "==", "1.0"):
+            return None, None
+        return (b.index(f"{pos}-2c"), b.index(pos)), "replace"
+
+    def _range_carries_formatting(self, start, end):
+        """Does any character formatting or paragraph formatting touch the
+        text from `start` to `end`? The tags at its first character, and
+        any that begin inside it."""
+        b = self.body_text
+        try:
+            if any(_fmt_journal_tag(t) for t in b.tag_names(start)):
+                return True
+            # One character -- every BackSpace and Delete -- is answered by
+            # its own tags; only a selection pays for a look at them all.
+            if b.compare(end, "<=", f"{start}+1c"):
+                return False
+            return any(b.tag_nextrange(t, start, end)
+                       for t in b.tag_names() if _fmt_journal_tag(t))
+        except tk.TclError:
+            return False
+
+    def _close_styled_delete_run(self):
+        """Turn an open run of Tk's own deletes into a journal step: the
+        formatting before it and after it, with a separator after it on
+        Tk's stack too, so the step and Tk's unit end in the same place.
+        A run that deleted nothing (a guard broke the key) leaves no step."""
+        run = getattr(self, "_styled_delete_run", None)
+        if run is None or not hasattr(self, "body_text"):
+            self._styled_delete_run = None
+            return
+        try:
+            self.body_text.edit_separator()
+            # Taken with the run still open: its deletes may have made a
+            # line the drawing held the note's, counted into the run's first
+            # snapshot as into every other (_settle_undo_tail).
+            after = self._fmt_state()
+        except (tk.TclError, ValueError):
+            self._styled_delete_run = None
+            return
+        self._styled_delete_run = None
+        # Nothing changed at all: no step. The same text put back bare --
+        # Insert over the selection it pastes, a paste of the very words it
+        # replaced -- changed their formatting only, and is a step: dropped,
+        # Ctrl+Z gave the words back without their style.
+        if after == run["before"]:
+            return
+        journal = getattr(self, "_fmt_undo", None)
+        if journal is None:
+            journal = self._fmt_undo = []
+        # Tk's own deletes, like every step of Tk's: never on a drawn table's
+        # line, so replayed with the tables down (see _body_undo_redo).
+        journal.append({"text": True, "before": run["before"], "after": after,
+                        "grids_down": True})
+        self._trim_fmt_journal(journal)
+        self._fmt_redo = []
 
     def _body_undo_redo(self, action):
         """Ctrl+Z / Ctrl+Y on the note body.
@@ -12554,24 +15283,131 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         the OLD cells over the new text (the drawing itself is kept off
         the stack by _undo_hidden). So every step resyncs the line tags
         and redraws the grids from the text that undo produced.
+
+        And Tk's stack holds TEXT, never a tag. Making a word bold left
+        nothing on it, so Ctrl+Z skipped the bold and took back the last
+        burst of typing instead; and text Tk puts back comes back bare,
+        so undoing a table operation returned the cells without their
+        bold and colours. A formatting journal beside Tk's stack fills
+        both gaps: every undo unit (_undo_atom) notes the formatting
+        before and after it. A step that changed formatting only is taken
+        back here, without Tk, when the text is exactly what it was then;
+        a step Tk takes back gets its formatting laid again once Tk lands
+        on the text the step started from. Matching on the text itself,
+        never on a count of steps, is what keeps the two stacks in step:
+        a snapshot is only ever laid on the very text it was taken from.
+        A unit nothing noted (typing) is noted on its way back, so Ctrl+Y
+        returns its styles too.
         """
         b = self.body_text
+        # A table is tidied when the caret leaves it (_align_table_on_
+        # leaving), and undo moves the caret without the person moving it.
+        # The release of this very key, or of the next Ctrl+Z, found the
+        # caret "leaving" a table the undo had put it in, and padded its
+        # narrow columns as a new recorded edit -- which wipes the redo
+        # history: Ctrl+Y could no longer bring back what was undone.
+        self._last_caret_line = None
         # A still-open cell editor holds uncommitted text; commit it so
         # the undo works against what the note actually says.
         if getattr(self, "_cell_editor", None):
             self._commit_cell_editor()
-        can = (self._can_edit_undo if action == "undo"
-               else self._can_edit_redo)(b)
-        if not can:
-            return "break"
-        try:
-            (b.edit_undo if action == "undo" else b.edit_redo)()
-        except tk.TclError:
-            return "break"
+        # A run of Tk's own deletes still open is a step now, so this
+        # press can take it back with its formatting.
+        self._close_styled_delete_run()
+        undo = action == "undo"
+        if getattr(self, "_fmt_undo", None) is None:
+            self._fmt_undo = []
+        if getattr(self, "_fmt_redo", None) is None:
+            self._fmt_redo = []
+        mine, other = ((self._fmt_undo, self._fmt_redo) if undo
+                       else (self._fmt_redo, self._fmt_undo))
+        now = self._fmt_state()
+        now_text = self._fmt_last_text
+        top = mine[-1] if mine else None
+        redraw = True
+        if (top is not None and not top["text"]
+                and self._undo_sig_is(top["before"][0], now[0], now_text)):
+            # A formatting-only step, taken on exactly this text: it is
+            # this whole key press, and Tk's stack is not touched.
+            mine.pop()
+            other.append(top)
+            target = top["before"] if undo else top["after"]
+            touched = self._fmt_restore(target, now)
+            # The drawn tables only need drawing again when the step
+            # restyled one of their cells (or the windows had moved): a
+            # bold taken back in the prose redrew every table in the note.
+            redraw = target[1] != now[1]
+            for info in getattr(self, "_table_grids", []):
+                first = self._grid_first_line(info)
+                last = None if first is None else first + info["nrows"] - 1
+                if redraw or first is None or any(
+                        int(lo.split(".")[0]) <= last
+                        and int(hi.split(".")[0]) >= first
+                        for lo, hi in touched):
+                    redraw = True
+                    break
+        else:
+            can = (self._can_edit_undo if undo else self._can_edit_redo)(b)
+            if not can:
+                return "break"
+            came, went = ("after", "before") if undo else ("before", "after")
+            # Tk replays a step in the state it was recorded in: a step
+            # recorded with the tables taken down is replayed with them
+            # down (see _undo_atom_grids_coming_down). They are drawn again
+            # below, as after every step.
+            pending = next((s for s in reversed(mine) if s["text"]
+                            and self._undo_sig_is(s[came][0], now[0],
+                                                  now_text)), None)
+            # A step no unit of the app's noted -- typing, Tk's own deletes
+            # and paste -- never touches a drawn table's line (the caret
+            # guard keeps the caret off them), so the only windows that
+            # matter to its replay are those of tables drawn SINCE it was
+            # recorded: a table typed by hand, then left. Its rows were typed
+            # with no window on the table's first line, and replayed with one
+            # there they landed a column off ("| Item name | Qt  |"). Such a
+            # step is replayed with the tables down, like a unit marked so.
+            if pending is None or pending.get("grids_down"):
+                self._teardown_table_grids()
+            # Tk replays on the text it recorded: a line the drawing put under
+            # the last table since the text last changed goes first, and the
+            # redraw below puts it back if it is still needed.
+            self._drop_undo_tail()
+            try:
+                (b.edit_undo if undo else b.edit_redo)()
+            except tk.TclError:
+                return "break"
+            text = b.get("1.0", "end-1c")
+            landed = (len(text), hash(text))
+            step = None
+            for i in range(len(mine) - 1, -1, -1):
+                if (mine[i]["text"]
+                        and self._undo_sig_is(mine[i][came][0], now[0],
+                                              now_text)
+                        and self._undo_sig_is(mine[i][went][0], landed,
+                                              text)):
+                    step = mine.pop(i)
+                    break
+            if step is None:
+                # Replayed with the tables down (above), and so replayed
+                # back the other way.
+                step = {"text": True, came: now, went: self._fmt_state(),
+                        "grids_down": pending is None or bool(
+                            pending.get("grids_down"))}
+            else:
+                # The side left behind is noted as it really was, for the
+                # press that comes back to it.
+                step[came] = now
+                # A stub's side is its signature alone (see
+                # _trim_fmt_journal): no formatting to lay back.
+                if len(step[went]) > 1:
+                    self._fmt_restore(step[went])
+            other.append(step)
+            self._trim_fmt_journal(other)
         self._body_follow_caret = True
         self._resync_list_tags()
-        if (getattr(self, "_table_grids", None)
-                or core_tables.find_blocks(b.get("1.0", "end-1c"))):
+        grids = getattr(self, "_table_grids", None)
+        if ((grids and redraw) or (not grids and core_tables.find_blocks(
+                b.get("1.0", "end-1c")))):
             self._render_table_grids()
         self._refresh_format_buttons()
         self._schedule_autosave()
@@ -12606,9 +15442,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     return "break"
             except (tk.TclError, ValueError):
                 pass
-            # A deliberate scroll beats a rebuild's still-pending restore.
+            # A deliberate scroll beats a rebuild's still-pending restore,
+            # and the list hears that the person scrolled it: the keyboard
+            # coming back then starts in view, not back at the ring.
             if canvas is getattr(self, "canvas", None):
-                self._list_restore_px = None
+                self._list_scrolled_by_hand()
             canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
             return "break"
 
@@ -12716,6 +15554,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # rebuild below would draw the list around a card that is not
         # where it seems. The drag ends, and the card goes back first.
         self._cancel_list_drag()
+        # Every route that takes notes out of the notebook ends here or in
+        # _remove_note_cards, so the ticks of notes that are gone go here.
+        self._prune_selection()
         # The sort this list is drawn in -- what Custom order starts from
         # when it is chosen for the first time (_on_sort_chosen).
         sort_var = getattr(self, "sort_var", None)
@@ -12738,9 +15579,6 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 saved_list_scroll = max(0, self.canvas.canvasy(0))
         except (tk.TclError, AttributeError):
             saved_list_scroll = 0
-        if saved_list_scroll > 0:
-            self.after_idle(lambda px=saved_list_scroll:
-                            self._restore_list_scroll(px))
         # Called from everywhere note/category data changes (save, delete,
         # category rename/delete, import, ...) — piggyback the Statistics
         # panel's refresh here too, so it stays live while Settings happens
@@ -12752,8 +15590,17 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # draws (see _list_draw_target). The keyboard itself stays where it
         # is: the canvas survives a rebuild, only its drawing is replaced.
         self._restore_focus_wanted = getattr(self, "_keyboard_on_card", False)
-        # How deep the list was drawn, asked before the drawing goes.
-        drawn_before = len(getattr(self, "_list_drawn", None) or ())
+        # Whether the person could see the ring: if this rebuild moves its
+        # row out of sight -- the card pinned from its menu goes to the top
+        # -- the view goes after it (_restore_card_focus). Only ever set
+        # here, so two rebuilds before the app is idle cannot forget it.
+        ring = self._ring_row()
+        if (self._restore_focus_wanted and ring is not None
+                and self._row_on_screen(self._list_row_record(ring)) == "all"):
+            self._ring_follow = True
+        # How deep the list must be drawn again, asked before the drawing
+        # goes: as deep as the view needs, not as deep as it once went.
+        drawn_before = self._list_depth_for(saved_list_scroll)
         self.canvas.delete("row")
         # One record per drawn row, in the order the rows stand on screen,
         # and the same records by note id and by category -- what every
@@ -12763,6 +15610,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._note_cards = {}
         self._group_headers = {}
         self._list_pending = []
+        # The drawing is replaced, and every card drawn below notes afresh
+        # whether it is painted as the open note (_ring_to_paint).
+        self._open_ring_ids = set()
 
         rows = self._list_rows()
 
@@ -12772,8 +15622,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 msg = "No notes match your search or filter."
             else:
                 msg = "No notes yet.\nClick '+ New Note' to start!"
+            # Kept inside the list's width, like every other text on it:
+            # a message that fits here can run off the edge in another
+            # font or at another scaling.
             self.canvas.create_text(
                 13, 23, anchor="nw", text=msg, font=("Segoe UI", 10),
+                width=self.LIST_DRAW_WIDTH - 2 * 13,
                 fill=self.colors["subtext"], tags=("row", "list_empty"))
             self._list_extent_changed()
             return
@@ -12781,6 +15635,17 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._list_pending = rows
         self._draw_list_rows(self._list_draw_target(
             rows, drawn_before, saved_list_scroll))
+        if saved_list_scroll > 0:
+            # The restore is in force from here, not from when the app is
+            # next idle. Every deliberate scroll -- the wheel, the scrollbar,
+            # the ring's scroll-into-view, a click keeping its card under the
+            # pointer -- cancels a restore by clearing _list_restore_px; a
+            # restore queued as a bare callback could not be cancelled, and
+            # scrolled the view back after them. A press measured in one view
+            # and a jitter read in the other then passed for a drag.
+            self._list_restore_px = saved_list_scroll
+            self._list_restore_until = time.monotonic() + 0.4
+            self.after_idle(self._begin_list_restore)
         # The card with the keyboard's ring is drawn with it; this repaints
         # it once the app is idle, for a rebuild that ran while the list was
         # not the thing holding the keyboard.
@@ -12797,6 +15662,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
     # within a screen of the end of what is drawn. See _draw_list_rows.
     LIST_FIRST_DRAW = 30
     LIST_DRAW_STEP = 20
+    # Where a card redrawn by a save is drawn before the reflow puts it in
+    # its place: above the list, where no row ever stands (_reflow_list).
+    LIST_OUT_OF_THE_WAY = -100000
 
     # The list is drawn on its canvas: every card is rectangles and text,
     # not widgets. These reproduce the widget cards they replaced, to the
@@ -12807,14 +15675,18 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
     # normalize_note). One name, because the dropdown, the sort and the
     # move all have to mean the same option.
     SORT_CUSTOM = "Custom order"
+    LIST_DOUBLE_PRESS_S = 0.5   # how long a double-click's first press counts
     DRAG_THRESHOLD = 5          # pixels a press must travel to become a drag
     DRAG_EDGE = 28              # near the list's top or bottom, a drag scrolls
     DRAG_SCROLL_MS = 40         # ...one step this often
+    DRAG_EDGE_DWELL_MS = 400    # ...a drag that began there, once held this long
+    DRAG_SCROLL_RAMP = 10       # ...its steps growing to full over these beats
 
     LIST_DRAW_WIDTH = 250       # the list's width, as the old frame's was
     CARD_MARGIN = (5, 5)        # above and below each card
     HEADER_MARGIN = (6, 2)      # above and below each category header
     HEADER_HEIGHT = 22
+    HEADER_FONT = ("Segoe UI", 9, "bold")
     CARD_INSET_X = 2            # between the list's edge and a card's
     CARD_RING = 2               # the ring: open note, keyboard, or nothing
     CARD_STRIPE = 5             # the note's colour down the left edge
@@ -12841,7 +15713,20 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         agreed, which is exactly what copies stop doing.
         """
         query = self._search_query()
-        shown = [n for n in self.notes if self._query_matches_note(query, n)]
+        if not query:
+            shown = list(self.notes)
+        else:
+            # The same rule as _query_matches_note, over texts kept from the
+            # last scan: a keystroke used to lowercase every body and parse
+            # every table again (70 ms a pause at 5,000 notes).
+            shown = [n for n in self.notes
+                     if self._query_in_texts(query, self._cached_search_texts(n))]
+            cache = self.__dict__.setdefault("_search_text_cache", {})
+            if len(cache) > len(self.notes) + 64:
+                # Notes deleted since: their entries go.
+                alive = {n.get("id") for n in self.notes}
+                for gone in [k for k in cache if k not in alive]:
+                    del cache[gone]
         # Category/type filter (from the dropdown). "All" shows everything.
         chosen_category = getattr(self, "filter_var", None)
         if chosen_category is not None:
@@ -12850,6 +15735,14 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 shown = [n for n in shown
                          if self._note_passes_filter(n, selected)]
         return shown
+
+    @staticmethod
+    def _list_group_of(note):
+        """The group a note's card stands in when the list is grouped: its
+        category, or General for a note with none. One answer for the rows
+        themselves and for every question asked about them -- which group a
+        card may be dragged within, and which notes a folded group hides."""
+        return note.get("category") or "General"
 
     def _list_rows(self):
         """Every row the note list shows, in screen order, before any of
@@ -12877,7 +15770,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             return [("note", note) for note in shown]
         groups = {}
         for note in shown:
-            groups.setdefault(note.get("category") or "General", []).append(note)
+            groups.setdefault(self._list_group_of(note), []).append(note)
         # Known categories first (in their defined order), then any leftover
         # (stale/deleted) category names so nothing gets silently dropped.
         ordered = [c for c in CATEGORY_COLORS.keys() if c in groups]
@@ -12895,20 +15788,45 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
         A screenful and some to spare, as a rule. But a rebuild must not
         take the list out from under the person using it: when it was
-        scrolled, the old depth is drawn again, so the position restored
-        in pixels has content to land on; and when the keyboard was on a
-        card, that card is drawn, so the ring has somewhere to be.
+        scrolled, as many rows are drawn again as reached a screen below
+        the view (`drawn_before`, measured by _list_depth_for on the drawing
+        being replaced), so the position restored in pixels has content to
+        land on; and when the keyboard was on a card, that card is drawn,
+        so the ring has somewhere to be.
         """
         want = self.LIST_FIRST_DRAW
         if scrolled_px > 0:
             want = max(want, drawn_before)
         if getattr(self, "_restore_focus_wanted", False):
-            wanted = getattr(self, "_focused_note_id", None)
-            for index, row in enumerate(rows):
-                if row[0] == "note" and row[1].get("id") == wanted:
-                    want = max(want, index + 1)
-                    break
+            index = self._ring_index_in(rows)
+            if index is not None:
+                want = max(want, index + 1)
         return want
+
+    def _list_depth_for(self, scrolled_px):
+        """How many of the drawn rows it takes to reach a screen below a
+        view scrolled `scrolled_px` down -- asked of the drawing a rebuild is
+        about to replace, whose rows the new one mostly shares.
+
+        A rebuild used to draw again every row drawn before whenever the list
+        was scrolled at all: after one trip to the end of 1,000 notes and
+        back near the top, every pin, Select mode, grouping and search drew
+        all 1,000 (90-360 ms against 12-52 at the top). The restore needs
+        the rows down to the view's bottom; one screen more is what the
+        top-up keeps below the view anyway, so a wheel turn finds rows."""
+        drawn = getattr(self, "_list_drawn", None) or ()
+        if scrolled_px <= 0 or not drawn:
+            return 0
+        try:
+            bottom = scrolled_px + 2 * self.canvas.winfo_height()
+        except tk.TclError:
+            return len(drawn)
+        depth = 0
+        for rec in drawn:
+            depth += 1
+            if rec["y0"] >= bottom:
+                break
+        return depth
 
     def _draw_list_rows(self, count):
         """Draw the next `count` waiting rows, below what is already drawn.
@@ -12988,19 +15906,61 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
     def _reflow_list(self, start=0):
         """Move every drawn row from `start` on to its place below the row
         before it. Rows keep their own heights; only where they stand
-        changes, by moving their items -- one repaint for the lot."""
+        changes, by moving their items -- one repaint for the lot.
+
+        Rows that move by the same amount move together, in one tagged move
+        of the band they stand in. A canvas finds a tag by walking every
+        item it holds, so moving each row by its own tag cost rows times
+        items: 2.6 s to close the gap one delete left in a list drawn to the
+        end of 5,000 notes, and a first autosave of a note far down paid the
+        same. A band is tagged by what lies wholly inside it, before any
+        band moves, and trusted only if it holds exactly its rows' items;
+        otherwise those rows move one by one, as they always did.
+
+        Tk's search for what lies inside skips hidden items, and in Select
+        mode every unticked card's tick mark is one: every band came up a
+        mark short per card and moved row by row -- 4.7 s for a delete at
+        5,000 notes. The marks join their band by id (a lookup, not a walk
+        of the canvas), so they travel with their cards."""
         drawn = self._list_drawn
         y = 0
         if start > 0:
             y = drawn[start - 1]["y1"] + drawn[start - 1]["margin"][1]
-        for rec in drawn[start:]:
-            top = y + rec["margin"][0]
-            dy = top - rec["y0"]
+        runs = []                       # [dy, first row, last row]
+        for i in range(start, len(drawn)):
+            rec = drawn[i]
+            dy = y + rec["margin"][0] - rec["y0"]
             if dy:
-                self.canvas.move(rec["tag"], 0, dy)
-                rec["y0"] += dy
-                rec["y1"] += dy
-            y = rec["y1"] + rec["margin"][1]
+                if runs and runs[-1][0] == dy and runs[-1][2] == i - 1:
+                    runs[-1][2] = i
+                else:
+                    runs.append([dy, i, i])
+            y = rec["y1"] + dy + rec["margin"][1]
+        cv = self.canvas
+        bands = []
+        for n, (dy, first, last) in enumerate(runs):
+            tag = "reflow%d" % n
+            # Rows stand at least 7px apart (their margins); three pixels
+            # either side is room for how Tk pads a bbox, and no more.
+            cv.addtag_enclosed(tag, -10, drawn[first]["y0"] - 3,
+                               self.LIST_DRAW_WIDTH + 10, drawn[last]["y1"] + 3)
+            for i in range(first, last + 1):
+                mark = drawn[i]["items"].get("mark")
+                if mark is not None:
+                    cv.addtag_withtag(tag, mark)
+            owned = sum(len(drawn[i]["items"]) for i in range(first, last + 1))
+            bands.append((tag, dy, first, last,
+                          len(cv.find_withtag(tag)) == owned))
+        for tag, dy, first, last, whole in bands:
+            if whole:
+                cv.move(tag, 0, dy)
+            else:
+                for i in range(first, last + 1):
+                    cv.move(drawn[i]["tag"], 0, dy)
+            cv.dtag(tag)
+            for i in range(first, last + 1):
+                drawn[i]["y0"] += dy
+                drawn[i]["y1"] += dy
         self._list_extent_changed()
 
     def _list_view_changed(self, first, last):
@@ -13065,18 +16025,48 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             23, mid, anchor="w", text=("▶" if collapsed else "▼"),
             font=("Segoe UI", 8), fill=c["subtext"], tags=tags)
         caret_right = cv.bbox(items["caret"])[2]
+        label_x = caret_right + 10
         items["label"] = cv.create_text(
-            caret_right + 10, mid, anchor="w",
-            text=f"{cat} ({len(notes_in_group)})",
-            font=("Segoe UI", 9, "bold"), fill=c["text"], tags=tags)
+            label_x, mid, anchor="w",
+            text=self._header_label_text(cat, len(notes_in_group), label_x),
+            font=self.HEADER_FONT, fill=c["text"], tags=tags)
+        # The keyboard's ring, drawn the way a card's is: the header is a
+        # stop on the keyboard's walk. The header's own fill when the ring
+        # is elsewhere, which is no ring at all.
+        items["ring"] = cv.create_rectangle(
+            self.CARD_INSET_X + 1, top + 1,
+            self.LIST_DRAW_WIDTH - self.CARD_INSET_X - 1, bottom - 1,
+            width=self.CARD_RING, outline=self._header_ring_color(cat),
+            tags=tags)
         # The ids, not the cards: a collapsed group draws no cards at
         # all, and its header still has to show the right number.
         rec = {"kind": "header", "key": ("header", cat), "tag": tag,
                "cat": cat, "ids": [n["id"] for n in notes_in_group],
                "collapsed": collapsed, "y0": top, "y1": bottom,
-               "margin": self.HEADER_MARGIN, "items": items}
+               "margin": self.HEADER_MARGIN, "items": items,
+               "label_x": label_x}
         self._group_headers[cat] = rec
         return rec
+
+    def _header_label_text(self, cat, count, left):
+        """What a category header says -- the category and how many notes it
+        holds -- fitted between `left` and the edge the card texts keep to.
+
+        The count always shows: on a folded group it is all the header says
+        about the group's size. A name too long for the line gives way to
+        an ellipsis first. Drawn whole, a long name (up to 80 characters is
+        allowed) ran past the list's edge and took the count with it."""
+        font = getattr(self, "_header_font", None)
+        if font is None:
+            # A Font object, not the tuple: _ellipsize measures a tuple
+            # with its family and size only, and this one is bold.
+            font = self._header_font = tkfont.Font(
+                family=self.HEADER_FONT[0], size=self.HEADER_FONT[1],
+                weight=self.HEADER_FONT[2])
+        tail = f" ({count})"
+        right = self.LIST_DRAW_WIDTH - self.CARD_INSET_X - self.CARD_PAD[0]
+        room = max(1, right - left - font.measure(tail))
+        return self._ellipsize(cat, font, room) + tail
 
     def _sort_notes(self, notes, choice=None):
         """Sort the list in place according to the chosen sort option -- or
@@ -13159,7 +16149,32 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
     def _on_sort_chosen(self, value):
         """The Sort dropdown's choice. Custom order chosen before anything
         was ever placed starts from the order the list was showing, rather
-        than from an order nobody has seen."""
+        than from an order nobody has seen.
+
+        And Custom order chosen after a move replaced an arrangement made by
+        hand (see _move_note) asks, once, whether to bring that arrangement
+        back. Its toast offered it for eight seconds, and the next toast
+        with an Undo -- a delete's, say -- took the offer's place: the
+        arrangement then had no way back at all. Kept for the session, it
+        is offered where the person goes looking for it."""
+        replaced = getattr(self, "_replaced_custom_order", None)
+        if value == self.SORT_CUSTOM and replaced is not None:
+            self._replaced_custom_order = None
+            marks, sort_before = replaced
+            if (self._put_back_custom_order(marks, dry_run=True)
+                    and self.ask_yes_no(
+                        "Bring back your Custom order?",
+                        f"Moving a note while the list was sorted by "
+                        f"{sort_before} started Custom order again from that "
+                        f"sort, and the arrangement you had made by hand was "
+                        f"replaced.\n\n"
+                        f"Bring back the arrangement you made by hand? Moves "
+                        f"made since then will be undone. With No, the list "
+                        f"stays as it is now, and this is not asked again.",
+                        icon="question")):
+                self._put_back_custom_order(marks)
+                self.save_notes()
+                self.set_status("Put back your Custom order")
         if (value == self.SORT_CUSTOM
                 and not any("order" in n for n in self.notes)):
             before = getattr(self, "_sort_shown", None)
@@ -13186,8 +16201,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             return False
         grouped = getattr(self, "group_by_category", None)
         if grouped is not None and grouped.get():
-            return ((a.get("category") or "General")
-                    == (b.get("category") or "General"))
+            return self._list_group_of(a) == self._list_group_of(b)
         return True
 
     def _move_note(self, note_id, before_id=None, after_id=None):
@@ -13198,16 +16212,40 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         starts from the order it was showing -- the one the person just
         moved a card in -- and the move is made there. Every note gets its
         place again, in one pass, so a number never has to fit between two
-        others. A move is not an edit: nothing's "updated" changes."""
+        others. A move is not an edit: nothing's "updated" changes.
+
+        Starting from the order shown replaces any arrangement made by hand
+        earlier, so when there was one, the toast says so and offers it
+        back (_undo_custom_order). It used to go without a word: one
+        Alt+Down while looking at the list by title, and the arrangement
+        was gone from the notes file."""
         note = self.find_note(note_id)
         anchor = self.find_note(before_id if before_id is not None else after_id)
         if note is None or anchor is None or anchor is note:
             return False
-        if self.sort_var.get() != self.SORT_CUSTOM:
-            self._place_notes_as_sorted(self.sort_var.get())
+        replaced = None
+        was = None
+        by_hand = self.sort_var.get() == self.SORT_CUSTOM
+        if not by_hand:
+            sort_before = self.sort_var.get()
+            # What every note carried, held by the note itself: an id freed
+            # by a delete while the toast is up can name a new note by then.
+            marks = [(n, "order" in n, n.get("order")) for n in self.notes]
+            placed = [n for n in self.notes if "order" in n]
+            was_notes = sorted(placed, key=lambda n: n["order"])
+            was = [id(n) for n in was_notes]
+            self._place_notes_as_sorted(sort_before)
             self.sort_var.set(self.SORT_CUSTOM)
+            # Replaced only if the notes placed by hand no longer stand in
+            # the order they were put in; a renumbering that keeps it is
+            # not a loss, and says nothing.
+            now = [id(n) for n in sorted(placed, key=lambda n: n["order"])]
+            if was != now:
+                replaced = (marks, sort_before)
         everything = list(self.notes)
         self._sort_notes(everything, choice=self.SORT_CUSTOM)
+        if by_hand:
+            self._custom_order_knows(everything)
         everything.remove(note)
         at = everything.index(anchor) + (0 if before_id is not None else 1)
         everything.insert(at, note)
@@ -13215,7 +16253,136 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             each["order"] = place
         self.save_notes()
         self.refresh_note_list()
+        if replaced is not None:
+            # Kept beyond the toast, which the next offer replaces: choosing
+            # Custom order asks whether to bring it back (_on_sort_chosen).
+            # The arrangement made by hand is the one kept: a second move
+            # in a sorted view "replaced" the first replacement, and its
+            # marks took the place of the hand-made order's, which then had
+            # no way back at all. That move's toast still offers its own.
+            # But an arrangement made by hand ON that replacement is then
+            # the newest one made by hand, and it is the one kept: offered
+            # the older one, the newer was lost. Made by hand means the order
+            # differs from the one the last such move left -- not that a card
+            # was moved: Alt+Down then Alt+Up arranges nothing, and counted
+            # as a new arrangement it gave the older one's place to the
+            # replacement itself.
+            if (getattr(self, "_replaced_custom_order", None) is None
+                    or self._arranged_since_last_replace(was_notes)):
+                self._replaced_custom_order = replaced
+            self._custom_order_left = [self._order_identity(n)
+                                       for n in everything]
+            self._show_toast(
+                f"Custom order started again from {replaced[1]}",
+                action=lambda: self._undo_custom_order(*replaced))
         return True
+
+    @staticmethod
+    def _order_identity(note):
+        """A note as the Custom order offer knows it: by its uid, which a
+        note brought back from the Trash keeps as a new dict."""
+        return note.get("uid") or id(note)
+
+    def _arranged_since_last_replace(self, was_notes):
+        """Whether the Custom order a move in a sorted view replaces (its
+        placed notes, in order) was arranged by hand since the last such
+        move: whether the notes both know stand in another order now. A note
+        deleted since arranges nothing. A note that move did not know -- new
+        since, a duplicate, one back from the Trash -- is known from the
+        first move by hand after it, where it stood then
+        (_custom_order_knows): moving it, or moving a card past it, arranges
+        something; a move undone by the next arranges nothing, as with any
+        other card."""
+        left = getattr(self, "_custom_order_left", None)
+        if left is None or was_notes is None:
+            return True
+        was = [self._order_identity(n) for n in was_notes]
+        common = set(left) & set(was)
+        return ([i for i in was if i in common]
+                != [i for i in left if i in common])
+
+    def _custom_order_knows(self, shown):
+        """Put the notes the last move in a sorted view did not know into
+        its record (_custom_order_left), each just under the known note it
+        stands under in *shown* -- the list in Custom order before a move by
+        hand -- so the move is compared like any other.
+
+        Counting only the note a move by hand moved missed an arrangement
+        made by moving a known card past a new note: the known notes' order
+        was unchanged, and the newest arrangement made by hand was replaced
+        by the older one. Counting every note a move passed would count a
+        card moved past a new note and back."""
+        left = getattr(self, "_custom_order_left", None)
+        if left is None:
+            return
+        known = set(left)
+        under = {}
+        above = None
+        for each in shown:
+            i = self._order_identity(each)
+            if i in known:
+                above = i
+            else:
+                under.setdefault(above, []).append(i)
+        if not under:
+            return
+        record = list(under.get(None, ()))
+        for i in left:
+            record.append(i)
+            record.extend(under.get(i, ()))
+        self._custom_order_left = record
+
+    def _undo_custom_order(self, marks, sort_before):
+        """Put back the arrangement a move replaced, and the sort the move
+        was made in (see _move_note) -- the moves made on top of the new
+        one since go with it, because they were made on the replacement."""
+        # The offer kept for the session ends here only if it is this
+        # toast's own; a later move's toast puts back that move's.
+        kept = getattr(self, "_replaced_custom_order", None)
+        if kept is not None and kept[0] is marks:
+            self._replaced_custom_order = None
+        self._put_back_custom_order(marks)
+        # What this puts back was not arranged by hand since that move: a
+        # later move in a sorted view keeps the offer it finds.
+        placed = [n for n in self.notes if "order" in n]
+        self._custom_order_left = [
+            self._order_identity(n)
+            for n in sorted(placed, key=lambda n: n["order"])]
+        self.save_notes()
+        self.sort_var.set(sort_before)
+        self.refresh_note_list()
+        self.set_status(f"Put back your Custom order; the list is sorted by "
+                        f"{sort_before} again")
+
+    def _put_back_custom_order(self, marks, dry_run=False):
+        """Give every note in `marks` -- (note, had a place, the place), as
+        _move_note took them -- the place it had, or its having none; with
+        dry_run, only count. Returns how many notes' places change.
+
+        A note is found by the dict itself or by its uid. A note deleted and
+        brought back from the Trash since is a new dict with the same uid,
+        and its place comes back with the rest; held by the dict alone, it
+        stayed where the replacement had put it. A note made since keeps
+        whatever place it has, and one still in the Trash is not there."""
+        present = {id(n) for n in self.notes}
+        by_uid = {n.get("uid"): n for n in self.notes if n.get("uid")}
+        changed = 0
+        for note, had, old in marks:
+            target = note if id(note) in present else by_uid.get(
+                note.get("uid") or None)
+            if target is None:
+                continue
+            if ("order" in target) == had and (not had
+                                               or target["order"] == old):
+                continue
+            changed += 1
+            if dry_run:
+                continue
+            if had:
+                target["order"] = old
+            else:
+                target.pop("order", None)
+        return changed
 
     def _list_move_by_keyboard(self, delta):
         """Alt+Up or Alt+Down: the card with the ring moves one place, and
@@ -13252,19 +16419,26 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._drag = {"nid": rec["note"]["id"], "press_y": cy,
                       "grab_dy": cy - rec["y0"], "started": False,
                       "offset": 0, "slot": None, "line": None,
-                      "pointer_y": event.y, "scroll_job": None}
+                      "pointer_y": event.y, "press_wy": event.y,
+                      "scroll_job": None,
+                      # Pressed in the open list, an edge may scroll at
+                      # once; pressed at an edge -- or a slip away from
+                      # one -- only once the pointer has left it or stayed
+                      # there a moment.
+                      "edge_free": not self._list_near_edge(event.y),
+                      "edge_since": None, "edge_beats": 0}
 
     def _list_dragged(self, event):
         """The pointer moving with the button down."""
         drag = getattr(self, "_drag", None)
         if not drag:
             return
-        try:
-            cy = self.canvas.canvasy(event.y)
-        except tk.TclError:
-            return
         if not drag["started"]:
-            if abs(cy - drag["press_y"]) < self.DRAG_THRESHOLD:
+            # How far the HAND has moved, in the widget's own pixels. Asked
+            # in canvas pixels, a view that moved under a held button -- a
+            # rebuild's restore landing after the press was measured --
+            # counted as travel, and a 1px jitter started a drag.
+            if abs(event.y - drag["press_wy"]) < self.DRAG_THRESHOLD:
                 return
             if not self._start_list_drag():
                 self._drag = None
@@ -13288,6 +16462,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 self.CARD_INSET_X, -10, self.LIST_DRAW_WIDTH - self.CARD_INSET_X, -10,
                 width=3, fill=self.colors["accent"], tags=("row", "drag_line"))
             cv.configure(cursor="fleur")
+            # Said where the pointer's own shape is remembered, too: left
+            # saying "hand2", _list_pointer_moved saw nothing to change and
+            # the four-way arrow outlived the drag over every card.
+            self._list_cursor = "fleur"
         except tk.TclError:
             return False
         drag["started"] = True
@@ -13361,46 +16539,103 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             return None
         return slot
 
-    def _scroll_list_drag_near_edge(self):
-        """Near the top or bottom of the list a drag scrolls it, one step
-        at a time while the pointer stays there -- or a card could never
-        be taken further than the list shows."""
-        drag = getattr(self, "_drag", None)
-        if not drag or not drag["started"]:
-            return
+    def _list_edge_depth(self, y):
+        """How far a pointer at widget y is inside the list's top or bottom
+        edge, and which way a drag there scrolls the list: (depth, -1 or 1),
+        or None in the open list between the two."""
         try:
             height = self.canvas.winfo_height()
         except tk.TclError:
-            return
-        y = drag["pointer_y"]
+            return None
         if y < self.DRAG_EDGE:
-            depth, direction = self.DRAG_EDGE - y, -1
-        elif y > height - self.DRAG_EDGE:
-            depth, direction = y - (height - self.DRAG_EDGE), 1
-        else:
+            return self.DRAG_EDGE - y, -1
+        if y > height - self.DRAG_EDGE:
+            return y - (height - self.DRAG_EDGE), 1
+        return None
+
+    def _list_near_edge(self, y):
+        """Whether widget y is at the list's top or bottom edge, or a slip
+        away from it. A press a pixel or three outside the edge counted as
+        one in the open list, so a hand that slipped into the edge
+        scrolled the list at once and dropped the card a place away; the
+        same press a few pixels further in waited, as a slip should."""
+        slip = 2 * self.DRAG_THRESHOLD
+        return any(self._list_edge_depth(y + d) is not None
+                   for d in (0, -slip, slip))
+
+    def _scroll_list_drag_near_edge(self):
+        """Near the top or bottom of the list a drag scrolls it, one step
+        at a time while the pointer stays there -- or a card could never
+        be taken further than the list shows.
+
+        Not at once for a drag that BEGAN there. The card cut by the list's
+        edge is the one a hand most often clicks, and a click whose hand
+        slips five pixels starts a drag: it scrolled the list under the
+        held card from the first beat, and the release dropped the card one
+        to three places away -- the list switched to Custom order, or a
+        hand-made one changed without a word. Such a drag waits until the
+        pointer has been out in the open list, or has stayed at the edge
+        for DRAG_EDGE_DWELL_MS; and every arrival at an edge starts slowly
+        (_list_drag_scroll_step)."""
+        drag = getattr(self, "_drag", None)
+        if not drag or not drag["started"]:
+            return
+        if self._list_edge_depth(drag["pointer_y"]) is None:
+            # Out in the open list: an edge reached from here scrolls
+            # without waiting, from its slowest step again -- once the
+            # pointer is clear of the edge, not a slip away from it.
+            if not self._list_near_edge(drag["pointer_y"]):
+                drag["edge_free"] = True
+            drag["edge_since"] = None
+            drag["edge_beats"] = 0
             if drag["scroll_job"] is not None:
                 self.after_cancel(drag["scroll_job"])
                 drag["scroll_job"] = None
             return
-        # Faster the further the pointer is pushed past the edge: a step a
-        # beat at the edge itself, ten beyond it. At one step a beat, taking
-        # a card from the bottom of 300 notes to the top took over a minute.
-        step = direction * min(10, 1 + int(depth) // 8)
+        if drag["edge_since"] is None:
+            drag["edge_since"] = time.monotonic()
         if drag["scroll_job"] is None:
-            drag["scroll_job"] = self.after(self.DRAG_SCROLL_MS,
-                                            lambda: self._list_drag_scroll_step(step))
+            delay = self.DRAG_SCROLL_MS
+            if not drag["edge_free"]:
+                waited = (time.monotonic() - drag["edge_since"]) * 1000
+                delay = max(delay, int(self.DRAG_EDGE_DWELL_MS - waited) + 1)
+            drag["scroll_job"] = self.after(delay, self._list_drag_scroll_step)
 
-    def _list_drag_scroll_step(self, step):
+    def _list_drag_scroll_step(self):
+        """One beat of a drag's scrolling at the list's edge.
+
+        Faster the further the pointer is pushed past the edge: a tenth of
+        the view a beat at the edge itself, the whole view beyond it -- at
+        one tenth a beat, taking a card from the bottom of 300 notes to the
+        top took over a minute. But the first beats at an edge take a part
+        of that, growing to all of it over DRAG_SCROLL_RAMP beats: at the
+        full step from the first beat, an edge reached a moment before the
+        release had already carried the list a card or two along."""
         drag = getattr(self, "_drag", None)
         if not drag or not drag["started"]:
             return
         drag["scroll_job"] = None
-        # A deliberate move beats a rebuild's still-pending restore.
-        self._list_restore_px = None
+        edge = self._list_edge_depth(drag["pointer_y"])
+        if edge is None:
+            return
+        if not drag["edge_free"]:
+            if ((time.monotonic() - drag["edge_since"]) * 1000
+                    < self.DRAG_EDGE_DWELL_MS):
+                # Still a hand that slipped, as far as anyone can tell.
+                self._scroll_list_drag_near_edge()
+                return
+            drag["edge_free"] = True
+        depth, direction = edge
+        drag["edge_beats"] += 1
         try:
-            self.canvas.yview_scroll(step, "units")
+            unit = self.canvas.winfo_height() / 10.0
+            top = self.canvas.canvasy(0)
         except tk.TclError:
             return
+        step = min(10, 1 + int(depth) // 8) * unit * min(
+            1.0, drag["edge_beats"] / float(self.DRAG_SCROLL_RAMP))
+        self._list_scrolled_by_hand()
+        self._apply_list_scroll_px(top + direction * max(1, round(step)))
         self._follow_list_drag()
         self._scroll_list_drag_near_edge()
 
@@ -13484,6 +16719,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         """
         cv = self.canvas
         cv.bind("<Button-1>", self._list_pressed)
+        # Tk hands the second press of a double-click to this instead of
+        # <Button-1>; it goes where the first press went.
+        cv.bind("<Double-Button-1>", self._list_double_pressed)
         cv.bind("<Button-3>", self._list_right_pressed)
         cv.bind("<Motion>", self._list_pointer_moved)
         cv.bind("<Leave>", self._list_pointer_left)
@@ -13494,6 +16732,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         cv.bind("<Escape>", self._list_drag_escape)
         cv.bind("<Down>", lambda _e: self._list_step(1))
         cv.bind("<Up>", lambda _e: self._list_step(-1))
+        # A grouped list folds and opens from the keyboard, as a tree does.
+        cv.bind("<Left>", lambda _e: self._list_fold_by_keyboard(True))
+        cv.bind("<Right>", lambda _e: self._list_fold_by_keyboard(False))
         cv.bind("<Alt-Down>", lambda _e: self._list_move_by_keyboard(1))
         cv.bind("<Alt-Up>", lambda _e: self._list_move_by_keyboard(-1))
         cv.bind("<Return>", self._list_activate)
@@ -13530,35 +16771,138 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         note -- or ticks it, in selection mode, where opening would defeat
         the point of picking several without leaving the list. Either way
         the keyboard comes to the list, on the card clicked, so Down and Up
-        carry on from there. Nothing is returned: the window's own click
-        handling (closing an open popup) still hears the click."""
-        self._drag = None
+        carry on from there. The window's own click handling (closing an
+        open popup) still hears the click -- unless the note's opening was
+        refused ("break", see _list_press_row)."""
+        # A card still lifted means the release that should have dropped
+        # it never arrived (lost to another window, say). Put it back
+        # first: forgetting the drag left its drawing, its line and its
+        # pointer shape on the list, over records that had never moved.
+        self._cancel_list_drag()
+        # Only the second press of a double-click may follow the first
+        # press's aim (_list_double_pressed); any other press forgets it.
+        self._list_press_aim = None
         rec = self._list_record_at(event.x, event.y)
+        if rec is not None:
+            return self._list_press_row(rec, event)
+        return None
+
+    def _list_double_pressed(self, event):
+        """The second press of a double-click -- Tk's own judgement of one
+        (close in time and place), which replaces <Button-1> for that press.
+
+        It goes where the first press went. The first press can open a note
+        and so save the note left behind, and under a sort by date that save
+        moves rows: the clicked card slides away and its neighbour slides
+        under the pointer. The list keeps the clicked card there when it can
+        scroll far enough (_keep_row_under_pointer); when it cannot, the
+        first press leaves its aim here, and without it the second press
+        opened the neighbour -- a double-click that opened the wrong note."""
+        self._cancel_list_drag()
+        aim = getattr(self, "_list_press_aim", None)
+        self._list_press_aim = None
+        rec = None
+        # Only for as long as a double-click can take: Tk's own judgement
+        # reads the events' timestamps, and an event made by a program
+        # carries none, so two such presses a minute apart read as one
+        # double-click -- and an aim left from long ago redirected the
+        # later press to a card nobody had just pressed.
+        if (aim is not None
+                and time.monotonic() - aim[1] <= self.LIST_DOUBLE_PRESS_S):
+            rec = self._list_row_record(aim[0])
         if rec is None:
+            rec = self._list_record_at(event.x, event.y)
+        if rec is not None:
+            return self._list_press_row(rec, event)
+        return None
+
+    def _list_row_record(self, key):
+        """The drawn record of the row ("note", id) or ("header", category),
+        or None when that row is not drawn."""
+        if key[0] == "note":
+            return (getattr(self, "_note_cards", None) or {}).get(key[1])
+        return (getattr(self, "_group_headers", None) or {}).get(key[1])
+
+    def _list_press_row(self, rec, event):
+        """What a press does to the row it is for (see _list_pressed)."""
+        key = rec["key"]
+        # Where the row stands on the SCREEN before the press acts. Opening
+        # a note can save the note left behind, and that save can move this
+        # card -- by a surgical redraw, or by the full rebuild a popup
+        # deferred; folding a group scrolled near the end shortens the list,
+        # and the view clamps under the header.
+        try:
+            on_screen = rec["y0"] - self.canvas.canvasy(0)
+        except tk.TclError:
             return
         if rec["kind"] == "header":
             self._toggle_group_collapsed(rec["cat"])
-            return
-        note = rec["note"]
-        nid = note["id"]
-        if self.selection_mode:
-            self._toggle_note_selected(nid, nid not in self.selected_note_ids)
-            self._paint_card_check(nid)
+            self._keep_row_under_pointer(key, on_screen)
+        else:
+            note = rec["note"]
+            nid = note["id"]
+            if self.selection_mode:
+                self._toggle_note_selected(nid, nid not in self.selected_note_ids)
+                self._paint_card_check(nid)
+                self._put_keyboard_on_card(nid)
+                return
+            # Not when the open refused to happen: Cancel on a repeating
+            # day's save question keeps the person on the day they were
+            # editing -- or on the template they were writing, whose
+            # "Save changes?" was the question. "break" then: the window's
+            # click-outside, still to run for this same press, would ask
+            # it a second time, and "No" there threw the template away.
+            if self.open_note_in_tab(note) is False:
+                return "break"
+            # Before the ring's scroll-into-view, which then still brings a
+            # card clicked at the list's edge fully into sight.
+            self._keep_row_under_pointer(key, on_screen)
             self._put_keyboard_on_card(nid)
+        # Asked afresh, and only of a row still under the pointer: a drag
+        # armed on a card that slid away measured its grab against a place
+        # the hand was not on, so a slip of a few pixels dropped the card
+        # before its neighbour -- and switched the whole list to Custom
+        # order. A row that could not be kept there leaves its aim for the
+        # second press of a double-click (_list_double_pressed).
+        rec = self._list_row_record(key)
+        if rec is None:
             return
-        # Not when the open refused to happen: Cancel on a repeating day's
-        # save question keeps the person on the day they were editing.
-        if self.open_note_in_tab(note) is not False:
-            self._put_keyboard_on_card(nid)
-            # Asked afresh: the open can have saved the note left behind,
-            # and that save can have moved this card.
-            rec = (getattr(self, "_note_cards", None) or {}).get(nid)
-            if rec is not None:
-                self._list_drag_arm(rec, event)
+        if self._list_record_at(event.x, event.y) is not rec:
+            self._list_press_aim = (key, time.monotonic())
+        elif rec["kind"] == "note":
+            self._list_drag_arm(rec, event)
+
+    def _keep_row_under_pointer(self, key, on_screen):
+        """Scroll the list so this row stands where it stood on the screen
+        -- `on_screen` pixels below the view's top -- as far as the list can
+        scroll. What the hand is over stays what it was over; the saved
+        note's card still goes where the sort puts it, above or below."""
+        rec = self._list_row_record(key)
+        if rec is None:
+            return
+        try:
+            top = self.canvas.canvasy(0)
+        except tk.TclError:
+            return
+        want = rec["y0"] - on_screen
+        if abs(want - top) < 1:
+            return
+        # Held like a rebuild's restore, and replacing any: this is the one
+        # place the view should be now (see _restore_list_scroll).
+        self._restore_list_scroll(max(0, want))
 
     def _list_right_pressed(self, event):
         """Right-click on a card opens that note's menu. A plain click on
-        the same card opens the note, so the menu leaves out Open / Edit."""
+        the same card opens the note, so the menu leaves out Open / Edit.
+
+        During a drag it cancels the drag and opens nothing: the card under
+        the pointer then is the lifted one's drawing, while the record there
+        is its neighbour's, so a menu would have been for a note nobody
+        pointed at."""
+        drag = getattr(self, "_drag", None)
+        if drag and drag["started"]:
+            self._cancel_list_drag()
+            return
         rec = self._list_record_at(event.x, event.y)
         if rec is None or rec["kind"] != "note":
             return
@@ -13567,6 +16911,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
     def _list_pointer_moved(self, event):
         """The hand over a row, the plain pointer over the gaps -- what each
         card and header widget's own cursor used to say."""
+        # This hears motion with the button UP (<B1-Motion> takes it while
+        # the button is down), so a card still lifted here lost its
+        # release: it goes back before anything else is decided.
+        drag = getattr(self, "_drag", None)
+        if drag and drag["started"]:
+            self._cancel_list_drag()
         want = "hand2" if self._list_record_at(event.x, event.y) else ""
         if getattr(self, "_list_cursor", None) != want:
             self._list_cursor = want
@@ -13583,20 +16933,51 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             pass
 
     def _list_step(self, delta):
-        """Down or Up on the list: the ring moves one card along."""
-        current = getattr(self, "_focused_note_id", None)
-        if current not in (getattr(self, "_note_cards", None) or {}):
-            order = self._card_order()
-            if order:
-                self._put_keyboard_on_card(order[0])
+        """Down or Up on the list: the ring moves one row along -- a card,
+        or the header of a group when the list is grouped."""
+        key = self._ring_row()
+        if key is None:
+            first = self._first_ring_row()
+            if first is not None:
+                self._put_keyboard_on_row(first)
             return "break"
-        self._focus_card_by_offset(current, delta)
+        self._focus_row_by_offset(key, delta)
+        return "break"
+
+    def _list_fold_by_keyboard(self, fold):
+        """Left folds, Right unfolds -- the tree list's keys, for a list
+        grouped by category. Left on a card folds its group and takes the
+        ring to the group's header; Left on an open header folds it, Right
+        on a folded one opens it. Without these (and Enter on a header) a
+        folded group could be opened only with the mouse, and a list with
+        every group folded gave the keyboard nothing at all to do."""
+        grouped = getattr(self, "group_by_category", None)
+        key = self._ring_row()
+        if key is None or grouped is None or not grouped.get():
+            return "break"
+        if key[0] == "note":
+            note = self.find_note(key[1])
+            if not fold or note is None:
+                return "break"
+            cat = self._list_group_of(note)
+            if cat not in self.collapsed_groups:
+                self._toggle_group_collapsed(cat)
+            self._put_keyboard_on_header(cat)
+            return "break"
+        if fold != (key[1] in self.collapsed_groups):
+            self._toggle_group_collapsed(key[1])
         return "break"
 
     def _list_activate(self, _event=None):
         """Enter or Space: what a click does -- open the note, or tick it
         in selection mode, where a keyboard that opened the note instead
-        would be the one route that ignores the mode."""
+        would be the one route that ignores the mode. On a header, what a
+        click on it does: fold or unfold its group."""
+        self._bring_ring_into_view()
+        key = self._ring_row()
+        if key is not None and key[0] == "header":
+            self._toggle_group_collapsed(key[1])
+            return "break"
         rec = (getattr(self, "_note_cards", None) or {}).get(
             getattr(self, "_focused_note_id", None))
         if rec is None:
@@ -13618,8 +16999,13 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             getattr(self, "_focused_note_id", None))
         if rec is None:
             return "break"
+        # At a card the person can see: the ring may have been scrolled out
+        # of sight by the wheel, and the menu then opened hundreds of pixels
+        # off the screen. The place is kept to the list, too, whatever it is.
+        self._bring_ring_into_view()
         try:
-            y_on_screen = rec["y1"] - self.canvas.canvasy(0)
+            y_on_screen = max(0, min(self.canvas.winfo_height(),
+                                     rec["y1"] - self.canvas.canvasy(0)))
             self.show_note_context_menu(
                 type("KeyEvent", (), {
                     "x_root": self.canvas.winfo_rootx() + 30,
@@ -13632,38 +17018,221 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
     def _list_focus_in(self, _event=None):
         """The keyboard arrived on the list: the ring shows where it is --
-        on the card it was last on, else the open note's, else the first."""
+        on the row it was last on, else the open note's card, else the
+        first card, else (every group folded) the first header.
+
+        Always where the person can see it: a ring left 900px above the
+        view had Enter open a note nobody could see and the menu key post
+        its menu off the screen. What took the ring's row out of sight
+        decides how. If the person scrolled the list away from it, the ring
+        goes to the first row the view shows, and the view stays where they
+        put it. If the list moved the row while the keyboard was elsewhere
+        -- a save took the card to the top, a search keystroke filtered the
+        notes above it -- the ring stays on its row and the row is brought
+        into view: given to the first row in view, it sat on another note,
+        and Enter opened that one. A row half in sight is scrolled in."""
         self._keyboard_on_card = True
-        cards = getattr(self, "_note_cards", None) or {}
-        if getattr(self, "_focused_note_id", None) not in cards:
-            order = self._card_order()
+        by_hand = getattr(self, "_list_hand_scrolled", False)
+        own = self._ring_row()
+        if own is None and not by_hand:
+            # Not drawn: a rebuild made while the keyboard was elsewhere
+            # draws no further than the view needs.
+            own = self._draw_down_to_ring()
+        if own is None:
+            cards = getattr(self, "_note_cards", None) or {}
             if self.selected_note_id in cards:
-                self._focused_note_id = self.selected_note_id
-            elif order:
-                self._focused_note_id = order[0]
-        self._paint_ring(getattr(self, "_focused_note_id", None))
+                self._set_ring_row(("note", self.selected_note_id))
+            else:
+                first = self._first_ring_row()
+                if first is not None:
+                    self._set_ring_row(first)
+        key = self._ring_row()
+        if key is not None:
+            rec = self._list_row_record(key)
+            seen = self._row_on_screen(rec)
+            if seen == "none" and (by_hand or key != own):
+                shown = self._rows_on_screen()
+                if shown:
+                    self._set_ring_row(shown[0])
+                    # The row it left, repainted now that it is not there.
+                    self._paint_row(key)
+            elif seen != "all":
+                self._scroll_row_into_view(rec)
+        self._list_hand_scrolled = False
+        self._paint_ring_row()
+
+    def _ring_index_in(self, rows):
+        """Where the ring's row stands among `rows` (as _list_rows gives
+        them, drawn or waiting), or None when it is not among them."""
+        wanted = getattr(self, "_focused_note_id", None)
+        header = getattr(self, "_focused_header", None)
+        for index, row in enumerate(rows):
+            if ((row[0] == "note" and row[1].get("id") == wanted)
+                    or (row[0] == "header" and row[1] == header)):
+                return index
+        return None
+
+    def _draw_down_to_ring(self):
+        """Draw the waiting rows down to the ring's, when the list still
+        shows it, and return its key -- else None."""
+        index = self._ring_index_in(getattr(self, "_list_pending", None) or ())
+        if index is None:
+            return None
+        self._draw_list_rows(index + 1)
+        return self._ring_row()
+
+    def _row_on_screen(self, rec):
+        """How much of a drawn row the view shows: "all", "part" or "none"."""
+        try:
+            top = self.canvas.canvasy(0)
+            bottom = top + self.canvas.winfo_height()
+        except tk.TclError:
+            return "all"
+        if rec["y0"] >= top and rec["y1"] <= bottom:
+            return "all"
+        if rec["y1"] <= top or rec["y0"] >= bottom:
+            return "none"
+        return "part"
+
+    def _rows_on_screen(self):
+        """The drawn rows the view shows whole, in screen order -- or, when
+        none is whole (a row taller than the view), those it shows part of."""
+        whole, part = [], []
+        for rec in getattr(self, "_list_drawn", None) or ():
+            seen = self._row_on_screen(rec)
+            if seen == "all":
+                whole.append(rec["key"])
+            elif seen == "part":
+                part.append(rec["key"])
+        return whole or part
+
+    def _bring_ring_into_view(self):
+        """Scroll the ring's row into view, if it has one -- before anything
+        the keyboard does to it, so no key acts on a row out of sight."""
+        key = self._ring_row()
+        if key is not None:
+            rec = self._list_row_record(key)
+            if self._row_on_screen(rec) != "all":
+                self._scroll_row_into_view(rec)
+            # In sight again: a scroll made before this no longer counts.
+            self._list_hand_scrolled = False
 
     def _list_focus_out(self, _event=None):
         """The keyboard left the list: the ring goes back to saying only
-        which note is open."""
+        which note is open. A drag cannot outlive it either -- the window
+        losing the keyboard (Alt+Tab, another program) is exactly how a
+        release goes missing -- so a lifted card goes back."""
+        self._cancel_list_drag()
         self._keyboard_on_card = False
-        self._paint_ring(getattr(self, "_focused_note_id", None))
+        self._paint_ring_row()
+
+    def _ring_row(self):
+        """The drawn row the keyboard's ring is on, as ("note", id) or
+        ("header", category) -- or None when that row is not drawn."""
+        cat = getattr(self, "_focused_header", None)
+        if cat is not None:
+            key = ("header", cat)
+        else:
+            key = ("note", getattr(self, "_focused_note_id", None))
+        return key if self._list_row_record(key) is not None else None
+
+    def _first_ring_row(self):
+        """Where a ring with nowhere to be goes: the first card, else --
+        a list whose every group is folded -- the first header."""
+        order = self._card_order()
+        if order:
+            return ("note", order[0])
+        keys = self._list_drawn_keys
+        return keys[0] if keys else None
+
+    def _set_ring_row(self, key):
+        """Put the ring's place on this row, without painting or scrolling:
+        on a card, _focused_note_id says which; on a header, _focused_header
+        does, and no card holds the ring."""
+        if key[0] == "header":
+            self._focused_header = key[1]
+            self._focused_note_id = None
+        else:
+            self._focused_header = None
+            self._focused_note_id = key[1]
+
+    def _paint_ring_row(self):
+        """Repaint the ring where it is, card or header."""
+        cat = getattr(self, "_focused_header", None)
+        if cat is not None:
+            self._paint_header_ring(cat)
+        else:
+            self._paint_ring(getattr(self, "_focused_note_id", None))
+
+    def _paint_row(self, key):
+        """Repaint one row's ring, card or header, as it should be now."""
+        if key[0] == "header":
+            self._paint_header_ring(key[1])
+        else:
+            self._paint_ring(key[1])
+
+    def _put_keyboard_on_row(self, key):
+        if key[0] == "header":
+            self._put_keyboard_on_header(key[1])
+        else:
+            self._put_keyboard_on_card(key[1])
 
     def _put_keyboard_on_card(self, note_id):
         """Give the keyboard to the list, with the ring on this card, and
         bring the card into view."""
         previous = getattr(self, "_focused_note_id", None)
-        self._focused_note_id = note_id
+        header = getattr(self, "_focused_header", None)
+        self._set_ring_row(("note", note_id))
         try:
             self.canvas.focus_set()
         except tk.TclError:
             return
+        if header is not None:
+            self._paint_header_ring(header)
         if previous != note_id:
             self._paint_ring(previous)
         self._paint_ring(note_id)
         rec = (getattr(self, "_note_cards", None) or {}).get(note_id)
         if rec is not None:
             self._scroll_row_into_view(rec)
+            # The ring is where the person can see it, and was put there.
+            self._list_hand_scrolled = False
+
+    def _put_keyboard_on_header(self, cat):
+        """The same for a category header: the ring on it, in view."""
+        previous = getattr(self, "_focused_note_id", None)
+        header = getattr(self, "_focused_header", None)
+        self._set_ring_row(("header", cat))
+        try:
+            self.canvas.focus_set()
+        except tk.TclError:
+            return
+        self._paint_ring(previous)
+        if header is not None and header != cat:
+            self._paint_header_ring(header)
+        self._paint_header_ring(cat)
+        rec = (getattr(self, "_group_headers", None) or {}).get(cat)
+        if rec is not None:
+            self._scroll_row_into_view(rec)
+            self._list_hand_scrolled = False
+
+    def _header_ring_color(self, cat):
+        """A header's ring: the text colour while the keyboard's ring is on
+        it, else the header's own fill -- no ring at all."""
+        if (cat == getattr(self, "_focused_header", None)
+                and getattr(self, "_keyboard_on_card", False)):
+            return self.colors["text"]
+        return self.colors["sidebar"]
+
+    def _paint_header_ring(self, cat):
+        rec = (getattr(self, "_group_headers", None) or {}).get(cat)
+        if rec is None:
+            return
+        try:
+            self.canvas.itemconfigure(rec["items"]["ring"],
+                                      outline=self._header_ring_color(cat))
+        except tk.TclError:
+            pass
 
     def _scroll_row_into_view(self, rec):
         """Scroll the list just far enough that this row is all on screen.
@@ -13693,27 +17262,32 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             pass
 
     def _focus_card_by_offset(self, note_id, delta):
-        """Move the ring `delta` cards along the list on screen.
+        """Move the ring `delta` rows along the list on screen, from this
+        card (see _focus_row_by_offset)."""
+        self._focus_row_by_offset(("note", note_id), delta)
 
-        Asked of the ORDER THE CARDS ARE DRAWN IN rather than of
+    def _focus_row_by_offset(self, key, delta):
+        """Move the ring `delta` rows along the list on screen -- cards, and
+        the headers of a grouped list, which are stops like the cards: the
+        keyboard folds and opens a group from its header.
+
+        Asked of the ORDER THE ROWS ARE DRAWN IN rather than of
         self.notes: the list is sorted, filtered, searched and grouped, so
         the note after this one in the file is very often not the one
         underneath it on screen.
         """
-        order = self._card_order()
-        if note_id not in order:
+        order = self._list_drawn_keys
+        if key not in order:
             return
-        target = order.index(note_id) + delta
+        target = order.index(key) + delta
         # The list is drawn a step at a time (see _draw_list_rows), and
         # the keyboard must not stop where the drawing happened to: walking
-        # off the end of what is drawn draws the next step first. A loop,
-        # because a step of a grouped list can be nothing but the headers
-        # of collapsed groups.
+        # off the end of what is drawn draws the next step first.
         while target >= len(order) and getattr(self, "_list_pending", None):
             self._draw_list_rows(self.LIST_DRAW_STEP)
-            order = self._card_order()
+            order = self._list_drawn_keys
         if 0 <= target < len(order):
-            self._put_keyboard_on_card(order[target])
+            self._put_keyboard_on_row(order[target])
 
     def _restore_card_focus(self):
         """Repaint the keyboard's ring after a rebuild.
@@ -13724,8 +17298,17 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         a destroyed card, and a guard that had to decide, from focus_get()
         (which answers None whenever another program holds the desktop's
         foreground), whether to pull it back.
+
+        A ring the person could see before the rebuild stays in sight after
+        it: the view follows its row, as it follows Alt+Up/Down. A ring the
+        wheel had already scrolled away is left where it is -- the keys
+        that act on it bring it back first (_bring_ring_into_view).
         """
-        self._paint_ring(getattr(self, "_focused_note_id", None))
+        self._paint_ring_row()
+        follow = getattr(self, "_ring_follow", False)
+        self._ring_follow = False
+        if follow and getattr(self, "_keyboard_on_card", False):
+            self._bring_ring_into_view()
 
     def _card_ring_color(self, note_id):
         """What a card's ring says. The text colour where the keyboard is;
@@ -13740,13 +17323,28 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             return c["accent"]
         return c["card"]
 
+    def _ring_to_paint(self, note_id):
+        """_card_ring_color, for a ring about to be painted -- and a note of
+        whether the card is being painted as the open note. A card can be
+        painted so without anyone moving the outline off another: a new
+        note's first save draws its card as open, and the note before it
+        kept the outline. _update_open_highlight takes it off every card
+        noted here that is no longer the open one."""
+        painted = self.__dict__.setdefault("_open_ring_ids", set())
+        if note_id == self.selected_note_id:
+            painted.add(note_id)
+        else:
+            painted.discard(note_id)
+        return self._card_ring_color(note_id)
+
     def _paint_ring(self, note_id):
         rec = (getattr(self, "_note_cards", None) or {}).get(note_id)
         if rec is None:
+            getattr(self, "_open_ring_ids", set()).discard(note_id)
             return
         try:
             self.canvas.itemconfigure(
-                rec["items"]["ring"], outline=self._card_ring_color(note_id))
+                rec["items"]["ring"], outline=self._ring_to_paint(note_id))
         except tk.TclError:
             pass
 
@@ -13894,7 +17492,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 state="normal" if nid in self.selected_note_ids else "hidden")
         items["ring"] = cv.create_rectangle(
             x0 + 1, top + 1, x1 - 1, bottom - 1, width=self.CARD_RING,
-            outline=self._card_ring_color(nid), tags=tags)
+            outline=self._ring_to_paint(nid), tags=tags)
         rec = {"kind": "note", "key": ("note", nid), "tag": tag, "note": note,
                "y0": top, "y1": bottom, "margin": self.CARD_MARGIN,
                "items": items}
@@ -13981,7 +17579,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 cv.itemconfigure(it["title"], fill=c["text"])
                 cv.itemconfigure(it["preview"], fill=c["subtext"])
                 cv.itemconfigure(it["tags"], fill=note_color)
-                cv.itemconfigure(it["ring"], outline=self._card_ring_color(note_id))
+                cv.itemconfigure(it["ring"], outline=self._ring_to_paint(note_id))
                 if "check" in it:
                     cv.itemconfigure(it["check"], fill=c["check_well"],
                                      outline=c["subtext"])
@@ -13992,6 +17590,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 cv.itemconfigure(it["dot"], fill=dot, outline=dot)
                 cv.itemconfigure(it["caret"], fill=c["subtext"])
                 cv.itemconfigure(it["label"], fill=c["text"])
+                cv.itemconfigure(it["ring"], outline=self._header_ring_color(cat))
             cv.itemconfigure("list_empty", fill=c["subtext"])
         except tk.TclError:
             pass
@@ -14043,6 +17642,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         gone = set(note_ids)
         focused = getattr(self, "_focused_note_id", None)
         order_before = self._card_order()
+        ringed_header = getattr(self, "_focused_header", None)
+        rows_before = self._list_drawn_keys
         kept = []
         try:
             for rec in drawn:
@@ -14067,7 +17668,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 if rec["ids"]:
                     self.canvas.itemconfigure(
                         rec["items"]["label"],
-                        text=f"{rec['cat']} ({len(rec['ids'])})")
+                        text=self._header_label_text(
+                            rec["cat"], len(rec["ids"]), rec["label_x"]))
                     still_drawn.append(rec)
                 else:
                     self.canvas.delete(rec["tag"])
@@ -14105,12 +17707,25 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 place = min(order_before.index(focused), len(order) - 1)
                 self._focused_note_id = order[place]
                 self._paint_ring(self._focused_note_id)
+        # ...and a header's, when its group went with the delete: to the row
+        # now standing where the header stood.
+        if (ringed_header is not None and ringed_header not in headers
+                and ("header", ringed_header) in rows_before):
+            rows = self._list_drawn_keys
+            place = min(rows_before.index(("header", ringed_header)),
+                        len(rows) - 1)
+            self._set_ring_row(rows[place])
+            self._paint_ring_row()
         # What was taken off may have left less than a screen drawn.
         self._ask_for_top_up()
         # refresh_note_list() recomputes these on its way past, and
         # Settings may be open on them right now. Due even when no card
         # was drawn -- a note still left the notebook.
         self._render_statistics()
+        # ...and so does taking the ticks of the notes that went.
+        self._prune_selection()
+        # A delete can leave the editor empty, and no card is open then.
+        self._update_open_highlight()
         return True
 
     def _redraw_saved_card(self, note_id):
@@ -14192,10 +17807,14 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 cards.pop(note_id, None)
                 self.canvas.delete(old["tag"])
             if drawn_now:
-                # Drawn anywhere and put in its place by the reflow below,
-                # which slides every row between the old place and the new
-                # one -- the drawing changes in one repaint.
-                drawn.insert(new_at, self._draw_note_card(rows[new_at][1], 0))
+                # Drawn out of the way and put in its place by the reflow
+                # below, which slides every row between the old place and
+                # the new one -- the drawing changes in one repaint. Out of
+                # the way, not at the top: the reflow moves rows as bands,
+                # and a card drawn over them made the band it landed in hold
+                # items that were not its rows', so every row moved alone.
+                drawn.insert(new_at, self._draw_note_card(
+                    rows[new_at][1], self.LIST_OUT_OF_THE_WAY))
         except tk.TclError:
             return False
         starts = [i for i in (old_at, new_at if drawn_now else None) if i is not None]
@@ -14212,6 +17831,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._render_statistics()
         if getattr(self, "selection_mode", False):
             self._update_bulk_selected_label()
+        # A new note's first save makes it the open one and draws its card
+        # so; the card of the note open before it (Ctrl+N, a day on the
+        # calendar) still wears the outline, and a rebuild would have
+        # repainted it. One card redrawn repaints only itself.
+        self._update_open_highlight()
         return True
 
     def _exit_selection_mode_after_bulk_action(self):
@@ -14248,6 +17872,23 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         up by walking the sidebar rather than stored separately, so it stays
         correct even if the sidebar layout changes elsewhere."""
         return self.select_toggle_btn.master
+
+    def _prune_selection(self):
+        """Keep the ticks to notes that still exist, and the bar's words
+        with them.
+
+        A note deleted from its own menu (or with its category, or as a
+        duplicate) kept its tick: the bar went on counting it, the Trash
+        question named it, and because a new note's id is the highest one
+        plus one, a note made next could take the freed id -- and arrive
+        drawn ticked, to be trashed by a Trash nobody aimed at it."""
+        chosen = getattr(self, "selected_note_ids", None)
+        if not chosen:
+            return
+        kept = chosen & {n["id"] for n in self.notes}
+        if kept != chosen:
+            self.selected_note_ids = kept
+            self._update_bulk_selected_label()
 
     def _toggle_note_selected(self, note_id, now_selected):
         if now_selected:
@@ -14292,7 +17933,22 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         while Select all matched the raw body — so "Select all visible"
         quietly selected notes the filter had hidden, and bulk actions
         hit them. Every field is coerced to a string first, so a
-        missing/None field from older data can't crash the render."""
+        missing/None field from older data can't crash the render.
+
+        Nothing typed matches every note, and is answered without reading
+        one: every rebuild, every autosave's one-card redraw and every tick
+        in Select mode used to lowercase every body and parse every table
+        in the notebook to find that an empty query is in all of them."""
+        if not query:
+            return True
+        return NoteOrganizer._query_in_texts(
+            query, NoteOrganizer._search_texts(note))
+
+    @staticmethod
+    def _search_texts(note):
+        """What the sidebar search looks through in a note: its title, its
+        body as text -- a table's plumbing stripped -- and its comments,
+        lowercased (see _query_matches_note)."""
         def _txt(value):
             return value.lower() if isinstance(value, str) else ""
 
@@ -14301,9 +17957,26 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             body_txt = core_tables.content_text(body).lower()
         else:
             body_txt = _txt(body)
-        return (query in _txt(note.get("title"))
-                or query in body_txt
-                or query in _txt(note.get("comments")))
+        return (_txt(note.get("title")), body_txt, _txt(note.get("comments")))
+
+    @staticmethod
+    def _query_in_texts(query, texts):
+        """The search's one rule, for texts from _search_texts."""
+        return any(query in text for text in texts)
+
+    def _cached_search_texts(self, note):
+        """_search_texts, kept for each note until one of the three fields
+        is replaced. Asked of the field objects themselves: a save writes
+        new strings, and the cache holds on to the old ones, so an old one's
+        identity cannot be reused by a new string while it is compared."""
+        cache = self.__dict__.setdefault("_search_text_cache", {})
+        fields = (note.get("title"), note.get("body"), note.get("comments"))
+        hit = cache.get(note.get("id"))
+        if (hit is None or hit[0][0] is not fields[0]
+                or hit[0][1] is not fields[1] or hit[0][2] is not fields[2]):
+            hit = (fields, self._search_texts(note))
+            cache[note.get("id")] = hit
+        return hit[1]
 
     def _visible_note_ids(self):
         """The notes the list is showing right now, by id.
@@ -14318,8 +17991,18 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
         Asked of the notes, not of the cards: the list draws a step at a
         time, and "all" means every note it shows, drawn yet or not.
+
+        A folded group shows its header and none of its notes, so they are
+        not on the list -- the same fold _list_rows applies. Asked only of
+        the search and the filter, Select all ticked every note of every
+        folded group, and bulk Trash took notes the person could not see.
         """
-        return {n["id"] for n in self._notes_on_the_list()}
+        shown = self._notes_on_the_list()
+        grouped = getattr(self, "group_by_category", None)
+        folded = getattr(self, "collapsed_groups", None)
+        if grouped is not None and grouped.get() and folded:
+            shown = [n for n in shown if self._list_group_of(n) not in folded]
+        return {n["id"] for n in shown}
 
     def _bulk_select_all(self):
         """Select every note the list is showing — or, if they are all
@@ -14423,8 +18106,21 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if not self.selected_note_ids:
             self.show_info("Nothing selected", "Tick one or more notes first.")
             return
-        count = len(self.selected_note_ids)
+        # Save what the editor holds first, as the single delete from a
+        # note's menu does: the note on screen may be one of the ticked
+        # ones, and its unsaved typing belongs in the Trash copy (and in
+        # what Undo brings back), not in an editor about to be cleared.
+        # Cancel on a day's save question stops the delete here. A repeat's
+        # turn-off is held back for the question (see _context_delete_note).
+        if self._flush_autosave(
+                leaving=self.selected_note_id in self.selected_note_ids,
+                hold_repeat_off=True) is False:
+            return
         to_trash = [n for n in self.notes if n["id"] in self.selected_note_ids]
+        # Counted from the notes that will move, not from the ticks: the
+        # two agree now that a deleted note leaves the selection, and the
+        # question should never name more notes than it moves.
+        count = len(to_trash)
         attachment_count = sum(len(n.get("attachments") or []) for n in to_trash)
         warning = self._series_warning(to_trash)
         if attachment_count:
@@ -14436,12 +18132,23 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             f"Move {count} selected {noun} to the trash? "
             f"You can restore {'it' if count == 1 else 'them'} within "
             f"{trash_retention_days()} days.{warning}",
-            icon="question"
+            # Enter answers a question now, and a reflexive Enter must not
+            # be the one that deletes.
+            icon="question", default="no"
         ):
             return
+        # Yes acts on exactly the notes the question named, and the ticks
+        # are not read again. Read after the answer, a tick added while the
+        # question waited (a timer's question over it took its grab, and a
+        # click went through) was removed from the notebook with no Trash
+        # copy, and a tick taken away was trashed and kept. A named note
+        # that left the notebook meanwhile is not trashed a second time.
+        named = {n["id"] for n in to_trash}
+        to_trash = [n for n in self.notes if n["id"] in named]
+        count = len(to_trash)
         marks = [(e.get("id"), e.get("deleted_at"))
                  for e in self._move_notes_to_trash(to_trash)]
-        self.notes = [n for n in self.notes if n["id"] not in self.selected_note_ids]
+        self.notes = [n for n in self.notes if n["id"] not in named]
         self.save_notes()
         # If the note currently open in the editor was among the ones just
         # trashed, the editor (and any tab pointing at it) is now referring
@@ -14451,13 +18158,13 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # still trying to save changes against the now-gone note. Same
         # cleanup delete_current_note() already does for a single delete.
         self.open_tabs = [t for t in self.open_tabs
-                          if t["state"]["selected_note_id"] not in self.selected_note_ids]
+                          if t["state"]["selected_note_id"] not in named]
         if not self.open_tabs:
             self.active_tab_index = None
             self.new_note()
-        else:
-            self.active_tab_index = None
-            self.switch_to_tab(min(0, len(self.open_tabs) - 1))
+        # Otherwise the editor holds a note that was not trashed, and it
+        # stays as it is -- see _delete_note for what "switching" to it
+        # from its stored copy used to cost.
         self._sync_editor_snapshot()
         self._exit_selection_mode_after_bulk_action()
         self.render_calendar()
@@ -14506,7 +18213,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             # describing a state that no longer exists by the time the
             # user answers.
             touched = set(self.selected_note_ids)
-            if self._flush_autosave() is False:
+            # Leaving only if the note on screen is one of those moving.
+            if self._flush_autosave(
+                    leaving=self.selected_note_id in touched) is False:
                 return  # Cancel on a day's save question: nothing moves
             to_move = [n for n in self.notes if n["id"] in touched]
             if not to_move:
@@ -14534,8 +18243,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             # be read first -- and a mixed selection is precisely what a
             # bulk change is for, so it is also what an undo has to
             # survive.
-            marks = [(n["id"], n.get("category"), n.get("updated"))
-                     for n in to_move]
+            marks = [(n["id"], n.get("category"), n.get("updated"),
+                      n.get("uid")) for n in to_move]
             stamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             for n in to_move:
                 n["category"] = cat
@@ -14543,6 +18252,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self.save_notes()
             self._editor_follows_external_change(touched)
             self._exit_selection_mode_after_bulk_action()
+            # The calendar draws a note with no colour of its own in its
+            # category's -- its dots, and an open day's stripes.
+            self.render_calendar()
             self.set_status(f"Moved {count} note(s) to \u201c{cat}\u201d")
             # This was the one action in the bar that changed stored data
             # with neither a question nor a way back, while the button
@@ -14562,7 +18274,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                           font=("Segoe UI", 9), anchor="w")
             lbl.pack(side="left", fill="x", expand=True, padx=(0, 10), pady=5)
             for w in (row, dot, lbl):
-                w.bind("<Button-1>", lambda e, c=cat: apply_category(c))
+                # "break": this destroys the popup the row is in (see
+                # _show_inline_rename).
+                w.bind("<Button-1>",
+                       lambda e, c=cat: (apply_category(c), "break")[1])
 
         # A way out that says so. Every row here refiles every ticked note,
         # and until now the only way to leave without picking one was to
@@ -14597,9 +18312,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                            anchor="w")
             lbl.pack(side="left", fill="x", expand=True, padx=10, pady=5)
             for w in (row, lbl):
+                # "break": this destroys the popup the row is in (see
+                # _show_inline_rename).
                 w.bind("<Button-1>",
                        lambda e, f=fmt: (self._dismiss_mini_popup(),
-                                         self._bulk_export_run(f)))
+                                         self._bulk_export_run(f), "break")[2])
         self._bulk_popup_cancel(frame)
         self._place_dropdown_popup(pop, self._bulk_export_btn)
 
@@ -14733,13 +18450,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.comments_text.insert("1.0", st["comments"])
         self.category_var.set(st["category"])
 
-        self.date_entry.delete(0, "end")
-        if st["date"]:
-            self.date_entry.insert(0, st["date"])
-            self.date_entry.config(fg=self.colors["text"])
-        else:
-            self.date_entry.insert(0, "YYYY-MM-DD")
-            self.date_entry.config(fg=self.colors["subtext"])
+        self._show_date_in_field(st["date"])
 
         self.current_note_color = st["color"]
         self._update_color_swatch()
@@ -14838,12 +18549,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             # stripped comparison here made every whitespace-only edit read
             # as "no change" — so the autosave, the flush and the dirty dot
             # all ignored exactly the characters the save had just learned
-            # to keep. Titles and comments are STORED stripped, so their
-            # stripped comparison is the honest one.
+            # to keep. The comments now follow the body's rule, stored as
+            # typed, so they compare unstripped too. Titles are STORED
+            # stripped, so their stripped comparison is the honest one.
             if not (st["title"].strip() == shown["title"].strip()
                     and st["body"] == shown["body"]
-                    and st["comments"].strip()
-                    == shown.get("comments", "").strip()
+                    and st["comments"] == (shown.get("comments") or "")
                     and st["category"] == shown["category"]
                     and st["color"] == shown.get("color", "")):
                 return False
@@ -14877,7 +18588,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 # this comparison, a tag-only change read as "nothing new"
                 # and the autosave quietly skipped it.
                 or st.get("paragraphs", []) != note.get("paragraphs", [])
-                or st["comments"].strip() != shown.get("comments", "").strip()
+                or st["comments"] != (shown.get("comments") or "")
                 or st["category"] != shown["category"]
                 or st["color"] != shown.get("color", "")
                 or st.get("checklist", []) != note.get("checklist", [])):
@@ -14918,20 +18629,26 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
     def _update_open_highlight(self):
         """Move the 'currently open' ring directly to whichever card needs
-        it, without rebuilding the list -- the (at most) two cards that
-        actually changed.
+        it, without rebuilding the list -- only the cards that changed.
 
         Every place that says which note is open asks _card_ring_color,
         which also knows where the keyboard is: the colour carries the
         meaning (the thickness is on every card), and a card that is both
-        open and holding the keyboard shows the keyboard's ring."""
-        prev = getattr(self, "_last_highlighted_note_id", None)
+        open and holding the keyboard shows the keyboard's ring.
+
+        It used to repaint the one card it had last outlined itself, and a
+        card could be outlined behind its back: a new note's first save
+        draws its card as the open one, and the next note opened left that
+        card outlined too -- two "open" notes on the list, until a full
+        rebuild. So it asks the paint itself (_ring_to_paint), which notes
+        every card painted as open, and takes the outline off all of them
+        but the note that is open now."""
         current = self.selected_note_id
-        if prev == current:
-            return
-        self._paint_ring(prev)
-        self._paint_ring(current)
-        self._last_highlighted_note_id = current
+        painted = getattr(self, "_open_ring_ids", None) or set()
+        for note_id in [n for n in painted if n != current]:
+            self._paint_ring(note_id)
+        if current not in painted:
+            self._paint_ring(current)
 
     def open_note_in_tab(self, note, occurrence_date=None, flush=True):
         """Open a saved note in the editor. Only one note is open at a time — any
@@ -14948,8 +18665,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # Close any open popup (e.g. an emoji picker) FIRST, before flushing
         # autosave below — otherwise the autosave that follows would see a
         # popup still open and skip refreshing the note list, leaving it
-        # stale even after switching notes.
-        self._dismiss_mini_popup()
+        # stale even after switching notes. One holding typed work -- the
+        # template editor -- asks first, and choosing to keep editing keeps
+        # this note from opening: a card clicked beside a half-written
+        # template closed it without the question, the typing gone.
+        if not self._dismiss_mini_popup_asking():
+            return False
         # Navigating to a different note means we're no longer mid-creation of
         # the calendar-originated one — clear this BEFORE the flush below, so
         # that flush's save can't accidentally trigger an unwanted jump back
@@ -14983,8 +18704,16 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
     def open_blank_tab(self):
         """Start a brand-new empty note, replacing whatever was open (after
-        auto-saving any unsaved work in it)."""
-        self._dismiss_mini_popup()
+        auto-saving any unsaved work in it).
+
+        Returns False when the person chose to stay (Cancel on a repeating
+        day's question), True otherwise -- as open_note_in_tab does. A
+        caller that goes on to fill the editor must stop on False: the
+        import did not, and loaded a recipe into the repeating note still
+        on screen, whose next save wrote it over the whole series."""
+        # A popup holding typed work asks first, as in open_note_in_tab.
+        if not self._dismiss_mini_popup_asking():
+            return False
         pending_return = getattr(self, "_pending_calendar_return", None)
         self._pending_calendar_return = None
         self._update_calendar_return_button()
@@ -14993,7 +18722,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             # Cancel means stay, exactly as in open_note_in_tab.
             self._pending_calendar_return = pending_return
             self._update_calendar_return_button()
-            return
+            return False
         self.new_note()
         self._tab_counter += 1
         self.open_tabs = [{"key": self._tab_counter, "state": self.capture_editor_state()}]
@@ -15004,7 +18733,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # open_note_in_tab, not a full rebuild.
         self._update_open_highlight()
 
-    def _flush_autosave(self):
+    def _flush_autosave(self, leaving=True, hold_repeat_off=None):
         """Cancel any pending debounced auto-save and, if the current editor has
         real unsaved changes, save them right now. Called before switching notes
         or closing so a late timer can't fire into the wrong note.
@@ -15017,16 +18746,28 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         to carry on regardless, and Cancel quietly threw the day's edit
         away.
 
+        ``leaving`` says whether the caller is about to replace the editor.
+        A route that saves on its way to changing something ELSE -- deleting
+        or moving another note, an import updating notes the editor does
+        not hold -- passes False: the editor stays as it is, so a date the
+        save could not store stays on screen to be fixed, and the question
+        about it belongs to the way out of the note. Asked on those routes,
+        "Continue" reset a date in a note that stayed open, and "Go back"
+        silently cancelled the delete nobody had asked about.
+
         Callers stop on an explicit False only (``is False``), never on
         anything falsy: a return added later without a value, or a test
         standing in for this method, must not turn into a window that
-        will not close."""
-        if getattr(self, "_autosave_job", None) is not None:
-            try:
-                self.after_cancel(self._autosave_job)
-            except (tk.TclError, ValueError):
-                pass
-            self._autosave_job = None
+        will not close.
+
+        A save that is not leaving holds a repeat's turn-off back (see
+        _date_and_repeat_to_store), and so does one a delete makes before
+        its question (*hold_repeat_off*), leaving or not: the answer may be
+        No, and the turn-off was made all the same -- or it made a series a
+        one-off before the question about deleting one of its days, which
+        then offered to delete the whole note. A note deleted takes the
+        turn-off with it; one kept keeps it waiting."""
+        self._cancel_pending_autosave()
         if self.selected_note_id is None and not self.open_tabs:
             return True
         # selected_note_id can end up stale — pointing at a note that no
@@ -15041,6 +18782,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # for something the user didn't directly ask to happen.
         if self.selected_note_id is not None and self.find_note(self.selected_note_id) is None:
             return True
+        # A checklist item typed but not yet added is typing like any other:
+        # it goes into the note it was typed for, before that note is left.
+        # It used to stay in the box and be added to whichever note came next.
+        self._take_pending_checklist_item()
         try:
             st = self.capture_editor_state()
         except Exception:
@@ -15054,13 +18799,64 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             return True
         try:
             if not self.editor_state_matches_saved(st):
-                if self.save_current_note(auto=True) is self._SAVE_CANCELLED:
-                    return False
+                # A route that saves on its way to something else holds a
+                # repeat's turn-off back, as the autosave does: it moved a
+                # series' days into the rescue copy unasked, the note still
+                # open (see _date_and_repeat_to_store).
+                held = getattr(self, "_holding_repeat_off", False)
+                self._holding_repeat_off = held or (
+                    not leaving if hold_repeat_off is None else hold_repeat_off)
+                try:
+                    if self.save_current_note(auto=True) is self._SAVE_CANCELLED:
+                        return False
+                finally:
+                    self._holding_repeat_off = held
         except Exception:
             # THE silent spot the audit named: a save failing here, at
             # note-switch or close, is exactly "stopped saving in
             # complete silence" — leave the trace.
             self._log_swallowed("flush: save_current_note")
+        # A date or repeat the save could not store exists only on the
+        # screen now, and a caller that is leaving is about to replace the
+        # screen. Asked, not decided: going back to fix it is the safe
+        # answer, so it is what Escape and Enter give.
+        if not leaving:
+            return True
+        try:
+            left_out = self._date_and_repeat_to_store()[2]
+        except Exception:
+            self._log_swallowed("flush: date and repeat check")
+            left_out = []
+        if left_out and hold_repeat_off and self._repeat_off_waits():
+            # "Continue" puts the stored date and repeat back, and with them
+            # the turn-off this save held for its question -- so it is named:
+            # the question said everything else was saved, and dropped it
+            # without a word. Not asked for it alone, or every delete of
+            # such a note would ask.
+            held = getattr(self, "_holding_repeat_off", False)
+            self._holding_repeat_off = True
+            try:
+                left_out = [item[:-len(self._HELD_TAIL)]
+                            if item.endswith(self._HELD_TAIL) else item
+                            for item in self._date_and_repeat_to_store()[2]]
+            except Exception:
+                self._log_swallowed("flush: held date and repeat check")
+            finally:
+                self._holding_repeat_off = held
+        if left_out:
+            if not self._themed_dialog(
+                    "Part of this note isn't saved",
+                    self._left_out_message(left_out),
+                    kind="warning",
+                    buttons=[("Go back and fix it", False),
+                             ("Continue without it", True)],
+                    default="Go back and fix it"):
+                return False
+            self._put_back_stored_date_and_repeat()
+            # Putting the repeat back writes its fields, and their traces
+            # schedule an autosave; this method's promise is that no late
+            # timer is left to fire into whatever replaces the editor.
+            self._cancel_pending_autosave()
         return True
 
     def switch_to_tab(self, index):
@@ -15120,25 +18916,13 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         went nowhere. Worse, with a template half-written in its editor and
         the Calendar tab underneath, that tab change dismissed the editor
         directly -- the template gone without the question a click outside
-        it asks.
+        it asks. It gets the same three answers everywhere: Cancel (or
+        Escape) keeps editing, No discards, Yes saves.
         """
-        pop = getattr(self, "_mini_popup", None)
-        confirm = getattr(pop, "_confirm_dismiss", None) if pop is not None else None
-        if confirm is not None:
-            try:
-                alive = bool(pop.winfo_exists())
-            except tk.TclError:
-                alive = False
-            if alive and not confirm():
-                # False means "stay open" -- or "I saved and closed myself".
-                # Only a popup still on screen is someone's unfinished work.
-                try:
-                    if pop.winfo_exists():
-                        return False
-                except tk.TclError:
-                    pass
+        if not self._dismiss_mini_popup_asking(holding_work_only=True):
+            return False
         if getattr(self, "_settings_open", False):
-            self.hide_settings_page()
+            return self.hide_settings_page() is not False
         return True
 
     def _shortcut_new_note(self, event=None):
@@ -15162,6 +18946,17 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         warning a global shortcut would otherwise trigger from anywhere
         (same emptiness test the autosave uses)."""
         if self._a_dialog_is_asking():
+            return "break"
+        # Typing in a popup that saves -- the template editor -- Ctrl+S is
+        # that popup's own Save. It used to save the note hidden behind the
+        # Settings page instead, or nothing, and say nothing either way.
+        # Asked of the key's own widget: that is where the keystroke went.
+        pop = getattr(self, "_mini_popup", None)
+        save_popup = (getattr(pop, "_save_from_keyboard", None)
+                      if pop is not None else None)
+        if (save_popup is not None and event is not None
+                and self._is_inside_popup(getattr(event, "widget", None), pop)):
+            save_popup()
             return "break"
         try:
             st = self.capture_editor_state()
@@ -15330,7 +19125,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 self.after_cancel(job)
             except (tk.TclError, ValueError):
                 pass
-        self._find_debounce = self.after(180, lambda: self._find_rescan(reveal=True))
+        self._find_debounce = self.after(180, self._find_debounce_fire, True)
 
     def _find_on_body_edit(self):
         # The body changed while the bar is open: the match model is now
@@ -15345,7 +19140,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 self.after_cancel(job)
             except (tk.TclError, ValueError):
                 pass
-        self._find_debounce = self.after(180, lambda: self._find_rescan(reveal=False))
+        self._find_debounce = self.after(180, self._find_debounce_fire, False)
 
     def _find_on_context_switch(self):
         """Note/tab switch or load: the old note's match model is invalid.
@@ -15461,8 +19256,16 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         matches.sort(key=lambda m: (m["line"], m.get("sortcol", m.get("col", 0))))
         return matches
 
-    def _find_rescan(self, reveal=False):
+    def _find_debounce_fire(self, reveal):
+        """The debounced rescan, run by its own timer -- the only place
+        its job is cleared. A rescan run directly (the Aa box, opening the
+        bar) leaves a waiting one tracked, since it may carry a reveal the
+        direct one does not; clearing the job there left that timer
+        scheduled with nothing tracking it -- see _autosave_now."""
         self._find_debounce = None
+        self._find_rescan(reveal=reveal)
+
+    def _find_rescan(self, reveal=False):
         if not getattr(self, "_find_open", False):
             return
         query = self._find_var.get()
@@ -15683,6 +19486,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
     def new_note(self):
         self.selected_note_id = None
         self.current_occurrence_date = None
+        # Whatever was under review from a share code is no longer here.
+        self._arrived_uid = ""
         self.title_entry.delete(0, "end")
         self.title_entry.config(fg=self.colors["text"])
         # Clearing the field does not go through _insert_title, so the
@@ -15698,12 +19503,17 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.refresh_attachments_list()
         self.write_recurrence_to_ui({})
         self._working_checklist = []
+        # The add box belongs to the note that was open; what was typed in
+        # it was saved there on the way out, or dropped with that note.
+        if hasattr(self, "checklist_add_var"):
+            self.checklist_add_var.set("")
         if hasattr(self, "checklist_items_frame"):
             self._render_checklist_items()
         self._sync_checklist_open_state()
         self._sync_calculator_open_state()
         self.title_entry.focus()
         self.set_status("New note — not yet saved")
+        self._status_names_left_out = None
         self.update_word_count()
         self._pending_styles = set()
         self._pending_text_color = None
@@ -15723,13 +19533,38 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # _add_note_for_date re-arms its own pending right after this.
         self._pending_calendar_return = None
         self._update_calendar_return_button()
+        # No note is open now, so no card wears the "open" outline: Ctrl+N,
+        # a calendar day's "Add note" and Use template came through here
+        # and left it on the card they left until the new note's first save.
+        self._update_open_highlight()
 
     def load_note(self, note, occurrence_date=None):
         """Open a note. If occurrence_date is given, the note is being opened
         from one specific day of a repeating series, and any per-occurrence
         override for that day is shown instead of the base content."""
+        # The same note loaded again over itself -- Restore previous, Reset
+        # this day, a save's own reload, a change made behind the editor --
+        # is the same editing session when it brings back the checklist the
+        # editor holds: the list keeps its identity, so the Undo just offered
+        # for a deleted item still has somewhere to put it back
+        # (_undo_checklist_delete knows the list by identity, and said "That
+        # note is no longer open" with the note on screen). A reload that
+        # brings ANOTHER checklist -- a rescue copy's own, an import's
+        # Update -- starts a new list: the item it brought back as a new
+        # entry was put back again beside it, and stored twice.
+        day = occurrence_date if is_recurring(note) else None
+        kept_checklist = (getattr(self, "_working_checklist", None)
+                          if (self.selected_note_id == note.get("id")
+                              and self.current_occurrence_date == day)
+                          else None)
         self.selected_note_id = note["id"]
-        self.current_occurrence_date = occurrence_date if is_recurring(note) else None
+        self.current_occurrence_date = day
+        # A new note's status line names nothing left out (see
+        # _say_nothing_is_left_out).
+        self._status_names_left_out = None
+        # A saved note has its own identity; one that was under review from
+        # a share code is no longer in the editor.
+        self._arrived_uid = ""
 
         shown = effective_note(note, occurrence_date) if occurrence_date else note
 
@@ -15761,23 +19596,26 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.comments_text.insert("1.0", shown.get("comments", ""))
         self.category_var.set(shown["category"])
 
-        self.date_entry.delete(0, "end")
-        if note.get("date"):
-            self.date_entry.insert(0, note["date"])
-            self.date_entry.config(fg=self.colors["text"])
-        else:
-            self.date_entry.insert(0, "YYYY-MM-DD")
-            self.date_entry.config(fg=self.colors["subtext"])
+        self._show_date_in_field(note.get("date"))
 
         self.current_note_color = shown.get("color", "")
         self._update_color_swatch()
         self.current_attachments = list(note.get("attachments", []))
         self.refresh_attachments_list()
         # Checklist: work on a copy so edits aren't committed until save.
-        self._working_checklist = [
+        fresh = [
             {"text": it.get("text", ""), "done": bool(it.get("done"))}
             for it in note.get("checklist", []) if isinstance(it, dict)
         ]
+        if kept_checklist is not None and kept_checklist == fresh:
+            kept_checklist[:] = fresh
+            self._working_checklist = kept_checklist
+        else:
+            self._working_checklist = fresh
+        # An item half-typed for the note that was open does not follow it
+        # here (see new_note).
+        if hasattr(self, "checklist_add_var"):
+            self.checklist_add_var.set("")
         if hasattr(self, "checklist_items_frame"):
             self._render_checklist_items()
         self._sync_checklist_open_state()
@@ -15859,6 +19697,31 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
 
 
+    def _new_context_menu(self, **options):
+        """A fresh right-click menu, and the end of the previous one.
+
+        Each right-click builds its menu anew, because the entries depend
+        on what was clicked -- and none was ever destroyed. Measured over a
+        thousand right-clicks on notes: three windows and eighteen Tcl
+        commands more per click, each menu holding the note it was built
+        for, and a theme switch that walks them all slowing from about
+        80 ms to over 400.
+
+        Not destroyed as soon as tk_popup returns: on Linux it returns at
+        once, with the menu still open (measured: 1 ms, still mapped), so
+        the menu would vanish before anyone chose. Only one right-click
+        menu is ever open, so the previous one is done with by the time
+        the next is asked for. Its cascades are its children and go too.
+        """
+        old = getattr(self, "_context_menu", None)
+        if old is not None:
+            try:
+                old.destroy()
+            except tk.TclError:
+                pass
+        menu = self._context_menu = tk.Menu(self, **options)
+        return menu
+
     def show_note_context_menu(self, event, note, occurrence_date=None,
                                click_opens=False):
         """Native right-click dropdown for a note. Extensible — add items here
@@ -15874,7 +19737,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         """
         if note is None:
             return
-        menu = tk.Menu(self, tearoff=0)
+        menu = self._new_context_menu(tearoff=0)
         menu.configure(
             bg=self.colors["card"], fg=self.colors["text"],
             activebackground=self.colors["accent"], activeforeground="white",
@@ -15973,7 +19836,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         menu.add_separator()
         menu.add_command(
             label="📄  Duplicate",
-            command=lambda: (self.duplicate_note(note), self.refresh_day_panel())
+            command=lambda: self._duplicate_from_menu(note)
         )
         # Say what it aims at, before the click rather than after it. With
         # no occurrence_date the target is the stored note, so on a
@@ -16050,7 +19913,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             return
         if real.get("category") == category:
             return
-        if self._flush_autosave() is False:
+        # The editor stays where it is unless it holds this very note, so
+        # its own unreadable date is no question for this move to ask.
+        if self._flush_autosave(
+                leaving=real["id"] == self.selected_note_id) is False:
             return  # Cancel on a day's save question: nothing moves
         # Re-read after the flush: the note object above was fetched before
         # anything the editor was holding reached the store.
@@ -16061,6 +19927,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.save_notes()
         self._editor_follows_external_change({real["id"]})
         self.refresh_note_list()
+        # A note with no colour of its own is drawn in its category's, as
+        # a dot on its days and a stripe in an open day's list.
+        self.render_calendar()
         title = (real.get("title") or "").strip() or "Untitled note"
         self.set_status("Moved “%s” to “%s”"
                         % (_truncate(title, 30), category))
@@ -16136,6 +20005,16 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 "date_str": return_day, "origin": "edit",
             }
             self._update_calendar_return_button()
+        # Nudge focus toward the recurrence dropdown so it's obvious what to do.
+        # (These lines sat at the end of _reset_occurrence_override instead,
+        # left there by an insertion: the reset's status said "Set a repeat
+        # frequency" about a note that already repeats and sent the keyboard
+        # to the hidden editor, while this, which promises both, did neither.)
+        try:
+            self.rec_freq_menu.focus_set()
+        except (AttributeError, tk.TclError):
+            pass
+        self.set_status("Set a repeat frequency to make this note recurring")
 
     def _reset_occurrence_override(self, note, occurrence_date):
         """Drop one day's separate edits so it follows the series again.
@@ -16153,24 +20032,34 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 "The separate edits made for this day will be discarded.",
                 icon="warning", default="no"):
             return
+        showing = (self.selected_note_id == note["id"]
+                   and self.current_occurrence_date == occurrence_date)
+        carried = {}
+        if showing:
+            # The day's own edits go; the files and the checklist on screen
+            # are the series', and the reload below would fill the editor
+            # from a note that never had them (see restore_previous_version).
+            self._take_pending_checklist_item()
+            self._write_series_owned(note, None, None, schedule=False)
+            # Only what no save can store: the day's own edits go, as the
+            # question says (see _schedule_to_carry).
+            carried = self._schedule_to_carry(unsaved=False)
         note["overrides"].pop(occurrence_date, None)
         note["updated"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         self.save_notes()
         # If the editor is showing exactly this day, reload it so the
         # series content replaces the dropped override on screen too.
-        if (self.selected_note_id == note["id"]
-                and self.current_occurrence_date == occurrence_date):
+        if showing:
             self.load_note(note, occurrence_date)
+            self._put_back_schedule(carried)
+        elif self.selected_note_id == note["id"]:
+            # The series on screen counts its days' own edits in its
+            # banner, which went on counting this one.
+            self._update_occurrence_banner()
         self.refresh_note_list()
         self.render_calendar()
         self.refresh_day_panel()
         self.set_status("This day follows the series again")
-        # Nudge focus toward the recurrence dropdown so it's obvious what to do.
-        try:
-            self.rec_freq_menu.focus_set()
-        except (AttributeError, tk.TclError):
-            pass
-        self.set_status("Set a repeat frequency to make this note recurring")
 
     def _context_delete_note(self, note, occurrence_date=None):
         """Delete triggered from the right-click menu. Routes through the normal
@@ -16179,7 +20068,16 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # selected_note_id, so the list re-render after the delete shows the
         # editor's latest content rather than a stale preview. Cancel on a
         # day's save question stops the delete before it asks anything.
-        if self._flush_autosave() is False:
+        # Only deleting the note on screen -- or the very day it shows --
+        # replaces the editor; one other day of it leaves the editor be. A
+        # repeat's turn-off waiting there is not made for the delete either
+        # way: made first, it turned the series into a one-off, and the
+        # question then offered to delete the whole note instead of a day
+        # (and a No kept a turn-off nobody had saved).
+        leaving = ((note or {}).get("id") == self.selected_note_id
+                   and (occurrence_date is None
+                        or occurrence_date == self.current_occurrence_date))
+        if self._flush_autosave(leaving=leaving, hold_repeat_off=True) is False:
             return
         # The target travels as a parameter — never by repointing the
         # editor's selection at it. An earlier version did exactly that,
@@ -16304,8 +20202,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         except Exception:
             html = None
         if html and "<table" in html.lower():
+            cut = {}
             try:
-                text, _spans, _paras = html_to_note(html)
+                text, _spans, _paras = html_to_note(html, report=cut)
             except Exception:
                 return None
             if core_tables.find_blocks(text):
@@ -16314,6 +20213,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 except tk.TclError:
                     pass
                 text_widget.insert("insert", text)
+                self._say_if_paste_was_cut(cut)
                 return "break"
         return None
 
@@ -16397,28 +20297,53 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if note is None:
             self.show_info("Nothing to duplicate", "No saved note is open.")
             return
-
-        # If the editor has unsaved changes, the saved version is what gets
-        # copied — make that explicit rather than silently copying stale content.
-        st = self.capture_editor_state()
-        if not self.editor_state_matches_saved(st):
-            choice = self.ask_yes_no_cancel(
-                "Unsaved changes",
-                "This note has unsaved changes. Save them before duplicating?\n\n"
-                "Yes = save, then duplicate\n"
-                "No = duplicate the last saved version\n"
-                "Cancel = do nothing"
-            )
-            if choice is None:
-                return
-            if choice:
-                self.save_current_note()
-                note = self.find_note(self.selected_note_id)
-
+        note = self._note_to_duplicate(note)
+        if note is None:
+            return
         clone = self.duplicate_note(note)
         # Open the fresh copy so the user can edit it right away.
         if clone is not None:
             self.open_note_in_tab(clone)
+
+    def _note_to_duplicate(self, note):
+        """The stored note a duplicate copies -- or None for Cancel.
+
+        A duplicate copies the SAVED version. When the editor holds this
+        note with unsaved changes, that is said rather than a stale copy
+        made in silence, and the person chooses. The right-click Duplicate
+        on a card or a calendar day copied the stored note without asking:
+        a file attached on a day after its save was not in the copy."""
+        if note.get("id") != self.selected_note_id:
+            return note
+        st = self.capture_editor_state()
+        if self.editor_state_matches_saved(st):
+            return note
+        choice = self.ask_yes_no_cancel(
+            "Unsaved changes",
+            "This note has unsaved changes. Save them before duplicating?\n\n"
+            "Yes = save, then duplicate\n"
+            "No = duplicate the last saved version\n"
+            "Cancel = do nothing"
+        )
+        if choice is None:
+            return None
+        if choice:
+            # Cancel on a repeating day's save question means stay:
+            # nothing saved, so nothing duplicated either.
+            if self.save_current_note() is self._SAVE_CANCELLED:
+                return None
+            # The note the question was about, saved: not whichever one
+            # the editor holds after the answer.
+            return self.find_note(note["id"])
+        return note
+
+    def _duplicate_from_menu(self, note):
+        """A right-click Duplicate: the note as stored, after the same
+        question about unsaved changes as the editor's own Duplicate."""
+        note = self._note_to_duplicate(note)
+        if note is not None:
+            self.duplicate_note(note)
+            self.refresh_day_panel()
 
     def find_note(self, note_id):
         """The note with this id, or None."""
@@ -16431,7 +20356,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
     def rename_category_everywhere(self, old_name, new_name):
         """Rewrite every reference to a category when it is renamed."""
-        core_rename_category(self.notes, old_name, new_name)
+        self._refile_category_everywhere(old_name, new_name, renamed=True)
 
     def reassign_category_everywhere(self, old_name, new_name):
         """Move every note from one category to another.
@@ -16441,7 +20366,50 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         renaming a category, the other is a category being deleted and its
         notes being kept.
         """
+        self._refile_category_everywhere(old_name, new_name, renamed=False)
+
+    def _refile_category_everywhere(self, old_name, new_name, renamed):
+        """Every holder of a category's name, moved to another name.
+
+        The notes used to be the only holder rewritten, and every other one
+        went on using the old name. The editor's own category box fell back
+        to General, so the next save filed the open note there. Templates
+        and the Trash kept a category that no longer existed, and a note
+        restored from the Trash brought it back. A folded group unfolded,
+        and its old name stayed folded in the settings for good. Every
+        holder is here, so the next one is added here or visibly not at all.
+
+        A rename carries the list's state with it -- the fold, the filter,
+        the open note's box. A deletion (``renamed=False``) only lets go of
+        the old name: General does not become folded, or the list filtered,
+        because a deleted category was.
+        """
+        # The core rewrite reaches each note's rescue copy as well ("↩
+        # Restore previous" puts its category and days back), and says how
+        # many held the name -- a Trash entry can hold it there alone,
+        # where counting the notes in the category would not see it.
         core_rename_category(self.notes, old_name, new_name)
+        trashed = [e for e in self.trash if isinstance(e, dict)]
+        if core_rename_category(trashed, old_name, new_name):
+            save_trash(self.trash)
+        moved_templates = False
+        for tpl in self.templates:
+            if isinstance(tpl, dict) and tpl.get("category") == old_name:
+                tpl["category"] = new_name
+                moved_templates = True
+        if moved_templates:
+            save_templates(self.templates)
+        if old_name in self.collapsed_groups:
+            self.collapsed_groups.discard(old_name)
+            if renamed:
+                self.collapsed_groups.add(new_name)
+            save_setting("collapsed_groups", sorted(self.collapsed_groups))
+        if renamed:
+            if self.category_var.get() == old_name:
+                self.category_var.set(new_name)
+            var = getattr(self, "filter_var", None)
+            if var is not None and var.get() == old_name:
+                var.set(new_name)
 
     def refresh_category_widgets(self):
         """Push the current category set into the editor dropdown and the
@@ -16490,6 +20458,14 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         """Bring back the rescue copy: the text a drastic shortening
         replaced, or everything an update from a share code or backup
         replaced."""
+        # An edit still waiting for its autosave is saved first. Left
+        # pending, the autosave ran while the question below waited, and a
+        # big delete made a new rescue copy of the words it took -- which the
+        # restore, of the copy read before the question, then dropped: the
+        # deleted words were in no file. Saved first, that copy is the one
+        # the question offers. _autosave_now cancels the timer it replaces.
+        if getattr(self, "_autosave_job", None) is not None:
+            self._autosave_now()
         note = self.find_note(self.selected_note_id) if self.selected_note_id else None
         if not (note and note.get("_prev")):
             return
@@ -16518,34 +20494,56 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         else:
             question = ("Bring back the earlier version of this note's text? "
                         "The current text will be replaced.")
+        occurrence = self.current_occurrence_date
         if not self.ask_yes_no(
             "Restore previous version", question + extra,
             icon="warning", default="no"
         ):
             return
-        # Put the previous content back into the editor and save it. Clear
-        # any pending style first — the insert hook that applies pending
-        # styles doesn't know this insert is a restore rather than typing,
-        # so a stale pending style at this point would silently tag it.
-        self._pending_styles = set()
-        self._pending_text_color = None
-        self._pending_font_size = None
-        self._pending_font_family = None
-        self._pending_highlight_color = None
-        self.title_entry.delete(0, "end")
-        self._insert_title(prev.get("title", ""))
-        self.title_entry.config(fg=self.colors["text"])
-        self.body_text.delete("1.0", "end")
-        self.body_text.insert("1.0", prev.get("body", ""))
-        self._apply_formatting(self.body_text, prev.get("formatting", []))
-        self._apply_paragraphs(self.body_text, prev.get("paragraphs", []))
-        # Mirror restore_editor_state's tail: this was the one body-loader
-        # that skipped the redraw, so a restored table came back as raw
-        # pipe rows and the word count kept describing the replaced text.
-        self._render_table_grids()
-        self._refresh_format_buttons()
-        self.comments_text.delete("1.0", "end")
-        self.comments_text.insert("1.0", prev.get("comments", ""))
+        # The note the question named is the note restored -- and the
+        # editor is filled only if it still holds that note. While the
+        # question waited the editor could move on; filling it then put
+        # the old text into ANOTHER note, which its next save kept.
+        in_editor = self.selected_note_id == note["id"]
+        # A date or repeat value the note does not store -- left out, or not
+        # saved yet -- is carried across the reload below, unless the
+        # rescue copy brings back its own.
+        carried = (self._schedule_to_carry(date="date" not in prev,
+                                           repeat="recurrence" not in prev)
+                   if in_editor else {})
+        if in_editor:
+            # The editor's files and checklist are the note's, and the
+            # rescue copy is of its text: stored first, or the reload below
+            # filled the editor from a note that never had them -- a file
+            # attached on a day after its save was left with no note, and a
+            # removed one came back listed with its stored copy deleted. A
+            # rescue copy that holds them still wins, applied after. An item
+            # typed in the checklist's box goes in first, as leaving does.
+            self._take_pending_checklist_item()
+            self._write_series_owned(note, None, None, schedule=False)
+            # Put the previous content back into the editor and save it.
+            # Clear any pending style first — the insert hook that applies
+            # pending styles doesn't know this insert is a restore rather
+            # than typing, so a stale pending style here would tag it.
+            self._pending_styles = set()
+            self._pending_text_color = None
+            self._pending_font_size = None
+            self._pending_font_family = None
+            self._pending_highlight_color = None
+            self.title_entry.delete(0, "end")
+            self._insert_title(prev.get("title", ""))
+            self.title_entry.config(fg=self.colors["text"])
+            self.body_text.delete("1.0", "end")
+            self.body_text.insert("1.0", prev.get("body", ""))
+            self._apply_formatting(self.body_text, prev.get("formatting", []))
+            self._apply_paragraphs(self.body_text, prev.get("paragraphs", []))
+            # Mirror restore_editor_state's tail: this was the one body-
+            # loader that skipped the redraw, so a restored table came back
+            # as raw pipe rows and the word count described the old text.
+            self._render_table_grids()
+            self._refresh_format_buttons()
+            self.comments_text.delete("1.0", "end")
+            self.comments_text.insert("1.0", prev.get("comments", ""))
         # Written straight onto the NOTE, not routed through the editor's
         # save. The rescue copy belongs to the note, and the save path
         # asks a scope question on a repeating note: answering "this
@@ -16576,6 +20574,13 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 note[key] = copy.deepcopy(prev[key])
         if note.get("category") not in CATEGORY_COLORS:
             note["category"] = "General"
+        # The days it brings back follow the same rule: a day filed under
+        # a category that is gone came back under that dead name, and the
+        # next launch re-created the category from it.
+        for patch in (note.get("overrides") or {}).values():
+            if (isinstance(patch, dict) and "category" in patch
+                    and patch["category"] not in CATEGORY_COLORS):
+                patch["category"] = "General"
         note.pop("_prev", None)
         # Seconds included, matching what save_current_note stamps: the
         # minute-resolution version sorted a just-restored note BELOW
@@ -16587,18 +20592,403 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # Reload from the note so the editor and the dirty machinery agree
         # with what is now on disk (the widgets above were filled for the
         # user to see; this makes them the note's official state).
-        self.load_note(note, occurrence_date=self.current_occurrence_date)
+        if in_editor:
+            self.load_note(note, occurrence_date=occurrence)
+            self._put_back_schedule(carried)
         self.refresh_note_list()
+        # The rescue copy can bring back a date, a repeat, a colour, a
+        # category and a series' days -- all of them drawn on the calendar,
+        # which this was the one note-writing route never to redraw.
+        self.render_calendar()
         self.set_status(
             "Restored the previous version of the whole note"
             if viewing_occurrence else "Restored the previous version")
         self.update_word_count()
         self._update_restore_button()
 
+    def _date_and_repeat_to_store(self):
+        """What a save can store from the date and repeat fields, and what
+        it has to leave out: ``(date, rule, left_out)``.
+
+        One field the app cannot read used to veto the WHOLE save, and the
+        automatic routes -- a pause in typing, another note, Ctrl+N,
+        closing the window -- took that refusal for success and replaced
+        the editor. A date typed as 30/09/2026, the way many people write
+        it, quietly cost every word typed after it. Now a field that cannot
+        be stored keeps the value the note already had, everything else is
+        saved, and ``left_out`` says what was not, in words for the person.
+
+        What can be left out: a date that is not a date (the field reads
+        YYYY-MM-DD), any repeat value the app cannot read
+        (_unreadable_repeat_fields: its end date, "Every", "After … times", a
+        monthly repeat's days), and a repeat with no start date to hang on.
+        The save, the question asked on the way out of the note, the
+        repeat's summary line and the reloads that carry what is typed all
+        ask here, so they cannot disagree about what stayed behind.
+        """
+        note = (self.find_note(self.selected_note_id)
+                if self.selected_note_id is not None else None)
+        kept_date = (note or {}).get("date") or ""
+        kept_rule = normalize_recurrence((note or {}).get("recurrence"))
+        left_out = []
+
+        typed = self.date_entry.get().strip()
+        if typed == "YYYY-MM-DD":
+            typed = ""
+        date_value = typed
+        if typed and not parse_date(typed):
+            # Exactly the date the note already has is not left out,
+            # readable or not: nothing new is being lost. A note can arrive
+            # holding a date the app cannot read (a share code or a backup
+            # keeps a one-off note's date as it came), and it asked "Part
+            # of this note isn't saved" every time it was left -- untouched
+            # -- while "Continue without it" put back that same date.
+            if typed != kept_date.strip():
+                left_out.append(f"the date “{typed}” "
+                                "(dates are written like 2026-09-30)")
+            date_value = kept_date
+
+        rule = self.read_recurrence_from_ui()
+        # A repeat value the app cannot read is left out as a date is. Read
+        # as 1, "After abc times" ended the series after its first day --
+        # every later day, its own text included, fell off the calendar --
+        # and a box emptied on the way to a new number did the same at the
+        # next autosave; "Every x" made the series repeat every time instead,
+        # and a monthly "15th" was no day at all, the series on its start's.
+        for field, typed in self._unreadable_repeat_fields(rule["freq"]):
+            if field == "end":
+                left_out.append(f"the repeat's end date “{typed}” "
+                                "(dates are written like 2026-12-31)")
+                rule = normalize_recurrence(dict(
+                    rule, end=kept_rule["end"], count=kept_rule["count"]))
+            elif field == "every":
+                left_out.append(f"the repeat's “Every {typed}” "
+                                "(write a whole number, like 2)")
+                rule = normalize_recurrence(dict(
+                    rule, interval=kept_rule["interval"]))
+            elif field == "after":
+                left_out.append(f"the repeat's “After {typed} times” "
+                                "(write a whole number, like 10)")
+                rule = normalize_recurrence(dict(
+                    rule, end=kept_rule["end"], count=kept_rule["count"]))
+            else:
+                left_out.append(f"the repeat's day(s) “{typed}” "
+                                "(write days of the month, like 1, 15)")
+                rule = normalize_recurrence(dict(
+                    rule, month_days=kept_rule["month_days"]))
+
+        if rule["freq"] and not parse_date(date_value):
+            if parse_date(kept_date):
+                # Most often the date was cleared on the way to typing a
+                # new one: the series keeps the day it already starts on.
+                left_out.append("the cleared date (a repeating note needs "
+                                f"a start date, so it still starts {kept_date})")
+                date_value = kept_date
+            else:
+                left_out.append("the repeat (a repeating note needs a "
+                                "start date)")
+                rule = normalize_recurrence({})
+        # A repeat turned off on a series whose days hold edits of their own
+        # is held by a save no one asked for (_holds_repeat_off: the
+        # autosave, and a route saving on its way to something else). Its
+        # save moves every day into the rescue copy, and a "Does not repeat"
+        # picked by mistake and put right a moment later brought the series
+        # back without them. Held, it is left out as a value the app cannot
+        # read is: everything else is saved with the note's own repeat, and
+        # the status line says what waits. Leaving the note or Save makes it.
+        # A date typed with it waits too: the held save keeps the series
+        # repeating, and a new start date moves every day of a series that
+        # repeats -- a one-off typed on a Thursday moved a Monday series to
+        # Thursdays, and the rescue copy the turn-off made later held the
+        # moved series, a day's own text on no day.
+        if getattr(self, "_holding_repeat_off", False) and self._repeat_off_waits():
+            what = "turning the repeat off"
+            if date_value != kept_date:
+                what += (f" and the date “{date_value}”" if date_value
+                         else " and clearing the date")
+                date_value = kept_date
+            left_out.append(what + self._HELD_TAIL)
+            rule = kept_rule
+        return date_value, rule, left_out
+
+    # What a held turn-off's words in the status line end with.
+    _HELD_TAIL = " (saved when you leave the note or press Save)"
+
+    def _unreadable_repeat_fields(self, freq):
+        """The repeat's typed values the app cannot store, as (field,
+        typed): "end" (its end date, when it ends on a date; an empty box
+        means it never ends), "every" (its interval), "after" (its count,
+        when it ends after N times) and "days" (a monthly repeat's days, any
+        one of them not a day of the month; a wholly blank box is legal --
+        it means the start date's day). The one judgement the save and its
+        question (_date_and_repeat_to_store), the summary line and the
+        reloads that carry what is typed (_schedule_to_carry) ask. The end
+        date was judged apart, so the summary line knew nothing of it and
+        previewed a series with no end."""
+        problems = []
+        if not freq:
+            return problems
+        mode = self.rec_end_mode_var.get()
+        if mode == "on":
+            end = self.rec_end_date_var.get().strip()
+            if end and not parse_date(end):
+                problems.append(("end", end))
+        every = self.rec_interval_var.get().strip()
+        if not _whole_number(every):
+            problems.append(("every", every))
+        if mode == "after":
+            times = self.rec_count_var.get().strip()
+            if not _whole_number(times):
+                problems.append(("after", times))
+        if freq == "monthly":
+            days = self.rec_monthdays_var.get()
+            chunks = [c.strip() for c in days.replace(";", ",").split(",")]
+            if any(c and not _is_month_day(c) for c in chunks):
+                problems.append(("days", days.strip()))
+        return problems
+
+    def _schedule_to_carry(self, date=True, repeat=True, unsaved=True):
+        """What the date and repeat fields hold that the note does not
+        store, to carry across a reload: the date field's text, and the
+        repeat's fields as typed -- each only when it differs from what the
+        note holds, because a save would leave it out (see
+        _date_and_repeat_to_store) or because it is not saved yet; {} when
+        both agree with the note.
+
+        A route that fills the editor from the note as stored -- Restore
+        previous, Reset this day -- wrote the stored date and repeat over
+        such values in silence, the one thing on screen no file held. They
+        are carried across the reload instead, as a save's own reload
+        carries them, and stay there to be fixed or saved; leaving the note
+        then asks, or saves them. Not asked before the route: a half-typed
+        date must never block a restore (qa7 pins that promise). Not only
+        what a save leaves out: a day of a series never autosaves, and a
+        readable "Every 3" typed there was lost -- or kept, when an
+        unreadable box happened to sit beside it. The repeat goes whole:
+        its fields only mean something together. With *date* or *repeat*
+        False the reload brings back its own (a rescue copy that holds it).
+        With *unsaved* False only what a save would leave out is carried:
+        Reset this day says the day's own edits will be discarded, and a
+        readable start date it kept was saved on leaving -- moving the whole
+        series without a question, another day's own text with it. A value
+        no save can store moves nothing, and leaving asks about it; of the
+        repeat, that is its unreadable boxes alone, over the note's rule.
+        """
+        try:
+            date_value, rule, left_out = self._date_and_repeat_to_store()
+        except Exception:
+            self._log_swallowed("reload: date and repeat check")
+            return {}
+        note = (self.find_note(self.selected_note_id)
+                if self.selected_note_id is not None else None)
+        if note is None:
+            return {}
+        carried = {}
+        typed = self.date_entry.get().strip()
+        if typed == "YYYY-MM-DD":
+            typed = ""
+        if date and (typed != (date_value or "")
+                     or (unsaved and (date_value or "")
+                         != (note.get("date") or ""))):
+            carried["date"] = typed
+        freq = self.selected_freq_key()
+        unreadable = self._unreadable_repeat_fields(freq)
+        stored = normalize_recurrence(note.get("recurrence"))
+        # A value it cannot read, the whole repeat left out for want of a
+        # start date, or (with *unsaved*) a rule not saved yet.
+        if repeat and (unreadable or (freq and not rule["freq"])
+                       or (unsaved and rule != stored)):
+            boxes = {
+                "freq": self.rec_freq_var.get(),
+                "interval": self.rec_interval_var.get(),
+                "weekdays": list(self.rec_weekday_state),
+                "month_days": self.rec_monthdays_var.get(),
+                "policy": self.rec_policy_var.get(),
+                "end_mode": self.rec_end_mode_var.get(),
+                "end": self.rec_end_date_var.get(),
+                "count": self.rec_count_var.get(),
+            }
+            if not unsaved:
+                # Only the boxes no save can store, over the note's own rule
+                # -- which the reload writes back -- and none at all when
+                # they were typed for another rule than the note's (another
+                # frequency, another ending): they go with that change.
+                # Carried whole, one unreadable box kept every readable
+                # change beside it, and leaving saved them to the series.
+                ending = ("after" if stored["count"]
+                          else "on" if stored["end"] else "never")
+                boxes = ({self._REPEAT_BOX[field]: boxes[self._REPEAT_BOX[field]]
+                          for field, _typed in unreadable}
+                         if freq == stored["freq"]
+                         and boxes["end_mode"] == ending else {})
+            if boxes:
+                carried["repeat"] = boxes
+                # A turn-off goes across with its record of the rescue copy a
+                # save made while it waited (_turn_off_rescue_copy): the
+                # reload's own repeat ends the wait (on_recurrence_changed),
+                # the put-back begins it again, and without the record the
+                # turn-off's copy replaced that one, its text in no file.
+                if not freq and getattr(self, "_held_text_rescue", None) is not None:
+                    carried["held_rescue"] = self._held_text_rescue
+        return carried
+
+    # The box each of _unreadable_repeat_fields' values is typed in, as
+    # _schedule_to_carry names it.
+    _REPEAT_BOX = {"every": "interval", "after": "count", "end": "end",
+                   "days": "month_days"}
+
+    def _put_back_schedule(self, carried):
+        """Show again what _schedule_to_carry carried across a reload; the
+        summary line then says what is not understood, and leaving asks or
+        saves. A repeat carried in part -- the boxes no save can store --
+        lands on the rule the reload wrote, the rest of it left as is."""
+        if not carried:
+            return
+        if "date" in carried:
+            self._show_date_in_field(carried["date"])
+        rep = carried.get("repeat")
+        if rep:
+            for key, var in (("freq", self.rec_freq_var),
+                             ("interval", self.rec_interval_var),
+                             ("month_days", self.rec_monthdays_var),
+                             ("policy", self.rec_policy_var),
+                             ("end_mode", self.rec_end_mode_var),
+                             ("end", self.rec_end_date_var),
+                             ("count", self.rec_count_var)):
+                if key in rep:
+                    var.set(rep[key])
+            if "weekdays" in rep:
+                self.rec_weekday_state = list(rep["weekdays"])
+            self.refresh_weekday_buttons()
+            self.on_end_mode_changed()
+            self.on_recurrence_changed()
+        else:
+            self.update_recurrence_summary()
+        if "held_rescue" in carried:
+            self._held_text_rescue = carried["held_rescue"]
+
+    def _left_out_message(self, left_out,
+                          lead="Everything else in this note is saved, but not:"):
+        """The words for what a save could not store (see
+        _date_and_repeat_to_store) -- one list, whoever is asking."""
+        return lead + "\n\n" + "\n".join(f"• {item}" for item in left_out)
+
+    def _put_back_stored_date_and_repeat(self):
+        """Show the date and repeat the note has on disk, over whatever the
+        save had to leave out -- what "Continue without it" means, so the
+        editor agrees with the note again and nothing reads as unsaved."""
+        note = (self.find_note(self.selected_note_id)
+                if self.selected_note_id is not None else None)
+        self._show_date_in_field((note or {}).get("date"))
+        self.write_recurrence_to_ui((note or {}).get("recurrence"))
+        # Nothing is left out now: a status line still naming a value goes
+        # back to the save's own words, here rather than at the next
+        # autosave tick, which a route that stays (the delete answered No,
+        # Back to Calendar) cancels.
+        self._say_nothing_is_left_out()
+
     # What save_current_note returns when the person pressed Cancel on the
     # occurrence-scope question -- the one outcome a caller that is about
     # to replace the editor must not carry on past.
     _SAVE_CANCELLED = object()
+
+    # Said wherever a save turns a repeat off and the rescue copy takes the
+    # days' own text.
+    _REPEAT_OFF_KEPT = (" — the repeat is off; ↩ Restore previous brings it "
+                        "back with every day's own text")
+
+    def _repeat_off_loses_days(self, note, recurrence):
+        """Whether a save writing *recurrence* turns *note*'s repeat off
+        while a day of it holds text of its own -- which goes with the
+        repeat. A day differing only in its colour or category loses no
+        text."""
+        if not is_recurring(note) or recurrence.get("freq"):
+            return False
+        # A day deleted a moment ago is not counted, though its Undo is still
+        # on offer: the turn-off takes nothing of it -- the person deleted it,
+        # and once the series is gone its Undo says the day can't come back
+        # (_undo_occurrence_delete). Counted, the turn-off made a copy for an
+        # Undo that might never be clicked, and the copy replaced the note's
+        # own rescue copy -- a big delete's text in no file, the window's
+        # close counting an Undo that died with it.
+        for day in (note.get("overrides") or {}):
+            shown = effective_note(note, day)
+            if any((shown.get(key) or "") != (note.get(key) or "")
+                   for key in ("title", "body", "comments")):
+                return True
+        return False
+
+    @staticmethod
+    def _whole_note_rescue_copy(note):
+        """*note* as it is -- its text, and the date, repeat and days a
+        save is about to take away -- as the rescue copy "↩ Restore
+        previous" puts back whole (_PREV_EXTRA_LABELS)."""
+        prev = {
+            "title": note.get("title") or "",
+            "body": note.get("body") or "",
+            "formatting": copy.deepcopy(note.get("formatting") or []),
+            "paragraphs": copy.deepcopy(note.get("paragraphs") or []),
+            "comments": note.get("comments") or "",
+        }
+        for key in ("date", "recurrence", "exceptions", "overrides"):
+            prev[key] = copy.deepcopy(note.get(key))
+        return prev
+
+    # The text fields a rescue copy of text alone holds.
+    _RESCUE_TEXT_KEYS = ("title", "body", "formatting", "paragraphs", "comments")
+
+    def _turn_off_rescue_copy(self, note):
+        """The rescue copy a repeat's turn-off makes: *note* whole, its
+        repeat and days included (_whole_note_rescue_copy) -- with the text
+        of a rescue copy a save made while that turn-off waited, if the note
+        still holds it.
+
+        A held save stores everything but the turn-off, a big delete among
+        it, with its own copy of the text it took away. The turn-off came
+        first in what the person did, but it is saved last, and its copy,
+        taken from the note the held saves left, replaced the delete's: the
+        deleted text was in no file. The copy is known by identity, so it
+        is never taken for one an earlier visit made."""
+        prev = self._whole_note_rescue_copy(note)
+        held = getattr(self, "_held_text_rescue", None)
+        self._held_text_rescue = None
+        if held is not None and note.get("_prev") is held:
+            for key in self._RESCUE_TEXT_KEYS:
+                prev[key] = copy.deepcopy(held.get(key))
+        return prev
+
+    def _write_series_owned(self, note, date_value, recurrence, schedule=True):
+        """After a save on one day of *note*, write what the editor holds
+        that belongs to the whole series -- its attachments and checklist,
+        and with *schedule* its date and its repeat. A day has nowhere to
+        keep them.
+
+        A repeat turned off takes every day's own edits with it. When a
+        day had text of its own, the note as it was becomes the rescue
+        copy first, repeat and days included. Only the day on screen used
+        to be kept, and every other day's text was in no file. Returns
+        whether that happened.
+
+        *schedule* is False for "This occurrence only": a day saved on its
+        own does not move the series. Written, a date or repeat changed in
+        the same visit moved it -- and every day's own text, the one just
+        saved among them, sat on a day the series no longer had."""
+        rescued = schedule and self._repeat_off_loses_days(note, recurrence)
+        if rescued:
+            note["_prev"] = self._whole_note_rescue_copy(note)
+        if schedule:
+            if not recurrence["freq"]:
+                note["exceptions"] = []
+                note["overrides"] = {}
+            note["date"] = date_value
+            note["recurrence"] = recurrence
+        # A copy, as the checklist beside it: the editor's own list stored
+        # in the note made the next file attached or removed change the
+        # note too, so the dirty check compared the list with itself, read
+        # the note as saved, and closing the app lost the change.
+        note["attachments"] = [dict(a) for a in self.current_attachments]
+        note["checklist"] = [dict(it) for it in self._get_checklist()]
+        return rescued
 
     def save_current_note(self, auto=False):
         title = self.title_entry.get().strip()
@@ -16622,33 +21012,23 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # above, and went with it.
         formatting = self._extract_formatting(self.body_text)
         paragraphs = self._extract_paragraphs(self.body_text)
-        comments = self.comments_text.get("1.0", "end").strip()
+        # As typed, less the one newline Tk keeps at the end -- the body's
+        # rule (see above). A .strip() here ate a pasted code block's first
+        # indent and every trailing blank line on each save, long after the
+        # body had stopped doing it.
+        comments = self.comments_text.get("1.0", "end-1c")
         category = self.category_var.get()
 
-        date_raw = self.date_entry.get().strip()
-        date_value = ""
-        if date_raw and date_raw != "YYYY-MM-DD":
-            if parse_date(date_raw):
-                date_value = date_raw
-            else:
-                # Autosave fires while the user may still be mid-keystroke
-                # typing a date (e.g. "2026-1"), which is legitimately
-                # incomplete rather than wrong — only the explicit Save
-                # button should interrupt with a warning here. Autosave just
-                # quietly skips this round and tries again once the field
-                # holds a complete, valid date (or is cleared).
-                if not auto:
-                    self.show_warning(
-                        "Invalid date",
-                        "Date should be in YYYY-MM-DD format (e.g. 2026-07-20), or left empty."
-                    )
-                return
+        # A date or repeat the app cannot read is left out and keeps what
+        # the note already had; it no longer stops the rest from saving.
+        # Autosave fires while someone may still be mid-keystroke on a
+        # date ("2026-1"), so the automatic routes stay quiet about it --
+        # the status line says it, the explicit Save says it out loud, and
+        # leaving the note asks (_flush_autosave).
+        date_value, recurrence, left_out = self._date_and_repeat_to_store()
 
         has_attachments = bool(self.current_attachments)
         has_checklist_items = bool(self._get_checklist())
-        # Read early so the emptiness test below can count a repeat rule as
-        # content — a pure UI read, safe to hoist above the guard.
-        recurrence = self.read_recurrence_from_ui()
         # The date and the repeat rule count as content ONLY on an
         # explicit Save. That is what "a bare dated reminder is
         # deliberate" actually means, and the first version of this
@@ -16662,7 +21042,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # excludes the date for the same reason; this keeps the two in
         # step while leaving the deliberate gesture its meaning.
         deliberate_only = (date_value or recurrence["freq"]) and not auto
-        if (not title and not body.strip() and not comments
+        if (not title and not body.strip() and not comments.strip()
                 and not has_attachments and not has_checklist_items
                 and not deliberate_only):
             # The guard exists to stop a stray "+ New Note" click becoming
@@ -16679,25 +21059,19 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             already_saved = (self.selected_note_id is not None
                              and self.find_note(self.selected_note_id) is not None)
             if not already_saved:
-                # Same contract as the invalid-date guard above: a
-                # background autosave must never interrupt with a dialog —
-                # skip quietly and leave the warning to the Save button.
+                # A background autosave must never interrupt with a
+                # dialog — skip quietly and leave the warning to the Save
+                # button. There, a date or repeat that could not be read
+                # is the real reason nothing was saved, not an empty note.
                 if not auto:
-                    self.show_warning("Empty note", "Write something before saving!")
+                    if left_out:
+                        self.show_warning(
+                            "Nothing saved yet",
+                            self._left_out_message(
+                                left_out, lead="This note can't be saved with:"))
+                    else:
+                        self.show_warning("Empty note", "Write something before saving!")
                 return
-
-        if recurrence["freq"] and not date_value:
-            # Same reasoning as the invalid-date case above: don't interrupt
-            # an automatic autosave for a state the user may still be
-            # actively editing toward (e.g. clearing the date on a
-            # recurring note before typing a new one).
-            if not auto:
-                self.show_warning(
-                    "Repeating note needs a start date",
-                    "A repeating note uses its date as the day the series starts.\n\n"
-                    "Set a date, or change Repeat back to 'Does not repeat'."
-                )
-            return
 
         if recurrence["freq"] == "weekly" and not recurrence["weekdays"]:
             # Empty selection is legal — it means "the same weekday as the
@@ -16705,11 +21079,23 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             pass
 
         now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        reload_from_note = False
+        put_back_schedule = False
+        repeat_off_kept = False
 
         if self.selected_note_id is None:
             new_id = max([n["id"] for n in self.notes], default=0) + 1
+            # A note under review from a share code keeps the identity it
+            # arrived with (see _open_imported_note_in_editor) -- checked
+            # again here, since another import may have brought that very
+            # note in meanwhile, and two notes never wear one identity.
+            arrived_uid = getattr(self, "_arrived_uid", "") or ""
+            if arrived_uid and find_by_uid(self.notes, arrived_uid) is not None:
+                arrived_uid = ""
+            self._arrived_uid = ""
             self.notes.append(normalize_note({
                 "id": new_id,
+                "uid": arrived_uid,
                 "title": title,
                 "body": body,
                 "formatting": formatting,
@@ -16736,6 +21122,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             if note is None:
                 self.show_error("Note missing", "That note no longer exists.")
                 return
+            # What the note stores before this save, and its stamp: a save
+            # that changes none of it is not an update (see the end).
+            stored_before = (_stored_signature(note), note.get("updated"))
 
             scope = "series"
             # Read once, before any question is asked. The question runs a
@@ -16744,6 +21133,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             # pressed under the question used to clear the day, and the
             # answer then wrote the edit under a key of None.
             occurrence_date = self.current_occurrence_date
+            # Whether "The entire series" was the person's answer or the
+            # save's own conclusion: they mean different writes below.
+            asked = False
+            schedule_changed = False
             if is_recurring(note) and occurrence_date:
                 # Only ask when the answer could actually change anything.
                 # An override carries OVERRIDABLE_FIELDS and nothing else,
@@ -16759,11 +21152,23 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 overridable_changed = (
                     title.strip() != (shown_now.get("title") or "").strip()
                     or body != (shown_now.get("body") or "")
-                    or comments.strip() != (shown_now.get("comments") or "").strip()
+                    or comments != (shown_now.get("comments") or "")
                     or category != shown_now.get("category")
                     or self.current_note_color != (shown_now.get("color") or ""))
+                # The date and the repeat are the series' own, and a day
+                # saved on its own leaves them as they are: the question
+                # says so when this visit changed either -- a date typed in
+                # a form the app cannot read among them, which is left out
+                # and so never differs from the stored one by value.
+                schedule_changed = bool(
+                    left_out
+                    or date_value != (note.get("date") or "")
+                    or normalize_recurrence(recurrence)
+                    != normalize_recurrence(note.get("recurrence")))
                 if overridable_changed:
-                    scope = self.ask_occurrence_scope("Save", occurrence_date)
+                    scope = self.ask_occurrence_scope(
+                        "Save", occurrence_date,
+                        keeps_schedule=schedule_changed)
                     if scope is None:
                         # Said out loud, because Cancel means "take me
                         # back": a caller about to leave this note (another
@@ -16771,6 +21176,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                         # edit was NOT saved, or it replaces the editor and
                         # the edit is gone without a word.
                         return self._SAVE_CANCELLED
+                    asked = True
+            # The day on screen has text of its own: the editor's words are
+            # that day's, not the series'.
+            own_day = (occurrence_date is not None and is_recurring(note)
+                       and occurrence_date in (note.get("overrides") or {}))
 
             if scope == "occurrence":
                 # Only content is overridden. Date, recurrence rule and
@@ -16782,15 +21192,68 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 # note's, so the base note's formatting spans wouldn't
                 # necessarily land on the right characters. An occurrence
                 # with its own overridden text shows as plain text.
-                note.setdefault("overrides", {})[occurrence_date] = {
+                #
+                # Shaped as a load shapes it (clean_override), so the copy
+                # in memory is the copy a restart reads back: written raw,
+                # an empty colour stayed here and was dropped from the
+                # file's copy, and an import comparing the two found this
+                # very note "edited elsewhere". One exception: a colour
+                # cleared on a day of a COLOURED series stays empty. The
+                # stored form cannot keep that choice -- the next load
+                # gives the day the series' colour again -- but dropping it
+                # now would leave the editor's empty colour unequal to the
+                # day's forever, asking about an unsaved edit at every exit.
+                from noteorganizer.core.model import clean_override
+                patch = clean_override({
                     "title": title,
                     "body": body,
                     "comments": comments,
                     "category": category,
                     "color": self.current_note_color,
-                }
+                })
+                if not self.current_note_color and note.get("color"):
+                    patch["color"] = ""
+                note.setdefault("overrides", {})[occurrence_date] = patch
                 note["updated"] = now
-                self.set_status(("Auto-saved " if auto else "Saved ") + f"{occurrence_date} only")
+                # A file or a tick from this visit is the series': a day
+                # has nowhere to keep either. They were dropped here -- an
+                # attached file left in the folder with no note, a removed
+                # one still listed with its file gone, a tick undone -- and
+                # the editor's snapshot then called the drop saved. The date
+                # and the repeat stay the series' as they were (the question
+                # said so); the editor shows them again below.
+                self._write_series_owned(note, date_value, recurrence,
+                                         schedule=False)
+                put_back_schedule = schedule_changed
+                # Nothing of the schedule is stored by this save, so
+                # nothing of it was left out: the question said the date
+                # and the repeat stay the series', and the editor shows
+                # the series' again below. Kept on screen as a field "to
+                # fix", a changed date or repeat made the editor differ
+                # from the note, and the next save -- asking nothing,
+                # since the day's text was already saved -- wrote it to
+                # the whole series: the series moved, or stopped repeating.
+                left_out = []
+                self.set_status(("Auto-saved " if auto else "Saved ")
+                                + f"{occurrence_date} only"
+                                + (" — the date and the repeat stay the "
+                                   "whole series'" if schedule_changed else ""))
+                if auto:
+                    self._show_toast("Note updated", yield_to_action=True)
+            elif own_day and not asked:
+                # Only a series-owned field changed -- a ticked checklist
+                # item, an attachment, the repeat rule -- while looking at a
+                # day with text of its own, so nobody was asked. The whole
+                # editor used to be written to the series here: one day's
+                # words replaced every day's, and the series' formatting was
+                # wiped, since a day's own text carries none. Only what
+                # belongs to the series is written; its text, and this
+                # day's, stay as they were.
+                rescued = repeat_off_kept = self._write_series_owned(
+                    note, date_value, recurrence)
+                note["updated"] = now
+                self.set_status(("Auto-saved " if auto else "Saved at ") + now
+                                + (self._REPEAT_OFF_KEPT if rescued else ""))
                 if auto:
                     self._show_toast("Note updated", yield_to_action=True)
             else:
@@ -16814,7 +21277,23 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 # reset by the note switch that persisted it. The case
                 # that most needs the safety net had none.
                 emptied = old_len > 0 and new_len == 0
-                if emptied or (removed > 40 and (big_fraction or big_absolute)):
+                # A day with text of its own, saved to "The entire series"
+                # by the person's own answer: that day's words become every
+                # day's words. The series' own text is replaced wholesale by
+                # something typed on one day, so it keeps a rescue copy
+                # whatever the lengths say.
+                series_text_replaced = own_day and (
+                    title.strip() != (note.get("title") or "").strip()
+                    or body != (note.get("body") or ""))
+                # The repeat going off takes every day's own text with it
+                # (below): kept whole, with the repeat and the days, so
+                # Restore previous brings the series back as it was.
+                days_lost = repeat_off_kept = self._repeat_off_loses_days(
+                    note, recurrence)
+                if days_lost:
+                    note["_prev"] = self._turn_off_rescue_copy(note)
+                elif (emptied or series_text_replaced
+                        or (removed > 40 and (big_fraction or big_absolute))):
                     note["_prev"] = {
                         "title": note.get("title", ""),
                         "body": note.get("body", ""),
@@ -16822,6 +21301,18 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                         "paragraphs": note.get("paragraphs", []),
                         "comments": note.get("comments", ""),
                     }
+                    # Made while a turn-off waits: the turn-off's own copy
+                    # keeps this text when it is made (_turn_off_rescue_copy).
+                    if (getattr(self, "_holding_repeat_off", False)
+                            and self._repeat_off_waits()):
+                        self._held_text_rescue = note["_prev"]
+                if own_day:
+                    # ...and the day's own copy goes: it now says what the
+                    # series says. Kept, it made the day read as unsaved
+                    # forever -- the editor showed the series' new text,
+                    # the day still held its old one -- so every way out
+                    # of the note asked the same question again.
+                    note["overrides"].pop(occurrence_date, None)
                 note["title"] = title
                 note["body"] = body
                 note["formatting"] = formatting
@@ -16830,23 +21321,40 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 note["category"] = category
                 note["date"] = date_value
                 note["color"] = self.current_note_color
-                note["attachments"] = self.current_attachments
+                # A copy, never the editor's own list -- see
+                # _write_series_owned.
+                note["attachments"] = [dict(a) for a in self.current_attachments]
                 note["recurrence"] = recurrence
                 note["checklist"] = [dict(it) for it in self._get_checklist()]
                 note["updated"] = now
                 if not recurrence["freq"]:
                     # No longer repeating: leftover per-occurrence data would
-                    # be invisible clutter, so drop it.
+                    # be invisible clutter, so drop it -- a day's own text
+                    # only once the rescue copy above holds it.
                     note["exceptions"] = []
                     note["overrides"] = {}
-                self.set_status(("Auto-saved " if auto else "Saved at ") + now)
+                self.set_status(("Auto-saved " if auto else "Saved at ") + now
+                                + (self._REPEAT_OFF_KEPT if days_lost else ""))
                 if auto:
                     self._show_toast("Note updated", yield_to_action=True)
             # A series save can have just removed the recurrence — an
             # occurrence view of a note that no longer repeats is a lie
-            # the day banner must not keep telling.
+            # the day banner must not keep telling. And what the editor
+            # shows is that day's, not the note's: the note keeps the
+            # series' text. Left on screen, the day's text read as an
+            # unsaved edit of the note, and the next save -- leaving the
+            # note -- wrote it over the series' text, which was then in no
+            # file. The editor is filled from the note below.
             if self.current_occurrence_date and not is_recurring(note):
                 self.current_occurrence_date = None
+                reload_from_note = occurrence_date is not None
+            if left_out and _stored_signature(note) == stored_before[0]:
+                # Only a field this save had to leave out differed from the
+                # note, so nothing it stores changed: the stamp stays. Every
+                # way out of a note with an unreadable date on screen saved
+                # again, and each moved the note up "Recently updated" and
+                # rewrote its "Last updated" with no edit made.
+                note["updated"] = stored_before[1]
         # Recurrence or override counts may have just changed either way.
         self._update_occurrence_banner()
 
@@ -16874,14 +21382,65 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 self.refresh_note_list()
             self.render_calendar()
             self._note_list_needs_refresh = False
+        # "This occurrence only" left the series' date and repeat as they
+        # were: the editor shows them again, so it agrees with the note.
+        if put_back_schedule:
+            self._put_back_stored_date_and_repeat()
+            self._cancel_pending_autosave()
         # The saved note now matches disk; update this tab's snapshot so its
         # dirty dot clears, and refresh the strip labels/markers.
         self._sync_active_tab()
         self._sync_editor_snapshot()
         self._update_restore_button()
+        if reload_from_note:
+            # The editor stood for a day, and stands for the note now (see
+            # above). Only fields the save just wrote were changed in this
+            # visit, so nothing typed is lost -- except what loading a note
+            # puts its own values over: a checklist item half-typed in its
+            # box, and a date or repeat the save had to leave out. That date
+            # wrote the stored one over itself, so leaving asked nothing and
+            # the typed date was gone. Both are carried across, the left-out
+            # values as Restore previous carries them (_schedule_to_carry).
+            # The save's own words stay: loading writes the note's dates
+            # over the status line, and the line says where the days went.
+            said = str(self.status_lbl.cget("text"))
+            pending_item = (self.checklist_add_var.get()
+                            if hasattr(self, "checklist_add_var") else "")
+            carried = self._schedule_to_carry() if left_out else {}
+            self.load_note(self.find_note(self.selected_note_id))
+            if pending_item:
+                self.checklist_add_var.set(pending_item)
+            self._put_back_schedule(carried)
+            self.set_status(said)
+            # Loading wrote the repeat's fields, and their traces asked for
+            # an autosave. With a left-out date carried back, the editor
+            # differs from the note, so half a second later that autosave
+            # saved again -- storing exactly what was just stored -- and its
+            # status line dropped the words that say where the days went.
+            self._cancel_pending_autosave()
         # If the calendar day panel is showing, reflect the edit there too.
         if getattr(self, "_day_panel_mode", "empty") != "empty":
             self.refresh_day_panel()
+        # What the save had to leave out is still on screen, waiting to be
+        # fixed. The status line says so on every route and the explicit
+        # Save says it out loud -- which is also why that Save does not
+        # send anyone back to the calendar with a date still to fix. Its
+        # words without the "except" are kept for the moment the value is
+        # put right with nothing left to save (_say_nothing_is_left_out) --
+        # kept after the line is written, since set_status drops them.
+        if left_out:
+            self.set_status(("Auto-saved " if auto else "Saved at ") + now
+                            + " — except " + "; ".join(left_out)
+                            + (self._REPEAT_OFF_KEPT if repeat_off_kept else ""))
+        self._status_names_left_out = (
+            ("Auto-saved " if auto else "Saved at ") + now
+            + (self._REPEAT_OFF_KEPT if repeat_off_kept else "")
+            if left_out else None)
+        if left_out:
+            if not auto:
+                self.show_warning("Part of this note isn't saved",
+                                  self._left_out_message(left_out))
+                return
         # Only an explicit Save click sends you back, and only on the
         # quick add-a-note-for-a-day flow — when the user opened an
         # EXISTING note from the calendar, Save must not yank them out
@@ -16894,17 +21453,49 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
     # ---------- Trash / recently deleted ----------
     def _restore_from_trash(self, entry):
-        """Bring a trashed note back, then redraw what shows it.
+        """Bring a trashed note back, then redraw what shows it."""
+        self._restore_trash_entries([entry])
 
-        The data half is in core/storage.py. A note whose category was
-        deleted meanwhile comes back under "General" -- normalize_note
-        guarantees that, so nothing here needs to re-check it.
+    def _restore_trash_entries(self, entries):
+        """Bring trashed notes back -- one, or a batch -- then redraw once.
+        Returns the notes that came back.
+
+        The data half is in core/storage.py (restore_many_from_trash). A
+        note whose category was deleted meanwhile comes back under
+        "General" -- normalize_note guarantees that, so nothing here needs
+        to re-check it.
+
+        One pass, one write of each file, one redraw, whatever the count:
+        a batch used to come back one note at a time, each with its own
+        write of the whole trash file, and an Undo of a thousand notes
+        froze the app for over half a minute. The notes are written FIRST:
+        if that write fails, the notes are still in the trash file -- a
+        duplicate at worst, where the old order could leave a note in
+        neither file.
         """
-        self.notes, self.trash = core_restore_from_trash(
-            self.notes, self.trash, entry)
-        self.save_notes()
+        self.notes, self.trash, restored = core_restore_many_from_trash(
+            self.notes, self.trash, entries)
+        if not restored:
+            return restored
+        if self.save_notes():
+            save_trash(self.trash)
         self.refresh_note_list()
         self.render_calendar()
+        return restored
+
+    def _refresh_open_trash_panel(self):
+        """Redraw Settings -> Recently deleted if it is the section on
+        screen: its rows hold the entries they were drawn for, and a
+        restore made from outside the panel leaves them stale."""
+        redraw = getattr(self, "_trash_panel_redraw", None)
+        if (redraw is None or not getattr(self, "_settings_open", False)
+                or getattr(self, "_settings_selected_section", None) != "trash"):
+            return
+        try:
+            redraw()
+        except tk.TclError:
+            # The panel was rebuilt or torn down since this was recorded.
+            self._trash_panel_redraw = None
 
     def _undo_trash(self, marks):
         """Put back the notes the toast's Undo was offered for.
@@ -16922,18 +21513,13 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         it sat in the trash), so what comes back is identified by where
         it lands -- appended -- and never by the id that went in.
         """
-        restored = []
-        for note_id, stamp in marks:
-            entry = next((e for e in self.trash
-                          if isinstance(e, dict) and e.get("id") == note_id
-                          and e.get("deleted_at") == stamp), None)
-            if entry is None:
-                continue
-            before = len(self.notes)
-            self.notes, self.trash = core_restore_from_trash(
-                self.notes, self.trash, entry)
-            if len(self.notes) > before:
-                restored.append(self.notes[-1])
+        # A set of the marks, looked up in one pass over the trash: finding
+        # each one with its own scan made a bulk Undo quadratic as well.
+        wanted = set(marks)
+        entries = [e for e in self.trash
+                   if isinstance(e, dict)
+                   and (e.get("id"), e.get("deleted_at")) in wanted]
+        restored = self._restore_trash_entries(entries)
 
         if not restored:
             # Emptied, purged, or already put back -- a second click on a
@@ -16941,10 +21527,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             # note is simply not where the click expected it.
             self._show_toast("Nothing left to put back", kind="info")
             return
-
-        self.save_notes()
-        self.refresh_note_list()
-        self.render_calendar()
+        # The toast floats over Settings too, and the Trash's rows are the
+        # one view of the trash that does not redraw itself.
+        self._refresh_open_trash_panel()
 
         if len(restored) == 1:
             # Back in front of whoever asked for it: the click meant "I
@@ -16957,11 +21542,19 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         else:
             self.set_status(f"Put back {len(restored)} notes")
 
+    def _note_for_undo(self, note_id, uid):
+        """The note an Undo was offered for, known by its identity when it
+        has one -- not by its number. An id freed by a delete goes to the
+        next new note, and a note restored from the Trash comes back under a
+        new one: looked up by number and then checked, the Undo said "That
+        note is no longer here" with the note in the list."""
+        return find_by_uid(self.notes, uid) if uid else self.find_note(note_id)
+
     def _undo_bulk_category(self, marks, applied):
         """Put each note back in the category it was moved out of.
 
-        `marks` carry one (id, category, updated) per note rather than one
-        old value for the batch, because the ticked notes can sit in
+        `marks` carry one (id, category, updated, uid) per note rather than
+        one old value for the batch, because the ticked notes can sit in
         several categories at once -- which is the case a bulk change
         exists for, and therefore the case its undo has to get right.
 
@@ -16977,16 +21570,27 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         the top of a "Recently updated" list on account of a change the
         user just said they did not want.
         """
+        # Each note by its identity when the mark has it (_note_for_undo).
+        notes = [self._note_for_undo(mark[0], mark[3] if len(mark) > 3 else None)
+                 for mark in marks]
         # The editor may be holding one of these notes and may have been
         # typed into while the toast was up: save that under the category
         # it was typed against, then move the note, then bring the editor
         # onto the result -- the same order the change itself uses.
-        if self._flush_autosave() is False:
-            return  # Cancel on a day's save question: the undo waits
+        if self._flush_autosave(leaving=self.selected_note_id in {
+                note["id"] for note in notes if note is not None}) is False:
+            # Cancel on a day's save question means stay -- and the offer
+            # stays with it: where each note came from is kept nowhere else.
+            count = len(marks)
+            self._show_toast(
+                f"Moved {count} {'note' if count == 1 else 'notes'} to "
+                f"\u201c{applied}\u201d",
+                action=lambda: self._undo_bulk_category(marks, applied))
+            return
         restored = []
         homeless = 0
-        for note_id, old_category, old_updated in marks:
-            note = self.find_note(note_id)
+        for mark, note in zip(marks, notes):
+            old_category, old_updated = mark[1:3]
             if note is None or note.get("category") != applied:
                 continue
             if old_category not in CATEGORY_COLORS:
@@ -17013,11 +21617,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.save_notes()
         self._editor_follows_external_change({n["id"] for n in restored})
         self.refresh_note_list()
-        # No render_calendar() here, unlike _undo_trash: nothing the
-        # calendar draws comes from a note's category -- calendar_view.py
-        # does not read CATEGORY_COLORS at all -- and no note appears or
-        # disappears from a date. A delete changes which notes exist; this
-        # only changes how they are filed.
+        # The calendar draws a note with no colour of its own in its
+        # category's (get_note_color falls back to CATEGORY_COLORS): its
+        # dots, and an open day's stripes. A comment here once said the
+        # calendar never read a category, and the dots stayed in the
+        # colour the undo had just taken back.
+        self.render_calendar()
         if homeless:
             self.set_status(
                 f"Put back {len(restored)} note(s); {homeless} could not go "
@@ -17063,34 +21668,124 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # a promise. No clamping written here: list.insert already treats
         # an index past the end as "at the end", and a min() in front of
         # it would be code no test could ever make matter.
+        drawn = getattr(self, "_checklist_drawn", None)
+        in_step = (getattr(self, "_checklist_open", False)
+                   and _checklist_rows_current(
+                       drawn, items, getattr(self, "theme_name", None)))
         items.insert(index, item)
-        self._render_checklist_items()
+        if in_step and drawn["rows"]:
+            # The one row back where it was, the others untouched.
+            at = min(index, len(drawn["rows"]))
+            record = self._build_checklist_row(at, item)
+            if at < len(drawn["rows"]):
+                after = drawn["rows"][at][1]
+                record[1].pack_configure(before=after)
+                # The stacking order too, not only the packing: Tab walks
+                # the tick boxes in it, and winfo_children() lists the rows
+                # in it -- a row put back in the middle was reached last.
+                record[1].lower(after)
+            drawn["rows"].insert(at, record)
+            self._update_checklist_progress()
+        else:
+            self._render_checklist_items()
         self._schedule_autosave()
         self.set_status("Checklist item put back")
 
-    def _undo_occurrence_delete(self, note_id, date_str):
+    def _undo_occurrence_delete(self, note_id, date_str, own_edit=None,
+                                uid=None):
         """Put back the one day a repeating note was removed from.
 
         This half has no other way home. Deleting a single occurrence
         writes the date into the note's `exceptions`, and nothing in the
         app takes it out again -- so without this the choice was
         permanent, made from a dialog offering no hint that it was.
+
+        `own_edit` is the day's own title and text the delete took with
+        it, if the day had any: the day comes back as it was, not showing
+        the series' text in its place. `uid` is the note's identity: an id
+        freed by a delete goes to the next new note.
+
+        The day goes back only into the series the note holds now. Once the
+        repeat was turned off -- or picked anew without that day -- the
+        series it was deleted from is gone, and the Undo says the day can't
+        come back. Three designs that put it into a rescue copy instead were
+        each broken by the next round of breakers: a copy made for an Undo
+        never clicked replaced an older one, an older series' copy took the
+        day, a copy of the series as the delete left it undid what was saved
+        since. The plain answer is the one that cannot be wrong.
         """
-        note = self.find_note(note_id)
+        note = self._note_for_undo(note_id, uid)
         if note is None:
             self._show_toast("That note is no longer here", kind="info")
             return
+        here = self.selected_note_id == note["id"]
+        # Read before the day goes back: with this very series on screen and
+        # its repeat's turn-off waiting, opening the day leaves the note, and
+        # leaving makes the turn-off. Read after, a day that was the only one
+        # removed left the turn-off nothing to wait for, and the Undo made
+        # it -- "Put that day back", with the series gone from the calendar.
+        waits = here and self._repeat_off_waits()
+        if here and not waits:
+            # What the editor holds of this note is saved FIRST, as every
+            # route that writes a note behind the editor saves it
+            # (_editor_follows_external_change), and the day is opened
+            # without a second save below. Saved after the day went back,
+            # the editor's view of that very day -- a repeat picked anew
+            # shows the series' text on it -- read as an edit and asked
+            # "What should Save apply to?", and every answer but Cancel wrote
+            # the series' text over the day's own.
+            if self._flush_autosave() is False:
+                # Cancel means stay -- and the offer stays with it: the day's
+                # own text is kept nowhere else.
+                self._show_toast(
+                    "Occurrence removed",
+                    action=lambda: self._undo_occurrence_delete(
+                        note_id, date_str, own_edit, uid))
+                return
         exceptions = set(note.get("exceptions") or [])
-        if date_str not in exceptions:
+        if not is_recurring(note):
+            self._show_toast("This note no longer repeats, so that day "
+                             "can't come back", kind="info")
+            return
+        # Asked of the calendar, the day as if it were not skipped: a repeat
+        # picked anew, or one whose rule, start or end was changed since, may
+        # not have that day at all. Asked only of a day no longer skipped,
+        # the Undo put back -- and opened, with its own text -- a day no
+        # calendar showed.
+        day = parse_date(date_str)
+        if day is None or expand_occurrences(
+                dict(note, exceptions=sorted(exceptions - {date_str})),
+                day, day) != [date_str]:
+            self._show_toast("This note's repeat no longer has that day, "
+                             "so it can't come back", kind="info")
+            return
+        if date_str not in exceptions and (
+                not own_edit or date_str in (note.get("overrides") or {})):
             self._show_toast("That day is already back", kind="info")
             return
+        # Otherwise the day is skipped, or the repeat was picked anew and has
+        # it again without the text it had of its own: both go back below.
         exceptions.discard(date_str)
         note["exceptions"] = sorted(exceptions)
+        # Its own edit goes back with it -- unless the day somehow has one
+        # again already, which is newer than the one this Undo remembers.
+        if own_edit and date_str not in (note.get("overrides") or {}):
+            note.setdefault("overrides", {})[date_str] = dict(own_edit)
         note["updated"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         self.save_notes()
         self.refresh_note_list()
         self.render_calendar()
-        self.open_note_in_tab(note, occurrence_date=date_str)
+        # The day is back on the calendar either way. Opening it replaces
+        # the editor, which is leaving the note it holds -- and with this
+        # very series on screen and its repeat's turn-off waiting, leaving
+        # made the turn-off (_flush_autosave): the Undo that put the day
+        # back turned the whole series off, that day with it.
+        if not waits:
+            self.open_note_in_tab(note, occurrence_date=date_str,
+                                  flush=not here)
+        else:
+            # The series stays on screen, its days changed under it.
+            self._update_occurrence_banner()
         self.set_status("Put that day back")
 
     def _attach_dup_preview(self, widget, note):
@@ -17206,6 +21901,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if note is None:
             self.show_info("Nothing to delete", "No note is selected.")
             return
+        # The typing not yet saved goes with the note, so the Trash copy
+        # and the toast's Undo give back what was on screen -- the same
+        # first step as a delete from the note's menu, a repeat's turn-off
+        # held back the same way (see _context_delete_note).
+        if self._flush_autosave(hold_repeat_off=True) is False:
+            return
         self._delete_note(note, self.current_occurrence_date)
 
     def _delete_note(self, note, occurrence_date):
@@ -17230,7 +21931,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 exceptions = set(note.get("exceptions") or [])
                 exceptions.add(occurrence_date)
                 note["exceptions"] = sorted(exceptions)
-                note["overrides"].pop(occurrence_date, None)
+                # Kept for the Undo below: the day's own title and text
+                # went with it, and the Undo used to bring back the day
+                # showing the series' text instead -- the edit gone for good.
+                own_edit = note["overrides"].pop(occurrence_date, None)
                 note["updated"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 self.save_notes()
                 if (self.selected_note_id == note["id"]
@@ -17245,10 +21949,14 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 # This one had no way back at all: the date goes into the
                 # note's exceptions and no screen in the app takes it out
                 # again. The toast is not a convenience here.
-                self._show_toast(
-                    "Occurrence removed",
-                    action=lambda nid=note["id"], day=occurrence_date:
-                        self._undo_occurrence_delete(nid, day))
+                # With the note's identity: an id freed by a delete goes to
+                # the next new note, and the Undo must not act on that one.
+                undo = (lambda nid=note["id"], day=occurrence_date,
+                        edit=own_edit, uid=note.get("uid"):
+                        self._undo_occurrence_delete(nid, day, edit, uid))
+                self._show_toast("Occurrence removed", action=undo)
+                if self.selected_note_id == note["id"]:
+                    self._update_occurrence_banner()
                 return
 
         attachment_count = len(note.get("attachments") or [])
@@ -17259,7 +21967,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         confirm = self.ask_yes_no(
             "Delete note",
             ("Delete this entire repeating series?" if is_recurring(note)
-             else "Are you sure you want to delete this note?") + warning
+             else "Are you sure you want to delete this note?") + warning,
+            # Enter answers a question now: a reflexive one keeps the note.
+            default="no"
         )
         if confirm:
             deleted_id = note["id"]
@@ -17276,9 +21986,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             if not self.open_tabs:
                 self.active_tab_index = None
                 self.new_note()
-            else:
-                self.active_tab_index = None
-                self.switch_to_tab(min(0, len(self.open_tabs) - 1))
+            # Otherwise the editor holds some OTHER note, and it stays
+            # exactly as it is. This used to "switch" to the one tab left
+            # -- the note already on screen -- restoring it from the copy
+            # taken when it was opened. Anything saved since (a Restore
+            # previous, a day's edit) was put back to that older version,
+            # and the next switch wrote the old text over the new.
             self._sync_editor_snapshot()
             # Take the one card off rather than rebuilding all of them.
             # Falls back to the full rebuild whenever the surgical path
@@ -17288,7 +22001,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             if not self._remove_note_cards([deleted_id]):
                 self.refresh_note_list()
             self.render_calendar()
-            self.set_status("Note moved to Trash (recoverable for 30 days)")
+            # The window is a setting (Settings -> Recently deleted), so the
+            # number is read, never written: this line promised thirty days
+            # to someone who had chosen seven.
+            self.set_status("Note moved to Trash (recoverable for "
+                            f"{trash_retention_days()} days)")
             # The status line says where it went; the toast is the way
             # back. Settings -> Recently deleted was the only route home
             # until now, and it asks you to know the trash exists.
@@ -17330,7 +22047,22 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         ask -- see _autosave_now) raises its occurrence-scope question
         here, at the gesture. Cancelling it keeps the window open, on the
         edited day: it used to close anyway and discard the edit, which
-        is the opposite of what Cancel means anywhere else."""
+        is the opposite of what Cancel means anywhere else.
+
+        Two things come before any of that. A question on screen owns the
+        window until it is answered, as a modal question does on Windows:
+        the close is refused and the question brought to the front.
+        Closing under it destroyed the window while the question still
+        waited, and the process lived on with no window, holding the
+        notebook lock -- every later launch was refused as "already
+        open". And a popup holding typed work (the template editor) has
+        its say, as it does on a click outside it; Cancel keeps the
+        window open there too."""
+        if self._a_dialog_is_asking():
+            self._bring_question_forward()
+            return
+        if not self._dismiss_mini_popup_asking(holding_work_only=True):
+            return
         if self._flush_autosave() is False:
             return
         self._sync_active_tab()
@@ -17346,11 +22078,18 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 self._log_swallowed("close: per-tab final save")
                 continue
         # A backup export/import may still be writing on its worker thread;
-        # destroy() would kill it mid-file. Wait (capped) for it to finish.
+        # destroy() would kill it mid-file. Wait (capped) for it to finish,
+        # then do what its completion would have done on the main thread.
         self._wait_for_io_workers()
+        self._settle_background_work_at_close()
         self.destroy()
 
     def set_status(self, text):
+        # A line naming what a save left out is put right by
+        # _say_nothing_is_left_out only while it is still the line on
+        # screen: any other words over it end that. Kept past them, the
+        # put-right wrote an earlier save's words over a later save's own.
+        self._status_names_left_out = None
         self.status_lbl.config(text=text)
 
     def _on_data_write_failure(self, path, exc):
@@ -17417,13 +22156,17 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         """
         if not hasattr(self, "toast_frame"):
             return
-        if (yield_to_action and getattr(self, "_toast_action", None) is not None
-                and getattr(self, "_toast_hide_job", None) is not None):
+        if (yield_to_action and getattr(self, "_toast_hide_job", None) is not None
+                and (getattr(self, "_toast_action", None) is not None
+                     or getattr(self, "_toast_kind", None) == "error")):
             # An offer is on screen right now and has been neither taken
             # nor expired — both of those clear _toast_action, so this
             # cannot mistake a stale one for a live offer. Nothing is
             # lost by staying quiet: every caller that yields also writes
-            # the same news to the status line.
+            # the same news to the status line. An error on screen is
+            # yielded to as well: the autosave that follows a failed
+            # action within its delay covered "something went wrong" with
+            # "Note updated", and the one message that mattered was gone.
             return
         color = {"success": self.colors["success"],
                  "info": self.colors["accent"],
@@ -17434,6 +22177,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # Undo would have read as a job well done.
         mark = {"success": "✓", "info": "i", "error": "!"}.get(kind, "✓")
         self._toast_action = action
+        self._toast_kind = kind
         try:
             self.toast_frame.configure(bg=color)
             self.toast_lbl.configure(text=f"{mark}  {text}", bg=color, fg="white")

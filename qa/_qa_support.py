@@ -23,8 +23,9 @@ the five clicks had ever been delivered.
 The rules that close it
 -----------------------
 ``pin_the_desktop(NO)`` (also still spelled ``pin_popup_visibility``)
-    The app asks the desktop two questions, and a test must not hear the
-    answers of whoever is using the machine while it runs.
+    The app asks the desktop two questions, and shares one thing with it;
+    a test must not hear the answers of whoever is using the machine while
+    it runs, nor share anything with them.
 
     Who owns the OS foreground: a test process cannot own it, so popup
     visibility must not depend on it.
@@ -38,6 +39,23 @@ The rules that close it
     never happened. Pinned to "not held"; qa9 answers it for the app where
     a check is about the freeze, and asks the real question through
     ``_desktop_pointer_button_held``.
+
+    The clipboard: a stand-in kept in this process (``CLIPBOARD``) for
+    every app the script builds -- Tcl's ``clipboard`` command, Tk's
+    CLIPBOARD selection (which Text's and Entry's own paste read), and,
+    on Windows, the app's own clipboard module. The machine's clipboard is
+    shared with every program on it: one holding it open for an instant
+    made a paste read nothing, and qa1's copy-and-paste check went red
+    three times on a developer machine while Linux stayed green. Waiting
+    until one read succeeded only moved the race to the paste's own read.
+    And a run wrote over the owner's clipboard while she worked. Off
+    Windows the app's module already reads nothing and writes nothing, so
+    it is left as it is: the app's fallback to Tk is what runs there.
+
+    The keyboard cannot be pinned: a test app can hold the focus while
+    someone types. Every key a keyboard sends is noted instead
+    (``REAL_KEYS``) and said when the run ends, so a red that came from
+    someone typing names itself rather than reading as a flake.
 
     Patches the class, not an instance, so every app the script builds —
     including ones built later — is deterministic, and a new qa script
@@ -88,10 +106,82 @@ One thing this deliberately does NOT police: whether a human could have
 clicked the widget where it currently sits. Delivery and realism are
 different questions, and a check that wants the second asserts it itself
 (scroll the row into view, then assert it is viewable).
+
+``hermetic_seed()``
+    The first line of every qa script, before ``import note_organizer``:
+    gives the script a data folder of its own, or refuses to run. It lives
+    here, once, because it was nine identical copies -- the one state a
+    copied safety rule does not stay in.
+
+``waiting_timers(app, name)``
+    The Tcl timers waiting to run a callback called *name*, asked of Tcl
+    rather than of the job attribute the app keeps. The attribute answers
+    only for the timer it tracks: a job set to None instead of cancelled
+    left its timer scheduled with nothing tracking it, and the autosave's
+    did that in a relay through a whole qa1 run.
 """
 
+import atexit
+import io
+import json
+import os
 import re
+import sys
 import tkinter as tk
+
+# Set by tools/run_tests.py and by the CI workflow for the scripts they
+# start, each in a throwaway folder. Nothing else sets it.
+SCRATCH_MARKER = "NOTEORG_SCRATCH"
+
+
+def hermetic_seed():
+    """Give this script a data folder of its own -- or refuse to run.
+
+    Called first, BEFORE ``import note_organizer``: the module resolves
+    its data folder and runs the data MIGRATIONS at import time, so by the
+    first line of test code the adoption has already happened. An empty
+    folder invites run_migrations to adopt whatever real notebook
+    %APPDATA% holds, and real notes then leak into every scenario -- the
+    checks start flaking whenever the owner's data changes. Seeding an
+    empty notebook plus the reclaim marker closes both migration doors
+    before the app is even constructed.
+
+    It refuses, and fails closed:
+
+    * outside a scratch run. A script started by hand, from whatever
+      folder the terminal happened to be in, stops here before it wipes
+      anything -- the way three real notebooks were lost.
+    * beside a notes_data.json that holds notes, or that it cannot read.
+      The nine copies this replaced read an unreadable notebook as EMPTY
+      and overwrote it with ``[]`` -- and an unreadable notebook is
+      exactly the one the app itself could still have rescued. They also
+      overwrote settings.json unconditionally; now nothing is written
+      until every check has passed.
+    """
+    if os.environ.get(SCRATCH_MARKER) != "1":
+        sys.exit(
+            "REFUSING to run: this script wipes the data files in its "
+            "working folder, and nothing says this folder is a throwaway "
+            "copy. Run it through tools/run_tests.py, or set %s=1 yourself "
+            "in a scratch folder outside the project (see CLAUDE.md, "
+            "'QA testing safety')." % SCRATCH_MARKER)
+    if os.path.exists("notes_data.json"):
+        try:
+            with io.open("notes_data.json", encoding="utf-8") as fh:
+                held = json.load(fh)
+        except (OSError, ValueError) as exc:
+            sys.exit(
+                "REFUSING to run: notes_data.json here cannot be read (%s). "
+                "It may be a real notebook the app could still rescue; this "
+                "script would overwrite it." % exc)
+        if not isinstance(held, list) or held:
+            sys.exit(
+                "REFUSING to run: notes_data.json here holds real notes. "
+                "Copy this script to a scratch folder instead.")
+    with io.open("notes_data.json", "w", encoding="utf-8") as fh:
+        fh.write("[]")
+    with io.open("settings.json", "w", encoding="utf-8") as fh:
+        fh.write(json.dumps({"reclaimed_from_appdata": True}))
 
 
 class EventNotDelivered(AssertionError):
@@ -106,7 +196,9 @@ ClickNotDelivered = EventNotDelivered
 def pin_the_desktop(NO):
     """Make the app's two questions about the desktop -- who owns the
     foreground, whether the mouse button is down -- answer the same way
-    whoever is using the machine. See the module docstring."""
+    whoever is using the machine, give every app the script builds a
+    clipboard of the script's own, and note every key a keyboard sends it
+    (_note_real_keys). See the module docstring."""
     cls = NO.NoteOrganizer
     cls._foreground_is_ours = lambda self: True
     # Every app the script builds may take any size a check asks for. Tk caps
@@ -125,6 +217,104 @@ def pin_the_desktop(NO):
     if real is not None and not hasattr(cls, "_desktop_pointer_button_held"):
         cls._desktop_pointer_button_held = real
     cls._pointer_button_held = lambda self: False
+    if not getattr(cls, "_qa_keeps_the_clipboard", False):
+        built = cls.__init__
+
+        def __init__(self, *args, **kwargs):
+            built(self, *args, **kwargs)
+            _keep_the_clipboard(self)
+            _note_real_keys(self)
+
+        cls.__init__ = __init__
+        cls._qa_keeps_the_clipboard = True
+    if sys.platform == "win32":
+        module = NO.clipboard
+        module.read_text = lambda: CLIPBOARD["text"]
+        module.read_html = lambda: CLIPBOARD["html"]
+        module.write = _write_clipboard
+
+
+# The clipboard every app the script builds shares, as apps on one machine
+# share the machine's: None until something is put there. "tk" says whether
+# Tk last claimed it (see _clipboard_command).
+CLIPBOARD = {"text": None, "html": None, "tk": False}
+
+
+def _write_clipboard(text, html=None):
+    """The app's clipboard.write, on Windows: plain text and, when given,
+    the HTML beside it, as the machine's clipboard holds both."""
+    CLIPBOARD.update(text=text, html=html, tk=False)
+    return True
+
+
+def _clipboard_command(*args):
+    """Tcl's ``clipboard``: clear, append and get, any options (-displayof,
+    -format, -type, --) read past. As Tk's own: an append claims the
+    clipboard, clearing it first when another writer held it, and replaces
+    every format, so the HTML goes; an empty clipboard refuses a get."""
+    args = [str(a) for a in args]
+    if args and args[0] == "clear":
+        CLIPBOARD.update(text="", html=None, tk=True)
+    elif args and args[0] == "append":
+        held = CLIPBOARD["text"] if CLIPBOARD["tk"] else ""
+        CLIPBOARD.update(text=(held or "") + args[-1], html=None, tk=True)
+    elif args and args[0] == "get":
+        return _clipboard_selection()
+    return ""
+
+
+def _clipboard_selection():
+    if CLIPBOARD["text"] is None:
+        raise tk.TclError("CLIPBOARD selection doesn't exist")
+    return CLIPBOARD["text"]
+
+
+def _keep_the_clipboard(app):
+    """Put the stand-in in place of the machine's clipboard for *app*'s
+    interpreter. Tk's Text and Entry paste through ::tk::GetSelection, so
+    only its CLIPBOARD answer is replaced; PRIMARY stays Tk's own."""
+    tcl = app.tk
+    tcl.eval("rename clipboard ::_qa_machine_clipboard")
+    tcl.createcommand("clipboard", _clipboard_command)
+    tcl.eval("rename ::tk::GetSelection ::tk::_qa_machine_GetSelection")
+    tcl.createcommand("::qa_clipboard_selection", _clipboard_selection)
+    tcl.eval("proc ::tk::GetSelection {w {sel PRIMARY}} {"
+             " if {$sel eq \"CLIPBOARD\"} {return [::qa_clipboard_selection]};"
+             " return [::tk::_qa_machine_GetSelection $w $sel] }")
+
+
+# Keys that came from a keyboard -- whoever is at the machine -- and not from
+# the script: a generated key carries time 0, a real one the clock. Nothing
+# keeps them out, since the test app can hold the keyboard while someone
+# types; so they are noted, and said once the run ends. Twice a check went
+# red once in dozens of runs on a developer machine, with the editor changed
+# between two reads, and nothing could say whether a key had reached it.
+REAL_KEYS = []
+
+
+def _note_real_keys(app):
+    """Note every key event a keyboard sends *app* (REAL_KEYS). Bound on the
+    'all' tag beside whatever the app binds there, and never breaking: a key
+    a binding before it breaks off goes unseen, so this can only add to what
+    a red says, never change what the app does."""
+    def note(event, sequence):
+        try:
+            when = int(event.time)
+        except (TypeError, ValueError):
+            return
+        if when:
+            if not REAL_KEYS:
+                atexit.register(_say_real_keys)
+            REAL_KEYS.append((sequence, str(getattr(event, "keysym", "?"))))
+    for sequence in ("<KeyPress>", "<KeyRelease>"):
+        app.bind_all(sequence, lambda e, s=sequence: note(e, s), add="+")
+
+
+def _say_real_keys():
+    print("REAL KEYS: %d key event(s) came from the keyboard while this "
+          "script ran -- someone typed on this machine, and a red in this "
+          "run may be theirs: %s" % (len(REAL_KEYS), REAL_KEYS[:12]),
+          flush=True)
 
 
 # The original name, from when the foreground was the only answer pinned;
@@ -182,3 +372,17 @@ def click(widget, **kwargs):
     ``event_generate``.
     """
     fire(widget, "<Button-1>", **kwargs)
+
+
+def waiting_timers(app, name):
+    """The ids of the Tcl timers waiting to run a callback called *name*,
+    tracked or not. Tkinter names a timer's command after its callback."""
+    waiting = []
+    for job in app.tk.splitlist(app.tk.call("after", "info")):
+        try:
+            script = app.tk.splitlist(app.tk.call("after", "info", job))[0]
+        except tk.TclError:
+            continue
+        if str(script).endswith(name):
+            waiting.append(str(job))
+    return waiting

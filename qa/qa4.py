@@ -1,29 +1,11 @@
 # HERMETIC SEED -- BEFORE the note_organizer import below: the module
 # resolves its data directory and runs the data MIGRATIONS at import
-# time, so by the first line of test code the adoption has already
-# happened. The data directory must be this test's alone. An
-# empty directory invites run_migrations to adopt whatever real notebook
-# %APPDATA% holds, and real notes then leak into every scenario: the
-# checks start flaking whenever the OWNER's data changes. Seeding an
-# empty notebook plus the reclaim marker closes both migration doors
-# before the app is even constructed. The refusal is the same last-line
-# defence test_data_safety carries: run from a folder holding real
-# notes, the script stops instead of seeding over them.
-import io as _seed_io, json as _seed_json, os as _seed_os, sys as _seed_sys
-if _seed_os.path.exists('notes_data.json'):
-    try:
-        _seed_prev = _seed_json.load(
-            _seed_io.open('notes_data.json', encoding='utf-8'))
-    except Exception:
-        _seed_prev = []
-    if isinstance(_seed_prev, list) and _seed_prev:
-        _seed_sys.exit(
-            'REFUSING to run: notes_data.json here holds %d real note(s). '
-            'Copy this script to a scratch directory instead.'
-            % len(_seed_prev))
-_seed_io.open('notes_data.json', 'w', encoding='utf-8').write('[]')
-_seed_io.open('settings.json', 'w', encoding='utf-8').write(
-    _seed_json.dumps({'reclaimed_from_appdata': True}))
+# time, so this script's data directory must be its own before that
+# happens. hermetic_seed (qa/_qa_support.py) seeds it -- or refuses to
+# run at all outside a scratch run, or beside a notebook it cannot
+# prove is empty.
+from _qa_support import hermetic_seed as _qa_seed
+_qa_seed()
 
 import sys
 import note_organizer as NO, tkinter as tk, time
@@ -296,6 +278,13 @@ _probe_btn.destroy(); _probe_dd.destroy(); _probe_txt.destroy(); app.update()
 # dark<->light switch, the main editor included; the recurrence radios'
 # selectcolor and the checklist rows' wells stayed on the old palette;
 # Back to Notes pressed in the old theme's colours.
+# Checklist rows are built while the section is OPEN (a closed section
+# builds none since the checklist learned to touch one row at a time);
+# open it, as a person must to reach the box that adds an item, and put it
+# back after the check.
+_cl_was_open = app._checklist_open
+if not _cl_was_open:
+    app.toggle_checklist_section()
 app.checklist_add_var.set('bifa')
 app._add_checklist_item()
 app.update()
@@ -336,6 +325,8 @@ check('the caret follows the theme in body, title and comments',
       _dark2[0] and _light2[0])
 check('checklist checkbox wells stay readable across a theme switch',
       _dark2[1] and _light2[1])
+if not _cl_was_open and app._checklist_open:
+    app.toggle_checklist_section()
 check('recurrence radios still have their well tracked, so it cannot go stale',
       any(isinstance(w, tk.Radiobutton) and m.get('selectcolor') == 'card'
           for w, m in app.themed_widgets))
@@ -385,6 +376,12 @@ app.toggle_theme(); app.update()
 # 300 in the list's own order. A rebuild that silently stopped building
 # cards fails both, and so does one that went back to drawing everything.
 NOTE_LIST_BUDGET_MS = 8000
+# A clean editor first. Whatever an earlier block left in it (the checklist
+# item above, on a note from an older fixture) is otherwise saved by a late
+# autosave INTO this fixture -- a 301st note, and the counts below read one
+# card too many whenever the timer lost the race. Every real delete route
+# saves the editor first; the checks here call _delete_note directly.
+app.new_note(); app.update()
 app.notes = [{'id':i,'title':f'Perf{i}','body':'x'*30,'category':'General',
              'updated':'2026-01-01 00:00','created':'2026-01-01 00:00',
              'checklist':[],'attachments':[]} for i in range(300)]
@@ -667,6 +664,8 @@ check(f'Down on the last drawn card draws on and moves to the next '
       _ls_want is not None and _ls_asked == [_ls_want])
 
 # A note deleted before its card was ever drawn must never get one.
+check(f'fixture: the list holds exactly the 300 notes it was given '
+      f'({len(app.notes)})', len(app.notes) == 300)
 _ls_victim = _ls_rows[200]
 _ls_real_ask = app.ask_yes_no
 app.ask_yes_no = lambda *a, **k: True
@@ -680,24 +679,43 @@ check(f'a note deleted before its card was drawn never gets one '
       f'({len(_ls_ids)} cards, victim drawn: {_ls_victim in _ls_ids})',
       _ls_victim not in _ls_ids and len(_ls_ids) == 299)
 
-# A rebuild while scrolled keeps the depth, so the place restored in
-# pixels has content to land on.
+# A rebuild while scrolled draws as deep as the view needs -- down to a
+# screen below it -- so the place restored in pixels has content to land
+# on. It used to draw again every row drawn before, which is the next check.
 app.canvas.yview_moveto(0); _ls_settle()
 app.refresh_note_list(); _ls_settle()
 for _ in range(4):
     app.canvas.yview_moveto(1.0); app.update()
 app.canvas.yview_moveto(0.6); _ls_settle()
-_ls_depth = len(app._list_drawn_keys)
 _ls_px = app.canvas.canvasy(0)
 app.refresh_note_list()
 # Read once the restore has run its course: straight after the call the
 # view has not been clamped yet, so the place would match for nothing.
 _ls_let_restores_finish()
-check(f'a rebuild while scrolled keeps the drawn depth '
-      f'({len(app._list_drawn_keys)} of {_ls_depth}) and the place '
-      f'({app.canvas.canvasy(0):.0f} of {_ls_px:.0f})',
-      _ls_px > 0 and len(app._list_drawn_keys) >= _ls_depth
-      and abs(app.canvas.canvasy(0) - _ls_px) < 30)
+_ls_view_h = app.canvas.winfo_height()
+check(f'a rebuild while scrolled keeps the place '
+      f'({app.canvas.canvasy(0):.0f} of {_ls_px:.0f}) with rows drawn below '
+      f'it ({app._list_end_y():.0f}px drawn, the view ends at '
+      f'{app.canvas.canvasy(0) + _ls_view_h:.0f})',
+      _ls_px > 0 and abs(app.canvas.canvasy(0) - _ls_px) < 30
+      and (app._list_end_y() >= app.canvas.canvasy(0) + _ls_view_h
+           or not app._list_pending))
+# ...and no deeper than that. One trip to the end of the list draws every
+# row; back near the top, a rebuild drew all of them again from then on --
+# every pin, Select mode, grouping or search paying for 1,000 rows where
+# the top of the list costs 30.
+_ls_scroll_to_end()
+_ls_all = len(app._list_drawn_keys)
+app._list_restore_px = None
+app._apply_list_scroll_px(109); _ls_settle()
+app.refresh_note_list()
+_ls_let_restores_finish()
+check(f'after one trip to the end of the list, a rebuild near the top draws '
+      f'a screenful again, not the {_ls_all} rows the trip drew '
+      f'({len(app._list_drawn_keys)} drawn; view at {app.canvas.canvasy(0):.0f})',
+      _ls_all >= 290
+      and len(app._list_drawn_keys) <= app.LIST_FIRST_DRAW + app.LIST_DRAW_STEP
+      and abs(app.canvas.canvasy(0) - 109) < 2)
 
 # A first draw shorter than the window draws on by itself. From the top,
 # once the rebuild above's restore has run out -- still in force, it
@@ -1257,8 +1275,13 @@ _co_top = app.canvas.canvasy(0)
 _co_drawn = len(app._list_drawn)
 _co_h = app.canvas.winfo_height()
 _co_move_to(_co_y, app.canvas.canvasy(_co_h - 3))
+# Held until the state promised: the list scrolled well down AND the rows
+# that were waiting drawn. Waiting for the rows alone measured how fast the
+# scroll STARTS, which it now does slowly on purpose (see the edge-slip
+# checks below): the first rows arrived after 84px.
 _co_end = time.time() + 6
-while time.time() < _co_end and len(app._list_drawn) <= _co_drawn:
+while time.time() < _co_end and (len(app._list_drawn) <= _co_drawn
+                                 or app.canvas.canvasy(0) - _co_top <= 100):
     app.update(); time.sleep(0.02)
 _co_scrolled = app.canvas.canvasy(0) - _co_top
 _co_slot = app._drag['slot'] if getattr(app, '_drag', None) else None
@@ -1274,7 +1297,13 @@ check(f'...and the card lands where the line was when it was let go '
       and _co_rows.index(1725) == _co_rows.index(_co_slot[1])
       + (-1 if _co_slot[0] == 'before' else 1)
       and _ls_same_as_rebuild())
-app.canvas.yview_moveto(1.0); _ls_settle()
+# To the end the way the scrollbar goes there: a deliberate move that beats
+# the restore the rebuild above left in force (qa/README). A bare
+# yview_moveto did not, so the restore could pull the view back up in the
+# middle of this measurement -- counted as the edge scrolling when it
+# landed after the press, and costing the drag its card when it landed
+# before the click (0px, seen once under a mutant elsewhere).
+app._list_scrollbar_moved('moveto', '1.0'); _ls_settle()
 _co_y = _co_press(_co_rows[-1])
 _co_let = app.canvas.canvasy(0)
 _co_move_to(_co_y, app.canvas.canvasy(3))
@@ -1285,7 +1314,1670 @@ _co_up = _co_let - app.canvas.canvasy(0)
 _qa_fire(app.canvas, '<ButtonRelease-1>', x=120, y=3); _ls_settle()
 check(f'...and one held at the top edge scrolls it up ({_co_up:.0f}px)',
       _co_up >= 100 and _ls_same_as_rebuild())
+
+
+# A press AT an edge is not a drag carried there. The card the list's edge
+# cuts is the one a hand most often clicks, and a click whose hand slips
+# five pixels starts a drag: it scrolled the list under the held card from
+# the very first beat, and the release dropped the card a place or three
+# away -- the list in Custom order, or a hand-made one changed silently. A
+# drag that begins at an edge scrolls only once it has been out in the open
+# list, or has stayed at the edge a while; and any arrival at an edge starts
+# slowly. The beats are driven here by hand, the timers cancelled, so no
+# stopwatch decides what a beat did.
+def _co_cancel_beat():
+    drag = app._drag
+    if drag['scroll_job'] is not None:
+        app.after_cancel(drag['scroll_job'])
+        drag['scroll_job'] = None
+
+
+def _co_beat():
+    """One beat of the edge scroll, as its timer would run it; returns how
+    far it moved the view. The drag's own timer is cancelled before and
+    after, so only these beats move anything."""
+    _co_cancel_beat()
+    top = app.canvas.canvasy(0)
+    app._list_drag_scroll_step()
+    _co_cancel_beat()
+    app.update_idletasks()
+    return app.canvas.canvasy(0) - top
+
+
+def _co_press_at(y):
+    """A press on the card at (or a few pixels from) widget y; returns
+    where. Measured AFTER it: a press brings a card the edge cuts into view
+    itself, which is not the edge scrolling."""
+    for yy in [y] + [y + d for d in range(-6, 7) if d]:
+        rec = app._list_record_at(120, yy)
+        if rec is not None and rec['kind'] == 'note':
+            y = yy
+            break
+    _qa_click(app.canvas, x=120, y=y); _ls_settle()
+    return y
+
+
+def _co_edge_slip(y, dy):
+    """A press on the card at widget y and a slip of dy pixels with the
+    button held, then a beat; returns (drag started, view moved, slot)."""
+    y = _co_press_at(y)
+    top = app.canvas.canvasy(0)
+    _qa_fire(app.canvas, '<B1-Motion>', x=120, y=y + dy // 2); app.update()
+    _qa_fire(app.canvas, '<B1-Motion>', x=120, y=y + dy); app.update()
+    drag = getattr(app, '_drag', None)
+    started = bool(drag and drag['started'])
+    if started:
+        _co_beat()
+    slot = drag['slot'] if drag else None
+    moved = app.canvas.canvasy(0) - top
+    _qa_fire(app.canvas, '<ButtonRelease-1>', x=120, y=y + dy); _ls_settle()
+    return started, moved, slot
+
+
+_co_edge_notes = [{'id': 1750 + i, 'title': 'Edge %02d' % i, 'body': 'b',
+                   'category': 'General', 'created': '2026-01-01 00:%02d' % i,
+                   'updated': '2026-02-01 00:%02d' % (59 - i)}
+                  for i in range(14)]
+_co_fresh(_co_edge_notes)
+app._list_scrollbar_moved('moveto', '0.3'); _ls_settle()
+_co_order = app._card_order()
+# However long the hold: what is asked is whether a beat may scroll yet.
+app.DRAG_EDGE_DWELL_MS = 10 ** 9
+try:
+    _co_bottom = _co_edge_slip(app.canvas.winfo_height() - 10, 6)
+    _co_top = _co_edge_slip(10, -6)
+finally:
+    app.__dict__.pop('DRAG_EDGE_DWELL_MS', None)
+check(f'a click whose hand slips 6px on a card at the list\'s bottom or top '
+      f'edge scrolls nothing and drops nothing (bottom: started, moved, slot '
+      f'{_co_bottom}; top {_co_top}; sort {app.sort_var.get()!r}, notes with '
+      f'a place: {sum(1 for n in app.notes if "order" in n)})',
+      _co_bottom == (True, 0, None) and _co_top == (True, 0, None)
+      and app.sort_var.get() == 'Recently updated'
+      and not any('order' in n for n in app.notes)
+      and app._card_order() == _co_order)
+# A press a pixel or three OUTSIDE the edge counted as one in the open
+# list: the same slip into the edge then scrolled the list at once, and a
+# slow click dropped the card a place away. A slip away from the edge
+# waits as one at it does.
+_co_out = None
+for _co_d in (1, 2, 3):
+    _co_yy = app.canvas.winfo_height() - app.DRAG_EDGE - _co_d
+    _co_rec = app._list_record_at(120, _co_yy)
+    if _co_rec is not None and _co_rec['kind'] == 'note':
+        _co_out = _co_yy
+        break
+check(f'fixture: a card lies a few pixels outside the list\'s bottom edge '
+      f'(at y {_co_out})', _co_out is not None)
+app.DRAG_EDGE_DWELL_MS = 10 ** 9
+try:
+    _co_outside = _co_edge_slip(_co_out, 7) if _co_out is not None else None
+    # A slip that passes first through the strip just outside the edge is
+    # not the pointer having been out in the open list either.
+    _co_far = (_co_edge_slip(_co_out - 6, 12) if _co_out is not None
+               and app._list_record_at(120, _co_out - 6) is not None else None)
+finally:
+    app.__dict__.pop('DRAG_EDGE_DWELL_MS', None)
+check(f'...and a click there whose hand slips 7px into the edge scrolls '
+      f'nothing and drops nothing, nor one pressed 6px further in that slips '
+      f'12px (started, moved, slot {_co_outside}; {_co_far}; sort '
+      f'{app.sort_var.get()!r})',
+      _co_outside == (True, 0, None) and _co_far == (True, 0, None)
+      and app.sort_var.get() == 'Recently updated'
+      and not any('order' in n for n in app.notes))
+# ...while one held there scrolls the list after all: a card at the edge
+# can still be taken further than the list shows. Waited for, not timed.
+_co_y = _co_press_at(app.canvas.winfo_height() - 10)
+_co_top0 = app.canvas.canvasy(0)
+_qa_fire(app.canvas, '<B1-Motion>', x=120, y=_co_y + 6); app.update()
+_co_end = time.time() + 6
+while time.time() < _co_end and app.canvas.canvasy(0) == _co_top0:
+    app.update(); time.sleep(0.02)
+_co_held = app.canvas.canvasy(0) - _co_top0
+app._list_drag_escape()
+_qa_fire(app.canvas, '<ButtonRelease-1>', x=120, y=_co_y + 6); _ls_settle()
+check(f'...while a drag held at the edge it began on scrolls the list after a '
+      f'moment ({_co_held:.0f}px)', _co_held > 0
+      and app._card_order() == _co_order)
+# Arriving at the edge from the open list, the first beat is a part of the
+# full step, and the steps grow to it.
+_co_fresh([dict(n, id=2300 + i, title='Ramp %02d' % i)
+           for i, n in enumerate(_co_edge_notes * 3)])
+_co_h = app.canvas.winfo_height()
+_co_y = _co_press(2301)
+for _co_to in range(_co_y, _co_h - 30, 6):
+    _qa_fire(app.canvas, '<B1-Motion>', x=120, y=_co_to); app.update()
+_qa_fire(app.canvas, '<B1-Motion>', x=120, y=_co_h - 3)
+_co_steps = [_co_beat() for _ in range(12)]
+_co_full = min(10, 1 + (_co_h - 3 - (_co_h - app.DRAG_EDGE)) // 8) * _co_h / 10.0
+app._list_drag_escape()
+_qa_fire(app.canvas, '<ButtonRelease-1>', x=120, y=_co_h - 3); _ls_settle()
+check(f'...and arriving at an edge from the open list, the scroll starts with '
+      f'a part of its step and grows to all of it ({[round(s) for s in _co_steps]}'
+      f'; the full step {_co_full:.0f}px)',
+      0 < _co_steps[0] <= _co_full / 5
+      and all(b >= a for a, b in zip(_co_steps, _co_steps[1:]))
+      and abs(_co_steps[-1] - _co_full) <= 1.5)
 app.sort_var.set('Recently updated')
+
+# ---------------------------------------------------------------------
+# 5. The list under a hurried hand (the break-it audit, 2026-09-30).
+#
+# Each part below is a way a person's ordinary handling of the list went
+# wrong while every single gesture, taken slowly and alone, worked: a
+# release lost to another window, a click that saved the note left behind
+# and so moved the rows under the pointer, a Select all over folded
+# groups, a tick left on a note that was deleted, an arrangement replaced
+# without a word, two cards both claiming to be open, a header too long
+# for its line, the ring out of sight, groups the keyboard could not
+# fold, and a list that stayed drawn to its end once it had been.
+# ---------------------------------------------------------------------
+
+
+def _bl_drawing_ok():
+    """Every drawn card is drawn where its record says: a card left
+    lifted, or moved without its record, shows here."""
+    bad = []
+    for rec in app._list_drawn:
+        if rec['kind'] != 'note':
+            continue
+        box = app.canvas.coords(rec['items']['bg'])
+        if not box or abs(box[1] - rec['y0']) > 0.5 or abs(box[3] - rec['y1']) > 0.5:
+            bad.append(rec['note']['id'])
+    return not bad
+
+
+def _bl_lift(nid, by=54):
+    """Press a card and carry it `by` pixels down with the button held --
+    far enough to lift it -- and return where the pointer is."""
+    y = _co_press(nid)
+    for dy in range(6, by + 1, 6):
+        _qa_fire(app.canvas, '<B1-Motion>', x=120, y=y + dy)
+        app.update()
+    return y + by
+
+
+def _bl_lifted():
+    drag = getattr(app, '_drag', None)
+    return bool(drag and drag['started'] and drag['offset']
+                and app.canvas.find_withtag('drag_line'))
+
+
+# 5a. A drag whose release never reaches the list. The release is lost
+# (another window took the pointer, say); whatever the list hears next
+# must put the lifted card back before it does anything else.
+app.DRAG_EDGE = -10000
+_co_fresh(_co_notes)
+_bl_o = app._card_order()
+_bl_lift(_bl_o[1])
+_bl_was = _bl_lifted()
+_bl_pt = app._card_point(_bl_o[0])
+_qa_click(app.canvas, x=_bl_pt[0], y=_bl_pt[1]); _ls_settle()
+check(f'a press while a card is still lifted puts it back first: no line, '
+      f'every card where its record is, no four-way pointer (lifted first: '
+      f'{_bl_was}, pointer {str(app.canvas.cget("cursor"))!r})',
+      _bl_was and not app.canvas.find_withtag('drag_line') and _bl_drawing_ok()
+      and str(app.canvas.cget('cursor')) != 'fleur')
+_qa_fire(app.canvas, '<ButtonRelease-1>', x=_bl_pt[0], y=_bl_pt[1]); _ls_settle()
+
+_bl_lift(_bl_o[2])
+check(f'...while a card is lifted, the pointer shape the list remembers is '
+      f'the one it shows ({app._list_cursor!r}, '
+      f'{str(app.canvas.cget("cursor"))!r})',
+      app._list_cursor == str(app.canvas.cget('cursor')) == 'fleur')
+# Motion with the button UP: <B1-Motion> takes every move while it is down,
+# so this one says the release went missing.
+_bl_pt = app._card_point(_bl_o[0])
+_qa_fire(app.canvas, '<Motion>', x=_bl_pt[0], y=_bl_pt[1]); _ls_settle()
+check(f'...and the pointer moving with the button up puts it back too, '
+      f'with the hand over a card again ({str(app.canvas.cget("cursor"))!r})',
+      not _bl_lifted() and not app.canvas.find_withtag('drag_line')
+      and _bl_drawing_ok() and str(app.canvas.cget('cursor')) == 'hand2')
+
+# A right-click during a drag: the drawing under the pointer is the lifted
+# card, the record there its neighbour's, so a menu would be for a note
+# nobody pointed at. First the control -- with no drag, a right-click does
+# open the menu of the card under it -- so the silence below is a decision.
+_bl_menus = []
+app.show_note_context_menu = lambda ev, note, **k: _bl_menus.append(note['id'])
+try:
+    _bl_pt = app._card_point(_bl_o[3])
+    _qa_fire(app.canvas, '<Button-3>', x=_bl_pt[0], y=_bl_pt[1]); _ls_settle()
+    _bl_control = list(_bl_menus)
+    del _bl_menus[:]
+    _bl_y = _bl_lift(_bl_o[1])
+    _bl_was = _bl_lifted()
+    # On the neighbour's record, where the lifted card is drawn: without
+    # the cancel this is the menu that opened -- for the neighbour.
+    _bl_pt = app._card_point(_bl_o[2])
+    _qa_fire(app.canvas, '<Button-3>', x=_bl_pt[0], y=_bl_pt[1]); _ls_settle()
+finally:
+    app.__dict__.pop('show_note_context_menu', None)
+check(f'a right-click during a drag cancels it and opens no menu (menus '
+      f'{_bl_menus}; with no drag it opened {_bl_control}, lifted first: '
+      f'{_bl_was})',
+      _bl_control == [_bl_o[3]] and _bl_was and _bl_menus == []
+      and not _bl_lifted() and _bl_drawing_ok())
+_qa_fire(app.canvas, '<ButtonRelease-1>', x=120, y=_bl_y); _ls_settle()
+
+# The window losing the keyboard mid-drag is how a release goes missing.
+_bl_lift(_bl_o[1])
+_bl_was = _bl_lifted()
+app.canvas.winfo_id()
+app.canvas.event_generate('<FocusOut>'); _ls_settle()
+check(f'the list losing the keyboard mid-drag puts the lifted card back '
+      f'(lifted first: {_bl_was})',
+      _bl_was and not _bl_lifted() and not app.canvas.find_withtag('drag_line')
+      and _bl_drawing_ok() and app._card_order() == _bl_o)
+_qa_fire(app.canvas, '<ButtonRelease-1>', x=120, y=10); _ls_settle()
+
+# 5b. A click whose own open moves the rows under the pointer. Opening a
+# note first saves the one left behind, and under a sort by date that save
+# moves the saved card: the cards between slide, the clicked one included.
+# What the pointer is over must stay what it was over -- for the second
+# press of a double-click, and for a drag the press may start. One check
+# per mechanism, because two of them hold the double-click together.
+_bl_notes = [{'id': 1800 + i, 'title': 'Hurry %02d' % i, 'body': 'b',
+              'category': 'General', 'created': '2026-01-01 00:%02d' % i,
+              'updated': '2026-02-01 00:%02d' % (59 - i)} for i in range(12)]
+
+
+def _bl_type_in(nid):
+    """Open a note and type in it, leaving the save pending -- what the
+    next click's open will flush."""
+    app.open_note_in_tab(app.find_note(nid)); _ls_settle()
+    app.body_text.insert('end', ' typed')
+    app._schedule_autosave()
+
+
+def _bl_y_at(nid, frac):
+    v = app._card_view(nid)
+    return int(v['y0'] + (v['y1'] - v['y0']) * frac - app.canvas.canvasy(0))
+
+
+# The list keeps the clicked card under the pointer when it can scroll far
+# enough: Recently updated moves the saved card to the top, above it.
+_co_fresh(_bl_notes)
+_bl_o = app._card_order()
+_bl_h = app.canvas.winfo_height()
+_bl_type_in(_bl_o[2])
+_bl_y = _bl_y_at(_bl_o[1], 0.25)
+check(f'fixture: a list long enough to scroll, the card to click in view '
+      f'({app._list_extent()[3]:.0f}px of list, a {_bl_h}px view, the click '
+      f'at y={_bl_y})', app._list_extent()[3] > _bl_h + 200 and 0 <= _bl_y < _bl_h)
+_qa_click(app.canvas, x=120, y=_bl_y); _ls_settle()
+_bl_under = app._list_record_at(120, _bl_y)
+_bl_under = _bl_under['note']['id'] if _bl_under else None
+check(f'a click whose open saves the note left behind keeps the clicked card '
+      f'under the pointer (open {app.selected_note_id}, under the pointer '
+      f'{_bl_under}, clicked {_bl_o[1]}; the saved card went to the top: '
+      f'{app._card_order()[:1]})',
+      app.selected_note_id == _bl_o[1] and _bl_under == _bl_o[1]
+      and app._card_order()[0] == _bl_o[2])
+_qa_fire(app.canvas, '<ButtonRelease-1>', x=120, y=_bl_y); _ls_settle()
+# A second press at the same spot is the second half of a double-click (Tk
+# calls it one), and it goes to the card now under the pointer: the same.
+_qa_click(app.canvas, x=120, y=_bl_y); _ls_settle()
+_qa_fire(app.canvas, '<ButtonRelease-1>', x=120, y=_bl_y); _ls_settle()
+check(f'...so a double-click on it opens it ({app.selected_note_id})',
+      app.selected_note_id == _bl_o[1])
+
+# When the list cannot scroll far enough, the second press follows the first
+# one's aim. Oldest updated at the top of the list: the saved card goes to
+# the BOTTOM, the clicked card slides up, and a view at the top cannot
+# scroll up after it -- whatever the window's or the fonts' size.
+_co_fresh(_bl_notes, sort='Oldest updated')
+_bl_o = app._card_order()
+_bl_type_in(_bl_o[0])
+_bl_y = _bl_y_at(_bl_o[1], 0.25)
+_qa_click(app.canvas, x=120, y=_bl_y); _ls_settle()
+_bl_under = app._list_record_at(120, _bl_y)
+_bl_under = _bl_under['note']['id'] if _bl_under else None
+check(f'fixture: the clicked card slid out from under the pointer and the '
+      f'list could not follow it (open {app.selected_note_id}, under the '
+      f'pointer {_bl_under}, clicked {_bl_o[1]}, view at '
+      f'{app.canvas.canvasy(0):.0f})',
+      app.selected_note_id == _bl_o[1] and _bl_under not in (None, _bl_o[1]))
+_qa_fire(app.canvas, '<ButtonRelease-1>', x=120, y=_bl_y); _ls_settle()
+_qa_click(app.canvas, x=120, y=_bl_y); _ls_settle()
+_qa_fire(app.canvas, '<ButtonRelease-1>', x=120, y=_bl_y); _ls_settle()
+check(f'...and a double-click still opens the card it was aimed at, not the '
+      f'one that slid under the pointer ({app.selected_note_id}; under the '
+      f'pointer {_bl_under})', app.selected_note_id == _bl_o[1])
+# The aim lasts as long as a double-click can: a press made later goes where
+# it points. Tk reads a made-up event's timestamp as 0, so it calls this
+# press the second half of a double-click too -- only the aim's own clock
+# can tell the two apart (a stale aim once opened the wrong note here).
+_bl_under_now = app._list_record_at(120, _bl_y)
+_bl_under_now = _bl_under_now['note']['id'] if _bl_under_now else None
+_ls_let_restores_finish()
+_qa_click(app.canvas, x=120, y=_bl_y); _ls_settle()
+_qa_fire(app.canvas, '<ButtonRelease-1>', x=120, y=_bl_y); _ls_settle()
+check(f'...while a press a second later opens the card under the pointer '
+      f'({app.selected_note_id}; under the pointer {_bl_under_now})',
+      _bl_under_now not in (None, _bl_o[1])
+      and app.selected_note_id == _bl_under_now)
+
+# ...and a hand that slips a few pixels while that press is held drops
+# nothing. A drag armed on a card that slid away measured its grab against
+# a place the hand was not on, so the slip "dropped" the clicked card
+# before its neighbour and switched the whole list to Custom order.
+_co_fresh(_bl_notes, sort='Oldest updated')
+_bl_o = app._card_order()
+_bl_type_in(_bl_o[0])
+# The LOWER part of the card: once it has slid up, the pointer is over the
+# lower half of the card that took its place, where a drag armed anyway
+# reads "before the next one" -- a real drop, not the card's own place.
+_bl_y = _bl_y_at(_bl_o[1], 0.75)
+check(f'fixture: the lower part of the card to press is on screen (y={_bl_y} '
+      f'of {app.canvas.winfo_height()})', 0 <= _bl_y < app.canvas.winfo_height())
+_qa_click(app.canvas, x=120, y=_bl_y); _ls_settle()
+for _bl_dy in (3, 6):
+    _qa_fire(app.canvas, '<B1-Motion>', x=120, y=_bl_y + _bl_dy); app.update()
+_bl_started = bool(getattr(app, '_drag', None) and app._drag['started'])
+_qa_fire(app.canvas, '<ButtonRelease-1>', x=120, y=_bl_y + 6); _ls_settle()
+check(f'a 6px slip while pressing a card that slid away drops nothing '
+      f'(drag started: {_bl_started}; sort {app.sort_var.get()!r}; notes '
+      f'with a place: {sum(1 for n in app.notes if "order" in n)})',
+      not _bl_started and app.sort_var.get() == 'Oldest updated'
+      and not any('order' in n for n in app.notes))
+
+# A header's own press can move it too: folding the last group of a list
+# scrolled to its end shortens the list, the view clamps, and the header
+# slides down from under the pointer -- where the second press of a
+# double-click then opened the card that slid in, instead of unfolding.
+_bl_work_added = 'Work' not in NO.CATEGORY_COLORS
+NO.CATEGORY_COLORS.setdefault('Work', '#4cc9f0')
+_co_fresh([dict(n, category='General') for n in _bl_notes[:10]]
+          + [dict(n, category='Work') for n in _bl_notes[10:]])
+app.group_by_category.set(True)
+app.collapsed_groups.discard('Work')
+app.refresh_note_list(); _ls_settle()
+app._list_scrollbar_moved('moveto', '1.0'); _ls_settle()
+_ls_let_restores_finish()
+_bl_hd = app._header_view('Work')
+_bl_y = int((_bl_hd['y0'] + _bl_hd['y1']) / 2 - app.canvas.canvasy(0))
+_bl_open = app.selected_note_id
+_qa_click(app.canvas, x=200, y=_bl_y); _ls_settle()
+_bl_under = app._list_record_at(200, _bl_y)
+_bl_under = _bl_under and _bl_under['key']
+_qa_fire(app.canvas, '<ButtonRelease-1>', x=200, y=_bl_y); _ls_settle()
+check(f'fixture: folding the last group of a list scrolled to its end moves '
+      f'its header from under the pointer (folded: '
+      f'{"Work" in app.collapsed_groups}; under the pointer now {_bl_under})',
+      'Work' in app.collapsed_groups and _bl_under != ('header', 'Work'))
+_qa_click(app.canvas, x=200, y=_bl_y); _ls_settle()
+_qa_fire(app.canvas, '<ButtonRelease-1>', x=200, y=_bl_y); _ls_settle()
+check(f'...and a double-click on that header unfolds the same group again, '
+      f'opening nothing (folded: {sorted(app.collapsed_groups)}; open '
+      f'{app.selected_note_id}, was {_bl_open})',
+      'Work' not in app.collapsed_groups and app.selected_note_id == _bl_open)
+app.group_by_category.set(False)
+app.collapsed_groups.discard('Work')
+if _bl_work_added:
+    NO.CATEGORY_COLORS.pop('Work', None)
+
+# How far the HAND moved decides a drag, not how far the view did: the view
+# can move under a held button (a rebuild's restore landing late), and read
+# in canvas pixels a 1px jitter then passed for a drag.
+_co_fresh(_bl_notes)
+_bl_o = app._card_order()
+_bl_y = _co_press(_bl_o[1])
+_bl_top = app.canvas.canvasy(0)
+app._list_restore_px = None
+app._apply_list_scroll_px(_bl_top + 12); _ls_settle()
+_bl_moved = app.canvas.canvasy(0) - _bl_top
+_qa_fire(app.canvas, '<B1-Motion>', x=120, y=_bl_y + 1); app.update()
+_bl_started = bool(getattr(app, '_drag', None) and app._drag['started'])
+_qa_fire(app.canvas, '<ButtonRelease-1>', x=120, y=_bl_y + 1); _ls_settle()
+check(f'the view moving under a held button is not the hand moving: a 1px '
+      f'jitter starts no drag (the view moved {_bl_moved:.0f}px; drag '
+      f'started: {_bl_started})', _bl_moved >= 10 and not _bl_started
+      and app.sort_var.get() == 'Recently updated')
+
+# A deliberate scroll beats a rebuild's restore even before that restore
+# has started: it was queued for the next idle moment as a callback nothing
+# could cancel, and it scrolled the view back after the scroll-into-view.
+_co_fresh(_bl_notes)
+_bl_o = app._card_order()
+app._apply_list_scroll_px(40); _ls_settle()
+_bl_was = app.canvas.canvasy(0)
+app.refresh_note_list()
+app._scroll_row_into_view(app._note_cards[_bl_o[-1]])
+_bl_want = app.canvas.canvasy(0)
+_ls_let_restores_finish()
+check(f'a deliberate scroll made before a rebuild\'s restore has run beats '
+      f'it (view {app.canvas.canvasy(0):.0f}, scrolled to {_bl_want:.0f}, '
+      f'the rebuild was at {_bl_was:.0f})',
+      _bl_was > 0 and _bl_want > _bl_was + 50
+      and abs(app.canvas.canvasy(0) - _bl_want) < 2)
+
+# The reported route end to end: the emoji picker open while typing, so the
+# autosave leaves the list as it was; the list scrolled; a click on a card
+# above the edited one, whose open catches the list up with a full rebuild;
+# a 1px jitter. Nothing may move.
+_co_fresh(_bl_notes)
+app._apply_list_scroll_px(40); _ls_settle()
+app._list_restore_px = None
+_bl_top = app.canvas.canvasy(0)
+_bl_o = app._card_order()
+_bl_vis = [n for n in _bl_o if app._card_view(n)['y0'] >= _bl_top
+           and app._card_view(n)['y1'] <= _bl_top + app.canvas.winfo_height()]
+_bl_click = _bl_vis[-1] if _bl_vis else _bl_o[1]
+_bl_edit = _bl_o[_bl_o.index(_bl_click) + 2]
+app.open_note_in_tab(app.find_note(_bl_edit)); _ls_settle()
+app._show_emoji_picker(app.body_text); _ls_settle()
+app.body_text.insert('end', ' x')
+app._schedule_autosave()
+_bl_end = time.time() + 5
+while not getattr(app, '_note_list_needs_refresh', False) and time.time() < _bl_end:
+    app.update(); time.sleep(0.02)
+_bl_deferred = bool(getattr(app, '_note_list_needs_refresh', False))
+_bl_y = _bl_y_at(_bl_click, 0.2)
+_qa_click(app.canvas, x=120, y=_bl_y); _ls_settle()
+_qa_fire(app.canvas, '<B1-Motion>', x=120, y=_bl_y + 1); app.update()
+_bl_started = bool(getattr(app, '_drag', None) and app._drag['started'])
+_qa_fire(app.canvas, '<ButtonRelease-1>', x=120, y=_bl_y + 1); _ls_settle()
+_ls_let_restores_finish()
+check(f'a click that catches up a deferred rebuild, with the list scrolled, '
+      f'then a 1px jitter: nothing moves (autosave deferred the list: '
+      f'{_bl_deferred}; drag started: {_bl_started}; open '
+      f'{app.selected_note_id} of {_bl_click}; sort {app.sort_var.get()!r})',
+      _bl_deferred and not _bl_started and app.selected_note_id == _bl_click
+      and app.sort_var.get() == 'Recently updated'
+      and not any('order' in n for n in app.notes))
+app.__dict__.pop('DRAG_EDGE', None)
+
+# 5c. Select all ticks exactly what the list shows (USER_GUIDE), and a
+# folded group shows its header, not its notes. Asked only of the search and
+# the filter, Select all ticked the five notes folded away too, and bulk
+# Trash took them. Pressed on the bar's own button, as a person presses it.
+_bl_work_added = 'Work' not in NO.CATEGORY_COLORS
+NO.CATEGORY_COLORS.setdefault('Work', '#4cc9f0')
+_co_fresh([dict(n, category='Work') for n in _bl_notes[:5]]
+          + [dict(n, category='General') for n in _bl_notes[5:9]])
+_bl_general = {n['id'] for n in _bl_notes[5:9]}
+app.group_by_category.set(True)
+app.collapsed_groups.clear()
+app.collapsed_groups.add('Work')
+app.refresh_note_list(); _ls_settle()
+check(f'fixture: a grouped list with Work folded shows only the General '
+      f'cards ({app._card_order()}; Work header '
+      f'{(app._header_view("Work") or {}).get("label")!r})',
+      set(app._card_order()) == _bl_general
+      and (app._header_view('Work') or {}).get('caret') == '▶')
+app._toggle_selection_mode(); _ls_settle()
+app._bulk_select_all_btn.invoke(); _ls_settle()
+check(f'Select all over a folded group ticks only the notes the list shows '
+      f'({sorted(app.selected_note_ids)}; label '
+      f'{app.bulk_selected_lbl.cget("text")!r}, button '
+      f'{app._bulk_select_all_btn.cget("text")!r})',
+      app.selected_note_ids == _bl_general
+      and app.bulk_selected_lbl.cget('text') == '4 selected'
+      and app._bulk_select_all_btn.cget('text') == 'Unselect all')
+app._toggle_group_collapsed('Work'); _ls_settle()
+check(f'...and unfolding the group puts unticked notes on show, so the button '
+      f'offers Select all again ({app._bulk_select_all_btn.cget("text")!r})',
+      app._bulk_select_all_btn.cget('text') == 'Select all'
+      and app.selected_note_ids == _bl_general)
+app._toggle_selection_mode(); _ls_settle()
+app.group_by_category.set(False)
+app.collapsed_groups.clear()
+if _bl_work_added:
+    NO.CATEGORY_COLORS.pop('Work', None)
+
+# 5d. A ticked note that is deleted leaves the selection. It kept its tick:
+# the bar went on counting it, and since a new note's id is the highest plus
+# one, the next note made took the freed id and arrived ticked -- trashed by
+# a Trash nobody aimed at it. Two routes, because deletes end in two places:
+# the one card taken off (_remove_note_cards), or a rebuild.
+_co_fresh(_bl_notes[:8])
+_bl_ids = sorted(n['id'] for n in app.notes)
+_bl_top, _bl_keep = _bl_ids[-1], _bl_ids[2]
+app._toggle_selection_mode(); _ls_settle()
+for _bl_n in (_bl_keep, _bl_top):
+    _bl_pt = app._card_point(_bl_n)
+    app._scroll_row_into_view(app._note_cards[_bl_n]); _ls_settle()
+    _bl_pt = app._card_point(_bl_n)
+    _qa_click(app.canvas, x=_bl_pt[0], y=_bl_pt[1]); _ls_settle()
+check(f'fixture: two notes ticked on their cards, one of them the highest id '
+      f'({sorted(app.selected_note_ids)}, {app.bulk_selected_lbl.cget("text")!r})',
+      app.selected_note_ids == {_bl_keep, _bl_top}
+      and app.bulk_selected_lbl.cget('text') == '2 selected')
+app.ask_yes_no = lambda *a, **k: True
+try:
+    app._context_delete_note(app.find_note(_bl_top)); _ls_settle()
+finally:
+    app.ask_yes_no = _ls_real_ask
+check(f'a ticked note deleted from its own menu leaves the selection, and the '
+      f'bar says so ({sorted(app.selected_note_ids)}, '
+      f'{app.bulk_selected_lbl.cget("text")!r})',
+      app.find_note(_bl_top) is None and app.selected_note_ids == {_bl_keep}
+      and app.bulk_selected_lbl.cget('text') == '1 selected')
+app.open_blank_tab(); _ls_settle()
+app.title_entry.delete(0, 'end')
+app.title_entry.insert(0, 'Brand new shopping list')
+app.save_current_note(auto=True); _ls_settle()
+_bl_new = app.selected_note_id
+_bl_view = app._card_view(_bl_new) or {}
+check(f'...so a new note that takes the freed id arrives unticked (new id '
+      f'{_bl_new}, freed {_bl_top}; ticked: {_bl_view.get("checked")}; '
+      f'selection {sorted(app.selected_note_ids)})',
+      _bl_new == _bl_top and _bl_view.get('checked') is False
+      and app.selected_note_ids == {_bl_keep})
+app._toggle_selection_mode(); _ls_settle()
+
+# The rebuild's route: a category deleted together with its notes.
+_bl_work_colour = NO.CATEGORY_COLORS.get('Work')
+NO.CATEGORY_COLORS.setdefault('Work', '#4cc9f0')
+_co_fresh([dict(n, category='Work') for n in _bl_notes[:3]]
+          + [dict(n, category='General') for n in _bl_notes[3:8]])
+_bl_work = {n['id'] for n in _bl_notes[:3]}
+_bl_gen = _bl_notes[4]['id']
+app._toggle_selection_mode(); _ls_settle()
+app.selected_note_ids = set(_bl_work) | {_bl_gen}
+app._sync_card_checkboxes(); app._update_bulk_selected_label(); _ls_settle()
+app._ask_category_deletion = lambda *a, **k: 'delete_notes'
+try:
+    app._delete_category('Work', lambda: None); _ls_settle()
+finally:
+    app.__dict__.pop('_ask_category_deletion', None)
+check(f'...and so do ticked notes that went with their category '
+      f'({sorted(app.selected_note_ids)}, '
+      f'{app.bulk_selected_lbl.cget("text")!r})',
+      not any(app.find_note(i) for i in _bl_work)
+      and app.selected_note_ids == {_bl_gen}
+      and app.bulk_selected_lbl.cget('text') == '1 selected')
+app._toggle_selection_mode(); _ls_settle()
+# The category was really deleted; one that was there before comes back.
+if _bl_work_colour is not None:
+    NO.CATEGORY_COLORS['Work'] = _bl_work_colour
+    NO.persist_categories()
+    app.refresh_category_widgets(); _ls_settle()
+
+# 5e. An arrangement made by hand is never replaced without a word. A move
+# made while the list is sorted another way still starts Custom order from
+# the order shown (as documented), but when notes already had places, the
+# toast says the old arrangement went and offers it back. It used to go in
+# silence: one Alt+Down while looking at the list by title, and the
+# arrangement was gone from the notes file.
+_bl_fruit = ['Zebra', 'Apple', 'Mango', 'Banana', 'Kiwi', 'Cherry', 'Lemon',
+             'Grape']
+_bl_hand = ['Lemon', 'Apple', 'Zebra', 'Grape', 'Kiwi', 'Banana', 'Cherry',
+            'Mango']
+_bl_placed = [{'id': 1900 + i, 'title': t + ' note', 'body': 'b',
+               'category': 'General', 'created': '2026-01-01 00:%02d' % i,
+               'updated': '2026-02-01 00:%02d' % i, 'order': _bl_hand.index(t)}
+              for i, t in enumerate(_bl_fruit)]
+_bl_hand_ids = [1900 + _bl_fruit.index(t) for t in _bl_hand]
+
+
+def _bl_names():
+    return [app.find_note(i)['title'].split()[0] for i in app._card_order()]
+
+
+def _bl_sort(value):
+    """Choose a sort the way the dropdown does."""
+    app.sort_var.set(value)
+    app._on_sort_chosen(value); _ls_settle()
+
+
+def _bl_file_names():
+    """The notes file's Custom order, by the first word of each title: a
+    note brought back from the Trash returns under a new id."""
+    return [app.find_note(i)['title'].split()[0] for i in _co_file_order()]
+
+
+# Every question a sort asks in this block is answered here and written
+# down: a real one would wait for a person who is not there.
+_bl_questions = []
+_bl_answer = [False]
+app.ask_yes_no = lambda title, message, **k: (
+    _bl_questions.append((title, message)), _bl_answer[0])[1]
+_co_fresh(_bl_placed, sort='Custom order')
+check(f'fixture: a Custom order arranged by hand ({_bl_names()})',
+      _bl_names() == _bl_hand and _co_file_order() == _bl_hand_ids)
+_bl_sort('Title A–Z')
+app._hide_toast()
+app._put_keyboard_on_card(app._card_order()[0]); _ls_settle()
+app._list_move_by_keyboard(1); _ls_settle()
+_bl_said = app.toast_lbl.cget('text')
+check(f'a move in another sort that replaces an arrangement made by hand says '
+      f'so and offers it back ({_bl_said!r}; sort now {app.sort_var.get()!r})',
+      app.sort_var.get() == 'Custom order' and app._toast_action is not None
+      and 'Title A–Z' in _bl_said)
+_qa_click(app.toast_action_lbl); _ls_settle()
+check(f'...and Undo on the toast puts back the arrangement and the sort, in '
+      f'the notes file too (sort {app.sort_var.get()!r}; file order '
+      f'{_co_file_order() == _bl_hand_ids})',
+      app.sort_var.get() == 'Title A–Z' and _co_file_order() == _bl_hand_ids)
+_bl_sort('Custom order')
+check(f'...so choosing Custom order again shows it as it was made, and asks '
+      f'nothing -- Undo already put it back ({_bl_names()}; asked '
+      f'{[q[0] for q in _bl_questions]})',
+      _bl_names() == _bl_hand and not _bl_questions)
+# Moves made on top of the replacement go with it: they were made on it.
+_bl_sort('Title A–Z')
+app._hide_toast()
+app._put_keyboard_on_card(app._card_order()[0]); _ls_settle()
+app._list_move_by_keyboard(1); _ls_settle()
+app._list_move_by_keyboard(1); _ls_settle()
+_qa_click(app.toast_action_lbl); _ls_settle()
+_bl_sort('Custom order')
+check(f'...also after more moves made in the new order before Undo '
+      f'({_bl_names()})',
+      _bl_names() == _bl_hand and _co_file_order() == _bl_hand_ids)
+# Nothing to replace, nothing said: the first move ever still starts Custom
+# order from the order shown, quietly, as it always did.
+_co_fresh([{k: v for k, v in n.items() if k != 'order'} for n in _bl_placed],
+          sort='Title A–Z')
+app._hide_toast()
+app._put_keyboard_on_card(app._card_order()[0]); _ls_settle()
+app._list_move_by_keyboard(1); _ls_settle()
+check(f'...while a first move, with no arrangement to lose, says nothing '
+      f'(sort {app.sort_var.get()!r}, an offer on screen: '
+      f'{app._toast_action is not None})',
+      app.sort_var.get() == 'Custom order' and app._toast_action is None
+      and len(_co_file_order()) == len(_bl_placed))
+app._hide_toast()
+# The offer outlives its toast. The app shows one toast at a time, and the
+# next one with an Undo -- a delete's, within the offer's eight seconds --
+# took its place: the arrangement made by hand then had no way back at all.
+# It is kept for the session, and choosing Custom order asks, once, whether
+# to bring it back.
+_co_fresh(_bl_placed, sort='Custom order')
+_bl_sort('Title A–Z')
+app._hide_toast()
+app._put_keyboard_on_card(app._card_order()[0]); _ls_settle()
+app._list_move_by_keyboard(1); _ls_settle()
+_bl_answer[0] = True
+app._context_delete_note(next(n for n in app.notes
+                              if n['title'].startswith('Zebra'))); _ls_settle()
+_bl_said = app.toast_lbl.cget('text')
+# The delete's own Undo: the note comes back from the Trash, a new dict.
+_qa_click(app.toast_action_lbl); _ls_settle()
+del _bl_questions[:]
+_bl_sort('Custom order')
+_bl_asked = list(_bl_questions)
+check(f'...and when a later toast took the offer\'s place, choosing Custom '
+      f'order asks to bring the arrangement back, naming the sort that '
+      f'replaced it, and Yes does -- the note deleted and restored meanwhile '
+      f'too (the toast then: {_bl_said!r}; asked {[q[0] for q in _bl_asked]}; '
+      f'now {_bl_names()}, in the file {_bl_file_names()})',
+      'Trash' in _bl_said and len(_bl_asked) == 1
+      and 'Title A–Z' in _bl_asked[0][1]
+      and _bl_names() == _bl_hand and _bl_file_names() == _bl_hand)
+del _bl_questions[:]
+_bl_sort('Custom order')
+check(f'...asked once: choosing Custom order again asks nothing (asked '
+      f'{[q[0] for q in _bl_questions]})', not _bl_questions)
+# A second move made in a sorted view counted the first move's order as an
+# arrangement made by hand: its marks took the offer's place, and the
+# arrangement really made by hand had no way back at all -- choosing
+# Custom order asked nothing.
+_co_fresh(_bl_placed, sort='Custom order')
+for _bl_i in range(2):
+    _bl_sort('Title A–Z')
+    app._hide_toast()
+    app._put_keyboard_on_card(app._card_order()[0]); _ls_settle()
+    app._list_move_by_keyboard(1); _ls_settle()
+app._hide_toast()
+del _bl_questions[:]
+_bl_answer[0] = True
+_bl_sort('Custom order')
+check(f'...and after two moves made in a sorted view, choosing Custom order '
+      f'offers back the arrangement made by hand, and Yes brings it (asked '
+      f'{[q[0] for q in _bl_questions]}; now {_bl_names()})',
+      len(_bl_questions) == 1 and _bl_names() == _bl_hand
+      and _bl_file_names() == _bl_hand)
+# The second move's own Undo puts back what that move replaced -- the first
+# replacement -- and leaves the offer of the arrangement made by hand.
+_co_fresh(_bl_placed, sort='Custom order')
+for _bl_i in range(2):
+    _bl_sort('Title A–Z')
+    app._hide_toast()
+    app._put_keyboard_on_card(app._card_order()[0]); _ls_settle()
+    app._list_move_by_keyboard(1); _ls_settle()
+_qa_click(app.toast_action_lbl); _ls_settle()
+_bl_after_undo = app.sort_var.get()
+del _bl_questions[:]
+_bl_sort('Custom order')
+check(f'...also when the second move\'s Undo was taken first (sort after it '
+      f'{_bl_after_undo!r}; asked {[q[0] for q in _bl_questions]}; now '
+      f'{_bl_names()})',
+      _bl_after_undo == 'Title A–Z' and len(_bl_questions) == 1
+      and _bl_names() == _bl_hand)
+# Moves made by hand in Custom order after a sorted-view move make the
+# list an arrangement made by hand again; a second sorted-view move then
+# replaces THAT one, and it is the one offered back. The older offer was
+# kept instead, and the newer arrangement had no way back.
+_co_fresh(_bl_placed, sort='Custom order')
+_bl_sort('Title A–Z')
+app._hide_toast()
+app._put_keyboard_on_card(app._card_order()[0]); _ls_settle()
+app._list_move_by_keyboard(1); _ls_settle()
+app._hide_toast()
+app._put_keyboard_on_card(app._card_order()[3]); _ls_settle()
+app._list_move_by_keyboard(-1); _ls_settle()
+app._list_move_by_keyboard(-1); _ls_settle()
+_bl_newer = _bl_names()
+_bl_sort('Title A–Z')
+app._hide_toast()
+app._put_keyboard_on_card(app._card_order()[0]); _ls_settle()
+app._list_move_by_keyboard(1); _ls_settle()
+app._hide_toast()
+del _bl_questions[:]
+_bl_answer[0] = True
+_bl_sort('Custom order')
+check(f'...and when the replaced order was rearranged by hand in between, '
+      f'the newer arrangement is the one offered back (asked '
+      f'{[q[0] for q in _bl_questions]}; now {_bl_names()}; newer {_bl_newer})',
+      len(_bl_questions) == 1 and _bl_names() == _bl_newer
+      and _bl_newer != _bl_hand)
+# Moves by hand that cancel out arrange nothing. Alt+Down then Alt+Up on one
+# card left the list as the first sorted-view move had, and counted as an
+# arrangement made by hand they gave the kept offer's place to that move's
+# own result: choosing Custom order then asked nothing, and the arrangement
+# really made by hand was gone.
+_co_fresh(_bl_placed, sort='Custom order')
+_bl_sort('Title A–Z')
+app._hide_toast()
+app._put_keyboard_on_card(app._card_order()[0]); _ls_settle()
+app._list_move_by_keyboard(1); _ls_settle()
+app._hide_toast()
+_bl_first = _bl_names()
+app._put_keyboard_on_card(app._card_order()[3]); _ls_settle()
+app._list_move_by_keyboard(1); _ls_settle()
+app._list_move_by_keyboard(-1); _ls_settle()
+_bl_back = _bl_names() == _bl_first
+_bl_sort('Title A–Z')
+app._hide_toast()
+app._put_keyboard_on_card(app._card_order()[0]); _ls_settle()
+app._list_move_by_keyboard(1); _ls_settle()
+app._hide_toast()
+del _bl_questions[:]
+_bl_answer[0] = True
+_bl_sort('Custom order')
+check(f'...and moves by hand that cancel out arrange nothing: the '
+      f'arrangement made by hand is still the one offered back (back where '
+      f'the first move left it: {_bl_back}; asked '
+      f'{[q[0] for q in _bl_questions]}; now {_bl_names()})',
+      _bl_back and len(_bl_questions) == 1 and _bl_names() == _bl_hand)
+# A move's own Undo puts back what that move replaced -- which nobody
+# arranged by hand since -- so a later sorted-view move keeps the offer it
+# finds. The two moves move different cards, so the order each leaves is
+# its own: the same move twice left one order, and could not tell the
+# Undo's from the move's.
+_co_fresh(_bl_placed, sort='Custom order')
+for _bl_i in range(2):
+    _bl_sort('Title A–Z')
+    app._hide_toast()
+    app._put_keyboard_on_card(app._card_order()[2 * _bl_i]); _ls_settle()
+    app._list_move_by_keyboard(1); _ls_settle()
+_qa_click(app.toast_action_lbl); _ls_settle()
+_bl_after_undo = app.sort_var.get()
+app._hide_toast()
+app._put_keyboard_on_card(app._card_order()[0]); _ls_settle()
+app._list_move_by_keyboard(1); _ls_settle()
+app._hide_toast()
+del _bl_questions[:]
+_bl_answer[0] = True
+_bl_sort('Custom order')
+check(f'...and after the second move\'s Undo and a third move, it is still '
+      f'the arrangement made by hand that is offered back (sort after the '
+      f'Undo {_bl_after_undo!r}; asked {[q[0] for q in _bl_questions]}; now '
+      f'{_bl_names()})',
+      _bl_after_undo == 'Title A–Z' and len(_bl_questions) == 1
+      and _bl_names() == _bl_hand)
+# A NEW note placed by hand is an arrangement made by hand too: compared
+# only among the notes the last sorted-view move knew, its placing counted
+# for nothing, and the older arrangement was offered back.
+_co_fresh(_bl_placed, sort='Custom order')
+_bl_sort('Title A–Z')
+app._hide_toast()
+app._put_keyboard_on_card(app._card_order()[0]); _ls_settle()
+app._list_move_by_keyboard(1); _ls_settle()
+app._hide_toast()
+app.new_note()
+app.title_entry.insert(0, 'Golf note')
+app.body_text.insert('1.0', 'a new note')
+app.save_current_note()
+_ls_settle()
+_bl_golf = app.selected_note_id
+for _bl_i in range(2):
+    app._put_keyboard_on_card(_bl_golf); _ls_settle()
+    app._list_move_by_keyboard(1); _ls_settle()
+app._hide_toast()
+_bl_newer = _bl_names()
+_bl_sort('Title A–Z')
+app._hide_toast()
+app._put_keyboard_on_card(app._card_order()[0]); _ls_settle()
+app._list_move_by_keyboard(1); _ls_settle()
+app._hide_toast()
+del _bl_questions[:]
+_bl_answer[0] = True
+_bl_sort('Custom order')
+check(f'...and a new note placed by hand makes the newer arrangement the one '
+      f'offered back (asked {[q[0] for q in _bl_questions]}; now '
+      f'{_bl_names()}; newer {_bl_newer})',
+      len(_bl_questions) == 1 and _bl_names() == _bl_newer
+      and 'Golf' in _bl_newer)
+# A note deleted and brought back from the Trash meanwhile is the same note:
+# known by the dict alone, it came back as one the last move had never
+# seen, and counted as placed by hand -- the arrangement really made by
+# hand gave its place to the first move's result.
+_co_fresh(_bl_placed, sort='Custom order')
+_bl_sort('Title A–Z')
+app._hide_toast()
+app._put_keyboard_on_card(app._card_order()[0]); _ls_settle()
+app._list_move_by_keyboard(1); _ls_settle()
+app._hide_toast()
+_bl_answer[0] = True
+_bl_victim = next(n for n in app.notes if n['title'].startswith('Kiwi'))
+app._delete_note(_bl_victim, None); _ls_settle()
+app._hide_toast()
+app._restore_trash_entries(
+    [e for e in app.trash if (e.get('title') or '').startswith('Kiwi')])
+_ls_settle()
+_bl_sort('Title A–Z')
+app._hide_toast()
+app._put_keyboard_on_card(app._card_order()[0]); _ls_settle()
+app._list_move_by_keyboard(1); _ls_settle()
+app._hide_toast()
+del _bl_questions[:]
+_bl_sort('Custom order')
+check(f'...while a note only deleted and restored in between arranges '
+      f'nothing: the arrangement made by hand is still the one offered back '
+      f'(asked {[q[0] for q in _bl_questions]}; now {_bl_names()})',
+      len(_bl_questions) == 1 and _bl_names() == _bl_hand)
+# A duplicate is born with its original's place, and a move by hand of
+# ANOTHER card gives every note a place, a new one included: neither is a
+# note placed by hand. Counted as one, it gave the kept offer's place to the
+# first move's result, and the arrangement made by hand was gone.
+_bl_kept_hand = []
+for _bl_how in ('duplicate', 'jiggle'):
+    _co_fresh(_bl_placed, sort='Custom order')
+    _bl_sort('Title A–Z')
+    app._hide_toast()
+    app._put_keyboard_on_card(app._card_order()[0]); _ls_settle()
+    app._list_move_by_keyboard(1); _ls_settle()
+    app._hide_toast()
+    if _bl_how == 'duplicate':
+        app.duplicate_note(next(n for n in app.notes
+                                if n['title'].startswith('Kiwi')))
+        _ls_settle()
+    else:
+        app.new_note()
+        app.title_entry.insert(0, 'Golf note')
+        app.body_text.insert('1.0', 'a new note')
+        app.save_current_note()
+        _ls_settle()
+        _bl_kiwi = next(n['id'] for n in app.notes
+                        if n['title'].startswith('Kiwi'))
+        app._put_keyboard_on_card(_bl_kiwi); _ls_settle()
+        app._list_move_by_keyboard(1); _ls_settle()
+        app._list_move_by_keyboard(-1); _ls_settle()
+    app._hide_toast()
+    _bl_sort('Title A–Z')
+    app._hide_toast()
+    app._put_keyboard_on_card(app._card_order()[0]); _ls_settle()
+    app._list_move_by_keyboard(1); _ls_settle()
+    app._hide_toast()
+    del _bl_questions[:]
+    _bl_answer[0] = True
+    _bl_sort('Custom order')
+    _bl_kept_hand.append(
+        (_bl_how, len(_bl_questions),
+         [i for i in app._card_order() if i in _bl_hand_ids] == _bl_hand_ids))
+check(f'...and neither a duplicate nor a new note given its place by '
+      f'another card\'s move arranges anything: the arrangement made by hand '
+      f'comes back ({_bl_kept_hand})',
+      _bl_kept_hand == [('duplicate', 1, True), ('jiggle', 1, True)])
+# A known card moved past a new note arranges something -- the new note
+# stands where the person put it beside that card -- though the notes the
+# last move knew keep their order. Counted only when the new note itself
+# was moved, it lost the newest arrangement to the older offer. Moved past
+# it and straight back, nothing is arranged, as with any other card.
+_bl_past = []
+for _bl_how in ('past', 'past and back', 'duplicate, then a jiggle'):
+    _co_fresh(_bl_placed, sort='Custom order')
+    _bl_sort('Title A–Z')
+    app._hide_toast()
+    app._put_keyboard_on_card(app._card_order()[0]); _ls_settle()
+    app._list_move_by_keyboard(1); _ls_settle()
+    app._hide_toast()
+    if _bl_how == 'duplicate, then a jiggle':
+        # A duplicate stands beside its original, mid-list: the record
+        # learns it there, so a card moved down and back arranges nothing.
+        app.duplicate_note(next(n for n in app.notes
+                                if n['title'].startswith('Kiwi')))
+        _ls_settle()
+        _bl_other = next(i for i in app._card_order()
+                         if not app.find_note(i)['title'].startswith('Kiwi'))
+        app._put_keyboard_on_card(_bl_other); _ls_settle()
+        app._list_move_by_keyboard(1); _ls_settle()
+        app._list_move_by_keyboard(-1); _ls_settle()
+    else:
+        app.new_note()
+        app.title_entry.insert(0, 'Golf note')
+        app.body_text.insert('1.0', 'a new note')
+        app.save_current_note()
+        _ls_settle()
+        _bl_order = app._card_order()
+        _bl_golf = next(n['id'] for n in app.notes
+                        if n['title'].startswith('Golf'))
+        _bl_under = _bl_order[_bl_order.index(_bl_golf) + 1]
+        app._put_keyboard_on_card(_bl_under); _ls_settle()
+        app._list_move_by_keyboard(-1); _ls_settle()
+        if _bl_how == 'past and back':
+            app._list_move_by_keyboard(1); _ls_settle()
+    app._hide_toast()
+    _bl_made = app._card_order()
+    _bl_sort('Title A–Z')
+    app._hide_toast()
+    app._put_keyboard_on_card(app._card_order()[0]); _ls_settle()
+    app._list_move_by_keyboard(1); _ls_settle()
+    app._hide_toast()
+    del _bl_questions[:]
+    _bl_answer[0] = True
+    _bl_sort('Custom order')
+    _bl_back = app._card_order()
+    _bl_past.append(
+        (_bl_how, len(_bl_questions),
+         _bl_back == _bl_made if _bl_how == 'past'
+         else [i for i in _bl_back if i in _bl_hand_ids] == _bl_hand_ids))
+check(f'...and a card moved past a new note arranges something, the new '
+      f'arrangement offered back; moved past it and back, or beside a '
+      f'duplicate and back, nothing ({_bl_past})',
+      _bl_past == [('past', 1, True), ('past and back', 1, True),
+                   ('duplicate, then a jiggle', 1, True)])
+# No: the list stays as the replacement left it, and the question does not
+# come back.
+_bl_sort('Title A–Z')
+app._hide_toast()
+app._put_keyboard_on_card(app._card_order()[0]); _ls_settle()
+app._list_move_by_keyboard(1); _ls_settle()
+_bl_replacement = _bl_names()
+app._hide_toast()
+_bl_sort('Recently updated')
+del _bl_questions[:]
+_bl_answer[0] = False
+_bl_sort('Custom order')
+_bl_no = (len(_bl_questions), _bl_names() == _bl_replacement)
+del _bl_questions[:]
+_bl_sort('Custom order')
+check(f'...while No leaves the list as the move left it and is not asked '
+      f'again (asked {_bl_no[0]}, list as the move left it: {_bl_no[1]}; '
+      f'asked after: {len(_bl_questions)})',
+      _bl_no == (1, True) and not _bl_questions
+      and _bl_replacement != _bl_hand)
+# An offer the toast's Undo has taken is gone for good. Right after Undo the
+# old arrangement IS the list's, so there is nothing to offer -- but here
+# the arrangement made by hand is alphabetical, so a later move made while
+# sorted Title A–Z replaces nothing, and a stale offer would then try to
+# undo that move the next time Custom order is chosen.
+_bl_abc = sorted(_bl_fruit)
+_co_fresh([dict(n, order=_bl_abc.index(n['title'].split()[0]))
+           for n in _bl_placed], sort='Custom order')
+_bl_sort('Title Z–A')
+app._hide_toast()
+app._put_keyboard_on_card(app._card_order()[0]); _ls_settle()
+app._list_move_by_keyboard(1); _ls_settle()
+_qa_click(app.toast_action_lbl); _ls_settle()
+_bl_sort('Title A–Z')
+app._put_keyboard_on_card(app._card_order()[0]); _ls_settle()
+app._list_move_by_keyboard(1); _ls_settle()
+_bl_moved = _bl_names()
+del _bl_questions[:]
+_bl_sort('Custom order')
+check(f'...and an offer Undo has taken does not come back over a move made '
+      f'since (asked {[q[0] for q in _bl_questions]}; the move kept: '
+      f'{_bl_names() == _bl_moved}, {_bl_moved[:3]})',
+      not _bl_questions and _bl_names() == _bl_moved
+      and _bl_moved[:2] == ['Banana', 'Apple'])
+app.ask_yes_no = _ls_real_ask
+app._hide_toast()
+
+# 5f. One card wears the open note's outline: the open note's. A new note's
+# first save draws its card as the open one, and the outline used to be
+# moved only off the card it had last been put on by hand -- so opening
+# another note next left two "open" cards, until a full rebuild.
+
+
+def _bl_outlined():
+    """The cards whose ring says "open", read off the drawing -- with the
+    keyboard away from the list, where the colour means only that."""
+    app._list_focus_out()
+    return sorted(n for n in app._card_order()
+                  if app._card_view(n)['ring'] == app.colors['accent'])
+
+
+_co_fresh(_bl_notes[:6])
+_bl_o = app._card_order()
+app.open_note_in_tab(app.find_note(_bl_o[2])); _ls_settle()
+app.open_blank_tab(); _ls_settle()
+app.title_entry.delete(0, 'end')
+app.title_entry.insert(0, 'Fresh one')
+app.save_current_note(auto=True); _ls_settle()
+_bl_new = app.selected_note_id
+check(f'fixture: a new note\'s first save outlines its card, and only its '
+      f'card ({_bl_outlined()}, new {_bl_new})', _bl_outlined() == [_bl_new])
+app._scroll_row_into_view(app._note_cards[_bl_o[4]]); _ls_settle()
+_bl_pt = app._card_point(_bl_o[4])
+_qa_click(app.canvas, x=_bl_pt[0], y=_bl_pt[1]); _ls_settle()
+_qa_fire(app.canvas, '<ButtonRelease-1>', x=_bl_pt[0], y=_bl_pt[1]); _ls_settle()
+check(f'...and a note clicked open next takes the outline off it: one open '
+      f'card, the one open ({_bl_outlined()}, open {app.selected_note_id})',
+      app.selected_note_id == _bl_o[4] and _bl_outlined() == [_bl_o[4]])
+# Ctrl+N from an open note: the new note's first save moves the outline
+# onto it, although nothing moved it off the note before. The note is
+# opened without the keyboard, which stays on another card: taking the
+# keyboard away repaints ITS card, and on the open one that would hide
+# exactly the outline this is about.
+app.open_note_in_tab(app.find_note(_bl_o[1])); _ls_settle()
+app._shortcut_new_note(); _ls_settle()
+# Before that save no note is open, so no card is: new_note() is where
+# Ctrl+N, a calendar day's "Add note" and Use template all pass.
+check(f'...and Ctrl+N takes the outline off the note it leaves, before the '
+      f'new one is saved ({_bl_outlined()}, the note open before {_bl_o[1]})',
+      app.selected_note_id is None and _bl_outlined() == [])
+app.title_entry.delete(0, 'end')
+app.title_entry.insert(0, 'Made with Ctrl+N')
+app.save_current_note(auto=True); _ls_settle()
+check(f'...and after Ctrl+N, the new note\'s first save leaves one outline, '
+      f'on it ({_bl_outlined()}, open {app.selected_note_id}, the note open '
+      f'before {_bl_o[1]}; the keyboard on {app._focused_note_id})',
+      _bl_outlined() == [app.selected_note_id]
+      and app.selected_note_id not in _bl_o and app._focused_note_id != _bl_o[1])
+# Grouped, a new note's first save changes its group's count, so the whole
+# list is rebuilt rather than one card redrawn -- and the card is drawn as
+# the open one with nothing noting that it was.
+app.group_by_category.set(True)
+app.refresh_note_list(); _ls_settle()
+app.open_note_in_tab(app.find_note(_bl_o[2])); _ls_settle()
+app.open_blank_tab(); _ls_settle()
+app.title_entry.delete(0, 'end')
+app.title_entry.insert(0, 'Fresh in a group')
+app.save_current_note(auto=True); _ls_settle()
+app._scroll_row_into_view(app._note_cards[_bl_o[4]]); _ls_settle()
+_bl_pt = app._card_point(_bl_o[4])
+_qa_click(app.canvas, x=_bl_pt[0], y=_bl_pt[1]); _ls_settle()
+_qa_fire(app.canvas, '<ButtonRelease-1>', x=_bl_pt[0], y=_bl_pt[1]); _ls_settle()
+check(f'...and in a grouped list, where that save rebuilds the list, too '
+      f'({_bl_outlined()}, open {app.selected_note_id})',
+      app.selected_note_id == _bl_o[4] and _bl_outlined() == [_bl_o[4]])
+app.group_by_category.set(False)
+app.refresh_note_list(); _ls_settle()
+
+# 5g. Every text on the list stays inside it. A category may be named with
+# up to 80 characters, and its header drew name and count as one line with
+# no width: the name ran past the list's edge and took the count -- all a
+# folded group says about its size -- with it.
+_bl_long = "Kids' school forms and permission slips 2026"
+_bl_edge = app.LIST_DRAW_WIDTH - app.CARD_INSET_X
+NO.CATEGORY_COLORS[_bl_long] = '#f4a261'
+_co_fresh([dict(n, category=_bl_long) for n in _bl_notes[:3]]
+          + [dict(n, category='General') for n in _bl_notes[3:6]])
+app.group_by_category.set(True)
+app.collapsed_groups.clear()
+app.refresh_note_list(); _ls_settle()
+
+
+def _bl_header_fits(cat, count):
+    rec = app._group_headers.get(cat)
+    if rec is None:
+        return False, None
+    box = app.canvas.bbox(rec['items']['label'])
+    text = app.canvas.itemcget(rec['items']['label'], 'text')
+    return (box is not None and box[2] <= _bl_edge
+            and text.endswith(' (%d)' % count)), (text, box and box[2])
+
+
+_bl_ok, _bl_seen = _bl_header_fits(_bl_long, 3)
+check(f'a header with a long name keeps its count inside the list, the name '
+      f'shortened first ({_bl_seen}; the edge is {_bl_edge})', _bl_ok)
+# The count changes without a rebuild when a note is deleted from the group.
+app.ask_yes_no = lambda *a, **k: True
+try:
+    app._delete_note(app.find_note(_bl_notes[0]['id']), None); _ls_settle()
+finally:
+    app.ask_yes_no = _ls_real_ask
+_bl_ok, _bl_seen = _bl_header_fits(_bl_long, 2)
+check(f'...and so does the count a delete brings down in place ({_bl_seen})',
+      _bl_ok)
+_bl_short = (app._header_view('General') or {}).get('label')
+check(f'...while a name that fits is drawn whole, as before ({_bl_short!r})',
+      _bl_short == 'General (3)')
+# And the one text the list draws when it has no rows at all.
+_ls_search('zzz-no-such-note')
+_bl_box = app.canvas.bbox('list_empty')
+check(f'...and the empty list\'s message stays inside it too ({_bl_box})',
+      _bl_box is not None and _bl_box[2] <= _bl_edge)
+_ls_search('')
+app.group_by_category.set(False)
+NO.CATEGORY_COLORS.pop(_bl_long, None)
+app.refresh_note_list(); _ls_settle()
+
+# 5h. The keyboard folds and opens groups. A header is a stop on the ring's
+# walk, drawn with the ring as a card is; Enter or Space on it does what a
+# click does, Left on a card folds its group and takes the ring to the
+# header, Right opens a folded header. Without them a folded group opened
+# only to the mouse, and with every group folded -- as a person may leave
+# the list -- no key on the list did anything at all. Keys are called as
+# their bindings call them (see 4.), and the bindings are asked for too.
+_bl_work_colour = NO.CATEGORY_COLORS.get('Work')
+NO.CATEGORY_COLORS.setdefault('Work', '#4cc9f0')
+_co_fresh([dict(n, category='General') for n in _bl_notes[:2]]
+          + [dict(n, category='Work') for n in _bl_notes[2:4]])
+_bl_work_ids = [n['id'] for n in _bl_notes[2:4]]
+app.group_by_category.set(True)
+app.collapsed_groups.clear()
+app.collapsed_groups.update({'General', 'Work'})
+app.refresh_note_list(); _ls_settle()
+
+
+def _bl_ring_on_header(cat):
+    rec = app._group_headers.get(cat)
+    return (rec is not None and app._focused_header == cat
+            and app.canvas.itemcget(rec['items']['ring'], 'outline')
+            == app.colors['text'])
+
+
+check(f'fixture: every group folded, nothing but headers on the list '
+      f'({app._list_drawn_keys})',
+      app._list_drawn_keys == [('header', 'General'), ('header', 'Work')])
+app._list_focus_in(); _ls_settle()
+check(f'with every group folded, the keyboard arriving puts the ring on the '
+      f'first header, drawn as a card\'s is ({app._focused_header!r})',
+      _bl_ring_on_header('General'))
+app._list_step(1); _ls_settle()
+check(f'...Down walks it to the next header ({app._focused_header!r})',
+      _bl_ring_on_header('Work'))
+app._list_activate(); _ls_settle()
+check(f'...Enter on a header opens its group, and the ring stays on the '
+      f'header (open groups: {sorted({"General", "Work"} - app.collapsed_groups)})',
+      'Work' not in app.collapsed_groups and _bl_ring_on_header('Work'))
+app._list_step(1); _ls_settle()
+check(f'...Down from the header goes to its first card '
+      f'({app._focused_note_id}, header ring off: '
+      f'{not _bl_ring_on_header("Work")})',
+      app._focused_note_id == (app._card_order() or [None])[0]
+      and app._focused_note_id in _bl_work_ids
+      and not _bl_ring_on_header('Work'))
+app._list_fold_by_keyboard(True); _ls_settle()
+check(f'...Left on a card folds its group and takes the ring to its header '
+      f'({sorted(app.collapsed_groups)}, ring on {app._focused_header!r})',
+      'Work' in app.collapsed_groups and _bl_ring_on_header('Work'))
+app._list_fold_by_keyboard(False); _ls_settle()
+check(f'...Right on the folded header opens it again '
+      f'({sorted(app.collapsed_groups)})',
+      'Work' not in app.collapsed_groups and _bl_ring_on_header('Work'))
+app._list_fold_by_keyboard(False); _ls_settle()
+check('...and Right on an open header leaves it open',
+      'Work' not in app.collapsed_groups and _bl_ring_on_header('Work'))
+app._list_activate(); _ls_settle()
+check('...and Space (the same handler as Enter) folds it again',
+      'Work' in app.collapsed_groups and _bl_ring_on_header('Work'))
+# To a theme whose text colour differs -- a recolour that repaints the
+# same colour would prove nothing.
+_bl_theme = app.theme_name
+_bl_other = next(t for t, p in NO.THEMES.items()
+                 if p.get('text') != app.colors['text'])
+app.set_theme(_bl_other); _ls_settle()
+_bl_recoloured = _bl_ring_on_header('Work')
+app.set_theme(_bl_theme); _ls_settle()
+check(f'...the header\'s ring follows a theme switch ({_bl_other})',
+      _bl_recoloured and _bl_ring_on_header('Work'))
+app._list_focus_out(); _ls_settle()
+_bl_hdr = app._group_headers.get('Work')
+check('...and the keyboard leaving the list takes the ring off the header',
+      _bl_hdr is not None
+      and app.canvas.itemcget(_bl_hdr['items']['ring'], 'outline')
+      == app.colors['sidebar'])
+_bl_bound = set(app.canvas.bind())
+check(f'Left and Right are bound on the list '
+      f'({sorted(s for s in _bl_bound if "Left" in s or "Right" in s)})',
+      '<Key-Left>' in _bl_bound and '<Key-Right>' in _bl_bound)
+app.group_by_category.set(False)
+app.collapsed_groups.clear()
+app.refresh_note_list(); _ls_settle()
+if _bl_work_colour is None:
+    NO.CATEGORY_COLORS.pop('Work', None)
+
+# 5i. The ring stays where the person can see it. It could sit on a card
+# 900px above the view: Tab brought the keyboard back to a list the wheel
+# had scrolled away, Enter then opened a note nobody could see, the menu
+# key posted its menu off the screen, and pinning the ringed card from its
+# menu sent it to the top while the view stayed put.
+_co_fresh(_bl_notes)
+_bl_o = app._card_order()
+_bl_menus = []
+
+
+def _bl_seen(nid):
+    rec = app._note_cards.get(nid)
+    return app._row_on_screen(rec) if rec else 'not drawn'
+
+
+def _bl_scroll_away(px):
+    """The person scrolling the list, while the keyboard is elsewhere or
+    still on the list -- the scrollbar's way: a deliberate scroll, which
+    beats any restore. A bare yview_moveto stood in for it once, and once
+    the list learned to tell the person's scrolls from its own moves
+    (5k), that stand-in was the list's own move."""
+    app._list_scrollbar_moved('moveto', str(px / float(app._list_extent()[3])))
+    _ls_settle()
+
+
+app._put_keyboard_on_card(_bl_o[0]); _ls_settle()
+app._list_focus_out(); _ls_settle()
+_bl_scroll_away(700)
+_bl_top = app.canvas.canvasy(0)
+check(f'fixture: the ring\'s card scrolled out of sight ({_bl_seen(_bl_o[0])}, '
+      f'view at {_bl_top:.0f})', _bl_seen(_bl_o[0]) == 'none' and _bl_top > 300)
+app._list_focus_in(); _ls_settle()
+check(f'Tab into a list scrolled away from the ring puts the ring on a card in '
+      f'sight and leaves the view alone (ring on {app._focused_note_id}: '
+      f'{_bl_seen(app._focused_note_id)}; view {app.canvas.canvasy(0):.0f})',
+      _bl_seen(app._focused_note_id) == 'all'
+      and abs(app.canvas.canvasy(0) - _bl_top) < 1
+      and app._card_view(_bl_o[0])['ring'] != app.colors['text'])
+# The wheel is the person's own scroll as much as the scrollbar is. It is
+# bound by the sidebar's _bind_mousewheel_recursive, which has to say so
+# through _list_scrolled_by_hand, as the scrollbar does.
+app._put_keyboard_on_card(_bl_o[0]); _ls_settle()
+app._list_focus_out(); _ls_settle()
+for _ in range(15):
+    _qa_fire(app.canvas, '<MouseWheel>', delta=-120)
+    app.update()
+_bl_top = app.canvas.canvasy(0)
+_bl_was = _bl_seen(_bl_o[0])
+app._list_focus_in(); _ls_settle()
+check(f'...and so does one the wheel scrolled away (the ring\'s card was '
+      f'{_bl_was}; ring now on {app._focused_note_id}: '
+      f'{_bl_seen(app._focused_note_id)}; view {app.canvas.canvasy(0):.0f}, '
+      f'left at {_bl_top:.0f})',
+      _bl_was == 'none' and app._focused_note_id != _bl_o[0]
+      and _bl_seen(app._focused_note_id) == 'all'
+      and abs(app.canvas.canvasy(0) - _bl_top) < 1)
+# Half in sight: it stays on its card, and the card comes into view.
+_bl_v = app._card_view(_bl_o[5])
+app._put_keyboard_on_card(_bl_o[5]); _ls_settle()
+app._list_focus_out(); _ls_settle()
+_bl_scroll_away(_bl_v['y0'] + 30)
+_bl_was = _bl_seen(_bl_o[5])
+app._list_focus_in(); _ls_settle()
+check(f'...and a ring half in sight stays on its card, which comes into view '
+      f'(was {_bl_was}, now {_bl_seen(_bl_o[5])}; ring on {app._focused_note_id})',
+      _bl_was == 'part' and _bl_seen(_bl_o[5]) == 'all'
+      and app._focused_note_id == _bl_o[5])
+# The keys that act on the ring bring it back first, when the wheel has
+# scrolled it away while the keyboard stayed on the list.
+app.show_note_context_menu = lambda ev, note, **k: _bl_menus.append(
+    (ev.y_root, note['id']))
+try:
+    app._put_keyboard_on_card(_bl_o[1]); _ls_settle()
+    _bl_scroll_away(700)
+    _bl_was = _bl_seen(_bl_o[1])
+    app._list_open_menu(); _ls_settle()
+finally:
+    app.__dict__.pop('show_note_context_menu', None)
+_bl_lo = app.canvas.winfo_rooty()
+_bl_hi = _bl_lo + app.canvas.winfo_height()
+check(f'the menu key on a ring scrolled out of sight opens the note\'s menu at '
+      f'its card, in view ({_bl_menus}; card {_bl_seen(_bl_o[1])}, was '
+      f'{_bl_was}; the list spans {_bl_lo}-{_bl_hi})',
+      _bl_was == 'none' and len(_bl_menus) == 1 and _bl_menus[0][1] == _bl_o[1]
+      and _bl_lo <= _bl_menus[0][0] <= _bl_hi and _bl_seen(_bl_o[1]) == 'all')
+app._put_keyboard_on_card(_bl_o[2]); _ls_settle()
+_bl_scroll_away(700)
+app._list_activate(); _ls_settle()
+check(f'...and Enter on it opens the note with its card in view (open '
+      f'{app.selected_note_id}, card {_bl_seen(_bl_o[2])})',
+      app.selected_note_id == _bl_o[2] and _bl_seen(_bl_o[2]) == 'all')
+# A rebuild that moves the ringed card out of sight: pinned from its menu,
+# the card goes to the top, and the view goes with it.
+_bl_scroll_away(500)
+_bl_mid = next(n for n in _bl_o if _bl_seen(n) == 'all')
+app._put_keyboard_on_card(_bl_mid); _ls_settle()
+# The keyboard on the list, as <FocusIn> records it -- the ring is only
+# shown, and only followed, while it is (qa/README on focus).
+app._list_focus_in(); _ls_settle()
+_bl_kb = app._keyboard_on_card
+app.toggle_pin(app.find_note(_bl_mid)); _ls_settle()
+_ls_let_restores_finish()
+check(f'pinning the ringed card from its menu keeps the ring in sight '
+      f'(keyboard on the list: {_bl_kb}; card first: '
+      f'{app._card_order()[:1] == [_bl_mid]}; {_bl_seen(_bl_mid)}; view '
+      f'{app.canvas.canvasy(0):.0f})',
+      _bl_kb and app._card_order()[:1] == [_bl_mid]
+      and _bl_seen(_bl_mid) == 'all' and app._focused_note_id == _bl_mid)
+app.toggle_pin(app.find_note(_bl_mid)); _ls_settle()
+# The menu's place is kept to the list even for a card taller than the
+# view, which no scroll can show whole: the smallest window, a full card,
+# its top scrolled out of sight -- brought back into view top first, its
+# bottom (where the menu opens) is below the list.
+app.geometry('1100x600'); _ls_settle()
+_bl_tall = {'id': 1990, 'title': 'A title long enough to wrap over two lines',
+            'body': 'x ' * 40, 'category': 'General', 'comments': 'c',
+            'date': '2026-09-01', 'created': '2026-01-01 00:00',
+            'updated': '2026-02-01 00:00',
+            'recurrence': {'freq': 'weekly', 'interval': 1, 'weekdays': [],
+                           'end': ''},
+            'checklist': [{'text': 'a', 'done': True}, {'text': 'b', 'done': False}],
+            'attachments': [{'filename': 'f.txt', 'stored_as': 'f.txt'}]}
+_co_fresh([_bl_tall] + _bl_notes[:3])
+_bl_card = app._card_view(1990)
+_bl_view_h = app.canvas.winfo_height()
+app._put_keyboard_on_card(1990); _ls_settle()
+_bl_scroll_away(_bl_card['y0'] + 30)
+_bl_cut = app.canvas.canvasy(0) > _bl_card['y0']
+_bl_menus = []
+app.show_note_context_menu = lambda ev, note, **k: _bl_menus.append(
+    (ev.y_root, note['id']))
+try:
+    app._list_open_menu(); _ls_settle()
+finally:
+    app.__dict__.pop('show_note_context_menu', None)
+_bl_lo = app.canvas.winfo_rooty()
+_bl_hi = _bl_lo + app.canvas.winfo_height()
+check(f'...and a card taller than the view still gets its menu inside the '
+      f'list (card {_bl_card["y1"] - _bl_card["y0"]}px in a {_bl_view_h}px '
+      f'view, its top cut off: {_bl_cut}; menu at {_bl_menus}, the list '
+      f'spans {_bl_lo}-{_bl_hi})',
+      _bl_card['y1'] - _bl_card['y0'] > _bl_view_h and _bl_cut
+      and len(_bl_menus) == 1 and _bl_lo <= _bl_menus[0][0] <= _bl_hi)
+app.geometry('1100x850'); _ls_settle()
+
+# 5k. ...but the LIST moving the ring's card away is not the person
+# scrolling away from it. With the keyboard elsewhere, a save takes the card
+# to the top of a list sorted by date, a search keystroke filters away the
+# notes above it -- and the keyboard coming back gave the ring to the first
+# card in view: another note, which Enter then opened instead of the one
+# being edited. The ring stays on its card, and the card comes into view.
+_bl_alpha = [{'id': 2000 + i, 'title': 'Alpha %02d' % i,
+              'body': 'b %d' % i + (' zeta' if i >= 15 else ''),
+              'category': 'General', 'created': '2026-01-01 00:00',
+              'updated': '2026-02-01 00:%02d' % (59 - i)} for i in range(40)]
+_co_fresh(_bl_alpha)
+_bl_scroll_away(app._card_view(2017)['y0'] - 20)
+_bl_pt = app._card_point(2017)
+_qa_click(app.canvas, x=_bl_pt[0], y=_bl_pt[1]); _ls_settle()
+_qa_fire(app.canvas, '<ButtonRelease-1>', x=_bl_pt[0], y=_bl_pt[1]); _ls_settle()
+# A small scroll of the person's own that leaves the card in sight: the
+# keyboard arriving after it finds the ring where it was, and from then on
+# that scroll no longer counts as having scrolled away from it.
+_bl_scroll_away(app.canvas.canvasy(0) + 10)
+app._list_focus_in(); _ls_settle()
+_ls_let_restores_finish()
+_bl_opened = (app.selected_note_id, app._focused_note_id, _bl_seen(2017))
+# Into the editor, and typing there saves: the card goes to the top.
+app._list_focus_out(); _ls_settle()
+app.body_text.insert('end', ' typed')
+app.save_current_note(auto=True); _ls_settle()
+_ls_let_restores_finish()
+_bl_away = (app._card_order()[:1] == [2017], _bl_seen(2017))
+check(f'fixture: a card clicked deep in the list goes to the top, out of '
+      f'sight, when its note is saved from the editor (opened, ring, seen: '
+      f'{_bl_opened}; first, seen: {_bl_away})',
+      _bl_opened == (2017, 2017, 'all') and _bl_away == (True, 'none'))
+app._list_focus_in(); _ls_settle()
+_bl_back = (app._focused_note_id, _bl_seen(2017),
+            app._card_view(2017)['ring'] == app.colors['text'])
+app._list_activate(); _ls_settle()
+check(f'the keyboard coming back after a save took its card out of sight '
+      f'puts the ring back on that card, in view (ring, seen, drawn: '
+      f'{_bl_back}) -- so Enter opens the note being edited (open '
+      f'{app.selected_note_id})',
+      _bl_back == (2017, 'all', True) and app.selected_note_id == 2017)
+# A wheel turn that leaves the card in sight is no scroll away from it.
+# Every notch said it was -- even one that moved nothing -- and after a
+# save took the card away, the ring went to another note.
+_co_fresh(_bl_alpha)
+_bl_scroll_away(app._card_view(2017)['y0'] - 20)
+_bl_pt = app._card_point(2017)
+_qa_click(app.canvas, x=_bl_pt[0], y=_bl_pt[1]); _ls_settle()
+_qa_fire(app.canvas, '<ButtonRelease-1>', x=_bl_pt[0], y=_bl_pt[1]); _ls_settle()
+_ls_let_restores_finish()
+app._list_focus_out(); _ls_settle()
+for _bl_d in (-120, 120):
+    _qa_fire(app.canvas, '<MouseWheel>', delta=_bl_d)
+    app.update()
+_ls_settle()
+_bl_wheel_seen = (app.selected_note_id, _bl_seen(2017))
+app.body_text.insert('end', ' typed')
+app.save_current_note(auto=True); _ls_settle()
+_ls_let_restores_finish()
+_bl_away = (app._card_order()[:1] == [2017], _bl_seen(2017))
+app._list_focus_in(); _ls_settle()
+check(f'...and so it does after a wheel turn that left the card in sight '
+      f'(open, seen after the wheel: {_bl_wheel_seen}; first, seen after the '
+      f'save: {_bl_away}; ring now on {app._focused_note_id}: '
+      f'{_bl_seen(app._focused_note_id)})',
+      _bl_wheel_seen == (2017, 'all') and _bl_away == (True, 'none')
+      and app._focused_note_id == 2017 and _bl_seen(2017) == 'all')
+# A wheel turn made while the ring's card is not drawn at all -- a save
+# carried it below the rows the list drew -- is the person scrolling away
+# from it too. It was not noted, and the keyboard's return drew every row
+# down to the card and pulled the view there.
+_bl_many = [{'id': 3000 + i, 'title': 'Many %03d' % i, 'body': 'b',
+             'category': 'General', 'created': '2026-01-01 00:00',
+             'updated': '2026-02-01 %02d:%02d' % (i // 60, i % 60)}
+            for i in range(120)]
+_co_fresh(_bl_many, sort='Oldest updated')
+_bl_nid = app._card_order()[4]
+_bl_pt = app._card_point(_bl_nid)
+_qa_click(app.canvas, x=_bl_pt[0], y=_bl_pt[1]); _ls_settle()
+_qa_fire(app.canvas, '<ButtonRelease-1>', x=_bl_pt[0], y=_bl_pt[1]); _ls_settle()
+_ls_let_restores_finish()
+app._list_focus_out(); _ls_settle()
+app.body_text.insert('end', ' typed')
+app.save_current_note(auto=True); _ls_settle()
+_ls_let_restores_finish()
+_bl_undrawn = _bl_seen(_bl_nid)
+for _bl_d in (-120, -120):
+    _qa_fire(app.canvas, '<MouseWheel>', delta=_bl_d)
+    app.update()
+_ls_settle()
+_bl_top = app.canvas.canvasy(0)
+app._list_focus_in(); _ls_settle()
+check(f'...while a wheel turn made with the ring\'s card not drawn leaves the '
+      f'view where the person put it, the ring on a card in sight (the card '
+      f'was {_bl_undrawn}; view {_bl_top:.0f} -> {app.canvas.canvasy(0):.0f}; '
+      f'ring on {app._focused_note_id}: {_bl_seen(app._focused_note_id)})',
+      _bl_undrawn == 'not drawn' and _bl_top > 0
+      and abs(app.canvas.canvasy(0) - _bl_top) < 1
+      and app._focused_note_id != _bl_nid
+      and _bl_seen(app._focused_note_id) == 'all')
+# A search keystroke: the notes above the card filtered away, the view kept.
+_co_fresh(_bl_alpha)
+_bl_scroll_away(app._card_view(2017)['y0'] - 20)
+app._put_keyboard_on_card(2017); _ls_settle()
+app._list_focus_in(); _ls_settle()
+app._list_focus_out(); _ls_settle()
+_ls_search('zeta'); _ls_let_restores_finish()
+_bl_away = _bl_seen(2017)
+app._list_focus_in(); _ls_settle()
+check(f'...and after a search keystroke filtered away the notes above it '
+      f'(was {_bl_away}; ring on {app._focused_note_id}: '
+      f'{_bl_seen(app._focused_note_id)})',
+      _bl_away == 'none' and app._focused_note_id == 2017
+      and _bl_seen(2017) == 'all')
+app._list_focus_out(); _ls_settle()
+_ls_search('')
+# A sort chosen meanwhile can take the card past what the rebuild drew: a
+# list rebuilt while the keyboard is elsewhere draws what the view needs.
+_co_fresh(_bl_alpha)
+app._put_keyboard_on_card(2005); _ls_settle()
+app._list_focus_in(); _ls_settle()
+app._list_focus_out(); _ls_settle()
+_bl_sort('Oldest updated')
+_bl_drawn = 2005 in app._note_cards
+app._list_focus_in(); _ls_settle()
+check(f'...and after a sort chosen meanwhile took it past what the list had '
+      f'drawn (drawn before: {_bl_drawn}; ring on {app._focused_note_id}: '
+      f'{_bl_seen(app._focused_note_id)})',
+      not _bl_drawn and app._focused_note_id == 2005
+      and _bl_seen(2005) == 'all')
+app._list_focus_out(); _ls_settle()
+app.sort_var.set('Recently updated')
+
+# 5j. The list stays quick however far it has been scrolled, and whatever
+# is typed. Asked of the WORK done, never of a stopwatch (qa/README): a
+# canvas finds a tag by walking every item it holds, so closing the gap a
+# delete left by moving each row by its own tag cost rows times items -- 2.6 s
+# in a list drawn to the end of 5,000 notes; and every rebuild scanned the
+# whole notebook's text to find that an empty search matches everything.
+_bl_many = [{'id': 2100 + i, 'title': 'Quick %03d' % i, 'body': 'b %d' % i,
+             'category': 'General', 'created': '2026-01-01 00:00',
+             'updated': '2026-02-%02d 00:%02d' % (1 + i // 60, i % 60)}
+            for i in range(120)]
+_co_fresh(_bl_many)
+_ls_scroll_to_end()
+_bl_moves = []
+_bl_real_move = app.canvas.move
+app.canvas.move = lambda *a: (_bl_moves.append(a[0]), _bl_real_move(*a))[1]
+_bl_o = app._card_order()
+app.ask_yes_no = lambda *a, **k: True
+try:
+    app._delete_note(app.find_note(_bl_o[3]), None); _ls_settle()
+finally:
+    app.ask_yes_no = _ls_real_ask
+    app.canvas.__dict__.pop('move', None)
+check(f'a delete in a list drawn to its end closes the gap with one move of '
+      f'the rows below, not one per row ({len(_bl_moves)} canvas moves for '
+      f'{len(_bl_o) - 4} rows)',
+      len(_bl_o) == 120 and 1 <= len(_bl_moves) <= 2
+      and _ls_same_as_rebuild())
+# A save that takes a card from far down to the top slides every row above
+# its old place -- one band too.
+_ls_scroll_to_end()
+_bl_o = app._card_order()
+app.open_note_in_tab(app.find_note(_bl_o[100])); _ls_settle()
+app.body_text.insert('end', ' moved up')
+_bl_moves = []
+app.canvas.move = lambda *a: (_bl_moves.append(a[0]), _bl_real_move(*a))[1]
+try:
+    app.save_current_note(auto=True); _ls_settle()
+finally:
+    app.canvas.__dict__.pop('move', None)
+check(f'...and a save that takes a card from the 101st place to the top slides '
+      f'the hundred above it with one move ({len(_bl_moves)} canvas moves; '
+      f'now first: {app._card_order()[:1] == [_bl_o[100]]})',
+      app._card_order()[:1] == [_bl_o[100]] and 1 <= len(_bl_moves) <= 2
+      and _ls_same_as_rebuild())
+# The band is trusted only if it holds exactly its rows' items: anything
+# else inside it -- an item the list never drew -- sends those rows back to
+# moving one by one, and the stranger stays where it was.
+_ls_scroll_to_end()
+_bl_o = app._card_order()
+_bl_v = app._card_view(_bl_o[60])
+_bl_stranger = app.canvas.create_rectangle(
+    100, _bl_v['y0'] + 10, 110, _bl_v['y0'] + 20, outline='')
+app.ask_yes_no = lambda *a, **k: True
+try:
+    app._delete_note(app.find_note(_bl_o[2]), None); _ls_settle()
+finally:
+    app.ask_yes_no = _ls_real_ask
+_bl_where = app.canvas.coords(_bl_stranger)
+app.canvas.delete(_bl_stranger)
+check(f'...and a band holding an item the list never drew moves its rows one '
+      f'by one, leaving that item where it was ({_bl_where[1]:.0f}, was '
+      f'{_bl_v["y0"] + 10:.0f}; every card where its record is: '
+      f'{_bl_drawing_ok()})',
+      abs(_bl_where[1] - (_bl_v['y0'] + 10)) < 0.5 and _bl_drawing_ok())
+# In Select mode every unticked card's tick mark is drawn HIDDEN, and Tk's
+# search for what lies inside a band skips hidden items: each band came up
+# short and moved its rows one by one (4.7 s for a delete at 5,000 notes).
+# One card ticked, so the band holds both kinds of mark.
+app._toggle_selection_mode(); _ls_settle()
+_ls_scroll_to_end()
+_bl_o = app._card_order()
+app._toggle_note_selected(_bl_o[40], True)
+app._paint_card_check(_bl_o[40])
+
+
+def _bl_marks_stray():
+    """The cards whose tick box or mark is not inside the card -- shown or
+    hidden, a mark left behind by a move shows here."""
+    bad = []
+    for rec in app._list_drawn:
+        it = rec['items']
+        for key in ('check', 'mark'):
+            if key not in it:
+                continue
+            ys = app.canvas.coords(it[key])[1::2]
+            if not ys or min(ys) < rec['y0'] or max(ys) > rec['y1']:
+                bad.append((rec['note']['id'], key))
+    return bad
+
+
+_bl_moves = []
+app.canvas.move = lambda *a: (_bl_moves.append(a[0]), _bl_real_move(*a))[1]
+app.ask_yes_no = lambda *a, **k: True
+try:
+    app._delete_note(app.find_note(_bl_o[3]), None); _ls_settle()
+finally:
+    app.ask_yes_no = _ls_real_ask
+    app.canvas.__dict__.pop('move', None)
+_bl_stray = _bl_marks_stray()
+_bl_ticked = app._card_view(_bl_o[40])['checked']
+check(f'...and in Select mode too, the unticked cards\' hidden tick marks '
+      f'travelling with their cards ({len(_bl_moves)} canvas moves for '
+      f'{len(_bl_o) - 4} rows; marks out of their cards: {_bl_stray[:4]}; '
+      f'the ticked card still ticked: {_bl_ticked})',
+      1 <= len(_bl_moves) <= 2 and not _bl_stray and _bl_ticked
+      and _bl_drawing_ok() and not app.canvas.find_withtag('reflow0'))
+app._toggle_selection_mode(); _ls_settle()
+# The search: nothing typed reads no note's text; a first search reads each
+# note's once, the next keystroke none; a note saved since is read again.
+_bl_reads = []
+_bl_asked = []
+_bl_real_texts = app._search_texts
+_bl_real_cached = app._cached_search_texts
+app._search_texts = lambda note: (_bl_reads.append(note['id']),
+                                  _bl_real_texts(note))[1]
+# The cache is asked too: a note read before this check (the fixture's own
+# rebuilds) answers from it, and would hide an empty query that still walked
+# every note.
+app._cached_search_texts = lambda note: (_bl_asked.append(note['id']),
+                                         _bl_real_cached(note))[1]
+try:
+    _ls_search('')
+    _bl_empty = len(_bl_reads) + len(_bl_asked)
+    del _bl_reads[:]
+    _ls_search('quick 0')
+    _bl_first = len(_bl_reads)
+    del _bl_reads[:]
+    _ls_search('quick 00')
+    _bl_again = len(_bl_reads)
+    _bl_found = sorted(app._card_order())
+    _bl_note = app.find_note(_bl_many[50]['id'])
+    app.open_note_in_tab(_bl_note); _ls_settle()
+    app.title_entry.delete(0, 'end')
+    app.title_entry.insert(0, 'Quick 00x renamed')
+    # Counted across the save AND the next search: with a search active,
+    # the save's own one-card redraw is what reads the note again.
+    del _bl_reads[:]
+    app.save_current_note(auto=True); _ls_settle()
+    _ls_search('quick 00x')
+    _bl_after_save = list(_bl_reads)
+    _bl_found_saved = app._card_order()
+finally:
+    app.__dict__.pop('_search_texts', None)
+    app.__dict__.pop('_cached_search_texts', None)
+    _ls_search('')
+check(f'a rebuild with nothing typed reads no note\'s text, nor asks the cache '
+      f'for any ({_bl_empty} read or asked)', _bl_empty == 0)
+check(f'...a first search reads each note\'s text once, the next keystroke '
+      f'none ({_bl_first} then {_bl_again} of {len(app.notes)}; found '
+      f'{len(_bl_found)})',
+      _bl_first == len(app.notes) and _bl_again == 0
+      and _bl_found == sorted(2100 + i for i in range(10)))
+check(f'...and a note saved since is read again -- it alone -- and found by '
+      f'its new words (read {_bl_after_save}; found {_bl_found_saved})',
+      _bl_after_save == [_bl_note['id']]
+      and _bl_found_saved == [_bl_note['id']])
 
 # ---------------------------------------------------------------------
 # A tick box's well must be light, because the mark in it is dark.

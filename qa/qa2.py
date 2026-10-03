@@ -1,29 +1,11 @@
 # HERMETIC SEED -- BEFORE the note_organizer import below: the module
 # resolves its data directory and runs the data MIGRATIONS at import
-# time, so by the first line of test code the adoption has already
-# happened. The data directory must be this test's alone. An
-# empty directory invites run_migrations to adopt whatever real notebook
-# %APPDATA% holds, and real notes then leak into every scenario: the
-# checks start flaking whenever the OWNER's data changes. Seeding an
-# empty notebook plus the reclaim marker closes both migration doors
-# before the app is even constructed. The refusal is the same last-line
-# defence test_data_safety carries: run from a folder holding real
-# notes, the script stops instead of seeding over them.
-import io as _seed_io, json as _seed_json, os as _seed_os, sys as _seed_sys
-if _seed_os.path.exists('notes_data.json'):
-    try:
-        _seed_prev = _seed_json.load(
-            _seed_io.open('notes_data.json', encoding='utf-8'))
-    except Exception:
-        _seed_prev = []
-    if isinstance(_seed_prev, list) and _seed_prev:
-        _seed_sys.exit(
-            'REFUSING to run: notes_data.json here holds %d real note(s). '
-            'Copy this script to a scratch directory instead.'
-            % len(_seed_prev))
-_seed_io.open('notes_data.json', 'w', encoding='utf-8').write('[]')
-_seed_io.open('settings.json', 'w', encoding='utf-8').write(
-    _seed_json.dumps({'reclaimed_from_appdata': True}))
+# time, so this script's data directory must be its own before that
+# happens. hermetic_seed (qa/_qa_support.py) seeds it -- or refuses to
+# run at all outside a scratch run, or beside a notebook it cannot
+# prove is empty.
+from _qa_support import hermetic_seed as _qa_seed
+_qa_seed()
 
 import sys
 import note_organizer as NO, tkinter as tk
@@ -933,6 +915,106 @@ app.notes = list(_b4d_saved_notes)
 app.trash = list(_b4d_saved_trash)
 app.save_notes()
 app.new_note(); app.update()
+
+# ---- A DAY WITH TEXT OF ITS OWN, AND WHAT CAN HAPPEN TO IT ----
+# Three routes lost one day's own title and text, or spread it over every
+# day of the series. See docs/ISSUES_LOG.md.
+_od_saved = list(app.notes)
+
+
+def _od_series():
+    app.new_note(); app.update()
+    app.notes = [NO.normalize_note({
+        'id': 1, 'title': 'Yoga', 'body': 'stretch 20 min',
+        'formatting': [{'start': 0, 'end': 7, 'style': 'bold'}],
+        'date': '2026-09-01', 'recurrence': {'freq': 'weekly'},
+        'checklist': [{'text': 'mat', 'done': False}],
+        'overrides': {'2026-09-15': {'title': 'Yoga', 'body': 'class moved to 7pm'}}})]
+    app.save_notes()
+    return app.notes[0]
+
+
+# The Undo of a removed day brings the day back as it was: it came back
+# showing the series' text, the day's own edit gone for good.
+_od_note = _od_series()
+check("fixture: the series has formatting and one day with text of its own",
+      _od_note['formatting'] == [{'start': 0, 'end': 7, 'style': 'bold'}]
+      and '2026-09-15' in _od_note['overrides'])
+_od_scope = app.ask_occurrence_scope
+_od_yes = app.ask_yes_no
+app.ask_occurrence_scope = lambda *a, **k: 'occurrence'
+app._delete_note(_od_note, '2026-09-15')
+app.ask_occurrence_scope = _od_scope
+app.update()
+_od_back = app.find_note(1)
+check('removing one day of a series takes its own text with it',
+      '2026-09-15' not in (_od_back.get('overrides') or {}))
+app._undo_occurrence_delete(1, '2026-09-15',
+                            {'title': 'Yoga', 'body': 'class moved to 7pm'})
+app.update()
+_od_back = app.find_note(1)
+check("...and the Undo brings the day back with that text, not the series'",
+      (_od_back.get('overrides') or {}).get('2026-09-15', {}).get('body')
+      == 'class moved to 7pm'
+      and '2026-09-15' not in (_od_back.get('exceptions') or []))
+# The toast carries it: the offer made by the delete itself.
+_od_note = _od_series()
+_od_offers = []
+_od_real_toast = app._show_toast
+app._show_toast = lambda text, **k: _od_offers.append(k.get('action'))
+app.ask_occurrence_scope = lambda *a, **k: 'occurrence'
+app._delete_note(_od_note, '2026-09-15')
+app.ask_occurrence_scope = _od_scope
+app._show_toast = _od_real_toast
+if _od_offers and _od_offers[-1]:
+    _od_offers[-1]()
+app.update()
+check("...even when the Undo is the delete's own toast",
+      (app.find_note(1).get('overrides') or {}).get('2026-09-15', {}).get('body')
+      == 'class moved to 7pm')
+
+# A ticked checklist item on a day with its own text belongs to the
+# series, and nobody is asked -- but the whole editor was written to the
+# series: that one day's words replaced every day's, and the series'
+# formatting was wiped (a day's own text carries none).
+_od_note = _od_series()
+app.open_note_in_tab(_od_note, occurrence_date='2026-09-15'); app.update()
+app._working_checklist[0]['done'] = True
+app._flush_autosave(); app.update()
+_od_back = app.find_note(1)
+check("a tick made on a day with its own text reaches the series' checklist",
+      _od_back['checklist'][0]['done'] is True)
+check("...without that day's words becoming every day's",
+      _od_back['body'] == 'stretch 20 min'
+      and _od_back['formatting'] == [{'start': 0, 'end': 7, 'style': 'bold'}])
+check("...and the day keeps its own text",
+      (_od_back.get('overrides') or {}).get('2026-09-15', {}).get('body')
+      == 'class moved to 7pm')
+app.new_note(); app.update()
+
+# Answering "The entire series" on such a day makes its words the series'
+# -- and the day stops holding a copy of its own: it kept one, the editor
+# read as unsaved forever, and every way out asked the question again.
+_od_note = _od_series()
+app.open_note_in_tab(_od_note, occurrence_date='2026-09-15'); app.update()
+app.body_text.insert('end', ', room B')
+_od_asked = []
+app.ask_occurrence_scope = lambda *a, **k: (_od_asked.append(a), 'series')[1]
+app._flush_autosave(); app.update()
+app.ask_occurrence_scope = _od_scope
+_od_back = app.find_note(1)
+check('"The entire series" on a day with its own text gives every day its words',
+      _od_back['body'].startswith('class moved to 7pm, room B')
+      and '2026-09-15' not in (_od_back.get('overrides') or {}))
+check("...keeping the series' own text as the rescue copy",
+      (_od_back.get('_prev') or {}).get('body') == 'stretch 20 min')
+check('...and the question is not asked again for an edit already saved',
+      app.editor_state_matches_saved(app.capture_editor_state())
+      and len(_od_asked) == 1)
+app.ask_yes_no = _od_yes
+app.new_note(); app.update()
+app.notes = _od_saved
+app.save_notes()
 
 
 print()

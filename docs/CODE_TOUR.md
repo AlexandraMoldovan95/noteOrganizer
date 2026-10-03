@@ -55,7 +55,7 @@ py note_organizer.py
 
 `note_organizer.py` is still the front door. The pure logic has moved into
 the `noteorganizer/` package next to it and is imported back in; the entry
-file itself stays large (~16,200 lines) because it is the UI hub the pieces
+file itself stays large (~22,300 lines) because it is the UI hub the pieces
 hang off, not a junk drawer of stray logic.
 
 To run every test — units + qa1–qa9 — safely in a scratch copy:
@@ -64,8 +64,8 @@ To run every test — units + qa1–qa9 — safely in a scratch copy:
 py tools/run_tests.py
 ```
 
-The six unit suites — `test_recurrence`, `test_calculator`,
-`test_data_safety`, `test_richtext`, `test_tables`,
+The seven unit suites — `test_recurrence`, `test_calculator`,
+`test_data_safety`, `test_richtext`, `test_tables`, `test_note_identity`,
 `test_entry_module_identity` — also run individually (`py test_<name>.py`).
 See [qa/README.md](../qa/README.md) for the map of the whole suite,
 and the QA safety rule in `CLAUDE.md` before running any test by hand —

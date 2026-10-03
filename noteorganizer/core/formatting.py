@@ -28,6 +28,7 @@ a Tkinter constraint, explained in the comment just below.
 """
 
 import bisect
+import heapq
 import re
 
 # Tkinter Text tags that both set the widget's font option don't compose —
@@ -232,7 +233,50 @@ def normalize_formatting(value):
             # choke point every route passes through, generous enough
             # that no real document ever reaches it.
             break
-    return spans
+    return _fold_bold_with_italic(spans)[:MAX_FORMATTING_SPANS]
+
+
+def _fold_bold_with_italic(spans):
+    """Where a bold span and an italic span cover the same characters, one
+    bold_italic span there instead: the two are Tk tags that both set the
+    font, which do not compose, and italic -- made after bold -- won. Bold
+    italic text pasted from a web page, or from the app's own copy (which
+    writes it as <i><b>), was drawn italic alone, on every open, while the
+    toolbar lit Bold and the note saved it bold.
+
+    One sweep over the two styles' ends, and the list as it was when
+    nothing overlaps. When something does, the list comes back in the
+    order the editor reads spans back in (merge_spans): the folded pieces
+    put after the rest made a note saved the old way differ from its own
+    reading at once -- unsaved, and saved again on leaving with no edit,
+    its "Last updated" moved."""
+    marks = sorted((s[edge], s["style"], step)
+                   for s in spans if s["style"] in ("bold", "italic")
+                   for edge, step in (("start", 1), ("end", -1)))
+    held = {"bold": 0, "italic": 0}
+    pieces, overlap, i = [], False, 0
+    while i < len(marks):
+        at = marks[i][0]
+        while i < len(marks) and marks[i][0] == at:
+            held[marks[i][1]] += marks[i][2]
+            i += 1
+        if i == len(marks):
+            break
+        style = ("bold_italic" if held["bold"] and held["italic"]
+                 else "bold" if held["bold"] else
+                 "italic" if held["italic"] else None)
+        overlap = overlap or style == "bold_italic"
+        if style is None:
+            continue
+        if (pieces and pieces[-1]["end"] == at
+                and pieces[-1]["style"] == style):
+            pieces[-1]["end"] = marks[i][0]
+        else:
+            pieces.append({"start": at, "end": marks[i][0], "style": style})
+    if not overlap:
+        return spans
+    return sorted([s for s in spans if s["style"] not in ("bold", "italic")]
+                  + pieces, key=lambda s: (s["start"], s["end"], s["style"]))
 
 
 # ---- Naming the tags the editor applies ----
@@ -303,6 +347,11 @@ def resolve_font_runs(spans, text_length):
     keeps two things true: a note that never touches size or family tags
     exactly as it always did, and the toolbar can go on asking "is this
     range bold?" by looking for that tag.
+
+    One sweep over the span boundaries, in order, carrying what covers the
+    stretch to the next one. Every span used to be checked at every
+    boundary: one font size in a note of 8,000 styled words cost 1.7 s at
+    every open, every Enter in a numbered list and every font change.
     """
     spans = normalize_formatting(spans)
     affects_font = {"bold", "italic", "bold_italic"} | FONT_VALUE_STYLES
@@ -313,33 +362,41 @@ def resolve_font_runs(spans, text_length):
     # Every span boundary is a point where the answer can change; between
     # two consecutive boundaries it cannot.
     marks = {0, text_length}
-    for span in relevant:
+    starting, ending = {}, {}
+    for index, span in enumerate(relevant):
         marks.add(span["start"])
         marks.add(span["end"])
+        starting.setdefault(span["start"], []).append(index)
+        ending.setdefault(span["end"], []).append(index)
     points = sorted(m for m in marks if 0 <= m <= text_length)
 
+    # What covers the stretch from one boundary to the next: how many bold
+    # and italic spans, and the sizes and families as heaps on their place
+    # in the list -- the last one listed wins, as when every span was
+    # checked in turn. One that ended is let go when it reaches the top.
+    bold = italic = 0
+    sizes, families = [], []
     runs = []
     for start, end in zip(points, points[1:]):
-        if start >= end:
-            continue
-        bold = italic = False
-        size = family = None
-        for span in relevant:
-            if span["start"] > start or span["end"] < end:
-                continue
+        for index in ending.get(start, ()):
+            style = relevant[index]["style"]
+            bold -= style in ("bold", "bold_italic")
+            italic -= style in ("italic", "bold_italic")
+        for index in starting.get(start, ()):
+            span = relevant[index]
             style = span["style"]
-            if style == "bold":
-                bold = True
-            elif style == "italic":
-                italic = True
-            elif style == "bold_italic":
-                bold = italic = True
-            elif style == "font_size":
-                size = span["value"]
-            else:
-                family = span["value"]
+            bold += style in ("bold", "bold_italic")
+            italic += style in ("italic", "bold_italic")
+            if style in FONT_VALUE_STYLES:
+                heapq.heappush(sizes if style == "font_size" else families,
+                               (-index, span["end"], span["value"]))
+        for heap in (sizes, families):
+            while heap and heap[0][1] <= start:
+                heapq.heappop(heap)
+        size = sizes[0][2] if sizes else None
+        family = families[0][2] if families else None
         if size is not None or family is not None:
-            runs.append((start, end, bold, italic, size, family))
+            runs.append((start, end, bold > 0, italic > 0, size, family))
 
     # Neighbouring runs that came out identical were split by a boundary
     # belonging to some other span; joining them keeps the widget holding one
@@ -449,6 +506,27 @@ def parse_font_tag(name):
             return None
     return flags[0] == "1", flags[1] == "1", size, family
     return None
+
+
+def is_format_tag(name):
+    """True for a Tk tag that carries CHARACTER formatting.
+
+    A plain style, a colour (``text_color_``/``highlight_`` and a valid
+    hex), or a composite font -- exactly the tags the editor reads back as
+    the note's spans. The one answer for code that has to move or restore
+    formatting tag by tag instead of through the span list; a tag list
+    written out by hand at each such place is how a new kind of tag gets
+    carried by one of them and silently dropped by the next.
+    """
+    if not isinstance(name, str):
+        return False
+    if name in KNOWN_FORMAT_STYLES:
+        return True
+    for style in COLOR_FORMAT_STYLES:
+        prefix = style + "_"
+        if name.startswith(prefix):
+            return _is_valid_hex_color("#" + name[len(prefix):])
+    return parse_font_tag(name) is not None
 
 
 # ---- Bullet and numbered lists ----

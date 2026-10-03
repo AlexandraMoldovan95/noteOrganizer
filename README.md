@@ -17,7 +17,7 @@ anywhere else.
 ## Project highlights
 
 - **Ships as a real Windows app** — a PyInstaller one-folder build, released across 40 versions — five early milestones plus 35 numbered bumps — and field-tested against a written test plan along the way (the [Changelog](CHANGELOG.md) tells the story; the [version ledger](docs/ROADMAP.md#version-ledger) accounts for every number).
-- **~1,540 automated checks on every pull request** — a nine-script headless GUI suite (~1,070 checks) driving the real app plus six unit suites, run in CI on both Windows and Linux.
+- **~3,400 automated checks on every pull request** — a nine-script headless GUI suite (~2,700 checks) driving the real app plus seven unit suites, run in CI on both Windows and Linux.
 - **Fully offline by design** — plain local JSON files, no accounts, no network calls, one dependency.
 - **A hand-built themed UI** — every dialog, dropdown and picker is drawn by the app itself; only choosing a file or folder uses the system's own chooser. 8 themes, switchable live.
 - **Everything is plain text underneath** — tables drawn as real grids, checkboxes, rich text and lists are all stored as readable Markdown-style text, so notes survive export, sharing and backup intact.
@@ -205,8 +205,8 @@ noteOrganizer/
 ## Testing
 
 Every push and Pull Request runs the whole suite on GitHub Actions, on
-**both Windows and Linux**: about 1,540 checks — ~1,070 across the
-nine-script headless GUI suite, plus the six unit suites. [qa/README](qa/README.md)
+**both Windows and Linux**: about 3,400 checks — ~2,700 across the
+nine-script headless GUI suite, plus the seven unit suites. [qa/README](qa/README.md)
 maps which script guards which surface and carries the house rules new
 checks follow; the [Issues Log](docs/ISSUES_LOG.md) tells how some of
 those rules were earned. Check the **Actions** tab for the latest run.

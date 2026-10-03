@@ -88,6 +88,10 @@ jobs:
       # a Windows console defaults to cp1252 and dies on the first one.
       # (The same variable is set when running the suite locally.)
       PYTHONIOENCODING: utf-8
+      # A fresh checkout is a throwaway folder: the scripts that wipe their
+      # working folder refuse to run without this marker, which only
+      # tools/run_tests.py and this workflow set.
+      NOTEORG_SCRATCH: "1"
     defaults:
       run:
         # Git Bash exists on the Windows runners too, so ONE set of steps
@@ -115,10 +119,19 @@ jobs:
         # screen, the only difference is nobody's looking at it. The
         # Windows runner needs none of this: Windows Tk draws through the
         # normal win32 windowing that is always there.
+        #
+        # And the fonts of the local mirror (tools/linux-ci), not the
+        # runner's: the runner image carries a colour emoji font the mirror
+        # does not, and Tk 8.6 measures its glyphs hundreds of pixels wide.
+        # The calendar's day markers, drawn in "Segoe UI Emoji", which Linux
+        # resolves to that font, overflowed every day, and qa7 went red here
+        # and nowhere else. The last line says what is left.
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y python3-tk xvfb
+          sudo apt-get remove -y fonts-noto-color-emoji
+          fc-list : family | grep -i emoji || echo "no emoji font left"
 
       - name: Decide how a GUI test runs here
         # Every step below says "$GUI script.py" and stays identical on
@@ -140,7 +153,7 @@ jobs:
         # so the module still imports), and a method lost, duplicated or
         # re-signatured while being moved between files.
         run: |
-          python tools/check_undefined_names.py note_organizer.py noteorganizer/core/*.py noteorganizer/ui/*.py
+          python tools/check_undefined_names.py note_organizer.py noteorganizer/core/*.py noteorganizer/ui/*.py qa/*.py test_*.py tools/*.py
           python tools/check_class_api.py
           python tools/check_one_definition.py
           python tools/check_english.py

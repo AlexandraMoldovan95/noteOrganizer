@@ -175,11 +175,19 @@ class _Reader(HTMLParser):
     # a pasted table shattered: the header row survived because its cells
     # held bare text, and every row under it became six separate lines.
     cell_depth = 0
+    # Whether the caps left anything out: text past MAX_PASTE_CHARS, styles
+    # past MAX_PASTE_SPANS. The paste was cut there without a word, and the
+    # rest of a long article was simply not in the note.
+    text_cut = False
+    styles_cut = False
 
     def _add(self, chunk):
-        if self.length >= MAX_PASTE_CHARS:
+        room = MAX_PASTE_CHARS - self.length
+        if len(chunk) > room and chunk[max(room, 0):].strip():
+            self.text_cut = True
+        if room <= 0:
             return
-        chunk = chunk[:MAX_PASTE_CHARS - self.length]
+        chunk = chunk[:room]
         if not chunk:
             return
         self.text.append(chunk)
@@ -211,7 +219,9 @@ class _Reader(HTMLParser):
         for i in range(len(self._open) - 1, -1, -1):
             if self._open[i][0] == style:
                 name, value, start = self._open.pop(i)
-                if self.length > start and len(self.spans) < MAX_PASTE_SPANS:
+                if self.length > start and len(self.spans) >= MAX_PASTE_SPANS:
+                    self.styles_cut = True
+                elif self.length > start:
                     span = {"start": start, "end": self.length, "style": name}
                     if value is not None:
                         span["value"] = value
@@ -415,12 +425,18 @@ _BLOCK_TAG_RE = re.compile(
     + r")\b", re.I)
 
 
-def html_to_note(fragment):
+def html_to_note(fragment, report=None):
     """Convert an HTML fragment into ``(text, formatting, paragraphs)``.
 
     Everything the app cannot express is dropped. The result is passed
     through the same normalisers the editor uses, so nothing reaches a note
     that would not have been allowed if it had been typed.
+
+    A dict passed as *report* is told whether the caps left anything out:
+    ``text_cut`` (text past MAX_PASTE_CHARS) and ``styles_cut`` (styles past
+    MAX_PASTE_SPANS) -- so the paste can say so instead of cutting quietly.
+    A fragment that cannot be read at all leaves it untouched: nothing is
+    pasted, so there is nothing to say.
     """
     reader = _Reader()
     # Looked for in the source rather than during parsing: a block tag late in
@@ -435,6 +451,9 @@ def html_to_note(fragment):
         return "", [], []
     for name, _value, _start in list(reader._open):
         reader._close(name)
+    if report is not None:
+        report["text_cut"] = reader.text_cut
+        report["styles_cut"] = reader.styles_cut
 
     text = "".join(reader.text).strip("\n")
     dropped = len("".join(reader.text)) - len("".join(reader.text).lstrip("\n"))

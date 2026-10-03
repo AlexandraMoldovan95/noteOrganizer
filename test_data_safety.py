@@ -18,20 +18,41 @@ import tempfile
 # happened once, despite the warning above being here the whole time. A
 # warning depends on being read; this check does not. CI and a proper
 # scratch copy have no notes_data.json here, so they pass through.
+#
+# It fails CLOSED. It used to let an unreadable notes_data.json through
+# as if it were no notebook at all -- and an unreadable notebook is the
+# one the app itself could still have rescued. And it runs only where a
+# throwaway folder has been declared (NOTEORG_SCRATCH=1, set by
+# tools/run_tests.py and by CI), the rule the qa scripts follow too
+# (qa/_qa_support.hermetic_seed).
 def _guard_real_notes():
+    if os.environ.get("NOTEORG_SCRATCH") != "1":
+        sys.exit(
+            "REFUSING to run: this test deletes and rewrites notes_data.json "
+            "beside it, and nothing says this folder is a throwaway copy. "
+            "Run it through tools/run_tests.py, or set NOTEORG_SCRATCH=1 "
+            "yourself in a scratch folder outside the project -- see "
+            "CLAUDE.md, 'QA testing safety'.")
     here = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                         "notes_data.json")
+    if not os.path.exists(here):
+        return
     try:
         with open(here, encoding="utf-8") as f:
             notes = json.load(f)
-    except (IOError, OSError, ValueError):
-        return
-    if isinstance(notes, list) and notes:
+    except (IOError, OSError, ValueError) as exc:
+        sys.exit(
+            "REFUSING to run: the notes_data.json beside this test cannot "
+            "be read (%s). It may be a real notebook the app could still "
+            "rescue; this test would delete it." % exc)
+    if not isinstance(notes, list) or notes:
+        held = ("%d notes" % len(notes) if isinstance(notes, list)
+                else "something other than an empty notebook")
         sys.exit(
             "REFUSING to run: the notes_data.json beside this test holds "
-            "%d notes.\nThis test deletes and rewrites that file. Run it "
+            "%s.\nThis test deletes and rewrites that file. Run it "
             "only from a throwaway copy\noutside the project tree -- see "
-            "CLAUDE.md, 'QA testing safety'." % len(notes))
+            "CLAUDE.md, 'QA testing safety'." % held)
 
 
 _guard_real_notes()
@@ -571,16 +592,30 @@ _ok, _exc = _storage.save_notes(
     [{"id": 991, "title": "x " + _pair + " y", "body": ""}])
 check("a surrogate-pair emoji no longer kills the save", _ok and _exc is None)
 import json as _json
-_back = _json.load(open(_paths.DATA_FILE, encoding="utf-8"))
+
+
+def _first_title_on_disk():
+    """The first note's title as the file holds it, or None when there is
+    no readable file: a failed save must be one red check, not a crash
+    that hides every check after it (a mutant that broke the mend used
+    to end this suite here, before its footer, with no verdict)."""
+    try:
+        with open(_paths.DATA_FILE, encoding="utf-8") as fh:
+            notes = _json.load(fh)
+        return notes[0].get("title") if notes else None
+    except (OSError, ValueError, AttributeError, IndexError):
+        return None
+
+
+_title_back = _first_title_on_disk() or ""
 check("and it lands as the real character, not the pair",
-      chr(0x1F600) in _back[0]["title"] and len(_back[0]["title"]) == 5)
+      chr(0x1F600) in _title_back and len(_title_back) == 5)
 check("no half-written .tmp is left beside the file",
       not os.path.exists(_paths.DATA_FILE + ".tmp"))
 
 _ok2, _exc2 = _storage.save_notes([{"id": 992, "title": "l " + chr(0xD83D)}])
-_back2 = _json.load(open(_paths.DATA_FILE, encoding="utf-8"))
 check("a lone surrogate is replaced rather than poisoning the file",
-      _ok2 and chr(0xFFFD) in _back2[0]["title"])
+      _ok2 and chr(0xFFFD) in (_first_title_on_disk() or ""))
 
 _ok3, _exc3 = _storage.save_notes([{"id": 993, "bad": {1, 2}}])
 check("an unserializable note reports (False, exc) instead of raising",
@@ -685,6 +720,31 @@ _flat = _nn_att({"id": 1, "title": "x", "attachments": [
     "not-a-dict"]})
 check("normalize_note reduces every attachment stored_as to a bare name",
       [a["stored_as"] for a in _flat["attachments"]] == ["evil.exe", "z"])
+# A record with no stored name takes its display name as the stored one --
+# taken as it was, a filename of "../../x" kept the very path the rule
+# above removes. A name that flattens to nothing names no file at all.
+_side = _nn_att({"id": 1, "title": "x", "attachments": [
+    {"filename": "../../side.exe"}, {"filename": ".."},
+    {"filename": "C:\\Windows\\w.txt", "stored_as": 7}]})
+check("a record with no stored name takes the display name, flattened (%s)"
+      % [a.get("stored_as") for a in _side["attachments"]],
+      [a["stored_as"] for a in _side["attachments"]] == ["side.exe", "w.txt"])
+# The two names are all a record is. Copied whole, a crafted record kept
+# whatever else it carried, and a value nested a few hundred deep made
+# Duplicate (a deep copy of the note) fail with "Something went wrong".
+_nest = []
+for _ in range(900):
+    _nest = [_nest]
+_extra = _nn_att({"id": 1, "title": "x", "attachments": [
+    {"filename": "a.txt", "stored_as": "a.txt", "smuggled": _nest}]})
+check("an attachment record keeps its two names and nothing else",
+      _extra["attachments"] == [{"filename": "a.txt", "stored_as": "a.txt"}])
+import copy as _copy_att
+try:
+    _copy_ok = _copy_att.deepcopy(_extra) == _extra
+except RecursionError:
+    _copy_ok = False
+check("so a note carrying one can still be duplicated", _copy_ok)
 # Defensive: under a mutant that breaks the guard the outsider is gone,
 # and a bare remove would crash the run before its footer. The checks
 # already recorded their verdicts; this only lets the suite finish.
@@ -829,6 +889,85 @@ check("an all-junk templates file is preserved before falling back",
       _tpJ == [] and any(p.startswith("templates_corrupt_")
                          for p in os.listdir(_paths.APP_DIR)))
 
+# ---- Damage the parser does not call JSON is damage all the same ----
+# Two more ways a file can be unreadable, and neither raised the
+# JSONDecodeError the loaders caught: bytes that are not UTF-8 (a file
+# another program saved in a Windows code page, where "e" with an acute
+# accent is the one byte 0xE9) raised UnicodeDecodeError, and nesting
+# deeper than the parser follows raised RecursionError. Both flew past the
+# loaders, and the app would not start while any of its four files held one.
+_DAMAGED = {
+    "not-UTF-8": b'[{"id": 1, "title": "caf\xe9"}]',
+    "nested-too-deep": b"[" * 100000 + b"]" * 100000,
+}
+
+
+def _answer(call):
+    """What *call* returns -- or which exception escaped it. The defect
+    under test is the escape, and a mutant bringing it back must be one red
+    check, not a crash that ends the suite before its footer."""
+    try:
+        return call()
+    except Exception as exc:
+        return "ESCAPED " + type(exc).__name__
+
+
+def _kept_aside(prefix, data):
+    """True if a preserved copy named *prefix*... holds exactly *data*."""
+    for name in os.listdir(_paths.APP_DIR):
+        if name.startswith(prefix):
+            with open(os.path.join(_paths.APP_DIR, name), "rb") as fh:
+                if fh.read() == data:
+                    return True
+    return False
+
+
+_DATA_FILES = (_paths.DATA_FILE, _paths.SETTINGS_FILE, _paths.TRASH_FILE,
+               _paths.TEMPLATES_FILE)
+_before_damage = {}
+for _file in _DATA_FILES:
+    try:
+        with open(_file, "rb") as _f:
+            _before_damage[_file] = _f.read()
+    except OSError:
+        _before_damage[_file] = None
+for _how, _bytes in _DAMAGED.items():
+    with open(_paths.DATA_FILE, "wb") as _f:
+        _f.write(_bytes)
+    _dmg = _answer(lambda: _storage.load_notes(None))
+    check("a %s notes file loads as damaged: empty, flagged, bytes kept (%s)"
+          % (_how, _dmg if isinstance(_dmg, str) else "returned"),
+          isinstance(_dmg, tuple) and _dmg[0] == []
+          and _dmg[1]["notes_file_corrupt"]
+          and _kept_aside("notes_data_corrupt_", _bytes))
+    for _file, _load, _empty, _prefix in (
+            (_paths.SETTINGS_FILE, _storage.load_settings, {}, "settings_corrupt_"),
+            (_paths.TRASH_FILE, _storage.load_trash, [], "trash_corrupt_"),
+            (_paths.TEMPLATES_FILE, _storage.load_templates, [],
+             "templates_corrupt_")):
+        with open(_file, "wb") as _f:
+            _f.write(_bytes)
+        _dmg = _answer(_load)
+        check("a %s %s loads as damaged: empty, bytes kept (%s)"
+              % (_how, os.path.basename(_file),
+                 _dmg if isinstance(_dmg, str) else "returned"),
+              _dmg == _empty and _kept_aside(_prefix, _bytes))
+# What was here goes back, and this block's own copies go: the checks
+# below read every preserved copy as UTF-8 text.
+for _file, _held in _before_damage.items():
+    if _held is None:
+        if os.path.exists(_file):
+            os.remove(_file)
+        continue
+    with open(_file, "wb") as _f:
+        _f.write(_held)
+for _name in os.listdir(_paths.APP_DIR):
+    if "_corrupt_" in _name:
+        with open(os.path.join(_paths.APP_DIR, _name), "rb") as _f:
+            _held = _f.read()
+        if _held in _DAMAGED.values():
+            os.remove(os.path.join(_paths.APP_DIR, _name))
+
 # On a corrupt launch the one-time cleanup must NOT rewrite the notes
 # file — when even the preserve failed, that rewrite would destroy the
 # last copy of the user's bytes while the startup notice still points
@@ -886,6 +1025,38 @@ check("a wrong-shape trash.json is preserved before falling back",
           == '{"wrong": "shape"}'
           for p in os.listdir(_paths.APP_DIR)
           if p.startswith("trash_corrupt_")))
+
+# Junk beside real entries -- a hand edit -- kept Recently deleted from
+# opening at all: the panel asks every entry .get(). Only notes come in,
+# and the file's bytes are kept aside first.
+_JUNK = '[{"id": 7, "title": "real"}, "junk", null]'
+with open(_paths.TRASH_FILE, "w", encoding="utf-8") as _f:
+    _f.write(_JUNK)
+_trJ = _storage.load_trash()
+# Read whatever came back, junk included: a check that raised on the very
+# failure it is there to see would stop the suite instead of naming it.
+check("a trash.json holding junk beside its notes loads the notes alone "
+      "(%r)" % (_trJ,),
+      [e.get("title") if isinstance(e, dict) else e for e in _trJ] == ["real"])
+check("...and keeps the file's bytes aside first",
+      any(open(os.path.join(_paths.APP_DIR, p), encoding="utf-8").read() == _JUNK
+          for p in os.listdir(_paths.APP_DIR) if p.startswith("trash_corrupt_")))
+# Read again at the next launch, with nothing having rewritten the file:
+# each launch kept one more copy of the same bytes, never deleted. Kept
+# once is enough. The copy above is dated as an earlier launch would have
+# left it -- copies are stamped to the second, and a test runs in one.
+def _junk_copies():
+    return [p for p in os.listdir(_paths.APP_DIR)
+            if p.startswith("trash_corrupt_")
+            and open(os.path.join(_paths.APP_DIR, p), encoding="utf-8").read() == _JUNK]
+
+
+for _jk in _junk_copies()[:1]:
+    os.replace(os.path.join(_paths.APP_DIR, _jk),
+               os.path.join(_paths.APP_DIR, "trash_corrupt_20000101_000000.json"))
+_storage.load_trash()
+check("...once: the next launch reading the same file keeps no second copy "
+      "(%s)" % _junk_copies(), len(_junk_copies()) == 1)
 
 # ---- The reclaim migration preserves a corrupt settings.json ----
 # run_migrations used to clobber an unreadable settings file with the
@@ -1337,8 +1508,12 @@ finally:
 # field, the category import and the calendar day map.
 from noteorganizer.core.model import sanitize_color as _sc
 check("sanitize_color passes real colours and both hex widths",
-      _sc("#A1B2C3") == "#A1B2C3" and _sc("#abc") == "#abc"
-      and _sc(" #ff0000 ") == "#ff0000")
+      _sc("#A1B2C3") == "#A1B2C3" and _sc(" #ff0000 ") == "#ff0000")
+# ...and the short one comes back long: every reader that works a colour
+# out by hand reads six digits, and a #abc day colour from a hand-edited
+# settings.json stopped its whole month drawing.
+check("sanitize_color gives #rgb back as #rrggbb, the same colour (%r)"
+      % _sc("#abc"), _sc("#abc") == "#aabbcc" and _sc("#F0a") == "#FF00aa")
 check("sanitize_color refuses everything Tk would choke on",
       _sc("#zzz123") == "" and _sc("red)") == "" and _sc(123) == ""
       and _sc(None) == "" and _sc("#12345") == ""
@@ -1681,6 +1856,15 @@ for _bad in ("2", None, [1], {"major": 1}):
 check("an ordinary version still imports, and a newer one is still refused",
       _decode_answer(_code_with_version(1)) == "accepted"
       and "newer version" in _decode_answer(_code_with_version(2)))
+# Nesting deeper than the parser follows raised RecursionError, which the
+# decoder did not catch: "Something went wrong" instead of the message
+# that tells the person what to do.
+_deep_code = "NOTE1:" + _b64.urlsafe_b64encode(
+    _zlib.compress(b"[" * 100000 + b"]" * 100000)).decode()
+check("a share code nested too deep to read is refused as damaged (%s)"
+      % _decode_answer(_deep_code)[:40],
+      _decode_answer(_deep_code).startswith("ValueError")
+      and "damaged" in _decode_answer(_deep_code))
 
 # ---- One rule for every door a category name comes in by ----
 # Add and Rename accepted any length and any count; the loader then
@@ -2026,6 +2210,126 @@ try:
 finally:
     _paths.get_appdata_dir = _rc_real_appdata
     shutil.rmtree(_rc_root, ignore_errors=True)
+
+# ---- The startup readers take damage as damage too ----
+# The same two kinds of damage as the loaders' (_DAMAGED), met before any
+# loader runs. Every launch reads settings.json for the reclaim marker and
+# sizes up each notebook a migration might adopt, and the purge reads both
+# notebooks before it deletes anything. Each read raised past its except
+# clause, and the app stopped before its window opened.
+_su_real = (_paths.get_appdata_dir, _paths.get_legacy_dirs)
+_su_root = tempfile.mkdtemp(prefix="nd_damaged_startup_")
+try:
+    _paths.get_appdata_dir = lambda: os.path.join(_su_root, "no_appdata")
+    for _how, _bytes in _DAMAGED.items():
+        _su_app = os.path.join(_su_root, _how, "app")
+        _su_old = os.path.join(_su_root, _how, "old")
+        os.makedirs(_su_app)
+        os.makedirs(_su_old)
+        _paths.get_legacy_dirs = lambda app_dir, _old=_su_old: [_old]
+        _su_notes = os.path.join(_su_old, "notes_data.json")
+        _su_set = os.path.join(_su_old, "settings.json")
+        for _file in (_su_notes, _su_set, os.path.join(_su_app, "settings.json")):
+            with open(_file, "wb") as _f:
+                _f.write(_bytes)
+        check("a %s notebook counts as holding no notes" % _how,
+              _answer(lambda: _paths.count_notes_in(_su_notes)) == 0)
+        check("...and is never taken for a copy of ours, so never deleted",
+              _answer(lambda: _paths.is_redundant_copy(_su_notes, [])) is False)
+        check("a %s settings.json is not taken for ours" % _how,
+              _answer(lambda: _paths._looks_like_our_settings(_su_set)) is False)
+        _answer(lambda: _paths._preserve_settings_if_unreadable(_su_set))
+        check("...and is kept aside before a migration writes over it",
+              any(_n.startswith("settings_corrupt_")
+                  and open(os.path.join(_su_old, _n), "rb").read() == _bytes
+                  for _n in os.listdir(_su_old)))
+        # The launch itself: a damaged settings.json in the app folder, and
+        # only a damaged notebook to adopt -- nothing to do, said quietly.
+        _su_ran = _answer(lambda: _paths.run_migrations(_su_app))
+        check("a launch beside a %s settings.json and notebook starts (%s)"
+              % (_how, _su_ran),
+              _su_ran is None)
+        # The purge, both ways round: our notebook damaged, then theirs.
+        with open(os.path.join(_su_app, "notes_data.json"), "wb") as _f:
+            _f.write(_bytes)
+        _su_purged = _answer(lambda: _paths.purge_stale_copies(_su_app))
+        check("a purge beside a %s notebook of ours deletes nothing (%s)"
+              % (_how, _su_purged),
+              _su_purged == [] and os.path.isfile(_su_notes))
+        with open(os.path.join(_su_app, "notes_data.json"), "w",
+                  encoding="utf-8") as _f:
+            json.dump([{"id": 1, "title": "Ours"}], _f)
+        _su_purged = _answer(lambda: _paths.purge_stale_copies(_su_app))
+        check("...nor beside a %s old one (%s)" % (_how, _su_purged),
+              _su_purged == [] and os.path.isfile(_su_notes))
+finally:
+    _paths.get_appdata_dir, _paths.get_legacy_dirs = _su_real
+    shutil.rmtree(_su_root, ignore_errors=True)
+
+# ---- The qa scripts' own guard fails closed ----
+# Nine identical copies of it read an unreadable notebook as EMPTY and
+# overwrote it with [], and ran from any folder at all. One definition now
+# (qa/_qa_support.hermetic_seed) refuses outside a declared scratch run,
+# and beside any notebook it cannot prove is empty -- leaving it untouched.
+_here = os.path.dirname(os.path.abspath(__file__))
+for _support_dir in (_here, os.path.join(_here, "qa")):
+    if os.path.isfile(os.path.join(_support_dir, "_qa_support.py")):
+        sys.path.insert(0, _support_dir)
+        break
+import _qa_support  # noqa: E402
+_hs_root = tempfile.mkdtemp(prefix="nd_seed_")
+_hs_cwd = os.getcwd()
+_hs_marker = os.environ.get(_qa_support.SCRATCH_MARKER)
+
+
+def _hs_try(contents, marker):
+    """Run the guard in a fresh folder holding `contents` as its
+    notes_data.json (None: no file). Returns (refused, file afterwards)."""
+    folder = tempfile.mkdtemp(dir=_hs_root)
+    path = os.path.join(folder, "notes_data.json")
+    if contents is not None:
+        with open(path, "w", encoding="utf-8") as fh:
+            fh.write(contents)
+    if marker:
+        os.environ[_qa_support.SCRATCH_MARKER] = "1"
+    else:
+        os.environ.pop(_qa_support.SCRATCH_MARKER, None)
+    os.chdir(folder)
+    try:
+        _qa_support.hermetic_seed()
+        refused = False
+    except SystemExit:
+        refused = True
+    finally:
+        os.chdir(_hs_cwd)
+    after = None
+    if os.path.exists(path):
+        with open(path, encoding="utf-8") as fh:
+            after = fh.read()
+    return refused, after
+
+
+try:
+    _ok_refused, _ok_after = _hs_try(None, marker=True)
+    check("the qa seed runs in a declared scratch folder and seeds it",
+          not _ok_refused and _ok_after == "[]")
+    _nm_refused, _nm_after = _hs_try("[]", marker=False)
+    check("...refuses to run where no scratch run was declared",
+          _nm_refused and _nm_after == "[]")
+    _bad = '[{"id": 1, "title": "half a notebook"'
+    _bad_refused, _bad_after = _hs_try(_bad, marker=True)
+    check("...refuses beside a notebook it cannot read, leaving it as it was",
+          _bad_refused and _bad_after == _bad)
+    _real = '[{"id": 1, "title": "Groceries"}]'
+    _real_refused, _real_after = _hs_try(_real, marker=True)
+    check("...and refuses beside a notebook holding notes, leaving it as it was",
+          _real_refused and _real_after == _real)
+finally:
+    if _hs_marker is None:
+        os.environ.pop(_qa_support.SCRATCH_MARKER, None)
+    else:
+        os.environ[_qa_support.SCRATCH_MARKER] = _hs_marker
+    shutil.rmtree(_hs_root, ignore_errors=True)
 
 print()
 print(f"FAILURES: {fails if fails else 'none'}")

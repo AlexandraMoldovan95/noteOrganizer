@@ -1,29 +1,11 @@
 # HERMETIC SEED -- BEFORE the note_organizer import below: the module
 # resolves its data directory and runs the data MIGRATIONS at import
-# time, so by the first line of test code the adoption has already
-# happened. The data directory must be this test's alone. An
-# empty directory invites run_migrations to adopt whatever real notebook
-# %APPDATA% holds, and real notes then leak into every scenario: the
-# checks start flaking whenever the OWNER's data changes. Seeding an
-# empty notebook plus the reclaim marker closes both migration doors
-# before the app is even constructed. The refusal is the same last-line
-# defence test_data_safety carries: run from a folder holding real
-# notes, the script stops instead of seeding over them.
-import io as _seed_io, json as _seed_json, os as _seed_os, sys as _seed_sys
-if _seed_os.path.exists('notes_data.json'):
-    try:
-        _seed_prev = _seed_json.load(
-            _seed_io.open('notes_data.json', encoding='utf-8'))
-    except Exception:
-        _seed_prev = []
-    if isinstance(_seed_prev, list) and _seed_prev:
-        _seed_sys.exit(
-            'REFUSING to run: notes_data.json here holds %d real note(s). '
-            'Copy this script to a scratch directory instead.'
-            % len(_seed_prev))
-_seed_io.open('notes_data.json', 'w', encoding='utf-8').write('[]')
-_seed_io.open('settings.json', 'w', encoding='utf-8').write(
-    _seed_json.dumps({'reclaimed_from_appdata': True}))
+# time, so this script's data directory must be its own before that
+# happens. hermetic_seed (qa/_qa_support.py) seeds it -- or refuses to
+# run at all outside a scratch run, or beside a notebook it cannot
+# prove is empty.
+from _qa_support import hermetic_seed as _qa_seed
+_qa_seed()
 
 import sys
 import note_organizer as NO, tkinter as tk, tkinter.filedialog as fd, os, tempfile, base64, zlib, struct
@@ -32,7 +14,8 @@ import note_organizer as NO, tkinter as tk, tkinter.filedialog as fd, os, tempfi
 # Windows foreground -- which a test process never owns. See
 # qa/_qa_support.py; _qa_click refuses to click into the void.
 from _qa_support import (click as _qa_click, fire as _qa_fire,
-                         pin_popup_visibility as _qa_pin)
+                         pin_popup_visibility as _qa_pin,
+                         waiting_timers as _qa_waiting)
 _qa_pin(NO)
 fails = []
 def check(name, cond):
@@ -228,6 +211,31 @@ try:
 finally:
     NO.tk.Menu.tk_popup = _cal_real_popup
 check('calendar day-list delete removes the note', len(app.notes) == 0)
+
+# ---- A RIGHT-CLICK MENU DOES NOT OUTLIVE THE NEXT ONE ----
+# Every right-click builds its menu anew, and none was ever destroyed:
+# three windows more per right-click on a note, each holding the note it
+# was built for, and a theme switch that walks them all went from about
+# 80 ms to over 400. The note's menu and the day's are asked for in turn,
+# so a menu that kept its own slot would still leave one of each.
+_rm_real = NO.tk.Menu.tk_popup
+NO.tk.Menu.tk_popup = lambda _m, *a, **k: None
+_rm_note = NO.normalize_note({'id': 7301, 'title': 'Menus', 'body': 'x',
+                              'category': 'General', 'date': '2026-07-15'})
+app.notes.append(_rm_note)
+try:
+    _rm_ev = type('E', (), {'x_root': 0, 'y_root': 0})()
+    for _rm_i in range(5):
+        app.show_note_context_menu(_rm_ev, _rm_note,
+                                   occurrence_date='2026-07-15')
+        app.show_day_context_menu(_rm_ev, '2026-07-15')
+    app.update()
+    _rm_left = [w for w in app.winfo_children() if isinstance(w, tk.Menu)]
+    check('ten right-clicks on a note and on its day leave one menu behind, '
+          'not ten (%d)' % len(_rm_left), len(_rm_left) <= 1)
+finally:
+    NO.tk.Menu.tk_popup = _rm_real
+    app.notes = [n for n in app.notes if n.get('id') != 7301]
 
 # detail view + Cancel doesn't bounce
 app.notes = [{'id': 2, 'title': 'CalDetailDelete', 'body': 'x', 'category': 'General', 'date': '2026-07-15',
@@ -1046,10 +1054,18 @@ for _pv_i in range(8):
 _pv_gif = os.path.join(_pv_dir, 'anim_pv.gif')
 _pv_frames[0].save(_pv_gif, save_all=True, append_images=_pv_frames[1:],
                    duration=20, loop=0)
-app._show_image_preview(_pv_gif, 'anim_pv.gif'); app.update()
+# Read the moment the preview is built, before any update(): a frame is
+# decoded on each 20 ms tick, and an update() slower than that -- any
+# loaded machine -- ran ticks first and reported "2 (or 3) decoded when
+# shown" about an app that had decoded one. Measured on the untouched
+# base commit, red under load and green alone.
+app._show_image_preview(_pv_gif, 'anim_pv.gif')
+_pv_decoded_when_shown = len(app._image_preview_ref)
+_pv_reading_when_shown = app._preview_source is not None
+app.update()
 check(f'an animation shows its first frame before decoding the rest '
-      f'({len(app._image_preview_ref)} decoded when shown)',
-      len(app._image_preview_ref) == 1 and app._preview_source is not None)
+      f'({_pv_decoded_when_shown} decoded when shown)',
+      _pv_decoded_when_shown == 1 and _pv_reading_when_shown)
 _pv_end = time.time() + 10
 while app._preview_source is not None and time.time() < _pv_end:
     app.update(); time.sleep(0.01)
@@ -1098,7 +1114,10 @@ check(f'a file replaced under the same name is read again ({_pv_w1} -> '
 # Closed half-way through its first loop, the preview lets go of the file
 # -- on Windows an open file cannot be renamed or deleted.
 app._preview_cache.clear()
-app._show_image_preview(_pv_gif, 'anim_pv.gif'); app.update()
+# Closed before any update(), for the reason above: eight 20 ms ticks decode
+# the whole file and let it go by themselves, and a slow enough update()
+# ran all of them -- after which this proved nothing about closing.
+app._show_image_preview(_pv_gif, 'anim_pv.gif')
 _pv_held = app._preview_source is not None
 app._dismiss_mini_popup(); app.update()
 try:
@@ -1638,9 +1657,10 @@ check('a note that does not repeat still just says Delete',
 # recoverability, and a question in front of every colour change would
 # cost more than the loss. So the loss stopped being permanent.
 #
-# The marker POPUP is deliberately untouched -- it works on a copy, writes
-# only on Save and discards on ✕ -- and a check below holds that, so a
-# later "consistency" pass does not helpfully break it.
+# The marker POPUP's picking is deliberately untouched -- it works on a
+# copy, writes only on Save and discards on ✕ -- and a check below holds
+# that, so a later "consistency" pass does not helpfully break it. (Its
+# Save with nothing left, the fourth door to the loss, has the Undo: 6g.)
 _cc_saved_colors = dict(app.day_colors)
 _cc_saved_emoji = dict(app.day_emoji)
 _CC_COLOUR = '#cc4444'
@@ -1844,8 +1864,8 @@ check('clear day: Undo does not overwrite a marker chosen in between',
 check('clear day: ...and says the day is occupied',
       any('has markers again' in _t and _k == 'info' for _t, _k in _cc_toasts))
 
-# The popup was already safe. Hold that, so a later consistency pass does
-# not helpfully give it an undo it does not need.
+# The popup's picking was already safe. Hold that, so a later consistency
+# pass does not helpfully give its chips an undo they do not need.
 _cc_seed()
 app._mark_day_emoji(_CC_DAY, _types_q7.SimpleNamespace(x_root=200, y_root=200))
 app.update()
@@ -1943,9 +1963,9 @@ check('answering the question completes the trip',
 del app.ask_occurrence_scope
 app.close_day_panel(); app.update()
 
-# Deleting ends the calendar trip on BOTH cleanup arms — a pending that
-# outlived a delete once made a later, unrelated Save yank the user
-# onto a stale calendar day.
+# Deleting the open note ends the calendar trip — a pending that outlived
+# a delete which REPLACED the editor once made a later, unrelated Save
+# yank the user onto a stale calendar day.
 app._ctx_open(app.find_note(61), None, return_day='2026-07-15'); app.update()
 app.ask_yes_no = lambda *a, **k: True
 app.delete_current_note(); app.update()
@@ -1960,9 +1980,17 @@ app.save_notes(); app.refresh_note_list(); app.update()
 app._ctx_open(app.find_note(60), '2026-07-18', return_day='2026-07-18')
 app.update()
 app._context_delete_note(app.find_note(63)); app.update()
-check('deleting another note ends the trip too (tab-restore arm)',
-      not app._pending_calendar_return
-      and not app.calendar_return_btn.winfo_ismapped())
+# Deleting ANOTHER note used to end the trip as a side effect: the
+# delete reloaded the editor from the copy taken when it was opened
+# (the "tab-restore arm"), which also cleared the way back. That reload
+# put older versions back over newer ones and is gone -- the editor now
+# stays exactly as it was, still on this day, so the way back to the
+# calendar still means what it did. Nothing about it is stale.
+check('deleting another note leaves the open day and its way back alone',
+      app.selected_note_id == 60
+      and app.current_occurrence_date == '2026-07-18'
+      and bool(app._pending_calendar_return)
+      and app._is_placed(app.calendar_return_btn))
 
 # Un-repeating via a series save retires the day banner — an occurrence
 # view of a note that no longer repeats would be a lying label.
@@ -2058,13 +2086,46 @@ check('the reset entry appears exactly where an override exists',
 # crash the suite mid-run — the footer rule.)
 _reset_cmd = next((c for l, c in _with_ov if 'Reset this day' in l), None)
 app.ask_yes_no = lambda *a, **k: True
-if _reset_cmd is not None:
-    _reset_cmd(); app.update()
-check('reset drops the override and the day shows series content',
-      _reset_cmd is not None
-      and '2026-07-15' not in (app.find_note(64).get('overrides') or {})
-      and NO.effective_note(app.find_note(64),
-                            '2026-07-15')['body'] == 'series body')
+# Who reaches for the Repeat control: an insertion once left "Make this
+# repeat"'s last lines at the end of the reset, so the reset said "Set a
+# repeat frequency" about a series and sent the keyboard to the hidden
+# editor, while "Make this repeat" -- which promises both -- did neither.
+_rs_focus = []
+app.rec_freq_menu.focus_set = lambda: _rs_focus.append('rec_freq_menu')
+try:
+    if _reset_cmd is not None:
+        _reset_cmd(); app.update()
+    _rs_status = app.status_lbl.cget('text')
+    _rs_reset_focus = list(_rs_focus)
+    check('reset drops the override and the day shows series content',
+          _reset_cmd is not None
+          and '2026-07-15' not in (app.find_note(64).get('overrides') or {})
+          and NO.effective_note(app.find_note(64),
+                                '2026-07-15')['body'] == 'series body')
+    check(f'...and says so, leaving the keyboard where it was ({_rs_status!r}, '
+          f'{_rs_reset_focus})',
+          _rs_status == 'This day follows the series again'
+          and _rs_reset_focus == [])
+    _rs_focus.clear()
+    app.notes.append(NO.normalize_note({
+        'id': 7302, 'title': 'Plain dated', 'body': 'x',
+        'category': 'General', 'date': '2026-07-20'}))
+    app.save_notes()
+    app._ctx_make_recurring(app.find_note(7302), return_day='2026-07-20')
+    app.update()
+    check(f'"Make this repeat" puts the keyboard on the Repeat control, as it '
+          f'promises ({app.status_lbl.cget("text")!r}, {_rs_focus})',
+          _rs_focus == ['rec_freq_menu']
+          and app.status_lbl.cget('text')
+          == 'Set a repeat frequency to make this note recurring')
+finally:
+    del app.rec_freq_menu.focus_set
+    app._pending_calendar_return = None
+    app._update_calendar_return_button()
+    app.notes = [n for n in app.notes if n.get('id') != 7302]
+    app.save_notes()
+    app.new_note()
+    app.notebook.select(app.TAB_CALENDAR); app.update()
 app.close_day_panel(); app.update()
 
 # The sidebar filter isolates calendar notes — one judgment, used by
@@ -2260,6 +2321,21 @@ check('the Last-year chip keeps only that year',
       any('HistLastYear' in t for t in _hl)
       and not any('HistDated' in t for t in _hl))
 app._history_set_bucket('All'); app.update()
+# A chip chosen while a typed search waits renders at once, and the
+# waiting render is cancelled. Only forgotten, it stayed scheduled with
+# nothing tracking it, rendered again on its own, and on firing forgot
+# the next one the same way -- the relay qa1's "a save run directly"
+# check describes for the autosave.
+app._history_search_var.set('Hist')       # the typed search's render waits
+_hs_before = _qa_waiting(app, '_render_calendar_history')
+app._history_set_bucket('All')
+_hs_after = _qa_waiting(app, '_render_calendar_history')
+check(f'a History chip chosen while a typed search waits leaves no render '
+      f'waiting ({_hs_before} -> {_hs_after})',
+      len(_hs_before) == 1 and not _hs_after
+      and app._history_search_job is None)
+app._history_search_var.set('')
+app.update(); _t7.sleep(0.4); app.update()
 
 # Theme switch while open: rows re-render in the new palette.
 app.set_theme('light'); app.update()
@@ -2365,8 +2441,8 @@ app.open_day_popup('2026-07-15'); app.update()
 # before its footer (a mutant that stopped drawing did exactly that).
 _CD_NONE = {'box': (0, 0, 0, 0), 'bg': '', 'day': '', 'day_fill': '',
             'today': False, 'badge': '', 'badge_fill': '', 'dots': [],
-            'chips': [], 'chip_fill': [], 'more': '', 'selected_width': -1,
-            'selected_colour': ''}
+            'more_dots': '', 'chips': [], 'chip_fill': [], 'more': '',
+            'selected_width': -1, 'selected_colour': ''}
 
 
 def _cd_view(date_str):
@@ -2380,6 +2456,13 @@ def _cd_point(date_str, chip=None):
         return app._cal_point(date_str, chip=chip) or (-50, -50)
     except (IndexError, KeyError):
         return (-50, -50)
+
+
+def _cd_badge_ok(badge, marks):
+    """A day's corner shows its first markers -- at most three, and only as
+    many as fit beside the day's number -- and counts the rest ("⭐+2")."""
+    return badge in {''.join(marks[:k]) + (f'+{len(marks) - k}' if len(marks) > k else '')
+                     for k in range(0, min(3, len(marks)) + 1)}
 
 
 _cell = _cd_view('2026-07-15')
@@ -2434,8 +2517,11 @@ _cd17 = _cd_view('2026-07-17')
 check('a painted day wears its colour, with its text in white',
       _cd17['bg'] == '#e76f51' and _cd17['day_fill'] == '#ffffff'
       and _cd17['chip_fill'] == ['#ffffff'])
-check(f'four markers show as three and "+1" ({_cd17["badge"]!r})',
-      _cd17['badge'] == ''.join(_cd_markers4[:3]) + '+1')
+# At most three, and only as many as fit beside the day's number -- the
+# rest counted (6g holds the cap at a width where all three fit).
+check(f'four markers show as the first that fit, the rest counted '
+      f'({_cd17["badge"]!r})', _cd_badge_ok(_cd17['badge'], _cd_markers4)
+      and _cd17['badge'] != ''.join(_cd_markers4))
 # The markers were drawn in a Label's default colour -- black -- so on a
 # dark theme's day they all but disappeared. The day's own text colour.
 _cd11 = _cd_view('2026-07-11')
@@ -2700,6 +2786,1108 @@ _today_btn = find_widget(app.notebook, tk.Button, 'Today')
 check('the History button sits at the far right of the header',
       _hist_btn is not None and _today_btn is not None
       and _hist_btn.winfo_rootx() > _today_btn.winfo_rootx())
+app.notebook.select(app.TAB_NOTES); app.update()
+
+# ============================================================
+# 6g. THE CALENDAR AFTER THE "BREAK IT" AUDIT
+# ============================================================
+
+# ---- A HISTORY ROW NEVER RE-DATES THE NOTE IN THE EDITOR ----
+# A row's landing ended with the tail of _add_note_for_date -- the new
+# note's date prefill, left behind by an insertion -- so it wrote the row's
+# date into whatever note the editor held, and the next flush saved it
+# without a word: a dated note moved to the row's day, a series moved its
+# start (and its weekday), an undated note landed on the calendar. The
+# landing check above runs after the notes were replaced, when the editor's
+# note no longer exists and the flush has nothing to save, so it could
+# never see it. A person's route: a note open in the editor (the app
+# reopens the last one at startup), Calendar -> History -> a row, then on
+# as usual: another note opened, or the window closed.
+_hr_notes = [
+    {'id': 120, 'title': 'Dentist', 'body': 'x', 'category': 'General',
+     'date': '2026-03-10'},
+    {'id': 121, 'title': 'Holiday flight', 'body': 'x', 'category': 'General',
+     'date': '2025-11-20'},
+    {'id': 122, 'title': 'Daily walk', 'body': 'x', 'category': 'General',
+     'date': '2026-07-01', 'recurrence': {'freq': 'daily'}},
+    {'id': 123, 'title': 'Groceries', 'body': 'x', 'category': 'General'},
+]
+_hr_asked = []
+
+
+def _hr_reset():
+    app.notes = [NO.normalize_note(dict(n)) for n in _hr_notes]
+    app.save_notes()
+    app.refresh_note_list(); app.update()
+
+
+def _hr_disk_date(note_id):
+    # Its own imports: the io/json aliases this first borrowed came from
+    # the copied seed block, which is one call to _qa_support now.
+    import io as _hr_io, json as _hr_json
+    with _hr_io.open(NO.DATA_FILE, encoding='utf-8') as _hr_fh:
+        for _hr_n in _hr_json.load(_hr_fh):
+            if _hr_n.get('id') == note_id:
+                return _hr_n.get('date', '')
+    return None
+
+
+def _hr_open_from_the_list(note_id, date_str):
+    app.notebook.select(app.TAB_NOTES); app.update()
+    app.open_note_in_tab(app.find_note(note_id)); app.update()
+    return (app.selected_note_id == note_id
+            and app.date_entry.get() == date_str)
+
+
+def _hr_open_one_day_of_the_walk():
+    """One day of the series, opened as a person opens it: its title in the
+    month, then the panel's "Open in editor"."""
+    app.notebook.select(app.TAB_CALENDAR); app.update()
+    app.cal_year, app.cal_month = 2026, 7
+    app.render_calendar(); app.update()
+    _hr_at = _cd_point('2026-07-10', chip=0)
+    _qa_click(app.cal_canvas, x=_hr_at[0], y=_hr_at[1]); app.update()
+    _hr_btn = find_widget(app.day_panel, tk.Button, 'Open in editor')
+    if _hr_btn is not None:
+        _hr_btn.invoke(); app.update()
+    return (app.selected_note_id == 122
+            and app.current_occurrence_date == '2026-07-10'
+            and app.date_entry.get() == '2026-07-01')
+
+
+def _hr_click_the_row(title):
+    """Calendar -> History -> the row, clicked where a person clicks it."""
+    app.notebook.select(app.TAB_CALENDAR); app.update()
+    if not app._history_visible:
+        app._history_toggle_btn.invoke(); app.update()
+    for _hr_row in app._history_rows.winfo_children():
+        for _hr_lbl in _hr_row.winfo_children():
+            if (isinstance(_hr_lbl, tk.Label)
+                    and title in str(_hr_lbl.cget('text'))):
+                _qa_click(_hr_lbl); app.update()
+                return True
+    return False
+
+
+def _hr_close_the_window():
+    """on_app_close with destroy stood in for, as the Cancel checks below
+    do, so the rest of the file still has a window."""
+    _hr_closed = []
+    app.destroy = lambda: _hr_closed.append(1)
+    try:
+        app.on_app_close(); app.update()
+    finally:
+        del app.destroy
+    return bool(_hr_closed)
+
+
+# Answered and recorded, never shown: with nothing edited, nothing may ask.
+app.ask_occurrence_scope = lambda *a, **k: (_hr_asked.append(a), 'series')[1]
+try:
+    for _hr_what, _hr_open, _hr_id, _hr_date, _hr_other in (
+            ('a dated note', lambda: _hr_open_from_the_list(120, '2026-03-10'),
+             120, '2026-03-10', 123),
+            ('one day of a series', _hr_open_one_day_of_the_walk,
+             122, '2026-07-01', 123),
+            ('an undated note', lambda: _hr_open_from_the_list(123, 'YYYY-MM-DD'),
+             123, '', 120)):
+        for _hr_then in ('another note is opened', 'the window is closed'):
+            _hr_reset()
+            del _hr_asked[:]
+            _hr_ready = _hr_open()
+            _hr_clicked = _hr_click_the_row('Holiday flight')
+            _hr_landed = (app.selected_day == '2025-11-20'
+                          and app._day_panel_mode == 'note')
+            _hr_field = app.date_entry.get()
+            if _hr_then == 'another note is opened':
+                app.notebook.select(app.TAB_NOTES); app.update()
+                app.open_note_in_tab(app.find_note(_hr_other)); app.update()
+                _hr_went = app.selected_note_id == _hr_other
+            else:
+                _hr_went = _hr_close_the_window()
+            _hr_stored = _hr_disk_date(_hr_id)
+            check(f'fixture: {_hr_what} is in the editor, its History row click '
+                  f'lands on the row\'s day, and {_hr_then} ({_hr_ready}, '
+                  f'{_hr_clicked}, {app.selected_day}, {_hr_went})',
+                  _hr_ready and _hr_clicked and _hr_landed and _hr_went)
+            check(f'a History row leaves the date of {_hr_what} in the editor '
+                  f'alone, and on disk once {_hr_then} (field {_hr_field!r}, '
+                  f'disk {_hr_stored!r}, questions {len(_hr_asked)})',
+                  _hr_field == (_hr_date or 'YYYY-MM-DD')
+                  and _hr_stored == _hr_date and not _hr_asked)
+finally:
+    del app.ask_occurrence_scope
+if app._history_visible:
+    app._hide_calendar_history()
+app.close_day_panel()
+app.notebook.select(app.TAB_NOTES); app.update()
+
+
+def _cal_button(text):
+    """A header button by its exact label ('▶' is inside '▶▶' too)."""
+    _stack = [app.notebook]
+    while _stack:
+        _w = _stack.pop()
+        if isinstance(_w, tk.Button) and str(_w.cget('text')) == text:
+            return _w
+        _stack.extend(_w.winfo_children())
+    return None
+
+
+# ---- DECEMBER 9999 DRAWS, WHATEVER REPEATS ----
+# The month picker and the arrows both go up to year 9999, and the walk
+# over a repeating note's days took its next step before comparing it with
+# the horizon: from 9999-12-31 that step is past the last date there is.
+# With any daily, weekly or monthly note the month raised instead of
+# drawing -- December's title over November's days, a click on them
+# opening November -- and History raised on a "10 times" series dated in
+# the 9900s. Reached here by the real ▶, with an error recorder standing
+# where the crash toast would be.
+_eot_errors = []
+app.report_callback_exception = (
+    lambda _t, _v, _tb: _eot_errors.append('%s: %s' % (_t.__name__, _v)))
+try:
+    app.notes = [NO.normalize_note(n) for n in (
+        {'id': 130, 'title': 'EotDaily', 'body': 'x', 'category': 'General',
+         'date': '2026-01-01', 'recurrence': {'freq': 'daily'}},
+        {'id': 131, 'title': 'EotFriday', 'body': 'x', 'category': 'General',
+         'date': '2026-01-09', 'recurrence': {'freq': 'weekly'}},
+        {'id': 132, 'title': 'EotWeekend', 'body': 'x', 'category': 'General',
+         'date': '2026-01-03',
+         'recurrence': {'freq': 'weekly', 'weekdays': [5, 6]}},
+        {'id': 133, 'title': 'EotMonthEnd', 'body': 'x', 'category': 'General',
+         'date': '2026-01-31', 'recurrence': {'freq': 'monthly'}},
+        {'id': 134, 'title': 'EotYearly', 'body': 'x', 'category': 'General',
+         'date': '2026-12-31', 'recurrence': {'freq': 'yearly'}},
+        {'id': 135, 'title': 'EotTenTimes', 'body': 'x', 'category': 'General',
+         'date': '9950-06-01',
+         'recurrence': {'freq': 'monthly', 'count': 10}},
+    )]
+    app.save_notes()
+    app.notebook.select(app.TAB_CALENDAR); app.update()
+    app.cal_year, app.cal_month = 9999, 11
+    app.render_calendar(); app.update()
+    _eot_next = _cal_button('▶')
+    if _eot_next is not None:
+        _eot_next.invoke(); app.update()
+    _eot_days = sorted(app._cal_cells)
+    _eot_by_date = (app._cal_month_data or {}).get('notes_by_date', {})
+
+    def _eot_titles(day):
+        return [n['title'] for n in _eot_by_date.get(day, [])]
+
+    check(f'▶ into December 9999 draws December under its own title '
+          f'({app.cal_month_lbl.cget("text")!r}, {_eot_days[:1]}..{_eot_days[-1:]}, '
+          f'errors {_eot_errors})',
+          _eot_next is not None and not _eot_errors
+          and app.cal_month_lbl.cget('text') == 'December 9999  ⌄'
+          and _eot_days == ['9999-12-%02d' % d for d in range(1, 32)])
+    check(f"...with every repeating note on its days, to the very last one "
+          f"({_eot_titles('9999-12-31')}, {_eot_titles('9999-12-26')})",
+          _eot_titles('9999-12-31')
+          == ['EotDaily', 'EotFriday', 'EotMonthEnd', 'EotYearly']
+          and _eot_titles('9999-12-25') == ['EotDaily', 'EotWeekend']
+          and _eot_titles('9999-12-26') == ['EotDaily', 'EotWeekend'])
+    if _eot_next is not None:
+        _eot_next.invoke(); app.update()
+    check(f'...and ▶ on the last month stays there, quietly ({_eot_errors})',
+          not _eot_errors and (app.cal_year, app.cal_month) == (9999, 12)
+          and app.cal_month_lbl.cget('text') == 'December 9999  ⌄')
+    app._history_toggle_btn.invoke(); app.update()
+    _eot_rows = find_all_labels(app._history_rows)
+    check(f'History opens with a "10 times" series dated in the 9900s '
+          f'({[t for t in _eot_rows if "Eot" in t][:3]}, errors {_eot_errors})',
+          not _eot_errors
+          and any('EotTenTimes' in t and '10 occurrences' in t for t in _eot_rows))
+    app._history_toggle_btn.invoke(); app.update()
+
+    # Should a month's notes ever fail to be worked out, the title stays
+    # with the days drawn under it: the month is worked out first, and only
+    # then are the title and the month's record changed.
+    import noteorganizer.ui.calendar_view as _eot_cv
+    _eot_real_expand = _eot_cv.expand_occurrences
+
+    def _eot_broken_expand(*_a, **_k):
+        raise ValueError('a month that cannot be worked out')
+
+    del _eot_errors[:]
+    _eot_cv.expand_occurrences = _eot_broken_expand
+    try:
+        _eot_prev = _cal_button('◀')
+        if _eot_prev is not None:
+            _eot_prev.invoke(); app.update()
+    finally:
+        _eot_cv.expand_occurrences = _eot_real_expand
+    _eot_title = str(app.cal_month_lbl.cget('text'))
+    _eot_drawn = sorted(app._cal_cells)
+    check(f'...and when a month cannot be worked out, the title still names '
+          f'the days drawn under it ({_eot_title!r}, {_eot_drawn[:1]}, '
+          f'{len(_eot_errors)} error)',
+          len(_eot_errors) == 1 and _eot_title == 'December 9999  ⌄'
+          and _eot_drawn[:1] == ['9999-12-01'])
+finally:
+    del app.report_callback_exception
+app.cal_year, app.cal_month = 2026, 7
+app.render_calendar(); app.update()
+app.notebook.select(app.TAB_NOTES); app.update()
+
+# ---- THE OPEN DAY FOLLOWS EVERY REDRAW OF THE CALENDAR ----
+# The day's panel was drawn from the notes when the day opened, and only
+# some routes drew it again: Undo after a delete from the panel put the
+# note back on the grid while the open list went on without it. The undos
+# redraw the month, as every change to the notes does, so render_calendar
+# now draws the open day again whenever what it shows has changed -- and
+# only then, which paging past it proves.
+_od_day = '2026-07-08'
+_od_notes = [
+    {'id': 140, 'title': 'OdDentist', 'body': 'x', 'category': 'General',
+     'date': _od_day},
+    {'id': 141, 'title': 'OdWalk', 'body': 'x', 'category': 'General',
+     'date': '2026-07-01', 'recurrence': {'freq': 'daily'}},
+]
+
+
+def _od_reset():
+    app.notes = [NO.normalize_note(dict(n)) for n in _od_notes]
+    app.save_notes()
+    app.refresh_note_list()
+    app.notebook.select(app.TAB_CALENDAR); app.update()
+    app.cal_year, app.cal_month = 2026, 7
+    app.render_calendar(); app.update()
+
+
+def _od_panel_texts():
+    return find_all_labels(app.day_panel)
+
+
+def _od_open_chip(day, index=0):
+    app.notebook.select(app.TAB_CALENDAR); app.update()
+    _at = _cd_point(day, chip=index)
+    _qa_click(app.cal_canvas, x=_at[0], y=_at[1]); app.update()
+
+
+def _od_open_day(day):
+    app.notebook.select(app.TAB_CALENDAR); app.update()
+    _at = _cd_point(day)
+    _qa_click(app.cal_canvas, x=_at[0], y=_at[1]); app.update()
+
+
+# Undo after a delete from the open note: the list shows the note again.
+_od_reset()
+_od_open_chip(_od_day, 0)
+_od_ready = app._day_panel_mode == 'note' and 'OdDentist' in _od_panel_texts()
+_od_del = find_widget(app.day_panel, tk.Button, 'Delete')
+if _od_del is not None:
+    _od_del.invoke(); app.update()
+_od_gone = not any('OdDentist' in t for t in _od_panel_texts())
+_qa_click(app.toast_action_lbl); app.update()
+check(f"Undo after a delete from the day's panel shows the note in the open "
+      f"list again, as on the grid ({_od_ready}, {_od_gone}, "
+      f"{[t for t in _od_panel_texts() if 'Od' in t]}, "
+      f"{_cd_view(_od_day)['chips']})",
+      _od_ready and _od_del is not None and _od_gone
+      and app._day_panel_mode == 'list' and app.selected_day == _od_day
+      and any('OdDentist' in t for t in _od_panel_texts())
+      and any('OdDentist' in t for t in _cd_view(_od_day)['chips']))
+
+# ...and after "this occurrence only" and its Undo, the day's series.
+_od_reset()
+app.ask_occurrence_scope = lambda *a, **k: 'occurrence'
+try:
+    _od_open_chip('2026-07-15', 0)
+    _od_ready = app._day_panel_mode == 'note' and 'OdWalk' in _od_panel_texts()
+    _od_del = find_widget(app.day_panel, tk.Button, 'Delete')
+    if _od_del is not None:
+        _od_del.invoke(); app.update()
+    _od_gone = any('No notes for this day yet.' in t for t in _od_panel_texts())
+    _qa_click(app.toast_action_lbl); app.update()
+finally:
+    del app.ask_occurrence_scope
+check(f"...and Undo after removing one day of a series shows that day's "
+      f"list with the series again ({_od_ready}, {_od_gone}, "
+      f"{[t for t in _od_panel_texts() if 'Od' in t or 'No notes' in t]})",
+      _od_ready and _od_gone and app.selected_day == '2026-07-15'
+      and any('OdWalk' in t for t in _od_panel_texts())
+      and not any('No notes for this day yet.' in t for t in _od_panel_texts()))
+
+# Paging past an open day draws nothing new in it: the same widgets stay.
+_od_reset()
+_od_open_day(_od_day)
+_od_before = list(app.day_panel.winfo_children())
+for _od_label in ('▶', '◀'):
+    _od_btn = _cal_button(_od_label)
+    if _od_btn is not None:
+        _od_btn.invoke(); app.update()
+check(f'paging the months with a day open leaves its panel as it was '
+      f'({len(_od_before)} widgets, same: '
+      f'{list(app.day_panel.winfo_children()) == _od_before})',
+      _od_before and list(app.day_panel.winfo_children()) == _od_before
+      and (app.cal_year, app.cal_month) == (2026, 7)
+      and app.selected_day == _od_day and app._day_panel_mode == 'list')
+
+# ---- A CATEGORY CHANGE REPAINTS THE CALENDAR ----
+# A note with no colour of its own is drawn in its category's. Three routes
+# change a category and never asked the calendar to redraw -- a title's own
+# menu, the selection bar, and that change's Undo, beside which a comment
+# said the calendar never reads a category -- so the dots and an open
+# day's stripe stayed in the old colour until the month was paged.
+# A category whose colour is not General's, so a stale dot can be told
+# from a fresh one.
+_od_cat = next(c for c, col in NO.CATEGORY_COLORS.items()
+               if c != 'General' and col != NO.CATEGORY_COLORS['General'])
+_od_gen, _od_new = NO.CATEGORY_COLORS['General'], NO.CATEGORY_COLORS[_od_cat]
+
+
+def _od_stripes():
+    """The open list's stripes, row by row: the 4-pixel frame in each row."""
+    out, level = [], [app.day_panel]
+    while level:
+        nxt = []
+        for w in level:
+            for c in w.winfo_children():
+                if isinstance(c, tk.Frame):
+                    try:
+                        if int(str(c.cget('width'))) == 4:
+                            out.append(str(c.cget('bg')))
+                    except (tk.TclError, ValueError):
+                        pass
+                nxt.append(c)
+        level = nxt
+    return out
+
+
+_od_reset()
+_od_open_day(_od_day)
+_od_caught = []
+_od_real_add, _od_real_pop = tk.Menu.add_command, tk.Menu.tk_popup
+tk.Menu.add_command = lambda self, **kw: _od_caught.append(
+    (str(kw.get('label', '')), kw.get('command')))
+tk.Menu.tk_popup = lambda self, *a, **k: None
+try:
+    _at = _cd_point(_od_day, chip=0)
+    _qa_fire(app.cal_canvas, '<Button-3>', x=_at[0], y=_at[1],
+             rootx=app.cal_canvas.winfo_rootx() + _at[0],
+             rooty=app.cal_canvas.winfo_rooty() + _at[1])
+    app.update()
+finally:
+    tk.Menu.add_command = _od_real_add
+    tk.Menu.tk_popup = _od_real_pop
+_od_move = next((c for l, c in _od_caught if l.strip() == _od_cat), None)
+if _od_move is not None:
+    _od_move(); app.update()
+check(f"a category moved from a title's menu recolours its dot and the open "
+      f"list's stripe ({_od_cat}: {_cd_view(_od_day)['dots']}, {_od_stripes()})",
+      _od_move is not None and app.find_note(140)['category'] == _od_cat
+      and _cd_view(_od_day)['dots'] == [_od_new, _od_gen]
+      and _od_stripes() == [_od_new, _od_gen])
+
+# From the selection bar, with the day open; then that change's Undo.
+_od_reset()
+_od_open_day(_od_day)
+app.notebook.select(app.TAB_NOTES); app.update()
+app._toggle_selection_mode()
+app._toggle_note_selected(140, True)
+app.update()
+app._bulk_change_category()
+app.update()
+_od_lbl = find_widget(app._mini_popup, tk.Label, _od_cat)
+for _ in range(60):
+    if app.find_note(140)['category'] == _od_cat:
+        break
+    try:
+        if _od_lbl is not None and _od_lbl.winfo_exists():
+            _qa_click(_od_lbl)
+    except tk.TclError:
+        pass
+    app.update()
+    _t7.sleep(0.02)
+_od_undo = app._toast_action
+app.notebook.select(app.TAB_CALENDAR); app.update()
+check(f"a category moved from the selection bar shows on the calendar and in "
+      f"the open list ({_cd_view(_od_day)['dots']}, {_od_stripes()})",
+      app.find_note(140)['category'] == _od_cat
+      and _cd_view(_od_day)['dots'] == [_od_new, _od_gen]
+      and _od_stripes() == [_od_new, _od_gen])
+if _od_undo is not None:
+    _od_undo(); app.update()
+check(f"...and its Undo puts the old colour back on both "
+      f"({_cd_view(_od_day)['dots']}, {_od_stripes()})",
+      _od_undo is not None and app.find_note(140)['category'] == 'General'
+      and _cd_view(_od_day)['dots'] == [_od_gen]
+      and _od_stripes() == [_od_gen, _od_gen])
+if app.selection_mode:
+    app._toggle_selection_mode()
+
+# ---- A THEME SWITCH LEAVES EACH NOTE ITS OWN COLOUR ----
+# The straggler pass swaps any colour equal to another theme's palette
+# entry, and cannot tell a note's own colour from one: the open day's
+# stripes in the colours the theme being left also uses -- its accent
+# (General's), its danger (Urgent's), its success -- came back as the new
+# theme's. The list is drawn again from the notes after that pass, as the
+# note list's cards are.
+_od_theme_was = app.theme_name
+app.set_theme('dark'); app.update()
+_od_dark, _od_ocean = NO.THEMES['dark'], NO.THEMES['dark_ocean']
+app.notes = [NO.normalize_note(n) for n in (
+    {'id': 142, 'title': 'OdGeneral', 'body': 'x', 'category': 'General',
+     'date': '2026-07-09'},
+    {'id': 143, 'title': 'OdUrgent', 'body': 'x', 'category': 'Urgent',
+     'date': '2026-07-09'},
+    {'id': 144, 'title': 'OdOwn', 'body': 'x', 'category': 'General',
+     'date': '2026-07-09', 'color': _od_dark['success']},
+)]
+app.save_notes()
+app.refresh_note_list()
+_od_open_day('2026-07-09')
+_od_want = [app.get_note_color(n) for n in app.notes]
+check(f'fixture: the stripes wear colours the dark theme also uses, which '
+      f'Ocean Blue does not ({_od_stripes()})',
+      _od_stripes() == _od_want
+      and _od_want == [_od_dark['accent'], _od_dark['danger'], _od_dark['success']]
+      and all(_od_dark[k] != _od_ocean[k] for k in ('accent', 'danger', 'success')))
+app.show_settings_page(); app.update()
+app.set_theme('dark_ocean'); app.update()
+app.hide_settings_page(); app.update()
+check(f"a theme switched in Settings leaves the open day's stripes in the "
+      f"notes' own colours ({_od_stripes()})",
+      app.theme_name == 'dark_ocean' and _od_stripes() == _od_want)
+app.set_theme('dark'); app.update()
+app.notebook.select(app.TAB_NOTES); app.update()
+app.editor_theme_btn.invoke(); app.update()
+app.notebook.select(app.TAB_CALENDAR); app.update()
+check(f"...and so does the sun/moon above a note ({app.theme_name}, "
+      f"{_od_stripes()})",
+      app.theme_name != 'dark' and _od_stripes() == _od_want)
+app.set_theme(_od_theme_was); app.update()
+app.close_day_panel()
+app.notebook.select(app.TAB_NOTES); app.update()
+
+
+class _CalKey:
+    """What a page key reaches through bind_all: the bound handler, with the
+    widget that holds the keyboard as the event's widget. A generated key
+    goes to the focus, which a test process does not own (qa/README)."""
+    widget = None
+
+
+_CalKey.widget = app.cal_canvas
+
+# ---- A MONTH CHANGED UNDER THE POINTER TAKES ITS PREVIEW WITH IT ----
+# Resting on a title shows its preview; PgDn changed the month under the
+# still pointer and the preview of July's note stayed over August's 12th,
+# and over the gaps and the weekday names too -- the redraw forgot the
+# hover without taking its preview down.
+app.notes = [NO.normalize_note({
+    'id': 150, 'title': 'TipDentist', 'body': 'Bring the card',
+    'category': 'General', 'date': '2026-07-08'})]
+app.save_notes()
+app.notebook.select(app.TAB_CALENDAR); app.update()
+app.cal_year, app.cal_month = 2026, 7
+app.render_calendar(); app.update()
+_tp_at = _cd_point('2026-07-08', chip=0)
+_qa_fire(app.cal_canvas, '<Motion>', x=_tp_at[0], y=_tp_at[1]); app.update()
+_tp_tip = getattr(app, '_day_tooltip', None)
+_tp_up = _tp_tip is not None and bool(_tp_tip.winfo_exists())
+app._calendar_key(_CalKey(), months=1); app.update()
+check(f"PgDn under a note's preview takes the preview down with its month "
+      f"(up before: {_tp_up}, month {app.cal_year}-{app.cal_month:02d}, "
+      f"after: {getattr(app, '_day_tooltip', None)})",
+      _tp_up and (app.cal_year, app.cal_month) == (2026, 8)
+      and getattr(app, '_day_tooltip', None) is None
+      and not (_tp_tip.winfo_exists() if _tp_tip is not None else False))
+app.hide_day_tooltip()
+app.cal_year, app.cal_month = 2026, 7
+app.render_calendar(); app.update()
+
+# ---- ...AND SO DOES THE WHEEL ----
+# The wheel scrolls the calendar's area under the same still pointer, with
+# no redraw -- and only a redraw took the preview down: the preview of the
+# 8th stayed up over the 22nd. The area's own movement takes it down now.
+_wp_geom = app.winfo_geometry()
+try:
+    app.geometry('1150x600'); app.update()
+    app.open_day_popup('2026-07-29'); app.update()
+    app.cal_scroll_canvas.yview_moveto(0); app.update()
+    _wp_at = _cd_point('2026-07-08', chip=0)
+    _qa_fire(app.cal_canvas, '<Motion>', x=_wp_at[0], y=_wp_at[1]); app.update()
+    _wp_tip = getattr(app, '_day_tooltip', None)
+    _wp_up = _wp_tip is not None and bool(_wp_tip.winfo_exists())
+    _wp_before = app.cal_scroll_canvas.yview()[0]
+    _qa_fire(app.cal_canvas, '<MouseWheel>', x=_wp_at[0], y=_wp_at[1],
+             delta=-360)
+    app.update()
+    _wp_after = app.cal_scroll_canvas.yview()[0]
+    check(f"the wheel under a note's preview takes the preview down with the "
+          f"days it moved (up before: {_wp_up}, view {_wp_before:.2f} -> "
+          f"{_wp_after:.2f}, after: {getattr(app, '_day_tooltip', None)})",
+          _wp_up and _wp_after > _wp_before
+          and getattr(app, '_day_tooltip', None) is None)
+finally:
+    app.hide_day_tooltip()
+    app.close_day_panel()
+    app.geometry(_wp_geom); app.update()
+
+# ---- WHILE HISTORY COVERS THE MONTH, THE PAGE KEYS PAGE HISTORY ----
+# PgUp/PgDn/Home asked only whether the Calendar tab was showing, so under
+# the register they moved the hidden month -- three PgDn from July came
+# back to October -- and the register itself did not move.
+app.notes = [NO.normalize_note({
+    'id': 160 + i, 'title': f'PageKey{i}', 'body': 'x', 'category': 'General',
+    'date': '2026-03-%02d' % (i % 28 + 1)}) for i in range(45)]
+app.save_notes()
+app.notebook.select(app.TAB_CALENDAR); app.update()
+app.cal_year, app.cal_month = 2026, 7
+app.render_calendar(); app.update()
+app._history_toggle_btn.invoke(); app.update()
+app.cal_scroll_canvas.yview_moveto(0); app.update()
+_hk_top = app.cal_scroll_canvas.yview()
+check(f'fixture: the register is longer than its view ({_hk_top})',
+      app._history_visible and _hk_top[0] == 0.0 and _hk_top[1] < 1.0)
+for _ in range(3):
+    app._calendar_key(_CalKey(), months=1); app.update()
+_hk_paged = app.cal_scroll_canvas.yview()
+check(f'PgDn under History pages the register and leaves the hidden month '
+      f'alone ({_hk_top} -> {_hk_paged}, {app.cal_year}-{app.cal_month:02d})',
+      (app.cal_year, app.cal_month) == (2026, 7) and _hk_paged[0] > _hk_top[0])
+app._calendar_key(_CalKey(), today=True); app.update()
+_hk_home = app.cal_scroll_canvas.yview()
+check(f'...Home goes to its top, not to today ({_hk_home}, '
+      f'{app.cal_year}-{app.cal_month:02d})',
+      _hk_home[0] == 0.0 and (app.cal_year, app.cal_month) == (2026, 7))
+app._history_toggle_btn.invoke(); app.update()
+check(f'...and the grid comes back on the month it left '
+      f'({app.cal_month_lbl.cget("text")!r})',
+      not app._history_visible and app.cal_month_lbl.cget('text') == 'July 2026  ⌄')
+
+# ---- THE REMINDER BAR LANDS ON TODAY, ON SCREEN ----
+# The "notes for today" bar sits above every page. Its click selected the
+# Calendar tab and opened today's list under whichever month was showing,
+# with no day outlined; from Settings, it opened the day behind Settings,
+# where nothing showed; and under History, below the register.
+import datetime as _rm_dt
+_rm_d = _rm_dt.date.today()
+_rm_today = _rm_d.strftime('%Y-%m-%d')
+_rm_away = (_rm_d.year - 1, _rm_d.month)          # a month that is not today's
+app.notes = [NO.normalize_note(n) for n in (
+    {'id': 170, 'title': 'RemindToday', 'body': 'x', 'category': 'General',
+     'date': _rm_today},
+    {'id': 171, 'title': 'RemindAway', 'body': 'x', 'category': 'General',
+     'date': '%04d-%02d-03' % _rm_away})]
+app.save_notes()
+app._render_reminder_bar(1, _rm_today); app.update()
+_rm_lbl = find_widget(app.reminder_bar, tk.Label, 'You have')
+
+
+def _rm_landed():
+    return (app.notebook.winfo_ismapped()
+            and app.notebook.index(app.notebook.select()) == app.TAB_CALENDAR
+            and not app._history_visible
+            and (app.cal_year, app.cal_month) == (_rm_d.year, _rm_d.month)
+            and app.selected_day == _rm_today and app._day_panel_mode == 'list'
+            and _cd_view(_rm_today)['selected_width'] == 2)
+
+
+def _rm_elsewhere():
+    app.close_day_panel()
+    app.notebook.select(app.TAB_CALENDAR); app.update()
+    app.cal_year, app.cal_month = _rm_away
+    app.render_calendar(); app.update()
+
+
+check('fixture: the reminder bar shows its line', _rm_lbl is not None)
+_rm_elsewhere()
+if _rm_lbl is not None:
+    _qa_click(_rm_lbl); app.update()
+check(f"the reminder's click shows today on its own month, outlined "
+      f"({app.cal_year}-{app.cal_month:02d}, {app.selected_day})", _rm_landed())
+_rm_elsewhere()
+app.show_settings_page(); app.update()
+if _rm_lbl is not None:
+    _qa_click(_rm_lbl); app.update()
+check(f"...clicked over Settings, it leaves Settings to show it "
+      f"(Settings open: {app._settings_open})",
+      not app._settings_open and _rm_landed())
+_rm_elsewhere()
+app._history_toggle_btn.invoke(); app.update()
+if _rm_lbl is not None:
+    _qa_click(_rm_lbl); app.update()
+check(f"...and clicked over History, it brings the month back to show it "
+      f"(History open: {app._history_visible})", _rm_landed())
+app.dismiss_reminder()
+app.close_day_panel(); app.update()
+
+# ---- SAVING THE MARKER POPUP EMPTY OFFERS THE WAY BACK ----
+# The menu's "Clear day markers" offers Undo on its toast, and so does the
+# palette's "No color" for a day's colour. The marker popup's Clear, then
+# Save, discards the same markers by a fourth door, and it said nothing and
+# kept nothing. Picking chips and ✕ still write nothing (held above).
+_mk_day = '2026-07-14'
+_mk_three = [e for e, _c in app.DAY_MARKER_EMOJIS[:3]]
+app.day_emoji = {_mk_day: list(_mk_three)}
+app._persist_day_emoji()
+app.notebook.select(app.TAB_CALENDAR); app.update()
+app.cal_year, app.cal_month = 2026, 7
+app.render_calendar(); app.update()
+app._hide_toast()
+
+
+def _mk_popup_save(clear_first):
+    app._mark_day_emoji(_mk_day, _types_q7.SimpleNamespace(x_root=200, y_root=200))
+    app.update()
+    _mk_pop = app._mini_popup
+    if clear_first:
+        _mk_clear = find_widget(_mk_pop, tk.Button, 'Clear')
+        if _mk_clear is not None:
+            _mk_clear.invoke(); app.update()
+    _mk_save = find_widget(_mk_pop, tk.Button, 'Save')
+    if _mk_save is not None:
+        _mk_save.invoke(); app.update()
+
+
+_mk_popup_save(clear_first=True)
+_mk_offer = app._toast_action
+check(f"the marker popup saved empty clears the day and offers Undo on "
+      f"its toast ({app.day_emoji.get(_mk_day)}, "
+      f"{str(app.toast_lbl.cget('text'))!r})",
+      _mk_day not in app.day_emoji
+      and NO.load_settings().get('day_emoji', {}).get(_mk_day) is None
+      and _mk_offer is not None
+      and 'Day markers cleared' in str(app.toast_lbl.cget('text')))
+if _mk_offer is not None:
+    _mk_offer(); app.update()
+check(f"...and its Undo puts the three back, on disk and in the day's corner "
+      f"({_cd_view(_mk_day)['badge']!r})",
+      app.day_emoji.get(_mk_day) == _mk_three
+      and NO.load_settings().get('day_emoji', {}).get(_mk_day) == _mk_three
+      and _cd_badge_ok(_cd_view(_mk_day)['badge'], _mk_three))
+# The control: saved unchanged, nothing was lost and nothing is offered.
+app._hide_toast()
+_mk_popup_save(clear_first=False)
+check(f"...while saving it unchanged offers nothing ({app._toast_action})",
+      app._toast_action is None and app.day_emoji.get(_mk_day) == _mk_three)
+app.day_emoji = {}
+app._persist_day_emoji()
+app._hide_toast()
+app.notebook.select(app.TAB_NOTES); app.update()
+
+# ---- A DAY DRAWS INSIDE ITSELF, ITS NUMBER UNCOVERED, READABLE ON ITS PAINT ----
+# Three things the drawing got wrong where the widget grid had hidden them.
+# A day of many colours drew its dots across the gap into the next days (a
+# Frame had clipped them). Three markers printed over the day's number at
+# the default window's width (an opaque Label had covered it). And a day
+# painted yellow or light teal drew its number, titles and markers in white
+# (1.3:1). Read from the canvas at the smallest window, either side of the
+# 1,150-pixel text step, and wide: every item's box against its cell.
+from noteorganizer.core.themes import contrasting_fg as _dr_contrasting_fg
+_dr_colours = list(dict.fromkeys(NO.PRESET_NOTE_COLORS))[:12]
+_dr_marks = [e for e, _c in app.DAY_MARKER_EMOJIS[:4]]
+app.notes = [NO.normalize_note({
+    'id': 180 + i, 'title': f'Colour{i}', 'body': 'x', 'category': 'General',
+    'date': '2026-08-12', 'color': col}) for i, col in enumerate(_dr_colours)]
+app.notes += [NO.normalize_note({
+    'id': 195 + i, 'title': f'Painted{i}', 'body': 'x', 'category': 'General',
+    'date': d}) for i, d in enumerate(('2026-08-14', '2026-08-18', '2026-08-19'))]
+app.save_notes()
+app.day_emoji = {'2026-08-14': list(_dr_marks), '2026-08-15': list(_dr_marks[:3]),
+                 '2026-08-18': list(_dr_marks[:3])}
+app._persist_day_emoji()
+app.day_colors = {'2026-08-14': '#e76f51', '2026-08-18': '#fee440',
+                  '2026-08-19': '#00f5d4'}
+app._persist_day_colors()
+app.notebook.select(app.TAB_CALENDAR); app.update()
+app.cal_year, app.cal_month = 2026, 8
+app.render_calendar(); app.update()
+
+
+_dr_w0, _dr_h0 = app.winfo_width(), app.winfo_height()
+try:
+    for _dr_geom in ('640x700', '1149x850', '1150x850', '1400x850'):
+        app.geometry(_dr_geom)
+        for _ in range(6):
+            app.update(); _t7.sleep(0.02)
+        _dr_cv = app.cal_canvas
+        _dr_out, _dr_cover = [], []
+        for _dr_d, _dr_rec in app._cal_cells.items():
+            for _dr_item in _dr_cv.find_withtag(_dr_rec['tag']):
+                _dr_b = _dr_cv.bbox(_dr_item)
+                if _dr_b and not (_dr_rec['x0'] - 1 <= _dr_b[0] and _dr_b[2] <= _dr_rec['x1'] + 1
+                                  and _dr_rec['y0'] - 1 <= _dr_b[1]
+                                  and _dr_b[3] <= _dr_rec['y1'] + 1):
+                    _dr_out.append(_dr_d)
+            _dr_it = _dr_rec['items']
+            if 'badge' in _dr_it:
+                _b1, _b2 = _dr_cv.bbox(_dr_it['badge']), _dr_cv.bbox(_dr_it['day'])
+                if _b1[0] < _b2[2] and _b2[0] < _b1[2] and _b1[1] < _b2[3] and _b2[1] < _b1[3]:
+                    _dr_cover.append(_dr_d)
+        _dr_busy = _cd_view('2026-08-12')
+        _dr_cell = _dr_busy['box'][2] - _dr_busy['box'][0]
+        check(f'{_dr_geom} (cell {_dr_cell}px): everything a day draws sits inside '
+              f'its own cell ({sorted(set(_dr_out))})', not _dr_out)
+        check(f'{_dr_geom}: no marker covers its day\'s number ({_dr_cover}; '
+              f'{_cd_view("2026-08-15")["badge"]!r}, {_cd_view("2026-08-14")["badge"]!r})',
+              not _dr_cover
+              and _cd_badge_ok(_cd_view('2026-08-15')['badge'], _dr_marks[:3])
+              and _cd_badge_ok(_cd_view('2026-08-14')['badge'], _dr_marks))
+        check(f'{_dr_geom}: a day of twelve colours shows the dots that fit, in '
+              f'order, and "+" for the rest ({len(_dr_busy["dots"])} dots, '
+              f'{_dr_busy["more_dots"]!r})',
+              _dr_busy['dots'] == _dr_colours[:len(_dr_busy['dots'])]
+              and (_dr_busy['more_dots'] == '+') == (len(_dr_busy['dots']) < 12))
+    # Wide, where the room is not what limits: still three at most.
+    check(f'with room to spare, four markers show as three and "+1" '
+          f'({_cd_view("2026-08-14")["badge"]!r})',
+          _cd_view('2026-08-14')['badge'] == ''.join(_dr_marks[:3]) + '+1')
+finally:
+    app.geometry('%dx%d' % (_dr_w0, _dr_h0))
+    for _ in range(6):
+        app.update(); _t7.sleep(0.02)
+
+
+def _dr_contrast(a, b):
+    def lum(h):
+        h = h.lstrip('#')
+        chans = [int(h[i:i + 2], 16) / 255 for i in (0, 2, 4)]
+        lin = [c / 12.92 if c <= 0.03928 else ((c + 0.055) / 1.055) ** 2.4 for c in chans]
+        return 0.2126 * lin[0] + 0.7152 * lin[1] + 0.0722 * lin[2]
+    hi, lo = sorted((lum(a), lum(b)), reverse=True)
+    return (hi + 0.05) / (lo + 0.05)
+
+
+# The two paints the audit measured at 1.28:1 and 1.40:1 must read now; the
+# darker one keeps white, as the older check above holds for its July day.
+for _dr_d, _dr_paint, _dr_least in (('2026-08-18', '#fee440', 4.5),
+                                    ('2026-08-19', '#00f5d4', 4.5),
+                                    ('2026-08-14', '#e76f51', 3.0)):
+    _dr_v = _cd_view(_dr_d)
+    _dr_want = _dr_contrasting_fg(_dr_paint)
+    _dr_fills = {_dr_v['day_fill']} | set(_dr_v['chip_fill']) | (
+        {_dr_v['badge_fill']} if _dr_v['badge'] else set())
+    check(f"a day painted {_dr_paint} draws its number, titles and markers in the "
+          f"colour that reads on it ({_dr_fills}, "
+          f"{_dr_contrast(_dr_paint, _dr_v['day_fill']):.2f}:1)",
+          _dr_v['bg'] == _dr_paint and _dr_fills == {_dr_want}
+          and _dr_contrast(_dr_paint, _dr_v['day_fill']) >= _dr_least)
+# A colour the drawing cannot work out -- #abc, which the colour gate now
+# gives back long, planted here past the gate -- draws its text white, as
+# every painted day did before it learned contrast. Raising in the middle
+# of the month's drawing left the month half drawn and unclickable.
+app.day_colors = dict(app.day_colors, **{'2026-08-20': '#abc'})
+_dr_err = None
+try:
+    app.render_calendar(); app.update()
+except Exception as _dr_exc:   # noqa: BLE001 -- the check reports it
+    _dr_err = repr(_dr_exc)
+check(f'a day colour the drawing cannot work out leaves the month drawn '
+      f'({len(app._cal_cells)} days, {_dr_err})',
+      _dr_err is None and len(app._cal_cells) == 31
+      and _cd_view('2026-08-20')['day_fill'] == '#ffffff')
+app.day_emoji, app.day_colors = {}, {}
+app._persist_day_emoji()
+app._persist_day_colors()
+app.cal_year, app.cal_month = 2026, 7
+app.render_calendar(); app.update()
+app.notebook.select(app.TAB_NOTES); app.update()
+
+# ---- A LONG TITLE GIVES WAY; THE MARKS AFTER IT STAY ----
+# A day's list row and a History row put their marks AFTER the title -- ✎
+# 💬 📎 on the day, "· 20 occurrences · 1 edited (✎)" in History -- in one
+# label, and a long title (the app allows TITLE_MAX_LEN characters) pushed
+# them past the label's edge, which is where the cut fell. Only the title
+# gives way now, with an ellipsis, at the label's own width.
+_lt_title = ('Quarterly planning with the whole regional team about the budget '
+             * 4)[:app.TITLE_MAX_LEN].strip()
+app.notes = [NO.normalize_note({
+    'id': 210, 'title': _lt_title, 'body': 'x', 'category': 'General',
+    'date': '2026-07-01', 'comments': 'c',
+    'recurrence': {'freq': 'daily', 'count': 20},
+    'attachments': [{'filename': 'plan.pdf', 'stored_as': 'x_plan.pdf'}],
+    'overrides': {'2026-07-10': {'title': _lt_title, 'body': 'edited',
+                                 'comments': 'note to self',
+                                 'category': 'General', 'color': ''}}}),
+    NO.normalize_note({'id': 211, 'title': 'Short one', 'body': 'x',
+                       'category': 'General', 'date': '2026-07-10'})]
+app.save_notes()
+app.notebook.select(app.TAB_CALENDAR); app.update()
+app.cal_year, app.cal_month = 2026, 7
+app.render_calendar(); app.update()
+_od_open_day('2026-07-10')
+for _ in range(3):
+    app.update_idletasks(); app.update()
+
+
+def _lt_label(root, needle):
+    _stack = [root]
+    while _stack:
+        _w = _stack.pop(0)
+        if isinstance(_w, tk.Label) and needle in str(_w.cget('text')):
+            return _w
+        _stack.extend(_w.winfo_children())
+    return None
+
+
+_lt_row = _lt_label(app.day_panel, _lt_title[:20])
+_lt_short = _lt_label(app.day_panel, 'Short one')
+_lt_text = str(_lt_row.cget('text')) if _lt_row is not None else ''
+check(f"a long title in a day's list gives way and its marks stay in view "
+      f"(...{_lt_text[-28:]!r}, needs {_lt_row.winfo_reqwidth() if _lt_row else 0} "
+      f"of {_lt_row.winfo_width() if _lt_row else 0}px)",
+      _lt_row is not None and _lt_text.endswith('…  ✎  💬  📎×1')
+      and _lt_text.startswith('🔁 Quarterly')
+      and _lt_row.winfo_reqwidth() <= _lt_row.winfo_width())
+check(f"...while a short one is shown whole ({_lt_short.cget('text') if _lt_short else None!r})",
+      _lt_short is not None and str(_lt_short.cget('text')) == 'Short one')
+app._history_toggle_btn.invoke(); app.update()
+for _ in range(3):
+    app.update_idletasks(); app.update()
+_lt_hist = _lt_label(app._history_rows, _lt_title[:20])
+_lt_htext = str(_lt_hist.cget('text')) if _lt_hist is not None else ''
+check(f"...and in History, the group's counts stay in view "
+      f"(...{_lt_htext[-45:]!r}, needs {_lt_hist.winfo_reqwidth() if _lt_hist else 0} "
+      f"of {_lt_hist.winfo_width() if _lt_hist else 0}px)",
+      _lt_hist is not None and '…' in _lt_htext
+      and _lt_htext.endswith(' · 20 occurrences · 1 edited (✎)')
+      and _lt_hist.winfo_reqwidth() <= _lt_hist.winfo_width())
+app._history_toggle_btn.invoke(); app.update()
+app.close_day_panel()
+app.notebook.select(app.TAB_NOTES); app.update()
+
+# ---- WITH A DAY OPEN, A HELD DRAG OF THE EDGE WAITS FOR THE HAND ----
+# The month alone is one drawing and follows a held drag of the window's
+# edge (qa9 holds that). An open day's panel below it is widgets -- a row
+# per note, or a note's whole text -- and was laid out at every step with
+# the month: 60 ms a step for an ordinary month, 150 and more for a busy
+# one, back near the cost the drawing set out to remove. So with a day
+# open the calendar waits for the hand, as History and the other pages do.
+# The button is answered for the app and the pause is put out of reach, as
+# qa9 does; what is asked is the width the content was given.
+def _dg_width():
+    return int(float(app.main_canvas.itemcget(app._main_window_item, 'width')))
+
+
+def _dg_window():
+    return max(app.main_canvas.winfo_width(), app._main_min_width)
+
+
+app.notes = [NO.normalize_note({'id': 220, 'title': 'DragDay', 'body': 'x',
+                                'category': 'General', 'date': '2026-07-08'})]
+app.save_notes()
+app.notebook.select(app.TAB_CALENDAR); app.update()
+app.cal_year, app.cal_month = 2026, 7
+app.render_calendar(); app.update()
+_dg_held = {'now': True}
+_dg_w0, _dg_h0 = app.winfo_width(), app.winfo_height()
+app._pointer_button_held = lambda: _dg_held['now']
+app.RESIZE_PAUSE_MS = 60000
+try:
+    app.geometry('%dx%d' % (_dg_w0 - 40, _dg_h0))
+    for _ in range(5):
+        app.update_idletasks(); app.update()
+    check(f'fixture: with no day open, the month follows a held drag '
+          f'({_dg_width()} for {_dg_window()})', _dg_width() == _dg_window())
+    for _dg_open in (lambda: _od_open_day('2026-07-08'),
+                     lambda: _od_open_chip('2026-07-08', 0)):
+        _dg_open()
+        for _ in range(3):
+            app.update_idletasks(); app.update()
+        _dg_mode = app._day_panel_mode
+        _dg_before = _dg_width()
+        app.geometry('%dx%d' % (_dg_before + (30 if _dg_before < _dg_w0 else -30),
+                                _dg_h0))
+        for _ in range(5):
+            app.update_idletasks(); app.update()
+        check(f'with a day open ({_dg_mode}), a held drag waits for the hand '
+              f'(content {_dg_before} -> {_dg_width()}, the window is {_dg_window()})',
+              _dg_mode in ('list', 'note') and _dg_width() == _dg_before != _dg_window()
+              and app._resize_watch_job is not None)
+        _dg_held['now'] = False
+        _dg_end = time.time() + 5
+        while time.time() < _dg_end and _dg_width() != _dg_window():
+            app.update(); time.sleep(0.02)
+        check(f'...and letting go lays it out, the open day with it '
+              f'({_dg_width()} for {_dg_window()}, {app._day_panel_mode})',
+              _dg_width() == _dg_window() and app._day_panel_mode == _dg_mode)
+        _dg_held['now'] = True
+finally:
+    for _dg_attr in ('_pointer_button_held', 'RESIZE_PAUSE_MS'):
+        app.__dict__.pop(_dg_attr, None)
+    app.geometry('%dx%d' % (_dg_w0, _dg_h0))
+    app._lay_out_at_window_size()
+    for _ in range(5):
+        app.update_idletasks(); app.update()
+app.close_day_panel()
+app.notebook.select(app.TAB_NOTES); app.update()
+
+# ---- HISTORY KEEPS WHAT A SERIES COSTS; IT NEVER KEEPS A STALE ANSWER ----
+# History worked every bounded series out again at each search pause (300-
+# 400 ms at 1,000-5,000 notes). It now keeps what does not depend on the
+# query -- a series' days, its label, its next day -- under exactly what
+# they are worked out from, while the register is open. The promise that
+# must not move: the rows, their order, their counts and "Show more" are
+# what a register opened afresh would show, also after a series changes
+# under the kept answers.
+app.notes = [NO.normalize_note(n) for n in (
+    [{'id': 230, 'title': 'KeptSeries', 'body': 'x', 'category': 'General',
+      'date': '2026-06-01', 'recurrence': {'freq': 'daily', 'count': 10}},
+     {'id': 231, 'title': 'KeptLong', 'body': 'x', 'category': 'General',
+      'date': '2026-01-05', 'recurrence': {'freq': 'weekly', 'end': '2029-01-01'}}]
+    + [{'id': 240 + i, 'title': f'KeptDated{i}', 'body': 'x',
+        'category': 'General', 'date': '2026-03-%02d' % (i % 28 + 1)}
+       for i in range(55)])]
+app.save_notes()
+app.notebook.select(app.TAB_CALENDAR); app.update()
+app._history_toggle_btn.invoke(); app.update()
+# A page of fifty, as a search or a year chip leaves it (the Show-more
+# check above left it at a hundred).
+app._history_shown = 50
+app._render_calendar_history(); app.update()
+
+
+def _hm_rows():
+    return find_all_labels(app._history_rows) + [
+        str(b.cget('text')) for b in app._history_rows.winfo_children()
+        if isinstance(b, tk.Button)]
+
+
+def _hm_fresh():
+    """The same view, from a memo nobody has used."""
+    app._history_memo = {}
+    app._render_calendar_history(); app.update()
+    return _hm_rows()
+
+
+_hm_kept = _hm_rows()
+check(f'fixture: History shows the ten-day series, 50 rows and Show more '
+      f'({[t for t in _hm_kept if "KeptSeries" in t]}, {_hm_kept[-1]!r})',
+      any('KeptSeries' in t and '10 occurrences' in t for t in _hm_kept)
+      and _hm_kept[-1].startswith('Show more (7 left)'))
+for _hm_q in ('Kept', 'KeptD', ''):
+    app._history_search_var.set(_hm_q)
+    app._render_calendar_history(); app.update()
+_hm_kept = _hm_rows()
+check('with its kept answers, History lists what a fresh register lists',
+      _hm_kept == _hm_fresh())
+# A series changes under the kept answers: one of its days deleted through
+# a day row's own menu ("this occurrence only"), with the search running.
+app._history_search_var.set('KeptSeries')
+app._render_calendar_history(); app.update()
+app._history_toggle_group(230); app.update()
+_hm_caught = []
+_hm_real_add, _hm_real_pop = tk.Menu.add_command, tk.Menu.tk_popup
+tk.Menu.add_command = lambda self, **kw: _hm_caught.append(
+    (str(kw.get('label', '')), kw.get('command')))
+tk.Menu.tk_popup = lambda self, *a, **k: None
+try:
+    _hm_row = _lt_label(app._history_rows, '2026-06-05')
+    if _hm_row is not None:
+        _qa_fire(_hm_row, '<Button-3>', x=5, y=5, rootx=200, rooty=200)
+        app.update()
+finally:
+    tk.Menu.add_command = _hm_real_add
+    tk.Menu.tk_popup = _hm_real_pop
+_hm_delete = next((c for l, c in _hm_caught if 'Delete' in l), None)
+app.ask_occurrence_scope = lambda *a, **k: 'occurrence'
+try:
+    if _hm_delete is not None:
+        _hm_delete(); app.update()
+finally:
+    del app.ask_occurrence_scope
+_hm_after = _hm_rows()
+check(f'...and after one of a series\' days is deleted under them, the count '
+      f'follows ({[t for t in _hm_after if "KeptSeries" in t]})',
+      _hm_delete is not None
+      and '2026-06-05' in (app.find_note(230).get('exceptions') or [])
+      and any('KeptSeries' in t and '9 occurrences' in t for t in _hm_after)
+      and not any('2026-06-05' in t for t in _hm_after)
+      and _hm_after == _hm_fresh())
+app._history_search_var.set('')
+app._render_calendar_history(); app.update()
+_hm_show = find_widget(app._history_rows, tk.Button, 'Show more')
+if _hm_show is not None:
+    _hm_show.invoke(); app.update()
+_hm_more = _hm_rows()
+check(f'...and Show more still brings the same rows as a fresh register '
+      f'({len(_hm_more)} rows)',
+      _hm_show is not None and any('KeptLong' in t for t in _hm_more)
+      and _hm_more == _hm_fresh())
+
+# ---- A DAY'S NOTES COME FROM THE MONTH ALREADY WORKED OUT ----
+# The month's drawing already knows which notes land on each day; hovering
+# a day and opening it asked every note again (14 ms at 5,000 notes, at
+# every hover). The drawn month's answer is used while it is current.
+app._history_toggle_btn.invoke(); app.update()
+app.cal_year, app.cal_month = 2026, 3
+app.render_calendar(); app.update()
+_nd_day = '2026-03-02'
+_nd_calls = []
+_nd_real = app.notes_on_date
+app.notes_on_date = lambda d: (_nd_calls.append(d), _nd_real(d))[1]
+_nd_tips = []
+try:
+    _at = _cd_point(_nd_day)
+    _qa_fire(app.cal_canvas, '<Motion>', x=_at[0], y=_at[1]); app.update()
+    _nd_tips = find_all_labels(app._day_tooltip) if getattr(app, '_day_tooltip', None) else []
+    app.hide_day_tooltip()
+    _od_open_day(_nd_day)
+finally:
+    del app.notes_on_date
+_nd_want = [n['title'] for n in app.notes_on_date(_nd_day)]
+check(f"hovering and opening a day of the drawn month ask no note again "
+      f"({_nd_calls}), and show the day's notes ({_nd_want})",
+      not _nd_calls and _nd_want
+      and all(any(t in s for s in _nd_tips) for t in _nd_want)
+      and all(any(t in s for s in _od_panel_texts()) for t in _nd_want))
+
+# ---- RE-DRAWING HISTORY OR A DAY LEAVES NOTHING BEHIND ----
+# Both bound their long-lived frame again at every redraw -- History its
+# wheel, the day panel its right-click -- and Tkinter never deletes the
+# command a binding replaces: one more Tcl command per render, for as long
+# as the app ran. The day panel's binding also outlived its note: back on
+# the day's list, a right-click on the panel's bare edge offered the last
+# note's menu.
+def _lb_commands():
+    return len(app.tk.splitlist(app.tk.call('info', 'commands')))
+
+
+app._history_toggle_btn.invoke(); app.update()
+for _ in range(3):
+    app._render_calendar_history(); app.update()
+_lb_before = _lb_commands()
+for _ in range(20):
+    app._render_calendar_history(); app.update()
+_lb_history = _lb_commands() - _lb_before
+app._history_toggle_btn.invoke(); app.update()
+_od_open_day(_nd_day)
+_lb_note = app.notes_on_date(_nd_day)[0]
+for _ in range(3):
+    app.show_day_note(_lb_note, _nd_day); app.show_day_list(); app.update()
+_lb_before = _lb_commands()
+for _ in range(20):
+    app.show_day_note(_lb_note, _nd_day); app.show_day_list(); app.update()
+_lb_day = _lb_commands() - _lb_before
+# Fewer than five, not zero: a timer of the app's own that fires or is set
+# during the loop moves the count by one or two either way; the leak was
+# one per redraw, twenty here.
+check(f'twenty History renders and twenty day views leave no Tcl command '
+      f'behind ({_lb_history}, {_lb_day})', _lb_history < 5 and _lb_day < 5)
+_lb_menus = []
+app.show_note_context_menu = lambda e, n, **k: _lb_menus.append((n['id'], k))
+try:
+    app.show_day_note(_lb_note, _nd_day); app.update()
+    _qa_fire(app.day_panel, '<Button-3>', x=3, y=3, rootx=200, rooty=200)
+    app.update()
+    _lb_in_note = list(_lb_menus)
+    app.show_day_list(); app.update()
+    _qa_fire(app.day_panel, '<Button-3>', x=3, y=3, rootx=200, rooty=200)
+    app.update()
+finally:
+    del app.show_note_context_menu
+check(f"the panel's edge offers the open note's menu, and none once back on "
+      f"the day's list ({_lb_in_note}, {_lb_menus[len(_lb_in_note):]})",
+      _lb_in_note == [(_lb_note['id'], {'occurrence_date': _nd_day})]
+      and _lb_menus == _lb_in_note)
+app.close_day_panel()
+app.cal_year, app.cal_month = 2026, 7
+app.render_calendar(); app.update()
 app.notebook.select(app.TAB_NOTES); app.update()
 
 # ============================================================

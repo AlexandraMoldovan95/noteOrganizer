@@ -55,9 +55,25 @@ day-to-day tracking.
 | [The text box that was always eighty characters wide](#the-text-box-that-was-always-eighty-characters-wide) | When a check passes, ask what it would take to make it fail. | 0.38.59 |
 | [The list that lost its place, twice, for two silent reasons](#the-list-that-lost-its-place-twice-for-two-silent-reasons) | 'Hard to reproduce' means unmeasured timing; instrument what the widget experiences until it's deterministic. | 0.58.82 |
 | [The click that was never delivered](#the-click-that-was-never-delivered) | Tk discards a generated event aimed at a widget with no native window, in silence — and `winfo_ismapped`/`winfo_viewable` do not predict delivery. | 0.71.154 |
+| [The window that closed under its own question](#the-window-that-closed-under-its-own-question) | A wait only one event can end needs every other way out to end it too — or to be refused while it waits. | 0.83.335 |
+| [The click that deleted its own next command](#the-click-that-deleted-its-own-next-command) | Tk expands every script of an event before running any: ask what the same event still calls after you destroy or unbind. | 0.83.335 |
+| [The Cut that arrived as a key](#the-cut-that-arrived-as-a-key) | A virtual event's binding is reached by keys too, as the key's own press: tell what happened by which binding fired, and test with the key a person presses. | 0.83.335 |
+| [The table that changed shape under its own undo](#the-table-that-changed-shape-under-its-own-undo) | A recorded position is only as good as the layout it was recorded in: replay every step in the state it was recorded in. | 0.83.335 |
+| [The line under a table that knew where it was, not what happened on it](#the-line-under-a-table-that-knew-where-it-was-not-what-happened-on-it) | The same text can sit on top of different undo histories: ask what changed since (a flag every change sets), never where something is. | 0.83.335 |
 | [The safety net that could not see the gap](#the-safety-net-that-could-not-see-the-gap) | A gate tuned to the instances it already found certifies the ones it cannot see — worse than no gate, because the next reader trusts it. | 0.71.154 |
 | [The same net, woven again](#the-same-net-woven-again--and-the-question-it-was-answering) | A wordlist answers "are any of MY words here", not "is this English" — when a check's method can only answer a narrower question than its promise, say so where the promise is made. | — |
 | [The check that pinned the behaviour a release had deliberately replaced](#the-check-that-pinned-the-behaviour-a-release-had-deliberately-replaced) | When a feature changes what the app promises, the checks asserting the old promise are part of the change — and a suite that cannot run a check cannot tell you it is wrong. | — |
+| [One unreadable field, and every word typed after it](#one-unreadable-field-and-every-word-typed-after-it) | A refusal the caller cannot tell from success is data loss; one bad field must not take the good ones down with it. | 0.83.335 |
+| [The delete that put an older version back](#the-delete-that-put-an-older-version-back) | Code kept for a feature that no longer exists goes on doing what it did — find what it still touches. | 0.83.335 |
+| [Importing the same backup twice, the second time](#importing-the-same-backup-twice-the-second-time) | Several questions guarding one change: change after the last answer; a change that changes nothing must change nothing. | 0.83.335 |
+| [The category renamed in one place of six](#the-category-renamed-in-one-place-of-six) | Before renaming anything, list everything that holds the name. | 0.83.335 |
+| [The Trash that gave notes back one at a time](#the-trash-that-gave-notes-back-one-at-a-time) | A write inside a loop is a quadratic waiting for its first big batch; a row's reference must still mean what it did. | 0.83.335 |
+| [The day whose own words went missing](#the-day-whose-own-words-went-missing) | When a view shows one layer over another, every write must know which layer each field came from. | 0.83.335 |
+| [A question holds the app three ways, and it held one](#a-question-holds-the-app-three-ways-and-it-held-one) | "Modal" is three promises — pointer, keyboard, subject; act on the subject the question named, captured before the wait. | 0.83.335 |
+| [The list the note shared with the editor](#the-list-the-note-shared-with-the-editor) | Store a copy of anything you keep editing, or "is it saved?" asks the object about itself; test the route the bug took. | 0.83.335 |
+| [The copy that exposed a reload](#the-copy-that-exposed-a-reload) | Removing an accidental behaviour exposes whatever leaned on it: list the routes that read what the fix changes. | 0.83.335 |
+| [The turn-off that stopped every save to wait](#the-turn-off-that-stopped-every-save-to-wait) | Hold back the one value that must wait, not the save around it: stopping the whole save broke every promise it keeps. | 0.83.335 |
+| [The file the app could not start beside](#the-file-the-app-could-not-start-beside) | An `except` clause is a claim about every way its call can fail: when one call is guarded in many places, write the list once and let a gate refuse a hand-written copy. | 0.83.338 |
 | [A calendar that kept navigating behind the user's back](#a-calendar-that-kept-navigating-behind-the-users-back) | Changing how a page becomes visible invalidates 'is X visible' assumptions in unrelated code. | 0.5.0 |
 | [The date field that either lost your edit, or wouldn't let you finish typing it](#the-date-field-that-either-lost-your-edit-or-wouldnt-let-you-finish-typing-it) | Reusing Save's validation in silent autosave turns a helpful warning into an interruption. | 0.28.38 |
 | [The autosave that could interrupt you over a note that was already gone](#the-autosave-that-could-interrupt-you-over-a-note-that-was-already-gone) | A guard added to one path doesn't cover other routes into the same code. | 0.28.38 |
@@ -67,6 +83,10 @@ day-to-day tracking.
 | [The fast-typing fix that took three tries to land safely](#the-fast-typing-fix-that-took-three-tries-to-land-safely) | Decide from what the widget contains, not event internals; boring-safe beats precise-dangerous. | 0.31.39 |
 | [The paste that kept the formatting it was told to drop](#the-paste-that-kept-the-formatting-it-was-told-to-drop) | Clipboard 'plain text' isn't plain — strip whatever the app itself would read as markers. | 0.37.56 |
 | [The paragraphs a PDF does not have](#the-paragraphs-a-pdf-does-not-have) | A paragraph almost never stops mid-sentence; punctuation beats width arithmetic for rejoining broken lines. | 0.38.59 |
+| [The History row that re-dated the open note](#the-history-row-that-re-dated-the-open-note) | An insertion between two methods can leave the end of one inside the other; sweep for the shape, not the field. | 0.83.335 |
+| [Ctrl+Z, and the formatting Tk's stack never held](#ctrlz-and-the-formatting-tks-stack-never-held) | Keep what an undo system cannot see beside it, keyed to what it does see — and measure how it groups steps first. | 0.83.335 |
+| [The key that typed nothing, and the line it forgot](#the-key-that-typed-nothing-and-the-line-it-forgot) | A fix that narrows when a feature acts must re-walk its main path; ask the text what a key did, and press modifiers as keys. | 0.83.335 |
+| [The bold the screen kept for later](#the-bold-the-screen-kept-for-later) | When one tag draws several properties, a change to any of them must reach it: the screen shows what was laid last. | 0.83.335 |
 | [The rebuild under the click](#the-rebuild-under-the-click) | Re-anchor gestures by what survives a rebuild — a line number, never a widget reference. | 0.39.63 |
 | [The centring that would not save itself](#the-centring-that-would-not-save-itself) | A comparison that lists fields silently exempts whatever field is added next. | 0.39.63 |
 | [The accepted cost that nobody had accepted](#the-accepted-cost-that-nobody-had-accepted) | When a docstring says 'accepted cost', check who pays it, and for what. | 0.64.95 |
@@ -74,6 +94,10 @@ day-to-day tracking.
 | [The undo that stopped halfway, the sequel](#the-undo-that-stopped-halfway-the-sequel-lists-and-the-grid-trio) | When a fix has a sibling family, audit which siblings were missed; a "drawn?" check reads real windows, not a stale dict. | 0.71.116 |
 | [The table that outlived its own deletion](#the-table-that-outlived-its-own-deletion) | A cached handle to a drawn thing must prove the drawing still exists — Tk marks survive the delete that killed the widgets. | 0.71.125 |
 | [The clipping that turned out to be a feature](#the-clipping-that-turned-out-to-be-a-feature) | Before fixing "wrong" behaviour, find who relies on it; the fix moved from render to parse once the ellipsis check spoke up. | 0.71.134 |
+| [The table header Ctrl+Z gave back one column off](#the-table-header-ctrlz-gave-back-one-column-off) | A stack that records positions replays right only in the state it recorded in; one step never holds two states. | 0.83.335 |
+| [The tidy that ate the redo](#the-tidy-that-ate-the-redo) | A side effect keyed to "the caret moved" has to ask who moved it — an undo's caret is not the person's. | 0.83.335 |
+| [The selection the caret left behind](#the-selection-the-caret-left-behind) | A selection is two positions: code that moves one must say what happens to the other; an invisible selection is a trap. | 0.83.335 |
+| [The paste that drew the row you were typing](#the-paste-that-drew-the-row-you-were-typing) | The app's own redraw can undo what the person is doing: a step typing does not take must follow the 'like typing' rule too. | 0.83.335 |
 | [The Trash panel that took two seconds to open](#the-trash-panel-that-took-two-seconds-to-open) | Don't build and wire every row up front; render a page, reveal more on demand. | 0.4.0 |
 | [The slowdown that only showed up after a long session](#the-slowdown-that-only-showed-up-after-a-long-session) | 'Slow after a while, fine at first' means unbounded growth; reproduce with a loop. | 0.4.0 |
 | [Export/import freezing the app](#exportimport-freezing-the-app) | Do file I/O on a worker thread; only the main thread touches Tkinter widgets. | 0.4.0 |
@@ -84,6 +108,8 @@ day-to-day tracking.
 | [The month that was two hundred windows](#the-month-that-was-two-hundred-windows) | A fix to one screen's cost is a list of its siblings; a colour a widget took by default is a colour nobody chose; and whatever the app reads from the desktop, the person at the machine feeds every test run until a test answers it. | 0.82.232 |
 | [The Settings panels that stayed dark on a light theme](#the-settings-panels-that-stayed-dark-on-a-light-theme) | A computed colour is invisible to palette matching; derive it once, teach the theme switch. | 0.36.54 |
 | [The title box that took three and a half seconds a keystroke](#the-title-box-that-took-three-and-a-half-seconds-a-keystroke) | Measure to isolate: the app was fine, one widget was quadratic — cap its input. | 0.36.55 |
+| [The colour the door let in and the drawing could not read](#the-colour-the-door-let-in-and-the-drawing-could-not-read) | A gate defines what its readers may receive; every reader must read all it lets through, or it must narrow. | 0.83.335 |
+| [Every right-click left its menu behind](#every-right-click-left-its-menu-behind) | A widget built per event needs an owner that ends it; whether a call blocks differs by platform. | 0.83.335 |
 | [The dropdown that opened on the wrong monitor](#the-dropdown-that-opened-on-the-wrong-monitor) | Position popups against the app window's own bounds, not the full virtual desktop. | 0.2.0 |
 | [The emoji that multiplied into squares](#the-emoji-that-multiplied-into-squares) | An off-by-one appearing only after an emoji is a units bug; audit every boundary. | 0.39.63 |
 | [The backspace that ate half an emoji](#the-backspace-that-ate-half-an-emoji) | Tk's Entry deletes UTF-16 units, not characters — guard every free-text Entry, not just the one reported. | 0.66.105 |
@@ -97,11 +123,16 @@ day-to-day tracking.
 | [The fix that was dead on arrival](#the-fix-that-was-dead-on-arrival) | A test calling the method proves the method; only the user's route proves the feature. | 0.55.81 |
 | [The teeth that had gone dull](#the-teeth-that-had-gone-dull) | Reintroduce the original bug occasionally — green must prove it can still go red. | 0.64.95 |
 | [The safety net that hid the missing mechanism](#the-safety-net-that-hid-the-missing-mechanism) | When a fallback masks the primary mechanism, assert the mechanism — a behaviour check green under two themes proved nothing. | 0.71.125 |
+| [The safety guard that read a broken notebook as empty](#the-safety-guard-that-read-a-broken-notebook-as-empty) | A safety guard's fallback must be the safe answer: "I cannot tell" means stop. | 0.83.335 |
+| [The save that forgot the next one](#the-save-that-forgot-the-next-one) | A job attribute answers only for the timer it tracks: cancel, never just forget; a flake that re-runs green has a mechanism — slow the machine down and watch. | 0.83.335 |
+| [The clipboard the tests shared with whoever was at the machine](#the-clipboard-the-tests-shared-with-whoever-was-at-the-machine) | A flaky check has a hidden dependency: waiting moves the race, taking the shared thing out of the test ends it. | 0.83.335 |
 | [The width that was guessed](#the-width-that-was-guessed) | A layout number that must agree with a layout it cannot see is wrong the first time either changes — ask the widget; and when a measurement disagrees with a photograph, doubt the measurement. | 0.73.167 |
 | [The rebuild nobody was looking at](#the-rebuild-nobody-was-looking-at) | When a new feature makes the user look somewhere new, expect a report about something that was always wrong there — measure before blaming the newest change; and a guard applied at one call site out of thirty-one is a comment, not a guard. | 0.74.169 |
 | [The sentence that counted notes](#the-sentence-that-counted-notes) | When a dialog counts things, ask what one of those things can be — a repeating series is one note in the count and every occurrence in the consequence; and a guard that has only ever been asked well-formed questions has been lucky, not tested. | 0.74.170 |
 | [Two ways to be invisible](#two-ways-to-be-invisible) | A layout whose last element absorbs every shortfall reports nothing and fails last — measure asked-for against given, on every font it will meet; and a fixture that does not do what its name says turns a measurement into a rumour. | 0.74.172 |
 | [The rule the app already had](#the-rule-the-app-already-had) | When two screens disagree, do not pick one — ask what the rest of the app does and make the odd one out match; and read what a gesture really offers before calling it a duplicate. | 0.75.174 |
+| [The list that moved under the pointer](#the-list-that-moved-under-the-pointer) | An action that moves the layout must keep the user's target under the pointer — or remember what they pointed at. | 0.83.335 |
+| [The character only the drawn tables had](#the-character-only-the-drawn-tables-had) | An offset belongs to the space it was counted in: convert at every crossing, and compare in the space both sides share. | 0.83.335 |
 
 
 ## Data safety & integrity
@@ -1368,6 +1399,316 @@ check happened to set it first. It is read with a default now.
    window's bindings in between. Decide on the press what the release
    will mean.
 
+### One unreadable field, and every word typed after it
+
+*([0.83.335](../CHANGELOG.md#083335--2026-10-02))*
+
+**Symptom:** Type a note's date the way many people write it — 30/09/2026, or "Oct 3" — keep
+typing, and click another note: everything typed after the date was gone. No dialog, no status;
+the status line still said "Auto-saved" from before. The same with a repeat chosen on a note that
+had no date, and a note that arrived by share code carrying such a date could not be edited at all.
+
+**Root cause:** The save treated one field it could not read as a reason to save nothing, and
+said so only on the explicit Save button. The automatic routes — a pause in typing, another note,
+Ctrl+N, closing the window — read that silent "no" as "done" and replaced the editor. One route
+of eight (Back to Calendar) had learned to check; the rest never asked. And a code made in the
+editor sent the date field's raw text, so the far end received a date its own save would refuse.
+
+**Fix:** A field the app cannot read is left out, never allowed to veto the rest: it keeps the
+note's last good value, everything else is saved, the status line says what was left out, and
+leaving the note asks "Go back and fix it" or "Continue without it". The save and the question
+ask one judgement (`_date_and_repeat_to_store`), so they cannot disagree about what stayed
+behind. A repeat's end date typed day-first joined the same rule, instead of quietly making the
+series endless; and a code carries the date a save would keep.
+
+**Takeaway:** a refusal the caller cannot tell from success is data loss — and when several
+fields are checked, one bad field must not take the good ones down with it.
+
+### The delete that put an older version back
+
+*([0.83.335](../CHANGELOG.md#083335--2026-10-02))*
+
+**Symptom:** Press "↩ Restore previous" on a note, then delete some other note from the list:
+the open note jumped back to the version Restore had just replaced — and clicking away saved it
+over the restored one, with no rescue copy left.
+
+**Root cause:** The editor keeps a snapshot of the note it opened, left over from when several
+notes could be open in tabs. Every delete "switched" to the first remaining tab afterwards —
+with one tab, the note already on screen — and restored it from that snapshot, taken when the
+note was opened. Whatever had been saved since went back to the older version, silently.
+
+**Fix:** Deleting some other note leaves the editor exactly as it is. Every delete route — the
+editor's Delete, the selection bar's Trash, a category deleted with its notes, the Duplicates
+clean-up — also saves the editor's unsaved typing first, as the right-click delete already did.
+
+**Takeaway:** code kept for a feature that no longer exists goes on doing what it did — find what
+it still touches before trusting that it is inert.
+
+### Importing the same backup twice, the second time
+
+*([0.83.335](../CHANGELOG.md#083335--2026-10-02))*
+
+**Symptom:** Import a backup older than this device's notes and choose "Update": this device's
+text was kept as the rescue copy, as promised. Import the same backup again — the first import had
+said "Added 0 notes", which read as "nothing happened" — and that rescue copy was replaced by the
+backup's own text: the newer text was in no file at all. And around it: Cancel at the duplicate
+question after "Update" left the update in memory for the next save to write; Cancel on a
+repeating day's question loaded the import into that day, whose Save then replaced the whole
+series; and a note sent out by code, edited elsewhere and sent back arrived as a second copy.
+
+**Root cause:** One habit in four shapes — acting before the last question was answered, and
+acting when there was nothing to act on. An update that changed nothing still rewrote the rescue
+copy; the updates were applied at the first answer, before the second question; the import went
+on after a Cancel; and the review editor dropped the identity the code carried.
+[The 0.4.0 story](#importing-the-same-backup-twice) was the same gesture's first lesson.
+
+**Fix:** An import asks every question first and changes nothing until the last answer. A note
+that arrives exactly as it is here is neither updated nor copied, and the result counts updated
+and unchanged notes as well as added ones. "Update" flags a backup copy that is older than this
+device's. Cancel on a day's question keeps the day and the code. A note under review keeps the
+identity it arrived with for its first save.
+
+**Takeaway:** when several questions guard one change, the change happens after the last answer
+— and an operation that would change nothing must change nothing, its side effects included.
+
+### The category renamed in one place of six
+
+*([0.83.335](../CHANGELOG.md#083335--2026-10-02))*
+
+**Symptom:** Rename the category of the note open in the editor, and a moment later that note was
+filed under General. Templates and the Trash kept the old name, a folded group unfolded while its
+old name stayed folded in the settings for good, and the category moved to the end of the list.
+Delete a category and restore an old series from the Trash, and the next launch re-created the
+deleted category as having "gone missing from the settings".
+
+**Root cause:** A category's name lives in six places — the notes, the Trash, the templates, the
+folded groups, the list's filter and the editor's own category box — and the rename rewrote one.
+The editor's box was left holding a name that no longer existed, a guard written for deleted
+categories reset it to General, and the next save wrote that. A deletion likewise left the Trash
+holding the name, and one day of a restored series carried it back in.
+
+**Fix:** One method moves every holder of the name (`_refile_category_everywhere`), for a rename
+and for a deletion alike; a rename keeps the category's place among the groups; and a day filed
+under a category that no longer exists comes back under General, as the note itself always did.
+
+**Takeaway:** before renaming anything, list everything that holds the name — the place you
+remembered is rarely the only one.
+
+### The Trash that gave notes back one at a time
+
+*([0.83.335](../CHANGELOG.md#083335--2026-10-02))*
+
+**Symptom:** Undo after moving a thousand notes to the Trash froze the app for 30–46 seconds, and
+restoring ten ticked notes took up to four. A row in Recently deleted could restore a second copy
+of a note the toast's Undo had already brought back — and its Delete destroyed the file that
+note was showing.
+
+**Root cause:** Restoring went note by note, each one rewriting the whole trash file — quadratic
+in the size of the batch. The trash was written before the notes, so a failed notes write could
+leave a note in neither file. And the panel's rows held the entries they were drawn for, with
+nothing redrawing them when a restore happened somewhere else.
+
+**Fix:** A batch comes back in one pass, each file written once, the notes first. The rows check
+that their entry is still in the Trash; a permanent delete spares any file a note still uses;
+and the toast's Undo redraws an open Trash panel.
+
+**Takeaway:** a write inside a loop is a quadratic waiting for its first big batch — and a row
+that holds a reference must check the reference still means what it did when it was drawn.
+
+### The day whose own words went missing
+
+*([0.83.335](../CHANGELOG.md#083335--2026-10-02))*
+
+**Symptom:** Undo after removing one day of a repeating note brought the day back showing the
+series' text — that day's own edit gone for good. Saving a day with its own text to "The entire
+series" gave every day those words, left the day unchanged, and asked the same question again at
+every exit. And ticking a checklist item on such a day wrote that day's words over every day of
+the series, wiping the series' formatting.
+
+**Root cause:** A day's own text lives in the note's overrides, and three routes forgot it: the
+delete dropped it and handed the Undo nothing to put back; the series save wrote the editor — the
+day's text — into the series but kept the day's now-identical copy; and a save made without a
+question, because only a series-owned field had changed, still wrote the whole editor.
+
+**Fix:** The Undo carries the day's own text back. "The entire series", answered on such a day,
+makes its words the series' and drops the day's copy, keeping the series' old text as the rescue
+copy. A save made without asking writes only what belongs to the series — the checklist, the
+attachments, the date, the repeat.
+
+Two more rounds of breakers found the same lesson at the edges of the fix. "This occurrence
+only" wrote the day's text to the day and dropped the series-owned fields changed in the same
+visit — a file attached was left in the folder with no note. Turning the repeat off took every
+day's own text with it, and when the day on screen was saved first, the editor went on showing
+the day's text as the note's, so leaving wrote it over the series' text. Every day-view save now
+writes the series-owned fields to the series, a repeat turned off keeps the whole note as it was
+(repeat and days) as the rescue copy, and the editor is filled from the note the save left.
+
+**Takeaway:** when a view shows one layer over another, every write from that view must know
+which layer each field on screen came from — and when a save removes the layer the view stood
+on, the view has to be rebuilt from what is left.
+
+### A question holds the app three ways, and it held one
+
+*([0.83.335](../CHANGELOG.md#083335--2026-10-02))*
+
+**Symptom:** While a question waited — "Move to trash?", "Empty trash?", "Restore previous
+version?" — the app under it could still change. A timer's own question answered inside it
+("Export complete") left the app taking clicks. Tab walked out of the question's buttons into
+the note under it, where typing landed, and onto the note list, whose Shift+F10 menu holds
+Delete. And the answer then acted on the app as it was after the wait: a note ticked meanwhile
+was removed with no Trash copy; Empty trash destroyed a note trashed meanwhile; deleting a
+category's notes trashed one more than the question said; Restore previous wrote the old text
+into whichever note the editor had moved to, and its next save kept it.
+
+**Root cause:** A question waits in a nested event loop, so the app goes on running under it.
+To be modal it has to hold three things — the pointer, the keyboard, and what it asked about —
+and it held only the pointer, through Tk's grab. Even that went when a question inside it
+ended: Tk has one grab, and the inner question's release left none. Tab is the keyboard's own
+walk between widgets, which no grab stops. And every one of these actions read its target
+after the answer.
+
+**Fix:** A question that ends gives the grab back to the one still waiting under it. Tab and
+Shift+Tab walk the question's own buttons and come back round, as a Windows message box does.
+And every confirmation acts on what its question named, captured before asking — the notes,
+the Trash entries, the attachment, the note being restored — and checks each is still where it
+was; one that arrived meanwhile was never asked about, so it is left alone.
+
+**Takeaway:** "modal" is three promises — pointer, keyboard, subject. A confirmation acts on
+the subject it named, captured before the wait, because a nested event loop lets the world move
+under it.
+
+**Follow-up:** Capturing the subject is not enough when the wait itself can change it. Restore
+previous captured its rescue copy, then asked — and an edit still waiting for its autosave was
+saved while it waited. After a big delete, that save made a new rescue copy of the words just
+taken, which the restore, of the copy captured before, then replaced: the deleted words were in
+no file. A pending autosave now runs before the copy is captured, so the question offers the
+newest one. A timer due inside a question is part of the world that moves under it.
+
+### The list the note shared with the editor
+
+*([0.83.335](../CHANGELOG.md#083335--2026-10-02))*
+
+**Symptom:** Type a word, let the autosave run, attach a photo, close the app: after a restart the
+note had no attachment, and the photo sat in the attachments folder with no note. A file removed
+the same way was still listed, its stored copy already deleted.
+
+**Root cause:** The save stored the editor's own list of files in the note — the same Python
+object, not a copy. From then on, attaching or removing changed the note in memory too, so the
+dirty check compared the list with itself, found nothing unsaved, and the autosave, the note
+switch and the window's close all skipped the save. It needed only one save earlier in the visit.
+The checklist stored beside it had always been copied, which is why ticks never went the same
+way. The line was there from the first commit.
+
+**Fix:** Both saves of an existing note store a copy. A new note's save already copied (through
+`normalize_note`), which is also why the first fixture written for this check could not fail: it
+saved a new note, and the shared list lived only on the save of an existing one.
+
+**Takeaway:** storing a mutable object you will keep editing makes "is it saved?" ask the object
+about itself. Copy at the boundary — and make the check take the route the bug took.
+
+### The copy that exposed a reload
+
+*([0.83.335](../CHANGELOG.md#083335--2026-10-02))*
+
+**Symptom:** On a day of a repeating note: save the day, attach a photo, press "↩ Restore previous".
+After a restart the photo was gone from the note, its copy left in the attachments folder. The same
+steps had kept the photo an hour earlier, on the code before the fix for
+[The list the note shared with the editor](#the-list-the-note-shared-with-the-editor).
+
+**Root cause:** That fix stopped the save storing the editor's own list of files in the note. The
+shared list had also made every file attached after a save land in the note at once, in memory —
+so two routes that fill the editor from the note as stored, Restore previous and "Reset this day",
+kept the file by accident. On a day nothing else stores the editor's files before a save or a way
+out (the autosave does not run there), and without a save earlier in the visit, or for a ticked
+checklist item, both routes had always dropped them.
+
+**Fix:** Both routes store the editor's files and checklist first — copies, through the same write
+a day's own save uses, never its date or repeat — and a rescue copy that holds them still wins.
+The right-click Duplicate, which copied the stored note in silence, asks about unsaved changes as
+the editor's own Duplicate does.
+
+**Takeaway:** removing an accidental behaviour exposes whatever leaned on it. Before such a fix
+lands, list the routes that read what it changes — here, every route that reloads the editor from
+the stored note.
+
+### The turn-off that stopped every save to wait
+
+*([0.83.335](../CHANGELOG.md#083335--2026-10-02))*
+
+**Symptom:** On a series whose days hold edits of their own, "Does not repeat" picked by mistake
+and put right a second later brought the series back without its days.
+
+**Root cause:** The autosave saved the turn-off like any other edit, half a second later — and
+turning a repeat off moves every day's own edits into the rescue copy.
+
+**Fix:** The first fix stopped the autosave altogether while the turn-off waited. The next round
+found what that cost: everything typed meanwhile was lost on a crash; Restore previous, which
+saves the waiting edit before it asks, saved nothing and put an older copy over the newest
+text; and routes that save on their way to something else — deleting another note, deleting one
+day on the Calendar — made the turn-off anyway, then asked the wrong question. Now only the
+turn-off is held, the way a value the app cannot read is left out: a save nobody asked for —
+the autosave, a route saving on its way — keeps the stored repeat and names "turning the repeat
+off" as left out, and leaving the note or Save makes it.
+
+**Takeaway:** hold back the one thing that must wait, not everything around it. Stopping the
+whole save to protect one field broke every other promise the save keeps — crash safety, the
+rescue copy, the routes that rely on it — at once.
+
+**Follow-up:** "The one thing" turned out to have edges, found by the next round. A date typed
+beside the held turn-off was saved alone onto a series that still repeated, and a new start date
+moves every day of a series: a one-off typed on a Thursday moved a Monday series to Thursdays.
+The date waits with the turn-off now. A big delete made while it waited was saved with its own
+rescue copy, and the turn-off, saved last, replaced that copy with one of the note as the held
+saves left it — the person had acted in the other order, so their deleted text was in no file.
+The turn-off's copy keeps that text now, within the same wait. And every delete saves before
+its question, which made the waiting turn-off before an answer that could be No; those saves
+hold it too. What is held is whatever cannot be separated from it.
+
+A day deleted during the wait taught a harder lesson, four rounds running. Its own text was held
+only by the delete's Undo, and each round tried to keep it once the turn-off took the series
+away. Kept in the note, it read as a day with edits of its own. Counted by the turn-off, it made
+a copy for an Undo that might never be clicked, and that copy replaced an older one. Carried by
+the Undo and made into a copy only when clicked, the copy picked up an older series, undid what
+was saved since, and once wrote itself into a new note that had taken the old note's number.
+Each design was broken by the next round of breakers. Now the Undo puts the day back only into
+the series the note still holds, and once that series is gone it says so: the day can't come
+back. That is what 0.82.233 said too — the person had deleted the day — and nothing the Undo
+writes can be wrong. A convenience for an edge case is not worth machinery that every round
+finds a new way to break.
+
+Even the one convenience kept — the day's own text put back on a repeat picked anew — broke
+once more: it was written behind an editor that could be showing that very day, and the
+editor's next save read its own stale view as an edit and wrote the series' text over the day's.
+A route that writes a note behind the editor saves the editor first, every time; the rule was
+already written down, and one more route had to learn it.
+
+### The file the app could not start beside
+
+*([0.83.338](../CHANGELOG.md#083338--2026-10-03))*
+
+**Symptom:** A security pass after the nineteenth round tried the data files with two kinds of
+damage nobody had tried: a notes file saved by another program in one of Windows' older text
+encodings, and one nested deeper than a JSON reader can follow. With either in the notes,
+settings, Trash or templates file, the app did not start. A share code damaged the same way said
+"Something went wrong", and a backup carrying such a file failed whole, sound notes and all.
+
+**Root cause:** Every reader caught `json.JSONDecodeError` and took that to mean "unreadable".
+It is one of three ways a JSON text turns out unreadable: bytes that are not UTF-8 raise
+`UnicodeDecodeError` before the parser sees them, and nesting past the parser's depth raises
+`RecursionError`. Fourteen readers each wrote the list out by hand. Two also caught
+`UnicodeDecodeError` — met once each, and fixed where it was met — and none caught
+`RecursionError`.
+
+**Fix:** One definition, `JSON_UNREADABLE` in `core/paths.py`, names all three, and every reader
+catches it. The loaders already knew what to do with damage — keep the file's bytes aside, start
+empty, say so at startup — so none of that changed; the two new kinds simply reach it now.
+`tools/check_one_definition.py` fails on any `except` that names `JSONDecodeError` itself.
+
+**Takeaway:** an `except` clause is a claim about every way its call can fail. When one call is
+guarded in many places, that list is a definition: write it once, and let a gate refuse a copy
+written by hand. Hand-written copies are how two readers learned about the encoding and twelve
+did not.
+
 
 ## Tk & platform gotchas
 
@@ -1797,6 +2138,155 @@ or the next instance waits for a screenshot. A cap in characters is not a
 width. And any change that makes text wrap for the first time inherits
 every multi-line default the widget had been hiding.
 
+### The window that closed under its own question
+
+*([0.83.335](../CHANGELOG.md#083335--2026-10-02))*
+
+**Symptom:** Closing the window while a question was on screen ("Save changes?", a delete
+confirmation) made the window disappear — and left the app running with no window, holding the
+notebook's lock, so the next launch said another copy was open.
+
+**Root cause:** A question waits in `wait_variable()`, which only its own answer ends. The close
+handler destroyed the window underneath it, so the answer could never come and the wait never
+returned.
+
+**Fix:** While a question asks, the close is refused and the question comes forward instead —
+out of the taskbar if needed, with the keyboard on its button — as a modal question on Windows
+does. And a question whose card is destroyed by any route ends its wait with its safe answer.
+
+**Takeaway:** a wait that only one event can end needs every other way out to end it too — or
+to be refused while the wait is on.
+
+### The click that deleted its own next command
+
+*([0.83.335](../CHANGELOG.md#083335--2026-10-02))*
+
+**Symptom:** After a dropdown was opened inside a popup — the Category list in the template
+editor, the Month list in Jump to month — every dropdown in the app was closed by the same click
+that opened it, until a restart. Elsewhere, silently, many clicks raised "invalid command name"
+background errors that nobody saw.
+
+**Root cause:** Two Tk rules, met by several handlers. Tk expands every script bound to an
+event before it runs any, so a handler that destroys its own widget or popup, or unbinds a
+neighbour, deletes a command the same event is about to call. And each popup stored the
+window-level binding it added in one slot per kind, so a list inside a popup overwrote its
+host's slot and the host's handler stayed bound for good. A third rule surfaced while fixing a
+sibling: given a string script, tkinter's `bind()` ignores `add="+"` and replaces the widget's
+other bindings.
+
+**Fix:** Each popup keeps its own window-level lines, removed when it goes by whatever route,
+and every line calls one command that is never deleted. The tooltip's hide is one command
+registered on the window, its "+" spelled into the script.
+
+The same rule came back a round later through the keyboard. The rename box's Escape closed the
+box and returned nothing, so Tk went on to call the box's own Escape binding, which the close
+had just deleted: every Escape in a category rename or a template name left an error in the
+background. A widget-level handler that destroys the popup it lives in returns `"break"` now —
+nine such handlers, swept, though only that Escape raised.
+
+**Takeaway:** in Tk, a handler is not alone with its event — ask what else the same event will
+still call after you destroy, unbind or rebind something. And capture `bgerror` in tests:
+Tk reports these errors to nobody by default.
+
+### The Cut that arrived as a key
+
+*([0.83.335](../CHANGELOG.md#083335--2026-10-02))*
+
+**Symptom:** Selecting a bold word and pressing Ctrl+X, then Ctrl+Z, gave the word back plain —
+though the same Cut chosen from the right-click menu came back bold. Ctrl+V over the word did
+the same, and so did Tk's own Ctrl+H, Ctrl+K and Ctrl+T.
+
+**Root cause:** The bindtag that notes the formatting before Tk's own deletes listened for
+`<<Cut>>` and `<<Paste>>`, and told a virtual event from a key by the event's type. A key that
+means Cut fires that binding with the key's own press — type KeyPress, keysym `x` — so the
+handler read Ctrl+X as a control character typed over a selection, which deletes nothing. Only
+the menu's `event_generate('<<Cut>>')` was a true virtual event, and that is what the checks had
+generated. Paste had a second gap: the app's own paste routes, each an undo unit, ended the run
+before Tk's paste deleted anything. And Tk binds Ctrl+H, Ctrl+K and Ctrl+T on every platform,
+keys the app had never heard of.
+
+**Fix:** Each virtual binding says what it is, whatever reached it; a paste that falls through
+to Tk gives the run back while the text is unchanged; and the three Tk keys are worked out as
+Tk's own text.tcl works them. The checks press the keys a person presses, with Tcl's clipboard
+replaced inside the test process so the machine's own is never touched.
+
+**Takeaway:** a binding for a virtual event is reached by keys too, and then the event is the
+key's — tell what happened by which binding fired, not by the event's type. And check with the
+key a person presses, not with the event a menu generates.
+
+### The table that changed shape under its own undo
+
+*([0.83.335](../CHANGELOG.md#083335--2026-10-02))*
+
+**Symptom:** Type a table by hand, press Down to leave it — it lines up and turns into a grid —
+then Ctrl+Z: the header came back as "| Item name | Qt  |", a letter gone. The next Ctrl+Z took
+another. Even Ctrl+Z then Ctrl+Y inside a table still being typed brought back "Qyt" for "Qty".
+
+**Root cause:** Tk's undo stack records every edit by its position, line and column. A drawn
+table's grid is an embedded window, and a window takes a column: the first one of the table's
+first line. A table typed by hand is plain text while it is typed, so its rows — and the tidy
+that pads them as the caret leaves — were recorded with no window there, then replayed with one.
+Every position on that line landed one column to the left. The table operations had been fixed
+for exactly this months before (a step recorded with the grids down is replayed with them down);
+the typed table never went through a table operation, so nothing marked its steps.
+
+**Fix:** A step no unit of the app's noted — typing, Tk's own deletes and paste — can never touch
+a drawn table's line, because the caret guard keeps the caret off them; so it is replayed with
+the tables down, always, and marked so for Ctrl+Y. A unit that lines up a table not yet drawn is
+marked the same way, split only if it already wrote into a drawn table's first line with the
+window in place.
+
+**Takeaway:** a recorded position is only as good as the layout it was recorded in. Whatever can
+insert something that occupies a position — a window, an image, a hidden mark that counts — must
+either be on the undo stack itself, or make every replay happen in the state the step was
+recorded in.
+
+**Follow-up:** The next round found where the rule did not reach. The formatting journal keeps
+100 steps; past them a step was dropped, read as typing, and replayed with the tables down — a
+header cell written long before came back a column off. A step past the cap now stays as a
+stub that says how it was recorded, and stubs are not capped, because Tk's own stack is not:
+a cap would only move the bug further back. A unit that begins with no table drawn is recorded
+with the tables down from its start, and split where it goes on to write into a table it drew;
+Tk's own deletes of styled text, which the app notes, are marked like every other step of Tk's.
+A record that is trimmed must keep what its replay reads.
+
+### The line under a table that knew where it was, not what happened on it
+
+*([0.83.335](../CHANGELOG.md#083335--2026-10-02))*
+
+**Symptom:** A table at the very end of a note gets an empty line under it from the drawing, so
+the caret has somewhere to go. Ctrl+Z back past the Enter that had made a line there, then
+Ctrl+Y, doubled the line, and from then on a header cell's edit was replayed a column off
+(`| Name s   |`).
+
+**Root cause:** Tk never records the drawing's line — the drawing is kept off the undo stack —
+so Tk's idea of the text is one line shorter than the note. Redoing that Enter put Tk's own line
+back beside the drawing's, and every snapshot the formatting journal took after that named a
+text Tk could not reach: the steps stopped matching, read as typing, and were replayed with the
+tables down.
+
+**Fix:** The first fix followed the line with a mark, left it out of the journal's count, and
+took it out before every Ctrl+Z. The next round of breakers found four ways it lost data. A
+word typed on the line and erased left the same text, but Tk now held steps on that line:
+taking the line out glued the word to the table's last row. A delete that took the line moved
+the mark onto the person's own line, and Ctrl+Z put the table back glued to the line above. A
+list renumber, which rewrites the whole body, came back without a single bold or italic. The
+mark knew where the line was, never what had happened on it. Now the line is held only while
+nothing has changed the text since it was drawn, which Tk's own modified flag says: every
+insert and delete sets it, recorded or not. The moment anything does change it, the line is
+the note's for good, and every older snapshot counts one more line break at its end — which is
+how Tk will give those texts back.
+
+**Takeaway:** the same text can sit on top of different histories. A check that reads where
+something is, or what the text says, cannot tell whether an undo stack has steps there; ask
+what has changed since — here, a flag every change sets.
+
+**Follow-up:** One of the readers the fix had to reorder — a unit's first snapshot, read before
+the call that settles the line — was fixed in its near-twin instead: two methods with the same
+few lines, one named in the commit message, the other edited. The next round found the
+untouched one by the symptom it left (a cell's bold half lost on Ctrl+Z). The sweep that would
+have caught it is mechanical: list every reader of the value, not the ones memory offers.
+
 ## Editor & input interaction
 
 *Typing, pasting, focus and timing — bugs that live between the keyboard and the widget.*
@@ -1962,6 +2452,135 @@ two that lacked it were the two that bit.
 **Tested by property, not by result.** Which widths happen to come out exactly right is not the point and invites tuning the test until it passes, which this project has done once before and regretted. What is asserted instead, at eight widths, indented and not: no word is ever lost or altered, and no paragraph is ever split in two. Merging two paragraphs is possible — without indentation, a paragraph whose last line lands nearly full cannot be told from a line the column broke — and that limit is asserted rather than hidden, because losing a break is survivable and cutting a sentence in half is not.
 
 **One check written during the fix passed without testing anything.** A three-line fixture meant to prove a heading keeps its own line was never recognised as a column in the first place, so it never reached the code it was guarding. Deleting that code changed nothing. It was found by deliberately breaking the code and noticing that nothing failed.
+
+### The History row that re-dated the open note
+
+*([0.83.335](../CHANGELOG.md#083335--2026-10-02))*
+
+**Symptom:** Since 0.71.111, clicking any row in the calendar's History register while a saved
+note sat in the editor changed that note's date — a series' start date, a weekly series'
+weekday, an undated note gained one — at the next note switch, New note, Back to Calendar or
+close. Nothing on screen said so.
+
+**Root cause:** The row's landing ended with the last lines of `_add_note_for_date` — the new
+note's date prefill — left there when History was inserted next to it. Those lines wrote the
+row's date into whatever note the editor held, and the next save stored it. A second tail of
+the same kind turned up a round later: "Reset this day" ended with the lines "Make this
+repeat…" was missing, so it announced "Set a repeat frequency" about a note that already
+repeats and sent the keyboard to the hidden editor.
+
+**Fix:** The stray lines are gone from the landing, and the reset's tail went back where it
+belonged. A History landing only navigates now; a check opens each kind of note, clicks a row,
+leaves, and compares the stored note field by field.
+
+**Takeaway:** an insertion between two methods can leave the end of one inside the other, and
+it runs on every call. Sweep for the shape — a function that does a second, unrelated job at
+its very end — not only for the field the first report named.
+
+### Ctrl+Z, and the formatting Tk's stack never held
+
+*([0.83.335](../CHANGELOG.md#083335--2026-10-02))*
+
+**Symptom:** Making a word bold and pressing Ctrl+Z took back the last sentence typed instead,
+and the autosave stored that. Undoing a table operation brought the cells back without their
+bold and colours. And deleting styled text — Delete, BackSpace, typing over it, Cut — then
+pressing Ctrl+Z brought the words back plain.
+
+**Root cause:** Tk's undo stack records text, never a tag. A style change left nothing on it,
+so Ctrl+Z reached past it; and text Tk puts back comes back bare.
+
+**Fix:** A formatting journal beside Tk's stack notes the formatting before and after every
+undo unit of the app's, and lays it back on the very text it was taken from — matched by the
+text, never by counting steps, so the two stacks cannot drift. Tk's own deletes are no unit of
+the app's, so a bindtag placed ahead of the body's bindings notes the formatting before one of
+them reaches styled text; a run of BackSpaces stays one Ctrl+Z, as Tk merges it, and plain text
+is left to Tk entirely. Measured before it was built: typing over a selection, Cut and Paste are
+one Tk unit each, five BackSpaces are one, and a separator from the front tag splits them where
+it is put.
+
+The journal's first version paid for itself three ways on a long, styled note, all found by the
+second wave of breakers: every unit made Tk lay out every line again (Ctrl+B went from 46 to
+266 ms at 19,000 characters); each unit kept two snapshots of the whole note's formatting
+(60 MB more after 100 cell edits); and Ctrl+Z of a style stripped every tag and laid every span
+back (3.9–4.9 s at 8,000 words). A snapshot is now Tk's own ranges, one string per tag, read in
+one Tcl call and shared with the step before when unchanged; actions that only restyle leave
+Tk's grouping alone; and a restore touches only the ranges that differ. At 8,000 spans, Ctrl+B
+takes 44 ms and its Ctrl+Z 51 ms.
+
+**Takeaway:** when an undo system cannot see part of the state, keep that part beside it, keyed
+to what the system does see — and measure how the system groups its steps before deciding where
+yours begin and end.
+
+### The key that typed nothing, and the line it forgot
+
+*([0.83.335](../CHANGELOG.md#083335--2026-10-02))*
+
+**Symptom:** A word's style spreads to the letters typed right after it — the field report was "the
+new letters don't get the colour". An arrow key, or a Shift+Down stopping at a table under
+"Prices:", turned the plain ":" after a bold word bold with nothing typed. Fixed once, the fix
+broke the feature itself: letters typed after a bold or coloured word stayed plain on every line
+but the note's last, and Delete, BackSpace, Ctrl+B, Ctrl+Z and Ctrl+Shift+V still spread the bold.
+
+**Root cause:** The spreading ran on every key's release and read the two characters left of the
+caret, so a key that typed nothing counted. The first fix asked "did the text grow?" by comparing
+where the text *ended* before and after the key — an index, which an edit on any line above the
+last never moves. And it noted the press in the body's generic `<KeyPress>`, which Tk never runs
+for a key with a more specific binding of its own: those keys' releases found no press and fell
+back to the old reading.
+
+**Fix:** A key going down sets two marks at the caret, one staying put and one carried along by
+whatever goes in there. What the key typed lands between them, after any selection it replaced;
+a key that types nothing leaves them together. Every key is noted first by a bindtag ahead of the
+body's own, so a key with its own binding — and Ctrl or Shift pressed before it, which reach the
+generic binding as keys of their own — spreads nothing.
+
+**Takeaway:** a fix that narrows *when* a feature acts must re-walk the feature's main path, not
+only the reported case: the first fix's check was one line long. And ask the text what a key did
+— a position that only looks like a size is not one.
+
+### The bold the screen kept for later
+
+*([0.83.335](../CHANGELOG.md#083335--2026-10-02))*
+
+**Symptom:** Select a word in a bigger heading — or anywhere in a note set to Georgia — and
+press Ctrl+B. The toolbar's Bold lights up and the save stores the word bold, but on screen
+nothing changes; opened again, the note shows it bold. Taking bold off fails the other way
+round, and so do Bold turned on before typing and a bold paste. A letter typed onto a bold word
+at a heading's end came out bold, small and saved small.
+
+**Root cause:** Tk tags that set the same option do not compose, so a size or a font is drawn
+by one composite tag with the weight and slant folded in, made after the plain bold and italic
+tags so that it wins. Every route that changes bold or italic changed only the plain tag, which
+the composite outranks; only opening the note, a renumber or a font change worked the
+composites out again. The same lines held a second cost: those composites were worked out by
+checking every styled word at every boundary, so one size in a note of 8,000 styled words cost
+1.7 s at every open and every Enter in a numbered list.
+
+**Fix:** Ctrl+B, Ctrl+I and a formatted paste lay every composite again from what the note
+holds; typing refits only the letters typed, from the composite they wear or the one of the
+word they were glued onto. The stretches are worked out in one sweep, checked against the old
+way on thousands of random notes.
+
+**Takeaway:** when one tag draws several properties, a change to any of them must reach that
+tag. What the toolbar and the file say is not what the person sees: the screen shows the last
+thing laid.
+
+**Follow-up:** The next round found the first fix too broad and too narrow at once. It laid
+every composite in the note again for one word's Ctrl+B — five times slower in a long note set
+in a font — and a size picked before typing replaced the composite the letters had inherited,
+taking the run's font with it. Ctrl+B now swaps only the composites inside the selection, and
+typed letters keep the property that was not picked. The same round found bold italic pasted
+from a web page drawn italic: the reader gave back bold and italic as two spans, two tags that
+both set the font. They are folded into one at the choke point every span passes through.
+
+The round after that found the same three rules each kept on one road only. Typed text at a
+bold word's edge took the heading's size, while a paste, an emoji or the calculator's result at
+the same place did not; a picked size kept the run's font in the run's middle, not at its
+edges; the fold reached span lists, not two tags laid by typing or pasting. One more cost had
+come in too: the refit went a character at a time, and a long paste paid for every one. Each
+rule now lives in one helper that every road asks, and the refit goes by stretches of
+unchanging tags. Fixing a mechanism on the road it was reported on, rather than on every road
+that reaches it, is how the same finding came back three rounds running.
 
 ## Tables
 
@@ -2219,6 +2838,109 @@ relies on it — the qa suite is the census of deliberate behaviour, and
 a red pre-existing check on a "fix" is it speaking up. And when one
 byte pattern serves two meanings, disambiguate where it is parsed, not
 where it is drawn.
+
+### The table header Ctrl+Z gave back one column off
+
+*([0.83.335](../CHANGELOG.md#083335--2026-10-02))*
+
+**Symptom:** Centring a table cell from the toolbar, inserting a row below or autofitting a
+column, then pressing Ctrl+Z, gave the table's header back as `| Ite  | Qt  | Not  |`: every
+cell of the first line one letter short, and the line no longer a match for its rows. Measured
+on 0.82.233 in the Linux image: four of six table operations did it; inserting a column and
+merging cells did not.
+
+**Root cause:** A drawn table's first line holds the grid's embedded window at column 0, and
+Tk's undo stack records every edit by its index. These operations take the grids down —
+which deletes the window's character — edit the text, and draw the grids again. Their edits
+were recorded with the window gone and replayed by Ctrl+Z with it drawn: one column off.
+
+**Fix:** An undo unit now learns when the grids come down inside it, while Tk is still
+recording, and the journal step it leaves is marked as recorded with the grids down; Ctrl+Z
+takes the grids down before Tk replays such a step, and draws them again after it, as after
+every step. A unit that had already edited the text with the grids up — a header cell still
+being edited when the toolbar centred it — held both kinds of edit in one step, right in
+neither state; it is split where the grids come down, so the first Ctrl+Z takes back the
+centring and the second the word.
+
+**Takeaway:** a stack that records positions replays correctly only in the state it recorded
+in. When an operation changes what the positions count, the replay must restore that state
+first — and one step must never hold edits from two states.
+
+### The tidy that ate the redo
+
+*([0.83.335](../CHANGELOG.md#083335--2026-10-02))*
+
+**Symptom:** On a table pasted from Markdown, Ctrl+Z twice past a table operation, then Ctrl+Y,
+brought nothing back: what had been undone was gone.
+
+**Root cause:** A table is tidied — its columns padded — when the caret leaves it, at every key's
+release, so it never shifts under someone typing. Undo moves the caret without the person moving
+it. The release of the undo key found the caret "leaving" the table the undo had put it in, and
+padded it: a new recorded edit, and a new edit empties every redo stack.
+
+**Fix:** Undo and redo forget where the caret was last seen, so no release after them reads as
+leaving a table.
+
+**Takeaway:** a side effect keyed to "the caret moved" has to ask who moved it — the caret an undo
+puts somewhere is not the person's.
+
+### The selection the caret left behind
+
+*([0.83.335](../CHANGELOG.md#083335--2026-10-02))*
+
+**Symptom:** Shift+Down on the line above a drawn table, then a letter: the letter appeared under
+the table and the line stayed selected; a paste deleted the line and glued its text to the next
+one; cells pasted from a spreadsheet went *into* the table. Shift+Up from under a table seemed to
+select nothing — and the next letter typed deleted the whole table.
+
+**Root cause:** The caret is never allowed on a drawn table's hidden pipe text: a guard walks it to
+the line under the table. Tk's selection has two ends, and the guard moved only the caret. Shift+Down
+had selected the line and the table's own line break, so the caret stood under the table while the
+selection ended above it; typing lands at the caret and replaces a selection only when the caret
+is in it. Shift+Up jumped over the whole table in one display line, selecting all its rows — a
+grid shows no selection — and the guard put the caret back under the table, where it was the
+selection's end: the next key replaced the table.
+
+**Fix:** The guard keeps the caret with the selection's moving end. A first press stops at the
+table's near edge — the line above without its break, or the line under the table — so no
+selection takes a table in unasked; a second press at that edge crosses it, so the keyboard can
+still select across a table. A mouse drag stops at the edge it came from. The spreadsheet paste,
+for its own part, never deletes a table's line break with a selection.
+
+**Takeaway:** a selection is two positions. Code that moves one of them on the person's behalf
+must say what happens to the other — and an invisible selection is a trap whatever it holds.
+
+### The paste that drew the row you were typing
+
+*([0.83.335](../CHANGELOG.md#083335--2026-10-02))*
+
+**Symptom:** Type a table's first row by hand — `| Item name | Qty |` — click back into it, and
+paste a word. The word went in, but the row turned into a drawn table at once and the caret
+jumped under it: the next letter typed landed on the line below. Typing the same word by hand
+did not do it. Every paste route did — Ctrl+V, the menu's Paste, Ctrl+Shift+V, a paste from a
+web page — and so did the release the app shipped before this branch.
+
+**Root cause:** A table typed by hand stays text while the caret is on it, and is drawn when the
+caret leaves; that is what lets you finish typing it. Typing never asks for a drawing. Every
+paste route ends by drawing every table in the note, because a paste can bring a whole table
+in — and the row being typed counts as a table (one pipe row is enough). Drawn, the row's text
+is hidden behind a grid, and the caret guard, which never lets the caret rest on a drawn table,
+moved it to the line below. The paste route already knew the row was being typed: it had
+decided, a round earlier, that "a paste that stays on its line is a letter typed there" — but
+only for tidying the row, not for drawing it.
+
+**Fix:** The paste's tidy names the line of the table being typed that the caret is still on,
+and every paste route hands that line to the drawing, which leaves that one table as text until
+the caret leaves it.
+
+**Takeaway:** the app's own redraw can undo what the person is doing. When a rule says "treat
+this like typing", find every step that typing does not take — here, a redraw — and make it
+follow the rule too.
+
+**Follow-up:** Two more redraws nobody asked for did it as well: a theme switch and a new font
+size drew any row being typed, pasted into or not, and the next letter went under the table.
+They ask the same question now — is the caret on a row of a table not yet drawn? — and leave
+that row as it is.
 
 ## Theming & performance
 
@@ -2579,6 +3301,43 @@ desktop is an input the person at the machine is feeding every test run, until a
 **Two things that needed care.** A validator can only accept or refuse a change *whole*, so pasting something longer left the field empty, which reads as the paste having failed rather than having been shortened; pasting now trims to fit. And validation fires on programmatic inserts as well as on typing — so without a guard, opening a note written before the cap would have had the widget silently drop the overflow, and the next autosave would have written that shortened title back over the real one. Loading a note must never edit it.
 
 **Why the body is fine:** it is a `tk.Text`, which stays near-linear — a million characters costs 363ms a keystroke against `tk.Entry`'s three and a half seconds at a tenth of the size. Someone can write a book in one note; measured at 1M characters, typing is 14ms and saving 377ms.
+
+### The colour the door let in and the drawing could not read
+
+*([0.83.335](../CHANGELOG.md#083335--2026-10-02))*
+
+**Symptom:** A calendar day coloured `#abc` — three hex digits, from a hand-edited or restored
+settings.json — stopped its whole month from drawing: the days piled up in the corner and
+nothing was clickable, on every visit.
+
+**Root cause:** The day's text had just learned to contrast with its paint, and the contrast
+reads six digits. The colour gate, `sanitize_color`, admits three on purpose, since Tk draws
+both. The gate and its newest reader disagreed about what a colour is.
+
+**Fix:** The gate gives `#rgb` back as `#rrggbb` — the same colour, in the only form the app
+itself ever writes — so every reader that works a colour out by hand sees six digits. And the
+contrast answers white for anything it cannot read, so no future door can freeze a month.
+
+**Takeaway:** a gate defines what its readers may receive; a new reader must be able to read
+everything the gate lets through, or the gate must narrow what it hands on.
+
+### Every right-click left its menu behind
+
+*([0.83.335](../CHANGELOG.md#083335--2026-10-02))*
+
+**Symptom:** After a thousand right-clicks on notes, switching the theme took 420 ms instead of
+80; each right-click left three windows and eighteen Tcl commands behind, each menu holding the
+note it was built for.
+
+**Root cause:** Every right-click built its menu anew and nothing ever destroyed one.
+
+**Fix:** The previous menu is destroyed when the next is built. Not when `tk_popup` returns:
+on Linux it returns at once with the menu still open (measured in the CI image: 1 ms, still
+mapped), so the menu would vanish before anyone chose. The price is Tk's own: destroying a menu
+with two cascades costs about 3 ms on Windows, with no app code involved.
+
+**Takeaway:** a widget built per event needs an owner that ends it; and "destroy it when the
+call returns" depends on whether the call blocks, which differs by platform.
 
 ## Coordinate systems & units
 
@@ -3073,6 +3832,62 @@ actually offers before calling it "the delete system": the menu that
 looked like a duplicate way to delete was the only way to reach a third
 of the note's actions.
 
+### The list that moved under the pointer
+
+*([0.83.335](../CHANGELOG.md#083335--2026-10-02))*
+
+**Symptom:** With unsaved typing in one note, double-clicking another note's card opened its
+neighbour; a click with a tiny slip could drop the card into a new place and switch the list to
+Custom order.
+
+**Root cause:** The click's own open saved the note left behind, and the save moved rows under a
+pointer that had not moved. The double-click's second press, and the drag the first press had
+armed, then acted on whatever had slid under it. The drag threshold was even measured in the
+canvas, so a view moving under a still hand counted as the hand travelling.
+
+**Fix:** A press keeps its row where it stood on screen, scrolling as far as the list can;
+where it cannot, the press leaves an aim that the double-click's second press follows for half
+a second. A drag arms only if the card is still under the pointer, and the threshold is measured
+on the screen.
+
+A second slip lived at the list's edges. A drag that began in an edge zone — a click on the
+card the edge cuts, the one a hand most often clicks — scrolled the list from its first 40 ms
+beat, so a five-pixel slip dropped the card one to three places away. A drag that begins at an
+edge now scrolls only after the pointer has been out in the open list, or has stayed at the edge
+for 400 ms, and every arrival at an edge starts at a tenth of the step and grows.
+
+**Takeaway:** an action that changes the layout as a side effect must keep the user's target
+where the user is pointing — or remember what they pointed at.
+
+### The character only the drawn tables had
+
+*([0.83.335](../CHANGELOG.md#083335--2026-10-02))*
+
+**Symptom:** A font size set on "hello", under a drawn table, landed on "\nhell" — and the next
+size or font set anywhere moved it again, to "|\nhel", saved that way. In the same lines, Enter
+in a numbered list of a note of 8,000 styled words froze the editor for 3.4 s.
+
+**Root cause:** A drawn table is an embedded window, and to Tk's index arithmetic ("+Nc") a
+window is one character. The note's text has no such character: the app's offsets are counted
+in what `get()` returns, which skips windows. Reading spans out had been made to agree with the
+saved text long ago; laying them back still asked Tk for "1.0+Nc", one character early for
+every table above. Every font change re-reads all the font runs and lays them again, so each
+one moved every run under a table once more. And each of those "1.0+Nc" walked the note from
+its first character — the freeze. A breaker reported only the freeze; the misplacement came
+out of the sweep the fix owed anyway — every line that turns a saved offset into a place.
+
+**Fix:** One walk lays every span: the offsets sorted, each reached from the one before, and
+the windows a hop passes hopped again. With no table drawn every index is the one "1.0+Nc"
+gave, checked at every offset of a text with emoji, Chinese and tabs; with tables drawn, every
+offset read back from its index is itself. The same round found the undo journal comparing
+two snapshots by moving one into the other's windows, which put a position at a window's column
+past the window, where Tk keeps a range's end before it: a centred line above a table left an
+empty Ctrl+Z after every renumber. It compares both in the text without windows now.
+
+**Takeaway:** an offset belongs to the space it was counted in. Where two spaces differ by
+characters only one of them has, convert at every crossing, in both directions — and compare
+in the space both sides share, never by moving one side into the other's.
+
 ## Tests & CI discipline
 
 *Bugs in the safety net itself: checks that could not fail, suites that lied, and how they got teeth.*
@@ -3497,3 +4312,81 @@ time the Linux image has found something invisible on Windows.
    again on the same page it is documented on, so the mutant is what caught
    it — which is the argument for running mutants on checks that look
    obviously right.
+
+### The safety guard that read a broken notebook as empty
+
+*([0.83.335](../CHANGELOG.md#083335--2026-10-02))*
+
+**Symptom:** None yet — found by reading. The block at the top of all nine qa scripts, written
+after real notebooks were lost to tests run in the wrong folder, treated a notes_data.json it
+could not read as an empty notebook and overwrote it with `[]`, and overwrote settings.json
+unconditionally. `test_data_safety.py`'s own guard let an unreadable file through too.
+
+**Root cause:** a guard written for one case — a readable notebook holding notes — whose fallback
+assumed that anything else meant safe; and nine copies of it, so any fix had to be made nine
+times.
+
+**Fix:** One definition, `qa/_qa_support.hermetic_seed`, that fails closed: it refuses outside a
+declared scratch run (`NOTEORG_SCRATCH=1`, set only by `tools/run_tests.py` and the CI workflow)
+and beside any notebook it cannot prove empty. `test_data_safety.py` follows the same rule, and
+proves the guard's four answers.
+
+**Takeaway:** a safety guard's fallback must be the safe answer — "I cannot tell" means stop.
+
+### The save that forgot the next one
+
+*([0.83.335](../CHANGELOG.md#083335--2026-10-02))*
+
+**Symptom:** One qa1 check went red on the Linux runner and nowhere else: holding BackSpace
+through a bold word, then Ctrl+Z, gave back "Fr" alone. Re-run, it passed. A second check failed
+on every re-run in the same folder and never on a fresh one.
+
+**Root cause:** Two, of different kinds. The second was the test's: the bulk export names its
+files after what the folder already holds, and the check listed a fixed folder that an earlier
+run had filled. The first was the app's. The autosave's timer callback began by setting its job
+to None — assuming it was the timer that job tracked. Run any other way while a timer waited (the
+qa scripts call it directly, as "the timer firing now"), it left that timer scheduled with
+nothing tracking it, and the next cancel had nothing to cancel. On firing, the stray timer set
+the *next* job to None the same way: a relay of untracked saves, 28 of them in one qa1 run,
+counted by wrapping every timer the app scheduled. One fired between two presses of the held
+key, and a save's boundary ends a run of deletes — on purpose, as a pause does. A 0.7-second
+wait between presses reproduced it on any machine. The find bar's rescan and the Calendar
+History's search render had the same shape, run directly from the Aa box and the year chips:
+duplicate work in the app, nothing a person sees.
+
+**Fix:** The autosave and the History render cancel a waiting timer instead of forgetting it —
+work that runs now makes the waiting one redundant. The find rescan's job is cleared only by its
+own timer: a waiting rescan may carry a reveal the direct one does not. The checks ask Tcl which
+timers wait, not the attribute the app keeps, and a held key in the checks presses and releases
+with the autosave held for the burst. The export check gets a folder of its own each run.
+
+**Takeaway:** a job attribute answers only for the timer it tracks. A callback that clears its
+own job must be sure it is that job's timer — or cancel instead of forget. And a flake that
+re-runs green has a mechanism: slow the machine down on purpose and watch it fail.
+
+### The clipboard the tests shared with whoever was at the machine
+
+*([0.83.335](../CHANGELOG.md#083335--2026-10-02))*
+
+**Symptom:** qa1's check "pasting copied cells below the table makes a SECOND table" went red
+on a developer machine — a third time — while the Linux run stayed green and the same run passed
+again a minute later. The tables were never wrong.
+
+**Root cause:** The suite copied and pasted through the machine's real clipboard, which every
+program on the machine shares. One that holds it open for an instant — Windows' own clipboard
+history reads it right after every copy — makes a read return nothing: the app's clipboard
+module returns None and Tk's fallback fails the same way, so the paste pastes nothing. The
+check's earlier repair waited until one read succeeded, and only moved the race: the paste then
+read the clipboard again. And every run wrote over the clipboard of whoever was working at the
+machine while it ran.
+
+**Fix:** The helper every qa script and story already calls, `pin_the_desktop`, gives every app
+the script builds a stand-in clipboard kept in the process: Tcl's `clipboard` command, Tk's
+CLIPBOARD selection that Text and Entry paste through, and on Windows the app's own clipboard
+module — with Tk's own rules (an append claims the clipboard and drops its HTML; an empty one
+refuses a read). No other program can take part, and nothing the person copied is touched.
+
+**Takeaway:** a flaky check is a check with a hidden dependency. "Wait for it to work" moves the
+race; taking the shared thing out of the test ends it — the same lesson as
+[The tests that borrowed the notebook](#the-tests-that-borrowed-the-notebook), for the
+clipboard.

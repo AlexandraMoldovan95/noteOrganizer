@@ -137,9 +137,17 @@ def sanitize_color(value, default=""):
     TclError on garbage. Because a note is SAVED before it is first
     drawn, one bad colour used to mean a crash on every launch after:
     the T0-7 brick, on a different field. Only #rgb/#rrggbb pass; the
-    app itself never writes anything else."""
+    app itself never writes anything else.
+
+    And #rgb comes back as #rrggbb, the same colour: every reader that
+    works a colour out by hand -- a painted day's text contrast, the
+    blends, a chip's darker hover -- reads six digits, and a #abc day
+    colour from a hand-edited file stopped its whole month drawing."""
     if isinstance(value, str) and _HEX_COLOR.match(value.strip()):
-        return value.strip()
+        value = value.strip()
+        if len(value) == 4:
+            value = "#" + "".join(ch * 2 for ch in value[1:])
+        return value
     return default
 
 
@@ -252,8 +260,13 @@ def apply_shared_update(note, incoming, fields=UPDATABLE_FROM_SHARED):
     normalised before anything is copied out of it. *fields* is what it
     may replace: UPDATABLE_FROM_SHARED for a share code,
     UPDATABLE_FROM_BACKUP for a backup.
+
+    An update that would change nothing leaves the note alone -- see
+    shared_update_changes for why that is not a nicety.
     """
     fresh = normalize_note(dict(incoming))
+    if not shared_update_changes(note, fresh, fields):
+        return note
     prev = {
         "title": note.get("title") or "",
         "body": note.get("body") or "",
@@ -269,6 +282,29 @@ def apply_shared_update(note, incoming, fields=UPDATABLE_FROM_SHARED):
         note[field] = copy.deepcopy(fresh[field])
     note["updated"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     return note
+
+
+def shared_update_changes(note, incoming, fields=UPDATABLE_FROM_SHARED):
+    """Whether updating *note* from *incoming* would change any of *fields*.
+
+    An update that changes nothing is not harmless. It rewrites the rescue
+    copy ("↩ Restore previous") with a duplicate of what is already there,
+    so the note's one earlier version is gone. Importing the same backup
+    twice did exactly that: the first import kept this device's newer text
+    as the rescue copy, the second replaced it with the backup's own, and
+    the newer text was in no file at all -- after messages ("Added 0
+    notes") that invited the second import.
+
+    Both sides are compared in the shape a load gives them. The note here
+    is the copy in memory, which can still hold what the editor wrote
+    raw -- a day's edit carried an empty colour that normalize_note drops
+    -- while *incoming* has been through normalize_note. Compared as they
+    were, a backup holding this very note read as "edited elsewhere"
+    until the next restart, and Update spent the rescue copy on it.
+    """
+    fresh = normalize_note(dict(incoming))
+    mine = normalize_note(dict(note))
+    return any(mine[field] != fresh[field] for field in fields)
 
 
 def split_by_identity(notes, incoming):
@@ -293,6 +329,67 @@ def split_by_identity(notes, incoming):
         else:
             known.append((mine, note))
     return known, fresh
+
+
+def clean_override(patch):
+    """One day's edit of a repeating note, in the shape a load gives it.
+
+    normalize_note runs every stored override through this, and the save
+    that writes a day's edit runs it too, so the edit held in memory is
+    the edit a restart reads back. Written raw, it kept an empty colour
+    the load then dropped, and the two copies of one note compared as
+    different until the next launch.
+
+    An override carries "color" like the base note does -- and like the
+    base note's, it ends inside a Tk configure() when the day is drawn.
+    isinstance(v, str) let "#nope" through, so a single per-day colour
+    from a share code, a backup or a hand-edited file could raise during
+    the startup calendar render: the same make-the-app-unopenable class
+    the note's own colour was closed for, through the one door that fix
+    did not cover. Dropping the bad value (rather than the whole
+    override) keeps the day's text edit intact.
+    """
+    out = {}
+    for k, v in patch.items():
+        if k not in OVERRIDABLE_FIELDS or not isinstance(v, str):
+            continue
+        if k == "color":
+            v = sanitize_color(v)
+            if not v:
+                continue
+        if k == "category" and v not in CATEGORY_COLORS:
+            # The rule the note's own category follows in normalize_note:
+            # a name the categories no longer hold is filed under General.
+            # Kept as it was, one day of a series restored from the Trash
+            # carried a deleted category back in, and the next launch
+            # re-created it as having "gone missing from the settings".
+            # (At load the names the notes use are adopted first, on the
+            # raw file, so this never re-files a category that is merely
+            # missing from settings.json.)
+            v = "General"
+        if k == "body":
+            # The same canonicalisation the base body gets. An override is
+            # shown in the same editor, so the renderer adds the same line
+            # under a trailing table -- and without this the day's stored
+            # text is one newline short of what is on screen, which made a
+            # per-day edit ending in a table read as unsaved FOREVER: a
+            # save-scope question on every note switch and at close, for
+            # an edit nobody made.
+            v = with_caret_line(v)
+        out[k] = v
+    return out
+
+
+def _bare_file_name(name):
+    """*name* as the app stores an attachment: one bare file name.
+
+    basename flattens a smuggled path ("../../x", "C:\\...", a UNC root);
+    the rstrip removes trailing dots and spaces, which Windows itself strips
+    when opening a file -- so "invoice.lnk. " names invoice.lnk on disk while
+    reading as extension-less to the warn-before-opening gate. Normalised
+    here, the name the gate inspects and the file the OS opens can never
+    disagree."""
+    return os.path.basename(name.replace("\\", "/")).rstrip(". ")
 
 
 def normalize_note(note):
@@ -405,38 +502,9 @@ def normalize_note(note):
     # around to indent a line that no longer exists.
     clean["paragraphs"] = normalize_paragraphs(
         clean["paragraphs"], len(clean["body"].split("\n")))
-    # An override carries "color" like the base note does -- and like the
-    # base note's, it ends inside a Tk configure() when the day is drawn.
-    # isinstance(v, str) let "#nope" through, so a single per-day colour
-    # from a share code, a backup or a hand-edited file could raise
-    # during the startup calendar render: the same make-the-app-
-    # unopenable class the note's own colour was closed for, through the
-    # one door that fix did not cover. Dropping the bad value (rather
-    # than the whole override) keeps the day's text edit intact.
-    def _clean_override(patch):
-        out = {}
-        for k, v in patch.items():
-            if k not in OVERRIDABLE_FIELDS or not isinstance(v, str):
-                continue
-            if k == "color":
-                v = sanitize_color(v)
-                if not v:
-                    continue
-            if k == "body":
-                # The same canonicalisation the base body gets. An
-                # override is shown in the same editor, so the renderer
-                # adds the same line under a trailing table -- and
-                # without this the day's stored text is one newline
-                # short of what is on screen, which made a per-day edit
-                # ending in a table read as unsaved FOREVER: a save-scope
-                # question on every note switch and at close, for an
-                # edit nobody made.
-                v = with_caret_line(v)
-            out[k] = v
-        return out
 
     clean["overrides"] = {
-        d: _clean_override(patch)
+        d: clean_override(patch)
         for d, patch in clean["overrides"].items()
         if isinstance(d, str) and parse_date(d) and isinstance(patch, dict)
     }
@@ -478,16 +546,14 @@ def normalize_note(note):
     for att in clean.get("attachments", []):
         if not isinstance(att, dict):
             continue
-        item = dict(att)
+        # The two names are all a record is -- the app writes nothing else,
+        # and nothing reads anything else. Copied whole, a crafted record
+        # carried whatever else it held into every save, and a value nested
+        # a few hundred deep made Duplicate fail on the note.
+        item = {key: att[key] for key in ("filename", "stored_as") if key in att}
         stored = item.get("stored_as")
         if isinstance(stored, str) and stored:
-            # basename flattens smuggled paths; the rstrip removes
-            # trailing dots/spaces, which Windows itself strips when
-            # opening a file — so "invoice.lnk. " names invoice.lnk on
-            # disk while reading as extension-less to the warn-before-
-            # opening gate. Normalised here, the name the gate inspects
-            # and the file the OS opens can never disagree.
-            stored = os.path.basename(stored.replace("\\", "/")).rstrip(". ")
+            stored = _bare_file_name(stored)
             item["stored_as"] = stored
         else:
             stored = ""
@@ -503,7 +569,13 @@ def normalize_note(note):
             continue
         item["filename"] = display
         if not isinstance(item.get("stored_as"), str) or not item["stored_as"]:
-            item["stored_as"] = display
+            # The display name stands in for the stored one -- flattened the
+            # same way: taken as it was, a crafted record with no stored_as
+            # and a filename of "../../x" kept the path the rule above exists
+            # to remove (the guards at the open and delete sinks still held).
+            item["stored_as"] = _bare_file_name(display)
+            if not item["stored_as"]:
+                continue
         attachments.append(item)
         if len(attachments) >= MAX_ATTACHMENTS:
             # Same class as the checklist cap above: an unbounded list a
@@ -799,17 +871,38 @@ def count_notes_in_category(notes, name):
 
 
 def rename_category_everywhere(notes, old_name, new_name):
-    """Rewrite every reference to a category, in base notes and overrides.
+    """Rewrite every reference to a category, in base notes and overrides --
+    and in each note's rescue copy, which "↩ Restore previous" puts back.
 
     Used both for a real rename and for moving notes out of a category that
     is being deleted -- the operation is the same either way.
+
+    The rescue copy an update leaves (see apply_shared_update) holds the
+    category and the per-day edits it replaced. Left out, a restore after
+    a rename filed the note under General and its day under the old name,
+    which the next launch then brought back as a category of its own.
+
+    Returns how many notes held the name, so a caller knows whether there
+    is anything to write.
     """
+    held = 0
     for n in notes:
-        if n.get("category") == old_name:
-            n["category"] = new_name
-        for patch in (n.get("overrides") or {}).values():
-            if patch.get("category") == old_name:
-                patch["category"] = new_name
+        found = False
+        for holder in (n, n.get("_prev")):
+            if not isinstance(holder, dict):
+                continue
+            if holder.get("category") == old_name:
+                holder["category"] = new_name
+                found = True
+            # Trash entries are kept as the file held them, unshaped.
+            overrides = holder.get("overrides")
+            for patch in (overrides.values() if isinstance(overrides, dict)
+                          else ()):
+                if isinstance(patch, dict) and patch.get("category") == old_name:
+                    patch["category"] = new_name
+                    found = True
+        held += found
+    return held
 
 
 def notes_on_date(notes, date_str):

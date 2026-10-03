@@ -1,29 +1,11 @@
 # HERMETIC SEED -- BEFORE the note_organizer import below: the module
 # resolves its data directory and runs the data MIGRATIONS at import
-# time, so by the first line of test code the adoption has already
-# happened. The data directory must be this test's alone. An
-# empty directory invites run_migrations to adopt whatever real notebook
-# %APPDATA% holds, and real notes then leak into every scenario: the
-# checks start flaking whenever the OWNER's data changes. Seeding an
-# empty notebook plus the reclaim marker closes both migration doors
-# before the app is even constructed. The refusal is the same last-line
-# defence test_data_safety carries: run from a folder holding real
-# notes, the script stops instead of seeding over them.
-import io as _seed_io, json as _seed_json, os as _seed_os, sys as _seed_sys
-if _seed_os.path.exists('notes_data.json'):
-    try:
-        _seed_prev = _seed_json.load(
-            _seed_io.open('notes_data.json', encoding='utf-8'))
-    except Exception:
-        _seed_prev = []
-    if isinstance(_seed_prev, list) and _seed_prev:
-        _seed_sys.exit(
-            'REFUSING to run: notes_data.json here holds %d real note(s). '
-            'Copy this script to a scratch directory instead.'
-            % len(_seed_prev))
-_seed_io.open('notes_data.json', 'w', encoding='utf-8').write('[]')
-_seed_io.open('settings.json', 'w', encoding='utf-8').write(
-    _seed_json.dumps({'reclaimed_from_appdata': True}))
+# time, so this script's data directory must be its own before that
+# happens. hermetic_seed (qa/_qa_support.py) seeds it -- or refuses to
+# run at all outside a scratch run, or beside a notebook it cannot
+# prove is empty.
+from _qa_support import hermetic_seed as _qa_seed
+_qa_seed()
 
 import sys
 import note_organizer as NO, tkinter as tk, tkinter.filedialog as fd, os, tempfile, time, zipfile, json
@@ -525,8 +507,20 @@ app._themed_dialog = _real_dlg_id
 # A single imported note opens in the editor UNSAVED, by design -- the
 # user reviews it, then saves. The promise lands at the save, so the
 # check follows it there.
+#
+# Which note the editor holds, not whether a save has happened yet: the
+# autosave that follows an import (_open_imported_note_in_editor says
+# so) can create the copy inside the update() above on a loaded machine,
+# and "selected_note_id is None" then went red with nothing wrong --
+# seen during a mutant run, reproduced by pausing past the debounce.
+# Either answer keeps the promise: unsaved, or saved as a note of its
+# own holding the copy's text; never the old note.
+_add_sel = app.capture_editor_state().get('selected_note_id')
 check('choosing Add opens the copy as a NEW note, not over the old one',
-      app.capture_editor_state().get('selected_note_id') is None)
+      _add_sel != _ident_note['id']
+      and (_add_sel is None
+           or (app.find_note(_add_sel) or {}).get('body', '').rstrip('\n')
+           == 'alta varianta'))
 app.save_current_note(auto=False)
 app.update()
 check('...and once saved it is a second note',
@@ -1819,6 +1813,42 @@ if _sr_empty is not None:
 check('emptying the trash counts the series in it',
       '2 of them are repeating series' in _sr_said.get('msg', ''))
 
+# Yes deletes the entries the question counted, and only them. Read after
+# the answer, a note that reached the Trash while the question waited was
+# deleted for good with the rest -- by the one question in the app that
+# cannot be undone. It stays in the Trash now.
+_et_now = time.strftime('%Y-%m-%d %H:%M:%S')
+app.trash = [{'id': 940, 'title': 'Counted', 'body': 'b',
+              'category': 'General', 'deleted_at': _et_now}]
+NO.save_trash(app.trash)
+app.toggle_settings_panel('trash')
+app.toggle_settings_panel('trash')
+app.update()
+_et_stub = app.ask_yes_no
+
+
+def _et_yes(t, m, **k):
+    _sr_said['msg'] = m
+    app.trash.append({'id': 941, 'title': 'Arrived while asking', 'body': 'b',
+                      'category': 'General', 'deleted_at': _et_now})
+    return True
+
+
+app.ask_yes_no = _et_yes
+_et_btn = find_btn(app.settings_trash_panel, 'Empty trash')
+if _et_btn is not None:
+    _et_btn.invoke()
+    app.update()
+app.ask_yes_no = _et_stub
+check('Empty trash deletes the notes its question counted, and keeps one '
+      'that reached the Trash while it waited (%s, on disk %s, %r)'
+      % ([e.get('title') for e in app.trash],
+         [e.get('title') for e in NO.load_trash()], _sr_said.get('msg')),
+      _et_btn is not None
+      and [e.get('title') for e in app.trash] == ['Arrived while asking']
+      and [e.get('title') for e in NO.load_trash()] == ['Arrived while asking']
+      and 'all 1 note ' in _sr_said.get('msg', ''))
+
 # A corrupt recurrence must not break the sentence -- the trash holds
 # whatever was on disk, and normalize_note does not run on the way out.
 app.trash = [
@@ -2020,6 +2050,597 @@ app.trash = []
 NO.save_trash(app.trash)
 app.notes = []
 app.save_notes()
+
+# ---- NOTHING TYPED IS LOST: WHAT A DELETE, AN IMPORT AND A RESTORE TOUCH ----
+# The break-it wave of 2026-09-30 found routes where work already saved,
+# or still on screen, was replaced without a word. Each block names its
+# route; docs/ISSUES_LOG.md has the stories.
+if getattr(app, '_settings_open', False):
+    app.hide_settings_page()
+app.new_note(); app.update()
+
+# A delete elsewhere leaves the open note alone. Deleting some OTHER note
+# used to "switch" the editor to its one tab -- the note already on screen
+# -- restoring it from the copy taken when it was opened, so a version
+# saved since was put back, and the next switch wrote it over the new one.
+app.notes = [NO.normalize_note({'id': 1, 'title': 'Recipe', 'body': 'first version'}),
+             NO.normalize_note({'id': 2, 'title': 'Old list', 'body': 'eggs'})]
+app.save_notes()
+app.open_note_in_tab(app.notes[0]); app.update()
+app.notes[0]['body'] = 'second version'   # saved behind the tab's copy,
+app.save_notes()                          # as "Restore previous" does
+app.load_note(app.notes[0]); app.update()
+app._delete_note(app.find_note(2), None)
+app.update()
+check('deleting another note leaves the open one on its latest version',
+      app.body_text.get('1.0', 'end-1c') == 'second version')
+app._flush_autosave(); app.update()
+check('...so the next save cannot put the older version back',
+      app.find_note(1)['body'] == 'second version')
+
+# An import the person would not let replace a day's edit. Cancel on the
+# repeating day's question means stay -- but the import went on, loaded
+# the note it carried into the day still on screen (whose next save wrote
+# it over the whole series), and had already cleared the code.
+app.new_note(); app.update()
+app.notes = [NO.normalize_note({'id': 1, 'title': 'Yoga', 'body': 'stretch',
+                                'date': '2026-09-01',
+                                'recurrence': {'freq': 'weekly'}})]
+app.save_notes()
+app.open_note_in_tab(app.notes[0], occurrence_date='2026-09-08'); app.update()
+app.body_text.insert('end', '\nbring the mat')
+_nt_code = NO.encode_share_code([{'title': 'Lasagne', 'body': 'layers',
+                                  'category': 'General'}])
+if not app._is_placed(app.import_panel):
+    app.toggle_import_panel()
+app.update()
+app.import_box.delete('1.0', 'end')
+app.import_box.insert('1.0', _nt_code)
+_nt_real_scope = app.ask_occurrence_scope
+app.ask_occurrence_scope = lambda *a, **k: None
+app._do_inline_import()
+app.ask_occurrence_scope = _nt_real_scope
+app.update()
+check("Cancel on a day's question keeps the day in the editor, not the import",
+      app.title_entry.get() == 'Yoga' and app.selected_note_id == 1
+      and 'bring the mat' in app.body_text.get('1.0', 'end-1c'))
+check('...the code stays in the box, to try again',
+      app.import_box.get('1.0', 'end').strip() == _nt_code.strip())
+check('...and the series is untouched',
+      [n['title'] for n in app.notes] == ['Yoga']
+      and app.notes[0]['recurrence']['freq'] == 'weekly')
+app.new_note(); app.update()   # leave the day without its question
+if app._is_placed(app.import_panel):
+    app.toggle_import_panel()
+
+# An update that would change nothing changes nothing. It rewrote the
+# rescue copy with a duplicate of the note itself, so importing the same
+# backup twice left this device's newer text in no file at all.
+_nt_mine = NO.normalize_note({'id': 1, 'title': 'Report', 'body': 'v2 - newer'})
+_nt_theirs = {'uid': _nt_mine['uid'], 'title': 'Report', 'body': 'v1 - older'}
+NO.apply_shared_update(_nt_mine, _nt_theirs, NO.UPDATABLE_FROM_BACKUP)
+check('an update keeps the text it replaced as the rescue copy',
+      _nt_mine['_prev']['body'] == 'v2 - newer')
+NO.apply_shared_update(_nt_mine, _nt_theirs, NO.UPDATABLE_FROM_BACKUP)
+check('...and the same update again leaves that rescue copy alone',
+      _nt_mine['_prev']['body'] == 'v2 - newer')
+app.notes = [_nt_mine]; app.save_notes()
+_nt_asked = []
+app._themed_dialog = lambda *a, **k: (_nt_asked.append(a), 'update')[1]
+_nt_res = app._take_known_notes([dict(_nt_theirs)], 'backup')
+app._themed_dialog = _real_dialog
+check('a note arriving exactly as it is here is not offered as an update',
+      not _nt_asked and _nt_res[2] == [] and _nt_res[3] == 1)
+
+# "Update" waits for the import's last answer. The updates were applied
+# at once, so Cancel on the duplicate question that follows left them in
+# memory, and the next unrelated save wrote them to disk.
+app.notes = [NO.normalize_note({'id': 1, 'title': 'Report', 'body': 'local v2'})]
+app.save_notes()
+app._themed_dialog = lambda *a, **k: 'update'
+_nt_res = app._take_known_notes(
+    [{'uid': app.notes[0]['uid'], 'title': 'Report', 'body': 'laptop v1'}],
+    'backup')
+app._themed_dialog = _real_dialog
+check('"Update" hands the update back rather than making it',
+      _nt_res[0] and len(_nt_res[2]) == 1
+      and app.notes[0]['body'] == 'local v2')
+app._apply_known_updates(_nt_res[2], 'backup')
+check('...and it happens when the import applies it, after its last question',
+      app.notes[0]['body'] == 'laptop v1')
+
+# A note under review from a code keeps the identity it arrived with. The
+# review editor dropped it, so a note sent out, edited elsewhere and sent
+# back arrived as a stranger and became a second copy.
+app.notes = []; app.save_notes()
+app.new_note(); app.update()
+app._open_imported_note_in_editor(
+    {'uid': 'qa3-arrived-0001', 'title': 'Trip plan', 'body': 'flights'})
+app.save_current_note(); app.update()
+check('a note saved from the import review keeps the identity it arrived with',
+      [n.get('uid') for n in app.notes] == ['qa3-arrived-0001'])
+app._open_imported_note_in_editor(
+    {'uid': 'qa3-arrived-0001', 'title': 'Trip plan', 'body': 'another'})
+app.save_current_note(); app.update()
+check('...but never one a note here already wears',
+      len({n.get('uid') for n in app.notes}) == 2)
+app.new_note(); app.update()
+# Ctrl+Z starts from the note as it arrived, as after every other load. The
+# import was the first step on Tk's undo stack: Ctrl+Z took the whole body
+# back, and the autosave then stored the imported note empty.
+app._open_imported_note_in_editor({'title': 'Shopping',
+                                   'body': 'List for Saturday'})
+app.update()
+check(f'an imported note gives Ctrl+Z nothing to take back '
+      f'({app._can_edit_undo(app.body_text)}; '
+      f'{app.body_text.get("1.0", "end-1c")!r})',
+      not app._can_edit_undo(app.body_text)
+      and app.body_text.get('1.0', 'end-1c').startswith('List for Saturday'))
+app._cancel_pending_autosave()
+app.new_note(); app.update()
+
+# A batch comes back from the Trash in one pass: each file written once,
+# the notes first. Note by note, every restore rewrote the whole trash
+# file (an Undo of a thousand notes froze the app for over half a
+# minute), and the trash was written before the notes, so a failed notes
+# write left a note in neither file.
+app.trash = []; NO.save_trash(app.trash)
+app.notes = [NO.normalize_note({'id': i, 'title': 'Bulk %d' % i, 'body': 'x'})
+             for i in range(1, 61)]
+app.save_notes()
+_nt_marks = [(e.get('id'), e.get('deleted_at'))
+             for e in app._move_notes_to_trash(list(app.notes))]
+app.notes = []; app.save_notes()
+_nt_writes = []
+_nt_real_save_trash = NO.save_trash
+_nt_real_save_notes = app.save_notes
+NO.save_trash = lambda t, _r=_nt_real_save_trash: (_nt_writes.append('trash'), _r(t))[1]
+app.save_notes = lambda _r=_nt_real_save_notes: (_nt_writes.append('notes'), _r())[1]
+app._undo_trash(_nt_marks)
+NO.save_trash = _nt_real_save_trash
+del app.save_notes
+app.update()
+check('an Undo of sixty notes moved to the Trash brings all sixty back',
+      len(app.notes) == 60 and not app.trash)
+check('...writing each file once, the notes before the trash',
+      _nt_writes == ['notes', 'trash'])
+
+# The Trash's rows hold the entries they were drawn for. After a restore
+# made from outside the panel, a stale row's Restore brought back a
+# second copy, and its Delete destroyed the file the restored note showed.
+app.notes = []; app.save_notes()
+_nt_file = 'qa3_stale_row.txt'
+os.makedirs(NO.ATTACHMENTS_DIR, exist_ok=True)
+with open(os.path.join(NO.ATTACHMENTS_DIR, _nt_file), 'w') as _fh:
+    _fh.write('keep me')
+
+
+def _nt_trashed():
+    return dict(NO.normalize_note({
+        'id': 1, 'title': 'Holiday plans', 'body': 'x',
+        'attachments': [{'name': 'plan.txt', 'stored_as': _nt_file}]}),
+        deleted_at='2026-09-30 10:00:00')
+
+
+app.trash = [_nt_trashed()]; NO.save_trash(app.trash)
+app.show_settings_page(); app.toggle_settings_panel('trash'); app.update()
+_nt_restore = find_btn(_trash_rows()[0], 'Restore')
+app._restore_trash_entries(list(app.trash)); app.update()
+_nt_restore.invoke(); app.update()
+check("a stale Trash row's Restore does not bring a second copy back",
+      len([n for n in app.notes if n['title'] == 'Holiday plans']) == 1)
+app.notes = []; app.save_notes()
+app.trash = [_nt_trashed()]; NO.save_trash(app.trash)
+app.toggle_settings_panel('trash'); app.update()
+_nt_delete = find_btn(_trash_rows()[0], 'Delete')
+app._restore_trash_entries(list(app.trash)); app.update()
+_nt_delete.invoke(); app.update()
+check("...and its Delete leaves the restored note's file on disk",
+      os.path.isfile(os.path.join(NO.ATTACHMENTS_DIR, _nt_file)))
+# ...and the toast's Undo redraws the rows itself, so none goes stale.
+app.notes = [NO.normalize_note({'id': 1, 'title': 'Undone', 'body': 'x'})]
+app.save_notes()
+app.trash = []; NO.save_trash(app.trash)
+_nt_marks = [(e.get('id'), e.get('deleted_at'))
+             for e in app._move_notes_to_trash(list(app.notes))]
+app.notes = []; app.save_notes()
+app.toggle_settings_panel('trash'); app.update()
+_nt_rows_before = len(_trash_rows())
+app._undo_trash(_nt_marks); app.update()
+check("the toast's Undo takes the note's row off an open Trash panel",
+      _nt_rows_before == 1 and not _trash_rows())
+app.hide_settings_page(); app.update()
+app.trash = []; NO.save_trash(app.trash)
+app.notes = []; app.save_notes()
+
+# The status line after a delete says how long the Trash really keeps a
+# note: it said "30 days" to someone who had chosen seven.
+NO.save_setting('trash_retention_days', 7)
+app.notes = [NO.normalize_note({'id': 1, 'title': 'Short-lived', 'body': 'x'})]
+app.save_notes()
+app._delete_note(app.find_note(1), None)
+app.update()
+check('the status after a delete names the retention actually chosen',
+      '7 days' in str(app.status_lbl.cget('text')))
+NO.save_setting('trash_retention_days', NO.TRASH_RETENTION_DAYS)
+app.trash = []; NO.save_trash(app.trash)
+app.notes = []; app.save_notes()
+
+# Closing the window while a backup's worker has just finished: the
+# main-thread poll that would have finished the job never runs again. An
+# import's copied files were left belonging to no note, its unpacked
+# backup stayed in the temp folder, and a finished export went unrecorded.
+os.makedirs(NO.ATTACHMENTS_DIR, exist_ok=True)
+_cl_orphan = 'qa3_close_orphan.txt'
+_cl_owned = 'qa3_close_owned.txt'
+for _cl_name in (_cl_orphan, _cl_owned):
+    with open(os.path.join(NO.ATTACHMENTS_DIR, _cl_name), 'w') as _fh:
+        _fh.write('x')
+app.notes = [NO.normalize_note({
+    'id': 1, 'title': 'Owns a file', 'body': 'x',
+    'attachments': [{'name': 'owned.txt', 'stored_as': _cl_owned}]})]
+app.save_notes()
+_cl_temp = tempfile.mkdtemp(prefix='qa3_close_')
+app._import_state = {'phase': 'copying', 'current': 2, 'total': 2,
+                     'done': True, 'error': None, 'temp_dir': _cl_temp,
+                     'imported_notes': [], 'copied': [_cl_orphan, _cl_owned]}
+app._export_state = {'current': 1, 'total': 1, 'done': True, 'error': None,
+                     'save_path': 'unused'}
+NO.save_setting('last_export_at', '')
+_cl_destroy = app.destroy
+app.destroy = lambda: None          # the close itself, not the window
+app.on_app_close()
+del app.destroy
+app.update()
+check('closing on a finished import drops the files it copied for no note',
+      not os.path.exists(os.path.join(NO.ATTACHMENTS_DIR, _cl_orphan)))
+check('...keeps a file a note uses',
+      os.path.exists(os.path.join(NO.ATTACHMENTS_DIR, _cl_owned)))
+check('...and removes the unpacked backup from the temp folder',
+      not os.path.exists(_cl_temp))
+check('closing on a finished export records it as the last one',
+      bool(NO.get_setting('last_export_at', '')))
+app._import_state = None
+app._export_state = None
+app.notes = []; app.save_notes()
+# ...and on a REAL import: its worker copies the backup's files in, and
+# the window closes before the main thread ever merges the notes.
+import shutil as _ri_shutil
+_ri_dir = tempfile.mkdtemp(prefix='qa3_ri_')
+_ri_name = 'qa3_ri_attached.txt'
+os.makedirs(os.path.join(_ri_dir, 'attachments'))
+with open(os.path.join(_ri_dir, 'attachments', _ri_name), 'w') as _fh:
+    _fh.write('from the backup')
+with open(os.path.join(_ri_dir, 'notes_data.json'), 'w') as _fh:
+    json.dump([{'title': 'Came with a file', 'body': 'x',
+                'attachments': [{'name': 'a.txt', 'stored_as': _ri_name}]}], _fh)
+_ri_zip = os.path.join(tempfile.gettempdir(), 'qa3_real_import_close.zip')
+with zipfile.ZipFile(_ri_zip, 'w') as _zf:
+    _zf.write(os.path.join(_ri_dir, 'notes_data.json'), 'notes_data.json')
+    _zf.write(os.path.join(_ri_dir, 'attachments', _ri_name),
+              'attachments/' + _ri_name)
+_ri_shutil.rmtree(_ri_dir, ignore_errors=True)
+fd.askopenfilename = lambda **k: _ri_zip
+app.import_data()
+_ri_state = app._import_state
+t0 = time.time()
+while (_ri_state is not None and not _ri_state['done']
+       and time.time() - t0 < 10):
+    time.sleep(0.05)   # no update(): the main-thread merge must not run
+check('fixture: the import worker copied the backup file in',
+      _ri_state is not None and _ri_state['done']
+      and os.path.exists(os.path.join(NO.ATTACHMENTS_DIR, _ri_name)))
+_ri_temp = (_ri_state or {}).get('temp_dir')
+app.destroy = lambda: None
+app.on_app_close()
+del app.destroy
+app.update()
+check('...closing before its merge leaves no file behind that no note owns',
+      not os.path.exists(os.path.join(NO.ATTACHMENTS_DIR, _ri_name)))
+check('...and no unpacked backup in the temp folder',
+      not (_ri_temp and os.path.exists(_ri_temp)))
+os.remove(_ri_zip)
+app._import_state = None
+app.notes = []; app.save_notes()
+
+# A double-click on a Trash row's Restore restores that one note. The
+# second press used to land on the row that slid up into its place when
+# the first redrew the list, and restored that note too -- the checklist
+# bin's hazard (qa1), and the same guard. Delivered as a pointer delivers
+# it, at explicit screen points and times.
+from _qa_support import fire as _dc_fire
+app.trash = [
+    dict(NO.normalize_note({'id': 1, 'title': 'Newer', 'body': 'x'}),
+         deleted_at='2026-09-30 11:00:00'),
+    dict(NO.normalize_note({'id': 2, 'title': 'Older', 'body': 'y'}),
+         deleted_at='2026-09-30 10:00:00')]
+NO.save_trash(app.trash)
+app.show_settings_page(); app.toggle_settings_panel('trash'); app.update()
+
+
+def _dc_restore(t, x=400, y=300):
+    rows = _trash_rows()
+    btn = find_btn(rows[0], 'Restore') if rows else None
+    if btn is None:
+        return
+    _dc_fire(btn, '<Enter>')
+    _dc_fire(btn, '<ButtonPress-1>', x=5, y=5, rootx=x, rooty=y, time=t)
+    _dc_fire(btn, '<ButtonRelease-1>', x=5, y=5, rootx=x, rooty=y, time=t + 60)
+    app.update()
+
+
+_dc_restore(200000)
+check('fixture: the first click of a double-click restores the top row',
+      [n['title'] for n in app.notes] == ['Newer'])
+_dc_restore(200250)
+check('a double-click on a Trash row restores one note, not the next one too',
+      [n['title'] for n in app.notes] == ['Newer'] and len(app.trash) == 1)
+_dc_restore(201500)
+check('...while a click of its own, later, still restores',
+      sorted(n['title'] for n in app.notes) == ['Newer', 'Older'])
+app.hide_settings_page(); app.update()
+app.trash = []; NO.save_trash(app.trash)
+app.notes = []; app.save_notes()
+
+# Enter answers a question now (qa9), so a confirmation whose keyboard
+# sits on Yes deletes on a reflexive Enter. The three that move notes to
+# the Trash put it on No. Answered No here, so nothing moves.
+_dn_asked = {}
+_dn_stub = app.ask_yes_no
+app.ask_yes_no = lambda *a, **k: (_dn_asked.__setitem__(a[0], k.get('default')),
+                                  False)[1]
+app.notes = [NO.normalize_note({'id': 1, 'title': 'Keep me', 'body': 'x'}),
+             NO.normalize_note({'id': 2, 'title': 'Keep me', 'body': 'x'})]
+app.save_notes()
+app._delete_note(app.find_note(1), None)
+app.selected_note_ids = {1}
+app._bulk_move_to_trash()
+app.selected_note_ids = set()
+
+
+class _DnVar:
+    def __init__(self, v):
+        self._v = v
+
+    def get(self):
+        return self._v
+
+
+_dn_group = [app.find_note(1), app.find_note(2)]
+app._cleanup_selected_duplicates(
+    [(_DnVar(False), _dn_group[0], _dn_group), (_DnVar(True), _dn_group[1], _dn_group)],
+    None, refresh=lambda: None)
+app.ask_yes_no = _dn_stub
+check('the confirmations that move notes to the Trash keep the keyboard on No (%s)'
+      % _dn_asked,
+      _dn_asked == {'Delete note': 'no', 'Move to trash': 'no',
+                    'Move duplicates to trash': 'no'}
+      and len(app.notes) == 2 and not app.trash)
+app.notes = []; app.save_notes()
+
+# ---- A DAY'S EDIT SAVED THIS SESSION IS NOT "EDITED ELSEWHERE" ----
+# The occurrence save wrote the day's edit raw -- with an empty colour the
+# load drops -- and the import compared that raw copy with the backup's
+# normalised one. A backup holding this very note asked "already here,
+# edited elsewhere", and Update spent the note's rescue copy on nothing.
+app.open_blank_tab(); app.update()
+app.trash = []; NO.save_trash(app.trash)
+_ie_note = NO.normalize_note({'id': 1, 'title': 'Weekly', 'body': 'every monday',
+                              'date': '2026-09-07',
+                              'recurrence': {'freq': 'weekly'}})
+_ie_note['_prev'] = {'title': 'Weekly', 'body': 'THE ORIGINAL LONG TEXT',
+                     'formatting': [], 'paragraphs': [], 'comments': ''}
+app.notes = [_ie_note]; app.save_notes()
+app.open_note_in_tab(app.find_note(1), occurrence_date='2026-09-14'); app.update()
+app.title_entry.delete(0, 'end'); app._insert_title('Weekly (moved to 10:00)')
+_ie_scope = app.ask_occurrence_scope
+app.ask_occurrence_scope = lambda *a, **k: 'occurrence'
+app._flush_autosave(); app.update()
+app.ask_occurrence_scope = _ie_scope
+_ie_mem = app.find_note(1)
+check("fixture: the edit is saved as that day's own",
+      (_ie_mem['overrides'].get('2026-09-14') or {}).get('title')
+      == 'Weekly (moved to 10:00)')
+check(f"a day's edit held in memory is the edit a restart reads back "
+      f"({_ie_mem['overrides']})",
+      _ie_mem['overrides']
+      == NO.normalize_note(json.loads(json.dumps(_ie_mem)))['overrides'])
+_ie_raw = dict(_ie_mem, overrides={'2026-09-14': dict(
+    _ie_mem['overrides']['2026-09-14'], color='')})
+check('...and an import compares a raw copy in memory like with like',
+      not NO.shared_update_changes(_ie_raw, json.loads(json.dumps(_ie_raw)),
+                                   NO.UPDATABLE_FROM_BACKUP))
+_iezip = os.path.join(tempfile.gettempdir(), 'qa3_identical_backup.zip')
+if os.path.exists(_iezip):
+    os.remove(_iezip)
+fd.asksaveasfilename = lambda **k: _iezip
+app.export_data()
+t0 = time.time()
+while app._export_state is not None and time.time() - t0 < 5:
+    app.update()
+_ie_asked = []
+_ie_real_dlg = app._themed_dialog
+app._themed_dialog = lambda *a, **k: (_ie_asked.append(a[0]), 'update')[1]
+fd.askopenfilename = lambda **k: _iezip
+app.import_data()
+t0 = time.time()
+while app._import_state is not None and time.time() - t0 < 8:
+    app.update()
+app._themed_dialog = _ie_real_dlg
+check(f'importing a backup holding that note exactly as it is asks nothing '
+      f'({_ie_asked})', not any('already have' in t for t in _ie_asked))
+check('...and the rescue copy is untouched',
+      len(app.notes) == 1
+      and (app.find_note(1).get('_prev') or {}).get('body')
+      == 'THE ORIGINAL LONG TEXT')
+if os.path.exists(_iezip):
+    os.remove(_iezip)
+# The one colour kept raw: "Reset to category" on a day of a COLOURED
+# series. The stored form cannot hold it, and written as a load shapes it
+# the editor's empty colour never matched the day's again -- an unsaved
+# edit, and a question, at every exit.
+app.open_blank_tab(); app.update()
+app.notes = [NO.normalize_note({'id': 2, 'title': 'Coloured', 'body': 'x',
+                                'color': '#cc3366', 'date': '2026-09-07',
+                                'recurrence': {'freq': 'weekly'}})]
+app.save_notes()
+app.open_note_in_tab(app.find_note(2), occurrence_date='2026-09-14'); app.update()
+app.open_color_picker(); app.update()
+_ie_reset = find_btn(app._mini_popup, 'Reset to category') if app._mini_popup else None
+if _ie_reset is not None:
+    _ie_reset.invoke(); app.update()
+app.ask_occurrence_scope = lambda *a, **k: 'occurrence'
+app._flush_autosave(); app.update()
+app.ask_occurrence_scope = _ie_scope
+check('fixture: the day of a coloured series had its colour reset and saved',
+      _ie_reset is not None and app.current_note_color == ''
+      and '2026-09-14' in app.find_note(2)['overrides'])
+check('...and the day reads as saved afterwards, not as an edit forever',
+      app.editor_state_matches_saved(app.capture_editor_state()))
+app.open_blank_tab(); app.update()
+app.notes = []; app.save_notes()
+
+# ---- A BACKUP IMPORT THAT TAKES NOTHING LEAVES NO FILES BEHIND ----
+# The worker copies a backup's files before anything is asked. Only the
+# window's close removed them when the notes were never merged; Cancel on
+# any of the import's questions, and skipping duplicates, left each file
+# in the attachments folder belonging to nobody.
+import shutil as _ic_shutil
+
+
+def _ic_path(name):
+    return os.path.join(NO.ATTACHMENTS_DIR, name)
+
+
+def _ic_import(notes, files, answer):
+    """Import a backup holding `notes` and the attachment `files`,
+    answering the import's own questions with `answer`."""
+    src = tempfile.mkdtemp(prefix='qa3_ic_')
+    os.makedirs(os.path.join(src, 'attachments'))
+    for name in files:
+        with open(os.path.join(src, 'attachments', name), 'w') as fh:
+            fh.write('from the backup')
+    with open(os.path.join(src, 'notes_data.json'), 'w') as fh:
+        json.dump(notes, fh)
+    zpath = os.path.join(tempfile.gettempdir(), 'qa3_import_takes_nothing.zip')
+    if os.path.exists(zpath):
+        os.remove(zpath)
+    with zipfile.ZipFile(zpath, 'w') as zf:
+        zf.write(os.path.join(src, 'notes_data.json'), 'notes_data.json')
+        for name in files:
+            zf.write(os.path.join(src, 'attachments', name), 'attachments/' + name)
+    _ic_shutil.rmtree(src, ignore_errors=True)
+    asked = []
+    real = app._themed_dialog
+    app._themed_dialog = lambda *a, **k: (asked.append(a[0]), answer)[1]
+    fd.askopenfilename = lambda **k: zpath
+    app.import_data()
+    t0 = time.time()
+    while app._import_state is not None and time.time() - t0 < 8:
+        app.update()
+    app._themed_dialog = real
+    os.remove(zpath)
+    return asked
+
+
+app.open_blank_tab(); app.update()
+app.notes = [NO.normalize_note({'id': 1, 'title': 'Groceries', 'body': 'milk'})]
+app.trash = []
+app.save_notes(); NO.save_trash(app.trash)
+os.makedirs(NO.ATTACHMENTS_DIR, exist_ok=True)
+_ic_names = ['qa3_ic_dup.txt', 'qa3_ic_known.txt', 'qa3_ic_skip.txt',
+             'qa3_ic_fresh.txt']
+check('fixture: none of the backup files is in the attachments folder yet',
+      not any(os.path.exists(_ic_path(n)) for n in _ic_names))
+_ic_asked = _ic_import(
+    [{'title': 'Groceries', 'body': 'milk',
+      'attachments': [{'name': 'r.txt', 'stored_as': 'qa3_ic_dup.txt'}]}],
+    ['qa3_ic_dup.txt'], 'cancel')
+check(f'Cancel on "all notes already imported" leaves no file no note owns '
+      f'({_ic_asked})',
+      any('already imported' in t for t in _ic_asked)
+      and not os.path.exists(_ic_path('qa3_ic_dup.txt')))
+_ic_asked = _ic_import(
+    [{'uid': app.find_note(1)['uid'], 'title': 'Groceries',
+      'body': 'milk and eggs',
+      'attachments': [{'name': 'k.txt', 'stored_as': 'qa3_ic_known.txt'}]}],
+    ['qa3_ic_known.txt'], 'cancel')
+check(f'...nor Cancel on "notes you already have" ({_ic_asked})',
+      any('already have' in t for t in _ic_asked)
+      and not os.path.exists(_ic_path('qa3_ic_known.txt'))
+      and app.find_note(1)['body'].rstrip('\n') == 'milk')
+_ic_asked = _ic_import(
+    [{'title': 'Groceries', 'body': 'milk',
+      'attachments': [{'name': 's.txt', 'stored_as': 'qa3_ic_skip.txt'}]},
+     {'title': 'Fresh', 'body': 'new',
+      'attachments': [{'name': 'f.txt', 'stored_as': 'qa3_ic_fresh.txt'}]}],
+    ['qa3_ic_skip.txt', 'qa3_ic_fresh.txt'], 'skip')
+_ic_fresh = [n for n in app.notes if n.get('title') == 'Fresh']
+check(f'...nor skipping the duplicates: their files go ({_ic_asked})',
+      any('Possible duplicates' in t for t in _ic_asked)
+      and not os.path.exists(_ic_path('qa3_ic_skip.txt')))
+check('...while the note imported keeps its own file, on disk',
+      len(_ic_fresh) == 1
+      and [a.get('stored_as') for a in _ic_fresh[0].get('attachments') or []]
+      == ['qa3_ic_fresh.txt']
+      and os.path.exists(_ic_path('qa3_ic_fresh.txt')))
+for _ic_name in _ic_names:
+    if os.path.exists(_ic_path(_ic_name)):
+        os.remove(_ic_path(_ic_name))
+app.notes = []; app.save_notes()
+
+# ---- A BACKUP WITH A DAMAGED FILE IN IT ----
+# Bytes that are not UTF-8 (a file another program saved in a Windows code
+# page) and nesting deeper than the parser follows raised past the worker's
+# handlers. Its catch-all then ended the whole import with "Import failed
+# unexpectedly" -- even when the damaged file was only the templates, the
+# Trash or the settings riding beside a sound notebook.
+_dz_damage = {'not UTF-8': b'[{"id": 1, "title": "caf\xe9"}]',
+              'nested too deep': b'[' * 100000 + b']' * 100000}
+_dz_sound = json.dumps([{'title': 'Sound note', 'body': 'kept'}]).encode()
+
+
+def _dz_import(members):
+    """Import a backup holding *members* (name -> bytes), saying yes to
+    every question; return what the import said, as (title, text) pairs."""
+    zpath = os.path.join(tempfile.gettempdir(), 'qa3_damaged_member.zip')
+    if os.path.exists(zpath):
+        os.remove(zpath)
+    with zipfile.ZipFile(zpath, 'w') as zf:
+        for name, data in members.items():
+            zf.writestr(name, data)
+    said = []
+    real = app._themed_dialog
+    app._themed_dialog = lambda *a, **k: (said.append((a[0], a[1])), True)[1]
+    fd.askopenfilename = lambda **k: zpath
+    try:
+        app.import_data()
+        t0 = time.time()
+        while app._import_state is not None and time.time() - t0 < 8:
+            app.update()
+    finally:
+        app._themed_dialog = real
+        os.remove(zpath)
+    return said
+
+
+for _dz_how, _dz_bytes in _dz_damage.items():
+    for _dz_extra in ('templates.json', 'trash.json', 'settings.json'):
+        app.notes = []; app.save_notes()
+        _dz_said = _dz_import({'notes_data.json': _dz_sound,
+                               _dz_extra: _dz_bytes})
+        check(f'a backup whose {_dz_extra} is {_dz_how} still brings its '
+              f'notes ({[t for t, _m in _dz_said]})',
+              [n.get('title') for n in app.notes] == ['Sound note']
+              and not any('failed' in t.lower() for t, _m in _dz_said))
+    app.notes = []; app.save_notes()
+    _dz_said = _dz_import({'notes_data.json': _dz_bytes})
+    check(f'a backup whose notebook is {_dz_how} says it cannot read the '
+          f'notes ({[m.split(chr(10))[0] for _t, m in _dz_said]})',
+          app.notes == []
+          and any(m.startswith("Couldn't read the notes in that backup")
+                  for _t, m in _dz_said))
+app.notes = []; app.save_notes()
 
 
 print()
