@@ -241,3 +241,37 @@ jobs:
           cd qa
           rm -rf attachments *.json
           $GUI qa9.py
+
+  coverage:
+    # How much of the app the suite executes, measured on every run of this
+    # workflow, on Linux only (a Linux minute is half the price). A floor,
+    # not a target: it is there to notice a suite that quietly stopped
+    # running -- the coverage tool itself once ran for weeks with every qa
+    # script refusing to start -- and tools/run_coverage.py also fails
+    # outright when any suite does not reach its own footer. Chasing the
+    # number would invite checks written for the percentage.
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      PYTHONIOENCODING: utf-8
+    steps:
+      - name: Check out the code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install Tkinter and a virtual display
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y python3-tk xvfb
+
+      - name: Install Python dependencies, and coverage (a measuring tool, not an app dependency)
+        run: pip install -r requirements.txt coverage==7.16.0
+
+      - name: Measure, with a floor
+        # 80: the suite executes 89.2% of the app's lines on Windows (3 Oct);
+        # Linux runs fewer Windows-only branches, hence the margin.
+        run: xvfb-run -a python tools/run_coverage.py --fail-under 80
