@@ -1934,6 +1934,14 @@ try:
     _cp_msg = next((w for w in app.reminder_bar.winfo_children()
                     if isinstance(w, tk.Label) and 'for today' in str(w.cget('text'))),
                    None)
+    # Today written out day first, as every date in the app: "Saturday,
+    # 3 October" -- it said "Saturday, October 03".
+    import datetime as _dt9r
+    check('the reminder bar writes today out, day first (%r)'
+          % (str(_cp_msg.cget('text')) if _cp_msg is not None else None,),
+          _cp_msg is not None
+          and '(%s)' % NO.show_day(_dt9r.date.today(), year=False)
+          in str(_cp_msg.cget('text')))
     _wa_pop, _wa_ent = _wa_open_dirty()
     _wa_answer(None)
     if _cp_msg is not None:

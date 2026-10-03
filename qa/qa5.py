@@ -515,37 +515,40 @@ if _built5g:
 # One unreadable field vetoed the whole save, and the automatic routes took
 # the veto for success and replaced the editor: a date typed as 30/09/2026,
 # the way many people write it, quietly cost every word typed after it.
+# That date is read now (see DATES THE WAY PEOPLE WRITE THEM below), so the
+# unreadable date here is one that cannot exist: September has no 31st.
 app.new_note(); app.update()
 app.notes = [NO.normalize_note({'id': 1, 'title': 'Shopping', 'body': 'milk',
                                 'date': '2026-09-01'})]
 app.save_notes()
 app.open_note_in_tab(app.notes[0]); app.update()
 app.body_text.insert('end', '\neggs')
-app.date_entry.delete(0, 'end'); app.date_entry.insert(0, '30/09/2026')
+app.date_entry.delete(0, 'end'); app.date_entry.insert(0, '31/09/2026')
 app._autosave_now(); app.update()
 check('a pause after an unreadable date still saves the words',
       app.find_note(1)['body'].rstrip('\n').endswith('eggs'))
 check('...keeping the date the note already had',
       app.find_note(1)['date'] == '2026-09-01')
 check('...and the status line says what was left out',
-      '30/09/2026' in str(app.status_lbl.cget('text')))
+      '31/09/2026' in str(app.status_lbl.cget('text')))
 _real_dlg5 = app._themed_dialog
 _asked5 = []
 app._themed_dialog = lambda *a, **k: (_asked5.append(a[0]), False)[1]
 check('leaving asks first -- and "Go back and fix it" stays on the note',
       app._flush_autosave() is False and len(_asked5) == 1
-      and app.date_entry.get() == '30/09/2026')
+      and app.date_entry.get() == '31/09/2026')
 app._themed_dialog = lambda *a, **k: True
 check('..."Continue without it" goes on',
       app._flush_autosave() is True)
 app._themed_dialog = _real_dlg5
 check('...showing the date the note keeps, so nothing reads as unsaved',
-      app.date_entry.get() == '2026-09-01'
+      app.date_entry.get() == '01.09.2026'
       and app.editor_state_matches_saved(app.capture_editor_state()))
 # A code made in the editor carries what a save would keep: one carrying
 # "30.09.2026" delivered a date no save could store, and every edit to the
-# note that arrived was lost on the far end.
-app.date_entry.delete(0, 'end'); app.date_entry.insert(0, '30.09.2026')
+# note that arrived was lost on the far end. (30.09.2026 is read now; a day
+# that does not exist stands for every date no save can store.)
+app.date_entry.delete(0, 'end'); app.date_entry.insert(0, '31.09.2026')
 app.share_current_note_as_code(); app.update()
 _code_w5 = [w for w in app.editor_code_area.winfo_children()
             if isinstance(w, tk.Text)]
@@ -557,10 +560,11 @@ check('a code made in the editor carries the date a save would keep',
 app._show_date_in_field('2026-09-01')
 # The repeat's end date, typed day-first, was dropped without a word and
 # the series stored as never-ending while the field still showed the date.
+# (Day first is read now; an end that cannot exist stands for the rest.)
 app.rec_freq_var.set(NO.FREQ_LABELS['weekly'])
 app.on_recurrence_changed()
 app.rec_end_mode_var.set('on')
-app.rec_end_date_var.set('31/12/2026')
+app.rec_end_date_var.set('32/12/2026')
 app._autosave_now(); app.update()
 check('a repeat whose end date cannot be read saves without that end',
       app.find_note(1)['recurrence']['freq'] == 'weekly'
@@ -584,6 +588,232 @@ check('clearing a series date keeps its start while the words are saved',
       and 'bring the mat' in app.find_note(2)['body'])
 app.new_note(); app.update()
 app.notes = []; app.save_notes()
+
+# ---- DATES THE WAY PEOPLE WRITE THEM ----
+# The date field reads a date as a person writes it -- 16.11.2026,
+# 16/11/2026, 2026-11-16, the month as a word -- shows it day first, and
+# stores YYYY-MM-DD whatever was typed. A short or a missing year is read
+# only once the person has finished: leaving the field, pressing Save,
+# leaving the note, asking for a code. Read while typing, "16.11.20" on its
+# way to 2026 would be a wrong year saved. Each check below is a seam the
+# feature crosses: the comparator, the autosave's timing, the settling,
+# the end date, the card, the picker, the code.
+import datetime as _dt5w
+import re as _re5w
+
+_W_YEAR = _dt5w.date.today().year
+
+
+def _w_note(**fields):
+    app.new_note(); app.update()
+    app.notes = [NO.normalize_note(dict({'id': 1, 'title': 'Dentist',
+                                         'body': 'x'}, **fields)),
+                 NO.normalize_note({'id': 2, 'title': 'Other', 'body': 'y'})]
+    app.save_notes()
+    app.open_note_in_tab(app.find_note(1)); app.update()
+    app._cancel_pending_autosave()
+
+
+def _w_type(text):
+    app.date_entry.delete(0, 'end')
+    app.date_entry.insert(0, text)
+
+
+def _w_widgets(root):
+    found, todo = [], [root]
+    while todo:
+        w = todo.pop()
+        found.append(w)
+        todo.extend(w.winfo_children())
+    return found
+
+
+# Every question the app asks in this section is recorded and answered
+# (True: "Continue without it"), never left waiting: a mutant that leaves
+# a date out must turn into a red check here, not a suite stopped in front
+# of a question nobody will answer -- the first run of these checks did
+# exactly that.
+_w_real_dlg = app._themed_dialog
+_w_asked = []
+app._themed_dialog = lambda *a, **k: (_w_asked.append(a[0]), True)[1]
+
+app.new_note(); app.update()
+check('an empty date field shows the form a date is read in',
+      app.date_entry.get() == 'DD.MM.YYYY' == NO.DATE_FORM)
+_w_note(date='2026-10-17')
+check('a dated note shows its date day first, and opens clean',
+      app.date_entry.get() == '17.10.2026'
+      and app.editor_state_matches_saved(app.capture_editor_state()))
+check('...and its card says it day first too',
+      '\U0001F4C5 17.10.2026' in app._card_texts(app.find_note(1))['tags'])
+_w_stored = []
+for _w_form in ('16.11.2026', '16/11/2026', '16 nov 2026',
+                '16 noiembrie 2026', 'November 16, 2026', '2026-11-16'):
+    _w_note(date='2026-10-17')
+    _w_type(_w_form)
+    app._autosave_now(); app.update()
+    _w_stored.append((_w_form, app.find_note(1)['date'],
+                      'except' in str(app.status_lbl.cget('text')),
+                      app.editor_state_matches_saved(app.capture_editor_state())))
+check(f'a date written each way people write it is stored in the one form, '
+      f'and the editor reads as saved after ({_w_stored})',
+      all(stored == '2026-11-16' and not named and clean
+          for _f, stored, named, clean in _w_stored))
+check(f'...and the save\'s status line says its moment day first '
+      f'({str(app.status_lbl.cget("text"))!r})',
+      bool(_re5w.match(r'Auto-saved \d\d\.\d\d\.\d{4} \d\d:\d\d',
+                       str(app.status_lbl.cget('text')))))
+
+_w_note(date='2026-10-17')
+_w_type('16.11.20')
+app._autosave_now(); app.update()
+_w_mid = app.find_note(1)['date']
+_w_type('16.11.2026')
+app._autosave_now(); app.update()
+check(f'a year still being typed is never saved as a year of its own '
+      f'({_w_mid}, then {app.find_note(1)["date"]})',
+      _w_mid == '2026-10-17' and app.find_note(1)['date'] == '2026-11-16')
+
+_w_note(date='2026-10-17')
+_w_type('16.11')
+app.date_entry.event_generate('<FocusOut>'); app.update()
+_w_short = app.date_entry.get()
+_w_type('2026-11-16')
+app.date_entry.event_generate('<FocusOut>'); app.update()
+_w_iso = app.date_entry.get()
+_w_type('31/09/2026')
+app.date_entry.event_generate('<FocusOut>'); app.update()
+_w_bad = app.date_entry.get()
+app._cancel_pending_autosave()
+check(f'leaving the field writes the date in the form it shows, a missing '
+      f'year completed, and leaves what it cannot read as typed '
+      f'({_w_short!r}; {_w_iso!r}; {_w_bad!r})',
+      _w_short == '16.11.%d' % _W_YEAR and _w_iso == '16.11.2026'
+      and _w_bad == '31/09/2026')
+check('...and a date no one can read is left out in words that show the form',
+      any('(write dates like 30.09.2026)' in item
+          for item in app._date_and_repeat_to_store()[2]))
+
+_w_note(date='2026-10-17')
+_w_type('16.11.26')
+del _w_asked[:]
+app.open_note_in_tab(app.find_note(2)); app.update()
+check(f'leaving the note with a short year typed stores the date whole, '
+      f'asking nothing ({app.find_note(1)["date"]}; {_w_asked})',
+      app.find_note(1)['date'] == '2026-11-16' and _w_asked == []
+      and app.selected_note_id == 2)
+
+_w_note(date='2026-10-17')
+_w_type('16.11')
+del _w_asked[:]
+app.save_current_note(); app.update()
+check(f'Save pressed on a date with no year stores this year\'s, and shows it, '
+      f'asking nothing ({app.find_note(1)["date"]}; {app.date_entry.get()!r}; '
+      f'{_w_asked})',
+      app.find_note(1)['date'] == '%d-11-16' % _W_YEAR
+      and app.date_entry.get() == '16.11.%d' % _W_YEAR and _w_asked == [])
+
+_w_note(date='2026-10-17')
+_w_type('16.11')
+app.share_current_note_as_code(); app.update()
+_w_code = [w for w in app.editor_code_area.winfo_children()
+           if isinstance(w, tk.Text)]
+_w_payload = (NO.decode_share_code(_w_code[0].get('1.0', 'end-1c'))
+              if _w_code else [])
+_w_shared = ((_w_payload['notes'] if isinstance(_w_payload, dict)
+              else _w_payload) or [{}])[0]
+check(f'a code asked for with a date typed short carries it whole '
+      f'({_w_shared.get("date")})',
+      _w_shared.get('date') == '%d-11-16' % _W_YEAR)
+
+_w_note(date='2020-01-06', recurrence={'freq': 'weekly'})
+app.rec_end_mode_var.set('on'); app.on_end_mode_changed()
+app.rec_end_date_var.set('31.12.2026')
+app._autosave_now(); app.update()
+_w_end = app.find_note(1)['recurrence']['end']
+app.rec_end_date_var.set('30.12')
+app.rec_end_date_entry.event_generate('<FocusOut>'); app.update()
+_w_end_box = app.rec_end_date_var.get()
+del _w_asked[:]
+app.open_note_in_tab(app.find_note(2)); app.update()
+app.open_note_in_tab(app.find_note(1)); app.update()
+check(f'an end date written day first is stored, completed on leaving its '
+      f'box, and shown day first again, asking nothing ({_w_end}; '
+      f'{_w_end_box!r}; {app.rec_end_date_var.get()!r}; '
+      f'{app.find_note(1)["recurrence"]["end"]}; {_w_asked})',
+      _w_end == '2026-12-31' and _w_end_box == '30.12.%d' % _W_YEAR
+      and app.find_note(1)['recurrence']['end'] == '%d-12-30' % _W_YEAR
+      and app.rec_end_date_var.get() == '30.12.%d' % _W_YEAR
+      and _w_asked == [])
+
+_w_note(date='2026-09-07', recurrence={'freq': 'weekly'})
+_w_type('14.09.2026')
+app.update_recurrence_summary(); app.update()
+_w_summary = str(app.rec_summary_lbl.cget('text'))
+app._cancel_pending_autosave()
+check(f'the repeat\'s summary reads a start date typed day first as the date '
+      f'it is ({_w_summary!r})',
+      _w_summary == 'Every week')
+
+# A series and one of its days, named day first wherever the app names
+# them: the status line on opening each, the question Save asks on a day,
+# Reset this day's question, and what a save leaves out when the start
+# date is cleared.
+_w_note(date='2026-09-07', recurrence={'freq': 'weekly'},
+        created='2026-09-01 08:15:00', updated='2026-09-02 10:45:00')
+_w_said_series = str(app.status_lbl.cget('text'))
+app.open_note_in_tab(app.find_note(1), occurrence_date='2026-09-14'); app.update()
+_w_said_day = str(app.status_lbl.cget('text'))
+app.title_entry.insert('end', ' (moved)')
+_w_msgs = []
+app._themed_dialog = lambda *a, **k: (
+    _w_msgs.append((a[0], a[1] if len(a) > 1 else '')), 'occurrence')[1]
+app.save_current_note(); app.update()
+_w_reset_msgs = []
+_w_real_yes = app.ask_yes_no
+app.ask_yes_no = lambda *a, **k: (
+    _w_reset_msgs.append(a[1] if len(a) > 1 else ''), False)[1]
+app._reset_occurrence_override(app.find_note(1), '2026-09-14'); app.update()
+app.ask_yes_no = _w_real_yes
+app._themed_dialog = lambda *a, **k: (_w_asked.append(a[0]), True)[1]
+app.open_note_in_tab(app.find_note(1)); app.update()
+_w_type('')
+_w_cleared = app._date_and_repeat_to_store()[2]
+app._show_date_in_field('2026-09-07')
+app._cancel_pending_autosave()
+check(f'a series and its day are named day first in the status line '
+      f'({_w_said_series!r}; {_w_said_day!r})',
+      'Created: 01.09.2026 08:15:00' in _w_said_series
+      and 'Last updated: 02.09.2026 10:45:00' in _w_said_series
+      and _w_said_day.startswith('Occurrence 14.09.2026'))
+check(f'...in the question a day\'s Save asks, and in Reset this day\'s '
+      f'({[m for _t, m in _w_msgs][:1]}; {_w_reset_msgs[:1]})',
+      any('Currently open occurrence: 14.09.2026' in m for _t, m in _w_msgs)
+      and any(m.startswith('Return 14.09.2026 to the series content?')
+              for m in _w_reset_msgs))
+check(f'...and in what a save leaves out when the start date is cleared '
+      f'({_w_cleared})',
+      any('so it still starts 07.09.2026' in item for item in _w_cleared))
+
+_w_note(date='2026-10-17')
+_w_type('16.11.2026')
+app.open_date_picker(); app.update()
+_w_pop = getattr(app, '_mini_popup', None)
+_w_buttons = ([b for b in _w_widgets(_w_pop) if isinstance(b, tk.Button)]
+              if _w_pop is not None else [])
+_w_marked = [b for b in _w_buttons if str(b.cget('text')) == '16'
+             and str(b.cget('bg')) == str(app.colors['accent'])]
+_w_picked = [b for b in _w_buttons if str(b.cget('text')) == '20']
+if _w_picked:
+    _w_picked[0].invoke(); app.update()
+app._cancel_pending_autosave()
+check(f'the date picker opens on a date typed day first and marks its day, '
+      f'and a day picked lands day first ({len(_w_marked)}; '
+      f'{app.date_entry.get()!r})',
+      len(_w_marked) == 1 and app.date_entry.get() == '20.11.2026')
+app.new_note(); app.update()
+app.notes = []; app.save_notes()
+app._themed_dialog = _w_real_dlg
 
 # Comments keep their shape: the save stripped them, so a pasted code
 # block lost its first indent and every trailing blank line on each save
@@ -713,16 +943,18 @@ app.notes = []; app.save_notes()
 # note can hold "30.09.2026". Opened and left untouched, it asked "Part of
 # this note isn't saved" at every exit -- the window's close included --
 # and "Continue without it" put back that same date for the next time.
+# A date written day first is read on the way in now (normalize_note), so
+# the date that still arrives unreadable is one that cannot exist.
 _bd_real_dlg = app._themed_dialog
 app.notes = [NO.normalize_note({'id': 1, 'title': 'Arrived', 'body': 'x',
-                                'date': '30.09.2026'}),
+                                'date': '31.09.2026'}),
              NO.normalize_note({'id': 2, 'title': 'Other', 'body': 'y'})]
 app.save_notes()
 app.open_note_in_tab(app.find_note(1)); app.update()
 check('fixture: a note holding a date the app cannot read, shown as it is',
-      app.find_note(1)['date'] == '30.09.2026'
-      and not NO.parse_date('30.09.2026')
-      and app.date_entry.get() == '30.09.2026')
+      app.find_note(1)['date'] == '31.09.2026'
+      and not NO.read_date('31.09.2026')
+      and app.date_entry.get() == '31.09.2026')
 _bd_asked = []
 app._themed_dialog = lambda *a, **k: (_bd_asked.append(a[0]), True)[1]
 app.open_note_in_tab(app.find_note(2)); app.update()
@@ -730,12 +962,12 @@ app._themed_dialog = _bd_real_dlg
 check(f'leaving it untouched asks nothing ({_bd_asked})',
       _bd_asked == [] and app.selected_note_id == 2)
 check('...and the note keeps the date it came with',
-      app.find_note(1)['date'] == '30.09.2026')
+      app.find_note(1)['date'] == '31.09.2026')
 app.open_note_in_tab(app.find_note(1)); app.update()
-app.date_entry.delete(0, 'end'); app.date_entry.insert(0, '01.10.2026')
+app.date_entry.delete(0, 'end'); app.date_entry.insert(0, '32.10.2026')
 check('...while a different unreadable date typed there is still left out',
-      any('01.10.2026' in item for item in app._date_and_repeat_to_store()[2]))
-app._show_date_in_field('30.09.2026')
+      any('32.10.2026' in item for item in app._date_and_repeat_to_store()[2]))
+app._show_date_in_field('31.09.2026')
 app.new_note(); app.update()
 app.notes = []; app.save_notes()
 
@@ -772,7 +1004,7 @@ def _nl_setup():
     app.trash = []
     app.save_notes(); NO.save_trash(app.trash)
     app.open_note_in_tab(app.find_note(1)); app.update()
-    app.date_entry.delete(0, 'end'); app.date_entry.insert(0, '14/10/2026')
+    app.date_entry.delete(0, 'end'); app.date_entry.insert(0, '32/10/2026')
     _nl_asked.clear()
     app._themed_dialog = _nl_dialog
     app.ask_yes_no = lambda *a, **k: (_nl_asked.append(a[0]), True)[1]
@@ -849,7 +1081,7 @@ for _nl_label, _nl_action in _nl_routes:
           f'{_nl_error!r})',
           _nl_error is None and "Part of this note isn't saved" not in _nl_asked
           and app.selected_note_id == 1
-          and app.date_entry.get() == '14/10/2026')
+          and app.date_entry.get() == '32/10/2026')
 # The asymmetry: deleting the note ON SCREEN still asks, and "Go back and
 # fix it" keeps it -- and so does a ticked note on screen.
 for _nl_label, _nl_action in [
@@ -868,7 +1100,7 @@ for _nl_label, _nl_action in [
           f'({_nl_asked})',
           _nl_asked == ["Part of this note isn't saved"]
           and app.find_note(1) is not None
-          and app.date_entry.get() == '14/10/2026')
+          and app.date_entry.get() == '32/10/2026')
 app._show_date_in_field('2026-09-01')
 app.new_note(); app.update()
 NO.CATEGORY_COLORS.pop('Temp5nl', None)
@@ -1091,7 +1323,7 @@ check(f'"This occurrence only" with the date changed too keeps the series '
 check(f'...the question says so, and the editor shows the series\' date again '
       f'(date field {app.date_entry.get()!r}; status {app.status_lbl.cget("text")!r})',
       len(_mv_said) == 1 and 'keeps them as they are' in _mv_said[0]
-      and app.date_entry.get() == '2026-09-07'
+      and app.date_entry.get() == '07.09.2026'
       and "stay the whole series'" in str(app.status_lbl.cget('text')))
 # The repeat turned off on a day, and a date typed the app cannot read:
 # the save fills the editor from the note it left (above), and that wrote
@@ -1107,7 +1339,7 @@ app.open_note_in_tab(app.find_note(1), occurrence_date='2026-09-14'); app.update
 app.rec_freq_var.set(NO.FREQ_LABELS[''])
 app.on_recurrence_changed(); app.update()
 app.date_entry.delete(0, 'end')
-app.date_entry.insert(0, '30/09/2026')
+app.date_entry.insert(0, '31/09/2026')
 _lr_asked = []
 app._themed_dialog = lambda *a, **k: (_lr_asked.append(a[0]), False)[1]
 _lr_left = app.open_note_in_tab(app.find_note(2)); app.update()
@@ -1116,7 +1348,7 @@ check(f'turning the repeat off on a day with a date the app cannot read '
       f'still asks before leaving, and Go back keeps the typed date (asked '
       f'{_lr_asked}; left: {_lr_left}; date field {app.date_entry.get()!r})',
       "Part of this note isn't saved" in _lr_asked and _lr_left is False
-      and app.date_entry.get() == '30/09/2026'
+      and app.date_entry.get() == '31/09/2026'
       and app.selected_note_id == 1)
 # "Continue without it", as the person would answer at last: the editor
 # agrees with the note again, and nothing below is asked about it.
@@ -1173,7 +1405,7 @@ def _lo_repeat_off_and_bad_date():
     app.rec_freq_var.set(NO.FREQ_LABELS[''])
     app.on_recurrence_changed(); app.update()
     app.date_entry.delete(0, 'end')
-    app.date_entry.insert(0, '30/09/2026')
+    app.date_entry.insert(0, '31/09/2026')
 
 
 _lo_asked = _lo_day(_lo_repeat_off_and_bad_date)
@@ -1193,7 +1425,7 @@ check(f'"This occurrence only" with the repeat off and a date the app cannot '
       f'{_lo_shown}; status {_lo_said!r})',
       len(_lo_asked) == 1 and 'keeps them as they are' in _lo_asked[0][1]
       and _lo_saved == ('2026-09-07', 'weekly', True, True)
-      and _lo_shown == ('2026-09-07', NO.FREQ_LABELS['weekly'])
+      and _lo_shown == ('07.09.2026', NO.FREQ_LABELS['weekly'])
       and "stay the whole series'" in _lo_said and 'except' not in _lo_said)
 check(f'...and leaving afterwards asks nothing and moves nothing (asked '
       f'{_lo_leave}; {_lo_series()})',
@@ -1202,7 +1434,7 @@ check(f'...and leaving afterwards asks nothing and moves nothing (asked '
 
 def _lo_bad_date_only():
     app.date_entry.delete(0, 'end')
-    app.date_entry.insert(0, '22/09/2026')
+    app.date_entry.insert(0, '32/09/2026')
 
 
 _lo_asked = _lo_day(_lo_bad_date_only)
@@ -1210,7 +1442,7 @@ check(f'...also when the only change to the schedule is a date the app cannot '
       f'read: the question says the date stays the series\', and the field '
       f'shows it again (asked {_lo_asked}; field {app.date_entry.get()!r})',
       len(_lo_asked) == 1 and 'keeps them as they are' in _lo_asked[0][1]
-      and app.date_entry.get() == '2026-09-07'
+      and app.date_entry.get() == '07.09.2026'
       and _lo_series() == ('2026-09-07', 'weekly', True, True))
 
 # The reload after a day turned its repeat off, with a date it had to leave
@@ -1401,7 +1633,7 @@ _rn_series()
 app.notes[0]['updated'] = '2026-01-01 00:00:00'
 app.save_notes()
 app.date_entry.delete(0, 'end')
-app.date_entry.insert(0, '30/09/2026')
+app.date_entry.insert(0, '31/09/2026')
 app.save_current_note(auto=True); app.update()
 _rn_kept = app.find_note(1).get('updated')
 app.body_text.insert('end-1c', ' and an edit')
@@ -1438,7 +1670,7 @@ app.notes[0]['_prev'] = {'title': 'Weekly', 'body': 'older series text',
                          'formatting': [], 'paragraphs': [], 'comments': ''}
 app.save_notes()
 app.date_entry.delete(0, 'end')
-app.date_entry.insert(0, '30/09/2026')
+app.date_entry.insert(0, '31/09/2026')
 _rn_asked = []
 app.ask_yes_no = lambda *a, **k: True
 app._themed_dialog = lambda *a, **k: (_rn_asked.append(a[0]), True)[1]
@@ -1452,7 +1684,7 @@ check(f'...and keeps a date the save had to leave out on screen, to be '
       f'{app.find_note(1).get("body")!r}; date field {app.date_entry.get()!r})',
       _rn_asked == []
       and app.find_note(1).get('body', '').startswith('older series text')
-      and app.date_entry.get() == '30/09/2026')
+      and app.date_entry.get() == '31/09/2026')
 app._put_back_stored_date_and_repeat()
 app._cancel_pending_autosave()
 
@@ -1488,26 +1720,26 @@ check(f'a monthly repeat\'s day the app cannot read is left out, and said so '
 # an unreadable one left the summary previewing a series with no end, and
 # no warning, while the save kept "until 2026-12-31".
 _rn_series(interval=2, end='2026-12-31')
-app.rec_end_date_var.set('31/12/2027'); app.update()
+app.rec_end_date_var.set('32/12/2027'); app.update()
 _rn_said = str(app.rec_summary_lbl.cget('text'))
 app._put_back_stored_date_and_repeat()
 app._cancel_pending_autosave()
 check(f'the repeat\'s summary keeps the end date the save keeps, and names '
       f'the one it does not understand ({_rn_said!r})',
-      _rn_said.startswith('Every 2 weeks, until 2026-12-31')
-      and 'the end date “31/12/2027”' in _rn_said)
+      _rn_said.startswith('Every 2 weeks, until 31.12.2026')
+      and 'the end date “32/12/2027”' in _rn_said)
 # ...and a start date it cannot read is named: "needs a start date" said the
 # series had none, while the save keeps the one it starts on.
 _rn_series(interval=2)
 app.date_entry.delete(0, 'end')
-app.date_entry.insert(0, '30/09/2026')
+app.date_entry.insert(0, '31/09/2026')
 app.update_recurrence_summary(); app.update()
 _rn_said = str(app.rec_summary_lbl.cget('text'))
 app._put_back_stored_date_and_repeat()
 app._cancel_pending_autosave()
 check(f'...and names a start date it does not understand, instead of saying '
       f'the series needs one ({_rn_said!r})',
-      'the date “30/09/2026”' in _rn_said
+      'the date “31/09/2026”' in _rn_said
       and 'needs a start date' not in _rn_said)
 # The warning wraps inside what its row leaves it instead of running past
 # the row's end, where a long one was cut off. In a window narrow enough
@@ -1516,7 +1748,7 @@ check(f'...and names a start date it does not understand, instead of saying '
 _rn_geom = app.geometry()
 app.geometry('1000x760'); app.update()
 _rn_series(freq='monthly', month_days=[15], end='2026-12-31')
-app.rec_end_date_var.set('31/12/2027')
+app.rec_end_date_var.set('32/12/2027')
 app.rec_interval_var.set('every other one')
 app.rec_monthdays_var.set('the fifteenth')
 app.update()
@@ -1543,7 +1775,7 @@ _rn_series(interval=2, end='2026-12-31')
 app.notes[0]['_prev'] = {'title': 'Weekly', 'body': 'older series text',
                          'formatting': [], 'paragraphs': [], 'comments': ''}
 app.save_notes()
-app.rec_end_date_var.set('31/12/2027'); app.update()
+app.rec_end_date_var.set('32/12/2027'); app.update()
 app.ask_yes_no = lambda *a, **k: True
 try:
     app.restore_previous_version(); app.update()
@@ -1555,7 +1787,7 @@ app._put_back_stored_date_and_repeat()
 app._cancel_pending_autosave()
 check(f'Restore previous keeps a repeat value the save had to leave out on '
       f'screen, to be fixed (end date box {_rn_box!r}; left out {_rn_left})',
-      _rn_box == '31/12/2027' and bool(_rn_left)
+      _rn_box == '32/12/2027' and bool(_rn_left)
       and app.find_note(1)['recurrence'].get('end') == '2026-12-31'
       and app.find_note(1).get('body', '').startswith('older series text'))
 _rr_day()
@@ -1614,7 +1846,25 @@ app._put_back_stored_date_and_repeat()
 app._cancel_pending_autosave()
 check(f'...and so is a start date typed on the day, which leaving would have '
       f'moved the whole series to ({_rn_reset_date!r})',
-      _rn_reset_date == '2026-09-07')
+      _rn_reset_date == '07.09.2026')
+# ...typed day first too. What a reload carries is judged by the day a date
+# names: compared as text, "23.09.2026" differs from the 2026-09-23 a save
+# would store, was carried over the reset as if it could not be stored, and
+# leaving then moved the whole series to it.
+_rr_day()
+app.date_entry.delete(0, 'end')
+app.date_entry.insert(0, '23.09.2026')
+app.ask_yes_no = lambda *a, **k: True
+try:
+    app._reset_occurrence_override(app.find_note(1), '2026-09-14')
+    app.update()
+finally:
+    app.ask_yes_no = _ro_yes
+_rn_reset_date = app.date_entry.get()
+app._put_back_stored_date_and_repeat()
+app._cancel_pending_autosave()
+check(f'...and so is one typed day first ({_rn_reset_date!r})',
+      _rn_reset_date == '07.09.2026')
 # ...and a box it cannot read keeps only itself: the whole repeat was
 # carried for its sake, a weekday ticked beside it with it, and leaving
 # saved that weekday to the series. Typed with another frequency, the box
@@ -1650,7 +1900,7 @@ check(f'...and a box it cannot read keeps only itself, never a readable '
 # save: only a save rewrote the line, and it went on saying "except".
 _rn_series(interval=2)
 app.date_entry.delete(0, 'end')
-app.date_entry.insert(0, '07/09/2026')
+app.date_entry.insert(0, '31/09/2026')
 app.save_current_note(auto=True); app.update()
 _rn_said_bad = str(app.status_lbl.cget('text'))
 app.date_entry.delete(0, 'end')
@@ -1687,7 +1937,7 @@ app._cancel_pending_autosave()
 check(f'the summary says an emptied date keeps the start the save keeps, and '
       f'that a repeat with no start date is not saved ({_rn_said_cleared!r}; '
       f'{_rn_said_nodate!r})',
-      'still starts 2026-09-07' in _rn_said_cleared
+      'still starts 07.09.2026' in _rn_said_cleared
       and 'not saved' in _rn_said_nodate
       and '“Every 3x”' in _rn_said_nodate
       and 'kept as saved' not in _rn_said_nodate
@@ -1723,7 +1973,7 @@ def _rn_date_key(text, keysym):
     return app.focus_get() is app.date_entry
 
 
-_rn_focus = _rn_date_key('30/09/2026', '6')
+_rn_focus = _rn_date_key('31/09/2026', '6')
 _rn_said_bad = str(app.rec_summary_lbl.cget('text'))
 _rn_focus = _rn_date_key('2026-09-30', '0') and _rn_focus
 _rn_said_typed = str(app.rec_summary_lbl.cget('text'))
@@ -1736,9 +1986,9 @@ app._cancel_pending_autosave()
 check(f'the summary follows the date field as it is typed and cleared, and '
       f'names a date it cannot read on a note with none ({_rn_said_bad!r}; '
       f'{_rn_said_typed!r}; {_rn_said_clear!r})',
-      _rn_focus and 'the date “30/09/2026”' in _rn_said_bad
+      _rn_focus and 'the date “31/09/2026”' in _rn_said_bad
       and _rn_said_typed == 'Every week'
-      and 'still starts 2026-09-07' in _rn_said_clear)
+      and 'still starts 07.09.2026' in _rn_said_clear)
 # ...and a date pasted there, which lands after the field's own bindings
 # return. The clipboard is a stand-in: the person's own is never read.
 app.new_note(); app.update()
@@ -1777,7 +2027,7 @@ app._cancel_pending_autosave()
 # right -- so the line went on saying the date was not saved.
 _rn_series(interval=2)
 app.date_entry.delete(0, 'end')
-app.date_entry.insert(0, '07/09/2026')
+app.date_entry.insert(0, '31/09/2026')
 app.save_current_note(auto=True); app.update()
 _rn_said_before = str(app.status_lbl.cget('text'))
 app._put_back_stored_date_and_repeat()
@@ -1792,7 +2042,7 @@ check(f'putting the stored date back puts the status line right at once '
 # over the occurrence save's own.
 _rr_day()
 app.date_entry.delete(0, 'end')
-app.date_entry.insert(0, '30/09/2026')
+app.date_entry.insert(0, '31/09/2026')
 _rn_warn_real = app.show_warning
 app.show_warning = lambda *a, **k: True
 app.ask_occurrence_scope = lambda *a, **k: 'series'
@@ -1809,7 +2059,7 @@ finally:
 app._cancel_pending_autosave()
 check(f'a day saved on its own keeps its own words in the status line '
       f'({_rn_first!r} -> {_rn_second!r})',
-      'except' in _rn_first and '2026-09-14 only' in _rn_second)
+      'except' in _rn_first and '14.09.2026 only' in _rn_second)
 
 # Every key in the date field redraws the repeat's summary beside the
 # field's own autosave, and each key read the whole body for its word count
@@ -2023,7 +2273,7 @@ app.notes = [
 app.save_notes()
 app.open_note_in_tab(app.find_note(1)); app.update()
 app._cancel_pending_autosave()
-app.date_entry.delete(0, 'end'); app.date_entry.insert(0, '30/09/2026')
+app.date_entry.delete(0, 'end'); app.date_entry.insert(0, '31/09/2026')
 _rn_ok = _rn_pick(NO.FREQ_LABELS[''])
 app._autosave_now(); app.update()
 _rn_said = [str(app.status_lbl.cget('text'))]
@@ -2036,9 +2286,9 @@ _rn_said.append(str(app.status_lbl.cget('text')))
 app._cancel_pending_autosave()
 check(f'the status line names what is left out as it stands, a waiting '
       f'turn-off and a date put right included ({_rn_said})',
-      _rn_ok and '30/09/2026' in _rn_said[0]
+      _rn_ok and '31/09/2026' in _rn_said[0]
       and 'turning the repeat off' in _rn_said[0]
-      and '30/09/2026' not in _rn_said[1]
+      and '31/09/2026' not in _rn_said[1]
       and 'turning the repeat off' in _rn_said[1]
       and 'except' not in _rn_said[2])
 
@@ -2070,7 +2320,7 @@ _rn_ok = _rn_pick(NO.FREQ_LABELS[''])
 app.date_entry.delete(0, 'end'); app.date_entry.insert(0, '2026-09-10')
 app._autosave_now(); app.update()
 _rn_dw = [((app.find_note(1) or {}).get('date'), _rn_days()[0],
-           '2026-09-10' in str(app.status_lbl.cget('text')))]
+           '10.09.2026' in str(app.status_lbl.cget('text')))]
 app.open_note_in_tab(app.find_note(2)); app.update()
 _rn_dw.append(((app.find_note(1) or {}).get('date'), _rn_days()[0],
                _rn_prev().get('date'),
@@ -2272,7 +2522,7 @@ check(f'a turn-off carried across the duplicates clean-up keeps the text a '
 # also took back the "Does not repeat" the delete's save had held.
 _rn_fresh()
 _rn_ok = _rn_pick(NO.FREQ_LABELS[''])
-app.date_entry.delete(0, 'end'); app.date_entry.insert(0, '30/09/2026')
+app.date_entry.delete(0, 'end'); app.date_entry.insert(0, '31/09/2026')
 _rn_said = []
 app._themed_dialog = lambda *a, **k: (_rn_said.append(a[1] if len(a) > 1
                                                        else ''), True)[1]
@@ -2285,7 +2535,7 @@ finally:
     app.ask_yes_no = _ro_yes
 app._cancel_pending_autosave()
 _rn_named = bool(_rn_said) and 'turning the repeat off' in _rn_said[0]
-_rn_cn = (_rn_named, '30/09/2026' in (_rn_said or [''])[0],
+_rn_cn = (_rn_named, '31/09/2026' in (_rn_said or [''])[0],
           app.selected_freq_key(), _rn_days())
 check(f'"Continue without it" on a delete names the turn-off it takes back '
       f'({_rn_cn})',

@@ -2116,7 +2116,8 @@ check('a paste into a title that has real text leaves that text alone',
 # wants a paste menu on next; it has no <<Paste>> route a user can reach
 # today, so this is the latent half of the same hole, checked so that adding
 # the menu cannot re-open it.
-_PH_DATE = 'YYYY-MM-DD'
+# The field's form, DD.MM.YYYY: the order a typed date is read in.
+_PH_DATE = NO.DATE_FORM
 check('fixture: the date field is showing its placeholder',
       _restore_placeholder(app.date_entry, _PH_DATE))
 app.clipboard_clear(); app.clipboard_append('2026-10-05'); app.update()
@@ -8148,8 +8149,10 @@ _day_btns = [b for b in _walk_widgets(_dp, tk.Button)
              if str(b.cget('text')).strip() == '15']
 _day_btns[0].invoke()
 app.update()
+# Written as every date in the field is shown, day first: 15.MM.YYYY.
 check('picking a day writes the date into the date field',
-      app.date_entry.get().endswith('-15')
+      app.date_entry.get().startswith('15.')
+      and NO.read_date(app.date_entry.get()) is not None
       and app._mini_popup is not _dp)
 # ...and the repeat's summary follows the date the picker writes: it went on
 # saying "needs a start date" after one was picked.

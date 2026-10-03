@@ -2217,6 +2217,11 @@ _od_shown = [t for t in (_od_texts(_od_rows) if _od_rows is not None else [])
 check(f'a deleted_at that is not text still lets Recently deleted draw every '
       f'row ({_od_err}, {sorted(_od_shown)})',
       _od_err is None and sorted(_od_shown) == ['Odd list', 'Odd number', 'Plain date'])
+# The day a note was deleted is shown as every date in the app is: day first.
+_od_when = [t for t in (_od_texts(_od_rows) if _od_rows is not None else [])
+            if t.startswith('deleted ')]
+check(f'a Trash row says when it was deleted day first ({_od_when})',
+      any(t.startswith('deleted 01.03.2026') for t in _od_when))
 app.trash = []; NO.save_trash(app.trash)
 # The Categories list: its redraw is the one each row is handed.
 _lk_cat_redraws = []

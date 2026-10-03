@@ -12,10 +12,16 @@ Nothing about that was wrong while it lived on one machine. It stops
 being a private note the moment it is pushed.
 
 This app's interface is English throughout, so in THIS repository there
-is no legitimate Romanian at all -- which makes the rule simple to state
+is no legitimate Romanian to show -- which makes the rule simple to state
 and simple to check. (The Android companion is different: its interface
 speaks Romanian to its users, so its copy of this gate exempts the app's
 own strings. Same idea, different boundary.)
+
+One exception, agreed on purpose: the Romanian month names the date field
+understands ("17 octombrie 2026"), in noteorganizer/core/recurrence.py and
+in the tests that type them. They are read, never shown; none carries a
+diacritic, and none is on the word list below. Do not "fix" them away --
+and do not let anything else in on their account.
 
     py tools/check_english.py
     py tools/check_english.py --list     # every hit, not just the first few

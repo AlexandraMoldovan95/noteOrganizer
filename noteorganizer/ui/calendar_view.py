@@ -54,6 +54,8 @@ from ..core.recurrence import (
     history_entries,
     is_recurring,
     parse_date,
+    show_date,
+    show_day,
 )
 from ..core.storage import (
     load_settings,
@@ -993,10 +995,9 @@ class CalendarViewMixin:
         self.reminder_bar.pack(fill="x", side="top", before=self.notebook)
 
         noun = "note" if count == 1 else "notes"
-        try:
-            friendly = datetime.strptime(today, "%Y-%m-%d").strftime("%A, %B %d")
-        except (ValueError, TypeError):
-            friendly = today
+        # Written out day first, as every date in the app is shown.
+        day = parse_date(today)
+        friendly = show_day(day, year=False) if day else today
         msg = tk.Label(
             self.reminder_bar,
             text=f"🔔  You have {count} {noun} for today ({friendly}).",
@@ -1070,10 +1071,9 @@ class CalendarViewMixin:
         container = tk.Frame(outer, bg=self.colors["card"], padx=10, pady=8)
         container.pack()
 
-        try:
-            friendly = datetime.strptime(date_str, "%Y-%m-%d").strftime("%A, %b %d")
-        except (ValueError, TypeError):
-            friendly = date_str
+        day = parse_date(date_str)
+        friendly = (show_day(day, year=False, short_month=True) if day
+                    else date_str)
         tk.Label(container, text=f"{friendly} — {len(day_notes)} note(s)",
                  bg=self.colors["card"], fg=self.colors["subtext"],
                  font=("Segoe UI", 8, "bold")).pack(anchor="w", pady=(0, 4))
@@ -1189,10 +1189,8 @@ class CalendarViewMixin:
         self._day_panel_mode = "list"
         date_str = self.selected_day
 
-        try:
-            friendly = datetime.strptime(date_str, "%Y-%m-%d").strftime("%A, %B %d, %Y")
-        except (ValueError, TypeError):
-            friendly = str(date_str)
+        day = parse_date(date_str) if isinstance(date_str, str) else None
+        friendly = show_day(day) if day else str(date_str)
 
         header = tk.Frame(self.day_panel, bg=self.colors["sidebar"])
         header.pack(fill="x", padx=15, pady=(10, 6))
@@ -1416,9 +1414,10 @@ class CalendarViewMixin:
             "year": self.cal_year, "month": self.cal_month,
             "date_str": date_str, "origin": "add",
         }
-        self.date_entry.delete(0, "end")
-        self.date_entry.insert(0, date_str)
-        self.date_entry.config(fg=self.colors["text"])
+        # Through the field's one writer, so the day shows as every date
+        # in the field does (17.10.2026) -- written here by hand, it was
+        # the one route that put the stored form on screen.
+        self._show_date_in_field(date_str)
         self.title_entry.focus()
         self._update_calendar_return_button()
 
@@ -1617,7 +1616,7 @@ class CalendarViewMixin:
             if entry["kind"] == "note":
                 one_row(
                     self._history_rows,
-                    (f"📅 {entry['date']}   ", entry['title'] or '(untitled)', ""),
+                    (f"📅 {show_date(entry['date'])}   ", entry['title'] or '(untitled)', ""),
                     self.colors["text"],
                     lambda n=note, d=entry["date"]: self._history_open_day(n, d),
                     context_cmd=lambda e, n=note, d=entry["date"]:
@@ -1661,7 +1660,7 @@ class CalendarViewMixin:
                         mark = "✎" if child.get("edited") else "•"
                         one_row(
                             self._history_rows,
-                            (f"{mark} {child['date']}   ",
+                            (f"{mark} {show_date(child['date'])}   ",
                              child['title'] or '(untitled)', ""),
                             self.colors["text"],
                             lambda n=note, d=child["date"]:

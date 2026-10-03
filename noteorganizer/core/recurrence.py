@@ -34,6 +34,9 @@ WHAT'S EXPORTED
   that day's override applied.
 * :func:`parse_date` / :func:`format_date` — the app's date-string
   convention (``YYYY-MM-DD``) in one place.
+* :func:`read_date` / :func:`show_date` — dates as people write them
+  (17.10.2026, 17 octombrie 2026) and the one form the app shows them in;
+  the store keeps ``YYYY-MM-DD`` whatever was typed.
 
 IDEAS WORTH TAKING AWAY
 -----------------------
@@ -71,6 +74,8 @@ a different way, with a one-item list — both are common.)
 """
 
 import calendar as cal_module
+import re
+import unicodedata
 from datetime import datetime, date as date_cls, timedelta
 
 __all__ = [
@@ -82,6 +87,12 @@ __all__ = [
     "MAX_RECURRENCE_INTERVAL",
     "parse_date",
     "format_date",
+    "DATE_FORM",
+    "read_date",
+    "show_date",
+    "show_stamp",
+    "show_day",
+    "same_date",
     "normalize_recurrence",
     "is_recurring",
     "expand_occurrences",
@@ -147,6 +158,189 @@ def format_date(d):
     return d.strftime("%Y-%m-%d")
 
 
+# ---- Dates as people write them, and as the app shows them ----
+#
+# The files keep one form, YYYY-MM-DD (parse_date and format_date above).
+# People write a date in many: the day first, with dots, slashes or dashes;
+# the year first; the month as a word, in English or in Romanian. read_date
+# understands those, and show_date is the one form a date is shown in. What
+# reaches a note goes through format_date, so the store never learns there
+# was a choice. The day always comes first in figures: 10/12/2026 is the
+# tenth of December, never the twelfth of October.
+
+#: What the empty date field shows: the order a typed date is read in.
+DATE_FORM = "DD.MM.YYYY"
+
+# The month names a typed date may use, in English and in Romanian. The
+# Romanian ones are the only Romanian in this repository, kept by agreement
+# for exactly this: they are read, never shown (tools/check_english.py says
+# so as well). None of them carries a diacritic, and typed ones are folded
+# away regardless. A word names a month when it is a whole name or the
+# start of one, three letters at least, and every name it starts agrees on
+# the month: "oct", "octom" and "October" all do, "ma" does not.
+_MONTH_NAMES = {
+    "january": 1, "february": 2, "march": 3, "april": 4, "may": 5,
+    "june": 6, "july": 7, "august": 8, "september": 9, "october": 10,
+    "november": 11, "december": 12,
+    "ianuarie": 1, "februarie": 2, "martie": 3, "aprilie": 4, "mai": 5,
+    "iunie": 6, "iulie": 7, "septembrie": 9, "octombrie": 10,
+    "noiembrie": 11, "decembrie": 12,
+}
+
+# Written-out English names, kept here rather than taken from strftime, so
+# the language Windows is set to never changes what the app says.
+_LONG_MONTHS = ("January", "February", "March", "April", "May", "June",
+                "July", "August", "September", "October", "November",
+                "December")
+_LONG_DAYS = ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday",
+              "Saturday", "Sunday")
+
+# A typed date: figures and words, with spaces, dots, slashes, dashes or
+# commas between them -- and nothing else. Figures are 0-9 only: digits of
+# another script are not a date, and int() would read them as one. Checked
+# by taking the allowed runs away and seeing whether anything is left: one
+# pass, each run taken whole. A single pattern for the whole shape needs a
+# repeated group of repeated runs, and that is the form which backtracks
+# without end on thirty figures and a stray symbol -- in the field's own
+# keystroke, on the app's one thread.
+_DATE_PART = re.compile(r"[0-9]+|[^\W\d_]+")
+_DATE_RUNS = re.compile(r"[0-9]+|[^\W\d_]+|[\s./,\-]+")
+# Far longer than any date anyone writes ("17 septembrie 2026" is 18).
+_DATE_MAX_CHARS = 40
+
+
+def _month_from_word(word):
+    """The month *word* names, or None (see _MONTH_NAMES)."""
+    folded = "".join(c for c in unicodedata.normalize("NFKD", word)
+                     if not unicodedata.combining(c)).casefold()
+    if len(folded) < 3:
+        return None
+    months = {n for name, n in _MONTH_NAMES.items() if name.startswith(folded)}
+    return months.pop() if len(months) == 1 else None
+
+
+def read_date(text, settled=False, today=None):
+    """A date as a person writes it -> date object, or None.
+
+    Read: 17.10.2026, 17/10/2026, 17-10-2026 (the day first, one or two
+    figures for the day and the month); 2026-10-17 (four figures first mean
+    the year comes first); and the month as a word -- 17 oct 2026, 17
+    octombrie 2026, October 17, 2026.
+
+    *settled*: the person has finished with the field (left it, saved,
+    left the note). Only then is a short year read as this century's
+    (17.10.26) and a missing one as this year's (17.10, 17 oct): read while
+    someone is still typing, "17.10.20" on its way to 2026 would be saved
+    as 2020. *today* is injectable for tests.
+    """
+    if not isinstance(text, str):
+        return None
+    text = text.strip()
+    if (not text or len(text) > _DATE_MAX_CHARS
+            or _DATE_RUNS.sub("", text)):
+        return None
+    parts = _DATE_PART.findall(text)
+    numbers = [p for p in parts if p.isdigit()]
+    words = [p for p in parts if not p.isdigit()]
+
+    def year_of(figures):
+        if len(figures) == 4 and figures[0] != "0":
+            return int(figures)
+        if len(figures) == 2 and settled:
+            return 2000 + int(figures)
+        return None
+
+    def this_year():
+        return (today or date_cls.today()).year if settled else None
+
+    if not words:
+        if len(numbers) == 3 and len(numbers[0]) == 4:
+            year, month, day = year_of(numbers[0]), numbers[1], numbers[2]
+        elif len(numbers) == 3:
+            day, month, year = numbers[0], numbers[1], year_of(numbers[2])
+        elif len(numbers) == 2:
+            day, month, year = numbers[0], numbers[1], this_year()
+        else:
+            return None
+        if len(day) > 2 or len(month) > 2:
+            return None
+        month = int(month)
+    elif len(words) == 1:
+        month = _month_from_word(words[0])
+        if month is None:
+            return None
+        if len(numbers) == 2:
+            # The year is the figure written as one -- four figures -- and
+            # where both are short, the second: "17 oct 26".
+            if len(numbers[0]) == 4:
+                year, day = year_of(numbers[0]), numbers[1]
+            elif len(numbers[1]) == 4:
+                day, year = numbers[0], year_of(numbers[1])
+            else:
+                day, year = numbers[0], year_of(numbers[1])
+        elif len(numbers) == 1:
+            day, year = numbers[0], this_year()
+        else:
+            return None
+        if len(day) > 2:
+            return None
+    else:
+        return None
+    if year is None:
+        return None
+    try:
+        return date_cls(year, month, int(day))
+    except ValueError:
+        return None
+
+
+def show_date(value):
+    """A stored date as the app shows it: 2026-10-17 -> 17.10.2026.
+
+    Anything that is not a stored date -- empty, or text the app cannot
+    read, which a field may carry as it was typed -- comes back as it was.
+    """
+    if not isinstance(value, str):
+        return ""
+    d = parse_date(value)
+    if d is None:
+        return value
+    return "%02d.%02d.%04d" % (d.day, d.month, d.year)
+
+
+def show_stamp(value):
+    """A stored moment as the app shows it: 2026-10-17 09:30 -> 17.10.2026
+    09:30. The date part is shown as show_date shows a date; the rest is
+    kept as it is."""
+    if not isinstance(value, str):
+        return ""
+    head, gap, rest = value.partition(" ")
+    return show_date(head) + gap + rest
+
+
+def show_day(d, year=True, short_month=False):
+    """A day written out, the day first: Saturday, 3 October 2026."""
+    month = _LONG_MONTHS[d.month - 1]
+    if short_month:
+        month = month[:3]
+    text = "%s, %d %s" % (_LONG_DAYS[d.weekday()], d.day, month)
+    return text + (" %d" % d.year if year else "")
+
+
+def same_date(a, b):
+    """Whether two date texts name the same day, or are the same text.
+
+    The date field shows 17.10.2026 where the note stores 2026-10-17; asked
+    as text, every dated note would read as changed the moment it opened.
+    """
+    a = a.strip() if isinstance(a, str) else ""
+    b = b.strip() if isinstance(b, str) else ""
+    if a == b:
+        return True
+    first, second = read_date(a), read_date(b)
+    return first is not None and first == second
+
+
 def normalize_recurrence(rec):
     """Coerce a recurrence rule into a known-good shape. Anything unexpected
     degrades to 'does not repeat' rather than crashing the calendar.
@@ -194,8 +388,11 @@ def normalize_recurrence(rec):
     policy = rec.get("month_day_policy", "clamp")
     out["month_day_policy"] = policy if policy in ("clamp", "skip") else "clamp"
 
-    end = rec.get("end", "")
-    out["end"] = end.strip() if isinstance(end, str) and parse_date(end) else ""
+    # Read as a typed date is read: an end written day first -- by an older
+    # share code, a hand edit, the end-date box -- is that end, not "never
+    # ends". Stored in the one form, whatever form it came in.
+    end_day = read_date(rec.get("end", ""))
+    out["end"] = format_date(end_day) if end_day else ""
 
     try:
         # Clamped above at MAX_OCCURRENCES too (0 = unlimited): a rule can
@@ -724,6 +921,6 @@ def describe_recurrence(note):
     if rec["count"]:
         base += f", {rec['count']} times"
     elif rec["end"]:
-        base += f", until {rec['end']}"
+        base += f", until {show_date(rec['end'])}"
 
     return base

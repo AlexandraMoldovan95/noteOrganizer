@@ -52,7 +52,7 @@ from ..core.duplicates import find_duplicate_groups
 # and it is the one that never said which of its rows is a whole
 # repeating series. Both of these read a note's own recurrence field, so
 # a trash entry -- which is a copy of the note -- answers them too.
-from ..core.recurrence import describe_recurrence, is_recurring
+from ..core.recurrence import describe_recurrence, is_recurring, show_date
 # Shortens with an ellipsis rather than by slicing: a title cut at N
 # characters with nothing to show for it is the same defect as a
 # sentence clipped by a layout, only cheaper to make.
@@ -446,7 +446,7 @@ class SettingsPageMixin:
         # FIRST_LAUNCH_DATE -- see _host()'s docstring for why that global
         # can be None here. Purely a read: the stamp is written once, at
         # startup, by get_first_launch_date().
-        since = load_settings().get("first_launch_date") or "\u2014"
+        since = show_date(load_settings().get("first_launch_date")) or "\u2014"
 
         # Same wheel-forwarding pattern used elsewhere in Settings (theme
         # picker, inline panels) — without it, scrolling with the cursor
@@ -1359,7 +1359,7 @@ class SettingsPageMixin:
             # below raised and kept the whole panel from opening.
             meta = ""
         remaining = self._days_left_in_trash(meta)
-        sub = f"deleted {meta[:10]}" if meta else "deleted"
+        sub = f"deleted {show_date(meta[:10])}" if meta else "deleted"
         if remaining is not None:
             sub += f" · {remaining} day(s) left"
         if repeats:
@@ -1772,9 +1772,9 @@ class SettingsPageMixin:
             for note, var in zip(group, group_vars):
                 created = note.get("created", "")
                 updated = note.get("updated", "")
-                meta = f"created {created[:10]}" if created else ""
+                meta = f"created {show_date(created[:10])}" if created else ""
                 if updated and updated != created:
-                    meta += f" · updated {updated[:10]}"
+                    meta += f" · updated {show_date(updated[:10])}"
                 cb = tk.Checkbutton(
                     box, text=f"Delete this copy   ({meta})" if meta else "Delete this copy",
                     variable=var,

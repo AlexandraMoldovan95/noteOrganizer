@@ -375,8 +375,9 @@ check('calendar add-note asks and saves the deferred edit before clearing',
       and 'cal-add-pending' in app13.notes[0]['overrides']['2026-07-11']['body'])
 _ca_ok = False
 for _ in range(60):  # settle: a late timer tick may still be landing
+    # Shown as every date in the field is, day first.
     if (app13.selected_note_id is None
-            and app13.date_entry.get() == '2026-08-15'):
+            and app13.date_entry.get() == '15.08.2026'):
         _ca_ok = True
         break
     app13.update()

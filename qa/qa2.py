@@ -889,12 +889,31 @@ _b4d_saved_notes, _b4d_saved_trash = list(app.notes), list(app.trash)
 app.notes = []
 app.trash = []
 app.notes = [NO.normalize_note({'id': i + 1, 'title': 'Identica',
-                                'body': 'the very same body', 'category': 'General'})
+                                'body': 'the very same body', 'category': 'General',
+                                'created': '2026-03-01 09:00:00',
+                                'updated': '2026-03-02 10:00:00'})
              for i in range(3)]
 app.save_notes()
 app.ask_yes_no = lambda *a, **k: True
 app.show_settings_page(); app.update()
 app.toggle_settings_panel('duplicates'); app.update()
+
+
+def _b4d_boxes(w):
+    out = []
+    for c in w.winfo_children():
+        if isinstance(c, tk.Checkbutton):
+            out.append(str(c.cget('text')))
+        out.extend(_b4d_boxes(c))
+    return out
+
+
+# A copy's dates are shown as every date in the app is: day first.
+_b4d_said = _b4d_boxes(app.settings_duplicates_panel)
+check(f'a duplicate says when it was created and updated, day first '
+      f'({_b4d_said[:1]})',
+      any('created 01.03.2026' in t and 'updated 02.03.2026' in t
+          for t in _b4d_said))
 _b4d_shortcut = _dp_button(app.settings_duplicates_panel, 'Tick all but first')
 if _b4d_shortcut is not None:
     _b4d_shortcut.invoke(); app.update()

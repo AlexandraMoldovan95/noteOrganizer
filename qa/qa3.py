@@ -1923,9 +1923,9 @@ check('...and the date, the yearly repeat and the colour',
       _pp['date'] == '2026-10-01'
       and _pp['recurrence'].get('freq') == 'yearly'
       and _pp['color'] == '#ff0000' and 'renew' == _pp['body'].strip())
-check('...into the editor too, not only the file',
+check('...into the editor too, not only the file (shown day first)',
       len(app.capture_editor_state().get('checklist', [])) == 3
-      and app.date_entry.get() == '2026-10-01')
+      and app.date_entry.get() == '01.10.2026')
 check('...and its question names what comes back, not just "text"',
       bool(_pp_asked) and 'checklist' in _pp_asked[-1][1]
       and 'repeat rule' in _pp_asked[-1][1])
