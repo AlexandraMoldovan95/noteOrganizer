@@ -445,9 +445,9 @@ with open('settings.json', 'w', encoding='utf-8') as _f5g:
                                  '2026-04-02': 'not-a-colour',
                                  '2026-04-03': '#12zz34'},
                   'categories': {'General': '#4f6d7a',
-                                 'Rupt': '#nu-e-hex'}}, _f5g)
+                                 'Broken': '#not-hex'}}, _f5g)
 with open('notes_data.json', 'w', encoding='utf-8') as _f5g:
-    _json5g.dump([{'id': 1, 'title': 'Colorata', 'body': 'x',
+    _json5g.dump([{'id': 1, 'title': 'Colored', 'body': 'x',
                    'category': 'General', 'color': '#zzzzzz',
                    'updated': '2026-01-01 00:00',
                    'created': '2026-01-01 00:00'},
@@ -456,11 +456,11 @@ with open('notes_data.json', 'w', encoding='utf-8') as _f5g:
                   # when the calendar draws that day -- the one colour
                   # door the first sweep missed. The day's text edit must
                   # survive; only the undrawable colour is dropped.
-                  {'id': 2, 'title': 'Serie', 'body': 'y',
+                  {'id': 2, 'title': 'Series', 'body': 'y',
                    'category': 'General', 'date': '2026-04-01',
                    'recurrence': {'freq': 'weekly', 'weekdays': [2]},
-                   'overrides': {'2026-04-08': {'title': 'ziua aia',
-                                                'color': '#nu-e-hex'},
+                   'overrides': {'2026-04-08': {'title': 'that day',
+                                                'color': '#not-hex'},
                                  '2026-04-15': {'color': '#00ff00'}},
                    'updated': '2026-01-01 00:00',
                    'created': '2026-01-01 00:00'}], _f5g)
@@ -486,13 +486,13 @@ check('the valid day colour is kept, both garbage ones dropped',
       and '2026-04-02' not in app5g.day_colors
       and '2026-04-03' not in app5g.day_colors)
 check('the garbage category colour never enters the palette map',
-      NO.CATEGORY_COLORS.get('Rupt') is None)
+      NO.CATEGORY_COLORS.get('Broken') is None)
 check('the note survives with its undrawable colour blanked',
       _built5g and app5g.notes and app5g.notes[0]['color'] == ''
-      and app5g.notes[0]['title'] == 'Colorata')
+      and app5g.notes[0]['title'] == 'Colored')
 _ovr5g = (app5g.find_note(2) or {}).get('overrides', {}) if _built5g else {}
 check('a per-day override loses only its undrawable colour',
-      _ovr5g.get('2026-04-08') == {'title': 'ziua aia'})
+      _ovr5g.get('2026-04-08') == {'title': 'that day'})
 check('...while a valid per-day colour is kept',
       _ovr5g.get('2026-04-15') == {'color': '#00ff00'})
 # The calendar is where day colours are painted -- drive the render

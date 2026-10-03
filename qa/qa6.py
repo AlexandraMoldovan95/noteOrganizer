@@ -1348,7 +1348,7 @@ check('zero days clamps to one -- never purge-everything',
 import datetime as _dtQW
 _oldQW = (_dtQW.datetime.now()
           - _dtQW.timedelta(days=10)).strftime('%Y-%m-%d %H:%M:%S')
-_entryQW = {'id': 9990, 'title': 'veche', 'deleted_at': _oldQW,
+_entryQW = {'id': 9990, 'title': 'old', 'deleted_at': _oldQW,
             'attachments': []}
 NO.save_setting('trash_retention_days', 7)
 _keptQW, _nQW = NO.purge_expired_trash([dict(_entryQW)])
@@ -1716,14 +1716,14 @@ def _btn6(root, txt):
     walk(root)
     return hit[0] if hit else None
 _new_entry = _entries6(_catf)[-1]
-_new_entry.insert(0, 'Proiecte')
+_new_entry.insert(0, 'Projects')
 _btn6(_catf, '+ Add').invoke()
 app.update()
 check('adding a category through the panel lands in the palette map',
-      'Proiecte' in _CC6
-      and 'Proiecte' in NO.get_setting('categories', {}))
+      'Projects' in _CC6
+      and 'Projects' in NO.get_setting('categories', {}))
 
-# The row rebuilt on redraw — find Proiecte's swatch and recolour it.
+# The row rebuilt on redraw — find the Projects swatch and recolour it.
 def _row_of6(root, name):
     def walk(w):
         for c in w.winfo_children():
@@ -1734,9 +1734,9 @@ def _row_of6(root, name):
                 return r
         return None
     return walk(root)
-_prow = _row_of6(_catf, 'Proiecte')
+_prow = _row_of6(_catf, 'Projects')
 check('the new category has its own row', _prow is not None)
-_old_col = _CC6['Proiecte']
+_old_col = _CC6['Projects']
 _swatch6 = next(c for c in _prow.winfo_children()
                 if isinstance(c, tk.Frame)
                 and str(c.cget('cursor')) == 'hand2')
@@ -1765,8 +1765,8 @@ _want6 = _fill6(_target6)
 _qa_click(_target6)
 app.update()
 check('recolouring through the swatch palette stores the clicked colour',
-      _CC6.get('Proiecte') == _want6
-      and NO.get_setting('categories', {}).get('Proiecte') == _want6)
+      _CC6.get('Projects') == _want6
+      and NO.get_setting('categories', {}).get('Projects') == _want6)
 
 # What a rename carries besides the notes: the note open in the editor,
 # the templates, the Trash, a folded group, and its place among the
@@ -1777,26 +1777,26 @@ _rn_kept6 = (list(app.notes), list(app.trash), list(app.templates),
              set(app.collapsed_groups))
 app.new_note(); app.update()
 app.notes = [NO.normalize_note({'id': 1, 'title': 'Budget', 'body': 'x',
-                                'category': 'Proiecte'})]
+                                'category': 'Projects'})]
 app.save_notes()
 app.open_note_in_tab(app.notes[0]); app.update()
-app.templates = [NO.normalize_template({'name': 'Weekly', 'category': 'Proiecte'})]
+app.templates = [NO.normalize_template({'name': 'Weekly', 'category': 'Projects'})]
 NO.save_templates(app.templates)
 app.trash = [dict(NO.normalize_note({'id': 2, 'title': 'Old', 'body': 'x',
-                                     'category': 'Proiecte'}),
+                                     'category': 'Projects'}),
                   deleted_at='2026-09-30 10:00:00')]
 NO.save_trash(app.trash)
-app.collapsed_groups = {'Proiecte'}
-# A category AFTER the renamed one: added last, 'Proiecte' was already at
+app.collapsed_groups = {'Projects'}
+# A category AFTER the renamed one: added last, 'Projects' was already at
 # the end, so "moved to the end" and "kept its place" read the same and the
 # place check could not fail (a mutant restoring the move survived it).
-_CC6['ZAfterProiecte'] = '#556677'
+_CC6['ZAfterProjects'] = '#556677'
 _rn_order6 = list(_CC6)
 check('fixture: the category about to be renamed is not the last one',
-      _rn_order6.index('Proiecte') < len(_rn_order6) - 1)
+      _rn_order6.index('Projects') < len(_rn_order6) - 1)
 
 # Rename through the pencil's inline editor.
-_prow = _row_of6(_catf, 'Proiecte')
+_prow = _row_of6(_catf, 'Projects')
 # children order = creation order: the pencil canvas is created before
 # the trash one, so [0] is rename (touring them would hit trash's
 # delete). The inline editor's <Return> needs REAL focus first, or the
@@ -1811,27 +1811,27 @@ _ipop = app._mini_popup
 if _ipop is not None and _ipop.winfo_exists():
     _ientry = _entries6(_ipop)[0]
     _ientry.delete(0, 'end')
-    _ientry.insert(0, 'ProiecteX')
+    _ientry.insert(0, 'ProjectsX')
     _btn6(_ipop, 'Save').invoke()
     app.update()
-    _renamed = 'ProiecteX' in _CC6 and 'Proiecte' not in _CC6
+    _renamed = 'ProjectsX' in _CC6 and 'Projects' not in _CC6
 check('renaming through the inline editor moves the category',
-      _renamed and 'ProiecteX' in NO.get_setting('categories', {}))
+      _renamed and 'ProjectsX' in NO.get_setting('categories', {}))
 check('...the note open in the editor goes with it',
-      app.category_var.get() == 'ProiecteX')
+      app.category_var.get() == 'ProjectsX')
 app._flush_autosave(); app.update()
 check('...so its next save does not file it under General',
-      app.find_note(1)['category'] == 'ProiecteX')
+      app.find_note(1)['category'] == 'ProjectsX')
 check('...templates and the Trash go with it too',
-      app.templates[0]['category'] == 'ProiecteX'
-      and app.trash[0]['category'] == 'ProiecteX')
+      app.templates[0]['category'] == 'ProjectsX'
+      and app.trash[0]['category'] == 'ProjectsX')
 check('...a folded group stays folded, under its new name',
-      app.collapsed_groups == {'ProiecteX'}
-      and NO.get_setting('collapsed_groups', []) == ['ProiecteX'])
+      app.collapsed_groups == {'ProjectsX'}
+      and NO.get_setting('collapsed_groups', []) == ['ProjectsX'])
 check('...and the category keeps its place among the groups',
-      list(_CC6).index('ProiecteX') == _rn_order6.index('Proiecte'))
+      list(_CC6).index('ProjectsX') == _rn_order6.index('Projects'))
 app.new_note(); app.update()
-_CC6.pop('ZAfterProiecte', None)
+_CC6.pop('ZAfterProjects', None)
 NO.persist_categories()
 app.notes, app.trash, app.templates, app.collapsed_groups = _rn_kept6
 app.save_notes(); NO.save_trash(app.trash); NO.save_templates(app.templates)
@@ -1856,7 +1856,7 @@ check('Add refuses a category name longer than the app keeps',
 check('...and says why, naming the limit',
       bool(_catwarn6) and str(NO.MAX_CATEGORY_NAME) in _catwarn6[-1][1])
 _catwarn6.clear()
-_prow = _row_of6(_catf, 'ProiecteX')
+_prow = _row_of6(_catf, 'ProjectsX')
 _pencil6 = [c for c in _prow.winfo_children() if isinstance(c, tk.Canvas)][0]
 _qa_click(_pencil6)
 app.update()
@@ -1868,7 +1868,7 @@ if _ipop is not None and _ipop.winfo_exists():
     _ientry.insert(0, _long6)
     _btn6(_ipop, 'Save').invoke()
     app.update()
-    _kept_name6 = 'ProiecteX' in _CC6 and _long6 not in _CC6
+    _kept_name6 = 'ProjectsX' in _CC6 and _long6 not in _CC6
     app._dismiss_mini_popup()
     app.update()
 check('Rename refuses it too, and the category keeps its name',
@@ -1876,7 +1876,7 @@ check('Rename refuses it too, and the category keeps its name',
       and str(NO.MAX_CATEGORY_NAME) in _catwarn6[-1][1])
 app.show_warning = _real_catwarn6
 
-for _nm in ('Proiecte', 'ProiecteX'):
+for _nm in ('Projects', 'ProjectsX'):
     _CC6.pop(_nm, None)
 NO.persist_categories()
 _catf.destroy(); app.update()
@@ -2308,7 +2308,7 @@ check('the wheel over an empty trash panel scrolls the page (plan 107)',
 
 # And the other half of the same promise: a panel that CAN scroll keeps
 # the wheel to itself, rather than sliding the page under the user.
-app.trash = [{'id': 3000 + i, 'title': 'Veche %d' % i, 'body': 'x',
+app.trash = [{'id': 3000 + i, 'title': 'Old %d' % i, 'body': 'x',
               'category': 'General',
               'deleted_at': '2026-01-%02d 00:00:00' % ((i % 28) + 1)}
              for i in range(60)]
@@ -2345,18 +2345,18 @@ app.hide_settings_page(); app.update()
 # very category. The notes must land somewhere real and the grouping
 # must agree with where they landed.
 app.trash = []
-NO.CATEGORY_COLORS['Temporara'] = '#889922'
-app.notes = [NO.normalize_note({'id': 4100 + i, 'title': 'In temporara %d' % i,
-                                'body': 'x', 'category': 'Temporara'})
+NO.CATEGORY_COLORS['Temporary'] = '#889922'
+app.notes = [NO.normalize_note({'id': 4100 + i, 'title': 'In temporary %d' % i,
+                                'body': 'x', 'category': 'Temporary'})
              for i in range(3)]
 app.save_notes()
 # The Trash holds the name too: a series deleted earlier, one day of it
 # filed under the category. Left alone, restoring it brought the category
 # back at the next launch, announced as "gone missing from the settings".
 app.trash = [dict(NO.normalize_note({
-    'id': 4200, 'title': 'Old series', 'body': 'x', 'category': 'Temporara',
+    'id': 4200, 'title': 'Old series', 'body': 'x', 'category': 'Temporary',
     'date': '2026-09-01', 'recurrence': {'freq': 'weekly'},
-    'overrides': {'2026-09-08': {'body': 'moved', 'category': 'Temporara'}}}),
+    'overrides': {'2026-09-08': {'body': 'moved', 'category': 'Temporary'}}}),
     deleted_at='2026-09-30 10:00:00')]
 NO.save_trash(app.trash)
 app.group_by_category.set(True)
@@ -2364,10 +2364,10 @@ app.refresh_note_list(); app.update()
 app._themed_dialog = lambda *a, **k: 'move'      # keep the notes
 app.show_settings_page(); app.update()
 app.toggle_settings_panel('categories'); app.update()
-app._delete_category('Temporara', lambda: None)
+app._delete_category('Temporary', lambda: None)
 app.update()
 check('deleting a category takes it off the list (plan 110)',
-      'Temporara' not in NO.CATEGORY_COLORS)
+      'Temporary' not in NO.CATEGORY_COLORS)
 check('...and its notes are kept, filed under General (plan 110)',
       all(n['category'] == 'General' for n in app.notes if n['id'] >= 4100))
 check('...and the Trash lets go of the name too, day by day',
@@ -2379,7 +2379,7 @@ _old_series6 = dict(NO.normalize_note({
     'id': 4201, 'title': 'Older series', 'body': 'x', 'date': '2026-09-01',
     'recurrence': {'freq': 'weekly'}}), deleted_at='2026-09-30 10:00:00')
 _old_series6['overrides'] = {'2026-09-08': {'body': 'moved',
-                                            'category': 'Temporara'}}
+                                            'category': 'Temporary'}}
 app.trash.append(_old_series6)
 app._restore_from_trash(_old_series6); app.update()
 check('...so a day filed under a deleted category comes back under General',
@@ -2398,12 +2398,12 @@ app.refresh_note_list(); app.update()
 # 121: a backup that mentions a category this device no longer has.
 # The note must arrive filed somewhere real rather than in a category
 # that does not exist.
-_b5_incoming = NO.normalize_note({'id': 999, 'title': 'Din backup',
-                                  'body': 'x', 'category': 'CategorieDisparuta'})
+_b5_incoming = NO.normalize_note({'id': 999, 'title': 'From backup',
+                                  'body': 'x', 'category': 'VanishedCategory'})
 check('a note naming a category this device lost is filed under General '
       '(plan 121)', _b5_incoming['category'] == 'General')
 check('...and the note itself arrives whole, not refused',
-      _b5_incoming['title'] == 'Din backup')
+      _b5_incoming['title'] == 'From backup')
 
 # 118: an export started while the editor holds unsaved work. The export
 # must not take the half-typed text, and must not lose it either.

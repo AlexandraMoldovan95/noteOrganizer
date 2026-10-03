@@ -308,10 +308,10 @@ check('and the preview scrolls once it outgrows its budget',
 NO.clipboard.read_html = lambda: None
 app.clipboard_clear()
 app.clipboard_append(
-    '| Coloana1 | Coloana2 | Coloana3 | Coloana4 | Coloana5 | Coloana6 |'
-    ' Coloana7 | Coloana8 |\n'
-    '| unsprezece | doisprezece | treisprezece | paisprezece |'
-    ' cincisprezece | saisprezece | saptesprezece | optsprezece |')
+    '| Heading1 | Heading2 | Heading3 | Heading4 | Heading5 | Heading6 |'
+    ' Heading7 | Heading8 |\n'
+    '| value-eleven | value-twelve | value-thirteen | value-fourteen |'
+    ' value-fifteen | value-sixteen | value-seventeen | value-eighteen |')
 _body9.delete('1.0', 'end')
 _body9.event_generate('<<Paste>>')
 app.update()
@@ -388,7 +388,7 @@ check('saved with the newly-picked category, not the default (bug 1)',
 # row, broke the block, and its leftovers surfaced as bare pipe lines.
 _tplG = NO.normalize_template({
     'name': 'GuardTpl', 'title': '',
-    'body': '| Cap | Doi |\n| --- | --- |\n| a | b |',
+    'body': '| Head | Two |\n| --- | --- |\n| a | b |',
     'comments': '', 'category': 'General', 'checklist': [],
 })
 app.templates.append(_tplG)
@@ -434,7 +434,7 @@ app.update()
 _bodyG.insert('insert', 'z')
 app.update()
 check('typing with the caret in hidden table text herds it to visible',
-      _bodyG.get('1.0', 'end-1c').startswith('| Cap | Doi |')
+      _bodyG.get('1.0', 'end-1c').startswith('| Head | Two |')
       and 'tblhide' not in _bodyG.tag_names('insert - 1c'))
 _bodyG.mark_set('insert', '4.0')
 app.update()
@@ -486,7 +486,7 @@ check('a failing preview draw is contained, hiding intact',
 
 # ---- THE PREVIEW DRAWS A CELL'S <br> LINES AS LINES ----
 _bodyG.delete('1.0', 'end')
-_bodyG.insert('1.0', '| Cap | Doi |\n| unu<br>doi | x |')
+_bodyG.insert('1.0', '| Head | Two |\n| one<br>two | x |')
 _focus_body9('the keystroke that redraws the <br> preview')
 _bodyG.event_generate('<KeyRelease>', keysym='q')
 for _ in range(3):
@@ -502,7 +502,7 @@ while _sB:
 _txB = [_pvB.itemcget(i, 'text') for i in (_pvB.find_all() if _pvB else ())
         if _pvB.type(i) == 'text']
 check('the template preview splits a <br> cell into its lines',
-      'unu' in _txB and 'doi' in _txB and 'unu<br>doi' not in _txB)
+      'one' in _txB and 'two' in _txB and 'one<br>two' not in _txB)
 
 # ---- A TAKEN TEMPLATE NAME ASKS, NEVER SILENTLY OVERWRITES ----
 app.templates = [NO.normalize_template({
@@ -568,7 +568,7 @@ check('Yes replaces the old template, one copy of the name remains',
 
 # renaming a template onto a neighbour in Settings asks the same way
 app.templates.append(NO.normalize_template({
-    'name': 'Retete', 'title': '', 'body': 'retetele mele',
+    'name': 'Recipes', 'title': '', 'body': 'my recipes',
     'comments': '', 'category': 'General', 'checklist': []}))
 NO.save_templates(app.templates)
 app._edit_template(app.templates[-1], lambda: None)
@@ -581,14 +581,14 @@ find_widget(app._mini_popup, tk.Button, 'Save').invoke()
 app.update()
 _names9 = [t['name'] for t in app.templates]
 check('renaming onto a neighbour asks too; No leaves no duplicate',
-      _names9.count('Shopping') == 1 and 'Retete' in _names9)
+      _names9.count('Shopping') == 1 and 'Recipes' in _names9)
 app.ask_yes_no = lambda *a, **k: (_asksC.append(1), True)[1]
 find_widget(app._mini_popup, tk.Button, 'Save').invoke()
 app.update()
 _names9 = [t['name'] for t in app.templates]
 check('Yes removes the neighbour and keeps one template with that name',
       _names9 == ['Shopping']
-      and app.templates[0]['body'] == 'retetele mele')
+      and app.templates[0]['body'] == 'my recipes')
 app.ask_yes_no = _origAsk9
 _popG._confirm_dismiss = False
 app._dismiss_mini_popup()

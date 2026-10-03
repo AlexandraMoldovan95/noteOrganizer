@@ -166,10 +166,10 @@ check("and so does the formatting inside it",
 # the data itself never leaves the note's text, so unhiding brings it back.
 _hid = "\n".join(["| a | SECRET | c |",
                   "| --- | ~ | --- |",
-                  "| 1 | ascuns | 3 |"])
+                  "| 1 | concealed | 3 |"])
 _hid_out = note_to_html(_hid)
 check("a hidden column stays hidden in the export",
-      "SECRET" not in _hid_out and "ascuns" not in _hid_out
+      "SECRET" not in _hid_out and "concealed" not in _hid_out
       and "<th>a</th><th>c</th>" in _hid_out)
 _span_hid = "\n".join(["| a | b | c |",
                        "| --- | ~ | --- |",
@@ -180,8 +180,8 @@ check("a merge across a hidden column narrows to what shows",
 # A checkbox leaves as the glyph the app draws, and the glyph comes back
 # as the checkbox -- brackets never reach Word, boxes always come home.
 # The app draws every checkbox centred in its cell, so the page does too.
-_cb = "\n".join(["| task | done |", "| --- | --- |", "| nu | [ ] |",
-                 "| da | [x] |"])
+_cb = "\n".join(["| task | done |", "| --- | --- |", "| no | [ ] |",
+                 "| yes | [x] |"])
 _cb_out = note_to_html(_cb)
 check("checkboxes export as centred glyphs",
       'text-align:center;">☐</td>' in _cb_out
@@ -230,7 +230,7 @@ check("reflow leaves a table exactly as it found it",
 # cell above; anchors sit at the top-left of their rectangle. The markers
 # live in the text like everything else, so a merge survives align(), save,
 # share codes and export with no new note field.
-_m_rows = [["Nr", "Canal", "Cablu", "<", "<"],
+_m_rows = [["No", "Channel", "Cable", "<", "<"],
            ["^", "^", "Vodafone", "Digi", "Orange"],
            ["1.", "TV", "x", "x", "x"]]
 _m_spans, _m_covered = tables.merge_map(_m_rows)
@@ -247,8 +247,8 @@ check("an orphan marker stays ordinary content",
 # The bug as reported: a spreadsheet header with rowspan and colspan sheared
 # every row under it one column left, so the symbol columns came out empty.
 _shear_html = ("<table>"
-               "<tr><th rowspan='2'>Nr</th><th rowspan='2'>Canal</th>"
-               "<th colspan='3'>Cablu</th></tr>"
+               "<tr><th rowspan='2'>No</th><th rowspan='2'>Channel</th>"
+               "<th colspan='3'>Cable</th></tr>"
                "<tr><th>Vodafone</th><th>Digi</th><th>Orange</th></tr>"
                "<tr><td>1.</td><td>TV</td>"
                "<td>\u2713</td><td>\u2717</td><td>\u2713</td></tr>"
@@ -256,7 +256,7 @@ _shear_html = ("<table>"
 _shear_text, _s2, _p2 = html_to_note(_shear_html)
 _shear_rows = [tables.split_row(l) for l in _shear_text.split("\n")]
 check(f"a merged header no longer shears the rows below ({_shear_rows[1]})",
-      _shear_rows == [["Nr", "Canal", "Cablu", "<", "<"],
+      _shear_rows == [["No", "Channel", "Cable", "<", "<"],
                       ["^", "^", "Vodafone", "Digi", "Orange"],
                       ["1.", "TV", "\u2713", "\u2717", "\u2713"]])
 check("the symbols come through as themselves",

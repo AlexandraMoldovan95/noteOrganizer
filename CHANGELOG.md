@@ -1169,7 +1169,7 @@ say what it was for.*
   `Note title...My pasted title` — the hint that says "type a title here" was still in
   the box and the pasted text was stuck to the end of it. The same on the Calendar's
   History search, where the result was a query like
-  `Search all calendar entries...bugetul`, which matches nothing, so the search looked
+  `Search all calendar entries...budget`, which matches nothing, so the search looked
   broken rather than misfilled. The note title also lost thirteen characters of its
   200-character limit to the hint, so a long pasted title came back shorter than it had
   to be. The hint is now cleared by a paste exactly as it is by typing, on every field
@@ -2394,8 +2394,8 @@ adversarial review of the first round proved the class was wider than the findin
   one degrade gracefully in older builds (the import path has always normalized the field).
 
 ### Changed
-- **The table caption speaks English.** The inserted labels were "Tab. N: descriere" / "Sursa:"
-  (the academic convention the feature was first built around, in Romanian); they are now
+- **The table caption speaks English.** The inserted labels were in Romanian ("Tab. N:" and a
+  source line, the academic convention the feature was first built around); they are now
   "Table N: description" / "Source: " — the app's own functions are English everywhere, and the
   caption stays plain editable text, so what's written after the labels (or instead of them) is
   the user's, in any language. Numbering now counts only caption-shaped lines ("Table 3:"), not
@@ -2464,9 +2464,9 @@ regression checks.*
   switch, a per-view choice rather than saved note content. The redundant in-panel "Close" buttons
   were dropped from both boxes, since their header bars already toggle them shut.
 - **A system-managed table caption.** Table menu → **Table → Add caption below…** inserts a
-  centred, auto-numbered label line ("Tab. N: descriere" — *Table N: description*, the placeholder
-  pre-selected so typing replaces it) plus a "Sursa:" (*Source*) line for as many sources or links
-  as needed — the literal labels the app inserts, following the academic table-caption convention
+  centred, auto-numbered label line (*Table N: description*, the placeholder
+  pre-selected so typing replaces it) plus a *Source* line for as many sources or links
+  as needed — labels the app inserted in Romanian at first, following the academic table-caption convention
   it was built for, as ordinary body text after that, editable like anything else. Nobody has to hand-build a caption and fight its
   alignment again.
 - **The table menu got shelves.** The flat run had grown past fifteen entries ("finding the one you
@@ -2531,7 +2531,7 @@ regression checks.*
 - **Our own table copy takes its own road home.** The cell copy puts an HTML table on the clipboard
   for Word's sake — and on Windows the rich-paste route saw that HTML first, so pasting a copied
   table back into a note bypassed the table route's own fixes on the shipping platform: no
-  remembered widths, no placement, the first row glued onto the caret's line ("`Sursa: | fff |…`"
+  remembered widths, no placement, the first row glued onto the caret's line ("`Source: | fff |…`"
   in the field report). A paste whose plain text matches our own cell copy now goes straight to the
   table route with all its guards; content from other applications keeps the rich route. The qa
   clipboard stub gained a loopback mode that serves back exactly what the app wrote — the Windows

@@ -898,3 +898,10 @@ A new surface joins this list the moment it ships.
   event(s) …` at exit. A red in a run that printed it is reproduced in a
   run that did not before it is believed or dismissed; a red in a run
   that did not print it is never blamed on the keyboard.
+- **A rename renames every mention at once.** The pass that put the
+  suite into English on 2026-09-29 renamed qa8's control note to
+  `OtherNote` line by line, and left the check that it is filtered out
+  asking about the note's old Romanian title — a title no note had any
+  more, so the check could not fail. Data a check names is renamed
+  across the whole file in one replacement whose count is known before
+  it runs, and the check is then made to fail once on purpose.

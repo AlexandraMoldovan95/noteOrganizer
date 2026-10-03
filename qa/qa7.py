@@ -316,7 +316,7 @@ from noteorganizer.core import tables as _core_tables_q7
 app.notes = [{'id': 9, 'title': 'PreviewNote', 'category': 'General',
               'date': '2026-07-20', 'updated': '2026-01-01 00:00',
               'created': '2026-01-01 00:00', 'attachments': [],
-              'body': 'Text sus\n| A | B |\n| --- | --- |\n| 1 | 2 |\nText jos',
+              'body': 'Text above\n| A | B |\n| --- | --- |\n| 1 | 2 |\nText below',
               'comments': 'a comment that must not be shown',
               'checklist': [{'text': 'a', 'done': True},
                             {'text': 'b', 'done': False}]}]
@@ -339,7 +339,7 @@ _pv_chip = next((w.cget('text') for w in _pv_texts
                  and ('▦' in str(w.cget('text')) or '💬' in str(w.cget('text')))),
                 '')
 check('calendar preview strips the table to plain text',
-      '|' not in _pv_text and 'Text sus' in _pv_text and 'Text jos' in _pv_text)
+      '|' not in _pv_text and 'Text above' in _pv_text and 'Text below' in _pv_text)
 check('calendar preview does not dump the comments inline',
       'a comment that must not' not in _pv_text)
 check('calendar preview flags table + checklist + comments as chips',
@@ -2225,7 +2225,7 @@ app.notes = [
      'updated': '2026-01-01 00:00', 'created': '2026-01-01 00:00',
      'checklist': [], 'attachments': [], 'exceptions': [],
      'overrides': {
-         '2026-08-17': {'title': '', 'body': 'discutat bugetul',
+         '2026-08-17': {'title': '', 'body': 'discussed the budget',
                         'comments': '', 'category': 'General', 'color': ''},
          '2026-06-15': {'title': 'HistSpecial', 'body': 'plan',
                         'comments': '', 'category': 'General', 'color': ''}}},
@@ -2258,7 +2258,7 @@ check('expanding the group reveals its edited days, newest first',
 app._history_toggle_group(80); app.update()
 
 # Search reaches into a day's own override content and auto-expands.
-app._history_search_var.set('bugetul')
+app._history_search_var.set('budget')
 app.update(); import time as _t7; _t7.sleep(0.4); app.update()
 _hl = find_all_labels(app._history_rows)
 check('search finds override content and auto-expands its group',
@@ -2270,7 +2270,7 @@ app.update(); _t7.sleep(0.4); app.update()
 # ---- A PASTE ONTO THIS SEARCH BOX'S PLACEHOLDER ----
 # The check above drives the search through the VARIABLE, which steps over
 # the widget entirely -- so it could never see that a right-click Paste
-# landed glued to the placeholder: "Search all calendar entries...bugetul",
+# landed glued to the placeholder: "Search all calendar entries...budget",
 # a query that matches nothing, which reads as the search being broken. Set
 # through the var it works; set through the field it did not. The fix lives
 # in add_placeholder, so this is the sibling of qa1's title checks on the
@@ -2299,11 +2299,11 @@ if _hist_entry is not None:
     app.update()
     check('fixture: the History search shows its placeholder',
           _hist_entry.get() == _PH_HIST)
-    app.clipboard_clear(); app.clipboard_append('bugetul'); app.update()
+    app.clipboard_clear(); app.clipboard_append('budget'); app.update()
     _hist_entry.event_generate('<<Paste>>')
     app.update(); _t7.sleep(0.4); app.update()
     check('pasting into the History search replaces the placeholder',
-          _hist_entry.get() == 'bugetul')
+          _hist_entry.get() == 'budget')
     # And the consequence, not just the contents: the query the user pasted
     # is the query that ran. The same hit the var-driven check above proved,
     # so a failure here is about the paste and not about the fixture.
@@ -2313,16 +2313,16 @@ if _hist_entry is not None:
           and not any('HistDated' in t for t in _hl))
     # The control: a paste must not wipe a query someone typed.
     _hist_entry.delete(0, 'end')
-    _hist_entry.insert(0, 'bug')
+    _hist_entry.insert(0, 'bud')
     _hist_entry.icursor('end')
     app.update()
     check('fixture: the History search holds real text, no placeholder',
-          _hist_entry.get() == 'bug')
-    app.clipboard_clear(); app.clipboard_append('etul'); app.update()
+          _hist_entry.get() == 'bud')
+    app.clipboard_clear(); app.clipboard_append('get'); app.update()
     _hist_entry.event_generate('<<Paste>>')
     app.update(); _t7.sleep(0.4); app.update()
     check('a paste into a typed History query leaves that text alone',
-          _hist_entry.get() == 'bugetul')
+          _hist_entry.get() == 'budget')
     _hist_entry.delete(0, 'end')
     app.update(); _t7.sleep(0.4); app.update()
 app._history_search_var.set('')
@@ -4035,7 +4035,7 @@ app.open_blank_tab(); app.update()
 # been driven through the real widgets.
 app.notes = []
 for i in range(3):
-    app.notes.append({'id': 800 + i, 'title': 'Geamana', 'body': 'idem',
+    app.notes.append({'id': 800 + i, 'title': 'Twin', 'body': 'idem',
                       'category': 'General', 'updated': '2026-01-01 00:00',
                       'created': '2026-01-01 00:00', 'checklist': [],
                       'attachments': []})
@@ -4070,8 +4070,8 @@ finally:
     app.ask_yes_no = _orig_ask7c
     del app._reopen_dup_panel
 check('tick-all-but-first plus cleanup keeps exactly one twin',
-      sum(1 for n in app.notes if n.get('title') == 'Geamana') == 1
-      and sum(1 for e in app.trash if e.get('title') == 'Geamana') == 2)
+      sum(1 for n in app.notes if n.get('title') == 'Twin') == 1
+      and sum(1 for e in app.trash if e.get('title') == 'Twin') == 2)
 _dpf.destroy(); app.update()
 
 # ---- Duplicates hover PREVIEW (coverage-lift #2) ----
@@ -4142,7 +4142,7 @@ print()
 # Ctrl+S), never save_current_note directly, precisely because the bug
 # lived in front of it.
 app.open_blank_tab(); app.update()
-app.title_entry.insert(0, 'DeGolit')
+app.title_entry.insert(0, 'ToEmpty')
 app.body_text.insert('1.0', 'old content')
 app.save_current_note(auto=False); app.update()
 _gid = app.selected_note_id
@@ -4154,7 +4154,7 @@ check('switch-away flush records the emptying of a saved note',
       _gn is not None and _gn['title'] == '' and _gn['body'] == '')
 
 app.open_blank_tab(); app.update()
-app.title_entry.insert(0, 'DeGolit2')
+app.title_entry.insert(0, 'ToEmpty2')
 app.body_text.insert('1.0', 'other content')
 app.save_current_note(auto=False); app.update()
 _gid2 = app.selected_note_id
@@ -4166,7 +4166,7 @@ check('the autosave timer route records the emptying too',
       _gn2 is not None and _gn2['title'] == '' and _gn2['body'] == '')
 
 app.open_blank_tab(); app.update()
-app.title_entry.insert(0, 'DeGolit3')
+app.title_entry.insert(0, 'ToEmpty3')
 app.body_text.insert('1.0', 'content again')
 app.save_current_note(auto=False); app.update()
 _gid3 = app.selected_note_id
@@ -4209,7 +4209,7 @@ check('a comments-only note is real content to the autosave',
 # change" and the automatic routes never wrote it: the fix's own promise,
 # defeated one frame upstream.
 app.open_blank_tab(); app.update()
-app.title_entry.insert(0, 'Spatii')
+app.title_entry.insert(0, 'Spaces')
 app.body_text.insert('1.0', 'abc')
 app.save_current_note(auto=False); app.update()
 _wid = app.selected_note_id

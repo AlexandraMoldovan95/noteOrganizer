@@ -453,13 +453,13 @@ check('import code with skip-duplicates adds only the fresh note',
 app.open_blank_tab()
 app.update()
 _ident_base = len(app.notes)
-app.notes.append(NO.normalize_note({'id': 9001, 'title': 'Plecata',
+app.notes.append(NO.normalize_note({'id': 9001, 'title': 'Departed',
                                     'body': 'text original'}))
 app.save_notes()
 _ident_note = app.notes[-1]
 _sent_uid = _ident_note['uid']
 _returned = NO.encode_share_code([{
-    'uid': _sent_uid, 'title': 'Plecata', 'body': 'text corectat pe telefon',
+    'uid': _sent_uid, 'title': 'Departed', 'body': 'text corrected on the phone',
     'formatting': [], 'paragraphs': [], 'comments': '',
     'category': 'General', 'date': '', 'color': '', 'checklist': [],
 }])
@@ -478,7 +478,7 @@ check('a returning note is recognised as one we already have, and asked about',
 check('choosing Update adds no second note',
       len(app.notes) == _ident_base + 1)
 check('...and the note we had now carries the text that came back',
-      _ident_note['body'] == 'text corectat pe telefon')
+      _ident_note['body'] == 'text corrected on the phone')
 check('...still in its place: the id did not move',
       _ident_note['id'] == 9001)
 check('...still the same note: the identity did not move',
@@ -492,7 +492,7 @@ check('an update leaves the rescue copy Restore previous reads',
 app.open_blank_tab()
 app.update()
 _again = NO.encode_share_code([{
-    'uid': _sent_uid, 'title': 'Plecata', 'body': 'alta varianta',
+    'uid': _sent_uid, 'title': 'Departed', 'body': 'another version',
     'formatting': [], 'paragraphs': [], 'comments': '',
     'category': 'General', 'date': '', 'color': '', 'checklist': [],
 }])
@@ -520,7 +520,7 @@ check('choosing Add opens the copy as a NEW note, not over the old one',
       _add_sel != _ident_note['id']
       and (_add_sel is None
            or (app.find_note(_add_sel) or {}).get('body', '').rstrip('\n')
-           == 'alta varianta'))
+           == 'another version'))
 app.save_current_note(auto=False)
 app.update()
 check('...and once saved it is a second note',
@@ -548,7 +548,7 @@ _bulk_code = NO.encode_share_code([
     {'uid': _bulk_uid, 'title': 'Batch', 'body': 'edited carelessly',
      'formatting': [], 'paragraphs': [], 'comments': '',
      'category': 'General', 'date': '', 'color': '', 'checklist': []},
-    {'title': 'CuTotulNoua', 'body': 'zzz', 'formatting': [],
+    {'title': 'AllNew', 'body': 'zzz', 'formatting': [],
      'paragraphs': [], 'comments': '', 'category': 'General',
      'date': '', 'color': '', 'checklist': []},
 ])
@@ -577,8 +577,8 @@ app.update()
 # table's place on the page (paragraphs) must arrive AND render -- the
 # imported note opens with a real grid built from them.
 _tbl_code = NO.encode_share_code([{
-    'title': 'TabelPrinCod',
-    'body': '| Cap | G |\n| :-------------: | --- |\n| unu | doi |',
+    'title': 'TableViaCode',
+    'body': '| Head | G |\n| :-------------: | --- |\n| one | two |',
     'formatting': [],
     'paragraphs': [{'line': 0, 'align': 'center'},
                    {'line': 1, 'align': 'center'},
@@ -593,7 +593,7 @@ app.import_box.insert('1.0', _tbl_code)
 app._do_inline_import()
 app.update()
 check('the table note opens in the editor from the code',
-      app.title_entry.get() == 'TabelPrinCod')
+      app.title_entry.get() == 'TableViaCode')
 _g3 = app._grid_at_line(1)
 from noteorganizer.core import tables as _ct
 _sep3 = (_ct.parse_separator(app.body_text.get('2.0', '2.end'))
@@ -946,10 +946,10 @@ check('a code over the note cap names the cap in its refusal', _cap_ok)
 # zip and never read back out, so on a new machine every imported note
 # whose category did not exist yet was silently re-filed under "General"
 # by normalize_note. The whole filing system of a restored notebook, gone.
-NO.CATEGORY_COLORS['Proiecte Mari'] = '#ff8800'
+NO.CATEGORY_COLORS['Big Projects'] = '#ff8800'
 NO.persist_categories()
-app.notes = [{'id': 1, 'title': 'Planul', 'body': 'x',
-              'category': 'Proiecte Mari', 'updated': '2026-01-01 00:00',
+app.notes = [{'id': 1, 'title': 'The Plan', 'body': 'x',
+              'category': 'Big Projects', 'updated': '2026-01-01 00:00',
               'created': '2026-01-01 00:00', 'checklist': [],
               'attachments': []}]
 app.save_notes()
@@ -971,7 +971,7 @@ while app._export_state is not None and time.time() - t0 < 5:
 check('the backup zip carries settings.json', os.path.exists(_catzip))
 
 # Now become a device that has never heard of that category.
-del NO.CATEGORY_COLORS['Proiecte Mari']
+del NO.CATEGORY_COLORS['Big Projects']
 NO.persist_categories()
 NO.save_setting('day_colors', {})
 NO.save_setting('day_emoji', {})
@@ -987,10 +987,10 @@ t0 = time.time()
 while app._import_state is not None and time.time() - t0 < 8:
     app.update()
 check('importing the backup brings the category back',
-      'Proiecte Mari' in NO.CATEGORY_COLORS
-      and NO.get_setting('categories', {}).get('Proiecte Mari') == '#ff8800')
+      'Big Projects' in NO.CATEGORY_COLORS
+      and NO.get_setting('categories', {}).get('Big Projects') == '#ff8800')
 check('and the note keeps its filing instead of falling to General',
-      any(n.get('category') == 'Proiecte Mari' for n in app.notes))
+      any(n.get('category') == 'Big Projects' for n in app.notes))
 # The calendar decor is user data the backup has always carried and the
 # import used to drop wholesale -- and its colours are as untrusted as
 # any other imported value: the garbage one must NOT come back.
@@ -1002,7 +1002,7 @@ check('a garbage day colour from the backup is refused at the door',
       '2026-03-05' not in app.day_colors
       and '2026-03-05' not in NO.get_setting('day_colors', {}))
 os.remove(_catzip)
-NO.CATEGORY_COLORS.pop('Proiecte Mari', None)
+NO.CATEGORY_COLORS.pop('Big Projects', None)
 NO.persist_categories()
 NO.save_setting('day_colors', {})
 NO.save_setting('day_emoji', {})
@@ -1015,9 +1015,9 @@ app.day_emoji = {}
 # read as a duplicate of a local General twin and the import offered to
 # skip it -- while the dialog claimed its category matched. With the
 # merge first, the same import must sail through with no question.
-NO.CATEGORY_COLORS['Ordine'] = '#123456'
+NO.CATEGORY_COLORS['Order'] = '#123456'
 NO.persist_categories()
-app.notes = [{'id': 1, 'title': 'Same', 'body': 'y', 'category': 'Ordine',
+app.notes = [{'id': 1, 'title': 'Same', 'body': 'y', 'category': 'Order',
               'updated': '2026-01-01 00:00', 'created': '2026-01-01 00:00',
               'checklist': [], 'attachments': []}]
 app.save_notes()
@@ -1031,7 +1031,7 @@ while app._export_state is not None and time.time() - t0 < 5:
     app.update()
 # The amnesiac device again -- but THIS one already owns a General note
 # with the identical text, the collision the old order manufactured.
-NO.CATEGORY_COLORS.pop('Ordine', None)
+NO.CATEGORY_COLORS.pop('Order', None)
 NO.persist_categories()
 app.notes = [{'id': 1, 'title': 'Same', 'body': 'y', 'category': 'General',
               'updated': '2026-01-01 00:00', 'created': '2026-01-01 00:00',
@@ -1050,9 +1050,9 @@ check('with categories merged first, the twin is no duplicate: no dialog',
       _dlg_asked == [])
 check('and it lands under its own category, alongside the local twin',
       len(app.notes) == 2
-      and any(n.get('category') == 'Ordine' for n in app.notes))
+      and any(n.get('category') == 'Order' for n in app.notes))
 os.remove(_ordzip)
-NO.CATEGORY_COLORS.pop('Ordine', None)
+NO.CATEGORY_COLORS.pop('Order', None)
 NO.persist_categories()
 
 # ---- An oversized pasted note SAYS it was trimmed ----
@@ -1101,9 +1101,9 @@ app.new_note(); app.update()
 # along in the backup's palette WITHOUT being used by that note -- which
 # separates the two things cleanly: the dialog is about the note, the
 # rollback is about the category.
-NO.CATEGORY_COLORS['Straina'] = '#abcdef'
+NO.CATEGORY_COLORS['Foreign'] = '#abcdef'
 NO.persist_categories()
-app.notes = [{'id': 1, 'title': 'Dubla', 'body': 'z', 'category': 'General',
+app.notes = [{'id': 1, 'title': 'Double', 'body': 'z', 'category': 'General',
               'updated': '2026-01-01 00:00', 'created': '2026-01-01 00:00',
               'checklist': [], 'attachments': []}]
 app.save_notes()
@@ -1118,9 +1118,9 @@ while app._export_state is not None and time.time() - t0 < 5:
 
 # A device that never heard of it, but DOES hold the identical note, so
 # the duplicate dialog is guaranteed to appear and can be cancelled.
-NO.CATEGORY_COLORS.pop('Straina', None)
+NO.CATEGORY_COLORS.pop('Foreign', None)
 NO.persist_categories()
-app.notes = [{'id': 1, 'title': 'Dubla', 'body': 'z', 'category': 'General',
+app.notes = [{'id': 1, 'title': 'Double', 'body': 'z', 'category': 'General',
               'updated': '2026-01-01 00:00', 'created': '2026-01-01 00:00',
               'checklist': [], 'attachments': []}]
 app.save_notes()
@@ -1133,9 +1133,9 @@ while app._import_state is not None and time.time() - t0 < 8:
     app.update()
 check('cancelling an import adds no notes', len(app.notes) == _before_cx)
 check('and leaves no stranger category in the palette',
-      'Straina' not in NO.CATEGORY_COLORS)
+      'Foreign' not in NO.CATEGORY_COLORS)
 check('...nor on disk',
-      'Straina' not in NO.get_setting('categories', {}))
+      'Foreign' not in NO.get_setting('categories', {}))
 
 # Agreeing installs it, which is what makes the check above meaningful.
 app._themed_dialog = lambda *a, **k: 'all'
@@ -1144,10 +1144,10 @@ t0 = time.time()
 while app._import_state is not None and time.time() - t0 < 8:
     app.update()
 check('while agreeing DOES install it (the cancel was the difference)',
-      'Straina' in NO.CATEGORY_COLORS
-      and NO.get_setting('categories', {}).get('Straina') == '#abcdef')
+      'Foreign' in NO.CATEGORY_COLORS
+      and NO.get_setting('categories', {}).get('Foreign') == '#abcdef')
 os.remove(_cxzip)
-NO.CATEGORY_COLORS.pop('Straina', None)
+NO.CATEGORY_COLORS.pop('Foreign', None)
 NO.persist_categories()
 app.notes = []
 app.save_notes()

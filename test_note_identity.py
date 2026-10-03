@@ -75,7 +75,7 @@ check('...and through it any number of times',
       _third["uid"] == _once["uid"])
 
 check('a uid minted elsewhere is trusted, not replaced',
-      normalize_note({"id": 1, "uid": "de-pe-telefon"})["uid"] == "de-pe-telefon")
+      normalize_note({"id": 1, "uid": "from-the-phone"})["uid"] == "from-the-phone")
 
 check('surrounding whitespace is trimmed off a uid',
       normalize_note({"id": 1, "uid": "  abc  "})["uid"] == "abc")
@@ -133,13 +133,13 @@ check('the note that comes back out of a code still normalises cleanly',
 # joining that list must not widen the door.
 
 _forged = decode_share_code(encode_share_code([{
-    "uid": "inventat", "title": "x",
+    "uid": "made-up", "title": "x",
     "attachments": [{"filename": "p.png", "stored_as": "../../escape"}],
 }]))[0]
 check('a code cannot smuggle in an attachment alongside a uid',
       "attachments" not in _forged)
 check('...while the uid it did carry comes through',
-      _forged.get("uid") == "inventat")
+      _forged.get("uid") == "made-up")
 
 # ---- finding the note an incoming copy IS ----
 
@@ -177,7 +177,7 @@ for _empty, _what in [("", "an empty string"), ("   ", "whitespace")]:
 
 # The pairing that matters: identity says yes exactly where resemblance
 # says no. An edited note is a different text and the same note.
-_edited = dict(_a, title="A, corectat", body="text nou")
+_edited = dict(_a, title="A, corrected", body="new text")
 check('an EDITED copy still has the same identity',
       find_by_uid(_notes, _edited["uid"]) is _a)
 check('...while its content no longer matches',
@@ -224,7 +224,7 @@ check('the rescue copy survives the gate, so the button is not a lie',
 
 # An incoming copy is untrusted like any other: it goes through the gate
 # before a single field is taken out of it.
-_hostile = {"uid": _mine["uid"], "title": ["nu e text"], "body": None,
+_hostile = {"uid": _mine["uid"], "title": ["not text"], "body": None,
             "checklist": "not this either", "category": "No such category"}
 apply_shared_update(_mine, _hostile)
 check('an update coerces a wrong type instead of storing it',
@@ -262,7 +262,7 @@ check('split_by_identity treats a note with NO identity as new',
 check('split_by_identity accounts for every note in the batch',
       len(_known) + len(_fresh) == len(_batch))
 check('split_by_identity skips an entry that is not a note at all',
-      split_by_identity(_mine_all, ["nu e", None, 5]) == ([], []))
+      split_by_identity(_mine_all, ["not a note", None, 5]) == ([], []))
 check('split_by_identity on an empty batch finds nothing',
       split_by_identity(_mine_all, []) == ([], []))
 check('split_by_identity against an empty notebook calls everything new',
@@ -337,7 +337,7 @@ try:
     # Its bytes are what the startup notice promises are still on disk.
     with open(os.path.join(_work, "notes_data.json"), "w",
               encoding="utf-8") as _handle:
-        _handle.write("{ nu e json")
+        _handle.write("{ not json")
     _corrupt_before = _bytes_of(_work)
     _notes, _report = _storage.load_notes(False)
     check('an unreadable notebook is reported, not repaired',

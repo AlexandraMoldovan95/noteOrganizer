@@ -6876,7 +6876,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # sake, and on Windows the rich-paste route saw it FIRST -- so
         # pasting a copied table back into a note took the generic HTML
         # road: no set widths, no placement, and the first row glued onto
-        # the caret's line ("Sursa: | fff |..." in the field report). The
+        # the caret's line ("Source: | fff |..." in the field report). The
         # TSV route carries everything the copy knew, so our own copies go
         # there; the rich route is for content from OTHER applications.
         # Detection reads the system clipboard directly, no Tk fallback:
@@ -19118,7 +19118,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                        highlightbackground=self.colors["accent"])
         # The accent-coloured border must be tracked too, not just the fill:
         # left off the map it stays frozen at the theme the bar was first
-        # built under, so changing the accent (mov -> albastru) leaves the
+        # built under, so changing the accent (purple -> blue) leaves the
         # old colour framing the bar until it is rebuilt.
         self.track_theme(bar, bg="card", highlightbackground="accent")
         self._find_var = tk.StringVar()

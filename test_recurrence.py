@@ -171,7 +171,7 @@ _h_notes = [
      'date': '2026-01-01', 'recurrence': {'freq': 'daily'},
      'exceptions': ['2026-02-02'],
      'overrides': {
-         '2026-08-15': {'title': '', 'body': 'discutat bugetul',
+         '2026-08-15': {'title': '', 'body': 'discussed the budget',
                         'comments': '', 'category': 'General', 'color': ''},
          '2025-12-01': {'title': 'Year-end sync', 'body': 'retro',
                         'comments': '', 'category': 'General', 'color': ''},
@@ -222,7 +222,7 @@ check("a child with no override title borrows the series'",
 check('a series with no edited days still gets a row',
       any(e['note_id'] == 4 and e['kind'] == 'series' for e in _all))
 
-_q = _hist(_h_notes, query='bugetul', today=_H_TODAY)
+_q = _hist(_h_notes, query='budget', today=_H_TODAY)
 check('search reaches into a day\'s own override content',
       [e['note_id'] for e in _q] == [3]
       and [c['date'] for c in _q[0]['children']] == ['2026-08-15']

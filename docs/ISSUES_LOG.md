@@ -2013,7 +2013,7 @@ Right-click a new note's title, choose Paste, and the field read
 `Note title...My pasted title`. The grey hint text the app puts there to
 say "type a title here" was still sitting in the box, and the pasted text
 was glued to the end of it. The same on the Calendar's History search,
-where the glued query — `Search all calendar entries...bugetul` — matched
+where the glued query — `Search all calendar entries...budget` — matched
 nothing, so the search read as broken rather than as misfilled.
 
 **Found by a pre-flight, not by a report.** The register wanted a paste
@@ -2693,7 +2693,7 @@ it was noticing which operations never needed it at all.
 *([0.64.95](../CHANGELOG.md#06495--2026-09-02) · 2026-09-02)*
 
 **Symptom:** found by an audit probe, not a field report — edit a
-table cell from `1` to `schimbat`, press Ctrl+Z once, and the cell
+table cell from `1` to `changed`, press Ctrl+Z once, and the cell
 reads neither: `|  | 2 |`. The old value gone, the padding collapsed,
 and the drawn grid still showing the text from before the undo.
 

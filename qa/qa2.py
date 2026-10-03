@@ -165,7 +165,7 @@ app.hide_day_tooltip()
 app.update()
 check('hide_day_tooltip destroys it', _tip_labels() is None)
 
-app.notes = [{'id': 400 + i, 'title': f'Multa{i}', 'body': 'b',
+app.notes = [{'id': 400 + i, 'title': f'Many{i}', 'body': 'b',
               'category': 'General', 'date': _D13,
               'updated': '2026-01-01 00:00', 'created': '2026-01-01 00:00',
               'checklist': [], 'attachments': []} for i in range(12)]
@@ -174,7 +174,7 @@ app.update()
 _lbls = _tip_labels()
 check('twelve notes cap at ten titles plus a "+2 more" line',
       _lbls is not None and any('+2 more' in t for t in _lbls)
-      and sum(1 for t in _lbls if t.startswith('Multa')) == 10)
+      and sum(1 for t in _lbls if t.startswith('Many')) == 10)
 app.hide_day_tooltip(); app.update()
 
 _rich = {'id': 500, 'title': 'Hover', 'body': 'some body text',
@@ -420,11 +420,11 @@ app._persist_day_emoji()
 # what proves that: an override is plain text, so comparing them made a
 # just-saved occurrence read as dirty FOREVER (field report, 0.71.111).
 _occ_series = NO.normalize_note({
-    'id': 4101, 'title': 'Sport', 'body': 'antrenament',
+    'id': 4101, 'title': 'Sport', 'body': 'training',
     'category': 'General', 'date': '2026-07-01',
     'recurrence': {'freq': 'weekly', 'weekdays': [2]},
-    'checklist': [{'text': 'incaltari', 'done': False},
-                  {'text': 'prosop', 'done': False}],
+    'checklist': [{'text': 'shoes', 'done': False},
+                  {'text': 'towel', 'done': False}],
     # The series carries a styling span ON PURPOSE. An override is plain
     # text, so load_note only re-applies the base's spans when the shown
     # body equals the base's -- which is exactly why formatting must stay
@@ -492,7 +492,7 @@ _ov_note = NO.normalize_note({
     'id': 4301, 'title': 'Series', 'body': 'the base body',
     'category': 'General', 'date': '2026-07-01',
     'recurrence': {'freq': 'weekly', 'weekdays': [2]},
-    'overrides': {'2026-07-08': {'title': 'Ziua', 'body': 'intro\n' + _TBL_O}},
+    'overrides': {'2026-07-08': {'title': 'The day', 'body': 'intro\n' + _TBL_O}},
     'updated': '2026-01-01 00:00', 'created': '2026-01-01 00:00'})
 app.notes = [_ov_note]
 app.save_notes()
@@ -514,7 +514,7 @@ _sq_note = NO.normalize_note({
     'id': 4302, 'title': 'Series2', 'body': 'body',
     'category': 'General', 'date': '2026-07-01',
     'recurrence': {'freq': 'weekly', 'weekdays': [2]},
-    'checklist': [{'text': 'unu', 'done': False}],
+    'checklist': [{'text': 'one', 'done': False}],
     'updated': '2026-01-01 00:00', 'created': '2026-01-01 00:00'})
 app.notes = [_sq_note]
 app.save_notes()
@@ -560,7 +560,7 @@ app.new_note(); app.update()
 # with an override present, and the stale button later overwrote new
 # text. It writes straight to the note now: no scope to get wrong.
 _rs_note = NO.normalize_note({
-    'id': 4201, 'title': 'Repetat', 'date': '2026-07-01',
+    'id': 4201, 'title': 'Repeated', 'date': '2026-07-01',
     'body': 'the long original version, with plenty of text worth keeping',
     'formatting': [{'start': 0, 'end': 9, 'style': 'bold'}],
     'recurrence': {'freq': 'weekly', 'weekdays': [2]},
@@ -820,17 +820,17 @@ app._persist_day_colors()
 
 # 77 and 83: the sidebar filter, and sorting inside groups.
 app.notebook.select(app.TAB_NOTES); app.update()
-NO.CATEGORY_COLORS.setdefault('Scoala', '#4477aa')
-NO.CATEGORY_COLORS.setdefault('Acasa', '#aa7744')
+NO.CATEGORY_COLORS.setdefault('School', '#4477aa')
+NO.CATEGORY_COLORS.setdefault('Home', '#aa7744')
 app.notes = [
-    {'id': 7001, 'title': 'Beta', 'category': 'Scoala'},
-    {'id': 7002, 'title': 'Alfa', 'category': 'Scoala'},
-    {'id': 7003, 'title': 'Delta', 'category': 'Acasa'},
-    {'id': 7004, 'title': 'Gama', 'category': 'Acasa'},
+    {'id': 7001, 'title': 'Beta', 'category': 'School'},
+    {'id': 7002, 'title': 'Alpha', 'category': 'School'},
+    {'id': 7003, 'title': 'Delta', 'category': 'Home'},
+    {'id': 7004, 'title': 'Gamma', 'category': 'Home'},
 ]
 app.notes = [NO.normalize_note(n) for n in app.notes]
 app.save_notes()
-app.filter_var.set('Scoala')
+app.filter_var.set('School')
 app.refresh_note_list(); app.update()
 _b3_shown = set(app._card_order())
 check('filtering by a category shows only that category (plan 77)',
@@ -839,7 +839,7 @@ app.filter_var.set('All')
 app.refresh_note_list(); app.update()
 
 # 78: a category added later is in the filter without a restart.
-NO.CATEGORY_COLORS['ProaspatAdaugata'] = '#336699'
+NO.CATEGORY_COLORS['FreshlyAdded'] = '#336699'
 app.refresh_category_widgets(); app.update()
 # The dropdown keeps no list of its own: it asks for the categories at
 # the moment it opens, which IS the promise this case is about. So the
@@ -852,8 +852,8 @@ _b3_labels = _b3_texts(_b3_pop) if _b3_pop is not None else []
 app._dismiss_mini_popup()
 app.update()
 check('a category added just now is in the filter, no restart (plan 78)',
-      'ProaspatAdaugata' in _b3_labels)
-NO.CATEGORY_COLORS.pop('ProaspatAdaugata', None)
+      'FreshlyAdded' in _b3_labels)
+NO.CATEGORY_COLORS.pop('FreshlyAdded', None)
 app.refresh_category_widgets(); app.update()
 
 # 83: with grouping on, the sort still orders inside each group.
@@ -870,8 +870,8 @@ if _b3_order is None:
     # The cards in the order they are drawn, top to bottom.
     _b3_order = [app.find_note(_cid)['title'] for _cid in app._card_order()]
 check('sorting A-Z orders the notes inside each group (plan 83)',
-      _b3_order == ['Delta', 'Gama', 'Alfa', 'Beta']
-      or _b3_order == ['Alfa', 'Beta', 'Delta', 'Gama'])
+      _b3_order == ['Delta', 'Gamma', 'Alpha', 'Beta']
+      or _b3_order == ['Alpha', 'Beta', 'Delta', 'Gamma'])
 app.group_by_category.set(False)
 app.sort_var.set('Recently updated')
 app.refresh_note_list(); app.update()
@@ -888,7 +888,7 @@ app.new_note(); app.update()
 _b4d_saved_notes, _b4d_saved_trash = list(app.notes), list(app.trash)
 app.notes = []
 app.trash = []
-app.notes = [NO.normalize_note({'id': i + 1, 'title': 'Identica',
+app.notes = [NO.normalize_note({'id': i + 1, 'title': 'Identical',
                                 'body': 'the very same body', 'category': 'General',
                                 'created': '2026-03-01 09:00:00',
                                 'updated': '2026-03-02 10:00:00'})
