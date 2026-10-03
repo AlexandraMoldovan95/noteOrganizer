@@ -34,7 +34,9 @@ WHAT IT RUNS
 6. ``check_comments`` -- no release named in the app's comments, every
    pointer into the issues log leads somewhere, and the condensed modules
    keep their comments to a reason.
-7. ``compile()`` over every tracked ``.py`` in the repo -- tests and qa
+7. ``check_contrast`` -- every theme's text against WCAG AA; the pairs
+   still below it are listed, and the list can only shrink.
+8. ``compile()`` over every tracked ``.py`` in the repo -- tests and qa
    scripts included, because a syntax error in a TEST file is exactly
    what the remote runner would otherwise find first (a locally-valid
    PEP 701 f-string once died only on CI's older Python; the interpreter
@@ -109,6 +111,9 @@ def main():
     # Comments say why in a few lines, and the story they point to exists.
     _run_gate("comments say why, briefly",
               [os.path.join("tools", "check_comments.py")])
+    # Every theme's text measured against WCAG, and kept from getting worse.
+    _run_gate("contrast measured",
+              [os.path.join("tools", "check_contrast.py")])
 
     print("== every tracked .py compiles", flush=True)
     listed = subprocess.run(["git", "ls-files", "*.py"], cwd=ROOT,

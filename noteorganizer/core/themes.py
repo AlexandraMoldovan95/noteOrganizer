@@ -116,7 +116,7 @@ THEMES = {
         # every theme -- a dark well made a ticked box read as empty.
         "check_well": "#f7f7fb",
         "text": "#22223a",
-        "subtext": "#6b6b85",
+        "subtext": "#676780",
         "danger": "#e0405f",
         "success": "#2fae82",
         "calendar_has_notes": "#e3dbff",
@@ -132,7 +132,7 @@ THEMES = {
         # every theme -- a dark well made a ticked box read as empty.
         "check_well": "#f7f7fb",
         "text": "#173049",
-        "subtext": "#5a748c",
+        "subtext": "#536b81",
         "danger": "#e0405f",
         "success": "#2fae82",
         "calendar_has_notes": "#d3e7f8",
@@ -148,7 +148,7 @@ THEMES = {
         # every theme -- a dark well made a ticked box read as empty.
         "check_well": "#f7f7fb",
         "text": "#183328",
-        "subtext": "#5b7d6c",
+        "subtext": "#527061",
         "danger": "#e0405f",
         "success": "#2fae82",
         "calendar_has_notes": "#d3edde",
@@ -164,7 +164,7 @@ THEMES = {
         # every theme -- a dark well made a ticked box read as empty.
         "check_well": "#f7f7fb",
         "text": "#3a2c1c",
-        "subtext": "#8a7660",
+        "subtext": "#776653",
         "danger": "#e0405f",
         "success": "#2fae82",
         "calendar_has_notes": "#f3e2cd",

@@ -484,6 +484,56 @@ compute a colour rather than looking one up, derive it in one place and teach th
 about it there** — otherwise it is invisible to everything that fixes colours by matching known
 values.
 
+### Contrast, measured
+
+Every theme's text is measured against WCAG 2.1: the contrast ratio worked out from relative
+luminance, by formula rather than by eye. All of the app's text is 8–11 pt, which WCAG counts as
+normal size, so every pair owes 4.5:1, the AA level. `tools/check_contrast.py` measures each pair
+the app draws and prints the table below (`--markdown`). In CI it fails on any pair below AA that
+is not listed with its reason, and on a listed pair that has started to pass, so the list can
+only shrink. It also checks that a colour value means one role across all eight themes, which
+the theme switch depends on, since it remaps colours by value.
+
+The four light themes' secondary text was below AA, on the sidebar most of all, where Sort and
+Show sit. Each is now one step darker: Soft Lavender `#6b6b85` → `#676780`, Sky Blue `#5a748c` →
+`#536b81`, Fresh Mint `#5b7d6c` → `#527061`, Warm Cream `#8a7660` → `#776653`. Text and secondary
+text now pass in every theme.
+
+What does not pass yet is every pair that uses the accent, the warning red or the confirming
+green, and that waits for a design decision rather than a calculation. Each of those colours is
+used two ways: as text on a surface, and as a button's fill under white text. On a light theme
+one darker shade serves both, but it changes how the theme looks — Warm Cream's orange would
+turn brown. On a dark theme no single shade can: text on a dark surface wants a lighter shade,
+and a fill under white text a darker one. The ways out are a darker shade on the light themes
+with dark text on the dark themes' bright buttons, or a second colour for each role, one for
+text and one for fills. Which way is a question of how the app looks, so it is decided by eye,
+with these numbers in hand.
+
+| Text, and where | Midnight Purple | Ocean Blue | Forest Green | Warm Charcoal | Soft Lavender | Sky Blue | Fresh Mint | Warm Cream |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| text on the window | 14.7 | 15.3 | 15.1 | 15.2 | 14.2 | 12.4 | 12.7 | 12.5 |
+| text on a card or panel | 11.8 | 11.3 | 10.8 | 12.2 | 15.5 | 13.5 | 13.6 | 13.5 |
+| text in the sidebar | 13.1 | 13.3 | 12.7 | 13.4 | 12.8 | 11.1 | 11.3 | 11.0 |
+| secondary text on the window | 6.5 | 7.1 | 7.5 | 7.2 | 5.0 | 5.1 | 5.1 | 5.1 |
+| secondary text on a card (a note's preview) | 5.2 | 5.2 | 5.4 | 5.8 | 5.5 | 5.5 | 5.5 | 5.5 |
+| secondary text in the sidebar (Sort, Show) | 5.8 | 6.1 | 6.3 | 6.4 | 4.6 | 4.6 | 4.5 | 4.5 |
+| accent text on the window (the repeat summary) | **3.8** ✗ | 5.7 | 7.0 | 6.2 | **4.0** ✗ | **3.5** ✗ | **2.8** ✗ | **2.9** ✗ |
+| accent text on a card or panel | **3.0** ✗ | **4.2** ✗ | 5.0 | 5.0 | **4.3** ✗ | **3.8** ✗ | **3.0** ✗ | **3.1** ✗ |
+| accent text in the sidebar | **3.4** ✗ | 4.9 | 5.9 | 5.5 | **3.6** ✗ | **3.1** ✗ | **2.5** ✗ | **2.5** ✗ |
+| warning text on the window | 5.5 | 6.2 | 6.5 | 6.1 | **3.8** ✗ | **3.8** ✗ | **3.9** ✗ | **3.8** ✗ |
+| warning text on a card or panel | **4.4** ✗ | 4.6 | 4.6 | 4.9 | **4.1** ✗ | **4.1** ✗ | **4.1** ✗ | **4.1** ✗ |
+| warning text in the sidebar | 4.9 | 5.4 | 5.4 | 5.4 | **3.4** ✗ | **3.4** ✗ | **3.5** ✗ | **3.4** ✗ |
+| confirmation text on the window | 9.2 | 8.7 | 9.1 | 9.5 | **2.6** ✗ | **2.6** ✗ | **2.6** ✗ | **2.6** ✗ |
+| confirmation text on a card or panel | 7.3 | 6.4 | 6.5 | 7.6 | **2.8** ✗ | **2.8** ✗ | **2.8** ✗ | **2.8** ✗ |
+| confirmation text in the sidebar | 8.2 | 7.5 | 7.7 | 8.4 | **2.3** ✗ | **2.3** ✗ | **2.3** ✗ | **2.3** ✗ |
+| white text on an accent button | **4.3** ✗ | **3.0** ✗ | **2.3** ✗ | **2.7** ✗ | **4.3** ✗ | **3.8** ✗ | **3.0** ✗ | **3.1** ✗ |
+| white text on an accent button, pointed at | **3.3** ✗ | **2.4** ✗ | **1.9** ✗ | **2.2** ✗ | 5.7 | 5.0 | **4.1** ✗ | **4.1** ✗ |
+| white text on a destructive button | **3.0** ✗ | **2.8** ✗ | **2.5** ✗ | **2.8** ✗ | **4.1** ✗ | **4.1** ✗ | **4.1** ✗ | **4.1** ✗ |
+| white text on a confirming button | **1.8** ✗ | **2.0** ✗ | **1.8** ✗ | **1.8** ✗ | **2.8** ✗ | **2.8** ✗ | **2.8** ✗ | **2.8** ✗ |
+
+A note's own colour, used for the tags line on its card, is the person's choice from a palette
+and is not in this table; a colour picked for its look may not read as text on every theme.
+
 ### Layout arithmetic belongs in core, not in the widgets
 
 The formatting toolbar wraps when it will not fit on one row, so no control can be out of reach
