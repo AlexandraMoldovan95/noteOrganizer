@@ -2665,31 +2665,24 @@ app.refresh_note_list()
 app.update()
 
 
-def _stats_says(text):
-    found = []
-
-    def walk(w):
-        try:
-            if text in str(w.cget('text')):
-                found.append(w)
-        except tk.TclError:
-            pass
-        for kid in w.winfo_children():
-            walk(kid)
-    if hasattr(app, 'stats_frame'):
-        walk(app.stats_frame)
-    return bool(found)
+def _stats_total():
+    """The "Total notes" tile, read as the number it shows. Searching every
+    text in the panel for a digit also found it in the date of "Using Note
+    Organizer since 04.10.2026": red on the fourth of the month, and the
+    "2" it waited for was always there, in the year."""
+    return stats_pairs().get('Total notes')
 
 
 app.show_settings_page()
 app.toggle_settings_panel('statistics')
 app.update()
-check('arriving at Statistics shows the count as it is now',
-      _stats_says('5'))
+check(f'arriving at Statistics shows the count as it is now '
+      f'({_stats_total()})', _stats_total() == 5)
 # Deleted from under an open Settings page: the panel must follow.
 app._delete_note(app.find_note(620), None)
 app.update()
-check('a delete while Statistics is open updates it', _stats_says('4'))
+check(f'a delete while Statistics is open updates it ({_stats_total()})',
+      _stats_total() == 4)
 app.hide_settings_page()
 app.update()
 
@@ -2701,8 +2694,8 @@ app.update()
 app.show_settings_page()
 app.toggle_settings_panel('statistics')
 app.update()
-check('Statistics is current on the next visit, not left behind',
-      _stats_says('2') and not _stats_says('4'))
+check(f'Statistics is current on the next visit, not left behind '
+      f'({_stats_total()})', _stats_total() == 2)
 app.hide_settings_page()
 app.update()
 
